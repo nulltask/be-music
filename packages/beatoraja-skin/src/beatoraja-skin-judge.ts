@@ -18,6 +18,10 @@
 
 import { flattenBeatorajaElements } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import {
+  SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P,
+  SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P,
+} from './beatoraja-runtime-ids.ts';
 import type { BeatorajaValueElement } from './beatoraja-skin-value.ts';
 
 /**
@@ -135,22 +139,36 @@ export function expandBeatorajaJudgeDestinations(
     // every PG, not just full-gauge PGs.
     const hasFullgaugeSubstitute = judge.images.length > 6 && judge.images[6] !== undefined;
     const gaugeMaxOp = SIDE_GAUGE_MAX_OPS[side];
+    // `judge.shift = true` triggers upstream's combo-width-aware repositioning:
+    // `nowJudge.region.x += -nowCount.getLength() / 2`. The judge word slides LEFT by
+    // half the rendered combo's pixel width, so (word + combo) stays centred on the
+    // authored anchor regardless of digit count. Implemented by appending a synthetic
+    // offset id that the runtime adapter resolves to the dynamic shift value (= the
+    // adapter knows the live combo and slot width).
+    const judgeWordShiftOffsetId = judge.shift
+      ? side === 1
+        ? SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P
+        : SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P
+      : undefined;
     for (let i = 0; i < judge.images.length; i += 1) {
       const child = judge.images[i];
       if (child === undefined) continue;
       const gate = ops[i] ?? ops[0]!;
+      let withGate = addOpGate(child, gate);
       // When a fullgauge substitute is present, gate the PG slot (i=0) on NOT-fullgauge and
       // the substitute slot (i=6) on fullgauge. All other slots (1..5, plus 7+ aliases)
       // keep their per-tier op only.
       if (hasFullgaugeSubstitute && i === 0) {
-        out.push(addOpGate(addOpGate(child, gate), -gaugeMaxOp));
-        continue;
+        withGate = addOpGate(withGate, -gaugeMaxOp);
+      } else if (hasFullgaugeSubstitute && i === 6) {
+        withGate = addOpGate(withGate, gaugeMaxOp);
       }
-      if (hasFullgaugeSubstitute && i === 6) {
-        out.push(addOpGate(addOpGate(child, gate), gaugeMaxOp));
-        continue;
+      // Append the judge-word-shift offset so each judgef-* destination picks up the
+      // dynamic `-combo_width/2` x adjustment from the adapter.
+      if (judgeWordShiftOffsetId !== undefined) {
+        withGate = appendOffset(withGate, judgeWordShiftOffsetId);
       }
-      out.push(addOpGate(child, gate));
+      out.push(withGate);
     }
     // judge.numbers[] (the ms / count readouts paired with each judge tier) are only emitted
     // for the top three tiers (PG / GR / GD) per beatoraja's `SkinJudge.java:96`:
@@ -289,6 +307,23 @@ function numberOrZero(v: unknown): number {
  * array is set. Other fields pass through unchanged — this is a lightweight clone that doesn't
  * deep-copy the `dst[]` keyframes (those are read-only at this point).
  */
+/**
+ * Append an offset id to the destination's `offsets[]` array. Used to plumb the
+ * synthetic judge-word-shift id through the standard offset-summing path so the runtime
+ * adapter's `resolveOffset` can supply the dynamic `-combo_width/2` x offset.
+ */
+function appendOffset(child: Readonly<Record<string, unknown>>, offsetId: number): Readonly<Record<string, unknown>> {
+  const existing = child.offsets;
+  const merged: number[] = [];
+  if (Array.isArray(existing)) {
+    for (const v of existing) {
+      if (typeof v === 'number' && Number.isFinite(v)) merged.push(v);
+    }
+  }
+  merged.push(offsetId);
+  return { ...child, offsets: merged };
+}
+
 function addOpGate(child: Readonly<Record<string, unknown>>, gateOp: number): Readonly<Record<string, unknown>> {
   const existingOp = child.op;
   const merged: number[] = [];

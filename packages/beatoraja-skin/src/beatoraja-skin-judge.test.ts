@@ -247,6 +247,60 @@ describe('expandBeatorajaJudgeDestinations', () => {
     expect(valueElement.align).toBe(2);
   });
 
+  it('appends synthetic judge-word-shift offset id on judgef-* destinations when shift=true', () => {
+    // Mirrors `SkinJudge.prepare()`'s `nowJudge.region.x += -nowCount.getLength() / 2`:
+    // when `judge.shift` is true, beatoraja shifts the judge word LEFT by half the
+    // rendered combo's pixel width so the (word + combo) pair stays centred on the
+    // authored anchor regardless of digit count. We append a synthetic offset id
+    // (20001 for 1P, 20002 for 2P) that the runtime adapter resolves to the dynamic
+    // `-combo_width/2` x adjustment.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 70, y: 240, w: 180, h: 40 }] }],
+        numbers: [{ id: 'judgen-pg', dst: [{ time: 0, x: 200, y: 0, w: 40, h: 40 }] }],
+        shift: true,
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    const judgef = expanded[0]! as Record<string, unknown>;
+    expect(judgef.id).toBe('judgef-pg');
+    expect(judgef.offsets).toEqual([20001]); // 1P judge-word-shift synthetic id
+  });
+
+  it('uses the 2P synthetic offset id when index=1 and shift=true', () => {
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 1,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 1010, y: 240, w: 180, h: 40 }] }],
+        numbers: [{ id: 'judgen-pg', dst: [{ time: 0, x: 200, y: 0, w: 40, h: 40 }] }],
+        shift: true,
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    const judgef = expanded[0]! as Record<string, unknown>;
+    expect(judgef.offsets).toEqual([20002]); // 2P
+  });
+
+  it('skips the synthetic offset when shift=false', () => {
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 70, y: 240, w: 180, h: 40 }] }],
+        numbers: [{ id: 'judgen-pg', dst: [{ time: 0, x: 200, y: 0, w: 40, h: 40 }] }],
+        shift: false,
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    const judgef = expanded[0]! as Record<string, unknown>;
+    // `offsets` is either undefined or empty — no synthetic id.
+    const offsets = (judgef.offsets as number[] | undefined) ?? [];
+    expect(offsets.includes(20001) || offsets.includes(20002)).toBe(false);
+  });
+
   it('passes the child through unchanged when the matching parent has no positioned dst', () => {
     // Some skins author `judge.images[i]` with empty / time-only dst (e.g. an animation hold
     // with no spatial keyframe). Folding has nothing to add to in that case — the child's

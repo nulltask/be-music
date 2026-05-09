@@ -104,6 +104,15 @@ export interface BeatorajaRuntimeAdapterOptions {
    * that doesn't author this metadata explicitly).
    */
   laneHeight?: number;
+  /**
+   * Per-side combo-digit slot width (= `judge[].numbers[i].dst.w` from the skin) for resolving
+   * the synthetic `SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_*P` offset that `judge[].shift = true`
+   * routes through. The shift amount is `digitCount(combo) * slotWidth / 2` per upstream's
+   * `nowJudge.region.x += -nowCount.getLength() / 2` formula. Default `40` covers default
+   * skin's `play5.json` / `play7main.lua`; community skins with custom digit cell widths
+   * pass their authored value.
+   */
+  judgeShiftSlotWidth?: { 1?: number; 2?: number };
 }
 
 interface SideJudgeState {
@@ -175,6 +184,13 @@ export class BeatorajaRuntimeAdapter {
    * matches one lane height. See {@link BeatorajaRuntimeAdapterOptions.laneHeight}.
    */
   private readonly laneHeight: number;
+  /**
+   * Per-side combo-digit slot width for resolving the judge-word-shift synthetic offset
+   * (= `digitCount(combo) * slotW / 2` shift applied to judgef-* destinations when
+   * `judge[].shift = true`). Defaults to 40 per default skin's `numbers[i].dst.w`; the
+   * host overrides via {@link BeatorajaRuntimeAdapterOptions.judgeShiftSlotWidth}.
+   */
+  private readonly judgeShiftSlotWidth: { 1: number; 2: number };
   private frame: PlayerUiFramePayload | null = null;
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
@@ -398,6 +414,12 @@ export class BeatorajaRuntimeAdapter {
       typeof options.laneHeight === 'number' && Number.isFinite(options.laneHeight) && options.laneHeight > 0
         ? options.laneHeight
         : DEFAULT_LANE_HEIGHT;
+    const judgeSlot1 = options.judgeShiftSlotWidth?.[1];
+    const judgeSlot2 = options.judgeShiftSlotWidth?.[2];
+    this.judgeShiftSlotWidth = {
+      1: typeof judgeSlot1 === 'number' && Number.isFinite(judgeSlot1) && judgeSlot1 > 0 ? judgeSlot1 : 40,
+      2: typeof judgeSlot2 === 'number' && Number.isFinite(judgeSlot2) && judgeSlot2 > 0 ? judgeSlot2 : 40,
+    };
     // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
     // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
     // `if[-32]`; both are valid in beatoraja's spec.)
@@ -1057,6 +1079,20 @@ export class BeatorajaRuntimeAdapter {
    * as `ZERO_BEATORAJA_OFFSET`).
    */
   resolveOffset(offsetId: number): Readonly<BeatorajaSkinOffsetValue> | undefined {
+    // Synthetic judge-word-shift offset (= `judge[].shift` honor path). Per upstream
+    // `SkinJudge.prepare()`: `nowJudge.region.x += -nowCount.getLength() / 2` shifts the
+    // judge word LEFT by half the rendered combo's pixel width so word + combo stays
+    // centred on the authored anchor regardless of digit count. We compute the shift on
+    // the fly from the live combo + the per-side slot width.
+    if (offsetId === 20001 || offsetId === 20002) {
+      const side: BeatorajaSide = offsetId === 20001 ? 1 : 2;
+      const combo = this.maxCombo; // matches what ref:75 displays in the digit row.
+      const digitCount = combo <= 0 ? 1 : Math.floor(Math.log10(combo)) + 1;
+      const slotW = this.judgeShiftSlotWidth[side];
+      const shiftPx = (digitCount * slotW) / 2;
+      // Negative x shifts the judge word LEFT in skin coords.
+      return { x: -shiftPx, y: 0, w: 0, h: 0, r: 0, a: 0 };
+    }
     if (offsetId === 3) {
       // OFFSET_LIFT — derived live from `liftRatio`, scaled by the skin's lane height so
       // `liftRatio = 1` shifts the cover edge by exactly one lane. We let the manual

@@ -272,6 +272,12 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // skin is mounted, not just the reference theme's 580.
     const sliderDefs = normalizeBeatorajaSliders((options.skin as { slider?: unknown }).slider);
     const lanecoverSliderRange = sliderDefs.find((s) => s.type === 4)?.range;
+    // Per-side judge combo digit slot width (= `numbers[i].dst.w` from the first
+    // judgement number entry). Drives the synthetic judge-word-shift offset that honors
+    // `judge[].shift = true`. Default 40 covers default skin's `play5.json` /
+    // `play7main.lua`; community skins with custom combo digit cell widths will report
+    // their own value here so the shift uses the right per-pixel width.
+    const judgeShiftSlotWidth = readJudgeShiftSlotWidth(options.skin);
     this.adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: options.variant,
       baseOps: skinConfigOps,
@@ -284,6 +290,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       skinHeaderAuthor: options.skin.author,
       directoryLabel: options.directoryLabel,
       laneHeight: lanecoverSliderRange,
+      judgeShiftSlotWidth,
     });
     // Push the user's `customOffset` picks into the adapter's offset table KEYED BY ID. The
     // skin's `header.offset[]` declares each slot's `(name, id, axisFlags)`; the host config
@@ -1124,6 +1131,38 @@ function insertNoteAndMarkerLayers(
  * authored chart-image destinations (ModernChic's lane-cover backing, default's loading
  * panel) render correctly.
  */
+/**
+ * Read the per-side combo digit slot width from `skin.judge[i].numbers[0].dst[0].w`. Used
+ * to seed the runtime adapter's judge-word-shift resolver so the synthetic offset that
+ * honors `judge[].shift = true` knows the correct per-pixel digit width for each side.
+ *
+ * Default value `40` covers default skin's `play5.json` / `play7main.lua` which both
+ * authored `numbers[i].dst.w = 40`.
+ */
+function readJudgeShiftSlotWidth(skin: BeatorajaSkin): { 1: number; 2: number } {
+  const result = { 1: 40, 2: 40 };
+  const judges = (skin as { judge?: unknown }).judge;
+  if (!Array.isArray(judges)) return result;
+  for (const judge of judges) {
+    if (judge === null || typeof judge !== 'object') continue;
+    const obj = judge as Readonly<Record<string, unknown>>;
+    const index = typeof obj.index === 'number' ? obj.index : 0;
+    const side: 1 | 2 = index === 1 ? 2 : 1;
+    const numbers = Array.isArray(obj.numbers) ? obj.numbers : [];
+    const first = numbers[0];
+    if (first === null || typeof first !== 'object') continue;
+    const dst = (first as Readonly<Record<string, unknown>>).dst;
+    if (!Array.isArray(dst) || dst.length === 0) continue;
+    const kf = dst[0];
+    if (kf === null || typeof kf !== 'object') continue;
+    const w = (kf as Readonly<Record<string, unknown>>).w;
+    if (typeof w === 'number' && Number.isFinite(w) && w > 0) {
+      result[side] = w;
+    }
+  }
+  return result;
+}
+
 function resolveChartImage(
   images: PixiBeatorajaGameplayViewOptions['chartImages'] | undefined,
   syntheticId: number,

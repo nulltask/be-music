@@ -1160,3 +1160,17 @@ export const OFFSET_NOTES_1P = 30;
 export const OFFSET_JUDGE_1P = 32;
 /** SkinProperty `OFFSET_JUDGEDETAIL_1P` — judge detail (timing graph) shift. */
 export const OFFSET_JUDGEDETAIL_1P = 33;
+
+/**
+ * Synthetic offset ids the renderer appends to each `judgef-*` destination when the matching
+ * `judge[]` entry has `shift = true`. Mirrors upstream `SkinJudge.prepare()`'s
+ * `nowJudge.region.x += -nowCount.getLength() / 2` — the judge word slides LEFT by half the
+ * rendered combo's pixel width so the (word + combo) pair stays centred on the authored
+ * anchor regardless of digit count.
+ *
+ * The host's runtime adapter resolves these to a per-frame `{x: -shift, ...}` dynamic offset
+ * computed from `digitCount(combo) * slotWidth / 2`. Picked from a high range (20000+) so they
+ * don't collide with `SkinProperty.OFFSET_*` standard ids (sparse, all under 100).
+ */
+export const SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P = 20001;
+export const SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P = 20002;
