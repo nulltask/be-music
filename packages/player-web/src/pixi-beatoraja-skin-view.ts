@@ -1243,6 +1243,25 @@ export class BeatorajaPlaySkinView {
         break;
       }
     }
+    // Click dispatch (audit 2.5). `imageset[].act` was previously dropped at the parser layer,
+    // so default's `modeset` (act:11 cycles keymode filter) and similar imageset-driven cycle
+    // buttons in GdbG / ModernChic didn't react to clicks. Mirror the `image[]` interactive
+    // wiring — when `act > 0` and the host wires `onButtonAction`, hook a `pointertap`
+    // handler that forwards the action code.
+    if (element.act > 0 && this.onButtonAction !== undefined) {
+      sprite.eventMode = 'static';
+      sprite.cursor = 'pointer';
+      const handler = this.onButtonAction;
+      const actCode = element.act;
+      sprite.on('pointertap', (event) => {
+        const orig = event as unknown as { shiftKey?: boolean; ctrlKey?: boolean; altKey?: boolean };
+        handler(actCode, {
+          shift: orig.shiftKey === true,
+          ctrl: orig.ctrlKey === true,
+          alt: orig.altKey === true,
+        });
+      });
+    }
     return { kind: 'imageset', group, element, subImages, sprite, lastSubIndex: -1, lastFrame: -1 };
   }
 
@@ -2632,6 +2651,7 @@ function makeSyntheticChartImage(id: number, w: number, h: number): BeatorajaIma
     ref: 0,
     len: 0,
     act: 0,
+    click: 0,
     disapearLine: -1,
     isDisapearLineLinkLift: false,
     ifCodes: [],
@@ -2657,6 +2677,7 @@ const SYNTHETIC_BLACK_IMAGE: BeatorajaImageElement = {
   ref: 0,
   len: 0,
   act: 0,
+  click: 0,
   disapearLine: -1,
   isDisapearLineLinkLift: false,
   ifCodes: [],

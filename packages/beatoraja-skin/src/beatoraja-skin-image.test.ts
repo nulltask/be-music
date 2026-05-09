@@ -19,6 +19,7 @@ describe('normalizeBeatorajaImages', () => {
         ref: 0,
         len: 0,
         act: 0,
+        click: 0,
         // disapearLine defaults to -1 (= no clip). Hidden-cover entries set this to a positive
         // value (e.g., 140 in the play7 reference theme).
         disapearLine: -1,

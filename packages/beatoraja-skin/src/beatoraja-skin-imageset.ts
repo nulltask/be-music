@@ -33,6 +33,21 @@ export interface BeatorajaImagesetElement {
   valueProperty?: BeatorajaIntegerPropertyRef;
   /** Sub-image ids (each an `image[].id`). Empty array → renders nothing. */
   images: ReadonlyArray<BeatorajaImageId>;
+  /**
+   * Click-event code (audit 2.5). Mirrors beatoraja's `Event act` field on `JsonSkin.ImageSet`.
+   * When non-zero AND the host wires an `onButtonAction` callback, the renderer makes the
+   * imageset's sprite interactive and forwards this code on tap. Default skin uses it for
+   * `modeset` (`act:11` cycles keymode filter), GdbG for its mode-cycle button, and
+   * ModernChic for various sub-icon flips. Without this parsed the click was dropped at the
+   * data layer.
+   */
+  act: number;
+  /**
+   * Click mode tag (`int click = 0` in beatoraja). Identifies how the host should interpret
+   * the click — typical values are `0` (= regular tap), `1` (= long-press / hold), etc. The
+   * renderer forwards this verbatim to the host callback so per-skin variants work.
+   */
+  click: number;
   /** `if` codes that gate visibility (AND-merged with the destination's `op[]`). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -64,6 +79,8 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImagesetElement | unde
     ref: numberField(f, 'ref', 0),
     ...(valueProperty !== undefined ? { valueProperty } : {}),
     images,
+    act: numberField(f, 'act', 0),
+    click: numberField(f, 'click', 0),
     ifCodes: entry.ifCodes,
   };
 }

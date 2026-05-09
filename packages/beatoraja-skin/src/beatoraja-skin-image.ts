@@ -60,10 +60,24 @@ export interface BeatorajaImageElement {
    */
   len: number;
   /**
-   * `act` field used by some skins to flag alternate-state textures. Beatoraja's reference theme sets it to `0` or
-   * leaves it absent; we preserve it for forward compatibility but it isn't read by the normalization layer.
+   * Click-event code (audit 2.5). Mirrors beatoraja's `Event act` field on `JsonSkin.Image`.
+   * When non-zero, the renderer makes the sprite interactive and forwards this code to the
+   * host's `onButtonAction` callback on tap. Beatoraja's reference theme uses
+   *
+   *   - `15` PLAY, `16` AUTO_PLAY, `19/316/317/318` REPLAY slots, `315` PRACTICE, `210` IR_OPEN,
+   *   - `17` READ_TEXT, `89` FAVORITE_SONG, `90` FAVORITE_CHART, `74` JUDGE_TIMING,
+   *   - `308` LN_MODE_CYCLE, `11` KEYS_FILTER, `12` SORT.
+   *
+   * Default `0` = "no action" (decorative sprite). The host scene resolves the code into its
+   * real action — see `pixi-beatoraja-select.ts handleButtonAction` for the mapping.
    */
   act: number;
+  /**
+   * Click mode tag (`int click = 0` in beatoraja's `JsonSkin.Image`). Distinguishes the
+   * action variant the host should interpret on the click — typical values are `0` (regular
+   * tap) and `1` (long-press / hold). Forwarded verbatim alongside {@link act} to the host.
+   */
+  click: number;
   /**
    * Disappearance Y line in skin-pixel units (libGDX Y-UP — bigger = higher on screen). When set
    * (and the destination's lift offset is wired), the renderer hides the portion of the sprite
@@ -121,6 +135,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
     ref: numberField(f, 'ref', 0),
     len: numberField(f, 'len', 0),
     act: numberField(f, 'act', 0),
+    click: numberField(f, 'click', 0),
     disapearLine: numberField(f, 'disapearLine', -1),
     isDisapearLineLinkLift: boolField(f, 'isDisapearLineLinkLift', false),
     ifCodes: entry.ifCodes,
