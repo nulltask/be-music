@@ -53,6 +53,12 @@ export interface BeatorajaFloatValueElement {
   zeropadding: number;
   /** Alignment hint, same numeric semantics as `value.align` (0=right, 1=left, 2=center). */
   align: number;
+  /**
+   * Per-digit secondary offset ids — same semantics as `BeatorajaValueElement.offsets`.
+   * Mirrors upstream `SkinNumber.draw()` `+ offsets[j].x` per-slot term. Empty for the
+   * common case; default skin doesn't use it.
+   */
+  offsets: ReadonlyArray<number>;
   /** Op-code reference for the dynamic numeric value. `0` = no ref. */
   ref: number;
   /** Optional `value` FloatProperty. Beatoraja evaluates this instead of `ref` when authored. */
@@ -98,6 +104,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaFloatValueElement | un
     padding: numberField(f, 'padding', 0),
     zeropadding: numberField(f, 'zeropadding', 0),
     align: numberField(f, 'align', 0),
+    offsets: numberArrayField(f, 'offset'),
     ref: numberField(f, 'ref', 0),
     ...(valueProperty !== undefined ? { valueProperty } : {}),
     ifCodes: entry.ifCodes,
@@ -107,6 +114,16 @@ function normalizeOne(entry: NormalizedElement): BeatorajaFloatValueElement | un
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+function numberArrayField(record: Readonly<Record<string, unknown>>, key: string): ReadonlyArray<number> {
+  const v = record[key];
+  if (!Array.isArray(v)) return [];
+  const out: number[] = [];
+  for (const x of v) {
+    if (typeof x === 'number' && Number.isFinite(x)) out.push(x);
+  }
+  return out;
 }
 
 function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

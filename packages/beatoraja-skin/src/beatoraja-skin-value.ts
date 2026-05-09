@@ -100,6 +100,19 @@ export interface BeatorajaValueElement {
    * count depends on the runtime value, not the static cell layout.
    */
   align: number;
+  /**
+   * Per-digit secondary offset ids — one offset id per slot. Mirrors upstream's
+   * `SkinNumber.draw()` `+ offsets[j].x / offsets[j].y` term: each digit slot j adds
+   * `(offset.x, offset.y)` from its authored offset id (resolved via the host's
+   * `resolveOffset`). Authored as `value[].offset = [10, 20, 30, ...]` (parallel array
+   * with one id per slot up to {@link digit}); slots without a corresponding entry get
+   * no per-digit offset.
+   *
+   * Empty (= `[]`) when the author didn't author per-digit offsets, which is the common
+   * case. Default skin / GdbG / ModernChic don't currently use this — the field is
+   * preserved for community skins that author per-digit chrome positioning.
+   */
+  offsets: ReadonlyArray<number>;
   /** Op-codes that gate visibility (from `if`/`values` flattening). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -140,8 +153,19 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
     ref: numberField(f, 'ref', 0),
     ...(valueProperty !== undefined ? { valueProperty } : {}),
     align: numberField(f, 'align', 0),
+    offsets: numberArrayField(f, 'offset'),
     ifCodes: entry.ifCodes,
   };
+}
+
+function numberArrayField(record: Readonly<Record<string, unknown>>, key: string): ReadonlyArray<number> {
+  const v = record[key];
+  if (!Array.isArray(v)) return [];
+  const out: number[] = [];
+  for (const x of v) {
+    if (typeof x === 'number' && Number.isFinite(x)) out.push(x);
+  }
+  return out;
 }
 
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

@@ -1731,10 +1731,10 @@ export class BeatorajaPlaySkinView {
           this.updateImageEntry(entry, renderContext, props);
           break;
         case 'value':
-          this.updateValueEntry(entry, props, luaContext);
+          this.updateValueEntry(entry, props, luaContext, context.resolveOffset);
           break;
         case 'floatvalue':
-          this.updateFloatValueEntry(entry, props, luaContext);
+          this.updateFloatValueEntry(entry, props, luaContext, context.resolveOffset);
           break;
         case 'text':
           this.updateTextEntry(entry, props, luaContext);
@@ -1884,6 +1884,7 @@ export class BeatorajaPlaySkinView {
     entry: ValueEntry,
     props: ReturnType<typeof destinationToSpriteProps>,
     luaContext: BeatorajaLuaRuntimeContext,
+    resolveOffset: BeatorajaRenderContext['resolveOffset'],
   ): void {
     const baseTexture = entry.baseTexture;
     if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
@@ -1944,6 +1945,13 @@ export class BeatorajaPlaySkinView {
     // digit width) so rotation pivots around the strip's authored center, not each digit's
     // local middle. The +i*slotWidth offset stays as before.
     const center = centerToAnchor(entry.group.center);
+    // Per-digit offsets — `value[].offset = [id0, id1, ...]` (parallel array, one offset
+    // id per slot). Mirrors upstream `SkinNumber.draw()`'s `+ offsets[j].x / .y` term.
+    // Empty (= the default) skips the per-slot resolveOffset call entirely; populated
+    // arrays add `(off.x, off.y)` to the matching slot's position. Width / height grow
+    // from off.w / off.h independent of the `relative` group flag (per-digit offsets
+    // operate on a single sprite, no center-anchor recompute needed).
+    const perDigitOffsets = entry.value.offsets;
     for (let i = 0; i < entry.digitSprites.length; i += 1) {
       const sprite = entry.digitSprites[i]!;
       const cell = cells[i];
@@ -1953,10 +1961,24 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift;
-      sprite.y = props.y + center.y * props.height;
-      sprite.width = slotWidth;
-      sprite.height = props.height;
+      let perDigitDx = 0;
+      let perDigitDy = 0;
+      let perDigitDw = 0;
+      let perDigitDh = 0;
+      const offsetId = perDigitOffsets[i];
+      if (offsetId !== undefined && resolveOffset !== undefined) {
+        const off = resolveOffset(offsetId);
+        if (off !== undefined) {
+          perDigitDx = off.x;
+          perDigitDy = off.y;
+          perDigitDw = off.w;
+          perDigitDh = off.h;
+        }
+      }
+      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift + perDigitDx;
+      sprite.y = props.y + center.y * props.height + perDigitDy;
+      sprite.width = slotWidth + perDigitDw;
+      sprite.height = props.height + perDigitDh;
       sprite.alpha = props.alpha;
       sprite.tint = props.tint;
       sprite.angle = props.angle;
@@ -1975,6 +1997,7 @@ export class BeatorajaPlaySkinView {
     entry: FloatValueEntry,
     props: ReturnType<typeof destinationToSpriteProps>,
     luaContext: BeatorajaLuaRuntimeContext,
+    resolveOffset: BeatorajaRenderContext['resolveOffset'],
   ): void {
     const baseTexture = entry.baseTexture;
     if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
@@ -2022,6 +2045,7 @@ export class BeatorajaPlaySkinView {
     // with explicit `align` rendered with leading blanks on the wrong side.
     const alignShift = composeBeatorajaFloatValueShift(entry.value, value, slotWidth);
     const center = centerToAnchor(entry.group.center);
+    const perDigitOffsets = entry.value.offsets;
     for (let i = 0; i < entry.slotSprites.length; i += 1) {
       const sprite = entry.slotSprites[i]!;
       const cell = cells[i];
@@ -2031,10 +2055,24 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift;
-      sprite.y = props.y + center.y * props.height;
-      sprite.width = slotWidth;
-      sprite.height = props.height;
+      let perDigitDx = 0;
+      let perDigitDy = 0;
+      let perDigitDw = 0;
+      let perDigitDh = 0;
+      const offsetId = perDigitOffsets[i];
+      if (offsetId !== undefined && resolveOffset !== undefined) {
+        const off = resolveOffset(offsetId);
+        if (off !== undefined) {
+          perDigitDx = off.x;
+          perDigitDy = off.y;
+          perDigitDw = off.w;
+          perDigitDh = off.h;
+        }
+      }
+      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift + perDigitDx;
+      sprite.y = props.y + center.y * props.height + perDigitDy;
+      sprite.width = slotWidth + perDigitDw;
+      sprite.height = props.height + perDigitDh;
       sprite.alpha = props.alpha;
       sprite.tint = props.tint;
       sprite.angle = props.angle;
@@ -2733,17 +2771,35 @@ export class BeatorajaPlaySkinView {
       if (props.height > 0) {
         graphics.rect(halfWidthPx - 0.5, 0, 1, props.height).fill({ color: 0xffffff, alpha: 0.25 });
       }
-      // Ticks — newest paints brightest, oldest faintest. Sample list is oldest-first; map each
-      // index to a vertical position (oldest at top, newest at bottom) and an alpha that decays
-      // toward the top. The judge kind picks the color (PG/GR/GD/BD/PR fall back to white).
+      // Ticks — newest paints brightest, oldest faintest. Sample list is oldest-first.
+      // Two height modes per beatoraja's `SkinTimingVisualizer.draw()`:
+      //
+      //  - `drawDecay !== 0` — each tick's height is `region.h * i / n` (i = age index,
+      //    0..n-1 with 0 = oldest). Taller for newer, zero for oldest. Vertically centred
+      //    in the region so the taper grows symmetrically from the middle. Mirrors
+      //    upstream's `region.y + h*(n-i)/n / 2` y-anchor + `h * i / n` height.
+      //  - `drawDecay === 0` (default) — every tick paints at full region height. Just
+      //    the alpha fade carries the age cue.
+      //
+      // Color comes from the judge kind (PG/GR/GD/BD/PR/MS); unknown kinds fall back to
+      // white via `judgeColorFor`.
+      const drawDecay = entry.element.drawDecay !== 0;
       for (let i = 0; i < samples.length; i += 1) {
         const sample = samples[i]!;
         const ageRatio = (i + 1) / samples.length; // 1 = newest, 0 ≈ oldest
-        const alpha = ageRatio; // linear fade — could be tuned by `drawDecay` later
+        const alpha = ageRatio;
         const xRatio = Math.max(-1, Math.min(1, sample.deltaMs / halfWidthMs));
         const x = halfWidthPx + xRatio * halfWidthPx;
-        const y = props.height * (1 - ageRatio);
-        graphics.rect(x - lineWidthPx / 2, y, lineWidthPx, 4).fill({
+        let y: number;
+        let height: number;
+        if (drawDecay) {
+          height = (props.height * i) / samples.length;
+          y = (props.height - height) / 2;
+        } else {
+          y = 0;
+          height = props.height;
+        }
+        graphics.rect(x - lineWidthPx / 2, y, lineWidthPx, height).fill({
           color: judgeColorFor(sample.kind),
           alpha,
         });

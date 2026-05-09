@@ -84,6 +84,7 @@ describe('composeBeatorajaFloatValueCells', () => {
     padding: 0,
     zeropadding: 0,
     align: 0,
+    offsets: [],
     ref: 92,
     ifCodes: [],
   } as const;
@@ -180,6 +181,7 @@ describe('composeBeatorajaFloatValueShift', () => {
     padding: 0,
     zeropadding: 0,
     align: 0,
+    offsets: [],
     ref: 0,
     ifCodes: [],
   };

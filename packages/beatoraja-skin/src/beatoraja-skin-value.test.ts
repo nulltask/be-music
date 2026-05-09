@@ -77,6 +77,7 @@ describe('composeBeatorajaValueCells (24-cell signed dual-strip — audit 2.7)',
     space: 0,
     ref: 0,
     align: 0,
+    offsets: [],
     ifCodes: [],
   };
 
