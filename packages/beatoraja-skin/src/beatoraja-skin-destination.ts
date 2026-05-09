@@ -108,6 +108,25 @@ export interface BeatorajaDestinationGroup {
    */
   dst: ReadonlyArray<BeatorajaDestinationKeyframe>;
   /**
+   * Element-level easing curve. Mirrors beatoraja's `SkinObject.acc` class field (audit 1.5).
+   * Java's `setDestination` runs `if (this.acc == 0) this.acc = anim.acc;` per keyframe — the
+   * first non-zero value across the whole keyframe list wins, and once set the field is sticky
+   * (subsequent keyframes never overwrite). The renderer's `getRate()` reads this single value
+   * for every segment, so the entire animation runs on ONE easing curve, not a per-segment
+   * curve.
+   *
+   * The previous TS implementation applied easing per-segment using the FROM keyframe's `acc`.
+   * That diverged from beatoraja in two cases: (1) the first segment lost the curve when
+   * authors omit acc on keyframe 0 and add it on keyframe 1 (common in fade-in choreography);
+   * (2) different non-zero acc values across keyframes produced a hybrid curve in our impl
+   * but resolved to the first non-zero value in beatoraja. Both forms appear in ModernChic
+   * and GdbG community skins, so the per-element lock is the correct interpretation.
+   *
+   * The keyframe-level `acc` (`BeatorajaDestinationKeyframe.acc`) is preserved for round-trip
+   * and debugging — the renderer doesn't consult it any more.
+   */
+  acc: number;
+  /**
    * Stretch mode — mirrors beatoraja's `StretchType` enum (0..10). Controls how the source
    * sprite's natural dimensions are mapped onto the destination rect. Default `0` (= STRETCH,
    * free-stretch ignoring aspect ratio); non-zero values preserve aspect ratio in various ways
@@ -168,6 +187,9 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     offsets: normalizeOpArray(f.offsets),
     ifCodes: entry.ifCodes,
     dst: keyframes,
+    // Element-level easing: first non-zero acc across all keyframes wins (matches beatoraja's
+    // `if (this.acc == 0) this.acc = acc` per-keyframe accumulator inside SkinObject.setDestination).
+    acc: pickElementAcc(keyframes),
     // Stretch is per-element in beatoraja (the loader's `setStretch` call overwrites the field
     // each keyframe; last-write wins). The JSON / Lua entry sometimes places it on the outer
     // record, sometimes on individual keyframes; we read whichever the author chose, walking the
@@ -175,6 +197,18 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     stretch: pickStretchMode(f, rawDst),
     declarationOrder,
   };
+}
+
+/**
+ * Walk the keyframe list and return the first non-zero `acc` value, mirroring beatoraja's
+ * `if (this.acc == 0) this.acc = acc` accumulator. Returns `0` (linear) when every keyframe
+ * authored acc=0 / omitted acc.
+ */
+function pickElementAcc(keyframes: ReadonlyArray<BeatorajaDestinationKeyframe>): number {
+  for (const k of keyframes) {
+    if (k.acc !== 0) return k.acc;
+  }
+  return 0;
 }
 
 /**
@@ -407,11 +441,12 @@ export function sampleBeatorajaDestination(
     if (t <= b.time) {
       const span = b.time - a.time;
       const linearU = span === 0 ? 0 : (t - a.time) / span;
-      // Apply the segment's easing — `acc` belongs to the FROM keyframe and parametrizes the
-      // interpolation up to the next stop. Without this, every animation collapses to linear
-      // motion, which is visually wrong on skins that author punchy decel / accel curves
-      // (notably GdbG's decide / select fades, which use `acc = 1` and `acc = 2` heavily).
-      const easedU = applyAccCurve(linearU, a.acc);
+      // Apply the ELEMENT's easing — beatoraja's `SkinObject.acc` is a class field locked to
+      // the first non-zero authored value across the keyframe list, NOT a per-segment curve
+      // (audit 1.5). Every segment of the entire animation uses the same curve; switching
+      // between curves mid-animation is impossible at the spec level. See `pickElementAcc`
+      // for the resolution rule.
+      const easedU = applyAccCurve(linearU, group.acc);
       return interpolate(a, b, easedU);
     }
   }

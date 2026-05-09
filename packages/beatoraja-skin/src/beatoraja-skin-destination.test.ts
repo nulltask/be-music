@@ -184,11 +184,13 @@ describe('sampleBeatorajaDestination', () => {
       }
     });
 
-    it('carries acc forward to subsequent keyframes (matches JSONSkinLoader semantics)', () => {
-      // Segment 0→1000 has acc=2 (decelerate); segment 1000→2000 has no acc — beatoraja's
-      // setDestination keeps the previous frame's `acc` when the next is `MIN_VALUE`, so both
-      // segments use acc=2 here. Authors author long fades by declaring acc once on the FROM
-      // frame and omitting it on the rest.
+    it('every segment uses the SAME acc (element-level lock, audit 1.5)', () => {
+      // Beatoraja's `SkinObject.acc` is a class-level field, not a per-keyframe curve:
+      // `setDestination` runs `if (this.acc == 0) this.acc = anim.acc` per keyframe, so the
+      // first non-zero acc across the whole list wins and locks. Every segment then uses that
+      // single curve.
+      //
+      // Multi-segment dst with acc=2 on the first non-zero keyframe → both segments decelerate.
       const mixed = normalizeBeatorajaDestinations([
         {
           id: 'mixed',
@@ -199,12 +201,56 @@ describe('sampleBeatorajaDestination', () => {
             { time: 2000, x: 0 },
           ],
         },
-      ])[0];
-      // First half-segment: acc=2 decelerate at u=0.5 → x = 75
+      ])[0]!;
+      expect(mixed.acc).toBe(2);
+      // First segment (0→1000): u=0.5, decel → 0.75 → x = 75.
       expect(sampleBeatorajaDestination(mixed, 500)?.x).toBeCloseTo(75, 6);
-      // Second half-segment: also acc=2 (carried forward). u=0.5 from 100 → 0 with decel.
-      // Decel curve `u·(2-u)` at 0.5 = 0.75 → x = 100 - 0.75·100 = 25.
+      // Second segment (1000→2000): also uses acc=2 (element-level lock). u=0.5, decel = 0.75
+      // → x = 100 - 0.75·100 = 25.
       expect(sampleBeatorajaDestination(mixed, 1500)?.x).toBeCloseTo(25, 6);
+    });
+
+    it('first non-zero acc wins regardless of which keyframe authored it (audit 1.5)', () => {
+      // Authors that omit acc on the first keyframe and add it on the second still get the
+      // curve applied to ALL segments — beatoraja's accumulator picks up the first non-zero
+      // value it encounters. Old per-segment behavior would have left the first segment linear,
+      // which doesn't match the author's intent for fade-in choreography.
+      const lateAcc = normalizeBeatorajaDestinations([
+        {
+          id: 'late',
+          loop: -1,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1, a: 255 },
+            { time: 1000, x: 100, acc: 2 },
+            { time: 2000, x: 0 },
+          ],
+        },
+      ])[0]!;
+      expect(lateAcc.acc).toBe(2);
+      // First segment: now uses acc=2 (was incorrectly linear in the per-segment impl).
+      expect(sampleBeatorajaDestination(lateAcc, 500)?.x).toBeCloseTo(75, 6);
+    });
+
+    it('subsequent non-zero acc values are ignored (only first wins)', () => {
+      // Multi-keyframe with DIFFERENT non-zero acc values: beatoraja locks on the first,
+      // ignores the rest. Mirrors the `if (this.acc == 0)` guard.
+      const conflicting = normalizeBeatorajaDestinations([
+        {
+          id: 'conflict',
+          loop: -1,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 1, h: 1, a: 255, acc: 1 },
+            { time: 1000, x: 100, acc: 2 },
+            { time: 2000, x: 0 },
+          ],
+        },
+      ])[0]!;
+      expect(conflicting.acc).toBe(1);
+      // First segment uses accel (acc=1): u=0.5 → 0.25 → x = 25
+      expect(sampleBeatorajaDestination(conflicting, 500)?.x).toBeCloseTo(25, 6);
+      // Second segment ALSO uses acc=1 (locked element-level). 100 → 0 with accel u=0.5
+      // → 0.25 → x = 100 - 0.25·100 = 75.
+      expect(sampleBeatorajaDestination(conflicting, 1500)?.x).toBeCloseTo(75, 6);
     });
 
     it('still defaults to acc=0 (linear) when no keyframe specifies acc', () => {
