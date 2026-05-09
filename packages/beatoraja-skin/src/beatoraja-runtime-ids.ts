@@ -900,7 +900,17 @@ export const BEATORAJA_NUM = {
   BEST_MAXSCORE: 72,
   /** prop.lua `totalnotes = 74` — total scorable notes (also exposed as live `totalnotes2 = 106`). */
   TOTALNOTES: 74,
-  /** prop.lua `maxcombo = 75` — best max-combo across runs. */
+  /**
+   * prop.lua `maxcombo = 75` (upstream `NUMBER_MAXCOMBO`). Context-dependent:
+   *
+   * - **During play**: running max-combo of the CURRENT run — `JudgeManager.getScoreData().getCombo()`
+   *   refreshed via `score.setCombo(max(score, live))` on every judge. This is what default
+   *   `play5.json`'s `judgen-*` (judge-popup combo digits) reads.
+   * - **Music select**: stored best-run combo for this chart (`BarManager.getSelected().getScore().getCombo()`).
+   *
+   * The `BEST_*` prefix in this enum is a naming holdover from the music-select interpretation;
+   * the play-scene adapter wires it to the CURRENT-run max combo so judge popups render correctly.
+   */
   BEST_MAXCOMBO: 75,
   /** prop.lua `misscount = 76`. */
   BEST_MISSCOUNT: 76,

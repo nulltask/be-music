@@ -1603,7 +1603,6 @@ export class BeatorajaRuntimeAdapter {
         return summary?.total ?? 0;
       case BEATORAJA_NUM.BEST_SCORE:
       case BEATORAJA_NUM.BEST_MAXSCORE:
-      case BEATORAJA_NUM.BEST_MAXCOMBO:
       case BEATORAJA_NUM.BEST_MISSCOUNT:
       case BEATORAJA_NUM.PLAYCOUNT:
       case BEATORAJA_NUM.CLEARCOUNT:
@@ -1659,6 +1658,14 @@ export class BeatorajaRuntimeAdapter {
         return Math.floor((scoreRatePct - Math.floor(scoreRatePct)) * 100);
       case BEATORAJA_NUM.COMBO:
         return this.runningCombo;
+      // Ref 75 (`NUMBER_MAXCOMBO`) — despite the misleading "BEST_*" alias inherited from
+      // the constant table, upstream's `IntegerPropertyFactory` returns
+      // `JudgeManager.getScoreData().getCombo()` during play (= running max combo of the
+      // CURRENT run, refreshed via `score.setCombo(Math.max(score.getCombo(), combo))`
+      // every judge). Default `play5.json` declares `judgen-pg / -gr / -gd / -bd / -pr /
+      // -ms` (judge-popup combo digits) with `ref:75`, so without this case the combo
+      // stays at 0 throughout the play.
+      case BEATORAJA_NUM.BEST_MAXCOMBO:
       case BEATORAJA_NUM.MAXCOMBO_LIVE:
         return this.maxCombo;
       case BEATORAJA_NUM.TOTALNOTES_LIVE:
