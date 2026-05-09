@@ -44,6 +44,7 @@ import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
 import { computeBeatorajaChartMarkers } from './beatoraja-chart-markers.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
+import { flipDpChart } from './beatoraja-chart-dp-flip.ts';
 import { BeatorajaBgaLayer } from './pixi-beatoraja-bga.ts';
 import type { BgaCue } from './pixi-gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
@@ -80,6 +81,16 @@ export interface PixiBeatorajaGameplayViewOptions {
   chart: BeMusicJson;
   audio: EngineDriverAudioContext;
   mode: 'manual' | 'auto';
+  /**
+   * Optional DP-flip flag. When `true` AND the chart is a DP variant (10 / 14 keys), the
+   * chart's lane channels are mirrored before the engine consumes them — `1X ↔ 2X` for
+   * visible / invisible / LN / landmine slots. Pure SP charts are unaffected (no
+   * 2P channels to swap with). Mirrors beatoraja's `Config.flipMode`.
+   *
+   * Default `false`. Hosts wire this to a UI toggle (the demo's keymode-options panel
+   * surfaces it on a top-level setting).
+   */
+  dpFlip?: boolean;
   /** Optional song directory label (e.g. parent folder name). Surfaces `BEATORAJA_TEXT.DIRECTORY = 1000`. */
   directoryLabel?: string;
   inputTarget?: EventTarget;
@@ -205,7 +216,13 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private lastFitHeight = 0;
 
   constructor(options: PixiBeatorajaGameplayViewOptions) {
-    this.options = options;
+    // Apply DP flip to the chart BEFORE anything else consumes it. The transform swaps
+    // `1X ↔ 2X` (and 3/4, 5/6, D/E) channel sides — pure SP charts have no 2P channels to
+    // swap with so the transform is a fast-path no-op. Re-stash the flipped chart on a
+    // copy of `options` so all downstream consumers (engine driver, BPM curve, markers,
+    // BGA timeline) see the same flipped chart.
+    const effectiveChart = options.dpFlip === true ? flipDpChart(options.chart) : options.chart;
+    this.options = effectiveChart === options.chart ? options : { ...options, chart: effectiveChart };
 
     // Skin-config-level op set built ONCE from the user's selected skin options. Threaded into
     // every consumer that runs `normalizeBeatorajaDestinations` (the play-skin view, BGA layer,
@@ -230,7 +247,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       baseOps: skinConfigOps,
       getNowMs: () => performance.now() - this.startMs,
       autoPlay: options.mode === 'auto',
-      chart: options.chart,
+      chart: effectiveChart,
       // Surface skin / directory metadata so `BEATORAJA_TEXT.SKIN_NAME` / `SKIN_AUTHOR` /
       // `DIRECTORY` resolve to real strings on the play scene's chrome panels.
       skinHeaderName: options.skin.name,
@@ -250,7 +267,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // BPM curve is precomputed once — `bpmgraph[]` is static for the whole session, no point
     // recomputing per frame. Captured here so both the initial view and any hot-swapped view
     // (`replaceSkin`) reuse the same curve.
-    this.chartBpmCurve = computeBeatorajaBpmCurve(options.chart);
+    this.chartBpmCurve = computeBeatorajaBpmCurve(effectiveChart);
     this.view = new BeatorajaPlaySkinView({
       skin: options.skin,
       textures: options.textures,
@@ -312,7 +329,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: options.textures,
       canvasHeight: this.view.height,
     });
-    this.chartMarkers = computeBeatorajaChartMarkers(options.chart, {
+    this.chartMarkers = computeBeatorajaChartMarkers(effectiveChart, {
       // 1-second time ticks when the skin authors `time[]` markers. Disabled when the skin
       // doesn't author them — the marker layer culls the empty list anyway.
       timeIntervalSec: noteSection.time.length > 0 ? 1 : undefined,

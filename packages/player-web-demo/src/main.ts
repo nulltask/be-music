@@ -1789,6 +1789,12 @@ class PlayerWebDemoApp {
       audio: prep.audio,
       skinAudio: this.beatorajaSkinAudio,
       mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
+      // DP flip — when the user enabled it via the play-options panel AND the chart is a
+      // DP variant (10 / 14 keys), the chart's lane channels mirror at construction. SP
+      // charts pass through unchanged because they have no 2P channels to swap with.
+      // Reads from the LR2 select view's persisted play options (the same surface that
+      // already drives `dpFlip` on the LR2 path).
+      dpFlip: this.selectView?.getPlayOptions().dpFlip,
       bgaTextures: prep.bga.textures,
       bgaCues: prep.bga.cues,
       chartImages,
