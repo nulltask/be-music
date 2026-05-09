@@ -241,7 +241,14 @@ export function destinationToSpriteProps(
     mirrorY,
     alpha,
     tint: packRgbTint(keyframe.r, keyframe.g, keyframe.b),
-    angle: keyframe.angle + offset.r,
+    // Negate the authored angle to convert libGDX (Y-UP, CCW-positive) into Pixi (Y-DOWN,
+    // CW-positive). The Y-flip of the rect's POSITION (`canvasHeight - yLibgdxBottom -
+    // height` above) is just a translation; it doesn't change the handedness of rotations
+    // applied to the sprite itself. Without this negation every authored rotation runs
+    // visually backwards — most visible on ModernChic Play's `attack.lua` 14 keyframe attack
+    // motion (was rotating the wrong way), 7K-skin scratch wheels, and Select-scene focus
+    // rings (audit 1.8).
+    angle: -(keyframe.angle + offset.r),
     blendMode: blendCodeToPixi(group.blend),
   };
 }

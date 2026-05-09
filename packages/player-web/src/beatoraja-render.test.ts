@@ -98,6 +98,22 @@ describe('destinationToSpriteProps', () => {
     expect(props.visible).toBe(false);
   });
 
+  it('negates the authored angle to convert libGDX CCW-positive into Pixi CW-positive (audit 1.8)', () => {
+    // libGDX rotates counter-clockwise on positive angles (Y-UP convention); Pixi rotates
+    // clockwise on positive angles (Y-DOWN). The Y-flip on the position alone doesn't
+    // re-handle the rotation handedness — we have to negate the angle so authored "CCW 30°"
+    // ends up as "CCW 30°" on screen, not "CW 30°".
+    const g = groupOf({ dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255, angle: 30 }] });
+    const props = destinationToSpriteProps(g, ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
+    expect(props.angle).toBe(-30);
+  });
+
+  it('negates negative angles too — full handedness flip', () => {
+    const g = groupOf({ dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255, angle: -45 }] });
+    const props = destinationToSpriteProps(g, ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
+    expect(props.angle).toBe(45);
+  });
+
   it('hides when ifCodes are unsatisfied', () => {
     const props = destinationToSpriteProps(
       groupOf({ if: [920], values: [{ id: 'demo', timer: 0, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }] }),
