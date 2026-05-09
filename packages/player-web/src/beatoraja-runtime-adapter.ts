@@ -1463,9 +1463,9 @@ export class BeatorajaRuntimeAdapter {
    *   - `2`: chart-time progress
    *   - `102`: load progress (always 1 in our pipeline — assets pre-decode before mount)
    *
-   * Polyline-style codes (`110` / `113` / `115` — score history) intentionally aren't surfaced
-   * here because they don't fit the bar-scaling model. Skins that author them get hidden bars
-   * until a per-frame history mechanism ships.
+   * Polyline-style codes (`110` / `113` / `115` — score history) are NOT surfaced through
+   * this resolver because they don't fit the bar-scaling model. {@link resolveGraphPolyline}
+   * handles the polyline path with `(progress, ratio)` samples instead.
    */
   resolveGraphValue(type: number): number | undefined {
     const frame = this.frame;
@@ -1489,6 +1489,43 @@ export class BeatorajaRuntimeAdapter {
       // is reachable, loading IS complete. Surface 1 to match the "fully loaded" visual.
       case 102:
         return 1;
+      default:
+        return undefined;
+    }
+  }
+
+  /**
+   * Resolve a `graph[].type` code into a polyline of `(x, y)` samples in `[0, 1]²`. Skins
+   * use this for score / gauge history graphs that paint as a curve over time, not as a
+   * single bar. Beatoraja's reference theme convention:
+   *
+   *   - `110` (NUMBER_SCORE_GRAPH) → live exScore polyline. `x` = chart progress (0..1),
+   *     `y` = exScore / maxExScore (0..1). Pulled from {@link scoreHistory}, populated
+   *     in `applyJudgeCombo` so the curve refreshes on every judgement.
+   *   - `113` (NUMBER_TARGET_GRAPH) / `115` (NUMBER_BEST_GRAPH) — DB-backed best /
+   *     target curves. We don't have a per-chart score DB yet, so these return
+   *     `undefined` (= the renderer hides the curve).
+   *
+   * Returning `undefined` for unknown / unsurfaced types keeps unsupported skins clean:
+   * the renderer hides the polyline rather than painting a flat line.
+   */
+  resolveGraphPolyline(type: number): ReadonlyArray<{ x: number; y: number }> | undefined {
+    switch (type) {
+      case 110: {
+        // Score history. Each sample has `progress ∈ [0, 1]` and `exScore` (raw integer).
+        // Normalize to `y = exScore / maxExScore`. When the history is empty (chart hasn't
+        // fired any judges yet) return undefined so the curve stays hidden until the first
+        // hit lands.
+        const history = this.scoreHistory;
+        if (history.length === 0) return undefined;
+        const summary = this.frame?.summary;
+        const maxExScore = (summary?.total ?? 0) * 2;
+        if (maxExScore <= 0) return undefined;
+        return history.map((s) => ({
+          x: Math.max(0, Math.min(1, s.progress)),
+          y: Math.max(0, Math.min(1, s.exScore / maxExScore)),
+        }));
+      }
       default:
         return undefined;
     }
