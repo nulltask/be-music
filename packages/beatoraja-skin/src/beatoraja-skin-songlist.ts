@@ -21,8 +21,18 @@
 
 import type { BeatorajaSkin } from './beatoraja-skin-types.ts';
 
-/** One row's rect in skin Y-UP coordinates. */
+/**
+ * One row's rect in skin Y-UP coordinates. The optional `id` is the row's
+ * `liston[i].id` / `listoff[i].id` — the `skin.image[]` entry the renderer crops as the
+ * row's bar background. Only set on entries returned in {@link BeatorajaSongListLayout.rows};
+ * sub-destination rects ({@link BeatorajaSongListLayout.level}, label rects) never set it.
+ *
+ * Many beatoraja skins author the focused row with a different `id` (e.g. `list_on` while
+ * other rows use `list`), so iterating `rows` and looking up `image[id]` per row produces
+ * a per-row sprite list with the cursor highlight baked into the texture choice.
+ */
 export interface BeatorajaSongListRowRect {
+  id?: string;
   x: number;
   y: number;
   w: number;
@@ -176,7 +186,14 @@ function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefine
     const w = numberField(rect, 'w', 0);
     const h = numberField(rect, 'h', 0);
     if (w <= 0 || h <= 0) continue;
-    out.push({ x, y, w, h });
+    // Capture `entry.id` so callers can look up `skin.image[id]` for the row's bar
+    // background sprite. Many skins author the focused row with a different id
+    // (e.g. `list_on` vs `list`), so retaining the id per-row gives the renderer the
+    // cursor highlight at no extra cost. `undefined` when the entry omits an id (bare
+    // dst-only entries in skins that don't author a bar texture).
+    const idValue = obj.id;
+    const id = typeof idValue === 'string' && idValue.length > 0 ? idValue : undefined;
+    out.push(id !== undefined ? { id, x, y, w, h } : { x, y, w, h });
   }
   return out.length > 0 ? out : undefined;
 }

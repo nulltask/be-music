@@ -26,8 +26,35 @@ describe('parseBeatorajaSongList', () => {
     } as unknown as Partial<BeatorajaSkin>);
     const layout = parseBeatorajaSongList(skin);
     expect(layout?.rows).toHaveLength(3);
-    expect(layout?.rows[0]).toEqual({ x: 800, y: 720, w: 500, h: 36 });
-    expect(layout?.rows[2]).toEqual({ x: 800, y: 0, w: 500, h: 36 });
+    expect(layout?.rows[0]).toEqual({ id: 'bar', x: 800, y: 720, w: 500, h: 36 });
+    expect(layout?.rows[2]).toEqual({ id: 'bar', x: 800, y: 0, w: 500, h: 36 });
+  });
+
+  it('captures `liston[i].id` per row so renderers can crop the bar texture', () => {
+    // Many beatoraja skins author the focused row with a different id (e.g. `list_on`)
+    // while other rows use the generic `list` id. Retaining the per-row id lets the
+    // renderer pick the right `image[]` crop without extra focused-row branching.
+    const skin = makeSkin({
+      songlist: {
+        liston: [
+          { id: 'list', dst: [{ x: 800, y: 720, w: 500, h: 36 }] },
+          { id: 'list_on', dst: [{ x: 800, y: 360, w: 500, h: 36 }] },
+          { id: 'list', dst: [{ x: 800, y: 0, w: 500, h: 36 }] },
+        ],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.rows.map((r) => r.id)).toEqual(['list', 'list_on', 'list']);
+  });
+
+  it('omits `id` when the entry has no `id` field', () => {
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.rows[0]?.id).toBeUndefined();
   });
 
   it('picks the row whose Pixi-y centre is closest to canvas vertical centre as focused', () => {
@@ -57,7 +84,7 @@ describe('parseBeatorajaSongList', () => {
     } as unknown as Partial<BeatorajaSkin>);
     const layout = parseBeatorajaSongList(skin);
     expect(layout?.rows).toHaveLength(1);
-    expect(layout?.rows[0]).toEqual({ x: 100, y: 200, w: 500, h: 50 });
+    expect(layout?.rows[0]).toEqual({ id: 'bar', x: 100, y: 200, w: 500, h: 50 });
   });
 
   it('skips entries with non-positive width / height', () => {

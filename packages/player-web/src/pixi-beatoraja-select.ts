@@ -13,9 +13,12 @@
 //   - **Smooth scroll** — `currentIndex` is the discrete cursor; `scrollPosition` is the
 //     animated value the renderer reads. `scrollPosition` tweens toward `currentIndex` on every
 //     tick so a long jump (PageDown / End) glides instead of teleporting.
-//   - **Selection highlight** — the row at the cursor renders in a warm yellow tint to stand
-//     out against arbitrarily-coloured skin chrome. No solid backdrop / row panel: the skin's
-//     authored chrome stays fully visible behind the list.
+//   - **Selection highlight** — driven by two stacked mechanisms. Skins that author the
+//     focused `liston[i]` entry with a different `id` than its peers (e.g. `list_on` vs
+//     `list`) get a per-row bar texture swap automatically — `parseBeatorajaSongList`
+//     captures the per-row id and we crop `image[id]` into a Sprite per row. ON TOP of
+//     that, the row at the cursor draws its label / icon in a warm yellow tint so the
+//     selection stays visible even for skins with no per-row bar texture authored.
 //   - **Text resolver** — surfaces the *currently-highlighted* song's title / artist / genre /
 //     etc. via `text[].ref` so the skin's authored info panels reflect the live cursor.
 //   - **Keyboard navigation** — ArrowUp/Down (one row), PageUp/Down (10 rows), Home/End
@@ -344,6 +347,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * sat at hard-coded screen-space coordinates that ignored the skin's chrome.
    */
   private readonly listLayer = new Container();
+  /**
+   * Per-row bar background sprites — cropped from `skin.image[liston[i].id]`. Many beatoraja
+   * skins author the focused row with a different id (e.g. `list_on` while other rows use
+   * `list`), so the per-row texture choice doubles as the cursor highlight. `undefined`
+   * entries fill the array when the skin omits an `id` for that row OR the matching
+   * `image[]` entry is missing — labels still paint, just without a per-row backdrop.
+   *
+   * Mounted FIRST in the listLayer's z-order so labels / icons / level / feature labels
+   * paint on top.
+   */
+  private readonly rowBarSprites: (Sprite | undefined)[] = [];
   /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
   /** Per-row "kind icon" texts (folder ▸ vs song ♪). Length matches {@link rowLabels}. */
@@ -1538,12 +1552,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
     }
     for (const s of this.rowHitAreas) s.destroy();
+    for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
     this.rowLabels.length = 0;
     this.rowKindIcons.length = 0;
     this.rowSublabels.length = 0;
     this.rowLevelLabels.length = 0;
     this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
+    this.rowBarSprites.length = 0;
     // Pick a font size proportional to the row height. Skins with tall bars (ModernChic
     // 70px) get bigger text; skins with thin bars (default 36px) get smaller text. The 0.45
     // multiplier leaves room for a sub-label below the primary one.
@@ -1551,6 +1567,18 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const labelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
     const subSize = Math.max(10, Math.floor(sampleRect.h * 0.25));
     for (let i = 0; i < this.visibleRowCount; i += 1) {
+      // Per-row bar background. Mounted FIRST so it sits behind hit area / icon / labels.
+      // Skins that author the focused row with a different `liston[i].id` (e.g. `list_on`
+      // for the cursor row, `list` for the rest) get their cursor highlight via the
+      // texture choice — no extra branching here. Skins that omit an id, or whose matching
+      // `image[]` entry is missing from the texture cache, get an `undefined` slot and the
+      // labels paint without a backdrop.
+      const rowMeta = this.songList?.rows[i];
+      const barId = rowMeta?.id;
+      const bar = barId !== undefined ? this.buildFeatureLabelSprite(barId) : undefined;
+      if (bar !== undefined) this.listLayer.addChild(bar);
+      this.rowBarSprites.push(bar);
+
       // Hit area sprite — invisible but interactive. Sized to the row's text band on layout.
       const hit = new Sprite({ texture: Texture.WHITE });
       hit.alpha = 0;
@@ -1673,11 +1701,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
       const hit = this.rowHitAreas[i]!;
+      const bar = this.rowBarSprites[i];
       if (entry === undefined) {
         icon.visible = false;
         label.visible = false;
         sub.visible = false;
         hit.visible = false;
+        // Hide the row bar background when no song / folder is mapped to this slot
+        // (small libraries that don't fill the whole visible window). Otherwise an empty
+        // row would still show its bar texture.
+        if (bar !== undefined) bar.visible = false;
         continue;
       }
       const isSelected = i === this.centreRowIndex;
@@ -1685,6 +1718,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       label.visible = true;
       sub.visible = true;
       hit.visible = true;
+      if (bar !== undefined) bar.visible = true;
       const levelLabel = this.rowLevelLabels[i];
       if (entry.kind === 'folder') {
         const folder = entry.folder;
@@ -1757,6 +1791,18 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
 
       const isSelected = i === this.centreRowIndex;
+
+      // Per-row bar background — positioned + sized to the row's full rect (skin-space).
+      // The skin's authored `liston[i].dst[0]` rect IS the bar rect, so we just stamp the
+      // cropped texture into the same coordinates the labels / hit area use. Honours the
+      // fractional scroll nudge so an in-flight tween glides the bar with everything else.
+      const bar = this.rowBarSprites[i];
+      if (bar !== undefined) {
+        bar.x = rect.x;
+        bar.y = rect.y + fractionalNudge;
+        bar.width = rect.w;
+        bar.height = rect.h;
+      }
 
       hit.x = rect.x;
       hit.y = rect.y + fractionalNudge;
