@@ -15,6 +15,7 @@ export type {
   BeatorajaSkinCategoryGroup,
   BeatorajaSkinConfig,
   BeatorajaSkinCustomOffset,
+  BeatorajaSkinOffsetAxes,
   BeatorajaSkinFilepath,
   BeatorajaSkinFontId,
   BeatorajaSkinFontEntry,

@@ -100,11 +100,24 @@ export function loadBeatorajaSkin(options: LoadBeatorajaSkinOptions): LoadBeator
   // Lua path.
   const baseDir = dirname(normalizePath(entryKey));
   const modules = collectBeatorajaLuaModules(options.files, baseDir);
+  // Translate the host-facing `BeatorajaSkinConfig` into the Lua-bridge shape
+  // (`BeatorajaLuaSkinConfig`). The Lua `skin_config.offset` table reads from `customOffset`
+  // (the per-name record); the chart timing `offset` number is host-only and not surfaced to
+  // Lua. Skins relying on `skin_config.offset[name]` (ModernChic et al.) get a populated
+  // table when the user has picked offsets, an empty table with default-zero `__index`
+  // otherwise.
+  const luaSkinConfig =
+    options.skinConfig === undefined
+      ? undefined
+      : {
+          ...options.skinConfig,
+          offset: options.skinConfig.customOffset,
+        };
   const evalResult = evaluateBeatorajaLuaSkin({
     entry: entryBytes,
     entryName: entryKey,
     modules,
-    skinConfig: options.skinConfig,
+    skinConfig: luaSkinConfig,
     skinBaseDir: baseDir,
     runtimeContext: options.runtimeContext,
     // `dofile(skin_config.get_path("Play/lua/sp/info.lua"))` (the ModernChic pattern)

@@ -329,11 +329,45 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
 
 /** What the host UI hands back after the user has picked their custom options & files. */
 export interface BeatorajaSkinConfig {
+  /**
+   * Chart timing offset in ms — applied to note timing by the engine, not by the skin.
+   * Lua-side `skin_config.offset[name]` does NOT read this value; it's a host-side concern.
+   * Range conventionally `[-200, 200]`. Defaults to `0`.
+   */
   offset?: number;
+  /**
+   * User picks for the skin's `header.offset[]` declared customization slots. Keyed by
+   * `BeatorajaSkinCustomOffset.name`; each value carries the axis deltas the user adjusted
+   * via the skin-options panel. ModernChic and other community skins author dozens of
+   * `header.offset[]` entries (e.g. `"main_brightness"`, `"info_panel_x"`,
+   * `"playarea_w"`) and read them at draw time via Lua closures like
+   * `function() return skin_config.offset[name].a end`.
+   *
+   * The Lua bridge surfaces this map as `skin_config.offset` (a NAME-KEYED TABLE distinct
+   * from the chart-timing number above). Hosts populate this from the GUI's per-axis
+   * sliders driven by `header.offset[]`. Empty / undefined = every slot returns its
+   * default zero record via the table's `__index` metatable.
+   */
+  customOffset?: Readonly<Record<string, Readonly<Partial<BeatorajaSkinOffsetAxes>>>>;
   /** Map of `property[].name` → chosen `op` integer. */
   option?: Readonly<Record<string, number>>;
   /** Map of `filepath[].name` → chosen relative path. */
   file?: Readonly<Record<string, string>>;
+}
+
+/**
+ * Per-axis offset deltas the user authored through the skin-options panel. Same shape as
+ * `BeatorajaSkinOffsetValue` (in `./beatoraja-skin-destination.ts`), repeated here to avoid
+ * pulling that module into the types layer's import graph. Positive values shift in the
+ * libGDX-positive direction (x right, y up); alpha is an additive delta in `[-255, 255]`.
+ */
+export interface BeatorajaSkinOffsetAxes {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  r: number;
+  a: number;
 }
 
 /**

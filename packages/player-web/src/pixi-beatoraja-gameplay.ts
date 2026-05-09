@@ -30,6 +30,7 @@ import type {
   BeatorajaImageId,
   BeatorajaSkin,
   BeatorajaSkinConfig,
+  BeatorajaSkinCustomOffset,
 } from '@be-music/beatoraja-skin';
 import {
   buildBaseOpSet,
@@ -237,6 +238,14 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       directoryLabel: options.directoryLabel,
       laneHeight: lanecoverSliderRange,
     });
+    // Push the user's `customOffset` picks into the adapter's offset table KEYED BY ID. The
+    // skin's `header.offset[]` declares each slot's `(name, id, axisFlags)`; the host config
+    // carries per-name axis values. Walking both gives us numeric-id-keyed rows for the
+    // renderer to consume via `resolveOffset(id)`. Without this, ModernChic-style author-
+    // exposed sliders (e.g. `main_brightness.a`) only reach the Lua side via
+    // `skin_config.offset[name]` — destinations referencing the slot id directly via
+    // `offsets: [50]` see no shift.
+    this.applyCustomOffsets(options.skin.offset, options.skinConfig?.customOffset);
 
     // BPM curve is precomputed once — `bpmgraph[]` is static for the whole session, no point
     // recomputing per frame. Captured here so both the initial view and any hot-swapped view
@@ -482,6 +491,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // 1. Adapter: swap base ops while keeping runtime state.
     const skinConfigOps = buildBaseOpSet(opts.skinConfig?.option);
     this.adapter.setBaseOps(skinConfigOps);
+    // Re-seed the per-name custom offsets against the new skin's `header.offset[]` schema —
+    // entries from the previous skin that no longer exist in the new schema are dropped, the
+    // rest carry forward. Replacing the same skin with new picks fully overrides the prior
+    // values via the adapter's `setOffset` merge semantics.
+    this.applyCustomOffsets(opts.skin.offset, opts.skinConfig?.customOffset);
 
     // 2. Tear down the old visual layers. Textures live on the per-entry cache and survive disposal
     // (we never destroy them through the cache by design — see `beatoraja-textures.ts`).
@@ -564,6 +578,36 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         name: opts.skin.name,
       }),
     );
+  }
+
+  /**
+   * Push the user's `BeatorajaSkinConfig.customOffset` picks into the runtime adapter's
+   * offset table, keyed by the matching `header.offset[].id`. Each axis flagged on the
+   * schema gets forwarded; unflagged axes default to 0 (no shift).
+   *
+   * Called at construction and from `replaceSkin` so a config edit (or a skin swap that
+   * changes the schema) lands the new values without restarting the chart.
+   */
+  private applyCustomOffsets(
+    schema: ReadonlyArray<BeatorajaSkinCustomOffset> | undefined,
+    picks: BeatorajaSkinConfig['customOffset'],
+  ): void {
+    if (schema === undefined || schema.length === 0 || picks === undefined) return;
+    for (const slot of schema) {
+      const axes = picks[slot.name];
+      if (axes === undefined) continue;
+      // `setOffset` does a partial merge — we send only the flagged axes, leaving the
+      // rest untouched (so a subsequent unrelated `setOffset` for the same id doesn't
+      // wipe these). Unflagged values stay at the slot's authored defaults.
+      const next: Partial<{ x: number; y: number; w: number; h: number; r: number; a: number }> = {};
+      if (slot.x && axes.x !== undefined) next.x = axes.x;
+      if (slot.y && axes.y !== undefined) next.y = axes.y;
+      if (slot.w && axes.w !== undefined) next.w = axes.w;
+      if (slot.h && axes.h !== undefined) next.h = axes.h;
+      if (slot.r && axes.r !== undefined) next.r = axes.r;
+      if (slot.a && axes.a !== undefined) next.a = axes.a;
+      this.adapter.setOffset(slot.id, next);
+    }
   }
 
   private tick(): void {

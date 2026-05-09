@@ -209,6 +209,29 @@ describe('destinationToSpriteProps', () => {
     expect(props.x).toBe(50);
   });
 
+  it('handles ModernChic black-overlay pattern: keyframe.a=0 + offset.a=+192 → alpha 0.75', () => {
+    // ModernChic stages a transparent black image (`MAIN.IMAGE.BLACK` with `a=0` in the
+    // keyframe) and uses an `offset.a` slider to dim the playfield by adding alpha. Under
+    // the previous multiplicative impl, the keyframe alpha 0 multiplied any offset.a to 0,
+    // so the dimmer was inert. With additive math: keyframe.a/255 + offset.a/255 = 0 + 0.75
+    // = 0.75. Reproduces the ModernChic background.lua / lane.lua / info.lua pattern.
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 0 }], // transparent black overlay
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        // Brighten by ~75% — typical "darkness" slider value the ModernChic config exposes.
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 0, h: 0, r: 0, a: 192 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+    expect(props.alpha).toBeCloseTo(0.752, 2);
+    expect(props.visible).toBe(true);
+  });
+
   it('adds offset.a to keyframe.a (matches SkinObject.prepareColor additive math)', () => {
     // Beatoraja's `prepareColor` does `color.a = clamp(color.a + off.a / 255)`. A skin
     // authoring `offset.a = -64` to dim an element should subtract ~25% from the keyframe

@@ -53,7 +53,7 @@ export interface SetSkinOptions {
   /** Section title shown at the top of the panel. */
   title: string;
   /** Skin header carrying the `property[]` / `filepath[]` / `category[]` schema to expose. */
-  header: Pick<BeatorajaSkinHeader, 'property' | 'filepath' | 'category'>;
+  header: Pick<BeatorajaSkinHeader, 'property' | 'filepath' | 'category' | 'offset'>;
   /** Currently-applied skin config. Dropdowns initialize to these picks. */
   config: BeatorajaSkinConfig;
   /**
@@ -101,12 +101,21 @@ export class BeatorajaSkinOptionsGui {
     offset: number;
     option: Record<string, number>;
     file: Record<string, string>;
+    /**
+     * Per-name custom-offset axes. Mirrors `BeatorajaSkinConfig.customOffset` —
+     * `state.customOffset[<offsetName>][<axis>]` holds the user's authored delta for one of
+     * the `header.offset[]` slots. lil-gui binds one controller per (name × axis) flagged in
+     * the header schema; the controller mutates this nested record live, and `onChange`
+     * forwards a deep-cloned snapshot to the host.
+     */
+    customOffset: Record<string, { x: number; y: number; w: number; h: number; r: number; a: number }>;
     /** Currently-selected skin entry path (drives the top "Skin" dropdown). */
     entryPath: string;
   } = {
     offset: 0,
     option: {},
     file: {},
+    customOffset: {},
     entryPath: '',
   };
 
@@ -120,10 +129,27 @@ export class BeatorajaSkinOptionsGui {
    */
   setSkin(options: SetSkinOptions): void {
     this.disposeGui();
+    // Hydrate customOffset state from the incoming config — every header.offset[] slot gets
+    // a zero-filled record by default; existing host-persisted picks pre-populate matching
+    // axes. The deep clone ensures the GUI's controllers don't mutate the host's stored
+    // config in place.
+    const customOffsetSeed: Record<string, { x: number; y: number; w: number; h: number; r: number; a: number }> = {};
+    for (const slot of options.header.offset ?? []) {
+      const prior = options.config.customOffset?.[slot.name];
+      customOffsetSeed[slot.name] = {
+        x: prior?.x ?? 0,
+        y: prior?.y ?? 0,
+        w: prior?.w ?? 0,
+        h: prior?.h ?? 0,
+        r: prior?.r ?? 0,
+        a: prior?.a ?? 0,
+      };
+    }
     this.state = {
       offset: typeof options.config.offset === 'number' ? options.config.offset : 0,
       option: { ...options.config.option },
       file: { ...options.config.file },
+      customOffset: customOffsetSeed,
       entryPath: options.currentEntryPath ?? '',
     };
     const properties: ReadonlyArray<BeatorajaSkinProperty> = options.header.property ?? [];
@@ -151,10 +177,16 @@ export class BeatorajaSkinOptionsGui {
 
     const emit = (): void => {
       // Fresh copy so downstream code never aliases our mutator state.
+      // Deep-clone customOffset so the host never aliases nested slot records.
+      const customOffsetCopy: Record<string, { x: number; y: number; w: number; h: number; r: number; a: number }> = {};
+      for (const [name, axes] of Object.entries(this.state.customOffset)) {
+        customOffsetCopy[name] = { ...axes };
+      }
       options.onChange({
         offset: this.state.offset,
         option: { ...this.state.option },
         file: { ...this.state.file },
+        customOffset: customOffsetCopy,
       });
     };
 
@@ -274,6 +306,36 @@ export class BeatorajaSkinOptionsGui {
     // `Offset` slider — chart timing offset in ms. Beatoraja accepts negative / positive integers in
     // the ±200 ms range; tighter control isn't typically necessary.
     gui.add(this.state, 'offset', -200, 200, 1).name('Note offset (ms)').onChange(emit);
+
+    // Custom offset sliders — one folder per `header.offset[]` slot, with axis controllers
+    // gated by the slot's per-axis flags. ModernChic's `header.offset` declares dozens of
+    // slots like `{name: "main_brightness", a: true}` (alpha-only) or
+    // `{name: "playarea_w", w: true, h: true}` (width/height). Beatoraja's reference engine
+    // surfaces the same per-axis-flagged sliders in its options dialog; without them the
+    // user has no way to drive `skin_config.offset[name].a` from outside the skin Lua.
+    //
+    // Range: x/y/w/h in ±400 px (covers most authoring); rotation in ±360°; alpha in
+    // ±255 (additive delta range, matching the spec). Step 1 keeps the values integer.
+    const customOffsets = options.header.offset ?? [];
+    if (customOffsets.length > 0) {
+      const offsetFolder = gui.addFolder('Custom offsets');
+      offsetFolder.close();
+      for (const slot of customOffsets) {
+        const slotState = this.state.customOffset[slot.name];
+        if (slotState === undefined) continue;
+        // Per-slot subfolder when more than one axis is exposed; flat slot otherwise to
+        // keep the panel compact for single-axis controls (the most common case).
+        const flagged = (['x', 'y', 'w', 'h', 'r', 'a'] as const).filter((axis) => slot[axis]);
+        if (flagged.length === 0) continue;
+        const slotFolder = flagged.length > 1 ? offsetFolder.addFolder(slot.name) : offsetFolder;
+        if (flagged.length > 1) (slotFolder as GUI).close();
+        for (const axis of flagged) {
+          const range = axis === 'r' ? [-360, 360] : axis === 'a' ? [-255, 255] : [-400, 400];
+          const label = flagged.length > 1 ? axis : `${slot.name}.${axis}`;
+          slotFolder.add(slotState, axis, range[0], range[1], 1).name(label).onChange(emit);
+        }
+      }
+    }
   }
 
   /**
