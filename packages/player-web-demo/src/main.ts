@@ -650,6 +650,8 @@ interface DemoGuiState {
   openFolder: () => void;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
+  /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
+  screenshot: () => void;
 }
 
 class PlayerWebDemoApp {
@@ -916,6 +918,9 @@ class PlayerWebDemoApp {
       openFolder: () => this.elements.songInput.click(),
       record: () => {
         void this.toggleRecording();
+      },
+      screenshot: () => {
+        void this.captureScreenshot();
       },
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
@@ -1207,6 +1212,10 @@ class PlayerWebDemoApp {
         this.gameplayView?.setJudgedNoteDisplay(value);
       });
     this.recordController = gui.add(this.guiState, 'record').name('● Record');
+    // Screenshot button — captures the Pixi stage at its native size (= the renderer's
+    // current screen dimensions; matches what the user sees in the canvas, downloaded as
+    // PNG). See `captureScreenshot` for the extract pipeline.
+    gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
     this.refreshCompressorStageVisibility();
   }
 
@@ -1228,6 +1237,67 @@ class PlayerWebDemoApp {
    * Stop`, and `disable()` grays it out while the WebM blob is being assembled on stop. The `.recording` CSS class on
    * the controller's DOM element drives the red-glow accent so the lil-gui style takes precedence over our highlight.
    */
+  /**
+   * Capture the Pixi stage at its native size and download as a PNG. "Stage size" is the
+   * renderer's current screen dimensions (`app.screen.width × app.screen.height`) — the
+   * same pixel dimensions the user sees on the canvas. We route through
+   * `renderer.extract.canvas(app.stage)` rather than reading `app.canvas` directly so the
+   * capture works regardless of `preserveDrawingBuffer`. The extract pipeline forces a
+   * fresh render into an offscreen RT, reads the pixels, and returns a CPU-side
+   * HTMLCanvasElement we can `toBlob` for download.
+   *
+   * Filename includes a UTC timestamp so multiple captures in one session don't collide.
+   * Errors (renderer not initialised, browser blocks the download) surface to the status
+   * panel for diagnostic visibility.
+   */
+  private async captureScreenshot(): Promise<void> {
+    const app = this.sceneHost.app;
+    if (app.renderer === undefined) {
+      this.setStatus('Screenshot failed: renderer not ready');
+      return;
+    }
+    try {
+      // Pixi v8's extract.canvas pre-renders the target into a CPU canvas. Passing
+      // `app.stage` captures every active scene exactly as it would have rendered on the
+      // next frame, including the backdrop / skin chrome / notes / overlays. Default
+      // resolution = 1 (= renderer pixel ratio); the resulting canvas matches
+      // `app.screen.width × app.screen.height` in CSS pixels.
+      const canvas = app.renderer.extract.canvas(app.stage);
+      // `extract.canvas` returns ICanvas (compat union of HTMLCanvasElement / OffscreenCanvas).
+      // Both expose `toBlob` in modern browsers — narrow to the form that does.
+      const toBlob = (canvas as { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void }).toBlob;
+      if (typeof toBlob !== 'function') {
+        this.setStatus('Screenshot failed: canvas.toBlob unavailable');
+        return;
+      }
+      const blob = await new Promise<Blob | null>((resolve) => {
+        toBlob.call(canvas, (b) => resolve(b), 'image/png');
+      });
+      if (blob === null) {
+        this.setStatus('Screenshot failed: encoder returned null');
+        return;
+      }
+      const timestamp = new Date()
+        .toISOString()
+        .replace(/[:.]/g, '-')
+        .replace(/Z$/, '');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bms-screenshot-${timestamp}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Revoke after a short delay — some browsers race the download against immediate
+      // revocation. 5s is enough for the download dialog to grab the URL.
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
+      this.setStatus(`Screenshot saved (${app.screen.width}×${app.screen.height})`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`Screenshot failed: ${message}`);
+    }
+  }
+
   private async toggleRecording(): Promise<void> {
     const gameplay = this.gameplayView;
     const controller = this.recordController;
