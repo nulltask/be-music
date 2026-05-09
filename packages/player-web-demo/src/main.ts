@@ -1350,8 +1350,23 @@ class PlayerWebDemoApp {
     }
   }
 
+  /**
+   * Pick whichever gameplay view is currently mounted (LR2 or beatoraja). Both expose the
+   * same recording API surface (`startRecording` / `stopRecording` / `isRecording`), so
+   * the rest of `toggleRecording` can stay path-agnostic. Returns `undefined` when neither
+   * is mounted (= the user pressed Record on the song-select screen) so the caller
+   * branches into the auto-arm flow instead.
+   */
+  private activeGameplayRecorder(): {
+    startRecording(): void;
+    stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number } | undefined>;
+    isRecording(): boolean;
+  } | undefined {
+    return this.gameplayView ?? this.beatorajaGameplayView;
+  }
+
   private async toggleRecording(): Promise<void> {
-    const gameplay = this.gameplayView;
+    const gameplay = this.activeGameplayRecorder();
     const controller = this.recordController;
     if (!gameplay) {
       // No chart is playing yet — interpret the click as "arm capture for the next song I pick" so the user can stage
@@ -1950,6 +1965,24 @@ class PlayerWebDemoApp {
     this.currentBeatorajaPlayVariant = variant;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
     this.setStatus(`Playing (beatoraja): ${song.title}`);
+
+    // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
+    // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
+    // before picking a song; the next gameplay mount kicks the recorder off automatically.
+    if (this.autoRecordArmed) {
+      this.autoRecordArmed = false;
+      const controller = this.recordController;
+      controller?.domElement.classList.remove('arming');
+      try {
+        this.beatorajaGameplayView.startRecording();
+        controller?.domElement.classList.add('recording');
+        controller?.name('■ Stop');
+        this.setStatus('Recording…');
+      } catch (error) {
+        controller?.name('● Record');
+        recordLog.warn('auto-start failed', error);
+      }
+    }
 
     // Skin-options panel for the play skin's `property[]` / `filepath[]`. Live edits flow through
     // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down

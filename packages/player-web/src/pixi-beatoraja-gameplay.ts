@@ -61,6 +61,7 @@ import { runEngineDriver, type EngineDriverAudioContext, type EngineDriverResult
 import { BeatorajaRuntimeAdapter } from './beatoraja-runtime-adapter.ts';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
+import { GameplayRecorder, type GameplayRecorderResult } from './gameplay-recorder.ts';
 import { HISPEED_MAX, HISPEED_MIN } from './pixi-gameplay-constants.ts';
 import { drainWebUiSignals } from './web-ui-runtime.ts';
 import { logger } from './logger.ts';
@@ -224,6 +225,17 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * a multiple-of-300 (~5 s at 60 fps) frame counter.
    */
   private debugFrameCounter = 0;
+  /**
+   * Active canvas + audio recorder when the host has called {@link startRecording}. Tied to
+   * the `audio.audioContext` / `audio.audioBus.outputNode` passed at construction so the
+   * captured audio matches what the player hears (the bus's `outputNode` is the same node
+   * the speakers tap, regardless of compressor mode).
+   *
+   * `undefined` while idle. We hold the instance across the play session so {@link
+   * stopRecording} / {@link dispose} can finalize cleanly even if the chart ends or the
+   * scene unmounts mid-recording.
+   */
+  private recorder: GameplayRecorder | undefined;
   /**
    * Last screen size we ran `fitToStage` against. The Pixi `Application` is `resizeTo: container`, which
    * means the canvas can resize asynchronously after `enter()` (e.g. when the demo's gameplay scene
@@ -492,6 +504,14 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     if (!this.engineSettled && this.inputSignals) {
       this.inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
     }
+    // Finalize an in-flight recording so we don't leak the audio tap / MediaRecorder when
+    // the host tears down the scene mid-recording (e.g. ESC during a take). The promise
+    // is intentionally not awaited — `stop()` handles the async finalization itself, and
+    // dispose can't be async without changing the scene-host contract.
+    if (this.recorder !== undefined) {
+      void this.recorder.stop();
+      this.recorder = undefined;
+    }
     this.bgaLayer?.dispose();
     this.noteLayer.dispose();
     this.markerLayer.dispose();
@@ -527,6 +547,52 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   /** Promise that resolves once the engine driver finishes (chart end / interrupt / error). */
   awaitCompletion(): Promise<EngineDriverResult> | undefined {
     return this.enginePromise;
+  }
+
+  /**
+   * Begin recording the play scene (canvas video + audio bus mix) into a WebM blob. Same
+   * `GameplayRecorder` infrastructure the LR2 gameplay path uses, just bound to the
+   * beatoraja view's host canvas + the audio bus the engine driver received at
+   * construction.
+   *
+   * Throws when:
+   *   - The scene hasn't been mounted yet (no `host` → no canvas to capture)
+   *   - The browser doesn't expose `MediaRecorder` / `canvas.captureStream` / a usable
+   *     codec (older Safari)
+   *
+   * Idempotent in the sense that calling while a recording is already active is a no-op
+   * (use {@link isRecording} as the canonical gate).
+   */
+  startRecording(): void {
+    if (this.recorder?.isActive() === true) return;
+    if (this.host === undefined) {
+      throw new Error('PixiBeatorajaGameplayView.startRecording: scene is not mounted (no host canvas)');
+    }
+    // Build a fresh recorder per session — instances are one-shot by design (chunk
+    // buffer + audio tap lifecycle), so the host gets a clean blob on every start.
+    this.recorder = new GameplayRecorder({
+      canvas: this.host.app.canvas,
+      audioContext: this.options.audio.audioContext,
+      audioOutput: this.options.audio.audioBus.outputNode,
+    });
+    this.recorder.start();
+  }
+
+  /**
+   * Finalize the active recording and resolve with the assembled blob plus its MIME type
+   * + duration. Resolves with `undefined` when no recording is in progress, so callers
+   * can call this unconditionally on chart end / unmount without branching.
+   */
+  async stopRecording(): Promise<GameplayRecorderResult | undefined> {
+    const recorder = this.recorder;
+    if (recorder === undefined) return undefined;
+    this.recorder = undefined;
+    return recorder.stop();
+  }
+
+  /** Whether a recording session is currently active. The demo's record button reads this. */
+  isRecording(): boolean {
+    return this.recorder?.isActive() ?? false;
   }
 
   /**
