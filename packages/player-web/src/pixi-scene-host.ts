@@ -97,6 +97,12 @@ export class PixiSceneHost {
       backgroundAlpha: 0,
       resizeTo: container,
       ...(gpu !== undefined ? { gpu } : {}),
+      // Required for advanced blend modes (subtract / difference / etc.) on the WebGL backend.
+      // Beatoraja skins use blend mode 3 (subtract) and 9 (invert-multiply) for niche BGA
+      // overlays; without `useBackBuffer` Pixi silently falls back to "normal" and logs a
+      // warning. WebGPU enables the back buffer unconditionally so this is a no-op there.
+      // See `blendCodeToPixi` for the LR2/beatoraja → Pixi mode mapping.
+      useBackBuffer: true,
       // LR2 skins and BGA frames are pixel-art; bilinear filtering and MSAA blur them visibly. Combined with
       // `roundPixels: true` and per-texture nearest sampling on each loaded asset, this gives a fully-crisp
       // pixel-art-style render.

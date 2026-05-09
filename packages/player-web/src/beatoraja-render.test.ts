@@ -291,13 +291,18 @@ describe('flipRectToPixi', () => {
 });
 
 describe('blendCodeToPixi', () => {
-  it('maps LR2/beatoraja codes to PixiJS v8 BlendMode strings', () => {
+  it('maps LR2/beatoraja codes to PixiJS v8 BlendMode strings (audit 2.13)', () => {
     expect(blendCodeToPixi(0)).toBe('normal');
     expect(blendCodeToPixi(1)).toBe('normal');
     expect(blendCodeToPixi(2)).toBe('add');
-    expect(blendCodeToPixi(3)).toBe('screen');
+    // Code 3 = beatoraja's GL_FUNC_SUBTRACT — Pixi's 'subtract' (advanced-blend-modes) matches
+    // exactly. Previous mapping was 'screen' (brighten-only), the opposite operation.
+    expect(blendCodeToPixi(3)).toBe('subtract');
     expect(blendCodeToPixi(4)).toBe('multiply');
-    expect(blendCodeToPixi(9)).toBe('erase');
+    // Code 9 = beatoraja's `(GL_ONE_MINUS_DST_COLOR, GL_ZERO)` — no exact Pixi match;
+    // 'difference' is the closest visual approximation. Previous mapping was 'erase'
+    // (alpha hole-punch), a fundamentally different operation.
+    expect(blendCodeToPixi(9)).toBe('difference');
     expect(blendCodeToPixi(99)).toBe('normal'); // unknown code falls back
   });
 });
