@@ -320,6 +320,11 @@ export class BeatorajaSkinOptionsGui {
     if (customOffsets.length > 0) {
       const offsetFolder = gui.addFolder('Custom offsets');
       offsetFolder.close();
+      // Per-slot folder controllers tracked here so the reset action can `setValue` on
+      // every authored axis at once (lil-gui doesn't propagate state-object mutations
+      // back into its DOM displays — we have to walk the controller list and call
+      // `setValue` per controller for the reset to land visually).
+      const offsetControllers: Array<{ setValue: (v: number) => void }> = [];
       for (const slot of customOffsets) {
         const slotState = this.state.customOffset[slot.name];
         if (slotState === undefined) continue;
@@ -332,8 +337,24 @@ export class BeatorajaSkinOptionsGui {
         for (const axis of flagged) {
           const range = axis === 'r' ? [-360, 360] : axis === 'a' ? [-255, 255] : [-400, 400];
           const label = flagged.length > 1 ? axis : `${slot.name}.${axis}`;
-          slotFolder.add(slotState, axis, range[0], range[1], 1).name(label).onChange(emit);
+          const controller = slotFolder.add(slotState, axis, range[0], range[1], 1).name(label).onChange(emit);
+          offsetControllers.push(controller as unknown as { setValue: (v: number) => void });
         }
+      }
+      // "Reset to authored defaults" button — zeros every authored axis at once. Useful
+      // when the user has dialed in many slots and wants to start over without tearing
+      // down the panel. Single emit() at the end batches the change into one onChange
+      // notification rather than firing once per controller setValue.
+      if (offsetControllers.length > 0) {
+        const resetActions = {
+          reset: (): void => {
+            for (const controller of offsetControllers) {
+              controller.setValue(0);
+            }
+            emit();
+          },
+        };
+        offsetFolder.add(resetActions, 'reset').name('Reset all to 0');
       }
     }
   }

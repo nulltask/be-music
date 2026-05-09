@@ -946,6 +946,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Folder enter / leave / filter change reshuffles the entry list; re-arm preview against
     // the new focused song (or stop if the new focus is a folder bar).
     this.refreshChartPreview();
+    // Search-prompt suffix carries a live "N matches" count — refresh whenever the entry
+    // list changes so the user sees the new result count after folder enter / sort cycle /
+    // keymode filter change while a search query is active.
+    this.refreshSearchPrompt();
   }
 
   private resolveSelectionText(refOp: number): string | undefined {
@@ -2109,7 +2113,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     }
     const prompt = this.searchActive ? '/ ' : '🔍 ';
     const display = this.searchQuery.length > 0 ? this.searchQuery : '(type to search)';
-    this.searchPromptText.text = `${prompt}${display}`;
+    // Append "no matches" suffix when the query yields zero entries — gives the user clear
+    // feedback that they typed too narrowly. Otherwise show the result count for queries
+    // with hits ("3 matches"), which doubles as a hint that filtering is working.
+    let suffix = '';
+    if (this.searchQuery.length > 0) {
+      if (this.entries.length === 0) {
+        suffix = ' — no matches';
+      } else {
+        suffix = ` — ${this.entries.length} match${this.entries.length === 1 ? '' : 'es'}`;
+      }
+    }
+    this.searchPromptText.text = `${prompt}${display}${suffix}`;
+    this.searchPromptText.tint = this.searchQuery.length > 0 && this.entries.length === 0 ? 0xff8888 : 0xffe066;
     this.searchPromptText.visible = true;
   }
 
