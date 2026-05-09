@@ -431,17 +431,172 @@ function openSkinSandbox(L: lua_State): void {
 const REGISTRY_MODULE_CACHE = '__be_music_beatoraja_module_cache';
 const REGISTRY_MODULE_SOURCES = '__be_music_beatoraja_module_sources';
 
+/**
+ * Built-in Lua sources for beatoraja's `timer_util` / `event_util` helper modules. The reference
+ * player exposes these as JVM classes (`bms.player.beatoraja.skin.lua.{TimerUtility,EventUtility}`)
+ * registered at runtime. Community Lua skins call into them WITHOUT bundling a fallback `.lua`,
+ * so a host without these baked in fails on `require("timer_util")` (returns nil → indexing
+ * `timer_util.timer_observe_boolean` crashes).
+ *
+ * `timer_util` is the heaviest user — ModernChic's Result/Select scenes call
+ * `timer_util.timer_observe_boolean(boolFn)` 80+ times to gate destination animations on
+ * Lua-evaluated booleans (e.g. "is the IR ranking visible right now?", "did the section's
+ * win/loss flag flip?"). Without it the Result info-menu tab switching is dead.
+ *
+ * `event_util` returns table descriptors that the engine pairs with `customEvents` (audit 2.2)
+ * to fire actions when conditions change. We don't yet wire `customEvents` — these helpers
+ * still return well-formed descriptors so call sites don't crash; the actual side effect is
+ * deferred until the customEvents pipeline lands.
+ */
+const TIMER_UTIL_LUA_SOURCE = `
+local main_state = require("main_state")
+local M = {}
+
+-- timer_observe_boolean(boolFn): a TimerProperty driven by a boolean.
+-- Returns a closure that the destination renderer calls each frame. When boolFn() flips
+-- false → true, the closure stamps "now" as the timer start and returns it for as long
+-- as boolFn stays true. When it flips back, the start resets and the closure returns
+-- timer_off_value (= "timer not started" sentinel — destinations gate on this).
+function M.timer_observe_boolean(boolFn)
+  local startMicros = nil
+  return function()
+    if boolFn() then
+      if startMicros == nil then startMicros = main_state.time() end
+      return startMicros
+    else
+      startMicros = nil
+      return main_state.timer_off_value
+    end
+  end
+end
+
+-- now_timer(): a TimerProperty fixed at the current time. Used by skins that want a
+-- one-shot baseline (e.g. "the moment a panel was created").
+function M.now_timer()
+  local stamp = main_state.time()
+  return function() return stamp end
+end
+
+-- is_timer_on(id) / is_timer_off(id): convenience predicates wrapping main_state.timer.
+function M.is_timer_on(id)
+  return main_state.timer(id) ~= main_state.timer_off_value
+end
+function M.is_timer_off(id)
+  return main_state.timer(id) == main_state.timer_off_value
+end
+
+-- timer_function(fn): adopts an arbitrary Lua function as a TimerProperty. Beatoraja's
+-- impl is a passthrough — the function is expected to return microsecond timestamps
+-- itself. We do the same; identity helps Lua skins that pre-build TimerProperty wrappers
+-- via this helper for consistency with the boolean/timer variants.
+function M.timer_function(fn)
+  return fn
+end
+
+-- new_passive_timer(): creates a manually-managed timer the script can stamp. Returns
+-- four closures matching beatoraja's signature: (read, set, get, reset).
+function M.new_passive_timer()
+  local t = main_state.timer_off_value
+  local read = function() return t end
+  local set = function(v) t = v or main_state.time() end
+  local get = function() return t end
+  local reset = function() t = main_state.timer_off_value end
+  return read, set, get, reset
+end
+
+return M
+`;
+
+const EVENT_UTIL_LUA_SOURCE = `
+local M = {}
+
+-- event_observe_turn_true(boolFn, action): fires action() when boolFn flips false → true.
+-- Beatoraja's pipeline iterates the 'customEvents' table each frame, calling action when
+-- the condition just turned true. We return a descriptor table that customEvents
+-- consumers (audit 2.2 — not yet wired) can pick up.
+function M.event_observe_turn_true(boolFn, action)
+  local last = false
+  return {
+    condition = function()
+      local now = boolFn() and true or false
+      local fire = now and not last
+      last = now
+      return fire
+    end,
+    action = action,
+  }
+end
+
+-- event_observe_timer(timerId, action): fires when the engine timer changes state. We
+-- can't observe arbitrary timer transitions without engine cooperation, so the descriptor
+-- delegates to event_observe_turn_true keyed on "timer is currently on".
+local main_state = require("main_state")
+function M.event_observe_timer_on(timerId, action)
+  return M.event_observe_turn_true(function()
+    return main_state.timer(timerId) ~= main_state.timer_off_value
+  end, action)
+end
+function M.event_observe_timer_off(timerId, action)
+  return M.event_observe_turn_true(function()
+    return main_state.timer(timerId) == main_state.timer_off_value
+  end, action)
+end
+function M.event_observe_timer(timerId, action)
+  -- Fires on EITHER edge — return both descriptors so customEvents iteration sees them.
+  return {
+    M.event_observe_timer_on(timerId, action),
+    M.event_observe_timer_off(timerId, action),
+  }
+end
+
+-- event_min_interval(action, minIntervalMs): rate-limits action so it fires at most once
+-- per interval. Implemented as a wrapper that compares against the last invocation time.
+function M.event_min_interval(action, minIntervalMs)
+  local lastFireMicros = nil
+  local intervalMicros = (minIntervalMs or 0) * 1000
+  return function(...)
+    local now = main_state.time()
+    if lastFireMicros == nil or now - lastFireMicros >= intervalMicros then
+      lastFireMicros = now
+      return action(...)
+    end
+  end
+end
+
+return M
+`;
+
+/** UTF-8-encode a Lua source string for fengari's byte-oriented loader. */
+function encodeLuaSource(src: string): Uint8Array {
+  return new TextEncoder().encode(src);
+}
+
+const TIMER_UTIL_BYTES = encodeLuaSource(TIMER_UTIL_LUA_SOURCE);
+const EVENT_UTIL_BYTES = encodeLuaSource(EVENT_UTIL_LUA_SOURCE);
+
 function setupCustomRequire(
   L: lua_State,
   modules: ReadonlyArray<BeatorajaLuaModuleSource>,
   owner: LuaRuntimeOwner,
   exposeMainState: boolean,
 ): void {
-  // Registry sources table: { [name]: source }.
-  lua_createtable(L, 0, modules.length);
+  // Registry sources table: { [name]: source }. Seeded with the bundled theme modules first,
+  // then the built-in `timer_util` / `event_util` helpers — bundled modules win on collision so
+  // a theme that ships its own `timer_util.lua` overrides ours.
+  lua_createtable(L, 0, modules.length + 2);
+  const seenModules = new Set<string>();
   for (const m of modules) {
     lua_pushstring(L, m.source);
     lua_setfield(L, -2, to_luastring(m.name));
+    seenModules.add(m.name);
+  }
+  if (!seenModules.has('timer_util')) {
+    lua_pushstring(L, TIMER_UTIL_BYTES);
+    lua_setfield(L, -2, to_luastring('timer_util'));
+  }
+  if (!seenModules.has('event_util')) {
+    lua_pushstring(L, EVENT_UTIL_BYTES);
+    lua_setfield(L, -2, to_luastring('event_util'));
   }
   lua_setfield(L, LUA_REGISTRYINDEX, to_luastring(REGISTRY_MODULE_SOURCES));
 
@@ -846,16 +1001,9 @@ function pushBuiltinLuaModule(
       // beatoraja's Java bridge), so we hand back the same surface here too.
       pushLuajavaStub(L);
       return true;
-    case 'timer_util':
-      // `timer_util` ships as a small helper module inside beatoraja's reference theme;
-      // community themes occasionally `require()` it without bundling the file. The real
-      // implementation only exposes a few wrappers around `main_state.timer(...)` /
-      // `main_state.set_timer(...)`, so a stub returning the empty table is enough to
-      // unblock module load — actual functionality calls will resolve to nil and
-      // pcall-wrapped consumers swallow the error.
-      lua_createtable(L, 0, 0);
-      return true;
     default:
+      // `timer_util` and `event_util` are seeded as Lua-source modules in
+      // `setupCustomRequire` — the regular require path handles them, no special case here.
       return false;
   }
 }

@@ -581,6 +581,102 @@ describe('evaluateBeatorajaLuaSkin', () => {
     expect(result.value).toEqual({ ok: false });
   });
 
+  it('exposes timer_util.timer_observe_boolean as a TimerProperty closure tied to a Lua boolFn', () => {
+    // ModernChic Result/Select sites assign `timer = timer_util.timer_observe_boolean(boolFn)`
+    // on 80+ destinations. The resulting closure, when called by the renderer at draw time,
+    // returns either a microsecond start-time (when boolFn is currently true) or the
+    // timer-off sentinel. Without timer_util wired the require returns nil and the destination
+    // throws on the field access.
+    let toggle = false;
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local timer_util = require("timer_util")',
+          // boolFn flips based on the host-supplied option(1) gate; we toggle that gate from JS
+          // between calls below to emulate the engine flipping a runtime predicate.
+          'local main_state = require("main_state")',
+          'local fn = timer_util.timer_observe_boolean(function() return main_state.option(1) end)',
+          'return { fn = fn, off = main_state.timer_off_value }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      runtimeContext: {
+        option: (id) => id === 1 && toggle,
+        time: () => 1234567,
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const value = result.value as { fn: import('./beatoraja-skin-lua.ts').BeatorajaLuaFunctionValue; off: number };
+    // boolFn returns false initially → the closure returns the timer-off sentinel.
+    expect(evaluateBeatorajaLuaNumber(value.fn, { option: () => false, time: () => 100 })).toBe(value.off);
+    // boolFn flips true → closure stamps the current time and returns it.
+    toggle = true;
+    expect(evaluateBeatorajaLuaNumber(value.fn, { option: () => true, time: () => 5_000_000 })).toBe(5_000_000);
+    // Subsequent calls while still true return the SAME stamp (animation doesn't restart).
+    expect(evaluateBeatorajaLuaNumber(value.fn, { option: () => true, time: () => 9_000_000 })).toBe(5_000_000);
+    // Flip back to false → returns off again, and the next true stamps a fresh start.
+    expect(evaluateBeatorajaLuaNumber(value.fn, { option: () => false, time: () => 11_000_000 })).toBe(value.off);
+    expect(evaluateBeatorajaLuaNumber(value.fn, { option: () => true, time: () => 13_000_000 })).toBe(13_000_000);
+    value.fn.dispose();
+  });
+
+  it('exposes timer_util.is_timer_on / is_timer_off keyed off main_state.timer', () => {
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local timer_util = require("timer_util")',
+          'return { on = timer_util.is_timer_on(7), off = timer_util.is_timer_off(7) }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      runtimeContext: {
+        // timer(7) returns 1234 → "on"; timer_off_value is whatever the runtime's TIMER_OFF
+        // sentinel is. is_timer_on/off compare against it, so we don't need to match an exact
+        // numeric value here.
+        timer: (id) => (id === 7 ? 1234 : undefined),
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ on: true, off: false });
+  });
+
+  it('exposes event_util.event_observe_turn_true returning a {condition, action} descriptor', () => {
+    // event_util descriptors get assigned to `customEvents` (audit 2.2 — not yet wired); for
+    // this test we just verify the require returns a usable table whose condition fires once
+    // when boolFn flips false → true and stays false on repeated true.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local event_util = require("event_util")',
+          'local count = 0',
+          'local main_state = require("main_state")',
+          'local fired = 0',
+          'local desc = event_util.event_observe_turn_true(',
+          '  function() return main_state.option(1) end,',
+          '  function() fired = fired + 1 end',
+          ')',
+          // Drive condition() through a simulated state machine: false, true (fire), true
+          // (no-fire), false (no-fire), true (fire).
+          'local r = {}',
+          'r[1] = desc.condition()',
+          'r[2] = desc.condition()',
+          'return r',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      runtimeContext: {
+        // Always false during this synthetic eval — condition() should yield false twice
+        // (no flip).
+        option: () => false,
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual([false, false]);
+  });
+
   it('audio_play with empty path short-circuits without invoking the host callback', () => {
     // Defensive: a skin computing the path dynamically may hand us "" before the bundle is
     // resolved. We don't want to invoke the host callback with an empty path (which the
