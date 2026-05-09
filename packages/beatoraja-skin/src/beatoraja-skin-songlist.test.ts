@@ -47,6 +47,24 @@ describe('parseBeatorajaSongList', () => {
     expect(layout?.rows.map((r) => r.id)).toEqual(['list', 'list_on', 'list']);
   });
 
+  it('accepts numeric `liston[i].id` (image[].id is `string | number`)', () => {
+    // `image[].id` is typed `BeatorajaImageId = number | string`. Lua-driven skins
+    // (ModernChic's bar variants) sometimes emit numeric ids when the authoring loop
+    // assigns them programmatically. Previously the parser only accepted strings, so
+    // numeric forms silently dropped — leaving rows with no bar background even when
+    // the matching `image[]` entry was authored.
+    const skin = makeSkin({
+      songlist: {
+        liston: [
+          { id: 100, dst: [{ x: 800, y: 720, w: 500, h: 36 }] },
+          { id: 101, dst: [{ x: 800, y: 360, w: 500, h: 36 }] },
+        ],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.rows.map((r) => r.id)).toEqual([100, 101]);
+  });
+
   it('omits `id` when the entry has no `id` field', () => {
     const skin = makeSkin({
       songlist: {

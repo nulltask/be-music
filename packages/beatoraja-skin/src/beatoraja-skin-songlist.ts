@@ -19,6 +19,7 @@
 // rectangle does row N occupy". Hosts that want to render their own song-bar overlay should
 // read these rects, NOT pin the layout to fixed canvas fractions.
 
+import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
 import type { BeatorajaSkin } from './beatoraja-skin-types.ts';
 
 /**
@@ -30,9 +31,15 @@ import type { BeatorajaSkin } from './beatoraja-skin-types.ts';
  * Many beatoraja skins author the focused row with a different `id` (e.g. `list_on` while
  * other rows use `list`), so iterating `rows` and looking up `image[id]` per row produces
  * a per-row sprite list with the cursor highlight baked into the texture choice.
+ *
+ * Type matches `image[].id` ({@link BeatorajaImageId}) — numeric and string forms both
+ * appear in the wild. The default reference theme uses strings (`"bar"`, `"list_on"`);
+ * Lua-driven skins (ModernChic's bar variants) sometimes emit numeric ids when the
+ * authoring loop assigns them programmatically. Accepting both lets the renderer's
+ * `image[]` lookup succeed regardless of which form the author used.
  */
 export interface BeatorajaSongListRowRect {
-  id?: string;
+  id?: BeatorajaImageId;
   x: number;
   y: number;
   w: number;
@@ -80,7 +87,7 @@ export interface BeatorajaSongListLayout {
    * row's chart, so adding more label kinds in the future just means extending the
    * id-to-feature mapping.
    */
-  labels: ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }>;
+  labels: ReadonlyArray<{ id: BeatorajaImageId; rect: BeatorajaSongListRowRect }>;
   /**
    * Per-row text destinations. Each entry references a top-level `skin.text[id == entry.id]`
    * declaration (e.g. `"bartext"` in the default theme) and provides the per-bar rect that
@@ -98,7 +105,7 @@ export interface BeatorajaSongListLayout {
    * verbatim. `[]` when the skin omits the block — caller falls back to a synthesised
    * label / sub-label pair sized proportionally to the bar height.
    */
-  text: ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }>;
+  text: ReadonlyArray<{ id: BeatorajaImageId; rect: BeatorajaSongListRowRect }>;
 }
 
 /**
@@ -160,14 +167,20 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
  * it) and pick the first dst rect as the per-bar position. Filters entries with missing
  * id or zero/negative dimensions so render-time sprite sizing is always safe.
  */
-function collectLabelEntries(input: unknown): ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }> {
+function collectLabelEntries(input: unknown): ReadonlyArray<{ id: BeatorajaImageId; rect: BeatorajaSongListRowRect }> {
   if (!Array.isArray(input)) return [];
-  const out: { id: string; rect: BeatorajaSongListRowRect }[] = [];
+  const out: { id: BeatorajaImageId; rect: BeatorajaSongListRowRect }[] = [];
   for (const entry of input) {
     if (entry === null || typeof entry !== 'object') continue;
     const obj = entry as Readonly<Record<string, unknown>>;
-    const id = obj.id;
-    if (typeof id !== 'string' || id.length === 0) continue;
+    const idRaw = obj.id;
+    const id: BeatorajaImageId | undefined =
+      typeof idRaw === 'string' && idRaw.length > 0
+        ? idRaw
+        : typeof idRaw === 'number' && Number.isFinite(idRaw)
+          ? idRaw
+          : undefined;
+    if (id === undefined) continue;
     const rect = collectFirstSubRect([entry]);
     if (rect === undefined) continue;
     out.push({ id, rect });
@@ -206,12 +219,14 @@ function collectFirstSubRect(input: unknown): BeatorajaSongListRowRect | undefin
  * like `level[].id == "playlevel_bar"`). Picks the FIRST entry of the array; returns
  * `undefined` when missing / malformed.
  */
-function firstEntryId(input: unknown): string | undefined {
+function firstEntryId(input: unknown): BeatorajaImageId | undefined {
   if (!Array.isArray(input) || input.length === 0) return undefined;
   const first = input[0];
   if (first === null || typeof first !== 'object') return undefined;
   const idValue = (first as Readonly<Record<string, unknown>>).id;
-  return typeof idValue === 'string' && idValue.length > 0 ? idValue : undefined;
+  if (typeof idValue === 'string' && idValue.length > 0) return idValue;
+  if (typeof idValue === 'number' && Number.isFinite(idValue)) return idValue;
+  return undefined;
 }
 
 function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefined {
@@ -235,8 +250,18 @@ function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefine
     // (e.g. `list_on` vs `list`), so retaining the id per-row gives the renderer the
     // cursor highlight at no extra cost. `undefined` when the entry omits an id (bare
     // dst-only entries in skins that don't author a bar texture).
+    //
+    // Accept both string and numeric ids — `image[].id` is `string | number` and Lua-
+    // driven skins occasionally emit numeric forms. Previously the numeric branch was
+    // silently dropped, leaving rows with no bar background even when the matching
+    // `image[]` entry was authored.
     const idValue = obj.id;
-    const id = typeof idValue === 'string' && idValue.length > 0 ? idValue : undefined;
+    const id =
+      typeof idValue === 'string' && idValue.length > 0
+        ? idValue
+        : typeof idValue === 'number' && Number.isFinite(idValue)
+          ? idValue
+          : undefined;
     out.push(id !== undefined ? { id, x, y, w, h } : { x, y, w, h });
   }
   return out.length > 0 ? out : undefined;
@@ -247,8 +272,8 @@ function numberField(record: Readonly<Record<string, unknown>>, key: string, fal
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
 }
 
-function dedupeById<T extends { id: string }>(entries: ReadonlyArray<T>): ReadonlyArray<T> {
-  const seen = new Set<string>();
+function dedupeById<T extends { id: BeatorajaImageId }>(entries: ReadonlyArray<T>): ReadonlyArray<T> {
+  const seen = new Set<BeatorajaImageId>();
   const out: T[] = [];
   for (const entry of entries) {
     if (seen.has(entry.id)) continue;
