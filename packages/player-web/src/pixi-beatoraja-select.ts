@@ -1932,13 +1932,35 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.hitArea = null;
 
       // Title label x — pushed past whichever sub-rect extends further right within the
-      // bar (level rect, plus any positive-x label rects). Skins authoring `songlist.level[]`
-      // (default beatoraja, GdbG, ModernChic) place the chart-level number at a fixed
-      // offset from the bar's left; without including its right edge in the title-x
-      // computation, the title text overlaps with the level number. Negative-x labels
-      // (e.g. default's `label-ln` at x=-20) sit OUTSIDE the bar and don't push the title.
+      // bar. Two flavours for the level slot:
+      //
+      //  - Sprite-digit (`value[].digit` cells, default skin) — `dst.w` is PER-DIGIT slot
+      //    width, so the digit row's actual right edge is
+      //    `level.x + (slotWidth + space) * digit_count`. Using just `level.x + level.w`
+      //    here was the squashed-text bug's twin: the title text would overlap the
+      //    second / third digit of multi-digit levels (e.g. "10ight Parade" instead of
+      //    "10  Light Parade").
+      //  - Text fallback — single Text node sized to roughly `level.w`, so `level.x +
+      //    level.w` is the right edge.
+      //
+      // Negative-x `label[]` entries (e.g. default's `label-ln` at x=-20) sit OUTSIDE the
+      // bar and don't push the title.
       const levelRectForOffset = this.songList?.level;
-      const levelRightEdge = levelRectForOffset !== undefined ? levelRectForOffset.x + levelRectForOffset.w : 0;
+      let levelRightEdge = 0;
+      if (levelRectForOffset !== undefined) {
+        if (this.levelValueElement !== undefined) {
+          const ve = this.levelValueElement;
+          const slotW = levelRectForOffset.w;
+          const space = Number.isFinite(ve.space) ? ve.space : 0;
+          const digits = Math.max(1, Math.trunc(ve.digit));
+          // `align=0` (right) extends right from `dst.x`; `align=1/2` shift the row LEFT,
+          // so the right edge is at most `dst.x + slotStep * digits` regardless. Using the
+          // upper bound keeps the title clearance conservative across alignments.
+          levelRightEdge = levelRectForOffset.x + slotW * digits + space * Math.max(0, digits - 1);
+        } else {
+          levelRightEdge = levelRectForOffset.x + levelRectForOffset.w;
+        }
+      }
       let positiveLabelRight = 0;
       for (const labelEntry of this.songList?.labels ?? []) {
         const right = labelEntry.rect.x + labelEntry.rect.w;
