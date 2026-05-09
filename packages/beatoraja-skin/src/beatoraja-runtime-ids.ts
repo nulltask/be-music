@@ -524,6 +524,71 @@ export const BEATORAJA_OP = {
 } as const;
 
 /**
+ * Button action codes (audit 2.1). Mirrors beatoraja's `SkinProperty.BUTTON_*` constants —
+ * each integer is both the click-event code (forwarded through `image.act` / `imageset.act`
+ * to `onButtonAction`) AND an op code that destinations gate on for "pressed state" visual
+ * feedback. The host's adapter / scene populator transiently activates the matching op when
+ * a click fires so skins gating press-state chrome on `op = {15}` (= BUTTON_PLAY) see the
+ * highlight while the click is in flight.
+ */
+export const BEATORAJA_BUTTON = {
+  /** Cycle keymode filter (5K / 7K / 9K / 10K / 14K / 24K / 24K-DP / ALL). */
+  MODE: 11,
+  /** Cycle sort order (default / title / artist / level / bpm / etc.). */
+  SORT: 12,
+  /** Open key-config dialog. */
+  KEYCONFIG: 13,
+  /** Open skin-select picker. */
+  SKINSELECT: 14,
+  /** Start play with the user's default mode. */
+  PLAY: 15,
+  /** Start play in autoplay mode. */
+  AUTOPLAY: 16,
+  /** Show chart's accompanying readme/text content. */
+  READTEXT: 17,
+  /** Start replay slot 1. */
+  REPLAY: 19,
+  /** Open IR ranking website for the focused chart. */
+  OPEN_IR_WEBSITE: 210,
+  /** Start practice mode (currently routes as plain play in player-web). */
+  PRACTICE: 315,
+  /** Replay slots 2-4. */
+  REPLAY2: 316,
+  REPLAY3: 317,
+  REPLAY4: 318,
+  /** Toggle BGA (background animation) overlay. */
+  BGA: 72,
+  /** Adjust note offset by ±1 ms (Shift = decrement). */
+  JUDGE_TIMING: 74,
+  /** Open target-score picker. */
+  TARGET: 77,
+  /** Cycle hispeed-fix mode. */
+  HSFIX: 55,
+  /** Adjust lanecover percentage. */
+  LANECOVER: 330,
+  /** Adjust lift percentage. */
+  LIFT: 331,
+  /** Adjust hidden-cover percentage. */
+  HIDDEN: 332,
+  /** Cycle assist options — exjudge / constant / judgearea / legacy / marknote / bpmguide / nomine. */
+  ASSIST_EXJUDGE: 301,
+  ASSIST_CONSTANT: 302,
+  ASSIST_JUDGEAREA: 303,
+  ASSIST_LEGACY: 304,
+  ASSIST_MARKNOTE: 305,
+  ASSIST_BPMGUIDE: 306,
+  ASSIST_NOMINE: 307,
+  /** Cycle LN mode (LN / CN / HCN). */
+  LNMODE: 308,
+  /** Toggle the focused song's "favorite song" flag. */
+  FAVORITTE_SONG: 89,
+  /** Toggle the focused chart's "favorite chart" flag. */
+  FAVORITTE_CHART: 90,
+} as const;
+
+export type BeatorajaButtonCode = (typeof BEATORAJA_BUTTON)[keyof typeof BEATORAJA_BUTTON];
+
+/**
  * Letter-rank classification from `(exScore, maxExScore)`. Returns the matching `BEATORAJA_OP`
  * code (`P1_RANK_*` for `side: 1`, `P2_RANK_*` for `side: 2`). Beatoraja's IIDX-derived rank
  * thresholds are 8/9, 7/9, ... down to 2/9 of the theoretical max EX-score (= `total * 2`).

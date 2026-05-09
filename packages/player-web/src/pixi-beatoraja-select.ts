@@ -108,6 +108,15 @@ export interface PixiBeatorajaSelectSceneOptions {
 const FALLBACK_VISIBLE_ROW_COUNT = 13;
 
 /**
+ * How long a `BUTTON_*` op stays active after a click fires (audit 2.1). 200ms is long
+ * enough for the player to perceive the press-state highlight in skins that author short
+ * "press feedback" tweens, short enough that subsequent clicks don't pile up if the user
+ * mashes a button. Beatoraja itself gates press feedback on Java's input-frame state which
+ * lasts a single frame; our 200ms window gives smooth animation under a 60fps tick.
+ */
+const BUTTON_PRESS_WINDOW_MS = 200;
+
+/**
  * Beatoraja's `select.json` `value[]` block declares `{"id":"songs_count", … "ref":300}` for
  * the "X songs" footer that shows on a folder bar. The `300` doesn't appear in beatoraja's
  * standard `prop.lua` number table (the publicly-documented enum stops at the 100s); it's a
@@ -506,6 +515,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     return this.cachedBaseOps;
   }
   private cachedBaseOps: ReadonlySet<number> | undefined;
+  /**
+   * Transient BUTTON-press tracker (audit 2.1). Maps each clicked `act` code to the
+   * `performance.now()` timestamp at which the press happened. `computeActiveOps` adds the
+   * code to the active op set while it's still within {@link BUTTON_PRESS_WINDOW_MS}, so
+   * skins gating press-state chrome on the matching op see the highlight in flight. Older
+   * entries get garbage-collected lazily during op resolution; the map stays bounded since
+   * the user can only click so many buttons per second.
+   */
+  private readonly buttonPressedAt = new Map<number, number>();
 
   /**
    * Per-frame active op set. Combines the stable base ops with bar-state ops derived from the
@@ -607,6 +625,21 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // "no record" frame still shows.
       const lampOp = this.options.resolveSongLampOp?.(entry.song) ?? BEATORAJA_OP.CLEAR_LAMP_NOPLAY;
       ops.add(lampOp);
+    }
+
+    // Transient BUTTON-press feedback (audit 2.1). Each `act` code clicked within the last
+    // `BUTTON_PRESS_WINDOW_MS` lights its matching op so destinations gating press-state
+    // chrome on `op = {act}` show their pressed visual. GC stale entries lazily — the map's
+    // size is bounded by user-click rate, which can never exceed ~10/sec.
+    if (this.buttonPressedAt.size > 0) {
+      const now = performance.now();
+      for (const [act, pressedAtMs] of this.buttonPressedAt) {
+        if (now - pressedAtMs >= BUTTON_PRESS_WINDOW_MS) {
+          this.buttonPressedAt.delete(act);
+          continue;
+        }
+        ops.add(act);
+      }
     }
     return ops;
   }
@@ -974,6 +1007,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private handleButtonAction(act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }): void {
     if (this.disposed) return;
+    // Stamp the press-state op (audit 2.1) BEFORE branching the action. `computeActiveOps`
+    // gates each entry on `BUTTON_PRESS_WINDOW_MS` so press-feedback chrome lights up for
+    // the duration regardless of which action arm we end up taking (or whether we early-out
+    // because the song / folder isn't pickable).
+    this.buttonPressedAt.set(act, performance.now());
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : entry?.folder.songs[0];
     switch (act) {

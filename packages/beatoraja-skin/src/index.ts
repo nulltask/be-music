@@ -170,8 +170,9 @@ export type {
   DiscoverBeatorajaThemeResult,
 } from './beatoraja-play-skin.ts';
 export { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './beatoraja-play-skin.ts';
-export type { BeatorajaSide } from './beatoraja-runtime-ids.ts';
+export type { BeatorajaButtonCode, BeatorajaSide } from './beatoraja-runtime-ids.ts';
 export {
+  BEATORAJA_BUTTON,
   BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
