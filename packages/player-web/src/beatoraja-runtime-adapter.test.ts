@@ -637,6 +637,45 @@ describe('BeatorajaRuntimeAdapter — timing samples', () => {
   });
 });
 
+describe('BeatorajaRuntimeAdapter — JUDGE_1P_OFFSET_MS (ref 525)', () => {
+  it('returns 0 before any 1P judgement has fired', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    // ref 525 — JUDGE_1P_OFFSET_MS (signed offset of most recent hit, not a fade timer).
+    expect(adapter.resolveNumberValue(525)).toBe(0);
+  });
+
+  it('returns the signed deltaMs of the most recent timing sample', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -8, updatedAtMs: 100 });
+    expect(adapter.resolveNumberValue(525)).toBe(-8);
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: 22, updatedAtMs: 200 });
+    expect(adapter.resolveNumberValue(525)).toBe(22);
+    // Latest sample wins — earlier offsets stay in the buffer but don't drive the readout.
+    adapter.applyJudgeCombo({ judge: 'GOOD', combo: 3, channel: '11', deltaMs: -45, updatedAtMs: 300 });
+    expect(adapter.resolveNumberValue(525)).toBe(-45);
+  });
+
+  it('truncates fractional ms toward zero so the digit display picks an integer cleanly', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -3.7, updatedAtMs: 100 });
+    expect(adapter.resolveNumberValue(525)).toBe(-3);
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', deltaMs: 19.4, updatedAtMs: 200 });
+    expect(adapter.resolveNumberValue(525)).toBe(19);
+  });
+});
+
 describe('BeatorajaRuntimeAdapter — judgegraph type=2 (early/late histogram)', () => {
   it('returns undefined when no judgements have fired yet', () => {
     const adapter = new BeatorajaRuntimeAdapter({

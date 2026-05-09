@@ -1626,13 +1626,18 @@ export class BeatorajaRuntimeAdapter {
         return Math.floor(gaugePct);
       case BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT:
         return Math.floor((gaugePct - Math.floor(gaugePct)) * 100);
-      // Time elapsed (ms) since the last 1P judgement. Read from the JUDGE_1P timer's stamp;
-      // returns 0 before the first judgement (`getTimerStart` undefined). Skins use this to
-      // fade out the judge popup ("PERFECT" / "GREAT" badge) — `1 - duration/fadeMs` style.
-      case BEATORAJA_NUM.JUDGE_1P_DURATION: {
-        const stamp = this.timerStartedAt.get(judgeTimerId(1));
-        if (stamp === undefined) return 0;
-        return Math.max(0, Math.floor(this.getNowMs() - stamp));
+      // Signed millisecond offset of the most recent 1P hit (positive = early/fast,
+      // negative = late/slow). Mirrors upstream `JudgeManager.getRecentJudgeTiming(0)`.
+      // Skins use the `divy:2` digit-strip layout to render the sign — row 0 = positive,
+      // row 1 = negative — so we just hand back the signed integer here.
+      //
+      // Returns 0 before the first hit lands (empty timing buffer). The fade-out of the
+      // judge popup is driven by the JUDGE_1P timer's stamp (read elsewhere via
+      // `getTimerStart`), not by this ref.
+      case BEATORAJA_NUM.JUDGE_1P_OFFSET_MS: {
+        const last = this.recentTimings[this.recentTimings.length - 1];
+        if (last === undefined) return 0;
+        return Math.trunc(last.deltaMs);
       }
       // BMS `#TOTAL` header value (gauge total). Same code (368) as the select scene's
       // chart-summary readout — ModernChic / GdbG_Skin author it on play too. Returns 0 when

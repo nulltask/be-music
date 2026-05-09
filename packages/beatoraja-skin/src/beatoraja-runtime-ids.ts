@@ -1009,11 +1009,21 @@ export const BEATORAJA_NUM = {
   /** prop.lua `bad_plus_poor_plus_miss = 427`. */
   BAD_PLUS_POOR_PLUS_MISS: 427,
   /**
-   * prop.lua `judge_1p_duration = 525` — milliseconds elapsed since the most recent 1P
-   * judgement. Skins gate fade-out timing on this so the judge "PERFECT" / "GREAT" badge
-   * dims as the duration grows. Returns 0 before the first judgement.
+   * prop.lua `judge_duration1 = 525` — SIGNED milliseconds offset of the most recent 1P
+   * hit. Positive = early (fast), negative = late (slow). Backed by upstream's
+   * `JudgeManager.getRecentJudgeTiming(0)` which is `judgefast[0]` in microseconds /
+   * 1000 (= ms with sign).
+   *
+   * Despite the upstream name "duration", this is NOT a fade-out timer (ms elapsed since
+   * the judgement). It's a hit-quality readout — beatoraja's default `play5.json` declares
+   * `judgems-1pp` with `divx:12, divy:2` so positive offsets render from row 0 and
+   * negative offsets from row 1 (the digit strip carries `+/-` signs alongside 0-9).
+   * Returns 0 before the first judgement.
+   *
+   * Refs 526 (2P) and 527 (3P / battle) are the per-player variants; we only surface 525
+   * since we're single-player.
    */
-  JUDGE_1P_DURATION: 525,
+  JUDGE_1P_OFFSET_MS: 525,
   /**
    * Community-extended `total = 368` — the chart's `#TOTAL` header value (gauge total per
    * BMS spec). Not in beatoraja's stock public prop.lua but ModernChic / GdbG_Skin both
