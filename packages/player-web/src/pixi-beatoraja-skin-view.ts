@@ -406,6 +406,17 @@ interface GaugeEntry {
    */
   cells: Sprite[];
   /**
+   * FLICKERING-mode overlay sprite painted on top of the topmost lit cell (the one whose
+   * `i === notes` boundary marks the live gauge edge). Beatoraja's `SkinGauge.draw` blits two
+   * sprites for that cell: the base lit node, then a second highlight node ON TOP of it that
+   * pulses with the gauge animation. Only the FLICKERING animation type uses this — the
+   * others rely on per-cell texture swaps via `pickBeatorajaGaugeNode` alone.
+   *
+   * Allocated once at build time (added LAST to the container so it z-orders above every base
+   * cell). Hidden when the picker doesn't return a `flickerOverlayId` for any cell.
+   */
+  overlay: Sprite;
+  /**
    * Pre-resolved `(nodeId → cropped Texture)` map. Only nodes referenced by `nodes[]` are
    * present; the renderer queries by id during the per-cell texture swap.
    */
@@ -1264,11 +1275,18 @@ export class BeatorajaPlaySkinView {
       this.container.addChild(sprite);
       cells.push(sprite);
     }
+    // FLICKERING overlay sprite. Mounted AFTER the base cells so its draw order is on top of
+    // them — beatoraja's `SkinGauge.draw` paints the second blit overtop the first. Hidden by
+    // default; `updateGaugeEntry` flips it visible and positions it on the topmost lit cell
+    // when the picker returns a `flickerOverlayId` (FLICKERING animation type only).
+    const overlay = new Sprite({ texture: firstTexture, alpha: 0 });
+    overlay.visible = false;
+    this.container.addChild(overlay);
     // Filter mode applies to every node texture used by this gauge, but they likely share a
     // single source (the gauge atlas). Apply to the first one and trust that pattern.
     const firstNode = nodeTextures.values().next().value;
     if (firstNode !== undefined) applyTextureFilterMode(firstNode, group.filter);
-    return { kind: 'gauge', group, element, cells, nodeTextures };
+    return { kind: 'gauge', group, element, cells, overlay, nodeTextures };
   }
 
   /**
@@ -2484,6 +2502,7 @@ export class BeatorajaPlaySkinView {
     const visible = props.visible;
     if (!visible) {
       for (const cell of entry.cells) cell.visible = false;
+      entry.overlay.visible = false;
       return;
     }
     // Pull the full gauge state for the spec-correct picker (audit 1.4). Falls back to a
@@ -2501,6 +2520,11 @@ export class BeatorajaPlaySkinView {
     const animation = computeBeatorajaGaugeAnimation(entry.element, context.nowMs);
     const cellWidth = props.width / Math.max(1, entry.element.parts);
     const center = centerToAnchor(entry.group.center);
+    // Track the topmost lit cell's overlay request — only one cell receives `flickerOverlayId`
+    // per frame (the picker emits it for `i == notes` only). Defer the overlay paint until
+    // after the cell loop so it lands on the resolved cell coordinates.
+    let overlayCellIndex = -1;
+    let overlayNodeId: BeatorajaImageId | undefined;
     for (let i = 0; i < entry.cells.length; i += 1) {
       const cell = entry.cells[i]!;
       const pick = pickBeatorajaGaugeNode(entry.element, i, state, animation);
@@ -2524,14 +2548,34 @@ export class BeatorajaPlaySkinView {
       cell.tint = props.tint;
       cell.angle = props.angle;
       cell.blendMode = props.blendMode;
-      // FLICKERING: when `pick.flickerOverlayId` is populated, the picker is asking us to
-      // paint a SECOND sprite on top of this cell. The current Pixi GaugeEntry only owns one
-      // sprite per cell — a future renderer pass can layer the overlay. For now the base
-      // node already conveys "this cell is the top" via the `notes` index, so the missing
-      // overlay is a small visual loss but not a structural break. (Not authored by any of
-      // our 3 sample skins beyond default play9, where the overlay matches `notes`-cell
-      // coloring closely enough that the absence isn't jarring.)
-      void pick.flickerOverlayId;
+      if (pick.flickerOverlayId !== undefined) {
+        overlayCellIndex = i;
+        overlayNodeId = pick.flickerOverlayId;
+      }
+    }
+    // FLICKERING overlay paint — beatoraja's `SkinGauge.draw` blits the highlight node ON TOP
+    // of the topmost lit cell as a second sprite. Mirror that here: position on the resolved
+    // cell, share the cell's tint/alpha/blend so the overlay reads as a true compositing pass
+    // rather than a separately-styled element.
+    if (overlayCellIndex < 0 || overlayNodeId === undefined) {
+      entry.overlay.visible = false;
+    } else {
+      const overlayTexture = entry.nodeTextures.get(overlayNodeId);
+      if (overlayTexture === undefined) {
+        entry.overlay.visible = false;
+      } else {
+        entry.overlay.visible = true;
+        entry.overlay.texture = overlayTexture;
+        entry.overlay.anchor.set(center.x, center.y);
+        entry.overlay.x = props.x + overlayCellIndex * cellWidth + center.x * cellWidth;
+        entry.overlay.y = props.y + center.y * props.height;
+        entry.overlay.width = cellWidth;
+        entry.overlay.height = props.height;
+        entry.overlay.alpha = props.alpha;
+        entry.overlay.tint = props.tint;
+        entry.overlay.angle = props.angle;
+        entry.overlay.blendMode = props.blendMode;
+      }
     }
   }
 
