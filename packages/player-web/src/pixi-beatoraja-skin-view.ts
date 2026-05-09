@@ -8,6 +8,10 @@ import {
   centerToAnchor,
   composeBeatorajaValueCells,
   composeBeatorajaValueShift,
+  evaluateBeatorajaCustomEvents,
+  evaluateBeatorajaCustomTimers,
+  normalizeBeatorajaCustomEvents,
+  normalizeBeatorajaCustomTimers,
   BEATORAJA_LUA_TIMER_OFF_VALUE,
   BEATORAJA_NUM,
   evaluateBeatorajaLuaNumber,
@@ -34,6 +38,9 @@ import {
   normalizeBeatorajaValues,
   pickBeatorajaGaugeNode,
   type BeatorajaBpmGraphElement,
+  type BeatorajaCustomEvent,
+  type BeatorajaCustomEventState,
+  type BeatorajaCustomTimer,
   type BeatorajaDestinationGroup,
   type BeatorajaGaugeGraphElement,
   type BeatorajaJudgeGraphElement,
@@ -500,6 +507,10 @@ export class BeatorajaPlaySkinView {
     | ((act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void)
     | undefined;
   private readonly chartImageProvider: ((syntheticId: number) => Texture | undefined) | undefined;
+  private readonly customEvents: ReadonlyArray<BeatorajaCustomEvent>;
+  private readonly customEventState: BeatorajaCustomEventState[] = [];
+  private readonly customTimers: ReadonlyArray<BeatorajaCustomTimer>;
+  private readonly customTimerState: number[] = [];
   private disposed = false;
 
   constructor(options: BeatorajaPlaySkinViewOptions) {
@@ -531,6 +542,16 @@ export class BeatorajaPlaySkinView {
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
     this.onButtonAction = options.onButtonAction;
     this.chartImageProvider = options.chartImageProvider;
+    // Parse customEvents / customTimers once at view construction. The per-frame evaluator
+    // reads `this.customEventState` / `this.customTimerState` for edge detection / change
+    // tracking — see `update()`. ModernChic + GdbG_Skin both populate these so panel-toggle
+    // SE / fullcombo voice / IR-update notifications fire at the right moments (audit 2.2).
+    this.customEvents = normalizeBeatorajaCustomEvents(
+      (options.skin as { customEvents?: unknown }).customEvents,
+    );
+    this.customTimers = normalizeBeatorajaCustomTimers(
+      (options.skin as { customTimers?: unknown }).customTimers,
+    );
 
     const imageById = new Map<BeatorajaImageId, BeatorajaImageElement>();
     for (const image of normalizeBeatorajaImages(options.skin.image)) {
@@ -1472,6 +1493,21 @@ export class BeatorajaPlaySkinView {
     if (this.disposed) return;
     const luaContext = this.buildLuaRuntimeContext(context);
     const renderContext: BeatorajaRenderContext = { ...context, lua: luaContext };
+    // customEvents / customTimers (audit 2.2). Fire any condition-flipped event actions and
+    // stamp any updated custom timers BEFORE walking the destination entries — that way
+    // BooleanProperty closures evaluated during destination paint observe the freshly-fired
+    // events and freshly-stamped timers in the same frame.
+    if (this.customEvents.length > 0) {
+      evaluateBeatorajaCustomEvents(this.customEvents, this.customEventState, luaContext, context.nowMs);
+    }
+    if (this.customTimers.length > 0) {
+      // customTimers stamp host engine timers — the host wires that via
+      // `BeatorajaLuaRuntimeContext.setTimer`. When the host omits the wiring (Node tests,
+      // hosts that don't carry a per-side timer table) the timer slot just doesn't update.
+      evaluateBeatorajaCustomTimers(this.customTimers, this.customTimerState, luaContext, (id, value) => {
+        luaContext.setTimer?.(id, value);
+      });
+    }
     // Pass the skin's authored canvas height into the renderer so it can flip Y-UP dst rects
     // (libGDX origin at canvas bottom-left) into Pixi Y-DOWN screen coords. The view owns this
     // value (`skin.h`) — callers don't need to thread it through.
