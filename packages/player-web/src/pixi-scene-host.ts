@@ -31,6 +31,17 @@ export interface PixiScene {
   enter(host: PixiSceneHost): Promise<void> | void;
   exit(): Promise<void> | void;
   dispose(): void;
+  /**
+   * Optional capture descriptor for the screenshot pipeline. Returns the SKIN's coordinate-
+   * space root container (= the contents are at native skin pixel coordinates, BEFORE the
+   * fit-to-stage scale) plus the skin's authored width / height. The host's screenshot
+   * helper temporarily resets the container's transform to identity, calls `extract.canvas`
+   * with a `frame: {0, 0, width, height}` rectangle, then restores the transform so the
+   * live view's scale isn't affected. Scenes that don't author a fixed skin canvas (or that
+   * don't want to be screenshot-capturable) leave the method undefined and the helper falls
+   * back to capturing the entire stage at its visible (window) size.
+   */
+  getStageInfo?(): { container: Container; width: number; height: number };
 }
 
 export interface PixiSceneHostMountOptions {

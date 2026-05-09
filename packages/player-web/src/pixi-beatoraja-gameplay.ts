@@ -484,6 +484,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   }
 
   /**
+   * Screenshot capture descriptor — returns the skin-space container + native authored
+   * dimensions. The play view's `view.container` is the skin canvas root (notes / BGA /
+   * markers all parent into it via the `insertNoteAndMarkerLayers` path), so capturing it
+   * with the transform reset gives a frame at the skin's exact authored resolution.
+   */
+  getStageInfo(): { container: Container; width: number; height: number } {
+    return { container: this.view.container, width: this.view.width, height: this.view.height };
+  }
+
+  /**
    * Ask the engine to fade out and resolve with the current summary. The host typically calls this from
    * a top-level pause/menu UI. ESC handling below routes through this same path.
    */

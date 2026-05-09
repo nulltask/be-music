@@ -651,6 +651,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
 
   /**
+   * Screenshot capture descriptor — see `PixiScene.getStageInfo`. Returns the play-skin
+   * view's container at native skin dimensions; the row-overlay listLayer is inside that
+   * container so the captured frame includes both the skin chrome and the song bars.
+   */
+  getStageInfo(): { container: Container; width: number; height: number } {
+    return { container: this.view.container, width: this.view.width, height: this.view.height };
+  }
+
+  /**
    * Hot-swap the underlying skin / textures / fonts / config without losing the cursor position.
    * Used by the skin-options panel for live `property[]` / `filepath[]` edits — rebuilds the chrome
    * against the new skin while preserving navigation state.

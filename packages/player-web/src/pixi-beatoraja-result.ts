@@ -220,6 +220,11 @@ export class PixiBeatorajaResultScene implements PixiScene {
     }
   }
 
+  /** Screenshot capture descriptor — see `PixiScene.getStageInfo`. */
+  getStageInfo(): { container: Container; width: number; height: number } {
+    return { container: this.view.container, width: this.view.width, height: this.view.height };
+  }
+
   /**
    * Decode + start the result BGM. Same lazy-init pattern as the decide scene's `startBgm`. The
    * jingle plays once (no loop) — beatoraja's result audio is typically a single-play fanfare,

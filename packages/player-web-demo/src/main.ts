@@ -1238,17 +1238,28 @@ class PlayerWebDemoApp {
    * the controller's DOM element drives the red-glow accent so the lil-gui style takes precedence over our highlight.
    */
   /**
-   * Capture the Pixi stage at its native size and download as a PNG. "Stage size" is the
-   * renderer's current screen dimensions (`app.screen.width × app.screen.height`) — the
-   * same pixel dimensions the user sees on the canvas. We route through
-   * `renderer.extract.canvas(app.stage)` rather than reading `app.canvas` directly so the
-   * capture works regardless of `preserveDrawingBuffer`. The extract pipeline forces a
-   * fresh render into an offscreen RT, reads the pixels, and returns a CPU-side
-   * HTMLCanvasElement we can `toBlob` for download.
+   * Capture the active scene at its SKIN-authored stage size and download as a PNG. When
+   * the active scene exposes a `getStageInfo()` descriptor (the four beatoraja scenes do),
+   * we capture at the skin's native resolution (e.g. 1280×720 for default play, 1920×1080
+   * for ModernChic) regardless of how the canvas is currently scaled to fit the window.
+   * Falls back to capturing the entire stage at the window size when the active scene
+   * doesn't expose stage info (LR2 path scenes today).
+   *
+   * Pipeline (skin-stage-size path):
+   *   1. Read `getStageInfo()` → {container, width, height}.
+   *   2. Save the container's transform (scale + position).
+   *   3. Reset to identity so children render at native skin coords.
+   *   4. `renderer.extract.canvas({ target: container, frame, resolution: 1 })` — Pixi
+   *      pre-renders into an offscreen RT at the requested frame; result is exactly
+   *      width × height pixels.
+   *   5. Restore the saved transform.
+   *
+   * The transform reset / restore happens within a single synchronous JS task — extract is
+   * synchronous and the next ticker fire restores the transform via fitToStage's cached-
+   * dims early-out short-circuit.
    *
    * Filename includes a UTC timestamp so multiple captures in one session don't collide.
-   * Errors (renderer not initialised, browser blocks the download) surface to the status
-   * panel for diagnostic visibility.
+   * Errors (renderer not ready, encoder failure) surface to the status panel.
    */
   private async captureScreenshot(): Promise<void> {
     const app = this.sceneHost.app;
@@ -1257,15 +1268,53 @@ class PlayerWebDemoApp {
       return;
     }
     try {
-      // Pixi v8's extract.canvas pre-renders the target into a CPU canvas. Passing
-      // `app.stage` captures every active scene exactly as it would have rendered on the
-      // next frame, including the backdrop / skin chrome / notes / overlays. Default
-      // resolution = 1 (= renderer pixel ratio); the resulting canvas matches
-      // `app.screen.width × app.screen.height` in CSS pixels.
-      const canvas = app.renderer.extract.canvas(app.stage);
-      // `extract.canvas` returns ICanvas (compat union of HTMLCanvasElement / OffscreenCanvas).
-      // Both expose `toBlob` in modern browsers — narrow to the form that does.
-      const toBlob = (canvas as { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void }).toBlob;
+      const activeScene = this.sceneHost.getCurrentScene();
+      const stageInfo = activeScene?.getStageInfo?.();
+      // `extract.canvas` returns Pixi's `ICanvas` (HTMLCanvasElement | OffscreenCanvas
+      // union). Demo doesn't depend directly on `pixi.js` so we type it via the runtime
+      // duck-type `{ toBlob }` we actually consume below.
+      let canvas: { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void };
+      let captureWidth: number;
+      let captureHeight: number;
+      if (stageInfo !== undefined) {
+        // Native skin-size path. Reset the container's fitToStage transform around the
+        // extract call; the next tick's fitToStage no-ops on cached screen dims and the
+        // user never sees the broken state on the live canvas.
+        const { container, width, height } = stageInfo;
+        const savedScaleX = container.scale.x;
+        const savedScaleY = container.scale.y;
+        const savedX = container.x;
+        const savedY = container.y;
+        container.scale.set(1, 1);
+        container.position.set(0, 0);
+        try {
+          // Use a plain `{x,y,width,height}` literal as the frame — Pixi v8's extract
+          // accepts the Rectangle shape structurally. Constructing via Pixi's Rectangle
+          // class would force a direct `pixi.js` dependency on this package; the literal
+          // is identical at runtime. Cast through the extract method to bypass the strict
+          // Rectangle type expectation.
+          const extractMethod = app.renderer.extract.canvas as (opts: unknown) => unknown;
+          canvas = extractMethod.call(app.renderer.extract, {
+            target: container,
+            frame: { x: 0, y: 0, width, height },
+            resolution: 1,
+          }) as typeof canvas;
+        } finally {
+          container.scale.set(savedScaleX, savedScaleY);
+          container.position.set(savedX, savedY);
+        }
+        captureWidth = width;
+        captureHeight = height;
+      } else {
+        // Fallback: capture the entire stage at the visible window size. Used when the
+        // scene isn't a beatoraja `PixiScene` (= LR2 path today). Same toBlob pipeline.
+        canvas = app.renderer.extract.canvas(app.stage) as typeof canvas;
+        captureWidth = app.screen.width;
+        captureHeight = app.screen.height;
+      }
+      // Both HTMLCanvasElement and OffscreenCanvas expose `toBlob` in modern browsers.
+      // Narrow defensively in case a runtime returns something exotic.
+      const toBlob = canvas.toBlob;
       if (typeof toBlob !== 'function') {
         this.setStatus('Screenshot failed: canvas.toBlob unavailable');
         return;
@@ -1291,7 +1340,7 @@ class PlayerWebDemoApp {
       // Revoke after a short delay — some browsers race the download against immediate
       // revocation. 5s is enough for the download dialog to grab the URL.
       setTimeout(() => URL.revokeObjectURL(url), 5_000);
-      this.setStatus(`Screenshot saved (${app.screen.width}×${app.screen.height})`);
+      this.setStatus(`Screenshot saved (${captureWidth}×${captureHeight})`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.setStatus(`Screenshot failed: ${message}`);

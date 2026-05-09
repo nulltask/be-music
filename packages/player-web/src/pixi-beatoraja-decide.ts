@@ -257,6 +257,11 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     }
   }
 
+  /** Screenshot capture descriptor — see `PixiScene.getStageInfo`. */
+  getStageInfo(): { container: Container; width: number; height: number } {
+    return { container: this.view.container, width: this.view.width, height: this.view.height };
+  }
+
   /**
    * Decode + start the decide BGM. Lazy in two senses: the `AudioContext` is constructed on
    * demand (so headless tests that never `enter()` the scene don't allocate one), and the bytes
