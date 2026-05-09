@@ -362,15 +362,25 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
   /**
-   * Per-row chart-level overlay. Mounted only when `songList.level` is populated (the skin
-   * author placed a `songlist.level[]` block) — sized + positioned via the level
-   * sub-destination's relative rect plus the row's authored bar rect. Renders the chart's
-   * `#PLAYLEVEL` digit as text rather than the per-difficulty sprite the skin author
-   * intends — sprite mode would need pulling level images from the songlist's authored
-   * sources, which is a larger workstream. Text mode preserves the position / size and
-   * gives players the chart difficulty at a glance.
+   * Per-row chart-level digit overlay (Pixi `Text`). Mounted only when `songList.level`
+   * is populated (the skin author placed a `songlist.level[]` block). Renders the
+   * chart's `#PLAYLEVEL` number; sized + positioned via the level sub-destination's
+   * relative rect plus the row's authored bar rect.
+   *
+   * Beatoraja's reference theme paints the level NUMBER as a per-digit number element
+   * driven by a separate `text[]` declaration (or directly by Lua); we emit text here as
+   * the most direct port. The bar background under it is painted by
+   * {@link rowLevelBars}, which crops the skin's `playlevel_bar` image when authored.
    */
   private readonly rowLevelLabels: Text[] = [];
+  /**
+   * Per-row chart-level background sprites. Cropped from `skin.image[level.id]`
+   * (typically `playlevel_bar` — a colored frame around the digit). Mounted under
+   * {@link rowLevelLabels} so the digit renders on top. `undefined` slots mean the skin
+   * authored a `level[]` block but didn't reference a `skin.image[id]` we could crop —
+   * the digit text still paints, just without the colored background.
+   */
+  private readonly rowLevelBars: (Sprite | undefined)[] = [];
   /**
    * Per-row chart-feature label sprites — one Sprite per `(visible row × songlist.label[]
    * entry)` combination. Each label is gated on a chart feature predicate (LN /
@@ -1562,6 +1572,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // listLayer; clearing the arrays lets the new loop allocate the right count.
     for (const t of this.rowLabels) t.destroy();
     for (const t of this.rowLevelLabels) t.destroy();
+    for (const s of this.rowLevelBars) s?.destroy({ children: false, texture: false, textureSource: false });
     for (const row of this.rowFeatureLabels) {
       for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
     }
@@ -1569,6 +1580,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
     this.rowLabels.length = 0;
     this.rowLevelLabels.length = 0;
+    this.rowLevelBars.length = 0;
     this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
     this.rowBarSprites.length = 0;
@@ -1624,20 +1636,35 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.rowLabels.push(label);
 
       // Per-row chart-level overlay — only allocated when the songlist authored
-      // `level[]`. Sized to the level sub-rect; tinted by difficulty band so a glance
-      // shows whether a chart is beginner / intermediate / advanced.
+      // `level[]`. Two stacked nodes:
+      //
+      //  - `levelBar`: SPRITE cropped from `skin.image[level.id]` (e.g. `playlevel_bar`,
+      //    a colored frame). Mounted FIRST so the digit text below paints on top. Skipped
+      //    when the skin authored a `level[]` block but referenced an image we couldn't
+      //    crop (missing entry / texture not in cache).
+      //  - `level`: TEXT digit (chart's `#PLAYLEVEL`) sized to `level.h` per the
+      //    `SkinTextFont.draw` height-from-dst convention. Stroke 2 px black for legibility
+      //    against arbitrary frame colors.
+      //
+      // Beatoraja's reference theme paints both the frame AND a styled digit element from
+      // the skin; we still emit the digit as Pixi Text since wiring up the skin's number
+      // element pipeline for songlist sub-destinations is more involved.
       if (this.songList?.level !== undefined) {
+        const levelDef = this.songList.level;
+        const levelBarId = levelDef.id;
+        const levelBar = levelBarId !== undefined ? this.buildFeatureLabelSprite(levelBarId) : undefined;
+        if (levelBar !== undefined) {
+          levelBar.visible = false;
+          this.listLayer.addChild(levelBar);
+        }
+        this.rowLevelBars.push(levelBar);
+
         const level = new Text({
           text: '',
           style: {
             fontFamily,
-            // Match beatoraja's `SkinTextFont.draw` height-from-dst convention: the
-            // rendered glyph height = `dst.h`. (The reference theme actually paints level
-            // as a per-difficulty SPRITE cropped from `playlevel_bar`, filling the rect at
-            // `level.h`; we render text as a fallback so chart difficulty stays visible
-            // without bundling the playlevel images yet, but the size rule is the same.)
             // Floor at 12 so unusually short level rects stay legible.
-            fontSize: Math.max(12, Math.floor(this.songList.level.h)),
+            fontSize: Math.max(12, Math.floor(levelDef.h)),
             fill: 0xffffff,
             fontWeight: '700',
             stroke: { color: 0x000000, width: 2 },
@@ -1726,10 +1753,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.visible = true;
       if (bar !== undefined) bar.visible = true;
       const levelLabel = this.rowLevelLabels[i];
+      const levelBar = this.rowLevelBars[i];
       if (entry.kind === 'folder') {
         // Beatoraja's bartext renders just the folder name on folder rows.
         label.text = entry.folder.label;
         if (levelLabel !== undefined) levelLabel.visible = false;
+        if (levelBar !== undefined) levelBar.visible = false;
       } else {
         const song = entry.song;
         label.text = song.title;
@@ -1739,8 +1768,18 @@ export class PixiBeatorajaSelectScene implements PixiScene {
             levelLabel.text = String(lvl);
             levelLabel.tint = levelTintForDifficulty(lvl);
             levelLabel.visible = true;
+            if (levelBar !== undefined) {
+              // Tint the playlevel_bar frame to match the digit's difficulty band so a
+              // glance shows whether a chart is beginner / intermediate / advanced. The
+              // skin authors per-difficulty color overrides on each `level[]` entry's
+              // dst, but we don't yet route those — this keeps the band cue visible
+              // until the per-entry color path lands.
+              levelBar.tint = levelTintForDifficulty(lvl);
+              levelBar.visible = true;
+            }
           } else {
             levelLabel.visible = false;
+            if (levelBar !== undefined) levelBar.visible = false;
           }
         }
       }
@@ -1835,8 +1874,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
       // Per-row level overlay — only when the songlist authored a `level` sub-rect AND we
       // pre-allocated a label for this row. Sub-rect is RELATIVE to the bar rect; we
-      // place the text at its centre.
+      // place the text at its centre, and stamp the optional `playlevel_bar` sprite
+      // beneath it sized to the full sub-rect.
       const levelLabel = this.rowLevelLabels[i];
+      const levelBar = this.rowLevelBars[i];
       const levelRect = this.songList?.level;
       if (levelLabel !== undefined && levelRect !== undefined) {
         // Beatoraja authors `level.dst` rects in skin Y-UP coords (origin at bar's
@@ -1844,6 +1885,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         // top. Skin Y-UP offset within the bar maps to Pixi:
         //   pixiY = rect.y + (rect.h - level.y - level.h)
         const subPixiY = rect.y + (rect.h - levelRect.y - levelRect.h) + fractionalNudge;
+        if (levelBar !== undefined) {
+          levelBar.x = rect.x + levelRect.x;
+          levelBar.y = subPixiY;
+          levelBar.width = levelRect.w;
+          levelBar.height = levelRect.h;
+          levelBar.alpha = isSelected ? 1 : 0.85;
+        }
         levelLabel.x = rect.x + levelRect.x + levelRect.w / 2;
         levelLabel.y = subPixiY + levelRect.h / 2;
         levelLabel.alpha = isSelected ? 1 : 0.85;

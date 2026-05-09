@@ -139,7 +139,7 @@ describe('parseBeatorajaSongList', () => {
       },
     } as unknown as Partial<BeatorajaSkin>);
     const layout = parseBeatorajaSongList(skin);
-    expect(layout?.level).toEqual({ x: 20, y: 8, w: 24, h: 24 });
+    expect(layout?.level).toEqual({ id: 'playlevel_bar', x: 20, y: 8, w: 24, h: 24 });
   });
 
   it('returns level as undefined / labels + text as empty when the songlist omits them', () => {

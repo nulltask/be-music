@@ -136,7 +136,9 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   // independently at draw time. `text[]` is similar — each entry references a top-level
   // `text[]` declaration by id and provides the per-bar rect, which the renderer should use
   // as the dst (with `rect.h` as the font size).
-  const level = collectFirstSubRect(obj.level);
+  const levelRect = collectFirstSubRect(obj.level);
+  const levelId = firstEntryId(obj.level);
+  const level = levelRect !== undefined && levelId !== undefined ? { id: levelId, ...levelRect } : levelRect;
   const labels = collectLabelEntries(obj.label);
   // De-dupe text entries by id — beatoraja's default `select.json` authors the same id
   // (e.g. `bartext`) twice with different `filter` / color overrides. Without a filter
@@ -177,7 +179,10 @@ function collectLabelEntries(input: unknown): ReadonlyArray<{ id: string; rect: 
  * Pick the first entry's first dst rect from a `songlist.level[]` / `songlist.label[]` etc.
  * array — beatoraja authors one entry per difficulty / kind index but the geometry is
  * identical across them in the typical case. `undefined` when the array is missing or
- * empty / malformed.
+ * empty / malformed. The wrapper entry's `id` (e.g. `playlevel_bar` for `level[]`) is
+ * NOT captured here; callers that need it should pull `input[0].id` separately. (Inner
+ * rect-only call sites like `collectLabelEntries` rely on the rect being id-free so the
+ * outer `{id, rect}` shape doesn't double-encode the id.)
  */
 function collectFirstSubRect(input: unknown): BeatorajaSongListRowRect | undefined {
   if (!Array.isArray(input) || input.length === 0) return undefined;
@@ -194,6 +199,19 @@ function collectFirstSubRect(input: unknown): BeatorajaSongListRowRect | undefin
   const h = numberField(obj, 'h', 0);
   if (w <= 0 || h <= 0) return undefined;
   return { x, y, w, h };
+}
+
+/**
+ * Pull a wrapper entry's `id` field (the `skin.image[]` reference for sub-destinations
+ * like `level[].id == "playlevel_bar"`). Picks the FIRST entry of the array; returns
+ * `undefined` when missing / malformed.
+ */
+function firstEntryId(input: unknown): string | undefined {
+  if (!Array.isArray(input) || input.length === 0) return undefined;
+  const first = input[0];
+  if (first === null || typeof first !== 'object') return undefined;
+  const idValue = (first as Readonly<Record<string, unknown>>).id;
+  return typeof idValue === 'string' && idValue.length > 0 ? idValue : undefined;
 }
 
 function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefined {
