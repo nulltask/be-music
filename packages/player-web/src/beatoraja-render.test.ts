@@ -5,7 +5,13 @@ import {
   normalizeBeatorajaDestinations,
   type BeatorajaLuaFunctionValue,
 } from '@be-music/beatoraja-skin';
-import { blendCodeToPixi, destinationToSpriteProps, flipRectToPixi } from './beatoraja-render.ts';
+import {
+  applyBeatorajaStretchRect,
+  BEATORAJA_STRETCH,
+  blendCodeToPixi,
+  destinationToSpriteProps,
+  flipRectToPixi,
+} from './beatoraja-render.ts';
 
 // Use a 1000-tall canvas so Y-flipped values are easy to eyeball: a `dst.y = 0, h = 50` rect
 // lands at Pixi y = 1000 - 0 - 50 = 950 (anchored to the canvas bottom edge in screen coords).
@@ -277,5 +283,142 @@ describe('blendCodeToPixi', () => {
     expect(blendCodeToPixi(4)).toBe('multiply');
     expect(blendCodeToPixi(9)).toBe('erase');
     expect(blendCodeToPixi(99)).toBe('normal'); // unknown code falls back
+  });
+});
+
+describe('applyBeatorajaStretchRect', () => {
+  // Standard test case: 100×100 destination rect with a wider 200×100 source — aspect 2:1.
+  // Expected behavior per mode summarized in the comments below.
+  const dst = { x: 50, y: 50, width: 100, height: 100 };
+  const wideSource = { width: 200, height: 100 }; // aspect 2:1
+  const tallSource = { width: 100, height: 200 }; // aspect 1:2
+
+  it('STRETCH (0) is a pass-through', () => {
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.STRETCH)).toEqual({
+      x: 50,
+      y: 50,
+      width: 100,
+      height: 100,
+      trim: false,
+    });
+  });
+
+  it('FIT_INNER (1) shrinks one axis to preserve aspect, recenters', () => {
+    // Wide source (200×100) into 100×100 dst → height shrinks to 50, width unchanged. Recenter
+    // vertically: dst center y = 100, new height 50 → y = 75.
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.FIT_INNER)).toEqual({
+      x: 50,
+      y: 75,
+      width: 100,
+      height: 50,
+      trim: false,
+    });
+    // Tall source (100×200) → width shrinks to 50, height unchanged. Recenter horizontally.
+    expect(applyBeatorajaStretchRect(dst, tallSource, BEATORAJA_STRETCH.FIT_INNER)).toEqual({
+      x: 75,
+      y: 50,
+      width: 50,
+      height: 100,
+      trim: false,
+    });
+  });
+
+  it('FIT_OUTER (2) expands one axis to cover the dst, recenters', () => {
+    // Wide source → height grows to 200 (overflows top + bottom), width 200 (overflows left+right).
+    // Wait — wide source means scaleX > scaleY (100/200=0.5 vs 100/100=1.0); FIT_OUTER picks the
+    // LARGER ratio → 1.0 → height stays 100, width becomes 200, recenter horizontally.
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.FIT_OUTER)).toEqual({
+      x: 0, // 100 dst center - 100 half-width
+      y: 50,
+      width: 200,
+      height: 100,
+      trim: false,
+    });
+  });
+
+  it('FIT_OUTER_TRIMMED (3) returns same geometry as FIT_OUTER but flags trim=true', () => {
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.FIT_OUTER_TRIMMED)).toEqual({
+      x: 0,
+      y: 50,
+      width: 200,
+      height: 100,
+      trim: true,
+    });
+  });
+
+  it('FIT_WIDTH (4) matches dst width, height scales proportionally', () => {
+    // Wide source 200×100 → matches dst.width = 100, height = 100 × 100/200 = 50, recenter.
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.FIT_WIDTH)).toEqual({
+      x: 50,
+      y: 75,
+      width: 100,
+      height: 50,
+      trim: false,
+    });
+  });
+
+  it('FIT_HEIGHT (6) matches dst height, width scales proportionally', () => {
+    // Wide source 200×100 → matches dst.height = 100, width = 200 × 100/100 = 200, recenter.
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.FIT_HEIGHT)).toEqual({
+      x: 0,
+      y: 50,
+      width: 200,
+      height: 100,
+      trim: false,
+    });
+  });
+
+  it('NO_RESIZE (9) keeps source dimensions verbatim, recenters', () => {
+    // 200×100 source recentered on the 100×100 dst at center (100, 100) → x = 0, y = 50.
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.NO_RESIZE)).toEqual({
+      x: 0,
+      y: 50,
+      width: 200,
+      height: 100,
+      trim: false,
+    });
+  });
+
+  it('NO_EXPANDING (8) only shrinks (uses min(1, fit-inner-scale))', () => {
+    // Smaller source than dst → scale=1 → keeps source dimensions.
+    const smallSource = { width: 50, height: 50 };
+    expect(applyBeatorajaStretchRect(dst, smallSource, BEATORAJA_STRETCH.NO_EXPANDING)).toEqual({
+      x: 75,
+      y: 75,
+      width: 50,
+      height: 50,
+      trim: false,
+    });
+    // Larger source than dst → scale = min(100/200, 100/100) = 0.5 → 100×50 recentered.
+    expect(applyBeatorajaStretchRect(dst, wideSource, BEATORAJA_STRETCH.NO_EXPANDING)).toEqual({
+      x: 50,
+      y: 75,
+      width: 100,
+      height: 50,
+      trim: false,
+    });
+  });
+
+  it('falls through to STRETCH for unknown / negative stretch codes', () => {
+    expect(applyBeatorajaStretchRect(dst, wideSource, 99)).toEqual({
+      x: 50,
+      y: 50,
+      width: 100,
+      height: 100,
+      trim: false,
+    });
+    expect(applyBeatorajaStretchRect(dst, wideSource, -1)).toEqual({
+      x: 50,
+      y: 50,
+      width: 100,
+      height: 100,
+      trim: false,
+    });
+  });
+
+  it('falls through to STRETCH when source dimensions are zero (degenerate texture)', () => {
+    expect(
+      applyBeatorajaStretchRect(dst, { width: 0, height: 100 }, BEATORAJA_STRETCH.FIT_INNER),
+    ).toEqual({ x: 50, y: 50, width: 100, height: 100, trim: false });
   });
 });

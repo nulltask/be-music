@@ -56,6 +56,7 @@ import {
   type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
 import {
+  applyBeatorajaStretchRect,
   createCroppedBeatorajaTexture,
   destinationToSpriteProps,
   type BeatorajaRenderContext,
@@ -1529,14 +1530,29 @@ export class BeatorajaPlaySkinView {
       entry.lastDisapearRatio = disapearRatio;
     }
 
+    // Apply the destination's `stretch` mode (audit 2.12). `stretch=0` (default = STRETCH)
+    // is a no-op; FIT_INNER / FIT_OUTER / FIT_WIDTH / FIT_HEIGHT / NO_RESIZE / NO_EXPANDING
+    // all preserve the source sprite's natural aspect ratio in some way. Without this the
+    // dst rect always wins, so banner / jacket / stagefile elements that author `stretch:1`
+    // got squashed to the dst rect's aspect (most visible: ModernChic Result mainmenu's
+    // stagefile thumbnail authored `stretch = MAIN.STRETCH.FIT_OUTER_TRIMMED`).
+    //
+    // `stretchSource` reflects the source sprite's natural cell size from the texture; for
+    // multi-cell `divx/divy` strips this is the cell size, not the entire atlas dimensions.
+    const cellRectAtFrame = imageFrameRect(entry.image, entry.currentFrame);
+    const stretched = applyBeatorajaStretchRect(
+      { x: props.x, y: props.y, width: props.width, height: visibleHeight },
+      { width: cellRectAtFrame.w, height: cellRectAtFrame.h },
+      entry.group.stretch,
+    );
     const center = centerToAnchor(entry.group.center);
     sprite.anchor.set(center.x, center.y);
-    sprite.x = props.x + center.x * props.width;
-    // Top edge is fixed at `props.y`; clip shrinks the bottom. Anchor offset uses `visibleHeight`
-    // so a center anchor lands at the visible mid-point, not the original rect's mid-point.
-    sprite.y = props.y + center.y * visibleHeight;
-    sprite.width = props.width;
-    sprite.height = visibleHeight;
+    sprite.x = stretched.x + center.x * stretched.width;
+    // Top edge is fixed at the stretched y; clip-trimmed bottom uses `visibleHeight`-scaled
+    // height (already absorbed into `stretched.height` via the dst rect we passed in).
+    sprite.y = stretched.y + center.y * stretched.height;
+    sprite.width = stretched.width;
+    sprite.height = stretched.height;
     // Honor the destination's authored mirror flag (negative `w` / `h` in beatoraja's skin).
     // `props.width` is already non-negative; we apply the mirror via `scale` so the texture
     // flips horizontally without disturbing the positioning math above.

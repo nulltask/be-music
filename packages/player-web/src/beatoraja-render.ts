@@ -272,6 +272,149 @@ export function flipRectToPixi(
   };
 }
 
+/**
+ * StretchType enum — mirrors `bms.player.beatoraja.skin.StretchType`. Listed for documentation;
+ * authors generally cite the integer code (0..10) rather than the symbolic name.
+ *
+ * - `0` STRETCH — fill the dst rect, ignore aspect ratio (default).
+ * - `1` FIT_INNER — preserve aspect, scale to FIT INSIDE dst rect (smaller axis wins).
+ * - `2` FIT_OUTER — preserve aspect, scale to COVER dst rect entirely (larger axis wins).
+ * - `3` FIT_OUTER_TRIMMED — like FIT_OUTER but the source texture is cropped to dst rect.
+ * - `4` FIT_WIDTH — match dst width, height scales proportionally.
+ * - `5` FIT_WIDTH_TRIMMED — match dst width, source cropped to dst height.
+ * - `6` FIT_HEIGHT — match dst height, width scales proportionally.
+ * - `7` FIT_HEIGHT_TRIMMED — match dst height, source cropped to dst width.
+ * - `8` NO_EXPANDING — preserve aspect, scale down only when source exceeds dst (otherwise NO_RESIZE).
+ * - `9` NO_RESIZE — keep source size verbatim, recenter on dst rect.
+ * - `10` NO_RESIZE_TRIMMED — keep source size verbatim, source cropped to dst rect.
+ *
+ * The TRIMMED variants (3 / 5 / 7 / 10) require modifying the texture's source UVs — the renderer
+ * crops to the dst rect rather than scaling. {@link applyBeatorajaStretchRect} returns the same
+ * dst geometry as the non-trimmed variant for those modes, plus a flag instructing the caller
+ * to crop the texture; renderers that don't support per-call source cropping degrade to the
+ * non-trimmed approximation (= no visible change vs FIT_OUTER / FIT_WIDTH / FIT_HEIGHT /
+ * NO_RESIZE respectively).
+ */
+export const BEATORAJA_STRETCH = {
+  STRETCH: 0,
+  FIT_INNER: 1,
+  FIT_OUTER: 2,
+  FIT_OUTER_TRIMMED: 3,
+  FIT_WIDTH: 4,
+  FIT_WIDTH_TRIMMED: 5,
+  FIT_HEIGHT: 6,
+  FIT_HEIGHT_TRIMMED: 7,
+  NO_EXPANDING: 8,
+  NO_RESIZE: 9,
+  NO_RESIZE_TRIMMED: 10,
+} as const;
+
+export interface BeatorajaStretchedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /**
+   * `true` when the stretch mode wants the texture cropped to the returned rect (TRIMMED
+   * variants). The non-trimmed variants leave this `false`. Renderers that don't support
+   * per-call source cropping can ignore this flag — the geometry alone is the FIT_OUTER /
+   * FIT_WIDTH / FIT_HEIGHT / NO_RESIZE result for the matching trimmed mode.
+   */
+  trim: boolean;
+}
+
+/**
+ * Compute the post-stretch rect for a given destination rect + source-sprite natural
+ * dimensions. Mirrors beatoraja's `StretchType.stretch(rectangle, image, image)` —
+ * `StretchType` mutates `rectangle` in place; we return a new record. The Y-flip / mirror /
+ * angle math is unaffected (this only resizes / recenters within the same Pixi space).
+ *
+ * Behavior per mode:
+ *
+ *   - **STRETCH (0)** — pass-through.
+ *   - **FIT_INNER (1) / FIT_OUTER (2 / 3) / NO_EXPANDING (8)** — scale uniformly, recenter.
+ *   - **FIT_WIDTH (4 / 5)** — match dst width, height = sourceH × dstW / sourceW; recenter.
+ *   - **FIT_HEIGHT (6 / 7)** — match dst height, width = sourceW × dstH / sourceH; recenter.
+ *   - **NO_RESIZE (9 / 10)** — keep source dimensions, recenter.
+ *
+ * Source dimensions ≤ 0 fall through to STRETCH (degenerate texture; no aspect to preserve).
+ */
+export function applyBeatorajaStretchRect(
+  dst: { x: number; y: number; width: number; height: number },
+  source: { width: number; height: number },
+  stretch: number,
+): BeatorajaStretchedRect {
+  const sw = source.width;
+  const sh = source.height;
+  if (stretch <= BEATORAJA_STRETCH.STRETCH || sw <= 0 || sh <= 0) {
+    return { ...dst, trim: false };
+  }
+  const cx = dst.x + dst.width * 0.5;
+  const cy = dst.y + dst.height * 0.5;
+  const fitWidth = (w: number): { x: number; width: number } => {
+    return { x: cx - w * 0.5, width: w };
+  };
+  const fitHeight = (h: number): { y: number; height: number } => {
+    return { y: cy - h * 0.5, height: h };
+  };
+  switch (stretch) {
+    case BEATORAJA_STRETCH.FIT_INNER: {
+      // Pick the SMALLER scale so the source fits inside the dst rect.
+      const scaleX = dst.width / sw;
+      const scaleY = dst.height / sh;
+      if (scaleX <= scaleY) {
+        const { y, height } = fitHeight(sh * scaleX);
+        return { x: dst.x, y, width: dst.width, height, trim: false };
+      }
+      const { x, width } = fitWidth(sw * scaleY);
+      return { x, y: dst.y, width, height: dst.height, trim: false };
+    }
+    case BEATORAJA_STRETCH.FIT_OUTER:
+    case BEATORAJA_STRETCH.FIT_OUTER_TRIMMED: {
+      // Pick the LARGER scale so the source covers the dst rect.
+      const scaleX = dst.width / sw;
+      const scaleY = dst.height / sh;
+      const trim = stretch === BEATORAJA_STRETCH.FIT_OUTER_TRIMMED;
+      if (scaleX >= scaleY) {
+        const { y, height } = fitHeight(sh * scaleX);
+        return { x: dst.x, y, width: dst.width, height, trim };
+      }
+      const { x, width } = fitWidth(sw * scaleY);
+      return { x, y: dst.y, width, height: dst.height, trim };
+    }
+    case BEATORAJA_STRETCH.FIT_WIDTH:
+    case BEATORAJA_STRETCH.FIT_WIDTH_TRIMMED: {
+      const trim = stretch === BEATORAJA_STRETCH.FIT_WIDTH_TRIMMED;
+      const { y, height } = fitHeight((sh * dst.width) / sw);
+      return { x: dst.x, y, width: dst.width, height, trim };
+    }
+    case BEATORAJA_STRETCH.FIT_HEIGHT:
+    case BEATORAJA_STRETCH.FIT_HEIGHT_TRIMMED: {
+      const trim = stretch === BEATORAJA_STRETCH.FIT_HEIGHT_TRIMMED;
+      const { x, width } = fitWidth((sw * dst.height) / sh);
+      return { x, y: dst.y, width, height: dst.height, trim };
+    }
+    case BEATORAJA_STRETCH.NO_EXPANDING: {
+      // Scale down only when the source exceeds the dst — otherwise leave at source dimensions.
+      const scale = Math.min(1, dst.width / sw, dst.height / sh);
+      const { x, width } = fitWidth(sw * scale);
+      const { y, height } = fitHeight(sh * scale);
+      return { x, y, width, height, trim: false };
+    }
+    case BEATORAJA_STRETCH.NO_RESIZE:
+    case BEATORAJA_STRETCH.NO_RESIZE_TRIMMED: {
+      const trim = stretch === BEATORAJA_STRETCH.NO_RESIZE_TRIMMED;
+      const { x, width } = fitWidth(sw);
+      const { y, height } = fitHeight(sh);
+      return { x, y, width, height, trim };
+    }
+    default:
+      // Unknown stretch code → fall through to STRETCH for defensive sanity. Keeps the renderer
+      // from blowing up on a future enum addition.
+      return { ...dst, trim: false };
+  }
+}
+
 function clampUnit(v: number): number {
   if (v <= 0) return 0;
   if (v >= 1) return 1;

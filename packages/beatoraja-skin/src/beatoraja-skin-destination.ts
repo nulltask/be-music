@@ -108,6 +108,20 @@ export interface BeatorajaDestinationGroup {
    */
   dst: ReadonlyArray<BeatorajaDestinationKeyframe>;
   /**
+   * Stretch mode — mirrors beatoraja's `StretchType` enum (0..10). Controls how the source
+   * sprite's natural dimensions are mapped onto the destination rect. Default `0` (= STRETCH,
+   * free-stretch ignoring aspect ratio); non-zero values preserve aspect ratio in various ways
+   * (fit-inside, fit-outside, fit-width, fit-height, no-resize, etc.). The renderer consults
+   * this when assigning sprite geometry — see `applyBeatorajaStretchRect` in
+   * `@be-music/player-web/beatoraja-render`.
+   *
+   * Beatoraja's `JSONSkinLoader.setDestination` reads `stretch` from each `dst[]` keyframe and
+   * calls `obj.setStretch(StretchType.values()[anim.stretch])` only when `>= 0`. Since each
+   * call overwrites the field, the LAST authored keyframe wins. Our parser likewise picks the
+   * last non-default value so multi-keyframe authoring stays consistent.
+   */
+  stretch: number;
+  /**
    * Author-given declaration order. Two destinations targeting the same image but emitted at different points in
    * the source file render in source order; this field preserves that.
    */
@@ -154,8 +168,37 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     offsets: normalizeOpArray(f.offsets),
     ifCodes: entry.ifCodes,
     dst: keyframes,
+    // Stretch is per-element in beatoraja (the loader's `setStretch` call overwrites the field
+    // each keyframe; last-write wins). The JSON / Lua entry sometimes places it on the outer
+    // record, sometimes on individual keyframes; we read whichever the author chose, walking the
+    // keyframes for the LAST non-default value.
+    stretch: pickStretchMode(f, rawDst),
     declarationOrder,
   };
+}
+
+/**
+ * Read the destination's `stretch` (StretchType) integer. Mirrors beatoraja's
+ * `JSONSkinLoader.setDestination` which iterates the `dst[]` array and applies
+ * `obj.setStretch(StretchType.values()[anim.stretch])` whenever `anim.stretch >= 0`. Since
+ * each call overwrites the previous, the LAST keyframe with a valid stretch value wins.
+ *
+ * Skins occasionally put `stretch` on the outer destination record instead of per-keyframe
+ * (Lua-driven skins especially); we honor either form. Default `0` = `STRETCH` = free-stretch
+ * ignoring aspect ratio, matching beatoraja's enum-zero default.
+ */
+function pickStretchMode(outer: Readonly<Record<string, unknown>>, dst: ReadonlyArray<unknown>): number {
+  const fromOuter = outer.stretch;
+  let resolved = typeof fromOuter === 'number' && Number.isFinite(fromOuter) && fromOuter >= 0 ? fromOuter : 0;
+  // Walk keyframes; last non-default wins.
+  for (const entry of dst) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const v = (entry as Readonly<Record<string, unknown>>).stretch;
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
+      resolved = v;
+    }
+  }
+  return resolved;
 }
 
 /**

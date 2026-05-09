@@ -249,3 +249,52 @@ describe('centerToAnchor (beatoraja convention, mapped into Pixi Y-DOWN)', () =>
     expect(centerToAnchor(Number.NaN)).toEqual({ x: 0.5, y: 0.5 });
   });
 });
+
+describe('destination.stretch (audit 2.12)', () => {
+  it('defaults to 0 (= STRETCH) when no stretch is authored', () => {
+    const groups = normalizeBeatorajaDestinations([
+      { id: 'bg', dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] },
+    ]);
+    expect(groups[0]!.stretch).toBe(0);
+  });
+
+  it('reads stretch from the outer destination record', () => {
+    const groups = normalizeBeatorajaDestinations([
+      { id: 'jacket', stretch: 1, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] },
+    ]);
+    expect(groups[0]!.stretch).toBe(1);
+  });
+
+  it('reads stretch from a per-keyframe entry (Lua-driven skins author it that way)', () => {
+    const groups = normalizeBeatorajaDestinations([
+      {
+        id: 'banner',
+        dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100, stretch: 2 }],
+      },
+    ]);
+    expect(groups[0]!.stretch).toBe(2);
+  });
+
+  it('LAST authored keyframe wins (matches beatoraja JSONSkinLoader.setStretch ordering)', () => {
+    // beatoraja's loader calls `obj.setStretch(...)` for each keyframe with a non-default
+    // value; subsequent calls overwrite. Our parser must match: the last keyframe's stretch
+    // is the one that takes effect.
+    const groups = normalizeBeatorajaDestinations([
+      {
+        id: 'jacket',
+        dst: [
+          { time: 0, x: 0, y: 0, w: 100, h: 100, stretch: 1 },
+          { time: 500, x: 0, y: 0, w: 100, h: 100, stretch: 2 },
+        ],
+      },
+    ]);
+    expect(groups[0]!.stretch).toBe(2);
+  });
+
+  it('ignores negative stretch values (= "not set" sentinel in beatoraja)', () => {
+    const groups = normalizeBeatorajaDestinations([
+      { id: 'bg', stretch: -1, dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] },
+    ]);
+    expect(groups[0]!.stretch).toBe(0);
+  });
+});
