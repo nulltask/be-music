@@ -44,6 +44,7 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
+import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
@@ -381,9 +382,11 @@ export class PixiBeatorajaResultScene implements PixiScene {
       case BEATORAJA_TEXT.ARTIST:
         return song?.artist ?? '';
       case BEATORAJA_TEXT.SUBARTIST:
-        return '';
+        // BMS `#SUBARTIST` lands in `metadata.extras.SUBARTIST`; bmson's structured
+        // `info.subartists[]` joins with spaces. Both paths surface the same string here.
+        return extractChartSubartist(song?.chart);
       case BEATORAJA_TEXT.FULLARTIST:
-        return song?.artist ?? '';
+        return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
       // Skin / directory metadata — same contract as decide / gameplay paths. Lets the result
       // panel display "Played: <directory> / <song.title>" in skins that author the layout.
       case BEATORAJA_TEXT.SKIN_NAME:

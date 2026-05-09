@@ -43,6 +43,7 @@ import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-chart-density.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
+import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import {
   computeBeatorajaChartNoteDistribution,
@@ -1038,9 +1039,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       case BEATORAJA_TEXT.ARTIST:
         return song?.artist ?? '';
       case BEATORAJA_TEXT.SUBARTIST:
-        return '';
+        // BMS `#SUBARTIST` lands in `metadata.extras.SUBARTIST`; bmson's structured
+        // `info.subartists[]` joins with spaces. Both paths surface the same string here so
+        // the default skin's sub-artist line under the focused song's artist isn't blank.
+        return extractChartSubartist(song?.chart);
       case BEATORAJA_TEXT.FULLARTIST:
-        return song?.artist ?? '';
+        return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
       case BEATORAJA_TEXT.SKIN_NAME:
         return skin.name ?? '';
       case BEATORAJA_TEXT.SKIN_AUTHOR:

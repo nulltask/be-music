@@ -26,6 +26,7 @@ import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
+import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import {
   beatorajaGaugeModeFromString,
@@ -1057,10 +1058,11 @@ export class BeatorajaRuntimeAdapter {
 
   private resolveTextContentInner(refOp: number, chart: BeMusicJson): string | undefined {
     const meta = chart.metadata;
-    // bmson sub-artist list is an array of `"role:name"` strings — for the dynamic readout we just join
-    // them with `" "` so the skin sees something readable. Hosts that need structured access can
-    // post-process via `parseBmsonSubartist`.
-    const subartist = chart.bmson?.info?.subartists?.join(' ') ?? '';
+    // Sub-artist source covers both formats: bmson `info.subartists[]` (joined with spaces) AND
+    // BMS `#SUBARTIST` (which the parser drops into `metadata.extras.SUBARTIST` since it isn't
+    // promoted to a typed metadata field). Hosts that need structured access can post-process
+    // bmson entries via `parseBmsonSubartist`.
+    const subartist = extractChartSubartist(chart);
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
         return meta.title ?? '';

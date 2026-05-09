@@ -35,6 +35,7 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
+import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
@@ -489,11 +490,11 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       case BEATORAJA_TEXT.ARTIST:
         return song?.artist ?? '';
       case BEATORAJA_TEXT.SUBARTIST:
-        // BrowserSongEntry doesn't carry sub-artist — surface empty rather than `undefined` so the
-        // text destination doesn't disappear (would confuse skins that style the row regardless).
-        return '';
+        // BMS `#SUBARTIST` lands in `metadata.extras.SUBARTIST`; bmson's structured
+        // `info.subartists[]` joins with spaces. Both paths surface the same string here.
+        return extractChartSubartist(song?.chart);
       case BEATORAJA_TEXT.FULLARTIST:
-        return song?.artist ?? '';
+        return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
       // Skin / directory metadata. The skin header is always present (we just mounted it); the
       // song's directory label may be empty when the host didn't preserve folder info.
       case BEATORAJA_TEXT.SKIN_NAME:
