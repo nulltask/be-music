@@ -497,6 +497,30 @@ export const BEATORAJA_OP = {
   P1_BAND_90_99: 239,
   P1_BAND_100: 240,
   P1_BAND_BORDER_OR_MORE: 1240,
+
+  // ─── Synthetic op codes (player-web only, not in beatoraja's prop.lua) ────────────────────────
+  // High integers (90100+) chosen to dodge any future expansion of beatoraja's pool. The runtime
+  // adapter sets / clears these per frame to match a Java-side `gauge.isMax()` check that
+  // beatoraja itself only exposes through SkinJudge's prepare() method, not through an op gate.
+  /**
+   * `true` while the 1P groove gauge is currently at >= 100%. Used to gate the
+   * `judge[6]` "fullgauge PG substitute" sprite (audit 1.2) — beatoraja's
+   * `SkinJudge.prepare()` runs:
+   *
+   *   if (judgenow == 0 && gauge.isMax()) { nowJudge = judge[6] != null ? judge[6] : judge[0]; }
+   *   else                                 { nowJudge = judge[judgenow]; }
+   *
+   * so the standard `judgef-pg` (index 0) and the fullgauge `judgef-pg2` (index 6) are
+   * mutually exclusive — one or the other paints, never both. `expandBeatorajaJudgeDestinations`
+   * uses this op (and its negation) to express that mutual exclusion through the standard
+   * op-gate machinery without needing a special-case substitute path.
+   *
+   * Synthetic — not present in beatoraja's prop.lua. The adapter populates / removes the op
+   * each frame from the live gauge state.
+   */
+  GAUGE_NOW_AT_MAX_1P: 90100,
+  /** Same as {@link GAUGE_NOW_AT_MAX_1P} but for the 2P side. Synthetic. */
+  GAUGE_NOW_AT_MAX_2P: 90101,
 } as const;
 
 /**

@@ -76,6 +76,11 @@ const SIDE_JUDGE_OPS: Record<1 | 2, ReadonlyArray<number>> = {
   ],
 };
 
+/** Synthetic "gauge is currently at max" op codes per side (audit 1.2). Mirrors the keys
+ * defined in `beatoraja-runtime-ids.ts` (`BEATORAJA_OP.GAUGE_NOW_AT_MAX_*`); kept inline as
+ * literal numbers here to avoid a circular import with the broader OP registry. */
+const SIDE_GAUGE_MAX_OPS: Record<1 | 2, number> = { 1: 90100, 2: 90101 };
+
 /**
  * Expand the parsed judge entries into raw destination-shaped records the standard destination
  * pipeline can ingest. Each sub-image / sub-number gains an `op = [...currentOp, judgeKindOp]`
@@ -99,10 +104,29 @@ export function expandBeatorajaJudgeDestinations(
   for (const judge of judges) {
     const side: 1 | 2 = judge.index === 1 ? 2 : 1;
     const ops = SIDE_JUDGE_OPS[side];
+    // Detect whether the skin authored the modern fullgauge-PG substitute at index 6 (audit
+    // 1.2). When it has, beatoraja's `SkinJudge.prepare()` makes `judge[0]` and `judge[6]`
+    // mutually exclusive: PG with full gauge → judge[6], PG without full gauge → judge[0].
+    // Without this flag the previous TS impl emitted both side-by-side, so default play9's
+    // `judgef-pg2` (the only sample skin that authors the slot today) double-rendered on
+    // every PG, not just full-gauge PGs.
+    const hasFullgaugeSubstitute = judge.images.length > 6 && judge.images[6] !== undefined;
+    const gaugeMaxOp = SIDE_GAUGE_MAX_OPS[side];
     for (let i = 0; i < judge.images.length; i += 1) {
       const child = judge.images[i];
       if (child === undefined) continue;
       const gate = ops[i] ?? ops[0]!;
+      // When a fullgauge substitute is present, gate the PG slot (i=0) on NOT-fullgauge and
+      // the substitute slot (i=6) on fullgauge. All other slots (1..5, plus 7+ aliases)
+      // keep their per-tier op only.
+      if (hasFullgaugeSubstitute && i === 0) {
+        out.push(addOpGate(addOpGate(child, gate), -gaugeMaxOp));
+        continue;
+      }
+      if (hasFullgaugeSubstitute && i === 6) {
+        out.push(addOpGate(addOpGate(child, gate), gaugeMaxOp));
+        continue;
+      }
       out.push(addOpGate(child, gate));
     }
     // judge.numbers[] (the ms / count readouts paired with each judge tier) are only emitted

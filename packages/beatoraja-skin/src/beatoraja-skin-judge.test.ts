@@ -29,11 +29,18 @@ describe('expandBeatorajaJudgeDestinations', () => {
     ]);
   });
 
-  it('aliases indices beyond MS back to PERFECT (popn 9K judgef-pg2 at index 6)', () => {
-    // Default 9K's `play9.json` authors a 7-image judge with `judgef-pg2` at index 6 — it's a
-    // popn-style secondary splash that fires alongside the regular `judgef-pg` on PERFECT.
-    // Pre-fix the 7th entry was silently dropped because the expansion capped at
-    // `i < ops.length`. Now indices ≥ 6 alias to PG so authors can stack PG-only effects.
+  it('makes judge[0] and judge[6] mutually exclusive via gauge-max op gating (audit 1.2)', () => {
+    // Default 9K's `play9.json` authors a 7-image judge with `judgef-pg2` at index 6.
+    // Beatoraja's `SkinJudge.prepare()` swaps `judge[0]` for `judge[6]` when the gauge is at
+    // max — it's a SUBSTITUTE, not a parallel layer. Express that mutual exclusion via the
+    // synthetic `GAUGE_NOW_AT_MAX_1P` (= 90100) op:
+    //   - judge[0] (PG) gates on `[_1p_perfect, -GAUGE_NOW_AT_MAX_1P]` — fires when PG and
+    //     gauge is NOT at max.
+    //   - judge[6] (PG2) gates on `[_1p_perfect, GAUGE_NOW_AT_MAX_1P]` — fires when PG and
+    //     gauge IS at max.
+    //
+    // Pre-fix the TS impl emitted both side-by-side gated on `[241]`, producing a visible
+    // double-render of `judgef-pg` + `judgef-pg2` on every PG (not just full-gauge PGs).
     const judges = normalizeBeatorajaJudges([
       {
         id: 2010,
@@ -45,15 +52,38 @@ describe('expandBeatorajaJudgeDestinations', () => {
           { id: 'judgef-bd' },
           { id: 'judgef-pr' },
           { id: 'judgef-ms' },
-          { id: 'judgef-pg2' }, // index 6 — popn PG2 splash
+          { id: 'judgef-pg2' }, // index 6 — fullgauge PG substitute
         ],
         numbers: [],
       },
     ]);
     const expanded = expandBeatorajaJudgeDestinations(judges);
-    // Both `judgef-pg` (index 0) AND `judgef-pg2` (index 6) gate on op 241 — they fire together.
+    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [241, -90100] });
+    expect(expanded[1]).toMatchObject({ id: 'judgef-gr', op: [242] });
+    expect(expanded[6]).toMatchObject({ id: 'judgef-pg2', op: [241, 90100] });
+  });
+
+  it('does NOT gate judge[0] on gauge-max when no fullgauge substitute is authored', () => {
+    // The standard 6-image authoring (everything except default play9) shouldn't pay the cost
+    // of the fullgauge gate. judge[0] keeps its plain `[241]` op so the renderer paints it
+    // for every PG regardless of gauge state.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [
+          { id: 'judgef-pg' },
+          { id: 'judgef-gr' },
+          { id: 'judgef-gd' },
+          { id: 'judgef-bd' },
+          { id: 'judgef-pr' },
+          { id: 'judgef-ms' },
+        ],
+        numbers: [],
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
     expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [241] });
-    expect(expanded[6]).toMatchObject({ id: 'judgef-pg2', op: [241] });
   });
 
   it('uses the 2P op block when index === 1', () => {

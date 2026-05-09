@@ -874,12 +874,33 @@ export class BeatorajaRuntimeAdapter {
    */
   getRenderContext(): BeatorajaRenderContext {
     this.refreshCoverOps();
+    this.refreshGaugeMaxOp();
     return {
       activeOps: this.activeOps,
       getTimerStart: (id) => this.timerStartedAt.get(id),
       nowMs: this.getNowMs(),
       resolveOffset: (id) => this.resolveOffset(id),
     };
+  }
+
+  /**
+   * Toggle `BEATORAJA_OP.GAUGE_NOW_AT_MAX_*P` based on the live groove-gauge percentage.
+   * Beatoraja's `SkinJudge.prepare()` consults `gauge.isMax()` directly to decide whether the
+   * `judge[6]` fullgauge-PG substitute should replace the standard `judgef-pg` slot (audit
+   * 1.2). Beatoraja itself doesn't expose this state through an OPTION code — we synthesize
+   * one so the judge expander can use the standard `op[]` gating machinery instead of a
+   * parallel substitute path.
+   *
+   * The op is transient: ON while the gauge is currently at max, OFF when it dips below.
+   * Distinct from `TIMER_GAUGE_MAX_1P` (which fires once on FIRST max-cross and stays
+   * stamped for the rest of the chart, even if the gauge later falls).
+   */
+  private refreshGaugeMaxOp(): void {
+    const pct = this.resolveGaugePercent();
+    if (pct >= 100) this.activeOps.add(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
+    else this.activeOps.delete(BEATORAJA_OP.GAUGE_NOW_AT_MAX_1P);
+    // 2P-side gauge state isn't currently tracked — battle / DP variants can plumb a separate
+    // gauge handle through if and when 2P play lands. Until then, leave the 2P op unset.
   }
 
   /**
