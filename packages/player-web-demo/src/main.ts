@@ -2136,6 +2136,11 @@ class PlayerWebDemoApp {
       // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
       // many times the user cleared the chart in the same session (audit 2.18).
       resolveSongLampOp: (song) => this.beatorajaSessionLampOps.get(song.id),
+      // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
+      // `-101 BACKBMP` / `-102 BANNER`). The scene calls this on every focus change and
+      // caches by song-id; default beatoraja's select.json paints `-102 BANNER` as the
+      // per-song banner inside the chart-info panel.
+      decodeChartImages: (song) => this.loadBeatorajaChartImages(song),
       // Restore the last cursor so coming back from gameplay lands on the same song.
       initialIndex: this.beatorajaSelectIndex,
       // Restore richer scene state captured before the previous tear-down — folder /

@@ -44,6 +44,7 @@ import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-chart-density.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
+import { computeBeatorajaBpmCurve } from './beatoraja-chart-bpm-curve.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from './library.ts';
 import { detectChartFeatures } from './select-ops.ts';
 import { ChartPreviewEngine } from './chart-preview.ts';
@@ -161,6 +162,20 @@ export interface PixiBeatorajaSelectSceneOptions {
    * doesn't crash when stale state outlives its source.
    */
   restoreSnapshot?: PixiBeatorajaSelectSceneSnapshot;
+  /**
+   * Optional decoder for the focused song's chart-bitmap synthetic ids. The scene calls
+   * this on every focus change; the host returns a Promise resolving to whichever bitmaps
+   * the chart shipped (`#STAGEFILE` / `#BACKBMP` / `#BANNER`). Decoded textures cache
+   * inside the scene by `song.id` so subsequent re-focuses skip the IO.
+   *
+   * Without this, destinations referencing the synthetic ids `-100` / `-101` / `-102`
+   * stay hidden — default beatoraja's select.json paints `-102 BANNER` as the focused
+   * song's banner inside the chart-info panel, ModernChic uses `-100 STAGEFILE` as a
+   * frosted backdrop, etc.
+   */
+  decodeChartImages?: (
+    song: BrowserSongEntry,
+  ) => Promise<{ stageFile?: Texture; backBmp?: Texture; banner?: Texture }>;
 }
 
 /**
@@ -348,6 +363,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * something usable.
    */
   private songList: BeatorajaSongListLayout | undefined;
+  /**
+   * Per-song chart-image cache. Keyed by `BrowserSongEntry.id`; populated lazily by
+   * {@link refreshChartImagesForFocus} as the user moves the cursor. Re-focusing a
+   * previously-loaded song hits the cache and skips the IO. Sentinel `null` records a
+   * decode that resolved with no usable images so we don't retry every cursor move
+   * (e.g. chart with no `#STAGEFILE` / `#BACKBMP` / `#BANNER`).
+   */
+  private readonly chartImageCache = new Map<
+    string,
+    { stageFile?: Texture; backBmp?: Texture; banner?: Texture } | null
+  >();
+  /** Generation counter — bumps on every focus change so stale async resolves don't overwrite newer ones. */
+  private chartImageFocusGeneration = 0;
   /** Cached visible row count — `songList?.rows.length` or the fallback constant. */
   private visibleRowCount = FALLBACK_VISIBLE_ROW_COUNT;
   /** Cached focused row index within `0..visibleRowCount-1`. */
@@ -488,6 +516,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: options.fonts ? (id) => options.fonts!.family(id) : undefined,
       resolveFontKind: options.fonts ? (id) => options.fonts!.kind(id) : undefined,
+      // Chart-image synthetic ids (-100 STAGEFILE / -101 BACKBMP / -102 BANNER). Returns
+      // the FOCUSED song's bitmap when the chart shipped one. Default beatoraja's
+      // select.json paints `-102` as the per-song banner; ModernChic uses `-100` as a
+      // frosted backdrop on the chart-info panel.
+      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
+      // BPM curve for the focused chart's `bpmgraph` element — recomputed lazily on
+      // focus change inside `resolveBpmGraphPoints`.
+      resolveBpmGraphPoints: () => this.resolveBpmGraphPointsForFocus(),
+      // Note-distribution histogram (judgegraph type=0) for the focused chart. The
+      // default skin's `notes-graph` plots `[normal, ln, scratch, bss]` here.
+      resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBarsForFocus(type),
     });
 
     this.root.addChild(this.backdrop);
@@ -690,6 +729,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       onButtonAction: (act, mods) => this.handleButtonAction(act, mods),
       resolveFontFamily: opts.fonts ? (id) => opts.fonts!.family(id) : undefined,
       resolveFontKind: opts.fonts ? (id) => opts.fonts!.kind(id) : undefined,
+      chartImageProvider: (id) => this.resolveChartImageForFocus(id),
+      resolveBpmGraphPoints: () => this.resolveBpmGraphPointsForFocus(),
+      resolveJudgeGraphBars: (type) => this.resolveJudgeGraphBarsForFocus(type),
     });
     // The old view's `container.destroy({children: false})` (inside `view.dispose()`) detaches
     // its children — listLayer was one of them, so it's now orphaned. Re-parent into the new
@@ -1925,9 +1967,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private refreshChartPreview(): void {
     if (this.disposed || this.host === undefined) return;
     const engine = this.ensureChartPreviewEngine();
-    if (engine === undefined) return;
     const entry = this.entries[this.currentIndex];
     const song = entry?.kind === 'song' ? entry.song : undefined;
+    // Always trigger the chart-image fetch (banner / backbmp / stagefile) on focus change,
+    // independent of preview-engine availability — destinations gated on the synthetic
+    // image ids paint regardless of whether audio is wired.
+    this.refreshChartImagesForFocus(song);
+    if (engine === undefined) return;
     if (song === undefined || this.options.collection === undefined) {
       engine.focus(undefined);
       return;
@@ -1939,6 +1985,91 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     }
     engine.focus({ song, source });
   }
+
+  /**
+   * Lazily decode the focused song's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps via
+   * the host's `decodeChartImages` callback. Caches by `song.id` so re-focusing a
+   * previously-loaded song hits the cache. Generation counter guards against stale async
+   * resolves overwriting newer ones (rapid cursor moves through a folder).
+   */
+  private refreshChartImagesForFocus(song: BrowserSongEntry | undefined): void {
+    if (song === undefined) return;
+    if (this.options.decodeChartImages === undefined) return;
+    if (this.chartImageCache.has(song.id)) return;
+    // Mark as in-flight so concurrent focus changes don't fire duplicate decodes.
+    this.chartImageCache.set(song.id, null);
+    const generation = ++this.chartImageFocusGeneration;
+    const decoder = this.options.decodeChartImages;
+    void decoder(song)
+      .then((images) => {
+        if (this.disposed) return;
+        // Stale resolve: the user has moved on to another song since this fetch fired.
+        // Still cache the result so a later refocus on this song uses it without re-IO,
+        // but skip the visible-state side effects.
+        this.chartImageCache.set(song.id, images);
+        // The next tick's render pass picks up the new texture via `chartImageProvider`.
+        // No explicit refresh call needed — `update()` reads from the cache every frame.
+        void generation;
+      })
+      .catch((error) => {
+        // Decode failed; leave the cache entry as `null` so we don't retry on every
+        // cursor settle. User-visible: the banner / stagefile / backbmp slot stays hidden.
+        // eslint-disable-next-line no-console
+        console.warn('[beatoraja-select] chart-image decode failed', { songId: song.id, error });
+        this.chartImageCache.set(song.id, null);
+      });
+  }
+
+  /**
+   * Per-frame resolver for the synthetic chart-bitmap ids. Returns the FOCUSED song's
+   * matching texture from the cache, or `undefined` (= destination hides) when the chart
+   * didn't ship that bitmap or the decode is still in flight / failed.
+   */
+  private resolveChartImageForFocus(syntheticId: number): Texture | undefined {
+    const entry = this.entries[this.currentIndex];
+    if (entry?.kind !== 'song') return undefined;
+    const cached = this.chartImageCache.get(entry.song.id);
+    if (cached === null || cached === undefined) return undefined;
+    if (syntheticId === -100) return cached.stageFile;
+    if (syntheticId === -101) return cached.backBmp;
+    if (syntheticId === -102) return cached.banner;
+    return undefined;
+  }
+
+  /**
+   * Per-frame resolver for the focused chart's BPM curve (consumed by `bpmgraph`
+   * destinations). Computes the curve lazily from the chart's events and caches per
+   * song-id so cursor moves through a folder don't redundantly re-walk the chart.
+   */
+  private resolveBpmGraphPointsForFocus(): ReadonlyArray<{ x: number; y: number }> | undefined {
+    const entry = this.entries[this.currentIndex];
+    if (entry?.kind !== 'song') return undefined;
+    const cached = this.bpmGraphCache.get(entry.song.id);
+    if (cached !== undefined) return cached;
+    const points = computeBeatorajaBpmCurve(entry.song.chart);
+    this.bpmGraphCache.set(entry.song.id, points);
+    return points;
+  }
+  private readonly bpmGraphCache = new Map<string, ReadonlyArray<{ x: number; y: number }>>();
+
+  /**
+   * Per-frame resolver for the focused chart's note-distribution histogram (judgegraph
+   * type=0). Returns `[normal, ln, scratch, bss]` from the chart's playable-event
+   * breakdown. Higher type codes (judgement spread, etc.) need real engine state and
+   * stay undefined on the select scene.
+   */
+  private resolveJudgeGraphBarsForFocus(type: number): ReadonlyArray<number> | undefined {
+    if (type !== 0) return undefined;
+    const entry = this.entries[this.currentIndex];
+    if (entry?.kind !== 'song') return undefined;
+    const cached = this.noteBreakdownCache.get(entry.song.id);
+    if (cached !== undefined) return cached;
+    const breakdown = computeBeatorajaNoteBreakdown(entry.song.chart);
+    const bars = [breakdown.normal, breakdown.ln, breakdown.scratch, breakdown.bss];
+    this.noteBreakdownCache.set(entry.song.id, bars);
+    return bars;
+  }
+  private readonly noteBreakdownCache = new Map<string, ReadonlyArray<number>>();
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
