@@ -33,7 +33,12 @@ import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
  */
 export type BeatorajaPmCharaType = number;
 
-/** 1P or 2P side the character is bound to. `0` (= unspecified) means "any side". */
+/**
+ * 1P or 2P side the character is bound to. Beatoraja's `JsonSkin.PmChara.side` defaults to
+ * `1` (per `JsonSkin.java`) and the play loader normalizes `chara.side == 2 ? 2 : 1` —
+ * effectively "0 / unset → 1P, 2 → 2P". Our type union keeps `0` for backward compatibility
+ * with already-parsed records, but the parser now emits `1` as the default per audit 3.1.
+ */
 export type BeatorajaPmCharaSide = 0 | 1 | 2;
 
 export interface BeatorajaPmCharaElement {
@@ -80,7 +85,12 @@ function normalizeOne(entry: NormalizedElement): BeatorajaPmCharaElement | undef
   return {
     id,
     src,
-    color: numberField(f, 'color', 0),
+    // Default `color = 1` matches beatoraja's `JsonSkin.PmChara.color = 1` declaration
+    // (audit 3.1). The play loader further clamps `chara.color == 2 ? 2 : 1` — the only
+    // valid runtime values are 1 and 2. The previous default of 0 was non-portable; a skin
+    // omitting `color` would lose its character coloring entirely in our impl while showing
+    // the default tint in real beatoraja.
+    color: numberField(f, 'color', 1),
     type: numberField(f, 'type', 0),
     side: sideField(f.side),
     ifCodes: entry.ifCodes,
@@ -93,7 +103,10 @@ function numberField(record: Readonly<Record<string, unknown>>, key: string, fal
 }
 
 function sideField(value: unknown): BeatorajaPmCharaSide {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
-  if (value === 1 || value === 2) return value;
-  return 0;
+  // Match beatoraja's `JsonPlaySkinObjectLoader` normalization (audit 3.1):
+  //   `chara.side == 2 ? 2 : 1`
+  // — anything other than literal 2 (including unset, 0, or invalid) means 1P. Earlier we
+  // returned 0 for "unset", which is a fictional state in beatoraja's runtime.
+  if (typeof value === 'number' && Number.isFinite(value) && value === 2) return 2;
+  return 1;
 }
