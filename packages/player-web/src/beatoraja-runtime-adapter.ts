@@ -1285,12 +1285,18 @@ export class BeatorajaRuntimeAdapter {
       // (`hispeed` / `hispeed_afterdot`). LR2 `hispeed_lr2 = 10` is the legacy slot — same payload.
       case BEATORAJA_NUM.HISPEED:
       case BEATORAJA_NUM.HISPEED_LR2:
-        return Math.round(this.lastHiSpeed * 100);
+        // Truncate (not round) — beatoraja's `(int)(hispeed * 100)` cast is a floor for
+        // positive values (hispeed is always ≥ 0 in our adapter). At 1.555 the integer part
+        // would round to "1" if we used Math.round, but Java's `(int)` cast yields "1"
+        // identically for the integer-portion display. Math.trunc keeps that semantics
+        // consistent with the AFTERDOT slot below (audit 3.16).
+        return Math.trunc(this.lastHiSpeed * 100);
       case BEATORAJA_NUM.HISPEED_AFTERDOT: {
-        // Two-digit fractional part of hispeed × 100 — i.e. (hispeed * 100) mod 100. For 1.50 → 50;
-        // for 2.00 → 0. Matches beatoraja's value-strip convention where `divx=10` digit slots are
-        // pulled from this op.
-        return Math.round(this.lastHiSpeed * 100) % 100;
+        // Two-digit fractional part of hispeed × 100 — i.e. `(int)(hispeed * 100) % 100`.
+        // For 1.50 → 50; for 2.00 → 0. Audit 3.16: previously we used `Math.round` here,
+        // which mismatched beatoraja's `(int)` cast at hispeed values like 1.555:
+        // round → 56, beatoraja → 55. Math.trunc matches the (int) cast exactly.
+        return Math.trunc(this.lastHiSpeed * 100) % 100;
       }
       // 1P lanecover / lift percentage — the player's slider position rendered as `0..100`.
       // Both fields update through {@link adjustLanecover} / {@link setLanecover} (resp.
