@@ -417,27 +417,48 @@ export function sampleBeatorajaDestination(
 ): BeatorajaDestinationKeyframe | undefined {
   const dst = group.dst;
   if (dst.length === 0) return undefined;
-  // Single-keyframe destinations are static — always show, regardless of `loop`. Time advancing past `dst[0].time`
-  // doesn't end the element because there's no animation to play out.
-  if (dst.length === 1) return dst[0];
 
-  const last = dst[dst.length - 1];
+  const first = dst[0]!;
+  const last = dst[dst.length - 1]!;
   let t = elapsedMs;
 
-  if (t >= last.time) {
+  // Pre-starttime gate (audit 1.7). Beatoraja's `prepareRegion()` runs
+  // `if (starttime > time) { draw = false; return; }` — elements authored with `dst[0].time
+  // > 0` (a delayed reveal) hide until the timer reaches that mark. The previous impl pinned
+  // `dst[0]` for any `t <= dst[0].time` instead, which made delayed elements paint their
+  // head frame from the moment the timer fired.
+  if (t < first.time) return undefined;
+
+  if (t > last.time) {
     if (group.loop < 0) return undefined;
     const period = last.time - group.loop;
+    // Degenerate case: single-keyframe dst with `loop >= 0`. The wraparound period collapses
+    // to 0 (or negative, when authors mis-author loop > last.time) — beatoraja itself is
+    // undefined here (division by zero in `(time - dstloop) % (lasttime - dstloop)`). Treat
+    // as "hold the last frame static" rather than producing NaN.
     if (period <= 0) return last;
     t = group.loop + ((elapsedMs - group.loop) % period);
+    // After wrap, t is in `[loop, last.time]`. If the wrap landed BEFORE the first keyframe's
+    // time (when authors loop with `loop < first.time`), beatoraja's same `starttime > time`
+    // gate kicks in and hides the element until the next wrap brings t back into range.
+    if (t < first.time) return undefined;
   }
 
-  if (t <= dst[0].time) {
-    return dst[0];
-  }
+  // Single-keyframe path: at this point we're guaranteed `first.time <= t <= last.time`,
+  // and since the array has length 1, both bounds are `first.time`. Audit 1.6: previously we
+  // short-circuited to `dst[0]` regardless of `loop`, which made elements stick on screen
+  // forever even when the author wrote `loop = -1` to mean "wink at t == dst[0].time then
+  // disappear" — visibly breaking default play's `judgef-*` / `judgen-*` / keybeam dsts and
+  // ModernChic Decide's corner-flash group. With the time-window gating above (and `t >
+  // last.time → hide` on `loop = -1`), length-1 elements naturally hide when the timer ticks
+  // past their authored time.
+  if (dst.length === 1) return first;
 
+  // Multi-keyframe path: locate the surrounding pair and lerp.
+  if (t <= first.time) return first;
   for (let i = 1; i < dst.length; i += 1) {
-    const a = dst[i - 1];
-    const b = dst[i];
+    const a = dst[i - 1]!;
+    const b = dst[i]!;
     if (t <= b.time) {
       const span = b.time - a.time;
       const linearU = span === 0 ? 0 : (t - a.time) / span;

@@ -85,9 +85,13 @@ describe('sampleBeatorajaDestination', () => {
     },
   ])[0];
 
-  it('returns the head keyframe before time 0', () => {
-    const sampled = sampleBeatorajaDestination(group, -50);
-    expect(sampled?.x).toBe(0);
+  it('hides for elapsed < dst[0].time (audit 1.7 — pre-starttime gate)', () => {
+    // Beatoraja's `prepareRegion()` runs `if (starttime > time) draw = false; return;` —
+    // sampling before the first keyframe's authored time hides the element. The renderer's
+    // pipeline already gates on `elapsed < 0` upstream so this only matters when a downstream
+    // caller drives the sampler directly with a negative offset, but matching beatoraja
+    // exactly keeps the spec faithful.
+    expect(sampleBeatorajaDestination(group, -50)).toBeUndefined();
   });
 
   it('linearly interpolates between adjacent keyframes', () => {
@@ -101,13 +105,53 @@ describe('sampleBeatorajaDestination', () => {
     expect(sampleBeatorajaDestination(group, 1500)).toBeUndefined();
   });
 
-  it('treats single-keyframe destinations as static (always visible regardless of loop)', () => {
+  it('single-keyframe destination with loop=-1 winks once at dst[0].time then hides (audit 1.6)', () => {
+    // Beatoraja's `prepareRegion()` runs both `starttime > time → hide` AND
+    // `dstloop == -1 && time > endtime → hide`. For length-1 dsts those bounds collapse to
+    // a single instant — only `t == dst[0].time` paints. The previous TS impl short-circuited
+    // length-1 to "always visible", which left default play's `judgef-*` / `judgen-*`
+    // single-keyframe judge dsts (and ModernChic's Decide corner-flash group) painted
+    // forever after their timer fired.
+    const winkOnce = normalizeBeatorajaDestinations([
+      { id: 'wink', loop: -1, dst: [{ time: 0, x: 10, y: 20, w: 100, h: 100, a: 255 }] },
+    ])[0]!;
+    expect(sampleBeatorajaDestination(winkOnce, 0)?.x).toBe(10);
+    expect(sampleBeatorajaDestination(winkOnce, 1)).toBeUndefined();
+    expect(sampleBeatorajaDestination(winkOnce, 1000)).toBeUndefined();
+  });
+
+  it('single-keyframe destination with loop>=0 stays visible (period collapses to "static")', () => {
+    // With `loop >= 0`, the wraparound period for a length-1 dst would divide by zero in
+    // beatoraja itself; we degrade to "hold the frame static" rather than producing NaN. This
+    // matches author intent for any single-frame element they DO want to keep visible — they
+    // simply set `loop = 0` instead of `-1`.
     const staticGroup = normalizeBeatorajaDestinations([
-      { id: 'static-bg', loop: -1, dst: [{ time: 0, x: 10, y: 20, w: 100, h: 100, a: 255 }] },
-    ])[0];
+      { id: 'static-bg', loop: 0, dst: [{ time: 0, x: 10, y: 20, w: 100, h: 100, a: 255 }] },
+    ])[0]!;
     expect(sampleBeatorajaDestination(staticGroup, 0)?.x).toBe(10);
     expect(sampleBeatorajaDestination(staticGroup, 1000)?.x).toBe(10);
     expect(sampleBeatorajaDestination(staticGroup, 9999)?.x).toBe(10);
+  });
+
+  it('hides before dst[0].time when authors author a delayed reveal (audit 1.7)', () => {
+    // Authors that delay an element's first appearance with `dst[0].time > 0` expect it to
+    // stay hidden until the timer reaches that mark. The previous impl returned the head
+    // frame for any `t <= dst[0].time` instead, which made delayed elements paint immediately
+    // (most visible when the head frame's `a` was non-zero — common in pop-in reveals).
+    const delayed = normalizeBeatorajaDestinations([
+      {
+        id: 'delayed',
+        loop: -1,
+        dst: [
+          { time: 500, x: 10, y: 0, w: 1, h: 1, a: 255 },
+          { time: 1000, x: 100 },
+        ],
+      },
+    ])[0]!;
+    expect(sampleBeatorajaDestination(delayed, 0)).toBeUndefined();
+    expect(sampleBeatorajaDestination(delayed, 499)).toBeUndefined();
+    expect(sampleBeatorajaDestination(delayed, 500)?.x).toBe(10);
+    expect(sampleBeatorajaDestination(delayed, 750)?.x).toBeCloseTo(55, 6); // halfway
   });
 
   it('wraps when loop is set', () => {
