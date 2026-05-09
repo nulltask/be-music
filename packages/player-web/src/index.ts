@@ -3,6 +3,11 @@ export * from './beatoraja-render.ts';
 export * from './beatoraja-skin-audio.ts';
 export * from './beatoraja-system-sounds.ts';
 export * from './beatoraja-textures.ts';
+// Re-export Pixi types the demo / hosts need (Rectangle is required by `extract.canvas`'s
+// `frame` option which calls `frame.copyTo(...)` internally — a plain object literal misses
+// that method and silently falls through to `getLocalBounds`). Hosts that don't depend on
+// `pixi.js` directly can route through this package's re-export.
+export { Rectangle } from 'pixi.js';
 export * from './beatoraja-theme.ts';
 export * from './browser-compat.ts';
 export * from './chart-preview.ts';

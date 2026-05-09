@@ -37,6 +37,7 @@ import {
   PixiBeatorajaDecideScene,
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
+  Rectangle,
   BeatorajaSkinAudioPlayer,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
@@ -1288,15 +1289,17 @@ class PlayerWebDemoApp {
         container.scale.set(1, 1);
         container.position.set(0, 0);
         try {
-          // Use a plain `{x,y,width,height}` literal as the frame — Pixi v8's extract
-          // accepts the Rectangle shape structurally. Constructing via Pixi's Rectangle
-          // class would force a direct `pixi.js` dependency on this package; the literal
-          // is identical at runtime. Cast through the extract method to bypass the strict
-          // Rectangle type expectation.
-          const extractMethod = app.renderer.extract.canvas as (opts: unknown) => unknown;
-          canvas = extractMethod.call(app.renderer.extract, {
+          // Frame MUST be an actual `Rectangle` instance — Pixi's `extract.canvas`
+          // internally calls `options.frame.copyTo(tempRect)` (see
+          // `GenerateTextureSystem.js`'s `generateTexture`). A plain `{x, y, width,
+          // height}` literal returns `undefined` from the optional chain there and the
+          // code falls through to `getLocalBounds(container)`, which on a transform-reset
+          // container yields a zero / negative rect → blank canvas, blob fails to encode,
+          // download silently fails. Rectangle is re-exported from `@be-music/player-web`
+          // so this package doesn't need a direct `pixi.js` dep.
+          canvas = app.renderer.extract.canvas({
             target: container,
-            frame: { x: 0, y: 0, width, height },
+            frame: new Rectangle(0, 0, width, height),
             resolution: 1,
           }) as typeof canvas;
         } finally {
