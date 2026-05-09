@@ -97,6 +97,29 @@ export interface BeatorajaLuaRuntimeContext {
   judge?: (judge: number) => number | undefined;
   gauge?: () => number | undefined;
   gaugeType?: () => number | undefined;
+  /**
+   * Play a one-shot SFX at `path` at the given volume (0..1, default 1). Mirrors beatoraja's
+   * {@code main_state.audio_play(path, volume)}. ModernChic uses this for menu-confirm clicks
+   * and panel-toggle SE (`Root/customsound.lua` calls 80+ times across panels and song moves).
+   * The path is the resolved absolute or skin-relative URL from the skin bundle. Hosts that
+   * don't wire audio simply leave this undefined; the runtime falls through to a no-op so the
+   * Lua call site doesn't raise `attempt to call a nil value`. Returns `true` when the play
+   * was scheduled, `false` when the host couldn't resolve the path or the audio system was
+   * unavailable.
+   */
+  audioPlay?: (path: string, volume: number) => boolean | undefined;
+  /**
+   * Same shape as {@link audioPlay}, but loops the clip until {@link audioStop} is called for
+   * the same path. Used for ambient loops (e.g. a result-scene background hum). Few skins use
+   * this in practice, but the API surface needs to exist so calls don't crash.
+   */
+  audioLoop?: (path: string, volume: number) => boolean | undefined;
+  /**
+   * Stop playback of `path` (matches both one-shot and looped instances scheduled previously
+   * for that path). Returns `true` when at least one instance was stopped. Hosts that don't
+   * track per-path handles can no-op and return `false`.
+   */
+  audioStop?: (path: string) => boolean | undefined;
 }
 
 export interface BeatorajaLuaFunctionValue {
@@ -948,6 +971,47 @@ function pushMainStateStub(L: lua_State, owner: LuaRuntimeOwner, exposeMainState
   setNumberAccessor('judge', (ctx, state) => ctx.judge?.(numberArg(state)));
   setNumberAccessor('gauge', (ctx) => ctx.gauge?.());
   setNumberAccessor('gauge_type', (ctx) => ctx.gaugeType?.());
+
+  // Audio API (`audio_play`, `audio_loop`, `audio_stop`). Beatoraja's
+  // `MainStateAccessor.audio_*` is the most-called Lua surface in ModernChic — every panel
+  // open / close / song change triggers an `audio_play` (`Root/customsound.lua` 80+ sites).
+  // Without these defined, the Lua call site hits `attempt to call a nil value` and either
+  // crashes the eval (when not pcall'd) or silently disables the panel (when pcall'd). The
+  // runtime defines the functions unconditionally even when the host hasn't wired audio so
+  // the call returns false instead of crashing; hosts that DO want SE patch in the
+  // `audioPlay/Loop/Stop` callbacks via `runtimeContext`.
+  const stringArg = (state: lua_State, idx = 1): string => {
+    if (lua_type(state, idx) !== LUA_TSTRING) return '';
+    return lua_tojsstring(state, idx);
+  };
+  const optionalNumberArg = (state: lua_State, idx: number, fallback: number): number => {
+    if (lua_type(state, idx) !== LUA_TNUMBER) return fallback;
+    const v = lua_tonumber(state, idx);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  lua_pushjsfunction(L, (state) => {
+    const path = stringArg(state, 1);
+    const vol = optionalNumberArg(state, 2, 1);
+    const ok = path.length > 0 ? owner.context?.audioPlay?.(path, vol) : false;
+    lua_pushboolean(state, ok ? 1 : 0);
+    return 1;
+  });
+  lua_setfield(L, -2, to_luastring('audio_play'));
+  lua_pushjsfunction(L, (state) => {
+    const path = stringArg(state, 1);
+    const vol = optionalNumberArg(state, 2, 1);
+    const ok = path.length > 0 ? owner.context?.audioLoop?.(path, vol) : false;
+    lua_pushboolean(state, ok ? 1 : 0);
+    return 1;
+  });
+  lua_setfield(L, -2, to_luastring('audio_loop'));
+  lua_pushjsfunction(L, (state) => {
+    const path = stringArg(state, 1);
+    const ok = path.length > 0 ? owner.context?.audioStop?.(path) : false;
+    lua_pushboolean(state, ok ? 1 : 0);
+    return 1;
+  });
+  lua_setfield(L, -2, to_luastring('audio_stop'));
 }
 
 function setupSkinConfig(L: lua_State, config: BeatorajaLuaSkinConfig | undefined, skinBaseDir: string): void {

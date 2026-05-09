@@ -518,4 +518,92 @@ describe('evaluateBeatorajaLuaSkin', () => {
     if (!offResult.ok) throw new Error(offResult.error.message);
     expect(offResult.value).toEqual({ attackPart: '(disabled)' });
   });
+
+  it('exposes main_state.audio_play / audio_loop / audio_stop, dispatching to runtimeContext callbacks', () => {
+    // Mirrors ModernChic's `Root/customsound.lua` pattern: every panel-toggle / song-change /
+    // confirm calls `main_state.audio_play(skin_config.get_path("Root/sounds/click.ogg"))`.
+    // Without these defined the call hit `attempt to call a nil value` and either crashed
+    // the eval or (when wrapped in pcall) silently disabled the SE — both undesirable.
+    const calls: Array<{ kind: string; path: string; volume?: number }> = [];
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local main_state = require("main_state")',
+          'local r1 = main_state.audio_play("click.ogg")',
+          'local r2 = main_state.audio_play("hover.ogg", 0.5)',
+          'local r3 = main_state.audio_loop("ambient.ogg", 0.3)',
+          'local r4 = main_state.audio_stop("ambient.ogg")',
+          'return { r1 = r1, r2 = r2, r3 = r3, r4 = r4 }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      runtimeContext: {
+        audioPlay: (path, volume) => {
+          calls.push({ kind: 'play', path, volume });
+          return true;
+        },
+        audioLoop: (path, volume) => {
+          calls.push({ kind: 'loop', path, volume });
+          return true;
+        },
+        audioStop: (path) => {
+          calls.push({ kind: 'stop', path });
+          return true;
+        },
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ r1: true, r2: true, r3: true, r4: true });
+    expect(calls).toEqual([
+      { kind: 'play', path: 'click.ogg', volume: 1 },
+      { kind: 'play', path: 'hover.ogg', volume: 0.5 },
+      { kind: 'loop', path: 'ambient.ogg', volume: 0.3 },
+      { kind: 'stop', path: 'ambient.ogg' },
+    ]);
+  });
+
+  it('audio_play returns false (and does not crash) when the host omits the callback', () => {
+    // The most common state during early development — no audio host wired. A skin call
+    // through `audio_play` should return false (no-op) instead of `nil` (would crash on
+    // boolean coercion in some skins). pcall'd skin code likewise sees a clean false.
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local main_state = require("main_state")',
+          'return { ok = main_state.audio_play("click.ogg") }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ ok: false });
+  });
+
+  it('audio_play with empty path short-circuits without invoking the host callback', () => {
+    // Defensive: a skin computing the path dynamically may hand us "" before the bundle is
+    // resolved. We don't want to invoke the host callback with an empty path (which the
+    // host might log or treat as an error); short-circuit to false here.
+    let invoked = false;
+    const result = evaluateBeatorajaLuaSkin({
+      entry: enc(
+        [
+          'local main_state = require("main_state")',
+          'return { ok = main_state.audio_play("") }',
+        ].join('\n'),
+      ),
+      modules: [],
+      skinConfig: { offset: 0, option: {}, file: {} },
+      runtimeContext: {
+        audioPlay: () => {
+          invoked = true;
+          return true;
+        },
+      },
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value).toEqual({ ok: false });
+    expect(invoked).toBe(false);
+  });
 });
