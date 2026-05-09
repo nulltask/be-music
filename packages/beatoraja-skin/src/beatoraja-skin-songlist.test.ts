@@ -97,7 +97,7 @@ describe('parseBeatorajaSongList', () => {
     expect(layout?.focusedRowIndex).toBe(1);
   });
 
-  it('extracts level / label sub-destination rects (relative to per-row bar rect)', () => {
+  it('extracts level sub-destination rect (relative to per-row bar rect)', () => {
     // Reference theme `select.json` authors `songlist.level[]` with one entry per chart
     // difficulty (1..14) but identical geometry. The parser picks the first entry's
     // `dst[0]` rect — most skins author every difficulty with the same `(x, y, w, h)` and
@@ -109,15 +109,13 @@ describe('parseBeatorajaSongList', () => {
           { id: 'playlevel_bar', dst: [{ x: 20, y: 8, w: 24, h: 24 }] },
           { id: 'playlevel_bar', dst: [{ x: 20, y: 8, w: 24, h: 24, r: 0, b: 0 }] },
         ],
-        label: [{ id: 'songlabel', dst: [{ x: 4, y: 4, w: 18, h: 18 }] }],
       },
     } as unknown as Partial<BeatorajaSkin>);
     const layout = parseBeatorajaSongList(skin);
     expect(layout?.level).toEqual({ x: 20, y: 8, w: 24, h: 24 });
-    expect(layout?.label).toEqual({ x: 4, y: 4, w: 18, h: 18 });
   });
 
-  it('returns level / label as undefined when the songlist omits them', () => {
+  it('returns level as undefined / labels as empty when the songlist omits them', () => {
     const skin = makeSkin({
       songlist: {
         liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 100, h: 30 }] }],
@@ -125,6 +123,29 @@ describe('parseBeatorajaSongList', () => {
     } as unknown as Partial<BeatorajaSkin>);
     const layout = parseBeatorajaSongList(skin);
     expect(layout?.level).toBeUndefined();
-    expect(layout?.label).toBeUndefined();
+    expect(layout?.labels).toEqual([]);
+  });
+
+  it('extracts every entry of `songlist.label[]` as `{id, rect}` for per-feature gating', () => {
+    // Default beatoraja's `select.json` authors three feature-gated label entries
+    // (LN / random / mine). Each maps to a `skin.image[]` entry by id and gets a
+    // rect RELATIVE to the bar — the renderer iterates them and shows each label
+    // sprite when the focused chart has the matching feature.
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        label: [
+          { id: 'label-ln', dst: [{ x: -20, y: 5, w: 16, h: 30 }] },
+          { id: 'label-random', dst: [{ x: -40, y: 5, w: 16, h: 30 }] },
+          { id: 'label-mine', dst: [{ x: -60, y: 5, w: 16, h: 30 }] },
+        ],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.labels).toEqual([
+      { id: 'label-ln', rect: { x: -20, y: 5, w: 16, h: 30 } },
+      { id: 'label-random', rect: { x: -40, y: 5, w: 16, h: 30 } },
+      { id: 'label-mine', rect: { x: -60, y: 5, w: 16, h: 30 } },
+    ]);
   });
 });

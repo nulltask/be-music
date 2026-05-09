@@ -58,11 +58,19 @@ export interface BeatorajaSongListLayout {
    */
   level?: BeatorajaSongListRowRect;
   /**
-   * Per-row label icon rect (song / folder / random / up-folder marker). Same relative-rect
-   * convention as {@link level}. Beatoraja's reference theme authors `songlist.label[]` with
-   * one entry per bar kind; the host picks the matching cell based on the row's `kind`.
+   * Per-row chart-feature label sprites. Each entry is `{id, rect}` — the `id` references
+   * a `skin.image[]` entry (e.g. `"label-ln"` / `"label-random"` / `"label-mine"` in the
+   * default theme), the `rect` is positioned RELATIVE to the bar rect. Each label is
+   * shown only when the focused chart has the matching feature: LN / random sequence /
+   * landmine notes.
+   *
+   * Beatoraja's reference theme authors three labels (LN / random / mine); ModernChic /
+   * GdbG add or substitute their own (e.g. `label-fav` for favorites). The renderer
+   * iterates the array and shows each entry whose feature predicate matches the focused
+   * row's chart, so adding more label kinds in the future just means extending the
+   * id-to-feature mapping.
    */
-  label?: BeatorajaSongListRowRect;
+  labels: ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }>;
 }
 
 /**
@@ -94,17 +102,39 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
       bestIndex = i;
     }
   }
-  // Sub-destination rects (level / label / lamp / etc.) — extracted with a single helper.
-  // Each is the FIRST entry's `dst[0]` rect since most skins author identical geometry per
-  // difficulty / kind index and only vary tint / cell.
+  // Sub-destination rects. `level` is treated as a single rect (per-difficulty entries
+  // typically share identical geometry — only the color tint varies). `label[]` is a LIST
+  // of `{id, rect}` so per-feature gating (LN / random / mine) can show / hide each
+  // independently at draw time.
   const level = collectFirstSubRect(obj.level);
-  const label = collectFirstSubRect(obj.label);
+  const labels = collectLabelEntries(obj.label);
   return {
     rows: rects,
     focusedRowIndex: bestIndex,
+    labels,
     ...(level !== undefined ? { level } : {}),
-    ...(label !== undefined ? { label } : {}),
   };
+}
+
+/**
+ * Collect per-id label sub-destinations from `songlist.label[]`. Each entry is shaped
+ * `{id, dst: [{x, y, w, h}]}`; we keep the id verbatim (the skin's `image[]` references
+ * it) and pick the first dst rect as the per-bar position. Filters entries with missing
+ * id or zero/negative dimensions so render-time sprite sizing is always safe.
+ */
+function collectLabelEntries(input: unknown): ReadonlyArray<{ id: string; rect: BeatorajaSongListRowRect }> {
+  if (!Array.isArray(input)) return [];
+  const out: { id: string; rect: BeatorajaSongListRowRect }[] = [];
+  for (const entry of input) {
+    if (entry === null || typeof entry !== 'object') continue;
+    const obj = entry as Readonly<Record<string, unknown>>;
+    const id = obj.id;
+    if (typeof id !== 'string' || id.length === 0) continue;
+    const rect = collectFirstSubRect([entry]);
+    if (rect === undefined) continue;
+    out.push({ id, rect });
+  }
+  return out;
 }
 
 /**

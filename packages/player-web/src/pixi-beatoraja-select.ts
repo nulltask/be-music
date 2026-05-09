@@ -45,6 +45,8 @@ import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-cha
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
 import { computeBeatorajaBpmCurve } from './beatoraja-chart-bpm-curve.ts';
+import { normalizeBeatorajaImages, type BeatorajaImageElement } from '@be-music/beatoraja-skin';
+import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
 import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from './library.ts';
 import { detectChartFeatures } from './select-ops.ts';
 import { ChartPreviewEngine } from './chart-preview.ts';
@@ -354,6 +356,18 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * gives players the chart difficulty at a glance.
    */
   private readonly rowLevelLabels: Text[] = [];
+  /**
+   * Per-row chart-feature label sprites — one Sprite per `(visible row × songlist.label[]
+   * entry)` combination. Each label is gated on a chart feature predicate (LN /
+   * random sequence / landmine / etc.); the renderer iterates the entries each frame and
+   * shows / hides the matching sprite per row. Mounted lazily via {@link buildRowVisuals}
+   * after the songlist parse settles.
+   *
+   * Layout: `rowFeatureLabels[rowIndex][labelIndex] = Sprite` so a single Sprite never
+   * needs to flip between different label ids at runtime — sizing / texture is fixed at
+   * mount time, only visibility / position toggles.
+   */
+  private readonly rowFeatureLabels: Sprite[][] = [];
   /** Per-row click hit area. Sized to the row's authored rect on layout. */
   private readonly rowHitAreas: Sprite[] = [];
   /**
@@ -1510,11 +1524,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const t of this.rowKindIcons) t.destroy();
     for (const t of this.rowSublabels) t.destroy();
     for (const t of this.rowLevelLabels) t.destroy();
+    for (const row of this.rowFeatureLabels) {
+      for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
+    }
     for (const s of this.rowHitAreas) s.destroy();
     this.rowLabels.length = 0;
     this.rowKindIcons.length = 0;
     this.rowSublabels.length = 0;
     this.rowLevelLabels.length = 0;
+    this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
     // Pick a font size proportional to the row height. Skins with tall bars (ModernChic
     // 70px) get bigger text; skins with thin bars (default 36px) get smaller text. The 0.45
@@ -1579,8 +1597,52 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         this.listLayer.addChild(level);
         this.rowLevelLabels.push(level);
       }
+
+      // Per-row chart-feature label sprites (LN / random / mine / favorite / etc.). One
+      // Sprite per `(row × songlist.label[] entry)` — texture is fixed at mount time from
+      // the skin's `image[id]` lookup, only visibility / position toggles per frame as
+      // the cursor moves and the focused song's feature predicate changes.
+      const featureLabels = this.songList?.labels ?? [];
+      const rowSprites: Sprite[] = [];
+      for (const labelEntry of featureLabels) {
+        const sprite = this.buildFeatureLabelSprite(labelEntry.id);
+        if (sprite === undefined) continue;
+        sprite.visible = false;
+        this.listLayer.addChild(sprite);
+        rowSprites.push(sprite);
+      }
+      this.rowFeatureLabels.push(rowSprites);
     }
   }
+
+  /**
+   * Crop the skin's `image[id]` source rect into a fresh `Sprite`. Returns `undefined`
+   * when the skin doesn't author the matching image entry, the source texture isn't in
+   * the cache (deferred / failed decode), or the cropped texture comes back empty. The
+   * sprite is sized later per the row's label sub-rect.
+   */
+  private buildFeatureLabelSprite(imageId: string | number): Sprite | undefined {
+    if (this.featureLabelImages === undefined) {
+      this.featureLabelImages = new Map();
+      for (const image of normalizeBeatorajaImages(this.options.skin.image)) {
+        this.featureLabelImages.set(image.id, image);
+      }
+    }
+    const image = this.featureLabelImages.get(imageId);
+    if (image === undefined) return undefined;
+    const baseTexture = this.options.textures.get(image.src);
+    if (baseTexture === undefined) return undefined;
+    const cropped = createCroppedBeatorajaTexture(baseTexture, {
+      x: image.x,
+      y: image.y,
+      w: image.w,
+      h: image.h,
+    });
+    if (cropped === undefined) return undefined;
+    return new Sprite({ texture: cropped, alpha: 1 });
+  }
+  /** Lazy `image[].id → BeatorajaImageElement` map for feature-label texture lookups. */
+  private featureLabelImages: Map<string | number, BeatorajaImageElement> | undefined;
 
   /**
    * Repaint the row backdrops + labels for the current cursor / scroll state. Called on every
@@ -1667,6 +1729,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const fractional = this.scrollPosition - Math.round(this.scrollPosition);
     const fractionalNudge = -fractional * avgRowStep;
 
+    const total = this.entries.length;
+    const centreEntry = this.scrollPosition;
     for (let i = 0; i < this.visibleRowCount; i += 1) {
       const hit = this.rowHitAreas[i]!;
       const icon = this.rowKindIcons[i]!;
@@ -1675,6 +1739,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       if (!label.visible) continue;
       const rect = this.rowRectAt(i);
       const rowCentreY = rect.y + rect.h / 2 + fractionalNudge;
+      // Resolve the entry for THIS row — needed for per-row feature-label predicates. The
+      // wrap math mirrors `refreshRowVisuals`'s; both functions iterate the same visible
+      // window so they need to agree on which entry maps to which slot.
+      const rawEntryIndex = Math.round(centreEntry) + (i - this.centreRowIndex);
+      const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
+      const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
 
       const isSelected = i === this.centreRowIndex;
 
@@ -1684,37 +1754,30 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.height = rect.h;
       hit.hitArea = null;
 
-      // Kind icon position — when the skin authored `songlist.label[]`, anchor the icon
-      // inside the label sub-rect (Y-flipped from beatoraja's Y-UP-within-bar coords).
-      // Otherwise fall back to a small left-inset of the bar rect (legacy behaviour for
-      // skins without a label sub-destination).
-      const labelRect = this.songList?.label;
-      let iconX: number;
-      let iconY: number;
-      if (labelRect !== undefined) {
-        const labelPixiY = rect.y + (rect.h - labelRect.y - labelRect.h) + fractionalNudge;
-        iconX = rect.x + labelRect.x + labelRect.w / 2;
-        iconY = labelPixiY + labelRect.h / 2;
-        icon.anchor.set(0.5, 0.5);
-      } else {
-        iconX = rect.x + Math.max(8, Math.floor(rect.h * 0.2));
-        iconY = rowCentreY;
-        icon.anchor.set(0, 0.5);
-      }
+      // Kind icon (▶ / ▸ / ♪) — our own UI element, not a beatoraja-songlist concept. Anchored
+      // at a small left-inset of the bar rect; the skin's `songlist.label[]` is a different
+      // beast (per-feature LN/random/mine indicators rendered separately, see below).
+      const iconX = rect.x + Math.max(8, Math.floor(rect.h * 0.2));
+      const iconY = rowCentreY;
+      icon.anchor.set(0, 0.5);
       icon.x = iconX;
       icon.y = iconY;
       icon.tint = isSelected ? 0xffe066 : 0xffffff;
 
-      // Title label x — pushed past whichever of label / level sub-rects extends further
-      // right within the bar. Skins authoring `songlist.level[]` (default beatoraja, GdbG,
-      // ModernChic) place the chart-level number at a fixed offset from the bar's left;
-      // without including its right edge in the title-x computation, the title text
-      // overlaps with the level number (visible "Nig2t Parade Zoetrope" bug). Skins that
-      // omit both sub-rects fall back to the legacy icon-inset spacing.
+      // Title label x — pushed past whichever sub-rect extends further right within the
+      // bar (level rect, plus any positive-x label rects). Skins authoring `songlist.level[]`
+      // (default beatoraja, GdbG, ModernChic) place the chart-level number at a fixed
+      // offset from the bar's left; without including its right edge in the title-x
+      // computation, the title text overlaps with the level number. Negative-x labels
+      // (e.g. default's `label-ln` at x=-20) sit OUTSIDE the bar and don't push the title.
       const levelRectForOffset = this.songList?.level;
-      const labelRightEdge = labelRect !== undefined ? labelRect.x + labelRect.w : 0;
       const levelRightEdge = levelRectForOffset !== undefined ? levelRectForOffset.x + levelRectForOffset.w : 0;
-      const subRectRightEdge = Math.max(labelRightEdge, levelRightEdge);
+      let positiveLabelRight = 0;
+      for (const labelEntry of this.songList?.labels ?? []) {
+        const right = labelEntry.rect.x + labelEntry.rect.w;
+        if (right > positiveLabelRight) positiveLabelRight = right;
+      }
+      const subRectRightEdge = Math.max(levelRightEdge, positiveLabelRight);
       const labelTextOffsetX =
         subRectRightEdge > 0
           ? rect.x + subRectRightEdge + Math.max(8, Math.floor(rect.h * 0.2))
@@ -1743,7 +1806,54 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         levelLabel.y = subPixiY + levelRect.h / 2;
         levelLabel.alpha = isSelected ? 1 : 0.85;
       }
+
+      // Per-row feature label sprites — show / hide / position based on the focused
+      // entry's chart features. Each label's visibility predicate is gated on the chart
+      // feature its image-id implies (LN / random sequence / landmine).
+      const featureSprites = this.rowFeatureLabels[i] ?? [];
+      const labelEntries = this.songList?.labels ?? [];
+      for (let labelIdx = 0; labelIdx < featureSprites.length; labelIdx += 1) {
+        const sprite = featureSprites[labelIdx]!;
+        const labelEntry = labelEntries[labelIdx];
+        if (labelEntry === undefined) {
+          sprite.visible = false;
+          continue;
+        }
+        const visible = entry !== undefined && this.chartHasLabelFeature(entry, labelEntry.id);
+        sprite.visible = visible;
+        if (!visible) continue;
+        const labelRect = labelEntry.rect;
+        const subPixiY = rect.y + (rect.h - labelRect.y - labelRect.h) + fractionalNudge;
+        sprite.x = rect.x + labelRect.x;
+        sprite.y = subPixiY;
+        sprite.width = labelRect.w;
+        sprite.height = labelRect.h;
+        sprite.alpha = isSelected ? 1 : 0.85;
+      }
     }
+  }
+
+  /**
+   * Predicate map for `songlist.label[]` entries. Each known label id corresponds to a
+   * chart feature; the sprite is shown when the focused entry's chart has that feature.
+   * Unknown ids return false (= hidden) so a skin authoring a custom label that we don't
+   * recognise stays out of view rather than showing on every row indiscriminately.
+   *
+   * Folder rows return false uniformly — the labels are per-chart, not per-folder.
+   */
+  private chartHasLabelFeature(entry: BrowserBrowseEntry, labelId: string | number): boolean {
+    if (entry.kind !== 'song') return false;
+    const features = detectChartFeatures(entry.song);
+    const id = String(labelId).toLowerCase();
+    if (id.includes('ln')) return features.longNote;
+    if (id.includes('random')) return features.random;
+    // `mine` / `landmine` covered by direct event-channel scan since `detectChartFeatures`
+    // doesn't expose it (it's not in the LR2 dst_option op gate set the LR2 helper was
+    // built against). BMS landmine channels are `D1..D9` (1P) and `E1..E9` (2P).
+    if (id.includes('mine') || id.includes('landmine')) {
+      return entry.song.chart.events.some((event) => /^[de][1-9a-z]$/iu.test(event.channel));
+    }
+    return false;
   }
 
   /** Map a chart's `playLevel` to a tint colour band — visual hint at glance. */
