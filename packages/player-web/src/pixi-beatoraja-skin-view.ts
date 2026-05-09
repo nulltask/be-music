@@ -881,7 +881,11 @@ export class BeatorajaPlaySkinView {
     // image / number sub-entry × judge kind), each with the per-judge op appended to the gate.
     // Concatenated with `skin.destination` so the standard destination pipeline handles them.
     const judges = normalizeBeatorajaJudges(options.skin.judge);
-    const expandedJudgeDestinations = expandBeatorajaJudgeDestinations(judges);
+    // Pass `valueById` so `judge[].numbers[]` (combo digits) get upstream's pre-shift
+    // (`ckf.w * digit / 2`) applied to each fold AND have their value declarations'
+    // `align` mutated to 2 (CENTER). Without these, "GREAT 46" rendered with a 160 px gap
+    // between the judge word and combo digit.
+    const expandedJudgeDestinations = expandBeatorajaJudgeDestinations(judges, valueById);
     // Beatoraja themes mark the playfield's z-order with a `{id = noteSection.id, offset = N}`
     // destination — the "notes anchor". Skin authors typically write it WITHOUT a `dst[]` field
     // since it carries no visual content (`table.insert(skin.destination, {id = "notes", offset =

@@ -17,6 +17,8 @@
 // SLOW label displacement yet — surfaced via `BEATORAJA_OP.P*_JUDGE_EARLY` / `_LATE` ops).
 
 import { flattenBeatorajaElements } from './beatoraja-skin-element.ts';
+import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
+import type { BeatorajaValueElement } from './beatoraja-skin-value.ts';
 
 /**
  * One `judge[]` entry as authored. The renderer's expansion pass consumes this and emits 12
@@ -99,6 +101,27 @@ const SIDE_GAUGE_MAX_OPS: Record<1 | 2, number> = { 1: 90100, 2: 90101 };
  */
 export function expandBeatorajaJudgeDestinations(
   judges: ReadonlyArray<BeatorajaJudgeElement>,
+  /**
+   * Optional lookup of `value[]` declarations by id. When supplied, judge.numbers[i] children
+   * receive upstream's combo-digit-specific treatment:
+   *
+   *   1. PRE-SHIFT: each child dst's `x` is decremented by `dst.w * value.digit / 2`. Mirrors
+   *      `JsonPlaySkinObjectLoader.java:267-270` (`for ani: ani.x -= ani.w * value.digit / 2`).
+   *      Effectively converts the authored child.x from "left edge of digit row" to "centre of
+   *      digit row".
+   *   2. ALIGN OVERRIDE: the matching value's `align` is mutated to `2` (CENTER), mirroring
+   *      `SkinJudge`'s hard-coded center-align mode for combo digits regardless of any
+   *      `value.align` the JSON authored.
+   *
+   * Without these, default `play5.json`'s combo digit "46" rendered far to the right of the
+   * judge popup (= 4 leading-blank slot widths × 40 px = 160 px gap before the visible "46"),
+   * because the value declaration has `digit:6` with no align field (defaults to RIGHT in our
+   * convention) and our fold treated child.x as the left edge of the digit row.
+   *
+   * Omitting the lookup falls back to the previous behaviour (parent.x + child.x as-is, no
+   * align override) — useful for tests that don't need the full skin context.
+   */
+  valuesById?: ReadonlyMap<BeatorajaImageId, BeatorajaValueElement>,
 ): Array<Readonly<Record<string, unknown>>> {
   const out: Array<Readonly<Record<string, unknown>>> = [];
   for (const judge of judges) {
@@ -150,7 +173,19 @@ export function expandBeatorajaJudgeDestinations(
       const parent = judge.images[i];
       if (child === undefined) continue;
       const gate = ops[i] ?? ops[0]!;
-      const folded = parent !== undefined ? foldChildDestIntoParent(child, parent) : child;
+      // Look up the matching `value[]` declaration to apply the combo-digit-specific
+      // adjustments (see {@link expandBeatorajaJudgeDestinations}'s `valuesById` doc).
+      const valueId = typeof child.id === 'string' || typeof child.id === 'number' ? child.id : undefined;
+      const valueElement = valueId !== undefined ? valuesById?.get(valueId as BeatorajaImageId) : undefined;
+      const valueDigit = valueElement !== undefined ? Math.max(1, Math.trunc(valueElement.digit)) : undefined;
+      const folded =
+        parent !== undefined ? foldChildDestIntoParent(child, parent, valueDigit) : child;
+      // Override the value's align to 2 (CENTER) — beatoraja's `SkinJudge` hardcodes center-
+      // align for combo digits regardless of the JSON's `value.align` field. Mutation is safe
+      // because `judgen-*` ids are conventionally only referenced from `judge[].numbers[]`.
+      if (valueElement !== undefined) {
+        (valueElement as { align: number }).align = 2;
+      }
       out.push(addOpGate(folded, gate));
     }
   }
@@ -173,6 +208,13 @@ export function expandBeatorajaJudgeDestinations(
 function foldChildDestIntoParent(
   child: Readonly<Record<string, unknown>>,
   parent: Readonly<Record<string, unknown>>,
+  /**
+   * When set, applies upstream's combo-digit pre-shift `(ckf.w * digit) / 2` to each
+   * folded x. Mirrors `JsonPlaySkinObjectLoader.java:267-270`. Skipped when `undefined`
+   * (= the child isn't a judge.numbers entry, or no matching value declaration is
+   * available to read `digit` from).
+   */
+  valueDigitForPreShift?: number,
 ): Readonly<Record<string, unknown>> {
   const childDst = Array.isArray(child.dst) ? (child.dst as ReadonlyArray<unknown>) : [];
   const parentDst = Array.isArray(parent.dst) ? (parent.dst as ReadonlyArray<unknown>) : [];
@@ -205,7 +247,9 @@ function foldChildDestIntoParent(
         const py = numberOrZero(inner.y);
         for (const ckf of childPositionKfs) {
           const folded: Record<string, unknown> = { ...ckf };
-          folded.x = px + numberOrZero(ckf.x);
+          const preShiftX =
+            valueDigitForPreShift !== undefined ? (numberOrZero(ckf.w) * valueDigitForPreShift) / 2 : 0;
+          folded.x = px + numberOrZero(ckf.x) - preShiftX;
           folded.y = py + numberOrZero(ckf.y);
           out.push({ if: parentObj.if, value: folded });
         }
@@ -219,7 +263,9 @@ function foldChildDestIntoParent(
       const py = numberOrZero(parentObj.y);
       for (const ckf of childPositionKfs) {
         const folded: Record<string, unknown> = { ...ckf };
-        folded.x = px + numberOrZero(ckf.x);
+        const preShiftX =
+          valueDigitForPreShift !== undefined ? (numberOrZero(ckf.w) * valueDigitForPreShift) / 2 : 0;
+        folded.x = px + numberOrZero(ckf.x) - preShiftX;
         folded.y = py + numberOrZero(ckf.y);
         out.push(folded);
       }

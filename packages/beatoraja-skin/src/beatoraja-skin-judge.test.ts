@@ -190,6 +190,63 @@ describe('expandBeatorajaJudgeDestinations', () => {
     ]);
   });
 
+  it('applies upstream pre-shift (ckf.w * digit / 2) and forces align=2 on judge.numbers values', () => {
+    // Mirrors `JsonPlaySkinObjectLoader.java:267-270`: judge.numbers[i].dst.x is decremented
+    // by `ani.w * value.digit / 2` so the authored child.x represents the CENTRE of the digit
+    // row (not the left edge). And SkinJudge constructs SkinNumber with align=2 (CENTRE)
+    // hard-coded, ignoring any authored `value.align`.
+    //
+    // For default `play5.json`'s judge.numbers[0] = {x:200, y:0, w:40, h:40} with the matching
+    // value `judgen-pg` (digit:6), the pre-shift is `40 * 6 / 2 = 120`, so the folded x for
+    // the 1P parent (`judgef-pg.dst.x = 70`) is `70 + 200 - 120 = 150`. Without the pre-shift
+    // + align=2 override, "GREAT 46" rendered with a 160 px gap between word and digits.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2010,
+        index: 0,
+        images: [
+          {
+            id: 'judgef-pg',
+            dst: [{ if: [920], value: { time: 0, x: 70, y: 240, w: 180, h: 40 } }],
+          },
+        ],
+        numbers: [
+          {
+            id: 'judgen-pg',
+            dst: [{ time: 0, x: 200, y: 0, w: 40, h: 40 }],
+          },
+        ],
+      },
+    ]);
+    const valueElement = {
+      id: 'judgen-pg',
+      src: 4,
+      x: 0,
+      y: 0,
+      w: 300,
+      h: 100,
+      divx: 10,
+      divy: 2,
+      digit: 6,
+      padding: 0,
+      zeropadding: 0,
+      space: 0,
+      ref: 75,
+      align: 0, // authored as RIGHT — should be mutated to 2 (CENTER)
+      ifCodes: [] as readonly number[],
+    };
+    const valuesById = new Map([['judgen-pg' as string | number, valueElement]]);
+    const expanded = expandBeatorajaJudgeDestinations(judges, valuesById);
+    const number = expanded[1]! as Record<string, unknown>;
+    expect(number.id).toBe('judgen-pg');
+    expect(number.dst).toEqual([
+      // 70 (parent) + 200 (child) - 120 (preShift = 40*6/2) = 150
+      { if: [920], value: { time: 0, x: 150, y: 240, w: 40, h: 40 } },
+    ]);
+    // Value declaration's align is mutated to 2 (CENTER) for the SkinNumber render path.
+    expect(valueElement.align).toBe(2);
+  });
+
   it('passes the child through unchanged when the matching parent has no positioned dst', () => {
     // Some skins author `judge.images[i]` with empty / time-only dst (e.g. an animation hold
     // with no spatial keyframe). Folding has nothing to add to in that case — the child's
