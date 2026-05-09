@@ -44,8 +44,9 @@ import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
 import { computeBeatorajaChartDensity, type ChartDensity } from './beatoraja-chart-density.ts';
 import { computeBeatorajaChartTotalSeconds } from './beatoraja-chart-duration.ts';
 import { computeBeatorajaNoteBreakdown, type NoteBreakdown } from './beatoraja-chart-note-counts.ts';
-import { groupSongsByFolder, resolveChartPlayVariant } from './library.ts';
+import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from './library.ts';
 import { detectChartFeatures } from './select-ops.ts';
+import { ChartPreviewEngine } from './chart-preview.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from './types.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
@@ -98,6 +99,14 @@ export interface PixiBeatorajaSelectSceneOptions {
    * Folder rows pass through unchanged (the lamp op is a song-bar concept).
    */
   resolveSongLampOp?: (song: BrowserSongEntry) => number | undefined;
+  /**
+   * Optional song collection — the same `BrowserSongCollection` the demo built `songs` from.
+   * Required only for the chart-preview engine: `ChartPreviewEngine.focus()` needs to resolve
+   * each song's `BrowserSongAssetSource` to load the `#PREVIEW` file (or fall back to in-place
+   * chart playback). When omitted, the preview engine stays inactive — the select scene runs
+   * silent on cursor moves, same as before this option existed.
+   */
+  collection?: import('./types.ts').BrowserSongCollection;
 }
 
 /**
@@ -304,6 +313,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private sortMode = 0;
   private disposed = false;
+  /**
+   * Lazily-constructed chart-preview engine. Mirrors the LR2 `pixi-select.ts` integration —
+   * focuses on the song under the cursor, decodes its `#PREVIEW` audio (or falls back to
+   * in-place chart playback when none is declared), and tears playback down on cursor move /
+   * scene exit. Built on first cursor settle so the AudioContext isn't touched until the user
+   * actually browses songs. Stays `undefined` when the host didn't pass an `audioContext` /
+   * `collection`.
+   */
+  private chartPreviewEngine: ChartPreviewEngine | undefined;
 
   constructor(options: PixiBeatorajaSelectSceneOptions) {
     this.options = options;
@@ -385,6 +403,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (typeof window !== 'undefined') {
       window.addEventListener('keydown', this.handleKeyDown);
     }
+    // Kick off preview audio for the initial cursor position. The engine's internal
+    // `focusDelayMs` (= LR2_PREVIEW_FOCUS_DELAY_MS, 1s) means a quick scene-flip won't
+    // actually start playback if the user moves on immediately.
+    this.refreshChartPreview();
   }
 
   exit(): void {
@@ -396,12 +418,25 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       window.removeEventListener('keydown', this.handleKeyDown);
     }
     this.host = undefined;
+    // Stop preview audio when the scene is hidden — the engine retains its state for the
+    // next `enter()` re-arm. Distinct from `dispose()` which permanently tears it down.
+    this.chartPreviewEngine?.focus(undefined);
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.exit();
+    this.chartPreviewEngine?.dispose();
+    this.chartPreviewEngine = undefined;
+    // Close the dedicated preview AudioContext we created lazily — `AudioContext.close()` is
+    // async but we don't await it; the browser cleans up the underlying audio thread on its
+    // own. Wrapped in a Promise.resolve guard to avoid warnings when called twice (e.g. on a
+    // hot-reload tear-down where the context was already closing).
+    if (this.previewAudioContext !== undefined) {
+      void this.previewAudioContext.close().catch(() => {});
+      this.previewAudioContext = undefined;
+    }
     this.view.dispose();
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
@@ -683,6 +718,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.currentIndex = clampIndex(initialIndex, this.entries.length);
     this.scrollPosition = this.currentIndex;
     this.refreshRowVisuals();
+    // Folder enter / leave / filter change reshuffles the entry list; re-arm preview against
+    // the new focused song (or stop if the new focus is a folder bar).
+    this.refreshChartPreview();
   }
 
   private resolveSelectionText(refOp: number): string | undefined {
@@ -1444,6 +1482,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     }
     this.currentIndex = next;
     this.refreshRowVisuals();
+    this.refreshChartPreview();
   }
 
   /**
@@ -1456,6 +1495,57 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (next === this.currentIndex) return;
     this.currentIndex = next;
     this.refreshRowVisuals();
+    this.refreshChartPreview();
+  }
+
+  /**
+   * Lazily build the chart-preview engine on first cursor settle. Returns `undefined` when the
+   * host didn't supply a `collection` (without it `resolveSongSource` has no map to walk) or
+   * when AudioContext isn't available (Node tests). Otherwise constructs a fresh AudioContext
+   * for preview playback — beatoraja themes don't use a select BGM, so there's nothing to
+   * duck against and a dedicated context is fine. The context is closed by {@link dispose}.
+   */
+  private ensureChartPreviewEngine(): ChartPreviewEngine | undefined {
+    if (this.chartPreviewEngine !== undefined) return this.chartPreviewEngine;
+    if (this.disposed) return undefined;
+    if (this.options.collection === undefined) return undefined;
+    if (typeof globalThis.AudioContext !== 'function') return undefined;
+    // Construct the AudioContext on first preview request rather than at scene-mount — browsers
+    // gate `AudioContext.resume()` behind a user gesture, so creating it before the user has
+    // interacted with the page burns a context that'll print "AudioContext was not allowed to
+    // start" to the console. By the time `ensureChartPreviewEngine` is called the user has
+    // already triggered the scene mount through a click / keypress.
+    this.previewAudioContext = new AudioContext({ latencyHint: 'interactive' });
+    this.chartPreviewEngine = new ChartPreviewEngine(
+      this.previewAudioContext,
+      this.previewAudioContext.destination,
+    );
+    return this.chartPreviewEngine;
+  }
+  private previewAudioContext: AudioContext | undefined;
+
+  /**
+   * Hand the preview engine the current focused song (or `undefined` when the cursor sits on a
+   * folder bar). The engine internally swallows redundant focuses, so calling this on every
+   * cursor move is cheap. Skipped while the scene isn't visible (`host` unset) to avoid
+   * preview audio firing through a backgrounded scene.
+   */
+  private refreshChartPreview(): void {
+    if (this.disposed || this.host === undefined) return;
+    const engine = this.ensureChartPreviewEngine();
+    if (engine === undefined) return;
+    const entry = this.entries[this.currentIndex];
+    const song = entry?.kind === 'song' ? entry.song : undefined;
+    if (song === undefined || this.options.collection === undefined) {
+      engine.focus(undefined);
+      return;
+    }
+    const source = resolveSongSource(this.options.collection, song);
+    if (source === undefined) {
+      engine.focus(undefined);
+      return;
+    }
+    engine.focus({ song, source });
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {

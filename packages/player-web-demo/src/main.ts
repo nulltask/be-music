@@ -1943,6 +1943,11 @@ class PlayerWebDemoApp {
       skinConfig: config,
       skinAudio: this.beatorajaSkinAudio,
       songs: this.collection.songs,
+      // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
+      // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
+      // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
+      // cursor moves — same as the LR2 select did before the preview engine was added.
+      collection: this.collection,
       // In-session lamp lookup — completed runs in this session light the focused song bar's
       // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
       // many times the user cleared the chart in the same session (audit 2.18).
