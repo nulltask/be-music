@@ -75,6 +75,8 @@ export {
   composeBeatorajaValueShift,
   normalizeBeatorajaValues,
 } from './beatoraja-skin-value.ts';
+export type { BeatorajaFloatValueElement } from './beatoraja-skin-floatvalue.ts';
+export { normalizeBeatorajaFloatValues } from './beatoraja-skin-floatvalue.ts';
 export type {
   BeatorajaBooleanPropertyRef,
   BeatorajaDestinationGroup,
