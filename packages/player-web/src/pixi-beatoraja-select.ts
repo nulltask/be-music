@@ -1968,11 +1968,33 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       }
       const subRectRightEdge = Math.max(levelRightEdge, positiveLabelRight);
       const leftPad = Math.max(8, Math.floor(rect.h * 0.2));
+      // Title label position. Two flavours:
+      //
+      //  - Skin authored `songlist.text[]` — `text[0].rect.{x, y}` is the per-bar relative
+      //    position of the bartext sprite. ModernChic / GdbG-style skins place the title
+      //    inside a decorative frame that doesn't follow the level / label sub-rects, so we
+      //    HAVE to honor the authored rect or the title lands in the wrong place (often
+      //    completely outside the bar).
+      //  - Skin omitted `text[]` — fall back to "right of level / labels + leftPad" so a
+      //    skin that didn't author a bartext rect still gets a readable title.
+      const songListTextRect = this.songList?.text[0]?.rect;
       const labelTextOffsetX =
-        subRectRightEdge > 0 ? rect.x + subRectRightEdge + leftPad : rect.x + leftPad;
-      const labelX = labelTextOffsetX;
-      label.x = labelX;
-      label.y = rowCentreY;
+        songListTextRect !== undefined
+          ? rect.x + songListTextRect.x
+          : subRectRightEdge > 0
+            ? rect.x + subRectRightEdge + leftPad
+            : rect.x + leftPad;
+      // Y: skin-authored relative-y is in libGDX Y-UP (origin at bar's bottom-left). Convert
+      // to Pixi Y-DOWN (origin at bar's top-left) so the title's y-anchor (`0.5` baseline)
+      // lands where the author intended. For default skin's bartext at `{y:6, h:24}` inside
+      // a 36-tall bar, this puts the baseline at `36 - 6 - 24/2 = 18` from the top — exactly
+      // the bar's vertical centre, matching beatoraja's reference layout.
+      const labelTextOffsetY =
+        songListTextRect !== undefined
+          ? rect.y + (rect.h - songListTextRect.y - songListTextRect.h / 2) + fractionalNudge
+          : rowCentreY;
+      label.x = labelTextOffsetX;
+      label.y = labelTextOffsetY;
       // Only paint the warm-yellow cursor tint when the skin doesn't already cue the
       // focused row via a per-row bar-image swap (e.g. `list_on` vs `list`). Doubling up
       // would over-paint the skin-authored highlight; leaving white-on-white otherwise
