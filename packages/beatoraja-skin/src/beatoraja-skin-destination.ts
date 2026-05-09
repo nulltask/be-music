@@ -48,8 +48,16 @@ export interface BeatorajaDestinationGroup {
   /** Runtime Lua timer function. When present, it supplies the timer start directly and takes precedence over `timer`. */
   timerFunction?: BeatorajaLuaFunctionValue;
   /**
-   * Loop offset in milliseconds. `-1` (or undefined → -1) hides the element after the last keyframe; `0` loops
-   * back to keyframe 0 once the last keyframe's time elapses; any other positive value loops to that time-stamp.
+   * Loop offset in milliseconds. `-1` hides the element after the last keyframe; `0` (the
+   * default — matches beatoraja's `JsonSkin.Destination.loop` Java int default) loops back to
+   * keyframe 0 once the last keyframe's time elapses; positive values loop to that time-stamp.
+   *
+   * Beatoraja's default of `0` matters for static (length-1) destinations: with `loop = 0`
+   * the wrap period collapses to `endtime - 0 = 0` and the picker holds the head frame
+   * indefinitely. With `loop = -1` the same length-1 dst would hide for every `t > 0` (one-
+   * frame wink). Authors who want "wink and hide" must opt in by writing `loop: -1`
+   * explicitly — matching beatoraja's behavior, where the most common static-anchor pattern
+   * (a single keyframe with no `loop` field) just paints continuously.
    */
   loop: number;
   /**
@@ -190,7 +198,9 @@ function normalizeOne(entry: NormalizedElement, declarationOrder: number): Beato
     id,
     timer: numberField(f, 'timer', 0),
     ...(timerFunction !== undefined ? { timerFunction } : {}),
-    loop: numberField(f, 'loop', -1),
+    // Default to `0` matching beatoraja's Java int default — see field doc above for why this
+    // matters for static (length-1) destinations.
+    loop: numberField(f, 'loop', 0),
     offset: numberField(f, 'offset', 0),
     op: normalizeOpArray(f.op),
     ...(draw !== undefined ? { draw } : {}),

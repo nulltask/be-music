@@ -120,6 +120,23 @@ describe('sampleBeatorajaDestination', () => {
     expect(sampleBeatorajaDestination(winkOnce, 1000)).toBeUndefined();
   });
 
+  it('default loop is 0 (NOT -1) so omitting `loop` keeps a length-1 dst visible (regression)', () => {
+    // Beatoraja's `JsonSkin.Destination.loop` is a Java int with no explicit default → `0`.
+    // Authors that author a static element as a single-keyframe dst with no `loop` field rely
+    // on this default to keep the element visible across the whole scene. Our parser
+    // previously defaulted to `-1`, which combined with the audit-1.6 length-1 single-frame
+    // gating made every static skin background, BG quad, and anchor sprite hide after t=0
+    // (= "render entirely black"). Confirm the default is now `0` and the static element
+    // stays visible.
+    const groups = normalizeBeatorajaDestinations([
+      { id: 'static-bg', dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100, a: 255 }] },
+    ]);
+    expect(groups[0]?.loop).toBe(0);
+    expect(sampleBeatorajaDestination(groups[0]!, 0)?.x).toBe(0);
+    expect(sampleBeatorajaDestination(groups[0]!, 1000)?.x).toBe(0);
+    expect(sampleBeatorajaDestination(groups[0]!, 9999)?.x).toBe(0);
+  });
+
   it('single-keyframe destination with loop>=0 stays visible (period collapses to "static")', () => {
     // With `loop >= 0`, the wraparound period for a length-1 dst would divide by zero in
     // beatoraja itself; we degrade to "hold the frame static" rather than producing NaN. This
