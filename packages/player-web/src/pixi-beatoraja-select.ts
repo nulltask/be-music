@@ -417,6 +417,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * the root, songs are still grouped by `directoryLabel` so a sort would jumble folders.
    */
   private sortMode = 0;
+  /**
+   * Live search query (case-insensitive substring match on title + artist + genre + sub
+   * title). Empty string = no filter. Updated by the search input flow (see
+   * {@link searchActive} / handleKeyDown's `/` branch). Surfaced to the skin via
+   * `BEATORAJA_TEXT.SEARCHWORD` so themes that author the search-display text node show
+   * the live query while the user types.
+   */
+  private searchQuery = '';
+  /**
+   * `true` while the user is in search-input mode (after pressing `/`). In this mode
+   * keystrokes go to the search query instead of cursor navigation; Enter / Escape exit
+   * the mode (Enter keeps the filter, Escape clears + exits). Visual indicator: a small
+   * prompt at the top of the canvas (rendered as a transient Text node).
+   */
+  private searchActive = false;
+  /** Sprite holding the live search prompt — only mounted while `searchActive`. */
+  private searchPromptText: Text | undefined;
   private disposed = false;
   /**
    * Lazily-constructed chart-preview engine. Mirrors the LR2 `pixi-select.ts` integration —
@@ -877,18 +894,36 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Higher values restrict to charts whose `resolveChartPlayVariant` returns the matching
     // variant; charts without a variant resolution are dropped from the filtered set.
     const filter = this.keymodeFilter;
-    const filtered =
+    const keymodeFiltered =
       filter === 0
         ? this.options.songs
         : this.options.songs.filter((song) => keymodeImagesetIndex(safeResolveChartVariant(song)) === filter);
+    // Search query — case-insensitive substring match on title / artist / genre / subtitle.
+    // Empty string short-circuits (no filter). Applied AFTER the keymode filter so a search
+    // narrows whatever the user already filtered to via the MODE button.
+    const query = this.searchQuery.toLowerCase();
+    const searchFiltered =
+      query.length === 0
+        ? keymodeFiltered
+        : keymodeFiltered.filter((song) => songMatchesQuery(song, query));
     if (this.folderStack.length === 0) {
-      const folders = groupSongsByFolder(filtered);
-      this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+      // When a search is active at the root, beatoraja flattens the result into a song list
+      // (no folder grouping) — matches the user's mental model of "show me every chart whose
+      // title contains X" rather than "show me folders that contain such charts". The
+      // keymode-only path keeps the folder grouping for browse-mode.
+      if (query.length > 0) {
+        const sorted = this.sortMode !== 0 ? sortSongsByMode(searchFiltered, this.sortMode) : searchFiltered;
+        this.entries = sorted.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
+      } else {
+        const folders = groupSongsByFolder(searchFiltered);
+        this.entries = folders.map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+      }
     } else {
       const top = this.folderStack[this.folderStack.length - 1]!;
       // When a filter is active, the folder's pre-stored `songs` may include charts the
       // current filter excludes — re-filter on read so what the user sees matches the badge.
-      let folderSongs = filter === 0 ? top.songs : top.songs.filter((s) => filtered.includes(s));
+      let folderSongs = filter === 0 ? top.songs : top.songs.filter((s) => keymodeFiltered.includes(s));
+      if (query.length > 0) folderSongs = folderSongs.filter((s) => songMatchesQuery(s, query));
       if (this.sortMode !== 0) folderSongs = sortSongsByMode(folderSongs, this.sortMode);
       this.entries = folderSongs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }));
     }
@@ -925,7 +960,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       case BEATORAJA_TEXT.DIRECTORY:
         return song?.directoryLabel ?? this.currentFolderLabel();
       case BEATORAJA_TEXT.SEARCHWORD:
-        return '';
+        // Live search query — typed by the user via the `/` search input flow. Empty when
+        // the user hasn't started a search; otherwise the in-flight substring being matched
+        // against title / artist / genre / subtitle. Skin authors gate a "search prompt"
+        // text node on this so the user can see what they've typed.
+        return this.searchQuery;
       // Difficulty-table refs — empty until table / dan-grade mode is wired.
       case BEATORAJA_TEXT.TABLE_NAME:
       case BEATORAJA_TEXT.TABLE_LEVEL:
@@ -1847,6 +1886,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
+    // Search-input mode swallows most keys — ArrowUp/Down still navigate within the
+    // filtered list (so the user can type, then arrow-pick), but printable characters /
+    // Backspace mutate the query and Enter / Escape exit the mode.
+    if (this.searchActive) {
+      this.handleSearchKey(event);
+      return;
+    }
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault();
@@ -1882,7 +1928,20 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         break;
       case 'Escape':
         event.preventDefault();
+        // ESC at root with an active search clears the filter rather than exiting the
+        // scene. The two-step behaviour matches what users expect from search-equipped
+        // file browsers — "narrow it, look, clear, leave".
+        if (this.searchQuery.length > 0 && this.folderStack.length === 0) {
+          this.setSearchQuery('');
+          break;
+        }
         this.leaveFolder();
+        break;
+      case '/':
+        // `/` enters search-input mode. Subsequent keystrokes type into the query (see
+        // `handleSearchKey`) until Enter (commit) or Escape (clear + exit) lands.
+        event.preventDefault();
+        this.setSearchActive(true);
         break;
       case 'r':
       case 'R':
@@ -1897,6 +1956,105 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         break;
     }
   };
+
+  /**
+   * Mutate the search query / search-mode state. Called from the `/`-search input flow.
+   * Re-runs `refreshEntries` so the visible row list narrows in real time as the user
+   * types. The cursor resets to the top of the new filtered list (otherwise an old
+   * `currentIndex` would point at a now-out-of-bounds slot).
+   */
+  private setSearchQuery(query: string): void {
+    if (this.searchQuery === query) return;
+    this.searchQuery = query;
+    this.refreshEntries(0);
+    this.refreshSearchPrompt();
+  }
+
+  private setSearchActive(active: boolean): void {
+    if (this.searchActive === active) return;
+    this.searchActive = active;
+    this.refreshSearchPrompt();
+  }
+
+  /**
+   * Field-keystroke handler for search-input mode. ArrowUp/Down still navigate (so the user
+   * can type → arrow-pick); Enter commits the filter and exits search mode; Escape clears
+   * + exits; Backspace deletes the last char; printable single-character keys append.
+   */
+  private handleSearchKey(event: KeyboardEvent): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.setSearchActive(false);
+      return;
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.setSearchActive(false);
+      this.setSearchQuery('');
+      return;
+    }
+    if (event.key === 'Backspace') {
+      event.preventDefault();
+      this.setSearchQuery(this.searchQuery.slice(0, -1));
+      return;
+    }
+    // ArrowUp/Down still navigate inside search mode so the user can type, then jump.
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      this.moveCursor(-1);
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      this.moveCursor(1);
+      return;
+    }
+    // Printable single-character keys append to the query. Filter out chord modifiers
+    // (Ctrl/Alt/Meta + letter) — those are typically OS shortcuts the user doesn't want
+    // landing in the search query.
+    if (event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      event.preventDefault();
+      this.setSearchQuery(this.searchQuery + event.key);
+    }
+  }
+
+  /**
+   * Show / hide / update the transient search prompt overlay. Mounted on the listLayer (=
+   * inside the scaled skin container) so its position scales with the rest of the chrome.
+   * Visible only while {@link searchActive}; the searchword display the skin authors via
+   * `BEATORAJA_TEXT.SEARCHWORD` is the canonical surface, but the transient prompt gives
+   * the user clear feedback that they're in input mode even on skins that don't author the
+   * text node.
+   */
+  private refreshSearchPrompt(): void {
+    if (!this.searchActive && this.searchQuery.length === 0) {
+      if (this.searchPromptText !== undefined) {
+        this.searchPromptText.visible = false;
+      }
+      return;
+    }
+    if (this.searchPromptText === undefined) {
+      const text = new Text({
+        text: '',
+        style: {
+          fontFamily: 'sans-serif',
+          fontSize: 24,
+          fill: 0xffe066,
+          fontWeight: '700',
+          stroke: { color: 0x000000, width: 4 },
+        },
+      });
+      text.anchor.set(0.5, 0);
+      text.x = this.view.width / 2;
+      text.y = 8;
+      this.view.container.addChild(text);
+      this.searchPromptText = text;
+    }
+    const prompt = this.searchActive ? '/ ' : '🔍 ';
+    const display = this.searchQuery.length > 0 ? this.searchQuery : '(type to search)';
+    this.searchPromptText.text = `${prompt}${display}`;
+    this.searchPromptText.visible = true;
+  }
 
   /**
    * Jump the cursor to a uniformly-random entry within the current list. Used by the `R`
@@ -1943,6 +2101,22 @@ function resolvePlayLevel(level: number | string | undefined): number | undefine
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+/**
+ * Case-insensitive substring match against a song's text-searchable fields. The query is
+ * pre-lowercased by the caller so this hot-path doesn't re-allocate per song. Returns true
+ * when ANY field contains the query — title / artist / genre / subtitle. Mirrors
+ * beatoraja's reference search which treats fields uniformly.
+ */
+function songMatchesQuery(song: BrowserSongEntry, lowerQuery: string): boolean {
+  const meta = song.chart.metadata;
+  const fields = [meta.title, meta.artist, meta.genre, meta.subtitle];
+  for (const field of fields) {
+    if (typeof field !== 'string' || field.length === 0) continue;
+    if (field.toLowerCase().includes(lowerQuery)) return true;
+  }
+  return false;
 }
 
 /**
