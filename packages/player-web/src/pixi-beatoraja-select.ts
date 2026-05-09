@@ -360,8 +360,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private readonly rowBarSprites: (Sprite | undefined)[] = [];
   /** Per-row label texts. */
   private readonly rowLabels: Text[] = [];
-  /** Per-row "kind icon" texts (folder ▸ vs song ♪). Length matches {@link rowLabels}. */
-  private readonly rowKindIcons: Text[] = [];
   /** Per-row sub-label (artist / song count). Length matches {@link rowLabels}. */
   private readonly rowSublabels: Text[] = [];
   /**
@@ -1545,7 +1543,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // songlist length differs from the previous one). Pixi children stay attached to
     // listLayer; clearing the arrays lets the new loop allocate the right count.
     for (const t of this.rowLabels) t.destroy();
-    for (const t of this.rowKindIcons) t.destroy();
     for (const t of this.rowSublabels) t.destroy();
     for (const t of this.rowLevelLabels) t.destroy();
     for (const row of this.rowFeatureLabels) {
@@ -1554,7 +1551,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const s of this.rowHitAreas) s.destroy();
     for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
     this.rowLabels.length = 0;
-    this.rowKindIcons.length = 0;
     this.rowSublabels.length = 0;
     this.rowLevelLabels.length = 0;
     this.rowFeatureLabels.length = 0;
@@ -1610,15 +1606,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.on('pointertap', (event: FederatedPointerEvent) => this.handleRowPointerTap(i, event));
       this.listLayer.addChild(hit);
       this.rowHitAreas.push(hit);
-
-      // Kind icon (▶ / ▸ / ♪) — narrow column at the row's left edge.
-      const icon = new Text({
-        text: '',
-        style: { fontFamily, fontSize: labelSize, fill: 0xffffff, fontWeight: '600' },
-      });
-      icon.anchor.set(0, 0.5);
-      this.listLayer.addChild(icon);
-      this.rowKindIcons.push(icon);
 
       // Primary label — title (song) / folder name (folder).
       const label = new Text({
@@ -1724,13 +1711,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const rawEntryIndex = Math.round(centreEntry) + (i - this.centreRowIndex);
       const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
       const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
-      const icon = this.rowKindIcons[i]!;
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
       const hit = this.rowHitAreas[i]!;
       const bar = this.rowBarSprites[i];
       if (entry === undefined) {
-        icon.visible = false;
         label.visible = false;
         sub.visible = false;
         hit.visible = false;
@@ -1741,7 +1726,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         continue;
       }
       const isSelected = i === this.centreRowIndex;
-      icon.visible = true;
       label.visible = true;
       sub.visible = true;
       hit.visible = true;
@@ -1749,14 +1733,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const levelLabel = this.rowLevelLabels[i];
       if (entry.kind === 'folder') {
         const folder = entry.folder;
-        icon.text = isSelected ? '▼' : '▸';
         label.text = folder.label;
         sub.text = `${folder.songs.length} song${folder.songs.length === 1 ? '' : 's'}`;
         // Folder rows have no chart level — hide the overlay if it exists for this row.
         if (levelLabel !== undefined) levelLabel.visible = false;
       } else {
         const song = entry.song;
-        icon.text = isSelected ? '▶' : '♪';
         label.text = song.title;
         sub.text = song.artist ?? '';
         if (levelLabel !== undefined) {
@@ -1770,7 +1752,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
           }
         }
       }
-      icon.alpha = isSelected ? 1 : 0.7;
       label.alpha = isSelected ? 1 : 0.75;
       sub.alpha = isSelected ? 0.95 : 0.55;
     }
@@ -1804,7 +1785,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const centreEntry = this.scrollPosition;
     for (let i = 0; i < this.visibleRowCount; i += 1) {
       const hit = this.rowHitAreas[i]!;
-      const icon = this.rowKindIcons[i]!;
       const label = this.rowLabels[i]!;
       const sub = this.rowSublabels[i]!;
       if (!label.visible) continue;
@@ -1837,16 +1817,6 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       hit.height = rect.h;
       hit.hitArea = null;
 
-      // Kind icon (▶ / ▸ / ♪) — our own UI element, not a beatoraja-songlist concept. Anchored
-      // at a small left-inset of the bar rect; the skin's `songlist.label[]` is a different
-      // beast (per-feature LN/random/mine indicators rendered separately, see below).
-      const iconX = rect.x + Math.max(8, Math.floor(rect.h * 0.2));
-      const iconY = rowCentreY;
-      icon.anchor.set(0, 0.5);
-      icon.x = iconX;
-      icon.y = iconY;
-      icon.tint = isSelected ? 0xffe066 : 0xffffff;
-
       // Title label x — pushed past whichever sub-rect extends further right within the
       // bar (level rect, plus any positive-x label rects). Skins authoring `songlist.level[]`
       // (default beatoraja, GdbG, ModernChic) place the chart-level number at a fixed
@@ -1861,10 +1831,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         if (right > positiveLabelRight) positiveLabelRight = right;
       }
       const subRectRightEdge = Math.max(levelRightEdge, positiveLabelRight);
+      const leftPad = Math.max(8, Math.floor(rect.h * 0.2));
       const labelTextOffsetX =
-        subRectRightEdge > 0
-          ? rect.x + subRectRightEdge + Math.max(8, Math.floor(rect.h * 0.2))
-          : iconX + Math.max(20, Math.floor(rect.h * 0.5));
+        subRectRightEdge > 0 ? rect.x + subRectRightEdge + leftPad : rect.x + leftPad;
       const labelX = labelTextOffsetX;
       label.x = labelX;
       label.y = rowCentreY - Math.floor(rect.h * 0.05);
