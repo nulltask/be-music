@@ -1,5 +1,18 @@
 // Strict-typed normalization for beatoraja's `gauge` element.
 //
+// **Spec note (audit 1.4):** beatoraja's `SkinGauge.java` indexes nodes as
+// `images[exgauge + frameOffset + borderFlag]` where `exgauge = gaugeMode * 6` — i.e. each
+// runtime gauge mode (GROOVE / EASY / HARD / EX-HARD / HAZARD / CLASS) has its own 6-cell
+// slab (border-off + border-on × 3 frame slots). `gauge.type` (`0..3`) is the ANIMATION
+// style (`RANDOM` / `INCREASE` / `DECREASE` / `FLICKERING`) — NOT a layout selector — and
+// `range` controls the frame stride for the animation cycle, not a "rim distance threshold".
+//
+// Our impl below is a heuristic that produces visually acceptable output for default
+// play9.json (the only sample skin authoring `type=3`) but doesn't faithfully implement the
+// 6-cell-per-gauge-mode layout. A full rewrite is a separate project; the current code
+// degrades gracefully when beatoraja's strict layout doesn't match (cells fall back to
+// `nodes[lastIndex]` rather than throwing) so authoring drift stays survivable.
+//
 // `gauge` is a special destination kind: a horizontal row of `parts` cells (default 50) painted
 // from a per-zone palette of node images. Each cell's "lit" / "off" state is decided by comparing
 // its position against the live gauge percentage, and the lit cell's color shifts through the
@@ -35,14 +48,21 @@ export interface BeatorajaGaugeElement {
   /** Total cell count painted across the destination rect's width. Defaults to 50. */
   parts: number;
   /**
-   * Animation type. `0` = static (cells just flip on/off as gauge crosses thresholds), `1` = pulse
-   * (lit cells breathe between two `nodes[]` indices over `cycle` ms). Authors most commonly use
-   * `0` so the renderer always picks the first lit-state node when `type !== 1`.
+   * Animation style — beatoraja's `SkinGauge` enumerates `0` = RANDOM, `1` = INCREASE,
+   * `2` = DECREASE, `3` = FLICKERING. Our heuristic renderer treats `0` as static, `1`/`3`
+   * as pulse-on-lit. The full spec drives a frame-cycling state machine keyed off `range`
+   * (frame stride) and `cycle` (interval ms); this is documented here for spec parity but
+   * not yet implemented (audit 1.4).
    */
   type: number;
-  /** Distance threshold at the gauge rim where lit/off cuts over. Defaults to 3. */
+  /**
+   * Animation frame stride in beatoraja's spec (`SkinGauge.animationRange`); our heuristic
+   * uses it as a "rim distance threshold" for lit/off cutoff. The two interpretations
+   * diverge for `type=1`/`3` skins — most authoring is `range=0` or `range=3` and either
+   * value happens to look reasonable under our heuristic.
+   */
   range: number;
-  /** Pulse-cycle duration in ms (`type = 1`). Defaults to 33. */
+  /** Animation interval in ms (`SkinGauge.duration`). Defaults to 33. */
   cycle: number;
   /** Pulse keyframe times. */
   starttime: number;
