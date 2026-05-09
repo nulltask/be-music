@@ -131,6 +131,21 @@ export interface PixiBeatorajaSelectSceneOptions {
    */
   systemSoundPaths?: BeatorajaSelectSystemSoundPaths;
   /**
+   * Optional bundle-relative path to a looping select-scene BGM (typically `Bgm/select.wav`).
+   * When supplied, the scene starts the loop in {@link enter} and stops it in {@link exit} via
+   * the {@link skinAudio} backend. Routed through the same `BeatorajaSkinAudioPlayer` the Lua
+   * audio_loop / audio_play calls use so a single AudioContext serves both.
+   *
+   * Discovered by hosts via {@link discoverBeatorajaSelectBgmPath}; pass the result verbatim
+   * (or `undefined` for a silent select). Beatoraja's reference engine stores the path in
+   * `config.json` `bgm_select`; the web port uses convention-based probing instead.
+   *
+   * Volume is fixed at `0.7` — quieter than authored to leave headroom for chart preview
+   * playback (the preview engine doesn't currently duck the BGM, so a too-loud loop drowns
+   * out short preview clips). Future ducking would multiply this by an in-flight factor.
+   */
+  selectBgmPath?: string;
+  /**
    * Optional snapshot from a previous mount — restores the user's prior cursor / folder /
    * filter / sort / favorite state when re-entering the select scene (e.g. after returning
    * from a play). Captured via {@link PixiBeatorajaSelectScene.captureSnapshot} on the
@@ -557,6 +572,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // `focusDelayMs` (= LR2_PREVIEW_FOCUS_DELAY_MS, 1s) means a quick scene-flip won't
     // actually start playback if the user moves on immediately.
     this.refreshChartPreview();
+    this.startSelectBgm();
   }
 
   exit(): void {
@@ -571,6 +587,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // Stop preview audio when the scene is hidden — the engine retains its state for the
     // next `enter()` re-arm. Distinct from `dispose()` which permanently tears it down.
     this.chartPreviewEngine?.focus(undefined);
+    this.stopSelectBgm();
   }
 
   dispose(): void {
@@ -1629,6 +1646,45 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (path === undefined || path.length === 0) return;
     this.options.skinAudio?.play(path, 1);
   }
+
+  /**
+   * Start the looping select BGM if the scene has both a path and an audio backend. Routed
+   * through `BeatorajaSkinAudio.loop` so the audio decode + AudioContext are shared with
+   * Lua-driven sounds. Volume defaults to `0.7` — quieter than the chart preview's `1.0` so
+   * preview clips remain audible (no per-source ducking yet; volume blend handles the
+   * common case).
+   *
+   * Idempotent — calling twice in a row stacks two loops on the same path, which would
+   * audibly double the BGM. We track {@link selectBgmPlaying} to short-circuit redundant
+   * starts. The `enter()` lifecycle method is the only caller, but a future scene-host that
+   * called `enter` twice without `exit` would otherwise produce a stuck overlap.
+   */
+  private startSelectBgm(): void {
+    if (this.selectBgmPlaying) return;
+    const path = this.options.selectBgmPath;
+    if (path === undefined || path.length === 0) return;
+    const skinAudio = this.options.skinAudio;
+    if (skinAudio === undefined) return;
+    if (skinAudio.loop(path, 0.7)) {
+      this.selectBgmPlaying = true;
+    }
+  }
+
+  /**
+   * Stop the looping select BGM. Safe to call when nothing was playing — the underlying
+   * `audio_stop` is a no-op for paths with no active loop.
+   */
+  private stopSelectBgm(): void {
+    if (!this.selectBgmPlaying) return;
+    const path = this.options.selectBgmPath;
+    if (path === undefined || path.length === 0) {
+      this.selectBgmPlaying = false;
+      return;
+    }
+    this.options.skinAudio?.stop(path);
+    this.selectBgmPlaying = false;
+  }
+  private selectBgmPlaying = false;
 
   /**
    * Move the cursor by `delta` rows, wrapping around list bounds (last row → first row on

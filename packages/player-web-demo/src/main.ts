@@ -38,6 +38,7 @@ import {
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
   BeatorajaSkinAudioPlayer,
+  discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   PixiBeatorajaSelectScene,
   isBeatorajaSkinIndicator,
@@ -700,6 +701,14 @@ class PlayerWebDemoApp {
    * for stripped LR2 themes that don't ship a `sound/` subdirectory.
    */
   private beatorajaSystemSoundPaths: BeatorajaSelectSystemSoundPaths = {};
+  /**
+   * Looping select-scene BGM path discovered from the active theme bundle. Re-probed on
+   * every theme load via {@link discoverBeatorajaSelectBgmPath}; passed to the select scene
+   * as `selectBgmPath` so the BGM starts on enter and stops on exit. `undefined` for themes
+   * that don't ship a select BGM (the scene runs silent in the background then, just chart
+   * preview clips and navigation cues).
+   */
+  private beatorajaSelectBgmPath: string | undefined;
   /**
    * In-session per-song clear-lamp memory (audit 2.18). Keyed by `BrowserSongEntry.id` so
    * each completed run updates the lamp the next time the user lands on that song in the
@@ -1521,6 +1530,10 @@ class PlayerWebDemoApp {
       // engine reads these paths from `config.json`; the web port uses convention-based
       // probing instead since we don't load the user's beatoraja config.
       this.beatorajaSystemSoundPaths = discoverBeatorajaSystemSoundPaths(bundle.files);
+      // Looping select BGM path. Probes the standard `Bgm/select.*` locations plus an LR2-
+      // compatible fallback. Stays `undefined` for themes without a select BGM file (the
+      // scene runs silent in the background then).
+      this.beatorajaSelectBgmPath = discoverBeatorajaSelectBgmPath(bundle.files);
       this.beatorajaTheme = bundle;
       // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
       // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
@@ -1986,6 +1999,10 @@ class PlayerWebDemoApp {
       // option-change). Routed through the same `BeatorajaSkinAudioPlayer` the Lua audio_play
       // calls use — that way browsers cap a single AudioContext per scene rather than two.
       systemSoundPaths: this.beatorajaSystemSoundPaths,
+      // Looping select-screen background music. Same audio backend as the navigation cues so
+      // a single AudioContext mixes them down. The scene starts the loop on enter and stops
+      // it on exit; transitioning into decide / play tears it down cleanly.
+      selectBgmPath: this.beatorajaSelectBgmPath,
       // In-session lamp lookup — completed runs in this session light the focused song bar's
       // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
       // many times the user cleared the chart in the same session (audit 2.18).

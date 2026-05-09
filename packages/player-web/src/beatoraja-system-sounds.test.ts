@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { discoverBeatorajaSystemSoundPaths } from './beatoraja-system-sounds.ts';
+import {
+  discoverBeatorajaSelectBgmPath,
+  discoverBeatorajaSystemSoundPaths,
+} from './beatoraja-system-sounds.ts';
 
 function fakeFiles(paths: ReadonlyArray<string>): Map<string, Uint8Array> {
   return new Map(paths.map((p) => [p, new Uint8Array(0)]));
@@ -57,6 +60,17 @@ describe('discoverBeatorajaSystemSoundPaths', () => {
   it('returns an empty record when no slot has any candidate present', () => {
     const files = fakeFiles(['random/file.png', 'gauge/n.png']);
     expect(discoverBeatorajaSystemSoundPaths(files)).toEqual({});
+  });
+
+  it('discovers a looping select BGM at the canonical Bgm/select.* path', () => {
+    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['Bgm/select.wav']))).toBe('Bgm/select.wav');
+    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['bgm/select.ogg']))).toBe('bgm/select.ogg');
+    // Falls back to LR2-derived layout
+    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['LR2files/Bgm/_common/select.wav']))).toBe(
+      'LR2files/Bgm/_common/select.wav',
+    );
+    // Returns undefined when no candidate matches
+    expect(discoverBeatorajaSelectBgmPath(fakeFiles(['random/file.png']))).toBeUndefined();
   });
 
   it('falls back to LR2-compatible Sound/lr2 paths when the theme is LR2-derived', () => {

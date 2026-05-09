@@ -108,3 +108,43 @@ export function discoverBeatorajaSystemSoundPaths(
   });
   return out;
 }
+
+/**
+ * Looping select-scene BGM discovery — a sibling to {@link discoverBeatorajaSystemSoundPaths}
+ * but for the long-form background music that plays under the song-select chrome.
+ *
+ * Beatoraja's reference engine stores this as `bgm_select` in `config.json`; the web port
+ * doesn't load that config so we probe well-known paths instead. The candidate list covers:
+ *
+ *   - `Bgm/select.*` — beatoraja's typical theme layout (`<theme>/Bgm/select.wav`)
+ *   - `bgm/select.*` — lowercase variants
+ *   - `sound/select.*` — themes that lump BGM in with system cues (rare)
+ *   - `LR2files/Bgm/_common/select.wav` — LR2-derived themes
+ *
+ * Returns the first matching bundle path, or `undefined` when no candidate exists. The
+ * returned path is meant to flow into {@link PixiBeatorajaSelectSceneOptions.selectBgmPath}
+ * and play through {@link BeatorajaSkinAudio.loop} — same audio backend the navigation cues
+ * and Lua audio_play / audio_loop calls go through, so a single AudioContext serves them all.
+ */
+export function discoverBeatorajaSelectBgmPath(
+  files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
+): string | undefined {
+  const candidates = [
+    'Bgm/select.wav',
+    'Bgm/select.ogg',
+    'Bgm/select.mp3',
+    'bgm/select.wav',
+    'bgm/select.ogg',
+    'bgm/select.mp3',
+    'sound/select_loop.wav',
+    'sound/select_loop.ogg',
+    'sound/bgm_select.wav',
+    'sound/bgm_select.ogg',
+    'LR2files/Bgm/_common/select.wav',
+  ];
+  for (const candidate of candidates) {
+    const resolved = findCaseInsensitivePath(files, candidate);
+    if (resolved !== undefined) return resolved;
+  }
+  return undefined;
+}
