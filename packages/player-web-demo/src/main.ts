@@ -2776,7 +2776,11 @@ class PlayerWebDemoApp {
       // the wildcard expansion sees identical candidates either way.
       const file =
         this.beatorajaTheme !== undefined ? buildDefaultSkinConfigFiles(header, this.beatorajaTheme.files, entryPath) : {};
-      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file };
+      // `customOffset` starts empty — the GUI's per-slot zero-fill happens at panel build
+      // time. Storing the empty object explicitly here means the config shape stays
+      // consistent across the cache vs. the GUI emit path (both have a `customOffset` key,
+      // even if empty), which keeps spread / deep-clone snapshots free of surprises.
+      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file, customOffset: {} };
       this.beatorajaSkinConfigByEntry.set(entryPath, cached);
     }
     return cached;
