@@ -159,6 +159,15 @@ async function tryLoadVideoTextureFromBytes(path: string, bytes: Uint8Array): Pr
 
   try {
     await waitForVideoMetadata(video, 5000);
+    // WAIT FOR THE FIRST FRAME, not just metadata. Pixi's WebGPU renderer calls
+    // `copyExternalImageToTexture(video)` at upload time and that fails with
+    // "Failed to import texture from video element that doesn't have back resource"
+    // when `readyState < HAVE_CURRENT_DATA` (= 2). `loadedmetadata` only guarantees
+    // readyState >= 1 (HAVE_METADATA — dimensions / duration known but no frame data),
+    // so on a paused-on-load BGA the very first render upload would crash. Holding for
+    // `loadeddata` ensures frame 0 is decoded before the source goes anywhere near the
+    // GPU.
+    await waitForVideoFrameData(video, 5000);
   } catch {
     releaseVideoElement(video);
     URL.revokeObjectURL(objectUrl);
@@ -742,6 +751,43 @@ function waitForVideoMetadata(video: HTMLVideoElement, timeoutMs: number): Promi
       reject(new Error('video metadata timeout'));
     }, timeoutMs);
     video.addEventListener('loadedmetadata', onLoaded);
+    video.addEventListener('error', onError);
+  });
+}
+
+/**
+ * Resolve once the `<video>` element has its first frame decoded — i.e. `readyState >=
+ * HAVE_CURRENT_DATA` (2). The renderer needs this BEFORE handing the element to a Pixi
+ * `VideoSource`: WebGPU's `copyExternalImageToTexture` rejects videos with no decoded
+ * frame ("back resource") and the WebGL path silently uploads a blank texture, both of
+ * which break the first-paint of any BGA video.
+ *
+ * Resolves immediately when the readyState is already past the threshold (= the browser
+ * decoded frame 0 during `loadedmetadata`'s autoplay-warmup, common on `preload="auto"`
+ * + small clips). Otherwise listens for `loadeddata`. Rejects on `error` or after
+ * `timeoutMs`.
+ */
+function waitForVideoFrameData(video: HTMLVideoElement, timeoutMs: number): Promise<void> {
+  if (video.readyState >= 2 /* HAVE_CURRENT_DATA */) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const cleanup = (): void => {
+      video.removeEventListener('loadeddata', onLoaded);
+      video.removeEventListener('error', onError);
+      window.clearTimeout(timeoutHandle);
+    };
+    const onLoaded = (): void => {
+      cleanup();
+      resolve();
+    };
+    const onError = (): void => {
+      cleanup();
+      reject(new Error('video error'));
+    };
+    const timeoutHandle = window.setTimeout(() => {
+      cleanup();
+      reject(new Error('video frame data timeout'));
+    }, timeoutMs);
+    video.addEventListener('loadeddata', onLoaded);
     video.addEventListener('error', onError);
   });
 }
