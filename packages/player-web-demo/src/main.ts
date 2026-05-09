@@ -38,6 +38,7 @@ import {
   PixiBeatorajaGameplayView,
   PixiBeatorajaResultScene,
   BeatorajaSkinAudioPlayer,
+  discoverBeatorajaSystemSoundPaths,
   PixiBeatorajaSelectScene,
   isBeatorajaSkinIndicator,
   loadBeatorajaFonts,
@@ -51,6 +52,7 @@ import {
   summarizeBeatorajaPlaySkins,
   type BeatorajaFontCache,
   type BeatorajaPlayableVariant,
+  type BeatorajaSelectSystemSoundPaths,
   type BeatorajaTextureCache,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
@@ -691,6 +693,13 @@ class PlayerWebDemoApp {
    * the eval no longer crashed.
    */
   private beatorajaSkinAudio: BeatorajaSkinAudioPlayer | undefined;
+  /**
+   * System-sound paths discovered from the active theme bundle. Re-probed every theme load
+   * via {@link discoverBeatorajaSystemSoundPaths}; passed to {@link PixiBeatorajaSelectScene}
+   * so cursor / decide / folder / option events fire the matching cues. Stays empty (`{}`)
+   * for stripped LR2 themes that don't ship a `sound/` subdirectory.
+   */
+  private beatorajaSystemSoundPaths: BeatorajaSelectSystemSoundPaths = {};
   /**
    * In-session per-song clear-lamp memory (audit 2.18). Keyed by `BrowserSongEntry.id` so
    * each completed run updates the lamp the next time the user lands on that song in the
@@ -1505,6 +1514,13 @@ class PlayerWebDemoApp {
       // the new bundle.
       this.beatorajaSkinAudio?.dispose();
       this.beatorajaSkinAudio = new BeatorajaSkinAudioPlayer({ files: bundle.files });
+      // Probe the bundle for navigation system sounds (cursor / decide / cancel / folder /
+      // option). The discovery walks well-known filenames inside the theme's `sound/` subdir
+      // (and an LR2-compatible `LR2files/Sound/lr2/*.wav` fallback) — slots without a match
+      // stay undefined and the select scene runs silent for those events. Beatoraja's own
+      // engine reads these paths from `config.json`; the web port uses convention-based
+      // probing instead since we don't load the user's beatoraja config.
+      this.beatorajaSystemSoundPaths = discoverBeatorajaSystemSoundPaths(bundle.files);
       this.beatorajaTheme = bundle;
       // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
       // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
@@ -1966,6 +1982,10 @@ class PlayerWebDemoApp {
       // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
       // cursor moves — same as the LR2 select did before the preview engine was added.
       collection: this.collection,
+      // Theme-bundled navigation cues (cursor / decide / cancel / folder open-close /
+      // option-change). Routed through the same `BeatorajaSkinAudioPlayer` the Lua audio_play
+      // calls use — that way browsers cap a single AudioContext per scene rather than two.
+      systemSoundPaths: this.beatorajaSystemSoundPaths,
       // In-session lamp lookup — completed runs in this session light the focused song bar's
       // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
       // many times the user cleared the chart in the same session (audit 2.18).

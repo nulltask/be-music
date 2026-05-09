@@ -108,6 +108,29 @@ export interface PixiBeatorajaSelectSceneOptions {
    */
   collection?: import('./types.ts').BrowserSongCollection;
   /**
+   * Optional system-sound paths for navigation cues. Each value is a bundle-relative path
+   * (e.g. `'sound/cursor.wav'`) that {@link skinAudio} resolves through its file map and
+   * decodes lazily. The scene fires the matching path on these events:
+   *
+   *   - `cursor` — every cursor advance (ArrowUp / ArrowDown / PageUp / PageDown / Home / End
+   *     / wheel / mouse-click on a non-focused row).
+   *   - `folderOpen` — drilling into a folder bar via Enter / click.
+   *   - `folderClose` — backing out via Escape / Backspace.
+   *   - `decide` — confirming a song bar (Enter / click on focused / autoplay button).
+   *   - `optionChange` — sort cycle (act=12) / keymode filter cycle (act=11).
+   *   - `cancel` — back-navigation when not in a folder (root-level ESC).
+   *
+   * Missing entries are silently skipped — themes that don't ship a particular cue just don't
+   * play it. Requires {@link skinAudio} to also be supplied; without an audio backend the
+   * paths are unreferenced and the scene runs silent on navigation.
+   *
+   * Hosts should discover the paths from the theme bundle (e.g. probe `sound/cursor.wav`,
+   * `sound/decide.wav` etc. against the bundle's file map) and pass whatever they found.
+   * Beatoraja itself reads these paths from its `config.json` keys (`sound_cursor`,
+   * `sound_select`, `sound_cancel`, `sound_folder`) — the same convention the demo follows.
+   */
+  systemSoundPaths?: BeatorajaSelectSystemSoundPaths;
+  /**
    * Optional snapshot from a previous mount — restores the user's prior cursor / folder /
    * filter / sort / favorite state when re-entering the select scene (e.g. after returning
    * from a play). Captured via {@link PixiBeatorajaSelectScene.captureSnapshot} on the
@@ -123,6 +146,20 @@ export interface PixiBeatorajaSelectSceneOptions {
    * doesn't crash when stale state outlives its source.
    */
   restoreSnapshot?: PixiBeatorajaSelectSceneSnapshot;
+}
+
+/**
+ * System-sound path mapping for navigation cues. See {@link PixiBeatorajaSelectSceneOptions.systemSoundPaths}
+ * for which event each entry fires on. Paths are bundle-relative, resolved through the
+ * theme's file map by {@link BeatorajaSkinAudio.play}.
+ */
+export interface BeatorajaSelectSystemSoundPaths {
+  cursor?: string;
+  folderOpen?: string;
+  folderClose?: string;
+  decide?: string;
+  optionChange?: string;
+  cancel?: string;
 }
 
 /**
@@ -1100,6 +1137,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.sortMode = next;
     // eslint-disable-next-line no-console
     console.log('[beatoraja-select] act=12 SORT cycled', JSON.stringify({ to: next }));
+    this.playSystemSound('optionChange');
     const previouslyFocused = this.entries[this.currentIndex];
     this.refreshEntries(this.currentIndex);
     if (previouslyFocused !== undefined) {
@@ -1126,6 +1164,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.keymodeFilter = next;
     // eslint-disable-next-line no-console
     console.log('[beatoraja-select] act=11 MODE filter cycled', JSON.stringify({ to: next }));
+    this.playSystemSound('optionChange');
     this.folderStack = [];
     this.cursorStack = [0];
     this.refreshEntries(0);
@@ -1181,6 +1220,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         if (song !== undefined) {
           // eslint-disable-next-line no-console
           console.log('[beatoraja-select] act=15 PLAY', JSON.stringify({ title: song.title }));
+          this.playSystemSound('decide');
           this.options.onSongPicked(song);
         }
         return;
@@ -1188,6 +1228,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         if (song !== undefined) {
           // eslint-disable-next-line no-console
           console.log('[beatoraja-select] act=16 AUTO PLAY', JSON.stringify({ title: song.title }));
+          this.playSystemSound('decide');
           this.options.onSongPicked(song, { autoPlay: true });
         }
         return;
@@ -1195,6 +1236,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         if (song !== undefined) {
           // eslint-disable-next-line no-console
           console.log('[beatoraja-select] act=315 PRACTICE (routed as normal play)', JSON.stringify({ title: song.title }));
+          this.playSystemSound('decide');
           this.options.onSongPicked(song);
         }
         return;
@@ -1547,6 +1589,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.folderStack.push(entry.folder);
       this.cursorStack.push(0);
       this.refreshEntries(0);
+      this.playSystemSound('folderOpen');
       return;
     }
     // eslint-disable-next-line no-console
@@ -1554,11 +1597,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       '[beatoraja-select] song picked',
       JSON.stringify({ index: this.currentIndex, title: entry.song.title, artist: entry.song.artist }),
     );
+    this.playSystemSound('decide');
     this.options.onSongPicked(entry.song);
   }
 
   private leaveFolder(): void {
     if (this.folderStack.length === 0) {
+      this.playSystemSound('cancel');
       this.options.onExit?.();
       return;
     }
@@ -1566,6 +1611,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.cursorStack.pop();
     const restoredIndex = this.cursorStack[this.cursorStack.length - 1] ?? 0;
     this.refreshEntries(restoredIndex);
+    this.playSystemSound('folderClose');
+  }
+
+  /**
+   * Fire a system-sound cue by name. Resolves the path from {@link PixiBeatorajaSelectSceneOptions.systemSoundPaths}
+   * and routes through {@link skinAudio} (the host's `BeatorajaSkinAudioPlayer`). Silently
+   * no-ops when either the path or audio backend is absent — themes that don't ship a
+   * particular cue (or hosts that didn't discover it in the bundle) just stay quiet for that
+   * event. Volume is fixed at 1.0; tracking authored sound levels per-event would need
+   * beatoraja's `config.json` `volume_*` knobs which we don't currently parse.
+   */
+  private playSystemSound(name: keyof BeatorajaSelectSystemSoundPaths): void {
+    const paths = this.options.systemSoundPaths;
+    if (paths === undefined) return;
+    const path = paths[name];
+    if (path === undefined || path.length === 0) return;
+    this.options.skinAudio?.play(path, 1);
   }
 
   /**
@@ -1596,6 +1658,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.currentIndex = next;
     this.refreshRowVisuals();
     this.refreshChartPreview();
+    this.playSystemSound('cursor');
   }
 
   /**
@@ -1609,6 +1672,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.currentIndex = next;
     this.refreshRowVisuals();
     this.refreshChartPreview();
+    this.playSystemSound('cursor');
   }
 
   /**

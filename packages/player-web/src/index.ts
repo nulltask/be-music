@@ -1,6 +1,7 @@
 export * from './audio-bus.ts';
 export * from './beatoraja-render.ts';
 export * from './beatoraja-skin-audio.ts';
+export * from './beatoraja-system-sounds.ts';
 export * from './beatoraja-textures.ts';
 export * from './beatoraja-theme.ts';
 export * from './browser-compat.ts';
