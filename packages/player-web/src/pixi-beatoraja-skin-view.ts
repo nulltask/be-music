@@ -606,109 +606,103 @@ export class BeatorajaPlaySkinView {
       if (!imageById.has(cover.id)) imageById.set(cover.id, cover);
       liftCoverIds.add(cover.id);
     }
-    // `value[]` declarations carry numeric formatting metadata (`digit` / `padding` / `divx`) that
-    // `image[]` doesn't, so they're tracked in their own map and rendered through a dedicated
-    // multi-sprite digit composer (`composeBeatorajaValueCells`). `image[]` wins on id collision —
-    // matches beatoraja's own resolver.
+    // Element-kind resolution priority follows beatoraja's `JsonSkinObjectLoader.loadSkinObject`
+    // which walks `sk.image -> sk.imageset -> sk.value -> sk.floatvalue -> sk.text -> sk.slider
+    // -> sk.graph` with an early-return on each match. Earlier kinds claim id collisions ahead
+    // of later ones — most importantly `imageset[]` outranks `value/text/graph/slider`. Our
+    // previous registration (imageset dead last) silently dropped imageset paint when authors
+    // reused the same id for a value/text/graph dst — common in skins that name their dst
+    // semantically (`"info-panel"`) and bind multiple representations to it.
+    //
+    // Each map's "is this id already claimed?" check enumerates every higher-priority map.
+    // Lower-priority kinds appended at the end inherit the same chain via the `claimedBy`
+    // helper so adding new element types keeps the registration order honest.
+    //
+    // `imageset[]` — multi-state images (lane keybeams, bomb cycles) flipping between sub-images
+    // by a runtime ref op. Mirrors upstream's #2 priority (right after `image[]`).
+    const imagesetById = new Map<BeatorajaImageId, BeatorajaImagesetElement>();
+    for (const imageset of normalizeBeatorajaImagesets(options.skin.imageset)) {
+      if (!imageById.has(imageset.id)) imagesetById.set(imageset.id, imageset);
+    }
+    // `value[]` — numeric formatting metadata (`digit` / `padding` / `divx`) over the
+    // `composeBeatorajaValueCells` digit composer.
     const valueById = new Map<BeatorajaImageId, BeatorajaValueElement>();
     for (const value of normalizeBeatorajaValues(options.skin.value)) {
-      if (!imageById.has(value.id)) {
+      if (!imageById.has(value.id) && !imagesetById.has(value.id)) {
         valueById.set(value.id, value);
       }
     }
-    // `text[]` declarations carry no source rect — font / size / ref pairs the runtime resolves into strings.
-    // Skin TTFs aren't loaded yet (engine integration handles that); the placeholders below use the browser's
-    // default sans-serif so positions and sizes are visible.
+    // `text[]` — font / size / ref pairs the runtime resolves into strings. Skin TTFs aren't
+    // loaded yet (engine integration handles that); placeholders use the browser's default
+    // sans-serif so positions and sizes are visible.
     const textById = new Map<BeatorajaImageId, BeatorajaTextElement>();
     for (const text of normalizeBeatorajaTexts(options.skin.text)) {
-      textById.set(text.id, text);
-    }
-    // `graph[]` declarations describe scaling-bar overlays — gauge fills, chart-progress bars, etc.
-    // Same id namespace as image / value / text; same "first wins" precedence with image / value /
-    // text taking priority on collisions (matches beatoraja's resolver order).
-    const graphById = new Map<BeatorajaImageId, BeatorajaGraphElement>();
-    for (const graph of normalizeBeatorajaGraphs(options.skin.graph)) {
-      if (!imageById.has(graph.id) && !valueById.has(graph.id) && !textById.has(graph.id)) {
-        graphById.set(graph.id, graph);
+      if (!imageById.has(text.id) && !imagesetById.has(text.id) && !valueById.has(text.id)) {
+        textById.set(text.id, text);
       }
     }
-    // `slider[]` declarations — translatable sprites driven by a runtime value (lanecover line,
-    // hispeed lift, volume sliders). Same precedence semantics as `graph[]` — image / value /
-    // text / graph win on id collision.
+    // `slider[]` — translatable sprites driven by a runtime value (lanecover line, hispeed
+    // lift, volume sliders).
     const sliderById = new Map<BeatorajaImageId, BeatorajaSliderElement>();
     for (const slider of normalizeBeatorajaSliders((options.skin as { slider?: unknown }).slider)) {
       if (
         !imageById.has(slider.id) &&
+        !imagesetById.has(slider.id) &&
         !valueById.has(slider.id) &&
-        !textById.has(slider.id) &&
-        !graphById.has(slider.id)
+        !textById.has(slider.id)
       ) {
         sliderById.set(slider.id, slider);
       }
     }
-    // `bpmgraph[]` — chart's BPM curve plotted across a destination box. Same id-namespace
-    // contention as the rest. Always loses to image / value / text / graph / slider on id
-    // collision (matches the "first kind to claim wins" rule).
-    const bpmGraphById = new Map<BeatorajaImageId, BeatorajaBpmGraphElement>();
-    for (const bpmGraph of normalizeBeatorajaBpmGraphs((options.skin as { bpmgraph?: unknown }).bpmgraph)) {
+    // `graph[]` — scaling-bar overlays (gauge fills, chart-progress bars).
+    const graphById = new Map<BeatorajaImageId, BeatorajaGraphElement>();
+    for (const graph of normalizeBeatorajaGraphs(options.skin.graph)) {
       if (
-        !imageById.has(bpmGraph.id) &&
-        !valueById.has(bpmGraph.id) &&
-        !textById.has(bpmGraph.id) &&
-        !graphById.has(bpmGraph.id) &&
-        !sliderById.has(bpmGraph.id)
+        !imageById.has(graph.id) &&
+        !imagesetById.has(graph.id) &&
+        !valueById.has(graph.id) &&
+        !textById.has(graph.id) &&
+        !sliderById.has(graph.id)
       ) {
-        bpmGraphById.set(bpmGraph.id, bpmGraph);
+        graphById.set(graph.id, graph);
       }
     }
-    // `judgegraph[]` — judgement / early-late histogram plotted across a destination box. Same
-    // id-namespace contention as bpmgraph (loses to every prior kind on collision).
+    // Helper closure tracking every claimed-by-higher-priority map. New low-priority element
+    // kinds (bpmgraph / judgegraph / gaugegraph / timingvisualizer / timingdistribution)
+    // funnel through this so the precedence chain stays authoritative.
+    const claimedBy = (id: BeatorajaImageId): boolean =>
+      imageById.has(id) ||
+      imagesetById.has(id) ||
+      valueById.has(id) ||
+      textById.has(id) ||
+      sliderById.has(id) ||
+      graphById.has(id);
+
+    // `bpmgraph[]` — chart's BPM curve plotted across a destination box.
+    const bpmGraphById = new Map<BeatorajaImageId, BeatorajaBpmGraphElement>();
+    for (const bpmGraph of normalizeBeatorajaBpmGraphs((options.skin as { bpmgraph?: unknown }).bpmgraph)) {
+      if (!claimedBy(bpmGraph.id)) bpmGraphById.set(bpmGraph.id, bpmGraph);
+    }
+    // `judgegraph[]` — judgement / early-late histogram.
     const judgeGraphById = new Map<BeatorajaImageId, BeatorajaJudgeGraphElement>();
     for (const judgeGraph of normalizeBeatorajaJudgeGraphs((options.skin as { judgegraph?: unknown }).judgegraph)) {
-      if (
-        !imageById.has(judgeGraph.id) &&
-        !valueById.has(judgeGraph.id) &&
-        !textById.has(judgeGraph.id) &&
-        !graphById.has(judgeGraph.id) &&
-        !sliderById.has(judgeGraph.id) &&
-        !bpmGraphById.has(judgeGraph.id)
-      ) {
+      if (!claimedBy(judgeGraph.id) && !bpmGraphById.has(judgeGraph.id)) {
         judgeGraphById.set(judgeGraph.id, judgeGraph);
       }
     }
-    // `gaugegraph[]` — gauge polyline plotted across the destination box on the result scene.
-    // Same id-namespace contention as judgegraph; loses to every prior kind on collision.
+    // `gaugegraph[]` — gauge polyline on the result scene.
     const gaugeGraphById = new Map<BeatorajaImageId, BeatorajaGaugeGraphElement>();
     for (const gaugeGraph of normalizeBeatorajaGaugeGraphs((options.skin as { gaugegraph?: unknown }).gaugegraph)) {
-      if (
-        !imageById.has(gaugeGraph.id) &&
-        !valueById.has(gaugeGraph.id) &&
-        !textById.has(gaugeGraph.id) &&
-        !graphById.has(gaugeGraph.id) &&
-        !sliderById.has(gaugeGraph.id) &&
-        !bpmGraphById.has(gaugeGraph.id) &&
-        !judgeGraphById.has(gaugeGraph.id)
-      ) {
+      if (!claimedBy(gaugeGraph.id) && !bpmGraphById.has(gaugeGraph.id) && !judgeGraphById.has(gaugeGraph.id)) {
         gaugeGraphById.set(gaugeGraph.id, gaugeGraph);
       }
     }
-    // `timingvisualizer[]` — recent-timing tick visualizer plotted across the destination box on
-    // the play scene. Same precedence as gaugegraph (loses to image / value / text / graph /
-    // slider / bpmgraph / judgegraph / gaugegraph on id collision).
-    //
-    // ModernChic and other community skins also author `hiterrorvisualizer[]` entries with
-    // identical shape — same `(deltaMs, kind)` decay tail rendered into the same destination
-    // box style. We feed both fields into the same normalizer + map so authors can use
-    // either name interchangeably without us shipping a duplicate render path.
+    // `timingvisualizer[]` / `hiterrorvisualizer[]` — recent-timing tick visualizer.
     const timingVisualizerById = new Map<BeatorajaImageId, BeatorajaTimingVisualizerElement>();
     const collectTimingVisualizers = (input: unknown): void => {
       for (const tv of normalizeBeatorajaTimingVisualizers(input)) {
         if (
-          !imageById.has(tv.id) &&
-          !valueById.has(tv.id) &&
-          !textById.has(tv.id) &&
-          !graphById.has(tv.id) &&
-          !sliderById.has(tv.id) &&
+          !claimedBy(tv.id) &&
           !bpmGraphById.has(tv.id) &&
           !judgeGraphById.has(tv.id) &&
           !gaugeGraphById.has(tv.id)
@@ -719,18 +713,13 @@ export class BeatorajaPlaySkinView {
     };
     collectTimingVisualizers((options.skin as { timingvisualizer?: unknown }).timingvisualizer);
     collectTimingVisualizers((options.skin as { hiterrorvisualizer?: unknown }).hiterrorvisualizer);
-    // `timingdistributiongraph[]` — full-run timing histogram plotted across the destination box
-    // on the result scene. Same precedence as timingvisualizer + loses to it on collision.
+    // `timingdistributiongraph[]` — full-run timing histogram on the result scene.
     const timingDistributionById = new Map<BeatorajaImageId, BeatorajaTimingDistributionGraphElement>();
     for (const tdg of normalizeBeatorajaTimingDistributionGraphs(
       (options.skin as { timingdistributiongraph?: unknown }).timingdistributiongraph,
     )) {
       if (
-        !imageById.has(tdg.id) &&
-        !valueById.has(tdg.id) &&
-        !textById.has(tdg.id) &&
-        !graphById.has(tdg.id) &&
-        !sliderById.has(tdg.id) &&
+        !claimedBy(tdg.id) &&
         !bpmGraphById.has(tdg.id) &&
         !judgeGraphById.has(tdg.id) &&
         !gaugeGraphById.has(tdg.id) &&
@@ -739,44 +728,18 @@ export class BeatorajaPlaySkinView {
         timingDistributionById.set(tdg.id, tdg);
       }
     }
-    // `imageset[]` declarations — multi-state images (lane keybeams, bomb cycles) that flip between
-    // sub-images based on a runtime ref op. Lowest precedence after every other element kind: a
-    // direct `image[]` / `value[]` / `text[]` / `graph[]` / `slider[]` / `bpmgraph[]` /
-    // `judgegraph[]` with the same id wins.
-    const imagesetById = new Map<BeatorajaImageId, BeatorajaImagesetElement>();
-    for (const imageset of normalizeBeatorajaImagesets(options.skin.imageset)) {
-      if (
-        !imageById.has(imageset.id) &&
-        !valueById.has(imageset.id) &&
-        !textById.has(imageset.id) &&
-        !graphById.has(imageset.id) &&
-        !sliderById.has(imageset.id) &&
-        !bpmGraphById.has(imageset.id) &&
-        !judgeGraphById.has(imageset.id) &&
-        !gaugeGraphById.has(imageset.id) &&
-        !timingVisualizerById.has(imageset.id) &&
-        !timingDistributionById.has(imageset.id)
-      ) {
-        imagesetById.set(imageset.id, imageset);
-      }
-    }
     // `gauge` element (singular — beatoraja's reference theme authors at most one gauge per
     // skin). Same id-namespace contention rule as the others.
     const gauge = normalizeBeatorajaGauge(options.skin.gauge);
     let gaugeElement: BeatorajaGaugeElement | undefined;
     if (
       gauge !== undefined &&
-      !imageById.has(gauge.id) &&
-      !valueById.has(gauge.id) &&
-      !textById.has(gauge.id) &&
-      !graphById.has(gauge.id) &&
-      !sliderById.has(gauge.id) &&
+      !claimedBy(gauge.id) &&
       !bpmGraphById.has(gauge.id) &&
       !judgeGraphById.has(gauge.id) &&
       !gaugeGraphById.has(gauge.id) &&
       !timingVisualizerById.has(gauge.id) &&
-      !timingDistributionById.has(gauge.id) &&
-      !imagesetById.has(gauge.id)
+      !timingDistributionById.has(gauge.id)
     ) {
       gaugeElement = gauge;
     }
@@ -788,17 +751,12 @@ export class BeatorajaPlaySkinView {
     const pmcharaById = new Map<BeatorajaImageId, BeatorajaPmCharaElement>();
     for (const pmchara of normalizeBeatorajaPmCharas((options.skin as { pmchara?: unknown }).pmchara)) {
       if (
-        !imageById.has(pmchara.id) &&
-        !valueById.has(pmchara.id) &&
-        !textById.has(pmchara.id) &&
-        !graphById.has(pmchara.id) &&
-        !sliderById.has(pmchara.id) &&
+        !claimedBy(pmchara.id) &&
         !bpmGraphById.has(pmchara.id) &&
         !judgeGraphById.has(pmchara.id) &&
         !gaugeGraphById.has(pmchara.id) &&
         !timingVisualizerById.has(pmchara.id) &&
         !timingDistributionById.has(pmchara.id) &&
-        !imagesetById.has(pmchara.id) &&
         gaugeElement?.id !== pmchara.id
       ) {
         pmcharaById.set(pmchara.id, pmchara);
@@ -939,6 +897,18 @@ export class BeatorajaPlaySkinView {
       }
       const image = imageById.get(group.id);
       if (image === undefined) {
+        // Resolution priority mirrors `JsonSkinObjectLoader.loadSkinObject`:
+        //   image -> imageset -> value -> floatvalue -> text -> slider -> graph
+        // The registration phase above already deduped ids by this priority, so each
+        // `*ById.get(id)` here only returns truthy for the WINNING kind. The order is still
+        // worth preserving for predictability: a future de-dedup change shouldn't accidentally
+        // re-introduce the imageset-dead-last bug.
+        const imagesetElement = imagesetById.get(group.id);
+        if (imagesetElement !== undefined) {
+          const imagesetEntry = this.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
+          if (imagesetEntry !== undefined) this.entries.push(imagesetEntry);
+          continue;
+        }
         const valueElement = valueById.get(group.id);
         if (valueElement !== undefined) {
           const valueEntry = this.buildValueEntry(group, valueElement, options.textures);
@@ -950,16 +920,16 @@ export class BeatorajaPlaySkinView {
           this.entries.push(this.buildTextEntry(group, textElement));
           continue;
         }
-        const graphElement = graphById.get(group.id);
-        if (graphElement !== undefined) {
-          const graphEntry = this.buildGraphEntry(group, graphElement, options.textures);
-          if (graphEntry !== undefined) this.entries.push(graphEntry);
-          continue;
-        }
         const sliderElement = sliderById.get(group.id);
         if (sliderElement !== undefined) {
           const sliderEntry = this.buildSliderEntry(group, sliderElement, options.textures);
           if (sliderEntry !== undefined) this.entries.push(sliderEntry);
+          continue;
+        }
+        const graphElement = graphById.get(group.id);
+        if (graphElement !== undefined) {
+          const graphEntry = this.buildGraphEntry(group, graphElement, options.textures);
+          if (graphEntry !== undefined) this.entries.push(graphEntry);
           continue;
         }
         const bpmGraphElement = bpmGraphById.get(group.id);
@@ -985,12 +955,6 @@ export class BeatorajaPlaySkinView {
         const tdgElement = timingDistributionById.get(group.id);
         if (tdgElement !== undefined) {
           this.entries.push(this.buildTimingDistributionEntry(group, tdgElement));
-          continue;
-        }
-        const imagesetElement = imagesetById.get(group.id);
-        if (imagesetElement !== undefined) {
-          const imagesetEntry = this.buildImagesetEntry(group, imagesetElement, imageById, options.textures);
-          if (imagesetEntry !== undefined) this.entries.push(imagesetEntry);
           continue;
         }
         const pmcharaElement = pmcharaById.get(group.id);
@@ -1108,6 +1072,7 @@ export class BeatorajaPlaySkinView {
             group.id !== noteAnchorId &&
             group.id !== SONG_LIST_ANCHOR_ID &&
             !imageById.has(group.id) &&
+            !imagesetById.has(group.id) &&
             !valueById.has(group.id) &&
             !textById.has(group.id),
         )
