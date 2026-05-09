@@ -337,7 +337,14 @@ export class BeatorajaNoteLayer {
   ): { g: number; s: number; t: number } {
     const startCrop = this.resolveLaneSprite(this.noteSection.lnstart[lane]);
     const endCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
-    const bodyCrop = this.resolveLaneSprite(this.noteSection.lnbody[lane]);
+    // Use the resolved `lnBodyHeld` slot (= beatoraja's lns[2]) instead of the raw `lnbody`
+    // field. In legacy mode (the only mode our 3 sample skins use today) `lnBodyHeld === lnbody`,
+    // so the visual is unchanged. In modern mode (where `lnbodyActive` is authored) the slot
+    // resolves to `lnbodyActive` instead — community 9K skins that follow the new naming
+    // convention now paint the held variant correctly. Held-vs-unheld switching at draw time is
+    // a follow-up that needs hold-state from the engine adapter; for now we always paint the
+    // held variant, matching beatoraja's typical visual when an LN is being played correctly.
+    const bodyCrop = this.resolveLaneSprite(this.noteSection.lnBodyHeld[lane]);
     if (startCrop === undefined || endCrop === undefined || bodyCrop === undefined) {
       // Fall back to colored rectangles when any of the LN sprite slots is missing.
       const color = this.fallbackColorForLane(lane);

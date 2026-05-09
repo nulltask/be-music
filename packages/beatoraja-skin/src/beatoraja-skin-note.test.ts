@@ -134,3 +134,71 @@ describe('pickBeatorajaNoteRects', () => {
     expect(pickBeatorajaNoteRects(flat, new Set())[0]!.x).toBe(7);
   });
 });
+
+describe('LN/HCN body mode flip (audit 1.10)', () => {
+  it('legacy mode: lnBodyHeld = lnbody, lnBodyUnheld = lnactive', () => {
+    // Legacy authoring (no `lnbodyActive`). Beatoraja's loader maps `lnbody` → "held" and
+    // `lnactive` → "unheld" in this branch. ModernChic and GdbG_Skin both use this mode.
+    const section = normalizeBeatorajaNote({
+      lnbody: ['lnb-w', 'lnb-b', 'lnb-w', 'lnb-s'],
+      lnactive: ['lna-w', 'lna-b', 'lna-w', 'lna-s'],
+    });
+    expect(section.lnBodyHeld).toEqual(['lnb-w', 'lnb-b', 'lnb-w', 'lnb-s']);
+    expect(section.lnBodyUnheld).toEqual(['lna-w', 'lna-b', 'lna-w', 'lna-s']);
+    // Raw fields stay accessible for debugging / migration tooling.
+    expect(section.lnbody).toEqual(['lnb-w', 'lnb-b', 'lnb-w', 'lnb-s']);
+    expect(section.lnactive).toEqual(['lna-w', 'lna-b', 'lna-w', 'lna-s']);
+    expect(section.lnbodyActive).toEqual([]);
+  });
+
+  it('modern mode: lnBodyHeld = lnbodyActive, lnBodyUnheld = lnbody', () => {
+    // Modern authoring (audit 1.10) — community 9K skins use this. Authoring `lnbodyActive`
+    // flips the meaning of the raw fields: `lnbody` becomes the unheld sprite and
+    // `lnbodyActive` is the actively-held one.
+    const section = normalizeBeatorajaNote({
+      lnbody: ['lnb-w', 'lnb-b'],
+      lnbodyActive: ['lnA-w', 'lnA-b'],
+      lnactive: ['lna-w', 'lna-b'], // Authored but ignored in modern mode (per Java loader).
+    });
+    expect(section.lnBodyHeld).toEqual(['lnA-w', 'lnA-b']);
+    expect(section.lnBodyUnheld).toEqual(['lnb-w', 'lnb-b']);
+  });
+
+  it('legacy HCN: hcnBodyHeld = hcnbody, _Unheld = hcnactive, _Reactive = hcndamage, _Miss = hcnreactive', () => {
+    // Legacy HCN naming is genuinely confusing: `hcnreactive` maps to lns[9] (the "missed"
+    // slot) and `hcndamage` maps to lns[8] (the "recovered" slot). Modern mode renamed for
+    // clarity. The mode-flip resolution presents stable per-state slots regardless.
+    const section = normalizeBeatorajaNote({
+      hcnbody: ['hcb-1', 'hcb-2'],
+      hcnactive: ['hca-1', 'hca-2'],
+      hcndamage: ['hcd-1', 'hcd-2'],
+      hcnreactive: ['hcr-1', 'hcr-2'],
+    });
+    expect(section.hcnBodyHeld).toEqual(['hcb-1', 'hcb-2']);
+    expect(section.hcnBodyUnheld).toEqual(['hca-1', 'hca-2']);
+    expect(section.hcnBodyReactive).toEqual(['hcd-1', 'hcd-2']);
+    expect(section.hcnBodyMiss).toEqual(['hcr-1', 'hcr-2']);
+  });
+
+  it('modern HCN: per-state slots come from the *Active / *Miss / *Reactive fields', () => {
+    const section = normalizeBeatorajaNote({
+      hcnbody: ['unheld'],
+      hcnbodyActive: ['held'],
+      hcnbodyReactive: ['recovered'],
+      hcnbodyMiss: ['missed'],
+    });
+    expect(section.hcnBodyHeld).toEqual(['held']);
+    expect(section.hcnBodyUnheld).toEqual(['unheld']);
+    expect(section.hcnBodyReactive).toEqual(['recovered']);
+    expect(section.hcnBodyMiss).toEqual(['missed']);
+  });
+
+  it('partial modern authoring: lnbodyActive present without lnbody falls through cleanly', () => {
+    // A skin that authors only `lnbodyActive` (and leaves `lnbody` unset) gets a well-formed
+    // section — `lnBodyUnheld` resolves to the empty `lnbody` array, which the renderer
+    // handles by falling back to its colored-rect placeholder for the unheld state.
+    const section = normalizeBeatorajaNote({ lnbodyActive: ['held'] });
+    expect(section.lnBodyHeld).toEqual(['held']);
+    expect(section.lnBodyUnheld).toEqual([]);
+  });
+});
