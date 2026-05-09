@@ -233,6 +233,20 @@ export class BeatorajaRuntimeAdapter {
    */
   private liftRatio = 0;
   /**
+   * Hidden-cover state. Beatoraja's `LaneRenderer` maintains this on `OFFSET_HIDDEN_COVER`
+   * (id `5`). When the user has hidden enabled, the cover paints visibly and `y` shifts
+   * proportionally to `hiddenRatio × laneHeight` (with the lift-active variant applying
+   * `(1 - lift) × ratio × laneHeight`). When disabled, `a = -255` (additive delta) clamps
+   * the cover's keyframe alpha down to 0 — invisible. Default: disabled / 0 ratio so the
+   * hidden cover stays out of view until the player opts in.
+   *
+   * Mirrors `LaneRenderer.java:282-296`. Together with {@link liftRatio} this drives the
+   * three lane-cover offset slots (LIFT, LANECOVER, HIDDEN_COVER) that the reference theme
+   * and most community skins author.
+   */
+  private hiddenRatio = 0;
+  private hiddenEnabled = false;
+  /**
    * User-adjustable destination offsets keyed by `OFFSET_*` id (from `SkinProperty.OFFSET_LIFT`
    * et al.). Values default to `ZERO_BEATORAJA_OFFSET` (no shift, full alpha) and stay there
    * until a host plugs in slider input via {@link setOffset}. The skin view consumes this through
@@ -965,6 +979,35 @@ export class BeatorajaRuntimeAdapter {
         // delta after the alpha-additive switch.
         return { x: 0, y: this.liftRatio * -this.laneHeight, w: 0, h: 0, r: 0, a: 0 };
       }
+    }
+    if (offsetId === 5) {
+      // OFFSET_HIDDEN_COVER — mirrors `LaneRenderer.java:282-296`:
+      //
+      //   if (enabled) {
+      //     hidden.a = 0;
+      //     hidden.y = (1 - lift) * ratio * laneHeight       // when lift active
+      //              | ratio * laneHeight                    // when lift inactive
+      //   } else {
+      //     hidden.a = -255;
+      //   }
+      //
+      // The `a = -255` additive delta drops the cover's keyframe alpha (typically 1.0) to
+      // 0 — invisible. Default disabled state hides the cover until the player toggles it
+      // on via {@link setHiddenCover}.
+      if (!this.hiddenEnabled) {
+        return { x: 0, y: 0, w: 0, h: 0, r: 0, a: -255 };
+      }
+      // Negative y in libGDX-Y-UP shifts the cover edge UPWARD (toward the top of the lane).
+      // The `(1 - lift)` factor pulls the cover toward the lift edge as the lift rises.
+      const liftFactor = this.liftRatio !== 0 ? 1 - this.liftRatio : 1;
+      return {
+        x: 0,
+        y: this.hiddenRatio * liftFactor * -this.laneHeight,
+        w: 0,
+        h: 0,
+        r: 0,
+        a: 0,
+      };
     }
     return this.offsets.get(offsetId);
   }
@@ -1718,6 +1761,34 @@ export class BeatorajaRuntimeAdapter {
   /** Read-only handle on the lift ratio. Mostly for tests / host-side state mirroring. */
   getLift(): number {
     return this.liftRatio;
+  }
+
+  /**
+   * Set the hidden-cover state. `enabled = false` (default) drives `OFFSET_HIDDEN_COVER.a =
+   * -255` to clamp the cover sprite invisible. `enabled = true` paints the cover and
+   * shifts its y by `ratio × laneHeight` (with the `(1 - lift)` lift-active modifier
+   * applied automatically via the shared `liftRatio`). `ratio` is clamped to `[0, 1]`.
+   *
+   * Mirrors `LaneRenderer.setHiddenCover` + the `OFFSET_HIDDEN_COVER` mutation block. Call
+   * with `(0, false)` to mirror beatoraja's "hidden disabled" baseline; call with
+   * `(0.5, true)` to expose 50% of the lane through the cover.
+   */
+  setHiddenCover(ratio: number, enabled: boolean = true): void {
+    if (Number.isFinite(ratio)) {
+      this.hiddenRatio = Math.max(0, Math.min(1, ratio));
+    }
+    this.hiddenEnabled = enabled === true;
+    this.coverLastChangedAtMs = this.getNowMs();
+  }
+
+  /** Read-only handle on the hidden-cover ratio. */
+  getHiddenCover(): number {
+    return this.hiddenRatio;
+  }
+
+  /** Read-only handle on the hidden-cover enabled flag. */
+  isHiddenCoverEnabled(): boolean {
+    return this.hiddenEnabled;
   }
 
   /**

@@ -675,6 +675,44 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
     expect(adapter.getLift()).toBeCloseTo(0.3, 6);
   });
 
+  it('drives OFFSET_HIDDEN_COVER (id 5) per LaneRenderer formulas', () => {
+    // Mirrors `LaneRenderer.java:282-296`:
+    //   disabled → a = -255 (additive, drops keyframe alpha to 0 → invisible)
+    //   enabled  → a = 0, y = (1 - lift) * ratio * laneHeight (Y-UP, negative shifts up)
+    //
+    // Default state: hidden DISABLED, ratio 0 → `a = -255` so the cover sprite stays
+    // invisible until the player toggles hidden on.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      laneHeight: 580,
+    });
+    expect(adapter.resolveOffset(5)).toMatchObject({ a: -255, y: 0 });
+    expect(adapter.isHiddenCoverEnabled()).toBe(false);
+
+    // Enable with ratio = 0.5 and no lift active → y = 0.5 × 1 × -580 = -290.
+    adapter.setHiddenCover(0.5, true);
+    expect(adapter.resolveOffset(5)).toMatchObject({ a: 0, y: -290 });
+    expect(adapter.getHiddenCover()).toBe(0.5);
+
+    // With lift active at 0.4, the cover follows: y = 0.5 × (1 - 0.4) × -580 = -174.
+    adapter.setLift(0.4);
+    expect(adapter.resolveOffset(5)?.y).toBeCloseTo(-174, 6);
+
+    // Disabling re-applies the -255 alpha. Ratio is preserved (re-enable resumes the y).
+    adapter.setHiddenCover(0.5, false);
+    expect(adapter.resolveOffset(5)).toMatchObject({ a: -255 });
+    adapter.setHiddenCover(0.5, true);
+    expect(adapter.resolveOffset(5)?.y).toBeCloseTo(-174, 6);
+
+    // Clamping: ratio out of [0, 1] is clamped.
+    adapter.setHiddenCover(2, true);
+    expect(adapter.getHiddenCover()).toBe(1);
+    adapter.setHiddenCover(-1, true);
+    expect(adapter.getHiddenCover()).toBe(0);
+  });
+
   it('lets manual setOffset(3, ...) win when liftRatio is 0', () => {
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
