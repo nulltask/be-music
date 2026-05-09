@@ -2458,6 +2458,17 @@ export class BeatorajaPlaySkinView {
         graphics.fill({ color: 0xffffff, alpha: 0.18 });
       }
       // Foreground bars — drawn AFTER the backdrop so they paint on top.
+      //
+      // For `type === 2` (early/late hit-fail histogram), color each bar by the bin's
+      // offset distance so the player sees their hit cluster against the judge windows
+      // at a glance: PERFECT bins (centre) are cyan, GREAT bins yellow-green, GOOD bins
+      // yellow, BAD/POOR-saturated edge bins red. Mirrors upstream `SkinJudgeGraph`'s
+      // per-band coloring of TYPE_HIT_FAIL_DISTRIBUTION.
+      //
+      // Other types (1 = judgement spread) get uniform white fill so the destination's
+      // own `tint` colors the whole histogram — beatoraja's default play skin tints these
+      // graphs per-side.
+      const isHitFailHistogram = entry.element.type === 2;
       for (let i = 0; i < barCount; i += 1) {
         const v = Number.isFinite(bars[i]) ? Math.max(0, bars[i]!) : 0;
         if (v <= 0) continue;
@@ -2467,14 +2478,27 @@ export class BeatorajaPlaySkinView {
         const y = props.height - barH;
         const w = barWidth - gap;
         graphics.rect(x, y, w, barH);
+        if (isHitFailHistogram) {
+          // Bin layout: 21 bins covering [-100, +100] ms, 10 ms each. Bin centre =
+          // `(i - 10) * 10 + 5` ms; bin 10 spans [-5, +5] (centre 0). Edge bins 0 / 20
+          // saturate everything beyond ±100 ms so we mark them BAD.
+          const binCentreMs = (i - 10) * 10 + 5;
+          const colour = hitFailBinColour(binCentreMs, i === 0 || i === barCount - 1);
+          graphics.fill({ color: colour, alpha: 1 });
+        }
       }
-      graphics.fill({ color: 0xffffff, alpha: 1 });
+      if (!isHitFailHistogram) {
+        graphics.fill({ color: 0xffffff, alpha: 1 });
+      }
       entry.lastSignature = signature;
     }
     graphics.x = props.x;
     graphics.y = props.y;
     graphics.alpha = props.alpha;
-    graphics.tint = props.tint;
+    // For `type === 2` colours are baked per-bar (judge-band hue) — tint would multiply
+    // through and distort them, so keep tint white. Other types take the destination's
+    // tint as the histogram colour.
+    graphics.tint = entry.element.type === 2 ? 0xffffff : props.tint;
     graphics.angle = props.angle;
     graphics.blendMode = props.blendMode;
   }
@@ -3239,6 +3263,31 @@ function judgeColorFor(kind: string): number {
     default:
       return 0xffffff;
   }
+}
+
+/**
+ * Map a hit-fail histogram bin's centre offset (ms) to a judge-band colour. Used by
+ * `judgegraph type=2` so each bar paints in the colour of the judgement that bin's hits
+ * would have produced — PERFECT (yellow) at the centre, fading out through GREAT (green) /
+ * GOOD (blue) and ending in BAD (red) at the edges.
+ *
+ * Thresholds use the default RANK 2 (NORMAL) judge windows: PERFECT ±21 ms / GREAT ±60 ms
+ * / GOOD ±120 ms. Charts that author non-default `#RANK` shift the actual windows, but
+ * we don't yet route the live values through to the renderer — the visual bias is small
+ * enough at typical ranks that the player still reads "centre = good, edge = bad" the
+ * same way.
+ *
+ * `isEdgeBin = true` flips inner-window classifications to BAD because edge bins
+ * saturate every sample beyond ±100 ms (the histogram's range), so they include real
+ * BAD / POOR hits regardless of what their nominal centre would suggest.
+ */
+function hitFailBinColour(centreOffsetMs: number, isEdgeBin: boolean): number {
+  if (isEdgeBin) return judgeColorFor('BAD');
+  const abs = Math.abs(centreOffsetMs);
+  if (abs <= 21) return judgeColorFor('PERFECT');
+  if (abs <= 60) return judgeColorFor('GREAT');
+  if (abs <= 120) return judgeColorFor('GOOD');
+  return judgeColorFor('BAD');
 }
 
 /** Clamp a number to `[0, 1]`. NaN / negative / overshoot all collapse to a safe in-range value. */
