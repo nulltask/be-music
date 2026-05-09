@@ -96,4 +96,35 @@ describe('parseBeatorajaSongList', () => {
     // Canvas centre = 540. Row1 is exactly there → focused.
     expect(layout?.focusedRowIndex).toBe(1);
   });
+
+  it('extracts level / label sub-destination rects (relative to per-row bar rect)', () => {
+    // Reference theme `select.json` authors `songlist.level[]` with one entry per chart
+    // difficulty (1..14) but identical geometry. The parser picks the first entry's
+    // `dst[0]` rect — most skins author every difficulty with the same `(x, y, w, h)` and
+    // only vary the color tint, so the FIRST captures the canonical layout.
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ id: 'bar', dst: [{ x: 800, y: 360, w: 500, h: 36 }] }],
+        level: [
+          { id: 'playlevel_bar', dst: [{ x: 20, y: 8, w: 24, h: 24 }] },
+          { id: 'playlevel_bar', dst: [{ x: 20, y: 8, w: 24, h: 24, r: 0, b: 0 }] },
+        ],
+        label: [{ id: 'songlabel', dst: [{ x: 4, y: 4, w: 18, h: 18 }] }],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.level).toEqual({ x: 20, y: 8, w: 24, h: 24 });
+    expect(layout?.label).toEqual({ x: 4, y: 4, w: 18, h: 18 });
+  });
+
+  it('returns level / label as undefined when the songlist omits them', () => {
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 100, h: 30 }] }],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.level).toBeUndefined();
+    expect(layout?.label).toBeUndefined();
+  });
 });

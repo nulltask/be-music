@@ -322,6 +322,16 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private readonly rowKindIcons: Text[] = [];
   /** Per-row sub-label (artist / song count). Length matches {@link rowLabels}. */
   private readonly rowSublabels: Text[] = [];
+  /**
+   * Per-row chart-level overlay. Mounted only when `songList.level` is populated (the skin
+   * author placed a `songlist.level[]` block) — sized + positioned via the level
+   * sub-destination's relative rect plus the row's authored bar rect. Renders the chart's
+   * `#PLAYLEVEL` digit as text rather than the per-difficulty sprite the skin author
+   * intends — sprite mode would need pulling level images from the songlist's authored
+   * sources, which is a larger workstream. Text mode preserves the position / size and
+   * gives players the chart difficulty at a glance.
+   */
+  private readonly rowLevelLabels: Text[] = [];
   /** Per-row click hit area. Sized to the row's authored rect on layout. */
   private readonly rowHitAreas: Sprite[] = [];
   /**
@@ -1392,10 +1402,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const t of this.rowLabels) t.destroy();
     for (const t of this.rowKindIcons) t.destroy();
     for (const t of this.rowSublabels) t.destroy();
+    for (const t of this.rowLevelLabels) t.destroy();
     for (const s of this.rowHitAreas) s.destroy();
     this.rowLabels.length = 0;
     this.rowKindIcons.length = 0;
     this.rowSublabels.length = 0;
+    this.rowLevelLabels.length = 0;
     this.rowHitAreas.length = 0;
     // Pick a font size proportional to the row height. Skins with tall bars (ModernChic
     // 70px) get bigger text; skins with thin bars (default 36px) get smaller text. The 0.45
@@ -1439,6 +1451,27 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       sub.anchor.set(0, 0.5);
       this.listLayer.addChild(sub);
       this.rowSublabels.push(sub);
+
+      // Per-row chart-level overlay — only allocated when the songlist authored
+      // `level[]`. Sized to the level sub-rect; tinted by difficulty band so a glance
+      // shows whether a chart is beginner / intermediate / advanced.
+      if (this.songList?.level !== undefined) {
+        const level = new Text({
+          text: '',
+          style: {
+            fontFamily,
+            // Sized to the level sub-rect's height when authored, falling back to the
+            // primary label size. Most skins author level slots ~24px tall.
+            fontSize: Math.max(12, Math.floor(this.songList.level.h * 0.7)),
+            fill: 0xffffff,
+            fontWeight: '700',
+            stroke: { color: 0x000000, width: 2 },
+          },
+        });
+        level.anchor.set(0.5, 0.5);
+        this.listLayer.addChild(level);
+        this.rowLevelLabels.push(level);
+      }
     }
   }
 
@@ -1473,16 +1506,29 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       label.visible = true;
       sub.visible = true;
       hit.visible = true;
+      const levelLabel = this.rowLevelLabels[i];
       if (entry.kind === 'folder') {
         const folder = entry.folder;
         icon.text = isSelected ? '▼' : '▸';
         label.text = folder.label;
         sub.text = `${folder.songs.length} song${folder.songs.length === 1 ? '' : 's'}`;
+        // Folder rows have no chart level — hide the overlay if it exists for this row.
+        if (levelLabel !== undefined) levelLabel.visible = false;
       } else {
         const song = entry.song;
         icon.text = isSelected ? '▶' : '♪';
         label.text = song.title;
         sub.text = song.artist ?? '';
+        if (levelLabel !== undefined) {
+          const lvl = resolvePlayLevel(song.playLevel);
+          if (lvl !== undefined && lvl > 0) {
+            levelLabel.text = String(lvl);
+            levelLabel.tint = levelTintForDifficulty(lvl);
+            levelLabel.visible = true;
+          } else {
+            levelLabel.visible = false;
+          }
+        }
       }
       icon.alpha = isSelected ? 1 : 0.7;
       label.alpha = isSelected ? 1 : 0.75;
@@ -1544,8 +1590,26 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       sub.x = labelX;
       sub.y = rowCentreY + Math.floor(rect.h * 0.25);
       sub.tint = isSelected ? 0xffe066 : 0xc0d0ff;
+
+      // Per-row level overlay — only when the songlist authored a `level` sub-rect AND we
+      // pre-allocated a label for this row. Sub-rect is RELATIVE to the bar rect; we
+      // place the text at its centre.
+      const levelLabel = this.rowLevelLabels[i];
+      const levelRect = this.songList?.level;
+      if (levelLabel !== undefined && levelRect !== undefined) {
+        // Beatoraja authors `level.dst` rects in skin Y-UP coords (origin at bar's
+        // bottom-left). Our `rect` is already Pixi Y-DOWN with `rect.y` at the row's
+        // top. Skin Y-UP offset within the bar maps to Pixi:
+        //   pixiY = rect.y + (rect.h - level.y - level.h)
+        const subPixiY = rect.y + (rect.h - levelRect.y - levelRect.h) + fractionalNudge;
+        levelLabel.x = rect.x + levelRect.x + levelRect.w / 2;
+        levelLabel.y = subPixiY + levelRect.h / 2;
+        levelLabel.alpha = isSelected ? 1 : 0.85;
+      }
     }
   }
+
+  /** Map a chart's `playLevel` to a tint colour band — visual hint at glance. */
 
   private fitToStage(): void {
     const host = this.host;
@@ -1879,6 +1943,26 @@ function resolvePlayLevel(level: number | string | undefined): number | undefine
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+/**
+ * Map a chart's `#PLAYLEVEL` to a tint colour band — beatoraja's reference theme uses
+ * different per-difficulty colours on the songlist's level slot (white for beginner, blue
+ * for normal, yellow for hyper, orange for another, red for insane). Without authored
+ * sprites we approximate via tint on a single neutral text node. Boundaries chosen to
+ * match the conventional BMS difficulty bands:
+ *   1-4  white      — beginner
+ *   5-8  cyan       — normal
+ *   9-10 yellow     — hyper
+ *   11   orange     — another
+ *   12+  red        — insane
+ */
+function levelTintForDifficulty(level: number): number {
+  if (level <= 4) return 0xffffff;
+  if (level <= 8) return 0x66ddff;
+  if (level <= 10) return 0xffe066;
+  if (level <= 11) return 0xffaa44;
+  return 0xff5555;
 }
 
 /**
