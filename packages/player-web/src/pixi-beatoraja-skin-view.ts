@@ -1201,13 +1201,23 @@ export class BeatorajaPlaySkinView {
     const fontKind = this.resolveFontKind(element.fontId) ?? 'css';
     const fontFamily =
       skinFamily === undefined ? 'sans-serif' : fontKind === 'bitmap' ? skinFamily : `'${skinFamily}', sans-serif`;
-    // beatoraja `text[].size` is the requested rendered height in skin-pixel units. Default to the
-    // destination rect's height when the skin omits it — most authors set `size` explicitly, but
-    // unset / non-positive values should fall back to "fit the box" semantics rather than a
-    // hard-coded 24.
+    // Mirror beatoraja's `SkinTextFont.draw()`:
+    //
+    //     font.getData().setScale(region.height / parameter.size);
+    //
+    // The font is loaded at `text[].size` glyph height, then scaled at draw time so the
+    // rendered glyph height matches the destination rect's `h`. Final on-screen text height
+    // is `dst.h` regardless of the authored `size` — that's why default beatoraja's
+    // `genre` / `artist` (dst.h=20) render visibly smaller than `title` (dst.h=24) even
+    // though all three set `size: 24`.
+    //
+    // Pixi's `Text` / `BitmapText` `fontSize` is the rendered height directly (no
+    // separate scale stage), so we set it to `dst.h`. Falls back to `text[].size` when
+    // the destination omits a height (rare); final guard at 24 for skins authoring
+    // neither.
     const firstFrame = group.dst[0];
-    const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 24;
-    const requestedSize = element.size > 0 ? element.size : rectH;
+    const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 0;
+    const requestedSize = rectH > 0 ? rectH : element.size > 0 ? element.size : 24;
     // Pick `BitmapText` for BMFonts and `Text` for everything else. Both share the same constructor
     // surface (`text`, `style.fontFamily`, `style.fontSize`, `style.align`, `alpha`, anchors), so
     // downstream update code doesn't branch — see `updateTextEntry`.
