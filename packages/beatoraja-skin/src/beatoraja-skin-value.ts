@@ -44,11 +44,39 @@ export interface BeatorajaValueElement {
   /** Number of digits to display. `0` is invalid; treated as 1. */
   digit: number;
   /**
-   * Padding mode. `0` = pad with the cell at index `divx-1` (typically a blank); `1` = pad with the cell
-   * at index 0 (= "0"). Beatoraja's reference theme uses `0` for BPM / time displays (where leading zeros
-   * are awkward) and `1` for score / combo (where leading zeros pad to the digit count).
+   * Padding mode for digit-only strips (`divx <= 10`). Values mirror beatoraja's
+   * {@code value.padding} after its loader's d-based dispatch:
+   *
+   * - `0` — Pad with the cell at index `divx-1` (typically a blank glyph for `divx>=11`),
+   *   or HIDE the slot when the strip is digits-only (`divx==10`). This matches beatoraja's
+   *   "no pad / null leading slots" behavior on 10-cell strips.
+   * - `1` — Pad with cell `0` ("0"). Used by score / combo / count readouts that want
+   *   leading zeros (e.g. `00008722`).
+   *
+   * Note: the JSON loader path inside beatoraja CONSULTS `padding` only when `divx <= 10`.
+   * For `divx > 10` (= 11-cell strips), beatoraja hardcodes pad=2 (blank); the renderer
+   * here mirrors that by always painting cell `divx-1` for the leading slots regardless
+   * of `padding` when `divx >= 11`. For `divx == 24` (signed dual-strip, two 12-cell
+   * halves), beatoraja consults {@link zeropadding} instead — see that field's doc.
    */
   padding: number;
+  /**
+   * Pad mode for the 24-cell signed dual-strip layout (`divx % 24 == 0`). Same value space
+   * as Java's {@code SkinNumber.zeropadding}: `1` = pad with cell 0 ("0"), `2` = pad with
+   * cell 10 (blank), other values = no pad / null slots. Default `0`.
+   *
+   * Currently parsed but only meaningful when 24-cell strip support lands (audit 2.7); for
+   * now the composer doesn't enter the dual-strip branch, so the field is preserved
+   * verbatim from the JSON for forward-compat with that future change.
+   */
+  zeropadding: number;
+  /**
+   * Inter-digit pixel gap. Mirrors {@code SkinNumber.space} — added to each slot's width
+   * when computing horizontal positions, so digit `j` sits at
+   * `region.x + (region.width + space) * j - shift`. Most skins author `0`; some banner
+   * fonts use small positive values to match the source font's natural spacing.
+   */
+  space: number;
   /** Source-strip cell-selection ref; resolves through the prop.lua num table. */
   ref: number;
   /** Optional `value` IntegerProperty. Beatoraja evaluates this instead of `ref` when authored. */
@@ -107,6 +135,8 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
     divy: positiveIntField(f, 'divy', 1),
     digit,
     padding: numberField(f, 'padding', 0),
+    zeropadding: numberField(f, 'zeropadding', 0),
+    space: numberField(f, 'space', 0),
     ref: numberField(f, 'ref', 0),
     ...(valueProperty !== undefined ? { valueProperty } : {}),
     align: numberField(f, 'align', 0),
@@ -248,11 +278,13 @@ export function composeBeatorajaValueCells(element: BeatorajaValueElement, value
  * `value = -7`, `digit = 4` → `shiftbase = 2` (two leading nulls; the sign occupies one slot).
  *
  * `slotWidth` is the rendered width of one digit cell (typically `dst.w` since beatoraja
- * authors set `dst.w` to the per-digit slot width). The renderer subtracts the returned
- * shift from each slot's `x` coordinate, so positive values shift the whole row LEFT.
+ * authors set `dst.w` to the per-digit slot width). The element's `space` (inter-digit gap)
+ * is added to slotWidth to match beatoraja's `(region.width + space) * shiftbase` formula.
+ * The renderer subtracts the returned shift from each slot's `x` coordinate, so positive
+ * values shift the whole row LEFT.
  */
 export function composeBeatorajaValueShift(
-  element: Pick<BeatorajaValueElement, 'align' | 'digit'>,
+  element: Pick<BeatorajaValueElement, 'align' | 'digit' | 'space'>,
   value: number,
   slotWidth: number,
 ): number {
@@ -261,6 +293,7 @@ export function composeBeatorajaValueShift(
   const safeValue = Number.isFinite(value) ? Math.trunc(value) : 0;
   const significant = Math.abs(safeValue).toString(10).length + (safeValue < 0 ? 1 : 0);
   const shiftbase = Math.max(0, digits - significant);
-  const baseShift = shiftbase * slotWidth;
+  const space = Number.isFinite(element.space) ? element.space : 0;
+  const baseShift = shiftbase * (slotWidth + space);
   return element.align === 1 ? baseShift : baseShift * 0.5;
 }

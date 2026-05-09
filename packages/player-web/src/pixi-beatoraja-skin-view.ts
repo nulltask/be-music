@@ -1590,6 +1590,11 @@ export class BeatorajaPlaySkinView {
     // digit collapse to `dst.w / digit` pixels wide, which is what produced the "potsubureteru"
     // (squashed-text) reports. Height stays at `dst.h`.
     const slotWidth = props.width;
+    // Inter-digit gap from beatoraja's `value.space`. Most authoring uses 0; some banner-style
+    // digit fonts use small positive values (1-3 px) to recover natural letter spacing. Per
+    // beatoraja, each subsequent slot is offset by `slotWidth + space`, NOT just `slotWidth`.
+    const space = Number.isFinite(entry.value.space) ? entry.value.space : 0;
+    const slotStep = slotWidth + space;
     // Honor `value.align` (0 = right / no shift, 1 = left, 2 = center) — see
     // `composeBeatorajaValueShift` for the formula. Without this, every authored `align: 1`
     // (left-flush) and `align: 2` (centered) rendered identically to `align: 0`, which is what
@@ -1610,7 +1615,7 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      sprite.x = props.x + i * slotWidth + center.x * slotWidth - alignShift;
+      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift;
       sprite.y = props.y + center.y * props.height;
       sprite.width = slotWidth;
       sprite.height = props.height;
