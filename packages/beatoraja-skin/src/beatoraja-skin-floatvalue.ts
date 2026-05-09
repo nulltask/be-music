@@ -261,3 +261,40 @@ export function beatorajaFloatValueSlotCount(element: BeatorajaFloatValueElement
   const fketa = Math.max(0, Math.trunc(element.fketa));
   return iketa + (fketa > 0 ? 1 : 0) + fketa;
 }
+
+/**
+ * Compute the horizontal pixel shift to apply across every digit slot to honor
+ * `element.align` for floatvalue rendering. Mirrors `SkinNumber.prepare()`'s
+ * `shift = align == 0 ? 0 : (align == 1 ? full : full*0.5)` formula, where `full`
+ * is `shiftbase * (slotWidth + space)` and `shiftbase` counts the LEADING hidden
+ * slots in the composed cells (= leading-blank pads on the integer half before the
+ * first significant digit).
+ *
+ * Sign convention: we subtract `shift` from each slot's x (= same direction as
+ * `composeBeatorajaValueShift`). Note: upstream's `SkinFloat.draw()` uses `+ shift`
+ * while `SkinNumber.draw()` uses `- shift` — that mismatch in the Java source looks
+ * like a long-standing inconsistency. We use `- shift` for both so left / centre
+ * alignment behaves predictably (= the visible digits flush left or sit centred at
+ * the destination's `region.x`, matching the integer-value path skin authors expect).
+ *
+ * Returns `0` for `align = 0` (right-flush, the default — leading blanks stay LEFT and
+ * digits land on the RIGHT side of the slot box, no shift needed). Also returns 0 when
+ * the value renders without leading blanks (= `shiftbase = 0`).
+ */
+export function composeBeatorajaFloatValueShift(
+  element: BeatorajaFloatValueElement,
+  value: number,
+  slotWidth: number,
+): number {
+  if (element.align !== 1 && element.align !== 2) return 0;
+  const cells = composeBeatorajaFloatValueCells(element, value);
+  let shiftbase = 0;
+  for (const cell of cells) {
+    if (!cell.hidden) break;
+    shiftbase += 1;
+  }
+  if (shiftbase === 0) return 0;
+  const space = Number.isFinite(element.space) ? element.space : 0;
+  const baseShift = shiftbase * (slotWidth + space);
+  return element.align === 1 ? baseShift : baseShift * 0.5;
+}

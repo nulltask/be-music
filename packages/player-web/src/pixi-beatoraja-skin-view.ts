@@ -43,6 +43,7 @@ import {
   pickBeatorajaGaugeNode,
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
+  composeBeatorajaFloatValueShift,
   type BeatorajaBpmGraphElement,
   type BeatorajaCustomEvent,
   type BeatorajaCustomEventState,
@@ -2009,11 +2010,17 @@ export class BeatorajaPlaySkinView {
     if (cells === undefined) cells = composeBeatorajaFloatValueCells(entry.value, value);
 
     // Lay the slot row across the dst rect — same convention as `value[]`: `dst.w` is per-slot
-    // width, `space` adds inter-slot gap. No `align` shift here; floatvalue authors typically
-    // pin the dot at a specific x by sizing slots manually rather than relying on alignment.
+    // width, `space` adds inter-slot gap.
     const slotWidth = props.width;
     const space = Number.isFinite(entry.value.space) ? entry.value.space : 0;
     const slotStep = slotWidth + space;
+    // Honor `value.align` — same formula as the integer `value[]` path. For float, leading
+    // hidden slots are the leading-blank pads on the integer half (when the value's int part
+    // has fewer digits than `iketa`). align=1 (LEFT) shifts the row left so significant
+    // digits flush with the dst's left edge; align=2 (CENTER) shifts half. Without this,
+    // ModernChic / GdbG result-screen `floatvalue` displays (BPM avg, accuracy %, ms delta)
+    // with explicit `align` rendered with leading blanks on the wrong side.
+    const alignShift = composeBeatorajaFloatValueShift(entry.value, value, slotWidth);
     const center = centerToAnchor(entry.group.center);
     for (let i = 0; i < entry.slotSprites.length; i += 1) {
       const sprite = entry.slotSprites[i]!;
@@ -2024,7 +2031,7 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      sprite.x = props.x + i * slotStep + center.x * slotWidth;
+      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift;
       sprite.y = props.y + center.y * props.height;
       sprite.width = slotWidth;
       sprite.height = props.height;

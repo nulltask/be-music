@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
+  composeBeatorajaFloatValueShift,
   normalizeBeatorajaFloatValues,
+  type BeatorajaFloatValueElement,
 } from './beatoraja-skin-floatvalue.ts';
 
 describe('normalizeBeatorajaFloatValues', () => {
@@ -154,5 +156,80 @@ describe('composeBeatorajaFloatValueCells', () => {
     const cells = composeBeatorajaFloatValueCells({ ...baseElement, divx: 10, fketa: 1 }, 5);
     // Slot order [blank?, blank?, 5, dot-hidden, 0]
     expect(cells[3]).toMatchObject({ hidden: true });
+  });
+});
+
+describe('composeBeatorajaFloatValueShift', () => {
+  // 10-cell strip (digits-only, no blank cell available) — leading int slots are HIDDEN
+  // when the value's int part has fewer digits than `iketa`. shiftbase is the leading-
+  // hidden count.
+  const digitOnlyElement: BeatorajaFloatValueElement = {
+    id: 'fv',
+    src: 4,
+    x: 0,
+    y: 0,
+    w: 240,
+    h: 24,
+    divx: 10,
+    divy: 1,
+    iketa: 3,
+    fketa: 0,
+    gain: 1,
+    isSignvisible: false,
+    space: 0,
+    padding: 0,
+    zeropadding: 0,
+    align: 0,
+    ref: 0,
+    ifCodes: [],
+  };
+
+  it('returns 0 when align=0 (right-flush, the upstream default)', () => {
+    // No shift needed — the existing right-flush layout already lands the digits at the
+    // right edge of the slot box. align=0 short-circuits before composing cells.
+    expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 0 }, 5, 40)).toBe(0);
+  });
+
+  it('returns 0 when the rendered value fills the slot box (no leading blanks)', () => {
+    // value=123 in iketa=3 — every slot is significant, so shiftbase=0, no shift.
+    expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 1 }, 123, 40)).toBe(0);
+    expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 2 }, 123, 40)).toBe(0);
+  });
+
+  it('returns full shiftbase * (slotWidth + space) for align=1 (LEFT-flush)', () => {
+    // value=5 in iketa=3 → 2 leading hidden slots → shift = 2 * 40 = 80. The renderer
+    // SUBTRACTS this from each slot's x so the visible "5" flushes against the dst's
+    // left edge.
+    expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 1 }, 5, 40)).toBe(80);
+  });
+
+  it('returns half shiftbase * slotWidth for align=2 (CENTER)', () => {
+    // value=5, shiftbase=2, slotW=40 → shift = 2 * 40 * 0.5 = 40.
+    expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 2 }, 5, 40)).toBe(40);
+  });
+
+  it('honors `space` when non-zero', () => {
+    // value=5, shiftbase=2, slotW=40, space=4 → shift = 2 * (40+4) = 88 for align=1.
+    const withSpace = { ...digitOnlyElement, align: 1, space: 4 };
+    expect(composeBeatorajaFloatValueShift(withSpace, 5, 40)).toBe(88);
+  });
+
+  it('floats with fketa>0 still shift only on leading int blanks (dot + frac always painted)', () => {
+    // iketa=3, fketa=1, divx=10 (slots: [int-2, int-1, int-0, dot-hidden, frac-0]).
+    // For divx=10 (digits-only, no blank cell glyph), leading int pads are HIDDEN per
+    // the composer's "no blank cell → hide" branch. Frac slots are zero-padded (painted)
+    // even when the source value's fractional part is shorter. value=5 → "5.0" with two
+    // leading hidden int slots → shiftbase = 2.
+    const withFrac = { ...digitOnlyElement, fketa: 1, align: 2 };
+    expect(composeBeatorajaFloatValueShift(withFrac, 5, 40)).toBe(40); // = 2 * 40 / 2
+  });
+
+  it('treats blank-cell-painted leading slots as significant (divx>=12, no shift)', () => {
+    // Divx=12 carries an explicit blank glyph cell — leading int pads use it (hidden=false,
+    // cell=11) rather than being skipped. Beatoraja's `SkinNumber.prepare()` only counts
+    // slots with `currentImages[i] == null` toward shiftbase, so painted-blank slots don't
+    // contribute. Result: align=2 still leaves the row at the dst's authored x.
+    const withBlankCell = { ...digitOnlyElement, divx: 12, align: 2 };
+    expect(composeBeatorajaFloatValueShift(withBlankCell, 5, 40)).toBe(0);
   });
 });

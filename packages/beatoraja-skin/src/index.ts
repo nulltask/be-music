@@ -80,6 +80,7 @@ export type { BeatorajaFloatValueElement } from './beatoraja-skin-floatvalue.ts'
 export {
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
+  composeBeatorajaFloatValueShift,
   normalizeBeatorajaFloatValues,
 } from './beatoraja-skin-floatvalue.ts';
 export type {
