@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeBeatorajaFloatValues } from './beatoraja-skin-floatvalue.ts';
+import {
+  beatorajaFloatValueSlotCount,
+  composeBeatorajaFloatValueCells,
+  normalizeBeatorajaFloatValues,
+} from './beatoraja-skin-floatvalue.ts';
 
 describe('normalizeBeatorajaFloatValues', () => {
   it('parses iketa / fketa / gain / isSignvisible from a representative authoring', () => {
@@ -55,5 +59,100 @@ describe('normalizeBeatorajaFloatValues', () => {
       { if: [920], values: [{ id: 'gated', src: 4 }] },
     ]);
     expect(out[0]).toMatchObject({ id: 'gated', ifCodes: [920] });
+  });
+});
+
+describe('composeBeatorajaFloatValueCells', () => {
+  // Sample 12-cell strip: cells 0..9 = digits, cell 10 = sign/blank, cell 11 = dot.
+  // 12-cell width = 240px → cellW = 20px; height = 24px (single row, divy = 1).
+  const baseElement = {
+    id: 'bpm',
+    src: 4,
+    x: 0,
+    y: 0,
+    w: 240,
+    h: 24,
+    divx: 12,
+    divy: 1,
+    iketa: 3,
+    fketa: 1,
+    gain: 1,
+    isSignvisible: false,
+    space: 0,
+    padding: 0,
+    zeropadding: 0,
+    align: 0,
+    ref: 92,
+    ifCodes: [],
+  } as const;
+
+  it('produces iketa + (fketa>0?1:0) + fketa slots', () => {
+    expect(beatorajaFloatValueSlotCount(baseElement)).toBe(3 + 1 + 1); // 5
+    expect(beatorajaFloatValueSlotCount({ ...baseElement, fketa: 0 })).toBe(3); // no dot
+  });
+
+  it('formats 123.4 as [1, 2, 3, dot, 4] cells against a 12-cell strip', () => {
+    const cells = composeBeatorajaFloatValueCells(baseElement, 123.4);
+    expect(cells).toHaveLength(5);
+    // Integer digits 1, 2, 3 — natural-aligned (no leading blanks needed for 3-digit value)
+    expect(cells[0]).toMatchObject({ cell: 1, hidden: false });
+    expect(cells[1]).toMatchObject({ cell: 2, hidden: false });
+    expect(cells[2]).toMatchObject({ cell: 3, hidden: false });
+    // Dot at cell 11 (last cell of the 12-cell strip)
+    expect(cells[3]).toMatchObject({ cell: 11, hidden: false });
+    // Fractional digit 4
+    expect(cells[4]).toMatchObject({ cell: 4, hidden: false });
+  });
+
+  it('applies gain before formatting (raw 9876 → 98.76 with gain=0.01)', () => {
+    // gain=1 baseline: 9876 with iketa=2 fketa=2 truncates to last 2 integer digits → "76.00"
+    // → cells [7, 6, dot, 0, 0]. Beatoraja's own renderer does the same low-bit truncation.
+    const ungained = composeBeatorajaFloatValueCells(
+      { ...baseElement, iketa: 2, fketa: 2 },
+      9876,
+    );
+    expect(ungained.map((c) => c.cell)).toEqual([7, 6, 11, 0, 0]);
+    // gain=0.01 scales the raw integer down to a percentage: 9876 → 98.76 → cells [9, 8, dot, 7, 6].
+    const gained = composeBeatorajaFloatValueCells(
+      { ...baseElement, iketa: 2, fketa: 2, gain: 0.01 },
+      9876,
+    );
+    expect(gained.map((c) => c.cell)).toEqual([9, 8, 11, 7, 6]);
+  });
+
+  it('zero-pads the fractional half — 1 displayed as 1.0 with fketa=1', () => {
+    const cells = composeBeatorajaFloatValueCells({ ...baseElement, iketa: 1, fketa: 1 }, 1);
+    expect(cells.map((c) => c.cell)).toEqual([1, 11, 0]);
+  });
+
+  it('right-aligns the integer half with leading blanks (padding=0, divx>=11 has blank)', () => {
+    // 5.0 with iketa=3 → leading 2 blanks + "5" + dot + "0"
+    const cells = composeBeatorajaFloatValueCells(baseElement, 5);
+    // blank cell index = divx - 1 - 1 = 10 (the "blank" cell before the dot)... actually for
+    // single-strip with divx=12, our impl uses `halfDivx - 1 = 11` as blank. Let me check:
+    // composeBeatorajaFloatValueCells single-strip path: `blankCellInHalf = halfDivx - 1` when
+    // !isSignedDualStrip. For divx=12, halfDivx=12, blank = 11. So leading blanks paint cell 11.
+    expect(cells[0]).toMatchObject({ cell: 11, hidden: false });
+    expect(cells[1]).toMatchObject({ cell: 11, hidden: false });
+    expect(cells[2]).toMatchObject({ cell: 5, hidden: false });
+  });
+
+  it('right-aligns with leading zeros when padding=1', () => {
+    const cells = composeBeatorajaFloatValueCells({ ...baseElement, padding: 1 }, 5);
+    // 005.0 → leading zeros at cell 0
+    expect(cells[0]).toMatchObject({ cell: 0, hidden: false });
+    expect(cells[1]).toMatchObject({ cell: 0, hidden: false });
+    expect(cells[2]).toMatchObject({ cell: 5, hidden: false });
+  });
+
+  it('omits the dot slot when fketa=0', () => {
+    const cells = composeBeatorajaFloatValueCells({ ...baseElement, fketa: 0 }, 123);
+    expect(cells.map((c) => c.cell)).toEqual([1, 2, 3]);
+  });
+
+  it('hides the dot slot when divx < 12 (no dot glyph in strip)', () => {
+    const cells = composeBeatorajaFloatValueCells({ ...baseElement, divx: 10, fketa: 1 }, 5);
+    // Slot order [blank?, blank?, 5, dot-hidden, 0]
+    expect(cells[3]).toMatchObject({ hidden: true });
   });
 });

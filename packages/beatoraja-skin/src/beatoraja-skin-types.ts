@@ -240,6 +240,14 @@ export interface BeatorajaSkin extends BeatorajaSkinHeader {
   image?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   imageset?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   value?: ReadonlyArray<Readonly<Record<string, unknown>>>;
+  /**
+   * Decimal-number declarations. Mirrors `JsonSkin.FloatValue[]`. Same digit-strip layout as
+   * `value[]` plus `iketa` / `fketa` / `gain` / `isSignvisible` for the formatted output. The
+   * result and decide scenes use these for BPM (`123.4`), accuracy percentages (`98.76 %`),
+   * and timing deltas (`+5.23 ms`). Renderer: integer half + decimal-point glyph + fractional
+   * half painted side-by-side via `composeBeatorajaFloatValueCells`.
+   */
+  floatvalue?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   text?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   slider?: ReadonlyArray<Readonly<Record<string, unknown>>>;
   graph?: ReadonlyArray<Readonly<Record<string, unknown>>>;

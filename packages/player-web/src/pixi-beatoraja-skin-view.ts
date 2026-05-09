@@ -36,10 +36,13 @@ import {
   normalizeBeatorajaJudges,
   normalizeBeatorajaSliders,
   normalizeBeatorajaTexts,
+  normalizeBeatorajaFloatValues,
   normalizeBeatorajaValues,
   OFFSET_HIDDEN_COVER,
   OFFSET_LIFT,
   pickBeatorajaGaugeNode,
+  beatorajaFloatValueSlotCount,
+  composeBeatorajaFloatValueCells,
   type BeatorajaBpmGraphElement,
   type BeatorajaCustomEvent,
   type BeatorajaCustomEventState,
@@ -52,6 +55,7 @@ import {
   type BeatorajaGaugeElement,
   type BeatorajaGraphElement,
   type BeatorajaFloatPropertyRef,
+  type BeatorajaFloatValueElement,
   type BeatorajaImageElement,
   type BeatorajaImageId,
   type BeatorajaImagesetElement,
@@ -256,6 +260,22 @@ interface SpriteEntry {
    * crop is used.
    */
   lastDisapearRatio: number;
+}
+
+interface FloatValueEntry {
+  kind: 'floatvalue';
+  group: BeatorajaDestinationGroup;
+  value: BeatorajaFloatValueElement;
+  /** Source strip texture (uncropped). Each digit / dot sprite crops a sub-rect from this. */
+  baseTexture: ReturnType<BeatorajaTextureCache['get']>;
+  /**
+   * One sprite per slot. Slot count is `iketa + (fketa > 0 ? 1 : 0) + fketa`. Each frame the
+   * composer hands back per-slot cell descriptors; the matching sprite gets a cropped
+   * sub-texture and laid out side-by-side along the dst rect.
+   */
+  slotSprites: Sprite[];
+  /** Last resolved float value — used to skip re-cropping when nothing changed. */
+  lastValue: number;
 }
 
 interface ValueEntry {
@@ -470,6 +490,7 @@ interface PmCharaEntry {
 type ViewEntry =
   | SpriteEntry
   | ValueEntry
+  | FloatValueEntry
   | TextEntry
   | GraphEntry
   | PolylineGraphEntry
@@ -632,12 +653,26 @@ export class BeatorajaPlaySkinView {
         valueById.set(value.id, value);
       }
     }
+    // `floatvalue[]` — decimal-number readouts (BPM, accuracy %, timing deltas). Same digit
+    // strip as `value[]` plus `iketa` / `fketa` / `gain` for the integer-dot-fractional
+    // composition. Lives between value and text in upstream's resolution order.
+    const floatValueById = new Map<BeatorajaImageId, BeatorajaFloatValueElement>();
+    for (const fv of normalizeBeatorajaFloatValues((options.skin as { floatvalue?: unknown }).floatvalue)) {
+      if (!imageById.has(fv.id) && !imagesetById.has(fv.id) && !valueById.has(fv.id)) {
+        floatValueById.set(fv.id, fv);
+      }
+    }
     // `text[]` — font / size / ref pairs the runtime resolves into strings. Skin TTFs aren't
     // loaded yet (engine integration handles that); placeholders use the browser's default
     // sans-serif so positions and sizes are visible.
     const textById = new Map<BeatorajaImageId, BeatorajaTextElement>();
     for (const text of normalizeBeatorajaTexts(options.skin.text)) {
-      if (!imageById.has(text.id) && !imagesetById.has(text.id) && !valueById.has(text.id)) {
+      if (
+        !imageById.has(text.id) &&
+        !imagesetById.has(text.id) &&
+        !valueById.has(text.id) &&
+        !floatValueById.has(text.id)
+      ) {
         textById.set(text.id, text);
       }
     }
@@ -674,6 +709,7 @@ export class BeatorajaPlaySkinView {
       imageById.has(id) ||
       imagesetById.has(id) ||
       valueById.has(id) ||
+      floatValueById.has(id) ||
       textById.has(id) ||
       sliderById.has(id) ||
       graphById.has(id);
@@ -915,6 +951,12 @@ export class BeatorajaPlaySkinView {
           if (valueEntry !== undefined) this.entries.push(valueEntry);
           continue;
         }
+        const floatValueElement = floatValueById.get(group.id);
+        if (floatValueElement !== undefined) {
+          const floatValueEntry = this.buildFloatValueEntry(group, floatValueElement, options.textures);
+          if (floatValueEntry !== undefined) this.entries.push(floatValueEntry);
+          continue;
+        }
         const textElement = textById.get(group.id);
         if (textElement !== undefined) {
           this.entries.push(this.buildTextEntry(group, textElement));
@@ -1115,6 +1157,36 @@ export class BeatorajaPlaySkinView {
       digitSprites.push(sprite);
     }
     return { kind: 'value', group, value: element, baseTexture, digitSprites, lastValue: 0 };
+  }
+
+  /**
+   * Build a `floatvalue[]` entry. Pre-allocates one sprite per slot — the slot count is fixed
+   * by `iketa` + (`fketa > 0 ? 1 : 0`) + `fketa` regardless of value magnitude, so we mount
+   * the row once at construction. Each slot's texture gets cropped on first `update()` from
+   * the source strip via {@link composeBeatorajaFloatValueCells}.
+   */
+  private buildFloatValueEntry(
+    group: BeatorajaDestinationGroup,
+    element: BeatorajaFloatValueElement,
+    textures: BeatorajaTextureCache,
+  ): FloatValueEntry | undefined {
+    const baseTexture = textures.get(element.src);
+    const slotCount = beatorajaFloatValueSlotCount(element);
+    const slotSprites: Sprite[] = [];
+    const baseIsBindable = baseTexture !== undefined && baseTexture !== Texture.EMPTY;
+    for (let i = 0; i < slotCount; i += 1) {
+      let initialTexture: Texture | undefined;
+      if (baseIsBindable) {
+        const placeholderCells = composeBeatorajaFloatValueCells(element, 0);
+        const cell = placeholderCells[i] ?? placeholderCells[0]!;
+        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+        if (cropped !== undefined) initialTexture = cropped;
+      }
+      const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
+      this.container.addChild(sprite);
+      slotSprites.push(sprite);
+    }
+    return { kind: 'floatvalue', group, value: element, baseTexture, slotSprites, lastValue: 0 };
   }
 
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
@@ -1559,6 +1631,9 @@ export class BeatorajaPlaySkinView {
         case 'value':
           this.updateValueEntry(entry, props, luaContext);
           break;
+        case 'floatvalue':
+          this.updateFloatValueEntry(entry, props, luaContext);
+          break;
         case 'text':
           this.updateTextEntry(entry, props, luaContext);
           break;
@@ -1777,6 +1852,78 @@ export class BeatorajaPlaySkinView {
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
       sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift;
+      sprite.y = props.y + center.y * props.height;
+      sprite.width = slotWidth;
+      sprite.height = props.height;
+      sprite.alpha = props.alpha;
+      sprite.tint = props.tint;
+      sprite.angle = props.angle;
+      sprite.blendMode = props.blendMode;
+    }
+  }
+
+  /**
+   * Update a `floatvalue[]` entry. Resolves the live value via the host's `resolveNumberValue`
+   * (or `valueProperty` when authored), formats it as `<integer>.<fractional>` with the
+   * declared `iketa` / `fketa` widths and `gain` multiplier, then crops one cell per slot from
+   * the source strip and lays the row across the dst rect — same alignment / spacing logic as
+   * the integer value path. Skips the re-crop pass when the value hasn't changed.
+   */
+  private updateFloatValueEntry(
+    entry: FloatValueEntry,
+    props: ReturnType<typeof destinationToSpriteProps>,
+    luaContext: BeatorajaLuaRuntimeContext,
+  ): void {
+    const baseTexture = entry.baseTexture;
+    if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
+      for (const sprite of entry.slotSprites) sprite.visible = false;
+      return;
+    }
+    if (!props.visible) {
+      for (const sprite of entry.slotSprites) sprite.visible = false;
+      return;
+    }
+
+    // Resolve the dynamic value through `valueProperty` (Lua function) when authored, else
+    // fall through to the host's `resolveNumberValue(ref)`. Defaults to 0 when neither path
+    // returns a finite number — keeps the readout stable while engine state is wiring up.
+    const value =
+      entry.value.valueProperty !== undefined
+        ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
+        : ((entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0);
+
+    let cells: ReturnType<typeof composeBeatorajaFloatValueCells> | undefined;
+    if (value !== entry.lastValue) {
+      entry.lastValue = value;
+      cells = composeBeatorajaFloatValueCells(entry.value, value);
+      for (let i = 0; i < entry.slotSprites.length; i += 1) {
+        const cell = cells[i];
+        if (cell === undefined || cell.hidden) continue;
+        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+        if (cropped !== undefined) {
+          entry.slotSprites[i]!.texture = cropped;
+        }
+      }
+    }
+    if (cells === undefined) cells = composeBeatorajaFloatValueCells(entry.value, value);
+
+    // Lay the slot row across the dst rect — same convention as `value[]`: `dst.w` is per-slot
+    // width, `space` adds inter-slot gap. No `align` shift here; floatvalue authors typically
+    // pin the dot at a specific x by sizing slots manually rather than relying on alignment.
+    const slotWidth = props.width;
+    const space = Number.isFinite(entry.value.space) ? entry.value.space : 0;
+    const slotStep = slotWidth + space;
+    const center = centerToAnchor(entry.group.center);
+    for (let i = 0; i < entry.slotSprites.length; i += 1) {
+      const sprite = entry.slotSprites[i]!;
+      const cell = cells[i];
+      if (cell !== undefined && cell.hidden) {
+        sprite.visible = false;
+        continue;
+      }
+      sprite.visible = true;
+      sprite.anchor.set(center.x, center.y);
+      sprite.x = props.x + i * slotStep + center.x * slotWidth;
       sprite.y = props.y + center.y * props.height;
       sprite.width = slotWidth;
       sprite.height = props.height;
@@ -2627,6 +2774,11 @@ export class BeatorajaPlaySkinView {
           break;
         case 'value':
           for (const sprite of entry.digitSprites) {
+            sprite.destroy({ children: false, texture: false, textureSource: false });
+          }
+          break;
+        case 'floatvalue':
+          for (const sprite of entry.slotSprites) {
             sprite.destroy({ children: false, texture: false, textureSource: false });
           }
           break;

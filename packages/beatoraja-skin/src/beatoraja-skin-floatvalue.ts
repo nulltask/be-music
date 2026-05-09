@@ -7,15 +7,16 @@
 // `gain` lets authors apply a runtime multiplier (e.g. `gain = 0.01` to convert a 100x op to
 // the displayed percentage).
 //
-// Parser only — the renderer is a follow-up. Beatoraja's draw path composes the integer half,
-// a decimal-point glyph, and the fractional half side-by-side; that's a non-trivial extension
-// of the `value[]` digit cell composer. By preserving the field shapes now, a future renderer
-// patch can ingest them without re-walking the JSON.
+// Composer below mirrors beatoraja's `SkinNumber` draw path for floats: integer half (right-
+// aligned to its digit count) + dot cell + fractional half (left-aligned, zero-padded). The
+// dot cell index is derived from the strip's `divx`: a 12-cell strip uses cell 11, a 24-cell
+// signed dual-strip uses cell 11 (positive) or cell 23 (negative), digits-only strips hide
+// the dot slot.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
 import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
-import type { BeatorajaIntegerPropertyRef } from './beatoraja-skin-value.ts';
+import type { BeatorajaIntegerPropertyRef, BeatorajaValueDigitCell } from './beatoraja-skin-value.ts';
 
 export interface BeatorajaFloatValueElement {
   /** Element id; `destination[]` references this. Same id space as `image[]` / `value[]`. */
@@ -128,4 +129,135 @@ function integerPropertyField(value: unknown): BeatorajaIntegerPropertyRef | und
     return value as BeatorajaIntegerPropertyRef;
   }
   return undefined;
+}
+
+/**
+ * Compose a float number into per-slot cell descriptors for the renderer. Slot order:
+ *
+ *     [int_iketa-1] [int_iketa-2] ... [int_0] [dot] [frac_0] [frac_1] ... [frac_fketa-1]
+ *
+ * The integer half is right-aligned to its `iketa` digit count (leading-blank or leading-zero
+ * pad based on `padding`). The fractional half is left-aligned to `fketa` and zero-padded on
+ * the right. The dot cell sits between them — index resolved per the strip's `divx`:
+ *
+ *   - 24-cell signed dual-strip (`divx % 24 == 0`): cell `divx/2 - 1` for positive (typically
+ *     11), cell `divx - 1` for negative (typically 23). Mirrors beatoraja's per-half atlas.
+ *   - Single strip with `divx >= 12`: cell `divx - 1` (the last cell, conventionally the dot).
+ *   - Smaller strip (`divx < 12`): no dot glyph available; the slot hides.
+ *
+ * `gain` is applied to `value` before formatting (`displayValue = value * gain`). Skins
+ * authoring `gain = 0.01` get percentage display (raw 9876 → 98.76); `gain = 1` is the
+ * pass-through default.
+ *
+ * Slot count = `iketa + (fketa > 0 ? 1 : 0) + fketa`. Slots with `hidden: true` mean "skip the
+ * sprite this slot" — the renderer mounts a single sprite per slot and toggles visibility.
+ *
+ * Negative numbers: the integer half emits a sign cell when the strip carries one. Single-strip
+ * conventions match the integer-`composeBeatorajaValueCells` path. Dual-strip uses the negative
+ * half (cells 12..23) for every digit cell including the dot.
+ */
+export function composeBeatorajaFloatValueCells(
+  element: BeatorajaFloatValueElement,
+  value: number,
+): BeatorajaValueDigitCell[] {
+  const iketa = Math.max(1, Math.trunc(element.iketa));
+  const fketa = Math.max(0, Math.trunc(element.fketa));
+  const divx = Math.max(1, element.divx);
+  const isSignedDualStrip = divx % 24 === 0;
+  const halfDivx = isSignedDualStrip ? divx / 2 : divx;
+
+  // Apply gain before formatting. Defaults (`gain = 1`) leave the value unchanged.
+  const gain = Number.isFinite(element.gain) ? element.gain : 1;
+  const safeValue = Number.isFinite(value) ? value * gain : 0;
+  const isNegative = safeValue < 0;
+  const halfOffset = isSignedDualStrip && isNegative ? halfDivx : 0;
+
+  // Format `|safeValue|` as a fixed-decimal string with `fketa` fractional digits, then split
+  // into integer and fractional digit arrays. `iketa` may exceed the natural integer length
+  // (in which case we pad on the left); `fketa` always fixes the fractional length (zero-pad
+  // on the right).
+  const fixed = Math.abs(safeValue).toFixed(fketa);
+  const dotIdx = fixed.indexOf('.');
+  const intStr = dotIdx >= 0 ? fixed.slice(0, dotIdx) : fixed;
+  const fracStr = dotIdx >= 0 ? fixed.slice(dotIdx + 1) : '';
+
+  // Build the sequence in left-to-right slot order. Integer half first (right-aligned to
+  // iketa). Dot if fketa > 0. Then fractional half left-aligned.
+  const slots: Array<{ cell: number; hidden: boolean }> = [];
+  // Integer half — right-align: leading slots are blank/zero-padded.
+  const hasBlankCell = halfDivx >= 11;
+  const blankCellInHalf = !hasBlankCell ? -1 : isSignedDualStrip ? halfDivx - 2 : halfDivx - 1;
+  // Sign cell: dual-strip bakes the sign into the negative-half digits (no dedicated slot).
+  // Single strip uses `divx - 1` when divx >= 11 (cell 10 = sign for the legacy 11-cell layout).
+  // We position the sign at the FIRST integer slot when negative + non-dual-strip.
+  const intDigitCount = intStr.length;
+  // For padding: how many leading slots (excluding the digits themselves and any sign).
+  const leadingSlots = Math.max(0, iketa - intDigitCount - (isNegative && !isSignedDualStrip ? 1 : 0));
+  for (let i = 0; i < leadingSlots; i += 1) {
+    if (element.padding === 1) {
+      slots.push({ cell: 0 + halfOffset, hidden: false });
+    } else if (hasBlankCell) {
+      slots.push({ cell: (blankCellInHalf >= 0 ? blankCellInHalf : 0) + halfOffset, hidden: false });
+    } else {
+      slots.push({ cell: 0, hidden: true });
+    }
+  }
+  // Sign cell (single-strip negatives only).
+  if (isNegative && !isSignedDualStrip) {
+    if (hasBlankCell) {
+      // For 12-cell strip, sign cell is `divx - 1 - 1 = 10` (the cell BEFORE the dot). For
+      // 11-cell strip, sign is at `divx - 1 = 10`. Approximate: use the second-to-last cell
+      // when divx >= 12, else the last cell. Skins typically use 12+ cells for floatvalue.
+      slots.push({ cell: divx >= 12 ? divx - 2 : divx - 1, hidden: false });
+    } else {
+      slots.push({ cell: 0, hidden: true });
+    }
+  }
+  // Integer digits (left-to-right within the integer half). Truncate to fit iketa.
+  const intDisplayed = intStr.slice(Math.max(0, intStr.length - (iketa - leadingSlots - (isNegative && !isSignedDualStrip ? 1 : 0))));
+  for (const ch of intDisplayed) {
+    const idx = ch.charCodeAt(0) - 48;
+    const cellInHalf = idx >= 0 && idx < halfDivx ? idx : halfDivx - 1;
+    slots.push({ cell: cellInHalf + halfOffset, hidden: false });
+  }
+  // Dot slot — only when there's a fractional half. Cell index = last cell of the active
+  // half (single-strip: `divx - 1`; dual-strip-positive: `halfDivx - 1`; dual-strip-negative:
+  // `divx - 1`). Strips smaller than 12 cells have no dot glyph; hide.
+  if (fketa > 0) {
+    if (halfDivx >= 12) {
+      slots.push({ cell: halfDivx - 1 + halfOffset, hidden: false });
+    } else {
+      slots.push({ cell: 0, hidden: true });
+    }
+  }
+  // Fractional digits (left-to-right). Already zero-padded to fketa by `toFixed`.
+  for (const ch of fracStr) {
+    const idx = ch.charCodeAt(0) - 48;
+    const cellInHalf = idx >= 0 && idx < halfDivx ? idx : halfDivx - 1;
+    slots.push({ cell: cellInHalf + halfOffset, hidden: false });
+  }
+
+  // Map slot cells to source-rect crops on the strip. Each cell occupies (w/divx, h/divy).
+  const cellW = Math.floor(element.w / divx);
+  const cellH = Math.floor(element.h / Math.max(1, element.divy));
+  return slots.map((slot) => ({
+    x: element.x + slot.cell * cellW,
+    y: element.y,
+    w: cellW,
+    h: cellH,
+    cell: slot.hidden ? -1 : slot.cell,
+    hidden: slot.hidden,
+  }));
+}
+
+/**
+ * Total slot count for {@link composeBeatorajaFloatValueCells}. The renderer pre-allocates one
+ * sprite per slot at build time before any value resolves, so it needs the count without
+ * actually formatting a value. Matches the slot count the composer emits regardless of value
+ * magnitude (the layout is fixed by `iketa` + (`fketa > 0 ? 1 : 0`) + `fketa`).
+ */
+export function beatorajaFloatValueSlotCount(element: BeatorajaFloatValueElement): number {
+  const iketa = Math.max(1, Math.trunc(element.iketa));
+  const fketa = Math.max(0, Math.trunc(element.fketa));
+  return iketa + (fketa > 0 ? 1 : 0) + fketa;
 }

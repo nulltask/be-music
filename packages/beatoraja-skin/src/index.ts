@@ -76,7 +76,11 @@ export {
   normalizeBeatorajaValues,
 } from './beatoraja-skin-value.ts';
 export type { BeatorajaFloatValueElement } from './beatoraja-skin-floatvalue.ts';
-export { normalizeBeatorajaFloatValues } from './beatoraja-skin-floatvalue.ts';
+export {
+  beatorajaFloatValueSlotCount,
+  composeBeatorajaFloatValueCells,
+  normalizeBeatorajaFloatValues,
+} from './beatoraja-skin-floatvalue.ts';
 export type {
   BeatorajaCustomEvent,
   BeatorajaCustomEventState,
