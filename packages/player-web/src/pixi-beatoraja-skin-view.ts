@@ -933,11 +933,19 @@ export class BeatorajaPlaySkinView {
       let initialTexture: Texture | undefined;
       let currentFrame = -1;
       if (baseIsBindable) {
-        const cell = imageFrameRect(image, 0);
-        const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
-        if (cropped !== undefined) {
-          initialTexture = cropped;
+        // Same `w <= 0 / h <= 0` "full texture" sentinel as the per-frame update path —
+        // bypass the cropper when the author meant "use the entire source as-is" (audit 3.17).
+        const useFullTexture = image.w <= 0 || image.h <= 0;
+        if (useFullTexture) {
+          initialTexture = baseTexture;
           currentFrame = 0;
+        } else {
+          const cell = imageFrameRect(image, 0);
+          const cropped = createCroppedBeatorajaTexture(baseTexture, cell);
+          if (cropped !== undefined) {
+            initialTexture = cropped;
+            currentFrame = 0;
+          }
         }
       }
       const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
@@ -1561,14 +1569,22 @@ export class BeatorajaPlaySkinView {
 
     if (frameIndex !== entry.currentFrame || disapearRatio !== entry.lastDisapearRatio) {
       const cell = imageFrameRect(entry.image, frameIndex);
-      // Crop the texture's TOP `disapearRatio` of the source cell to match the visible portion of
-      // the dst rect (trimming the bottom in skin Y-UP space).
-      const cropped = createCroppedBeatorajaTexture(entry.baseTexture, {
-        x: cell.x,
-        y: cell.y,
-        w: cell.w,
-        h: cell.h * disapearRatio,
-      });
+      // ModernChic `Play/lua/sp/bomb.lua` (and similar Lua-driven skins) author `image[]`
+      // entries with `w = -1, h = -1` — beatoraja's loader interprets that as "use the
+      // texture's natural size, no crop" rather than as a flip flag (audit 3.17). Without
+      // honoring the sentinel our impl returned `undefined` from the cropper and the bomb
+      // sprites were silently hidden. Detect the sentinel here and pass the base texture
+      // through unscaled — `disapearRatio < 1` cases still use the cropper for their partial
+      // re-crop, but those are mutually exclusive with the "full texture" sentinel.
+      const useFullTexture = entry.image.w <= 0 || entry.image.h <= 0;
+      const cropped = useFullTexture
+        ? entry.baseTexture
+        : createCroppedBeatorajaTexture(entry.baseTexture, {
+            x: cell.x,
+            y: cell.y,
+            w: cell.w,
+            h: cell.h * disapearRatio,
+          });
       if (cropped === undefined) {
         // Cell width/height collapsed to 0 — hiding avoids the same null-source bind-group crash above.
         sprite.visible = false;
