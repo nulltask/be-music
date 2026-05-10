@@ -1,7 +1,7 @@
 // Strict-typed normalization for beatoraja `graph[]` declarations.
 //
 // Beatoraja `graph` elements are scaling-bar overlays — a sub-rect of a source image that grows /
-// shrinks based on a runtime numeric value. The classic example is a lifebar that fills horizontally
+// shrinks based on a runtime numeric value. The classic example is a lifebar that fills upward
 // as the gauge climbs, or a chart-progress indicator that creeps left-to-right as the song plays.
 //
 // Each entry pairs:
@@ -12,13 +12,22 @@
 //   - `(x, y, w, h)` — source-rect crop inside that source image
 //   - `type` — what runtime value drives the bar (rank by prop.lua-ish op codes; common values
 //     listed below)
-//   - `angle` — fill direction code. Beatoraja's source is unambiguous: `SkinSlider.java` line 26
-//     comments `slider移動方向(0:上, 1:右, 2:下, 3:左)`, and the `draw()` math (`region.y + (dir==0 ?
-//     +v : dir==2 ? -v : 0)`) confirms beatoraja uses libGDX Y-UP coordinates internally — direction
-//     `0` ADDS to skin y (which means UP visually in Y-UP). So the canonical mapping is `0 = up`,
-//     `1 = right` (default), `2 = down`, `3 = left`. Our renderer Y-flips dst rects from libGDX
-//     Y-UP into Pixi Y-DOWN at draw time, so the visual labels here line up with the screen-space
-//     direction the bar fills toward.
+//   - `angle` — fill direction. **Upstream `SkinGraph.java:99-106` recognizes only TWO values:**
+//
+//         if (direction == 1) { /* vertical: scale region.height by value */ }
+//         else                 { /* horizontal: scale region.width by value */ }
+//
+//     `JsonSkin.Graph.angle` defaults to `1` (`JsonSkin.java:226`), so a skin that omits the
+//     field gets VERTICAL fill. The previous TS impl borrowed SkinSlider's 4-direction codes
+//     (0:up / 1:right / 2:down / 3:left), which both inverted the default (we treated 1 as
+//     'right') AND added 'left' / 'down' modes that don't exist in upstream — every gauge bar
+//     in the reference theme that didn't author `angle` rendered horizontally instead of
+//     filling upward.
+//
+//     Audit A-5 / B-3 (2024-12) re-aligned to upstream's 2-value semantics: any `angle == 1`
+//     (or omitted) → 'vertical'; anything else → 'horizontal'. SkinSlider keeps its own
+//     4-direction code (see `beatoraja-skin-slider.ts`); the two element types share a JSON
+//     field name but NOT the value space.
 //
 // Common `type` codes the renderer surfaces:
 //
@@ -40,8 +49,18 @@ import type { BeatorajaSkinSourceId } from './beatoraja-skin-types.ts';
 
 export type BeatorajaFloatPropertyRef = number | BeatorajaLuaFunctionValue;
 
-/** Direction the bar fills toward as `value` rises from 0 to 1. */
-export type BeatorajaGraphFillDirection = 'right' | 'up' | 'left' | 'down';
+/**
+ * Direction the bar fills toward as `value` rises from 0 to 1.
+ *
+ * - `'vertical'` — fill grows UPWARD from the dst rect's bottom edge (= upstream `direction == 1`).
+ *   The bottom `value*height` portion of the source paints into the bottom `value*height` of
+ *   the dst rect.
+ * - `'horizontal'` — fill grows RIGHTWARD from the dst rect's left edge (upstream catch-all).
+ *
+ * Upstream `SkinGraph.java:99-106` only recognises these two cases — `'left'` / `'down'` /
+ * tilted directions are NOT supported.
+ */
+export type BeatorajaGraphFillDirection = 'vertical' | 'horizontal';
 
 export interface BeatorajaGraphElement {
   /** Destination id this graph targets. Same id space as `image[]` / `value[]` / `text[]`. */
@@ -97,26 +116,13 @@ function normalizeOne(entry: NormalizedElement): BeatorajaGraphElement | undefin
 }
 
 function angleField(value: unknown): BeatorajaGraphFillDirection {
-  if (typeof value === 'number') {
-    // Beatoraja's direction codes are explicit in `SkinSlider.java` line 26:
-    // `slider移動方向(0:上, 1:右, 2:下, 3:左)` (0=up, 1=right, 2=down, 3=left). The `draw()` math
-    // confirms libGDX Y-UP semantics — direction 0 ADDS to skin y, which is visually upward. We
-    // Y-flip dst rects when handing them to Pixi, so the screen-visual direction labels line up
-    // with the source labels as a happy coincidence.
-    switch (value) {
-      case 0:
-        return 'up';
-      case 1:
-        return 'right';
-      case 2:
-        return 'down';
-      case 3:
-        return 'left';
-      default:
-        return 'right';
-    }
-  }
-  return 'right';
+  // Mirror upstream `SkinGraph.java:99-106`: ONLY `direction == 1` triggers the vertical
+  // branch; everything else (including 0, 2, 3, missing) falls into the horizontal catch-all.
+  // `JsonSkin.Graph.angle` defaults to 1 (`JsonSkin.java:226`), so an omitted `angle` field
+  // resolves to vertical here too.
+  if (typeof value === 'number' && value === 1) return 'vertical';
+  if (value === undefined) return 'vertical'; // JsonSkin default = 1 = vertical.
+  return 'horizontal';
 }
 
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

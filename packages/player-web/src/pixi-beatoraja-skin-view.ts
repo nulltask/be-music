@@ -2313,9 +2313,25 @@ export class BeatorajaPlaySkinView {
       return;
     }
     const el = entry.element;
-    // Compute the source-rect crop along the fill axis. Width / height shrink to `ratio` of full
-    // size; for `left` / `up`, the crop is anchored to the FAR edge so the painted area grows
-    // inward from there.
+    // Mirror upstream `SkinGraph.java:99-106`. Two cases only:
+    //
+    //   if (direction == 1) {
+    //       // vertical: take the BOTTOM `ratio*h` portion of the source, paint into the
+    //       // BOTTOM `ratio*h` of the dst rect (libGDX Y-UP — bar grows UPWARD visually).
+    //       current.setRegion(currentImage, 0, h - ratio*h, w, ratio*h);
+    //       draw(sprite, current, region.x, region.y, region.width, region.height * ratio);
+    //   } else {
+    //       // horizontal: take the LEFT `ratio*w` portion, paint into the LEFT `ratio*w` of
+    //       // the dst rect — bar grows RIGHTWARD visually.
+    //       current.setRegion(currentImage, 0, 0, ratio*w, h);
+    //       draw(sprite, current, region.x, region.y, region.width * ratio, region.height);
+    //   }
+    //
+    // For 'vertical' in Pixi Y-DOWN: the libGDX bar's bottom edge stays at the dst rect's
+    // bottom. Pixi's bottom-y of the dst = `props.y + props.height`. The bar's height is
+    // `props.height * ratio` and its TOP-y = bottom-y - bar.height = `props.y + props.height
+    // * (1 - ratio)`. Source crop's BOTTOM is at `el.y + el.h` in skin coords; we crop the
+    // BOTTOM `el.h * ratio` portion → cropY = `el.y + el.h * (1 - ratio)`, cropH = `el.h * ratio`.
     let cropX = el.x;
     let cropY = el.y;
     let cropW = el.w;
@@ -2324,29 +2340,15 @@ export class BeatorajaPlaySkinView {
     let destY = props.y;
     let destW = props.width;
     let destH = props.height;
-    switch (el.angle) {
-      case 'right':
-        cropW = el.w * ratio;
-        destW = props.width * ratio;
-        break;
-      case 'left':
-        // Anchor the crop to the right edge so the bar fills leftward.
-        cropX = el.x + el.w * (1 - ratio);
-        cropW = el.w * ratio;
-        destX = props.x + props.width * (1 - ratio);
-        destW = props.width * ratio;
-        break;
-      case 'up':
-        // Anchor the crop to the bottom edge so the bar fills upward.
-        cropY = el.y + el.h * (1 - ratio);
-        cropH = el.h * ratio;
-        destY = props.y + props.height * (1 - ratio);
-        destH = props.height * ratio;
-        break;
-      case 'down':
-        cropH = el.h * ratio;
-        destH = props.height * ratio;
-        break;
+    if (el.angle === 'vertical') {
+      cropY = el.y + el.h * (1 - ratio);
+      cropH = el.h * ratio;
+      destY = props.y + props.height * (1 - ratio);
+      destH = props.height * ratio;
+    } else {
+      // 'horizontal' — fill from left edge.
+      cropW = el.w * ratio;
+      destW = props.width * ratio;
     }
     const cropped = createCroppedBeatorajaTexture(baseTexture, {
       x: cropX,
