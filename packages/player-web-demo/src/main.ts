@@ -1939,6 +1939,11 @@ class PlayerWebDemoApp {
       // Directory label drives `BEATORAJA_TEXT.DIRECTORY = 1000` on the play scene. The browser
       // song entry preserves the parent folder name through the dropped collection.
       directoryLabel: song.directoryLabel,
+      // Chart filename — the gameplay view derives `laneModeExtension` from this for the engine,
+      // so PMS / BME / BMS lane-mode resolution doesn't depend on the BMS content heuristic
+      // (`#PLAYER 3` + channel 17). Without it a `#PLAYER 1` PMS chart routes to the IIDX 7-key
+      // bindings instead of POPN-9, which silently drops lane 6+ keys.
+      chartPath: song.chartPath,
       onExit: () => {
         void this.finishBeatorajaGameplayThen(() => this.showSelect());
       },

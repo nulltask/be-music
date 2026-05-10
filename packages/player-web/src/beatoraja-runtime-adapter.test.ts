@@ -280,6 +280,33 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(keyOnTimerId(2, 6)!)).toBeUndefined();
     expect(adapter.getTimerStart(keyOnTimerId(2, 7)!)).toBeUndefined();
   });
+
+  it('9K (POPN) variant routes channels 16..19 to lanes 6..9 (timers 106..109)', () => {
+    // POPN_9K maps channel 1N to lane N (1..9). The IIDX-default heuristic would clamp 16 to
+    // scratch (lane 0) and reject 17 (free zone), which is what user reports of "9 KEY lane 6+
+    // accepts no input, autoplay never paints lane 6+ keybeam / bomb / judge popup" boil down
+    // to: the chart was being driven against an IIDX `chartPlayVariant`, so channels 16/17
+    // never raised side-relative lane timers, and the engine's autoplay loop dropped the
+    // matching scorable notes via `activeFreeZoneChannels`. With variant `'9'` the adapter
+    // stamps `keyOnTimerId(1, 6..9) = 106..109` for channels 16..19 directly.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '9',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    for (const channel of ['16', '17', '18', '19']) {
+      adapter.applyCommand({ kind: 'press-lane', channel });
+    }
+    // Lane 6..9 (channels 16..19) → timer 106..109. Each must be stamped at clock=100 ms.
+    expect(adapter.getTimerStart(keyOnTimerId(1, 6)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 7)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 8)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 9)!)).toBe(100);
+    // Sanity: scratch timer (100) stays unstamped — POPN_9K has no scratch lane.
+    expect(adapter.getTimerStart(keyOnTimerId(1, 0)!)).toBeUndefined();
+  });
 });
 
 describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {

@@ -99,6 +99,25 @@ export interface PixiBeatorajaGameplayViewOptions {
   dpFlip?: boolean;
   /** Optional song directory label (e.g. parent folder name). Surfaces `BEATORAJA_TEXT.DIRECTORY = 1000`. */
   directoryLabel?: string;
+  /**
+   * Source chart filename (e.g. `'song.pms'`, `'song.bme'`, `'song.bms'`). The lowercased extension
+   * routes the engine's `resolveLaneMode` to the right binding family — without it, a 9 KEY (PMS)
+   * chart that doesn't match the BMS heuristic (`#PLAYER == 3 && uses channel 17`) is misclassified
+   * as 7-key SP, IIDX-style. Symptoms: lane 6+ keys (channels 16/17/18/19) get FREE-ZONE-clamped or
+   * scratch-mapped, autoplay never fires `flash-lane` for them, the keybeam / bomb timers stay
+   * dark, and the central judge popup (judgef) plus combo digits (judgen) never advance because
+   * the matching notes are filtered out of `scorableNotes` before the autoplay loop sees them.
+   *
+   * Mirrors the LR2 gameplay scene's same wiring (`pixi-gameplay.ts:1700`'s
+   * `laneModeExtension: extractChartExtension(this.song?.chartPath)`). Pass the chart's filename
+   * verbatim — `extractChartExtension` lowercases and strips path components internally.
+   *
+   * Optional: when omitted, the engine falls back to its content-based heuristic. PMS charts that
+   * declare `#PLAYER 3` and use channel 17 still classify correctly without this hint, so older
+   * hosts (and tests) continue to work — but providing it removes ambiguity for the
+   * `#PLAYER 1` PMS / BME cases.
+   */
+  chartPath?: string;
   inputTarget?: EventTarget;
   shouldSkipKey?: (event: KeyboardEvent) => boolean;
   engineOptions?: Omit<PlayerOptions, 'createAudioSession' | 'createInputRuntime' | 'createUiRuntime' | 'auto'>;
@@ -449,7 +468,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       mode: this.options.mode,
       inputTarget: this.options.inputTarget,
       shouldSkipKey: this.options.shouldSkipKey,
-      engineOptions: this.options.engineOptions,
+      // Forward the chart-filename extension so the engine's `resolveLaneMode` picks the right
+      // binding family (PMS / BME / BMS). Mirrors LR2 `PixiGameplayView`'s identical wiring at
+      // `pixi-gameplay.ts:1700`. Without this a `#PLAYER 1` PMS chart that doesn't use channel 17
+      // is misclassified as 7-key SP, channels 16/17/18/19 lose their POPN-key bindings, and
+      // autoplay's `flash-lane` loop skips the matching scorable notes — symptoms reported as
+      // "9 KEY lane 6+ doesn't accept input, AUTO doesn't paint laser/keybeam/judge popup".
+      // Host-provided `engineOptions.laneModeExtension` (if any) wins so callers explicitly
+      // overriding the inference (rare) still take precedence.
+      engineOptions: composeBeatorajaEngineOptions(this.options),
       onInputSignalsReady: ({ inputSignals }) => {
         this.inputSignals = inputSignals;
         // The engine input bus is up — stamp the `startinput` timer so chrome gated on it (input-active
@@ -1275,4 +1302,45 @@ function resolveChartImage(
     default:
       return undefined;
   }
+}
+
+/**
+ * Compose the engine's `PlayerOptions` for the run, defaulting `laneModeExtension` from the
+ * chart's filename when the host didn't already supply one. Without the extension hint the
+ * engine's content-based `resolveLaneMode` heuristic only classifies as `9-key` when the chart
+ * declares `#PLAYER 3` AND uses channel 17 — `#PLAYER 1` PMS / BME-Pop'n charts that omit
+ * channel 17 fall through to `7-key-sp`, which clamps lane bindings to channels 11..15 + 16
+ * (scratch) + 18/19, treats channel 17 as FREE ZONE, and silently drops channels 16's POPN
+ * key behavior. The autoplay loop iterates `scorableNotes` (= playable notes minus active
+ * free-zone channels) so notes on the misclassified lanes never fire `flash-lane`, and the
+ * matching keybeam / bomb / judge timers never stamp.
+ *
+ * Mirrors {@link extractBeatorajaChartExtension} → {@link PlayerOptions.laneModeExtension}.
+ * Host-set values win so explicit overrides keep working.
+ */
+function composeBeatorajaEngineOptions(
+  options: PixiBeatorajaGameplayViewOptions,
+): PixiBeatorajaGameplayViewOptions['engineOptions'] {
+  const supplied = options.engineOptions;
+  if (supplied?.laneModeExtension !== undefined) return supplied;
+  const inferred = extractBeatorajaChartExtension(options.chartPath);
+  if (inferred === undefined) return supplied;
+  return { ...(supplied ?? {}), laneModeExtension: inferred };
+}
+
+/**
+ * Returns the lowercased filename extension (with leading dot, e.g. `.pms` / `.bme` / `.bms`) of
+ * `chartPath`, or `undefined` when the path doesn't include a recognizable suffix. Mirrors
+ * the LR2 path's `extractChartExtension` (`pixi-gameplay.ts:5602`) so both gameplay surfaces
+ * derive `laneModeExtension` identically. Anchors the extension on the LAST PATH SEGMENT so
+ * dotted directory names (e.g. `Bok.fps/01.bms`) don't get mistaken for the chart's own
+ * extension.
+ */
+function extractBeatorajaChartExtension(chartPath: string | undefined): string | undefined {
+  if (typeof chartPath !== 'string' || chartPath.length === 0) return undefined;
+  const lastSlash = Math.max(chartPath.lastIndexOf('/'), chartPath.lastIndexOf('\\'));
+  const lastDot = chartPath.lastIndexOf('.');
+  if (lastDot < 0 || lastDot < lastSlash) return undefined;
+  const ext = chartPath.slice(lastDot).toLowerCase();
+  return ext.length > 1 ? ext : undefined;
 }
