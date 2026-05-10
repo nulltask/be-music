@@ -484,36 +484,52 @@ export class BeatorajaNoteLayer {
      * LN authoring mode (`1` = LN, `2` = CN, `3` = HCN). Drives top-cap presence per
      * upstream `LaneRenderer.drawLongNote` (`LaneRenderer.java:671-697`):
      *
-     *   - mode 2 (CN) / mode 3 (HCN): top cap uses `lnstart[lane]` — upstream's
-     *     `longImage[0]` slot (`lns-*` on `play5.json`).
+     *   - mode 2 (CN) / mode 3 (HCN): top cap uses `lnend[lane]` — upstream's
+     *     `longImage[0]` slot (= `lne-*` on `play5.json`, the LN's future-side cap).
      *   - mode 1 (LN): upstream's LN branch (lines 691-697) deliberately skips
-     *     `longImage[0]`; LN heads draw the regular `note[lane]` sprite through a
-     *     separate code path (not this function). We approximate that here by omitting
-     *     the top cap entirely — the body extends all the way to `yEnd` and the engine's
-     *     own note layer continues to paint a tap-note sprite at the head while it's
-     *     still on-screen via the standard `note[]` lookup. Matches upstream's visual
-     *     where an LN looks like a tap note glued onto a body, with no separate top cap.
+     *     `longImage[0]`; LN body simply terminates at its top edge without an end cap.
+     *     The head's tap-note painting happens through the regular `note[]` path on
+     *     the engine side (the BMS LN's head ChannelNote is treated as a normal tap
+     *     for the purpose of head visualization).
      *   - `undefined`: defensive default — treat like mode 2/3 so any host that hasn't
      *     wired `longNoteMode` through the frame keeps the both-caps layout.
      */
     longNoteMode: 1 | 2 | 3 | undefined,
   ): { g: number; s: number; t: number } {
-    // Cap sprite selection mirrors upstream's skin-spec convention (`LaneRenderer.java:671-697`):
+    // **upstream skin-spec convention** (`JsonPlaySkinObjectLoader.java:48-49` is the
+    // ground truth):
     //
-    //   - `lnend` = SCREEN-BOTTOM cap (judgement-line side, where the player first sees the LN
-    //              touch the line). Always rendered.
-    //   - `lnstart` = SCREEN-TOP cap (future side, where the LN extends into the upcoming chart).
-    //                Rendered only on CN/HCN; LN-mode skips it.
+    //     lns[0] = getNoteTexture(sk.note.lnend, p);    // longImage[0] = lnend
+    //     lns[1] = getNoteTexture(sk.note.lnstart, p);  // longImage[1] = lnstart
     //
-    // Pre-fix the renderer had `lnstart` / `lnend` swapped (lnstart pinned at yStart =
-    // judgement-line side, lnend pinned at yEnd = future side). Both `play5.json` and
-    // `ModernChic/lns-*` / `lne-*` art assume the upstream convention, so the swap is
-    // user-visible as "head and tail caps look mirrored" — and the LN body's range was off
-    // because it spanned the entire LN instead of the cap-bordered interior. User report:
-    // "ModernChic で head + body の部分の描画がおかしい".
-    const bottomCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
+    // And `LaneRenderer.drawLongNote` (Y-UP) does:
+    //
+    //     sprite.draw(longImage[0], x, y, width, scale);             // lnend at LN TOP
+    //     sprite.draw(longImage[1], x, y - height, width, scale);    // lnstart at LN BOTTOM
+    //
+    // Translated to Pixi Y-DOWN, where `yStart` is the judgement-line side (screen
+    // bottom = head time = LN bottom in Y-UP) and `yEnd` is the future side (screen
+    // top = tail time = LN top in Y-UP):
+    //
+    //   - **`yStart` (screen bottom, head time)** ← `lnstart[lane]` (always drawn)
+    //   - **`yEnd`   (screen top, tail time)**    ← `lnend[lane]` (CN/HCN only; LN
+    //                                                  mode skips this cap, matching
+    //                                                  upstream's `LaneRenderer.java:691-697`
+    //                                                  which omits `longImage[0]`)
+    //
+    // The skin-author naming aligns with the LN's TIME order:
+    //   - `lnstart` = LN's time-FIRST end (the side that hits the judgement line first)
+    //   - `lnend`   = LN's time-LAST end (the side the player releases last)
+    //
+    // Commit 09fe3b3 mis-identified `longImage[0]` as `lnstart` (because the slot index
+    // looks like it should pair with the alphabetically-first name) and swapped these,
+    // routing `lnend` to `yStart` and `lnstart` to `yEnd`. The visible result was head
+    // / tail art appearing on the wrong sides — most obvious on ModernChic where the
+    // `lns-*` / `lne-*` art differs noticeably between the two slots. Reverting to the
+    // upstream pairing.
+    const bottomCrop = this.resolveLaneSprite(this.noteSection.lnstart[lane]);
     const topCrop =
-      longNoteMode === 1 ? undefined : this.resolveLaneSprite(this.noteSection.lnstart[lane]);
+      longNoteMode === 1 ? undefined : this.resolveLaneSprite(this.noteSection.lnend[lane]);
     // Pick the held / unheld body slot based on the live press state. Falls back to the
     // OTHER slot when the chosen one is empty — happens on legacy-mode skins where only
     // `lnBodyHeld` is populated (`lnBodyUnheld === []` after parse), and we'd rather
@@ -545,10 +561,11 @@ export class BeatorajaNoteLayer {
     // Body — repeats the `lnbody` cell vertically across the LN's main span. Upstream body
     // range (Y-UP, `LaneRenderer.java:687-688, 694-695`) is `[y - height + scale, y]`,
     // i.e. tail-top to head-bottom — `scale` (one cap's worth) trimmed off the LN's bottom
-    // for the `lnend` cap. The TOP cap (`lnstart`, CN/HCN only) is drawn ABOVE the body's
-    // top edge (Y-UP `+ scale`); body itself doesn't shrink to make room for it. Translated
-    // to Pixi Y-DOWN: body bottom = yStart - bottomHExpanded (lnend cap's top); body top =
-    // yEnd unconditionally — top cap then sits ABOVE the body at y = yEnd - topHExpanded.
+    // for the `lnstart` cap (= `longImage[1]`, the judgement-line side). The TOP cap
+    // (`lnend` = `longImage[0]`, CN/HCN only) is drawn ABOVE the body's top edge
+    // (Y-UP `+ scale`); body itself doesn't shrink to make room for it. Translated to
+    // Pixi Y-DOWN: body bottom = yStart - bottomHExpanded (lnstart cap's top); body top =
+    // yEnd unconditionally — the lnend cap then sits ABOVE the body at y = yEnd - topHExpanded.
     const body = this.acquireTiling(usedT, bodyCrop.sprite.texture);
     const bodyTopY = yEnd;
     const bodyBottomY = yStart - bottomHExpanded;
@@ -560,10 +577,11 @@ export class BeatorajaNoteLayer {
     body.tileScale.set(drawW / Math.max(1, bodyCrop.cellW), 1);
     body.alpha = 1;
 
-    // Bottom cap (`lnend`, screen-bottom = judgement-line side). Upstream Y-UP draw is
-    // `(x, y - height, width, scale)` → bottom edge at the LN's lowest Y, top edge at
-    // body's bottom. Pixi Y-DOWN: top edge at `yStart - bottomHExpanded`, bottom edge at
-    // `yStart`. Anchored at the bottom-edge convention of the renderer.
+    // Bottom cap (`lnstart` = `longImage[1]`, screen-bottom = judgement-line side =
+    // LN's time-FIRST end). Upstream Y-UP draw is `(x, y - height, width, scale)`
+    // → bottom edge at the LN's lowest Y, top edge at body's bottom. Pixi Y-DOWN:
+    // top edge at `yStart - bottomHExpanded`, bottom edge at `yStart`. Anchored at the
+    // bottom-edge convention of the renderer.
     const bottomCap = this.acquireSprite(usedS);
     bottomCap.texture = bottomCrop.sprite.texture;
     bottomCap.x = drawX;
@@ -573,11 +591,11 @@ export class BeatorajaNoteLayer {
     bottomCap.tint = 0xffffff;
     bottomCap.alpha = 1;
 
-    // Top cap (`lnstart`, screen-top = future side). Upstream Y-UP draw is
-    // `(x, y, width, scale)` → bottom edge at LN top (= body top edge), TOP EDGE
-    // ABOVE the body at `y + scale`. The cap therefore overhangs the body upward,
-    // pulling the visible LN shape slightly past `yEnd` toward the future. In Pixi
-    // Y-DOWN: top edge at `yEnd - topHExpanded`, bottom edge at `yEnd`.
+    // Top cap (`lnend` = `longImage[0]`, screen-top = future side = LN's time-LAST end).
+    // Upstream Y-UP draw is `(x, y, width, scale)` → bottom edge at LN top (= body top
+    // edge), TOP EDGE ABOVE the body at `y + scale`. The cap therefore overhangs the
+    // body upward, pulling the visible LN shape slightly past `yEnd` toward the future.
+    // In Pixi Y-DOWN: top edge at `yEnd - topHExpanded`, bottom edge at `yEnd`.
     //
     // CN/HCN only. LN mode passes `topCrop = undefined` and we skip the cap; the body
     // already extends to `yEnd` so the LN's silhouette ends at the body's flat top edge
