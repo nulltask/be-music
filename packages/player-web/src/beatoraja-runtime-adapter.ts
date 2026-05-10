@@ -267,6 +267,25 @@ export class BeatorajaRuntimeAdapter {
    */
   private readonly lnHoldHeldByChannel = new Set<string>();
   /**
+   * "This channel was in an LN hold; the next `applyJudgeCombo` on it is the LN tail verdict"
+   * latch.  Populated on `hold-lane-until-beat`; cleared on the next `applyJudgeCombo`
+   * call for the same channel.  Used to drive ModernChic's LN-bomb sprite (which is gated
+   * on `HOLD_*P_KEY*` timers 71..79 / 81..89, NOT on the regular bomb timers 51..59 /
+   * 61..69 the engine's clean-hit branch already stamps).
+   *
+   * Why this exists separately from {@link lnHoldHeldByChannel}: `release-lane` arrives
+   * BEFORE the LN tail's `applyJudgeCombo` (engine emits release-lane first, then the
+   * judge publish), so `lnHoldHeldByChannel` is already cleared by the time we get the
+   * verdict.  This latch survives the release-lane and is consumed by the verdict path
+   * instead.
+   *
+   * Upstream `JudgeManager` automatically stamps the HOLD timer (`hold_*p_keyN`) on every
+   * LN tail verdict — that's what makes the lnbomb sprite animate at LN end on ModernChic.
+   * Our engine doesn't directly model that timer; we synthesize the stamp here by routing
+   * "this `applyJudgeCombo` belongs to an LN tail" through the latch.
+   */
+  private readonly lnTailVerdictLatch = new Set<string>();
+  /**
    * Live "is the player currently holding this lane via a real keypress?" set. Populated on
    * `press-lane`, cleared on `release-lane`. The auto-release path scheduled by
    * `flash-lane` reads this so a real keypress during the brief flash window doesn't get
@@ -908,6 +927,9 @@ export class BeatorajaRuntimeAdapter {
         // (`note.lnBodyHeld` / `note.hcnBodyHeld`) for the duration. Cleared on
         // `release-lane`.
         this.lnHoldHeldByChannel.add(command.channel);
+        // Latch the channel for the upcoming LN tail verdict — see the field doc on
+        // `lnTailVerdictLatch`. Cleared in `applyJudgeCombo` when the tail's verdict fires.
+        this.lnTailVerdictLatch.add(command.channel);
         break;
       case 'trigger-poor-bga':
         this.poorBgaActive = true;
@@ -993,6 +1015,30 @@ export class BeatorajaRuntimeAdapter {
     // bomb stamps the right per-lane timer (`bomb_*p_keyN` = 50+lane / 60+lane / 1000+lane).
     if (isCleanHitJudge(state.judge) && state.channel !== undefined) {
       this.startLaneBombTimer(state.channel);
+    }
+
+    // LN tail verdict: re-stamp the LN-hold timer (`hold_*p_keyN` = 70..79 / 80..89) so
+    // skins that gate their LN bomb on that timer get a fresh animation on the tail. Upstream
+    // `JudgeManager` stamps the HOLD timer on every LN tail verdict; we synthesize the
+    // equivalent here via `lnTailVerdictLatch`, which was set on `hold-lane-until-beat` at
+    // LN head time and survives the tail's preceding `release-lane`.
+    //
+    // ModernChic's `Play/lua/sp/bomb.lua:82-84` declares its lnbomb sprite with
+    // `timer = MAIN.TIMER.HOLD_1P_KEY*` (= 71..77) and `cycle = 160`. Without this re-stamp
+    // the timer's last `t=0` mark was at LN HEAD time — the 160 ms cycle elapsed long before
+    // the tail, so the lnbomb sprite was past frame 8 (= invisible) by the time the tail
+    // landed. User report: "tail でボムが表示されない (modernchic 限定)". GdbG's lnbomb
+    // declaration uses the same timer IDs but a longer cycle, so its head-time stamp was
+    // still within the visible window when the tail arrived — hence GdbG's tail bombs
+    // appeared even without this synthesis.
+    //
+    // The companion combo-timer re-stamp at line 1005 (`comboTimerId(side)`) already runs
+    // for LN tail verdicts (they're combo-advancing judges), so ModernChic's combo digit
+    // animation also resyncs at the tail — addresses "tail でコンボ数がカウントアップ
+    // されない (modernchic 限定)" in tandem with this change.
+    if (state.channel !== undefined && this.lnTailVerdictLatch.has(state.channel)) {
+      this.startLaneLnHoldTimer(state.channel);
+      this.lnTailVerdictLatch.delete(state.channel);
     }
 
     // Update the per-(side, lane) most-recent-judge ring. Drives the keybeam imageset (`ref =

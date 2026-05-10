@@ -189,6 +189,63 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(2000);
   });
 
+  it('re-stamps the LN-hold timer on the tail verdict (ModernChic lnbomb fix)', () => {
+    // ModernChic's `Play/lua/sp/bomb.lua:82-84` declares its LN bomb sprite with
+    // `timer = MAIN.TIMER.HOLD_1P_KEY*` (= 71..79) and `cycle = 160` ms. Without
+    // re-stamping the timer at the LN tail, the only stamp would be from the HEAD's
+    // `hold-lane-until-beat` — which for an LN longer than 160 ms means the lnbomb
+    // sprite advances past its visible frames long before the tail lands, leaving
+    // the player with no visual feedback at LN end.
+    //
+    // Upstream `JudgeManager` stamps the HOLD timer (`hold_*p_keyN`) automatically on
+    // every LN tail verdict; this regression test pins that synthesis at the adapter
+    // boundary.  User report: "tail でボムが表示されない (modernchic 限定)".
+    //
+    // Sequence:
+    //   1. hold-lane-until-beat at t=100 → LN-hold timer = 100, latch set
+    //   2. (160 ms elapses; the timer would naturally have aged past ModernChic's cycle)
+    //   3. release-lane at t=300 → LN-hold timer cleared (engine fires it BEFORE the
+    //      tail verdict so adapter sees release-lane → applyJudgeCombo in that order)
+    //   4. applyJudgeCombo at t=300 with the LN's channel → LN-hold timer re-stamped
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyCommand({ kind: 'hold-lane-until-beat', channel: '19', beat: 64 });
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(100);
+    clock.advance(200); // total t=300
+    adapter.applyCommand({ kind: 'release-lane', channel: '19' });
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '19', updatedAtMs: 300 });
+    // LN-hold timer re-stamped at the tail moment so ModernChic's lnbomb cycle resyncs.
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(300);
+    // Combo timer (446 = 1P) also re-stamped — PERFECT advances combo, so ModernChic's
+    // combo digit animation resyncs at the tail in tandem. Addresses "tail でコンボ数が
+    // カウントアップされない (modernchic 限定)".
+    expect(adapter.getTimerStart(446)).toBe(300);
+  });
+
+  it('does NOT re-stamp the LN-hold timer for tap-note verdicts (no LN context)', () => {
+    // Guards against the latch firing on tap notes that share a channel with a
+    // previously-resolved LN. After the LN tail's applyJudgeCombo consumes the latch,
+    // a subsequent tap-note PERFECT on the same channel must NOT re-stamp the hold
+    // timer (which has already been deactivated). Otherwise tap notes on LN-hosting
+    // lanes would spuriously fire the lnbomb sprite.
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '19', updatedAtMs: 100 });
+    // No `hold-lane-until-beat` preceded this verdict → no latch → LN-hold timer stays unset.
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
+  });
+
   it('isLaneLnHeld flips on hold-lane-until-beat and clears on release-lane', () => {
     // Drives modern-mode `lnBodyHeld` ↔ `lnBodyUnheld` sprite switching at draw time. The
     // hold flag must:
