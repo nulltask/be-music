@@ -23,11 +23,14 @@
 import type { BeMusicJson } from '@be-music/json';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
+import type { JudgeWindowsMs } from '@be-music/player/core/judge-window';
+import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
 import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
+import { computeBeatorajaChartNoteDistribution } from './beatoraja-chart-note-distribution.ts';
 import {
   beatorajaGaugeModeFromString,
   BEATORAJA_NUM,
@@ -353,6 +356,37 @@ export class BeatorajaRuntimeAdapter {
     MISS: { early: 0, late: 0 },
   };
   /**
+   * Per-second judge-state buckets for `judgegraph[]` `type=1` (TYPE_JUDGE) — mirrors
+   * upstream `SkinNoteDistributionGraph.data[][]` with `DATA_LENGTH[1] = 6`. Each row is
+   * `[unjudged, PG, GR, GD, BD, PR]`, indexed by chart-second. Initialized at chart load
+   * with every judgeable note (NORMAL + LN-end on key/scratch lanes; LN bodies and mines
+   * excluded per upstream's `case TYPE_JUDGE` filter at `SkinNoteDistributionGraph.java:304`).
+   * Each `applyJudgeCombo` decrements the bucket's unjudged slot and increments the verdict's
+   * slot — by the end of the chart, slot 0 should be 0 and slots 1..5 sum to the chart's
+   * total judgeable note count.
+   *
+   * Approximation note: upstream walks all notes every 750 ms and reads each note's live
+   * `getState()` directly (the BMSModel mutates note state on judge). We don't have per-note
+   * state plumbed through, so we approximate the note's chart-time-second from
+   * `currentChartTimeMs - deltaMs` and update the matching bucket. For the typical case
+   * (deltaMs ≤ 100 ms, 1-second buckets) the approximation lands in the right bucket; only
+   * edge cases (notes within 100 ms of a second-boundary, judged early) might float to a
+   * neighbour. Visual difference is imperceptible.
+   */
+  private judgeStateBuckets: number[][] = [];
+  /**
+   * Y-axis max for `judgeStateBuckets` — `max(20, ceil(densest_total / 10) * 10)` capped at
+   * 100 per upstream `SkinNoteDistributionGraph.updateData()` line 272-274. Stable for the
+   * chart's lifetime since the bucket totals don't change (only their distribution across
+   * the 6 states does).
+   */
+  private judgeStateMaxNotesPerBucket = 0;
+  /**
+   * Total chart length in ms (from `BeatorajaChartNoteDistribution.totalMs`). Surfaces the
+   * x-axis span the renderer needs to position the playhead cursor.
+   */
+  private judgeStateTotalMs = 0;
+  /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
    * this gameplay scene mounted". Stored in `Date.now()` ms so subtraction yields wallclock seconds.
@@ -455,6 +489,7 @@ export class BeatorajaRuntimeAdapter {
       const last = computeLastNoteBeatBySide(options.chart);
       this.lastNoteBeatBySide[1] = last[1];
       this.lastNoteBeatBySide[2] = last[2];
+      this.initJudgeStateBuckets(options.chart);
     }
     // Default gauge type — beatoraja sets exactly one of `gauge_groove / hard / ex` (1P side).
     // Without a runtime gauge-mode setting we default to GROOVE; the result-scene path can
@@ -979,6 +1014,11 @@ export class BeatorajaRuntimeAdapter {
         else if (state.deltaMs > 0) bucket.late += 1;
       }
     }
+    // Per-second judge-state bucket update for `judgegraph[]` `type=1` (TYPE_JUDGE).
+    // Mirrors upstream `SkinNoteDistributionGraph.updateData()`'s incremental "note moves
+    // from state 0 (unjudged) to state N (PG/GR/GD/BD/PR)" behaviour. Runs on every
+    // judge publish (READY / AUTO / unknown kinds skip via `judgeStateIndex < 1`).
+    this.updateJudgeStateBucket(state);
 
     // Append a polyline sample. Mirrors what `PixiGameplayView.publishJudge` does on the LR2
     // path — a `(progress, exScore)` / `(progress, gauge%)` pair captured at every judge so the
@@ -1531,6 +1571,117 @@ export class BeatorajaRuntimeAdapter {
   resolveTimingSamples(): ReadonlyArray<{ deltaMs: number; kind: string }> {
     return this.recentTimings;
   }
+
+  /**
+   * Per-second judge-state histogram for `judgegraph[]` `type=1` (TYPE_JUDGE). Mirrors
+   * upstream `SkinNoteDistributionGraph.draw()`'s data shape — each bucket carries the
+   * `[unjudged, PG, GR, GD, BD, PR]` counts for one chart-second. Renderer stacks them
+   * vertically in column order; as the player progresses, the unjudged (gray) cell at the
+   * bottom shrinks and the verdict-coloured cells stack up on top.
+   *
+   * Returns `undefined` when no chart is loaded (decide / select scenes don't drive this).
+   */
+  resolveJudgeStateBuckets(type: number): {
+    buckets: ReadonlyArray<ReadonlyArray<number>>;
+    maxCount: number;
+    totalMs: number;
+  } | undefined {
+    if (type !== 1) return undefined;
+    if (this.judgeStateBuckets.length === 0) return undefined;
+    return {
+      buckets: this.judgeStateBuckets,
+      maxCount: this.judgeStateMaxNotesPerBucket,
+      totalMs: this.judgeStateTotalMs,
+    };
+  }
+
+  /**
+   * Initialize {@link judgeStateBuckets} from the chart's per-second note distribution.
+   * Each judgeable note (NORMAL or LN-end on key/scratch lanes) lands in its second's
+   * `unjudged` slot. LN bodies (categories 1 and 4 of the distribution) and mines
+   * (category 6) are excluded — upstream's `case TYPE_JUDGE` filter at
+   * `SkinNoteDistributionGraph.java:304-309` skips both.
+   */
+  private initJudgeStateBuckets(chart: BeMusicJson): void {
+    const distribution = computeBeatorajaChartNoteDistribution(chart);
+    const buckets: number[][] = [];
+    let maxPerBucket = 0;
+    for (const bucket of distribution.buckets) {
+      // Sum the judgeable categories: SCRATCH_LN_END (0), SCRATCH_NORMAL (2),
+      // KEY_LN_END (3), KEY_NORMAL (5). LN bodies (1, 4) don't get judged; mines (6)
+      // produce damage hits but no PG/GR/GD/BD/PR verdict that lands in TYPE_JUDGE
+      // buckets. (Mines DO get judged as a separate "POOR-equivalent" but upstream's
+      // TYPE_JUDGE explicitly excludes them via `n instanceof MineNote` early-return.)
+      const judgeable = (bucket[0] ?? 0) + (bucket[2] ?? 0) + (bucket[3] ?? 0) + (bucket[5] ?? 0);
+      buckets.push([judgeable, 0, 0, 0, 0, 0]);
+      if (judgeable > maxPerBucket) maxPerBucket = judgeable;
+    }
+    this.judgeStateBuckets = buckets;
+    this.judgeStateTotalMs = distribution.totalMs;
+    // Upstream `updateData()` line 272-274: `max = Math.min((count / 10) * 10 + 10, 100)`
+    // bumped from a starting `max = 20`. Same logic — round densest bucket up to nearest
+    // 10, capped at 100, floor at 20 (so sparse charts don't stretch a 1-note bucket
+    // across the whole graph height).
+    this.judgeStateMaxNotesPerBucket = Math.max(20, Math.min(100, Math.ceil(maxPerBucket / 10) * 10));
+  }
+
+  /**
+   * Update {@link judgeStateBuckets} for one judge event. Decrements the matching
+   * bucket's `unjudged` slot and increments the verdict's slot, mirroring upstream's
+   * incremental "note moves from state 0 to state N" semantics.
+   *
+   * The bucket index is approximated as `floor((currentChartTimeMs - deltaMs) / 1000)`.
+   * Upstream walks all notes every 750 ms and reads each note's live `getState()` — we
+   * don't have per-note state plumbed through, so we use the timing offset to recover the
+   * note's chart-second. For the typical `deltaMs ∈ [-150, +150]` range and 1-second
+   * buckets, the approximation lands in the correct bucket; only notes within ±deltaMs
+   * of a second-boundary might float to a neighbour, an imperceptible visual difference.
+   *
+   * READY publishes (no `judge` value) and unjudged kinds (`MISS`) skip the update — they
+   * don't move a note out of the unjudged state in upstream's semantics.
+   */
+  private updateJudgeStateBucket(state: PlayerJudgeComboSignalState): void {
+    if (this.judgeStateBuckets.length === 0) return;
+    const stateIdx = judgeStateIndex(state.judge);
+    if (stateIdx < 1) return;
+    // Use the engine's latest frame clock as the "current chart time" reference — this is
+    // what `frame.currentSeconds * 1000` gives us. Falling back to 0 covers the rare case
+    // where a judge fires before the first frame has landed.
+    const currentChartTimeMs = (this.frame?.currentSeconds ?? 0) * 1000;
+    const noteChartTimeMs = currentChartTimeMs - (state.deltaMs ?? 0);
+    const bucketIdx = Math.floor(noteChartTimeMs / 1000);
+    if (bucketIdx < 0 || bucketIdx >= this.judgeStateBuckets.length) return;
+    const bucket = this.judgeStateBuckets[bucketIdx]!;
+    if (bucket[0]! > 0) {
+      bucket[0]! -= 1;
+      bucket[stateIdx]! += 1;
+    }
+  }
+
+  /**
+   * Resolve the chart's effective judge windows in ms — `{pgreat, great, good, bad}`.
+   * Used by the `timingvisualizer[]` renderer to paint upstream's per-band coloured
+   * background stripes (mirrors `SkinTimingVisualizer.prepare`'s `getJudgeArea(resource)`
+   * call at `SkinTimingVisualizer.java:88`). The skin's bands are stacked outward from
+   * the centre — PG window first, then GR / GD / BD / PR — so stretching the dst rect
+   * is enough for the player to read where their hits land relative to the windows.
+   *
+   * Cached per-chart since the windows are derived from the parsed JSON's judge rank
+   * and don't change mid-play (dynamic EXRANK changes happen but the timingvisualizer
+   * background is regenerated per BMSModel-change in upstream too).
+   *
+   * Returns `undefined` when no chart is loaded — the renderer falls through to its
+   * default IIDX-NORMAL windows so headless tests / unwired hosts still draw a usable
+   * background.
+   */
+  resolveJudgeWindowsMs(): JudgeWindowsMs | undefined {
+    if (this.chart === undefined) return undefined;
+    if (this.cachedJudgeWindowsMs === undefined) {
+      this.cachedJudgeWindowsMs = resolveJudgeWindowsMs(this.chart);
+    }
+    return this.cachedJudgeWindowsMs;
+  }
+  private cachedJudgeWindowsMs: JudgeWindowsMs | undefined;
 
   /**
    * Resolve a `graph[].type` code into a fill ratio in `[0, 1]`. The skin view scales the graph's
@@ -2278,6 +2429,39 @@ function judgeKindToIndex(kind: string): number {
       return 5;
     default:
       return -1;
+  }
+}
+
+/**
+ * Map a judge-kind string onto the upstream `Note.getState()` index used by
+ * `SkinNoteDistributionGraph` TYPE_JUDGE — `data[index][st]++` where `st ∈ [0, 5]`. Mirrors
+ * `bms.model.Note.STATE_*` field values:
+ *
+ *   0 = NONE (unjudged)
+ *   1 = PERFECT (PG)
+ *   2 = GREAT (GR)
+ *   3 = GOOD (GD)
+ *   4 = BAD (BD)
+ *   5 = POOR / MISS (PR)
+ *
+ * Returns 0 for unknown / unjudged kinds (READY publishes, etc.) so callers can use
+ * `< 1` as the "no state change" gate.
+ */
+function judgeStateIndex(kind: string): number {
+  switch (kind.toUpperCase()) {
+    case 'PERFECT':
+      return 1;
+    case 'GREAT':
+      return 2;
+    case 'GOOD':
+      return 3;
+    case 'BAD':
+      return 4;
+    case 'POOR':
+    case 'MISS':
+      return 5;
+    default:
+      return 0;
   }
 }
 

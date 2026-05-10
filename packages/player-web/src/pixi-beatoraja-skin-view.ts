@@ -232,6 +232,34 @@ export interface BeatorajaPlaySkinViewOptions {
    */
   resolveTimingSamples?: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   /**
+   * Resolve per-chart-second × per-judge-state buckets for `judgegraph[]` `type = 1`
+   * (TYPE_JUDGE in upstream `SkinNoteDistributionGraph`). Each bucket is `[unjudged, PG,
+   * GR, GD, BD, PR]`; the renderer stacks each second's notes vertically with judgement-
+   * coloured chips. Returning `undefined` falls through to the legacy "fixed bars" path
+   * via {@link resolveJudgeGraphBars} so the decide / select scenes (which lack live
+   * judge state) keep working.
+   *
+   * `maxCount` is the y-axis cap (densest bucket × upstream's `Math.min((count/10)*10
+   * + 10, 100)` formula), `totalMs` is the chart-length used for the cursor overlay.
+   */
+  resolveJudgeStateBuckets?: (type: number) => {
+    buckets: ReadonlyArray<ReadonlyArray<number>>;
+    maxCount: number;
+    totalMs: number;
+  } | undefined;
+  /**
+   * Resolve the chart's judge windows in ms — `{pgreat, great, good, bad}`. Drives the
+   * `timingvisualizer[]` band-background colours per upstream `SkinTimingVisualizer.prepare`
+   * (`getJudgeArea(resource)` at `SkinTimingVisualizer.java:88`): the renderer paints
+   * stacked stripes radiating outward from the visualizer's centre, one stripe per band,
+   * each stripe's half-width = the matching ms window.
+   *
+   * When omitted (decide / select scenes, headless tests), the renderer falls through to
+   * IIDX-NORMAL defaults (`{16.67, 33.33, 116.67, 250}`) so the bands still render
+   * approximately correct.
+   */
+  resolveTimingJudgeWindowsMs?: () => { pgreat: number; great: number; good: number; bad: number } | undefined;
+  /**
    * Resolve the FULL run's timing samples for the `timingdistributiongraph[]` element. Same
    * shape as {@link resolveTimingSamples} but returns every judgement, not just the live ring.
    * The renderer bins these into a per-ms histogram and overlays optional average / std-dev
@@ -622,6 +650,12 @@ export class BeatorajaPlaySkinView {
   private readonly resolveGaugeGraphPoints: () => ReadonlyArray<{ x: number; y: number }> | undefined;
   private readonly resolveTimingSamples: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
   private readonly resolveTimingDistribution: () => ReadonlyArray<{ deltaMs: number; kind: string }> | undefined;
+  private readonly resolveTimingJudgeWindowsMs: () =>
+    | { pgreat: number; great: number; good: number; bad: number }
+    | undefined;
+  private readonly resolveJudgeStateBuckets: (type: number) =>
+    | { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number }
+    | undefined;
   private readonly resolveCurrentTimeMs: () => number | undefined;
   private readonly onButtonAction:
     | ((act: number, modifiers?: { shift: boolean; ctrl: boolean; alt: boolean }) => void)
@@ -662,6 +696,8 @@ export class BeatorajaPlaySkinView {
     this.resolveGaugeGraphPoints = options.resolveGaugeGraphPoints ?? (() => undefined);
     this.resolveTimingSamples = options.resolveTimingSamples ?? (() => undefined);
     this.resolveTimingDistribution = options.resolveTimingDistribution ?? (() => undefined);
+    this.resolveTimingJudgeWindowsMs = options.resolveTimingJudgeWindowsMs ?? (() => undefined);
+    this.resolveJudgeStateBuckets = options.resolveJudgeStateBuckets ?? (() => undefined);
     this.resolveCurrentTimeMs = options.resolveCurrentTimeMs ?? (() => undefined);
     this.onButtonAction = options.onButtonAction;
     this.chartImageProvider = options.chartImageProvider;
@@ -2607,11 +2643,23 @@ export class BeatorajaPlaySkinView {
     if (entry.element.type === 0) {
       const distribution = this.resolveNoteDistribution();
       if (distribution !== undefined && distribution.buckets.length > 0) {
-        this.paintNoteDistribution(entry, props, distribution);
+        this.paintTimeAxisHistogram(entry, props, distribution, NOTE_DISTRIBUTION_COLORS);
         return;
       }
     }
-    // Cursor is only meaningful for type=0 (time-axis graph). Hide on the bar paths below.
+    // Type 1 (judge state) — same time-axis-stacked-histogram shape as type 0, but the
+    // category axis tracks live judgement state (`[unjudged, PG, GR, GD, BD, PR]`). Mirrors
+    // upstream `SkinNoteDistributionGraph` TYPE_JUDGE: each chart-second column stacks
+    // notes from the bottom in JGRAPH[1] order — the unjudged "gray" cell shrinks as the
+    // run progresses and verdict-coloured cells stack on top.
+    if (entry.element.type === 1) {
+      const stateData = this.resolveJudgeStateBuckets(entry.element.type);
+      if (stateData !== undefined && stateData.buckets.length > 0) {
+        this.paintTimeAxisHistogram(entry, props, stateData, JUDGE_STATE_COLORS);
+        return;
+      }
+    }
+    // Cursor is only meaningful for time-axis graphs (type 0 / 1). Hide on the bar paths below.
     entry.cursor.visible = false;
     const bars = this.resolveJudgeGraphBars(entry.element.type);
     if (bars === undefined || bars.length === 0) {
@@ -2697,22 +2745,29 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
-   * Paint the spec-faithful note distribution (judgegraph type=0) — mirrors upstream
+   * Paint a time-axis stacked histogram (judgegraph types 0 / 1). Mirrors upstream
    * `SkinNoteDistributionGraph.draw()`:
    *
    *   1. Background panel: black 80% alpha + olive bands every 10 height units +
    *      time-axis guide lines (gray every 60 sec, dim gray every 10 sec)
-   *   2. Per-bucket stacked chips: each note paints as a 4-pixel-tall coloured block at
-   *      the appropriate height in the bucket's stack, color-coded by category
-   *      (`NOTE_DISTRIBUTION_COLORS`).
+   *   2. Per-bucket stacked chips: each entry paints as a coloured block at the
+   *      appropriate height in the bucket's stack, color-coded by `colors[cat]` where
+   *      `cat` is the bucket's per-cell category index.
    *
-   * The destination's `tint` is intentionally ignored — note categories carry their own
-   * colors, so a tint multiplier would distort the palette.
+   * The destination's `tint` is intentionally ignored — categories carry their own
+   * colors (NOTE_DISTRIBUTION_COLORS for type=0 / JUDGE_STATE_COLORS for type=1), so a
+   * tint multiplier would distort the palette.
+   *
+   * The `colors` palette is the type-specific JGRAPH lookup from upstream:
+   *   - type 0 (TYPE_NORMAL) → JGRAPH[0]: 7-entry note-category palette
+   *   - type 1 (TYPE_JUDGE)  → JGRAPH[1]: 6-entry judge-state palette
+   *     (gray for unjudged, blue/cyan/yellow/orange/red for PG/GR/GD/BD/PR)
    */
-  private paintNoteDistribution(
+  private paintTimeAxisHistogram(
     entry: JudgeGraphEntry,
     props: ReturnType<typeof destinationToSpriteProps>,
     data: { buckets: ReadonlyArray<ReadonlyArray<number>>; maxCount: number; totalMs: number },
+    colors: ReadonlyArray<number>,
   ): void {
     const graphics = entry.graphics;
     const { buckets, maxCount } = data;
@@ -2772,8 +2827,8 @@ export class BeatorajaPlaySkinView {
         }
       }
 
-      // Foreground — per-bucket stacked chips. Walk categories 0..6, stack each
-      // category's chip count at the bottom of the bucket. Pixi y is inverted so chip
+      // Foreground — per-bucket stacked chips. Walk categories 0..colors.length-1, stack
+      // each category's chip count at the bottom of the bucket. Pixi y is inverted so chip
       // y_top = props.height - (stack_height + 1) * cellHeight.
       for (let i = 0; i < bucketCount; i += 1) {
         const bucket = buckets[i]!;
@@ -2782,7 +2837,7 @@ export class BeatorajaPlaySkinView {
         for (let cat = 0; cat < bucket.length; cat += 1) {
           const count = bucket[cat]!;
           if (count === 0) continue;
-          const color = NOTE_DISTRIBUTION_COLORS[cat] ?? 0xffffff;
+          const color = colors[cat] ?? 0xffffff;
           for (let chip = 0; chip < count && stackedCount < maxCount; chip += 1) {
             const yTop = props.height - (stackedCount + 1) * cellHeight;
             graphics.rect(x, yTop, chipWidth, chipHeight);
@@ -2880,12 +2935,25 @@ export class BeatorajaPlaySkinView {
   }
 
   /**
-   * Update a timingvisualizer entry. Plots the recent-judge timing samples as colored ticks
-   * across the destination box: x = sample's signed `deltaMs` mapped onto the rect's horizontal
-   * span, y = age-decayed vertical position (oldest at the top, newest near the bottom). Each
-   * tick is colored by judge kind (PG/GR/GD/BD/PR) and fades out with age.
+   * Update a timingvisualizer entry. Mirrors upstream `SkinTimingVisualizer.prepare()` +
+   * `.draw()` (`SkinTimingVisualizer.java:76-149`):
    *
-   * Hidden when the resolver returns `undefined` / empty (no judgement has fired yet).
+   *   1. **Background** — paints the judge windows as stacked colour bands radiating
+   *      outward from the centre line. PG band sits innermost, then GR / GD / BD / PR.
+   *      Each band's half-width = the matching `JudgeWindowsMs` value mapped through
+   *      `judgeWidthRate = width / (judgeWidthMillis * 2 + 1)`. Defaults to IIDX-NORMAL
+   *      windows when no host resolver is wired (decide / select scenes / headless tests).
+   *   2. **Tick marks** — semi-transparent black lines every 10 ms, painted on top of the
+   *      bands as a fine-grain ruler.
+   *   3. **Sample lines** — recent-judge offsets from {@link resolveTimingSamples}. Each
+   *      sample is one vertical line at the matching x; with `drawDecay = 1` (the
+   *      reference theme default) the line height tapers from full at the newest sample
+   *      to zero at the oldest, vertically centred in the region.
+   *
+   * Renders the bands AND tick marks even when no samples have arrived yet — upstream
+   * generates the background on chart load (per BMSModel-change), independent of judge
+   * activity. The previous implementation hid the entire visualizer until the first hit,
+   * which hid the player-facing band-window cue too.
    */
   private updateTimingVisualizerEntry(
     entry: TimingVisualizerEntry,
@@ -2894,45 +2962,121 @@ export class BeatorajaPlaySkinView {
     const graphics = entry.graphics;
     graphics.visible = props.visible;
     if (!props.visible) return;
-    const samples = this.resolveTimingSamples();
-    if (samples === undefined || samples.length === 0) {
-      graphics.visible = false;
-      return;
-    }
-    // Build a cheap signature so the per-frame stroke skips when nothing changed. Length + last
-    // sample's deltaMs cover all the cases that need a re-stroke (new judgement, reset, …).
-    const last = samples[samples.length - 1]!;
-    const signature = `${samples.length}|${last.deltaMs.toFixed(1)}|${last.kind}`;
+    const samples = this.resolveTimingSamples() ?? [];
+    // Half-width in ms — author-supplied or fallback. ±150 ms covers the BAD window in
+    // upstream's IIDX-NORMAL judge rule; matches `JsonSkin.TimingVisualizer.judgeWidthMillis`
+    // default.
+    const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 150;
+    const lineWidthPx = entry.element.lineWidth > 0 ? entry.element.lineWidth : 1;
+    // Authored `width` (default 301) drives the px/ms RATE, mirroring upstream
+    // `SkinTimingVisualizer.java:63`:
+    //
+    //     judgeWidthRate = width / (judgeWidthMillis * 2 + 1)   // px per ms
+    //
+    // The dst rect is independently centered on `region.width` (line 144 in upstream uses
+    // `region.x + (region.width - lineWidth) / 2 + recent[j] * judgeWidthRate`). This means
+    // sample-line offsets are computed from authored `width`, but their CENTERING uses the
+    // runtime `region.width`. Identical when `dst.w == width` (the typical authoring); for
+    // animating dst rects the author sees the authored ms scale stay constant.
+    const authoredWidth = entry.element.width > 0 ? entry.element.width : 301;
+    const judgeWidthRate = authoredWidth / (halfWidthMs * 2 + 1);
+    const centerLineLeft = (props.width - lineWidthPx) / 2;
+    // Resolve judge windows — host resolver wins, otherwise IIDX-NORMAL defaults so the
+    // background band still renders something sensible.
+    const windows = this.resolveTimingJudgeWindowsMs() ?? IIDX_NORMAL_JUDGE_WINDOWS_MS;
+    // Authored band colours — fall through to upstream `JsonSkin.TimingVisualizer` defaults
+    // when the skin omits a value (matches `JsonSkin.java`'s static initializer values).
+    const colors = {
+      center: parseHexColor(entry.element.centerColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.center,
+      pg: parseHexColor(entry.element.pgColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.pg,
+      gr: parseHexColor(entry.element.grColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.gr,
+      gd: parseHexColor(entry.element.gdColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.gd,
+      bd: parseHexColor(entry.element.bdColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.bd,
+      pr: parseHexColor(entry.element.prColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.pr,
+      line: parseHexColor(entry.element.lineColor) ?? DEFAULT_TIMING_VISUALIZER_COLORS.line,
+    };
+    const transparentPr = entry.element.transparent === 1;
+
+    // Build a cheap signature covering everything the static layer depends on plus the
+    // newest-sample identity. Re-strokes only when one of these changes — cheap per-frame
+    // path the rest of the time.
+    const lastSample = samples.length > 0 ? samples[samples.length - 1]! : undefined;
+    const signature = [
+      samples.length,
+      lastSample?.deltaMs.toFixed(1) ?? '-',
+      lastSample?.kind ?? '-',
+      props.width,
+      props.height,
+      windows.pgreat.toFixed(2),
+      windows.great.toFixed(2),
+      windows.good.toFixed(2),
+      windows.bad.toFixed(2),
+      colors.center,
+      colors.pg,
+      colors.gr,
+      colors.gd,
+      colors.bd,
+      colors.pr,
+      transparentPr ? 1 : 0,
+    ].join('|');
     if (signature !== entry.lastSignature) {
       graphics.clear();
-      // Half-width in ms — author-supplied or fallback. ±100ms covers the GOOD window in most
-      // judges; a reasonable default for skins that leave it unset.
-      const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 150;
-      const lineWidthPx = entry.element.lineWidth > 0 ? entry.element.lineWidth : 1;
-      // Authored `width` (default 301) drives the px/ms RATE, mirroring upstream
-      // `SkinTimingVisualizer.java:63`:
+      // ─── 1. Background bands (upstream `SkinTimingVisualizer.prepare` line 90-117) ─────
       //
-      //     judgeWidthRate = width / (judgeWidthMillis * 2 + 1)   // px per ms
-      //
-      // The dst rect is independently centered on `region.width` (line 144 in upstream uses
-      // `region.x + (region.width - lineWidth) / 2 + recent[j] * judgeWidthRate`). This means
-      // sample-line offsets are computed from authored `width`, but their CENTERING uses the
-      // runtime `region.width`. Identical when `dst.w == width` (the typical authoring); for
-      // animating dst rects the author sees the authored ms scale stay constant.
-      const authoredWidth = entry.element.width > 0 ? entry.element.width : 301;
-      const judgeWidthRate = authoredWidth / (halfWidthMs * 2 + 1);
-      // Upstream centers each line on the dst rect's geometric mid-x by passing the LEFT
-      // edge `region.x + (region.width - lineWidth) / 2` to libGDX's draw(image, x, y, w, h)
-      // — a `lineWidth`-wide rect whose midpoint lands at `region.x + region.width / 2`. We
-      // keep that intent: `centerLineLeft` is the LEFT edge for a centered line, and any
-      // delta-ms shift adds to that edge.
-      const centerLineLeft = (props.width - lineWidthPx) / 2;
-      // Faint center line — perfect-timing reference. Only draw when the visualizer has
-      // space (props.height > 0).
-      if (props.height > 0) {
-        graphics.rect(centerLineLeft, 0, lineWidthPx, props.height).fill({ color: 0xffffff, alpha: 0.25 });
+      // Bands stack OUTWARD from the centre — PG fills `[-pgreat, +pgreat]`, then GR
+      // extends beyond that to `[-great, -pgreat) ∪ (+pgreat, +great]`, etc. We track
+      // the previously-painted left/right edges and only fill the new outer slice on
+      // each iteration so adjacent bands don't overdraw each other (mirrors upstream's
+      // `beforex1 / beforex2` walk).
+      if (props.height > 0 && props.width > 0) {
+        const centerX = props.width / 2;
+        // Centre stripe — 1 px wide at the perfect-timing axis.
+        graphics.rect(centerX - 0.5, 0, 1, props.height).fill({ color: colors.center, alpha: 1 });
+        const bands: ReadonlyArray<{ halfMs: number; color: number }> = [
+          { halfMs: windows.pgreat, color: colors.pg },
+          { halfMs: windows.great, color: colors.gr },
+          { halfMs: windows.good, color: colors.gd },
+          { halfMs: windows.bad, color: colors.bd },
+          // PR band saturates at the visualizer's edge — beatoraja's
+          // `BMSPlayerRule.getNoteJudge()` returns a final "POOR" entry that's clamped
+          // to the visualizer's `±center` width. With `transparent = 1`, the band is
+          // skipped entirely (the player's PR hits show against whatever's behind the
+          // visualizer instead of the black PR band).
+          ...(transparentPr ? [] : [{ halfMs: halfWidthMs, color: colors.pr }]),
+        ];
+        let leftEdge = centerX;
+        let rightEdge = centerX;
+        for (const band of bands) {
+          const halfPx = Math.min(centerX, band.halfMs * judgeWidthRate);
+          const newLeft = centerX - halfPx;
+          const newRight = centerX + halfPx;
+          if (newLeft < leftEdge) {
+            graphics
+              .rect(newLeft, 0, leftEdge - newLeft, props.height)
+              .fill({ color: band.color, alpha: 1 });
+            leftEdge = newLeft;
+          }
+          if (newRight > rightEdge) {
+            graphics
+              .rect(rightEdge, 0, newRight - rightEdge, props.height)
+              .fill({ color: band.color, alpha: 1 });
+            rightEdge = newRight;
+          }
+        }
+        // ─── 2. Tick marks (upstream line 114-117) ─────────────────────────────────
+        // Every 10 ms (in scaled px), paint a thin semi-transparent black line.
+        // Upstream walks `for (int x = center % 10; x < pwidth; x += 10)`. We mirror
+        // by stepping in ms.
+        for (let ms = -halfWidthMs; ms <= halfWidthMs; ms += 10) {
+          if (ms === 0) continue;
+          const x = centerX + ms * judgeWidthRate;
+          if (x >= 0 && x <= props.width) {
+            graphics.rect(x - 0.5, 0, 1, props.height).fill({ color: 0x000000, alpha: 0.25 });
+          }
+        }
       }
-      // Ticks — newest paints brightest, oldest faintest. Sample list is oldest-first.
+      // ─── 3. Sample lines (upstream `draw()` at line 137-149) ──────────────────────
+      // Newest paints brightest, oldest faintest. Sample list is oldest-first.
       // Two height modes per beatoraja's `SkinTimingVisualizer.draw()`:
       //
       //  - `drawDecay !== 0` — each tick's height is `region.h * i / n` (i = age index,
@@ -2942,8 +3086,9 @@ export class BeatorajaPlaySkinView {
       //  - `drawDecay === 0` — every tick paints at full region height. Just the alpha fade
       //    carries the age cue.
       //
-      // Color comes from the judge kind (PG/GR/GD/BD/PR/MS); unknown kinds fall back to
-      // white via `judgeColorFor`.
+      // Sample colour comes from the configured `lineColor` (upstream uses a single
+      // `lineColors[]` array indexed by age, all derived from `lineColor`). The previous
+      // per-judge-kind tint was a deviation from upstream's behaviour.
       const drawDecay = entry.element.drawDecay !== 0;
       for (let i = 0; i < samples.length; i += 1) {
         const sample = samples[i]!;
@@ -2965,7 +3110,7 @@ export class BeatorajaPlaySkinView {
           height = props.height;
         }
         graphics.rect(x, y, lineWidthPx, height).fill({
-          color: judgeColorFor(sample.kind),
+          color: colors.line,
           alpha,
         });
       }
@@ -3495,6 +3640,85 @@ function judgeColorFor(kind: string): number {
     default:
       return 0xffffff;
   }
+}
+
+/**
+ * Per-state judgement-history palette for `judgegraph[]` `type = 1` (TYPE_JUDGE). Mirrors
+ * upstream `SkinNoteDistributionGraph.JGRAPH[1]` exactly:
+ *
+ *   0 = unjudged → `#555555` (gray)
+ *   1 = PG       → `#0088ff` (blue)
+ *   2 = GR       → `#00ff88` (cyan)
+ *   3 = GD       → `#ffff00` (yellow)
+ *   4 = BD       → `#ff8800` (orange)
+ *   5 = PR / MISS → `#ff0000` (red)
+ *
+ * Each chart-second's bucket stacks counts from index 0 (gray, bottom) up to index 5
+ * (red, top), so a fresh chart paints entirely gray and the bars colour up as the
+ * player progresses.
+ */
+const JUDGE_STATE_COLORS: ReadonlyArray<number> = [
+  0x555555,
+  0x0088ff,
+  0x00ff88,
+  0xffff00,
+  0xff8800,
+  0xff0000,
+];
+
+/**
+ * IIDX-NORMAL judge window fallback for the `timingvisualizer[]` background bands when no
+ * host resolver is wired (decide / select scenes / headless tests). Values from
+ * `@be-music/player/core/judge-window` constants — keep in sync with the engine's actual
+ * IIDX_*_WINDOW_MS constants.
+ */
+const IIDX_NORMAL_JUDGE_WINDOWS_MS = {
+  pgreat: 16.67,
+  great: 33.33,
+  good: 116.67,
+  bad: 250,
+} as const;
+
+/**
+ * Default colours for the `timingvisualizer[]` band background, mirroring upstream
+ * `JsonSkin.TimingVisualizer`'s static field initializers (`JsonSkin.java`):
+ *
+ *   - `centerColor = "FFFFFFFF"` (white)
+ *   - `PGColor = "000088FF"` (dark blue, innermost)
+ *   - `GRColor = "008800FF"` (dark green)
+ *   - `GDColor = "888800FF"` (dark olive)
+ *   - `BDColor = "880000FF"` (dark red)
+ *   - `PRColor = "000000FF"` (black, edge)
+ *   - `lineColor = "00FF00FF"` (green, sample lines)
+ *
+ * These apply when the skin's `timingvisualizer[]` element omits the matching colour
+ * field — the parser passes through empty strings for unset fields and the renderer
+ * falls through here.
+ */
+const DEFAULT_TIMING_VISUALIZER_COLORS = {
+  center: 0xffffff,
+  pg: 0x000088,
+  gr: 0x008800,
+  gd: 0x888800,
+  bd: 0x880000,
+  pr: 0x000000,
+  line: 0x00ff00,
+} as const;
+
+/**
+ * Parse a beatoraja-style hex colour string (`RRGGBB` or `RRGGBBAA`, no `#` prefix). Returns
+ * the 24-bit RGB integer or `undefined` for malformed / empty input. Alpha is dropped — the
+ * caller owns alpha via Pixi's `fill({ alpha })` API.
+ *
+ * Mirrors upstream `SkinTimingVisualizer.colorStringValidation` semantics: invalid strings
+ * fall through to `undefined` so the caller can apply its own default.
+ */
+function parseHexColor(input: string): number | undefined {
+  if (typeof input !== 'string' || input.length < 6) return undefined;
+  const cleaned = input.replace(/[^0-9a-fA-F]/g, '');
+  if (cleaned.length < 6) return undefined;
+  const rgb = Number.parseInt(cleaned.slice(0, 6), 16);
+  return Number.isFinite(rgb) ? rgb : undefined;
 }
 
 /**

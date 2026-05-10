@@ -1444,3 +1444,188 @@ describe('BeatorajaRuntimeAdapter — reset', () => {
     expect(adapter.getTimerStart(TIMER_SCENE_START)).toBe(0);
   });
 });
+
+// ─── judgegraph type=1 (TYPE_JUDGE) — per-second × per-state stacked histogram ────────
+// Mirrors upstream `SkinNoteDistributionGraph` `TYPE_JUDGE` semantics: chart-time-axis
+// columns whose stacks track each note's live judge state. We approximate the per-note
+// state by aggregating bucket counts from `applyJudgeCombo` events (upstream walks all
+// notes every 750 ms instead — same end result for the histogram).
+describe('BeatorajaRuntimeAdapter — judgegraph type=1 (per-second judge state)', () => {
+  function makeJudgeChart(events: ReadonlyArray<{ channel: string; pos?: [number, number]; measure?: number }>): import('@be-music/json').BeMusicJson {
+    return {
+      metadata: { bpm: 120, title: 'judge-state', rank: 2 } as unknown as import('@be-music/json').BeMusicJson['metadata'],
+      events: events.map((e) => ({
+        measure: e.measure ?? 0,
+        channel: e.channel,
+        position: (e.pos ?? [0, 1]) as unknown as import('@be-music/json').BeMusicJson['events'][0]['position'],
+        value: '01',
+      })),
+      measures: [],
+      bms: { lnObjs: [] } as unknown as import('@be-music/json').BeMusicJson['bms'],
+      resources: { bpm: {}, stop: {} } as unknown as import('@be-music/json').BeMusicJson['resources'],
+    } as unknown as import('@be-music/json').BeMusicJson;
+  }
+
+  it('returns undefined when no chart is loaded (decide / select scenes)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({ chartPlayVariant: '7', baseOps: new Set(), getNowMs: () => 0 });
+    expect(adapter.resolveJudgeStateBuckets(1)).toBeUndefined();
+  });
+
+  it('returns undefined for type values other than 1', () => {
+    // type=0 is note-distribution (handled via resolveNoteDistribution at the host
+    // level); type=2 is early/late (kept on the legacy fixed-bin histogram path).
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: makeJudgeChart([{ channel: '11', pos: [0, 1] }]),
+    });
+    expect(adapter.resolveJudgeStateBuckets(0)).toBeUndefined();
+    expect(adapter.resolveJudgeStateBuckets(2)).toBeUndefined();
+  });
+
+  it('initialises all judgeable notes into the unjudged (state 0) slot per chart-second', () => {
+    // 120 BPM → 0.5 sec/beat. Notes at beat 0 / 2 / 4 land in seconds 0 / 1 / 2.
+    // Mines (channels D1..D9 / E1..E9) are excluded per upstream `case TYPE_JUDGE`'s
+    // `n instanceof MineNote` early-return.
+    const chart = makeJudgeChart([
+      { channel: '11', pos: [0, 1] }, // beat 0 → bucket 0
+      { channel: '12', pos: [0, 1] }, // beat 0 → bucket 0
+      { channel: '11', pos: [2, 4] }, // beat 2 → bucket 1
+      { channel: '11', pos: [0, 1], measure: 1 }, // beat 4 → bucket 2
+      { channel: 'D1', pos: [0, 1] }, // 1P lane-1 mine → excluded
+    ]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart,
+    });
+    const data = adapter.resolveJudgeStateBuckets(1);
+    expect(data).toBeDefined();
+    // Each authored bucket starts with `[unjudged, 0, 0, 0, 0, 0]`.
+    expect(data!.buckets[0]).toEqual([2, 0, 0, 0, 0, 0]);
+    expect(data!.buckets[1]).toEqual([1, 0, 0, 0, 0, 0]);
+    expect(data!.buckets[2]).toEqual([1, 0, 0, 0, 0, 0]);
+    // maxCount floored at 20 so a 1-note bucket doesn't stretch to the rect's full
+    // height (matches upstream's `max = 20` initial value).
+    expect(data!.maxCount).toBe(20);
+    expect(data!.totalMs).toBeGreaterThan(0);
+  });
+
+  it('moves a note from unjudged into the verdict slot on applyJudgeCombo', () => {
+    const chart = makeJudgeChart([{ channel: '11', pos: [0, 1] }]); // bucket 0, 1 note
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart,
+    });
+    // applyFrame stamps the engine clock so applyJudgeCombo's chart-time approximation
+    // (currentSeconds * 1000 - deltaMs) places the note in the right bucket.
+    adapter.applyFrame({
+      currentSeconds: 0.05,
+      totalSeconds: 100,
+      summary: { fast: 0, slow: 0, perfect: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    // PERFECT verdict at deltaMs = 5 (chart time ≈ 50 - 5 = 45 ms → bucket 0).
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: 5, updatedAtMs: 50 });
+    const data = adapter.resolveJudgeStateBuckets(1);
+    // Slot index map (mirrors upstream `Note.STATE_*`): 0 = unjudged, 1 = PG, 2 = GR,
+    // 3 = GD, 4 = BD, 5 = PR/MISS. PG goes to slot 1.
+    expect(data!.buckets[0]).toEqual([0, 1, 0, 0, 0, 0]);
+  });
+
+  it('routes each verdict kind to its upstream-numbered state slot', () => {
+    // Five buckets, one judgeable note each. Drive one verdict per bucket and verify
+    // the state slot map: PG=1, GR=2, GD=3, BD=4, POOR=5 / MISS=5.
+    const chart = makeJudgeChart([
+      { channel: '11', pos: [0, 1] }, // bucket 0
+      { channel: '11', pos: [2, 4] }, // bucket 1
+      { channel: '11', pos: [0, 1], measure: 1 }, // bucket 2
+      { channel: '11', pos: [2, 4], measure: 1 }, // bucket 3
+      { channel: '11', pos: [0, 1], measure: 2 }, // bucket 4
+    ]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart,
+    });
+    // Frame at sec 0 — pin currentSeconds for each judge to its own bucket via applyFrame.
+    const fireAt = (sec: number, judge: string): void => {
+      adapter.applyFrame({
+        currentSeconds: sec,
+        totalSeconds: 100,
+        summary: { fast: 0, slow: 0 } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+        notes: [],
+      } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+      adapter.applyJudgeCombo({ judge, combo: 0, channel: '11', deltaMs: 0, updatedAtMs: sec * 1000 });
+    };
+    fireAt(0.1, 'PERFECT');
+    fireAt(1.1, 'GREAT');
+    fireAt(2.1, 'GOOD');
+    fireAt(3.1, 'BAD');
+    fireAt(4.1, 'POOR');
+    const data = adapter.resolveJudgeStateBuckets(1);
+    // Each bucket's authored note moved from slot 0 into the matching verdict slot.
+    expect(data!.buckets[0]).toEqual([0, 1, 0, 0, 0, 0]); // PG
+    expect(data!.buckets[1]).toEqual([0, 0, 1, 0, 0, 0]); // GR
+    expect(data!.buckets[2]).toEqual([0, 0, 0, 1, 0, 0]); // GD
+    expect(data!.buckets[3]).toEqual([0, 0, 0, 0, 1, 0]); // BD
+    expect(data!.buckets[4]).toEqual([0, 0, 0, 0, 0, 1]); // POOR → slot 5
+  });
+
+  it('skips unjudged kinds (READY / unknown) without mutating buckets', () => {
+    const chart = makeJudgeChart([{ channel: '11', pos: [0, 1] }]);
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart,
+    });
+    adapter.applyFrame({
+      currentSeconds: 0.1,
+      totalSeconds: 100,
+      summary: {} as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    // READY publish — judge='READY' has state index 0; should not move the count.
+    adapter.applyJudgeCombo({ judge: 'READY', combo: 0, channel: '11', updatedAtMs: 100 });
+    const data = adapter.resolveJudgeStateBuckets(1);
+    expect(data!.buckets[0]).toEqual([1, 0, 0, 0, 0, 0]);
+  });
+});
+
+// ─── timingvisualizer judge windows resolver ─────────────────────────────────────────
+describe('BeatorajaRuntimeAdapter — resolveJudgeWindowsMs', () => {
+  it('returns undefined when no chart is loaded', () => {
+    const adapter = new BeatorajaRuntimeAdapter({ chartPlayVariant: '7', baseOps: new Set(), getNowMs: () => 0 });
+    expect(adapter.resolveJudgeWindowsMs()).toBeUndefined();
+  });
+
+  it('resolves IIDX windows from the chart\'s judge rank', () => {
+    // RANK 2 (NORMAL) gives the IIDX baseline windows: PG ±16.67, GR ±33.33, GD ±116.67,
+    // BAD ±250 ms. Resolution path lives in `@be-music/player/core/judge-window` —
+    // tested there directly. Here we just verify the adapter forwards the call.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: {
+        metadata: { bpm: 120, title: 't', rank: 2 } as unknown as import('@be-music/json').BeMusicJson['metadata'],
+        events: [],
+        measures: [],
+        bms: {} as unknown as import('@be-music/json').BeMusicJson['bms'],
+        resources: { bpm: {}, stop: {} } as unknown as import('@be-music/json').BeMusicJson['resources'],
+      } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    const windows = adapter.resolveJudgeWindowsMs();
+    expect(windows).toBeDefined();
+    expect(windows!.pgreat).toBeCloseTo(16.67, 1);
+    expect(windows!.great).toBeCloseTo(33.33, 1);
+    expect(windows!.good).toBeCloseTo(116.67, 1);
+    expect(windows!.bad).toBeCloseTo(250, 1);
+  });
+});

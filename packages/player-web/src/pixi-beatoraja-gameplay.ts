@@ -323,8 +323,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveBpmGraphPoints: () => this.chartBpmCurve,
       resolveBpmGraphData: () => this.bpmGraphDataForCurrentChart(),
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
+      resolveJudgeStateBuckets: (type) => this.adapter.resolveJudgeStateBuckets(type),
       resolveNoteDistribution: () => this.noteDistributionForCurrentChart(),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
+      resolveTimingJudgeWindowsMs: () => this.adapter.resolveJudgeWindowsMs(),
       // Live playhead position drives the cursor on `bpmgraph` / `notes-graph`. Reads the
       // engine's currentSeconds latched into `currentFrame`; before the first frame lands
       // we return undefined so the cursor stays hidden.
@@ -655,8 +657,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       resolveBpmGraphPoints: () => this.chartBpmCurve,
       resolveBpmGraphData: () => this.bpmGraphDataForCurrentChart(),
       resolveJudgeGraphBars: (type) => this.adapter.resolveJudgeGraphBars(type),
+      resolveJudgeStateBuckets: (type) => this.adapter.resolveJudgeStateBuckets(type),
       resolveNoteDistribution: () => this.noteDistributionForCurrentChart(),
       resolveTimingSamples: () => this.adapter.resolveTimingSamples(),
+      resolveTimingJudgeWindowsMs: () => this.adapter.resolveJudgeWindowsMs(),
       resolveCurrentTimeMs: () => this.currentTimeMsForCursor(),
       chartImageProvider: (id) => resolveChartImage(this.options.chartImages, id),
       onButtonAction: (act, modifiers) => this.handleCoverButton(act, modifiers),
