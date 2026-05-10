@@ -27,7 +27,6 @@ import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
-  TIMER_FADEOUT,
   TIMER_PLAY,
   TIMER_READY,
   TIMER_SCENE_START,
@@ -46,6 +45,7 @@ import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
 import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
+import { BeatorajaSceneTransition } from './beatoraja-scene-transition.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
@@ -111,7 +111,19 @@ export interface PixiBeatorajaResultSceneOptions {
   skinAudio?: BeatorajaSkinAudio;
 }
 
-const STARTINPUT_DELAY_MS = 500;
+/**
+ * Default input-active delay when the skin omits `Skin.input`. Mirrors `resultmain.lua`'s
+ * reference value (500 ms) and upstream `MusicResult.render` line 12-14:
+ *
+ *     if (time > getSkin().getInput()) {
+ *         timer.switchTimer(TIMER_STARTINPUT, true);
+ *     }
+ *
+ * Until this gate elapses, input-gated chrome stays hidden AND user input is ignored —
+ * stops the player from accidentally dismissing the result splash within the first
+ * few hundred ms while their hand is still on the gameplay key.
+ */
+const DEFAULT_RESULT_INPUT_MS = 500;
 
 export class PixiBeatorajaResultScene implements PixiScene {
   readonly root = new Container();
@@ -124,7 +136,17 @@ export class PixiBeatorajaResultScene implements PixiScene {
   private timerStartedAt: Map<number, number> = new Map();
   private lastFitWidth = 0;
   private lastFitHeight = 0;
-  private dismissed = false;
+  /**
+   * Drives the user-input → `setTimerOn(TIMER_FADEOUT)` → wait `Skin.fadeout` →
+   * `changeState(MUSICSELECT)` lifecycle from upstream `MusicResult.render`
+   * (`result/MusicResult.java`, the `if (timer.isTimerOn(TIMER_FADEOUT))` branch around
+   * lines 16-22 in the simplified flow). Allocated per `enter()` so re-entered scenes
+   * start fresh.
+   *
+   * Result has no auto-advance trigger (upstream `Skin.scene` defaults to 24h /
+   * effectively never), so the helper is only kicked off by the keyboard handler.
+   */
+  private transitionToContinue: BeatorajaSceneTransition | undefined;
   private disposed = false;
   private cachedBaseOps: ReadonlySet<number> | undefined;
   /** Scene-owned `AudioContext` for the result jingle. Closed in `dispose()`. */
@@ -181,16 +203,31 @@ export class PixiBeatorajaResultScene implements PixiScene {
     this.host = host;
     this.startMs = performance.now();
     this.fitToStage();
+    // Resolve `Skin.input` per upstream `MusicResult.render` line 12-14. Reference theme
+    // ships `input = 500`; we fall back to the same value when the skin omits the field.
+    const inputDelayMs =
+      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
+        ? this.options.skin.input
+        : DEFAULT_RESULT_INPUT_MS;
     // Result scenes have their own timer ladder. We surface the same scene-relative timers as
     // gameplay so chrome gated on `TIMER_PLAY` / `TIMER_READY` (e.g., "music finished" reveals)
     // also fires here. The scene-start timer is at 0 ms so author keyframes run from the moment
     // the scene is visible.
     this.timerStartedAt = new Map([
       [TIMER_SCENE_START, 0],
-      [TIMER_STARTINPUT, STARTINPUT_DELAY_MS],
+      [TIMER_STARTINPUT, inputDelayMs],
       [TIMER_READY, 0],
       [TIMER_PLAY, 0],
     ]);
+    // Per-enter() transition slot. Fired by the keyboard handler on Enter / Space / Escape;
+    // the helper waits `Skin.fadeout` ms before invoking `onContinue`, mirroring upstream
+    // `MusicResult.render` `if (timer.getNowTime(TIMER_FADEOUT) > skin.getFadeout())`.
+    this.transitionToContinue = new BeatorajaSceneTransition({
+      fadeoutMs: this.options.skin.fadeout,
+      getElapsedMs: () => performance.now() - this.startMs,
+      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
+      onComplete: () => this.options.onContinue?.(),
+    });
     this.tickerHandle = () => this.tick();
     host.app.ticker.add(this.tickerHandle);
     if (typeof window !== 'undefined') {
@@ -208,6 +245,10 @@ export class PixiBeatorajaResultScene implements PixiScene {
       window.removeEventListener('keydown', this.handleKeyDown);
     }
     this.host = undefined;
+    // Drop the per-enter() transition helper so a future re-entry rebuilds it. The
+    // helper's internal `completed` latch would otherwise carry over and silently no-op
+    // future fadeouts on the same instance.
+    this.transitionToContinue = undefined;
   }
 
   dispose(): void {
@@ -302,6 +343,9 @@ export class PixiBeatorajaResultScene implements PixiScene {
       audioStop:
         this.options.skinAudio === undefined ? undefined : (path) => this.options.skinAudio!.stop(path),
     });
+    // Per-frame fadeout-window poll. No-op until the keyboard handler kicks off the
+    // transition; once active, fires `onContinue` once the `Skin.fadeout` window elapses.
+    this.transitionToContinue?.tick();
   }
 
   private baseOps(): ReadonlySet<number> {
@@ -762,17 +806,29 @@ export class PixiBeatorajaResultScene implements PixiScene {
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (this.disposed || this.dismissed) return;
+    if (this.disposed) return;
+    // Mirrors upstream `MusicResult.render` line 16's `if (timer.isTimerOn(TIMER_FADEOUT))`
+    // short-circuit — once the fadeout has begun, additional key presses are ignored.
+    if (this.transitionToContinue?.isFadingOut() === true || this.transitionToContinue?.isCompleted() === true) {
+      return;
+    }
+    // Gate input on `Skin.input` per upstream `MusicResult.render` line 12. Stops the
+    // player from accidentally dismissing the result splash within the first few hundred
+    // ms while their hand is still on the gameplay key.
+    const elapsed = performance.now() - this.startMs;
+    const inputDelay =
+      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
+        ? this.options.skin.input
+        : DEFAULT_RESULT_INPUT_MS;
+    if (elapsed < inputDelay) return;
     switch (event.key) {
       case 'Enter':
       case ' ':
       case 'Escape':
         event.preventDefault();
-        this.dismissed = true;
-        // Stamp the fadeout timer so any outro keyframes can play out for the few frames before
-        // the host swaps the scene.
-        this.timerStartedAt.set(TIMER_FADEOUT, performance.now() - this.startMs);
-        this.options.onContinue?.();
+        // Begin the fadeout window. Stamp of `TIMER_FADEOUT` and the `Skin.fadeout`-ms
+        // delay before `onContinue` fires happen inside the helper.
+        this.transitionToContinue?.begin();
         break;
     }
   };

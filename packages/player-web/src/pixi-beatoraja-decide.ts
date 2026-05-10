@@ -23,7 +23,6 @@ import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
   BEATORAJA_TEXT,
-  TIMER_FADEOUT,
   TIMER_PLAY,
   TIMER_READY,
   TIMER_SCENE_START,
@@ -37,6 +36,7 @@ import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
 import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
+import { BeatorajaSceneTransition } from './beatoraja-scene-transition.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 import type { BeatorajaFontCache } from './beatoraja-fonts.ts';
 import type { PixiScene, PixiSceneHost } from './pixi-scene-host.ts';
@@ -81,12 +81,15 @@ export interface PixiBeatorajaDecideSceneOptions {
     banner?: import('pixi.js').Texture;
   };
   /**
-   * Auto-advance window in ms. The scene fires `onContinue` automatically after this many ms have
-   * elapsed since `enter()`, mirroring beatoraja's reference behavior of holding the splash for a
-   * short consistent window before kicking off gameplay. Set to `0` to disable auto-advance (the
-   * user must press Enter / Space to continue).
+   * Optional override for the auto-advance window in ms. When unset, the scene reads
+   * {@link BeatorajaSkin.scene} from the parsed skin (mirrors upstream `MusicDecide.render`'s
+   * `nowtime > getSkin().getScene()` gate at `decide/MusicDecide.java:29`). The default
+   * `decidemain.lua` ships `scene = 3000`, so the splash holds for 3 s before auto-firing
+   * the fadeout — this preserves that behavior while letting hosts override for tests or
+   * custom flows. Set to `0` to disable auto-advance entirely (the user must press Enter /
+   * Space to continue).
    *
-   * @default 1500
+   * @default skin.scene ?? {@link DEFAULT_DECIDE_SCENE_MS}
    */
   autoAdvanceMs?: number;
   /**
@@ -128,9 +131,26 @@ export interface PixiBeatorajaDecideSceneOptions {
   getLoadingProgress?: () => number;
 }
 
-const DEFAULT_AUTO_ADVANCE_MS = 1500;
-/** Delay before stamping `TIMER_STARTINPUT` (= 1). Mirrors LR2's ~500 ms idle before input is taken. */
-const STARTINPUT_DELAY_MS = 500;
+/**
+ * Default auto-advance window when neither the host override nor the skin authors `scene`.
+ * Mirrors the `decidemain.lua` reference value (3000 ms). Upstream's `Skin.scene` defaults
+ * to `24h` for "never auto-advance", but the decide scene is unique in that it ALWAYS
+ * authors a real value — falling back to 24h here would silently break headless tests or
+ * hand-rolled fixtures that omit the field.
+ */
+const DEFAULT_DECIDE_SCENE_MS = 3000;
+/**
+ * Default input-active delay when the skin doesn't author `input`. Mirrors the
+ * `decidemain.lua` reference value (500 ms) and upstream `MusicDecide.render` line 22-24:
+ *
+ *     if (nowtime > getSkin().getInput()) {
+ *         timer.switchTimer(TIMER_STARTINPUT, true);
+ *     }
+ *
+ * Until that gate elapses, input-gated chrome (e.g. "press Enter to continue" prompts)
+ * stays hidden.
+ */
+const DEFAULT_DECIDE_INPUT_MS = 500;
 
 export class PixiBeatorajaDecideScene implements PixiScene {
   readonly root = new Container();
@@ -147,7 +167,15 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   private timerStartedAt: Map<number, number> = new Map();
   private lastFitWidth = 0;
   private lastFitHeight = 0;
-  private advanced = false;
+  /**
+   * Drives the `Skin.scene → setTimerOn(TIMER_FADEOUT) → wait skin.fadeout → changeState`
+   * lifecycle from upstream `MusicDecide.render` (`decide/MusicDecide.java:25-32`). Allocated
+   * per `enter()` so re-entered scenes (host re-uses the instance after a back-out) start
+   * fresh. The fadeout window honors `skin.fadeout` with a 500 ms fallback that matches
+   * `decidemain.lua`'s reference value.
+   */
+  private transitionToContinue: BeatorajaSceneTransition | undefined;
+  private transitionToCancel: BeatorajaSceneTransition | undefined;
   private disposed = false;
   private cachedBaseOps: ReadonlySet<number> | undefined;
   /**
@@ -217,17 +245,41 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     this.host = host;
     this.startMs = performance.now();
     this.fitToStage();
+    // Resolve `Skin.input` per upstream `MusicDecide.render` line 22-24. Reference theme
+    // ships `input = 500`; we fall back to the same value when the skin omits the field
+    // so headless tests / hand-rolled fixtures behave consistently.
+    const inputDelayMs =
+      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
+        ? this.options.skin.input
+        : DEFAULT_DECIDE_INPUT_MS;
     // Stamp the timer ladder at scene-start. `TIMER_SCENE_START = 0` is always at 0 ms (the global
-    // clock); `TIMER_STARTINPUT = 1` fires after a short idle so input-gated chrome only appears
-    // once the splash has settled. `TIMER_READY = 40` and `TIMER_PLAY = 41` are present so chrome
-    // gated on "post-load" / "now playing" ops also reveals during the splash — the gameplay scene
-    // re-stamps them when it mounts, so nothing in the live path notices.
+    // clock); `TIMER_STARTINPUT = 1` fires after the `Skin.input` idle so input-gated chrome only
+    // appears once the splash has settled. `TIMER_READY = 40` and `TIMER_PLAY = 41` are present so
+    // chrome gated on "post-load" / "now playing" ops also reveals during the splash — the gameplay
+    // scene re-stamps them when it mounts, so nothing in the live path notices.
     this.timerStartedAt = new Map([
       [TIMER_SCENE_START, 0],
-      [TIMER_STARTINPUT, STARTINPUT_DELAY_MS],
-      [TIMER_READY, STARTINPUT_DELAY_MS],
-      [TIMER_PLAY, STARTINPUT_DELAY_MS],
+      [TIMER_STARTINPUT, inputDelayMs],
+      [TIMER_READY, inputDelayMs],
+      [TIMER_PLAY, inputDelayMs],
     ]);
+    // Two parallel transition slots — one for the "continue" hand-off (auto-advance / Enter /
+    // Space) and one for "cancel" (Escape). Whichever fires first wins (the helpers are gated
+    // by `isFadingOut()` to ignore late triggers); they only differ in which callback fires
+    // when the fadeout window completes.
+    const fadeoutMs = this.options.skin.fadeout;
+    this.transitionToContinue = new BeatorajaSceneTransition({
+      fadeoutMs,
+      getElapsedMs: () => performance.now() - this.startMs,
+      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
+      onComplete: () => this.options.onContinue?.(),
+    });
+    this.transitionToCancel = new BeatorajaSceneTransition({
+      fadeoutMs,
+      getElapsedMs: () => performance.now() - this.startMs,
+      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
+      onComplete: () => (this.options.onCancel ?? this.options.onContinue)?.(),
+    });
     this.tickerHandle = () => this.tick();
     host.app.ticker.add(this.tickerHandle);
     if (typeof window !== 'undefined') {
@@ -245,6 +297,11 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       window.removeEventListener('keydown', this.handleKeyDown);
     }
     this.host = undefined;
+    // Drop the per-enter() transition helpers so a future re-entry rebuilds them. The
+    // helpers' internal `completed` latch would otherwise carry over and silently no-op
+    // future fadeouts on the same instance.
+    this.transitionToContinue = undefined;
+    this.transitionToCancel = undefined;
   }
 
   dispose(): void {
@@ -340,15 +397,55 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       audioStop: skinAudio === undefined ? undefined : (path) => skinAudio.stop(path),
     });
 
-    // Auto-advance hand-off. Fired once per scene; subsequent ticks no-op via `advanced`.
-    const autoAdvance = this.options.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS;
-    if (!this.advanced && autoAdvance > 0 && elapsed >= autoAdvance) {
-      // Stamp the fadeout timer for chrome gated on `TIMER_FADEOUT` (e.g., outro animations) — the
-      // scene stays mounted for a few extra frames before the host swaps it out, giving the timer
-      // a chance to drive its keyframes.
-      this.timerStartedAt.set(TIMER_FADEOUT, elapsed);
-      this.advance(() => this.options.onContinue?.());
+    // Auto-advance trigger — mirrors upstream `MusicDecide.render` line 28-32:
+    //
+    //     if (nowtime > getSkin().getScene()) {
+    //         timer.setTimerOn(TIMER_FADEOUT);
+    //     }
+    //
+    // ...and the `if (timer.isTimerOn(TIMER_FADEOUT))` check at line 25 prevents re-stamps.
+    // We only kick off the "continue" transition when neither slot has begun a fadeout yet
+    // (a user-driven Escape can race the auto-advance; whichever fires first wins).
+    const autoAdvance = this.resolveAutoAdvanceMs();
+    if (
+      !this.isAnyTransitionActive() &&
+      autoAdvance > 0 &&
+      elapsed >= autoAdvance &&
+      this.transitionToContinue !== undefined
+    ) {
+      this.transitionToContinue.begin();
     }
+    // Per-frame fadeout-window poll. Helpers are idempotent — the one that hasn't been
+    // `begin()`ed no-ops, the active one fires `onComplete` once the window elapses.
+    this.transitionToContinue?.tick();
+    this.transitionToCancel?.tick();
+  }
+
+  /**
+   * Resolve the effective auto-advance window in ms. Order of precedence:
+   *   1. {@link PixiBeatorajaDecideSceneOptions.autoAdvanceMs} — host override (test fixtures).
+   *   2. `skin.scene` from the parsed skin — upstream `MusicDecide.render`'s `getSkin().getScene()`.
+   *   3. {@link DEFAULT_DECIDE_SCENE_MS} — matches `decidemain.lua` reference value (3000 ms).
+   */
+  private resolveAutoAdvanceMs(): number {
+    const override = this.options.autoAdvanceMs;
+    if (typeof override === 'number' && Number.isFinite(override) && override >= 0) {
+      return override;
+    }
+    const skinScene = this.options.skin.scene;
+    if (typeof skinScene === 'number' && Number.isFinite(skinScene) && skinScene >= 0) {
+      return skinScene;
+    }
+    return DEFAULT_DECIDE_SCENE_MS;
+  }
+
+  /**
+   * `true` while either the continue or cancel transition is mid-fadeout. Used by the
+   * tick + key handler to short-circuit further triggers, mirroring upstream's
+   * `if (timer.isTimerOn(TIMER_FADEOUT))` short-circuit.
+   */
+  private isAnyTransitionActive(): boolean {
+    return this.transitionToContinue?.isFadingOut() === true || this.transitionToCancel?.isFadingOut() === true;
   }
 
   /** Stable per-skin op set (skin_config.option picks). Live ops are added by `computeActiveOps`. */
@@ -426,7 +523,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     if (typeof supplied === 'number' && Number.isFinite(supplied)) {
       return Math.max(0, Math.min(1, supplied));
     }
-    const autoAdvance = this.options.autoAdvanceMs ?? DEFAULT_AUTO_ADVANCE_MS;
+    const autoAdvance = this.resolveAutoAdvanceMs();
     if (autoAdvance <= 0) return 1;
     if (this.startMs === 0) return 0;
     const elapsed = performance.now() - this.startMs;
@@ -434,11 +531,6 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     return Math.min(1, elapsed / autoAdvance);
   }
 
-  private advance(then: () => void): void {
-    if (this.advanced) return;
-    this.advanced = true;
-    then();
-  }
 
   /**
    * `judgegraph` resolver for the decide scene. Maps `type:0` (note distribution histogram)
@@ -572,15 +664,31 @@ export class PixiBeatorajaDecideScene implements PixiScene {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
+    // Mirrors upstream `MusicDecide.render` line 25 short-circuit — once a fadeout has
+    // begun, additional key presses are ignored. (Note: upstream's `cancel` flag CAN be
+    // mutated mid-fadeout to flip the destination scene, but the timer is never re-stamped.
+    // We separate continue / cancel into two helpers to keep the destination immutable
+    // post-trigger; the more common UX pattern.)
+    if (this.isAnyTransitionActive()) return;
+    // Gate input on `Skin.input` per upstream `MusicDecide.render` line 22 — `nowtime >
+    // getSkin().getInput()`. Stops the user from accidentally dismissing the splash within
+    // the first few hundred ms while their finger is still on the Enter key from the
+    // select scene's confirmation.
+    const elapsed = performance.now() - this.startMs;
+    const inputDelay =
+      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
+        ? this.options.skin.input
+        : DEFAULT_DECIDE_INPUT_MS;
+    if (elapsed < inputDelay) return;
     switch (event.key) {
       case 'Enter':
       case ' ':
         event.preventDefault();
-        this.advance(() => this.options.onContinue?.());
+        this.transitionToContinue?.begin();
         break;
       case 'Escape':
         event.preventDefault();
-        this.advance(() => (this.options.onCancel ?? this.options.onContinue)?.());
+        this.transitionToCancel?.begin();
         break;
     }
   };
