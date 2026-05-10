@@ -1322,10 +1322,23 @@ function composeBeatorajaEngineOptions(
   options: PixiBeatorajaGameplayViewOptions,
 ): PixiBeatorajaGameplayViewOptions['engineOptions'] {
   const supplied = options.engineOptions;
-  if (supplied?.laneModeExtension !== undefined) return supplied;
   const inferred = extractBeatorajaChartExtension(options.chartPath);
-  if (inferred === undefined) return supplied;
-  return { ...(supplied ?? {}), laneModeExtension: inferred };
+  // **`playVariant` direct override** (`engine.ts` `PlayerOptions.playVariant`).  The host
+  // already classified the chart via `pickBeatorajaPlayableVariant` and passes the result
+  // here as `options.variant` (= `chartVariant`).  Forwarding it as a direct lane-mode
+  // override means the engine routes channels 16/17/18/19 through POPN-9 bindings even when
+  // its content-based heuristic would have under-classified the chart as 7-key (e.g. `.bme`
+  // with `#PLAYER 1`).  Host-provided `engineOptions.playVariant` wins so callers that
+  // explicitly override the variant (rare) keep the same precedence model as
+  // `laneModeExtension`.
+  const result = { ...(supplied ?? {}) };
+  if (result.laneModeExtension === undefined && inferred !== undefined) {
+    result.laneModeExtension = inferred;
+  }
+  if (result.playVariant === undefined && options.variant !== undefined) {
+    result.playVariant = options.variant;
+  }
+  return result;
 }
 
 /**

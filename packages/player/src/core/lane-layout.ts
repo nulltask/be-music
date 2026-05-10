@@ -92,6 +92,14 @@ export interface LaneModeOptions {
   player?: number;
   chartExtension?: string;
   platform?: NodeJS.Platform;
+  /**
+   * Direct lane-mode override. When the host has already classified the chart's variant
+   * (e.g. via `resolveChartPlayVariant` from `@be-music/chart`), pass it here to bypass the
+   * content-based heuristic entirely. Useful for charts the heuristic under-classifies —
+   * notably `.bme` POPN-9 charts authored with `#PLAYER 1` + channels 16/17/18/19, which the
+   * heuristic would route to `7-key-sp`.
+   */
+  playVariant?: ChartPlayVariant;
 }
 
 export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArray<string>): string | undefined {
@@ -365,6 +373,28 @@ function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions
   const has2P = [...existing].some((channel) => is2PSideLaneChannel(channel));
   const has7KeyMarker = existing.has('18') || existing.has('19');
   const has14KeyMarker = has7KeyMarker || existing.has('28') || existing.has('29');
+
+  // **Direct host override** — when the caller already classified the variant (e.g. the
+  // gameplay scene's `resolveChartPlayVariant`-derived `chartVariant`), trust it and bypass
+  // the heuristic.  Especially important for `.bme` POPN-9 charts authored with `#PLAYER 1`
+  // + channels 16/17/18/19: the heuristic below routes those to `7-key-sp` (channel 16 →
+  // scratch, 17 → FREE ZONE), dropping the `f/v/g/b` POPN-9 key bindings and the channel-17
+  // notes from `scorableNotes`.  Host-driven classification — even when based on the same
+  // heuristic — gives the rest of the pipeline a single source of truth.
+  if (options.playVariant !== undefined) {
+    switch (options.playVariant) {
+      case '5':
+        return '5-key-sp';
+      case '7':
+        return '7-key-sp';
+      case '9':
+        return '9-key';
+      case '10':
+        return '5-key-dp';
+      case '14':
+        return '14-key-dp';
+    }
+  }
 
   if (hasExtendedLane) {
     return has2P ? '48-key-dp' : '24-key-sp';

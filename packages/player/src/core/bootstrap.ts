@@ -119,7 +119,7 @@ export function createInitialPlayerSummary(
 
 export function preparePlaybackChartData(
   resolvedJson: BeMusicJson,
-  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension'>,
+  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension' | 'playVariant'>,
   inferBmsLnTypeWhenMissing: boolean,
   auxiliaryPlaybackEndSeconds: number,
 ): PreparedPlaybackChartData {
@@ -139,7 +139,11 @@ export function preparePlaybackChartData(
     auxiliaryPlaybackEndSeconds,
   );
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
-  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
+  const laneModeOptions = {
+    player: resolvedJson.bms.player,
+    chartExtension: options.laneModeExtension,
+    playVariant: options.playVariant,
+  };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
   appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);

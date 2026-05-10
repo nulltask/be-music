@@ -62,7 +62,7 @@ import {
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
-import { type LaneBinding } from './lane-layout.ts';
+import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TuiNoteHeight } from './ui-options.ts';
@@ -196,6 +196,26 @@ export interface PlayerOptions {
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
   laneModeExtension?: string;
+  /**
+   * Direct lane-mode override. When set, the engine's `resolveLaneMode` skips its content-based
+   * heuristic and routes straight to the corresponding `LaneMode`:
+   *
+   *   - `'5'`  → `5-key-sp`     - `'10'` → `5-key-dp`
+   *   - `'7'`  → `7-key-sp`     - `'14'` → `14-key-dp`
+   *   - `'9'`  → `9-key`        - `'24'` → `24-key-sp` / `48-key-dp` (resolved against 2P presence)
+   *
+   * Mirrors the renderer-side `chartVariant` the host has already classified the chart as. The
+   * engine's own heuristic only escalates to `9-key` when the chart is `.pms` OR `#PLAYER=3`
+   * with channel `17`, which under-classifies BME-format POPN-9 charts that author `#PLAYER 1`
+   * + channels 16/17/18/19. Without this override, those charts mounted on a 9-key skin /
+   * adapter (via the host) had their `f/v/g/b` inputs dropped because the engine's lane
+   * bindings followed `7-key-sp` (channel 16 → scratch, channel 17 → FREE ZONE, etc.).
+   *
+   * User report: "9 KEY でレーザーとボムが表示されません". The previous `laneModeExtension`-only
+   * inference (c0da7b5) only worked for charts the heuristic could classify; this override
+   * lets the host force the engine into the variant it already decided on.
+   */
+  playVariant?: ChartPlayVariant;
   /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}
@@ -1765,6 +1785,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       {
         showInvisibleNotes: options.showInvisibleNotes,
         laneModeExtension: options.laneModeExtension,
+        playVariant: options.playVariant,
       },
       inferBmsLnTypeWhenMissing,
       realtimeAudioEndSeconds,
@@ -2356,6 +2377,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       {
         showInvisibleNotes: options.showInvisibleNotes,
         laneModeExtension: options.laneModeExtension,
+        playVariant: options.playVariant,
       },
       inferBmsLnTypeWhenMissing,
       nonPlayableRealtimeAudioEndSeconds,
