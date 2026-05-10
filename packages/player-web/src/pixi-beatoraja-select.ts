@@ -40,6 +40,8 @@ import {
   BEATORAJA_TEXT,
   buildBaseOpSet,
   parseBeatorajaSongList,
+  TIMER_SCENE_START,
+  TIMER_SONGBAR_CHANGE,
 } from '@be-music/beatoraja-skin';
 import { BeatorajaPlaySkinView } from './pixi-beatoraja-skin-view.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
@@ -481,6 +483,19 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    */
   private scrollPosition = 0;
 
+  /**
+   * Per-scene timer ladder. Mirrors the play scene's runtime adapter `timerStartedAt` map —
+   * destinations gated on `timer = N` consult `getTimerStart(N)` to compute their elapsed
+   * time, returning `undefined` keeps the destination hidden. Stamped at scene mount
+   * (`TIMER_SCENE_START`) and on every cursor move (`TIMER_SONGBAR_CHANGE`).
+   *
+   * Mirrors upstream `MusicSelector.timer.setTimerOn(MAIN.TIMER.SONGBAR_CHANGE)` which the
+   * select-scene emits on `BarManager.update` (= focus moved). ModernChic's
+   * `musicdisplay.lua` keys title / genre / artist text destinations on this timer; without
+   * it the left-side song-info panel never appears.
+   */
+  private timerStartedAt: Map<number, number> = new Map();
+
   private lastFitWidth = 0;
   private lastFitHeight = 0;
   /**
@@ -717,6 +732,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (this.disposed) return;
     this.host = host;
     this.startMs = performance.now();
+    // Stamp the always-on scene-start timer (= 0) and the initial songbar-change pulse so
+    // skin destinations keyed on either start their `dst[]` keyframe walk from t=0 the
+    // moment the scene mounts. The songbar pulse is re-stamped inside `moveCursor` /
+    // `setCursor` / folder transitions on every cursor change, mirroring upstream's
+    // `MusicSelector.timer.setTimerOn(MAIN.TIMER.SONGBAR_CHANGE)`.
+    this.timerStartedAt.set(TIMER_SCENE_START, 0);
+    this.timerStartedAt.set(TIMER_SONGBAR_CHANGE, 0);
     this.fitToStage();
     this.tickerHandle = (ticker) => this.tick(ticker);
     host.app.ticker.add(this.tickerHandle);
@@ -880,7 +902,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const skinAudio = this.options.skinAudio;
     this.view.update({
       activeOps: this.computeActiveOps(),
-      getTimerStart: () => undefined,
+      // Consult the per-scene timer ladder. Returning `undefined` for unstamped timers keeps
+      // those destinations hidden (matches the play-scene runtime adapter's behaviour and
+      // upstream `getTimerStart` semantics — only fired timers produce a non-null start
+      // time). The previous always-`undefined` return blocked every `timer = N`-gated
+      // destination, including ModernChic's title / genre / artist text panel which keys
+      // off `TIMER_SONGBAR_CHANGE = 11`.
+      getTimerStart: (timerId) => this.timerStartedAt.get(timerId),
       nowMs: elapsed,
       audioPlay: skinAudio === undefined ? undefined : (path, vol) => skinAudio.play(path, vol),
       audioLoop: skinAudio === undefined ? undefined : (path, vol) => skinAudio.loop(path, vol),
@@ -1074,6 +1102,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     }
     this.currentIndex = clampIndex(initialIndex, this.entries.length);
     this.scrollPosition = this.currentIndex;
+    this.markSongbarChangeTimer();
     this.refreshRowVisuals();
     // Folder enter / leave / filter change reshuffles the entry list; re-arm preview against
     // the new focused song (or stop if the new focus is a folder bar).
@@ -2243,6 +2272,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (rawIndex >= total) this.scrollPosition -= total;
     else if (rawIndex < 0) this.scrollPosition += total;
     this.currentIndex = next;
+    this.markSongbarChangeTimer();
     this.refreshRowVisuals();
   }
 
@@ -2363,9 +2393,22 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       this.scrollPosition += total;
     }
     this.currentIndex = next;
+    this.markSongbarChangeTimer();
     this.refreshRowVisuals();
     this.refreshChartPreview();
     this.playSystemSound('cursor');
+  }
+
+  /**
+   * Re-stamp the `TIMER_SONGBAR_CHANGE` (= 11) timer to the current scene-relative time.
+   * Mirrors upstream's `MusicSelector.timer.setTimerOn(MAIN.TIMER.SONGBAR_CHANGE)` which
+   * fires whenever `BarManager` advances the focused row. Stamped via
+   * `performance.now() - this.startMs` so the value is in the same scene-relative time
+   * base the renderer reads via `nowMs`.
+   */
+  private markSongbarChangeTimer(): void {
+    if (this.startMs === 0) return;
+    this.timerStartedAt.set(TIMER_SONGBAR_CHANGE, performance.now() - this.startMs);
   }
 
   /**
@@ -2377,6 +2420,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const next = clampIndex(index, this.entries.length);
     if (next === this.currentIndex) return;
     this.currentIndex = next;
+    this.markSongbarChangeTimer();
     this.refreshRowVisuals();
     this.refreshChartPreview();
     this.playSystemSound('cursor');

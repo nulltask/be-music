@@ -43,6 +43,19 @@ export const TIMER_READY = 40;
 /** prop.lua `play` — fires when the chart begins audible playback. */
 export const TIMER_PLAY = 41;
 
+/**
+ * prop.lua `songbar_change = 11` — restarts every time the focused song bar changes (cursor
+ * up / down / page jump / folder enter-leave). Select-scene chrome whose authoring keys
+ * `timer = MAIN.TIMER.SONGBAR_CHANGE` (e.g., ModernChic's `musicdisplay.lua` for title /
+ * genre / artist text panels) needs this stamp re-fired on every cursor move so the
+ * destination's loop animation replays from t=0.
+ *
+ * Without re-stamping, destinations keyed on the timer return `undefined` from
+ * `getTimerStart` and stay hidden — visible to the user as "the left-side song info panel
+ * (title / artist / genre) never appears".
+ */
+export const TIMER_SONGBAR_CHANGE = 11;
+
 /** prop.lua `judge_1p` — restarts on every judgement on side 1. */
 export const TIMER_JUDGE_1P = 46;
 /** prop.lua `judge_2p` — restarts on every judgement on side 2. */

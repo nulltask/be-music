@@ -259,5 +259,6 @@ export {
   TIMER_PREVIEW,
   TIMER_RHYTHM,
   TIMER_SCENE_START,
+  TIMER_SONGBAR_CHANGE,
   TIMER_STARTINPUT,
 } from './beatoraja-runtime-ids.ts';
