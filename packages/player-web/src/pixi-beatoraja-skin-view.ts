@@ -71,6 +71,7 @@ import {
   type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
 import {
+  applyBeatorajaFilterMode,
   applyBeatorajaStretchRect,
   createCroppedBeatorajaTexture,
   destinationToSpriteProps,
@@ -1890,6 +1891,11 @@ export class BeatorajaPlaySkinView {
     sprite.tint = props.tint;
     sprite.angle = props.angle;
     sprite.blendMode = props.blendMode;
+    // Audit C-13: honor `dst.filter` per `SkinObject.java:536-538`. Pixi's scaleMode is
+    // per-source (not per-sprite), so this approximates upstream by setting the source
+    // mode based on the LAST destination updated. Most skins use consistent filter per
+    // source — see `applyBeatorajaFilterMode` for the single-frame race caveat.
+    applyBeatorajaFilterMode(sprite.texture, entry.group.filter);
   }
 
   /**
