@@ -1469,8 +1469,17 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   /**
    * Cycle the keymode filter and rebuild the song list against the new filter. Wraps at 0..7.
-   * After the new filter takes effect we pop back to the root list — keeps the user out of a
-   * folder whose contents may have been filtered to empty by the new mode.
+   *
+   * Preserves the active folder stack — the filter narrows the songs visible WITHIN whatever
+   * folder the user is currently browsing instead of yanking them back to root. User report:
+   * "SONG SELECT で KEY の絞り込みを変更するとフォルダ一覧に戻ってしまう。表示しているフォルダ
+   * 内で絞り込みを行う。" The previous "pop back to root on filter change" behavior was a
+   * defensive measure against folders becoming empty after filtering, but folders going
+   * empty is a fine state — the user can back out with Escape.
+   *
+   * Cursor restoration: when the previously-focused song still exists in the post-filter
+   * entries, snap the cursor to its new index. Otherwise clamp to whatever the filter left
+   * (mostly index 0 — the next available row).
    */
   private cycleKeymodeFilter(step: number): void {
     const next = (((this.keymodeFilter + step) % 8) + 8) % 8;
@@ -1479,9 +1488,21 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // eslint-disable-next-line no-console
     console.log('[beatoraja-select] act=11 MODE filter cycled', JSON.stringify({ to: next }));
     this.playSystemSound('optionChange');
-    this.folderStack = [];
-    this.cursorStack = [0];
-    this.refreshEntries(0);
+    // Capture the focused song BEFORE the entries list mutates so we can re-find its row in
+    // the post-filter list (when the song still passes the filter).
+    const focused = this.focusedSong();
+    this.refreshEntries(this.currentIndex);
+    if (focused !== undefined) {
+      const restored = this.entries.findIndex(
+        (entry) => entry.kind === 'song' && entry.song === focused,
+      );
+      if (restored >= 0 && restored !== this.currentIndex) {
+        this.currentIndex = restored;
+        this.scrollPosition = restored;
+        this.markSongbarChangeTimer();
+        this.refreshRowVisuals();
+      }
+    }
   }
 
   /**
