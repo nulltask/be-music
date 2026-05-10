@@ -1,4 +1,4 @@
-// Bottom-right lil-gui panel that lets the user pick `skin_config.option` / `skin_config.file` values
+// Bottom-centre lil-gui panel that lets the user pick `skin_config.option` / `skin_config.file` values
 // for the active beatoraja skin.
 //
 // Why a separate panel: the existing top-right `gui` mixes player-wide concerns (compressor / record /
@@ -6,6 +6,11 @@
 // they're per-skin-entry and need to be rebuilt every time the user navigates between play / select /
 // decide / result, since each scene's skin authors a different `property[]` schema. Putting them in a
 // dedicated panel keeps the main GUI stable and makes the relationship to the on-screen skin obvious.
+//
+// Skin selection itself lives in the Debug Menu, not here — this panel is purely the skin's authored
+// `property[]` / `filepath[]` / `offset[]` schema mirror. Mixing the picker in created two competing
+// UIs for the same action (Debug Menu's switcher + this panel's dropdown), which left the player
+// guessing which one was canonical.
 //
 // Lifecycle:
 //
@@ -32,21 +37,10 @@ import type {
 export interface BeatorajaSkinOptionsGuiOptions {
   /**
    * Parent element the panel attaches to. The GUI is positioned `absolute` inside this element at
-   * `bottom: 12px; right: 12px;` — the host typically passes the demo's `.shell` so the panel sits
-   * over the canvas (and not, say, over the page header).
+   * `bottom: 0; left: 50% (translateX -50%);` — the host typically passes the demo's `.shell` so
+   * the panel sits over the canvas (and not, say, over the page header).
    */
   container: HTMLElement;
-}
-
-/**
- * One discovered skin entry the user can pick for the active scene. The demo emits these from the
- * theme bundle's `entries[]`, filtered to the scene's matching `header.type`.
- */
-export interface SkinChoice {
-  /** Path inside the theme bundle (the canonical id). Used for override storage and re-mount. */
-  entryPath: string;
-  /** Human-readable label — typically `header.name` + filename. */
-  label: string;
 }
 
 export interface SetSkinOptions {
@@ -62,21 +56,6 @@ export interface SetSkinOptions {
    * pattern. Empty / missing → only the default ("(auto)") is offered.
    */
   fileCandidates?: ReadonlyMap<string, ReadonlyArray<string>>;
-  /**
-   * Discovered skin entries the user can switch to for this scene. The currently-mounted skin
-   * appears in the list (its `entryPath` matches `currentEntryPath`). The dropdown is hidden when
-   * `availableSkins.length <= 1` — no point showing a one-item picker.
-   */
-  availableSkins?: ReadonlyArray<SkinChoice>;
-  /** Currently-mounted entry path. The skin dropdown initializes to this value. */
-  currentEntryPath?: string;
-  /**
-   * Fired when the user picks a different skin entry from the top dropdown. The receiver should
-   * persist the override and re-mount the active scene against the new entry. After the new entry
-   * mounts, `setSkin` will be called again (with the new entry's header / config) — this lifecycle
-   * handles the cascade naturally.
-   */
-  onSkinChange?: (nextEntryPath: string) => void;
   /**
    * Fired whenever the user changes a property or file pick. The receiver is expected to write the new
    * config back to its per-entry cache and re-mount the active scene with the new values applied.
@@ -109,14 +88,11 @@ export class BeatorajaSkinOptionsGui {
      * forwards a deep-cloned snapshot to the host.
      */
     customOffset: Record<string, { x: number; y: number; w: number; h: number; r: number; a: number }>;
-    /** Currently-selected skin entry path (drives the top "Skin" dropdown). */
-    entryPath: string;
   } = {
     offset: 0,
     option: {},
     file: {},
     customOffset: {},
-    entryPath: '',
   };
 
   constructor(options: BeatorajaSkinOptionsGuiOptions) {
@@ -150,14 +126,13 @@ export class BeatorajaSkinOptionsGui {
       option: { ...options.config.option },
       file: { ...options.config.file },
       customOffset: customOffsetSeed,
-      entryPath: options.currentEntryPath ?? '',
     };
     const properties: ReadonlyArray<BeatorajaSkinProperty> = options.header.property ?? [];
     const filepaths: ReadonlyArray<BeatorajaSkinFilepath> = options.header.filepath ?? [];
-    const skinChoices = options.availableSkins ?? [];
-    const showSkinPicker = skinChoices.length > 1 && options.onSkinChange !== undefined;
-    if (properties.length === 0 && filepaths.length === 0 && !showSkinPicker) {
+    if (properties.length === 0 && filepaths.length === 0) {
       // Nothing to configure — leave the panel empty so the user isn't confused by a useless box.
+      // Skin selection itself lives in the Debug Menu, so a skin without authored
+      // property[] / filepath[] schema simply has no controls to surface here.
       return;
     }
 
@@ -168,7 +143,7 @@ export class BeatorajaSkinOptionsGui {
     });
     this.gui = gui;
     this.applyDomStyles(gui.domElement);
-    // Bottom-right skin-options panel starts COLLAPSED. The skin's authored options panel
+    // Bottom-centre skin-options panel starts COLLAPSED. The skin's authored options panel
     // (the in-scene popup activated by the skin's button_type 33 / 32 chrome) is the
     // primary surface for runtime tweaks; this lil-gui mirror is a power-user / debug
     // overlay that the user opens explicitly when they need it. Keeping it expanded by
@@ -189,23 +164,6 @@ export class BeatorajaSkinOptionsGui {
         customOffset: customOffsetCopy,
       });
     };
-
-    if (showSkinPicker) {
-      // Top-level "Skin" dropdown — lets the user pick which discovered skin entry the scene mounts
-      // when several were detected for this scene type. lil-gui's dropdown takes a Record<label,
-      // value>; we map each candidate's display label to its `entryPath`. Picking a different entry
-      // fires `onSkinChange` which the demo treats as "re-mount the scene against this entry".
-      // Property / file controls below stay attached to the CURRENT mount until the new mount
-      // calls `setSkin` again; that's the moment the panel rebuilds with the new schema.
-      const skinOptionMap: Record<string, string> = {};
-      for (const choice of skinChoices) skinOptionMap[choice.label] = choice.entryPath;
-      gui
-        .add(this.state, 'entryPath', skinOptionMap)
-        .name('Skin')
-        .onChange((value: string) => {
-          options.onSkinChange?.(value);
-        });
-    }
 
     // Build the category-id → display-label map up front. Header `category[]` (community-skin
     // only — GdbG_Skin and ModernChic populate it) declares groups like `{name: "メイン", item:
@@ -380,18 +338,22 @@ export class BeatorajaSkinOptionsGui {
   }
 
   /**
-   * Position lil-gui's root element at the bottom-right of the demo shell. We avoid lil-gui's
-   * default fixed positioning (top-right) because that overlaps the existing main GUI; the
-   * absolute-inside-shell positioning keeps both panels visible without modal interaction.
+   * Position lil-gui's root element at the bottom-centre of the demo shell, flush against the
+   * bottom edge (no gap). Avoids lil-gui's default fixed top-right positioning (which would
+   * overlap the existing main GUI) and the previous bottom-right placement (which collided
+   * with the on-screen skin's BPM / TIME / SPEED readouts in the play scene's lower-right
+   * corner). Centring + edge-flush keeps the panel out of every authored skin's HUD zone
+   * regardless of which scene is mounted.
    */
   private applyDomStyles(root: HTMLElement): void {
     root.style.position = 'absolute';
-    root.style.right = '12px';
-    root.style.bottom = '12px';
+    root.style.left = '50%';
+    root.style.bottom = '0';
     root.style.top = 'auto';
-    root.style.left = 'auto';
+    root.style.right = 'auto';
+    root.style.transform = 'translateX(-50%)';
     root.style.zIndex = '40';
-    root.style.maxHeight = 'calc(100vh - 24px)';
+    root.style.maxHeight = 'calc(100vh - 12px)';
     root.style.overflowY = 'auto';
   }
 }
