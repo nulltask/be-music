@@ -1896,7 +1896,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const levelLabel = this.rowLevelLabels[i];
       const levelDigits = this.rowLevelDigitSprites[i];
       if (entry.kind === 'folder') {
-        // Beatoraja's bartext renders just the folder name on folder rows.
+        // Beatoraja's `BarRenderer.render` (`BarRenderer.java:298`) sets the bar's text from
+        // `Bar.getTitle()`. For folder rows the implementation is `FolderBar.getTitle()` →
+        // `folder.getTitle()` (`FolderBar.java:35-36`), which is the folder's own name
+        // without any subtitle merge.
         label.text = entry.folder.label;
         if (levelLabel !== undefined) levelLabel.visible = false;
         if (levelDigits !== undefined) {
@@ -1904,7 +1907,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         }
       } else {
         const song = entry.song;
-        label.text = song.title;
+        // `SongBar.getTitle()` (`SongBar.java:61-63`) returns `song.getFullTitle()`, which is
+        // `subtitle.length() > 0 ? title + " " + subtitle : title` (`SongData.java:285-290`).
+        // Authors who use `#SUBTITLE` to disambiguate difficulty (`Foo` + `[INSANE]`) rely on
+        // this concatenation — pre-fix the bar showed only the title, so charts that share
+        // a base title looked identical in the song list.
+        label.text = joinNonEmpty(song.title, song.subtitle);
         const lvl = resolvePlayLevel(song.playLevel);
         const showLevel = lvl !== undefined && lvl > 0;
         if (levelDigits !== undefined && this.levelValueElement !== undefined && this.levelStripTexture !== undefined) {
