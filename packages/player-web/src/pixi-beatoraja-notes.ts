@@ -198,23 +198,34 @@ export class BeatorajaNoteLayer {
     }
 
     for (const note of frame.notes) {
-      if (note.judged) continue;
+      const isLongNote = note.endBeat !== undefined && Number.isFinite(note.endBeat);
+      // Tap-note `judged` gate. LN notes need a DIFFERENT visibility rule: upstream
+      // beatoraja's `LaneRenderer` keeps drawing the LN body / tail until the tail crosses
+      // the judgement line — even after the head's verdict has been recorded — so the
+      // player sees the sustain glow / `lnactive` frame while holding the key. Our engine
+      // flags `note.judged = true` at LN head time (manual `markScorableJudged` at
+      // `engine.ts:3077` / autoplay's `note.judged = true` at `engine.ts:2139`), so a naive
+      // `if (note.judged) continue` here would clip the entire LN — body, tail, and all —
+      // the moment the head was hit. User report: "head の判定が始まると LN ノートが
+      // 消えてしまう". The LN branch below handles its own tail-past culling via the
+      // `yEnd` check.
+      if (!isLongNote && note.judged) continue;
       const lane = this.resolveLane(note);
       if (lane === undefined) continue;
       const rect = rects[lane];
       if (rect === undefined) continue;
 
       const y = judgementY - (note.beat - frame.currentBeat) * pixelsPerBeat;
-      // Tight bottom cull at the judgement line — notes whose visual bottom has crossed the
-      // line are no longer judgable (the engine fires auto-POOR shortly after) and rendering
-      // them past the line looked like the note was "flying through" the chart's bottom edge.
-      // Top cull keeps a small lead-in margin so notes pop into view smoothly as they approach
-      // from above.
-      if (y < rect.y - 24 || y > judgementY) continue;
 
-      if (note.endBeat !== undefined) {
-        const yEnd = judgementY - (note.endBeat - frame.currentBeat) * pixelsPerBeat;
+      if (isLongNote) {
+        const yEnd = judgementY - (note.endBeat! - frame.currentBeat) * pixelsPerBeat;
+        // Cull when the tail hasn't yet reached the judgement line. (LN body extends DOWN
+        // from the tail to the head, so this checks if the tail is still scrolling in.)
         if (yEnd > judgementY) continue;
+        // Cull when the entire LN has scrolled past the top of the lane. Both head AND
+        // tail must be off the top edge — if the tail is still on-screen but the head
+        // has just slipped past, we want to keep drawing the part that's still visible.
+        if (y < rect.y - 24 && yEnd < rect.y - 24) continue;
         // Clip the LN's start cap (player-facing head) to the judgement line so the body
         // doesn't visually extend past the chart's bottom edge while the player is holding.
         // The engine still drives the LN's actual judging window from `note.beat` /
@@ -229,6 +240,12 @@ export class BeatorajaNoteLayer {
         continue;
       }
 
+      // Tap-note bottom + top cull at the judgement line — notes whose visual bottom has
+      // crossed the line are no longer judgable (the engine fires auto-POOR shortly after)
+      // and rendering them past the line looked like the note was "flying through" the
+      // chart's bottom edge. Top cull keeps a small lead-in margin so notes pop into view
+      // smoothly as they approach from above.
+      if (y < rect.y - 24 || y > judgementY) continue;
       const r = this.paintTapNote(usedG, usedS, rect, lane, note, y);
       usedG = r.g;
       usedS = r.s;
