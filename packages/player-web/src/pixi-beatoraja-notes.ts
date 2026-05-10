@@ -110,6 +110,28 @@ interface CroppedSprite {
 
 export class BeatorajaNoteLayer {
   readonly container = new Container();
+  /**
+   * Two-tier layering so LN bodies always sit BEHIND head/tail caps and tap notes,
+   * regardless of pool-reuse order across frames.
+   *
+   * `paintLongNote` acquires three sprites in sequence (body → start cap → end cap) and
+   * the previous implementation added them all to a single root container, relying on
+   * Pixi's `addChild` order to determine Z. That order, however, is captured the FIRST
+   * time a slot is allocated and persists through reuse — so a frame that mounts a
+   * tap-note via `acquireSprite(0)` before any LN exists captures `spritePool[0]` at
+   * Z position 0. A later frame that drops the tap-note and uses pool index 0 for an LN
+   * START CAP draws the head behind every subsequently-mounted body sprite (which were
+   * added LATER and thus sit on top). User report: "LN の head が body の手前に表示
+   * されない".
+   *
+   * Splitting bodies and caps into their own containers fixes the Z order at the
+   * CONTAINER level, which doesn't depend on pool slot ordering. The body container
+   * is added first (= back); caps + tap-notes are added second (= front). Inside each
+   * tier the addChild order between pool slots still doesn't matter — every LN body
+   * draws behind every cap/tap regardless of which pool index landed where.
+   */
+  private readonly bodyLayer = new Container();
+  private readonly noteLayer = new Container();
   private readonly noteSection: BeatorajaNoteSection;
   private readonly variant: ChartPlayVariant;
   private readonly images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>;
@@ -138,6 +160,9 @@ export class BeatorajaNoteLayer {
     this.textures = options.textures;
     this.canvasHeight = options.canvasHeight;
     this.judgementYOverride = options.judgementY;
+    // bodyLayer first (= back), noteLayer second (= front). See field doc for rationale.
+    this.container.addChild(this.bodyLayer);
+    this.container.addChild(this.noteLayer);
   }
 
   update(
@@ -232,7 +257,18 @@ export class BeatorajaNoteLayer {
         // `note.endBeat`; this is purely a visual cap so the body stops growing once it has
         // reached the line.
         const yStartClipped = Math.min(y, judgementY);
-        const held = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
+        // "Held" = THIS specific LN is the one currently being judged on its lane.
+        // `isLaneLnHeld(channel)` is a channel-level flag (true while ANY LN on the lane is in
+        // its active judgement window), so a future, not-yet-judged LN on the same lane
+        // would also satisfy it.  Pair it with `note.judged` — engine flips this to `true`
+        // ONLY for the LN whose head has been judged (mirrors upstream's `state.processing`
+        // pointer in `JudgeManager`, which holds the specific `LongNote` pair currently
+        // resolving).  Result: only the judged LN gets the held / glow sprite; unrelated
+        // LNs further down the lane render their unheld variant.  User report: "判定して
+        // いない同一レーンの LN ノートも光ってしまう".
+        const isThisNoteBeingJudged = note.judged;
+        const heldChannel = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
+        const held = isThisNoteBeingJudged && heldChannel;
         const r = this.paintLongNote(
           usedG,
           usedS,
@@ -548,7 +584,10 @@ export class BeatorajaNoteLayer {
     if (g === undefined) {
       g = new Graphics();
       this.graphicsPool.push(g);
-      this.container.addChild(g);
+      // Graphics nodes are used as note-shape fallbacks (e.g. LN body fill when a sprite
+      // is missing AND for tap notes). Mount to `noteLayer` so they share the front-tier
+      // with tap-note sprites; LN body tilings live behind on `bodyLayer`.
+      this.noteLayer.addChild(g);
     } else {
       g.visible = true;
     }
@@ -560,7 +599,9 @@ export class BeatorajaNoteLayer {
     if (s === undefined) {
       s = new Sprite();
       this.spritePool.push(s);
-      this.container.addChild(s);
+      // Tap notes, LN start caps, and LN end caps all share this pool — mount to the
+      // front-tier `noteLayer` so they sit on top of LN bodies.
+      this.noteLayer.addChild(s);
     } else {
       s.visible = true;
     }
@@ -572,7 +613,9 @@ export class BeatorajaNoteLayer {
     if (t === undefined) {
       t = new TilingSprite({ texture, width: 0, height: 0 });
       this.tilingPool.push(t);
-      this.container.addChild(t);
+      // LN body tilings live on the back-tier `bodyLayer`, so caps + tap notes (mounted to
+      // `noteLayer`) always render on top regardless of frame-to-frame pool-index churn.
+      this.bodyLayer.addChild(t);
     } else {
       t.visible = true;
       t.texture = texture;

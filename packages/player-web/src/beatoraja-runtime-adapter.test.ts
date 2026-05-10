@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   BEATORAJA_OP,
   bombTimerId,
@@ -226,6 +226,43 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     // combo digit animation resyncs at the tail in tandem. Addresses "tail でコンボ数が
     // カウントアップされない (modernchic 限定)".
     expect(adapter.getTimerStart(446)).toBe(300);
+  });
+
+  it('auto-deactivates the re-stamped LN-hold timer after the bomb-hold window', async () => {
+    // The re-stamped HOLD timer must auto-deactivate so destinations with `loop = 0` (the
+    // beatoraja `Destination.loop` default, which ModernChic's lnbomb declaration inherits
+    // by omitting the field) stop animating after their cycle. Without auto-release, a
+    // re-stamped HOLD timer stays "on" forever and the lnbomb sprite loops indefinitely.
+    // User report: "AUTO PLAY で LN 判定後ボムが消えない".
+    //
+    // We use vitest's fake timers to verify the timeout fires; the exact window (320 ms)
+    // is documented in the adapter under `LN_TAIL_BOMB_HOLD_MS`.
+    vi.useFakeTimers();
+    try {
+      const clock = makeClock();
+      const adapter = new BeatorajaRuntimeAdapter({
+        chartPlayVariant: '7',
+        baseOps: new Set(),
+        getNowMs: clock.now,
+      });
+      clock.advance(100);
+      adapter.applyCommand({ kind: 'hold-lane-until-beat', channel: '19', beat: 64 });
+      clock.advance(200);
+      adapter.applyCommand({ kind: 'release-lane', channel: '19' });
+      adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '19', updatedAtMs: 300 });
+      // Re-stamped immediately on the verdict.
+      expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(300);
+      // Just before the auto-release fires: still active.
+      vi.advanceTimersByTime(319);
+      expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(300);
+      // After the 320 ms window: deactivated. Mirrors upstream's per-frame
+      // `switchTimer(holdTimerId, processing != null)` flipping the timer OFF once the
+      // tail's `processing` clears.
+      vi.advanceTimersByTime(1);
+      expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does NOT re-stamp the LN-hold timer for tap-note verdicts (no LN context)', () => {

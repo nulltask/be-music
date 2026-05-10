@@ -195,6 +195,25 @@ const KEYBEAM_PERFECT_WINDOW_MS = 250;
  */
 const FLASH_LANE_HOLD_MS = 60;
 
+/**
+ * How long after the LN-tail `hold_*p_keyN` re-stamp (see `lnTailVerdictLatch` consumption
+ * in {@link applyJudgeCombo}) before the timer is auto-deactivated. Mirrors upstream
+ * `JudgeManager.java:546-547`'s `switchTimer(holdTimerId, processing != null)`: once the
+ * LN's `state.processing` clears at the tail, upstream's next per-frame tick flips the
+ * timer OFF — which lets `loop` skins (the default beatoraja `Destination.loop = 0`,
+ * matching ModernChic's lnbomb declaration that omits the `loop` field) stop rendering
+ * because the timer's `prepareRegion` returns "off".
+ *
+ * Our adapter doesn't run a per-frame `switchTimer` sweep, so without an explicit
+ * auto-release the re-stamp would leave the timer permanently `on` — and a `loop = 0`
+ * bomb destination would animate forever. User report: "AUTO PLAY で LN 判定後ボムが
+ * 消えない". Pinning the window at 320 ms covers all surveyed lnbomb cycles
+ * (ModernChic `lnbombCycle = 160`, GdbG variants up to ~200) with a comfortable
+ * safety margin, while still being short enough that a subsequent LN on the same
+ * lane stamps a fresh start time before the auto-release fires.
+ */
+const LN_TAIL_BOMB_HOLD_MS = 320;
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -297,6 +316,14 @@ export class BeatorajaRuntimeAdapter {
    * scene tear-down mid-flash doesn't fire the callback against a disposed adapter.
    */
   private readonly flashReleaseHandles = new Set<ReturnType<typeof setTimeout>>();
+  /**
+   * `setTimeout` handles for the LN-tail bomb auto-release (see {@link LN_TAIL_BOMB_HOLD_MS}).
+   * Tracked separately from `flashReleaseHandles` so a `release-lane` (which clears the hold
+   * timer immediately via {@link deactivateLaneLnHoldTimer}) doesn't get a stale auto-release
+   * scheduled on top — the auto-release skips its work when the timer is already inactive.
+   * Cleared on dispose to keep callbacks from firing against a torn-down adapter.
+   */
+  private readonly lnTailBombReleaseHandles = new Set<ReturnType<typeof setTimeout>>();
   // Initial hispeed value before the host calls `setHiSpeed` (which it does once per frame from
   // `stateSignals.highSpeed()`). Aligned with `DEFAULT_PLAY_OPTIONS.hiSpeed = 2.0` in
   // `pixi-select` for consistency. Diverges from upstream `PlayConfig.java:16`'s `1.0f` — see
@@ -1039,6 +1066,19 @@ export class BeatorajaRuntimeAdapter {
     if (state.channel !== undefined && this.lnTailVerdictLatch.has(state.channel)) {
       this.startLaneLnHoldTimer(state.channel);
       this.lnTailVerdictLatch.delete(state.channel);
+      // Auto-release the re-stamped hold timer so its `loop = 0` consumers (ModernChic
+      // lnbomb, GdbG lnbomb — both omit `loop` and thus default to 0 = repeating) stop
+      // animating once their bomb cycle finishes. Mirrors upstream's per-frame
+      // `switchTimer(holdTimerId, processing != null)` (`JudgeManager.java:546-547`) which
+      // flips the timer OFF on the tick after the tail's `processing` clears. Without this,
+      // a re-stamped tail-time HOLD timer stays "on" forever and the lnbomb animation
+      // loops indefinitely. User report: "AUTO PLAY で LN 判定後ボムが消えない".
+      const channel = state.channel;
+      const handle = setTimeout(() => {
+        this.lnTailBombReleaseHandles.delete(handle);
+        this.deactivateLaneLnHoldTimer(channel);
+      }, LN_TAIL_BOMB_HOLD_MS);
+      this.lnTailBombReleaseHandles.add(handle);
     }
 
     // Update the per-(side, lane) most-recent-judge ring. Drives the keybeam imageset (`ref =
@@ -2485,6 +2525,11 @@ export class BeatorajaRuntimeAdapter {
     // frames don't get a stale KEY_OFF stamp from the previous chart's tail flashes.
     for (const handle of this.flashReleaseHandles) clearTimeout(handle);
     this.flashReleaseHandles.clear();
+    // Same idea for the LN-tail bomb auto-release handles. Pending timeouts here would
+    // deactivate the LN-hold timer of whatever chart loads next mid-frame, which would
+    // dim a freshly-started sustain glow.
+    for (const handle of this.lnTailBombReleaseHandles) clearTimeout(handle);
+    this.lnTailBombReleaseHandles.clear();
     // Per-lane judge ring — clear both sides so the keybeam / bomb imageset revert to their
     // neutral frame after a re-mount. Without this, a re-mounted scene carries the prior
     // run's last-judge stamps until they age out, so the very first frame of the new run
