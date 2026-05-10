@@ -62,6 +62,7 @@ import {
   normalizeBeatorajaImages,
   normalizeBeatorajaValues,
   type BeatorajaImageElement,
+  type BeatorajaImageId,
   type BeatorajaValueElement,
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture } from './beatoraja-render.ts';
@@ -369,6 +370,29 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * paint on top.
    */
   private readonly rowBarSprites: (Sprite | undefined)[] = [];
+  /**
+   * Per-row pre-resolved imageset frame textures. When the row's authored id resolved
+   * through an `imageset[]`, this slot holds an array of textures (one per
+   * `imageset.images[i]`) keyed by frame index. The renderer swaps `rowBarSprites[i].texture`
+   * to the matching frame based on the focused entry's bar TYPE per upstream
+   * `BarRenderer.java:269`'s `si.draw(sprite, time, ba.value, ...)`:
+   *
+   *   - `SongBar` with chart  → frame 0 (`bar-song`)
+   *   - `SongBar` no chart    → frame 4 (`bar-nosong`)
+   *   - `FolderBar`           → frame 1 (`bar-folder`)
+   *   - `TableBar`/`HashBar`  → frame 2 (`bar-table`)
+   *   - `GradeBar`            → frame 3 (`bar-grade`)
+   *   - `CommandBar`/etc      → frame 5 (`bar-command`)
+   *   - `SearchWordBar`       → frame 6 (`bar-search`)
+   *
+   * Our app currently surfaces only `'song'` and `'folder'` entries (no command / search /
+   * grade bars on the web port), so the active branches are 0, 1, and 4 only — the rest of
+   * the array is kept ready for when those types land.
+   *
+   * `undefined` slot means the row's id wasn't an imageset (= legacy single-texture path);
+   * the per-frame paint leaves `rowBarSprites[i].texture` as the build-time default.
+   */
+  private readonly rowBarFrameTextures: (ReadonlyArray<Texture | undefined> | undefined)[] = [];
   /**
    * Per-row label texts. `undefined` slot when the upstream-fixed 60-slot grid (audit A-9
    * — `BEATORAJA_SONGLIST_BAR_COUNT`) extends past the skin's authored `liston[]` count;
@@ -1697,6 +1721,10 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.rowFeatureLabels.length = 0;
     this.rowHitAreas.length = 0;
     this.rowBarSprites.length = 0;
+    // Pre-resolved imageset frame textures don't own any GPU lifetime (the underlying
+    // base texture is owned by the texture cache); just drop the references so the
+    // rebuild loop populates a fresh array indexed alongside `rowBarSprites`.
+    this.rowBarFrameTextures.length = 0;
     // Resolve the songlist's `level[].id` against the skin's `value[]` declarations
     // FIRST. When it matches (e.g. default beatoraja's `playlevel_bar` value points at
     // `number.png`), each row's level slot composes per-digit sprites cropped from the
@@ -1732,6 +1760,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       // `barimageon[i] = null` / `barimageoff[i] = null` for indices past `liston.length`.
       if (this.songList !== undefined && this.songList.rows[i] === undefined) {
         this.rowBarSprites.push(undefined);
+        this.rowBarFrameTextures.push(undefined);
         this.rowHitAreas.push(undefined);
         this.rowLabels.push(undefined);
         if (this.songList.level !== undefined) {
@@ -1752,6 +1781,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const bar = barId !== undefined ? this.buildFeatureLabelSprite(barId) : undefined;
       if (bar !== undefined) this.listLayer.addChild(bar);
       this.rowBarSprites.push(bar);
+      // Pre-resolve every imageset sub-image's texture so the per-frame paint can swap to
+      // the matching one based on the entry's bar TYPE (song / folder / etc.). Mirrors
+      // upstream `BarRenderer.java:269`'s `si.draw(sprite, time, ba.value, ...)` where
+      // `ba.value` indexes into the multi-frame `SkinImage`. Empty when the row's authored
+      // id is just a plain `image[]` (= no imageset chain) — the legacy single-texture
+      // path stays the only path in that case.
+      this.rowBarFrameTextures.push(this.resolveBarFrameTextures(rowMeta?.imagesetImages));
 
       // Hit area sprite — invisible but interactive. Sized to the row's text band on layout.
       const hit = new Sprite({ texture: Texture.WHITE });
@@ -1947,6 +1983,46 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (cropped === undefined) return undefined;
     return new Sprite({ texture: cropped, alpha: 1 });
   }
+
+  /**
+   * Pre-resolve every imageset sub-image's cropped texture so the per-frame paint can
+   * swap to the matching frame in O(1). Returns `undefined` when the row's authored id
+   * wasn't an imageset (= legacy single-image path — no swap needed). Slots within the
+   * array are `undefined` when an authored sub-image id failed to resolve in `image[]` /
+   * texture cache; the caller falls back to the legacy single-texture render in that case.
+   */
+  private resolveBarFrameTextures(
+    images: ReadonlyArray<BeatorajaImageId> | undefined,
+  ): ReadonlyArray<Texture | undefined> | undefined {
+    if (images === undefined || images.length === 0) return undefined;
+    if (this.featureLabelImages === undefined) {
+      this.featureLabelImages = new Map();
+      for (const image of normalizeBeatorajaImages(this.options.skin.image)) {
+        this.featureLabelImages.set(image.id, image);
+      }
+    }
+    const out: (Texture | undefined)[] = [];
+    for (const id of images) {
+      const image = this.featureLabelImages.get(id);
+      if (image === undefined) {
+        out.push(undefined);
+        continue;
+      }
+      const baseTexture = this.options.textures.get(image.src);
+      if (baseTexture === undefined) {
+        out.push(undefined);
+        continue;
+      }
+      const cropped = createCroppedBeatorajaTexture(baseTexture, {
+        x: image.x,
+        y: image.y,
+        w: image.w,
+        h: image.h,
+      });
+      out.push(cropped);
+    }
+    return out;
+  }
   /** Lazy `image[].id → BeatorajaImageElement` map for feature-label texture lookups. */
   private featureLabelImages: Map<string | number, BeatorajaImageElement> | undefined;
 
@@ -1983,7 +2059,21 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const isSelected = i === this.centreRowIndex;
       label.visible = true;
       hit.visible = true;
-      if (bar !== undefined) bar.visible = true;
+      if (bar !== undefined) {
+        bar.visible = true;
+        // Per-bar-type imageset frame swap. Mirrors upstream `BarRenderer.java:269`'s
+        // `si.draw(sprite, time, ba.value, ...)` where `ba.value` is the bar TYPE index
+        // resolved at `BarRenderer.java:150-166`. Our app currently surfaces only `'song'`
+        // and `'folder'` browse entries, mapping to frames 0 (`bar-song`) and 1
+        // (`bar-folder`). Future bar-type additions (table / grade / command / search)
+        // would extend the switch below; today they fall through to the default frame.
+        const frames = this.rowBarFrameTextures[i];
+        if (frames !== undefined) {
+          const frameIndex = entry.kind === 'folder' ? 1 : 0;
+          const frame = frames[frameIndex] ?? frames[0];
+          if (frame !== undefined) bar.texture = frame;
+        }
+      }
       const levelLabel = this.rowLevelLabels[i];
       const levelDigits = this.rowLevelDigitSprites[i];
       if (entry.kind === 'folder') {

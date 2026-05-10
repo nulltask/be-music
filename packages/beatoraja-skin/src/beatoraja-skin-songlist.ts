@@ -59,6 +59,30 @@ export interface BeatorajaSongListRowRect {
   y: number;
   w: number;
   h: number;
+  /**
+   * Full `imageset.images[]` array when this row's authored id resolved through an
+   * imageset (audit A-7 keeps `id` aliased to `images[0]` for legacy renderers, but the
+   * full list is required for upstream-faithful per-bar-type rendering).
+   *
+   * Mirrors `JsonSelectSkinObjectLoader.java:44-77` which constructs a multi-frame
+   * `SkinImage(tr[][], timer, cycle, null)` and `BarRenderer.java:269` which calls
+   * `si.draw(sprite, time, ba.value, ...)` to pick the frame matching the bar's TYPE
+   * (`SongBar` → 0 / `FolderBar` → 1 / `TableBar` → 2 / etc.). ModernChic authors:
+   *
+   *     parts.imageset = {
+   *         {id = "bar", images = {"bar-song", "bar-folder", "bar-table",
+   *                                "bar-grade", "bar-nosong", "bar-command", "bar-search"}}
+   *     }
+   *
+   * so `imagesetImages = ["bar-song", "bar-folder", ...]` (in author order). Renderers that
+   * support per-bar-type rendering select the matching index per row; renderers that don't
+   * fall back to `id` (= `images[0]`) and paint every row with the same first frame
+   * (= the user-reported "all bars share one color" behaviour).
+   *
+   * `undefined` when the row's id wasn't an imageset (= just a plain `image[]` reference,
+   * the typical default-skin case for `bar` / `list_on`).
+   */
+  imagesetImages?: ReadonlyArray<BeatorajaImageId>;
 }
 
 /**
@@ -310,7 +334,7 @@ function firstEntryId(input: unknown): BeatorajaImageId | undefined {
 
 function collectListRects(
   input: unknown,
-  imagesetLookup: ReadonlyMap<BeatorajaImageId, BeatorajaImageId>,
+  imagesetLookup: ReadonlyMap<BeatorajaImageId, ReadonlyArray<BeatorajaImageId>>,
 ): BeatorajaSongListRowRect[] | undefined {
   if (!Array.isArray(input)) return undefined;
   const out: BeatorajaSongListRowRect[] = [];
@@ -344,23 +368,35 @@ function collectListRects(
           : undefined;
     // Audit A-7: resolve through `imageset[].images[0]` when the row id matches an
     // imageset entry. Mirrors `JsonSelectSkinObjectLoader.java:44-77` which uses the
-    // imageset chain (with `ref = null` so only `images[0]` matters at draw time).
-    const id = rawId !== undefined ? (imagesetLookup.get(rawId) ?? rawId) : undefined;
-    out.push(id !== undefined ? { id, x, y, w, h } : { x, y, w, h });
+    // imageset chain — for legacy single-texture renderers we alias `id` to `images[0]`,
+    // but the full `images[]` array is preserved on `imagesetImages` so renderers that
+    // support per-bar-type frame selection (matching upstream `BarRenderer.java:269`'s
+    // `si.draw(sprite, time, ba.value, ...)` where `ba.value` is the bar TYPE index) can
+    // pick the right sub-image at draw time.
+    const imagesetImages = rawId !== undefined ? imagesetLookup.get(rawId) : undefined;
+    const id = imagesetImages !== undefined ? imagesetImages[0]! : rawId;
+    if (id !== undefined && imagesetImages !== undefined) {
+      out.push({ id, x, y, w, h, imagesetImages });
+    } else if (id !== undefined) {
+      out.push({ id, x, y, w, h });
+    } else {
+      out.push({ x, y, w, h });
+    }
   }
   return out.length > 0 ? out : undefined;
 }
 
 /**
- * Build a lookup from `imageset[].id` to its `images[0]` (= the underlying `image[].id`
- * the bar renders). Used by `parseBeatorajaSongList` to resolve the imageset chain at
- * parse time per audit A-7.
+ * Build a lookup from `imageset[].id` to its full `images[]` array. The renderer reads
+ * `images[0]` for the legacy single-texture path (audit A-7) and the full array for
+ * upstream-faithful per-bar-type frame selection
+ * (`BarRenderer.java:269`'s `si.draw(sprite, time, ba.value, ...)`).
  *
  * Returns an empty map when the skin omits `imageset` (most LR2-derived skins) — callers
  * walk the lookup and gracefully fall back to the original id.
  */
-function buildImagesetIdLookup(skin: BeatorajaSkin): ReadonlyMap<BeatorajaImageId, BeatorajaImageId> {
-  const out = new Map<BeatorajaImageId, BeatorajaImageId>();
+function buildImagesetIdLookup(skin: BeatorajaSkin): ReadonlyMap<BeatorajaImageId, ReadonlyArray<BeatorajaImageId>> {
+  const out = new Map<BeatorajaImageId, ReadonlyArray<BeatorajaImageId>>();
   const imagesetField = (skin as { imageset?: unknown }).imageset;
   if (!Array.isArray(imagesetField)) return out;
   for (const entry of imagesetField) {
@@ -376,15 +412,13 @@ function buildImagesetIdLookup(skin: BeatorajaSkin): ReadonlyMap<BeatorajaImageI
     if (id === undefined) continue;
     const images = obj.images;
     if (!Array.isArray(images) || images.length === 0) continue;
-    const firstRaw = images[0];
-    const firstImageId: BeatorajaImageId | undefined =
-      typeof firstRaw === 'string' && firstRaw.length > 0
-        ? firstRaw
-        : typeof firstRaw === 'number' && Number.isFinite(firstRaw)
-          ? firstRaw
-          : undefined;
-    if (firstImageId === undefined) continue;
-    out.set(id, firstImageId);
+    const collected: BeatorajaImageId[] = [];
+    for (const raw of images) {
+      if (typeof raw === 'string' && raw.length > 0) collected.push(raw);
+      else if (typeof raw === 'number' && Number.isFinite(raw)) collected.push(raw);
+    }
+    if (collected.length === 0) continue;
+    out.set(id, collected);
   }
   return out;
 }

@@ -289,6 +289,53 @@ describe('parseBeatorajaSongList', () => {
       expect(layout?.rows[0]?.id).toBe('bar-frame-a');
     });
 
+    it('preserves the full imageset.images[] on imagesetImages for per-bar-type frame swap', () => {
+      // ModernChic authors a 7-frame bar imageset:
+      //     imageset = {id = "bar", images = {"bar-song", "bar-folder", "bar-table",
+      //                                       "bar-grade", "bar-nosong", "bar-command",
+      //                                       "bar-search"}}
+      // Upstream `BarRenderer.java:269` calls `si.draw(sprite, time, ba.value, ...)` where
+      // `ba.value` is the bar TYPE index. Renderers that support per-bar-type frame
+      // selection read `imagesetImages` to look up the matching frame; renderers that
+      // don't fall back to the legacy `id` (= images[0]). Without this list every row
+      // painted with `bar-song` regardless of folder / song type — the user-reported
+      // "all bars share one color" symptom on ModernChic.
+      const skin = makeSkin({
+        imageset: [
+          {
+            id: 'bar',
+            images: ['bar-song', 'bar-folder', 'bar-table', 'bar-grade', 'bar-nosong', 'bar-command', 'bar-search'],
+          },
+        ],
+        songlist: {
+          liston: [{ id: 'bar', dst: [{ x: 1125, y: 800, w: 960, h: 70 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe('bar-song');
+      expect(layout?.rows[0]?.imagesetImages).toEqual([
+        'bar-song',
+        'bar-folder',
+        'bar-table',
+        'bar-grade',
+        'bar-nosong',
+        'bar-command',
+        'bar-search',
+      ]);
+    });
+
+    it('omits imagesetImages when the row id is a plain image[] (no imageset chain)', () => {
+      const skin = makeSkin({
+        // No imageset[] authored — the row id resolves directly to an image[] entry.
+        songlist: {
+          liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe('bar');
+      expect(layout?.rows[0]?.imagesetImages).toBeUndefined();
+    });
+
     it('keeps the original id when no imageset matches (back-compat for image[]-only skins)', () => {
       // Skins authoring bars as `image[]` directly (legacy / test fixtures / hand-rolled
       // simplified skins) skip the imageset wrapper. The resolver leaves the id as-is
