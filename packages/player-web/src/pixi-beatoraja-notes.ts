@@ -233,7 +233,17 @@ export class BeatorajaNoteLayer {
         // reached the line.
         const yStartClipped = Math.min(y, judgementY);
         const held = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
-        const r = this.paintLongNote(usedG, usedS, usedT, rect, lane, yEnd, yStartClipped, held);
+        const r = this.paintLongNote(
+          usedG,
+          usedS,
+          usedT,
+          rect,
+          lane,
+          yEnd,
+          yStartClipped,
+          held,
+          note.longNoteMode,
+        );
         usedG = r.g;
         usedS = r.s;
         usedT = r.t;
@@ -434,8 +444,28 @@ export class BeatorajaNoteLayer {
      * visible effect there — preserves the prior behavior on the 3 reference skins.
      */
     held: boolean,
+    /**
+     * LN authoring mode (`1` = LN, `2` = CN, `3` = HCN). Drives head-cap sprite selection
+     * per upstream `LaneRenderer.drawLongNote` (`LaneRenderer.java:671-697`):
+     *
+     *   - mode 2 (CN) / mode 3 (HCN): the head cap uses `lnstart[lane]` — upstream's
+     *     `longImage[0]` slot — yielding the small dedicated "charge start" sprite the
+     *     reference theme authors as `lns-*` (13 px tall on `play5.json`).
+     *   - mode 1 (LN): upstream's LN branch (lines 691-697) deliberately skips
+     *     `longImage[0]`; the head visualizes through the regular `note[lane]` sprite
+     *     instead — same image a tap note would use, full note height. We mirror that
+     *     by swapping the head crop to `note[lane]` for mode 1.
+     *   - `undefined` (LN mode unknown at the engine boundary, defensive default):
+     *     keep the previous `lnstart[lane]` rendering. Skins that ship matched
+     *     `note` / `lnstart` art see no difference; the user-visible "LN head looks too
+     *     small" symptom only manifests when `note[]` and `lnstart[]` differ.
+     */
+    longNoteMode: 1 | 2 | 3 | undefined,
   ): { g: number; s: number; t: number } {
-    const startCrop = this.resolveLaneSprite(this.noteSection.lnstart[lane]);
+    // Head sprite selection per the mode-aware rule above.
+    const startImageId =
+      longNoteMode === 1 ? this.noteSection.note[lane] : this.noteSection.lnstart[lane];
+    const startCrop = this.resolveLaneSprite(startImageId);
     const endCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
     // Pick the held / unheld body slot based on the live press state. Falls back to the
     // OTHER slot when the chosen one is empty — happens on legacy-mode skins where only
