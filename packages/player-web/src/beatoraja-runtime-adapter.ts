@@ -278,7 +278,11 @@ export class BeatorajaRuntimeAdapter {
    * scene tear-down mid-flash doesn't fire the callback against a disposed adapter.
    */
   private readonly flashReleaseHandles = new Set<ReturnType<typeof setTimeout>>();
-  private lastHiSpeed = 1;
+  // Initial hispeed value before the host calls `setHiSpeed` (which it does once per frame from
+  // `stateSignals.highSpeed()`). Aligned with `DEFAULT_PLAY_OPTIONS.hiSpeed = 2.0` in
+  // `pixi-select` for consistency. Diverges from upstream `PlayConfig.java:16`'s `1.0f` — see
+  // the rationale comment on `DEFAULT_PLAY_OPTIONS.hiSpeed`.
+  private lastHiSpeed = 2.0;
   /**
    * Player's lanecover position in `[0, 1]`. `0` = cover off (slider at home, no obscuring),
    * `1` = cover fully extended (covers the upper portion of the lane). Drives the `slider[]`

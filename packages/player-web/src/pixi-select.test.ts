@@ -97,7 +97,7 @@ describe('matchesSearchQuery', () => {
 
 describe('DEFAULT_PLAY_OPTIONS', () => {
   it('seeds LR2-style visual options for the first gameplay mount', () => {
-    expect(DEFAULT_PLAY_OPTIONS.hiSpeed).toBe(2.5);
+    expect(DEFAULT_PLAY_OPTIONS.hiSpeed).toBe(2.0);
     expect(DEFAULT_PLAY_OPTIONS.bga).toBe('ON');
     expect(DEFAULT_PLAY_OPTIONS.bgaSize).toBe('EXTEND');
     expect(DEFAULT_PLAY_OPTIONS.scoreGraph).toBe(true);

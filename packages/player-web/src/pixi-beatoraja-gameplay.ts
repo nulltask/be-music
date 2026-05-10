@@ -209,7 +209,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
   private currentFrame: PlayerUiFramePayload | null = null;
-  private hiSpeed = 1;
+  // Hispeed fallback used until `stateSignals.highSpeed()` reports a host-driven value (which it
+  // does on every update tick — see line ~929). Aligned with `DEFAULT_PLAY_OPTIONS.hiSpeed = 2.0`
+  // in `pixi-select` for consistency, NOT upstream `PlayConfig.java:16`'s `1.0f`. See the
+  // rationale comment on `DEFAULT_PLAY_OPTIONS.hiSpeed`.
+  private hiSpeed = 2.0;
   private host?: PixiSceneHost;
   private startMs = 0;
   private tickerHandle?: (ticker: Ticker) => void;

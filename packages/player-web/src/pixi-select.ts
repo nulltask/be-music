@@ -343,7 +343,12 @@ const GAUGE_CYCLE: readonly PixiGaugeType[] = ['GROOVE', 'HARD', 'DEATH', 'EASY'
 
 /** Default play-option values, applied at view construction time. */
 export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
-  hiSpeed: 2.5,
+  // Seed at 2.0× rather than upstream beatoraja's `PlayConfig.java:16` default of `1.0f`.
+  // 1.0 produces an extremely slow scroll on most charts (ones BPM in the 130-180 range cover
+  // about a full lane in 1.8 seconds at hispeed=1) which reads as "the chart isn't moving" to
+  // anyone coming from LR2 / iidx-style defaults. 2.0 is the lowest preset most contemporary
+  // BMS players actually use; the Up/Down hotkeys can adjust from there.
+  hiSpeed: 2.0,
   autoPlay: false,
   bga: 'ON',
   // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
