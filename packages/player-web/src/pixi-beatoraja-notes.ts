@@ -481,28 +481,39 @@ export class BeatorajaNoteLayer {
      */
     held: boolean,
     /**
-     * LN authoring mode (`1` = LN, `2` = CN, `3` = HCN). Drives head-cap sprite selection
-     * per upstream `LaneRenderer.drawLongNote` (`LaneRenderer.java:671-697`):
+     * LN authoring mode (`1` = LN, `2` = CN, `3` = HCN). Drives top-cap presence per
+     * upstream `LaneRenderer.drawLongNote` (`LaneRenderer.java:671-697`):
      *
-     *   - mode 2 (CN) / mode 3 (HCN): the head cap uses `lnstart[lane]` — upstream's
-     *     `longImage[0]` slot — yielding the small dedicated "charge start" sprite the
-     *     reference theme authors as `lns-*` (13 px tall on `play5.json`).
+     *   - mode 2 (CN) / mode 3 (HCN): top cap uses `lnstart[lane]` — upstream's
+     *     `longImage[0]` slot (`lns-*` on `play5.json`).
      *   - mode 1 (LN): upstream's LN branch (lines 691-697) deliberately skips
-     *     `longImage[0]`; the head visualizes through the regular `note[lane]` sprite
-     *     instead — same image a tap note would use, full note height. We mirror that
-     *     by swapping the head crop to `note[lane]` for mode 1.
-     *   - `undefined` (LN mode unknown at the engine boundary, defensive default):
-     *     keep the previous `lnstart[lane]` rendering. Skins that ship matched
-     *     `note` / `lnstart` art see no difference; the user-visible "LN head looks too
-     *     small" symptom only manifests when `note[]` and `lnstart[]` differ.
+     *     `longImage[0]`; LN heads draw the regular `note[lane]` sprite through a
+     *     separate code path (not this function). We approximate that here by omitting
+     *     the top cap entirely — the body extends all the way to `yEnd` and the engine's
+     *     own note layer continues to paint a tap-note sprite at the head while it's
+     *     still on-screen via the standard `note[]` lookup. Matches upstream's visual
+     *     where an LN looks like a tap note glued onto a body, with no separate top cap.
+     *   - `undefined`: defensive default — treat like mode 2/3 so any host that hasn't
+     *     wired `longNoteMode` through the frame keeps the both-caps layout.
      */
     longNoteMode: 1 | 2 | 3 | undefined,
   ): { g: number; s: number; t: number } {
-    // Head sprite selection per the mode-aware rule above.
-    const startImageId =
-      longNoteMode === 1 ? this.noteSection.note[lane] : this.noteSection.lnstart[lane];
-    const startCrop = this.resolveLaneSprite(startImageId);
-    const endCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
+    // Cap sprite selection mirrors upstream's skin-spec convention (`LaneRenderer.java:671-697`):
+    //
+    //   - `lnend` = SCREEN-BOTTOM cap (judgement-line side, where the player first sees the LN
+    //              touch the line). Always rendered.
+    //   - `lnstart` = SCREEN-TOP cap (future side, where the LN extends into the upcoming chart).
+    //                Rendered only on CN/HCN; LN-mode skips it.
+    //
+    // Pre-fix the renderer had `lnstart` / `lnend` swapped (lnstart pinned at yStart =
+    // judgement-line side, lnend pinned at yEnd = future side). Both `play5.json` and
+    // `ModernChic/lns-*` / `lne-*` art assume the upstream convention, so the swap is
+    // user-visible as "head and tail caps look mirrored" — and the LN body's range was off
+    // because it spanned the entire LN instead of the cap-bordered interior. User report:
+    // "ModernChic で head + body の部分の描画がおかしい".
+    const bottomCrop = this.resolveLaneSprite(this.noteSection.lnend[lane]);
+    const topCrop =
+      longNoteMode === 1 ? undefined : this.resolveLaneSprite(this.noteSection.lnstart[lane]);
     // Pick the held / unheld body slot based on the live press state. Falls back to the
     // OTHER slot when the chosen one is empty — happens on legacy-mode skins where only
     // `lnBodyHeld` is populated (`lnBodyUnheld === []` after parse), and we'd rather
@@ -511,8 +522,10 @@ export class BeatorajaNoteLayer {
     const fallbackBodyId = held ? this.noteSection.lnBodyUnheld[lane] : this.noteSection.lnBodyHeld[lane];
     const bodyId = primaryBodyId !== undefined && primaryBodyId.length > 0 ? primaryBodyId : fallbackBodyId;
     const bodyCrop = bodyId !== undefined ? this.resolveLaneSprite(bodyId) : undefined;
-    if (startCrop === undefined || endCrop === undefined || bodyCrop === undefined) {
-      // Fall back to colored rectangles when any of the LN sprite slots is missing.
+    if (bottomCrop === undefined || bodyCrop === undefined) {
+      // Fall back to colored rectangles when the bottom cap or body sprite is missing.
+      // (Top cap is allowed to be missing — that's the legitimate LN-mode case where
+      // upstream itself doesn't draw a top cap.)
       const color = this.fallbackColorForLane(lane);
       const g = this.acquireGraphics(usedG);
       g.clear();
@@ -521,55 +534,68 @@ export class BeatorajaNoteLayer {
       g.rect(rect.x, yEnd - 6, rect.w, 12).fill({ color });
       return { g: usedG + 1, s: usedS, t: usedT };
     }
-    // Body — repeats the `lnbody` cell vertically across the LN duration. `TilingSprite`
-    // automatically wraps the texture to fit our requested width / height.
-    const body = this.acquireTiling(usedT, bodyCrop.sprite.texture);
-    // LN start / end caps share the tap-note convention: cell height stays at the source
-    // value; width stretches to the lane. Scaling cap H by `lane.w / cellW` (= the
-    // `* scaleX` pattern) puffed the caps to ~2× their authored size, which is what made
-    // LNs read as visually too tall and made the body / cap junction ride high vs.
-    // beatoraja's reference rendering.
-    const startH = startCrop.cellH;
-    const endH = endCrop.cellH;
     // Apply `note.expansionrate` to LN width and cap heights — same convention as tap notes.
-    // Body Y positions stay anchored to `yStart` / `yEnd` so the LN connects the start / end
-    // caps without gaps; only the X / cap-H dimensions expand.
     const exX = this.noteSection.expansionRate.x / 100;
     const exY = this.noteSection.expansionRate.y / 100;
     const drawW = rect.w * exX;
     const drawX = rect.x - (drawW - rect.w) / 2;
-    const startHExpanded = startH * exY;
-    const endHExpanded = endH * exY;
+    const bottomHExpanded = bottomCrop.cellH * exY;
+    const topHExpanded = topCrop !== undefined ? topCrop.cellH * exY : 0;
+
+    // Body — repeats the `lnbody` cell vertically across the LN's main span. Upstream body
+    // range (Y-UP, `LaneRenderer.java:687-688, 694-695`) is `[y - height + scale, y]`,
+    // i.e. tail-top to head-bottom — `scale` (one cap's worth) trimmed off the LN's bottom
+    // for the `lnend` cap. The TOP cap (`lnstart`, CN/HCN only) is drawn ABOVE the body's
+    // top edge (Y-UP `+ scale`); body itself doesn't shrink to make room for it. Translated
+    // to Pixi Y-DOWN: body bottom = yStart - bottomHExpanded (lnend cap's top); body top =
+    // yEnd unconditionally — top cap then sits ABOVE the body at y = yEnd - topHExpanded.
+    const body = this.acquireTiling(usedT, bodyCrop.sprite.texture);
+    const bodyTopY = yEnd;
+    const bodyBottomY = yStart - bottomHExpanded;
     body.x = drawX;
     body.width = drawW;
-    // Body sits between the bottom of the start cap (yStart) and the top of the end cap (yEnd).
-    body.y = yEnd;
-    body.height = Math.max(0, yStart - yEnd);
+    body.y = bodyTopY;
+    body.height = Math.max(0, bodyBottomY - bodyTopY);
     body.tilePosition.set(0, 0);
     body.tileScale.set(drawW / Math.max(1, bodyCrop.cellW), 1);
     body.alpha = 1;
 
-    // Start cap (visually closer to the judgement line — pinned at `yStart`).
-    const start = this.acquireSprite(usedS);
-    start.texture = startCrop.sprite.texture;
-    start.x = drawX;
-    start.y = yStart - startHExpanded;
-    start.width = drawW;
-    start.height = startHExpanded;
-    start.tint = 0xffffff;
-    start.alpha = 1;
+    // Bottom cap (`lnend`, screen-bottom = judgement-line side). Upstream Y-UP draw is
+    // `(x, y - height, width, scale)` → bottom edge at the LN's lowest Y, top edge at
+    // body's bottom. Pixi Y-DOWN: top edge at `yStart - bottomHExpanded`, bottom edge at
+    // `yStart`. Anchored at the bottom-edge convention of the renderer.
+    const bottomCap = this.acquireSprite(usedS);
+    bottomCap.texture = bottomCrop.sprite.texture;
+    bottomCap.x = drawX;
+    bottomCap.y = yStart - bottomHExpanded;
+    bottomCap.width = drawW;
+    bottomCap.height = bottomHExpanded;
+    bottomCap.tint = 0xffffff;
+    bottomCap.alpha = 1;
 
-    // End cap (further from the judgement line — pinned at `yEnd`).
-    const end = this.acquireSprite(usedS + 1);
-    end.texture = endCrop.sprite.texture;
-    end.x = drawX;
-    end.y = yEnd - endHExpanded;
-    end.width = drawW;
-    end.height = endHExpanded;
-    end.tint = 0xffffff;
-    end.alpha = 1;
+    // Top cap (`lnstart`, screen-top = future side). Upstream Y-UP draw is
+    // `(x, y, width, scale)` → bottom edge at LN top (= body top edge), TOP EDGE
+    // ABOVE the body at `y + scale`. The cap therefore overhangs the body upward,
+    // pulling the visible LN shape slightly past `yEnd` toward the future. In Pixi
+    // Y-DOWN: top edge at `yEnd - topHExpanded`, bottom edge at `yEnd`.
+    //
+    // CN/HCN only. LN mode passes `topCrop = undefined` and we skip the cap; the body
+    // already extends to `yEnd` so the LN's silhouette ends at the body's flat top edge
+    // (matching upstream's `LaneRenderer.java:691-697` LN branch that deliberately omits
+    // `longImage[0]`).
+    if (topCrop !== undefined) {
+      const topCap = this.acquireSprite(usedS + 1);
+      topCap.texture = topCrop.sprite.texture;
+      topCap.x = drawX;
+      topCap.y = yEnd - topHExpanded;
+      topCap.width = drawW;
+      topCap.height = topHExpanded;
+      topCap.tint = 0xffffff;
+      topCap.alpha = 1;
+      return { g: usedG, s: usedS + 2, t: usedT + 1 };
+    }
 
-    return { g: usedG, s: usedS + 2, t: usedT + 1 };
+    return { g: usedG, s: usedS + 1, t: usedT + 1 };
   }
 
   private fallbackColorForLane(lane: number): number {
