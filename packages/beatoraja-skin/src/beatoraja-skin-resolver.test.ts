@@ -121,6 +121,64 @@ describe('resolveSourcePath', () => {
     );
     expect(result).toBe('skin/default/play/background/a.png');
   });
+
+  it('accepts canonical (full files-map key) override paths', () => {
+    // `buildDefaultSkinConfigFiles` and the skin-options panel's user picks both store
+    // canonical paths (matching upstream beatoraja's `config.json` storage of absolute
+    // disk paths). Without canonical-aware resolution, the override path gets re-prepended
+    // with `dirname(entryPath)`, lands at a non-existent doubled key, and the bundler
+    // emits a misleading "no files matched wildcard" warning. ModernChic's bg / judge /
+    // keybeam / bomb / glow textures all hit this path — fix lets them resolve correctly.
+    const files = makeFiles([
+      ['beatoraja/skin/ModernChic/play7_hw.luaskin', '{}'],
+      ['beatoraja/skin/ModernChic/Play/parts/common/bg/#default.png', '1'],
+      ['beatoraja/skin/ModernChic/Play/parts/common/bg/blue.png', '2'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'beatoraja/skin/ModernChic/play7_hw.luaskin',
+      'Play/parts/common/bg/*.png',
+      { bg: 'beatoraja/skin/ModernChic/Play/parts/common/bg/#default.png' },
+      [{ name: 'bg', path: 'Play/parts/common/bg/*.png' }],
+    );
+    expect(result).toBe('beatoraja/skin/ModernChic/Play/parts/common/bg/#default.png');
+  });
+
+  it('falls back to relative-path resolution when canonical lookup misses', () => {
+    // Backward compatibility for callers that stored relative paths (hand-edited configs,
+    // older API output). The canonical lookup misses (no exact key match), then the
+    // relative-path branch prepends `dirname(entryPath)` and finds the file.
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/blue.png', '1'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/blue.png' }, // relative path
+      [{ name: 'Background', path: 'play/background/*.png' }],
+    );
+    expect(result).toBe('skin/default/play/background/blue.png');
+  });
+
+  it('returns undefined when override path resolves neither canonically nor relatively', () => {
+    // Defensive: a stale config pointing at a deleted file should fail cleanly. The
+    // bundler will then surface this as a missing-source warning rather than silently
+    // falling back to the wildcard's first match (which would mask the user's broken pick).
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/blue.png', '1'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/missing.png' },
+      [{ name: 'Background', path: 'play/background/*.png' }],
+    );
+    expect(result).toBeUndefined();
+  });
 });
 
 describe('buildDefaultSkinConfigFiles', () => {

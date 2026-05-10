@@ -149,6 +149,15 @@ function stemOf(path: string): string {
  * Look up the source path for a `source[]` entry, applying the user's `filepath[]` override when one is present.
  * Returns the canonical key in `files` (or `undefined` when nothing matched). When the path includes a wildcard and
  * no override is given, picks the first sorted match for determinism.
+ *
+ * Override-path resolution accepts BOTH canonical (full files-map key) and relative (skin-entry-relative)
+ * inputs. {@link buildDefaultSkinConfigFiles} and the skin-options panel's user picks both produce canonical
+ * paths (matching upstream beatoraja's Java side, which stores absolute disk paths in `config.json`); we try
+ * those as direct lookups first, falling back to {@link resolveBeatorajaPath}'s base-dir-prepend for any
+ * caller that stored relative paths (hand-edited config payloads, future API changes). Without the canonical
+ * branch, every wildcard source gated by a `filepath[]` entry resolves to `undefined` because the canonical
+ * path gets re-prepended with `dirname(entryPath)` and lands at a non-existent doubled key — most of
+ * ModernChic's chrome textures (bg / judge / keybeam / bomb / glow / ...) hit this path.
  */
 export function resolveSourcePath(
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>,
@@ -167,6 +176,13 @@ export function resolveSourcePath(
       if (f.path === sourcePath) {
         const chosen = filepathOverrides[f.name];
         if (typeof chosen === 'string' && chosen.length > 0) {
+          // Canonical path branch — direct files-map lookup. Wins for the common case where
+          // the host stored a canonical path (every default-pick + every user pick today).
+          const direct = findCaseInsensitivePath(files, normalizePath(chosen));
+          if (direct !== undefined) return direct;
+          // Relative-path fallback — defends against hand-edited config payloads or future
+          // API shifts that emit relative paths. `resolveBeatorajaPath` does the base-dir
+          // prepend that breaks canonical inputs but works correctly for relative ones.
           return resolveBeatorajaPath(files, entryPath, chosen);
         }
       }
