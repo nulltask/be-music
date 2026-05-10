@@ -970,11 +970,36 @@ export class BeatorajaPlaySkinView {
     // image / number sub-entry × judge kind), each with the per-judge op appended to the gate.
     // Concatenated with `skin.destination` so the standard destination pipeline handles them.
     const judges = normalizeBeatorajaJudges(options.skin.judge);
+    // Walk `skin.destination` once to collect every authored destination id — used to filter
+    // `parts.judge[]` so only entries actually referenced by `parts.destination` get
+    // expanded. Mirrors upstream's `JsonPlaySkinObjectLoader.java:220-221`:
+    //
+    //     for (JsonSkin.Judge judge : sk.judge) {
+    //         if (dst.id.equals(judge.id)) { ... instantiate ... }
+    //     }
+    //
+    // ModernChic's `judge.lua` authors 5 judge entries (`def`, `laneCoverRest_{1,2}`,
+    // `constantRest_{1,2}`) and only references one (or two) via `parts.destination` based
+    // on user options. Without this filter every layout's children painted simultaneously,
+    // producing 2-3 stacked judge sprites per fire — the user-reported flicker.
+    const referencedJudgeIds = new Set<string>();
+    if (Array.isArray(options.skin.destination)) {
+      for (const raw of options.skin.destination) {
+        if (raw === null || typeof raw !== 'object') continue;
+        const id = (raw as { id?: unknown }).id;
+        if (typeof id === 'string') referencedJudgeIds.add(id);
+        else if (typeof id === 'number') referencedJudgeIds.add(String(id));
+      }
+    }
     // Pass `valueById` so `judge[].numbers[]` (combo digits) get upstream's pre-shift
     // (`ckf.w * digit / 2`) applied to each fold AND have their value declarations'
     // `align` mutated to 2 (CENTER). Without these, "GREAT 46" rendered with a 160 px gap
     // between the judge word and combo digit.
-    const expandedJudgeDestinations = expandBeatorajaJudgeDestinations(judges, valueById);
+    const expandedJudgeDestinations = expandBeatorajaJudgeDestinations(
+      judges,
+      valueById,
+      referencedJudgeIds,
+    );
     // Beatoraja themes mark the playfield's z-order with a `{id = noteSection.id, offset = N}`
     // destination — the "notes anchor". Skin authors typically write it WITHOUT a `dst[]` field
     // since it carries no visual content (`table.insert(skin.destination, {id = "notes", offset =

@@ -320,4 +320,64 @@ describe('expandBeatorajaJudgeDestinations', () => {
     const number = expanded[1]! as Record<string, unknown>;
     expect(number.dst).toEqual([{ time: 0, x: 100, y: 200, w: 40, h: 40 }]);
   });
+
+  // Mirrors upstream `JsonPlaySkinObjectLoader.java:220-221`:
+  //   for (JsonSkin.Judge judge : sk.judge) {
+  //       if (dst.id.equals(judge.id)) { ... instantiate ... }
+  //   }
+  // Only judges whose id matches a destination id get instantiated. The previous TS impl
+  // expanded every parts.judge entry regardless — visible as 2-3 stacked judge sprites on
+  // ModernChic where 5 alternate-layout judge entries (`def`, `laneCoverRest_{1,2}`,
+  // `constantRest_{1,2}`) were all painting simultaneously even though `parts.destination`
+  // referenced just one.
+  it('skips judge entries whose id is not in the referencedJudgeIds set', () => {
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 'def',
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] }],
+        numbers: [],
+      },
+      {
+        id: 'laneCoverRest_1',
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] }],
+        numbers: [],
+      },
+      {
+        id: 'constantRest_2',
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 0, y: 0, w: 100, h: 100 }] }],
+        numbers: [],
+      },
+    ]);
+    // parts.destination references only `def`; the other two layouts must be skipped.
+    const referenced = new Set(['def']);
+    const expanded = expandBeatorajaJudgeDestinations(judges, undefined, referenced);
+    // 6 image destinations from `def` (one per judge tier PG/GR/GD/BD/PR/MS — though we only
+    // authored one image, the expansion processes images.length entries). The two unreferenced
+    // entries contribute 0 destinations each.
+    expect(expanded).toHaveLength(judges[0]!.images.length);
+  });
+
+  it('expands every judge entry when no referencedJudgeIds set is supplied (legacy fallback)', () => {
+    // Hosts that haven't wired the destination scan yet (or older tests) keep working — the
+    // filter only activates when an explicit set is passed.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 'a',
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }],
+        numbers: [],
+      },
+      {
+        id: 'b',
+        index: 0,
+        images: [{ id: 'judgef-pg', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }],
+        numbers: [],
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    expect(expanded.length).toBe(judges[0]!.images.length + judges[1]!.images.length);
+  });
 });

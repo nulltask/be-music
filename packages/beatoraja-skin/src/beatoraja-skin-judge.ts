@@ -128,9 +128,36 @@ export function expandBeatorajaJudgeDestinations(
    * align override) — useful for tests that don't need the full skin context.
    */
   valuesById?: ReadonlyMap<BeatorajaImageId, BeatorajaValueElement>,
+  /**
+   * Optional set of judge-element ids that the skin's `parts.destination` actually
+   * references — produced upstream by walking `parts.destination[]` and collecting every
+   * destination's `id`. When provided, judge entries whose `id` is NOT in the set are
+   * SKIPPED entirely.
+   *
+   * Mirrors upstream `JsonPlaySkinObjectLoader.java:220-221`'s instantiation guard:
+   *
+   *     for (JsonSkin.Judge judge : sk.judge) {
+   *         if (dst.id.equals(judge.id)) { ... instantiate ... }
+   *     }
+   *
+   * Only the judge whose `id` matches the current destination's id is built; the rest of
+   * `parts.judge[]` is dead authoring kept as alternate layouts. ModernChic's `judge.lua`
+   * authors 5 judge entries (`def`, `laneCoverRest_{1,2}`, `constantRest_{1,2}`) and toggles
+   * which one's id appears in `parts.destination` based on user options. Without honoring
+   * this filter our expansion emitted destinations for ALL 5 layouts simultaneously — even
+   * when the user-selected layout was just `def`, the other 4 still painted (gated by their
+   * `draw` predicates), so a single judge fire produced up to 3 stacked image sprites with
+   * different alphas / cycle phases. Visually that reads as "the judge popup is flickering"
+   * and "the wrong verdict image is showing" — the user-reported symptoms.
+   *
+   * Omitting the set falls back to "expand every judge entry" (the previous behaviour),
+   * which keeps tests / hosts that haven't wired the destination scan working.
+   */
+  referencedJudgeIds?: ReadonlySet<string>,
 ): Array<Readonly<Record<string, unknown>>> {
   const out: Array<Readonly<Record<string, unknown>>> = [];
   for (const judge of judges) {
+    if (referencedJudgeIds !== undefined && !referencedJudgeIds.has(judge.id)) continue;
     const side: 1 | 2 = judge.index === 1 ? 2 : 1;
     const ops = SIDE_JUDGE_OPS[side];
     // Detect whether the skin authored the modern fullgauge-PG substitute at index 6 (audit
