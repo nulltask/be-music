@@ -619,6 +619,61 @@ describe('BeatorajaPlaySkinView', () => {
     });
   });
 
+  describe('gauge entry id matching (string vs number coercion)', () => {
+    // ModernChic authors `parts.gauge.id = 2001` (numeric Lua value) but the matching
+    // destination uses `id = "2001"` (string-quoted). Upstream's JsonSkin.Gauge.id is declared
+    // as `String` (`JsonSkin.java:217`), so the JSON deserializer coerces the number to a
+    // string; `dst.id.equals(sk.gauge.id)` then matches both forms. Our Lua-table parser keeps
+    // numeric/string ids verbatim, so the matcher must string-coerce both sides explicitly.
+    // Without this fix the gauge entry was never built — visible as a pure-black gauge on
+    // ModernChic with no `[beatoraja-view] gauge entry built` diagnostic ever logged.
+
+    it('builds a gauge entry when destination.id is a string and gauge.id is a number', () => {
+      const skin = makeSkin({
+        // Provide a gauge node image so `buildGaugeEntry` succeeds.
+        image: [{ id: 'gauge-r1', src: 0, x: 0, y: 0, w: 8, h: 35 }],
+        gauge: { id: 2001, parts: 50, nodes: ['gauge-r1'] } as unknown as BeatorajaSkin['gauge'],
+        destination: [
+          {
+            id: '2001', // string, mirroring ModernChic's authored destination id
+            timer: 0,
+            loop: -1,
+            offset: 0,
+            dst: [{ time: 0, x: 0, y: 0, w: 100, h: 30, a: 255, r: 255, g: 255, b: 255 }],
+          },
+        ],
+      });
+      const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+      // The matched gauge entry pre-allocates `parts` cells + 1 overlay sprite, so the
+      // container has at least 51 children when matching succeeded. Pre-fix the destination
+      // dropped through to `imageById.get("2001")` (undefined) and produced no entry.
+      expect(view.container.children.length).toBeGreaterThanOrEqual(50);
+      view.dispose();
+    });
+
+    it('builds a gauge entry when both ids are numbers (default skin convention)', () => {
+      // Default `play24.json` authors both numerically (`"id": 2001` literal). This is the
+      // path that worked before the fix; we keep it under test to make sure the string
+      // coercion doesn't break the original convention.
+      const skin = makeSkin({
+        image: [{ id: 'gauge-r1', src: 0, x: 0, y: 0, w: 8, h: 35 }],
+        gauge: { id: 2001, parts: 50, nodes: ['gauge-r1'] } as unknown as BeatorajaSkin['gauge'],
+        destination: [
+          {
+            id: 2001,
+            timer: 0,
+            loop: -1,
+            offset: 0,
+            dst: [{ time: 0, x: 0, y: 0, w: 100, h: 30, a: 255, r: 255, g: 255, b: 255 }],
+          },
+        ],
+      });
+      const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+      expect(view.container.children.length).toBeGreaterThanOrEqual(50);
+      view.dispose();
+    });
+  });
+
   it('dispose() detaches sprites from the container without throwing', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     expect(() => view.dispose()).not.toThrow();

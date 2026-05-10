@@ -1201,7 +1201,16 @@ export class BeatorajaPlaySkinView {
           this.entries.push(this.buildPmCharaEntry(group, pmcharaElement, options.textures));
           continue;
         }
-        if (gaugeElement !== undefined && group.id === gaugeElement.id) {
+        // Gauge id matching uses string-coerced equality. Upstream's `JsonSkin.Gauge.id` is
+        // declared as `String` (`JsonSkin.java:217`), so when the JSON authoring uses a numeric
+        // literal (`"id": 2001`) the JSON deserializer coerces it to the string "2001" — and
+        // `dst.id.equals(sk.gauge.id)` then matches against destinations whose id was authored
+        // either as `2001` or `"2001"`. Our Lua-table parser preserves both numeric and string
+        // forms verbatim (BeatorajaImageId = number | string), so ModernChic's split authoring
+        // (`parts.gauge.id = 2001` numeric vs `destination.id = "2001"` string) only matches
+        // here when we string-coerce both sides — without this the gauge entry was never
+        // built, leaving the gauge canvas pure black.
+        if (gaugeElement !== undefined && String(group.id) === String(gaugeElement.id)) {
           const gaugeEntry = this.buildGaugeEntry(group, gaugeElement, imageById, options.textures);
           if (gaugeEntry !== undefined) this.entries.push(gaugeEntry);
         }
