@@ -903,13 +903,22 @@ export const BEATORAJA_NUM = {
   /**
    * prop.lua `maxcombo = 75` (upstream `NUMBER_MAXCOMBO`). Context-dependent:
    *
-   * - **During play**: running max-combo of the CURRENT run — `JudgeManager.getScoreData().getCombo()`
-   *   refreshed via `score.setCombo(max(score, live))` on every judge. This is what default
-   *   `play5.json`'s `judgen-*` (judge-popup combo digits) reads.
-   * - **Music select**: stored best-run combo for this chart (`BarManager.getSelected().getScore().getCombo()`).
+   * - **During play**: running max-combo of the CURRENT run —
+   *   `JudgeManager.getScoreData().getCombo()` refreshed via `score.setCombo(max(score, live))`
+   *   on every judge.
+   * - **Music select**: stored best-run combo for this chart
+   *   (`BarManager.getSelected().getScore().getCombo()`).
    *
-   * The `BEST_*` prefix in this enum is a naming holdover from the music-select interpretation;
-   * the play-scene adapter wires it to the CURRENT-run max combo so judge popups render correctly.
+   * Skins commonly author `value[].ref = MAIN.NUM.MAXCOMBO` on the judge popup's combo digits
+   * (`judgen-*`), but per `SkinJudge.prepare()` (`SkinJudge.java:108`) upstream OVERRIDES that
+   * ref with `JudgeManager.getNowCombo(player)` — the per-side live combo at the time of the
+   * latest judge — via SkinNumber's explicit-value `prepare(time, state, value, ox, oy)`
+   * overload. The judge expansion thus rewrites the matching `value[].ref` to
+   * {@link SYNTHETIC_NUM_JUDGE_COMBO_1P} / `_2P` (resolved against the adapter's
+   * `lastJudgeCombo[side]` latch); the running-max-combo interpretation of `MAXCOMBO` is
+   * preserved for non-judge readouts (score boards, result screen, etc.).
+   *
+   * The `BEST_*` prefix in this enum is a naming holdover from the music-select interpretation.
    */
   BEST_MAXCOMBO: 75,
   /** prop.lua `misscount = 76`. */
@@ -1174,3 +1183,25 @@ export const OFFSET_JUDGEDETAIL_1P = 33;
  */
 export const SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P = 20001;
 export const SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P = 20002;
+
+/**
+ * Synthetic `value[].ref` codes the judge expansion swaps in for `judgen-*` combo digits so
+ * the renderer paints the per-side LIVE combo at the time of the most recent judge — mirroring
+ * upstream `SkinJudge.prepare()`'s explicit value override at `SkinJudge.java:108`:
+ *
+ *     nowCount.prepare(time, state, ((BMSPlayer)state).getJudgeManager().getNowCombo(player),
+ *                      nowJudge.region.x, nowJudge.region.y);
+ *
+ * `SkinNumber.prepare(time, state, value, ox, oy)` consumes the explicit `value` arg in place
+ * of `ref.get(state)`, so whatever the JSON authored (`ref = MAIN.NUM.MAXCOMBO` is the
+ * convention; ModernChic / default both use it) is intentionally discarded in favor of
+ * `JudgeManager.getNowCombo(player)`. Without this swap every skin renders the running max
+ * combo in the judge popup — visible to the user as "the combo digit stays at the max even
+ * after the player breaks combo" because `BEAT_MAXCOMBO` (= prop.lua `maxcombo = 75`) only
+ * grows monotonically.
+ *
+ * Picked from the same 20000+ synthetic range as the offset codes above so it never collides
+ * with prop.lua's standard refs (every documented ref is < 2000).
+ */
+export const SYNTHETIC_NUM_JUDGE_COMBO_1P = 20101;
+export const SYNTHETIC_NUM_JUDGE_COMBO_2P = 20102;

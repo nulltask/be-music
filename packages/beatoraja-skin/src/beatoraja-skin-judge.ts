@@ -19,6 +19,8 @@
 import { flattenBeatorajaElements } from './beatoraja-skin-element.ts';
 import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
 import {
+  SYNTHETIC_NUM_JUDGE_COMBO_1P,
+  SYNTHETIC_NUM_JUDGE_COMBO_2P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P,
 } from './beatoraja-runtime-ids.ts';
@@ -201,8 +203,19 @@ export function expandBeatorajaJudgeDestinations(
       // Override the value's align to 2 (CENTER) — beatoraja's `SkinJudge` hardcodes center-
       // align for combo digits regardless of the JSON's `value.align` field. Mutation is safe
       // because `judgen-*` ids are conventionally only referenced from `judge[].numbers[]`.
+      //
+      // Also rewrite `value.ref` to the synthetic per-side judge-combo code so the renderer
+      // paints the LIVE combo at the time of the latest judge, mirroring upstream
+      // `SkinJudge.prepare()` (`SkinJudge.java:108`) which calls
+      // `nowCount.prepare(time, state, JudgeManager.getNowCombo(player), ox, oy)` — the
+      // explicit-value overload bypasses whatever ref the JSON authored. ModernChic / default
+      // both author `ref = MAIN.NUM.MAXCOMBO` (= 75) on `judgen-*`; without this override every
+      // judge popup paints the running max combo, so a player who breaks combo still sees the
+      // peak number until the next judge advances it.
       if (valueElement !== undefined) {
         (valueElement as { align: number }).align = 2;
+        (valueElement as { ref: number }).ref =
+          side === 1 ? SYNTHETIC_NUM_JUDGE_COMBO_1P : SYNTHETIC_NUM_JUDGE_COMBO_2P;
       }
       out.push(addOpGate(folded, gate));
     }

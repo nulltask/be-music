@@ -7,6 +7,8 @@ import {
   keyOffTimerId,
   keyOnTimerId,
   lnHoldTimerId,
+  SYNTHETIC_NUM_JUDGE_COMBO_1P,
+  SYNTHETIC_NUM_JUDGE_COMBO_2P,
   TIMER_FADEOUT,
   TIMER_PLAY,
   TIMER_READY,
@@ -402,6 +404,32 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     clock.advance(100);
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 0 });
     expect(adapter.getTimerStart(comboTimerId(1))).toBe(300);
+  });
+
+  it('latches the per-side judge combo into the synthetic JUDGE_COMBO_1P / 2P refs (upstream `getNowCombo`)', () => {
+    // Mirrors `JudgeManager.notifyJudge` (`JudgeManager.java:710`) where
+    // `judgecombo[judgeindex] = getCourseCombo()` records the LIVE combo at the time of the
+    // judge. SkinJudge.draw later passes that value via `nowCount.prepare(time, state, value,
+    // ox, oy)` to override whatever ref the JSON authored. Our adapter latches the same value
+    // into `judgeState[side].lastJudgeCombo`, exposed via `resolveNumberValue` for the
+    // synthetic refs that `expandBeatorajaJudgeDestinations` swaps into every `judgen-*`
+    // declaration.
+    const adapter = new BeatorajaRuntimeAdapter({ chartPlayVariant: '7', baseOps: new Set(), getNowMs: () => 0 });
+    // Publish a few judges and assert the synthetic ref tracks the latest combo per side.
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 0 });
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_1P)).toBe(1);
+    adapter.applyJudgeCombo({ judge: 'GREAT', combo: 2, channel: '11', updatedAtMs: 0 });
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_1P)).toBe(2);
+    // Combo break (BAD) — the engine emits combo=0; our latch follows so the popup reads "0",
+    // matching upstream where the running max combo branch (ref:75) is intentionally NOT
+    // consulted by SkinJudge.
+    adapter.applyJudgeCombo({ judge: 'BAD', combo: 0, channel: '11', updatedAtMs: 0 });
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_1P)).toBe(0);
+    // Side-2 stays independent — a 1P judge doesn't touch 2P's latch.
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_2P)).toBe(0);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 5, channel: '21', updatedAtMs: 0 });
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_2P)).toBe(5);
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_1P)).toBe(0);
   });
 
   it('per-lane keybeam ref encodes the latest verdict as judgeIndex+1 within the window', () => {

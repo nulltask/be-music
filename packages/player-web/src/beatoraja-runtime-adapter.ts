@@ -53,6 +53,8 @@ import {
   keyOffTimerId,
   keyOnTimerId,
   lnHoldTimerId,
+  SYNTHETIC_NUM_JUDGE_COMBO_1P,
+  SYNTHETIC_NUM_JUDGE_COMBO_2P,
   TIMER_FADEOUT,
   TIMER_FAILED,
   TIMER_FULLCOMBO_1P,
@@ -134,6 +136,19 @@ export interface BeatorajaRuntimeAdapterOptions {
 interface SideJudgeState {
   lastJudgeOp: number | undefined;
   lastFastSlowOp: number | undefined;
+  /**
+   * Live combo at the time of the latest judge for this side. Mirrors upstream's
+   * `judgecombo[judgeindex]` which `JudgeManager.notifyJudge` stamps to
+   * `getJudgeManager().getCourseCombo()` on every judge event. Read by `resolveNumberValue`
+   * for {@link SYNTHETIC_NUM_JUDGE_COMBO_1P} / `_2P` so the judge popup's combo digits paint
+   * the LIVE combo (not the running max) — `expandBeatorajaJudgeDestinations` swaps these
+   * synthetic refs into every `judge[].numbers[i]` value declaration.
+   *
+   * Stays at the most-recent value until the next judge for this side; combo-break verdicts
+   * (BAD / POOR) stamp `0` so the popup correctly displays "combo broke at 0" instead of the
+   * peak. Reset to `0` on `dispose()` / scene re-mount.
+   */
+  lastJudgeCombo: number;
 }
 
 /**
@@ -210,8 +225,8 @@ export class BeatorajaRuntimeAdapter {
   private readonly judgeComboMetrics: { 1: { width: number; space: number }; 2: { width: number; space: number } };
   private frame: PlayerUiFramePayload | null = null;
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
-    1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
-    2: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
+    1: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
+    2: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
   };
   /**
    * Per-(side, lane) most-recent-judge ring. Sized to `JUDGE_LANE_REF_RANGE` (10 lanes per side
@@ -377,6 +392,13 @@ export class BeatorajaRuntimeAdapter {
    * neighbour. Visual difference is imperceptible.
    */
   private judgeStateBuckets: number[][] = [];
+  /**
+   * Per-verdict-kind cumulative count, used as the running histogram in the
+   * `[beatoraja-adapter] apply judge` log line. Keyed on the upper-cased kind string so
+   * `applyJudgeCombo` can build the snapshot in one lookup. Reset to `{}` on `reset()` so a
+   * chart restart starts the histogram fresh.
+   */
+  private judgeKindCounts: Record<string, number> = {};
   /**
    * Y-axis max for `judgeStateBuckets` — `max(20, ceil(densest_total / 10) * 10)` capped at
    * 100 per upstream `SkinNoteDistributionGraph.updateData()` line 272-274. Stable for the
@@ -908,6 +930,11 @@ export class BeatorajaRuntimeAdapter {
       this.activeOps.add(op);
       sideState.lastJudgeOp = op;
     }
+    // Latch the per-side live combo at the moment of judge — read by `resolveNumberValue`
+    // for `SYNTHETIC_NUM_JUDGE_COMBO_*P`. Mirrors upstream `JudgeManager.notifyJudge`'s
+    // `judgecombo[judgeindex] = getCourseCombo()` (`JudgeManager.java:710`). Combo-break
+    // verdicts (BAD / POOR) intentionally stamp `0` so the popup reads "broke at 0".
+    sideState.lastJudgeCombo = state.combo;
     // FAST / SLOW gate (`_*p_early = 1242 / 1262`, `_*p_late = 1243 / 1263`) — beatoraja's
     // default play skin gates a "FAST" / "SLOW" badge on these ops so the player sees which
     // side of the judge window their hit landed on. Mirrors the `lastJudgeOp` pattern: only
@@ -1057,6 +1084,12 @@ export class BeatorajaRuntimeAdapter {
       this.gaugeHistory.push({ progress, value: gaugePct });
     }
 
+    // Cumulative per-kind count for the diagnostic log — useful when investigating reports
+    // like "GREAT and POOR are flickering" or "GOOD / BAD never appear" because the histogram
+    // exposes WHAT verdicts the engine actually emitted vs the user's perception. Bucketed
+    // case-insensitive on the kind string.
+    const kindKey = state.judge.toUpperCase();
+    this.judgeKindCounts[kindKey] = (this.judgeKindCounts[kindKey] ?? 0) + 1;
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-adapter] apply judge',
@@ -1067,6 +1100,10 @@ export class BeatorajaRuntimeAdapter {
         combo: state.combo,
         maxCombo: this.maxCombo,
         channel: state.channel,
+        deltaMs: state.deltaMs,
+        // Snapshot the running per-kind histogram so a single log line carries enough context
+        // to diagnose flicker / missing-kind reports without needing to scan the whole stream.
+        counts: { ...this.judgeKindCounts },
       }),
     );
   }
@@ -2050,13 +2087,22 @@ export class BeatorajaRuntimeAdapter {
         return Math.floor((scoreRatePct - Math.floor(scoreRatePct)) * 100);
       case BEATORAJA_NUM.COMBO:
         return this.runningCombo;
-      // Ref 75 (`NUMBER_MAXCOMBO`) — despite the misleading "BEST_*" alias inherited from
-      // the constant table, upstream's `IntegerPropertyFactory` returns
-      // `JudgeManager.getScoreData().getCombo()` during play (= running max combo of the
-      // CURRENT run, refreshed via `score.setCombo(Math.max(score.getCombo(), combo))`
-      // every judge). Default `play5.json` declares `judgen-pg / -gr / -gd / -bd / -pr /
-      // -ms` (judge-popup combo digits) with `ref:75`, so without this case the combo
-      // stays at 0 throughout the play.
+      // Synthetic per-side judge-combo refs — `expandBeatorajaJudgeDestinations` swaps these
+      // into every `judge[].numbers[i]` value declaration so the judge popup paints the live
+      // combo at the time of the latest judge. Mirrors upstream `SkinJudge.prepare()`'s
+      // explicit-value override (`SkinJudge.java:108`) which calls
+      // `nowCount.prepare(time, state, JudgeManager.getNowCombo(player), ox, oy)` — bypassing
+      // whatever the JSON authored for `value.ref`. Without this, ModernChic / default's
+      // `ref = MAIN.NUM.MAXCOMBO` falls through to the running-max-combo branch below and
+      // the popup keeps the peak number after the player breaks combo.
+      case SYNTHETIC_NUM_JUDGE_COMBO_1P:
+        return this.judgeState[1].lastJudgeCombo;
+      case SYNTHETIC_NUM_JUDGE_COMBO_2P:
+        return this.judgeState[2].lastJudgeCombo;
+      // Ref 75 (`NUMBER_MAXCOMBO`) — running max combo of the CURRENT run; upstream's
+      // `IntegerPropertyFactory` returns `JudgeManager.getScoreData().getCombo()` refreshed
+      // via `score.setCombo(Math.max(score.getCombo(), combo))` on every judge. Score boards
+      // and result-screen readouts source their combo display through here.
       case BEATORAJA_NUM.BEST_MAXCOMBO:
       case BEATORAJA_NUM.MAXCOMBO_LIVE:
         return this.maxCombo;
@@ -2363,8 +2409,11 @@ export class BeatorajaRuntimeAdapter {
     this.timerStartedAt.set(TIMER_PREVIEW, 0);
     this.judgeState[1].lastJudgeOp = undefined;
     this.judgeState[1].lastFastSlowOp = undefined;
+    this.judgeState[1].lastJudgeCombo = 0;
     this.judgeState[2].lastJudgeOp = undefined;
     this.judgeState[2].lastFastSlowOp = undefined;
+    this.judgeState[2].lastJudgeCombo = 0;
+    this.judgeKindCounts = {};
     this.poorBgaActive = false;
     this.runningCombo = 0;
     this.maxCombo = 0;
