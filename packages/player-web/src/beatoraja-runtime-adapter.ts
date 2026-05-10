@@ -840,13 +840,15 @@ export class BeatorajaRuntimeAdapter {
         this.pressedChannels.delete(command.channel);
         this.startLaneKeyOffTimer(command.channel);
         this.deactivateLaneKeyOnTimer(command.channel);
-        // Clear the LN-hold flag for this lane so the body sprite flips back to the unheld
-        // variant (drives `lnBodyHeld` ↔ `lnBodyUnheld` switching at draw time). Note we DON'T
-        // deactivate the LN-hold timer here — beatoraja's `TIMER_LN_HOLD_*P_BASE` is supposed
-        // to keep its `started_at` for the duration of the LN even after release (skins
-        // anchor a "hold ribbon" sprite onto it that taper-fades). The held flag is the live
-        // "is the player currently pressing" signal; the timer is the "this LN is in flight"
-        // signal. They diverge when the player releases mid-LN.
+        // Deactivate the LN-hold timer to mirror upstream `JudgeManager.java:546-547`'s
+        // `switchTimer(holdTimerId, processing != null || ...)` — when the LN sustain ends
+        // (player releases the key, or the LN reaches its tail), `state.processing` becomes
+        // `null` and the timer flips OFF. Skins gate "LN bomb" body-pulse / hold-ribbon
+        // animations on this timer (ModernChic's `bomb.lua` keys ln-bombs to
+        // `MAIN.TIMER.HOLD_1P_KEY*`); without the OFF here those animations stay glued
+        // visible after the first LN ends. The lnHoldHeldByChannel flag clears too so the
+        // body sprite flips back to the unheld variant.
+        this.deactivateLaneLnHoldTimer(command.channel);
         this.lnHoldHeldByChannel.delete(command.channel);
         break;
       case 'flash-lane': {
@@ -2437,6 +2439,24 @@ export class BeatorajaRuntimeAdapter {
 
   private startLaneLnHoldTimer(channel: string): void {
     this.startLaneTimer(channel, lnHoldTimerId);
+  }
+
+  /**
+   * Deactivate the LN-hold timer for `channel`. Mirrors upstream `JudgeManager.java:546-547`:
+   *
+   *     timer.switchTimer(SkinPropertyMapper.holdTimerId(state.player, state.offset),
+   *         state.processing != null || (state.passing != null && state.inclease));
+   *
+   * upstream re-evaluates the hold timer's on/off state every frame against the live LN
+   * processing state. When the LN sustain ends (player releases or LN reaches its end note),
+   * `state.processing` becomes `null` → `switchTimer` flips the timer OFF, hiding any sprite
+   * gated on it (notably ModernChic's "LN bomb" body-pulse animation in `bomb.lua` keyed to
+   * `MAIN.TIMER.HOLD_1P_KEY*`). Without this OFF, the LN bomb stays glued visible forever
+   * after the first LN ends — exactly the user-reported "AUTO LN 判定後にボムが消えない"
+   * symptom.
+   */
+  private deactivateLaneLnHoldTimer(channel: string): void {
+    this.deactivateLaneTimer(channel, lnHoldTimerId);
   }
 
   /**

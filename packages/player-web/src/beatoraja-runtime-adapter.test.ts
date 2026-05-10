@@ -204,13 +204,18 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     clock.advance(1000);
     adapter.applyCommand({ kind: 'hold-lane-until-beat', channel: '19', beat: 64 });
     expect(adapter.isLaneLnHeld('19')).toBe(true);
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(1000);
     // Other lanes are unaffected.
     expect(adapter.isLaneLnHeld('11')).toBe(false);
     clock.advance(500);
     adapter.applyCommand({ kind: 'release-lane', channel: '19' });
     expect(adapter.isLaneLnHeld('19')).toBe(false);
-    // Timer keeps its stamp through release — taper-fade chrome anchors on it.
-    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(1000);
+    // Timer DEACTIVATES on release — mirrors upstream `JudgeManager.java:546-547`'s
+    // `switchTimer(holdTimerId, processing != null || ...)`: when LN sustain ends,
+    // `processing` becomes null → timer flips OFF. ModernChic's `bomb.lua` keys its
+    // "LN bomb" body-pulse animation on this timer; without the OFF the bomb stays
+    // glued visible after the first LN ends in AUTO mode.
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
   });
 
   it('routes scratch (16 / 26) onto lane 0 → timer 100 (1P) / 110 (2P)', () => {
