@@ -95,8 +95,12 @@ export interface BeatorajaMarkerLayerOptions {
   laneAuthoredBottomY?: number;
 }
 
-/** Pixels per chart-beat at hispeed = 1.0 — must match the note layer's constant. */
-export const BEATORAJA_MARKER_PIXELS_PER_BEAT = 72;
+// `BEATORAJA_MARKER_PIXELS_PER_BEAT` (a fixed 72) used to live here for parity with the
+// note layer's old constant. It was removed alongside the upstream-faithful scroll switch
+// in `pixi-beatoraja-notes.ts` — the scroll distance per beat is now `laneHeight / 4 *
+// hispeed` per upstream `LaneRenderer.java:271-276`. The gameplay caller computes the
+// matching value via `beatorajaPixelsPerBeat()` and passes it through `update.args` so the
+// marker layer stays in lock-step with the note layer.
 
 export class BeatorajaMarkerLayer {
   readonly container = new Container();

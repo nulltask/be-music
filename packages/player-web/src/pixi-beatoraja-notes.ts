@@ -28,8 +28,41 @@ import {
 import { createCroppedBeatorajaTexture, flipRectToPixi } from './beatoraja-render.ts';
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 
-/** Pixels per chart-beat at hispeed = 1.0. Mirrors the LR2 path's constant so the two layers scroll consistently. */
-const BEATORAJA_PIXELS_PER_BEAT = 72;
+/**
+ * Beats per standard 4/4 measure. Mirrors `getMeasureBeats(1.0) === 4` from
+ * `@be-music/chart`'s beat resolver, which the engine uses to convert a measure into the
+ * per-beat scroll math below. We pin the constant here (rather than importing the chart
+ * helper) because the lane renderer doesn't otherwise need to know about chart structure;
+ * the value is fixed by BMS spec.
+ */
+const BEATS_PER_STANDARD_MEASURE = 4;
+
+/**
+ * Compute the per-beat scroll distance in skin-pixel space. Mirrors upstream
+ * `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed`:
+ *
+ *   - `(hu - hl)` is the lane's authored height (skin coords, libGDX Y-UP — equivalent to
+ *     the Pixi-flipped `laneBottomY - laneTopY` we pass in here).
+ *   - `rxhs` is the y-delta per UNIT MEASURE; one measure (= 4 beats) of music traverses
+ *     exactly one lane height when `hispeed === 1`.
+ *
+ * Re-derived per beat: `pixelsPerBeat = laneHeight / 4 * hispeed`. ModernChic authors a
+ * 841-px lane → 1 beat = 210 px at hispeed 1, matching upstream beatoraja's "4 beats
+ * visible on the lane" baseline. The previous fixed-72 constant scrolled ~2.9× slower
+ * than upstream on the same skin (and also slower than the LR2 path on tighter authored
+ * lanes), which the user reported as the beatoraja note scroll falling visibly slower
+ * than the LR2 path at the same hispeed.
+ *
+ * `laneHeight <= 0` falls back to `0` (no scroll), matching the upstream `nscroll > 0`
+ * guard. Callers are expected to pass `Math.max(0, judgementY - laneTopY)`; defensive
+ * `<= 0` handling here is just to keep the renderer from dividing by garbage if the
+ * caller forgets.
+ */
+export function beatorajaPixelsPerBeat(laneHeight: number, hispeed: number): number {
+  if (!Number.isFinite(laneHeight) || laneHeight <= 0) return 0;
+  if (!Number.isFinite(hispeed) || hispeed <= 0) return 0;
+  return (laneHeight / BEATS_PER_STANDARD_MEASURE) * hispeed;
+}
 
 /** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
 const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
@@ -138,7 +171,13 @@ export class BeatorajaNoteLayer {
       return;
     }
     const judgementY = this.resolveJudgementY(rects);
-    const pixelsPerBeat = BEATORAJA_PIXELS_PER_BEAT * hiSpeed;
+    // Per upstream `LaneRenderer.java:271-276` the scroll distance is proportional to the
+    // lane's authored height: `rxhs = (hu - hl) * hispeed`, so 1 measure (= 4 beats) of
+    // music covers exactly 1 lane at hispeed=1. `laneTopY` is read from the same flipped
+    // Pixi rects `judgementY` was derived from, so the two stay in lock-step on layout
+    // changes (lift / `if`-gated alt blocks).
+    const laneTopY = this.resolveLaneTopY(rects);
+    const pixelsPerBeat = beatorajaPixelsPerBeat(judgementY - laneTopY, hiSpeed);
     let usedG = 0;
     let usedS = 0;
     let usedT = 0;
@@ -244,6 +283,19 @@ export class BeatorajaNoteLayer {
     let bottom = 0;
     for (const rect of rects) bottom = Math.max(bottom, rect.y + rect.h);
     return bottom;
+  }
+
+  /**
+   * Lane top edge in Pixi-Y coords across the active rect set. Mirrors upstream's
+   * `hu = lanes[0].region.y + lanes[0].region.height` (`LaneRenderer.java:274`) — the
+   * spawn line — but expressed in Pixi terms (smallest `rect.y` = topmost edge after the
+   * Y-flip). Used together with `resolveJudgementY` to derive the per-beat scroll distance
+   * via {@link beatorajaPixelsPerBeat} (= upstream's `rxhs / 4`).
+   */
+  private resolveLaneTopY(rects: ReadonlyArray<BeatorajaNoteRect>): number {
+    let top = Number.POSITIVE_INFINITY;
+    for (const rect of rects) top = Math.min(top, rect.y);
+    return Number.isFinite(top) ? top : 0;
   }
 
   private resolveLane(note: PlayerUiFrameNote): number | undefined {

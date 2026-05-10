@@ -728,7 +728,7 @@ describe('BeatorajaPlaySkinView', () => {
               // and never saw this id, so the expansion skipped the parts.judge[0] entry.
               { id: 2010 },
             ],
-          } as unknown as BeatorajaSkin['destination'][number],
+          } as unknown as NonNullable<BeatorajaSkin['destination']>[number],
         ],
       });
       const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });

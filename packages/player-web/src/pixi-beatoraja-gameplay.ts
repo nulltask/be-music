@@ -40,8 +40,8 @@ import {
 } from '@be-music/beatoraja-skin';
 import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
-import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
-import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
+import { BeatorajaNoteLayer, beatorajaPixelsPerBeat } from './pixi-beatoraja-notes.ts';
+import { BeatorajaMarkerLayer } from './pixi-beatoraja-markers.ts';
 import { flipRectToPixi } from './beatoraja-render.ts';
 import { computeBeatorajaChartMarkers } from './beatoraja-chart-markers.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
@@ -950,11 +950,17 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // bounds (the active dst block resolves to the lane top + judgement Y). When no lane
       // matched, fall back to skin-canvas defaults so any markers still render at sane Ys.
       const laneBounds = this.noteLayer.getLaneBounds(ctx.activeOps) ?? { topY: 0, bottomY: this.view.height };
+      // Marker scroll uses the same upstream-faithful per-beat formula as the note layer
+      // (`rxhs / 4 * hispeed` per `LaneRenderer.java:271-276`) so the two layers stay in
+      // lock-step. Computing it here from the live `laneBounds` keeps it correct across
+      // dst-block toggles (lift, layout switches) without re-deriving inside the marker
+      // layer.
+      const laneHeightPixi = Math.max(0, laneBounds.bottomY - laneBounds.topY);
       this.markerLayer.update({
         currentBeat: this.currentFrame.currentBeat,
         judgementY: laneBounds.bottomY,
         laneTopY: laneBounds.topY,
-        pixelsPerBeat: BEATORAJA_MARKER_PIXELS_PER_BEAT * this.hiSpeed,
+        pixelsPerBeat: beatorajaPixelsPerBeat(laneHeightPixi, this.hiSpeed),
         markers: this.chartMarkers,
       });
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
