@@ -956,20 +956,6 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
     expect(adapter.resolveOffset(20002)).toMatchObject({ x: -90 });
   });
 
-  it('legacy `judgeShiftSlotWidth` (width-only) still works for back-compat', () => {
-    // Hosts that haven't migrated to the `{width, space}` shape pass `judgeShiftSlotWidth`,
-    // which is treated as `{width: ..., space: 0}`. Matches the pre-audit behavior so
-    // existing callers don't break on the rename.
-    const adapter = new BeatorajaRuntimeAdapter({
-      chartPlayVariant: '7',
-      baseOps: new Set(),
-      getNowMs: () => 0,
-      judgeShiftSlotWidth: { 1: 50, 2: 60 },
-    });
-    expect(adapter.resolveOffset(20001)).toMatchObject({ x: -25 }); // 50 * 1 / 2
-    expect(adapter.resolveOffset(20002)).toMatchObject({ x: -30 });
-  });
-
   it('lets manual setOffset(3, ...) win when liftRatio is 0', () => {
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',

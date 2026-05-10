@@ -123,12 +123,6 @@ export interface BeatorajaRuntimeAdapterOptions {
    * Community skins with custom metrics pass their authored values.
    */
   judgeComboMetrics?: { 1?: { width?: number; space?: number }; 2?: { width?: number; space?: number } };
-  /**
-   * @deprecated since the audit-2024-12 rewrite. Use {@link judgeComboMetrics} instead.
-   * Kept for back-compat with hosts that hadn't migrated yet — the constructor reads this
-   * as `{ width: judgeShiftSlotWidth[side], space: 0 }` if `judgeComboMetrics` is omitted.
-   */
-  judgeShiftSlotWidth?: { 1?: number; 2?: number };
 }
 
 interface SideJudgeState {
@@ -431,11 +425,9 @@ export class BeatorajaRuntimeAdapter {
       typeof options.laneHeight === 'number' && Number.isFinite(options.laneHeight) && options.laneHeight > 0
         ? options.laneHeight
         : DEFAULT_LANE_HEIGHT;
-    // Read `judgeComboMetrics` first (the precise upstream-faithful struct); fall back to
-    // legacy `judgeShiftSlotWidth` (= width-only) for back-compat.
     this.judgeComboMetrics = {
-      1: resolveJudgeComboMetric(options.judgeComboMetrics?.[1], options.judgeShiftSlotWidth?.[1]),
-      2: resolveJudgeComboMetric(options.judgeComboMetrics?.[2], options.judgeShiftSlotWidth?.[2]),
+      1: resolveJudgeComboMetric(options.judgeComboMetrics?.[1]),
+      2: resolveJudgeComboMetric(options.judgeComboMetrics?.[2]),
     };
     // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
     // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
@@ -2432,20 +2424,17 @@ function greenDurationMs(visibleRatio: number, hispeed: number): number {
 }
 
 /**
- * Resolve a per-side judge-combo metric `{width, space}` from the host-supplied options,
- * with back-compat for the legacy width-only `judgeShiftSlotWidth` shape. Defaults match the
- * default skin's `play5.json` / `play7main.lua` (`numbers[i].dst.w = 40`, value space = 0).
+ * Resolve a per-side judge-combo metric `{width, space}` from the host-supplied options.
+ * Defaults match the default skin's `play5.json` / `play7main.lua` (`numbers[i].dst.w = 40`,
+ * value space = 0).
  */
 function resolveJudgeComboMetric(
   preferred: { width?: number; space?: number } | undefined,
-  legacyWidth: number | undefined,
 ): { width: number; space: number } {
   const width =
     typeof preferred?.width === 'number' && Number.isFinite(preferred.width) && preferred.width > 0
       ? preferred.width
-      : typeof legacyWidth === 'number' && Number.isFinite(legacyWidth) && legacyWidth > 0
-        ? legacyWidth
-        : 40;
+      : 40;
   const space =
     typeof preferred?.space === 'number' && Number.isFinite(preferred.space) ? preferred.space : 0;
   return { width, space };
