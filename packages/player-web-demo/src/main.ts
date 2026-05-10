@@ -1767,24 +1767,48 @@ class PlayerWebDemoApp {
   private async playSongBeatoraja(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
     const bundle = this.beatorajaTheme;
     if (!bundle) return;
-    // The skin variant may differ from the chart's natural variant when the theme doesn't ship one and
-    // we fall back (e.g. 5K chart played on the theme's 7-keys skin). The engine still drives the chart
-    // at its native variant; only the skin chrome / note layer geometry follows the loaded skin.
-    const variant = this.resolveBeatorajaSkinVariant(song);
-    if (variant === undefined) return;
-    const desiredVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
-    if (variant !== desiredVariant) {
-      // Theme is missing the chart's native variant — a 5K chart on a theme that only ships a
-      // 7K skin, etc. The engine still drives input at the CHART's variant (`chartPlayVariant`
-      // ⇒ `BeatorajaRuntimeAdapter`), so notes / judges flow correctly; the skin chrome just
-      // shows the wrong lane count. On a 7K-skin/5K-chart pairing, columns 6 and 7 of the
-      // skin's lane art stay visually present but never receive notes. Bump to `warn` so the
-      // mismatch is visible in the console next to other skin-load warnings — `info` is too
-      // easy to miss for a configuration choice that visibly affects gameplay.
+    // **TWO distinct variants** flow into the gameplay scene:
+    //   - `skinVariant`: which `play_*` skin file to load. The theme may not ship every
+    //     variant (a popular 7-only theme lacks a `play_9` skin, etc.), so this falls back
+    //     through `pickBeatorajaPlayableSkinVariant`'s chain (`9 → 7 → 14 → 5 → 10`).
+    //   - `chartVariant`: what the chart ACTUALLY is. Drives the engine's lane mode
+    //     (channel → lane mapping), the runtime adapter's lane-timer resolution, and the
+    //     note layer's `channel → lane index` math. This MUST match what the chart's
+    //     channels declare; falling back to the skin's variant here would route a 9-key
+    //     chart's `f`/`v`/`g`/`b` inputs through the IIDX 7-key key bindings and the
+    //     engine's IIDX free-zone clamp would drop the corresponding `scorableNotes`.
+    //
+    // Pre-fix the gameplay view received `skinVariant` for everything, so a 9-key
+    // chart played on a 7-key skin had:
+    //   - 7-key adapter `chartPlayVariant` → lanes 6..9 of channels 16/17/18/19
+    //     misclassified as scratch / free-zone / 6key / 7key
+    //   - 7-key note-layer `variant` → channel 16 routed to lane 7 (the IIDX scratch
+    //     slot), channels 17 / 18 / 19 routed to lanes -1 / 5 / 6
+    //   - engine's `laneModeExtension`-only fallback never reached `9-key` because
+    //     `resolveLaneMode` only escalates to 9-key when the chart is `.pms` or
+    //     `#PLAYER=3` with channel `17` — and most 9-key BMEs that authored f/v/g/b
+    //     inputs satisfy neither
+    // User report: "9 KEY で lane 6-9 が挙動しない (f,v,g,b 不反応)". c0da7b5 partially
+    // addressed this by forwarding the chart's filename to the engine for the
+    // extension-based heuristic, but skipped the variant separation here.
+    const skinVariant = this.resolveBeatorajaSkinVariant(song);
+    if (skinVariant === undefined) return;
+    const chartVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (chartVariant === undefined) return;
+    if (skinVariant !== chartVariant) {
+      // Theme doesn't ship the chart's native skin variant (e.g. a 9-key chart on a
+      // 7-keys-only theme). We load the fallback skin chrome but keep the engine /
+      // adapter / note-layer pinned to the chart's variant so input + judging stay
+      // correct; the visible mismatch is the SKIN's lane count differing from the
+      // CHART's. Warn so the mismatch is visible in the console.
       gameplayLog.warn(
-        `beatoraja gameplay: theme has no '${desiredVariant}' skin — falling back to '${variant}' (lane chrome may not match chart key count)`,
+        `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${skinVariant}' (lane chrome may not match chart key count)`,
       );
     }
+    // Alias retained to minimize churn in the rest of this function. Use `skinVariant` for
+    // skin lookups (`playSkinTypeForVariant`, the skin entry pick chain) and `chartVariant`
+    // for runtime-driving prop wiring (`variant` on the gameplay view).
+    const variant = skinVariant;
 
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
@@ -1921,7 +1945,12 @@ class PlayerWebDemoApp {
       textures,
       fonts,
       skinConfig: config,
-      variant,
+      // CHART variant drives the engine's lane mode + adapter's `chartPlayVariant` + note
+      // layer's channel → lane math. Skin lookups above used `skinVariant` (= the fallback
+      // chain pick) because the theme may not ship the chart's exact variant — but the
+      // runtime stays pinned to the CHART so f/v/g/b stay bound to channels 16/17/18/19
+      // on 9-key POPN charts even when the loaded skin chrome is a 7-key fallback.
+      variant: chartVariant,
       chart: prep.chart,
       audio: prep.audio,
       skinAudio: this.beatorajaSkinAudio,
