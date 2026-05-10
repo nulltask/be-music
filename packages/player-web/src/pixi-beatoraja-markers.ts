@@ -40,6 +40,29 @@ interface MarkerKindData {
   /** Authored tint / alpha (from `dst[0]`) — applied to every painted instance. */
   tint: number;
   alpha: number;
+  /**
+   * Pixi-Y offset between the marker's authored BOTTOM and the lane's authored BOTTOM, both
+   * computed in Pixi-Y-DOWN screen coordinates. Mirrors upstream's `line.draw(sprite, time,
+   * main, 0, (int) (y - hl))` pattern (`LaneRenderer.java:373, 387, 400, 414`):
+   *
+   *   - upstream `y` is the libGDX-Y-UP scroll position of the timeline.
+   *   - `hl` is the lane's authored Y-UP bottom (= judge-line position).
+   *   - the offset added to the line's authored Y-UP position is `y - hl`.
+   *   - so the rendered line Y-UP bottom = `authored_line_y + (y - hl)`.
+   *
+   * Re-derived in Pixi: `rendered_pixi_bottom = scroll_pixi + (M_authored - L_authored)`,
+   * where `M_authored` / `L_authored` are the Pixi-Y bottoms of the marker / lane in their
+   * authored positions. This `bottomOffsetFromLaneBottomPixi` field stores
+   * `M_authored - L_authored` so the per-frame update can add it to `y` directly.
+   *
+   * For ModernChic the barline is authored at `y = NOTES_JUDGE_Y, h = 3` while the lane is
+   * authored at `y = NOTES_JUDGE_Y - 12, h = LANE_LENGTH - 12`. After Y-flip the offset
+   * resolves to `-12` (the barline sits 12 px above the lane bottom in Pixi). Without
+   * honoring this, every barline painted at the lane's bottom edge instead of crossing
+   * through the note head's middle, which is exactly the "ノートと小節線がずれている"
+   * symptom the user reported.
+   */
+  bottomOffsetFromLaneBottomPixi: number;
 }
 
 export interface BeatorajaMarkerLayerOptions {
@@ -55,6 +78,21 @@ export interface BeatorajaMarkerLayerOptions {
    * Y-UP into Pixi Y-DOWN, matching the note layer's lane rects and the play view's chrome.
    */
   canvasHeight: number;
+  /**
+   * Authored Pixi-Y of the lane's bottom edge (= upstream's `hl` after Y-flip into Pixi).
+   * Computed once from `noteSection.dst[0]`'s flipped lane rects: `max(rect.y + rect.h)`.
+   *
+   * Used to compute each marker's bottom-offset-from-lane-bottom in Pixi space. Mirrors
+   * upstream's barline draw pattern (`line.draw(sprite, ..., 0, y - hl)` in
+   * `LaneRenderer.java:373`) where the line is offset relative to the lane bottom — markers
+   * whose authored Y differs from the lane's bottom paint with that constant pixel gap so
+   * they cross the lane at the authored offset (e.g., ModernChic's barlines cross through
+   * the note head's MIDDLE rather than the note's bottom edge).
+   *
+   * `undefined` falls back to "treat marker bottom = scroll position", which is the previous
+   * behaviour that misaligned ModernChic barlines by 12 px.
+   */
+  laneAuthoredBottomY?: number;
 }
 
 /** Pixels per chart-beat at hispeed = 1.0 — must match the note layer's constant. */
@@ -74,11 +112,12 @@ export class BeatorajaMarkerLayer {
   private firstFrameLogged = false;
 
   constructor(options: BeatorajaMarkerLayerOptions) {
+    const laneBottom = options.laneAuthoredBottomY;
     this.kindData = {
-      group: this.resolveKind(options.group, options.images, options.textures, options.canvasHeight),
-      bpm: this.resolveKind(options.bpm, options.images, options.textures, options.canvasHeight),
-      stop: this.resolveKind(options.stop, options.images, options.textures, options.canvasHeight),
-      time: this.resolveKind(options.time, options.images, options.textures, options.canvasHeight),
+      group: this.resolveKind(options.group, options.images, options.textures, options.canvasHeight, laneBottom),
+      bpm: this.resolveKind(options.bpm, options.images, options.textures, options.canvasHeight, laneBottom),
+      stop: this.resolveKind(options.stop, options.images, options.textures, options.canvasHeight, laneBottom),
+      time: this.resolveKind(options.time, options.images, options.textures, options.canvasHeight, laneBottom),
     };
   }
 
@@ -109,20 +148,24 @@ export class BeatorajaMarkerLayer {
       const proto = kind.find((k) => k.texture !== undefined);
       if (proto === undefined) continue;
       for (const beat of beats) {
-        const y = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
-        // Cull markers outside the lane area (above the spawn line or below the judgement).
-        // The 24-pixel slack matches the note layer's culling so markers don't pop in/out at
-        // the edge.
+        const scrollY = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
+        // Apply the authored bottom offset relative to the lane's authored bottom — mirrors
+        // upstream's `line.draw(..., 0, y - hl)` (`LaneRenderer.java:373`). Without this the
+        // barline lands at the lane's BOTTOM EDGE instead of the authored bar position
+        // (which for ModernChic is 12 px above the lane bottom, crossing through the note
+        // head's middle).
+        const y = scrollY + proto.bottomOffsetFromLaneBottomPixi;
+        // Cull markers outside the lane area. Test against the OFFSET y so a marker that sits
+        // well above the lane bottom (e.g., a hypothetical "ceiling marker") doesn't get
+        // culled prematurely. 24-pixel slack matches the note layer's culling so markers
+        // don't pop in/out at the edge.
         if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
         const sprite = this.acquireSprite(used);
         sprite.texture = proto.texture!;
-        // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on the beat
-        // line. Authors write `{y = judge_y, h = 1}` (libGDX Y-UP) intending the marker's
-        // bottom-left to be at `judge_y` — the rect extends `h` pixels UP from there. In Pixi
-        // Y-DOWN that means the bottom edge lands at the beat's screen y, with the rect
-        // extending up by `h` pixels. With anchor `(0, 1)`, `sprite.y = beat_y` puts the
-        // bottom-left exactly at the beat — matching the note layer's "judgement = bottom of
-        // note" convention.
+        // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.
+        // Combined with the offset above, this puts the marker bottom at `scrollY + offset`
+        // — i.e., the offset relative to where the timeline's scroll position is at this
+        // beat, exactly mirroring upstream's `authored_marker_y + (scroll_y - lane_bottom_y)`.
         sprite.anchor.set(0, 1);
         sprite.x = proto.rect.x;
         sprite.y = y;
@@ -168,6 +211,7 @@ export class BeatorajaMarkerLayer {
     images: ReadonlyMap<BeatorajaImageId, BeatorajaImageElement>,
     textures: BeatorajaTextureCache,
     canvasHeight: number,
+    laneAuthoredBottomY: number | undefined,
   ): MarkerKindData[] {
     if (inputs.length === 0) return [];
     const groups = normalizeBeatorajaDestinations(inputs);
@@ -181,16 +225,23 @@ export class BeatorajaMarkerLayer {
           : undefined;
       const dst0 = group.dst[0];
       // beatoraja's `dst[]` is libGDX Y-UP; flip into Pixi Y-DOWN to match the rest of the
-      // pipeline. Note: `update()` re-writes `sprite.y` per-marker (computed from `judgementY` in
-      // Pixi space), so the prototype's flipped y doesn't actually paint — but we flip it anyway
-      // so the stored value is consistent with the convention upstream consumers might assume.
+      // pipeline. The flipped rect's `y + h` is the marker's authored Pixi BOTTOM, which we
+      // diff against the lane's authored Pixi bottom to mirror upstream's `(y - hl)` offset
+      // (`LaneRenderer.java:373`).
       const rect =
         dst0 !== undefined
           ? flipRectToPixi({ x: dst0.x, y: dst0.y, w: dst0.w, h: dst0.h }, canvasHeight)
           : { x: 0, y: 0, w: 0, h: 0 };
       const tint = dst0 !== undefined ? ((dst0.r & 0xff) << 16) | ((dst0.g & 0xff) << 8) | (dst0.b & 0xff) : 0xffffff;
       const alpha = dst0 !== undefined ? Math.max(0, Math.min(1, dst0.a / 255)) : 1;
-      out.push({ image, texture, rect, tint, alpha });
+      // Compute the constant Pixi-Y delta between the marker's authored bottom and the lane's
+      // authored bottom. Falls back to 0 when the caller didn't supply a lane bottom — that
+      // preserves the previous "marker bottom = scroll position" behaviour for tests / hosts
+      // that haven't wired the new arg yet.
+      const markerAuthoredBottomPixi = rect.y + rect.h;
+      const bottomOffsetFromLaneBottomPixi =
+        laneAuthoredBottomY !== undefined ? markerAuthoredBottomPixi - laneAuthoredBottomY : 0;
+      out.push({ image, texture, rect, tint, alpha, bottomOffsetFromLaneBottomPixi });
     }
     return out;
   }

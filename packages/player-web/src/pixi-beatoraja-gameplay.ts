@@ -42,6 +42,7 @@ import type { BeatorajaSkinAudio } from './beatoraja-skin-audio.ts';
 import type { BeatorajaPlayableVariant } from './beatoraja-theme.ts';
 import { BeatorajaNoteLayer } from './pixi-beatoraja-notes.ts';
 import { BeatorajaMarkerLayer, BEATORAJA_MARKER_PIXELS_PER_BEAT } from './pixi-beatoraja-markers.ts';
+import { flipRectToPixi } from './beatoraja-render.ts';
 import { computeBeatorajaChartMarkers } from './beatoraja-chart-markers.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from './beatoraja-chart-bpm-curve.ts';
 import {
@@ -368,6 +369,13 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // Marker layer goes ON the same container as notes — insertion order makes markers paint
     // first, then notes paint on top. Authors expect this so a falling note can visually cross
     // the section line without the line obscuring the note.
+    //
+    // Pass the AUTHORED lane bottom in Pixi so each marker can compute its bottom-offset-from-
+    // lane-bottom. Mirrors upstream `LaneRenderer.java:373`'s `line.draw(..., 0, y - hl)` —
+    // the rendered marker bottom = `scroll_y + (authored_marker_bottom - authored_lane_bottom)`.
+    // ModernChic authors barlines 12 px above the lane bottom so they cross the note head
+    // through its middle; without this offset the barline lands at the lane's bottom edge
+    // and visually misaligns with the note head.
     this.markerLayer = new BeatorajaMarkerLayer({
       group: noteSection.group,
       bpm: noteSection.bpm,
@@ -376,6 +384,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       images: noteImageMap,
       textures: options.textures,
       canvasHeight: this.view.height,
+      laneAuthoredBottomY: computeAuthoredLaneBottomYPixi(noteSection.dst[0]?.rects ?? [], this.view.height),
     });
     this.chartMarkers = computeBeatorajaChartMarkers(effectiveChart, {
       // 1-second time ticks when the skin authors `time[]` markers. Disabled when the skin
@@ -688,6 +697,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       images: noteImageMap,
       textures: opts.textures,
       canvasHeight: this.view.height,
+      laneAuthoredBottomY: computeAuthoredLaneBottomYPixi(noteSection.dst[0]?.rects ?? [], this.view.height),
     });
     if (this.options.bgaTextures !== undefined && this.options.bgaCues !== undefined) {
       this.bgaLayer = new BeatorajaBgaLayer({
@@ -1129,6 +1139,33 @@ function insertNoteAndMarkerLayers(
   const index = view.noteLayerInsertIndex;
   view.container.addChildAt(markerLayer.container, index);
   view.container.addChildAt(noteLayer.container, index + 1);
+}
+
+/**
+ * Compute the AUTHORED Pixi-Y of the lane's bottom edge from the note section's first dst
+ * block. Mirrors upstream's `hl = lanes[0].region.y` (`LaneRenderer.java:275`) — the lane's
+ * authored bottom is what every barline / BPM-marker / time-marker offset references.
+ *
+ * `noteSection.dst[0]` carries the default lane layout (no `if` gating); we ignore the optional
+ * gated alts. Each per-lane rect is in libGDX Y-UP; flip to Pixi and take the max bottom edge
+ * across all lanes — that's the judgement line in screen space. Returns `0` when the section
+ * has no rects (no lane authored), letting the marker layer fall back to "marker bottom =
+ * scroll position" via its `laneAuthoredBottomY: undefined` branch.
+ */
+function computeAuthoredLaneBottomYPixi(
+  rects: ReadonlyArray<{ readonly x: number; readonly y: number; readonly w: number; readonly h: number }>,
+  canvasHeight: number,
+): number | undefined {
+  if (rects.length === 0) return undefined;
+  let bottom = 0;
+  let any = false;
+  for (const rect of rects) {
+    const flipped = flipRectToPixi({ x: rect.x, y: rect.y, w: rect.w, h: rect.h }, canvasHeight);
+    const b = flipped.y + flipped.h;
+    if (b > bottom) bottom = b;
+    any = true;
+  }
+  return any ? bottom : undefined;
 }
 
 /**
