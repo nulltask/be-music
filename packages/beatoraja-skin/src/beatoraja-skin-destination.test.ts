@@ -158,6 +158,106 @@ describe('normalizeBeatorajaDestinations', () => {
     // 924 IS set, so `-924` fails — falls through to the empty-if catch-all.
     expect(out[0]?.dst[0]).toMatchObject({ x: 5, y: 6, w: 7, h: 8 });
   });
+
+  it('expands `{if, value}` keyframe wrappers inline (default play5.json judge popup)', () => {
+    // Mirrors upstream `JsonSkinSerializer.ArraySerializer.read` (lines 222-252): a dst[]
+    // element shaped `{"if": [...], "value": {...}}` is a CONDITIONAL INSERT — the wrapper
+    // expands to its inner `value` when the `if` test passes, drops entirely otherwise. Default
+    // play5.json's judge popup uses this for per-side rect placement:
+    //
+    //   "dst": [
+    //     {"if":[920], "value": {"time":0, "x":70,   "y":240, "w":180, "h":40}}, // 1P
+    //     {"if":[921], "value": {"time":0, "x":1010, "y":240, "w":180, "h":40}}, // 2P
+    //     {"time":500}
+    //   ]
+    //
+    // Without expansion the inner wrapper is read as a plain keyframe with no rect fields →
+    // `state.x/y/w/h` carry forward `0` → judge popup paints at zero size → invisible.
+    const playerOne = normalizeBeatorajaDestinations(
+      [
+        { id: 'judgef-pg', dst: [
+          { if: [920], value: { time: 0, x: 70,   y: 240, w: 180, h: 40 } },
+          { if: [921], value: { time: 0, x: 1010, y: 240, w: 180, h: 40 } },
+          { time: 500 },
+        ] },
+      ],
+      new Set([920]),
+    )[0]!;
+    expect(playerOne.dst).toHaveLength(2); // wrapper #2 dropped (921 not active), wrapper #1 + plain frame retained
+    expect(playerOne.dst[0]).toMatchObject({ time: 0, x: 70, y: 240, w: 180, h: 40 });
+    // Plain `{time:500}` keyframe carries forward x=70/y=240/w=180/h=40 from the resolved wrapper.
+    expect(playerOne.dst[1]).toMatchObject({ time: 500, x: 70, y: 240, w: 180, h: 40 });
+
+    const playerTwo = normalizeBeatorajaDestinations(
+      [
+        { id: 'judgef-pg', dst: [
+          { if: [920], value: { time: 0, x: 70,   y: 240, w: 180, h: 40 } },
+          { if: [921], value: { time: 0, x: 1010, y: 240, w: 180, h: 40 } },
+          { time: 500 },
+        ] },
+      ],
+      new Set([921]),
+    )[0]!;
+    expect(playerTwo.dst).toHaveLength(2);
+    expect(playerTwo.dst[0]).toMatchObject({ time: 0, x: 1010, y: 240, w: 180, h: 40 });
+    expect(playerTwo.dst[1]).toMatchObject({ time: 500, x: 1010, y: 240, w: 180, h: 40 });
+  });
+
+  it('expands `{if, values}` keyframe wrappers (multi-keyframe insert per match)', () => {
+    // Upstream `JsonSkinSerializer.ArraySerializer.read` line 239-242 inserts ALL of `values`
+    // when the `if` matches — used by skins that authoring a multi-frame animation segment
+    // conditionally. Mirrors `Collections.addAll(items, json.readValue(cls, values))`.
+    const out = normalizeBeatorajaDestinations(
+      [
+        { id: 'fade', dst: [
+          { time: 0, x: 0, y: 0, w: 100, h: 100, a: 0 },
+          { if: [930], values: [
+            { time: 200, a: 128 },
+            { time: 400, a: 255 },
+          ] },
+          { time: 1000 },
+        ] },
+      ],
+      new Set([930]),
+    )[0]!;
+    expect(out.dst).toHaveLength(4);
+    expect(out.dst[0]).toMatchObject({ time: 0,    a: 0 });
+    expect(out.dst[1]).toMatchObject({ time: 200,  a: 128, x: 0, w: 100 }); // values[0] inserted
+    expect(out.dst[2]).toMatchObject({ time: 400,  a: 255 });               // values[1] inserted
+    expect(out.dst[3]).toMatchObject({ time: 1000, a: 255 });               // tail keyframe carries forward
+  });
+
+  it('drops `{if, value}` wrappers whose `if` does not match', () => {
+    // Wrapper with no matching `if` → expansion yields zero items, the wrapper contributes
+    // nothing to the keyframe list. Plain elements before/after still pass through.
+    const out = normalizeBeatorajaDestinations(
+      [
+        { id: 'side', dst: [
+          { time: 0, x: 100, y: 100, w: 50, h: 50 },
+          { if: [922], value: { time: 250, x: 300 } }, // 922 not in activeOps → drop
+          { time: 500 },
+        ] },
+      ],
+      new Set([920]),
+    )[0]!;
+    expect(out.dst).toHaveLength(2);
+    expect(out.dst[0]).toMatchObject({ time: 0,   x: 100 });
+    expect(out.dst[1]).toMatchObject({ time: 500, x: 100 }); // wrapper at t=250 dropped, x stays at 100
+  });
+
+  it('passes through plain elements that have `if` but no `value` / `values`', () => {
+    // Per upstream line 229: only `item.has("if") && (item.has("value") || item.has("values"))`
+    // is treated as a wrapper. A plain keyframe that happens to carry an `if` (e.g. authored as
+    // documentation, or harvested from a Lua emitter) is not a wrapper — it's a regular
+    // keyframe whose `if` field is ignored at this layer.
+    const out = normalizeBeatorajaDestinations([
+      { id: 'plain', dst: [
+        { if: [999], time: 0, x: 10, y: 20, w: 30, h: 40 },
+      ] },
+    ])[0]!;
+    expect(out.dst).toHaveLength(1);
+    expect(out.dst[0]).toMatchObject({ time: 0, x: 10, y: 20, w: 30, h: 40 });
+  });
 });
 
 describe('sampleBeatorajaDestination', () => {

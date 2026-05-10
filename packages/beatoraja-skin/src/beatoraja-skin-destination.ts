@@ -559,35 +559,169 @@ function normalizeKeyframes(
     acc: 0,
   };
   for (const rawItem of raw) {
-    // Inner if-gated array: a single keyframe slot whose rect varies by skin-config layout
-    // option. Beatoraja's loader walks alternatives in order and picks the first whose `if`
-    // codes all match the SELECTED skin options (resolved at skin load time, not runtime).
-    // Used by play24's BGA group, custom-events tables, and lane-position presets — without
-    // this expansion the renderer reads the array as a degenerate object and emits an
-    // all-zero keyframe (BGA invisible, lane offsets null, etc.).
-    const item = Array.isArray(rawItem) ? resolveKeyframeAlternative(rawItem, activeOps) : rawItem;
-    if (item === null || item === undefined || typeof item !== 'object') continue;
-    const obj = item as Readonly<Record<string, unknown>>;
-    state.time = numberField(obj, 'time', state.time);
-    state.x = numberField(obj, 'x', state.x);
-    state.y = numberField(obj, 'y', state.y);
-    state.w = numberField(obj, 'w', state.w);
-    state.h = numberField(obj, 'h', state.h);
-    state.r = numberField(obj, 'r', state.r);
-    state.g = numberField(obj, 'g', state.g);
-    state.b = numberField(obj, 'b', state.b);
-    state.a = numberField(obj, 'a', state.a);
-    state.angle = numberField(obj, 'angle', state.angle);
-    // `acc` carries forward like every other field — `JSONSkinLoader.setDestination` does
-    // `a.acc = (a.acc == MIN_VALUE ? prev.acc : a.acc)`. Resetting to 0 each frame would break
-    // the common authoring pattern of declaring `acc=2` on the FROM frame of a long fade-in
-    // and leaving subsequent intermediate keyframes with no `acc` (which would re-linearize
-    // the back half of the fade in our implementation prior to this fix).
-    state.acc = numberField(obj, 'acc', state.acc);
-    // Push a fresh copy so future state mutations don't reach already-emitted keyframes.
-    out.push({ ...state });
+    if (Array.isArray(rawItem)) {
+      // Inner if-gated array: a single keyframe slot whose rect varies by skin-config layout
+      // option. Beatoraja's loader walks alternatives in order and picks the first whose `if`
+      // codes all match the SELECTED skin options (resolved at skin load time, not runtime).
+      // Used by play24's BGA group, custom-events tables, and lane-position presets — without
+      // this expansion the renderer reads the array as a degenerate object and emits an
+      // all-zero keyframe (BGA invisible, lane offsets null, etc.).
+      const resolved = resolveKeyframeAlternative(rawItem, activeOps);
+      if (resolved !== undefined) {
+        applyKeyframeFields(resolved, state);
+        out.push({ ...state });
+      }
+      continue;
+    }
+    if (rawItem === null || rawItem === undefined || typeof rawItem !== 'object') continue;
+    const obj = rawItem as Readonly<Record<string, unknown>>;
+    // Conditional `{if, value}` / `{if, values}` wrapper: upstream
+    // `JsonSkinSerializer.ArraySerializer.read` (lines 222-252) expands these inline at
+    // JSON-load time. The wrapper conditionally inserts ONE keyframe (`value`) or MANY
+    // (`values`) into the dst[] array iff its `if` codes are satisfied; otherwise the wrapper
+    // drops entirely. Default play5.json's judge popup (`judgef-*`) declares per-side rects
+    // this way:
+    //
+    //   "dst": [
+    //     {"if":[920], "value": {"time":0, "x":70,   "y":240, "w":180, "h":40}}, // 1P side
+    //     {"if":[921], "value": {"time":0, "x":1010, "y":240, "w":180, "h":40}}, // 2P side
+    //     {"time":500}
+    //   ]
+    //
+    // Without expansion the inner wrapper is read as a plain keyframe with no rect fields →
+    // `state.x/y/w/h` carry forward 0 → judge popup paints at zero size → invisible.
+    const expanded = expandKeyframeIfWrapper(obj, activeOps);
+    for (const entry of expanded) {
+      applyKeyframeFields(entry, state);
+      out.push({ ...state });
+    }
   }
   return out;
+}
+
+/**
+ * Apply a keyframe object's fields onto the rolling state used by {@link normalizeKeyframes}.
+ * Each field carries forward the previous value when omitted — matches beatoraja's
+ * `JSONSkinLoader.setDestination`, where `a.{field} = (a.{field} == MIN_VALUE ? prev.{field}
+ * : a.{field})` patches each missing field from the previous keyframe.
+ *
+ * `acc` carries forward identically to the other fields. Resetting it to 0 each frame would
+ * break the common authoring pattern of declaring `acc=2` on the FROM frame of a long fade-in
+ * and leaving subsequent intermediate keyframes with no `acc` (which would re-linearize the
+ * back half of the fade).
+ */
+function applyKeyframeFields(
+  obj: Readonly<Record<string, unknown>>,
+  state: BeatorajaDestinationKeyframe,
+): void {
+  state.time = numberField(obj, 'time', state.time);
+  state.x = numberField(obj, 'x', state.x);
+  state.y = numberField(obj, 'y', state.y);
+  state.w = numberField(obj, 'w', state.w);
+  state.h = numberField(obj, 'h', state.h);
+  state.r = numberField(obj, 'r', state.r);
+  state.g = numberField(obj, 'g', state.g);
+  state.b = numberField(obj, 'b', state.b);
+  state.a = numberField(obj, 'a', state.a);
+  state.angle = numberField(obj, 'angle', state.angle);
+  state.acc = numberField(obj, 'acc', state.acc);
+}
+
+/**
+ * Mirror of upstream `JsonSkinSerializer.ArraySerializer.read` (lines 222-252) operating at the
+ * single-element granularity. The upstream loader, while reading an array of objects, treats any
+ * element shaped `{"if": ..., "value": {...}}` or `{"if": ..., "values": [{...}, ...]}` as a
+ * conditional INSERT: when the `if` test passes, the wrapper expands to its `value` (single
+ * keyframe) or all of its `values` (multiple keyframes); when it fails, the wrapper drops
+ * entirely. Plain elements (no `if`, or no `value`/`values`) pass through unchanged.
+ *
+ * Used in default play5.json's judge popup (`judgef-pg`/`judgef-gr`/...) for per-side
+ * positioning. Without this expansion our parser treats `{if:[920], value:{...}}` as a regular
+ * keyframe whose only known field is `if` → `state.x/y/w/h` carry forward 0 → judge popup
+ * renders at zero size → invisible.
+ *
+ * `if` evaluation matches the existing flat-array convention in `resolveKeyframeAlternative` /
+ * `isElementVisible`: positive code = "must be active", negative code = "must NOT be active",
+ * `0` = no-op. Nested-array OR (`[[901, 902], 911]`) is supported per upstream `testOption`.
+ *
+ * @returns
+ *   - `[item]` when `item` is NOT a wrapper (no `if`, or no `value`/`values`).
+ *   - `[]` when the wrapper's `if` doesn't match `activeOps`.
+ *   - `[value, ...values]` when matched (either or both fields contribute).
+ */
+function expandKeyframeIfWrapper(
+  item: Readonly<Record<string, unknown>>,
+  activeOps: ReadonlySet<number>,
+): ReadonlyArray<Readonly<Record<string, unknown>>> {
+  if (!('if' in item)) return [item];
+  const valueField = item.value;
+  const valuesField = item.values;
+  const hasValue = isPlainObject(valueField);
+  const hasValues = Array.isArray(valuesField);
+  // Per upstream: only treat as wrapper if BOTH `if` AND (`value` OR `values`) are present.
+  // Falls through to "single item" otherwise.
+  if (!hasValue && !hasValues) return [item];
+
+  if (!testKeyframeIfCondition(item.if, activeOps)) return [];
+
+  const out: Readonly<Record<string, unknown>>[] = [];
+  if (hasValue) out.push(valueField as Readonly<Record<string, unknown>>);
+  if (hasValues) {
+    for (const v of valuesField as ReadonlyArray<unknown>) {
+      if (isPlainObject(v)) out.push(v);
+    }
+  }
+  return out;
+}
+
+function isPlainObject(v: unknown): v is Readonly<Record<string, unknown>> {
+  return v !== null && typeof v === 'object' && !Array.isArray(v);
+}
+
+/**
+ * Evaluate an `if` condition value the same way upstream's `testOption` does
+ * (`JsonSkinSerializer.java:120-150`):
+ *
+ * - missing / undefined → match (caller already short-circuited this branch)
+ * - bare number `n` → AND-singleton: `n` must be active (or `-n` must NOT be active)
+ * - flat array `[n, m, ...]` → AND across entries: every code must hold
+ * - nested array `[[n, m], k, ...]` → OR within the nested slot, AND across slots
+ *
+ * Code `0` is treated as a no-op (pass) per the existing project-level convention in
+ * `resolveKeyframeAlternative` / `isElementVisible`. Upstream technically treats `0` as
+ * `options.contains(0)` (false), but no real skin authors a literal `if: 0`, and our convention
+ * keeps stray zeros from breaking otherwise-valid entries.
+ */
+function testKeyframeIfCondition(ifField: unknown, activeOps: ReadonlySet<number>): boolean {
+  if (typeof ifField === 'number' && Number.isFinite(ifField)) {
+    return testIfOpCode(ifField, activeOps);
+  }
+  if (!Array.isArray(ifField)) return false;
+  for (const entry of ifField) {
+    if (typeof entry === 'number' && Number.isFinite(entry)) {
+      if (entry === 0) continue;
+      if (!testIfOpCode(entry, activeOps)) return false;
+    } else if (Array.isArray(entry)) {
+      // Nested OR slot: any one match satisfies the AND-position.
+      let anyOn = false;
+      for (const sub of entry) {
+        if (typeof sub === 'number' && Number.isFinite(sub) && sub !== 0 && testIfOpCode(sub, activeOps)) {
+          anyOn = true;
+          break;
+        }
+      }
+      if (!anyOn) return false;
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+function testIfOpCode(code: number, activeOps: ReadonlySet<number>): boolean {
+  if (code === 0) return true;
+  if (code > 0) return activeOps.has(code);
+  return !activeOps.has(-code);
 }
 
 function normalizeOpArray(value: unknown): ReadonlyArray<number> {
