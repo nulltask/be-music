@@ -1892,6 +1892,86 @@ export class BeatorajaPlaySkinView {
     sprite.blendMode = props.blendMode;
   }
 
+  /**
+   * Convert one digit slot's libGDX-space rect (after per-digit offset) into Pixi-space sprite
+   * props honoring the parent's `center` anchor. Shared between `updateValueEntry` and
+   * `updateFloatValueEntry` so the two paths can't drift.
+   *
+   * Mirrors upstream `SkinNumber.draw()` (`SkinNumber.java:189-199`):
+   *
+   *     draw(sprite, currentImages[j],
+   *          region.x + (region.width + space) * j - shift + offsets[j].x,
+   *          region.y + offsets[j].y,
+   *          region.width + offsets[j].w,
+   *          region.height + offsets[j].h);
+   *
+   * Two upstream-faithfulness points:
+   *
+   *   1. **Y sign.** `offsets[j].y > 0` shifts the slot UP in libGDX (Y-UP) — i.e., its libGDX
+   *      bottom-edge moves to a HIGHER y. After the Pixi Y-flip
+   *      (`pixiTop = canvasH - libgdxBottom - libgdxHeight`), the slot's Pixi top must DECREASE
+   *      by `offsets[j].y` AND by `offsets[j].h` (because libGDX height grew upward).
+   *      The previous impl added `+ offsets[j].y` directly to `sprite.y`, flipping the sign.
+   *
+   *   2. **Center anchor on post-offset rect.** The rotation pivot in libGDX is at
+   *      `(slot.x + centerx*slot.w, slot.y + centery*slot.h)` — using the FULL post-offset
+   *      width/height, NOT the base slotWidth. The previous impl multiplied centerx by the
+   *      base `slotWidth`, leaving the pivot off-center whenever `offsets[j].w/h ≠ 0`.
+   *
+   * The `relative` flag from the parent destination does NOT apply here. SkinObject's
+   * `region.x += off.x - off.w/2` center-shift is applied at the destination level (already
+   * baked into `parent.x/y`); per-digit offsets in `SkinNumber.draw()` are added without
+   * center-shift regardless of `relative`.
+   */
+  private static perDigitSlotPixiProps(args: {
+    /** Pixi-space parent destination rect (already Y-flipped). */
+    parent: { x: number; y: number; height: number };
+    /** `(slotWidth + space) * j`, the per-slot horizontal step before alignment shift. */
+    slotIndexX: number;
+    /** Un-offset slot width (= the per-digit `region.width`). */
+    slotBaseWidth: number;
+    /** Alignment shift (subtracted from x — see `composeBeatorajaValueShift`). */
+    alignShift: number;
+    /** Per-digit offset in libGDX semantics (or all-zeros when no offset id is set). */
+    off: { x: number; y: number; w: number; h: number };
+    /** Pixi anchor for the parent destination's `center` field (already Y-flipped). */
+    centerPixi: { x: number; y: number };
+  }): { x: number; y: number; width: number; height: number } {
+    const { parent, slotIndexX, slotBaseWidth, alignShift, off, centerPixi } = args;
+    // Slot's libGDX bottom-left, after per-digit offset. (Bottom-left is the natural anchor
+    // because libGDX `SpriteBatch.draw(image, x, y, w, h)` interprets x/y as bottom-left in
+    // Y-UP, mirrored by our parent.x = libGDX bottom-left x.)
+    const slotPixiLeft = parent.x + slotIndexX - alignShift + off.x;
+    // Pixi top = parent's Pixi top, MINUS off.y (slot moves up = Pixi-y decreases) and
+    // MINUS off.h (height grew upward in libGDX → Pixi top moves up by full off.h).
+    const slotPixiTop = parent.y - off.y - off.h;
+    const slotWidth = slotBaseWidth + off.w;
+    const slotHeight = parent.height + off.h;
+    return {
+      x: slotPixiLeft + slotWidth * centerPixi.x,
+      y: slotPixiTop + slotHeight * centerPixi.y,
+      width: slotWidth,
+      height: slotHeight,
+    };
+  }
+
+  /**
+   * Resolve a per-digit offset id (or `undefined` when the slot has no offset). Returns the
+   * zero offset when the resolver isn't wired or the id maps to nothing — keeps the caller's
+   * arithmetic uniform regardless of authoring.
+   */
+  private static readonly ZERO_PER_DIGIT_OFFSET = Object.freeze({ x: 0, y: 0, w: 0, h: 0 });
+  private resolvePerDigitOffsetOrZero(
+    offsetId: number | undefined,
+    resolveOffset: BeatorajaRenderContext['resolveOffset'],
+  ): { x: number; y: number; w: number; h: number } {
+    if (offsetId === undefined || resolveOffset === undefined) {
+      return BeatorajaPlaySkinView.ZERO_PER_DIGIT_OFFSET;
+    }
+    const off = resolveOffset(offsetId);
+    return off ?? BeatorajaPlaySkinView.ZERO_PER_DIGIT_OFFSET;
+  }
+
   private updateValueEntry(
     entry: ValueEntry,
     props: ReturnType<typeof destinationToSpriteProps>,
@@ -1958,11 +2038,11 @@ export class BeatorajaPlaySkinView {
     // local middle. The +i*slotWidth offset stays as before.
     const center = centerToAnchor(entry.group.center);
     // Per-digit offsets — `value[].offset = [id0, id1, ...]` (parallel array, one offset
-    // id per slot). Mirrors upstream `SkinNumber.draw()`'s `+ offsets[j].x / .y` term.
-    // Empty (= the default) skips the per-slot resolveOffset call entirely; populated
-    // arrays add `(off.x, off.y)` to the matching slot's position. Width / height grow
-    // from off.w / off.h independent of the `relative` group flag (per-digit offsets
-    // operate on a single sprite, no center-anchor recompute needed).
+    // id per slot). Mirrors upstream `SkinNumber.draw()`'s `+ offsets[j].x / .y / .w / .h`
+    // terms. Empty (= the default) keeps every slot at the un-offset position. Per-digit
+    // offsets operate on a single sprite and DO NOT inherit the parent's `relative` flag —
+    // SkinObject's center-shift is already baked into the parent's region; SkinNumber.draw
+    // adds offsets[j].* without center-shift regardless of `relative`.
     const perDigitOffsets = entry.value.offsets;
     for (let i = 0; i < entry.digitSprites.length; i += 1) {
       const sprite = entry.digitSprites[i]!;
@@ -1973,24 +2053,19 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      let perDigitDx = 0;
-      let perDigitDy = 0;
-      let perDigitDw = 0;
-      let perDigitDh = 0;
-      const offsetId = perDigitOffsets[i];
-      if (offsetId !== undefined && resolveOffset !== undefined) {
-        const off = resolveOffset(offsetId);
-        if (off !== undefined) {
-          perDigitDx = off.x;
-          perDigitDy = off.y;
-          perDigitDw = off.w;
-          perDigitDh = off.h;
-        }
-      }
-      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift + perDigitDx;
-      sprite.y = props.y + center.y * props.height + perDigitDy;
-      sprite.width = slotWidth + perDigitDw;
-      sprite.height = props.height + perDigitDh;
+      const off = this.resolvePerDigitOffsetOrZero(perDigitOffsets[i], resolveOffset);
+      const slot = BeatorajaPlaySkinView.perDigitSlotPixiProps({
+        parent: { x: props.x, y: props.y, height: props.height },
+        slotIndexX: i * slotStep,
+        slotBaseWidth: slotWidth,
+        alignShift,
+        off,
+        centerPixi: center,
+      });
+      sprite.x = slot.x;
+      sprite.y = slot.y;
+      sprite.width = slot.width;
+      sprite.height = slot.height;
       sprite.alpha = props.alpha;
       sprite.tint = props.tint;
       sprite.angle = props.angle;
@@ -2057,6 +2132,9 @@ export class BeatorajaPlaySkinView {
     // with explicit `align` rendered with leading blanks on the wrong side.
     const alignShift = composeBeatorajaFloatValueShift(entry.value, value, slotWidth);
     const center = centerToAnchor(entry.group.center);
+    // Per-digit offsets — same semantics as `value[]`. See `perDigitSlotPixiProps` for the
+    // upstream-faithful x/y/w/h derivation (mirrors `SkinFloat.java:189-199`, identical to
+    // `SkinNumber.draw()` modulo the shift sign which is handled by `composeBeatorajaFloatValueShift`).
     const perDigitOffsets = entry.value.offsets;
     for (let i = 0; i < entry.slotSprites.length; i += 1) {
       const sprite = entry.slotSprites[i]!;
@@ -2067,24 +2145,19 @@ export class BeatorajaPlaySkinView {
       }
       sprite.visible = true;
       sprite.anchor.set(center.x, center.y);
-      let perDigitDx = 0;
-      let perDigitDy = 0;
-      let perDigitDw = 0;
-      let perDigitDh = 0;
-      const offsetId = perDigitOffsets[i];
-      if (offsetId !== undefined && resolveOffset !== undefined) {
-        const off = resolveOffset(offsetId);
-        if (off !== undefined) {
-          perDigitDx = off.x;
-          perDigitDy = off.y;
-          perDigitDw = off.w;
-          perDigitDh = off.h;
-        }
-      }
-      sprite.x = props.x + i * slotStep + center.x * slotWidth - alignShift + perDigitDx;
-      sprite.y = props.y + center.y * props.height + perDigitDy;
-      sprite.width = slotWidth + perDigitDw;
-      sprite.height = props.height + perDigitDh;
+      const off = this.resolvePerDigitOffsetOrZero(perDigitOffsets[i], resolveOffset);
+      const slot = BeatorajaPlaySkinView.perDigitSlotPixiProps({
+        parent: { x: props.x, y: props.y, height: props.height },
+        slotIndexX: i * slotStep,
+        slotBaseWidth: slotWidth,
+        alignShift,
+        off,
+        centerPixi: center,
+      });
+      sprite.x = slot.x;
+      sprite.y = slot.y;
+      sprite.width = slot.width;
+      sprite.height = slot.height;
       sprite.alpha = props.alpha;
       sprite.tint = props.tint;
       sprite.angle = props.angle;

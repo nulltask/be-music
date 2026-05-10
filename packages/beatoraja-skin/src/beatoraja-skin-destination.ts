@@ -562,6 +562,31 @@ function booleanPropertyField(value: unknown): BeatorajaBooleanPropertyRef | und
  * - `loop >= 0` → wraps `elapsed` modulo `(lastKeyframe.time - loop)` after subtracting `loop`.
  *
  * Designed to be called per-frame from the renderer.
+ *
+ * ─── Upstream parity (audit 2024-12) ──────────────────────────────────────────────────────
+ *   Mirrors `SkinObject.java:300-326` (`prepareRegion`):
+ *
+ *     if (dstloop == -1) {
+ *         if (time > endtime) time = -1;     // hides via the starttime check below
+ *     } else if (lasttime > 0 && time > dstloop) {
+ *         if (lasttime == dstloop) time = dstloop;
+ *         else time = (time - dstloop) % (lasttime - dstloop) + dstloop;
+ *     }
+ *     if (starttime > time) { draw = false; return; }
+ *
+ *   Two micro-optimizations vs the literal upstream port:
+ *
+ *   1. **Wrap trigger short-circuit.** Upstream wraps when `time > dstloop`. We wrap only
+ *      when `t > last.time`. The two are observably equivalent because the wrap formula is
+ *      a no-op for `time ∈ [dstloop, lasttime]`:
+ *
+ *          (time - dstloop) % (lasttime - dstloop) + dstloop = time, when time ≤ lasttime.
+ *
+ *   2. **`period ≤ 0` defensive return.** Upstream divides by zero (or negative) when
+ *      authors mis-author `loop ≥ lasttime` — undefined behavior in Java. We treat this as
+ *      "hold the last frame static" so the renderer doesn't propagate NaN into sprite
+ *      coordinates. Matches upstream's `lasttime == dstloop` branch (which freezes time at
+ *      `dstloop`) for the equality case; differs only for the rarely-authored `loop > lasttime`.
  */
 export function sampleBeatorajaDestination(
   group: BeatorajaDestinationGroup,

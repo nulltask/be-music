@@ -230,6 +230,72 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('applies per-digit `value[].offset` ids with libGDX→Pixi Y-flip (audit A-14)', () => {
+    // Mirrors upstream `SkinNumber.draw()` (`SkinNumber.java:189-199`):
+    //
+    //   draw(sprite, image, region.x + (region.width + space) * j - shift + offsets[j].x,
+    //                       region.y + offsets[j].y, region.width + offsets[j].w,
+    //                       region.height + offsets[j].h);
+    //
+    // The slot's libGDX bottom-left = (region.x + i*slotStep + offsets[j].x, region.y +
+    // offsets[j].y); size = (slotW + offsets[j].w, region.height + offsets[j].h). After the
+    // Pixi Y-flip, the Pixi top-y MUST DECREASE by `offsets[j].y` AND by `offsets[j].h` (the
+    // upstream height grew upward in Y-UP). Previous impl added `+ offsets[j].y` to sprite.y,
+    // shifting the slot DOWN in Pixi when the author meant UP in libGDX — and ignored the
+    // height growth at the rotation pivot.
+    //
+    // Test setup: 1-digit `value[]` at `dst = (100, 100, 24, 24)` on a 720-tall canvas. With
+    // `center = 0` (default → libGDX (0.5, 0.5) → Pixi (0.5, 0.5)) and the host-supplied
+    // offset `id=999 → {x:5, y:10, w:6, h:8}`, the slot's expected Pixi geometry:
+    //
+    //   parent.x = 100, parent.y = canvasH - 100 - 24 = 596, parent.height = 24
+    //   slotPixiLeft = 100 + 0 + 5 = 105
+    //   slotPixiTop  = 596 - 10 - 8 = 578     ← y subtracts BOTH off.y and off.h
+    //   slotWidth    = 24 + 6 = 30
+    //   slotHeight   = 24 + 8 = 32
+    //   sprite.x     = 105 + 30 * 0.5 = 120  ← center.x of FULL post-offset width
+    //   sprite.y     = 578 + 32 * 0.5 = 594
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1280,
+      h: 720,
+      // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+      value: [
+        {
+          id: 200,
+          src: 0,
+          x: 0,
+          y: 0,
+          w: 24,
+          h: 24,
+          divx: 10,
+          digit: 1,
+          ref: 71,
+          // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
+          ...({ offset: [999] } as unknown as object),
+        },
+      ] as unknown as BeatorajaSkin['value'],
+      destination: [{ id: 200, dst: [{ time: 0, x: 100, y: 100, w: 24, h: 24, a: 255 }] }],
+    };
+    const view = new BeatorajaPlaySkinView({
+      skin,
+      textures: fakeTextureCache([0]),
+      resolveNumberValue: (ref) => (ref === 71 ? 5 : undefined),
+    });
+    view.update({
+      activeOps: new Set(),
+      getTimerStart: () => 0,
+      nowMs: 0,
+      resolveOffset: (id) => (id === 999 ? { x: 5, y: 10, w: 6, h: 8, r: 0, a: 0 } : undefined),
+    });
+    const sprite = view.container.children[0] as { x: number; y: number; width: number; height: number };
+    expect(sprite.x).toBeCloseTo(120, 4);
+    expect(sprite.y).toBeCloseTo(594, 4);
+    expect(sprite.width).toBe(30);
+    expect(sprite.height).toBe(32);
+    view.dispose();
+  });
+
   it('image declarations win over value declarations on id collision', () => {
     const skin: BeatorajaSkin = {
       type: 0,
