@@ -44,6 +44,15 @@ export interface BeatorajaSkinOptionsGuiOptions {
 }
 
 export interface SetSkinOptions {
+  /**
+   * Stable identity for the active skin entry. When a subsequent `setSkin` call carries the same
+   * `entryPath` the GUI is left intact (folder open/close state and scroll position survive); only
+   * a different entry triggers a full rebuild against the new schema. Without this guard, every
+   * config-change → `replaceSkin` → `refreshBeatorajaSkinOptionsGui` round-trip would tear down
+   * and recreate the lil-gui instance, snapping the panel back to its initial collapsed state on
+   * every controller tweak.
+   */
+  entryPath: string;
   /** Section title shown at the top of the panel. */
   title: string;
   /** Skin header carrying the `property[]` / `filepath[]` / `category[]` schema to expose. */
@@ -71,6 +80,15 @@ const AUTO_FILE_LABEL = '(auto)';
 export class BeatorajaSkinOptionsGui {
   private readonly container: HTMLElement;
   private gui: GUI | undefined;
+  /**
+   * Identity of the currently-rendered skin entry. Compared against the next `setSkin`'s
+   * `entryPath` so re-applying the SAME entry's config (the common case after a controller
+   * onChange triggers `replaceSkin` → `refreshBeatorajaSkinOptionsGui`) doesn't tear down and
+   * rebuild the lil-gui instance. State is already mutated in place by the controllers — the
+   * subsequent `setSkin` is purely informational and should NOT reset folder open/close state
+   * or scroll position. Cleared on `clear()` / `dispose()`.
+   */
+  private activeEntryPath: string | undefined;
   /**
    * Deep-cloned mutable copy of the active config. Lil-gui binds controllers to live object fields,
    * so we maintain a target object the controllers mutate; `onChange` callbacks fire with a fresh
@@ -102,9 +120,21 @@ export class BeatorajaSkinOptionsGui {
   /**
    * Build (or rebuild) the panel for `header`. Tears down the previous lil-gui instance and
    * constructs a fresh one bound to the new schema.
+   *
+   * Skipped entirely when `options.entryPath` matches {@link activeEntryPath} — the active GUI
+   * is already bound to the correct schema, the controllers' onChange handlers have already
+   * mutated the state to match the new config, and rebuilding would only collapse the panel
+   * back to its initial state. Mid-tweak `replaceSkin` round-trips (the common case) hit this
+   * fast path and leave folder open/close state plus scroll position untouched.
    */
   setSkin(options: SetSkinOptions): void {
+    if (this.activeEntryPath === options.entryPath && this.gui !== undefined) {
+      // Same entry — the GUI's controllers already reflect the new config (they fired the
+      // onChange that produced it). No-op.
+      return;
+    }
     this.disposeGui();
+    this.activeEntryPath = options.entryPath;
     // Hydrate customOffset state from the incoming config — every header.offset[] slot gets
     // a zero-filled record by default; existing host-persisted picks pre-populate matching
     // axes. The deep clone ensures the GUI's controllers don't mutate the host's stored
@@ -341,6 +371,7 @@ export class BeatorajaSkinOptionsGui {
       this.gui.destroy();
       this.gui = undefined;
     }
+    this.activeEntryPath = undefined;
   }
 
   /**

@@ -1993,7 +1993,7 @@ class PlayerWebDemoApp {
     // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down
     // the engine driver. The audio session, chart playback, and scoring all keep running.
     this.refreshBeatorajaSkinOptionsGui({
-      title: `Play skin (${variant} keys)`,
+      title: `Skin Config (Play ${variant}K)`,
       entryPath: selectedEntry.entryPath,
       header: headerLoad.header,
       onApply: (nextConfig) => {
@@ -2041,7 +2041,7 @@ class PlayerWebDemoApp {
     this.beatorajaGameplayView.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
 
     this.refreshBeatorajaSkinOptionsGui({
-      title: `Play skin (${variant} keys)`,
+      title: `Skin Config (Play ${variant}K)`,
       entryPath,
       header: result.header,
       onApply: (nextConfig) => {
@@ -2217,7 +2217,7 @@ class PlayerWebDemoApp {
     // changes (Play Side, Score Graph On/Off, etc.) take effect on the very next Pixi frame
     // without disposing / re-mounting the scene.
     this.refreshBeatorajaSkinOptionsGui({
-      title: `Select skin (${selectedEntry.entryPath.split('/').pop() ?? 'select'})`,
+      title: 'Skin Config (Select)',
       entryPath: selectedEntry.entryPath,
       header: headerLoad.header,
       onApply: (nextConfig) => {
@@ -2367,7 +2367,7 @@ class PlayerWebDemoApp {
     // Refresh the skin-options panel against the new entry's header so the property dropdowns
     // reflect the new skin's `property[]` schema.
     this.refreshBeatorajaSkinOptionsGui({
-      title: `Select skin (${entryPath.split('/').pop() ?? 'select'})`,
+      title: 'Skin Config (Select)',
       entryPath,
       header: result.header,
       onApply: (nextConfig) => {
@@ -2964,6 +2964,11 @@ class PlayerWebDemoApp {
     const gui = this.ensureBeatorajaSkinOptionsGui();
     gui.setSkin({
       title: args.title,
+      // Forward the entry's stable path so `setSkin` can short-circuit when the same skin entry
+      // is being reapplied (the round-trip after every controller tweak). Without this the GUI
+      // tears down and rebuilds on every value change, snapping the panel back to its
+      // initial collapsed state mid-edit.
+      entryPath: args.entryPath,
       header: args.header,
       config,
       fileCandidates: candidates,
