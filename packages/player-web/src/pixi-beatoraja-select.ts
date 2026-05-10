@@ -1140,13 +1140,28 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   private resolveSelectionText(refOp: number): string | undefined {
     const song = this.focusedSong();
     const skin = this.options.skin;
+    // Cursor's focused entry — used for TITLE / FULLTITLE folder-bar fallback. Mirrors
+    // upstream `StringPropertyFactory.java:76-97`'s special-case where the title text
+    // resolver returns `selector.getSelectedBar().getTitle()` (= the folder's own name)
+    // when the focused bar is a `DirectoryBar`, falling through to `song.getTitle()`
+    // otherwise. SUBTITLE / GENRE / ARTIST / SUBARTIST / FULLARTIST DON'T have this
+    // fallback per upstream — they just return `""` when no song is focused.
+    const focusedFolderEntry = this.entries[this.currentIndex];
+    const focusedFolderLabel =
+      focusedFolderEntry?.kind === 'folder' ? focusedFolderEntry.folder.label : undefined;
     switch (refOp) {
       case BEATORAJA_TEXT.TITLE:
-        return song?.title ?? '';
+        // Folder bar → folder label (upstream `StringPropertyFactory.java:77-78`).
+        // Song bar → song title. Empty when no entry focused (e.g. empty list).
+        return focusedFolderLabel ?? song?.title ?? '';
       case BEATORAJA_TEXT.SUBTITLE:
+        // No folder fallback — upstream resolves to `""` on folder (no `DirectoryBar`
+        // branch in `StringPropertyFactory.java:85-88`).
         return song?.subtitle ?? '';
       case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(song?.title, song?.subtitle);
+        // Folder bar → folder label (matches upstream `StringPropertyFactory.java:90-91`'s
+        // DirectoryBar branch).
+        return focusedFolderLabel ?? joinNonEmpty(song?.title, song?.subtitle);
       case BEATORAJA_TEXT.GENRE:
         return song?.genre ?? '';
       case BEATORAJA_TEXT.ARTIST:
@@ -1191,15 +1206,22 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * layer ships.
    */
   private resolveSelectionNumber(refOp: number): number | undefined {
-    // ref 300 = `songs_count` (number of songs in the focused folder). Resolved BEFORE the
-    // `focusedSong()` early-return below — it makes sense on a folder bar where focusedSong()
-    // returns the first child, but the more useful number is the folder's child count itself.
+    // ref 300 = `folder_totalsongs` (number of songs in the focused folder). Mirrors
+    // upstream `IntegerPropertyFactory.FolderTotalClearCountProperty.get()` (= line
+    // 1416-1429): only returns a value when the selected bar is a `DirectoryBar`,
+    // otherwise returns `Integer.MIN_VALUE` (= "hide" — `SkinNumber.prepare(value=MIN_VALUE)`
+    // sets `draw=false`). We mirror the hide via `undefined` here; the value renderer
+    // then hides every digit sprite for this destination.
+    //
+    // Pre-fix this fell back to the parent folder's `.songs.length` when focused on a
+    // song bar — visible to the user as a stale "X songs" readout next to the
+    // chart-info panel even after they entered the folder. ModernChic
+    // (`musicdisplay.lua:80-89`) gates the FRAME image on `op = {FOLDERBAR}` but the
+    // underlying value declaration has no op gate, so it relied on upstream's
+    // MIN_VALUE return for hiding.
     if (refOp === SELECT_NUM_SONGS_IN_FOLDER) {
       const entry = this.entries[this.currentIndex];
-      if (entry?.kind === 'folder') return entry.folder.songs.length;
-      // On a song bar, the parent folder's count if known; otherwise undefined.
-      const parent = this.folderStack[this.folderStack.length - 1];
-      return parent?.songs.length;
+      return entry?.kind === 'folder' ? entry.folder.songs.length : undefined;
     }
 
     // Wall-clock readouts (`time_year/month/day/hour/minute/second`, refs 21-26). The default
@@ -1581,12 +1603,26 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     }
   }
 
-  /** Whichever song the current cursor points at — at root, picks the first song of the focused folder. */
+  /**
+   * The song the cursor is focused on. Returns `undefined` when the cursor is on a folder
+   * row — mirrors upstream `MusicSelector.java:214`'s
+   *
+   *     resource.setSongdata(current instanceof SongBar ? ((SongBar) current).getSongData() : null);
+   *
+   * which sets the "current song" to `null` for any non-`SongBar` focus. Downstream
+   * `StringPropertyFactory` / `IntegerPropertyFactory` resolvers then return `""` /
+   * `MIN_VALUE` for refs that need a song, hiding the corresponding chrome — including the
+   * left-side title / artist / genre / chart-density / song-length panels.
+   *
+   * Pre-fix this returned `entry.folder.songs[0]` (= the first song INSIDE the focused
+   * folder), so the panels showed that song's metadata even while the user was hovering
+   * the folder row — visible to the user as "the title still shows on the left while I'm
+   * on a folder bar". Aligning to upstream's null-on-folder behaviour fixes the leak.
+   */
   private focusedSong(): BrowserSongEntry | undefined {
     const entry = this.entries[this.currentIndex];
     if (entry === undefined) return undefined;
-    if (entry.kind === 'song') return entry.song;
-    return entry.folder.songs[0];
+    return entry.kind === 'song' ? entry.song : undefined;
   }
 
   private currentFolderLabel(): string {

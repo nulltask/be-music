@@ -230,6 +230,60 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('hides every digit sprite when resolveNumberValue returns undefined (upstream `MIN_VALUE` semantics)', () => {
+    // Mirrors upstream `SkinNumber.prepare(time, state, value, ox, oy)`
+    // (`SkinNumber.java:133-136`): when the resolved value is `Integer.MIN_VALUE` it sets
+    // `draw = false` and renders nothing. We surface that as `undefined` from the host
+    // resolver so refs that don't apply to the current scene state (e.g.
+    // `folder_totalsongs = 300` on a song bar) hide their digits instead of falling back
+    // to `0` (which previously showed a stale "0000" / "0").
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1280,
+      h: 720,
+      value: [{ id: 200, src: 0, x: 0, y: 0, w: 240, h: 24, divx: 10, digit: 4, padding: 1, ref: 300 }],
+      destination: [{ id: 200, dst: [{ time: 0, x: 100, y: 100, w: 24, h: 24 }] }],
+    };
+    const view = new BeatorajaPlaySkinView({
+      skin,
+      textures: fakeTextureCache([0]),
+      resolveNumberValue: () => undefined, // ref 300 → MIN_VALUE-style hide
+    });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const sprites = view.container.children;
+    expect(sprites).toHaveLength(4);
+    for (const sprite of sprites) {
+      expect((sprite as { visible: boolean }).visible).toBe(false);
+    }
+    view.dispose();
+  });
+
+  it('renders `0` digits when the resolver returns the literal `0` (only `undefined` triggers the hide)', () => {
+    // Counterpart to the test above — guards against an over-eager hide. Idle scenes legitimately
+    // resolve scoreboard refs to `0` (e.g. score / combo at scene start) and the digits should
+    // paint, not vanish. Only `undefined` is the upstream `MIN_VALUE` mirror.
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 1280,
+      h: 720,
+      value: [{ id: 200, src: 0, x: 0, y: 0, w: 240, h: 24, divx: 10, digit: 4, padding: 1, ref: 71 }],
+      destination: [{ id: 200, dst: [{ time: 0, x: 100, y: 100, w: 24, h: 24 }] }],
+    };
+    const view = new BeatorajaPlaySkinView({
+      skin,
+      textures: fakeTextureCache([0]),
+      resolveNumberValue: () => 0,
+    });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const sprites = view.container.children;
+    expect(sprites).toHaveLength(4);
+    // padding=1 (zero-pad) → every slot paints "0", so all 4 stay visible.
+    for (const sprite of sprites) {
+      expect((sprite as { visible: boolean }).visible).toBe(true);
+    }
+    view.dispose();
+  });
+
   it('applies per-digit `value[].offset` ids with libGDX→Pixi Y-flip (audit A-14)', () => {
     // Mirrors upstream `SkinNumber.draw()` (`SkinNumber.java:189-199`):
     //

@@ -2190,12 +2190,28 @@ export class BeatorajaPlaySkinView {
       return;
     }
 
-    // Resolve the dynamic numeric value through the host's `prop.lua num` adapter. `0` when no value
-    // is wired — keeps the readout visually stable while engine state is wiring up.
-    const value =
+    // Resolve the dynamic numeric value through the host's `prop.lua num` adapter. The host
+    // returns `undefined` when the ref doesn't apply to the current scene state (e.g.
+    // `folder_totalsongs = 300` returns `MIN_VALUE` upstream while the cursor is on a song
+    // bar — our adapter's equivalent is `undefined`). Mirrors upstream `SkinNumber.prepare`
+    // (`SkinNumber.java:133-136`) which sets `draw = false` and skips rendering when the
+    // resolved value is `Integer.MIN_VALUE`. Hide every digit sprite in that case.
+    //
+    // Refs returning a real number (including `0`) keep rendering — many score / combo
+    // readouts legitimately read 0 in the idle state. The skin-side `valueProperty` (Lua
+    // function) path always returns a finite number from `resolveIntegerProperty`, so it
+    // skips the hide branch (matches upstream where Lua-driven values can't return MIN_VALUE).
+    const resolved =
       entry.value.valueProperty !== undefined
         ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
-        : ((entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0);
+        : entry.value.ref !== 0
+          ? this.resolveNumberValue(entry.value.ref)
+          : 0;
+    if (resolved === undefined) {
+      for (const sprite of entry.digitSprites) sprite.visible = false;
+      return;
+    }
+    const value = resolved;
 
     // Animation frame for `cycle`-driven strips — picks the current `divy` row. Mirrors
     // upstream `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`, since
@@ -2311,12 +2327,21 @@ export class BeatorajaPlaySkinView {
     }
 
     // Resolve the dynamic value through `valueProperty` (Lua function) when authored, else
-    // fall through to the host's `resolveNumberValue(ref)`. Defaults to 0 when neither path
-    // returns a finite number — keeps the readout stable while engine state is wiring up.
-    const value =
+    // fall through to the host's `resolveNumberValue(ref)`. `undefined` from the ref path
+    // mirrors upstream `MIN_VALUE` (= "ref doesn't apply now") — same hide-everything
+    // behaviour as the integer-value path above. See that block's comment for the
+    // upstream-faithfulness rationale.
+    const resolved =
       entry.value.valueProperty !== undefined
         ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
-        : ((entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0);
+        : entry.value.ref !== 0
+          ? this.resolveNumberValue(entry.value.ref)
+          : 0;
+    if (resolved === undefined) {
+      for (const sprite of entry.slotSprites) sprite.visible = false;
+      return;
+    }
+    const value = resolved;
 
     // Animation frame for `cycle`-driven strips — selects which `divy` row the slot textures
     // crop from. Mirrors `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`).
