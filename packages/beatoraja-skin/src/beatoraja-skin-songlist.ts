@@ -130,7 +130,34 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   const songlist = (skin as { songlist?: unknown }).songlist;
   if (songlist === null || typeof songlist !== 'object') return undefined;
   const obj = songlist as Readonly<Record<string, unknown>>;
-  const rects = collectListRects(obj.liston) ?? collectListRects(obj.listoff);
+
+  // Audit A-7 — `liston[i].id` / `listoff[i].id` reference an `imageset[]` entry per
+  // upstream `JsonSelectSkinObjectLoader.java:44-77`:
+  //
+  //     for (int i = 0; i < sk.songlist.liston.length; i++) {
+  //         for (JsonSkin.ImageSet imgs : sk.imageset) {
+  //             if (sk.songlist.liston[i].id.equals(imgs.id)) {
+  //                 // build TextureRegion[][] from imgs.images[*] looked up in sk.image[]
+  //                 ...
+  //                 onimage[i] = new SkinImage(tr, timer, cycle, null);  // ref = null
+  //                 ...
+  //             }
+  //         }
+  //     }
+  //
+  // Upstream's `SkinImage(images[][], ..., ref=null)` ALWAYS picks `image[0]` (the first
+  // imageset frame) since `ref == null` short-circuits to value=0 in `SkinImage.prepare()`.
+  // We resolve the chain at parse time: liston[i].id → imageset[id].images[0] → image[id],
+  // replacing `liston[i].id` in the output rect with the resolved `image[]` id. The
+  // renderer's existing direct `image[]` lookup then succeeds without further changes.
+  //
+  // Fallback: when `liston[i].id` doesn't match any imageset[], the original id is kept
+  // unchanged. Skins authoring bars as `image[]` directly (legacy / test fixtures /
+  // simplified hand-rolled skins) keep working — the renderer's direct lookup succeeds
+  // on the original id. Upstream technically requires imageset[]; permitting direct
+  // image[] is a strict superset of upstream behavior.
+  const imagesetLookup = buildImagesetIdLookup(skin);
+  const rects = collectListRects(obj.liston, imagesetLookup) ?? collectListRects(obj.listoff, imagesetLookup);
   if (rects === undefined || rects.length === 0) return undefined;
 
   // Audit A-8 — prefer the authored `songlist.center` (= upstream's
@@ -230,7 +257,10 @@ function firstEntryId(input: unknown): BeatorajaImageId | undefined {
   return undefined;
 }
 
-function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefined {
+function collectListRects(
+  input: unknown,
+  imagesetLookup: ReadonlyMap<BeatorajaImageId, BeatorajaImageId>,
+): BeatorajaSongListRowRect[] | undefined {
   if (!Array.isArray(input)) return undefined;
   const out: BeatorajaSongListRowRect[] = [];
   for (const entry of input) {
@@ -246,26 +276,66 @@ function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefine
     const w = numberField(rect, 'w', 0);
     const h = numberField(rect, 'h', 0);
     if (w <= 0 || h <= 0) continue;
-    // Capture `entry.id` so callers can look up `skin.image[id]` for the row's bar
-    // background sprite. Many skins author the focused row with a different id
-    // (e.g. `list_on` vs `list`), so retaining the id per-row gives the renderer the
-    // cursor highlight at no extra cost. `undefined` when the entry omits an id (bare
-    // dst-only entries in skins that don't author a bar texture).
+    // Capture `entry.id` so callers can look up the row's bar texture. Many skins author
+    // the focused row with a different id (e.g. `list_on` vs `list`), so retaining the id
+    // per-row gives the renderer the cursor highlight via texture choice at no extra cost.
+    // `undefined` when the entry omits an id (bare dst-only rows in skins that don't author
+    // a bar texture).
     //
-    // Accept both string and numeric ids — `image[].id` is `string | number` and Lua-
-    // driven skins occasionally emit numeric forms. Previously the numeric branch was
-    // silently dropped, leaving rows with no bar background even when the matching
-    // `image[]` entry was authored.
+    // Accept both string and numeric ids — `image[].id` and `imageset[].id` are both
+    // `string | number`; Lua-driven skins occasionally emit numeric forms.
     const idValue = obj.id;
-    const id =
+    const rawId =
       typeof idValue === 'string' && idValue.length > 0
         ? idValue
         : typeof idValue === 'number' && Number.isFinite(idValue)
           ? idValue
           : undefined;
+    // Audit A-7: resolve through `imageset[].images[0]` when the row id matches an
+    // imageset entry. Mirrors `JsonSelectSkinObjectLoader.java:44-77` which uses the
+    // imageset chain (with `ref = null` so only `images[0]` matters at draw time).
+    const id = rawId !== undefined ? (imagesetLookup.get(rawId) ?? rawId) : undefined;
     out.push(id !== undefined ? { id, x, y, w, h } : { x, y, w, h });
   }
   return out.length > 0 ? out : undefined;
+}
+
+/**
+ * Build a lookup from `imageset[].id` to its `images[0]` (= the underlying `image[].id`
+ * the bar renders). Used by `parseBeatorajaSongList` to resolve the imageset chain at
+ * parse time per audit A-7.
+ *
+ * Returns an empty map when the skin omits `imageset` (most LR2-derived skins) — callers
+ * walk the lookup and gracefully fall back to the original id.
+ */
+function buildImagesetIdLookup(skin: BeatorajaSkin): ReadonlyMap<BeatorajaImageId, BeatorajaImageId> {
+  const out = new Map<BeatorajaImageId, BeatorajaImageId>();
+  const imagesetField = (skin as { imageset?: unknown }).imageset;
+  if (!Array.isArray(imagesetField)) return out;
+  for (const entry of imagesetField) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue;
+    const obj = entry as Readonly<Record<string, unknown>>;
+    const idRaw = obj.id;
+    const id: BeatorajaImageId | undefined =
+      typeof idRaw === 'string' && idRaw.length > 0
+        ? idRaw
+        : typeof idRaw === 'number' && Number.isFinite(idRaw)
+          ? idRaw
+          : undefined;
+    if (id === undefined) continue;
+    const images = obj.images;
+    if (!Array.isArray(images) || images.length === 0) continue;
+    const firstRaw = images[0];
+    const firstImageId: BeatorajaImageId | undefined =
+      typeof firstRaw === 'string' && firstRaw.length > 0
+        ? firstRaw
+        : typeof firstRaw === 'number' && Number.isFinite(firstRaw)
+          ? firstRaw
+          : undefined;
+    if (firstImageId === undefined) continue;
+    out.set(id, firstImageId);
+  }
+  return out;
 }
 
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {

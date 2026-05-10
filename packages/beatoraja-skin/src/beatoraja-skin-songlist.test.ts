@@ -223,6 +223,111 @@ describe('parseBeatorajaSongList', () => {
     expect(layout?.text[0]?.id).toBe('bartext');
   });
 
+  describe('audit A-7 — imageset[] chain resolution for liston[].id', () => {
+    // Mirrors `JsonSelectSkinObjectLoader.java:44-77`: `liston[i].id` references an
+    // `imageset[]` entry, NOT `image[]` directly. The renderer needs the underlying
+    // `image[].id` (= `imageset[id].images[0]`) for its bar-texture lookup. The parser
+    // resolves the chain at parse time, replacing the row's `id` with the resolved value.
+
+    it('resolves liston[].id through `imageset[id].images[0]` to the underlying image[].id', () => {
+      const skin = makeSkin({
+        imageset: [{ id: 'bar', images: ['bar-img'] }],
+        songlist: {
+          liston: [{ id: 'bar', dst: [{ x: 800, y: 360, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      // Row id should be the resolved underlying image[].id, not the original imageset id.
+      expect(layout?.rows[0]?.id).toBe('bar-img');
+    });
+
+    it('uses imageset.images[0] only — additional frames are ignored at parse time', () => {
+      // Upstream `SkinImage(images[][], timer, cycle, ref=null)` always picks `image[0]`
+      // at draw time since `ref == null` short-circuits to value=0. We anchor that
+      // behavior at parse time by resolving to images[0].
+      const skin = makeSkin({
+        imageset: [{ id: 'bar', images: ['bar-frame-a', 'bar-frame-b', 'bar-frame-c'] }],
+        songlist: {
+          liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe('bar-frame-a');
+    });
+
+    it('keeps the original id when no imageset matches (back-compat for image[]-only skins)', () => {
+      // Skins authoring bars as `image[]` directly (legacy / test fixtures / hand-rolled
+      // simplified skins) skip the imageset wrapper. The resolver leaves the id as-is
+      // so the renderer's direct `image[]` lookup still succeeds.
+      const skin = makeSkin({
+        // No imageset[] authored.
+        songlist: {
+          liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe('bar');
+    });
+
+    it('resolves per-row when liston[] uses different imageset ids (e.g. focused vs unfocused)', () => {
+      // Common authoring: focused row uses a "highlighted" imageset, others use a base
+      // imageset. Each row's id resolves through its own imageset entry.
+      const skin = makeSkin({
+        imageset: [
+          { id: 'list', images: ['list-img'] },
+          { id: 'list_on', images: ['list_on-img'] },
+        ],
+        songlist: {
+          liston: [
+            { id: 'list', dst: [{ x: 0, y: 720, w: 500, h: 36 }] },
+            { id: 'list_on', dst: [{ x: 0, y: 360, w: 500, h: 36 }] },
+            { id: 'list', dst: [{ x: 0, y: 0, w: 500, h: 36 }] },
+          ],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows.map((r) => r.id)).toEqual(['list-img', 'list_on-img', 'list-img']);
+    });
+
+    it('honors numeric imageset ids', () => {
+      const skin = makeSkin({
+        imageset: [{ id: 100, images: [200] }],
+        songlist: {
+          liston: [{ id: 100, dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe(200);
+    });
+
+    it('falls back to original id when imageset.images[] is empty / malformed', () => {
+      // Defensive: an imageset with no images can't resolve anywhere meaningful. Keep
+      // the original id; let the renderer attempt direct image[] lookup. Either it
+      // succeeds (= a sibling image[] declared the id) or the bar texture stays empty.
+      const skin = makeSkin({
+        imageset: [{ id: 'bar', images: [] }],
+        songlist: {
+          liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe('bar');
+    });
+
+    it('also resolves `listoff[]` ids when the skin omits liston[]', () => {
+      // The `listoff` fallback path triggers when `liston[]` is absent. The imageset
+      // resolver still runs on each row's id.
+      const skin = makeSkin({
+        imageset: [{ id: 'bar', images: ['bar-img'] }],
+        songlist: {
+          listoff: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 500, h: 36 }] }],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      const layout = parseBeatorajaSongList(skin);
+      expect(layout?.rows[0]?.id).toBe('bar-img');
+    });
+  });
+
   it('extracts every entry of `songlist.label[]` as `{id, rect}` for per-feature gating', () => {
     // Default beatoraja's `select.json` authors three feature-gated label entries
     // (LN / random / mine). Each maps to a `skin.image[]` entry by id and gets a
