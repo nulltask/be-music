@@ -31,7 +31,13 @@ Also, as it is still in the early stages of development, backward compatibility 
 {
   "format": "be-music-json/0.1.0",
   "sourceFormat": "bms | bmson | json",
-  "metadata": {},
+  "metadata": {
+    "title": "Example",
+    "bpm": 130,
+    "backBmp": "back.png",
+    "banner": "banner.png",
+    "extras": {}
+  },
   "resources": {},
   "measures": [],
   "events": [],
@@ -56,6 +62,7 @@ Also, as it is still in the early stages of development, backward compatibility 
       "01": "MIRROR"
     },
     "wavCmd": "legacy",
+    "wavCmds": ["01 01 64"],
     "exWav": {
       "01": "sample_ex.wav"
     },
@@ -95,7 +102,8 @@ Also, as it is still in the early stages of development, backward compatibility 
             "value": "01",
             "bmson": {
               "l": 120,
-              "c": true
+              "c": true,
+              "damage": 50
             }
           }
         ]
@@ -107,8 +115,14 @@ Also, as it is still in the early stages of development, backward compatibility 
     "info": {
       "resolution": 240,
       "chartName": "HYPER",
-      "modeHint": "beat-7k"
+      "modeHint": "beat-7k",
+      "judgeRank": 100,
+      "total": 100,
+      "backImage": "back.png",
+      "bannerImage": "banner.png",
+      "previewMusic": "preview.ogg"
     },
+    "barlinesSuppressed": false,
     "bga": {
       "header": [
         {
@@ -178,6 +192,18 @@ Also, as it is still in the early stages of development, backward compatibility 
 }
 ```
 
+`metadata` is the normalized, format-neutral metadata area.
+
+- `stageFile`: BMS `#STAGEFILE`; bmson mirrors `info.eyecatch_image` here when present
+- `backBmp`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
+- `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
+- `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
+- `rank`: BMS `#RANK` or bmson `info.judge_rank`
+- `total`: BMS `#TOTAL` or bmson `info.total`
+- `difficulty`: BMS `#DIFFICULTY`
+- `bpm`: BMS `#BPM` or bmson `info.init_bpm`; BMS defaults to `130`, while bmson requires a positive `init_bpm`
+- `extras`: format-specific metadata that does not have a normalized field
+
 `bms` is an extension area that holds additional BMS-specific information.
 
 - `lnType`: value of `#LNTYPE`
@@ -193,7 +219,8 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `stp`: `#STP` value array
 - `option`: value of `#OPTION`
 - `changeOption`: Map of `#CHANGEOPTIONxx`
-- `wavCmd`: value of `#WAVCMD`
+- `wavCmd`: first value of `#WAVCMD`, kept for legacy compatibility
+- `wavCmds`: all `#WAVCMD` lines as raw post-directive text in declaration order
 - `exWav`: Map of `#EXWAVxx`
 - `exBmp`: Map of `#EXBMPxx`
 - `bga`: Map of `#BGAxx`
@@ -229,7 +256,8 @@ This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 be
 `bmson` is an extension area that holds additional bmson-specific information.
 
 - `version`: bmson version string
-- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `modeHint`, `judgeRank`, `total`, and image/preview system.
+- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, and image/preview fields.
+- `barlinesSuppressed`: `true` only when the bmson source authored an explicit `lines: []`; missing `lines` remains distinct and means the default 4/4 barline model.
 - `bga`: Keep `header`, `events`, `layerEvents`, `poorEvents`
 
 `preservation` is an auxiliary layer that maintains source-level information for round-trips.
@@ -257,9 +285,13 @@ interface BeMusicEvent {
   bmson?: {
     l?: number;
     c?: boolean;
+    damage?: number;
   };
 }
 ```
+
+`bmson.damage` is used for beatoraja-style bmson `key_channels` mine notes.
+It stores the authored gauge damage as a non-negative number and is absent on ordinary `sound_channels` notes.
 
 ## Meaning of `position`
 
