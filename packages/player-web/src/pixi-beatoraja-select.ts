@@ -835,7 +835,28 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.view.dispose();
     this.cachedBaseOps = undefined;
 
-    (this.options as { skinConfig?: BeatorajaSkinConfig }).skinConfig = opts.skinConfig;
+    // Mirror upstream `MainState.setSkin` (`MainState.java:113-132`): swap in the new skin AND
+    // its companion resource set so subsequent calls to `buildRowVisuals` /
+    // `resolveLevelValueElement` / `buildFeatureLabelSprite` / etc. resolve image[]/value[]/
+    // texture lookups against the new skin instead of the previous one.
+    //
+    // Previously only `skinConfig` was updated here; `options.skin` / `options.textures` /
+    // `options.fonts` stayed pointing at the prior mount's instances. The new `view` was built
+    // against the new skin, but the songlist row chrome (PLAYLEVEL digits, panel backgrounds)
+    // is rendered by THIS scene class through `this.options.*` and continued to read the OLD
+    // skin's `value[]` declarations and the OLD textures cache. User-visible symptom: switching
+    // skins mid-session left the previous skin's PLAYLEVEL font / panel background tints
+    // bleeding into the new skin's row layout.
+    const mut = this.options as {
+      skin: BeatorajaSkin;
+      textures: BeatorajaTextureCache;
+      fonts?: BeatorajaFontCache;
+      skinConfig?: BeatorajaSkinConfig;
+    };
+    mut.skin = opts.skin;
+    mut.textures = opts.textures;
+    mut.fonts = opts.fonts;
+    mut.skinConfig = opts.skinConfig;
 
     this.view = new BeatorajaPlaySkinView({
       skin: opts.skin,
