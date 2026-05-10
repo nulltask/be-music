@@ -2130,11 +2130,15 @@ export class BeatorajaPlaySkinView {
     // digits flush with the dst's left edge; align=2 (CENTER) shifts half. Without this,
     // ModernChic / GdbG result-screen `floatvalue` displays (BPM avg, accuracy %, ms delta)
     // with explicit `align` rendered with leading blanks on the wrong side.
-    const alignShift = composeBeatorajaFloatValueShift(entry.value, value, slotWidth);
+    // Compute shift, then NEGATE — `SkinFloat.java:193` ADDS the shift to slot.x while our
+    // `perDigitSlotPixiProps` helper SUBTRACTS the `alignShift` parameter (modeled after
+    // `SkinNumber.draw()`'s `- shift`). Negating preserves a single helper for both element
+    // types: `slot.x = parent.x + j*slotStep - alignShift` with `alignShift = -upstreamShift`
+    // is equivalent to upstream's `slot.x = parent.x + j*slotStep + upstreamShift`.
+    const alignShift = -composeBeatorajaFloatValueShift(entry.value, value, slotWidth);
     const center = centerToAnchor(entry.group.center);
     // Per-digit offsets — same semantics as `value[]`. See `perDigitSlotPixiProps` for the
-    // upstream-faithful x/y/w/h derivation (mirrors `SkinFloat.java:189-199`, identical to
-    // `SkinNumber.draw()` modulo the shift sign which is handled by `composeBeatorajaFloatValueShift`).
+    // upstream-faithful x/y/w/h derivation (mirrors `SkinFloat.java:189-199`).
     const perDigitOffsets = entry.value.offsets;
     for (let i = 0; i < entry.slotSprites.length; i += 1) {
       const sprite = entry.slotSprites[i]!;

@@ -148,155 +148,201 @@ function integerPropertyField(value: unknown): BeatorajaIntegerPropertyRef | und
   return undefined;
 }
 
+// ─── FloatFormatter cell-glyph constants ────────────────────────────────────────────────────
+// Mirror `FloatFormatter.java:21-23` cell index conventions. Used as the digit values written
+// into the formatter's `digits[]` array, then read back as cell indices on the source strip.
+const SIGNSYMBOL = 12; // sign cell ("+" / "-").
+const DECIMALPOINT = 11; // decimal-point cell.
+const REVERSEZERO = 10; // "back zero" cell (used when zeropadding=2 on fractional zeros).
+const KETAMAX = 8; // max combined int+frac digit count per `FloatFormatter.java:19`.
+
 /**
- * Compose a float number into per-slot cell descriptors for the renderer. Slot order:
+ * Compose a float number into per-slot cell descriptors for the renderer.
  *
- *     [int_iketa-1] [int_iketa-2] ... [int_0] [dot] [frac_0] [frac_1] ... [frac_fketa-1]
+ * Audit A-1 / A-2 / B-2 (2024-12) re-aligned this to upstream's `FloatFormatter.java` +
+ * `SkinFloat.java:177-199` logic. The previous TS impl had three bugs:
  *
- * The integer half is right-aligned to its `iketa` digit count (leading-blank or leading-zero
- * pad based on `padding`). The fractional half is left-aligned to `fketa` and zero-padded on
- * the right. The dot cell sits between them — index resolved per the strip's `divx`:
+ *   - **Slot order reversed**: emitted leading blanks at low j with visible content at high j,
+ *     while upstream emits visible content at low j with TRAILING nulls at high j (when the
+ *     authored iketa exceeds the value's natural int width).
+ *   - **Shift sign**: applied `- shift` to slot x, but `SkinFloat.draw()` uses `+ shift`.
+ *   - **Align convention**: treated `align=0:右 / 1:左 / 2:中央` (matching SkinNumber), but
+ *     `SkinFloat.java:60-62` documents `0:左 / 1:右 / 2:中央` (the OPPOSITE for 0/1).
  *
- *   - 24-cell signed dual-strip (`divx % 24 == 0`): cell `divx/2 - 1` for positive (typically
- *     11), cell `divx - 1` for negative (typically 23). Mirrors beatoraja's per-half atlas.
- *   - Single strip with `divx >= 12`: cell `divx - 1` (the last cell, conventionally the dot).
- *   - Smaller strip (`divx < 12`): no dot glyph available; the slot hides.
+ * The three bugs together meant skins authoring `floatvalue[]` with explicit `align` rendered
+ * with the WRONG flush direction, while the natural `align=0` default rendered with the
+ * intended visible content but on the wrong side of the dst rect.
  *
- * `gain` is applied to `value` before formatting (`displayValue = value * gain`). Skins
- * authoring `gain = 0.01` get percentage display (raw 9876 → 98.76); `gain = 1` is the
- * pass-through default.
+ * ─── Algorithm (mirrors `FloatFormatter.calcuateAndGetDigits()`) ────────────────────────────
  *
- * Slot count = `iketa + (fketa > 0 ? 1 : 0) + fketa`. Slots with `hidden: true` mean "skip the
- * sprite this slot" — the renderer mounts a single sprite per slot and toggles visibility.
+ * 1. Apply `gain` to value (`SkinFloat.java:148`: `var v = value * gain;`).
+ * 2. Compute `iketa, fketa, sign, length` per `FloatFormatter.java:55-71`. `length = sign +
+ *    iketa + fketa + (fketa != 0 ? 1 : 0)`. The digits[] array has `length + 1` entries
+ *    initialized to -1; entries 1..length map to currentImages[0..length-1] in `SkinFloat`.
+ * 3. RTL walk from `nowketa = base + fketa + (fketa>0?1:0)` down to `sign`. Per iteration:
+ *    write the current digit (or REVERSEZERO when zeropadding=2 and fval=0), advance fcnt and
+ *    fval. When fcnt drops to 0, write DECIMALPOINT one slot to the left.
+ * 4. Post-walk: if `nowketa == 1`, write SIGNSYMBOL (signed positive) or the final digit.
+ * 5. Slots with `digits[i] == -1` map to `hidden: true` (= upstream's null currentImages).
  *
- * Negative numbers: the integer half emits a sign cell when the strip carries one. Single-strip
- * conventions match the integer-`composeBeatorajaValueCells` path. Dual-strip uses the negative
- * half (cells 12..23) for every digit cell including the dot.
+ * Cell index translation (per `JsonSkinObjectLoader.java:173-300`):
+ *   - 0..9 → digit cells in active half.
+ *   - 10 (REVERSEZERO) → cell 10 of active half.
+ *   - 11 (DECIMALPOINT) → cell 11 of active half.
+ *   - 12 (SIGNSYMBOL) → cell 12 of active half (only present on 26-cell-per-half strips).
+ *
+ * For 24-cell signed dual-strip (`divx % 24 == 0`), the "active half" is the positive half
+ * (cells 0..halfDivx-1) when value ≥ 0, else the negative half (cells halfDivx..divx-1).
+ *
+ * `gain` is applied before formatting (`displayValue = value * gain`). Skins authoring
+ * `gain = 0.01` get percentage display (raw 9876 → 98.76); `gain = 1` is the pass-through
+ * default.
  */
 export function composeBeatorajaFloatValueCells(
   element: BeatorajaFloatValueElement,
   value: number,
 ): BeatorajaValueDigitCell[] {
-  const iketa = Math.max(1, Math.trunc(element.iketa));
-  const fketa = Math.max(0, Math.trunc(element.fketa));
+  // Apply `value * gain` per `SkinFloat.java:148`.
+  const gain = Number.isFinite(element.gain) ? element.gain : 1;
+  const rawValue = Number.isFinite(value) ? value * gain : 0;
+  const isNegative = rawValue < 0;
+  const absValue = Math.abs(rawValue);
+
+  // Mirror `FloatFormatter` constructor (`FloatFormatter.java:55-71`).
+  const tempIketa = Math.max(0, Math.trunc(element.iketa));
+  const tempFketa = Math.max(0, Math.trunc(element.fketa));
+  const sign = element.isSignvisible ? 1 : 0;
+  const zeropadding = element.zeropadding >= 2 ? 2 : element.zeropadding >= 1 ? 1 : 0;
+  let iketa: number;
+  let fketa: number;
+  if (tempIketa >= KETAMAX || tempFketa >= KETAMAX || tempIketa + tempFketa >= KETAMAX) {
+    fketa = Math.min(tempFketa, KETAMAX);
+    iketa = KETAMAX - fketa;
+  } else {
+    iketa = tempIketa;
+    fketa = tempFketa;
+  }
+  const length = sign + iketa + fketa + (fketa !== 0 ? 1 : 0);
+
   const divx = Math.max(1, element.divx);
   const isSignedDualStrip = divx % 24 === 0;
   const halfDivx = isSignedDualStrip ? divx / 2 : divx;
+  const activeHalfOffset = isSignedDualStrip && isNegative ? halfDivx : 0;
 
-  // Apply gain before formatting. Defaults (`gain = 1`) leave the value unchanged.
-  const gain = Number.isFinite(element.gain) ? element.gain : 1;
-  const safeValue = Number.isFinite(value) ? value * gain : 0;
-  const isNegative = safeValue < 0;
-  const halfOffset = isSignedDualStrip && isNegative ? halfDivx : 0;
-
-  // Format `|safeValue|` as a fixed-decimal string with `fketa` fractional digits, then split
-  // into integer and fractional digit arrays. `iketa` may exceed the natural integer length
-  // (in which case we pad on the left); `fketa` always fixes the fractional length (zero-pad
-  // on the right).
-  const fixed = Math.abs(safeValue).toFixed(fketa);
-  const dotIdx = fixed.indexOf('.');
-  const intStr = dotIdx >= 0 ? fixed.slice(0, dotIdx) : fixed;
-  const fracStr = dotIdx >= 0 ? fixed.slice(dotIdx + 1) : '';
-
-  // Build the sequence in left-to-right slot order. Integer half first (right-aligned to
-  // iketa). Dot if fketa > 0. Then fractional half left-aligned.
-  const slots: Array<{ cell: number; hidden: boolean }> = [];
-  // Integer half — right-align: leading slots are blank/zero-padded.
-  const hasBlankCell = halfDivx >= 11;
-  const blankCellInHalf = !hasBlankCell ? -1 : isSignedDualStrip ? halfDivx - 2 : halfDivx - 1;
-  // Sign cell: dual-strip bakes the sign into the negative-half digits (no dedicated slot).
-  // Single strip uses `divx - 1` when divx >= 11 (cell 10 = sign for the legacy 11-cell layout).
-  // We position the sign at the FIRST integer slot when negative + non-dual-strip.
-  const intDigitCount = intStr.length;
-  // For padding: how many leading slots (excluding the digits themselves and any sign).
-  const leadingSlots = Math.max(0, iketa - intDigitCount - (isNegative && !isSignedDualStrip ? 1 : 0));
-  for (let i = 0; i < leadingSlots; i += 1) {
-    if (element.padding === 1) {
-      slots.push({ cell: 0 + halfOffset, hidden: false });
-    } else if (hasBlankCell) {
-      slots.push({ cell: (blankCellInHalf >= 0 ? blankCellInHalf : 0) + halfOffset, hidden: false });
-    } else {
-      slots.push({ cell: 0, hidden: true });
+  // ─── Run FloatFormatter.calcuateAndGetDigits (`FloatFormatter.java:73-128`) ──────────────
+  const digits = new Array<number>(length + 1).fill(-1);
+  if (length === 0) {
+    // Degenerate config — no slots to fill.
+    return [];
+  }
+  if (iketa === 0 && fketa === 0 && sign === 1) {
+    // Sign-only mode (`FloatFormatter.java:78-81`).
+    digits[1] = SIGNSYMBOL;
+  } else {
+    const isSign = sign === 1 && absValue < Math.pow(10, iketa);
+    let base = sign + iketa;
+    if (zeropadding === 0) {
+      // `FloatFormatter.java:85-88` — base contracts to the natural int width when
+      // zeropadding=0, leaving trailing slots null.
+      const ival = Math.trunc(absValue);
+      base = Math.min(iketa, Math.floor(Math.log10(ival !== 0 ? ival : 1)) + 1) + sign;
+    }
+    let fval = Math.trunc(absValue * Math.pow(10, fketa));
+    let nowketa = iketa === 0 ? fketa + sign + 1 : base + fketa + (fketa !== 0 ? 1 : 0);
+    let fcnt = fketa;
+    while (nowketa > sign) {
+      if (fcnt > -1) {
+        digits[nowketa] = fval % 10;
+      } else {
+        digits[nowketa] = fval === 0 && zeropadding === 2 ? REVERSEZERO : fval % 10;
+      }
+      fcnt -= 1;
+      if (fcnt === 0) {
+        nowketa -= 1;
+        digits[nowketa] = DECIMALPOINT;
+      }
+      fval = Math.floor(fval / 10);
+      nowketa -= 1;
+    }
+    if (nowketa === 1) {
+      digits[1] = isSign ? SIGNSYMBOL : fval % 10;
+    }
+    if (iketa === 0 && sign === 1) {
+      digits[1] = SIGNSYMBOL;
     }
   }
-  // Sign cell (single-strip negatives only).
-  if (isNegative && !isSignedDualStrip) {
-    if (hasBlankCell) {
-      // For 12-cell strip, sign cell is `divx - 1 - 1 = 10` (the cell BEFORE the dot). For
-      // 11-cell strip, sign is at `divx - 1 = 10`. Approximate: use the second-to-last cell
-      // when divx >= 12, else the last cell. Skins typically use 12+ cells for floatvalue.
-      slots.push({ cell: divx >= 12 ? divx - 2 : divx - 1, hidden: false });
-    } else {
-      slots.push({ cell: 0, hidden: true });
-    }
-  }
-  // Integer digits (left-to-right within the integer half). Truncate to fit iketa.
-  const intDisplayed = intStr.slice(Math.max(0, intStr.length - (iketa - leadingSlots - (isNegative && !isSignedDualStrip ? 1 : 0))));
-  for (const ch of intDisplayed) {
-    const idx = ch.charCodeAt(0) - 48;
-    const cellInHalf = idx >= 0 && idx < halfDivx ? idx : halfDivx - 1;
-    slots.push({ cell: cellInHalf + halfOffset, hidden: false });
-  }
-  // Dot slot — only when there's a fractional half. Cell index = last cell of the active
-  // half (single-strip: `divx - 1`; dual-strip-positive: `halfDivx - 1`; dual-strip-negative:
-  // `divx - 1`). Strips smaller than 12 cells have no dot glyph; hide.
-  if (fketa > 0) {
-    if (halfDivx >= 12) {
-      slots.push({ cell: halfDivx - 1 + halfOffset, hidden: false });
-    } else {
-      slots.push({ cell: 0, hidden: true });
-    }
-  }
-  // Fractional digits (left-to-right). Already zero-padded to fketa by `toFixed`.
-  for (const ch of fracStr) {
-    const idx = ch.charCodeAt(0) - 48;
-    const cellInHalf = idx >= 0 && idx < halfDivx ? idx : halfDivx - 1;
-    slots.push({ cell: cellInHalf + halfOffset, hidden: false });
-  }
 
-  // Map slot cells to source-rect crops on the strip. Each cell occupies (w/divx, h/divy).
+  // ─── Map digits[1..length] to cells[0..length-1] (`SkinFloat.java:177-184`) ──────────────
   const cellW = Math.floor(element.w / divx);
   const cellH = Math.floor(element.h / Math.max(1, element.divy));
-  return slots.map((slot) => ({
-    x: element.x + slot.cell * cellW,
-    y: element.y,
-    w: cellW,
-    h: cellH,
-    cell: slot.hidden ? -1 : slot.cell,
-    hidden: slot.hidden,
-  }));
+  const cells: BeatorajaValueDigitCell[] = new Array(length);
+  for (let i = 0; i < length; i += 1) {
+    const digitValue = digits[i + 1] ?? -1;
+    if (digitValue === -1) {
+      cells[i] = { x: 0, y: element.y, w: cellW, h: cellH, cell: -1, hidden: true };
+      continue;
+    }
+    // Translate digit value (0..12) into a cell index in the active half. Unmapped values
+    // (rare) fall through to digit clamping at halfDivx-1.
+    const cellInHalf = digitValue >= 0 && digitValue < halfDivx ? digitValue : halfDivx - 1;
+    const cell = cellInHalf + activeHalfOffset;
+    cells[i] = {
+      x: element.x + cell * cellW,
+      y: element.y,
+      w: cellW,
+      h: cellH,
+      cell,
+      hidden: false,
+    };
+  }
+  return cells;
 }
 
 /**
  * Total slot count for {@link composeBeatorajaFloatValueCells}. The renderer pre-allocates one
  * sprite per slot at build time before any value resolves, so it needs the count without
- * actually formatting a value. Matches the slot count the composer emits regardless of value
- * magnitude (the layout is fixed by `iketa` + (`fketa > 0 ? 1 : 0`) + `fketa`).
+ * actually formatting a value. Mirrors `FloatFormatter.java:67`'s `length = sign + iketa +
+ * fketa + (fketa != 0 ? 1 : 0)` after the iketa/fketa KETAMAX clamp.
  */
 export function beatorajaFloatValueSlotCount(element: BeatorajaFloatValueElement): number {
-  const iketa = Math.max(1, Math.trunc(element.iketa));
-  const fketa = Math.max(0, Math.trunc(element.fketa));
-  return iketa + (fketa > 0 ? 1 : 0) + fketa;
+  const tempIketa = Math.max(0, Math.trunc(element.iketa));
+  const tempFketa = Math.max(0, Math.trunc(element.fketa));
+  const sign = element.isSignvisible ? 1 : 0;
+  let iketa: number;
+  let fketa: number;
+  if (tempIketa >= KETAMAX || tempFketa >= KETAMAX || tempIketa + tempFketa >= KETAMAX) {
+    fketa = Math.min(tempFketa, KETAMAX);
+    iketa = KETAMAX - fketa;
+  } else {
+    iketa = tempIketa;
+    fketa = tempFketa;
+  }
+  return sign + iketa + fketa + (fketa !== 0 ? 1 : 0);
 }
 
 /**
  * Compute the horizontal pixel shift to apply across every digit slot to honor
- * `element.align` for floatvalue rendering. Mirrors `SkinNumber.prepare()`'s
- * `shift = align == 0 ? 0 : (align == 1 ? full : full*0.5)` formula, where `full`
- * is `shiftbase * (slotWidth + space)` and `shiftbase` counts the LEADING hidden
- * slots in the composed cells (= leading-blank pads on the integer half before the
- * first significant digit).
+ * `element.align` for floatvalue rendering. Mirrors `SkinFloat.java:186`:
  *
- * Sign convention: we subtract `shift` from each slot's x (= same direction as
- * `composeBeatorajaValueShift`). Note: upstream's `SkinFloat.draw()` uses `+ shift`
- * while `SkinNumber.draw()` uses `- shift` — that mismatch in the Java source looks
- * like a long-standing inconsistency. We use `- shift` for both so left / centre
- * alignment behaves predictably (= the visible digits flush left or sit centred at
- * the destination's `region.x`, matching the integer-value path skin authors expect).
+ *     shift = align == 0 ? 0
+ *           : align == 1 ? (region.width + space) * shiftbase
+ *           : (region.width + space) * 0.5f * shiftbase;
  *
- * Returns `0` for `align = 0` (right-flush, the default — leading blanks stay LEFT and
- * digits land on the RIGHT side of the slot box, no shift needed). Also returns 0 when
- * the value renders without leading blanks (= `shiftbase = 0`).
+ * Where `shiftbase` is the count of `null` slots (= trailing-null int positions when
+ * iketa exceeds the value's natural width). Per `SkinFloat.java:60-62` the align values
+ * are `0:左 (LEFT)`, `1:右 (RIGHT)`, `2:中央 (CENTER)` — the OPPOSITE of `SkinNumber`'s
+ * `0:RIGHT, 1:LEFT, 2:CENTER` convention. The previous TS impl wrongly mirrored
+ * SkinNumber's mapping for floatvalue.
+ *
+ * The renderer ADDS this value to each slot's x per `SkinFloat.java:193, 195`'s
+ * `region.x + (region.width + space) * j + shift + offsets[j].x`. (SkinNumber subtracts
+ * the shift; the two element types differ on this point because their slot orders are
+ * mirror images of each other — SkinNumber puts visible content at HIGH j and nulls at
+ * LOW j, SkinFloat the opposite.)
+ *
+ * Returns `0` for `align = 0` (LEFT-flush, the default — visible content sits at the
+ * dst rect's LEFT edge naturally, no shift needed). Also returns 0 when the value
+ * renders without trailing nulls (= `shiftbase = 0`).
  */
 export function composeBeatorajaFloatValueShift(
   element: BeatorajaFloatValueElement,
@@ -307,8 +353,7 @@ export function composeBeatorajaFloatValueShift(
   const cells = composeBeatorajaFloatValueCells(element, value);
   let shiftbase = 0;
   for (const cell of cells) {
-    if (!cell.hidden) break;
-    shiftbase += 1;
+    if (cell.hidden) shiftbase += 1;
   }
   if (shiftbase === 0) return 0;
   const space = Number.isFinite(element.space) ? element.space : 0;
