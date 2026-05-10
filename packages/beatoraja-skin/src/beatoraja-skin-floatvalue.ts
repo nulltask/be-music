@@ -63,6 +63,13 @@ export interface BeatorajaFloatValueElement {
   ref: number;
   /** Optional `value` FloatProperty. Beatoraja evaluates this instead of `ref` when authored. */
   valueProperty?: BeatorajaIntegerPropertyRef;
+  /**
+   * Animation cycle in milliseconds — same semantics as {@link BeatorajaValueElement.cycle}.
+   * Mirrors upstream `SkinNumber`'s `cycle` argument piped to `SkinSourceImageSet`. When
+   * `cycle > 0` the source picks one of `divy` rows per frame via
+   * `(time * divy / cycle) % divy` (`SkinSourceImageSet.java:87`); `0` keeps row 0.
+   */
+  cycle: number;
   /** `if` codes that gate visibility (from `if`/`values` flattening). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -107,6 +114,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaFloatValueElement | un
     offsets: numberArrayField(f, 'offset'),
     ref: numberField(f, 'ref', 0),
     ...(valueProperty !== undefined ? { valueProperty } : {}),
+    cycle: numberField(f, 'cycle', 0),
     ifCodes: entry.ifCodes,
   };
 }
@@ -201,6 +209,14 @@ const KETAMAX = 8; // max combined int+frac digit count per `FloatFormatter.java
 export function composeBeatorajaFloatValueCells(
   element: BeatorajaFloatValueElement,
   value: number,
+  /**
+   * Animation frame index — selects which `divy` row the digit cells crop from. Defaults to
+   * `0` (= row 0). Caller computes the index via {@link floatValueFrameAt}. Indices are
+   * clamped to `[0, divy-1]`; the 24-cell signed-dual-strip mode pins frame to 0 because its
+   * "rows" encode positive/negative half rather than animation frames (matches the
+   * value-element composer's policy — see `composeBeatorajaValueCells` for the parallel doc).
+   */
+  frameIndex: number = 0,
 ): BeatorajaValueDigitCell[] {
   // Apply `value * gain` per `SkinFloat.java:148`.
   const gain = Number.isFinite(element.gain) ? element.gain : 1;
@@ -274,12 +290,21 @@ export function composeBeatorajaFloatValueCells(
 
   // ─── Map digits[1..length] to cells[0..length-1] (`SkinFloat.java:177-184`) ──────────────
   const cellW = Math.floor(element.w / divx);
-  const cellH = Math.floor(element.h / Math.max(1, element.divy));
+  const divy = Math.max(1, element.divy);
+  const cellH = Math.floor(element.h / divy);
+  // Clamp the requested animation frame into `[0, divy-1]`. 24-cell dual-strip pins frame=0
+  // because its rows are positive/negative-half cells, not animation frames — see the
+  // {@link frameIndex} doc for the rationale.
+  const frame =
+    isSignedDualStrip || divy <= 1
+      ? 0
+      : Math.min(divy - 1, Math.max(0, Math.trunc(Number.isFinite(frameIndex) ? frameIndex : 0)));
+  const yWithFrame = element.y + frame * cellH;
   const cells: BeatorajaValueDigitCell[] = new Array(length);
   for (let i = 0; i < length; i += 1) {
     const digitValue = digits[i + 1] ?? -1;
     if (digitValue === -1) {
-      cells[i] = { x: 0, y: element.y, w: cellW, h: cellH, cell: -1, hidden: true };
+      cells[i] = { x: 0, y: yWithFrame, w: cellW, h: cellH, cell: -1, hidden: true };
       continue;
     }
     // Translate digit value (0..12) into a cell index in the active half. Unmapped values
@@ -288,7 +313,7 @@ export function composeBeatorajaFloatValueCells(
     const cell = cellInHalf + activeHalfOffset;
     cells[i] = {
       x: element.x + cell * cellW,
-      y: element.y,
+      y: yWithFrame,
       w: cellW,
       h: cellH,
       cell,
@@ -296,6 +321,24 @@ export function composeBeatorajaFloatValueCells(
     };
   }
   return cells;
+}
+
+/**
+ * Pick the displayed animation frame index for a `floatvalue[]` strip at a given elapsed-time
+ * tick. Same formula as {@link valueFrameAt} on the integer-value side — both mirror upstream
+ * `SkinSourceImageSet.getImageIndex` which is shared between `SkinNumber` and `SkinFloat`.
+ *
+ * Returns `0` when `cycle <= 0` (animation disabled), `divy <= 1` (single-row strip), or
+ * `elapsedMs` is non-finite / negative (pre-roll guard mirroring upstream's `if (time < 0)
+ * return 0;`).
+ */
+export function floatValueFrameAt(element: BeatorajaFloatValueElement, elapsedMs: number): number {
+  if (element.cycle <= 0) return 0;
+  const length = Math.max(1, Math.trunc(element.divy));
+  if (length <= 1) return 0;
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return 0;
+  const t = Math.floor(elapsedMs) % element.cycle;
+  return Math.min(length - 1, Math.floor((t * length) / element.cycle));
 }
 
 /**

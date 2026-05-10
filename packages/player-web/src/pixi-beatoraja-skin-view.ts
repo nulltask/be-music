@@ -44,6 +44,7 @@ import {
   pickBeatorajaGaugeNode,
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
+  floatValueFrameAt,
   composeBeatorajaFloatValueShift,
   type BeatorajaBpmGraphElement,
   type BeatorajaCustomEvent,
@@ -347,6 +348,12 @@ interface FloatValueEntry {
   slotSprites: Sprite[];
   /** Last resolved float value — used to skip re-cropping when nothing changed. */
   lastValue: number;
+  /**
+   * Last animation frame index applied to the slot textures. Mirrors {@link ValueEntry}'s
+   * `lastFrameIndex` — re-crop runs whenever the strip's `cycle/divy` advances or the value
+   * changes. `-1` is the initial sentinel.
+   */
+  lastFrameIndex: number;
 }
 
 interface ValueEntry {
@@ -1359,7 +1366,7 @@ export class BeatorajaPlaySkinView {
       this.container.addChild(sprite);
       slotSprites.push(sprite);
     }
-    return { kind: 'floatvalue', group, value: element, baseTexture, slotSprites, lastValue: 0 };
+    return { kind: 'floatvalue', group, value: element, baseTexture, slotSprites, lastValue: 0, lastFrameIndex: -1 };
   }
 
   private buildTextEntry(group: BeatorajaDestinationGroup, element: BeatorajaTextElement): TextEntry {
@@ -1837,7 +1844,7 @@ export class BeatorajaPlaySkinView {
           this.updateValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
           break;
         case 'floatvalue':
-          this.updateFloatValueEntry(entry, props, luaContext, context.resolveOffset);
+          this.updateFloatValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
           break;
         case 'text':
           this.updateTextEntry(entry, props, luaContext);
@@ -2193,6 +2200,7 @@ export class BeatorajaPlaySkinView {
     props: ReturnType<typeof destinationToSpriteProps>,
     luaContext: BeatorajaLuaRuntimeContext,
     resolveOffset: BeatorajaRenderContext['resolveOffset'],
+    nowMs: number,
   ): void {
     const baseTexture = entry.baseTexture;
     if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
@@ -2212,10 +2220,17 @@ export class BeatorajaPlaySkinView {
         ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
         : ((entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0);
 
+    // Animation frame for `cycle`-driven strips — selects which `divy` row the slot textures
+    // crop from. Mirrors `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`).
+    const frameIndex = floatValueFrameAt(entry.value, nowMs);
+
     let cells: ReturnType<typeof composeBeatorajaFloatValueCells> | undefined;
-    if (value !== entry.lastValue) {
+    const valueChanged = value !== entry.lastValue;
+    const frameChanged = frameIndex !== entry.lastFrameIndex;
+    if (valueChanged || frameChanged) {
       entry.lastValue = value;
-      cells = composeBeatorajaFloatValueCells(entry.value, value);
+      entry.lastFrameIndex = frameIndex;
+      cells = composeBeatorajaFloatValueCells(entry.value, value, frameIndex);
       for (let i = 0; i < entry.slotSprites.length; i += 1) {
         const cell = cells[i];
         if (cell === undefined || cell.hidden) continue;
@@ -2225,7 +2240,7 @@ export class BeatorajaPlaySkinView {
         }
       }
     }
-    if (cells === undefined) cells = composeBeatorajaFloatValueCells(entry.value, value);
+    if (cells === undefined) cells = composeBeatorajaFloatValueCells(entry.value, value, frameIndex);
 
     // Lay the slot row across the dst rect — same convention as `value[]`: `dst.w` is per-slot
     // width, `space` adds inter-slot gap.

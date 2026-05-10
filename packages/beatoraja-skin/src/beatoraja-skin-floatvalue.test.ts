@@ -3,6 +3,7 @@ import {
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
   composeBeatorajaFloatValueShift,
+  floatValueFrameAt,
   normalizeBeatorajaFloatValues,
   type BeatorajaFloatValueElement,
 } from './beatoraja-skin-floatvalue.ts';
@@ -91,6 +92,7 @@ describe('composeBeatorajaFloatValueCells (audit A-1 / A-2 — upstream FloatFor
     align: 0,
     offsets: [],
     ref: 92,
+    cycle: 0,
     ifCodes: [],
   } as const;
 
@@ -230,6 +232,7 @@ describe('composeBeatorajaFloatValueShift (audit A-1 — align=0:左 / 1:右 / 2
     align: 0,
     offsets: [],
     ref: 0,
+    cycle: 0,
     ifCodes: [],
   };
 
@@ -277,5 +280,111 @@ describe('composeBeatorajaFloatValueShift (audit A-1 — align=0:左 / 1:右 / 2
     // zp=1 zero-pads every leading slot, leaving NO trailing null. shiftbase=0.
     const withZp1 = { ...digitOnlyElement, zeropadding: 1, align: 2 };
     expect(composeBeatorajaFloatValueShift(withZp1, 5, 40)).toBe(0);
+  });
+});
+
+// ─── cycle / divy animation (mirrors `SkinSourceImageSet.getImageIndex`) ──────────────────
+// Same formula as the integer-value side — both `SkinNumber` and `SkinFloat` route through the
+// same `SkinSourceImageSet`. ModernChic / GdbG don't currently animate `floatvalue[]` (the
+// authored cycle is 0 throughout the result-screen BPM/accuracy/ms readouts), but the upstream
+// schema accepts it and other community skins use it.
+describe('composeBeatorajaFloatValueCells — cycle / divy animation', () => {
+  function animatedFloatStrip(): BeatorajaFloatValueElement {
+    return {
+      id: 'fv-anim',
+      src: 4,
+      x: 0,
+      y: 100, // non-zero base y to make the row offset visible.
+      w: 240,
+      h: 48, // divy=2 → cellH = 24.
+      divx: 12,
+      divy: 2,
+      iketa: 3,
+      fketa: 1,
+      gain: 1,
+      isSignvisible: false,
+      space: 0,
+      padding: 0,
+      zeropadding: 0,
+      align: 0,
+      offsets: [],
+      ref: 0,
+      cycle: 80,
+      ifCodes: [],
+    };
+  }
+
+  it('frame 0 (default) keeps every slot at element.y', () => {
+    const cells = composeBeatorajaFloatValueCells(animatedFloatStrip(), 1.5);
+    for (const cell of cells) expect(cell.y).toBe(100);
+  });
+
+  it('frame 1 shifts every slot down by cellH (h / divy)', () => {
+    const cells = composeBeatorajaFloatValueCells(animatedFloatStrip(), 1.5, 1);
+    for (const cell of cells) expect(cell.y).toBe(124); // 100 + 1 * 24
+  });
+
+  it('hidden slots also shift y per the active animation frame', () => {
+    // value=5, iketa=3, fketa=1, zp=0: produces leading hidden slots that should still be
+    // re-anchored to the active row when the strip animates (matters for renderers that
+    // recompute hidden geometry without re-cropping).
+    const el = animatedFloatStrip();
+    const cellsF1 = composeBeatorajaFloatValueCells(el, 5, 1);
+    for (const cell of cellsF1) expect(cell.y).toBe(124);
+    // At least one hidden slot expected for value=5 in iketa=3 + fketa=1.
+    expect(cellsF1.some((c) => c.hidden)).toBe(true);
+  });
+
+  it('clamps frameIndex to [0, divy-1] (matches valueFrameAt clamp)', () => {
+    expect(composeBeatorajaFloatValueCells(animatedFloatStrip(), 1, 5)[0]?.y).toBe(124);
+    expect(composeBeatorajaFloatValueCells(animatedFloatStrip(), 1, -3)[0]?.y).toBe(100);
+  });
+});
+
+describe('floatValueFrameAt', () => {
+  function strip(overrides: Partial<BeatorajaFloatValueElement> = {}): BeatorajaFloatValueElement {
+    return {
+      id: 'fv',
+      src: 0,
+      x: 0,
+      y: 0,
+      w: 120,
+      h: 48,
+      divx: 12,
+      divy: 2,
+      iketa: 3,
+      fketa: 1,
+      gain: 1,
+      isSignvisible: false,
+      space: 0,
+      padding: 0,
+      zeropadding: 0,
+      align: 0,
+      offsets: [],
+      ref: 0,
+      cycle: 80,
+      ifCodes: [],
+      ...overrides,
+    };
+  }
+
+  it('returns 0 when cycle is 0', () => {
+    expect(floatValueFrameAt(strip({ cycle: 0 }), 100)).toBe(0);
+  });
+
+  it('returns 0 when divy <= 1', () => {
+    expect(floatValueFrameAt(strip({ divy: 1 }), 50)).toBe(0);
+  });
+
+  it('walks frames over the cycle period', () => {
+    expect(floatValueFrameAt(strip(), 0)).toBe(0);
+    expect(floatValueFrameAt(strip(), 39)).toBe(0);
+    expect(floatValueFrameAt(strip(), 40)).toBe(1);
+    expect(floatValueFrameAt(strip(), 80)).toBe(0);
+  });
+
+  it('clamps non-finite / negative elapsed to frame 0', () => {
+    expect(floatValueFrameAt(strip(), -1)).toBe(0);
+    expect(floatValueFrameAt(strip(), Number.NaN)).toBe(0);
   });
 });

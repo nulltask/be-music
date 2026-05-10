@@ -82,6 +82,7 @@ export {
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
   composeBeatorajaFloatValueShift,
+  floatValueFrameAt,
   normalizeBeatorajaFloatValues,
 } from './beatoraja-skin-floatvalue.ts';
 export type {
