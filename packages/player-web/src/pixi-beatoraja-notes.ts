@@ -521,21 +521,39 @@ export class BeatorajaNoteLayer {
     //   - `lnstart` = LN's time-FIRST end (the side that hits the judgement line first)
     //   - `lnend`   = LN's time-LAST end (the side the player releases last)
     //
-    // Commit 09fe3b3 mis-identified `longImage[0]` as `lnstart` (because the slot index
-    // looks like it should pair with the alphabetically-first name) and swapped these,
-    // routing `lnend` to `yStart` and `lnstart` to `yEnd`. The visible result was head
-    // / tail art appearing on the wrong sides — most obvious on ModernChic where the
-    // `lns-*` / `lne-*` art differs noticeably between the two slots. Reverting to the
-    // upstream pairing.
-    const bottomCrop = this.resolveLaneSprite(this.noteSection.lnstart[lane]);
-    const topCrop =
-      longNoteMode === 1 ? undefined : this.resolveLaneSprite(this.noteSection.lnend[lane]);
-    // Pick the held / unheld body slot based on the live press state. Falls back to the
-    // OTHER slot when the chosen one is empty — happens on legacy-mode skins where only
-    // `lnBodyHeld` is populated (`lnBodyUnheld === []` after parse), and we'd rather
-    // paint the held sprite than nothing.
-    const primaryBodyId = held ? this.noteSection.lnBodyHeld[lane] : this.noteSection.lnBodyUnheld[lane];
-    const fallbackBodyId = held ? this.noteSection.lnBodyUnheld[lane] : this.noteSection.lnBodyHeld[lane];
+    // Full `longImage[]` slot layout (`JsonPlaySkinObjectLoader.java:48-69`):
+    //
+    //     lns[0] = lnend / lns[1] = lnstart    // CN/LN caps
+    //     lns[2] / lns[3] = LN body (held / unheld)
+    //     lns[4] = hcnend / lns[5] = hcnstart  // HCN-specific caps
+    //     lns[6] / lns[7] = HCN body (held / unheld)
+    //     lns[8..9] = HCN gain/drain body
+    //
+    // And `LaneRenderer.drawLongNote` branches by mode:
+    //   - LN  (line 691-697): body + lnstart at LN bottom; NO top cap.
+    //   - CN  (line 684-690): body + lnend at LN top + lnstart at LN bottom.
+    //   - HCN (line 673-683): HCN body + hcnend at LN top + hcnstart at LN bottom.
+    //
+    // Pre-fix the renderer used `lnstart` / `lnend` / `lnBodyHeld` / `lnBodyUnheld` for
+    // ALL three modes including HCN, ignoring the dedicated `hcnstart` / `hcnend` /
+    // `hcnBody*` slots. ModernChic / GdbG / play9.json all author distinct `hcn*`
+    // sprites for HCN charts, so HCN LNs rendered with the wrong art. Routing mode 3
+    // to the `hcn*` field set restores the upstream-faithful visual.
+    const isHcn = longNoteMode === 3;
+    const bottomCapId = isHcn ? this.noteSection.hcnstart[lane] : this.noteSection.lnstart[lane];
+    const topCapId =
+      longNoteMode === 1 ? undefined : isHcn ? this.noteSection.hcnend[lane] : this.noteSection.lnend[lane];
+    const bottomCrop = this.resolveLaneSprite(bottomCapId);
+    const topCrop = topCapId !== undefined ? this.resolveLaneSprite(topCapId) : undefined;
+    // Pick the held / unheld body slot based on the live press state. HCN uses its
+    // dedicated `hcnBodyHeld` / `hcnBodyUnheld` (upstream `lns[6]` / `lns[7]`); LN/CN
+    // share the regular `lnBodyHeld` / `lnBodyUnheld` slots (`lns[2]` / `lns[3]`).
+    // Falls back to the OTHER slot when the chosen one is empty — legacy-mode skins
+    // populate only one half so we'd rather paint the wrong-mood body than nothing.
+    const heldBodyField = isHcn ? this.noteSection.hcnBodyHeld : this.noteSection.lnBodyHeld;
+    const unheldBodyField = isHcn ? this.noteSection.hcnBodyUnheld : this.noteSection.lnBodyUnheld;
+    const primaryBodyId = held ? heldBodyField[lane] : unheldBodyField[lane];
+    const fallbackBodyId = held ? unheldBodyField[lane] : heldBodyField[lane];
     const bodyId = primaryBodyId !== undefined && primaryBodyId.length > 0 ? primaryBodyId : fallbackBodyId;
     const bodyCrop = bodyId !== undefined ? this.resolveLaneSprite(bodyId) : undefined;
     if (bottomCrop === undefined || bodyCrop === undefined) {
@@ -577,32 +595,24 @@ export class BeatorajaNoteLayer {
     body.tileScale.set(drawW / Math.max(1, bodyCrop.cellW), 1);
     body.alpha = 1;
 
-    // Bottom cap (`lnstart` = `longImage[1]`, screen-bottom = judgement-line side =
-    // LN's time-FIRST end). Upstream Y-UP draw is `(x, y - height, width, scale)`
-    // → bottom edge at the LN's lowest Y, top edge at body's bottom. Pixi Y-DOWN:
-    // top edge at `yStart - bottomHExpanded`, bottom edge at `yStart`. Anchored at the
-    // bottom-edge convention of the renderer.
-    const bottomCap = this.acquireSprite(usedS);
-    bottomCap.texture = bottomCrop.sprite.texture;
-    bottomCap.x = drawX;
-    bottomCap.y = yStart - bottomHExpanded;
-    bottomCap.width = drawW;
-    bottomCap.height = bottomHExpanded;
-    bottomCap.tint = 0xffffff;
-    bottomCap.alpha = 1;
+    // **Cap draw order mirrors upstream `LaneRenderer.drawLongNote`** (Y-UP, lines
+    // 673-697). Upstream's call sequence is `body → topCap (lnend/hcnend) → bottomCap
+    // (lnstart/hcnstart)`, putting the bottom cap (judgement-line side) at the FRONT of
+    // the Z stack. This matters when the LN's visible span is shorter than one cap's
+    // height — typical mid-judge clipping at the bottom edge — and the top/bottom caps
+    // overlap: upstream paints the bottom cap on top because the player's eye anchors on
+    // the judgement-line side. Pixi's `addChild` order encodes Z, and `acquireSprite`
+    // commits the order at first allocation, so we acquire `topCap` BEFORE `bottomCap`
+    // so future-side cap lands behind judgement-side cap.
 
-    // Top cap (`lnend` = `longImage[0]`, screen-top = future side = LN's time-LAST end).
-    // Upstream Y-UP draw is `(x, y, width, scale)` → bottom edge at LN top (= body top
-    // edge), TOP EDGE ABOVE the body at `y + scale`. The cap therefore overhangs the
-    // body upward, pulling the visible LN shape slightly past `yEnd` toward the future.
-    // In Pixi Y-DOWN: top edge at `yEnd - topHExpanded`, bottom edge at `yEnd`.
-    //
-    // CN/HCN only. LN mode passes `topCrop = undefined` and we skip the cap; the body
-    // already extends to `yEnd` so the LN's silhouette ends at the body's flat top edge
-    // (matching upstream's `LaneRenderer.java:691-697` LN branch that deliberately omits
-    // `longImage[0]`).
+    // Top cap (`lnend` for CN, `hcnend` for HCN — `longImage[0]` / `[4]`). Pinned at
+    // `yEnd` with the cap overhanging UPWARD (Y-UP `+ scale`, Y-DOWN `y - topHExpanded`).
+    // LN mode skips this entirely — `LaneRenderer.java:691-697`'s LN branch deliberately
+    // omits `longImage[0]`, so the body's flat top edge serves as the LN's silhouette
+    // end.
+    let spritesUsed = 0;
     if (topCrop !== undefined) {
-      const topCap = this.acquireSprite(usedS + 1);
+      const topCap = this.acquireSprite(usedS + spritesUsed);
       topCap.texture = topCrop.sprite.texture;
       topCap.x = drawX;
       topCap.y = yEnd - topHExpanded;
@@ -610,10 +620,23 @@ export class BeatorajaNoteLayer {
       topCap.height = topHExpanded;
       topCap.tint = 0xffffff;
       topCap.alpha = 1;
-      return { g: usedG, s: usedS + 2, t: usedT + 1 };
+      spritesUsed += 1;
     }
 
-    return { g: usedG, s: usedS + 1, t: usedT + 1 };
+    // Bottom cap (`lnstart` for LN/CN, `hcnstart` for HCN — `longImage[1]` / `[5]`).
+    // Pinned at `yStart` with the cap's bottom edge meeting the judgement line; top
+    // edge at `yStart - bottomHExpanded` borders the body's bottom. Always rendered.
+    const bottomCap = this.acquireSprite(usedS + spritesUsed);
+    bottomCap.texture = bottomCrop.sprite.texture;
+    bottomCap.x = drawX;
+    bottomCap.y = yStart - bottomHExpanded;
+    bottomCap.width = drawW;
+    bottomCap.height = bottomHExpanded;
+    bottomCap.tint = 0xffffff;
+    bottomCap.alpha = 1;
+    spritesUsed += 1;
+
+    return { g: usedG, s: usedS + spritesUsed, t: usedT + 1 };
   }
 
   private fallbackColorForLane(lane: number): number {
