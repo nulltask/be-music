@@ -2226,27 +2226,39 @@ export class BeatorajaPlaySkinView {
     if (entry.element.wrapping && props.width > 0 && text.style.wordWrapWidth !== props.width) {
       text.style.wordWrapWidth = props.width;
     }
-    // Per-frame uniform scale to mirror beatoraja's `font.getData().setScale(region.height /
-    // parameter.size)`. The text bitmap was rasterized at `text[].size` (= `parameter.size`)
-    // in `buildTextEntry`; multiplying by `props.height / fontSize` produces glyphs whose
-    // visual height equals the current keyframe's dst rect height. For animated text this
-    // tracks `h` as it changes; for static text where `h == fontSize` it's a no-op (scale = 1).
+    // Per-frame scale — diverges between TTF (CSS-fonts) and bitmap (.fnt) text per upstream:
     //
-    // `overflow = 1` (= shrink-to-fit): when the rendered text is wider than the destination
-    // box at the height-derived scale, x-shrink proportionally so it stays inside. Beatoraja's
-    // reference does this so song titles / playernames that don't fit the chrome's reserved
-    // width don't bleed into adjacent panels. Other `overflow` modes (`0` = no handling, `2` =
-    // clip — uncommon in practice) leave xScale at the height-derived value (no horizontal
-    // shrink applied).
+    //  - **TTF / FreeType** (`SkinTextFont.java:103`):
+    //        font.getData().setScale(region.height / parameter.size);
+    //    The font is rasterized at `text[].size` and the per-frame scale tracks the current
+    //    keyframe's `region.height`. Animated-h dst rects scale the glyphs proportionally.
+    //
+    //  - **Bitmap font / .fnt** (`SkinTextBitmap.java:59`):
+    //        float scale = this.size / source.getOriginalSize();
+    //        font.getData().setScale(scale);
+    //    The scale is a CONSTANT derived from the authored `text[].size` and the .fnt's
+    //    natural size. `region.height` is IGNORED for sizing — the displayed glyph height
+    //    equals `text[].size` regardless of the dst rect's height.
+    //
+    //    Pixi's BitmapText resolves the bitmap's natural size automatically and renders at
+    //    `style.fontSize` (= `text[].size`, set at build time). With `scale = 1` the rendered
+    //    height equals `text[].size` — matching upstream's effective output.
+    //
+    // `overflow = 1` (= shrink-to-fit, `SkinTextFont.java:124-130` & `SkinTextBitmap.java:94-100`):
+    // when the rendered text is wider than the destination box at the height-derived scale,
+    // x-shrink proportionally so it stays inside. Applies to both TTF and bitmap. Other
+    // `overflow` modes (`0` = no handling, `2` = clip — uncommon) leave xScale at the
+    // height-derived value (no horizontal shrink applied).
     const referenceSize = entry.element.size > 0 ? entry.element.size : 24;
-    const baseScale = props.height > 0 ? props.height / referenceSize : 1;
+    const isBitmap = text instanceof BitmapText;
+    const baseScale = isBitmap ? 1 : props.height > 0 ? props.height / referenceSize : 1;
     let scaleX = baseScale;
     const scaleY = baseScale;
     if (entry.element.overflow === 1 && props.width > 0) {
       // text.width is the natural width at the current scale (Pixi reports post-scale
-      // dimensions). Multiply unscaled-width by baseScale to get the would-be drawn width,
-      // then shrink x further if it exceeds the box.
-      const unscaledWidth = baseScale > 0 ? text.width / Math.max(text.scale.x, 0.0001) : 0;
+      // dimensions). Recover the unscaled width by dividing by the current scale, then check
+      // if the would-be drawn width at `baseScale` exceeds the box — shrink x if so.
+      const unscaledWidth = text.width / Math.max(text.scale.x, 0.0001);
       const drawnWidth = unscaledWidth * baseScale;
       if (drawnWidth > props.width && drawnWidth > 0) {
         scaleX = baseScale * (props.width / drawnWidth);

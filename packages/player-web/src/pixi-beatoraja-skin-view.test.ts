@@ -375,11 +375,12 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
-  it('per-frame scales text uniformly to match dst rect height (mirrors upstream font.getData().setScale)', () => {
-    // Beatoraja's `SkinTextFont.draw()` does `font.getData().setScale(region.height /
-    // parameter.size)` per frame, so animated h shrinks/grows the text dynamically. Previously
-    // we rasterized the text bitmap at `dst[0].h` and never updated, so a text element whose
-    // dst.h animates would lock at the t=0 size forever.
+  it('TTF text per-frame scales by `region.height / size` (mirrors SkinTextFont.java:103)', () => {
+    // Beatoraja's `SkinTextFont.draw()` (TTF / FreeType pipeline) does
+    // `font.getData().setScale(region.height / parameter.size)` per frame, so animated h
+    // shrinks/grows the text dynamically. Previously we rasterized the text bitmap at
+    // `dst[0].h` and never updated, so a text element whose dst.h animates would lock at
+    // the t=0 size forever.
     //
     // With size=24 and dst.h=48 the scale should be 48/24 = 2; with dst.h=12 the scale is
     // 12/24 = 0.5. Static skins where dst.h == size land on scale=1 (no visible change).
@@ -409,6 +410,49 @@ describe('BeatorajaPlaySkinView', () => {
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 1000 });
     expect(node.scale.y).toBeCloseTo(0.5, 6);
     expect(node.scale.x).toBeCloseTo(0.5, 6);
+    view.dispose();
+  });
+
+  it('bitmap text scale stays at 1 regardless of region.height (mirrors SkinTextBitmap.java:59)', () => {
+    // Beatoraja's bitmap-font pipeline (`SkinTextBitmap.java:59`) scales by
+    // `this.size / source.getOriginalSize()` ONCE — independent of `region.height`. The
+    // displayed glyph height equals the authored `text[].size`, regardless of how the dst
+    // rect's height animates. Pixi's `BitmapText` already renders at `style.fontSize` (set
+    // to `text[].size` at build time), so we keep `scale = 1` to match upstream.
+    //
+    // TTF (the other branch) tracks `region.height / size` per frame; this test guards
+    // against regressing the bitmap branch into following the TTF formula.
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 100,
+      h: 100,
+      text: [{ id: 'bm', font: 0, size: 24 }],
+      destination: [
+        {
+          id: 'bm',
+          loop: 0,
+          dst: [
+            { time: 0, x: 0, y: 0, w: 200, h: 48, a: 255 }, // h = 2x size — TTF would scale=2
+            { time: 1000, x: 0, y: 0, w: 200, h: 12, a: 255 }, // h = 0.5x size — TTF would scale=0.5
+          ],
+        },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({
+      skin,
+      textures: fakeTextureCache([0]),
+      resolveFontFamily: () => 'fixture-bmf',
+      resolveFontKind: () => 'bitmap',
+    });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const node = view.container.children[0] as { scale: { x: number; y: number } };
+    // dst.h animates 48 → 12 but scale must stay at 1 for both — bitmap text's size is
+    // locked at `text[].size = 24` via Pixi's `style.fontSize`, not derived from the rect.
+    expect(node.scale.y).toBeCloseTo(1, 6);
+    expect(node.scale.x).toBeCloseTo(1, 6);
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 1000 });
+    expect(node.scale.y).toBeCloseTo(1, 6);
+    expect(node.scale.x).toBeCloseTo(1, 6);
     view.dispose();
   });
 
