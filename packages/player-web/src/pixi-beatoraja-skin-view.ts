@@ -527,9 +527,9 @@ interface SliderEntry {
  * post-mortem investigations see why a gauge appears blank without spamming the console
  * on every frame.
  *
- * Bumped during the ModernChic "ゲージが真っ黒" investigation (audit follow-up): when
- * the user reports a black gauge, the most useful info is whether the state resolver fed us a
- * sane (value, border, max, mode) tuple or whether every cell `pickBeatorajaGaugeNode` returned
+ * Added during the ModernChic black-gauge investigation (audit follow-up): when the user
+ * reports a black gauge, the most useful info is whether the state resolver fed us a sane
+ * (value, border, max, mode) tuple or whether every cell `pickBeatorajaGaugeNode` returned
  * `undefined` (= no node texture → cell hides, leaving the pure-black canvas underneath).
  */
 interface GaugeDiagState {
@@ -1597,10 +1597,10 @@ export class BeatorajaPlaySkinView {
     const firstNode = nodeTextures.values().next().value;
     if (firstNode !== undefined) applyTextureFilterMode(firstNode, group.filter);
     // Build-time diagnostic — emit one structured line covering the resolved declaration so
-    // post-mortem investigation of "ゲージが真っ黒" / "wrong nodes" reports can be cross-
-    // referenced against the skin's authored gauge declaration. Resolved-vs-missing node
-    // breakdown lets us spot when an authored node id failed to resolve into a texture (= the
-    // gauge's painter has no glyph for that cell, so it hides).
+    // post-mortem investigation of black-gauge / wrong-nodes reports can be cross-referenced
+    // against the skin's authored gauge declaration. Resolved-vs-missing node breakdown lets
+    // us spot when an authored node id failed to resolve into a texture (= the gauge's
+    // painter has no glyph for that cell, so it hides).
     const resolvedNodes = Array.from(nodeTextures.keys()).map(String);
     const missingNodes: string[] = [];
     for (const nodeId of element.nodes) {
@@ -3687,8 +3687,9 @@ export class BeatorajaPlaySkinView {
       );
     }
     // All-hidden warning — fires the first frame the gauge resolves with zero visible cells.
-    // The most common cause is texture-missing for every node id (= "ゲージが真っ黒"), which
-    // we surface by name so the bug report can map straight to the missing image[] declaration.
+    // The most common cause is texture-missing for every node id (visually a black gauge),
+    // which we surface here so the bug report can map straight to the missing image[]
+    // declaration rather than chasing the visible symptom.
     if (visibleCellCount === 0 && !entry.diag.allHiddenLogged && entry.element.parts > 0) {
       entry.diag.allHiddenLogged = true;
       // eslint-disable-next-line no-console

@@ -59,8 +59,8 @@ interface MarkerKindData {
    * authored at `y = NOTES_JUDGE_Y - 12, h = LANE_LENGTH - 12`. After Y-flip the offset
    * resolves to `-12` (the barline sits 12 px above the lane bottom in Pixi). Without
    * honoring this, every barline painted at the lane's bottom edge instead of crossing
-   * through the note head's middle, which is exactly the "ノートと小節線がずれている"
-   * symptom the user reported.
+   * through the note head's middle, which is exactly the user-reported symptom of section
+   * lines visually misaligning with note heads.
    */
   bottomOffsetFromLaneBottomPixi: number;
 }

@@ -2452,8 +2452,8 @@ export class BeatorajaRuntimeAdapter {
    * `state.processing` becomes `null` → `switchTimer` flips the timer OFF, hiding any sprite
    * gated on it (notably ModernChic's "LN bomb" body-pulse animation in `bomb.lua` keyed to
    * `MAIN.TIMER.HOLD_1P_KEY*`). Without this OFF, the LN bomb stays glued visible forever
-   * after the first LN ends — exactly the user-reported "AUTO LN 判定後にボムが消えない"
-   * symptom.
+   * after the first LN ends — exactly the user-reported symptom (the AUTO-mode LN bomb
+   * animation kept playing after the first long note finished resolving).
    */
   private deactivateLaneLnHoldTimer(channel: string): void {
     this.deactivateLaneTimer(channel, lnHoldTimerId);
