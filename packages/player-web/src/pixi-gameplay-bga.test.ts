@@ -1,13 +1,7 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
-import {
-  buildBgaTimeline,
-  fitTextureWithinSpecCanvas,
-  isVideoExtension,
-  pickActiveBgaCue,
-  pickActiveBgaKey,
-} from './pixi-gameplay-bga.ts';
+import { buildBgaTimeline, isVideoExtension, pickActiveBgaCue, pickActiveBgaKey } from './pixi-gameplay-bga.ts';
 
 const resolver = {
   eventToSeconds: (event) => event.measure * 10 + event.position[0] / event.position[1],
@@ -78,19 +72,6 @@ describe('BGA cue helpers', () => {
   });
 });
 
-describe('fitTextureWithinSpecCanvas', () => {
-  it('does not upscale small textures and centers them horizontally', () => {
-    expect(fitTextureWithinSpecCanvas(128, 128)).toEqual({ offsetX: 64, offsetY: 0, width: 128, height: 128 });
-  });
-
-  it('downscales oversized textures to fit the LR2 spec canvas', () => {
-    expect(fitTextureWithinSpecCanvas(512, 256)).toEqual({ offsetX: 0, offsetY: 0, width: 256, height: 128 });
-  });
-
-  it('normalizes invalid dimensions to at least one pixel', () => {
-    expect(fitTextureWithinSpecCanvas(0, Number.NaN)).toEqual({ offsetX: 127, offsetY: 0, width: 1, height: 1 });
-  });
-});
 
 describe('isVideoExtension', () => {
   it('recognizes browser/video BGA extensions case-insensitively', () => {
