@@ -2868,13 +2868,30 @@ export class BeatorajaPlaySkinView {
       graphics.clear();
       // Half-width in ms — author-supplied or fallback. ±100ms covers the GOOD window in most
       // judges; a reasonable default for skins that leave it unset.
-      const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 100;
-      const halfWidthPx = props.width / 2;
+      const halfWidthMs = entry.element.judgeWidthMillis > 0 ? entry.element.judgeWidthMillis : 150;
       const lineWidthPx = entry.element.lineWidth > 0 ? entry.element.lineWidth : 1;
-      // Faint center line — perfect-timing reference. Only draw when the author didn't pin
-      // `centerColor` to an empty string AND only when the visualizer has space (props.height > 0).
+      // Authored `width` (default 301) drives the px/ms RATE, mirroring upstream
+      // `SkinTimingVisualizer.java:63`:
+      //
+      //     judgeWidthRate = width / (judgeWidthMillis * 2 + 1)   // px per ms
+      //
+      // The dst rect is independently centered on `region.width` (line 144 in upstream uses
+      // `region.x + (region.width - lineWidth) / 2 + recent[j] * judgeWidthRate`). This means
+      // sample-line offsets are computed from authored `width`, but their CENTERING uses the
+      // runtime `region.width`. Identical when `dst.w == width` (the typical authoring); for
+      // animating dst rects the author sees the authored ms scale stay constant.
+      const authoredWidth = entry.element.width > 0 ? entry.element.width : 301;
+      const judgeWidthRate = authoredWidth / (halfWidthMs * 2 + 1);
+      // Upstream centers each line on the dst rect's geometric mid-x by passing the LEFT
+      // edge `region.x + (region.width - lineWidth) / 2` to libGDX's draw(image, x, y, w, h)
+      // — a `lineWidth`-wide rect whose midpoint lands at `region.x + region.width / 2`. We
+      // keep that intent: `centerLineLeft` is the LEFT edge for a centered line, and any
+      // delta-ms shift adds to that edge.
+      const centerLineLeft = (props.width - lineWidthPx) / 2;
+      // Faint center line — perfect-timing reference. Only draw when the visualizer has
+      // space (props.height > 0).
       if (props.height > 0) {
-        graphics.rect(halfWidthPx - 0.5, 0, 1, props.height).fill({ color: 0xffffff, alpha: 0.25 });
+        graphics.rect(centerLineLeft, 0, lineWidthPx, props.height).fill({ color: 0xffffff, alpha: 0.25 });
       }
       // Ticks — newest paints brightest, oldest faintest. Sample list is oldest-first.
       // Two height modes per beatoraja's `SkinTimingVisualizer.draw()`:
@@ -2883,8 +2900,8 @@ export class BeatorajaPlaySkinView {
       //    0..n-1 with 0 = oldest). Taller for newer, zero for oldest. Vertically centred
       //    in the region so the taper grows symmetrically from the middle. Mirrors
       //    upstream's `region.y + h*(n-i)/n / 2` y-anchor + `h * i / n` height.
-      //  - `drawDecay === 0` (default) — every tick paints at full region height. Just
-      //    the alpha fade carries the age cue.
+      //  - `drawDecay === 0` — every tick paints at full region height. Just the alpha fade
+      //    carries the age cue.
       //
       // Color comes from the judge kind (PG/GR/GD/BD/PR/MS); unknown kinds fall back to
       // white via `judgeColorFor`.
@@ -2893,8 +2910,12 @@ export class BeatorajaPlaySkinView {
         const sample = samples[i]!;
         const ageRatio = (i + 1) / samples.length; // 1 = newest, 0 ≈ oldest
         const alpha = ageRatio;
-        const xRatio = Math.max(-1, Math.min(1, sample.deltaMs / halfWidthMs));
-        const x = halfWidthPx + xRatio * halfWidthPx;
+        // Clamp to ±halfWidthMs in ms space (mirrors upstream `if (-center <= recent[j] &&
+        // recent[j] <= center)` gate in SkinTimingVisualizer.java:142). Beyond that, the
+        // sample is OFF-SCREEN; we just clamp to the edge so it stays visible at the rim.
+        const clampedDeltaMs = Math.max(-halfWidthMs, Math.min(halfWidthMs, sample.deltaMs));
+        // `x` is the LEFT edge of the line rect (matches upstream's draw-x convention).
+        const x = centerLineLeft + clampedDeltaMs * judgeWidthRate;
         let y: number;
         let height: number;
         if (drawDecay) {
@@ -2904,7 +2925,7 @@ export class BeatorajaPlaySkinView {
           y = 0;
           height = props.height;
         }
-        graphics.rect(x - lineWidthPx / 2, y, lineWidthPx, height).fill({
+        graphics.rect(x, y, lineWidthPx, height).fill({
           color: judgeColorFor(sample.kind),
           alpha,
         });
