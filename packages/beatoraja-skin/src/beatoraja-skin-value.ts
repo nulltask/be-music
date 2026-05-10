@@ -217,132 +217,172 @@ export interface BeatorajaValueDigitCell {
 }
 
 /**
- * Compose a numeric value into per-digit cells. Returns `digit` entries laid out left-to-right; the
- * caller positions each cell across the destination rect (typically by dividing rect width by digit).
+ * Compose a numeric value into per-digit cells. Returns `keta` entries laid out left-to-right
+ * (slot index 0 = leftmost, slot index keta-1 = rightmost = least-significant digit).
  *
- * Rules (mirrors beatoraja's reference behavior, verified against `play24.json`):
+ * Mirrors `SkinNumber.prepare()` (`SkinNumber.java:161-184`) — a right-to-left walk consuming
+ * one digit per step, with branching on `(mimage != null, zeropadding)`. Audit A-3 (2024-12)
+ * re-aligned the 24-cell branch to use `value.zeropadding` (NOT `value.padding`) and emit the
+ * sign cell at the leftmost slot when `zeropadding > 0`, matching upstream's
+ * `if (mimage != null && zeropadding > 0)` branch.
  *
- * - **Padding 1 (leading zeros)**: leading slots use cell `0` (the "0" digit). Common for score /
- *   combo / max-combo readouts ("00008722").
- * - **Padding 0 (default)**: leading slots use either:
- *   - cell `divx-1` if the strip carries an explicit blank glyph (`divx >= 11` — beatoraja's number
- *     atlas typically reserves cell 10 for a blank, cell 11 for "+", cell 12 for "-"), OR
- *   - **hidden** (`hidden: true`) when the strip is digits-only (`divx == 10`). The renderer omits
- *     the slot entirely instead of falling through to cell 9 ("9"), which would paint stray digits
- *     for every zero / short-of-`digit`-wide value (e.g. `value = 0`, `digit = 4` rendered "9990"
- *     against a digits-only strip).
- * - **Negative numbers**: cell `divx-1` (or `divx-2` for `divx == 12` where cell 11 is "+") is used
- *   for the minus-sign slot. For digits-only strips, the sign is hidden along with leading blanks.
- * - **Overflow**: a value wider than the digit count silently truncates to the lowest digits — beatoraja
- *   itself behaves the same way, and the alternative ("show all 9s") is more confusing for the player.
+ * ─── Pad-mode dispatch (per `JsonSkinObjectLoader.java:103-167`) ────────────────────────────
+ *   - **24-cell** (`divx % 24 == 0`): SkinNumber's `zeropadding` param ← `value.zeropadding`.
+ *   - **11-cell** (`divx == 11` after %10!=0 fallback): forced to `2` (blank pad).
+ *   - **10-cell** (`divx == 10`): SkinNumber's `zeropadding` param ← `value.padding`.
+ *
+ * ─── Per-slot logic (per `SkinNumber.java:161-184`) ──────────────────────────────────────────
+ * Walk j from `keta-1` to `0`, decrementing `value` by `value /= 10` each step:
+ *
+ *   1. **24-cell with zp > 0** (`mimage != null && zeropadding > 0`):
+ *      - `j == 0`: cell 11 (sign cell of active half — 11 for positive, 23 for negative).
+ *      - `value > 0 || j == keta-1`: digit cell `value % 10` in active half.
+ *      - else: pad cell — `10` (blank, `zp == 2`) or `0` (zero, `zp == 1`) in active half.
+ *
+ *   2. **24-cell with zp == 0** OR **single-strip**:
+ *      - `value > 0 || j == keta-1`: digit cell `value % 10` in active half.
+ *      - else if `zp == 2`: pad cell `10` (blank).
+ *      - else if `zp == 1`: pad cell `0` (zero).
+ *      - else (`zp == 0`):
+ *        - 24-cell only: place sign cell `11` to the LEFT of leftmost non-null slot (chained
+ *          from `currentImages[j+1] != image[11] && != null` upstream).
+ *        - single-strip: hidden (= upstream's `null` slot).
+ *
+ * Negative values: `value = Math.abs(value)` BEFORE the loop (`SkinNumber.java:160`), and the
+ * active "half" picks `mimage` instead of `image` for 24-cell mode. Single-strip with
+ * `mimage == null` renders negatives identically to their absolute value (no sign).
  */
 export function composeBeatorajaValueCells(element: BeatorajaValueElement, value: number): BeatorajaValueDigitCell[] {
-  const digits = Math.max(1, Math.trunc(element.digit));
-  const cells: BeatorajaValueDigitCell[] = Array.from({ length: digits });
+  const keta = Math.max(1, Math.trunc(element.digit));
   const divx = Math.max(1, element.divx);
-
-  // 24-cell signed dual-strip detection (audit 2.7). Beatoraja's
-  // `JsonPlaySkinObjectLoader.java:103-115` checks `images.length % 24 == 0` and splits the
-  // strip into a 12-cell positive half (cells 0..11) + 12-cell negative half (cells 12..23).
-  // Cells 0..9 are the digits, 10 is the blank glyph, 11 is the sign — the negative half is
-  // the same layout offset by 12 (negative-coloured glyphs baked in, no separate sign cell
-  // needed at draw time). Compose against the active half, picking the offset based on the
-  // numeric sign.
   const isSignedDualStrip = divx % 24 === 0;
+  // halfDivx: the per-half cell count (12 for 24-cell, divx for single-strip).
   const halfDivx = isSignedDualStrip ? divx / 2 : divx;
-  const hasBlankCell = halfDivx >= 11;
-  // For the 24-cell dual-strip path each half is `halfDivx = 12` cells: 0..9 digits, 10
-  // blank, 11 reserved (sign in beatoraja's atlas — unused since the sign is baked into
-  // negative-coloured digits). Blank lives at `halfDivx - 2 = 10`. The legacy single-strip
-  // path keeps the historic `divx - 1` cell for backward compat (a known imprecision when
-  // divx == 12 — the single-strip blank index lands on the sign cell, but every fix-tested
-  // skin authors against this), so only override the blank index for the dual-strip case.
-  const blankCellInHalf = !hasBlankCell ? -1 : isSignedDualStrip ? halfDivx - 2 : halfDivx - 1;
-  const zeroCellInHalf = 0;
 
-  // Stringify the absolute value with leading-zero padding wide enough to fit the digit count.
+  // Pad-mode dispatch (mirrors `JsonSkinObjectLoader.java:103-167`).
+  let zeropaddingMode: number;
+  if (isSignedDualStrip) {
+    zeropaddingMode = Math.trunc(element.zeropadding);
+  } else if (halfDivx === 11) {
+    zeropaddingMode = 2; // upstream forces zp=2 for 11-cell (`d > 10 ? 2 : value.padding`).
+  } else {
+    zeropaddingMode = Math.trunc(element.padding);
+  }
+
+  // Sign-cell index inside a half. Upstream uses `image[11]` regardless of the half's actual
+  // size; for our typical 12-cell half that lands on cell 11 (the conventional sign glyph).
+  // For 11-cell or 10-cell single-strip this index doesn't get used (single-strip with
+  // `mimage == null` never emits a sign cell).
+  const signCellInHalf = 11;
+
   const safeValue = Number.isFinite(value) ? Math.trunc(value) : 0;
   const isNegative = safeValue < 0;
-  const abs = Math.abs(safeValue);
-  const raw = abs.toString(10);
-
-  // For dual-strip, every cell within the active half gets shifted to the matching half. The
-  // blank cell stays inside the half (so a blank slot in negative mode picks cell 22, not 10).
-  const halfOffset = isSignedDualStrip && isNegative ? halfDivx : 0;
-  const blankCell = blankCellInHalf >= 0 ? blankCellInHalf + halfOffset : -1;
-  const zeroCell = zeroCellInHalf + halfOffset;
+  // Active half offset for cell-index translation (24-cell only; single-strip ignores).
+  const activeHalfOffset = isSignedDualStrip && isNegative ? halfDivx : 0;
+  let absValue = Math.abs(safeValue);
 
   type Slot = { cell: number; hidden: boolean };
-  const reversed: Slot[] = [];
-  for (let i = 0; i < digits; i += 1) {
-    if (i < raw.length) {
-      // Digit position from the right edge — always painted. Offset into the active half so
-      // negative dual-strip values pick the negative-coloured digit cells.
-      const ch = raw[raw.length - 1 - i]!;
-      const idx = ch.charCodeAt(0) - 48;
-      const cellInHalf = idx >= 0 && idx < halfDivx ? idx : Math.min(halfDivx - 1, idx);
-      reversed.push({ cell: cellInHalf + halfOffset, hidden: false });
-    } else if (isNegative && i === raw.length && !isSignedDualStrip) {
-      // Minus sign slot for SINGLE-strip (`divx == 11/12`) layouts. The dual-strip path bakes
-      // the sign into the digits themselves, so this branch only fires for the legacy single
-      // strip. When the strip carries no sign / blank cell at all, hide the slot.
-      reversed.push({ cell: hasBlankCell ? blankCell : 0, hidden: !hasBlankCell });
-    } else if (element.padding === 1) {
-      // Leading-zero pad — paint cell 0 (within the active half for dual-strip).
-      reversed.push({ cell: zeroCell, hidden: false });
-    } else if (hasBlankCell) {
-      // Leading-blank pad — paint the strip's authored blank cell (within the active half).
-      reversed.push({ cell: blankCell, hidden: false });
+  const slots: Slot[] = new Array(keta);
+
+  // RTL walk — mirrors SkinNumber.java:161 `for (int j = currentImages.length - 1; j >= 0; j--)`.
+  for (let j = keta - 1; j >= 0; j -= 1) {
+    if (isSignedDualStrip && zeropaddingMode > 0) {
+      // ─ 24-cell-with-zp branch (`SkinNumber.java:162-169`) ─
+      if (j === 0) {
+        // Leftmost slot is ALWAYS the sign cell when zp > 0 in dual-strip mode.
+        slots[j] = { cell: signCellInHalf + activeHalfOffset, hidden: false };
+      } else if (absValue > 0 || j === keta - 1) {
+        const digit = absValue % 10;
+        slots[j] = { cell: digit + activeHalfOffset, hidden: false };
+        absValue = Math.floor(absValue / 10);
+      } else {
+        const padCell = zeropaddingMode === 2 ? 10 : 0;
+        slots[j] = { cell: padCell + activeHalfOffset, hidden: false };
+      }
     } else {
-      // Digits-only strip + leading-blank pad → hide the slot. Renderer skips the matching sprite.
-      reversed.push({ cell: 0, hidden: true });
+      // ─ Catch-all branch (`SkinNumber.java:170-176`) ─
+      if (absValue > 0 || j === keta - 1) {
+        const digit = absValue % 10;
+        // Clamp digit to the active half's range — guards against `divx < 10` edge cases.
+        const cellIdx = digit < halfDivx ? digit : halfDivx - 1;
+        slots[j] = { cell: cellIdx + activeHalfOffset, hidden: false };
+        absValue = Math.floor(absValue / 10);
+      } else if (zeropaddingMode === 2) {
+        // Blank pad — cell 10 in active half for 24-cell, cell `divx-2` for single-strip 12+,
+        // cell `divx-1` for single-strip 11. We use cell index 10 uniformly because:
+        //   - 24-cell: cell 10 = blank in each half. ✓
+        //   - 11-cell: zp gets forced to 2; cell 10 = sign cell of 11-cell strip (upstream
+        //     uses cell 10 here too, so SAME index — happens to double as sign+blank).
+        //   - 10-cell: zp wasn't 2 unless author authored padding=2; rare. Cell index 9
+        //     would be "9" digit; clamp to halfDivx-1 = 9. Imperfect for 10-cell zp=2 but
+        //     matches upstream which would also produce a "9"-glyph leading slot.
+        const cellIdx = halfDivx >= 11 ? 10 : halfDivx - 1;
+        slots[j] = { cell: cellIdx + activeHalfOffset, hidden: false };
+      } else if (zeropaddingMode === 1) {
+        // Zero pad — cell 0 in active half.
+        slots[j] = { cell: 0 + activeHalfOffset, hidden: false };
+      } else if (isSignedDualStrip) {
+        // 24-cell with zp == 0: place sign cell to the LEFT of the leftmost non-null slot,
+        // hide everything else. Mirrors upstream's `mimage != null && currentImages[j+1] !=
+        // image[11] && currentImages[j+1] != null ? image[11] : null` chain — the loop walks
+        // RTL, so `slots[j+1]` is the slot we just filled.
+        const next = slots[j + 1];
+        const signCellAbsolute = signCellInHalf + activeHalfOffset;
+        if (next !== undefined && !next.hidden && next.cell !== signCellAbsolute) {
+          slots[j] = { cell: signCellAbsolute, hidden: false };
+        } else {
+          slots[j] = { cell: 0, hidden: true };
+        }
+      } else {
+        // Single-strip with zp == 0: leading slots are HIDDEN (upstream's `null` branch).
+        slots[j] = { cell: 0, hidden: true };
+      }
     }
   }
 
-  const sequence = reversed.reverse();
   const cellW = Math.floor(element.w / divx);
   const cellH = Math.floor(element.h / Math.max(1, element.divy));
-
-  for (let i = 0; i < digits; i += 1) {
-    const slot = sequence[i] ?? { cell: 0, hidden: true };
-    cells[i] = {
-      x: element.x + slot.cell * cellW,
-      y: element.y,
-      w: cellW,
-      h: cellH,
-      cell: slot.hidden ? -1 : slot.cell,
-      hidden: slot.hidden,
-    };
-  }
-  return cells;
+  return slots.map((slot) => ({
+    x: element.x + slot.cell * cellW,
+    y: element.y,
+    w: cellW,
+    h: cellH,
+    cell: slot.hidden ? -1 : slot.cell,
+    hidden: slot.hidden,
+  }));
 }
 
 /**
  * Compute the horizontal pixel shift to apply across every digit slot to honor `element.align`.
- * Mirrors the {@code shift = align == 0 ? 0 : (align == 1 ? (w+space)*shiftbase : (w+space)*0.5*shiftbase)}
- * formula from beatoraja's `SkinNumber.prepare()`.
+ * Mirrors `SkinNumber.prepare()` (`SkinNumber.java:185-186`):
  *
- * `shiftbase` is the count of LEADING non-significant slots — the slots that would render as a
- * blank glyph, a leading zero, or be hidden entirely (digits-only strip + leading-blank pad).
- * For `value = 5`, `digit = 4`, `padding = 0` → `shiftbase = 3` (three leading nulls). For
- * `value = -7`, `digit = 4` → `shiftbase = 2` (two leading nulls; the sign occupies one slot).
+ *     length = (region.width + space) * (currentImages.length - shiftbase);
+ *     shift = align == 0 ? 0
+ *           : align == 1 ? (region.width + space) * shiftbase
+ *           : (region.width + space) * 0.5f * shiftbase;
+ *
+ * Where `shiftbase` is the count of `null` slots (= leading non-significant slots that the
+ * renderer SKIPS, leaving them blank in screen coords). Audit A-3 (2024-12) re-derives
+ * shiftbase from {@link composeBeatorajaValueCells}'s `hidden` flag instead of the previous
+ * "digit length minus significant digits" estimate, so the dispatch matches upstream's
+ * 4-branch logic in `SkinNumber.java:161-184` (especially the 24-cell with zeropadding=0
+ * case where the sign cell occupies a slot the previous estimate counted as null).
  *
  * `slotWidth` is the rendered width of one digit cell (typically `dst.w` since beatoraja
  * authors set `dst.w` to the per-digit slot width). The element's `space` (inter-digit gap)
- * is added to slotWidth to match beatoraja's `(region.width + space) * shiftbase` formula.
+ * is added to slotWidth to match upstream's `(region.width + space) * shiftbase` formula.
  * The renderer subtracts the returned shift from each slot's `x` coordinate, so positive
- * values shift the whole row LEFT.
+ * values shift the whole row LEFT (= `align == 1`, LEFT-flush) or HALF-LEFT (= `align == 2`,
+ * CENTER).
  */
-export function composeBeatorajaValueShift(
-  element: Pick<BeatorajaValueElement, 'align' | 'digit' | 'space'>,
-  value: number,
-  slotWidth: number,
-): number {
+export function composeBeatorajaValueShift(element: BeatorajaValueElement, value: number, slotWidth: number): number {
   if (element.align !== 1 && element.align !== 2) return 0;
-  const digits = Math.max(1, Math.trunc(element.digit));
-  const safeValue = Number.isFinite(value) ? Math.trunc(value) : 0;
-  const significant = Math.abs(safeValue).toString(10).length + (safeValue < 0 ? 1 : 0);
-  const shiftbase = Math.max(0, digits - significant);
+  const cells = composeBeatorajaValueCells(element, value);
+  let shiftbase = 0;
+  for (const cell of cells) {
+    if (cell.hidden) shiftbase += 1;
+  }
+  if (shiftbase === 0) return 0;
   const space = Number.isFinite(element.space) ? element.space : 0;
   const baseShift = shiftbase * (slotWidth + space);
   return element.align === 1 ? baseShift : baseShift * 0.5;
