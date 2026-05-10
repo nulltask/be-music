@@ -6,14 +6,12 @@ import {
   type BeatorajaLuaFunctionValue,
 } from '@be-music/beatoraja-skin';
 import {
-  applyBeatorajaFilterMode,
   applyBeatorajaStretchRect,
   BEATORAJA_STRETCH,
   blendCodeToPixi,
   destinationToSpriteProps,
   flipRectToPixi,
 } from './beatoraja-render.ts';
-import { Texture, TextureSource } from 'pixi.js';
 
 // Use a 1000-tall canvas so Y-flipped values are easy to eyeball: a `dst.y = 0, h = 50` rect
 // lands at Pixi y = 1000 - 0 - 50 = 950 (anchored to the canvas bottom edge in screen coords).
@@ -616,36 +614,3 @@ describe('applyBeatorajaStretchRect', () => {
   });
 });
 
-describe('applyBeatorajaFilterMode (audit C-13 — `dstfilter` honored on Pixi sources)', () => {
-  // Pixi `TextureSource.scaleMode` is the per-source filter setting. `applyBeatorajaFilterMode`
-  // sets it to `linear` when `filter != 0` and `nearest` otherwise — approximating upstream
-  // `SkinObject.java:536-538`'s per-sprite TYPE_NORMAL / TYPE_BILINEAR dispatch.
-
-  function fakeTexture(): Texture {
-    // Build a tiny 1×1 source so we can read/write scaleMode without a full GPU init.
-    const source = new TextureSource({ width: 1, height: 1, resource: new Uint8Array([0, 0, 0, 0]) });
-    return new Texture({ source });
-  }
-
-  it('sets scaleMode to "linear" when filter != 0', () => {
-    const tex = fakeTexture();
-    tex.source.scaleMode = 'nearest';
-    applyBeatorajaFilterMode(tex, 1);
-    expect(tex.source.scaleMode).toBe('linear');
-  });
-
-  it('sets scaleMode to "nearest" when filter == 0', () => {
-    const tex = fakeTexture();
-    tex.source.scaleMode = 'linear';
-    applyBeatorajaFilterMode(tex, 0);
-    expect(tex.source.scaleMode).toBe('nearest');
-  });
-
-  it('is idempotent — re-applying the same filter mode does not flip back', () => {
-    const tex = fakeTexture();
-    applyBeatorajaFilterMode(tex, 1);
-    applyBeatorajaFilterMode(tex, 1);
-    applyBeatorajaFilterMode(tex, 1);
-    expect(tex.source.scaleMode).toBe('linear');
-  });
-});

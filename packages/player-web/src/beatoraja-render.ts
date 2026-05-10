@@ -362,38 +362,6 @@ function timerStartFromLuaFunction(
 }
 
 /**
- * Pixi `scaleMode` per `BeatorajaDestinationGroup.filter` (audit C-13). Mirrors upstream
- * `SkinObject.java:536-538`'s filter-mode dispatch:
- *
- *     sprite.setType(dstfilter != 0 && imageType == TYPE_NORMAL ?
- *         (tmpRect.width == tmpImage.getRegionWidth() && tmpRect.height == tmpImage.getRegionHeight() ?
- *             TYPE_NORMAL : TYPE_BILINEAR) : imageType);
- *
- * Three upstream cases:
- *   1. `filter == 0`               → nearest (= TYPE_NORMAL for regular images).
- *   2. `filter != 0` AND scaling   → bilinear (TYPE_BILINEAR).
- *   3. `filter != 0` AND no scaling → nearest (the optimization branch, identical visual to
- *      bilinear at 1:1 size but cheaper).
- *
- * Pixi limitation: `scaleMode` is per-TEXTURE-SOURCE, NOT per-sprite. Multiple sprites sharing
- * a source can't have different filter modes. We approximate upstream by setting the source's
- * scaleMode based on the LAST destination updated (skins typically use consistent filter per
- * source, so the per-frame race rarely manifests). The native-size optimization (case 3) is
- * skipped — `linear` at native size produces identical pixels to `nearest`, so collapsing
- * cases 2 and 3 is observably equivalent.
- *
- * Idempotent — only writes when the desired mode differs from the current source scaleMode.
- * Source-less textures (lazy-allocated croppings before binding) are no-ops.
- */
-export function applyBeatorajaFilterMode(texture: Texture, filter: number): void {
-  if (!texture.source) return;
-  const desired = filter !== 0 ? 'linear' : 'nearest';
-  if (texture.source.scaleMode !== desired) {
-    texture.source.scaleMode = desired;
-  }
-}
-
-/**
  * Convert a raw skin-space rect (libGDX Y-UP, origin at canvas bottom-left) into a Pixi-space
  * rect (Y-DOWN, origin at canvas top-left). Use this for layers that consume raw skin rects
  * outside the `destination[]` keyframe pipeline — note lane geometry, marker prototypes, etc.
