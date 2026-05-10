@@ -397,10 +397,13 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       fontsLoaded: options.fonts ? options.fonts.values().length : 0,
     });
 
-    // BGA layer mounts UNDER notes so scrolling notes draw on top of the BGA video; the LR2 default
-    // skin's chart-area chrome paints on top of both via its own destination z-order. Only construct
-    // the layer when both texture map and cues are supplied — otherwise the chart has no BGA / the
-    // host hasn't decoded the bitmaps yet, and skipping the sprite avoids a black rect over the chrome.
+    // BGA layer is spliced into the view's `container.children` at the index the skin
+    // authored its `{id = bga.id}` destination — mirroring upstream's per-destination
+    // z-order where later array entries paint on top. Without this anchor the layer
+    // would land at index 0 and end up behind every authored backdrop (most visibly the
+    // default skin's full-canvas `id = 1` playbg, which would completely cover the BGA).
+    // Falls back to top-of-stack when the skin omits a BGA destination — same behaviour
+    // as the note-anchor path.
     if (options.bgaTextures !== undefined && options.bgaCues !== undefined) {
       this.bgaLayer = new BeatorajaBgaLayer({
         skin: options.skin,
@@ -409,7 +412,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         cues: options.bgaCues,
         skinConfigOps,
       });
-      this.view.container.addChildAt(this.bgaLayer.container, 0);
+      this.view.container.addChildAt(this.bgaLayer.container, this.view.bgaLayerInsertIndex);
     }
   }
 
@@ -702,7 +705,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     //    layers slot in.
     insertNoteAndMarkerLayers(this.view, this.markerLayer, this.noteLayer);
     if (this.bgaLayer !== undefined) {
-      this.view.container.addChildAt(this.bgaLayer.container, 0);
+      this.view.container.addChildAt(this.bgaLayer.container, this.view.bgaLayerInsertIndex);
     }
     // The root already contains [backdrop, oldView]; replace the old view child with the new one.
     // Old view's container was destroyed (children detach), so we just append the new view.

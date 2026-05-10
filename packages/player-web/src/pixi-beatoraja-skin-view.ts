@@ -613,6 +613,21 @@ export class BeatorajaPlaySkinView {
    */
   readonly noteLayerInsertIndex: number;
   /**
+   * Index inside `container.children` where the host should splice in its BGA layer (the
+   * play scene's chart-time-driven background animation). Beatoraja's play skins author a
+   * `{id = skin.bga.id}` destination — typically `"bga"` — at the position where the BGA
+   * should sit in the z-stack: chrome declared earlier (background, lane bg) paints
+   * behind, chrome declared after (judgegraph / bpmgraph / HUD readouts) paints on top.
+   * Mirrors upstream `JSONSkinLoader`'s `for (Destination dst : sk.destination)` loop
+   * which adds each constructed `SkinObject` (including the `SkinBGA` returned by
+   * `JsonPlaySkinObjectLoader.loadSkinObject` for the matching id) to the render list in
+   * array order, so later destinations naturally paint on top.
+   *
+   * Defaults to `container.children.length` (= top-of-stack) when the skin doesn't author
+   * a BGA destination (rare — most play skins do).
+   */
+  readonly bgaLayerInsertIndex: number;
+  /**
    * Index inside `container.children` where the host should splice in its song-list overlay (the
    * select-scene's per-row labels). Beatoraja's select skins author a `{id = "songlist"}`
    * destination as the z-anchor for the song-bar grid — chrome declared earlier paints behind
@@ -936,6 +951,20 @@ export class BeatorajaPlaySkinView {
     // select scene's skins author it, so most other scenes' destinations carry no `songlist`
     // entry and the anchor is a no-op there.
     const SONG_LIST_ANCHOR_ID: BeatorajaImageId = 'songlist';
+    // BGA anchor — `{id = skin.bga.id}` in play-scene destination[]. The play skin's
+    // `bga = {id = "bga"}` block (`play7main.lua:606`) names the destination whose
+    // keyframes describe where the BGA should be drawn; matching the SAME id again in
+    // `destination[]` (line 748) authors the actual rect + z-order anchor. Without
+    // capturing this index, the host's separately-mounted BGA layer ends up at the
+    // bottom of the stack (behind every authored backdrop) instead of at the
+    // skin-authored position.
+    const bgaAnchorRaw = (options.skin as { bga?: { id?: unknown } }).bga?.id;
+    const bgaAnchorId: BeatorajaImageId | undefined =
+      typeof bgaAnchorRaw === 'string' && bgaAnchorRaw.length > 0
+        ? bgaAnchorRaw
+        : typeof bgaAnchorRaw === 'number' && Number.isFinite(bgaAnchorRaw)
+          ? bgaAnchorRaw
+          : undefined;
     const layerAnchorIds = new Set<BeatorajaImageId>();
     if (noteAnchorId !== undefined) layerAnchorIds.add(noteAnchorId);
     layerAnchorIds.add(SONG_LIST_ANCHOR_ID);
@@ -987,6 +1016,7 @@ export class BeatorajaPlaySkinView {
     // chrome over the song bars).
     let noteAnchorIndex: number | undefined;
     let songListAnchorIndex: number | undefined;
+    let bgaAnchorIndex: number | undefined;
 
     for (const group of groups) {
       // Notes anchor: skip the sprite, record where in `container.children` the host should insert
@@ -994,6 +1024,18 @@ export class BeatorajaPlaySkinView {
       // (uncommon in well-formed themes) are ignored.
       if (noteAnchorId !== undefined && group.id === noteAnchorId && noteAnchorIndex === undefined) {
         noteAnchorIndex = this.container.children.length;
+        continue;
+      }
+      // BGA anchor: same pattern as the notes anchor. The skin authors `bga = {id = "bga"}`
+      // and a matching `destination[]` entry whose dst rect / `if[]` keyframes describe
+      // where the BGA should sit. We capture the index now so the host can splice in its
+      // chart-time-driven `BeatorajaBgaLayer` exactly there — matching upstream's
+      // destination[]-array-order render priority. Falling through to a generic match
+      // would have the BGA-id destination silently drop (no image / value / text element
+      // matches that id), and the host's BGA layer mounted at index 0 would land behind
+      // every authored backdrop.
+      if (bgaAnchorId !== undefined && group.id === bgaAnchorId && bgaAnchorIndex === undefined) {
+        bgaAnchorIndex = this.container.children.length;
         continue;
       }
       // Songlist anchor — same idea, different layer. Tells the select scene where to splice its
@@ -1193,6 +1235,7 @@ export class BeatorajaPlaySkinView {
     // anchor, which matches the previous layering.
     this.noteLayerInsertIndex = noteAnchorIndex ?? this.container.children.length;
     this.songListLayerInsertIndex = songListAnchorIndex ?? this.container.children.length;
+    this.bgaLayerInsertIndex = bgaAnchorIndex ?? this.container.children.length;
 
     // Per-skin construction summary. `JSON.stringify` so devtools shows the full payload as a
     // selectable string (vs the collapsible tree `console.log(obj)` produces) — easier to copy
@@ -1206,7 +1249,9 @@ export class BeatorajaPlaySkinView {
     );
     const noteAnchorConsumed = noteAnchorIndex !== undefined ? 1 : 0;
     const songListAnchorConsumed = songListAnchorIndex !== undefined ? 1 : 0;
-    const skipped = groups.length - this.entries.length - noteAnchorConsumed - songListAnchorConsumed;
+    const bgaAnchorConsumed = bgaAnchorIndex !== undefined ? 1 : 0;
+    const skipped =
+      groups.length - this.entries.length - noteAnchorConsumed - songListAnchorConsumed - bgaAnchorConsumed;
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-view] skin view built',
@@ -1223,6 +1268,7 @@ export class BeatorajaPlaySkinView {
           index: this.songListLayerInsertIndex,
           found: songListAnchorIndex !== undefined,
         },
+        bgaAnchor: { id: bgaAnchorId, index: this.bgaLayerInsertIndex, found: bgaAnchorIndex !== undefined },
       }),
     );
     if (skipped > 0) {
@@ -1231,6 +1277,7 @@ export class BeatorajaPlaySkinView {
           (group) =>
             group.id !== noteAnchorId &&
             group.id !== SONG_LIST_ANCHOR_ID &&
+            group.id !== bgaAnchorId &&
             !imageById.has(group.id) &&
             !imagesetById.has(group.id) &&
             !valueById.has(group.id) &&
