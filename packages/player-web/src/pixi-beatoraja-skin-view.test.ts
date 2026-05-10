@@ -350,7 +350,18 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
-  it('shifts the text x by destination width for center / right alignment', () => {
+  it('treats `region.x` as anchor point for all align modes (audit A-4)', () => {
+    // Upstream `SkinTextFont.java:107` interprets `region.x` as the anchor point — NOT the
+    // bounding-box left edge:
+    //
+    //   align=0 LEFT:   text's LEFT edge at region.x.
+    //   align=1 CENTER: text's CENTER at region.x.
+    //   align=2 RIGHT:  text's RIGHT edge at region.x.
+    //
+    // In Pixi this collapses to "text.x = region.x always; the Pixi anchor (0 / 0.5 / 1) does
+    // the rest". Previous TS impl added `+ region.width / 2` and `+ region.width` to text.x
+    // for center / right, treating region as a bounding box — which placed `align=2` text
+    // `region.width` to the right of where upstream paints it.
     const skin: BeatorajaSkin = {
       type: 0,
       w: 1,
@@ -368,10 +379,18 @@ describe('BeatorajaPlaySkinView', () => {
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const [leftNode, centerNode, rightNode] = view.container.children as Array<{ x: number }>;
+    const [leftNode, centerNode, rightNode] = view.container.children as Array<{
+      x: number;
+      anchor: { x: number };
+    }>;
+    // All three text nodes have text.x = 100 (= dst.x). The visible position differs because
+    // the Pixi anchor.x adjusts: 0 / 0.5 / 1 places text's LEFT / CENTER / RIGHT edge at 100.
     expect(leftNode.x).toBe(100);
-    expect(centerNode.x).toBe(200); // 100 + 200/2
-    expect(rightNode.x).toBe(300); // 100 + 200
+    expect(centerNode.x).toBe(100);
+    expect(rightNode.x).toBe(100);
+    expect(leftNode.anchor.x).toBe(0);
+    expect(centerNode.anchor.x).toBe(0.5);
+    expect(rightNode.anchor.x).toBe(1);
     view.dispose();
   });
 

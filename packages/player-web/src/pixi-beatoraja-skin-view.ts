@@ -2205,17 +2205,33 @@ export class BeatorajaPlaySkinView {
       );
     }
 
-    // The destination's `x` is the bounding box's left edge. With `align: center` / `right` the
-    // Pixi anchor is 0.5 / 1.0 (set in `buildTextEntry`), so we add half / full width of the
-    // destination box to land on the box's center / right edge respectively.
+    // The destination's `x` is the ANCHOR POINT, not the bounding-box left edge. Upstream
+    // `SkinTextFont.java:107` interprets `region.x` per align:
     //
-    // Width / height aren't forced onto the Text node: beatoraja's `text[]` semantics is "render
-    // glyphs at `size` px with auto-width" — clamping to the dst rect would scale the type, which
-    // is what beatoraja explicitly avoids (the dst rect describes the *anchor*, not the text bbox).
-    let x = props.x;
-    if (entry.element.align === 'center') x += props.width / 2;
-    else if (entry.element.align === 'right') x += props.width;
-    text.x = x;
+    //     final float x = (getAlign() == 2 ? region.x - region.width
+    //                    : getAlign() == 1 ? region.x - region.width / 2
+    //                    : region.x);
+    //     sprite.draw(font, layout, x + offsetX, ...);   // layout halign = ALIGN[getAlign()]
+    //
+    // After libGDX's `GlyphLayout` applies the layout's `halign` within `[x, x + region.width]`:
+    //   - align=0 LEFT:   text's LEFT edge at `region.x` (no shift).
+    //   - align=1 CENTER: text's CENTER at `region.x` (shifted by -region.width/2 then centered).
+    //   - align=2 RIGHT:  text's RIGHT edge at `region.x` (shifted by -region.width then right-anchored).
+    //
+    // In Pixi we get the same effect by setting `text.x = props.x` regardless of align, with
+    // the Pixi `text.anchor.x = 0 / 0.5 / 1` set at build time per the same align value. The
+    // anchor's local-space pivot lands at `text.x` in parent coords, so the LEFT / CENTER /
+    // RIGHT of the text span sits at `region.x` exactly as upstream — no per-frame offset.
+    //
+    // Audit A-4 (2024-12): the previous TS impl added `+ props.width / 2` (center) and
+    // `+ props.width` (right) to text.x, treating the dst rect as a bounding box rather than
+    // an anchor point. That landed `align=2 RIGHT` text `region.width` to the RIGHT of where
+    // upstream paints it.
+    //
+    // Width / height aren't forced onto the Text node: beatoraja's `text[]` semantics is
+    // "render glyphs at `size` px with auto-width" — clamping to the dst rect would scale
+    // the type, which is what beatoraja explicitly avoids.
+    text.x = props.x;
     text.y = props.y;
     text.alpha = props.alpha;
     text.tint = props.tint;
