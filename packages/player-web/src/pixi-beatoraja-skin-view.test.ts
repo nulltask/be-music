@@ -529,6 +529,45 @@ describe('BeatorajaPlaySkinView', () => {
     view.dispose();
   });
 
+  it('treats negative `text.size` as `Math.abs(size)` per BMFont sign-as-unit convention (audit gdbg)', () => {
+    // AngelCode BMFont's authoring convention encodes a unit hint in the `size=N` line's sign:
+    // POSITIVE = points, NEGATIVE = pixels. The BMFont generator embeds the same sign in the
+    // `.fnt` output's `info size=N`. Skins targeting pixel-sized fonts pair the two negatives
+    // — GroundbreakinG's DECIDE skin authors `text.size = -118` to match its Title.fnt's
+    // `size=-120`. Upstream `SkinTextBitmap.draw` line 59 cancels the matched signs at scale
+    // time (`scale = -118 / -120 = +0.983`), so the rendered glyph height ends up
+    // `|text.size|` px.
+    //
+    // Pixi's `style.fontSize` doesn't have well-defined semantics for negative values
+    // (BMFont layout would compute a NEGATIVE scale and render the text 180° flipped — user
+    // report: gdbg's DECIDE title and artist rendered upside-down). We strip the sign on
+    // both sides (`Math.abs(parsed.fontSize)` in `beatoraja-fonts.ts` and `Math.abs(element.size)`
+    // here) so the resulting Pixi scale stays positive.
+    //
+    // For TTF (this test) the per-frame scale is `region.height / |size|`. With size=-24 and
+    // dst.h=48 the scale must be 48/24 = 2 — matching what a positive size=24 produces.
+    const skin: BeatorajaSkin = {
+      type: 0,
+      w: 100,
+      h: 100,
+      text: [{ id: 'neg', font: 0, size: -24 }],
+      destination: [
+        {
+          id: 'neg',
+          loop: 0,
+          dst: [{ time: 0, x: 0, y: 0, w: 200, h: 48, a: 255 }],
+        },
+      ],
+    };
+    const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+    view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
+    const node = view.container.children[0] as { scale: { x: number; y: number } };
+    // |size|=24, dst.h=48 → scale = 2 (positive — would be -2 without the abs).
+    expect(node.scale.y).toBeCloseTo(2, 6);
+    expect(node.scale.x).toBeCloseTo(2, 6);
+    view.dispose();
+  });
+
   it('hides text nodes when the destination is past its last keyframe with loop=-1', () => {
     const skin: BeatorajaSkin = {
       type: 0,

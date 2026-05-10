@@ -219,23 +219,34 @@ async function registerBitmapFont(args: {
     // (the parser fills it from the `info face=` line, which collides across skins). The resulting
     // BitmapFont reads its identity from this field.
     //
-    // Normalize `fontSize` to its absolute value. AngelCode BMFont's `info size=N` line uses the
-    // sign as a unit hint — POSITIVE = points, NEGATIVE = pixels — and sign-aware tooling (the
-    // generator, libGDX's `BitmapFont`) silently swallows the sign so the stored size is always
-    // a non-negative magnitude. GroundbreakinG's `Title.fnt` ships `size=-120` ("120 pixel
-    // glyphs"), and skins commonly author `text.size = -118` to match. In libGDX's pipeline both
-    // halves are negative, so `scale = text.size / fnt.originalSize` cancels to a positive scale
-    // and renders correctly.
+    // Normalize `fontSize` to its absolute value to mirror upstream's *effective* behavior.
     //
-    // Pixi's `bitmapFontTextParser` carries the literal `-120` straight into
-    // `BitmapFont.baseMeasurementFontSize`, and `getBitmapTextLayout` computes
-    // `scale = style.fontSize / baseMeasurementFontSize`. With a positive `style.fontSize`
-    // (which we always emit — `requestedSize` falls back to the dst rect's height when
-    // `text.size <= 0`) the scale becomes NEGATIVE, and `AbstractBitmapTextPipe` renders the
-    // text 180° flipped (negative scale on both axes). User report: gdbg DECIDE's title and
-    // artist render upside-down. Strip the sign here so the BitmapFont's measurement size is
-    // the actual pixel magnitude — matches both upstream's effective behavior and BMFont's
-    // sign-as-unit convention.
+    // AngelCode BMFont's `info size=N` line uses the sign as a UNIT HINT — POSITIVE = points,
+    // NEGATIVE = pixels — and the generator embeds that sign in the `.fnt` output verbatim.
+    // GroundbreakinG's `Title.fnt` ships `size=-120` ("120 pixel glyphs"), and skins targeting
+    // it pair the convention by authoring `text.size = -118` to match.
+    //
+    // Upstream `SkinTextBitmap.SkinTextBitmapSource.createCacheableFont` parses the `size=N` value
+    // verbatim into `originalSize` (the negative is preserved), and `SkinTextBitmap.draw` line 59
+    // computes `scale = this.size / originalSize`. Because BOTH `this.size` (= `text.size`) and
+    // `originalSize` carry the same sign, the negatives CANCEL at scale time and produce a
+    // positive ratio (`-118 / -120 = +0.983`). Final rendered glyph height ends up
+    // `|originalSize| * scale ≈ |text.size|` px.
+    //
+    // Pixi's `bitmapFontTextParser` likewise carries the literal `-120` straight into
+    // `BitmapFont.baseMeasurementFontSize`, but `getBitmapTextLayout` computes
+    // `scale = style.fontSize / baseMeasurementFontSize` — and Pixi's TextStyle treats
+    // `fontSize` as an unsigned magnitude (a negative input has no well-defined meaning in the
+    // CSS/canvas pipelines `Text` and `BitmapText` share). We can't pass through a negative
+    // `style.fontSize` to reproduce upstream's double-negative cancellation, so we sign-strip
+    // BOTH sides instead — `Math.abs(parsed.fontSize)` here, paired with `Math.abs(element.size)`
+    // in `pixi-beatoraja-skin-view.ts`'s `buildTextEntry`. The result is mathematically
+    // equivalent: `+118 / +120 = +0.983`, same scale, same rendered glyph height.
+    //
+    // User report: without this normalization, `style.fontSize = abs(text.size)` (the only
+    // value Pixi will accept) divided by negative `parsed.fontSize` gave a NEGATIVE Pixi scale,
+    // and `AbstractBitmapTextPipe` rendered the text 180° flipped (gdbg DECIDE's title and
+    // artist appeared upside-down).
     const normalizedFontSize = Math.abs(parsed.fontSize);
     const data = { ...parsed, fontFamily: args.family, fontSize: normalizedFontSize };
     const font = new BitmapFont({ data, textures: pageTextures });

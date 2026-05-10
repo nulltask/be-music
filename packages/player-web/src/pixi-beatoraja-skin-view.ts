@@ -1471,9 +1471,23 @@ export class BeatorajaPlaySkinView {
     // Falls back to `dst[0].h` only when `text[].size` is omitted (some Lua skins author
     // size on the destination rather than the element); final guard at 24 for skins
     // authoring neither.
+    //
+    // **Sign normalization** — AngelCode BMFont's authoring convention is "POSITIVE = points,
+    // NEGATIVE = pixels", and the sign is also baked into the .fnt's `info size=N` line. Skins
+    // pair the two: when the .fnt declares `size=-120` (the GroundbreakinG `Title.fnt` does
+    // exactly this), the skin authors `text.size = -118` to match. Upstream
+    // `SkinTextBitmap.draw` line 59 computes `scale = this.size / source.getOriginalSize()`,
+    // and the matched signs cancel to a positive scale (`-118 / -120 = +0.983`); the rendered
+    // glyph height ends up `|text.size|` px. We mirror this by taking `Math.abs(element.size)`
+    // — Pixi's `style.fontSize` doesn't have well-defined semantics for negative values
+    // (BMFont layout would compute a NEGATIVE scale and render the text 180° flipped), so we
+    // can't pass the sign through. Pairing this with the `Math.abs(parsed.fontSize)` we apply
+    // when registering the BitmapFont (see `beatoraja-fonts.ts`) reproduces upstream's
+    // "rendered height = |text.size|" identity exactly.
     const firstFrame = group.dst[0];
     const rectH = firstFrame !== undefined && firstFrame.h > 0 ? firstFrame.h : 0;
-    const requestedSize = element.size > 0 ? element.size : rectH > 0 ? rectH : 24;
+    const absElementSize = Math.abs(element.size);
+    const requestedSize = absElementSize > 0 ? absElementSize : rectH > 0 ? rectH : 24;
     // Pick `BitmapText` for BMFonts and `Text` for everything else. Both share the same constructor
     // surface (`text`, `style.fontFamily`, `style.fontSize`, `style.align`, `alpha`, anchors), so
     // downstream update code doesn't branch — see `updateTextEntry`.
@@ -2515,7 +2529,13 @@ export class BeatorajaPlaySkinView {
     // x-shrink proportionally so it stays inside. Applies to both TTF and bitmap. Other
     // `overflow` modes (`0` = no handling, `2` = clip — uncommon) leave xScale at the
     // height-derived value (no horizontal shrink applied).
-    const referenceSize = entry.element.size > 0 ? entry.element.size : 24;
+    //
+    // `Math.abs` mirrors the build-time `absElementSize` derivation in `buildTextEntry` — the
+    // BMFont sign convention treats `text.size`'s sign as a pixel-vs-point unit hint, not a
+    // signed magnitude, and upstream's `scale = this.size / originalSize` cancels the matched
+    // negatives. We strip the sign on both sides (.fnt fontSize and skin text.size) so the
+    // resulting Pixi scale is positive and the rendered glyph height equals `|text.size|`.
+    const referenceSize = Math.abs(entry.element.size) > 0 ? Math.abs(entry.element.size) : 24;
     const isBitmap = text instanceof BitmapText;
     const baseScale = isBitmap ? 1 : props.height > 0 ? props.height / referenceSize : 1;
     let scaleX = baseScale;
