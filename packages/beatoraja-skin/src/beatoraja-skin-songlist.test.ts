@@ -187,8 +187,42 @@ describe('parseBeatorajaSongList', () => {
     } as unknown as Partial<BeatorajaSkin>);
     const layout = parseBeatorajaSongList(skin);
     expect(layout?.level).toBeUndefined();
+    expect(layout?.levelEntries).toEqual([]);
     expect(layout?.labels).toEqual([]);
     expect(layout?.text).toEqual([]);
+  });
+
+  it('extracts every `songlist.level[]` entry into levelEntries so the renderer can pick per-difficulty', () => {
+    // ModernChic authors six entries (`level-unknown / -beginner / -normal / -hyper /
+    // -another / -insane`), each pointing at a different `value[]` declaration that crops a
+    // colour-coded row from `songbar.png`. The renderer keys on the entry's id suffix to
+    // pick the matching value at draw time. The parser keeps every entry verbatim so the
+    // ordering / color information survives.
+    const skin = makeSkin({
+      songlist: {
+        liston: [{ id: 'bar', dst: [{ x: 0, y: 0, w: 960, h: 70 }] }],
+        level: [
+          { id: 'level-unknown', dst: [{ x: 30, y: 13, w: 35, h: 42 }] },
+          { id: 'level-beginner', dst: [{ x: 30, y: 13, w: 35, h: 42 }] },
+          { id: 'level-normal', dst: [{ x: 30, y: 13, w: 35, h: 42 }] },
+          { id: 'level-hyper', dst: [{ x: 30, y: 13, w: 35, h: 42 }] },
+          { id: 'level-another', dst: [{ x: 30, y: 13, w: 35, h: 42 }] },
+          { id: 'level-insane', dst: [{ x: 30, y: 13, w: 35, h: 42 }] },
+        ],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    const layout = parseBeatorajaSongList(skin);
+    expect(layout?.levelEntries.map((entry) => entry.id)).toEqual([
+      'level-unknown',
+      'level-beginner',
+      'level-normal',
+      'level-hyper',
+      'level-another',
+      'level-insane',
+    ]);
+    // The singular `level` rect is still populated for backwards compat — falls back to the
+    // first entry's geometry, which all six entries share in the ModernChic authoring.
+    expect(layout?.level).toEqual({ id: 'level-unknown', x: 30, y: 13, w: 35, h: 42 });
   });
 
   it('extracts `songlist.text[]` entries verbatim so renderers can size text from `dst.h`', () => {

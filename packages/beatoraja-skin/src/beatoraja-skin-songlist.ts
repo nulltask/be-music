@@ -90,16 +90,46 @@ export interface BeatorajaSongListLayout {
    */
   focusedRowIndex: number;
   /**
-   * Per-row chart-level sprite rect (relative to the bar rect). Beatoraja's reference theme
-   * authors `songlist.level[N].dst[0] = {x, y, w, h}` for difficulties 1..14 (one entry per
-   * difficulty), but our renderer treats them as identical layout positions and lets the
-   * host pick which sprite to paint. Returns the FIRST entry's geometry — most skins author
-   * every difficulty with the same `(x, y, w, h)` and only vary the color tint.
+   * Per-row chart-level sprite rect (relative to the bar rect). Returns the FIRST entry's
+   * geometry — every skin we've inspected (default reference theme, ModernChic, GdbG)
+   * authors `songlist.level[N].dst[0] = {x, y, w, h}` with identical rects across all
+   * difficulty entries, so the singular form is sufficient for layout. The id varies per
+   * difficulty (= which sprite color row to crop from); use {@link levelEntries} for
+   * that branching.
    *
    * `undefined` when the skin omits `songlist.level`. Hosts that want per-row level display
    * fall back to a screen-space hard-coded position in that case.
    */
   level?: BeatorajaSongListRowRect;
+  /**
+   * Per-difficulty level-sprite entries. Mirrors upstream `songlist.level[]` exactly —
+   * each entry pairs a level `value[].id` (e.g. `level-unknown`, `level-beginner`,
+   * `level-normal`, `level-hyper`, `level-another`, `level-insane`) with its rect. The
+   * renderer picks one entry per row based on the chart's `#DIFFICULTY` value:
+   *
+   *   - difficulty 0 → `level-unknown`  (no `#DIFFICULTY` authored, or `0`)
+   *   - difficulty 1 → `level-beginner`
+   *   - difficulty 2 → `level-normal`
+   *   - difficulty 3 → `level-hyper`
+   *   - difficulty 4 → `level-another`
+   *   - difficulty 5 → `level-insane`
+   *
+   * Mirrors upstream `JsonSelectSkinObjectLoader.java:148-158`'s level-instantiation loop:
+   *
+   *     for (int i = 0; i < sk.songlist.level.length; i++) { ... new SkinNumber(...) ... }
+   *
+   * which hands beatoraja's `SkinBar.barlevel[i]` six independent SkinNumbers; the renderer
+   * picks `barlevel[song.difficulty]` per row to crop digits from the colour-coded sprite
+   * strip on `songbar.png`. Without honouring the per-difficulty selection every row uses
+   * the first authored entry (= `level-unknown`'s grey row), so charts whose author gave
+   * a `#DIFFICULTY` paint with the wrong colour.
+   *
+   * Empty array when the skin omits `songlist.level`. Order matches the author's `level[]`
+   * (typically beatoraja's `unknown / beginner / normal / hyper / another / insane`); the
+   * renderer keys on the entry's `id` suffix rather than positional index so a skin that
+   * permutes the order still works.
+   */
+  levelEntries: ReadonlyArray<{ id: BeatorajaImageId; rect: BeatorajaSongListRowRect }>;
   /**
    * Per-row chart-feature label sprites. Each entry is `{id, rect}` — the `id` references
    * a `skin.image[]` entry (e.g. `"label-ln"` / `"label-random"` / `"label-mine"` in the
@@ -189,6 +219,11 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   const levelRect = collectFirstSubRect(obj.level);
   const levelId = firstEntryId(obj.level);
   const level = levelRect !== undefined && levelId !== undefined ? { id: levelId, ...levelRect } : levelRect;
+  // `levelEntries` keeps the entire `songlist.level[]` array (one entry per authored
+  // difficulty). The renderer picks one per row based on the chart's `#DIFFICULTY`. Same
+  // shape as the existing `labels` / `text` lists — `{id, rect}` per entry with the rect
+  // relative to the bar.
+  const levelEntries = collectLabelEntries(obj.level);
   const labels = collectLabelEntries(obj.label);
   // De-dupe text entries by id — beatoraja's default `select.json` authors the same id
   // (e.g. `bartext`) twice with different `filter` / color overrides. Without a filter
@@ -200,6 +235,7 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
     focusedRowIndex,
     labels,
     text,
+    levelEntries,
     ...(level !== undefined ? { level } : {}),
   };
 }

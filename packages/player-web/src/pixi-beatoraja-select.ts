@@ -1865,6 +1865,68 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   }
   private valueElementsById: Map<string | number, BeatorajaValueElement> | undefined;
 
+  /**
+   * Per-difficulty level value-element map. Built from the parsed
+   * {@link BeatorajaSongListLayout.levelEntries}: each entry's id (e.g. `level-beginner`)
+   * looks up the matching `value[]` declaration on the skin (`src = songbar.png`,
+   * `(x, y)` cropping a difficulty-specific colour row from the level sprite strip).
+   * Per-row rendering picks the entry by `chart.metadata.difficulty`:
+   *
+   *   - 0 (no `#DIFFICULTY` authored) → `level-unknown`
+   *   - 1..5 → `level-beginner / normal / hyper / another / insane`
+   *
+   * Mirrors upstream `JsonSelectSkinObjectLoader.java:148-158` which builds an array of
+   * SkinNumbers (`barlevel[i]`) and `BarRenderer.java` reads `barlevel[song.difficulty]`
+   * per row. Without this, every row painted from the SAME value declaration (= the first
+   * entry, typically the grey "unknown" row), so charts with an explicit `#DIFFICULTY`
+   * showed in the wrong colour.
+   */
+  private resolveLevelValueByDifficulty(): ReadonlyMap<number, BeatorajaValueElement> {
+    if (this.cachedLevelValueByDifficulty !== undefined) return this.cachedLevelValueByDifficulty;
+    const map = new Map<number, BeatorajaValueElement>();
+    const entries = this.songList?.levelEntries ?? [];
+    if (this.valueElementsById === undefined) {
+      this.valueElementsById = new Map();
+      for (const v of normalizeBeatorajaValues((this.options.skin as { value?: unknown }).value)) {
+        this.valueElementsById.set(v.id, v);
+      }
+    }
+    for (const entry of entries) {
+      const difficulty = parseLevelDifficultyIndex(entry.id);
+      if (difficulty === undefined) continue;
+      const value = this.valueElementsById.get(entry.id);
+      if (value === undefined) continue;
+      // First occurrence wins — matches upstream's loop break-on-match semantics.
+      if (!map.has(difficulty)) map.set(difficulty, value);
+    }
+    this.cachedLevelValueByDifficulty = map;
+    return map;
+  }
+  private cachedLevelValueByDifficulty: ReadonlyMap<number, BeatorajaValueElement> | undefined;
+
+  /**
+   * Pick the level value element for a song's difficulty. Falls back to the global
+   * `levelValueElement` (= first entry) when the chart's `#DIFFICULTY` doesn't have a
+   * matching `level-*` entry — covers community charts that author non-standard
+   * difficulty values plus skins that only ship a subset (e.g. unknown + normal).
+   */
+  private levelValueElementForDifficulty(difficulty: number | undefined): BeatorajaValueElement | undefined {
+    const byDiff = this.resolveLevelValueByDifficulty();
+    if (byDiff.size > 0) {
+      const safe = Number.isFinite(difficulty) && (difficulty as number) >= 0 ? Math.trunc(difficulty as number) : 0;
+      const matched = byDiff.get(safe);
+      if (matched !== undefined) return matched;
+      // Difficulty outside the map (e.g. `#DIFFICULTY 9` from a non-standard chart, or no
+      // matching authored row) — try `level-unknown` (= 0) then fall back to the first
+      // authored entry so the digits still render with SOME sprite row.
+      const unknown = byDiff.get(0);
+      if (unknown !== undefined) return unknown;
+      const first = byDiff.values().next().value;
+      if (first !== undefined) return first;
+    }
+    return this.levelValueElement;
+  }
+
   private buildFeatureLabelSprite(imageId: string | number): Sprite | undefined {
     if (this.featureLabelImages === undefined) {
       this.featureLabelImages = new Map();
@@ -1944,14 +2006,22 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         label.text = joinNonEmpty(song.title, song.subtitle);
         const lvl = resolvePlayLevel(song.playLevel);
         const showLevel = lvl !== undefined && lvl > 0;
-        if (levelDigits !== undefined && this.levelValueElement !== undefined && this.levelStripTexture !== undefined) {
+        // Per-difficulty value element pick. Upstream's `BarRenderer` reads
+        // `barlevel[song.difficulty]` per row so each chart paints its `#PLAYLEVEL` from the
+        // colour-coded sprite row matching its difficulty (`level-beginner`,
+        // `level-normal`, …). Falls back to `this.levelValueElement` (the first authored
+        // entry) when the chart's difficulty doesn't have a matching authored entry — keeps
+        // skins with a partial level set or non-standard `#DIFFICULTY` values still
+        // rendering some sprite digits.
+        const perDifficultyLevelValue = this.levelValueElementForDifficulty(song.chart.metadata.difficulty);
+        if (levelDigits !== undefined && perDifficultyLevelValue !== undefined && this.levelStripTexture !== undefined) {
           // Sprite-digit path. Compose the chart's `#PLAYLEVEL` into per-cell rects via
           // upstream's value composer, then crop each cell from the strip texture and
           // assign it to the matching slot sprite. Hidden cells leave the slot invisible
           // (= leading-blank padding) so a 4-digit slot rendering "12" only paints two
           // sprites on the right.
           if (showLevel) {
-            const cells = composeBeatorajaValueCells(this.levelValueElement, lvl);
+            const cells = composeBeatorajaValueCells(perDifficultyLevelValue, lvl);
             for (let d = 0; d < levelDigits.length; d += 1) {
               const sprite = levelDigits[d]!;
               const cell = cells[d];
@@ -3162,6 +3232,44 @@ function judgeRankOp(rank: number | undefined): number {
  * `DIFFICULTY_*` op (skins use either flavour, so we fire both). Returns an array because the
  * "undefined / 0" case has only the LR2 alias (no LEVEL_UNDEFINED in the native block).
  */
+/**
+ * Parse a `songlist.level[].id` string (e.g. `"level-beginner"`) into the matching
+ * difficulty index used by `chart.metadata.difficulty`. Returns `undefined` when the id
+ * doesn't match the upstream `level-*` convention so the caller can skip it.
+ *
+ * Mapping mirrors upstream `JsonSelectSkinObjectLoader.java`'s level loop where each
+ * `level[i]` corresponds to one of the difficulty rows in beatoraja's level sprite strip:
+ *
+ *   level-unknown  → 0 (= no `#DIFFICULTY` authored)
+ *   level-beginner → 1
+ *   level-normal   → 2
+ *   level-hyper    → 3
+ *   level-another  → 4
+ *   level-insane   → 5
+ *
+ * Numeric ids (rare, default theme) fall through unmatched — the renderer keeps the
+ * legacy "first entry wins" fallback in that case.
+ */
+function parseLevelDifficultyIndex(id: string | number): number | undefined {
+  if (typeof id !== 'string') return undefined;
+  switch (id) {
+    case 'level-unknown':
+      return 0;
+    case 'level-beginner':
+      return 1;
+    case 'level-normal':
+      return 2;
+    case 'level-hyper':
+      return 3;
+    case 'level-another':
+      return 4;
+    case 'level-insane':
+      return 5;
+    default:
+      return undefined;
+  }
+}
+
 function difficultyOps(difficulty: number | undefined): ReadonlyArray<number> {
   switch (difficulty) {
     case 1:
