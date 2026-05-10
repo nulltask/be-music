@@ -272,12 +272,13 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // skin is mounted, not just the reference theme's 580.
     const sliderDefs = normalizeBeatorajaSliders((options.skin as { slider?: unknown }).slider);
     const lanecoverSliderRange = sliderDefs.find((s) => s.type === 4)?.range;
-    // Per-side judge combo digit slot width (= `numbers[i].dst.w` from the first
-    // judgement number entry). Drives the synthetic judge-word-shift offset that honors
-    // `judge[].shift = true`. Default 40 covers default skin's `play5.json` /
-    // `play7main.lua`; community skins with custom combo digit cell widths will report
-    // their own value here so the shift uses the right per-pixel width.
-    const judgeShiftSlotWidth = readJudgeShiftSlotWidth(options.skin);
+    // Per-side judge combo digit metrics (`{width, space}` from the matching `value[]`
+    // declaration referenced by `judge[].numbers[0].id`). Drives the synthetic
+    // judge-word-shift offset that honors `judge[].shift = true` per upstream
+    // `SkinJudge.java:108-109`'s `nowJudge.region.x += -nowCount.getLength() / 2`
+    // formula. Defaults `(width=40, space=0)` cover default skin's `play5.json` /
+    // `play7main.lua`.
+    const judgeComboMetrics = readJudgeComboMetrics(options.skin);
     this.adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: options.variant,
       baseOps: skinConfigOps,
@@ -290,7 +291,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       skinHeaderAuthor: options.skin.author,
       directoryLabel: options.directoryLabel,
       laneHeight: lanecoverSliderRange,
-      judgeShiftSlotWidth,
+      judgeComboMetrics,
     });
     // Push the user's `customOffset` picks into the adapter's offset table KEYED BY ID. The
     // skin's `header.offset[]` declares each slot's `(name, id, axisFlags)`; the host config
@@ -1132,17 +1133,47 @@ function insertNoteAndMarkerLayers(
  * panel) render correctly.
  */
 /**
- * Read the per-side combo digit slot width from `skin.judge[i].numbers[0].dst[0].w`. Used
- * to seed the runtime adapter's judge-word-shift resolver so the synthetic offset that
- * honors `judge[].shift = true` knows the correct per-pixel digit width for each side.
+ * Read the per-side combo-digit metrics needed to compute the judge-word-shift amount.
+ * Mirrors upstream's `nowCount.getLength()` formula at `SkinNumber.java:185`:
  *
- * Default value `40` covers default skin's `play5.json` / `play7main.lua` which both
- * authored `numbers[i].dst.w = 40`.
+ *     length = (region.width + space) * (currentImages.length - shiftbase)
+ *
+ * For the shift's purposes we need `region.width + space` as the per-digit pitch — that's
+ * what we capture here. Two skin sources contribute:
+ *
+ *   - `skin.judge[i].numbers[0].dst[0].w` — the per-digit cell width (= `region.width` at
+ *     runtime, before any offsets[].w grows it).
+ *   - `skin.value[id == numbers[0].id].space` — the inter-digit space (`SkinNumber.space`),
+ *     authored on the matching `value[]` declaration. Most skins author 0; some banner-style
+ *     digit fonts use small positive values.
+ *
+ * Default `(width = 40, space = 0)` covers default skin's `play5.json` / `play7main.lua`
+ * which both author `numbers[i].dst.w = 40` and the matching `value` block doesn't author
+ * a non-zero space.
  */
-function readJudgeShiftSlotWidth(skin: BeatorajaSkin): { 1: number; 2: number } {
-  const result = { 1: 40, 2: 40 };
+function readJudgeComboMetrics(
+  skin: BeatorajaSkin,
+): { 1: { width: number; space: number }; 2: { width: number; space: number } } {
+  const result = {
+    1: { width: 40, space: 0 },
+    2: { width: 40, space: 0 },
+  };
   const judges = (skin as { judge?: unknown }).judge;
   if (!Array.isArray(judges)) return result;
+  // Build a quick `value[].id → value` map so we can look up the `space` field for each
+  // judge.numbers[0].id without re-scanning value[] for every judge.
+  const valuesById = new Map<string | number, { space?: number }>();
+  const values = (skin as { value?: unknown }).value;
+  if (Array.isArray(values)) {
+    for (const v of values) {
+      if (v === null || typeof v !== 'object') continue;
+      const obj = v as Readonly<Record<string, unknown>>;
+      const id = obj.id;
+      if (typeof id === 'string' || typeof id === 'number') {
+        valuesById.set(id, obj as { space?: number });
+      }
+    }
+  }
   for (const judge of judges) {
     if (judge === null || typeof judge !== 'object') continue;
     const obj = judge as Readonly<Record<string, unknown>>;
@@ -1151,13 +1182,25 @@ function readJudgeShiftSlotWidth(skin: BeatorajaSkin): { 1: number; 2: number } 
     const numbers = Array.isArray(obj.numbers) ? obj.numbers : [];
     const first = numbers[0];
     if (first === null || typeof first !== 'object') continue;
-    const dst = (first as Readonly<Record<string, unknown>>).dst;
-    if (!Array.isArray(dst) || dst.length === 0) continue;
-    const kf = dst[0];
-    if (kf === null || typeof kf !== 'object') continue;
-    const w = (kf as Readonly<Record<string, unknown>>).w;
-    if (typeof w === 'number' && Number.isFinite(w) && w > 0) {
-      result[side] = w;
+    const firstObj = first as Readonly<Record<string, unknown>>;
+    const dst = firstObj.dst;
+    if (Array.isArray(dst) && dst.length > 0) {
+      const kf = dst[0];
+      if (kf !== null && typeof kf === 'object') {
+        const w = (kf as Readonly<Record<string, unknown>>).w;
+        if (typeof w === 'number' && Number.isFinite(w) && w > 0) {
+          result[side].width = w;
+        }
+      }
+    }
+    // `numbers[0].id` references a `value[]` declaration — pull its `space` field.
+    const valueId = firstObj.id;
+    if (typeof valueId === 'string' || typeof valueId === 'number') {
+      const valueDef = valuesById.get(valueId);
+      const space = valueDef?.space;
+      if (typeof space === 'number' && Number.isFinite(space)) {
+        result[side].space = space;
+      }
     }
   }
   return result;

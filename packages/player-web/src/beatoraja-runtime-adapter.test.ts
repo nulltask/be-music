@@ -926,6 +926,50 @@ describe('BeatorajaRuntimeAdapter — lift slider', () => {
     expect(adapter.getHiddenCover()).toBe(0);
   });
 
+  it('judge-word-shift offset (id 20001 / 20002) honors width + space (audit B-1)', () => {
+    // Mirrors upstream `SkinJudge.java:108-109`:
+    //
+    //   nowJudge.region.x += -nowCount.getLength() / 2;
+    //
+    // where `nowCount.getLength() = (region.width + space) * (currentImages.length - shiftbase)`.
+    // Tests the synthetic offset id 20001/20002 the expansion path appends to judgef-* destinations
+    // when `judge[].shift = true`. Default metrics `(width=40, space=0)` apply when host omits
+    // `judgeComboMetrics`.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      // Custom metrics: 50 px digits with a 4 px inter-digit gap. shift = (50+4) * digitCount / 2.
+      judgeComboMetrics: { 1: { width: 50, space: 4 }, 2: { width: 60, space: 0 } },
+    });
+    // No combo yet → digitCount falls back to 1. shift = (50+4) * 1 / 2 = 27.
+    expect(adapter.resolveOffset(20001)).toMatchObject({ x: -27 });
+    // Drive the combo up to 121 via the standard judge path → digitCount = 3,
+    // shift = (50+4) * 3 / 2 = 81.
+    for (let i = 1; i <= 121; i += 1) {
+      adapter.applyJudgeCombo({ judge: 'PERFECT', combo: i, channel: '11', updatedAtMs: 0 });
+    }
+    expect(adapter.resolveOffset(20001)).toMatchObject({ x: -81 });
+    // 2P uses its own metrics: width=60, space=0. shift = 60 * 3 / 2 = 90.
+    // Same maxCombo applies (the adapter tracks a single max-combo regardless of side
+    // since we don't surface separate per-side judge events yet).
+    expect(adapter.resolveOffset(20002)).toMatchObject({ x: -90 });
+  });
+
+  it('legacy `judgeShiftSlotWidth` (width-only) still works for back-compat', () => {
+    // Hosts that haven't migrated to the `{width, space}` shape pass `judgeShiftSlotWidth`,
+    // which is treated as `{width: ..., space: 0}`. Matches the pre-audit behavior so
+    // existing callers don't break on the rename.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      judgeShiftSlotWidth: { 1: 50, 2: 60 },
+    });
+    expect(adapter.resolveOffset(20001)).toMatchObject({ x: -25 }); // 50 * 1 / 2
+    expect(adapter.resolveOffset(20002)).toMatchObject({ x: -30 });
+  });
+
   it('lets manual setOffset(3, ...) win when liftRatio is 0', () => {
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',

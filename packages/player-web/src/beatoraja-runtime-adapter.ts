@@ -105,12 +105,28 @@ export interface BeatorajaRuntimeAdapterOptions {
    */
   laneHeight?: number;
   /**
-   * Per-side combo-digit slot width (= `judge[].numbers[i].dst.w` from the skin) for resolving
-   * the synthetic `SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_*P` offset that `judge[].shift = true`
-   * routes through. The shift amount is `digitCount(combo) * slotWidth / 2` per upstream's
-   * `nowJudge.region.x += -nowCount.getLength() / 2` formula. Default `40` covers default
-   * skin's `play5.json` / `play7main.lua`; community skins with custom digit cell widths
-   * pass their authored value.
+   * Per-side combo-digit metrics extracted from the skin's `judge[].numbers[0]` declaration.
+   * Used by the synthetic `SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_*P` offset to compute the
+   * dynamic word-shift amount.
+   *
+   * Mirrors upstream `SkinJudge.java:108-109`:
+   *
+   *     nowCount.prepare(time, state, combo, nowJudge.region.x, nowJudge.region.y);
+   *     nowJudge.region.x += shift ? -nowCount.getLength() / 2 : 0;
+   *
+   * Where `nowCount.getLength() = (region.width + space) * (currentImages.length - shiftbase)`
+   * — i.e., per-digit cell width PLUS inter-digit space, multiplied by the visible digit count.
+   * Both `width` and `space` come from the matching `value[]` declaration referenced by
+   * `judge[].numbers[0].id`.
+   *
+   * Default `width = 40, space = 0` matches default skin's `play5.json` / `play7main.lua`.
+   * Community skins with custom metrics pass their authored values.
+   */
+  judgeComboMetrics?: { 1?: { width?: number; space?: number }; 2?: { width?: number; space?: number } };
+  /**
+   * @deprecated since the audit-2024-12 rewrite. Use {@link judgeComboMetrics} instead.
+   * Kept for back-compat with hosts that hadn't migrated yet — the constructor reads this
+   * as `{ width: judgeShiftSlotWidth[side], space: 0 }` if `judgeComboMetrics` is omitted.
    */
   judgeShiftSlotWidth?: { 1?: number; 2?: number };
 }
@@ -185,12 +201,13 @@ export class BeatorajaRuntimeAdapter {
    */
   private readonly laneHeight: number;
   /**
-   * Per-side combo-digit slot width for resolving the judge-word-shift synthetic offset
-   * (= `digitCount(combo) * slotW / 2` shift applied to judgef-* destinations when
-   * `judge[].shift = true`). Defaults to 40 per default skin's `numbers[i].dst.w`; the
-   * host overrides via {@link BeatorajaRuntimeAdapterOptions.judgeShiftSlotWidth}.
+   * Per-side combo-digit metrics — `(width, space)` pair from the matching `value[]`
+   * declaration referenced by `judge[].numbers[0].id`. Used by the judge-word-shift
+   * synthetic offset to compute `(width + space) * digitCount / 2` per upstream
+   * `SkinJudge.java:108-109`'s `nowJudge.region.x += -nowCount.getLength() / 2` formula.
+   * Defaults `(40, 0)` cover default skin's `play5.json` / `play7main.lua`.
    */
-  private readonly judgeShiftSlotWidth: { 1: number; 2: number };
+  private readonly judgeComboMetrics: { 1: { width: number; space: number }; 2: { width: number; space: number } };
   private frame: PlayerUiFramePayload | null = null;
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined },
@@ -414,11 +431,11 @@ export class BeatorajaRuntimeAdapter {
       typeof options.laneHeight === 'number' && Number.isFinite(options.laneHeight) && options.laneHeight > 0
         ? options.laneHeight
         : DEFAULT_LANE_HEIGHT;
-    const judgeSlot1 = options.judgeShiftSlotWidth?.[1];
-    const judgeSlot2 = options.judgeShiftSlotWidth?.[2];
-    this.judgeShiftSlotWidth = {
-      1: typeof judgeSlot1 === 'number' && Number.isFinite(judgeSlot1) && judgeSlot1 > 0 ? judgeSlot1 : 40,
-      2: typeof judgeSlot2 === 'number' && Number.isFinite(judgeSlot2) && judgeSlot2 > 0 ? judgeSlot2 : 40,
+    // Read `judgeComboMetrics` first (the precise upstream-faithful struct); fall back to
+    // legacy `judgeShiftSlotWidth` (= width-only) for back-compat.
+    this.judgeComboMetrics = {
+      1: resolveJudgeComboMetric(options.judgeComboMetrics?.[1], options.judgeShiftSlotWidth?.[1]),
+      2: resolveJudgeComboMetric(options.judgeComboMetrics?.[2], options.judgeShiftSlotWidth?.[2]),
     };
     // Autoplay flag — prop.lua `autoplayon = 33` / `autoplayoff = 32`. We surface BOTH so a skin gated on
     // either side picks up the correct state. (Some skins author the panel as `if[33]`, others as
@@ -1079,17 +1096,29 @@ export class BeatorajaRuntimeAdapter {
    * as `ZERO_BEATORAJA_OFFSET`).
    */
   resolveOffset(offsetId: number): Readonly<BeatorajaSkinOffsetValue> | undefined {
-    // Synthetic judge-word-shift offset (= `judge[].shift` honor path). Per upstream
-    // `SkinJudge.prepare()`: `nowJudge.region.x += -nowCount.getLength() / 2` shifts the
-    // judge word LEFT by half the rendered combo's pixel width so word + combo stays
-    // centred on the authored anchor regardless of digit count. We compute the shift on
-    // the fly from the live combo + the per-side slot width.
+    // Synthetic judge-word-shift offset (= `judge[].shift` honor path). Mirrors upstream
+    // `SkinJudge.java:108-109`:
+    //
+    //     nowCount.prepare(time, state, combo, nowJudge.region.x, nowJudge.region.y);
+    //     nowJudge.region.x += shift ? -nowCount.getLength() / 2 : 0;
+    //
+    // Where `nowCount.getLength() = (region.width + space) * (currentImages.length - shiftbase)`
+    // = the visible combo digits' total pixel width (per-cell width + space, times visible
+    // digit count). Shift is applied to `nowJudge.region.x` ONLY — the combo digits
+    // themselves stay where they were prepared (= un-shifted parent.x + child.x).
+    //
+    // Implementation: the synthetic offset id (20001 / 20002) is appended to judgef-*
+    // destinations during `expandBeatorajaJudgeDestinations` ONLY when `judge.shift = true`,
+    // and the standard offset-summing path in `combineBeatorajaOffsets` adds our resolved
+    // value to the keyframe's x. Same observable effect as upstream's inline shift.
     if (offsetId === 20001 || offsetId === 20002) {
       const side: BeatorajaSide = offsetId === 20001 ? 1 : 2;
-      const combo = this.maxCombo; // matches what ref:75 displays in the digit row.
+      // `maxCombo` matches what ref:75 (BEATORAJA_NUM.MAXCOMBO_NOW / BEST_MAXCOMBO_LIVE)
+      // displays in the digit row — same value the combo number element renders.
+      const combo = this.maxCombo;
       const digitCount = combo <= 0 ? 1 : Math.floor(Math.log10(combo)) + 1;
-      const slotW = this.judgeShiftSlotWidth[side];
-      const shiftPx = (digitCount * slotW) / 2;
+      const { width, space } = this.judgeComboMetrics[side];
+      const shiftPx = ((width + space) * digitCount) / 2;
       // Negative x shifts the judge word LEFT in skin coords.
       return { x: -shiftPx, y: 0, w: 0, h: 0, r: 0, a: 0 };
     }
@@ -2400,6 +2429,26 @@ function whiteDurationMs(visibleRatio: number, hispeed: number, bpm: number): nu
 function greenDurationMs(visibleRatio: number, hispeed: number): number {
   if (hispeed <= 0) return 0;
   return Math.round((visibleRatio * 60000 * 4) / (hispeed * 130));
+}
+
+/**
+ * Resolve a per-side judge-combo metric `{width, space}` from the host-supplied options,
+ * with back-compat for the legacy width-only `judgeShiftSlotWidth` shape. Defaults match the
+ * default skin's `play5.json` / `play7main.lua` (`numbers[i].dst.w = 40`, value space = 0).
+ */
+function resolveJudgeComboMetric(
+  preferred: { width?: number; space?: number } | undefined,
+  legacyWidth: number | undefined,
+): { width: number; space: number } {
+  const width =
+    typeof preferred?.width === 'number' && Number.isFinite(preferred.width) && preferred.width > 0
+      ? preferred.width
+      : typeof legacyWidth === 'number' && Number.isFinite(legacyWidth) && legacyWidth > 0
+        ? legacyWidth
+        : 40;
+  const space =
+    typeof preferred?.space === 'number' && Number.isFinite(preferred.space) ? preferred.space : 0;
+  return { width, space };
 }
 
 /**
