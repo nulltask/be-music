@@ -19,6 +19,7 @@ import {
   evaluateBeatorajaLuaNumber,
   evaluateBeatorajaLuaString,
   expandBeatorajaJudgeDestinations,
+  flattenBeatorajaElements,
   imageFrameAt,
   imageFrameRect,
   imageRefFrame,
@@ -970,23 +971,30 @@ export class BeatorajaPlaySkinView {
     // image / number sub-entry × judge kind), each with the per-judge op appended to the gate.
     // Concatenated with `skin.destination` so the standard destination pipeline handles them.
     const judges = normalizeBeatorajaJudges(options.skin.judge);
-    // Walk `skin.destination` once to collect every authored destination id — used to filter
-    // `parts.judge[]` so only entries actually referenced by `parts.destination` get
-    // expanded. Mirrors upstream's `JsonPlaySkinObjectLoader.java:220-221`:
+    // Walk `skin.destination` (recursively descending into `if`/`values` wrappers) to
+    // collect every authored destination id — used to filter `parts.judge[]` so only entries
+    // actually referenced by `parts.destination` get expanded. Mirrors upstream's
+    // `JsonPlaySkinObjectLoader.java:220-221`:
     //
     //     for (JsonSkin.Judge judge : sk.judge) {
     //         if (dst.id.equals(judge.id)) { ... instantiate ... }
     //     }
     //
-    // ModernChic's `judge.lua` authors 5 judge entries (`def`, `laneCoverRest_{1,2}`,
-    // `constantRest_{1,2}`) and only references one (or two) via `parts.destination` based
-    // on user options. Without this filter every layout's children painted simultaneously,
-    // producing 2-3 stacked judge sprites per fire — the user-reported flicker.
+    // upstream iterates the FLATTENED destination list, so an `id` nested under
+    // `{ "if": [920], "values": [...] }` is reachable. Our previous filter only walked the
+    // raw top-level array and missed nested ids — default 5K (`play5.json`) wraps the
+    // judge anchor `{ "id": 2010 }` inside the 1P/2P side `if:[920]/[921]` blocks, so the
+    // filter incorrectly skipped the judge expansion and the popup's text / combo never
+    // rendered. ModernChic's separate-layout judges (`def`, `laneCoverRest_*`,
+    // `constantRest_*`) live at the top level of `parts.destination`, so the flat fallback
+    // still catches them.
+    //
+    // We use the package's `flattenBeatorajaElements` so the recursion semantics match the
+    // standard destination pipeline exactly (including `if/value` single-keyframe wrappers).
     const referencedJudgeIds = new Set<string>();
     if (Array.isArray(options.skin.destination)) {
-      for (const raw of options.skin.destination) {
-        if (raw === null || typeof raw !== 'object') continue;
-        const id = (raw as { id?: unknown }).id;
+      for (const entry of flattenBeatorajaElements(options.skin.destination)) {
+        const id = entry.fields.id;
         if (typeof id === 'string') referencedJudgeIds.add(id);
         else if (typeof id === 'number') referencedJudgeIds.add(String(id));
       }

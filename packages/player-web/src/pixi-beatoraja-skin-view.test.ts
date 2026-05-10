@@ -674,6 +674,72 @@ describe('BeatorajaPlaySkinView', () => {
     });
   });
 
+  describe('judge entry filtering walks nested `if` / `values` wrappers', () => {
+    // Default `play5.json` authors the judge anchor inside a 1P-side `if:[920]` wrapper:
+    //
+    //     "destination":[
+    //       { "if":[920], "values":[ ..., { "id":2010 }, ... ] },
+    //       ...
+    //     ]
+    //
+    // The judge filter introduced in `a533a5e` (= `parts.destination` references gate the
+    // expansion) walked only the top-level array and missed nested ids — the judge expansion
+    // was skipped, so the popup's text and combo digits never rendered on default 5K.
+    //
+    // The fix routes the id collection through `flattenBeatorajaElements` so wrapper
+    // recursion matches the standard destination pipeline.
+
+    it('expands judge entries referenced from inside `{if:[...], values:[...]}` wrappers', () => {
+      const skin = makeSkin({
+        image: [
+          { id: 'judgef-pg', src: 0, x: 0, y: 0, w: 180, h: 50 },
+          { id: 'judgef-gr', src: 0, x: 0, y: 50, w: 180, h: 50 },
+        ],
+        // Single-entry parts.judge with two sub-images. Pre-fix the filter would
+        // require id 2010 to appear at the top level of `skin.destination` to keep
+        // the entry; with the fix, nesting under `if/values` is sufficient.
+        judge: [
+          {
+            id: 2010,
+            index: 0,
+            images: [
+              {
+                id: 'judgef-pg',
+                loop: -1,
+                timer: 46,
+                dst: [{ time: 0, x: 70, y: 240, w: 180, h: 40 }, { time: 500 }],
+              },
+              {
+                id: 'judgef-gr',
+                loop: -1,
+                timer: 46,
+                dst: [{ time: 0, x: 70, y: 240, w: 180, h: 40 }, { time: 500 }],
+              },
+            ],
+            numbers: [],
+            shift: false,
+          },
+        ] as unknown as BeatorajaSkin['judge'],
+        destination: [
+          {
+            if: [920],
+            values: [
+              // Nested judge anchor — pre-fix our filter scanned only top-level entries
+              // and never saw this id, so the expansion skipped the parts.judge[0] entry.
+              { id: 2010 },
+            ],
+          } as unknown as BeatorajaSkin['destination'][number],
+        ],
+      });
+      const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
+      // With the fix, both judge images expand into destinations; pre-fix the container
+      // had no judge image entries at all (only the makeSkin default).
+      // We assert at least 2 sprites are present (the 2 judge images).
+      expect(view.container.children.length).toBeGreaterThanOrEqual(2);
+      view.dispose();
+    });
+  });
+
   it('dispose() detaches sprites from the container without throwing', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     expect(() => view.dispose()).not.toThrow();
