@@ -23,6 +23,21 @@ import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
 import type { BeatorajaSkin } from './beatoraja-skin-types.ts';
 
 /**
+ * Number of song-bar slots beatoraja's `BarRenderer` allocates per select scene. Mirrors
+ * upstream `BarRenderer.java:52` (`private final int barlength = 60;`) and
+ * `SkinBar.java:22` (`barimageon = new SkinImage[BAR_COUNT]` / `BAR_COUNT = 60`). Every
+ * skin shares this fixed slot count regardless of how many `liston[]` entries the JSON
+ * authors — slots beyond the authored array stay null in upstream and render nothing.
+ *
+ * Audit A-9 — exposed so the renderer can iterate the full upstream slot count and treat
+ * `liston[i]` for `i >= liston.length` as "unauthored" (skip drawing) rather than clamping
+ * `visibleRowCount` to the authored length. The visible behavior is identical for typical
+ * skins (`liston.length = 21`, `centerBar < 21`); the change matters only at the upstream-
+ * defined edge cases where `centerBar` lands beyond the authored row count.
+ */
+export const BEATORAJA_SONGLIST_BAR_COUNT = 60;
+
+/**
  * One row's rect in skin Y-UP coordinates. The optional `id` is the row's
  * `liston[i].id` / `listoff[i].id` — the `skin.image[]` entry the renderer crops as the
  * row's bar background. Only set on entries returned in {@link BeatorajaSongListLayout.rows};
@@ -348,6 +363,15 @@ function numberField(record: Readonly<Record<string, unknown>>, key: string, fal
  * verbatim — it's the index `BarRenderer.java:124` checks via `i == skin.getCenterBar()`.
  * When omitted (older community skins), fall back to the "closest to canvas vertical
  * centre" heuristic so layout still resolves to something sensible.
+ *
+ * Audit A-9 — accept the full upstream `[0, BEATORAJA_SONGLIST_BAR_COUNT)` range, NOT
+ * just `[0, rects.length)`. Upstream `BarRenderer.java:124` (`boolean on = (i == skin.
+ * getCenterBar())`) loops `i` from 0..59, so a skin authoring `centerBar = 25` with
+ * `liston.length = 21` legitimately points the cursor at slot 25 (which renders nothing
+ * because `barimageon[25] = null`). Clamping to `rects.length` would mis-resolve those
+ * skins to a different anchor row and silently desync the entry-to-slot mapping vs.
+ * upstream. The renderer skips drawing unauthored slots so the focused row simply
+ * doesn't paint a bar — matching upstream's null-slot behavior.
  */
 function resolveCenterIndex(
   centerField: unknown,
@@ -356,7 +380,7 @@ function resolveCenterIndex(
 ): number {
   if (typeof centerField === 'number' && Number.isFinite(centerField)) {
     const idx = Math.trunc(centerField);
-    if (idx >= 0 && idx < rects.length) return idx;
+    if (idx >= 0 && idx < BEATORAJA_SONGLIST_BAR_COUNT) return idx;
   }
   // Geometric fallback — pick the row whose Pixi-space centre y is closest to the canvas
   // vertical centre. Mirrors the previous heuristic (used for skins without `center`).

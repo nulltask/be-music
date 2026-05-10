@@ -160,7 +160,7 @@ export { expandBeatorajaJudgeDestinations, normalizeBeatorajaJudges } from './be
 export type { BeatorajaNoteDestinationBlock, BeatorajaNoteRect, BeatorajaNoteSection } from './beatoraja-skin-note.ts';
 export { normalizeBeatorajaNote, pickBeatorajaNoteRects } from './beatoraja-skin-note.ts';
 export type { BeatorajaSongListLayout, BeatorajaSongListRowRect } from './beatoraja-skin-songlist.ts';
-export { parseBeatorajaSongList } from './beatoraja-skin-songlist.ts';
+export { BEATORAJA_SONGLIST_BAR_COUNT, parseBeatorajaSongList } from './beatoraja-skin-songlist.ts';
 export type {
   BeatorajaPmCharaElement,
   BeatorajaPmCharaSide,

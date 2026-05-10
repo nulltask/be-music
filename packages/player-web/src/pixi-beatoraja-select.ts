@@ -36,6 +36,7 @@ import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from
 import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
+  BEATORAJA_SONGLIST_BAR_COUNT,
   BEATORAJA_TEXT,
   buildBaseOpSet,
   parseBeatorajaSongList,
@@ -366,8 +367,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * paint on top.
    */
   private readonly rowBarSprites: (Sprite | undefined)[] = [];
-  /** Per-row label texts. */
-  private readonly rowLabels: Text[] = [];
+  /**
+   * Per-row label texts. `undefined` slot when the upstream-fixed 60-slot grid (audit A-9
+   * — `BEATORAJA_SONGLIST_BAR_COUNT`) extends past the skin's authored `liston[]` count;
+   * those slots stay non-allocated since upstream's `barimageon[i]` is null there too.
+   */
+  private readonly rowLabels: (Text | undefined)[] = [];
   /**
    * Per-row chart-level digit overlay (Pixi `Text` fallback). Used ONLY when the skin's
    * `songlist.level[].id` doesn't resolve to a `value[]` declaration — e.g. legacy skins
@@ -408,8 +413,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * mount time, only visibility / position toggles.
    */
   private readonly rowFeatureLabels: Sprite[][] = [];
-  /** Per-row click hit area. Sized to the row's authored rect on layout. */
-  private readonly rowHitAreas: Sprite[] = [];
+  /**
+   * Per-row click hit area. `undefined` for unauthored slots beyond `liston.length`
+   * (audit A-9) — no rect to size against and nothing visible to click.
+   */
+  private readonly rowHitAreas: (Sprite | undefined)[] = [];
   /**
    * Skin-authored `songlist` layout (rect-per-row + focused row index). Parsed from
    * `skin.songlist` at construction. `undefined` when the skin omits the block — the layout
@@ -1537,18 +1545,30 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   /**
    * Recompute `visibleRowCount` + `centreRowIndex` from the parsed `songlist`. When the skin
-   * doesn't author one we fall back to the legacy 13-row hardcoded grid.
+   * doesn't author one we fall back to the legacy hardcoded grid.
+   *
+   * Audit A-9 — when a skin authors `songlist`, iterate the upstream-fixed 60-slot grid
+   * (`BEATORAJA_SONGLIST_BAR_COUNT`, mirroring `BarRenderer.barlength`) instead of clamping
+   * to the authored `liston.length`. Slots beyond `rows.length` stay unauthored (no rect,
+   * no allocated visuals) — the renderer paints nothing there, matching upstream's
+   * `barimageon[i] = null` for those indices. Visible behavior is identical for typical
+   * skins (`liston.length = 21`, `centerBar = 10`) since the entry-to-slot mapping
+   * `entry = cursor + (i - centerBar)` plus the centred per-row visibility gating already
+   * skipped those slots; the change matters only when the skin authors `centerBar` ≥
+   * `liston.length` (where upstream legitimately renders the focused song to a null slot).
    *
    * Called on construction and `replaceSkin` — the songlist parse depends on the skin
    * payload, so it has to re-run when the skin payload changes.
    */
   private applySongListGeometry(): void {
     if (this.songList !== undefined) {
-      this.visibleRowCount = this.songList.rows.length;
+      this.visibleRowCount = BEATORAJA_SONGLIST_BAR_COUNT;
       this.centreRowIndex = this.songList.focusedRowIndex;
       // Detect a per-row id variance (e.g. `list_on` for the focused row vs `list` for
       // the rest). When true, the bar-texture swap is the skin-authored cursor highlight,
-      // and stacking our warm-yellow label tint on top would over-paint the cue.
+      // and stacking our warm-yellow label tint on top would over-paint the cue. Reads
+      // from authored rows only — unauthored slots (i ≥ rows.length) don't affect the
+      // variant detection since they have no id at all.
       const focusId = this.songList.rows[this.centreRowIndex]?.id;
       const hasVariant =
         focusId !== undefined && this.songList.rows.some((r, idx) => idx !== this.centreRowIndex && r.id !== focusId);
@@ -1564,17 +1584,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * Get the per-row rect for visible-row index `i` in skin-space (top-left origin Y-DOWN).
    * Reads directly from `songList.rows[i]` (Y-flipped from libGDX Y-UP) when available;
    * otherwise synthesises a fallback grid on the right half of the canvas.
+   *
+   * Audit A-9 — returns `undefined` when the skin authored a `songlist` but `i` is past
+   * the authored `liston.length` (e.g. `i = 25` with `liston.length = 21`). The renderer
+   * iterates the full 60-slot upstream grid; unauthored slots have no rect and skip
+   * drawing. Skins that omit `songlist` entirely take the synthesised fallback grid path
+   * for every `i` so the legacy behavior keeps working.
    */
-  private rowRectAt(i: number): { x: number; y: number; w: number; h: number } {
+  private rowRectAt(i: number): { x: number; y: number; w: number; h: number } | undefined {
     const skinH = this.view.height;
     if (this.songList !== undefined) {
       const r = this.songList.rows[i];
-      if (r !== undefined) {
-        return { x: r.x, y: skinH - r.y - r.h, w: r.w, h: r.h };
-      }
+      if (r === undefined) return undefined;
+      return { x: r.x, y: skinH - r.y - r.h, w: r.w, h: r.h };
     }
     // Fallback: right half, evenly spaced. Keeps unsupported skins (no songlist block)
-    // usable.
+    // usable. Always returns a rect — the fallback grid is uniform across the full
+    // visible-row count.
     const skinW = this.view.width;
     const fallbackRowH = 56 * (skinH / 720);
     const focusedRowCentreY = skinH * 0.42;
@@ -1584,13 +1610,48 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     return { x: cx - w / 2, y: yCentre - fallbackRowH / 2, w, h: fallbackRowH };
   }
 
+  /**
+   * Pick an authored row rect for sample queries (label sizing, avg row step) that need
+   * SOME valid rect even when `centreRowIndex` lands on an unauthored slot (the upstream
+   * `centerBar ≥ liston.length` edge case). Returns the rect at index `0` of the authored
+   * rows, Y-flipped to skin-space — that's guaranteed to exist whenever `songList` is
+   * defined (parser drops empty `liston[]` arrays as "no songlist").
+   *
+   * Returns `undefined` only when no songlist was authored — call sites then take the
+   * synthesised-fallback grid path via {@link rowRectAt} on `centreRowIndex` (always
+   * defined under fallback).
+   */
+  private firstAuthoredRowRect(): { x: number; y: number; w: number; h: number } | undefined {
+    const rows = this.songList?.rows;
+    if (rows === undefined || rows.length === 0) return undefined;
+    const r = rows[0]!;
+    const skinH = this.view.height;
+    return { x: r.x, y: skinH - r.y - r.h, w: r.w, h: r.h };
+  }
+
+  /**
+   * Sample row rect for label-size / avg-step heuristics. Prefers `centreRowIndex`
+   * (matches the previous behavior for skins where centerBar < liston.length, which is
+   * every real skin in the wild) but falls back to the first authored row when centerBar
+   * lands on an unauthored slot — needed since {@link rowRectAt} now returns `undefined`
+   * for those.
+   */
+  private sampleRowRect(): { x: number; y: number; w: number; h: number } {
+    const atCentre = this.rowRectAt(this.centreRowIndex);
+    if (atCentre !== undefined) return atCentre;
+    const firstAuthored = this.firstAuthoredRowRect();
+    if (firstAuthored !== undefined) return firstAuthored;
+    // No songlist authored at all — fallback grid always returns a rect at index 0.
+    return this.rowRectAt(0)!;
+  }
+
   private buildRowVisuals(fonts: BeatorajaFontCache | undefined): void {
     const skinFamily = fonts?.values()[0]?.family;
     const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
     // Tear down old visuals when rebuilding (e.g. on `replaceSkin` against a skin whose
     // songlist length differs from the previous one). Pixi children stay attached to
     // listLayer; clearing the arrays lets the new loop allocate the right count.
-    for (const t of this.rowLabels) t.destroy();
+    for (const t of this.rowLabels) t?.destroy();
     for (const t of this.rowLevelLabels) t?.destroy();
     for (const sprites of this.rowLevelDigitSprites) {
       if (sprites === undefined) continue;
@@ -1599,7 +1660,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     for (const row of this.rowFeatureLabels) {
       for (const sprite of row) sprite.destroy({ children: false, texture: false, textureSource: false });
     }
-    for (const s of this.rowHitAreas) s.destroy();
+    for (const s of this.rowHitAreas) s?.destroy();
     for (const s of this.rowBarSprites) s?.destroy({ children: false, texture: false, textureSource: false });
     this.rowLabels.length = 0;
     this.rowLevelLabels.length = 0;
@@ -1628,12 +1689,29 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     //  - Skin omitted the block — fall back to a row-height proportional size so
     //    unsupported skins still get readable text. `0.45` mirrors what the bundled
     //    fixtures of older skins were authoring before we adopted the spec-faithful path.
-    const sampleRect = this.rowRectAt(this.centreRowIndex);
+    const sampleRect = this.sampleRowRect();
     const songListText = this.songList?.text ?? [];
     const proportionalLabelSize = Math.max(12, Math.floor(sampleRect.h * 0.45));
     const labelSize =
       songListText[0] !== undefined ? Math.max(8, Math.floor(songListText[0].rect.h)) : proportionalLabelSize;
     for (let i = 0; i < this.visibleRowCount; i += 1) {
+      // Audit A-9 — when iterating the upstream-fixed 60-slot grid, slots beyond the
+      // skin's authored `liston[]` array stay un-allocated. Push `undefined` placeholders
+      // so the array indices keep aligning with slot indices (every consumer indexes by
+      // `i ∈ [0, visibleRowCount)` so the alignment matters), and the render loops below
+      // skip these slots via the `=== undefined` checks. Mirrors upstream's
+      // `barimageon[i] = null` / `barimageoff[i] = null` for indices past `liston.length`.
+      if (this.songList !== undefined && this.songList.rows[i] === undefined) {
+        this.rowBarSprites.push(undefined);
+        this.rowHitAreas.push(undefined);
+        this.rowLabels.push(undefined);
+        if (this.songList.level !== undefined) {
+          this.rowLevelDigitSprites.push(undefined);
+          this.rowLevelLabels.push(undefined);
+        }
+        this.rowFeatureLabels.push([]);
+        continue;
+      }
       // Per-row bar background. Mounted FIRST so it sits behind hit area / icon / labels.
       // Skins that author the focused row with a different `liston[i].id` (e.g. `list_on`
       // for the cursor row, `list` for the rest) get their cursor highlight via the
@@ -1796,9 +1874,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       const rawEntryIndex = Math.round(centreEntry) + (i - this.centreRowIndex);
       const wrappedIndex = total > 0 ? ((rawEntryIndex % total) + total) % total : -1;
       const entry = total > 0 ? this.entries[wrappedIndex] : undefined;
-      const label = this.rowLabels[i]!;
-      const hit = this.rowHitAreas[i]!;
+      const label = this.rowLabels[i];
+      const hit = this.rowHitAreas[i];
       const bar = this.rowBarSprites[i];
+      // Audit A-9 — slot is unauthored in this skin's `liston[]` (i ≥ rows.length).
+      // No visuals were allocated; nothing to do this frame.
+      if (label === undefined || hit === undefined) continue;
       if (entry === undefined) {
         label.visible = false;
         hit.visible = false;
@@ -1889,9 +1970,13 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
     // Average row height (skin-space) to scale the fractional scroll. For straight layouts
     // this is the per-row vertical step; for arched layouts it's a reasonable approximation
-    // of the typical step magnitude.
-    const aboveCentre = this.rowRectAt(Math.max(0, this.centreRowIndex - 1));
-    const atCentre = this.rowRectAt(this.centreRowIndex);
+    // of the typical step magnitude. Audit A-9 — `centreRowIndex` may now point at an
+    // unauthored slot (`centerBar ≥ liston.length` edge case), so use `sampleRowRect()`
+    // (falls back to the first authored row) for `atCentre`. `aboveCentre` falls back to
+    // the same sample when the slot above is also unauthored — degenerate layouts (single
+    // authored row) collapse `avgRowStep` to `atCentre.h`, matching the pre-A-9 fallback.
+    const atCentre = this.sampleRowRect();
+    const aboveCentre = this.rowRectAt(Math.max(0, this.centreRowIndex - 1)) ?? atCentre;
     const avgRowStep = Math.abs(aboveCentre.y - atCentre.y) || atCentre.h;
     const fractional = this.scrollPosition - Math.round(this.scrollPosition);
     const fractionalNudge = -fractional * avgRowStep;
@@ -1899,10 +1984,15 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const total = this.entries.length;
     const centreEntry = this.scrollPosition;
     for (let i = 0; i < this.visibleRowCount; i += 1) {
-      const hit = this.rowHitAreas[i]!;
-      const label = this.rowLabels[i]!;
+      const hit = this.rowHitAreas[i];
+      const label = this.rowLabels[i];
+      // Audit A-9 — skip unauthored 60-slot grid positions (visuals weren't allocated).
+      if (hit === undefined || label === undefined) continue;
       if (!label.visible) continue;
       const rect = this.rowRectAt(i);
+      // Defensive: rowRectAt returns undefined for unauthored slots, but the label/hit
+      // checks above already gate that path. Keep the guard so type inference stays happy.
+      if (rect === undefined) continue;
       const rowCentreY = rect.y + rect.h / 2 + fractionalNudge;
       // Resolve the entry for THIS row — needed for per-row feature-label predicates. The
       // wrap math mirrors `refreshRowVisuals`'s; both functions iterate the same visible

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBeatorajaSongList } from './beatoraja-skin-songlist.ts';
+import { BEATORAJA_SONGLIST_BAR_COUNT, parseBeatorajaSongList } from './beatoraja-skin-songlist.ts';
 import type { BeatorajaSkin } from './beatoraja-skin-types.ts';
 
 function makeSkin(overrides: Partial<BeatorajaSkin> & { songlist?: unknown } = {}): BeatorajaSkin {
@@ -349,5 +349,69 @@ describe('parseBeatorajaSongList', () => {
       { id: 'label-random', rect: { x: -40, y: 5, w: 16, h: 30 } },
       { id: 'label-mine', rect: { x: -60, y: 5, w: 16, h: 30 } },
     ]);
+  });
+
+  // Audit A-9 — upstream `BarRenderer.barlength = 60` / `SkinBar.BAR_COUNT = 60`. The
+  // constant + the widened `center` acceptance range let renderers iterate the full
+  // 60-slot grid (treating `liston[i]` for `i ≥ liston.length` as unauthored / null).
+  describe('60-bar fixed slot grid (audit A-9)', () => {
+    it('exports `BEATORAJA_SONGLIST_BAR_COUNT = 60` matching upstream BarRenderer', () => {
+      // Upstream `beatoraja/src/bms/player/beatoraja/select/bar/BarRenderer.java:52`:
+      //   `private final int barlength = 60;`
+      // and `bms/player/beatoraja/skin/SkinBar.java`:
+      //   `public static final int BAR_COUNT = 60;`
+      // Pinning the value catches accidental drifts if upstream ever changes the constant.
+      expect(BEATORAJA_SONGLIST_BAR_COUNT).toBe(60);
+    });
+
+    it('accepts `songlist.center` values up to 59 even when `liston.length` is smaller', () => {
+      // Upstream `JsonSelectSkinObjectLoader.java:79` calls `setCenterBar(sk.songlist.center)`
+      // verbatim, and `BarRenderer.java:124` loops `i ∈ [0, 60)` testing `i == centerBar`.
+      // A skin authoring `center: 25` with only 21 authored rows is legal — the focused
+      // slot just renders nothing in upstream (`barimageon[25] == null`). Our parser must
+      // round-trip the value rather than clamp it to `liston.length - 1`.
+      const skin = makeSkin({
+        songlist: {
+          center: 25,
+          liston: Array.from({ length: 21 }, (_, i) => ({
+            id: 'bar',
+            dst: [{ x: 800, y: 720 - i * 36, w: 500, h: 36 }],
+          })),
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      expect(parseBeatorajaSongList(skin)?.focusedRowIndex).toBe(25);
+    });
+
+    it('rejects `songlist.center` values ≥ 60 (upstream BarRenderer iterates `[0, 60)`)', () => {
+      // 60 / 100 / negatives etc. fall through to the geometric heuristic. Mirrors upstream's
+      // implicit bound — `barlength = 60` is the loop length, and feeding `centerBar = 60`
+      // would mean "no slot is the cursor" in the upstream comparison.
+      const skin = makeSkin({
+        songlist: {
+          center: 60,
+          liston: [
+            { id: 'bar', dst: [{ x: 0, y: 600, w: 500, h: 36 }] },
+            { id: 'bar', dst: [{ x: 0, y: 360, w: 500, h: 36 }] }, // geometric pick
+            { id: 'bar', dst: [{ x: 0, y: 120, w: 500, h: 36 }] },
+          ],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      // Geometric fallback resolves to row 1 (closest to canvas vertical centre).
+      expect(parseBeatorajaSongList(skin)?.focusedRowIndex).toBe(1);
+    });
+
+    it('rejects negative `songlist.center` and falls back to the geometric heuristic', () => {
+      const skin = makeSkin({
+        songlist: {
+          center: -1,
+          liston: [
+            { id: 'bar', dst: [{ x: 0, y: 600, w: 500, h: 36 }] },
+            { id: 'bar', dst: [{ x: 0, y: 360, w: 500, h: 36 }] },
+            { id: 'bar', dst: [{ x: 0, y: 120, w: 500, h: 36 }] },
+          ],
+        },
+      } as unknown as Partial<BeatorajaSkin>);
+      expect(parseBeatorajaSongList(skin)?.focusedRowIndex).toBe(1);
+    });
   });
 });
