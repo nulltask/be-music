@@ -44,9 +44,9 @@ export interface LoadBeatorajaThemeOptions {
 }
 
 /**
- * Read the dropped theme files into memory and discover every skin entry inside. Returns the file map alongside the
- * discovered theme so the caller can hand both to {@link loadBeatorajaPlaySkinFromBundle} when the user picks a
- * scene.
+ * Read the dropped theme files into memory and discover every skin entry inside. Returns the
+ * file map alongside the discovered theme so the caller can pass both to `loadBeatorajaSkin`
+ * (from `@be-music/beatoraja-skin`) once the user picks a scene + variant.
  */
 export async function loadBeatorajaThemeFromFiles(
   files: ReadonlyArray<BeatorajaSkinInputFile>,
@@ -60,55 +60,6 @@ export async function loadBeatorajaThemeFromFiles(
   });
   const { theme, warnings } = discoverBeatorajaTheme(fileMap);
   return { files: fileMap, theme, warnings };
-}
-
-/**
- * Load the play skin for `desired` (or a fallback variant), evaluating the entry script against `skinConfig`.
- * Returns `undefined` when the bundle has no play skin for any variant.
- */
-export function loadBeatorajaPlaySkinFromBundle(
-  bundle: BeatorajaThemeBundle,
-  desired: BeatorajaPlayVariant,
-  skinConfig?: BeatorajaSkinConfig,
-): { entry: BeatorajaSkinEntry; result: ReturnType<typeof loadBeatorajaSkin> } | undefined {
-  const entry = pickBeatorajaPlaySkin(bundle.theme.playSkins, desired);
-  if (entry === undefined) return undefined;
-  const result = loadBeatorajaSkin({ entryPath: entry.entryPath, files: bundle.files, skinConfig });
-  return { entry, result };
-}
-
-/**
- * Load the select skin from the bundle. Mirrors {@link loadBeatorajaPlaySkinFromBundle} for the song-select scene.
- */
-export function loadBeatorajaSelectSkinFromBundle(
-  bundle: BeatorajaThemeBundle,
-  skinConfig?: BeatorajaSkinConfig,
-): { entry: BeatorajaSkinEntry; result: ReturnType<typeof loadBeatorajaSkin> } | undefined {
-  return loadSceneSkin(bundle, bundle.theme.selectSkin, skinConfig);
-}
-
-export function loadBeatorajaDecideSkinFromBundle(
-  bundle: BeatorajaThemeBundle,
-  skinConfig?: BeatorajaSkinConfig,
-): { entry: BeatorajaSkinEntry; result: ReturnType<typeof loadBeatorajaSkin> } | undefined {
-  return loadSceneSkin(bundle, bundle.theme.decideSkin, skinConfig);
-}
-
-export function loadBeatorajaResultSkinFromBundle(
-  bundle: BeatorajaThemeBundle,
-  skinConfig?: BeatorajaSkinConfig,
-): { entry: BeatorajaSkinEntry; result: ReturnType<typeof loadBeatorajaSkin> } | undefined {
-  return loadSceneSkin(bundle, bundle.theme.resultSkin, skinConfig);
-}
-
-function loadSceneSkin(
-  bundle: BeatorajaThemeBundle,
-  entry: BeatorajaSkinEntry | undefined,
-  skinConfig?: BeatorajaSkinConfig,
-): { entry: BeatorajaSkinEntry; result: ReturnType<typeof loadBeatorajaSkin> } | undefined {
-  if (entry === undefined) return undefined;
-  const result = loadBeatorajaSkin({ entryPath: entry.entryPath, files: bundle.files, skinConfig });
-  return { entry, result };
 }
 
 /**
@@ -129,13 +80,7 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
  * If the dropped theme only ships a 24-key skin, the host should fall back to the LR2 theme for gameplay. This
  * matches how `pickLr2PlaySkin` chains through fallbacks for missing variants.
  */
-export const BEATORAJA_PLAYABLE_VARIANTS = [
-  '7',
-  '5',
-  '9',
-  '10',
-  '14',
-] as const satisfies ReadonlyArray<BeatorajaPlayVariant>;
+const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14'] as const satisfies ReadonlyArray<BeatorajaPlayVariant>;
 export type BeatorajaPlayableVariant = (typeof BEATORAJA_PLAYABLE_VARIANTS)[number];
 
 /**

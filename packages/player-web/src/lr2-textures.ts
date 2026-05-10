@@ -133,7 +133,7 @@ export async function loadVideoTextureFromBytes(
  * `'VideoEncoder' in globalThis` is the canonical feature detection; it avoids tripping a `ReferenceError` on older
  * browsers (Safari < 17, older Firefox) that don't define the symbol at all.
  */
-export function isWebCodecsEncodeSupported(): boolean {
+function isWebCodecsEncodeSupported(): boolean {
   return typeof globalThis !== 'undefined' && 'VideoEncoder' in globalThis;
 }
 

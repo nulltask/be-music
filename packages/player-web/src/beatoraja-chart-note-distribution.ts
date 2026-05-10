@@ -33,7 +33,7 @@ export const NOTE_DISTRIBUTION_CATEGORIES = {
   MINE: 6,
 } as const;
 
-export const NOTE_DISTRIBUTION_CATEGORY_COUNT = 7;
+const NOTE_DISTRIBUTION_CATEGORY_COUNT = 7;
 
 /**
  * RGB tints (hex) for each category, matching upstream beatoraja's `JGRAPH[0]` palette.

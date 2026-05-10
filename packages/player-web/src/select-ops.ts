@@ -4,9 +4,6 @@ import { resolveSongSource } from './library.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from './types.ts';
 import type { PixiGaugeType, PixiPlayOptions } from './pixi-select.ts';
 
-/** Empty panel-state constant — saves a fresh allocation per op computation when no panel is open. */
-export const EMPTY_SELECT_PANEL_STATES: ReadonlySet<number> = new Set<number>();
-
 /**
  * Globally-true ops that hold regardless of which song is focused: filter / mode toggles, gauge defaults, "no rival"
  * fallbacks, etc.

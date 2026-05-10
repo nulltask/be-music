@@ -106,7 +106,7 @@ function resolveCenterAnchor(center: number): { x: number; y: number } {
  * Maps the LR2 `blend` field (0..11) onto PixiJS v8 blend mode names. Pixi has no native subtractive blend, so blend=3
  * falls back to normal.
  */
-export function mapLr2BlendMode(blend: number): BLEND_MODES {
+function mapLr2BlendMode(blend: number): BLEND_MODES {
   switch (blend) {
     case 2:
       return 'add';

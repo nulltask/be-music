@@ -181,7 +181,7 @@ export function collectDecideSkinTexturePaths(skin: Lr2Skin): Set<string> {
   return paths;
 }
 
-export function resolveSpecialGraphicAssetPath(song: BrowserSongEntry, path: Lr2SpecialGraphic): string | undefined {
+function resolveSpecialGraphicAssetPath(song: BrowserSongEntry, path: Lr2SpecialGraphic): string | undefined {
   const meta = song.chart.metadata;
   return path === LR2_SPECIAL_GRAPHIC.BACKBMP
     ? meta.backBmp

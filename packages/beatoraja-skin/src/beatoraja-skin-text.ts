@@ -130,7 +130,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTextElement | undefine
  * missing / malformed. Used by both the runtime parser (for `text[]` outline / shadow) and
  * future bpmgraph / gaugegraph color fields.
  */
-export function parseBeatorajaTextRgba(value: unknown, fallbackRgb: number, fallbackAlpha: number): BeatorajaTextRgba {
+function parseBeatorajaTextRgba(value: unknown, fallbackRgb: number, fallbackAlpha: number): BeatorajaTextRgba {
   if (typeof value !== 'string') return { rgb: fallbackRgb, alpha: fallbackAlpha };
   const trimmed = value.startsWith('#') ? value.slice(1) : value;
   if (trimmed.length === 8) {

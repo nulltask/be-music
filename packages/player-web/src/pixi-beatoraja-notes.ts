@@ -29,7 +29,7 @@ import { createCroppedBeatorajaTexture, flipRectToPixi } from './beatoraja-rende
 import type { BeatorajaTextureCache } from './beatoraja-textures.ts';
 
 /** Pixels per chart-beat at hispeed = 1.0. Mirrors the LR2 path's constant so the two layers scroll consistently. */
-export const BEATORAJA_PIXELS_PER_BEAT = 72;
+const BEATORAJA_PIXELS_PER_BEAT = 72;
 
 /** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
 const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
