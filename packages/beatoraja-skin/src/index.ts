@@ -101,6 +101,7 @@ export type {
 } from './beatoraja-skin-destination.ts';
 export type { BeatorajaSkinOffsetValue } from './beatoraja-skin-destination.ts';
 export {
+  applyBeatorajaOffsetAlpha,
   centerToAnchor,
   combineBeatorajaOffsets,
   normalizeBeatorajaDestinations,

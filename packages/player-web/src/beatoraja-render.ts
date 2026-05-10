@@ -22,6 +22,7 @@
 import 'pixi.js/advanced-blend-modes';
 import { Rectangle, Texture } from 'pixi.js';
 import {
+  applyBeatorajaOffsetAlpha,
   combineBeatorajaOffsets,
   evaluateBeatorajaLuaBoolean,
   evaluateBeatorajaLuaNumber,
@@ -211,18 +212,22 @@ export function destinationToSpriteProps(
     combinedOffsetIds !== undefined && context.resolveOffset !== undefined
       ? combineBeatorajaOffsets(combinedOffsetIds, context.resolveOffset)
       : ZERO_BEATORAJA_OFFSET;
-  // Additive alpha math — mirrors `SkinObject.prepareColor`:
+  // Per-step alpha math — mirrors `SkinObject.prepareColor` (`SkinObject.java:391-401, 424-430`):
   //
-  //     float a = color.a + (off.a / 255.0f);
-  //     a = a > 1 ? 1 : (a < 0 ? 0 : a);
+  //     for (off in offsets) {
+  //         color.a += off.a / 255;
+  //         color.a = clamp(color.a, 0, 1);
+  //     }
   //
-  // The previous impl multiplied `(keyframe.a / 255)` by `(offset.a / 255)` with a default
-  // offset.a of 255 (= no scaling). That was equivalent to upstream only at the default;
-  // skins authoring non-zero offset.a saw multiplication where upstream applied addition,
-  // which collapsed elements to near-invisible when authors meant to brighten them by a
-  // delta. Default offset.a is now 0 (Java's float field init) so the additive default is
-  // a no-op for the common case.
-  const alpha = clampUnit(keyframe.a / 255 + offset.a / 255);
+  // The clamp runs AFTER each offset, so saturating intermediate steps "burn off" the excess
+  // before the next delta is applied. A plain sum-then-clamp is observably equivalent only
+  // when no intermediate accumulation crosses [0, 1] — most skins author a single offset and
+  // satisfy that condition, but skins chaining brightness + flicker offsets need the per-step
+  // semantics to render correctly. See `applyBeatorajaOffsetAlpha` for the full derivation.
+  const alpha =
+    combinedOffsetIds !== undefined && context.resolveOffset !== undefined
+      ? applyBeatorajaOffsetAlpha(keyframe.a / 255, combinedOffsetIds, context.resolveOffset)
+      : clampUnit(keyframe.a / 255);
   if (alpha <= 0) return HIDDEN_PROPS;
 
   // Y-flip from beatoraja's libGDX Y-UP coordinates (origin at canvas bottom-left, with `(x, y)`

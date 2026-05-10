@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  applyBeatorajaOffsetAlpha,
   centerToAnchor,
   normalizeBeatorajaDestinations,
   sampleBeatorajaDestination,
+  type BeatorajaSkinOffsetValue,
 } from './beatoraja-skin-destination.ts';
 
 describe('normalizeBeatorajaDestinations', () => {
@@ -413,6 +415,80 @@ describe('sampleBeatorajaDestination', () => {
       ])[0];
       expect(sampleBeatorajaDestination(linear, 500)?.x).toBeCloseTo(50, 6);
     });
+  });
+});
+
+describe('applyBeatorajaOffsetAlpha (audit A-10 — per-step clamp matches SkinObject.prepareColor)', () => {
+  // Mirrors `SkinObject.java:391-401, 424-430`:
+  //
+  //   for (SkinOffset off : this.off) {
+  //       float a = color.a + (off.a / 255.0f);
+  //       a = a > 1 ? 1 : (a < 0 ? 0 : a);
+  //       color.a = a;
+  //   }
+  //
+  // Each offset is applied AND clamped before the next runs. The previous impl summed all
+  // offsets first then clamped at the end — observable difference only when intermediate
+  // accumulation crossed [0, 1].
+  function makeResolver(offsets: ReadonlyMap<number, BeatorajaSkinOffsetValue>) {
+    return (id: number) => offsets.get(id);
+  }
+
+  it('returns base alpha unchanged when no offset ids resolve', () => {
+    expect(applyBeatorajaOffsetAlpha(0.5, [], () => undefined)).toBeCloseTo(0.5, 6);
+    expect(applyBeatorajaOffsetAlpha(0.5, [99], () => undefined)).toBeCloseTo(0.5, 6);
+  });
+
+  it('clamps the base alpha into [0, 1] before applying offsets', () => {
+    expect(applyBeatorajaOffsetAlpha(2.0, [], () => undefined)).toBe(1);
+    expect(applyBeatorajaOffsetAlpha(-0.5, [], () => undefined)).toBe(0);
+  });
+
+  it('applies a single positive offset additively', () => {
+    // base 0.5 + (off.a = 64 → +0.251) = 0.751.
+    const offsets = new Map([[1, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 64 }]]);
+    expect(applyBeatorajaOffsetAlpha(0.5, [1], makeResolver(offsets))).toBeCloseTo(0.751, 3);
+  });
+
+  it('clamps each step independently — saturation in step N does not survive to step N+1', () => {
+    // Step trace for base 0.5 + offsets `[+200, -100, +50]` (raw a values):
+    //   +200/255 → 0.5 + 0.7843 = 1.2843 → clamp 1.0
+    //   -100/255 → 1.0 - 0.3922 = 0.6078
+    //   +50/255  → 0.6078 + 0.1961 = 0.8039
+    // Sum-then-clamp would give 0.5 + (0.7843 - 0.3922 + 0.1961) = 1.0882 → clamp 1.0 (wrong).
+    const offsets = new Map<number, BeatorajaSkinOffsetValue>([
+      [1, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 200 }],
+      [2, { x: 0, y: 0, w: 0, h: 0, r: 0, a: -100 }],
+      [3, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 50 }],
+    ]);
+    const out = applyBeatorajaOffsetAlpha(0.5, [1, 2, 3], makeResolver(offsets));
+    // 1.0 - 100/255 + 50/255 = 1.0 - 50/255 ≈ 0.8039.
+    expect(out).toBeCloseTo(1 - 50 / 255, 6);
+    expect(out).toBeLessThan(1.0); // strictly less than the sum-then-clamp upper bound.
+  });
+
+  it('honors authored offset order — swapping ids changes the saturation point', () => {
+    // [+200, -100] vs [-100, +200] both sum to +100 but per-step yields different finals.
+    const offsets = new Map<number, BeatorajaSkinOffsetValue>([
+      [1, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 200 }],
+      [2, { x: 0, y: 0, w: 0, h: 0, r: 0, a: -100 }],
+    ]);
+    // [1, 2]: 0.5 + 200/255 = 1.2843 → clamp 1.0; - 100/255 = 1.0 - 100/255 ≈ 0.6078.
+    expect(applyBeatorajaOffsetAlpha(0.5, [1, 2], makeResolver(offsets))).toBeCloseTo(1 - 100 / 255, 6);
+    // [2, 1]: 0.5 - 100/255 ≈ 0.1078; + 200/255 ≈ 0.8922.
+    expect(applyBeatorajaOffsetAlpha(0.5, [2, 1], makeResolver(offsets))).toBeCloseTo(0.5 + 100 / 255, 6);
+  });
+
+  it('clamps to 0 when intermediate steps go negative', () => {
+    // base 0.2 + (-200/255 → -0.5843 → clamp 0) + (+50/255 → 0.1961). Final ≈ 0.1961.
+    // Sum-then-clamp would give 0.2 - 200/255 + 50/255 = -0.3882 → clamp 0 (different).
+    const offsets = new Map<number, BeatorajaSkinOffsetValue>([
+      [1, { x: 0, y: 0, w: 0, h: 0, r: 0, a: -200 }],
+      [2, { x: 0, y: 0, w: 0, h: 0, r: 0, a: 50 }],
+    ]);
+    const out = applyBeatorajaOffsetAlpha(0.2, [1, 2], makeResolver(offsets));
+    expect(out).toBeCloseTo(50 / 255, 6);
+    expect(out).toBeGreaterThan(0);
   });
 });
 

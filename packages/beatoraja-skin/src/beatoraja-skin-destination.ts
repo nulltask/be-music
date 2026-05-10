@@ -365,6 +365,14 @@ export const ZERO_BEATORAJA_OFFSET: Readonly<BeatorajaSkinOffsetValue> = Object.
  * applies this on top of the keyframe-sampled position. `resolve` looks up each id's current
  * value via the host (typically `state.getOffsetValue(id)` on the Java side); returning
  * `undefined` for an unknown id treats it as `ZERO_BEATORAJA_OFFSET` (no shift).
+ *
+ * The `x / y / w / h / r` axes are pure addition with no per-step clamp — accumulation
+ * order doesn't matter. **The returned `a` is a RAW SUM and is NOT upstream-faithful for
+ * rendering; use {@link applyBeatorajaOffsetAlpha} for the alpha output.** Upstream's
+ * `SkinObject.prepareColor()` (`SkinObject.java:391-401, 424-430`) clamps after EACH offset
+ * application, which differs from a single final clamp whenever any intermediate step
+ * saturates. The `.a` field is kept on the return type for back-compat but should not be
+ * fed into Pixi alpha directly.
  */
 export function combineBeatorajaOffsets(
   ids: ReadonlyArray<number>,
@@ -376,13 +384,7 @@ export function combineBeatorajaOffsets(
   let w = 0;
   let h = 0;
   let r = 0;
-  // Alpha sums additively, mirroring beatoraja's `prepareColor` per-offset loop:
-  //   for each off: color.a += off.a / 255; clamp;
-  // The per-step clamp is collapsed into a final clamp at the call site (the sum stays in
-  // signed `[-N*255, +N*255]` until it's added to `keyframe.a/255` and clamped to `[0, 1]`).
-  // Ordering doesn't matter for plain addition, only for clamps; the spec doesn't surface
-  // intermediate clamping so the collapsed form is observably equivalent.
-  let aSum = 0;
+  let aSum = 0; // raw sum — see `applyBeatorajaOffsetAlpha` for the upstream-faithful clamp.
   for (const id of ids) {
     const v = resolve(id);
     if (v === undefined) continue;
@@ -394,6 +396,50 @@ export function combineBeatorajaOffsets(
     aSum += v.a;
   }
   return { x, y, w, h, r, a: aSum };
+}
+
+/**
+ * Apply each offset's `a` delta to a base alpha in sequence, clamping after every step.
+ * Returns the final alpha in `[0, 1]`.
+ *
+ * Mirrors upstream `SkinObject.prepareColor()` (`SkinObject.java:391-401, 424-430`):
+ *
+ *     for (SkinOffset off : this.off) {
+ *         float a = color.a + (off.a / 255.0f);
+ *         a = a > 1 ? 1 : (a < 0 ? 0 : a);
+ *         color.a = a;
+ *     }
+ *
+ * Per-step clamping differs from a single final clamp whenever any intermediate accumulation
+ * saturates. Concrete example: base 0.5 + offsets `[+200, -100, +50]`:
+ *
+ *   - Per-step (upstream): 0.5 + 0.78 = 1.28 → clamp 1.0; -0.39 → 0.61; +0.20 → 0.81. **Final: 0.81**
+ *   - Sum-then-clamp:      0.5 + (0.78 - 0.39 + 0.20) = 1.09 → clamp 1.0. **Final: 1.0** (wrong)
+ *
+ * Most skins author 0–1 offsets per destination so the two paths agree. Skins that chain
+ * multiple alpha-modifying offsets (e.g. brightness + flicker overlays) only render correctly
+ * with per-step semantics.
+ *
+ * @param baseAlpha The destination keyframe's color.a in `[0, 1]` (= `keyframe.a / 255`).
+ * @param ids Resolved offset ids in authored order. Order matters once any step saturates.
+ * @param resolve Host lookup (returns `undefined` for ids the host doesn't know).
+ */
+export function applyBeatorajaOffsetAlpha(
+  baseAlpha: number,
+  ids: ReadonlyArray<number>,
+  resolve: (offsetId: number) => Readonly<BeatorajaSkinOffsetValue> | undefined,
+): number {
+  let a = baseAlpha;
+  if (a > 1) a = 1;
+  else if (a < 0) a = 0;
+  for (const id of ids) {
+    const v = resolve(id);
+    if (v === undefined) continue;
+    a += v.a / 255;
+    if (a > 1) a = 1;
+    else if (a < 0) a = 0;
+  }
+  return a;
 }
 
 /**
