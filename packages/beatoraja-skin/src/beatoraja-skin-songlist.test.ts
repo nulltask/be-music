@@ -75,7 +75,26 @@ describe('parseBeatorajaSongList', () => {
     expect(layout?.rows[0]?.id).toBeUndefined();
   });
 
-  it('picks the row whose Pixi-y centre is closest to canvas vertical centre as focused', () => {
+  it('honors `songlist.center` verbatim when authored (audit A-8)', () => {
+    // Mirrors `JsonSelectSkinObjectLoader.java:79` — `setCenterBar(sk.songlist.center)`.
+    // The author's intent for which row should look "focused" wins over the geometric
+    // heuristic that's used as the fallback. Test setup: 3 rows with the geometric centre
+    // landing on row 1 (closest to canvas-vertical-centre), but author says `center: 2`.
+    // The parser must return 2.
+    const skin = makeSkin({
+      songlist: {
+        center: 2,
+        liston: [
+          { id: 'bar', dst: [{ x: 0, y: 600, w: 500, h: 36 }] },
+          { id: 'bar', dst: [{ x: 0, y: 360, w: 500, h: 36 }] }, // closest to centre by geometry
+          { id: 'bar', dst: [{ x: 0, y: 120, w: 500, h: 36 }] },
+        ],
+      },
+    } as unknown as Partial<BeatorajaSkin>);
+    expect(parseBeatorajaSongList(skin)?.focusedRowIndex).toBe(2);
+  });
+
+  it('falls back to the geometric heuristic when `songlist.center` is omitted', () => {
     // 720-tall canvas (skin.h). Rows below in skin-Y-UP order:
     //   row0: y=600, h=36 → Pixi centre y = 720 - 600 - 18 = 102
     //   row1: y=360, h=36 → Pixi centre y = 720 - 360 - 18 = 342

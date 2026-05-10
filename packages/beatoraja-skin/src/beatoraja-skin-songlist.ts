@@ -61,7 +61,18 @@ export interface BeatorajaSongListRowRect {
 export interface BeatorajaSongListLayout {
   /** Visible rows in author order. Length matches `liston[]`. */
   rows: ReadonlyArray<BeatorajaSongListRowRect>;
-  /** Index into {@link rows} of the cursor's anchor row. */
+  /**
+   * Index into {@link rows} of the cursor's anchor row. Resolution priority (audit A-8):
+   *
+   *   1. `songlist.center` (= the authored center index) when supplied — matches upstream
+   *      `JsonSelectSkinObjectLoader.java:79` `((MusicSelectSkin) skin).setCenterBar(sk.songlist.center)`
+   *      which is then read by `BarRenderer.java:124` (`boolean on = (i == skin.getCenterBar())`).
+   *      The author's intent for which row should look "focused" — this is what beatoraja
+   *      uses verbatim, no heuristic.
+   *   2. The row whose Pixi-space centre y is closest to the canvas vertical centre
+   *      (legacy fallback — used when the skin omits `center`, which happens on community
+   *      skins that pre-date the field's introduction).
+   */
   focusedRowIndex: number;
   /**
    * Per-row chart-level sprite rect (relative to the bar rect). Beatoraja's reference theme
@@ -121,22 +132,12 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   const obj = songlist as Readonly<Record<string, unknown>>;
   const rects = collectListRects(obj.liston) ?? collectListRects(obj.listoff);
   if (rects === undefined || rects.length === 0) return undefined;
-  // Pick the row whose Pixi-space centre y is closest to the canvas vertical centre. That's
-  // the "focused" anchor in beatoraja's reference renderer — the cursor's selected song
-  // always lands there.
-  const canvasHeight = typeof skin.h === 'number' && Number.isFinite(skin.h) && skin.h > 0 ? skin.h : 1080;
-  const targetY = canvasHeight / 2;
-  let bestIndex = 0;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (let i = 0; i < rects.length; i += 1) {
-    const r = rects[i]!;
-    const pixiCentreY = canvasHeight - r.y - r.h / 2;
-    const distance = Math.abs(pixiCentreY - targetY);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = i;
-    }
-  }
+
+  // Audit A-8 — prefer the authored `songlist.center` (= upstream's
+  // `JsonSelectSkinObjectLoader.java:79` `setCenterBar`). Fall back to the geometric
+  // "closest to canvas vertical centre" heuristic only when `center` is omitted (community
+  // skins predating the field's introduction).
+  const focusedRowIndex = resolveCenterIndex(obj.center, rects, skin);
   // Sub-destination rects. `level` is treated as a single rect (per-difficulty entries
   // typically share identical geometry — only the color tint varies). `label[]` is a LIST
   // of `{id, rect}` so per-feature gating (LN / random / mine) can show / hide each
@@ -154,7 +155,7 @@ export function parseBeatorajaSongList(skin: BeatorajaSkin): BeatorajaSongListLa
   const text = dedupeById(collectLabelEntries(obj.text));
   return {
     rows: rects,
-    focusedRowIndex: bestIndex,
+    focusedRowIndex,
     labels,
     text,
     ...(level !== undefined ? { level } : {}),
@@ -270,6 +271,39 @@ function collectListRects(input: unknown): BeatorajaSongListRowRect[] | undefine
 function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
   const v = record[key];
   return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
+}
+
+/**
+ * Resolve the focused row index. Audit A-8: when `songlist.center` is authored, use it
+ * verbatim — it's the index `BarRenderer.java:124` checks via `i == skin.getCenterBar()`.
+ * When omitted (older community skins), fall back to the "closest to canvas vertical
+ * centre" heuristic so layout still resolves to something sensible.
+ */
+function resolveCenterIndex(
+  centerField: unknown,
+  rects: ReadonlyArray<BeatorajaSongListRowRect>,
+  skin: BeatorajaSkin,
+): number {
+  if (typeof centerField === 'number' && Number.isFinite(centerField)) {
+    const idx = Math.trunc(centerField);
+    if (idx >= 0 && idx < rects.length) return idx;
+  }
+  // Geometric fallback — pick the row whose Pixi-space centre y is closest to the canvas
+  // vertical centre. Mirrors the previous heuristic (used for skins without `center`).
+  const canvasHeight = typeof skin.h === 'number' && Number.isFinite(skin.h) && skin.h > 0 ? skin.h : 1080;
+  const targetY = canvasHeight / 2;
+  let bestIndex = 0;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < rects.length; i += 1) {
+    const r = rects[i]!;
+    const pixiCentreY = canvasHeight - r.y - r.h / 2;
+    const distance = Math.abs(pixiCentreY - targetY);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestIndex = i;
+    }
+  }
+  return bestIndex;
 }
 
 function dedupeById<T extends { id: BeatorajaImageId }>(entries: ReadonlyArray<T>): ReadonlyArray<T> {
