@@ -218,7 +218,26 @@ async function registerBitmapFont(args: {
     // Override `fontFamily` on the parsed data so the cache key matches our skin-prefixed family
     // (the parser fills it from the `info face=` line, which collides across skins). The resulting
     // BitmapFont reads its identity from this field.
-    const data = { ...parsed, fontFamily: args.family };
+    //
+    // Normalize `fontSize` to its absolute value. AngelCode BMFont's `info size=N` line uses the
+    // sign as a unit hint — POSITIVE = points, NEGATIVE = pixels — and sign-aware tooling (the
+    // generator, libGDX's `BitmapFont`) silently swallows the sign so the stored size is always
+    // a non-negative magnitude. GroundbreakinG's `Title.fnt` ships `size=-120` ("120 pixel
+    // glyphs"), and skins commonly author `text.size = -118` to match. In libGDX's pipeline both
+    // halves are negative, so `scale = text.size / fnt.originalSize` cancels to a positive scale
+    // and renders correctly.
+    //
+    // Pixi's `bitmapFontTextParser` carries the literal `-120` straight into
+    // `BitmapFont.baseMeasurementFontSize`, and `getBitmapTextLayout` computes
+    // `scale = style.fontSize / baseMeasurementFontSize`. With a positive `style.fontSize`
+    // (which we always emit — `requestedSize` falls back to the dst rect's height when
+    // `text.size <= 0`) the scale becomes NEGATIVE, and `AbstractBitmapTextPipe` renders the
+    // text 180° flipped (negative scale on both axes). User report: gdbg DECIDE's title and
+    // artist render upside-down. Strip the sign here so the BitmapFont's measurement size is
+    // the actual pixel magnitude — matches both upstream's effective behavior and BMFont's
+    // sign-as-unit convention.
+    const normalizedFontSize = Math.abs(parsed.fontSize);
+    const data = { ...parsed, fontFamily: args.family, fontSize: normalizedFontSize };
     const font = new BitmapFont({ data, textures: pageTextures });
     // Pixi's `BitmapText` looks up `Cache.get(`${family}-bitmap`)` — register under that exact key.
     Cache.set(`${args.family}-bitmap`, font);
@@ -232,7 +251,8 @@ async function registerBitmapFont(args: {
         pages: pageTextures.length,
         chars: Object.keys(parsed.chars).length,
         lineHeight: parsed.lineHeight,
-        fontSize: parsed.fontSize,
+        fontSize: normalizedFontSize,
+        rawFontSize: parsed.fontSize,
       }),
     );
     return { id: args.declId, family: args.family, path: args.fntPath, kind: 'bitmap' };
