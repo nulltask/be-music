@@ -143,13 +143,21 @@ export class BeatorajaSkinOptionsGui {
     });
     this.gui = gui;
     this.applyDomStyles(gui.domElement);
-    // Bottom-centre skin-options panel + every folder inside opens by default. Surveyed
-    // community skins (GdbG / ModernChic / default) ship 2-4 categories with a handful of
-    // controls each — small enough that the player can scan all options at a glance, and
-    // expanded layout makes the relationship to the on-screen skin obvious without an
-    // extra click. The previous "start collapsed" behavior was inherited from the prior
-    // bottom-right placement (which competed with the play scene's HUD readouts in the
-    // same corner); centring the panel removes that conflict.
+    // Bottom-centre skin-options panel — the ROOT starts COLLAPSED, but every folder
+    // INSIDE opens by default. Two-tier rationale:
+    //
+    //   - Root collapsed: keeps the panel out of the player's primary visual field
+    //     (bottom of the canvas) when they're not actively tweaking. The on-screen
+    //     skin's authored options panel (button_type 33 / 32) remains the primary
+    //     surface for runtime tweaks; this lil-gui mirror is power-user / debug
+    //     territory the user opens explicitly.
+    //   - Folders open: once the user DOES expand the root, they see the full schema
+    //     at a glance instead of clicking through 3-4 nested categories. Surveyed
+    //     community skins (GdbG / ModernChic / default) ship 2-4 categories with a
+    //     handful of controls each — small enough that the expanded layout fits the
+    //     panel without overflow, and makes the relationship between control and
+    //     on-screen skin obvious without an extra click per category.
+    gui.close();
 
     const emit = (): void => {
       // Fresh copy so downstream code never aliases our mutator state.
