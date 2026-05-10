@@ -113,6 +113,22 @@ export interface BeatorajaValueElement {
    * preserved for community skins that author per-digit chrome positioning.
    */
   offsets: ReadonlyArray<number>;
+  /**
+   * Animation cycle in milliseconds — mirrors upstream `SkinNumber`'s `cycle` field which is
+   * passed straight to `SkinSourceImageSet(image, timer, cycle)` (`SkinNumber.java:73`). When
+   * `cycle > 0` the source image set walks `divy` rows over the cycle period:
+   *
+   *   `frame = (time * divy / cycle) % divy`  (`SkinSourceImageSet.java:87`)
+   *
+   * `0` (default) keeps the strip on row 0 — matches upstream's `cycle == 0` early-return
+   * branch (`SkinSourceImageSet.java:73-75`).
+   *
+   * Used by ModernChic's `judgen-*` combo digits (cycle=80/120, divy=2/3) so the digits cycle
+   * through the strip's vertically-stacked color frames in sync with the matching judge-text
+   * animation. Without honoring this, every digit always painted from row 0 — visually a
+   * single-color readout where upstream cycles through 2-3 colors.
+   */
+  cycle: number;
   /** Op-codes that gate visibility (from `if`/`values` flattening). */
   ifCodes: ReadonlyArray<number>;
 }
@@ -154,6 +170,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
     ...(valueProperty !== undefined ? { valueProperty } : {}),
     align: numberField(f, 'align', 0),
     offsets: numberArrayField(f, 'offset'),
+    cycle: numberField(f, 'cycle', 0),
     ifCodes: entry.ifCodes,
   };
 }
@@ -252,7 +269,25 @@ export interface BeatorajaValueDigitCell {
  * active "half" picks `mimage` instead of `image` for 24-cell mode. Single-strip with
  * `mimage == null` renders negatives identically to their absolute value (no sign).
  */
-export function composeBeatorajaValueCells(element: BeatorajaValueElement, value: number): BeatorajaValueDigitCell[] {
+export function composeBeatorajaValueCells(
+  element: BeatorajaValueElement,
+  value: number,
+  /**
+   * Animation frame index — selects which `divy` row the digit cells crop from. Defaults to
+   * `0` (= row 0, matching the previous behaviour where strips animated on every cycle were
+   * silently rendered from frame 0 only). Caller computes the index via {@link valueFrameAt}
+   * (or supplies `0` for unanimated strips). Indices are clamped to `[0, divy-1]` — values
+   * outside the range collapse to the nearest valid frame, mirroring upstream's
+   * `SkinSourceImageSet.getImageIndex` clamp.
+   *
+   * The 24-cell signed-dual-strip mode (divx % 24 == 0) ignores this argument: in upstream
+   * the dual-strip slicing produces `divx*divy/24` frames each containing a 12+12 cell row,
+   * which is a different shape than the simple `[divy][divx]` layout this composer assumes
+   * for animation. We keep the dual-strip composer single-frame for now (matches the few
+   * skins that author divx=24 with divy=1 + cycle=0).
+   */
+  frameIndex: number = 0,
+): BeatorajaValueDigitCell[] {
   const keta = Math.max(1, Math.trunc(element.digit));
   const divx = Math.max(1, element.divx);
   const isSignedDualStrip = divx % 24 === 0;
@@ -341,15 +376,50 @@ export function composeBeatorajaValueCells(element: BeatorajaValueElement, value
   }
 
   const cellW = Math.floor(element.w / divx);
-  const cellH = Math.floor(element.h / Math.max(1, element.divy));
+  const divy = Math.max(1, element.divy);
+  const cellH = Math.floor(element.h / divy);
+  // Clamp the requested animation frame into `[0, divy-1]`. Mirrors upstream's
+  // `SkinSourceImageSet.getImageIndex` which `% length`-folds the frame index. We additionally
+  // skip frame indexing for 24-cell signed dual-strip mode — see the {@link frameIndex} doc.
+  const frame =
+    isSignedDualStrip || divy <= 1
+      ? 0
+      : Math.min(divy - 1, Math.max(0, Math.trunc(Number.isFinite(frameIndex) ? frameIndex : 0)));
+  const yWithFrame = element.y + frame * cellH;
   return slots.map((slot) => ({
     x: element.x + slot.cell * cellW,
-    y: element.y,
+    y: yWithFrame,
     w: cellW,
     h: cellH,
     cell: slot.hidden ? -1 : slot.cell,
     hidden: slot.hidden,
   }));
+}
+
+/**
+ * Pick the displayed animation frame index for a `value[]` strip at a given elapsed-time tick.
+ * Mirrors upstream's `SkinSourceImageSet.getImageIndex` (`SkinSourceImageSet.java:73-87`):
+ *
+ *   if (cycle == 0) return 0;
+ *   return (int) ((time * length / cycle) % length);
+ *
+ * Where `length` is the number of frames — for our composer that's `divy` (single-strip layout
+ * sliced as `[divy][divx]`). Returns `0` for unanimated strips (`cycle <= 0`) or single-row
+ * strips (`divy <= 1`), matching upstream's early-return.
+ *
+ * Negative `elapsedMs` is folded into the cycle window so the strip stays on a valid frame
+ * during pre-roll / pre-timer-start states (instead of returning `-N` which would crop above
+ * the strip's top edge). This mirrors upstream's `if (time < 0) return 0;` guard.
+ */
+export function valueFrameAt(element: BeatorajaValueElement, elapsedMs: number): number {
+  if (element.cycle <= 0) return 0;
+  const length = Math.max(1, Math.trunc(element.divy));
+  if (length <= 1) return 0;
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return 0;
+  // Floor-mod over the cycle window. Upstream uses Java's integer `%`; we mirror it via
+  // `Math.floor` so negative elapsed (pre-timer) maps to frame 0 above.
+  const t = Math.floor(elapsedMs) % element.cycle;
+  return Math.min(length - 1, Math.floor((t * length) / element.cycle));
 }
 
 /**

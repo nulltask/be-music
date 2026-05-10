@@ -75,6 +75,7 @@ export {
   composeBeatorajaValueCells,
   composeBeatorajaValueShift,
   normalizeBeatorajaValues,
+  valueFrameAt,
 } from './beatoraja-skin-value.ts';
 export type { BeatorajaFloatValueElement } from './beatoraja-skin-floatvalue.ts';
 export {

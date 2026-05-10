@@ -234,6 +234,7 @@ describe('expandBeatorajaJudgeDestinations', () => {
       ref: 75,
       align: 0, // authored as RIGHT — should be mutated to 2 (CENTER)
       offsets: [] as readonly number[],
+      cycle: 0,
       ifCodes: [] as readonly number[],
     };
     const valuesById = new Map([['judgen-pg' as string | number, valueElement]]);

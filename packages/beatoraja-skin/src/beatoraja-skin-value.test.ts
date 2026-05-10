@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   composeBeatorajaValueCells,
   composeBeatorajaValueShift,
+  valueFrameAt,
   type BeatorajaValueElement,
 } from './beatoraja-skin-value.ts';
 
@@ -25,6 +26,7 @@ function singleStrip10(overrides: Partial<BeatorajaValueElement> = {}): Beatoraj
     ref: 0,
     align: 0,
     offsets: [],
+    cycle: 0,
     ifCodes: [],
     ...overrides,
   };
@@ -49,6 +51,7 @@ function dualStrip(overrides: Partial<BeatorajaValueElement> = {}): BeatorajaVal
     ref: 0,
     align: 0,
     offsets: [],
+    cycle: 0,
     ifCodes: [],
     ...overrides,
   };
@@ -206,6 +209,109 @@ describe('composeBeatorajaValueCells (audit A-3 — upstream-faithful 24-cell ze
       // dispatch internally via `divx === 11 → zp=2`.
       const cells = composeBeatorajaValueCells(dualStrip({ divx: 11 }), 12);
       expect(cells.map((c) => c.cell)).toEqual([10, 10, 1, 2]);
+    });
+  });
+
+  // ─── cycle / divy animation (mirrors `SkinSourceImageSet.getImageIndex`) ────────────────────
+  // Upstream's `SkinNumber` constructs `SkinSourceImageSet(image, timer, cycle)`, which slices
+  // the source rect into `divy` rows × `divx` cells and walks rows over `cycle` ms:
+  //
+  //   if (cycle == 0) return 0;
+  //   return (int) ((time * length / cycle) % length);   // length = divy
+  //
+  // The composer's optional `frameIndex` arg lets the renderer plumb the active row through;
+  // each digit cell's `y` becomes `element.y + frame * cellH` so the picked row is the source
+  // for every digit slot in this frame. ModernChic's `judgen-gr` (cycle=80, divy=2) is what
+  // exercises this — without it every digit cropped from row 0 only.
+  describe('cycle / divy animation row selection', () => {
+    function animatedStrip(overrides: Partial<BeatorajaValueElement> = {}): BeatorajaValueElement {
+      // Mirrors ModernChic's `judgen-gr` shape: 10-cell digit strip with 2 vertically-stacked
+      // animation frames, per-cell h=84 (h=168 / divy=2).
+      return singleStrip10({ x: 227, y: 252, w: 550, h: 168, divx: 10, divy: 2, digit: 6, cycle: 80, ...overrides });
+    }
+
+    it('frame 0 keeps y at element.y (default behaviour, no frameIndex passed)', () => {
+      const cells = composeBeatorajaValueCells(animatedStrip(), 123);
+      // y = 252 (= element.y + 0 * 84) for every slot.
+      for (const cell of cells) expect(cell.y).toBe(252);
+    });
+
+    it('frame 1 shifts y down by cellH (= h / divy)', () => {
+      const cells = composeBeatorajaValueCells(animatedStrip(), 123, 1);
+      // y = 336 (= 252 + 1 * 84) — picks row 1 (= the second-color frame in ModernChic's strip).
+      for (const cell of cells) expect(cell.y).toBe(336);
+    });
+
+    it('clamps frameIndex out-of-range to [0, divy-1]', () => {
+      // divy=2 → max valid frame = 1. frame=2 / NaN / -1 collapse to the boundary.
+      expect(composeBeatorajaValueCells(animatedStrip(), 123, 2)[5]?.y).toBe(336);
+      expect(composeBeatorajaValueCells(animatedStrip(), 123, -1)[5]?.y).toBe(252);
+      expect(composeBeatorajaValueCells(animatedStrip(), 123, NaN)[5]?.y).toBe(252);
+    });
+
+    it('frame stays 0 for divy=1 strips regardless of frameIndex', () => {
+      const cells = composeBeatorajaValueCells(animatedStrip({ divy: 1, h: 84 }), 123, 5);
+      for (const cell of cells) expect(cell.y).toBe(252);
+    });
+
+    it('preserves x cell selection (frame only affects y)', () => {
+      // value=123, digit=6, single-strip → 3 leading-blank slots + cells 1,2,3.
+      const cellsF0 = composeBeatorajaValueCells(animatedStrip(), 123, 0);
+      const cellsF1 = composeBeatorajaValueCells(animatedStrip(), 123, 1);
+      // Same x for the same digit slot, only y changes.
+      for (let i = 0; i < cellsF0.length; i += 1) {
+        expect(cellsF1[i]!.x).toBe(cellsF0[i]!.x);
+        expect(cellsF1[i]!.cell).toBe(cellsF0[i]!.cell);
+        expect(cellsF1[i]!.hidden).toBe(cellsF0[i]!.hidden);
+      }
+    });
+
+    it('24-cell signed dual-strip ignores frameIndex (single-frame layout)', () => {
+      // Dual-strip's row layout is positive-half / negative-half (different x-cell semantics),
+      // not animation frames; frame selection is intentionally pinned to 0.
+      const cells = composeBeatorajaValueCells(dualStrip({ divy: 2, h: 48 }), 12, 1);
+      for (const cell of cells) expect(cell.y).toBe(0); // element.y = 0 for dualStrip().
+    });
+  });
+
+  describe('valueFrameAt (`SkinSourceImageSet.getImageIndex`)', () => {
+    function strip(overrides: Partial<BeatorajaValueElement> = {}): BeatorajaValueElement {
+      return singleStrip10({ divy: 2, cycle: 80, ...overrides });
+    }
+
+    it('returns 0 when cycle is 0 (animation disabled)', () => {
+      expect(valueFrameAt(strip({ cycle: 0 }), 100)).toBe(0);
+      expect(valueFrameAt(strip({ cycle: 0 }), 1234567)).toBe(0);
+    });
+
+    it('returns 0 when divy <= 1 (single-row strip)', () => {
+      expect(valueFrameAt(strip({ divy: 1 }), 100)).toBe(0);
+    });
+
+    it('walks frames over the cycle period (length=divy)', () => {
+      // cycle=80, divy=2 → frame switches every 40ms.
+      expect(valueFrameAt(strip(), 0)).toBe(0);
+      expect(valueFrameAt(strip(), 39)).toBe(0);
+      expect(valueFrameAt(strip(), 40)).toBe(1);
+      expect(valueFrameAt(strip(), 79)).toBe(1);
+      expect(valueFrameAt(strip(), 80)).toBe(0); // cycles back
+      expect(valueFrameAt(strip(), 120)).toBe(1);
+    });
+
+    it('matches upstream divy=3 cycle=120 walk (judgen-pg from ModernChic)', () => {
+      const pg = strip({ divy: 3, cycle: 120 });
+      // cycle=120, divy=3 → 40ms per frame.
+      expect(valueFrameAt(pg, 0)).toBe(0);
+      expect(valueFrameAt(pg, 40)).toBe(1);
+      expect(valueFrameAt(pg, 80)).toBe(2);
+      expect(valueFrameAt(pg, 120)).toBe(0);
+      expect(valueFrameAt(pg, 360)).toBe(0);
+    });
+
+    it('clamps negative / non-finite elapsedMs to frame 0 (pre-roll guard)', () => {
+      expect(valueFrameAt(strip(), -10)).toBe(0);
+      expect(valueFrameAt(strip(), Number.NaN)).toBe(0);
+      expect(valueFrameAt(strip(), Number.POSITIVE_INFINITY)).toBe(0);
     });
   });
 });

@@ -8,6 +8,7 @@ import {
   centerToAnchor,
   composeBeatorajaValueCells,
   composeBeatorajaValueShift,
+  valueFrameAt,
   computeBeatorajaGaugeAnimation,
   evaluateBeatorajaCustomEvents,
   evaluateBeatorajaCustomTimers,
@@ -357,6 +358,13 @@ interface ValueEntry {
   digitSprites: Sprite[];
   /** Last numeric value rendered, used to skip cell-texture rebuilds when the number hasn't changed. */
   lastValue: number;
+  /**
+   * Last animation frame index applied to the digit textures. When the value's `cycle > 0` and
+   * the frame index advances, the per-digit textures are re-cropped from the matching strip row.
+   * `-1` is the initial sentinel — first update always re-crops. Mirrors upstream's
+   * `SkinSourceImageSet.getImageIndex` flow which re-evaluates per draw call.
+   */
+  lastFrameIndex: number;
 }
 
 interface TextEntry {
@@ -1321,7 +1329,7 @@ export class BeatorajaPlaySkinView {
       this.container.addChild(sprite);
       digitSprites.push(sprite);
     }
-    return { kind: 'value', group, value: element, baseTexture, digitSprites, lastValue: 0 };
+    return { kind: 'value', group, value: element, baseTexture, digitSprites, lastValue: 0, lastFrameIndex: -1 };
   }
 
   /**
@@ -1826,7 +1834,7 @@ export class BeatorajaPlaySkinView {
           this.updateImageEntry(entry, renderContext, props);
           break;
         case 'value':
-          this.updateValueEntry(entry, props, luaContext, context.resolveOffset);
+          this.updateValueEntry(entry, props, luaContext, context.resolveOffset, context.nowMs);
           break;
         case 'floatvalue':
           this.updateFloatValueEntry(entry, props, luaContext, context.resolveOffset);
@@ -2065,6 +2073,7 @@ export class BeatorajaPlaySkinView {
     props: ReturnType<typeof destinationToSpriteProps>,
     luaContext: BeatorajaLuaRuntimeContext,
     resolveOffset: BeatorajaRenderContext['resolveOffset'],
+    nowMs: number,
   ): void {
     const baseTexture = entry.baseTexture;
     if (baseTexture === undefined || baseTexture === Texture.EMPTY) {
@@ -2083,12 +2092,23 @@ export class BeatorajaPlaySkinView {
         ? this.resolveIntegerProperty(entry.value.valueProperty, luaContext)
         : ((entry.value.ref !== 0 ? this.resolveNumberValue(entry.value.ref) : 0) ?? 0);
 
-    // Re-compose digit-cell textures only when the value changes. The composer hands back one
-    // source-rect per digit slot; we crop a sub-texture per slot and assign it to the matching sprite.
+    // Animation frame for `cycle`-driven strips — picks the current `divy` row. Mirrors
+    // upstream `SkinSourceImageSet.getImageIndex(time, state)` (with `timer == null`, since
+    // our value-element schema doesn't expose the source-level `timer` field yet — most skins
+    // including ModernChic / default authors omit it). Re-crop runs whenever the frame index
+    // changes OR the value changes.
+    const frameIndex = valueFrameAt(entry.value, nowMs);
+
+    // Re-compose digit-cell textures when the value OR animation frame changes. The composer
+    // hands back one source-rect per digit slot (with the row's y-offset baked in); we crop a
+    // sub-texture per slot and assign it to the matching sprite.
     let cells: ReturnType<typeof composeBeatorajaValueCells> | undefined;
-    if (value !== entry.lastValue) {
+    const valueChanged = value !== entry.lastValue;
+    const frameChanged = frameIndex !== entry.lastFrameIndex;
+    if (valueChanged || frameChanged) {
       entry.lastValue = value;
-      cells = composeBeatorajaValueCells(entry.value, value);
+      entry.lastFrameIndex = frameIndex;
+      cells = composeBeatorajaValueCells(entry.value, value, frameIndex);
       for (let i = 0; i < entry.digitSprites.length; i += 1) {
         const cell = cells[i];
         if (cell === undefined || cell.hidden) continue;
@@ -2100,7 +2120,7 @@ export class BeatorajaPlaySkinView {
     }
     // Always recompute hidden flags — visibility depends on the latest value even when textures
     // weren't refreshed (the composer might emit `hidden: true` for slots that don't paint).
-    if (cells === undefined) cells = composeBeatorajaValueCells(entry.value, value);
+    if (cells === undefined) cells = composeBeatorajaValueCells(entry.value, value, frameIndex);
 
     // Lay the digit row across the destination rect. Per beatoraja's convention, `dst.w` is the
     // PER-DIGIT slot width (NOT the total strip width) — the reference theme writes things like
