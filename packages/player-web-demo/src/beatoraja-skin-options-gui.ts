@@ -143,12 +143,13 @@ export class BeatorajaSkinOptionsGui {
     });
     this.gui = gui;
     this.applyDomStyles(gui.domElement);
-    // Bottom-centre skin-options panel starts COLLAPSED. The skin's authored options panel
-    // (the in-scene popup activated by the skin's button_type 33 / 32 chrome) is the
-    // primary surface for runtime tweaks; this lil-gui mirror is a power-user / debug
-    // overlay that the user opens explicitly when they need it. Keeping it expanded by
-    // default crowded the lower-right corner over the rest of the UI.
-    gui.close();
+    // Bottom-centre skin-options panel + every folder inside opens by default. Surveyed
+    // community skins (GdbG / ModernChic / default) ship 2-4 categories with a handful of
+    // controls each — small enough that the player can scan all options at a glance, and
+    // expanded layout makes the relationship to the on-screen skin obvious without an
+    // extra click. The previous "start collapsed" behavior was inherited from the prior
+    // bottom-right placement (which competed with the play scene's HUD readouts in the
+    // same corner); centring the panel removes that conflict.
 
     const emit = (): void => {
       // Fresh copy so downstream code never aliases our mutator state.
@@ -190,14 +191,15 @@ export class BeatorajaSkinOptionsGui {
     if (properties.length > 0) {
       // Cache one folder per category label, lazily created on first member encounter so empty
       // categories don't render as empty folders. The flat fallback (`'Options'`) covers
-      // properties without a category and is also lazy.
+      // properties without a category and is also lazy. Folders are opened on creation —
+      // `lil-gui`'s `addFolder` defaults to "open" but we re-assert here to make the intent
+      // explicit (and to override any future default change in the library).
       const folderByLabel = new Map<string, GUI>();
-      const folderFor = (label: string, open: boolean): GUI => {
+      const folderFor = (label: string): GUI => {
         let folder = folderByLabel.get(label);
         if (folder === undefined) {
           folder = gui.addFolder(label);
-          if (open) folder.open();
-          else folder.close();
+          folder.open();
           folderByLabel.set(label, folder);
         }
         return folder;
@@ -221,25 +223,21 @@ export class BeatorajaSkinOptionsGui {
         // partial config might omit some).
         this.state.option[property.name] = initialOp;
         const categoryLabel = resolveCategoryFolderName(property.category) ?? 'Options';
-        // Open the flat `'Options'` fallback by default to preserve the prior UX (the reference
-        // theme uses no categories and expects the panel to land already-expanded). Categorized
-        // folders open too — surveyed community skins ship 2-3 groups, all worth showing at a
-        // glance — but a future skin with 6+ groups could hint via a separate `defaultOpen` flag.
-        const folder = folderFor(categoryLabel, true);
+        const folder = folderFor(categoryLabel);
         folder.add(this.state.option, property.name, optionMap).name(property.name).onChange(emit);
       }
     }
 
     if (filepaths.length > 0) {
       // Filepaths get their own folder root labeled by category (or 'Files' fallback). Folders
-      // start collapsed because file picks are usually power-user territory — most players never
-      // touch them, and showing N expanded file lists swamps the panel.
+      // are opened on creation — keeping the panel uniform with the property folders above so
+      // the user sees the full file-pick surface without an extra click.
       const folderByLabel = new Map<string, GUI>();
       const folderFor = (label: string): GUI => {
         let folder = folderByLabel.get(label);
         if (folder === undefined) {
           folder = gui.addFolder(label);
-          folder.close();
+          folder.open();
           folderByLabel.set(label, folder);
         }
         return folder;
@@ -277,7 +275,7 @@ export class BeatorajaSkinOptionsGui {
     const customOffsets = options.header.offset ?? [];
     if (customOffsets.length > 0) {
       const offsetFolder = gui.addFolder('Custom offsets');
-      offsetFolder.close();
+      offsetFolder.open();
       // Per-slot folder controllers tracked here so the reset action can `setValue` on
       // every authored axis at once (lil-gui doesn't propagate state-object mutations
       // back into its DOM displays — we have to walk the controller list and call
@@ -291,7 +289,7 @@ export class BeatorajaSkinOptionsGui {
         const flagged = (['x', 'y', 'w', 'h', 'r', 'a'] as const).filter((axis) => slot[axis]);
         if (flagged.length === 0) continue;
         const slotFolder = flagged.length > 1 ? offsetFolder.addFolder(slot.name) : offsetFolder;
-        if (flagged.length > 1) (slotFolder as GUI).close();
+        if (flagged.length > 1) (slotFolder as GUI).open();
         for (const axis of flagged) {
           const range = axis === 'r' ? [-360, 360] : axis === 'a' ? [-255, 255] : [-400, 400];
           const label = flagged.length > 1 ? axis : `${slot.name}.${axis}`;
