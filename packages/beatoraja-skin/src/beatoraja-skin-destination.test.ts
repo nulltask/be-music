@@ -492,6 +492,49 @@ describe('applyBeatorajaOffsetAlpha (audit A-10 — per-step clamp matches SkinO
   });
 });
 
+describe('normalizeBeatorajaDestinations — mouseRect (audit C-12)', () => {
+  it('parses {x, y, w, h} as a Rect object (matches JsonSkin.Rect)', () => {
+    // Mirrors `JsonSkinObjectLoader.java:723-725` — `dst.mouseRect` is a `Rect` object,
+    // NOT an integer index. Previous TS impl read it as `numberField(f, 'mouseRect', -1)`
+    // which silently dropped the 4 component values.
+    const out = normalizeBeatorajaDestinations([
+      {
+        id: 'tooltip',
+        dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50 }],
+        mouseRect: { x: 10, y: 20, w: 80, h: 40 },
+      },
+    ]);
+    expect(out[0]?.mouseRect).toEqual({ x: 10, y: 20, w: 80, h: 40 });
+  });
+
+  it('treats missing / malformed mouseRect as undefined', () => {
+    const noField = normalizeBeatorajaDestinations([
+      { id: 'a', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] },
+    ]);
+    expect(noField[0]?.mouseRect).toBeUndefined();
+
+    const nullField = normalizeBeatorajaDestinations([
+      { id: 'a', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }], mouseRect: null },
+    ]);
+    expect(nullField[0]?.mouseRect).toBeUndefined();
+
+    // Zero-sized rect is indistinguishable from "no rect" for visibility gating — treat as
+    // undefined so authors that accidentally type `{w: 0, h: 0}` don't permanently hide
+    // their destinations.
+    const zeroRect = normalizeBeatorajaDestinations([
+      { id: 'a', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }], mouseRect: { x: 0, y: 0, w: 0, h: 0 } },
+    ]);
+    expect(zeroRect[0]?.mouseRect).toBeUndefined();
+  });
+
+  it('defaults missing component values to 0', () => {
+    const out = normalizeBeatorajaDestinations([
+      { id: 'a', dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }], mouseRect: { w: 50, h: 60 } },
+    ]);
+    expect(out[0]?.mouseRect).toEqual({ x: 0, y: 0, w: 50, h: 60 });
+  });
+});
+
 describe('centerToAnchor (beatoraja convention, mapped into Pixi Y-DOWN)', () => {
   // Source: `SkinObject.java` CENTERX/CENTERY arrays (10 entries, 0=default mid-point, 1..9 are
   // a 1-indexed grid in libGDX Y-UP). We Y-flip so 1 (libGDX bottom-left) lands at Pixi anchor

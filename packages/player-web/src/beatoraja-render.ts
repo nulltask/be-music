@@ -129,6 +129,19 @@ export interface BeatorajaRenderContext {
   audioPlay?: (path: string, volume: number) => boolean | undefined;
   audioLoop?: (path: string, volume: number) => boolean | undefined;
   audioStop?: (path: string) => boolean | undefined;
+  /**
+   * Current mouse position in PIXI-SPACE coordinates (top-left origin, y-down). Used by the
+   * `mouseRect` hover-visibility gate — destinations with an authored `mouseRect` only paint
+   * when the cursor is inside the rect (relative to the destination's libGDX bottom-left).
+   * Mirrors upstream `SkinObject.java:513-517`'s `mouseRect.contains(mouseX - region.x,
+   * mouseY - region.y)` check, with X/Y converted from libGDX Y-UP into Pixi Y-DOWN at the
+   * call site.
+   *
+   * `undefined` (or omitted) = no hover gate applied — destinations with `mouseRect` paint
+   * unconditionally. Hosts that want the upstream-faithful hover-visibility behavior pass
+   * the live cursor coords every frame.
+   */
+  mousePosition?: { x: number; y: number };
 }
 
 /**
@@ -295,6 +308,28 @@ export function destinationToSpriteProps(
   const baseY = keyframe.y + offset.y + centerShiftY;
   const xLeft = mirrorX ? baseX + rawWidth : baseX;
   const yLibgdxBottom = mirrorY ? baseY + rawHeight : baseY;
+
+  // Mouse-hover visibility gate (audit C-12). Mirrors upstream `SkinObject.java:513-517`:
+  //
+  //     if (mouseRect != null && !mouseRect.contains(mouseX - region.x, mouseY - region.y)) {
+  //         draw = false;
+  //         return;
+  //     }
+  //
+  // The rect's `(x, y, w, h)` are in libGDX-Y-UP coords RELATIVE to the destination's
+  // (post-offset) `region.x / region.y` (= bottom-left of the rendered rect). Convert the
+  // host's Pixi-space mouse position into libGDX coords (X same; Y = canvasH - pixiY) and
+  // check the relative position against the rect.
+  if (group.mouseRect !== undefined && context.mousePosition !== undefined) {
+    const mouseLibgdxX = context.mousePosition.x;
+    const mouseLibgdxY = canvasHeight - context.mousePosition.y;
+    const relativeX = mouseLibgdxX - xLeft;
+    const relativeY = mouseLibgdxY - yLibgdxBottom;
+    const { x: mrX, y: mrY, w: mrW, h: mrH } = group.mouseRect;
+    if (relativeX < mrX || relativeX > mrX + mrW || relativeY < mrY || relativeY > mrY + mrH) {
+      return HIDDEN_PROPS;
+    }
+  }
   return {
     visible: true,
     x: xLeft,

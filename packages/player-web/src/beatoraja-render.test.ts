@@ -387,6 +387,66 @@ describe('destinationToSpriteProps', () => {
     );
     expect(lookups).toBe(0);
   });
+
+  describe('mouseRect hover-visibility gate (audit C-12)', () => {
+    // Mirrors `SkinObject.java:513-517` — when `mouseRect != null` AND the cursor is OUTSIDE
+    // the relative rect, the destination hides. Coords are in libGDX Y-UP space relative to
+    // `region.x / region.y` (= the destination's bottom-left after offset).
+    //
+    // Test fixture: dst rect at libGDX (100, 200), size (300, 100). canvasH = 1000.
+    //   - Pixi top-left of rect = (100, canvasH - 200 - 100) = (100, 700).
+    //   - Pixi bottom-right of rect = (400, 800).
+    //   - mouseRect = {x: 50, y: 25, w: 100, h: 50} (libGDX, relative to region's bottom-left).
+    //     In libGDX absolute coords, the rect occupies [150, 250] × [225, 275].
+    //     In Pixi screen coords, the rect occupies [150, 250] × [725, 775].
+    const fixture = () =>
+      normalizeBeatorajaDestinations([
+        {
+          id: 'tooltip',
+          loop: 0,
+          dst: [{ time: 0, x: 100, y: 200, w: 300, h: 100, a: 255 }],
+          mouseRect: { x: 50, y: 25, w: 100, h: 50 },
+        },
+      ])[0]!;
+
+    it('paints when the cursor is INSIDE the libGDX-relative mouseRect', () => {
+      const props = destinationToSpriteProps(
+        fixture(),
+        { ...ctx({ nowMs: 0 }), mousePosition: { x: 200, y: 750 } }, // Pixi (200, 750) — inside the rect.
+        TEST_CANVAS_HEIGHT,
+      );
+      expect(props.visible).toBe(true);
+    });
+
+    it('hides when the cursor is OUTSIDE the libGDX-relative mouseRect', () => {
+      const props = destinationToSpriteProps(
+        fixture(),
+        { ...ctx({ nowMs: 0 }), mousePosition: { x: 50, y: 100 } }, // Pixi (50, 100) — way outside.
+        TEST_CANVAS_HEIGHT,
+      );
+      expect(props.visible).toBe(false);
+    });
+
+    it('paints when no mousePosition is supplied (gate is opt-in)', () => {
+      // Hosts that don't track the cursor pass `mousePosition: undefined`. The gate
+      // short-circuits and the destination paints unconditionally — same as upstream
+      // when `mouseRect` was omitted (we have a rect but no cursor to test against).
+      const props = destinationToSpriteProps(fixture(), ctx({ nowMs: 0 }), TEST_CANVAS_HEIGHT);
+      expect(props.visible).toBe(true);
+    });
+
+    it('paints unconditionally when no mouseRect is authored', () => {
+      const noRect = normalizeBeatorajaDestinations([
+        { id: 'plain', loop: 0, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1, a: 255 }] },
+      ])[0]!;
+      const props = destinationToSpriteProps(
+        noRect,
+        { ...ctx({ nowMs: 0 }), mousePosition: { x: 9999, y: 9999 } }, // far outside any rect.
+        TEST_CANVAS_HEIGHT,
+      );
+      expect(props.visible).toBe(true);
+    });
+  });
 });
 
 describe('flipRectToPixi', () => {

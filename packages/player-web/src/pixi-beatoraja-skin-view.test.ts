@@ -379,7 +379,7 @@ describe('BeatorajaPlaySkinView', () => {
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const [leftNode, centerNode, rightNode] = view.container.children as Array<{
+    const [leftNode, centerNode, rightNode] = view.container.children as unknown as Array<{
       x: number;
       anchor: { x: number };
     }>;

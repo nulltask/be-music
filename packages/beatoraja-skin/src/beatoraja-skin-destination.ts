@@ -149,18 +149,28 @@ export interface BeatorajaDestinationGroup {
    */
   stretch: number;
   /**
-   * Custom mouse-hit rectangle (audit 3.8). Beatoraja's `JSONSkinLoader.setDestination` reads
-   * `dst.mouseRect` and forwards to `obj.setMouseRect(int)` — when authored, the renderer's
-   * pointer hit-test uses the indexed rect from a `mouseRect[]` table on the skin instead of
-   * the destination's natural bounding box. Used by clickable result-screen buttons whose
-   * visible art is smaller than their click area (or vice versa). `-1` (default) means "use
-   * the natural bounds" — same convention beatoraja uses.
+   * Custom mouse-hover rectangle (audit C-12). Beatoraja's `JsonSkinObjectLoader.java:723-725`
+   * parses `dst.mouseRect` as a `{x, y, w, h}` Rect object (NOT an integer index — the
+   * previous TS impl read it as `numberField(f, 'mouseRect', -1)` which silently dropped the
+   * authored coords).
    *
-   * Today our renderer doesn't honor mouse hit-testing on destinations (clickable wiring
-   * lives on `image.act` / `imageset.act`). The field is preserved for forward-compat so
-   * later renderer extensions don't need to re-parse the JSON.
+   * Upstream `SkinObject.java:513-517` uses this rect as a HOVER VISIBILITY GATE in
+   * `prepare()`:
+   *
+   *     if (mouseRect != null && !mouseRect.contains(mouseX - region.x, mouseY - region.y)) {
+   *         draw = false;
+   *         return;
+   *     }
+   *
+   * The rect's `(x, y, w, h)` are in libGDX-Y-UP coords RELATIVE to the destination's
+   * `region.x / region.y` (= bottom-left of the rendered rect). When the cursor is inside
+   * the relative rect, the destination paints normally; when outside, it hides. Used for
+   * tooltip-style chrome (e.g. the result-screen "next stage" hover button) that appears
+   * only when the player's cursor is over a specific area.
+   *
+   * `undefined` means "no gate, always paint" — same as upstream's `mouseRect == null`.
    */
-  mouseRect: number;
+  mouseRect: { x: number; y: number; w: number; h: number } | undefined;
   /**
    * Mirrors beatoraja's `SkinObject.relative` flag. Controls how `offsets[]` reshape the rect:
    *
@@ -250,7 +260,7 @@ function normalizeOne(
     // record, sometimes on individual keyframes; we read whichever the author chose, walking the
     // keyframes for the LAST non-default value.
     stretch: pickStretchMode(f, rawDst),
-    mouseRect: numberField(f, 'mouseRect', -1),
+    mouseRect: parseMouseRectField(f.mouseRect),
     // `relative` flips offset application from center-anchored to anchor-relative — see field
     // doc. Boolean parse: any truthy authored value (including the literal `1` skins
     // sometimes emit) flips it on.
@@ -598,6 +608,29 @@ function booleanPropertyField(value: unknown): BeatorajaBooleanPropertyRef | und
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (isBeatorajaLuaFunctionValue(value)) return value;
   return undefined;
+}
+
+/**
+ * Parse `dst.mouseRect` per `JsonSkinObjectLoader.java:723-725`. The JSON shape is the same
+ * `{x, y, w, h}` Rect object used by `JsonSkin.Rect` (`JsonSkin.java:444-449`). Defaults to
+ * `0` for any missing component — matches Java's `int` field initialization.
+ */
+function parseMouseRectField(value: unknown): { x: number; y: number; w: number; h: number } | undefined {
+  if (value === null || value === undefined || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+  const obj = value as Readonly<Record<string, unknown>>;
+  // At least one of (w, h) must be positive — a `0×0` rect would never contain the mouse and
+  // is indistinguishable from "unset" for visibility gating. Treat as no rect.
+  const w = numberField(obj, 'w', 0);
+  const h = numberField(obj, 'h', 0);
+  if (w <= 0 || h <= 0) return undefined;
+  return {
+    x: numberField(obj, 'x', 0),
+    y: numberField(obj, 'y', 0),
+    w,
+    h,
+  };
 }
 
 /**
