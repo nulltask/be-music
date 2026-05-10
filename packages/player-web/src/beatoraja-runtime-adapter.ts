@@ -30,7 +30,10 @@ import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/cor
 import type { BeatorajaRenderContext } from './beatoraja-render.ts';
 import { extractChartSubartist } from './beatoraja-chart-meta.ts';
 import { computeBeatorajaNoteBreakdown } from './beatoraja-chart-note-counts.ts';
-import { computeBeatorajaChartNoteDistribution } from './beatoraja-chart-note-distribution.ts';
+import {
+  computeBeatorajaChartNoteDistribution,
+  type BeatorajaBpmSegment,
+} from './beatoraja-chart-note-distribution.ts';
 import {
   beatorajaGaugeModeFromString,
   BEATORAJA_NUM,
@@ -386,6 +389,25 @@ export class BeatorajaRuntimeAdapter {
    * x-axis span the renderer needs to position the playhead cursor.
    */
   private judgeStateTotalMs = 0;
+  /**
+   * Sorted `(timeMs → bpm)` transitions across the chart. Sampled by `currentBpmAtMs()`
+   * to derive the live BPM for `BEATORAJA_NUM.NOWBPM` (160) and the duration formula —
+   * mirrors upstream `LaneRenderer.nbpm` per-frame value, which is a snapshot of the
+   * `BMSModel`'s `TimeLine.getBPM()` at the playhead.
+   *
+   * Stop events emit `(stopStart, 0)` then `(stopEnd, prevBpm)`. The sampler skips zero
+   * entries so a stop holds the previous song-BPM rather than collapsing the readout to
+   * 0 — matches what beatoraja's `MusicPlayer` exposes via `lanerender.getNowBPM()`
+   * during stops (the song BPM holds, only the scroll halts).
+   */
+  private bpmSegments: ReadonlyArray<BeatorajaBpmSegment> = [];
+  /**
+   * "Main" BPM — most-frequent BPM across the chart (weighted by note count per BPM
+   * segment). Mirrors upstream `SongInformation.getMainbpm()` / `BEATORAJA_NUM.MAINBPM`
+   * (92). Cached at chart load via {@link computeBeatorajaChartNoteDistribution}'s
+   * `mainBpm` field.
+   */
+  private cachedMainBpm = 0;
   /**
    * Adapter-instance boot wallclock — surfaces prop.lua `operating_time_*` (run uptime). Beatoraja's
    * native semantics is "since beatoraja launched"; in our world the closest equivalent is "since
@@ -1503,24 +1525,33 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Visible playfield ratio (= what fraction of the lane is unobstructed by lanecover / lift).
-   * `withCover = true` reads the live cover state so DURATION_LANECOVER_ON resolvers reflect
-   * what the player currently sees; `false` returns the raw 1.0 so DURATION_LANECOVER_OFF
-   * tells the player "what would the duration be without cover". Clamped to [0, 1].
+   * Lanecover ratio for the duration formula. Mirrors upstream
+   * `LaneRenderer.java:333` (`region * (1 - lanecover)` — only `playconfig.getLanecover()`,
+   * NOT `lift`). `withCover = true` reads the live cover state for `DURATION_LANECOVER_ON`
+   * resolvers; `false` returns 0 so `DURATION_LANECOVER_OFF` reports the no-cover baseline.
+   *
+   * Lift is a separate visual offset (`OFFSET_LIFT`) that shifts the lane bottom up but
+   * does NOT change the scroll-time the lane represents — upstream's duration formula
+   * doesn't subtract it. The previous implementation included lift in this ratio, which
+   * shrunk the white-number readout when the player engaged lift; that was a deviation
+   * from upstream. (Audit: `LaneRenderer.java:330-335`.)
    */
-  private visibleRatio(withCover: boolean): number {
-    if (!withCover) return 1;
-    return Math.max(0, Math.min(1, 1 - this.lanecoverRatio - this.liftRatio));
+  private lanecoverRatioForDuration(withCover: boolean): number {
+    if (!withCover) return 0;
+    return Math.max(0, Math.min(1, this.lanecoverRatio));
   }
 
   /**
-   * Current BPM for duration math. The frame payload doesn't carry a per-beat BPM today, so
-   * we fall back to the chart's main BPM. In practice this is fine — most charts spend most
-   * of their time at the main BPM, and the ModernChic panel surfaces the MIN / MAX variants
-   * separately for the player to read the range.
+   * Current BPM at the engine's playhead. Mirrors upstream `LaneRenderer.nbpm` which is
+   * sampled from `BMSModel`'s active TimeLine each frame. Reads the latched
+   * `frame.currentSeconds` and walks the cached {@link bpmSegments} to return the BPM
+   * in effect at that moment.
+   *
+   * Falls back to the chart's metadata BPM before the first frame lands.
    */
   private currentBpmForDuration(): number {
-    return this.chart?.metadata.bpm ?? 0;
+    if (this.frame === null) return this.chart?.metadata.bpm ?? 0;
+    return this.currentBpmAtMs(this.frame.currentSeconds * 1000);
   }
 
   /**
@@ -1623,6 +1654,46 @@ export class BeatorajaRuntimeAdapter {
     // 10, capped at 100, floor at 20 (so sparse charts don't stretch a 1-note bucket
     // across the whole graph height).
     this.judgeStateMaxNotesPerBucket = Math.max(20, Math.min(100, Math.ceil(maxPerBucket / 10) * 10));
+    // Reuse the same chart walk for the BPM-timeline + main-BPM caches that drive
+    // `BEATORAJA_NUM.NOWBPM` (160) and `BEATORAJA_NUM.MAINBPM` (92).
+    this.bpmSegments = distribution.bpmSegments;
+    this.cachedMainBpm = distribution.mainBpm;
+  }
+
+  /**
+   * Sample the BPM in effect at a given chart-time position. Mirrors upstream
+   * `LaneRenderer.nbpm` per-frame value, which is `BMSModel`'s `TimeLine.getBPM()` at the
+   * playhead. Walks {@link bpmSegments} (in time order) and returns the most recent
+   * positive BPM transition that's `<= timeMs`.
+   *
+   * STOP segments emit `bpm = 0`; we skip them so the readout holds the song's "real"
+   * BPM through the stop instead of collapsing to 0. Matches `lanerender.getNowBPM()`
+   * which exposes the song-BPM throughout (only the scroll velocity reaches 0 during a
+   * stop, the BPM number itself doesn't).
+   *
+   * Returns the chart's metadata BPM as a fallback when the timeline is empty (no chart
+   * loaded / chart with no BPM events yet).
+   */
+  private currentBpmAtMs(timeMs: number): number {
+    const segments = this.bpmSegments;
+    if (segments.length === 0) return this.chart?.metadata.bpm ?? 0;
+    let lastPositive = segments[0]!.bpm > 0 ? segments[0]!.bpm : (this.chart?.metadata.bpm ?? 0);
+    for (const seg of segments) {
+      if (seg.timeMs > timeMs) break;
+      if (seg.bpm > 0) lastPositive = seg.bpm;
+    }
+    return lastPositive;
+  }
+
+  /**
+   * Resolve the chart's "main BPM" — most-frequent BPM weighted by note count, mirroring
+   * upstream `SongInformation.getMainbpm()`. Pre-cached at chart load through
+   * {@link computeBeatorajaChartNoteDistribution}; falls back to the chart's metadata BPM
+   * for non-loaded charts (decide / select scenes that didn't run the full chart walk).
+   */
+  private cachedMainBpmValue(): number {
+    if (this.cachedMainBpm > 0) return this.cachedMainBpm;
+    return this.chart?.metadata.bpm ?? 0;
   }
 
   /**
@@ -1775,17 +1846,20 @@ export class BeatorajaRuntimeAdapter {
     const gaugePct = summary?.gauge && summary.gauge.max > 0 ? (summary.gauge.current / summary.gauge.max) * 100 : 0;
 
     switch (refOp) {
-      // ─── Hispeed / lanecover slots ─────────────────────────────────────────────────────
-      // Hispeed displays the multiplier ×100 (e.g. 1.5× → 150). The "afterdot" slot carries the
-      // post-decimal digits ALONE so a skin can render `xxx.yy` with two separate value strips
-      // (`hispeed` / `hispeed_afterdot`). LR2 `hispeed_lr2 = 10` is the legacy slot — same payload.
+      // ─── Hispeed slots (10, 310, 311) ──────────────────────────────────────────────────
+      // Three upstream variants in `IntegerPropertyFactory`:
+      //   - NUMBER_HISPEED       (310) = (int) hispeed                — integer part only
+      //   - NUMBER_HISPEED_AFTERDOT (311) = (int)(hispeed * 100) % 100 — 2-digit decimal
+      //   - NUMBER_HISPEED_LR2   (10)  = (int)(hispeed * 100)         — × 100 single int
+      //
+      // The default play skin authors `id="hispeed", ref=310` + `id="hispeed-d", ref=311`
+      // as separate value elements rendered side-by-side ("3" + "." + "42" → "3.42").
+      // Conflating 310 with 10 (the previous behavior) collapsed both pairs to the same
+      // value (342 / 42), making the integer half disappear in skins that author the two
+      // refs separately.
       case BEATORAJA_NUM.HISPEED:
+        return Math.trunc(this.lastHiSpeed);
       case BEATORAJA_NUM.HISPEED_LR2:
-        // Truncate (not round) — beatoraja's `(int)(hispeed * 100)` cast is a floor for
-        // positive values (hispeed is always ≥ 0 in our adapter). At 1.555 the integer part
-        // would round to "1" if we used Math.round, but Java's `(int)` cast yields "1"
-        // identically for the integer-portion display. Math.trunc keeps that semantics
-        // consistent with the AFTERDOT slot below (audit 3.16).
         return Math.trunc(this.lastHiSpeed * 100);
       case BEATORAJA_NUM.HISPEED_AFTERDOT: {
         // Two-digit fractional part of hispeed × 100 — i.e. `(int)(hispeed * 100) % 100`.
@@ -1809,47 +1883,51 @@ export class BeatorajaRuntimeAdapter {
         return 0;
 
       // ─── Duration / green-number readouts (312, 313, 1312-1327) ────────────────────────
-      // "Duration" (= white number) is the time in ms for a note to traverse the visible
-      // playfield at the current BPM × hispeed × cover state. "Green" is BPM-normalised so
-      // it stays constant across BPM changes — the player's "scroll speed setting".
+      // White-number duration = `(240000 / bpm / hispeed) / nscroll * (1 - lanecover)` ms,
+      // mirroring upstream `LaneRenderer.java:330-335`. Green-number = white * 3 / 5
+      // (mirrors `IntegerPropertyFactory.duration_green`).
       //
-      // Beatoraja exposes 8 white + 8 green variants (1312-1327) so ModernChic's hispeed
-      // panel can show "current / no-cover" × "current bpm / main / min / max bpm" combos.
-      // We compute all 16 from the same `whiteDurationMs` / `greenDurationMs` helpers below.
+      // `currentBpmForDuration()` samples the live BPM at the engine's playhead so SOFLAN
+      // charts see the readout track each BPM change — matches `LaneRenderer.nbpm`.
+      // `_LANECOVER_ON` variants honour the player's lanecover slider; `_LANECOVER_OFF`
+      // pass 0 so the readout shows the no-cover baseline.
+      //
+      // 8 white + 8 green variants (1312-1327) cover {current bpm / main / min / max} ×
+      // {cover on / off}. ModernChic's hispeed panel reads several of these in parallel.
       case BEATORAJA_NUM.DURATION:
       case BEATORAJA_NUM.DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.currentBpmForDuration());
+        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.currentBpmForDuration());
       case BEATORAJA_NUM.DURATION_GREEN:
       case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.currentBpmForDuration());
       case BEATORAJA_NUM.DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.currentBpmForDuration());
+        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.currentBpmForDuration());
       case BEATORAJA_NUM.DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.currentBpmForDuration());
       case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.chart?.metadata.bpm ?? 0);
+        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedMainBpmValue());
       case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedMainBpmValue());
       case BEATORAJA_NUM.MAINBPM_DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.chart?.metadata.bpm ?? 0);
+        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedMainBpmValue());
       case BEATORAJA_NUM.MAINBPM_DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedMainBpmValue());
       case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.cachedBpmRange().min);
+        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().min);
       case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().min);
       case BEATORAJA_NUM.MINBPM_DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.cachedBpmRange().min);
+        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().min);
       case BEATORAJA_NUM.MINBPM_DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().min);
       case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_ON:
-        return whiteDurationMs(this.visibleRatio(true), this.lastHiSpeed, this.cachedBpmRange().max);
+        return whiteDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().max);
       case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_ON:
-        return greenDurationMs(this.visibleRatio(true), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(true), this.lastHiSpeed, this.cachedBpmRange().max);
       case BEATORAJA_NUM.MAXBPM_DURATION_LANECOVER_OFF:
-        return whiteDurationMs(this.visibleRatio(false), this.lastHiSpeed, this.cachedBpmRange().max);
+        return whiteDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().max);
       case BEATORAJA_NUM.MAXBPM_DURATION_GREEN_LANECOVER_OFF:
-        return greenDurationMs(this.visibleRatio(false), this.lastHiSpeed);
+        return greenDurationMs(this.lanecoverRatioForDuration(false), this.lastHiSpeed, this.cachedBpmRange().max);
 
       // ─── Wallclock + run uptime + FPS (17-29) ──────────────────────────────────────────
       // `time_*` reads the local wallclock — what beatoraja prints in the corner of every scene.
@@ -1919,14 +1997,22 @@ export class BeatorajaRuntimeAdapter {
         return 0;
 
       // ─── Chart metadata (90-92, 96) ────────────────────────────────────────────────────
-      // `num.maxbpm = 90`, `num.minbpm = 91`, `num.mainbpm = 92` — the chart's BPM range. We expose
-      // `chart.metadata.bpm` (the canonical BPM); min/max would need a scan over all `bpm` events
-      // we don't yet do. Returning the canonical value for all three is a reasonable approximation
-      // and matches beatoraja's behavior on charts without dynamic BPM changes.
+      // Mirrors `IntegerPropertyFactory` entries:
+      //   - num.maxbpm  = 90 → SongData.getMaxbpm()       (chart-wide max of BPM events)
+      //   - num.minbpm  = 91 → SongData.getMinbpm()       (chart-wide min, excluding stops)
+      //   - num.mainbpm = 92 → SongInformation.getMainbpm() (most-frequent BPM, note-count weighted)
+      //
+      // All three resolve from chart-static analysis: max/min via {@link cachedBpmRange}
+      // (a scan over channel-03 / channel-08 BPM events), main via the
+      // {@link computeBeatorajaChartNoteDistribution} pass that's already cached for the
+      // judgegraph type=0 path. Constant-tempo charts have all three equal to the
+      // canonical metadata BPM — same end-result as the previous fallback.
       case BEATORAJA_NUM.MAXBPM:
+        return Math.round(this.cachedBpmRange().max);
       case BEATORAJA_NUM.MINBPM:
+        return Math.round(this.cachedBpmRange().min);
       case BEATORAJA_NUM.MAINBPM:
-        return Math.round(this.chart?.metadata?.bpm ?? 0);
+        return Math.round(this.cachedMainBpmValue());
       // `num.playlevel = 96` — chart difficulty rating from `#PLAYLEVEL`. The header is sometimes a
       // string (e.g. `"☆12"`); coerce best-effort to an int with `parseInt`.
       case BEATORAJA_NUM.PLAYLEVEL: {
@@ -2063,11 +2149,13 @@ export class BeatorajaRuntimeAdapter {
         return summary?.poor ?? 0;
 
       // ─── Time-based readouts (160-165, 1163-1164) ──────────────────────────────────────
-      // `nowbpm = 160` — current BPM. Without a per-frame BPM signal we fall back to the chart's
-      // canonical BPM, which matches beatoraja's behavior on charts without dynamic BPM changes.
-      // Future: when the engine publishes `currentBpm`, hook it here.
+      // `nowbpm = 160` → upstream `lanerender.getNowBPM()` — the BPM in effect at the
+      // engine's playhead, which tracks SOFLAN charts in real time. Sampled from the
+      // cached {@link bpmSegments} timeline (built at chart load) keyed by
+      // `frame.currentSeconds * 1000`. Falls back to the chart's metadata BPM before the
+      // first frame lands.
       case BEATORAJA_NUM.NOWBPM:
-        return Math.round(this.chart?.metadata?.bpm ?? 0);
+        return Math.round(this.currentBpmForDuration());
       // `playtime_*` — minute / second elapsed since playback started. Pulled from the engine
       // frame's `currentSeconds` so it stays in lockstep with what the user hears (independent of
       // wallclock drift, which would cause clock readouts to slip from chart progress).
@@ -2582,29 +2670,46 @@ function mapSideRankToNowRank(sideRank: number): number {
 
 /**
  * "White" duration — milliseconds for a note to traverse the visible playfield at the given
- * BPM × hispeed × visible-ratio. Mirrors beatoraja's reference convention where white scales
- * INVERSELY with bpm (faster song = less time on screen) but the player can read the value
- * directly from the on-screen panel.
+ * "White-number" duration in ms. Mirrors upstream `LaneRenderer.java:330-335` exactly:
  *
- * Formula: `visibleRatio * 60000 / (hispeed * bpm) * 4` (= ms per 4-beat window). Returns 0
- * for degenerate inputs (zero / negative bpm or hispeed) so the value display stays at zero
- * rather than garbage. 4-beat window picked because IIDX-style charts measure scroll in
- * 4-beat units (= 1 measure of 4/4 time).
+ *     final double region = nscroll > 0 ? (240000 / nbpm / hispeed) / nscroll : 0;
+ *     final float lanecover = playconfig.isEnablelanecover() ? playconfig.getLanecover() : 0;
+ *     currentduration = (int) Math.round(region * (1 - lanecover));
+ *
+ * `240000 = 60 sec/min × 4 beats/measure × 1000 ms/sec` — the time (ms) for 4 beats at
+ * the given bpm with hispeed = 1 and scroll = 1. Higher BPM / hispeed / scroll all
+ * shorten the duration (notes traverse the lane faster); lanecover proportionally
+ * shortens it more by hiding the top of the lane.
+ *
+ * Note that `lift` does NOT enter this formula — it shifts the lane bottom upward but
+ * doesn't compress the scroll time. Upstream uses only `playconfig.getLanecover()` here.
+ *
+ * `nscroll` is the BMS `#SCROLL` channel-09-driven multiplier — currently held at 1.0
+ * since we don't yet plumb the per-beat scroll value through the engine UI bus. The
+ * default-skin's hispeed panel (which is the dominant consumer of this readout) reads
+ * close to upstream for non-SCROLL charts and stays internally consistent.
+ *
+ * Returns 0 for degenerate inputs (zero / negative bpm, hispeed, or nscroll) so the
+ * value display stays at zero rather than garbage.
  */
-function whiteDurationMs(visibleRatio: number, hispeed: number, bpm: number): number {
-  if (hispeed <= 0 || bpm <= 0) return 0;
-  return Math.round((visibleRatio * 60000 * 4) / (hispeed * bpm));
+function whiteDurationMs(lanecoverRatio: number, hispeed: number, bpm: number, nscroll = 1): number {
+  if (hispeed <= 0 || bpm <= 0 || nscroll <= 0) return 0;
+  const region = 240000 / bpm / hispeed / nscroll;
+  return Math.round(region * (1 - lanecoverRatio));
 }
 
 /**
- * "Green" duration — BPM-invariant equivalent of `whiteDurationMs`. Normalised to a constant
- * 130 BPM reference so the player's "scroll setting" reading stays the same regardless of the
- * chart's actual BPM. At BPM 130 the white and green numbers coincide; at higher BPMs green
- * stays put while white shrinks (reflects "same setting, but song scrolls visibly faster").
+ * "Green-number" duration in ms. Mirrors upstream `IntegerPropertyFactory` `duration_green`
+ * (313): `getCurrentDuration() * 3 / 5` — exactly 60 % of the white-number value.
+ *
+ * Upstream's older "BPM-invariant" interpretation (white normalised to a constant
+ * reference BPM) does NOT match this entry's actual implementation; the upstream code
+ * is plain `* 3 / 5`. The previous helper used the BPM-invariant formula, which produced
+ * different values from upstream on every non-130-BPM chart. This rewrite restores parity.
  */
-function greenDurationMs(visibleRatio: number, hispeed: number): number {
-  if (hispeed <= 0) return 0;
-  return Math.round((visibleRatio * 60000 * 4) / (hispeed * 130));
+function greenDurationMs(lanecoverRatio: number, hispeed: number, bpm: number, nscroll = 1): number {
+  const white = whiteDurationMs(lanecoverRatio, hispeed, bpm, nscroll);
+  return Math.round((white * 3) / 5);
 }
 
 /**

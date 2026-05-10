@@ -1598,6 +1598,230 @@ describe('BeatorajaRuntimeAdapter — judgegraph type=1 (per-second judge state)
   });
 });
 
+// ─── HISPEED resolvers (10 / 310 / 311) ──────────────────────────────────────────────
+// Mirrors upstream `IntegerPropertyFactory`:
+//   NUMBER_HISPEED       (310) = (int) hispeed                — integer part only
+//   NUMBER_HISPEED_LR2   (10)  = (int)(hispeed * 100)         — × 100 single int
+//   NUMBER_HISPEED_AFTERDOT (311) = (int)(hispeed * 100) % 100 — 2-digit decimal
+describe('BeatorajaRuntimeAdapter — resolveNumberValue HISPEED', () => {
+  it('returns the integer part for HISPEED (310) and × 100 for HISPEED_LR2 (10)', () => {
+    const adapter = new BeatorajaRuntimeAdapter({ chartPlayVariant: '7', baseOps: new Set(), getNowMs: () => 0 });
+    adapter.setHiSpeed(3.42);
+    // The default skin authors `id="hispeed", ref=310` + `id="hispeed-d", ref=311` as
+    // separate sprites that paint side-by-side as "3" + "." + "42". Conflating 310 with
+    // 10 would have collapsed the integer half to "342" → digit=2 right-truncate → "42",
+    // erasing the integer "3". Restoring the upstream split keeps both halves visible.
+    expect(adapter.resolveNumberValue(310)).toBe(3);
+    expect(adapter.resolveNumberValue(10)).toBe(342);
+    expect(adapter.resolveNumberValue(311)).toBe(42);
+  });
+
+  it('handles fractional hispeed values like 1.555 with `(int)` truncation semantics', () => {
+    // Java's `(int)(1.555 * 100)` = 155 (truncation), not 156 (round). Our adapter must
+    // match — the AFTERDOT slot is then `155 % 100 = 55`, which the player reads as
+    // "1.55x" matching what beatoraja shows.
+    const adapter = new BeatorajaRuntimeAdapter({ chartPlayVariant: '7', baseOps: new Set(), getNowMs: () => 0 });
+    adapter.setHiSpeed(1.555);
+    expect(adapter.resolveNumberValue(310)).toBe(1);
+    expect(adapter.resolveNumberValue(10)).toBe(155);
+    expect(adapter.resolveNumberValue(311)).toBe(55);
+  });
+});
+
+// ─── DURATION (312) — upstream LaneRenderer formula ──────────────────────────────────
+describe('BeatorajaRuntimeAdapter — resolveNumberValue DURATION', () => {
+  it('matches upstream `LaneRenderer.getCurrentDuration()` for the no-cover case', () => {
+    // Upstream: `region = 240000 / bpm / hispeed / nscroll` (we hold nscroll = 1).
+    // BPM 140, hispeed 3.42 → 240000 / 140 / 3.42 = 501.05 → round 501. Matches what
+    // beatoraja's reference skin shows on the bottom panel for this exact configuration
+    // (the original screenshot the user posted: "DURATION 500" off by 1 from rounding).
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { bpm: 140 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    adapter.setHiSpeed(3.42);
+    expect(adapter.resolveNumberValue(312)).toBe(501);
+  });
+
+  it('shrinks proportionally to lanecover for the LANECOVER_ON variant', () => {
+    // 240000 / 130 / 1.0 = 1846.15 → round 1846; with lanecover 0.5 → 923.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { bpm: 130 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    adapter.setHiSpeed(1.0);
+    adapter.setLanecover(0.5);
+    expect(adapter.resolveNumberValue(312)).toBe(923);
+    // _LANECOVER_OFF reports the raw region — unaffected by the slider.
+    expect(adapter.resolveNumberValue(1314)).toBe(1846);
+  });
+
+  it('does NOT factor lift into the DURATION readout (mirrors upstream)', () => {
+    // Upstream `LaneRenderer.java:333` uses `(1 - lanecover)` only — `lift` is a
+    // separate `OFFSET_LIFT` pixel-shift with no influence on scroll time. Engaging
+    // lift must NOT change the white-number value.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { bpm: 130 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    adapter.setHiSpeed(1.0);
+    const before = adapter.resolveNumberValue(312);
+    adapter.setLift(0.5);
+    expect(adapter.resolveNumberValue(312)).toBe(before);
+  });
+
+  it('returns 60% of the white duration for DURATION_GREEN (313)', () => {
+    // Upstream `IntegerPropertyFactory.duration_green` = `getCurrentDuration() * 3 / 5`.
+    // Plain integer division of the white value — NOT a separate BPM-invariant formula.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { bpm: 130 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    adapter.setHiSpeed(1.0);
+    const white = adapter.resolveNumberValue(312);
+    const green = adapter.resolveNumberValue(313);
+    expect(white).toBe(1846);
+    expect(green).toBe(Math.round((1846 * 3) / 5)); // 1108
+  });
+
+  it('returns 0 when the chart\'s BPM is 0 / missing (defensive guard)', () => {
+    // `whiteDurationMs(... 0, hispeed)` short-circuits to 0 — same defensive behaviour as
+    // `setHiSpeed(0)` does at the input gate. Mirrors upstream's `nbpm <= 0` early-return
+    // shape (the formula divides by bpm and would NaN otherwise).
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { bpm: 0 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    expect(adapter.resolveNumberValue(312)).toBe(0);
+  });
+});
+
+// ─── BPM resolvers (90 / 91 / 92 / 160) ──────────────────────────────────────────────
+// Mirrors upstream `IntegerPropertyFactory` `maxbpm` / `minbpm` / `mainbpm` / `nowbpm`.
+describe('BeatorajaRuntimeAdapter — resolveNumberValue BPM', () => {
+  function makeBpmChart(opts: {
+    bpm: number;
+    bpmTable?: Record<string, number>;
+    events?: ReadonlyArray<{ measure?: number; channel: string; value?: string; pos?: [number, number] }>;
+  }): import('@be-music/json').BeMusicJson {
+    return {
+      metadata: { bpm: opts.bpm, title: 'bpm-test' } as unknown as import('@be-music/json').BeMusicJson['metadata'],
+      events: (opts.events ?? []).map((e) => ({
+        measure: e.measure ?? 0,
+        channel: e.channel,
+        position: (e.pos ?? [0, 1]) as unknown as import('@be-music/json').BeMusicJson['events'][0]['position'],
+        value: e.value ?? '01',
+      })),
+      measures: [],
+      bms: { lnObjs: [] } as unknown as import('@be-music/json').BeMusicJson['bms'],
+      resources: {
+        bpm: opts.bpmTable ?? {},
+        stop: {},
+      } as unknown as import('@be-music/json').BeMusicJson['resources'],
+    } as unknown as import('@be-music/json').BeMusicJson;
+  }
+
+  it('returns the chart\'s BPM for all variants on a constant-tempo chart', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: makeBpmChart({ bpm: 140 }),
+    });
+    expect(adapter.resolveNumberValue(90)).toBe(140); // MAXBPM
+    expect(adapter.resolveNumberValue(91)).toBe(140); // MINBPM
+    expect(adapter.resolveNumberValue(92)).toBe(140); // MAINBPM
+    expect(adapter.resolveNumberValue(160)).toBe(140); // NOWBPM (no frame yet)
+  });
+
+  it('reports the chart-wide max / min on a SOFLAN chart with channel-03 BPM events', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: makeBpmChart({
+        bpm: 140,
+        events: [
+          // Channel 03 = inline hex BPM. 'F0' = 240, 'A0' = 160.
+          { channel: '03', value: 'F0', pos: [0, 1] }, // jumps to 240 at start
+          { channel: '03', value: 'A0', pos: [2, 4] }, // back to 160 at beat 2
+          { channel: '11', pos: [0, 1] }, // a note so the chart isn't degenerate
+        ],
+      }),
+    });
+    expect(adapter.resolveNumberValue(90)).toBe(240); // max = F0
+    expect(adapter.resolveNumberValue(91)).toBe(140); // min = initial 140
+  });
+
+  it('tracks live BPM at the playhead via NOWBPM (160) — SOFLAN-aware', () => {
+    // 140 BPM start, jumps to 240 at beat 4 (= 1 measure later, 1714 ms at 140 BPM).
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: makeBpmChart({
+        bpm: 140,
+        events: [
+          { channel: '11', pos: [0, 1] },
+          { channel: '03', value: 'F0', pos: [0, 1], measure: 1 }, // BPM 240 at measure 1 start (= beat 4)
+          { channel: '11', pos: [0, 1], measure: 1 },
+        ],
+      }),
+    });
+    // Before any frame lands, NOWBPM falls back to metadata.bpm.
+    expect(adapter.resolveNumberValue(160)).toBe(140);
+    // Frame at 0.5 sec — well before the BPM jump (which happens at 1714 ms).
+    adapter.applyFrame({
+      currentSeconds: 0.5,
+      totalSeconds: 100,
+      summary: {} as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveNumberValue(160)).toBe(140);
+    // Frame at 2 sec — past the 1714 ms BPM jump.
+    adapter.applyFrame({
+      currentSeconds: 2.0,
+      totalSeconds: 100,
+      summary: {} as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveNumberValue(160)).toBe(240);
+  });
+
+  it('uses the most-frequent (note-weighted) BPM for MAINBPM (92)', () => {
+    // Two BPM regions: 140 (3 notes worth of run-time) → 280 (1 note's worth). The
+    // most-frequent BPM (= mainBpm) is 140 because it covers more notes. Upstream's
+    // `SongInformation.getMainbpm()` does exactly this weighted selection.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: makeBpmChart({
+        bpm: 140,
+        events: [
+          { channel: '11', pos: [0, 1] }, // beat 0 @ 140
+          { channel: '11', pos: [2, 4] }, // beat 2 @ 140
+          { channel: '11', pos: [0, 1], measure: 1 }, // beat 4 @ 140
+          { channel: '03', value: '46', pos: [2, 4], measure: 1 }, // BPM 70 at beat 6 (low BPM)
+          { channel: '11', pos: [3, 4], measure: 1 }, // beat 7 @ 70 (just one note at the slow BPM)
+        ],
+      }),
+    });
+    // Most notes (3) are at 140; just 1 note at 70. Main BPM should be 140.
+    expect(adapter.resolveNumberValue(92)).toBe(140);
+  });
+});
+
 // ─── timingvisualizer judge windows resolver ─────────────────────────────────────────
 describe('BeatorajaRuntimeAdapter — resolveJudgeWindowsMs', () => {
   it('returns undefined when no chart is loaded', () => {
