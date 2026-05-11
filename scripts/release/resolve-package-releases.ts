@@ -7,8 +7,12 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '..', '..');
 const packagesDir = resolve(repositoryDir, 'packages');
 
+// SEA-eligible packages, keyed by their package slug (directory name under `packages/`). The CLI/TUI
+// frontend lives in `@be-music/player-tui` since the player-tui split — the engine library
+// `@be-music/player` does not ship an executable, so it must NOT trigger SEA jobs. `archiveBaseName`
+// stays `be-music-player` (the user-facing binary name) regardless of the source package's slug.
 const SEA_RELEASES = new Map([
-  ['player', { archiveBaseName: 'be-music-player' }],
+  ['player-tui', { archiveBaseName: 'be-music-player' }],
   ['audio-renderer', { archiveBaseName: 'be-music-audio-render' }],
 ]);
 
@@ -192,7 +196,7 @@ async function main(): Promise<void> {
   }
 
   const seaReleases = releases.filter((release) => release.isSeaPackage);
-  const playerRelease = seaReleases.find((release) => release.packageSlug === 'player');
+  const playerTuiRelease = seaReleases.find((release) => release.packageSlug === 'player-tui');
   const audioRendererRelease = seaReleases.find((release) => release.packageSlug === 'audio-renderer');
 
   if (options.jsonOutput) {
@@ -207,9 +211,9 @@ async function main(): Promise<void> {
     const outputLines = [];
     setGitHubOutput(outputLines, 'has_releases', releases.length > 0 ? 'true' : 'false');
     setGitHubOutput(outputLines, 'has_sea_releases', seaReleases.length > 0 ? 'true' : 'false');
-    setGitHubOutput(outputLines, 'release_player', playerRelease ? 'true' : 'false');
+    setGitHubOutput(outputLines, 'release_player_tui', playerTuiRelease ? 'true' : 'false');
     setGitHubOutput(outputLines, 'release_audio_renderer', audioRendererRelease ? 'true' : 'false');
-    setGitHubOutput(outputLines, 'player_version', playerRelease?.version ?? '');
+    setGitHubOutput(outputLines, 'player_tui_version', playerTuiRelease?.version ?? '');
     setGitHubOutput(outputLines, 'audio_renderer_version', audioRendererRelease?.version ?? '');
     setGitHubOutput(outputLines, 'releases_json', JSON.stringify(releases));
     setGitHubOutput(outputLines, 'sea_releases_json', JSON.stringify(seaReleases));
