@@ -1,6 +1,14 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  loadExportsBenchmarkSnapshot,
+  loadExportsBenchmarkSnapshotOrUndefined,
+  parseNonNegativeCliNumber,
+  parsePositiveCliInteger,
+  resolveCliValue,
+  runCliMain,
+} from './cli-utils.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
 interface CliDefaults {
@@ -48,8 +56,8 @@ const DEFAULTS: CliDefaults = {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2), DEFAULTS);
-  const headSnapshot = await loadSnapshot(options.headPath);
-  const baseSnapshot = options.basePath ? await loadSnapshotOrUndefined(options.basePath) : undefined;
+  const headSnapshot = await loadExportsBenchmarkSnapshot(options.headPath);
+  const baseSnapshot = options.basePath ? await loadExportsBenchmarkSnapshotOrUndefined(options.basePath) : undefined;
 
   const markdown =
     baseSnapshot !== undefined
@@ -88,33 +96,6 @@ async function main(): Promise<void> {
 
   if (options.failOnRegression && summary.regressedCount > 0) {
     process.exitCode = 1;
-  }
-}
-
-async function loadSnapshot(pathValue: string): Promise<ExportsBenchmarkSnapshot> {
-  const raw = await readFile(pathValue, 'utf8');
-  const parsed = JSON.parse(raw) as Partial<ExportsBenchmarkSnapshot>;
-  if (parsed.schemaVersion !== 1) {
-    throw new Error(`Unsupported snapshot schema at ${pathValue}`);
-  }
-  if (!parsed.results || typeof parsed.results !== 'object') {
-    throw new Error(`Invalid snapshot (results is missing): ${pathValue}`);
-  }
-  if (!parsed.totals || typeof parsed.totals !== 'object') {
-    throw new Error(`Invalid snapshot (totals is missing): ${pathValue}`);
-  }
-  return parsed as ExportsBenchmarkSnapshot;
-}
-
-async function loadSnapshotOrUndefined(pathValue: string): Promise<ExportsBenchmarkSnapshot | undefined> {
-  try {
-    return await loadSnapshot(pathValue);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes('ENOENT')) {
-      return undefined;
-    }
-    throw error;
   }
 }
 
@@ -329,32 +310,32 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
       process.exit(0);
     }
     if (token === '--head') {
-      headPath = resolveValue(args[index + 1], '--head');
+      headPath = resolveCliValue(args[index + 1], '--head');
       index += 1;
       continue;
     }
     if (token === '--base') {
-      basePath = resolveValue(args[index + 1], '--base');
+      basePath = resolveCliValue(args[index + 1], '--base');
       index += 1;
       continue;
     }
     if (token === '--output') {
-      outputPath = resolveValue(args[index + 1], '--output');
+      outputPath = resolveCliValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
     if (token === '--threshold') {
-      thresholdPercent = parseNonNegativeNumber(args[index + 1], '--threshold');
+      thresholdPercent = parseNonNegativeCliNumber(args[index + 1], '--threshold');
       index += 1;
       continue;
     }
     if (token === '--top') {
-      topCount = parsePositiveInteger(args[index + 1], '--top');
+      topCount = parsePositiveCliInteger(args[index + 1], '--top');
       index += 1;
       continue;
     }
     if (token === '--summary') {
-      summaryPath = resolveValue(args[index + 1], '--summary');
+      summaryPath = resolveCliValue(args[index + 1], '--summary');
       index += 1;
       continue;
     }
@@ -402,29 +383,6 @@ function printUsage(defaults: CliDefaults): void {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
-function resolveValue(value: string | undefined, optionName: string): string {
-  if (!value) {
-    throw new Error(`Missing value for ${optionName}`);
-  }
-  return value;
-}
-
-function parsePositiveInteger(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseInt(resolveValue(value, optionName), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${optionName} must be a positive integer`);
-  }
-  return parsed;
-}
-
-function parseNonNegativeNumber(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseFloat(resolveValue(value, optionName));
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error(`${optionName} must be a non-negative number`);
-  }
-  return parsed;
-}
-
 function formatSha(sha: string | undefined): string {
   if (!sha || sha.length === 0) {
     return 'unknown';
@@ -454,8 +412,4 @@ function formatRunCount(snapshot: ExportsBenchmarkSnapshot): string {
   return `${runCount}`;
 }
 
-void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${message}\n`);
-  process.exit(1);
-});
+runCliMain(import.meta.url, main);
