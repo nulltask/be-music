@@ -637,6 +637,29 @@ export class BeatorajaPlaySkinView {
   readonly width: number;
   readonly height: number;
   /**
+   * Clip mask that bounds every descendant of `container` to the skin's authored canvas
+   * `(0, 0, width, height)`. Mirrors the LR2 path's `designClipMask` at
+   * `pixi-gameplay.ts:469`: an off-stage skin destination (slide-ins authored from
+   * negative coordinates, scroll-from-top effects, lane chrome that extends past the
+   * skin's authored stage edge, etc.) gets clipped at the canvas edge instead of
+   * bleeding into the host's letterbox / pillarbox bars.
+   *
+   * Drawn as a child of `container` so the same `fitToStage` transform applied to the
+   * canvas also applies to the mask — Pixi clips against the mask's WORLD-space bounds,
+   * which therefore line up with the on-screen rect of the authored canvas regardless of
+   * window aspect ratio.
+   */
+  private readonly clipMask = new Graphics();
+
+  /**
+   * `container.children` filtered to exclude the {@link clipMask} — i.e. the actual sprite /
+   * graphics children produced by the skin. Test utilities and host-side z-order callers prefer
+   * this so the clip-mask Graphics doesn't pollute their counts / indexing logic.
+   */
+  get renderableChildren(): ReadonlyArray<Container['children'][number]> {
+    return this.container.children.filter((child) => child !== this.clipMask);
+  }
+  /**
    * Index inside `container.children` where note / marker layers should be inserted by the host
    * to place them at the correct z-order. Beatoraja themes author a `{id = noteSection.id, offset
    * = N}` destination — the "notes" anchor — that marks WHERE in the destination z-stack the
@@ -1315,6 +1338,19 @@ export class BeatorajaPlaySkinView {
     this.noteLayerInsertIndex = noteAnchorIndex ?? this.container.children.length;
     this.songListLayerInsertIndex = songListAnchorIndex ?? this.container.children.length;
     this.bgaLayerInsertIndex = bgaAnchorIndex ?? this.container.children.length;
+
+    // Install the canvas-edge clip mask LAST so the mask sits at top of the child stack and
+    // its bounds inherit the full `(0, 0, width, height)` rect of the container's local space.
+    // Anything authored outside this rect (notes that haven't scrolled into view, slide-in
+    // chrome animated from negative coords, etc.) is clipped at the canvas edge — matching the
+    // LR2 path's `designClipMask` behaviour. The mask is invisible by design (it's a mask, not
+    // a paint), so its z-position relative to siblings doesn't affect what's rendered; we just
+    // need it to live under the same transform so its world-space bounds line up with the
+    // visible canvas after `fitToStage`'s scale + translate cascades down from the host.
+    this.clipMask.label = 'beatoraja-skin-view/clip-mask';
+    this.clipMask.rect(0, 0, this.width, this.height).fill(0xffffff);
+    this.container.addChild(this.clipMask);
+    this.container.mask = this.clipMask;
 
     // Per-skin construction summary. `JSON.stringify` so devtools shows the full payload as a
     // selectable string (vs the collapsible tree `console.log(obj)` produces) — easier to copy
@@ -3879,6 +3915,12 @@ export class BeatorajaPlaySkinView {
       }
     }
     this.entries.length = 0;
+    // Detach the clip mask reference before destroy so Pixi doesn't keep the (already-pending-
+    // destruction) Graphics alive through the container's `mask` slot. Destroy the mask
+    // explicitly — it doesn't appear in `entries[]` and would otherwise leak its
+    // GraphicsContext / GPU buffer.
+    this.container.mask = null;
+    this.clipMask.destroy({ children: false, texture: false, textureSource: false });
     this.container.destroy({ children: false });
   }
 }

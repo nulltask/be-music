@@ -46,9 +46,25 @@ function makeSkin(extra: Partial<BeatorajaSkin> = {}): BeatorajaSkin {
 describe('BeatorajaPlaySkinView', () => {
   it('builds a sprite per `(image, destination)` pair', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
-    expect(view.container.children).toHaveLength(1);
+    expect(view.renderableChildren).toHaveLength(1);
     expect(view.width).toBe(1280);
     expect(view.height).toBe(720);
+    view.dispose();
+  });
+
+  it('clips the container to the authored canvas via an off-stage mask', () => {
+    // Skin destinations authored outside `(0, 0, skin.w, skin.h)` (slide-in chrome from negative
+    // coords, scroll-from-top notes, lane chrome extending past the playfield's authored bottom)
+    // must be CLIPPED to the canvas edge — matching LR2's `designClipMask` at
+    // `pixi-gameplay.ts:469`. Without the mask, those elements bleed into the host's letterbox /
+    // pillarbox bars and read as "the skin is leaking outside its stage".
+    const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
+    // The mask is installed on the container and SEPARATELY tracked as a child. `renderableChildren`
+    // filters it out so test counts remain semantic, but `container.mask` must be set and the mask
+    // graphic must be present in the underlying children list (Pixi v8 requires the mask to be
+    // somewhere in the rendered scene graph).
+    expect(view.container.mask).not.toBeNull();
+    expect(view.container.children.length).toBe(view.renderableChildren.length + 1);
     view.dispose();
   });
 
@@ -67,7 +83,7 @@ describe('BeatorajaPlaySkinView', () => {
     });
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     // Offset 0 (id=2) renders first, then offset-5 entries in source order (id=1, id=3).
-    const children = view.container.children;
+    const children = view.renderableChildren;
     expect(children).toHaveLength(3);
     view.dispose();
   });
@@ -81,14 +97,14 @@ describe('BeatorajaPlaySkinView', () => {
       ],
     });
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
-    expect(view.container.children).toHaveLength(1);
+    expect(view.renderableChildren).toHaveLength(1);
     view.dispose();
   });
 
   it('updates sprite props from the keyframe sample (Y-flipped from libGDX Y-UP into Pixi Y-DOWN)', () => {
     const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const sprite = view.container.children[0] as { x: number; y: number; visible: boolean; alpha: number };
+    const sprite = view.renderableChildren[0] as { x: number; y: number; visible: boolean; alpha: number };
     expect(sprite.visible).toBe(true);
     // beatoraja's default `center = 0` puts the anchor at the rect's mid-point (0.5, 0.5), so
     // sprite.x = props.x + 0.5 * w = 10 + 50 = 60. Y is similarly offset by half the height.
@@ -116,7 +132,7 @@ describe('BeatorajaPlaySkinView', () => {
     });
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 2000 });
-    const sprite = view.container.children[0] as { visible: boolean };
+    const sprite = view.renderableChildren[0] as { visible: boolean };
     expect(sprite.visible).toBe(false);
     view.dispose();
   });
@@ -134,9 +150,9 @@ describe('BeatorajaPlaySkinView', () => {
     });
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+    expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(false);
     view.update({ activeOps: new Set([920]), getTimerStart: () => 0, nowMs: 0 });
-    expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
+    expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(true);
     view.dispose();
   });
 
@@ -159,10 +175,10 @@ describe('BeatorajaPlaySkinView', () => {
       resolveGaugePercent: () => gauge,
     });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+    expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(false);
     gauge = 80;
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
+    expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(true);
     draw.dispose();
     view.dispose();
   });
@@ -194,7 +210,7 @@ describe('BeatorajaPlaySkinView', () => {
       ],
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
-    expect(view.container.children).toHaveLength(5);
+    expect(view.renderableChildren).toHaveLength(5);
     view.dispose();
   });
 
@@ -217,7 +233,7 @@ describe('BeatorajaPlaySkinView', () => {
       resolveNumberValue: (ref) => (ref === 71 ? 12345 : undefined),
     });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const sprites = view.container.children;
+    const sprites = view.renderableChildren;
     expect(sprites).toHaveLength(5);
     // beatoraja's default `center = 0` shifts each digit's anchor by half a slot, so the per-
     // digit x = dst.x + i * slotWidth + center.x * slotWidth = 100 + i * 24 + 12.
@@ -250,7 +266,7 @@ describe('BeatorajaPlaySkinView', () => {
       resolveNumberValue: () => undefined, // ref 300 → MIN_VALUE-style hide
     });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const sprites = view.container.children;
+    const sprites = view.renderableChildren;
     expect(sprites).toHaveLength(4);
     for (const sprite of sprites) {
       expect((sprite as { visible: boolean }).visible).toBe(false);
@@ -275,7 +291,7 @@ describe('BeatorajaPlaySkinView', () => {
       resolveNumberValue: () => 0,
     });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const sprites = view.container.children;
+    const sprites = view.renderableChildren;
     expect(sprites).toHaveLength(4);
     // padding=1 (zero-pad) → every slot paints "0", so all 4 stay visible.
     for (const sprite of sprites) {
@@ -342,7 +358,7 @@ describe('BeatorajaPlaySkinView', () => {
       nowMs: 0,
       resolveOffset: (id) => (id === 999 ? { x: 5, y: 10, w: 6, h: 8, r: 0, a: 0 } : undefined),
     });
-    const sprite = view.container.children[0] as { x: number; y: number; width: number; height: number };
+    const sprite = view.renderableChildren[0] as { x: number; y: number; width: number; height: number };
     expect(sprite.x).toBeCloseTo(120, 4);
     expect(sprite.y).toBeCloseTo(594, 4);
     expect(sprite.width).toBe(30);
@@ -360,7 +376,7 @@ describe('BeatorajaPlaySkinView', () => {
       destination: [{ id: 5, dst: [{ time: 0, x: 0, y: 0, w: 1, h: 1 }] }],
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
-    expect(view.container.children).toHaveLength(1);
+    expect(view.renderableChildren).toHaveLength(1);
     view.dispose();
   });
 
@@ -381,7 +397,7 @@ describe('BeatorajaPlaySkinView', () => {
       ],
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
-    expect(view.container.children).toHaveLength(3);
+    expect(view.renderableChildren).toHaveLength(3);
     view.dispose();
   });
 
@@ -395,7 +411,7 @@ describe('BeatorajaPlaySkinView', () => {
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const node = view.container.children[0] as { x: number; y: number; alpha: number; visible: boolean };
+    const node = view.renderableChildren[0] as { x: number; y: number; alpha: number; visible: boolean };
     expect(node.visible).toBe(true);
     expect(node.x).toBe(100);
     // dst.y=50, h=24 inside a 720-tall skin → Pixi y = 720 - 50 - 24 = 646.
@@ -433,7 +449,7 @@ describe('BeatorajaPlaySkinView', () => {
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const [leftNode, centerNode, rightNode] = view.container.children as unknown as Array<{
+    const [leftNode, centerNode, rightNode] = view.renderableChildren as unknown as Array<{
       x: number;
       anchor: { x: number };
     }>;
@@ -476,7 +492,7 @@ describe('BeatorajaPlaySkinView', () => {
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     // t=0: dst.h=48, size=24 → scale = 2.
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const node = view.container.children[0] as { scale: { x: number; y: number } };
+    const node = view.renderableChildren[0] as { scale: { x: number; y: number } };
     expect(node.scale.y).toBeCloseTo(2, 6);
     expect(node.scale.x).toBeCloseTo(2, 6);
     // t=1000: dst.h=12, size=24 → scale = 0.5.
@@ -518,7 +534,7 @@ describe('BeatorajaPlaySkinView', () => {
       resolveFontKind: () => 'bitmap',
     });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const node = view.container.children[0] as { scale: { x: number; y: number } };
+    const node = view.renderableChildren[0] as { scale: { x: number; y: number } };
     // dst.h animates 48 → 12 but scale must stay at 1 for both — bitmap text's size is
     // locked at `text[].size = 24` via Pixi's `style.fontSize`, not derived from the rect.
     expect(node.scale.y).toBeCloseTo(1, 6);
@@ -561,7 +577,7 @@ describe('BeatorajaPlaySkinView', () => {
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-    const node = view.container.children[0] as { scale: { x: number; y: number } };
+    const node = view.renderableChildren[0] as { scale: { x: number; y: number } };
     // |size|=24, dst.h=48 → scale = 2 (positive — would be -2 without the abs).
     expect(node.scale.y).toBeCloseTo(2, 6);
     expect(node.scale.x).toBeCloseTo(2, 6);
@@ -587,7 +603,7 @@ describe('BeatorajaPlaySkinView', () => {
     };
     const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
     view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 1500 });
-    expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+    expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(false);
     view.dispose();
   });
 
@@ -609,11 +625,11 @@ describe('BeatorajaPlaySkinView', () => {
       view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
       // Two Graphics children mounted per judgegraph entry: the bars graph + the playhead
       // cursor overlay (only used for type=0, hidden here on type=1).
-      expect(view.container.children).toHaveLength(2);
+      expect(view.renderableChildren).toHaveLength(2);
       // After update with non-zero bars, the histogram Graphics is visible; the cursor stays
       // hidden because type=1 doesn't carry a time axis.
-      expect((view.container.children[0] as { visible: boolean }).visible).toBe(true);
-      expect((view.container.children[1] as { visible: boolean }).visible).toBe(false);
+      expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(true);
+      expect((view.renderableChildren[1] as { visible: boolean }).visible).toBe(false);
       view.dispose();
     });
 
@@ -632,7 +648,7 @@ describe('BeatorajaPlaySkinView', () => {
         resolveJudgeGraphBars: () => [0, 0, 0, 0, 0],
       });
       view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-      expect((view.container.children[0] as { visible: boolean }).visible).toBe(false);
+      expect((view.renderableChildren[0] as { visible: boolean }).visible).toBe(false);
       view.dispose();
     });
   });
@@ -658,7 +674,7 @@ describe('BeatorajaPlaySkinView', () => {
       };
       const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
       // 2 sprites mounted (bg + lanecover); the notes anchor is consumed without producing one.
-      expect(view.container.children).toHaveLength(2);
+      expect(view.renderableChildren).toHaveLength(2);
       // Anchor sat between bg and lanecover → after bg was added (children.length == 1) and
       // before lanecover was added.
       expect(view.noteLayerInsertIndex).toBe(1);
@@ -670,7 +686,7 @@ describe('BeatorajaPlaySkinView', () => {
       // anchor. Insert index defaults to the end of the children list — preserving the legacy
       // "marker/note layer goes on top" gameplay behavior.
       const view = new BeatorajaPlaySkinView({ skin: makeSkin(), textures: fakeTextureCache([0]) });
-      expect(view.noteLayerInsertIndex).toBe(view.container.children.length);
+      expect(view.noteLayerInsertIndex).toBe(view.renderableChildren.length);
       view.dispose();
     });
 
@@ -697,13 +713,13 @@ describe('BeatorajaPlaySkinView', () => {
       };
       const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
       view.update({ activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 });
-      expect(view.container.children).toHaveLength(2);
+      expect(view.renderableChildren).toHaveLength(2);
       // Lanecover is `children[0]`, bg is `children[1]` — declaration order preserved despite
       // lanecover's offset (4) being greater than bg's (3). Under the old z-by-offset sort
       // (`offset - offset || declarationOrder - declarationOrder`) the bg would have been
       // pulled in front of lanecover (lower offset wins). Identify the sprites by their unique
       // dst widths: lanecover authored w=100, bg w=1280.
-      const widths = view.container.children.map((c) => Math.round((c as unknown as { width: number }).width));
+      const widths = view.renderableChildren.map((c) => Math.round((c as unknown as { width: number }).width));
       expect(widths[0]).toBe(100);
       expect(widths[1]).toBe(1280);
       // Notes anchor sat between the two destinations — index 1 (after lanecover, before bg).
@@ -740,7 +756,7 @@ describe('BeatorajaPlaySkinView', () => {
       // The matched gauge entry pre-allocates `parts` cells + 1 overlay sprite, so the
       // container has at least 51 children when matching succeeded. Pre-fix the destination
       // dropped through to `imageById.get("2001")` (undefined) and produced no entry.
-      expect(view.container.children.length).toBeGreaterThanOrEqual(50);
+      expect(view.renderableChildren.length).toBeGreaterThanOrEqual(50);
       view.dispose();
     });
 
@@ -762,7 +778,7 @@ describe('BeatorajaPlaySkinView', () => {
         ],
       });
       const view = new BeatorajaPlaySkinView({ skin, textures: fakeTextureCache([0]) });
-      expect(view.container.children.length).toBeGreaterThanOrEqual(50);
+      expect(view.renderableChildren.length).toBeGreaterThanOrEqual(50);
       view.dispose();
     });
   });
@@ -828,7 +844,7 @@ describe('BeatorajaPlaySkinView', () => {
       // With the fix, both judge images expand into destinations; pre-fix the container
       // had no judge image entries at all (only the makeSkin default).
       // We assert at least 2 sprites are present (the 2 judge images).
-      expect(view.container.children.length).toBeGreaterThanOrEqual(2);
+      expect(view.renderableChildren.length).toBeGreaterThanOrEqual(2);
       view.dispose();
     });
   });
