@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@be-music/audio-renderer": "workspace:*",
+    "@be-music/beatoraja-skin": "workspace:*",
     "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
     "@be-music/lr2-skin": "workspace:*",

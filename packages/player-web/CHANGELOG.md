@@ -5,7 +5,6 @@
 ### Patch Changes
 
 - b9a5f51: Fix two LN-effect regressions on the web runtime:
-
   1. **AUTO LN lane laser fading out mid-LN.** The renderer's
      `applyEngineCommand` handler for `hold-lane-until-beat` did not add
      the lane to `pressedChannels`, so the `flash-lane` command emitted
@@ -51,7 +50,6 @@
   ## What changed
 
   ### `@be-music/player`
-
   - New `PlayerOptions.preparedChart` option lets the host hand the engine
     a pre-built `PreparedPlaybackChartData`. When provided,
     `autoPlay` / `manualPlay` use it verbatim and skip their own internal
@@ -72,7 +70,6 @@
     latch.
 
   ### `@be-music/player-web`
-
   - `PixiGameplayView.prepareSong` now calls `preparePlaybackChartData`
     itself, keeps the result on `this.preparedChart`, and forwards it to
     the engine through `engineOptions.preparedChart`. The renderer's
@@ -101,7 +98,6 @@
   each caused by the renderer's `extractTimedNotes` call disagreeing with
   the engine's. Sharing the prepared-chart instance removes the entire
   class:
-
   - **HIDE-on-judge dropouts**: notes vanishing partway down the lane
     before reaching the judgment line, because a `judged=true` flag from
     a different note crossed over via index mismatch
@@ -145,7 +141,6 @@
 ### Minor Changes
 
 - 632f274: Initial browser player implementation. Adds two packages:
-
   - **`@be-music/player-web`** — vanilla PixiJS scene host
     for the LR2 chart-player flow (select / decide / play /
     result), with scene-graph rendering driven by the parsed
@@ -163,7 +158,6 @@
     the runtime dep tree).
 
   Headline capabilities of the core:
-
   - **LR2 skin rendering**: frame chrome, BGA, lane lasers,
     scratch turntable with physics-driven streak alternation,
     bomb / FC / hold timers, animated bitmap fonts, gauge /
@@ -209,7 +203,6 @@
   across both runtimes.
 
   **Browser parity gains** (carried over from the engine):
-
   - Look-ahead lane keysound fallback: an empty press plays the next
     upcoming note's keysound on that lane, like beatoraja / LR2.
   - Free-Zone `17` / `27`: empty presses on these channels play the
@@ -223,7 +216,6 @@
     `summary.poor` increment, gauge penalty per gauge type, POOR BGA).
 
   **Engine surface (`@be-music/player`)**:
-
   - `PlayerOptions.createAudioSession` factory — host-supplied audio
     backend. Defaults to the bundled Node sink when omitted.
   - `PlayerOptions.createInputRuntime` / `createUiRuntime` — host-
@@ -246,7 +238,6 @@ performance.now()`).
     bundles can import the engine as-is.
 
   **Browser runtime adapters (`@be-music/player-web`)**:
-
   - `WebAudioSession` — Web Audio API implementation of the engine's
     `AudioSession` contract: immediate triggers, BGM scheduling,
     channel stops, pause / resume, key / BGM routing, dynamic volume
@@ -263,7 +254,6 @@ performance.now()`).
 mode, ui })` glue over the three adapters.
 
   **Browser performance / latency**:
-
   - Pixi `Application.init({ powerPreference: 'high-performance' })`
     — pin the renderer to the discrete GPU on hybrid laptops.
   - `<canvas style="contain: content">` — compositor isolation for
@@ -273,7 +263,6 @@ mode, ui })` glue over the three adapters.
     audible compressor pumping.
 
   **TUI fixes that came along**:
-
   - Absolute-path arguments now resolve correctly under pure-ESM
     Node runtimes (`tsx`, `node --import tsx/esm`); the previous
     `resolveCliPath` slow path silently fell back to `cwd` when its
@@ -288,7 +277,6 @@ mode, ui })` glue over the three adapters.
     share a comparable clock domain.
 
   **Demo (`@be-music/player-web-demo`)**:
-
   - The shared-engine path is the only playback path; the
     `useSharedEngine` opt-in flag has been removed along with the
     Debug Menu checkbox.

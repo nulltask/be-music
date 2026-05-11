@@ -100,7 +100,7 @@ const codecCases = [
   { label: 'OPUS', path: 'render-codec-test.opus' },
 ] as const;
 
-test.each(codecCases)('audio-renderer: $label サンプルを読み込んでミックスできる', async ({ path }) => {
+test.each(codecCases)('audio-renderer: decodes and mixes a $label sample', async ({ path }) => {
   const json = createSingleTriggerChart(path);
   const result = await renderJson(json, {
     baseDir: fixtureDir,

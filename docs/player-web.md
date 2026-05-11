@@ -16,10 +16,10 @@ The browser runtime uses these adapter modules:
 
 | module | role |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
-| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
-| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
-| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
+| [`web-audio-session.ts`](../packages/player-web/src/runtime/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
+| [`web-input-runtime.ts`](../packages/player-web/src/runtime/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
+| [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
+| [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
 
 `@be-music/player/core/engine` no longer imports `node:path` / `node:timers/promises`, so the module can be
 bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
@@ -79,8 +79,8 @@ The default LR2 skin is the verified compatibility target; custom themes work be
 The select scene exposes in-scene LR2 PLAY OPTION controls for hi-speed, autoplay, BGA mode/size, filters, sort, HS-FIX, HIDDEN/SUDDEN, lane cover, auto scratch, DP flip, 1P/2P random and mirror modes, and gauge variants.
 Select-time options are carried into gameplay during chart preparation.
 
-Scene-independent LR2 Pixi helpers live in [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) and
-[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts). They handle destination keyframe evaluation,
+Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) and
+[`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts). They handle destination keyframe evaluation,
 sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
 state-specific value resolution, timers, and input behavior.
 

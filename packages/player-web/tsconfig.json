@@ -10,6 +10,7 @@
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
   "references": [
     { "path": "../audio-renderer" },
+    { "path": "../beatoraja-skin" },
     { "path": "../chart" },
     { "path": "../json" },
     { "path": "../lr2-skin" },

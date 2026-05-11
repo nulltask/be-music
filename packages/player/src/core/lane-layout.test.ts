@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import {
+  createLaneBindings,
   resolveLaneChannels,
+  resolveLaneDisplayMode,
   resolveLr2LaneIndex,
   resolveSideKeySlot,
   resolveSideRelativeLaneIndex,
@@ -35,6 +37,35 @@ describe('resolveSideKeySlot', () => {
     // Channels outside the PMS-STD 22..25 band on the 2P side are rejected — there's no `#SRC_NOTE` slot for them.
     expect(resolveSideKeySlot('21', '9')).toBe(-1);
     expect(resolveSideKeySlot('28', '9')).toBe(-1);
+  });
+
+  test('5 KEY / 10 KEY — channels 18/19 (and 28/29) reject (no 6/7-key columns)', () => {
+    // 5K SP: keys 1..5 + scratch on 1P side. Channels 18/19 are not valid lane notes.
+    expect(resolveSideKeySlot('11', '5')).toBe(1);
+    expect(resolveSideKeySlot('15', '5')).toBe(5);
+    expect(resolveSideKeySlot('16', '5')).toBe(0);
+    expect(resolveSideKeySlot('18', '5')).toBe(-1);
+    expect(resolveSideKeySlot('19', '5')).toBe(-1);
+    // 10K DP: 5 keys + scratch per side. Same rejection on 2P side.
+    expect(resolveSideKeySlot('21', '10')).toBe(1);
+    expect(resolveSideKeySlot('25', '10')).toBe(5);
+    expect(resolveSideKeySlot('26', '10')).toBe(0);
+    expect(resolveSideKeySlot('28', '10')).toBe(-1);
+    expect(resolveSideKeySlot('29', '10')).toBe(-1);
+  });
+
+  test('7 KEY / 14 KEY — channels 18/19 stay valid (= slots 6/7)', () => {
+    // Sanity: the 5K-family clamp doesn't accidentally affect the 7K-family (where 18/19 ARE
+    // the 6/7-key columns). Without this regression test the clamp would silently break
+    // 7K play if someone misclassified the variant guard.
+    expect(resolveSideKeySlot('18', '7')).toBe(6);
+    expect(resolveSideKeySlot('19', '7')).toBe(7);
+    expect(resolveSideKeySlot('28', '14')).toBe(6);
+    expect(resolveSideKeySlot('29', '14')).toBe(7);
+    // Default (variant unset) keeps the legacy `'7'`-equivalent behavior — pre-existing callers
+    // that don't pass a variant still resolve 18/19 to 6/7 (matches the prior contract).
+    expect(resolveSideKeySlot('18')).toBe(6);
+    expect(resolveSideKeySlot('19')).toBe(7);
   });
 });
 
@@ -90,6 +121,53 @@ describe('resolveLaneChannels', () => {
   test('PMS / 9 KEY (STD) — 22..25 join the 1P-side rendering set', () => {
     const notes = [{ channel: '11' }, { channel: '15' }, { channel: '22' }, { channel: '25' }];
     expect(resolveLaneChannels(notes, '9')).toEqual(['11', '15', '22', '25']);
+  });
+});
+
+describe('lane mode `playVariant` host override (PlayerOptions.playVariant)', () => {
+  test('forces 9-key bindings on a `.bme` chart authored with #PLAYER 1 + channels 16/17/18/19', () => {
+    // BME-format POPN-9 charts that authored `#PLAYER 1` and used channels 16/17/18/19 fell
+    // through the content-based heuristic to `7-key-sp`, dropping channel 17 from
+    // `scorableNotes` (FREE ZONE clamp) and binding f/v to 18/19 only (no g/b). User-reported
+    // symptom: 9 KEY laser and bomb sprites failed to appear. With the host's
+    // `playVariant: '9'` override,
+    // the engine routes those channels through POPN-9 bindings regardless of the heuristic.
+    const channels = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+    const withOverride = createLaneBindings(channels, { player: 1, chartExtension: '.bme', playVariant: '9' });
+    // POPN_9KEY_BME_BINDINGS — channels 16/17/18/19 map to f/v/g/b respectively.
+    const ch16 = withOverride.find((b) => b.channel === '16');
+    const ch17 = withOverride.find((b) => b.channel === '17');
+    const ch18 = withOverride.find((b) => b.channel === '18');
+    const ch19 = withOverride.find((b) => b.channel === '19');
+    expect(ch16?.keyLabel).toBe('f');
+    expect(ch17?.keyLabel).toBe('v');
+    expect(ch18?.keyLabel).toBe('g');
+    expect(ch19?.keyLabel).toBe('b');
+    expect(ch16?.isScratch).toBe(false);
+
+    // Without the override, the same chart hits the 7-key-sp fallback — channel 16 becomes
+    // scratch and channels 17/18/19 lose the POPN-9 f/v/g/b bindings entirely.
+    const withoutOverride = createLaneBindings(channels, { player: 1, chartExtension: '.bme' });
+    const ch16NoOverride = withoutOverride.find((b) => b.channel === '16');
+    expect(ch16NoOverride?.isScratch).toBe(true);
+  });
+
+  test('respects the override even when chart channels are inconsistent with the variant', () => {
+    // A 9-key chart that happens to use only channels 11..15 (no 16/17/18/19) is still
+    // 9-key per the host's classification; the override prevents the heuristic from
+    // downgrading it to 5-key.
+    const channels = ['11', '12', '13', '14', '15'];
+    const mode = resolveLaneDisplayMode(channels, { player: 1, chartExtension: '.bms', playVariant: '9' });
+    expect(mode).toContain('9 KEY');
+  });
+
+  test('host-provided override wins over the chart-extension heuristic', () => {
+    // `.bms` chart with PLAYER 1 normally classifies as `5-key-sp`. With `playVariant: '7'`
+    // the override re-routes to `7-key-sp`. (Use case: a host that wants to play a 5-key
+    // chart with 7-key controls; rare, but the API supports it.)
+    const channels = ['11', '12', '13', '14', '15'];
+    const mode = resolveLaneDisplayMode(channels, { player: 1, chartExtension: '.bms', playVariant: '7' });
+    expect(mode).toBe('7 KEY SP');
   });
 });
 

@@ -513,7 +513,7 @@ describe('player-tui', () => {
 
   describe('formatJudgeComboDisplay', () => {
     // The TUI's NOWJUDGE plate pairs the judge verdict with the running combo for clean hits, but a
-    // beatoraja-compatible engine preserves combo through EMPTY POOR (空POOR — phantom press without a
+    // beatoraja-compatible engine preserves combo through EMPTY POOR (kara-poor — phantom press without a
     // judged note). Without a verdict-side guard the combo number leaks into the POOR plate as
     // "POOR 5", which conflicts with LR2 visual convention. Same logic for BAD (combo IS broken on
     // BAD, but if the engine ever publishes BAD with a non-zero combo we still want the plate clean).

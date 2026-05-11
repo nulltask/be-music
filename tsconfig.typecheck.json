@@ -24,6 +24,12 @@
       "@be-music/*": ["./packages/*/src/index.ts"]
     }
   },
-  "include": ["packages/*/src/**/*.ts", "scripts/**/*.ts", "vite.package.config.ts", "vitest.config.ts"],
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/src/**/*.d.ts",
+    "scripts/**/*.ts",
+    "vite.package.config.ts",
+    "vitest.config.ts"
+  ],
   "exclude": ["scripts/**/*.test.ts"]
 }

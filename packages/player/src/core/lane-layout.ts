@@ -92,6 +92,14 @@ export interface LaneModeOptions {
   player?: number;
   chartExtension?: string;
   platform?: NodeJS.Platform;
+  /**
+   * Direct lane-mode override. When the host has already classified the chart's variant
+   * (e.g. via `resolveChartPlayVariant` from `@be-music/chart`), pass it here to bypass the
+   * content-based heuristic entirely. Useful for charts the heuristic under-classifies —
+   * notably `.bme` POPN-9 charts authored with `#PLAYER 1` + channels 16/17/18/19, which the
+   * heuristic would route to `7-key-sp`.
+   */
+  playVariant?: ChartPlayVariant;
 }
 
 export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArray<string>): string | undefined {
@@ -123,6 +131,15 @@ export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVaria
   const digit = Number.parseInt(channel[1]!, 10);
   if (!Number.isFinite(digit)) return -1;
   if (digit >= 1 && digit <= 5) return digit;
+  // Channels 18/19 are valid LANE notes only on the 7-key family (`'7'` SP / `'14'` DP).
+  // 5-key family variants (`'5'` SP / `'10'` DP — 5 keys per side, no 6/7-key columns) reject
+  // them: a malformed BMS that authors notes on 18/19 in a 5K chart shouldn't trip the
+  // adapter into stamping ghost-lane bomb / keybeam / LN-hold timers for slots 6/7 that the
+  // mounted skin doesn't render. Returning `-1` here cascades through `resolveLane`'s
+  // `slot < 0 → undefined` guard, which all the lane-timer helpers already check.
+  if (playVariant === '5' || playVariant === '10') {
+    return -1;
+  }
   if (digit === 8) return 6;
   if (digit === 9) return 7;
   return -1;
@@ -356,6 +373,28 @@ function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions
   const has2P = [...existing].some((channel) => is2PSideLaneChannel(channel));
   const has7KeyMarker = existing.has('18') || existing.has('19');
   const has14KeyMarker = has7KeyMarker || existing.has('28') || existing.has('29');
+
+  // **Direct host override** — when the caller already classified the variant (e.g. the
+  // gameplay scene's `resolveChartPlayVariant`-derived `chartVariant`), trust it and bypass
+  // the heuristic.  Especially important for `.bme` POPN-9 charts authored with `#PLAYER 1`
+  // + channels 16/17/18/19: the heuristic below routes those to `7-key-sp` (channel 16 →
+  // scratch, 17 → FREE ZONE), dropping the `f/v/g/b` POPN-9 key bindings and the channel-17
+  // notes from `scorableNotes`.  Host-driven classification — even when based on the same
+  // heuristic — gives the rest of the pipeline a single source of truth.
+  if (options.playVariant !== undefined) {
+    switch (options.playVariant) {
+      case '5':
+        return '5-key-sp';
+      case '7':
+        return '7-key-sp';
+      case '9':
+        return '9-key';
+      case '10':
+        return '5-key-dp';
+      case '14':
+        return '14-key-dp';
+    }
+  }
 
   if (hasExtendedLane) {
     return has2P ? '48-key-dp' : '24-key-sp';

@@ -338,7 +338,8 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
   };
 }
 
-// Vite alias は string で starts-with マッチするので、長いサブパスを先に並べる必要がある。
+// Vite resolves aliases by string `startsWith` match, so longer subpaths must come first — otherwise
+// a shorter prefix entry would shadow them.
 //
 // `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
 // lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as
@@ -369,6 +370,7 @@ const workspaceAliases = [
   { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
   { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
   { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
+  { find: '@be-music/beatoraja-skin', replacement: resolve(repositoryDir, 'packages/beatoraja-skin/src/index.ts') },
   { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
   { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
   { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },

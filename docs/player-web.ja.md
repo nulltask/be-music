@@ -15,10 +15,10 @@ browser runtime は次の adapter module を使います。
 
 | module | 役割 |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio で実装します。即時発音、BGM scheduling、channel stop、pause/resume、key/BGM routing、動的 volume change、bmson `c=true` continuation、`#WAVCMD` gain を扱います。 |
-| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の input bus へ写像します。OS auto-repeat を除外し、`Escape` / `F5` / `Space` を command event へ送り、lane press には物理 event timestamp を付けます。 |
-| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | engine UI signal を Pixi host へ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。 |
-| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。 |
+| [`web-audio-session.ts`](../packages/player-web/src/runtime/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio で実装します。即時発音、BGM scheduling、channel stop、pause/resume、key/BGM routing、動的 volume change、bmson `c=true` continuation、`#WAVCMD` gain を扱います。 |
+| [`web-input-runtime.ts`](../packages/player-web/src/runtime/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の input bus へ写像します。OS auto-repeat を除外し、`Escape` / `F5` / `Space` を command event へ送り、lane press には物理 event timestamp を付けます。 |
+| [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts) | engine UI signal を Pixi host へ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。 |
+| [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts) | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。 |
 
 `@be-music/player/core/engine` は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
 含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
@@ -78,8 +78,8 @@ LR2 default skin を verified compatibility target とし、custom theme は実�
 select scene は、hi-speed、autoplay、BGA mode/size、filter、sort、HS-FIX、HIDDEN/SUDDEN、lane cover、auto scratch、DP flip、1P/2P random / mirror mode、gauge variant を扱う LR2 PLAY OPTION control を scene 内で提供します。
 select 時の option は chart preparation 時に gameplay へ引き継ぎます。
 
-scene に依存しない LR2 Pixi helper は [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) と
-[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
+scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) と
+[`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
 
 ## Scene lifecycle
 

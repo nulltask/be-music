@@ -572,9 +572,28 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '18', '21', '28']))).toBe('14');
     expect(resolveChartPlayVariant(chart('main.pms', ['11', '15', '22', '23', '24', '25']))).toBe('9');
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '17', '18', '19'], 3))).toBe('9');
+    // PMS-STD content authored as `.bme` — uses any of `22..25` AND no traditional IIDX 2P channels
+    // (`21`/`26..29`). Classified as `'9'` regardless of `.pms` extension so the engine picks up
+    // POPN-9 bindings (`22..25` → lanes 6..9). Before this rule the chart fell through to the IIDX
+    // 5K DP heuristic and the f/v/g/b lane bindings were lost.
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '22', '23', '24', '25']))).toBe(
-      '10',
+      '9',
     );
+    // BME POPN-9 — full 1P keyboard (`11..19`) authored as `#PLAYER 1`. Before the content-based rule the
+    // chart classified as `'7'` (saw `18`/`19`, didn't see `2X`) and the engine's 7-key SP bindings dropped
+    // the POPN-9 `f/v/g/b` on `16/17/18/19`.
+    expect(
+      resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '16', '17', '18', '19'])),
+    ).toBe('9');
+    // PMS-STD hybrid with 1P scratch — non-standard but uses POPN-specific `22..25`. Routes to `'9'`
+    // because `22..25` is the discriminator; the 1P-side scratch presence doesn't override it.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '16', '22', '23', '24', '25']))).toBe('9');
+    // Sparse PMS-STD authoring — single `22` channel use without any `21`/`26..29`. Still routes to
+    // `'9'` (a real IIDX 5K DP chart would have `21` and / or `26` for the leftmost 2P column / scratch).
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '15', '22']))).toBe('9');
+    // Real IIDX 5K DP — has scratch on both sides AND `21`. Stays at `'10'` (presence of `21`/`26..29`
+    // beats the PMS-STD signal).
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '16', '21', '22', '25', '26']))).toBe('10');
   });
 
   test('resolve long note helpers return empty results for non-BMS charts and missing LNOBJ markers', () => {

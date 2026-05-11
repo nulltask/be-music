@@ -1,5 +1,5 @@
 import {
-  BrowserSongLibrary,
+  BrowserSongCollectionStore,
   PixiGameplayView,
   PixiDecideView,
   PixiResultView,
@@ -8,6 +8,8 @@ import {
   checkBrowserCompat,
   describeSongCollection,
   downloadBlob,
+  loadAssetBytes,
+  loadTextureFromBytes,
   logger,
   makeWebmSeekable,
   parseCompressorMode,
@@ -31,6 +33,53 @@ import {
   type Lr2PlayVariant,
   type Lr2Skin,
 } from '@be-music/lr2-skin';
+import {
+  PixiBeatorajaDecideScene,
+  PixiBeatorajaGameplayView,
+  PixiBeatorajaResultScene,
+  Rectangle,
+  BeatorajaSkinAudioPlayer,
+  discoverBeatorajaSelectBgmPath,
+  discoverBeatorajaSystemSoundPaths,
+  PixiBeatorajaSelectScene,
+  isBeatorajaSkinIndicator,
+  loadBeatorajaFonts,
+  loadBeatorajaTexturesFromBundle,
+  findBeatorajaThemeBgm,
+  loadBeatorajaThemeFromFiles,
+  pickBeatorajaPlayableSkinVariant,
+  pickBeatorajaPlayableVariant,
+  prepareBeatorajaGameplayChart,
+  resolveChartPlayVariant,
+  summarizeBeatorajaPlaySkins,
+  type BeatorajaFontCache,
+  type BeatorajaPlayableVariant,
+  type BeatorajaSelectSystemSoundPaths,
+  type BeatorajaTextureCache,
+  type BeatorajaThemeBgm,
+  type BeatorajaThemeBundle,
+  type PreparedBeatorajaGameplayChart,
+} from '@be-music/player-web';
+import {
+  BEATORAJA_OP,
+  BEATORAJA_SKIN_TYPE,
+  buildBaseOpSet,
+  buildDefaultSkinConfigFiles,
+  buildDefaultSkinConfigOptions,
+  bundleBeatorajaSources,
+  computeClearLampOp,
+  expandBeatorajaWildcard,
+  loadBeatorajaSkin,
+  normalizeBeatorajaFonts,
+  type BeatorajaLuaRuntimeContext,
+  type BeatorajaSkinConfig,
+  type BeatorajaSkinEntry,
+  type BeatorajaSkinHeader,
+} from '@be-music/beatoraja-skin';
+import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
+import type { BeMusicJson } from '@be-music/json';
+import { resolveBmsControlFlow } from '@be-music/parser';
+import type { PlayerSummary } from '@be-music/player/core/engine';
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
@@ -602,10 +651,12 @@ interface DemoGuiState {
   openFolder: () => void;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
+  /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
+  screenshot: () => void;
 }
 
 class PlayerWebDemoApp {
-  private readonly library = new BrowserSongLibrary();
+  private readonly collectionStore = new BrowserSongCollectionStore();
   /**
    * Per-variant play skins, keyed by `Lr2PlayVariant`. Loaded once at theme-drop time so a DP chart can pick
    * `playSkins['14']` while a regular SP chart picks `playSkins['7']`.
@@ -625,6 +676,52 @@ class PlayerWebDemoApp {
    * transitions directly to gameplay.
    */
   private decideSkin: Lr2Skin | undefined;
+  /**
+   * beatoraja theme bundle held in parallel with the LR2 state. We don't render beatoraja scenes yet — that PixiJS
+   * wiring is a follow-up — but we DO want to detect a beatoraja theme drop so the user gets a clear log line and
+   * the parser path stays exercised end-to-end.
+   */
+  private beatorajaTheme: BeatorajaThemeBundle | undefined;
+  /**
+   * BGM bytes discovered inside the loaded beatoraja theme bundle (`decide.wav` / `clear.wav` /
+   * `fail.wav` / `result.wav`). Populated alongside `beatorajaTheme` after a successful drop.
+   * The decide / result scenes consume these directly — no separate caching layer needed since
+   * decoding happens lazily inside each scene's audio context.
+   */
+  private beatorajaThemeBgm: BeatorajaThemeBgm = {};
+  /**
+   * Audio player driving `main_state.audio_play / loop / stop` from Lua. One per theme bundle —
+   * the path → AudioBuffer cache is keyed against the bundle's file map, so a fresh theme drop
+   * disposes the old player and creates a new one. Without this wired in, the Lua API surface
+   * exists but every call returns false (silent), so ModernChic's panel SE were dead even though
+   * the eval no longer crashed.
+   */
+  private beatorajaSkinAudio: BeatorajaSkinAudioPlayer | undefined;
+  /**
+   * System-sound paths discovered from the active theme bundle. Re-probed every theme load
+   * via {@link discoverBeatorajaSystemSoundPaths}; passed to {@link PixiBeatorajaSelectScene}
+   * so cursor / decide / folder / option events fire the matching cues. Stays empty (`{}`)
+   * for stripped LR2 themes that don't ship a `sound/` subdirectory.
+   */
+  private beatorajaSystemSoundPaths: BeatorajaSelectSystemSoundPaths = {};
+  /**
+   * Looping select-scene BGM path discovered from the active theme bundle. Re-probed on
+   * every theme load via {@link discoverBeatorajaSelectBgmPath}; passed to the select scene
+   * as `selectBgmPath` so the BGM starts on enter and stops on exit. `undefined` for themes
+   * that don't ship a select BGM (the scene runs silent in the background then, just chart
+   * preview clips and navigation cues).
+   */
+  private beatorajaSelectBgmPath: string | undefined;
+  /**
+   * In-session per-song clear-lamp memory (audit 2.18). Keyed by `BrowserSongEntry.id` so
+   * each completed run updates the lamp the next time the user lands on that song in the
+   * select list. We don't persist across page reloads (no score DB on the web port today),
+   * but within a session the lamp icons gradually populate as the user plays charts.
+   *
+   * Stored as the resolved `BEATORAJA_OP.CLEAR_LAMP_*` op rather than a domain enum so the
+   * select scene's lookup stays a single map read with no per-frame translation.
+   */
+  private readonly beatorajaSessionLampOps = new Map<string, number>();
   /**
    * Loop-playable BGM bytes for the song-select scene (`LR2files/Bgm/<theme>/select.wav` from the dropped theme).
    * Forwarded to `PixiSongSelectView` via the constructor option on first mount and via `setSelectBgm` on subsequent
@@ -655,6 +752,98 @@ class PlayerWebDemoApp {
   } = {};
   private selectView: PixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
+  /**
+   * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
+   * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
+   * separately because the two views don't share an interface — the LR2 view manages its own audio
+   * decoding internally, while this one consumes a `PreparedBeatorajaGameplayChart` from the
+   * `prepareBeatorajaGameplayChart` helper.
+   */
+  private beatorajaGameplayView: PixiBeatorajaGameplayView | undefined;
+  /**
+   * The variant the active gameplay view is mounted against. Held alongside
+   * {@link beatorajaGameplayView} so the Debug Menu's "Play 7K / Play 5K / …" dropdowns can
+   * resolve their type-code → live-apply call without reaching into the view internals. Cleared
+   * on dispose so a stale value can never cause the next dropdown change to no-op silently.
+   */
+  private currentBeatorajaPlayVariant: BeatorajaPlayableVariant | undefined;
+  /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
+  private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
+  /**
+   * The most recently resolved chart for a beatoraja run, paired with the song's `chartPath` so
+   * subsequent stages can verify the cached chart still matches the song they're handling.
+   *
+   * Lifecycle:
+   *   1. The decide scene resolves `#IF` / `#RANDOM` once at entry and stores the result here so
+   *      the bpmgraph (and the gameplay prep that follows) sees the SAME branches.
+   *   2. `playSongBeatoraja` reads it via `preResolvedChart` — only when `chartPath` matches the
+   *      song being played. Mismatched paths fall back to a fresh resolve (= the user reached
+   *      gameplay without going through decide; rare but possible via debug paths).
+   *   3. `disposeBeatorajaGameplay` re-stamps it from `prep.chart` so the result scene gets the
+   *      same chart for its bpmgraph.
+   *
+   * `chart` is a plain JSON object so retaining the reference is cheap.
+   */
+  private lastBeatorajaChart: { chart: BeMusicJson; chartPath: string } | undefined;
+  /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
+  private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
+  /**
+   * Beatoraja-skinned decide splash. Active during the select → gameplay handoff when the loaded
+   * theme ships a decide skin (`type = 6`). Disposed before the gameplay scene mounts.
+   */
+  private beatorajaDecideScene: PixiBeatorajaDecideScene | undefined;
+  /**
+   * Beatoraja-skinned result scene. Active after gameplay completes when the loaded theme ships a
+   * result skin (`type = 7`). The chart's final `PlayerSummary` is forwarded so the skin's value
+   * destinations can render frozen score / judge / combo readouts.
+   */
+  private beatorajaResultScene: PixiBeatorajaResultScene | undefined;
+  /**
+   * Bottom-right lil-gui panel exposing the active beatoraja skin's `property[]` / `filepath[]` /
+   * note-offset for live editing. Lazily constructed once `start()` mounts the host (the panel is
+   * absolute-positioned inside the demo shell so the shell needs to exist first).
+   */
+  private beatorajaSkinOptionsGui: BeatorajaSkinOptionsGui | undefined;
+  /**
+   * Per-skin-entry config picks. The skin-options panel mutates these and the active scene re-mounts
+   * with the updated values. Survives scene transitions so navigating away and back preserves the
+   * user's choices for each skin (a select skin and a play skin can carry independent configs).
+   */
+  private readonly beatorajaSkinConfigByEntry = new Map<string, BeatorajaSkinConfig>();
+  /**
+   * Per-`SkinType` user-picked entry override. Lets the user choose between multiple discovered
+   * skins for a given scene type from the Debug Menu. Keyed by the numeric `header.type` so
+   * each scene (`MUSIC_SELECT = 5`, `PLAY_7KEYS = 0`, etc.) tracks its own override.
+   */
+  private readonly beatorajaSkinOverridesByType = new Map<number, string>();
+  /**
+   * Debug-menu folder hosting one dropdown per skin scene type (Play 5K / 7K / 9K / 10K / 14K /
+   * 24K / 24Kdp / Music Select / Decide / Result / etc.). Empty until a beatoraja theme is
+   * dropped — `rebuildBeatorajaSkinPickers` (re-)populates it from `beatorajaTheme.entries`.
+   */
+  private beatorajaSkinPickerFolder: GUI | undefined;
+  /**
+   * Active controllers inside {@link beatorajaSkinPickerFolder}, keyed by scene type. Cleared
+   * and rebuilt on each `rebuildBeatorajaSkinPickers` call so dropdown options stay in sync with
+   * the latest theme drop.
+   */
+  private readonly beatorajaSkinPickerControllers: Map<number, Controller> = new Map();
+  /**
+   * Last beatoraja-select highlighted index — survives scene tear-down so coming back from gameplay
+   * lands on the same song the user just played.
+   *
+   * Subsumed by {@link beatorajaSelectSnapshot} for richer restore (folder / sort / filter / favorites).
+   * Kept for backward compatibility with code paths that haven't been migrated to the snapshot yet.
+   */
+  private beatorajaSelectIndex = 0;
+  /**
+   * Last beatoraja-select scene state captured at scene-exit. Re-applied on the next mount so the
+   * user lands on the same folder, cursor, sort, filter, and favorites set they left — not just
+   * the focused song. Captured via `selectScene.captureSnapshot()` at every dispose site that
+   * represents a "coming back later" transition (PLAY entry, decide entry, theme reload). Cleared
+   * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
+   */
+  private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
   private resultView: PixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
@@ -730,6 +919,9 @@ class PlayerWebDemoApp {
       openFolder: () => this.elements.songInput.click(),
       record: () => {
         void this.toggleRecording();
+      },
+      screenshot: () => {
+        void this.captureScreenshot();
       },
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
@@ -906,6 +1098,14 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open Folder');
+    // Per-scene skin picker. Empty (= no controllers visible) until a beatoraja theme is
+    // dropped — `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a
+    // non-default entry for a scene records it on `beatorajaSkinOverridesByType`; the next
+    // mount picks it up via `pickBeatorajaSkinEntryWithOverride`. The folder is OPEN by
+    // default so the picker dropdowns are visible the moment a theme finishes loading
+    // — having the user hunt through a collapsed panel for a control they need on every
+    // theme drop didn't justify the extra click.
+    this.beatorajaSkinPickerFolder = gui.addFolder('Beatoraja skins').open();
     // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
     // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
     // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
@@ -1013,6 +1213,10 @@ class PlayerWebDemoApp {
         this.gameplayView?.setJudgedNoteDisplay(value);
       });
     this.recordController = gui.add(this.guiState, 'record').name('● Record');
+    // Screenshot button — captures the Pixi stage at its native size (= the renderer's
+    // current screen dimensions; matches what the user sees in the canvas, downloaded as
+    // PNG). See `captureScreenshot` for the extract pipeline.
+    gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
     this.refreshCompressorStageVisibility();
   }
 
@@ -1034,8 +1238,134 @@ class PlayerWebDemoApp {
    * Stop`, and `disable()` grays it out while the WebM blob is being assembled on stop. The `.recording` CSS class on
    * the controller's DOM element drives the red-glow accent so the lil-gui style takes precedence over our highlight.
    */
+  /**
+   * Capture the active scene at its SKIN-authored stage size and download as a PNG. When
+   * the active scene exposes a `getStageInfo()` descriptor (the four beatoraja scenes do),
+   * we capture at the skin's native resolution (e.g. 1280×720 for default play, 1920×1080
+   * for ModernChic) regardless of how the canvas is currently scaled to fit the window.
+   * Falls back to capturing the entire stage at the window size when the active scene
+   * doesn't expose stage info (LR2 path scenes today).
+   *
+   * Pipeline (skin-stage-size path):
+   *   1. Read `getStageInfo()` → {container, width, height}.
+   *   2. Save the container's transform (scale + position).
+   *   3. Reset to identity so children render at native skin coords.
+   *   4. `renderer.extract.canvas({ target: container, frame, resolution: 1 })` — Pixi
+   *      pre-renders into an offscreen RT at the requested frame; result is exactly
+   *      width × height pixels.
+   *   5. Restore the saved transform.
+   *
+   * The transform reset / restore happens within a single synchronous JS task — extract is
+   * synchronous and the next ticker fire restores the transform via fitToStage's cached-
+   * dims early-out short-circuit.
+   *
+   * Filename includes a UTC timestamp so multiple captures in one session don't collide.
+   * Errors (renderer not ready, encoder failure) surface to the status panel.
+   */
+  private async captureScreenshot(): Promise<void> {
+    const app = this.sceneHost.app;
+    if (app.renderer === undefined) {
+      this.setStatus('Screenshot failed: renderer not ready');
+      return;
+    }
+    try {
+      const activeScene = this.sceneHost.getCurrentScene();
+      const stageInfo = activeScene?.getStageInfo?.();
+      // `extract.canvas` returns Pixi's `ICanvas` (HTMLCanvasElement | OffscreenCanvas
+      // union). Demo doesn't depend directly on `pixi.js` so we type it via the runtime
+      // duck-type `{ toBlob }` we actually consume below.
+      let canvas: { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void };
+      let captureWidth: number;
+      let captureHeight: number;
+      if (stageInfo !== undefined) {
+        // Native skin-size path. Reset the container's fitToStage transform around the
+        // extract call; the next tick's fitToStage no-ops on cached screen dims and the
+        // user never sees the broken state on the live canvas.
+        const { container, width, height } = stageInfo;
+        const savedScaleX = container.scale.x;
+        const savedScaleY = container.scale.y;
+        const savedX = container.x;
+        const savedY = container.y;
+        container.scale.set(1, 1);
+        container.position.set(0, 0);
+        try {
+          // Frame MUST be an actual `Rectangle` instance — Pixi's `extract.canvas`
+          // internally calls `options.frame.copyTo(tempRect)` (see
+          // `GenerateTextureSystem.js`'s `generateTexture`). A plain `{x, y, width,
+          // height}` literal returns `undefined` from the optional chain there and the
+          // code falls through to `getLocalBounds(container)`, which on a transform-reset
+          // container yields a zero / negative rect → blank canvas, blob fails to encode,
+          // download silently fails. Rectangle is re-exported from `@be-music/player-web`
+          // so this package doesn't need a direct `pixi.js` dep.
+          canvas = app.renderer.extract.canvas({
+            target: container,
+            frame: new Rectangle(0, 0, width, height),
+            resolution: 1,
+          }) as typeof canvas;
+        } finally {
+          container.scale.set(savedScaleX, savedScaleY);
+          container.position.set(savedX, savedY);
+        }
+        captureWidth = width;
+        captureHeight = height;
+      } else {
+        // Fallback: capture the entire stage at the visible window size. Used when the
+        // scene isn't a beatoraja `PixiScene` (= LR2 path today). Same toBlob pipeline.
+        canvas = app.renderer.extract.canvas(app.stage) as typeof canvas;
+        captureWidth = app.screen.width;
+        captureHeight = app.screen.height;
+      }
+      // Both HTMLCanvasElement and OffscreenCanvas expose `toBlob` in modern browsers.
+      // Narrow defensively in case a runtime returns something exotic.
+      const toBlob = canvas.toBlob;
+      if (typeof toBlob !== 'function') {
+        this.setStatus('Screenshot failed: canvas.toBlob unavailable');
+        return;
+      }
+      const blob = await new Promise<Blob | null>((resolve) => {
+        toBlob.call(canvas, (b) => resolve(b), 'image/png');
+      });
+      if (blob === null) {
+        this.setStatus('Screenshot failed: encoder returned null');
+        return;
+      }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, '');
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bms-screenshot-${timestamp}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Revoke after a short delay — some browsers race the download against immediate
+      // revocation. 5s is enough for the download dialog to grab the URL.
+      setTimeout(() => URL.revokeObjectURL(url), 5_000);
+      this.setStatus(`Screenshot saved (${captureWidth}×${captureHeight})`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.setStatus(`Screenshot failed: ${message}`);
+    }
+  }
+
+  /**
+   * Pick whichever gameplay view is currently mounted (LR2 or beatoraja). Both expose the
+   * same recording API surface (`startRecording` / `stopRecording` / `isRecording`), so
+   * the rest of `toggleRecording` can stay path-agnostic. Returns `undefined` when neither
+   * is mounted (= the user pressed Record on the song-select screen) so the caller
+   * branches into the auto-arm flow instead.
+   */
+  private activeGameplayRecorder():
+    | {
+        startRecording(): void;
+        stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number } | undefined>;
+        isRecording(): boolean;
+      }
+    | undefined {
+    return this.gameplayView ?? this.beatorajaGameplayView;
+  }
+
   private async toggleRecording(): Promise<void> {
-    const gameplay = this.gameplayView;
+    const gameplay = this.activeGameplayRecorder();
     const controller = this.recordController;
     if (!gameplay) {
       // No chart is playing yet — interpret the click as "arm capture for the next song I pick" so the user can stage
@@ -1185,9 +1515,9 @@ class PlayerWebDemoApp {
    * The caller is responsible for showing / hiding the loading overlay and pausing the select view — both entry points
    * handle that around their own enumeration phase.
    *
-   * `loadSongs` appends to the existing library so a second / third invocation of this routine accumulates entries
+   * `loadSongs` appends to the existing collection so a second / third invocation of this routine accumulates entries
    * rather than wiping the previous pack — the host can call this multiple times in succession (e.g. Open Folder
-   * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the library's
+   * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
   private async processIncomingFiles(files: File[]): Promise<void> {
@@ -1203,12 +1533,23 @@ class PlayerWebDemoApp {
     const carriesLr2Theme = themeFiles.some((file) =>
       (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
     );
+    const carriesBeatorajaTheme = themeFiles.some((file) =>
+      isBeatorajaSkinIndicator(file.webkitRelativePath || file.name),
+    );
+    const themeMarkers = [carriesLr2Theme ? 'lr2' : null, carriesBeatorajaTheme ? 'beatoraja' : null].filter(
+      (marker): marker is string => marker !== null,
+    );
     dropLog.info(
-      `received ${files.length} file(s) · theme=${themeFiles.length}${carriesLr2Theme ? '' : ' (no .lr2skin → preserving current theme)'} · songs=${songFiles.length}`,
+      `received ${files.length} file(s) · theme=${themeFiles.length}${
+        themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
+      } · songs=${songFiles.length}`,
     );
     const tasks: Array<Promise<unknown>> = [];
     if (carriesLr2Theme) {
       tasks.push(this.loadTheme(themeFiles));
+    }
+    if (carriesBeatorajaTheme) {
+      tasks.push(this.loadBeatorajaTheme(themeFiles));
     }
     if (songFiles.length > 0) {
       tasks.push(this.loadSongs(songFiles));
@@ -1219,10 +1560,15 @@ class PlayerWebDemoApp {
     }
     await Promise.all(tasks);
     const playSkinSummary = summarizeLr2PlaySkins(this.playSkins);
+    const beatorajaSummary = this.beatorajaTheme
+      ? summarizeBeatorajaPlaySkins(this.beatorajaTheme.theme.playSkins) || 'none'
+      : 'none';
     dropLog.info(
       `loaded · songs=${this.collection.songs.length} · errors=${
         this.collection.errors.length
-      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}`,
+      } · play-skins=${playSkinSummary || 'none'} · select-skin=${this.selectSkin?.name ?? 'none'}${
+        this.beatorajaTheme ? ` · beatoraja-skins=${beatorajaSummary}` : ''
+      }`,
     );
     if (this.collection.errors.length > 0) {
       dropLog.warn('parse errors:', this.collection.errors);
@@ -1240,11 +1586,11 @@ class PlayerWebDemoApp {
 
   private async loadSongs(files: File[]): Promise<void> {
     this.setStatus('Loading songs...');
-    // Append rather than replace so a second / third folder drop adds to the existing library instead of wiping the
-    // previous pack. The library re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
+    // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
+    // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
     // very first drop is just `append onto an empty collection`, which produces the same result as `loadFromFiles`
     // would have.
-    this.collection = await this.library.appendFromFiles(files, {
+    this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
@@ -1290,6 +1636,1408 @@ class PlayerWebDemoApp {
     // everything lands.
   }
 
+  /**
+   * Load a beatoraja theme drop in parallel with the LR2 path. We currently parse the bundle and stash it on the
+   * host for inspection; PixiJS rendering for beatoraja skins is implemented in a follow-up patch. The beatoraja
+   * loader is independent of `loadTheme` — both states coexist so the user can drop both formats and switch between
+   * them later.
+   */
+  private async loadBeatorajaTheme(files: File[]): Promise<void> {
+    this.setStatus('Loading beatoraja theme...');
+    try {
+      const bundle = await loadBeatorajaThemeFromFiles(files, {
+        onProgress: (progress) => this.applyLoadProgress(progress),
+      });
+      // Drop the per-entry texture caches from the previous theme (we don't destroy individual
+      // beatoraja textures in this session — see `beatorajaTextureCachesByEntry`'s field comment).
+      // Clearing the map releases the only reference to the old theme's decoded bytes; the
+      // underlying Pixi textures stay allocated until page reload, but they're unreachable from
+      // the renderer once the new theme replaces `beatorajaTheme`.
+      this.beatorajaTextureCachesByEntry.clear();
+      // Tear down the previous theme's audio player — its file-map cache references bytes from
+      // the old bundle that we're about to replace. A fresh player gets created below tied to
+      // the new bundle.
+      this.beatorajaSkinAudio?.dispose();
+      this.beatorajaSkinAudio = new BeatorajaSkinAudioPlayer({ files: bundle.files });
+      // Probe the bundle for navigation system sounds (cursor / decide / cancel / folder /
+      // option). The discovery walks well-known filenames inside the theme's `sound/` subdir
+      // (and an LR2-compatible `LR2files/Sound/lr2/*.wav` fallback) — slots without a match
+      // stay undefined and the select scene runs silent for those events. Beatoraja's own
+      // engine reads these paths from `config.json`; the web port uses convention-based
+      // probing instead since we don't load the user's beatoraja config.
+      this.beatorajaSystemSoundPaths = discoverBeatorajaSystemSoundPaths(bundle.files);
+      // Looping select BGM path. Probes the standard `Bgm/select.*` locations plus an LR2-
+      // compatible fallback. Stays `undefined` for themes without a select BGM file (the
+      // scene runs silent in the background then).
+      this.beatorajaSelectBgmPath = discoverBeatorajaSelectBgmPath(bundle.files);
+      this.beatorajaTheme = bundle;
+      // Drop overrides from the previous theme — entryPaths from the old bundle will no longer
+      // resolve against the new entries. Without this `pickBeatorajaSkinEntryWithOverride`'s
+      // self-clearing fallback would still kick in, but the picker dropdowns would briefly show
+      // stale labels until the user opened a scene that hit that fallback. Clearing eagerly keeps
+      // the GUI honest.
+      this.beatorajaSkinOverridesByType.clear();
+      this.rebuildBeatorajaSkinPickers();
+      // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
+      // see `findBeatorajaThemeBgm` for the rules. Awaited because some entries are read lazily;
+      // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
+      this.beatorajaThemeBgm = await findBeatorajaThemeBgm(bundle);
+      const summary = summarizeBeatorajaPlaySkins(bundle.theme.playSkins) || 'none';
+      const sceneSummary = [
+        bundle.theme.selectSkin ? 'select' : null,
+        bundle.theme.decideSkin ? 'decide' : null,
+        bundle.theme.resultSkin ? 'result' : null,
+        bundle.theme.courseResultSkin ? 'course-result' : null,
+      ]
+        .filter((s): s is string => s !== null)
+        .join('+');
+      dropLog.info(
+        `beatoraja theme loaded · files=${bundle.files.size} · play=${summary}${sceneSummary ? ` · scenes=${sceneSummary}` : ''}${
+          bundle.warnings.length > 0 ? ` · warnings=${bundle.warnings.length}` : ''
+        }`,
+      );
+      if (bundle.warnings.length > 0) {
+        for (const w of bundle.warnings) {
+          dropLog.warn(`beatoraja skin warning: ${w.entryPath}: ${w.message}`);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      dropLog.warn(`beatoraja theme load failed: ${message}`);
+    }
+  }
+
+  /**
+   * Per-entry-path memoized texture caches. Never destroyed in this session — see `beatoraja-textures.ts` for
+   * why disposing beatoraja textures and re-decoding the same bytes crashes PixiJS v8's bind-group cache.
+   * The same hazard is technically present in the LR2 path but LR2's flow doesn't re-mount the same skin.
+   */
+  private readonly beatorajaTextureCachesByEntry = new Map<string, BeatorajaTextureCache>();
+  /**
+   * Per-entry skin font cache. Same lifecycle as the texture cache — the registered `FontFace`s outlive
+   * the scene (they sit on `document.fonts`), so re-mounting the same skin reuses the family lookup
+   * without re-parsing the TTF bytes.
+   */
+  private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
+
+  /**
+   * Returns true when the loaded beatoraja theme has a play skin we can mount for this chart — directly
+   * or through the playable-variant fallback chain (a 5K chart will happily render on a 7K skin if the
+   * theme author only shipped the 7-keys variant). Used by `playSong` / `showDecide` to decide whether
+   * to branch into the beatoraja gameplay path.
+   */
+  private canPlaySongBeatoraja(song: BrowserSongEntry): boolean {
+    return this.resolveBeatorajaSkinVariant(song) !== undefined;
+  }
+
+  /**
+   * Resolve the actual skin variant the beatoraja gameplay path will mount for a chart. Returns the
+   * desired variant verbatim when the theme ships it, the closest playable fallback otherwise, or
+   * `undefined` when the theme has nothing playable.
+   */
+  private resolveBeatorajaSkinVariant(song: BrowserSongEntry) {
+    const bundle = this.beatorajaTheme;
+    if (!bundle) return undefined;
+    const desired = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (desired === undefined) return undefined;
+    return pickBeatorajaPlayableSkinVariant(bundle.theme.playSkins, desired);
+  }
+
+  /** Map a song's parsed chart onto the shape input `pickBeatorajaPlayableVariant` expects. */
+  private chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble: boolean; isPms: boolean } {
+    const variant = resolveChartPlayVariant(song);
+    return {
+      keys: variant === '14' ? 14 : variant === '10' ? 10 : variant === '7' ? 7 : variant === '5' ? 5 : 9,
+      isDouble: variant === '14' || variant === '10',
+      isPms: variant === '9',
+    };
+  }
+
+  /**
+   * Beatoraja gameplay flow. Mirrors the LR2 `playSong` lifecycle (mount + audio decode → run engine →
+   * route exit / completion to result / select), but routes audio through `runEngineDriver` and the
+   * scene through `PixiBeatorajaGameplayView` instead of the LR2 view's bespoke render pipeline.
+   *
+   * The view assumes pre-decoded audio + BGA — those come from `prepareBeatorajaGameplayChart`. Each
+   * play awaits the prep promise before constructing the view; if the prep fails, we surface the
+   * status and bail back to song select rather than silently falling back to LR2 (the user explicitly
+   * opted into the beatoraja path).
+   */
+  private async playSongBeatoraja(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle) return;
+    // **TWO distinct variants** flow into the gameplay scene:
+    //   - `skinVariant`: which `play_*` skin file to load. The theme may not ship every
+    //     variant (a popular 7-only theme lacks a `play_9` skin, etc.), so this falls back
+    //     through `pickBeatorajaPlayableSkinVariant`'s chain (`9 → 7 → 14 → 5 → 10`).
+    //   - `chartVariant`: what the chart ACTUALLY is. Drives the engine's lane mode
+    //     (channel → lane mapping), the runtime adapter's lane-timer resolution, and the
+    //     note layer's `channel → lane index` math. This MUST match what the chart's
+    //     channels declare; falling back to the skin's variant here would route a 9-key
+    //     chart's `f`/`v`/`g`/`b` inputs through the IIDX 7-key key bindings and the
+    //     engine's IIDX free-zone clamp would drop the corresponding `scorableNotes`.
+    //
+    // Pre-fix the gameplay view received `skinVariant` for everything, so a 9-key
+    // chart played on a 7-key skin had:
+    //   - 7-key adapter `chartPlayVariant` → lanes 6..9 of channels 16/17/18/19
+    //     misclassified as scratch / free-zone / 6key / 7key
+    //   - 7-key note-layer `variant` → channel 16 routed to lane 7 (the IIDX scratch
+    //     slot), channels 17 / 18 / 19 routed to lanes -1 / 5 / 6
+    //   - engine's `laneModeExtension`-only fallback never reached `9-key` because
+    //     `resolveLaneMode` only escalates to 9-key when the chart is `.pms` or
+    //     `#PLAYER=3` with channel `17` — and most 9-key BMEs that authored f/v/g/b
+    //     inputs satisfy neither
+    // User report: 9 KEY charts wouldn't accept input on lanes 6-9 (f,v,g,b keys
+    // unresponsive). c0da7b5 partially
+    // addressed this by forwarding the chart's filename to the engine for the
+    // extension-based heuristic, but skipped the variant separation here.
+    const skinVariant = this.resolveBeatorajaSkinVariant(song);
+    if (skinVariant === undefined) return;
+    const chartVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    if (chartVariant === undefined) return;
+    if (skinVariant !== chartVariant) {
+      // Theme doesn't ship the chart's native skin variant (e.g. a 9-key chart on a
+      // 7-keys-only theme). We load the fallback skin chrome but keep the engine /
+      // adapter / note-layer pinned to the chart's variant so input + judging stay
+      // correct; the visible mismatch is the SKIN's lane count differing from the
+      // CHART's. Warn so the mismatch is visible in the console.
+      gameplayLog.warn(
+        `beatoraja gameplay: theme has no '${chartVariant}' skin — falling back to '${skinVariant}' (lane chrome may not match chart key count)`,
+      );
+    }
+    // Alias retained to minimize churn in the rest of this function. Use `skinVariant` for
+    // skin lookups (`playSkinTypeForVariant`, the skin entry pick chain) and `chartVariant`
+    // for runtime-driving prop wiring (`variant` on the gameplay view).
+    const variant = skinVariant;
+
+    this.elements.shell.classList.add('playing');
+    await this.ensureHostMounted();
+    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.selectView?.setVisible(false);
+    this.decideView?.dispose();
+    this.decideView = undefined;
+    this.gameplayView?.dispose();
+    this.gameplayView = undefined;
+    this.disposeBeatorajaGameplay();
+    this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
+
+    // 1. Pick the actual skin entry for this variant, honoring any user override from the
+    // Debug Menu's skin-picker dropdown. Falls back to `pickBeatorajaPlaySkin`'s discovery result.
+    const playTypeCode = playSkinTypeForVariant(variant);
+    const playCandidates = bundle.theme.entries.filter((entry) => entry.header.type === playTypeCode);
+    const fallbackEntry = bundle.theme.playSkins[variant];
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(playTypeCode, playCandidates, fallbackEntry);
+    if (selectedEntry === undefined) {
+      gameplayLog.warn(`beatoraja gameplay: no skin entry for variant '${variant}'`);
+      this.setStatus(`Beatoraja gameplay unavailable: no '${variant}' skin`);
+      void this.showSelect();
+      return;
+    }
+
+    // Two-pass evaluation — same contract as the select scene.
+    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
+    if (!headerLoad.ok) {
+      gameplayLog.warn(`beatoraja gameplay header: ${headerLoad.error.message}`);
+      this.setStatus(`Beatoraja gameplay unavailable: ${headerLoad.error.message}`);
+      void this.showSelect();
+      return;
+    }
+    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    // Gameplay skins don't crash without runtimeContext (the load-time `main_state.option`
+    // pattern is unique to ModernChic decide; play scenes use op gates on destinations,
+    // evaluated at render time with a fresh per-frame context). Skip the load-time
+    // injection here — its earlier addition was "for consistency" and downstream gameplay
+    // skins reacted unexpectedly to mid-load `main_state.option` returning chart-aware
+    // values where they previously got `false`. Decide / result still inject because
+    // ModernChic specifically pre-computes per-difficulty values during `main()`.
+    const result = loadBeatorajaSkin({
+      entryPath: selectedEntry.entryPath,
+      files: bundle.files,
+      skinConfig: config,
+    });
+    if (!result.ok || !result.skin) {
+      const reason = result.ok ? 'skin payload missing' : result.error.message;
+      gameplayLog.warn(`beatoraja gameplay: ${reason}`);
+      this.setStatus(`Beatoraja gameplay unavailable: ${reason}`);
+      void this.showSelect();
+      return;
+    }
+    // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
+    // type-check without `!` operators.
+    const skin = result.skin;
+    const skinLoad = { entry: selectedEntry, skin };
+
+    // 2. Texture cache for the skin variant — reuse if previously decoded.
+    let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        sources: (skinLoad.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: skinLoad.skin.filepath,
+        filepathOverrides: config.file,
+      });
+      gameplayLog.info(
+        `beatoraja gameplay source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
+      );
+      for (const u of sourceBundle.unresolved) {
+        gameplayLog.warn(`beatoraja gameplay unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+      }
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
+    }
+
+    // 2b. Skin font cache. Same per-entry memoization as textures — TTFs are tiny (≤ a few hundred KB)
+    // and the registered FontFace outlives every scene anyway.
+    let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
+    if (fonts === undefined) {
+      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.skin.font);
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        fonts: fontDeclarations,
+      });
+      gameplayLog.info(
+        `beatoraja gameplay fonts: declared=${fontDeclarations.length} loaded=${fonts.values().length} (entry=${skinLoad.entry.entryPath})`,
+      );
+      this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
+    }
+
+    // 3. Audio + BGA prep — owns the AudioContext for this play.
+    const source = resolveSongSource(this.collection, song);
+    if (!source) {
+      this.setStatus(`Beatoraja gameplay: no source for ${song.title}`);
+      void this.showSelect();
+      return;
+    }
+    let prep: PreparedBeatorajaGameplayChart;
+    try {
+      // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play
+      // — `#RANDOM` rolls fresh per `resolveBmsControlFlow` call, so resolving twice would pick
+      // different branches between decide and gameplay. When the cached chart is for a
+      // different `chartPath` (= the player reached gameplay via a path that bypassed decide),
+      // we fall through to a fresh resolve inside `prepareBeatorajaGameplayChart`.
+      const preResolvedChart =
+        this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.chart : undefined;
+      prep = await prepareBeatorajaGameplayChart({
+        song,
+        source,
+        audioCompressorMode: this.guiState.compressor === false ? 'off' : this.compressorMode,
+        preResolvedChart,
+      });
+    } catch (error) {
+      gameplayLog.warn('beatoraja prep failed', error);
+      this.setStatus(`Beatoraja prep failed: ${(error as Error).message}`);
+      void this.showSelect();
+      return;
+    }
+    this.beatorajaGameplayPrep = prep;
+
+    // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so play-scene destinations
+    // referencing the synthetic ids (-100 / -101 / -102) can paint them. ModernChic's lane
+    // cover uses the stagefile as a frosted backdrop; default skin's loading panel anchors
+    // on it during the intro chrome.
+    const chartImages = await this.loadBeatorajaChartImages(song);
+
+    // 4. Mount the gameplay view.
+    this.beatorajaGameplayView = new PixiBeatorajaGameplayView({
+      skin: skinLoad.skin,
+      textures,
+      fonts,
+      skinConfig: config,
+      // CHART variant drives the engine's lane mode + adapter's `chartPlayVariant` + note
+      // layer's channel → lane math. Skin lookups above used `skinVariant` (= the fallback
+      // chain pick) because the theme may not ship the chart's exact variant — but the
+      // runtime stays pinned to the CHART so f/v/g/b stay bound to channels 16/17/18/19
+      // on 9-key POPN charts even when the loaded skin chrome is a 7-key fallback.
+      variant: chartVariant,
+      chart: prep.chart,
+      audio: prep.audio,
+      skinAudio: this.beatorajaSkinAudio,
+      mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
+      // DP flip — when the user enabled it via the play-options panel AND the chart is a
+      // DP variant (10 / 14 keys), the chart's lane channels mirror at construction. SP
+      // charts pass through unchanged because they have no 2P channels to swap with.
+      // Reads from the LR2 select view's persisted play options (the same surface that
+      // already drives `dpFlip` on the LR2 path).
+      dpFlip: this.selectView?.getPlayOptions().dpFlip,
+      bgaTextures: prep.bga.textures,
+      bgaVideoElements: prep.bga.videoElements,
+      bgaCues: prep.bga.cues,
+      chartImages,
+      // Directory label drives `BEATORAJA_TEXT.DIRECTORY = 1000` on the play scene. The browser
+      // song entry preserves the parent folder name through the dropped collection.
+      directoryLabel: song.directoryLabel,
+      // Chart filename — the gameplay view derives `laneModeExtension` from this for the engine,
+      // so PMS / BME / BMS lane-mode resolution doesn't depend on the BMS content heuristic
+      // (`#PLAYER 3` + channel 17). Without it a `#PLAYER 1` PMS chart routes to the IIDX 7-key
+      // bindings instead of POPN-9, which silently drops lane 6+ keys.
+      chartPath: song.chartPath,
+      onExit: () => {
+        void this.finishBeatorajaGameplayThen(() => this.showSelect());
+      },
+      onComplete: (summary, maxCombo, history) => {
+        // Result skin (`type = 7`) when the bundle ships one — otherwise jump back to select.
+        // `finishBeatorajaGameplayThen` drops the gameplay scene first so the result scene gets a
+        // clean stage; the result scene mounts in the `then` branch. `history` carries the
+        // per-judge score / gauge polyline samples for the result skin's graph elements.
+        void this.finishBeatorajaGameplayThen(async () => {
+          const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
+          if (!mounted) await this.showSelect();
+        });
+      },
+      onError: (error) => {
+        // `PlayerInterruptedError` lands here for the ESC path — it's the expected exit for "user
+        // pressed ESC mid-chart". Treat it as a clean exit.
+        gameplayLog.info('beatoraja engine ended', { error: (error as Error).message });
+        void this.finishBeatorajaGameplayThen(() => this.showSelect());
+      },
+    });
+    this.beatorajaGameplayView.root.zIndex = 0;
+    // Track the live variant so the Debug Menu's "Play *K" dropdowns know whether their
+    // type-code matches the active scene before triggering a live re-mount.
+    this.currentBeatorajaPlayVariant = variant;
+    await this.sceneHost.setScene(this.beatorajaGameplayView);
+    this.setStatus(`Playing (beatoraja): ${song.title}`);
+
+    // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
+    // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
+    // before picking a song; the next gameplay mount kicks the recorder off automatically.
+    if (this.autoRecordArmed) {
+      this.autoRecordArmed = false;
+      const controller = this.recordController;
+      controller?.domElement.classList.remove('arming');
+      try {
+        this.beatorajaGameplayView.startRecording();
+        controller?.domElement.classList.add('recording');
+        controller?.name('■ Stop');
+        this.setStatus('Recording…');
+      } catch (error) {
+        controller?.name('● Record');
+        recordLog.warn('auto-start failed', error);
+      }
+    }
+
+    // Skin-options panel for the play skin's `property[]` / `filepath[]`. Live edits flow through
+    // `applyBeatorajaPlaySkinConfig` → `replaceSkin` so the chrome rebuilds without tearing down
+    // the engine driver. The audio session, chart playback, and scoring all keep running.
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Skin Config (Play ${variant}K)`,
+      entryPath: selectedEntry.entryPath,
+      header: headerLoad.header,
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaPlaySkinConfig(selectedEntry.entryPath, variant, nextConfig);
+      },
+    });
+  }
+
+  /**
+   * Apply a fresh skin-config to the active beatoraja gameplay scene WITHOUT restarting the chart.
+   * Re-loads the skin with the new options, rebuilds the per-entry texture cache, then calls
+   * `replaceSkin` on the live gameplay view. The runtime adapter's `setBaseOps` handles the option
+   * delta so per-side judge state / timer stamps / current frame all carry through unchanged.
+   */
+  private async applyBeatorajaPlaySkinConfig(
+    entryPath: string,
+    variant: BeatorajaPlayableVariant,
+    config: BeatorajaSkinConfig,
+  ): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle || !this.beatorajaGameplayView) return;
+    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
+    // alternate skin from the Debug Menu's skin-picker dropdown.
+    const result = loadBeatorajaSkin({ entryPath, files: bundle.files, skinConfig: config });
+    if (!result.ok || !result.skin) return;
+    this.beatorajaTextureCachesByEntry.delete(entryPath);
+    const sourceBundle = bundleBeatorajaSources({
+      files: bundle.files,
+      entryPath,
+      sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      filepathSchema: result.skin.filepath,
+      filepathOverrides: config.file,
+    });
+    const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+    this.beatorajaTextureCachesByEntry.set(entryPath, textures);
+    let fonts = this.beatorajaFontCachesByEntry.get(entryPath);
+    if (fonts === undefined) {
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath,
+        fonts: normalizeBeatorajaFonts(result.skin.font),
+      });
+      this.beatorajaFontCachesByEntry.set(entryPath, fonts);
+    }
+    this.beatorajaGameplayView.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
+
+    this.refreshBeatorajaSkinOptionsGui({
+      title: `Skin Config (Play ${variant}K)`,
+      entryPath,
+      header: result.header,
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaPlaySkinConfig(entryPath, variant, nextConfig);
+      },
+    });
+  }
+
+  /**
+   * Mount the beatoraja-skinned song select scene. Loads the theme's select skin (with a default
+   * `skin_config.option` fill from `buildDefaultSkinConfigOptions`), reuses cached textures / fonts
+   * when available, and hands the scene a callback that routes the chosen song through the existing
+   * `showDecide` / `playSong` flow.
+   */
+  private async showBeatorajaSelect(): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return;
+
+    // Pick the actual entry to mount — honor a user override from the Debug Menu's skin-picker dropdown
+    // when one was set, otherwise fall back to the discovery's "best" pick (`theme.selectSkin`).
+    const selectCandidates = bundle.theme.entries.filter(
+      (entry) => entry.header.type === BEATORAJA_SKIN_TYPE.MUSIC_SELECT,
+    );
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
+      BEATORAJA_SKIN_TYPE.MUSIC_SELECT,
+      selectCandidates,
+      bundle.theme.selectSkin,
+    );
+    if (selectedEntry === undefined) {
+      gameplayLog.warn('beatoraja select: no select skin in theme');
+      this.setStatus('Beatoraja select unavailable: no select skin');
+      return;
+    }
+
+    // Two-pass evaluation — header pass picks up the skin's `property[]` schema, the second pass
+    // re-runs `main()` with default option picks so dynamic `source[]` / `destination[]` populate.
+    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
+    if (!headerLoad.ok) {
+      gameplayLog.warn(`beatoraja select: ${headerLoad.error.message}`);
+      this.setStatus(`Beatoraja select unavailable: ${headerLoad.error.message}`);
+      return;
+    }
+    // Resolve cached skin config (or seed defaults from the header's property[] schema). The
+    // skin-options panel mutates this object as the user picks options.
+    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    const result = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files, skinConfig: config });
+    if (!result.ok || !result.skin) {
+      const reason = result.ok ? 'skin payload missing' : result.error.message;
+      gameplayLog.warn(`beatoraja select: ${reason}`);
+      this.setStatus(`Beatoraja select unavailable: ${reason}`);
+      return;
+    }
+    // Narrow the union by extracting the (now-known-defined) `skin` reference; subsequent uses
+    // type-check without `!` operators.
+    const skin = result.skin;
+    const skinLoad = { entry: selectedEntry, skin };
+
+    // Texture + font cache — same per-entry memoization as the gameplay path. The select skin lives
+    // at a different `entryPath` than `play_*.luaskin` so the caches are naturally segregated.
+    let textures = this.beatorajaTextureCachesByEntry.get(skinLoad.entry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        sources: (skinLoad.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: skinLoad.skin.filepath,
+      });
+      gameplayLog.info(
+        `beatoraja select source bundle: resolved=${sourceBundle.assets.length} unresolved=${sourceBundle.unresolved.length} (entry=${skinLoad.entry.entryPath})`,
+      );
+      for (const u of sourceBundle.unresolved) {
+        gameplayLog.warn(`beatoraja select unresolved source[${u.id}] '${u.path}': ${u.reason}`);
+      }
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(skinLoad.entry.entryPath, textures);
+    }
+    let fonts = this.beatorajaFontCachesByEntry.get(skinLoad.entry.entryPath);
+    if (fonts === undefined) {
+      const fontDeclarations = normalizeBeatorajaFonts(skinLoad.skin.font);
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath: skinLoad.entry.entryPath,
+        fonts: fontDeclarations,
+      });
+      this.beatorajaFontCachesByEntry.set(skinLoad.entry.entryPath, fonts);
+    }
+
+    // Capture the OUTGOING scene's state before disposing so the snapshot is fresh — covers
+    // the rare hot-swap case where `showBeatorajaSelect` runs while a scene is already up
+    // (e.g. theme reload). Normal PLAY → SELECT flow already captures via `playSongBeatoraja`
+    // / `showDecide`, but doing it here defensively ensures the snapshot is never stale.
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
+    this.beatorajaSelectScene?.dispose();
+    this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
+      skin: skinLoad.skin,
+      textures,
+      fonts,
+      skinConfig: config,
+      skinAudio: this.beatorajaSkinAudio,
+      songs: this.collection.songs,
+      // Pass the collection so the scene's `ChartPreviewEngine` can resolve each focused
+      // song's `BrowserSongAssetSource` and play `#PREVIEW` audio (or fall back to in-place
+      // chart playback) on cursor settle. Without this, the beatoraja select runs silent on
+      // cursor moves — same as the LR2 select did before the preview engine was added.
+      collection: this.collection,
+      // Theme-bundled navigation cues (cursor / decide / cancel / folder open-close /
+      // option-change). Routed through the same `BeatorajaSkinAudioPlayer` the Lua audio_play
+      // calls use — that way browsers cap a single AudioContext per scene rather than two.
+      systemSoundPaths: this.beatorajaSystemSoundPaths,
+      // Looping select-screen background music. Same audio backend as the navigation cues so
+      // a single AudioContext mixes them down. The scene starts the loop on enter and stops
+      // it on exit; transitioning into decide / play tears it down cleanly.
+      selectBgmPath: this.beatorajaSelectBgmPath,
+      // In-session lamp lookup — completed runs in this session light the focused song bar's
+      // lamp icon. Without this every bar reported as `CLEAR_LAMP_NOPLAY` regardless of how
+      // many times the user cleared the chart in the same session (audit 2.18).
+      resolveSongLampOp: (song) => this.beatorajaSessionLampOps.get(song.id),
+      // Decoder for the focused song's chart-bitmap synthetic ids (`-100 STAGEFILE` /
+      // `-101 BACKBMP` / `-102 BANNER`). The scene calls this on every focus change and
+      // caches by song-id; default beatoraja's select.json paints `-102 BANNER` as the
+      // per-song banner inside the chart-info panel.
+      decodeChartImages: (song) => this.loadBeatorajaChartImages(song),
+      // Restore the last cursor so coming back from gameplay lands on the same song.
+      initialIndex: this.beatorajaSelectIndex,
+      // Restore richer scene state captured before the previous tear-down — folder /
+      // sort / filter / favorites / cursor stack. Takes precedence over `initialIndex` when
+      // both are set (snapshot encodes the full position; bare index can't disambiguate
+      // root vs. inside-folder). Cleared by `onExit` so a future fresh entry from the empty
+      // drop screen starts at root.
+      restoreSnapshot: this.beatorajaSelectSnapshot,
+      onSongPicked: (song, opts) => {
+        // Cache the index using the picked song's identity — survives the scene tear-down.
+        this.beatorajaSelectIndex = this.collection.songs.indexOf(song);
+        // Same flow as the LR2 select view: route to decide → gameplay. The decide branch in
+        // `showDecide` already detects the beatoraja gameplay case and skips its splash.
+        // Forward the `autoPlay` override (set by the skin's AUTO PLAY button click → act=16);
+        // omitted otherwise so the user's global default applies.
+        void this.showDecide(song, { autoPlay: opts?.autoPlay });
+      },
+      onExit: () => {
+        // ESC from the beatoraja select returns to the empty drop screen. Clear the snapshot
+        // because the user explicitly left — coming back via a fresh drop or theme reload
+        // should start at root, not pick up wherever they were.
+        this.elements.shell.classList.add('empty');
+        void this.sceneHost.setScene(undefined);
+        this.beatorajaSelectScene?.dispose();
+        this.beatorajaSelectScene = undefined;
+        this.beatorajaSelectSnapshot = undefined;
+        this.beatorajaSkinOptionsGui?.clear();
+      },
+      onReadtextRequest: (song) => {
+        // Skin's READTEXT button (act=17 — "readme" / "btn-text" etc.). Find the chart's
+        // accompanying `.txt` next to its BMS file and show it in a transient browser dialog.
+        // No persistence / styling — just enough to surface chart-author notes.
+        void this.showBeatorajaReadtext(song);
+      },
+      onSkinConfigChange: (next) => {
+        // Skin mutated its own config (currently only the `JUDGE_TIMING` button — note offset
+        // ±1 ms per click). Persist back into the per-entry cache so the next mount /
+        // `replaceSkin` keeps the adjustment, and re-apply through `applyBeatorajaSelectSkinConfig`
+        // so the bottom-centre options panel re-renders with the new value.
+        this.beatorajaSkinConfigByEntry.set(skinLoad.entry.entryPath, next);
+        void this.applyBeatorajaSelectSkinConfig(skinLoad.entry.entryPath, next);
+      },
+    });
+    await this.sceneHost.setScene(this.beatorajaSelectScene);
+    this.setStatus(`Select (beatoraja): ${this.collection.songs.length} song(s)`);
+
+    // Build the bottom-centre skin-options panel for this select skin's `property[]` / `filepath[]`.
+    // User picks flow back through `onApply` → live `replaceSkin` on the active scene so chrome
+    // changes (Play Side, Score Graph On/Off, etc.) take effect on the very next Pixi frame
+    // without disposing / re-mounting the scene.
+    this.refreshBeatorajaSkinOptionsGui({
+      title: 'Skin Config (Select)',
+      entryPath: selectedEntry.entryPath,
+      header: headerLoad.header,
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaSelectSkinConfig(selectedEntry.entryPath, nextConfig);
+      },
+    });
+  }
+
+  /**
+   * Find the focused song's accompanying README / notes text and surface it in a transient
+   * overlay. Searches the song's source for a `.txt` file in the same directory as the chart
+   * (BMS convention: `myhardchart.bms` ↔ `myhardchart.txt` / `readme.txt` / etc.). When more
+   * than one matches, picks alphabetically — chart-authors typically only ship one.
+   *
+   * The overlay is a lightweight `<dialog>` injected at runtime — no persistent UI, click
+   * outside or hit Escape to dismiss. Falls back to a `console.log` notice when no `.txt` is
+   * found so the user has a hint that the chart didn't ship readtext content.
+   */
+  private async showBeatorajaReadtext(song: BrowserSongEntry): Promise<void> {
+    const source = resolveSongSource(this.collection, song);
+    if (source === undefined) {
+      gameplayLog.info('beatoraja readtext: source not found', { songId: song.id });
+      return;
+    }
+    const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
+    // Match `.txt` files inside the chart's folder (or root when the chart is at the top).
+    const textPaths: string[] = [];
+    for (const path of source.files.keys()) {
+      const lower = path.toLowerCase();
+      if (!lower.endsWith('.txt')) continue;
+      const dir = path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '';
+      if (dir.toLowerCase() !== chartDir.toLowerCase()) continue;
+      textPaths.push(path);
+    }
+    textPaths.sort();
+    const textPath = textPaths[0];
+    if (textPath === undefined) {
+      gameplayLog.info('beatoraja readtext: no .txt found', { dir: chartDir });
+      return;
+    }
+    const entry = source.files.get(textPath);
+    if (entry === undefined) return;
+    const bytes = await loadAssetBytes(entry);
+    if (bytes === undefined) return;
+    // BMS-era authors typically ship Shift_JIS-encoded text. Try the BOM-aware UTF-8 first;
+    // fall back to a Shift_JIS decode when the result contains replacement characters.
+    let text = decodeText(bytes, 'utf-8');
+    if (text.includes('�')) {
+      try {
+        text = decodeText(bytes, 'shift_jis');
+      } catch {
+        // some browsers don't expose 'shift_jis' decoder; keep the UTF-8 best-effort.
+      }
+    }
+    showReadtextOverlay({
+      title: `${song.title}${song.artist ? ` — ${song.artist}` : ''}`,
+      filename: textPath.split('/').pop() ?? textPath,
+      body: text,
+    });
+  }
+
+  /**
+   * Decode the focused chart's `#STAGEFILE` / `#BACKBMP` / `#BANNER` bitmaps to Pixi textures
+   * for the beatoraja decide scene's synthetic-id destinations (`-100` / `-101` / `-102`).
+   * Each entry is best-effort — missing or malformed bitmaps resolve to `undefined` and the
+   * matching destinations stay hidden. Uses the same `loadTextureFromBytes` decoder the LR2
+   * scenes use, so TGA / PNG / BMP / JPG all work transparently.
+   */
+  private async loadBeatorajaChartImages(song: BrowserSongEntry): Promise<{
+    stageFile?: ChartImageTexture;
+    backBmp?: ChartImageTexture;
+    banner?: ChartImageTexture;
+  }> {
+    const source = resolveSongSource(this.collection, song);
+    if (source === undefined) return {};
+    const meta = song.chart.metadata;
+    const out: { stageFile?: ChartImageTexture; backBmp?: ChartImageTexture; banner?: ChartImageTexture } = {};
+    const decode = async (relPath: string | undefined): Promise<ChartImageTexture | undefined> => {
+      if (relPath === undefined || relPath.length === 0) return undefined;
+      // Resolve relative to the chart's directory — `#STAGEFILE foo.png` lives next to the BMS
+      // unless the path starts with `/`. We strip any leading slash and join under the chart's
+      // dirname for the lookup.
+      const chartDir = song.chartPath.includes('/') ? song.chartPath.slice(0, song.chartPath.lastIndexOf('/')) : '';
+      const normalized = relPath.replace(/^\/+/, '');
+      const candidates = [chartDir.length > 0 ? `${chartDir}/${normalized}` : normalized, normalized];
+      for (const candidate of candidates) {
+        const entry = source.files.get(candidate);
+        if (entry === undefined) continue;
+        const bytes = await loadAssetBytes(entry);
+        if (bytes === undefined) continue;
+        try {
+          return await loadTextureFromBytes(candidate, bytes);
+        } catch (error) {
+          gameplayLog.info('beatoraja decide chart-image decode failed', { path: candidate, error });
+          return undefined;
+        }
+      }
+      return undefined;
+    };
+    const [stageFile, backBmp, banner] = await Promise.all([
+      decode(meta.stageFile),
+      decode(meta.backBmp),
+      decode(meta.banner),
+    ]);
+    if (stageFile !== undefined) out.stageFile = stageFile;
+    if (backBmp !== undefined) out.backBmp = backBmp;
+    if (banner !== undefined) out.banner = banner;
+    return out;
+  }
+
+  /**
+   * Apply a fresh skin-config to the active beatoraja select scene WITHOUT disposing / re-mounting.
+   * Re-runs the skin's Lua `main()` (or re-parses the JSON) with the new options, refreshes the
+   * texture cache (Lua skins emit different `source[]` lists per option set), then calls
+   * `replaceSkin` on the live scene.
+   */
+  private async applyBeatorajaSelectSkinConfig(entryPath: string, config: BeatorajaSkinConfig): Promise<void> {
+    const bundle = this.beatorajaTheme;
+    if (!bundle || !this.beatorajaSelectScene) return;
+    // Load the SPECIFIC entry — different from the discovery's "best" pick when the user picked an
+    // alternate skin from the Debug Menu's skin-picker dropdown.
+    const result = loadBeatorajaSkin({ entryPath, files: bundle.files, skinConfig: config });
+    if (!result.ok || !result.skin) return;
+    // Drop and re-decode the texture cache for this entry — option changes can alter `source[]`.
+    this.beatorajaTextureCachesByEntry.delete(entryPath);
+    const sourceBundle = bundleBeatorajaSources({
+      files: bundle.files,
+      entryPath,
+      sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+      filepathSchema: result.skin.filepath,
+      filepathOverrides: config.file,
+    });
+    const textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+    this.beatorajaTextureCachesByEntry.set(entryPath, textures);
+    let fonts = this.beatorajaFontCachesByEntry.get(entryPath);
+    if (fonts === undefined) {
+      // Per-entry font cache miss — fonts may differ between skins, so load fresh for this entry.
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath,
+        fonts: normalizeBeatorajaFonts(result.skin.font),
+      });
+      this.beatorajaFontCachesByEntry.set(entryPath, fonts);
+    }
+    this.beatorajaSelectScene.replaceSkin({ skin: result.skin, skinConfig: config, textures, fonts });
+
+    // Refresh the skin-options panel against the new entry's header so the property dropdowns
+    // reflect the new skin's `property[]` schema.
+    this.refreshBeatorajaSkinOptionsGui({
+      title: 'Skin Config (Select)',
+      entryPath,
+      header: result.header,
+      onApply: (nextConfig) => {
+        void this.applyBeatorajaSelectSkinConfig(entryPath, nextConfig);
+      },
+    });
+  }
+
+  /**
+   * Mount the beatoraja decide splash for `song`. Returns `true` when the splash actually mounted —
+   * `false` falls through to the no-decide fast-path (the loaded theme didn't ship a decide skin,
+   * the entry's header / payload failed to load, etc.). Both branches eventually call
+   * `playSongBeatoraja`; the difference is whether the user sees an animated chrome between
+   * select and gameplay.
+   */
+  private async showBeatorajaDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<boolean> {
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return false;
+
+    // Decide skin discovery — same shape as select / play. Picks the user's override when set,
+    // otherwise the discovery's "best" pick (`theme.decideSkin`). Falling back to
+    // `decideCandidates[0]` here was the previous behaviour and a bug: that's whatever
+    // happens to come first in the file-walk iteration order, NOT the preferred entry. So
+    // when the user picked the discovery default in the Debug Menu (which CLEARS the
+    // override per `rebuildBeatorajaSkinPickers`), the next decide mount fell back to
+    // `decideCandidates[0]` and silently mounted whichever theme the file map iterated
+    // first (typically GdbG_Skin instead of the requested default). The Debug Menu's
+    // dropdown showed the right name but the wrong skin actually loaded.
+    const decideCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.DECIDE);
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
+      BEATORAJA_SKIN_TYPE.DECIDE,
+      decideCandidates,
+      bundle.theme.decideSkin,
+    );
+    if (selectedEntry === undefined) return false;
+
+    // Two-pass evaluation — same `loadBeatorajaSkin` contract as select / play. The first pass
+    // gives us the header (used for `property[]` dropdown); the second runs the skin's `main()`
+    // with the resolved option set so dynamic destinations populate. The phase-2 eval also
+    // gets a `runtimeContext` populated with the chart's difficulty ops so themes that
+    // pre-compute per-difficulty values at load time (e.g. ModernChic's
+    // `CUSTOM.NUM.diffRGB()`) see a non-`nil` answer instead of crashing on `RGB[1]`.
+    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
+    if (!headerLoad.ok) {
+      gameplayLog.warn(`beatoraja decide: ${headerLoad.error.message}`);
+      return false;
+    }
+    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    const result = loadBeatorajaSkin({
+      entryPath: selectedEntry.entryPath,
+      files: bundle.files,
+      skinConfig: config,
+      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
+    });
+    if (!result.ok || !result.skin) {
+      const reason = result.ok ? 'skin payload missing' : result.error.message;
+      gameplayLog.warn(`beatoraja decide: ${reason}`);
+      return false;
+    }
+
+    // Texture + font cache lookup — reuse existing entries, decode + register fresh ones.
+    let textures = this.beatorajaTextureCachesByEntry.get(selectedEntry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: selectedEntry.entryPath,
+        sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: result.skin.filepath,
+        filepathOverrides: config.file,
+      });
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(selectedEntry.entryPath, textures);
+    }
+    let fonts = this.beatorajaFontCachesByEntry.get(selectedEntry.entryPath);
+    if (fonts === undefined) {
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath: selectedEntry.entryPath,
+        fonts: normalizeBeatorajaFonts(result.skin.font),
+      });
+      this.beatorajaFontCachesByEntry.set(selectedEntry.entryPath, fonts);
+    }
+
+    await this.ensureHostMounted();
+    this.lastSelectNavigation = this.selectView?.getNavigation();
+    this.selectView?.setVisible(false);
+    // Capture the select scene's state before disposing — the user picked a song and is
+    // heading into decide → play. When they come back via the result scene's "back to
+    // select" path we re-mount with this snapshot so they land in the same folder / cursor /
+    // sort / filter / favorites state, not at the root with default sort.
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
+    this.beatorajaSelectScene?.dispose();
+    this.beatorajaSelectScene = undefined;
+    this.beatorajaDecideScene?.dispose();
+
+    // Resolve `#IF` / `#RANDOM` once at decide entry so the decide skin's bpmgraph plots the
+    // SAME branches the gameplay scene will play. `resolveBmsControlFlow` rolls each `#RANDOM`
+    // fresh per call; resolving twice (here + inside `prepareBeatorajaGameplayChart`) would yield
+    // different branches between decide and gameplay. The resolved chart is cached on the demo
+    // and reused by `playSongBeatoraja` via `preResolvedChart`.
+    const resolvedChart = resolveBmsControlFlow(song.chart, { random: Math.random });
+    this.lastBeatorajaChart = { chart: resolvedChart, chartPath: song.chartPath };
+
+    // Idempotency gate — `onContinue` and the auto-advance timer can race in theory; whichever
+    // lands first wins. Same pattern as the LR2 decide path.
+    let advanced = false;
+    const advance = (then: () => void): void => {
+      if (advanced) return;
+      advanced = true;
+      then();
+    };
+
+    // Resolve the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps to Pixi textures so the
+    // decide skin's synthetic-id destinations (-100 / -101 / -102) can paint them. Loading is
+    // best-effort — missing bitmaps just leave the matching destinations hidden.
+    const chartImages = await this.loadBeatorajaChartImages(song);
+
+    this.beatorajaDecideScene = new PixiBeatorajaDecideScene({
+      skin: result.skin,
+      textures,
+      fonts,
+      // Pass the resolved chart so the decide skin's bpmgraph element (when authored) plots the
+      // BPM curve of the about-to-play chart.
+      chart: resolvedChart,
+      skinConfig: config,
+      song,
+      chartImages,
+      bgmBytes: this.beatorajaThemeBgm.decide,
+      skinAudio: this.beatorajaSkinAudio,
+      onContinue: () =>
+        advance(() => {
+          // Drop the decide scene first so the gameplay scene gets a clean stage. `playSongBeatoraja`
+          // handles the rest — host mount, audio prep, skin selection, etc.
+          void this.sceneHost.setScene(undefined).then(() => {
+            this.beatorajaDecideScene?.dispose();
+            this.beatorajaDecideScene = undefined;
+            void this.playSongBeatoraja(song, overrides);
+          });
+        }),
+      onCancel: () =>
+        advance(() => {
+          // ESC from the splash returns to select — same fallback as LR2.
+          void this.sceneHost.setScene(undefined).then(() => {
+            this.beatorajaDecideScene?.dispose();
+            this.beatorajaDecideScene = undefined;
+            void this.showSelect();
+          });
+        }),
+    });
+    await this.sceneHost.setScene(this.beatorajaDecideScene);
+    this.setStatus(`Decide (beatoraja): ${song.title}`);
+    return true;
+  }
+
+  /**
+   * Mount the beatoraja result scene for `song` against the chart's final `summary`. Returns
+   * `true` when the scene actually mounted — `false` falls through to the no-result fast-path
+   * (no result skin in the bundle, or skin load failed). Same shape as `showBeatorajaDecide`.
+   */
+  private async showBeatorajaResult(
+    song: BrowserSongEntry,
+    summary: PlayerSummary,
+    maxCombo: number,
+    history: {
+      scoreHistory: ReadonlyArray<{ progress: number; exScore: number }>;
+      gaugeHistory: ReadonlyArray<{ progress: number; value: number }>;
+      timingHistory: ReadonlyArray<{ deltaMs: number; kind: string }>;
+    },
+  ): Promise<boolean> {
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return false;
+
+    // Stash the run's clear-lamp into the in-session map (audit 2.18) so the next time the
+    // user lands on this song in the select scene the bar's lamp icon lights up. Cleared
+    // runs replace any previous lamp; a failed retry of a previously-cleared chart should
+    // not downgrade the lamp.
+    const newLamp = computeClearLampOp({
+      cleared: summary.gauge?.cleared ?? false,
+      perfect: summary.perfect,
+      great: summary.great,
+      good: summary.good,
+      bad: summary.bad,
+      poor: summary.poor,
+      total: summary.total,
+      gaugeType: summary.gauge?.type,
+    });
+    const previousLamp = this.beatorajaSessionLampOps.get(song.id);
+    if (newLamp !== BEATORAJA_OP.CLEAR_LAMP_FAILED || previousLamp === undefined) {
+      this.beatorajaSessionLampOps.set(song.id, newLamp);
+    }
+
+    // Same fix as decide — fall back to the discovery's `theme.resultSkin` rather than
+    // `resultCandidates[0]` (= file-walk iteration order), so picking the discovery default
+    // in the Debug Menu (which clears the override) actually mounts the discovery default
+    // instead of silently picking whatever theme happens to iterate first.
+    const resultCandidates = bundle.theme.entries.filter((entry) => entry.header.type === BEATORAJA_SKIN_TYPE.RESULT);
+    const selectedEntry = this.pickBeatorajaSkinEntryWithOverride(
+      BEATORAJA_SKIN_TYPE.RESULT,
+      resultCandidates,
+      bundle.theme.resultSkin,
+    );
+    if (selectedEntry === undefined) return false;
+
+    const headerLoad = loadBeatorajaSkin({ entryPath: selectedEntry.entryPath, files: bundle.files });
+    if (!headerLoad.ok) {
+      gameplayLog.warn(`beatoraja result: ${headerLoad.error.message}`);
+      return false;
+    }
+    const config = this.resolveBeatorajaSkinConfig(selectedEntry.entryPath, headerLoad.header);
+    // Phase-2 eval gets the chart's difficulty ops via `runtimeContext` so result themes that
+    // pre-compute per-difficulty values at load time (mirroring the decide path's
+    // ModernChic-style `diffRGB()` pattern) don't crash on `nil` indexing.
+    const result = loadBeatorajaSkin({
+      entryPath: selectedEntry.entryPath,
+      files: bundle.files,
+      skinConfig: config,
+      runtimeContext: this.buildBeatorajaSkinLoadContext(song, config),
+    });
+    if (!result.ok || !result.skin) {
+      const reason = result.ok ? 'skin payload missing' : result.error.message;
+      gameplayLog.warn(`beatoraja result: ${reason}`);
+      return false;
+    }
+
+    let textures = this.beatorajaTextureCachesByEntry.get(selectedEntry.entryPath);
+    if (textures === undefined) {
+      const sourceBundle = bundleBeatorajaSources({
+        files: bundle.files,
+        entryPath: selectedEntry.entryPath,
+        sources: (result.skin.source ?? []) as unknown as ReadonlyArray<Readonly<Record<string, unknown>>>,
+        filepathSchema: result.skin.filepath,
+        filepathOverrides: config.file,
+      });
+      textures = await loadBeatorajaTexturesFromBundle(sourceBundle);
+      this.beatorajaTextureCachesByEntry.set(selectedEntry.entryPath, textures);
+    }
+    let fonts = this.beatorajaFontCachesByEntry.get(selectedEntry.entryPath);
+    if (fonts === undefined) {
+      fonts = await loadBeatorajaFonts({
+        files: bundle.files,
+        entryPath: selectedEntry.entryPath,
+        fonts: normalizeBeatorajaFonts(result.skin.font),
+      });
+      this.beatorajaFontCachesByEntry.set(selectedEntry.entryPath, fonts);
+    }
+
+    await this.ensureHostMounted();
+    this.beatorajaResultScene?.dispose();
+
+    // Decode the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps so the result skin's
+    // synthetic-id destinations (-100 / -101 / -102) can paint them. Reuses the same loader
+    // as decide / play so all three scenes share one decoder path.
+    const chartImages = await this.loadBeatorajaChartImages(song);
+
+    let dismissed = false;
+    this.beatorajaResultScene = new PixiBeatorajaResultScene({
+      skin: result.skin,
+      textures,
+      fonts,
+      skinConfig: config,
+      song,
+      // Pass the just-played chart so any `bpmgraph[]` element in the result skin can plot the
+      // chart's BPM curve. The prep bundle is disposed at gameplay teardown, so the chart
+      // reference is snapshot into `lastBeatorajaChart` for use here. We only forward when the
+      // cached chart matches the song the result scene is rendering — otherwise the bpmgraph
+      // would plot the wrong chart's BPM curve.
+      chart: this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.chart : undefined,
+      summary,
+      maxCombo,
+      scoreHistory: history.scoreHistory,
+      gaugeHistory: history.gaugeHistory,
+      timingHistory: history.timingHistory,
+      chartImages,
+      // Pick the outcome-specific jingle when one was discovered, falling back to the generic
+      // `result` slot. Beatoraja themes that ship a single result BGM authoredit as `result.*`,
+      // while themes that distinguish clear / fail (most reference themes) ship dedicated tracks.
+      bgmBytes:
+        ((summary.gauge?.cleared ?? false) ? this.beatorajaThemeBgm.clear : this.beatorajaThemeBgm.fail) ??
+        this.beatorajaThemeBgm.result,
+      skinAudio: this.beatorajaSkinAudio,
+      onContinue: () => {
+        if (dismissed) return;
+        dismissed = true;
+        void this.sceneHost.setScene(undefined).then(() => {
+          this.beatorajaResultScene?.dispose();
+          this.beatorajaResultScene = undefined;
+          void this.showSelect();
+        });
+      },
+    });
+    await this.sceneHost.setScene(this.beatorajaResultScene);
+    this.setStatus(
+      `Result (beatoraja): ${song.title} · score=${summary.score} ex=${summary.exScore} maxCombo=${maxCombo}`,
+    );
+    return true;
+  }
+
+  /**
+   * Record an in-scene skin override and sync the Debug Menu dropdown's displayed value so the
+   * two surfaces stay consistent. Called from the in-scene `BeatorajaSkinOptionsGui` callbacks
+   * (the popup the user opens with the skin's authored "options" button); the Debug Menu's own
+   * dropdown writes the override directly because its `onChange` is the source.
+   *
+   * Pass `entryPath = undefined` to clear the override (= fall back to the theme's discovery
+   * default). The picker dropdown also resets to the default option in that case.
+   */
+  private setBeatorajaSkinOverride(typeCode: number, entryPath: string | undefined): void {
+    if (entryPath === undefined) {
+      this.beatorajaSkinOverridesByType.delete(typeCode);
+    } else {
+      this.beatorajaSkinOverridesByType.set(typeCode, entryPath);
+    }
+    // Mirror the change onto the Debug Menu dropdown when one exists for this type. lil-gui's
+    // `setValue` writes to the underlying proxy AND repaints the option list to highlight the
+    // matching entry; without this the dropdown would still show the previous selection until
+    // the next `rebuildBeatorajaSkinPickers` call (= next theme drop).
+    const controller = this.beatorajaSkinPickerControllers.get(typeCode);
+    if (controller !== undefined) {
+      const fallbackPath = this.beatorajaTheme?.theme.entries.find((e) => e.header.type === typeCode)?.entryPath;
+      controller.setValue(entryPath ?? fallbackPath ?? '');
+    }
+  }
+
+  /**
+   * Pick the actual skin entry to mount for a scene, honoring the user's override when one was
+   * recorded. Falls back to `fallback` (the discovery's "best" pick) when no override exists or
+   * when the override no longer points at a valid entry (e.g., the user dropped a different theme).
+   */
+  private pickBeatorajaSkinEntryWithOverride(
+    typeCode: number,
+    candidates: ReadonlyArray<BeatorajaSkinEntry>,
+    fallback: BeatorajaSkinEntry | undefined,
+  ): BeatorajaSkinEntry | undefined {
+    const override = this.beatorajaSkinOverridesByType.get(typeCode);
+    if (override !== undefined) {
+      const found = candidates.find((entry) => entry.entryPath === override);
+      if (found !== undefined) return found;
+      // Override stale (theme rotated) — drop it so the fallback takes over.
+      this.beatorajaSkinOverridesByType.delete(typeCode);
+    }
+    return fallback;
+  }
+
+  /**
+   * Repopulate the "Beatoraja skins" debug-menu folder with one dropdown per scene type that the
+   * loaded theme actually ships an entry for. Called from `loadBeatorajaTheme` after each drop,
+   * so the dropdowns always reflect the live `beatorajaTheme.entries` list.
+   *
+   * Each dropdown:
+   *   - shows the scene's "best" entry (from theme discovery) as the default — selecting a
+   *     different option sets `beatorajaSkinOverridesByType` and the next scene mount uses it
+   *     via {@link pickBeatorajaSkinEntryWithOverride}.
+   *   - labels options by `${header.name} (${entryPath})` so the user can disambiguate same-
+   *     named skins from different folders.
+   *   - is omitted entirely for scene types the loaded theme doesn't ship at all (so the panel
+   *     stays compact). Single-entry types still get a dropdown so the user can see at a glance
+   *     which file is mounted.
+   */
+  private rebuildBeatorajaSkinPickers(): void {
+    const folder = this.beatorajaSkinPickerFolder;
+    if (folder === undefined) return;
+    // Tear down previous controllers so dropdown options match the current theme bundle. lil-gui
+    // doesn't support live-updating an `add(target, prop, options)` controller's option list, so
+    // recreating each time is the safe path.
+    for (const controller of this.beatorajaSkinPickerControllers.values()) {
+      controller.destroy();
+    }
+    this.beatorajaSkinPickerControllers.clear();
+    const theme = this.beatorajaTheme?.theme;
+    if (theme === undefined) return;
+    // Order matters here — the folder lays controllers out in insertion order, so we keep the
+    // play-variant types together (clustered by key count), then chrome scenes (select / decide
+    // / result / etc.) below them.
+    const sceneTypes: ReadonlyArray<{ typeCode: number; label: string; best?: BeatorajaSkinEntry }> = [
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_5KEYS, label: 'Play 5K', best: theme.playSkins['5'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_7KEYS, label: 'Play 7K', best: theme.playSkins['7'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_9KEYS, label: 'Play 9K', best: theme.playSkins['9'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_10KEYS, label: 'Play 10K', best: theme.playSkins['10'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_14KEYS, label: 'Play 14K', best: theme.playSkins['14'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_24KEYS, label: 'Play 24K', best: theme.playSkins['24'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.PLAY_24KEYS_DOUBLE, label: 'Play 24K DP', best: theme.playSkins['24d'] },
+      { typeCode: BEATORAJA_SKIN_TYPE.MUSIC_SELECT, label: 'Music Select', best: theme.selectSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.DECIDE, label: 'Decide', best: theme.decideSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.RESULT, label: 'Result', best: theme.resultSkin },
+      { typeCode: BEATORAJA_SKIN_TYPE.COURSE_RESULT, label: 'Course Result', best: theme.courseResultSkin },
+    ];
+    for (const scene of sceneTypes) {
+      const candidates = theme.entries.filter((entry) => entry.header.type === scene.typeCode);
+      if (candidates.length === 0) continue;
+      // Build a label → entryPath map. lil-gui shows the keys in the dropdown and writes the
+      // matching value to the proxy. Using entryPath as the value lets us look up the entry on
+      // change without keeping a separate index.
+      const options: Record<string, string> = {};
+      for (const entry of candidates) {
+        const name = entry.header.name?.length ? entry.header.name : '(unnamed)';
+        const label = `${name} (${entry.entryPath})`;
+        options[label] = entry.entryPath;
+      }
+      // The proxy holds the currently-selected entryPath. Default to the discovery's best pick
+      // so the dropdown reflects what would actually mount if no override is set.
+      const proxy = { entryPath: scene.best?.entryPath ?? candidates[0]!.entryPath };
+      const controller = folder
+        .add(proxy, 'entryPath', options)
+        .name(`${scene.label} (${candidates.length})`)
+        .onChange((nextEntryPath: string) => {
+          if (scene.best !== undefined && nextEntryPath === scene.best.entryPath) {
+            // Picking the discovery default = "no override" — drop any prior override so future
+            // theme rotations pick up the new "best" automatically.
+            this.beatorajaSkinOverridesByType.delete(scene.typeCode);
+          } else {
+            this.beatorajaSkinOverridesByType.set(scene.typeCode, nextEntryPath);
+          }
+          // Live-apply: if the user's pick matches the currently-mounted scene type, re-mount it
+          // immediately against the new entry. Without this the Debug Menu only takes effect on
+          // the NEXT scene transition, which felt broken to the user (drop a theme, pick a skin,
+          // nothing visible until you ESC and re-enter the scene).
+          this.applyBeatorajaSkinSwitchIfActive(scene.typeCode, nextEntryPath, candidates);
+        });
+      this.beatorajaSkinPickerControllers.set(scene.typeCode, controller);
+    }
+  }
+
+  /**
+   * If the active scene's type-code matches `typeCode`, re-mount it against `entryPath`. Invoked
+   * by the Debug Menu's skin-picker dropdown (the canonical surface for switching skins —
+   * the bottom-centre `BeatorajaSkinOptionsGui` only exposes the picked skin's authored
+   * `property[]` / `filepath[]` schema, not the picker itself). No-op when no matching scene is
+   * active (e.g., user picks a Decide skin while the Select scene is on screen — the override
+   * still gets recorded by the caller for the next mount, but nothing visible changes now).
+   *
+   * `candidates` carries the dropdown's source list so we can recover the entry's `header` for
+   * config-defaults seeding without re-loading the skin to read it back. The header is also
+   * needed by `applyBeatoraja*SkinConfig` indirectly via the cached config map.
+   */
+  private applyBeatorajaSkinSwitchIfActive(
+    typeCode: number,
+    entryPath: string,
+    candidates: ReadonlyArray<BeatorajaSkinEntry>,
+  ): void {
+    const matched = candidates.find((entry) => entry.entryPath === entryPath);
+    if (matched === undefined) return;
+    const config = this.resolveBeatorajaSkinConfig(entryPath, matched.header);
+    if (typeCode === BEATORAJA_SKIN_TYPE.MUSIC_SELECT && this.beatorajaSelectScene !== undefined) {
+      void this.applyBeatorajaSelectSkinConfig(entryPath, config);
+      return;
+    }
+    if (
+      this.beatorajaGameplayView !== undefined &&
+      this.currentBeatorajaPlayVariant !== undefined &&
+      playSkinTypeForVariant(this.currentBeatorajaPlayVariant) === typeCode
+    ) {
+      void this.applyBeatorajaPlaySkinConfig(entryPath, this.currentBeatorajaPlayVariant, config);
+    }
+  }
+
+  /**
+   * Pick the cached skin config for an entry — falling back to a fresh defaults-fill from the
+   * header's `property[]` schema. Mutating the returned object directly mutates the cache, but the
+   * skin-options panel emits fresh copies on change so the cached state never becomes accidentally
+   * shared with downstream consumers.
+   */
+  /**
+   * Build a `BeatorajaLuaRuntimeContext` for skin-load time so themes that compute values via
+   * `main_state.option(...)` inside `main()` see chart-aware ops. Without this:
+   *
+   *   ModernChic decide.lua's `lockonAnimation` calls `CUSTOM.NUM.diffRGB()` which does
+   *   `main_state.option(MAIN.OP.DIFFICULTY1..)` → returns false → falls through to `nil` →
+   *   `RGB[1]` index crashes the entire `main()` evaluation → the load fails silently and
+   *   `showBeatorajaDecide` returns false (= the user's reported "no decide animation,
+   *   the scene jumps straight to PLAY" symptom).
+   *
+   * The context's `option` reflects the same op set the scene would compute on mount, so any
+   * pre-computed RGB / position / asset choice the skin makes at load time matches what would
+   * render anyway. Surfacing the chart's difficulty + skin_config option picks is enough to
+   * unblock the surveyed cases (ModernChic decide / result); other accessors stay
+   * \`undefined\` and fall through to the stub defaults.
+   */
+  private buildBeatorajaSkinLoadContext(
+    song: BrowserSongEntry | undefined,
+    skinConfig: BeatorajaSkinConfig,
+  ): BeatorajaLuaRuntimeContext {
+    const ops = new Set(buildBaseOpSet(skinConfig.option));
+    const difficulty = song?.chart.metadata.difficulty;
+    switch (difficulty) {
+      case 1:
+        ops.add(BEATORAJA_OP.LEVEL_BEGINNER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_BEGINNER);
+        break;
+      case 2:
+        ops.add(BEATORAJA_OP.LEVEL_NORMAL);
+        ops.add(BEATORAJA_OP.DIFFICULTY_NORMAL);
+        break;
+      case 3:
+        ops.add(BEATORAJA_OP.LEVEL_HYPER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_HYPER);
+        break;
+      case 4:
+        ops.add(BEATORAJA_OP.LEVEL_ANOTHER);
+        ops.add(BEATORAJA_OP.DIFFICULTY_ANOTHER);
+        break;
+      case 5:
+        ops.add(BEATORAJA_OP.LEVEL_INSANE);
+        ops.add(BEATORAJA_OP.DIFFICULTY_INSANE);
+        break;
+      default:
+        ops.add(BEATORAJA_OP.DIFFICULTY_UNDEFINED);
+        break;
+    }
+    const audio = this.beatorajaSkinAudio;
+    return {
+      option: (id) => ops.has(id),
+      // Wire `main_state.audio_play / audio_loop / audio_stop` to the theme-bundle audio
+      // player. ModernChic's `Root/customsound.lua` calls these from every panel-toggle /
+      // song-change / confirm — without them the menu UI feels dead even though the eval
+      // doesn't crash. Each callback returns false when the player isn't constructed (no
+      // theme bundle yet) so the Lua side gracefully no-ops.
+      audioPlay: audio === undefined ? undefined : (path, vol) => audio.play(path, vol),
+      audioLoop: audio === undefined ? undefined : (path, vol) => audio.loop(path, vol),
+      audioStop: audio === undefined ? undefined : (path) => audio.stop(path),
+    };
+  }
+
+  private resolveBeatorajaSkinConfig(entryPath: string, header: BeatorajaSkinHeader): BeatorajaSkinConfig {
+    let cached = this.beatorajaSkinConfigByEntry.get(entryPath);
+    if (cached === undefined) {
+      // Seed both `option` (from `property[].def`) AND `file` (from `filepath[].def`). Earlier
+      // `file` started empty, which made the wildcard fallback inside `resolveSourcePath` pick
+      // whichever filename happened to sort first instead of the author's authored default —
+      // ModernChic's `key` filepath got `#default.png` instead of the intended `harf.png`,
+      // its `bomb` filepath got `Kakabomb.png` instead of `diamond SCUROed..png`, etc.
+      // `buildDefaultSkinConfigFiles` resolves each `filepath[].def` against the wildcard's
+      // match set so first-time mounts pick the author-intended file rather than a sort-order
+      // accident. The bundle's `files` map is the same one `loadBeatorajaSkin` consumed, so
+      // the wildcard expansion sees identical candidates either way.
+      const file =
+        this.beatorajaTheme !== undefined
+          ? buildDefaultSkinConfigFiles(header, this.beatorajaTheme.files, entryPath)
+          : {};
+      // `customOffset` starts empty — the GUI's per-slot zero-fill happens at panel build
+      // time. Storing the empty object explicitly here means the config shape stays
+      // consistent across the cache vs. the GUI emit path (both have a `customOffset` key,
+      // even if empty), which keeps spread / deep-clone snapshots free of surprises.
+      cached = { offset: 0, option: buildDefaultSkinConfigOptions(header), file, customOffset: {} };
+      this.beatorajaSkinConfigByEntry.set(entryPath, cached);
+    }
+    return cached;
+  }
+
+  /**
+   * Pre-resolve `filepath[]` candidate lists for the skin-options panel. Each entry's `path` field
+   * is a wildcard relative to the skin directory; `expandBeatorajaWildcard` walks the dropped file
+   * map and returns every match. The panel hands these to lil-gui as dropdown options so the user
+   * can pick a specific file by name rather than guessing.
+   */
+  private collectBeatorajaFileCandidates(
+    entryPath: string,
+    header: BeatorajaSkinHeader,
+  ): ReadonlyMap<string, ReadonlyArray<string>> {
+    const map = new Map<string, ReadonlyArray<string>>();
+    const bundle = this.beatorajaTheme;
+    if (bundle === undefined) return map;
+    for (const fp of header.filepath ?? []) {
+      const matches = expandBeatorajaWildcard(bundle.files, entryPath, fp.path);
+      map.set(fp.name, matches);
+    }
+    return map;
+  }
+
+  /**
+   * Lazily instantiate the skin-options panel. Deferred from the constructor because the demo shell
+   * (the parent the panel attaches to) doesn't exist until `app.innerHTML` materializes.
+   */
+  private ensureBeatorajaSkinOptionsGui(): BeatorajaSkinOptionsGui {
+    if (this.beatorajaSkinOptionsGui === undefined) {
+      this.beatorajaSkinOptionsGui = new BeatorajaSkinOptionsGui({ container: this.elements.shell });
+    }
+    return this.beatorajaSkinOptionsGui;
+  }
+
+  /**
+   * Update the bottom-centre skin-options panel for a freshly-mounted beatoraja scene. Subsequent
+   * user changes flow back through `onChange` → cache update → scene re-mount.
+   *
+   * Skin selection itself is handled by the Debug Menu, not this panel — the demo's
+   * `setBeatorajaSkinOverride` + `applyBeatorajaPlaySkinConfig` cascade is invoked from there.
+   */
+  private refreshBeatorajaSkinOptionsGui(args: {
+    title: string;
+    entryPath: string;
+    header: BeatorajaSkinHeader;
+    onApply: (updatedConfig: BeatorajaSkinConfig) => void;
+  }): void {
+    const config = this.resolveBeatorajaSkinConfig(args.entryPath, args.header);
+    const candidates = this.collectBeatorajaFileCandidates(args.entryPath, args.header);
+    const gui = this.ensureBeatorajaSkinOptionsGui();
+    gui.setSkin({
+      title: args.title,
+      // Forward the entry's stable path so `setSkin` can short-circuit when the same skin entry
+      // is being reapplied (the round-trip after every controller tweak). Without this the GUI
+      // tears down and rebuilds on every value change, snapping the panel back to its
+      // initial collapsed state mid-edit.
+      entryPath: args.entryPath,
+      header: args.header,
+      config,
+      fileCandidates: candidates,
+      onChange: (next) => {
+        // Persist and notify the caller so it can re-mount the active scene with the new config.
+        this.beatorajaSkinConfigByEntry.set(args.entryPath, next);
+        args.onApply(next);
+      },
+    });
+  }
+
+  /** Tear down the active beatoraja gameplay view + its prep bundle. Idempotent. */
+  private disposeBeatorajaGameplay(): void {
+    this.beatorajaGameplayView?.dispose();
+    this.beatorajaGameplayView = undefined;
+    this.currentBeatorajaPlayVariant = undefined;
+    if (this.beatorajaGameplayPrep) {
+      // Refresh the cached chart with whatever the prep ended up using — this preserves the
+      // `chartPath ⇒ chart` association even on the rare path where the prep had to fall back to
+      // a fresh resolve (e.g. gameplay reached without going through decide). The audio / BGA
+      // resources owned by `prep` still get released by `dispose()`.
+      const chartPath = this.lastBeatorajaChart?.chartPath;
+      if (chartPath !== undefined) {
+        this.lastBeatorajaChart = { chart: this.beatorajaGameplayPrep.chart, chartPath };
+      }
+      void this.beatorajaGameplayPrep.dispose();
+      this.beatorajaGameplayPrep = undefined;
+    }
+  }
+
+  /** Sequence beatoraja-gameplay teardown → caller-supplied transition (mirrors `finishGameplayThen`). */
+  private async finishBeatorajaGameplayThen(then: () => void | Promise<void>): Promise<void> {
+    await this.sceneHost.setScene(undefined);
+    this.disposeBeatorajaGameplay();
+    await then();
+  }
+
   private async showSelect(): Promise<void> {
     this.elements.shell.classList.remove('playing');
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
@@ -1299,12 +3047,37 @@ class PlayerWebDemoApp {
     await this.ensureHostMounted();
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
+    this.disposeBeatorajaGameplay();
     this.resultView?.dispose();
     this.resultView = undefined;
     // Decide splash is cleared too — Escape from the splash should land back on the select scene rather than leave the
     // splash drawing over it.
     this.decideView?.dispose();
     this.decideView = undefined;
+    // Beatoraja select scene takes precedence when a beatoraja theme with a select skin is loaded.
+    // Falls through to the LR2 select path otherwise — same heuristic as `canPlaySongBeatoraja` for
+    // gameplay: opt-in when the theme covers the surface, fall back when it doesn't.
+    if (this.beatorajaTheme?.theme.selectSkin !== undefined && this.collection.songs.length > 0) {
+      // Hide / dispose the LR2 select view if it was up — only one select can own the scene host.
+      this.selectView?.setVisible(false);
+      await this.showBeatorajaSelect();
+      return;
+    }
+    // Same teardown for the beatoraja select scene if we're falling back to LR2 (theme dropped, etc.).
+    // Capture before disposing so a future beatoraja-theme reload (e.g. user re-drops the same
+    // theme) restores the cursor / folder state. The snapshot is opaque data — harmless to retain
+    // even when the user has switched away.
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
+    this.beatorajaSelectScene?.dispose();
+    this.beatorajaSelectScene = undefined;
+    // Decide / result splashes don't outlive a return to select either — the gameplay-skinned
+    // chrome they paint would otherwise overlay the select scene.
+    this.beatorajaDecideScene?.dispose();
+    this.beatorajaDecideScene = undefined;
+    this.beatorajaResultScene?.dispose();
+    this.beatorajaResultScene = undefined;
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
@@ -1364,6 +3137,14 @@ class PlayerWebDemoApp {
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
    */
   private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+    // Beatoraja gameplay path. When the loaded theme ships a decide skin (`type = 6`), mount it
+    // and route confirmation into the beatoraja gameplay scene. When it doesn't, hand straight to
+    // `playSong` — the beatoraja branch there picks up the chart without a splash.
+    if (this.canPlaySongBeatoraja(song)) {
+      const mounted = await this.showBeatorajaDecide(song, overrides);
+      if (!mounted) await this.playSong(song, overrides);
+      return;
+    }
     if (!this.decideSkin) {
       // No decide skin in the bundle (or skinless demo) — skip the splash entirely. The select view's `playDecideSound`
       // already fired so the audio cue still plays.
@@ -1506,6 +3287,14 @@ class PlayerWebDemoApp {
   }
 
   private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+    // Beatoraja gameplay path. Branch out early when a beatoraja theme is loaded and the chart shape
+    // resolves to a variant the renderer can mount (with `pickBeatorajaPlayableSkinVariant` fallback so
+    // a 5K chart on a 7-keys-only theme still takes this path). Falls through to the LR2 path
+    // otherwise — e.g. a 24-key chart on a beatoraja-only theme still gets the LR2 frame chrome.
+    if (this.canPlaySongBeatoraja(song)) {
+      await this.playSongBeatoraja(song, overrides);
+      return;
+    }
     this.elements.shell.classList.add('playing');
     await this.ensureHostMounted();
     this.lastSelectNavigation = this.selectView?.getNavigation();
@@ -1515,6 +3304,7 @@ class PlayerWebDemoApp {
     this.decideView?.dispose();
     this.decideView = undefined;
     this.gameplayView?.dispose();
+    this.disposeBeatorajaGameplay();
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
@@ -1756,4 +3546,96 @@ function sanitizeFilenameStem(input: string): string {
     .replace(/\s+/gu, ' ')
     .trim()
     .slice(0, 80);
+}
+
+/** Map a playable variant to the matching `BEATORAJA_SKIN_TYPE` code. */
+function playSkinTypeForVariant(variant: BeatorajaPlayableVariant): number {
+  switch (variant) {
+    case '7':
+      return BEATORAJA_SKIN_TYPE.PLAY_7KEYS;
+    case '5':
+      return BEATORAJA_SKIN_TYPE.PLAY_5KEYS;
+    case '14':
+      return BEATORAJA_SKIN_TYPE.PLAY_14KEYS;
+    case '10':
+      return BEATORAJA_SKIN_TYPE.PLAY_10KEYS;
+    case '9':
+      return BEATORAJA_SKIN_TYPE.PLAY_9KEYS;
+  }
+}
+
+/**
+ * Pixi `Texture` type as exposed by player-web's re-exported `loadTextureFromBytes`. Derived
+ * from the function's return type so the demo doesn't need a direct `pixi.js` dependency for
+ * the chart-image plumbing. `Awaited<…>` strips the `Promise` wrapper; `NonNullable<…>` strips
+ * the `| undefined` so callers can branch on presence.
+ */
+type ChartImageTexture = NonNullable<Awaited<ReturnType<typeof loadTextureFromBytes>>>;
+
+/**
+ * Decode a byte buffer with the named encoding via the platform `TextDecoder`. Throws if the
+ * runtime doesn't recognise the encoding name (some browsers gate non-UTF-8 decoders).
+ */
+function decodeText(bytes: Uint8Array, encoding: string): string {
+  return new TextDecoder(encoding).decode(bytes);
+}
+
+/**
+ * Lightweight read-text overlay. Injects a `<dialog>` at body root, populates it with the
+ * decoded chart notes, and wires Escape / outside-click dismissal. Replaces any prior overlay
+ * so repeated clicks just rebuild the panel against the latest song.
+ */
+function showReadtextOverlay(opts: { title: string; filename: string; body: string }): void {
+  if (typeof document === 'undefined') return;
+  // Tear down any prior overlay so back-to-back clicks don't stack.
+  const existing = document.getElementById('beatoraja-readtext-overlay');
+  if (existing !== null && existing instanceof HTMLDialogElement) {
+    existing.close();
+    existing.remove();
+  }
+  const dialog = document.createElement('dialog');
+  dialog.id = 'beatoraja-readtext-overlay';
+  // Inline styles — avoids needing a CSS file edit for this one-off surface.
+  dialog.style.maxWidth = 'min(640px, 80vw)';
+  dialog.style.maxHeight = '70vh';
+  dialog.style.padding = '0';
+  dialog.style.border = '1px solid #333';
+  dialog.style.borderRadius = '6px';
+  dialog.style.background = '#111';
+  dialog.style.color = '#eee';
+  dialog.style.fontFamily = 'sans-serif';
+  dialog.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.6)';
+
+  const header = document.createElement('div');
+  header.style.padding = '10px 14px';
+  header.style.borderBottom = '1px solid #333';
+  header.style.fontSize = '13px';
+  header.textContent = `${opts.title}  〔${opts.filename}〕`;
+  dialog.appendChild(header);
+
+  const body = document.createElement('pre');
+  body.textContent = opts.body;
+  body.style.margin = '0';
+  body.style.padding = '12px 14px';
+  body.style.maxHeight = 'calc(70vh - 80px)';
+  body.style.overflow = 'auto';
+  body.style.whiteSpace = 'pre-wrap';
+  body.style.wordBreak = 'break-word';
+  body.style.fontFamily = 'inherit';
+  body.style.fontSize = '13px';
+  body.style.lineHeight = '1.5';
+  dialog.appendChild(body);
+
+  document.body.appendChild(dialog);
+  // Native `<dialog>` Escape handling closes us; outside-click via the backdrop pattern.
+  dialog.addEventListener('click', (event) => {
+    if (event.target === dialog) {
+      dialog.close();
+      dialog.remove();
+    }
+  });
+  dialog.addEventListener('close', () => {
+    dialog.remove();
+  });
+  dialog.showModal();
 }

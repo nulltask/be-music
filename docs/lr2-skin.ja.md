@@ -61,18 +61,18 @@ resolver は LR2 風の path separator を normalize し、実際の LR2 theme �
 
 resolver は LR2 theme が使う wildcard asset reference も扱います。
 asset が DXA archive 内にある場合、DXA reader が archive entry を同じ lookup path へ露出します。
-TGA image は `lr2-tga.ts`、bitmap font は `#LR2FONT` declaration を元に `lr2-font.ts` で準備します。
+TGA image は `tga.ts`、bitmap font は `#LR2FONT` declaration を元に `font.ts` で準備します。
 
 ## Browser player での利用
 
 `@be-music/player-web` は次の scene module で parsed skin model を使用します。
 
-- `pixi-select.ts`
-- `pixi-decide.ts`
-- `pixi-gameplay.ts`
-- `pixi-result.ts`
+- `scene/lr2/select.ts`
+- `scene/lr2/decide.ts`
+- `scene/lr2/gameplay.ts`
+- `scene/lr2/result.ts`
 
-`lr2-render.ts` と `lr2-scene-render.ts` の共有 helper は destination keyframe、op-gated visibility、source cell、sprite transform、text、number、slider、bargraph を評価します。
+`skin/lr2/render.ts` と `skin/lr2/scene-render.ts` の共有 helper は destination keyframe、op-gated visibility、source cell、sprite transform、text、number、slider、bargraph を評価します。
 browser player は song metadata、current judge、combo、gauge、score、BGA texture、play option、result history などの runtime value を parsed skin element へ結び付けます。
 
 ## 互換性の境界
