@@ -18,15 +18,11 @@
 //   - Per-rank / clear-lamp comparisons that need "vs best" deltas. Current clear/rank ops reflect
 //     only the just-finished run.
 
-import { Container, Graphics, type Ticker } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
-  TIMER_PLAY,
-  TIMER_READY,
-  TIMER_SCENE_START,
-  TIMER_STARTINPUT,
   buildBaseOpSet,
   computeClearLampOp,
   computeGenericRankOp,
@@ -40,18 +36,23 @@ import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
+import type { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import {
+  attachBeatorajaSceneLifecycle,
   BeatorajaSceneBgmPlayer,
   fitBeatorajaViewToStage,
+  hasBeatorajaSceneLockedTransition,
+  isBeatorajaSceneInputReady,
   resolveBeatorajaChartImage,
+  resolveBeatorajaSkinTimingMs,
   resolveBeatorajaSongText,
   type BeatorajaChartImages,
+  type BeatorajaSceneLoopAttachment,
 } from './shared-scene.ts';
 
 export interface PixiBeatorajaResultSceneOptions {
@@ -129,7 +130,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaResultSceneOptions;
   private host?: PixiSceneHost;
-  private tickerHandle?: (ticker: Ticker) => void;
+  private sceneLoop?: BeatorajaSceneLoopAttachment;
   private startMs = 0;
   private timerStartedAt: Map<number, number> = new Map();
   private lastFitWidth = 0;
@@ -201,45 +202,28 @@ export class PixiBeatorajaResultScene implements PixiScene {
     this.fitToStage();
     // Resolve `Skin.input` per upstream `MusicResult.render` line 12-14. Reference theme
     // ships `input = 500`; we fall back to the same value when the skin omits the field.
-    const inputDelayMs =
-      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
-        ? this.options.skin.input
-        : DEFAULT_RESULT_INPUT_MS;
-    // Result scenes have their own timer ladder. We surface the same scene-relative timers as
-    // gameplay so chrome gated on `TIMER_PLAY` / `TIMER_READY` (e.g., "music finished" reveals)
-    // also fires here. The scene-start timer is at 0 ms so author keyframes run from the moment
-    // the scene is visible.
-    this.timerStartedAt = new Map([
-      [TIMER_SCENE_START, 0],
-      [TIMER_STARTINPUT, inputDelayMs],
-      [TIMER_READY, 0],
-      [TIMER_PLAY, 0],
-    ]);
-    // Per-enter() transition slot. Fired by the keyboard handler on Enter / Space / Escape;
-    // the helper waits `Skin.fadeout` ms before invoking `onContinue`, mirroring upstream
-    // `MusicResult.render` `if (timer.getNowTime(TIMER_FADEOUT) > skin.getFadeout())`.
-    this.transitionToContinue = new BeatorajaSceneTransition({
-      fadeoutMs: this.options.skin.fadeout,
+    const inputDelayMs = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_RESULT_INPUT_MS);
+    const lifecycle = attachBeatorajaSceneLifecycle({
+      host,
+      skin: this.options.skin,
+      inputDelayMs,
+      readyAtMs: 0,
+      playAtMs: 0,
       getElapsedMs: () => performance.now() - this.startMs,
-      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
-      onComplete: () => this.options.onContinue?.(),
+      tick: () => this.tick(),
+      handleKeyDown: this.handleKeyDown,
+      transitionCompletions: [() => this.options.onContinue?.()],
     });
-    this.tickerHandle = () => this.tick();
-    host.app.ticker.add(this.tickerHandle);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.handleKeyDown);
-    }
+    const [continueTransition] = lifecycle.transitions;
+    this.timerStartedAt = lifecycle.timerStartedAt;
+    this.transitionToContinue = continueTransition;
+    this.sceneLoop = lifecycle.sceneLoop;
     void this.bgm.start(this.options.bgmBytes);
   }
 
   exit(): void {
-    if (this.tickerHandle && this.host) {
-      this.host.app.ticker.remove(this.tickerHandle);
-    }
-    this.tickerHandle = undefined;
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleKeyDown);
-    }
+    this.sceneLoop?.dispose();
+    this.sceneLoop = undefined;
     this.host = undefined;
     // Drop the per-enter() transition helper so a future re-entry rebuilds it. The
     // helper's internal `completed` latch would otherwise carry over and silently no-op
@@ -704,18 +688,12 @@ export class PixiBeatorajaResultScene implements PixiScene {
     if (this.disposed) return;
     // Mirrors upstream `MusicResult.render` line 16's `if (timer.isTimerOn(TIMER_FADEOUT))`
     // short-circuit — once the fadeout has begun, additional key presses are ignored.
-    if (this.transitionToContinue?.isFadingOut() === true || this.transitionToContinue?.isCompleted() === true) {
-      return;
-    }
+    if (hasBeatorajaSceneLockedTransition(this.transitionToContinue)) return;
     // Gate input on `Skin.input` per upstream `MusicResult.render` line 12. Stops the
     // player from accidentally dismissing the result splash within the first few hundred
     // ms while their hand is still on the gameplay key.
-    const elapsed = performance.now() - this.startMs;
-    const inputDelay =
-      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
-        ? this.options.skin.input
-        : DEFAULT_RESULT_INPUT_MS;
-    if (elapsed < inputDelay) return;
+    const inputDelay = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_RESULT_INPUT_MS);
+    if (!isBeatorajaSceneInputReady(this.startMs, inputDelay, performance.now())) return;
     switch (event.key) {
       case 'Enter':
       case ' ':

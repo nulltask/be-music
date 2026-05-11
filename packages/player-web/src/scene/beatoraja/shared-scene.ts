@@ -1,7 +1,15 @@
-import { BEATORAJA_TEXT, type BeatorajaSkin } from '@be-music/beatoraja-skin';
-import { Container, Graphics, type Texture } from 'pixi.js';
+import {
+  BEATORAJA_TEXT,
+  TIMER_PLAY,
+  TIMER_READY,
+  TIMER_SCENE_START,
+  TIMER_STARTINPUT,
+  type BeatorajaSkin,
+} from '@be-music/beatoraja-skin';
+import { Container, Graphics, type Texture, type Ticker } from 'pixi.js';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
+import { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { PixiSceneHost } from '../host.ts';
 
 export interface BeatorajaChartImages {
@@ -13,6 +21,47 @@ export interface BeatorajaChartImages {
 export interface BeatorajaStageFitState {
   width: number;
   height: number;
+}
+
+export interface BeatorajaSceneLoopAttachment {
+  dispose(): void;
+}
+
+export interface BeatorajaSceneTimerStartsOptions {
+  inputDelayMs: number;
+  readyAtMs?: number;
+  playAtMs?: number;
+  sceneStartAtMs?: number;
+}
+
+export interface BeatorajaSceneFadeoutTransitionOptions {
+  skin: Pick<BeatorajaSkin, 'fadeout'>;
+  getElapsedMs: () => number;
+  timerStartedAt: Map<number, number>;
+  onComplete: () => void;
+}
+
+export interface AttachBeatorajaSceneLifecycleOptions {
+  host: PixiSceneHost;
+  skin: Pick<BeatorajaSkin, 'fadeout'>;
+  inputDelayMs: number;
+  readyAtMs?: number;
+  playAtMs?: number;
+  getElapsedMs: () => number;
+  tick: () => void;
+  handleKeyDown: (event: KeyboardEvent) => void;
+  transitionCompletions: ReadonlyArray<() => void>;
+}
+
+export interface BeatorajaSceneLifecycleAttachment {
+  timerStartedAt: Map<number, number>;
+  sceneLoop: BeatorajaSceneLoopAttachment;
+  transitions: BeatorajaSceneTransition[];
+}
+
+interface BeatorajaSceneTransitionState {
+  isFadingOut(): boolean;
+  isCompleted(): boolean;
 }
 
 interface BeatorajaStageView {
@@ -95,6 +144,98 @@ export function fitBeatorajaViewToStage(
   c.y = (height - view.height * scale) / 2;
   backdrop.clear().rect(0, 0, width, height).fill(0x000000);
   return { width, height };
+}
+
+export function resolveBeatorajaSkinTimingMs(
+  value: number | undefined,
+  fallbackMs: number,
+  options: { min?: number } = {},
+): number {
+  const min = options.min ?? Number.NEGATIVE_INFINITY;
+  if (typeof value === 'number' && Number.isFinite(value) && value >= min) {
+    return value;
+  }
+  return fallbackMs;
+}
+
+export function createBeatorajaSceneTimerStarts(options: BeatorajaSceneTimerStartsOptions): Map<number, number> {
+  const sceneStartAtMs = options.sceneStartAtMs ?? 0;
+  return new Map([
+    [TIMER_SCENE_START, sceneStartAtMs],
+    [TIMER_STARTINPUT, options.inputDelayMs],
+    [TIMER_READY, options.readyAtMs ?? options.inputDelayMs],
+    [TIMER_PLAY, options.playAtMs ?? options.inputDelayMs],
+  ]);
+}
+
+export function createBeatorajaSceneFadeoutTransition(
+  options: BeatorajaSceneFadeoutTransitionOptions,
+): BeatorajaSceneTransition {
+  return new BeatorajaSceneTransition({
+    fadeoutMs: options.skin.fadeout,
+    getElapsedMs: options.getElapsedMs,
+    stampFadeoutTimer: (timerId, atMs) => options.timerStartedAt.set(timerId, atMs),
+    onComplete: options.onComplete,
+  });
+}
+
+export function attachBeatorajaSceneLifecycle(
+  options: AttachBeatorajaSceneLifecycleOptions,
+): BeatorajaSceneLifecycleAttachment {
+  const timerStartedAt = createBeatorajaSceneTimerStarts({
+    inputDelayMs: options.inputDelayMs,
+    readyAtMs: options.readyAtMs,
+    playAtMs: options.playAtMs,
+  });
+  const transitions = options.transitionCompletions.map((onComplete) =>
+    createBeatorajaSceneFadeoutTransition({
+      skin: options.skin,
+      getElapsedMs: options.getElapsedMs,
+      timerStartedAt,
+      onComplete,
+    }),
+  );
+  return {
+    timerStartedAt,
+    transitions,
+    sceneLoop: attachBeatorajaSceneLoop(options.host, options.tick, options.handleKeyDown),
+  };
+}
+
+export function attachBeatorajaSceneLoop(
+  host: PixiSceneHost,
+  tick: () => void,
+  handleKeyDown: (event: KeyboardEvent) => void,
+): BeatorajaSceneLoopAttachment {
+  const tickerHandle = (_ticker: Ticker): void => tick();
+  host.app.ticker.add(tickerHandle);
+  if (typeof window !== 'undefined') {
+    window.addEventListener('keydown', handleKeyDown);
+  }
+  return {
+    dispose() {
+      host.app.ticker.remove(tickerHandle);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('keydown', handleKeyDown);
+      }
+    },
+  };
+}
+
+export function hasBeatorajaSceneFadingTransition(
+  ...transitions: ReadonlyArray<BeatorajaSceneTransitionState | undefined>
+): boolean {
+  return transitions.some((transition) => transition?.isFadingOut() === true);
+}
+
+export function hasBeatorajaSceneLockedTransition(
+  ...transitions: ReadonlyArray<BeatorajaSceneTransitionState | undefined>
+): boolean {
+  return transitions.some((transition) => transition?.isFadingOut() === true || transition?.isCompleted() === true);
+}
+
+export function isBeatorajaSceneInputReady(startMs: number, inputDelayMs: number, nowMs: number): boolean {
+  return nowMs - startMs >= inputDelayMs;
 }
 
 export class BeatorajaSceneBgmPlayer {
