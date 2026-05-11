@@ -44,9 +44,9 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       bus.dispose();
     },
   });
-  define('player-web.BrowserSongLibrary', {
+  define('player-web.BrowserSongCollectionStore', {
     run: () => {
-      new playerWebCoreApi.BrowserSongLibrary();
+      new playerWebCoreApi.BrowserSongCollectionStore();
     },
   });
   define('player-web.ChartPreviewEngine', {

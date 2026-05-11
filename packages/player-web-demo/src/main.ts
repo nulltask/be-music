@@ -1,5 +1,5 @@
 import {
-  BrowserSongLibrary,
+  BrowserSongCollectionStore,
   PixiGameplayView,
   PixiDecideView,
   PixiResultView,
@@ -656,7 +656,7 @@ interface DemoGuiState {
 }
 
 class PlayerWebDemoApp {
-  private readonly library = new BrowserSongLibrary();
+  private readonly collectionStore = new BrowserSongCollectionStore();
   /**
    * Per-variant play skins, keyed by `Lr2PlayVariant`. Loaded once at theme-drop time so a DP chart can pick
    * `playSkins['14']` while a regular SP chart picks `playSkins['7']`.
@@ -1329,10 +1329,7 @@ class PlayerWebDemoApp {
         this.setStatus('Screenshot failed: encoder returned null');
         return;
       }
-      const timestamp = new Date()
-        .toISOString()
-        .replace(/[:.]/g, '-')
-        .replace(/Z$/, '');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, '');
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -1357,11 +1354,13 @@ class PlayerWebDemoApp {
    * is mounted (= the user pressed Record on the song-select screen) so the caller
    * branches into the auto-arm flow instead.
    */
-  private activeGameplayRecorder(): {
-    startRecording(): void;
-    stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number } | undefined>;
-    isRecording(): boolean;
-  } | undefined {
+  private activeGameplayRecorder():
+    | {
+        startRecording(): void;
+        stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number } | undefined>;
+        isRecording(): boolean;
+      }
+    | undefined {
     return this.gameplayView ?? this.beatorajaGameplayView;
   }
 
@@ -1516,9 +1515,9 @@ class PlayerWebDemoApp {
    * The caller is responsible for showing / hiding the loading overlay and pausing the select view — both entry points
    * handle that around their own enumeration phase.
    *
-   * `loadSongs` appends to the existing library so a second / third invocation of this routine accumulates entries
+   * `loadSongs` appends to the existing collection so a second / third invocation of this routine accumulates entries
    * rather than wiping the previous pack — the host can call this multiple times in succession (e.g. Open Folder
-   * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the library's
+   * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
   private async processIncomingFiles(files: File[]): Promise<void> {
@@ -1587,11 +1586,11 @@ class PlayerWebDemoApp {
 
   private async loadSongs(files: File[]): Promise<void> {
     this.setStatus('Loading songs...');
-    // Append rather than replace so a second / third folder drop adds to the existing library instead of wiping the
-    // previous pack. The library re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
+    // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
+    // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The
     // very first drop is just `append onto an empty collection`, which produces the same result as `loadFromFiles`
     // would have.
-    this.collection = await this.library.appendFromFiles(files, {
+    this.collection = await this.collectionStore.appendFromFiles(files, {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
@@ -2935,7 +2934,9 @@ class PlayerWebDemoApp {
       // accident. The bundle's `files` map is the same one `loadBeatorajaSkin` consumed, so
       // the wildcard expansion sees identical candidates either way.
       const file =
-        this.beatorajaTheme !== undefined ? buildDefaultSkinConfigFiles(header, this.beatorajaTheme.files, entryPath) : {};
+        this.beatorajaTheme !== undefined
+          ? buildDefaultSkinConfigFiles(header, this.beatorajaTheme.files, entryPath)
+          : {};
       // `customOffset` starts empty — the GUI's per-slot zero-fill happens at panel build
       // time. Storing the empty object explicitly here means the config shape stays
       // consistent across the cache vs. the GUI emit path (both have a `customOffset` key,
@@ -3638,4 +3639,3 @@ function showReadtextOverlay(opts: { title: string; filename: string; body: stri
   });
   dialog.showModal();
 }
-

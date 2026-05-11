@@ -1,5 +1,5 @@
 // Minimal Fengari type surface. Fengari ships no declaration files, so we hand-roll only the bindings the Lua
-// evaluator (`beatoraja-skin-lua.ts`) actually touches. Each typed field corresponds 1:1 to a runtime field.
+// evaluator (`lua.ts`) actually touches. Each typed field corresponds 1:1 to a runtime field.
 
 declare module 'fengari' {
   // `lua_State` is opaque from our perspective — we only ever pass it back to fengari APIs.

@@ -1,0 +1,301 @@
+import { describe, expect, it } from 'vitest';
+import {
+  buildDefaultSkinConfigFiles,
+  describeMissingWildcardDirectory,
+  expandBeatorajaWildcard,
+  resolveBeatorajaPath,
+  resolveSourcePath,
+} from './resolver.ts';
+import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
+
+const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
+
+function makeFiles(entries: ReadonlyArray<readonly [string, string]>): Map<string, BeatorajaSkinFileEntry> {
+  return new Map(entries.map(([k, v]) => [k, enc(v)]));
+}
+
+describe('resolveBeatorajaPath', () => {
+  it('resolves paths relative to the entry file directory', () => {
+    const files = makeFiles([
+      ['skin/default/play24.json', '{}'],
+      ['skin/default/system.png', 'data'],
+    ]);
+    expect(resolveBeatorajaPath(files, 'skin/default/play24.json', 'system.png')).toBe('skin/default/system.png');
+  });
+
+  it('walks up via `..` segments', () => {
+    const files = makeFiles([
+      ['skin/default/result/result.luaskin', '{}'],
+      ['skin/default/system.png', 'data'],
+    ]);
+    expect(resolveBeatorajaPath(files, 'skin/default/result/result.luaskin', '../system.png')).toBe(
+      'skin/default/system.png',
+    );
+  });
+
+  it('is case-insensitive', () => {
+    const files = makeFiles([
+      ['skin/default/play24.json', '{}'],
+      ['skin/default/System.PNG', 'data'],
+    ]);
+    expect(resolveBeatorajaPath(files, 'skin/default/play24.json', 'system.png')).toBe('skin/default/System.PNG');
+  });
+
+  it('returns undefined when nothing matches', () => {
+    const files = makeFiles([['skin/default/play24.json', '{}']]);
+    expect(resolveBeatorajaPath(files, 'skin/default/play24.json', 'nope.png')).toBeUndefined();
+  });
+});
+
+describe('expandBeatorajaWildcard', () => {
+  it('returns sorted matches for `*.png` in a sibling directory', () => {
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/b.png', '1'],
+      ['skin/default/play/background/a.png', '2'],
+      ['skin/default/play/laser/x.png', '3'],
+    ]);
+    expect(expandBeatorajaWildcard(files, 'skin/default/play.json', 'play/background/*.png')).toEqual([
+      'skin/default/play/background/a.png',
+      'skin/default/play/background/b.png',
+    ]);
+  });
+
+  it('handles non-wildcard paths via the single-match path', () => {
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/system.png', 'x'],
+    ]);
+    expect(expandBeatorajaWildcard(files, 'skin/default/play.json', 'system.png')).toEqual(['skin/default/system.png']);
+  });
+
+  it('returns an empty array when no files match', () => {
+    const files = makeFiles([['skin/default/play.json', '{}']]);
+    expect(expandBeatorajaWildcard(files, 'skin/default/play.json', 'play/background/*.png')).toEqual([]);
+  });
+});
+
+describe('resolveSourcePath', () => {
+  it('honors a user filepath override over the wildcard', () => {
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/a.png', '1'],
+      ['skin/default/play/background/b.png', '2'],
+      ['skin/default/play/lanecover/c.png', '3'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/b.png' },
+      [{ name: 'Background', path: 'play/background/*.png' }],
+    );
+    expect(result).toBe('skin/default/play/background/b.png');
+  });
+
+  it('falls back to the first wildcard match when no override is supplied', () => {
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/a.png', '1'],
+      ['skin/default/play/background/b.png', '2'],
+    ]);
+    const result = resolveSourcePath(files, 'skin/default/play.json', 'play/background/*.png');
+    expect(result).toBe('skin/default/play/background/a.png');
+  });
+
+  it('ignores a non-array filepathSchema instead of crashing on `not iterable`', () => {
+    // Some Lua skins (and JSON skins with hand-edited filepath tables) end up handing us an
+    // object like `{}` instead of `[]`. Resolve gracefully by skipping the override path —
+    // matches the "no override supplied" behavior.
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/a.png', '1'],
+    ]);
+    const malformedSchema = {} as unknown as ReadonlyArray<{ name: string; path: string }>;
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/a.png' },
+      malformedSchema,
+    );
+    expect(result).toBe('skin/default/play/background/a.png');
+  });
+
+  it('accepts canonical (full files-map key) override paths', () => {
+    // `buildDefaultSkinConfigFiles` and the skin-options panel's user picks both store
+    // canonical paths (matching upstream beatoraja's `config.json` storage of absolute
+    // disk paths). Without canonical-aware resolution, the override path gets re-prepended
+    // with `dirname(entryPath)`, lands at a non-existent doubled key, and the bundler
+    // emits a misleading "no files matched wildcard" warning. ModernChic's bg / judge /
+    // keybeam / bomb / glow textures all hit this path — fix lets them resolve correctly.
+    const files = makeFiles([
+      ['beatoraja/skin/ModernChic/play7_hw.luaskin', '{}'],
+      ['beatoraja/skin/ModernChic/Play/parts/common/bg/#default.png', '1'],
+      ['beatoraja/skin/ModernChic/Play/parts/common/bg/blue.png', '2'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'beatoraja/skin/ModernChic/play7_hw.luaskin',
+      'Play/parts/common/bg/*.png',
+      { bg: 'beatoraja/skin/ModernChic/Play/parts/common/bg/#default.png' },
+      [{ name: 'bg', path: 'Play/parts/common/bg/*.png' }],
+    );
+    expect(result).toBe('beatoraja/skin/ModernChic/Play/parts/common/bg/#default.png');
+  });
+
+  it('falls back to relative-path resolution when canonical lookup misses', () => {
+    // Backward compatibility for callers that stored relative paths (hand-edited configs,
+    // older API output). The canonical lookup misses (no exact key match), then the
+    // relative-path branch prepends `dirname(entryPath)` and finds the file.
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/blue.png', '1'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/blue.png' }, // relative path
+      [{ name: 'Background', path: 'play/background/*.png' }],
+    );
+    expect(result).toBe('skin/default/play/background/blue.png');
+  });
+
+  it('returns undefined when override path resolves neither canonically nor relatively', () => {
+    // Defensive: a stale config pointing at a deleted file should fail cleanly. The
+    // bundler will then surface this as a missing-source warning rather than silently
+    // falling back to the wildcard's first match (which would mask the user's broken pick).
+    const files = makeFiles([
+      ['skin/default/play.json', '{}'],
+      ['skin/default/play/background/blue.png', '1'],
+    ]);
+    const result = resolveSourcePath(
+      files,
+      'skin/default/play.json',
+      'play/background/*.png',
+      { Background: 'play/background/missing.png' },
+      [{ name: 'Background', path: 'play/background/*.png' }],
+    );
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('buildDefaultSkinConfigFiles', () => {
+  it('resolves the entry whose stem matches `def` (lexicographic ordering bypassed)', () => {
+    // ModernChic's `key` filepath ships `#default.png` AND `harf.png`; `def = "harf"` says the
+    // author wants `harf.png` even though `#default.png` sorts first lexicographically (`#` =
+    // 0x23 < `h` = 0x68). Without honoring `def`, the wildcard fallback picks `#default.png`
+    // — the wrong file. Honoring it returns the canonical path of `harf.png`.
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/key/#default.png', '1'],
+      ['skin/parts/key/harf.png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      { filepath: [{ name: 'キーイメージ', path: 'parts/key/*.png', def: 'harf' }] },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ キーイメージ: 'skin/parts/key/harf.png' });
+  });
+
+  it('strips ONLY the last extension so trailing dots in stems still match', () => {
+    // ModernChic's `bomb` folder ships `diamond SCUROed..png` (note the trailing dot in the
+    // stem). `def = "diamond SCUROed."` includes that trailing dot — naive stem extraction
+    // that strips at the FIRST dot would produce `diamond SCUROed` and miss the match.
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/bomb/Kakabomb.png', '1'],
+      ['skin/parts/bomb/diamond SCUROed..png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      { filepath: [{ name: 'ボム', path: 'parts/bomb/*.png', def: 'diamond SCUROed.' }] },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ ボム: 'skin/parts/bomb/diamond SCUROed..png' });
+  });
+
+  it('falls back to case-insensitive matching when exact case fails', () => {
+    // Windows-authored themes occasionally drift case between `def` and the actual filename.
+    // `def = "DEFAULT"` should still resolve `Default.png` (or any case variant).
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/x/Default.png', '1'],
+      ['skin/parts/x/other.png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      { filepath: [{ name: 'X', path: 'parts/x/*.png', def: 'DEFAULT' }] },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ X: 'skin/parts/x/Default.png' });
+  });
+
+  it('omits entries with no `def`, no candidates, or no stem match', () => {
+    // Only entries with a successfully-resolved default appear in the output. The other
+    // entries fall through to the wildcard fallback inside `resolveSourcePath` at render
+    // time, matching beatoraja's "first sorted match" behavior for unset filepaths.
+    const files = makeFiles([
+      ['skin/play.json', '{}'],
+      ['skin/parts/y/a.png', '1'],
+      ['skin/parts/y/b.png', '2'],
+    ]);
+    const result = buildDefaultSkinConfigFiles(
+      {
+        filepath: [
+          { name: 'NoDef', path: 'parts/y/*.png' }, // missing def
+          { name: 'EmptyDef', path: 'parts/y/*.png', def: '' },
+          { name: 'NoCandidates', path: 'parts/missing/*.png', def: 'a' },
+          { name: 'NoMatch', path: 'parts/y/*.png', def: 'nonexistent' },
+          { name: 'Matched', path: 'parts/y/*.png', def: 'b' },
+        ],
+      },
+      files,
+      'skin/play.json',
+    );
+    expect(result).toEqual({ Matched: 'skin/parts/y/b.png' });
+  });
+
+  it('returns an empty record when the header has no filepath array', () => {
+    expect(buildDefaultSkinConfigFiles({}, makeFiles([]), 'skin/play.json')).toEqual({});
+    // Also tolerates a non-array filepath value (defensive against malformed Lua tables).
+    expect(buildDefaultSkinConfigFiles({ filepath: undefined }, makeFiles([]), 'skin/play.json')).toEqual({});
+  });
+});
+
+describe('describeMissingWildcardDirectory', () => {
+  it('flags the directory as absent when no entries live under it', () => {
+    // Most common scenario: the user's drop just doesn't include the directory the wildcard
+    // references — the warning needs to call this out plainly so the user knows to re-drop.
+    const files = makeFiles([
+      ['ModernChic/play7_hw.luaskin', '{}'],
+      ['ModernChic/play7_hw.lua', ''],
+    ]);
+    expect(describeMissingWildcardDirectory(files, 'ModernChic/play7_hw.luaskin', 'Play/parts/common/bg/*.png')).toBe(
+      " (search dir 'ModernChic/Play/parts/common/bg' absent from drop)",
+    );
+  });
+
+  it("lists sibling files when the directory exists but the basename pattern doesn't match", () => {
+    // The directory IS in the drop but the wildcard's basename pattern is wrong (typo, wrong
+    // extension, etc). The diagnostic shows up to 3 siblings so the user can spot the bug.
+    const files = makeFiles([
+      ['ModernChic/play7_hw.luaskin', '{}'],
+      ['ModernChic/Play/parts/common/bg/blue.png', ''],
+      ['ModernChic/Play/parts/common/bg/gray.png', ''],
+      ['ModernChic/Play/parts/common/bg/red.png', ''],
+      ['ModernChic/Play/parts/common/bg/notes.txt', ''],
+    ]);
+    const out = describeMissingWildcardDirectory(files, 'ModernChic/play7_hw.luaskin', 'Play/parts/common/bg/*.jpg');
+    expect(out).toContain("search dir 'ModernChic/Play/parts/common/bg'");
+    expect(out).toContain('4 sibling file(s)');
+    expect(out).toContain('samples: blue.png, gray.png, notes.txt');
+  });
+
+  it('returns an empty suffix when the path has no wildcard', () => {
+    // Defensive: helpers that wrap us shouldn't have to gate on wildcard presence themselves.
+    expect(describeMissingWildcardDirectory(makeFiles([]), 'skin/play.json', 'system.png')).toBe('');
+  });
+});

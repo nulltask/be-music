@@ -24,7 +24,7 @@ export type {
   BeatorajaSkinPropertyItem,
   BeatorajaSkinSource,
   BeatorajaSkinSourceId,
-} from './beatoraja-skin-types.ts';
+} from './types.ts';
 export {
   BEATORAJA_SKIN_TYPE,
   BEATORAJA_PLAY_VARIANTS,
@@ -33,7 +33,7 @@ export {
   normalizeBeatorajaSkinCustomOffsets,
   playVariantForSkinType,
   sceneForSkinType,
-} from './beatoraja-skin-types.ts';
+} from './types.ts';
 export type {
   BeatorajaLuaEvaluationError,
   BeatorajaLuaEvaluationResult,
@@ -44,7 +44,7 @@ export type {
   BeatorajaLuaSkinConfig,
   EvaluateBeatorajaLuaSkinOptions,
   LuaValue,
-} from './beatoraja-skin-lua.ts';
+} from './lua.ts';
 export {
   describeBeatorajaLuaError,
   BEATORAJA_LUA_TIMER_OFF_VALUE,
@@ -53,55 +53,47 @@ export {
   evaluateBeatorajaLuaSkin,
   evaluateBeatorajaLuaString,
   isBeatorajaLuaFunctionValue,
-} from './beatoraja-skin-lua.ts';
-export type { BeatorajaSkinFormat, LoadBeatorajaSkinOptions, LoadBeatorajaSkinResult } from './beatoraja-skin.ts';
+} from './lua.ts';
+export type { BeatorajaSkinFormat, LoadBeatorajaSkinOptions, LoadBeatorajaSkinResult } from './skin.ts';
 export {
   collectBeatorajaLuaModules,
   detectBeatorajaSkinFormat,
   extractBeatorajaSkinHeader,
   loadBeatorajaSkin,
-} from './beatoraja-skin.ts';
-export { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, relaxBeatorajaJson } from './beatoraja-skin-json.ts';
-export type { NormalizedElement, RawElement } from './beatoraja-skin-element.ts';
-export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './beatoraja-skin-element.ts';
-export type { BeatorajaImageElement, BeatorajaImageId } from './beatoraja-skin-image.ts';
-export { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages } from './beatoraja-skin-image.ts';
-export type {
-  BeatorajaIntegerPropertyRef,
-  BeatorajaValueDigitCell,
-  BeatorajaValueElement,
-} from './beatoraja-skin-value.ts';
+} from './skin.ts';
+export { parseBeatorajaSkinJson, parseBeatorajaSkinJsonHeader, relaxBeatorajaJson } from './json.ts';
+export type { NormalizedElement, RawElement } from './elements/base.ts';
+export { buildBaseOpSet, flattenBeatorajaElements, isElementVisible } from './elements/base.ts';
+export type { BeatorajaImageElement, BeatorajaImageId } from './elements/image.ts';
+export { imageFrameAt, imageFrameRect, imageRefFrame, normalizeBeatorajaImages } from './elements/image.ts';
+export type { BeatorajaIntegerPropertyRef, BeatorajaValueDigitCell, BeatorajaValueElement } from './elements/value.ts';
 export {
   composeBeatorajaValueCells,
   composeBeatorajaValueShift,
   normalizeBeatorajaValues,
   valueFrameAt,
-} from './beatoraja-skin-value.ts';
-export type { BeatorajaFloatValueElement } from './beatoraja-skin-floatvalue.ts';
+} from './elements/value.ts';
+export type { BeatorajaFloatValueElement } from './elements/float-value.ts';
 export {
   beatorajaFloatValueSlotCount,
   composeBeatorajaFloatValueCells,
   composeBeatorajaFloatValueShift,
   floatValueFrameAt,
   normalizeBeatorajaFloatValues,
-} from './beatoraja-skin-floatvalue.ts';
-export type {
-  BeatorajaCustomEvent,
-  BeatorajaCustomEventState,
-  BeatorajaCustomTimer,
-} from './beatoraja-skin-customevent.ts';
+} from './elements/float-value.ts';
+export type { BeatorajaCustomEvent, BeatorajaCustomEventState, BeatorajaCustomTimer } from './elements/custom-event.ts';
 export {
   evaluateBeatorajaCustomEvents,
   evaluateBeatorajaCustomTimers,
   normalizeBeatorajaCustomEvents,
   normalizeBeatorajaCustomTimers,
-} from './beatoraja-skin-customevent.ts';
+} from './elements/custom-event.ts';
 export type {
   BeatorajaBooleanPropertyRef,
   BeatorajaDestinationGroup,
   BeatorajaDestinationKeyframe,
-} from './beatoraja-skin-destination.ts';
-export type { BeatorajaSkinOffsetValue } from './beatoraja-skin-destination.ts';
+} from './elements/destination.ts';
+export type { BeatorajaSkinOffsetValue } from './elements/destination.ts';
 export {
   applyBeatorajaOffsetAlpha,
   centerToAnchor,
@@ -109,44 +101,44 @@ export {
   normalizeBeatorajaDestinations,
   sampleBeatorajaDestination,
   ZERO_BEATORAJA_OFFSET,
-} from './beatoraja-skin-destination.ts';
+} from './elements/destination.ts';
 export type {
   BeatorajaFontElement,
   BeatorajaStringPropertyRef,
   BeatorajaTextAlign,
   BeatorajaTextElement,
-} from './beatoraja-skin-text.ts';
-export { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './beatoraja-skin-text.ts';
-
-export type { BeatorajaFloatPropertyRef, BeatorajaGraphElement, BeatorajaGraphFillDirection } from './beatoraja-skin-graph.ts';
-export { normalizeBeatorajaGraphs } from './beatoraja-skin-graph.ts';
-
-export type { BeatorajaBpmGraphElement } from './beatoraja-skin-bpmgraph.ts';
-export { normalizeBeatorajaBpmGraphs } from './beatoraja-skin-bpmgraph.ts';
-
-export type { BeatorajaJudgeGraphElement } from './beatoraja-skin-judgegraph.ts';
-export { normalizeBeatorajaJudgeGraphs } from './beatoraja-skin-judgegraph.ts';
-
-export type { BeatorajaGaugeGraphElement } from './beatoraja-skin-gaugegraph.ts';
-export { normalizeBeatorajaGaugeGraphs } from './beatoraja-skin-gaugegraph.ts';
-
-export type { BeatorajaTimingVisualizerElement } from './beatoraja-skin-timingvisualizer.ts';
-export { normalizeBeatorajaTimingVisualizers } from './beatoraja-skin-timingvisualizer.ts';
-
-export type { BeatorajaTimingDistributionGraphElement } from './beatoraja-skin-timingdistributiongraph.ts';
-export { normalizeBeatorajaTimingDistributionGraphs } from './beatoraja-skin-timingdistributiongraph.ts';
-
-export type { BeatorajaSliderDirection, BeatorajaSliderElement } from './beatoraja-skin-slider.ts';
-export { normalizeBeatorajaSliders } from './beatoraja-skin-slider.ts';
-
-export type { BeatorajaImagesetElement } from './beatoraja-skin-imageset.ts';
-export { normalizeBeatorajaImagesets } from './beatoraja-skin-imageset.ts';
+} from './elements/text.ts';
+export { normalizeBeatorajaFonts, normalizeBeatorajaTexts } from './elements/text.ts';
 
 export type {
-  BeatorajaGaugeElement,
-  BeatorajaGaugeMode,
-  BeatorajaGaugeState,
-} from './beatoraja-skin-gauge.ts';
+  BeatorajaFloatPropertyRef,
+  BeatorajaGraphElement,
+  BeatorajaGraphFillDirection,
+} from './elements/graph.ts';
+export { normalizeBeatorajaGraphs } from './elements/graph.ts';
+
+export type { BeatorajaBpmGraphElement } from './elements/bpm-graph.ts';
+export { normalizeBeatorajaBpmGraphs } from './elements/bpm-graph.ts';
+
+export type { BeatorajaJudgeGraphElement } from './elements/judge-graph.ts';
+export { normalizeBeatorajaJudgeGraphs } from './elements/judge-graph.ts';
+
+export type { BeatorajaGaugeGraphElement } from './elements/gauge-graph.ts';
+export { normalizeBeatorajaGaugeGraphs } from './elements/gauge-graph.ts';
+
+export type { BeatorajaTimingVisualizerElement } from './elements/timing-visualizer.ts';
+export { normalizeBeatorajaTimingVisualizers } from './elements/timing-visualizer.ts';
+
+export type { BeatorajaTimingDistributionGraphElement } from './elements/timing-distribution-graph.ts';
+export { normalizeBeatorajaTimingDistributionGraphs } from './elements/timing-distribution-graph.ts';
+
+export type { BeatorajaSliderDirection, BeatorajaSliderElement } from './elements/slider.ts';
+export { normalizeBeatorajaSliders } from './elements/slider.ts';
+
+export type { BeatorajaImagesetElement } from './elements/imageset.ts';
+export { normalizeBeatorajaImagesets } from './elements/imageset.ts';
+
+export type { BeatorajaGaugeElement, BeatorajaGaugeMode, BeatorajaGaugeState } from './elements/gauge.ts';
 export {
   beatorajaGaugeModeFromString,
   BEATORAJA_GAUGE_ANIMATION,
@@ -155,43 +147,39 @@ export {
   gaugeExBase,
   normalizeBeatorajaGauge,
   pickBeatorajaGaugeNode,
-} from './beatoraja-skin-gauge.ts';
+} from './elements/gauge.ts';
 
-export type { BeatorajaJudgeElement } from './beatoraja-skin-judge.ts';
-export { expandBeatorajaJudgeDestinations, normalizeBeatorajaJudges } from './beatoraja-skin-judge.ts';
-export type { BeatorajaNoteDestinationBlock, BeatorajaNoteRect, BeatorajaNoteSection } from './beatoraja-skin-note.ts';
-export { normalizeBeatorajaNote, pickBeatorajaNoteRects } from './beatoraja-skin-note.ts';
-export type { BeatorajaSongListLayout, BeatorajaSongListRowRect } from './beatoraja-skin-songlist.ts';
-export { BEATORAJA_SONGLIST_BAR_COUNT, parseBeatorajaSongList } from './beatoraja-skin-songlist.ts';
-export type {
-  BeatorajaPmCharaElement,
-  BeatorajaPmCharaSide,
-  BeatorajaPmCharaType,
-} from './beatoraja-skin-pmchara.ts';
-export { normalizeBeatorajaPmCharas } from './beatoraja-skin-pmchara.ts';
+export type { BeatorajaJudgeElement } from './elements/judge.ts';
+export { expandBeatorajaJudgeDestinations, normalizeBeatorajaJudges } from './elements/judge.ts';
+export type { BeatorajaNoteDestinationBlock, BeatorajaNoteRect, BeatorajaNoteSection } from './elements/note.ts';
+export { normalizeBeatorajaNote, pickBeatorajaNoteRects } from './elements/note.ts';
+export type { BeatorajaSongListLayout, BeatorajaSongListRowRect } from './elements/song-list.ts';
+export { BEATORAJA_SONGLIST_BAR_COUNT, parseBeatorajaSongList } from './elements/song-list.ts';
+export type { BeatorajaPmCharaElement, BeatorajaPmCharaSide, BeatorajaPmCharaType } from './elements/pm-chara.ts';
+export { normalizeBeatorajaPmCharas } from './elements/pm-chara.ts';
 export {
   buildDefaultSkinConfigFiles,
   describeMissingWildcardDirectory,
   expandBeatorajaWildcard,
   resolveBeatorajaPath,
   resolveSourcePath,
-} from './beatoraja-skin-resolver.ts';
+} from './resolver.ts';
 export type {
   BeatorajaSourceAsset,
   BeatorajaSourceBundle,
   BeatorajaUnresolvedSource,
   BundleBeatorajaSourcesOptions,
-} from './beatoraja-skin-source.ts';
-export { bundleBeatorajaSources, listBeatorajaSourcePaths } from './beatoraja-skin-source.ts';
+} from './source.ts';
+export { bundleBeatorajaSources, listBeatorajaSourcePaths } from './source.ts';
 export type {
   BeatorajaPlaySkinMap,
   BeatorajaSkinEntry,
   BeatorajaTheme,
   BeatorajaThemeDiscoveryWarning,
   DiscoverBeatorajaThemeResult,
-} from './beatoraja-play-skin.ts';
-export { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './beatoraja-play-skin.ts';
-export type { BeatorajaButtonCode, BeatorajaSide } from './beatoraja-runtime-ids.ts';
+} from './play-skin.ts';
+export { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './play-skin.ts';
+export type { BeatorajaButtonCode, BeatorajaSide } from './runtime-ids.ts';
 export {
   BEATORAJA_BUTTON,
   BEATORAJA_NUM,
@@ -262,4 +250,4 @@ export {
   TIMER_SCENE_START,
   TIMER_SONGBAR_CHANGE,
   TIMER_STARTINPUT,
-} from './beatoraja-runtime-ids.ts';
+} from './runtime-ids.ts';

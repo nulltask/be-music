@@ -61,18 +61,18 @@ The resolver normalizes LR2-style path separators and performs case-insensitive 
 
 The resolver also supports wildcard asset references used by LR2 themes.
 When an asset lives inside a DXA archive, the DXA reader exposes the archive entries to the same lookup path.
-TGA images are decoded by `lr2-tga.ts`, and bitmap fonts are prepared from `#LR2FONT` declarations by `lr2-font.ts`.
+TGA images are decoded by `tga.ts`, and bitmap fonts are prepared from `#LR2FONT` declarations by `font.ts`.
 
 ## Browser player usage
 
 `@be-music/player-web` consumes the parsed skin model in these scene modules:
 
-- `pixi-select.ts`
-- `pixi-decide.ts`
-- `pixi-gameplay.ts`
-- `pixi-result.ts`
+- `scene/lr2/select.ts`
+- `scene/lr2/decide.ts`
+- `scene/lr2/gameplay.ts`
+- `scene/lr2/result.ts`
 
-Shared rendering helpers in `lr2-render.ts` and `lr2-scene-render.ts` evaluate destination keyframes, op-gated visibility, source cells, sprite transforms, text, numbers, sliders, and bargraphs.
+Shared rendering helpers in `skin/lr2/render.ts` and `skin/lr2/scene-render.ts` evaluate destination keyframes, op-gated visibility, source cells, sprite transforms, text, numbers, sliders, and bargraphs.
 The browser player binds runtime values such as song metadata, current judge, combo, gauge, score, BGA textures, play options, and result history onto the parsed skin elements.
 
 ## Compatibility boundary
