@@ -10,6 +10,7 @@
 - [Player 実装仕様](player-spec.ja.md)
 - [Browser player 実装メモ](player-web.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
+- [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](json-spec.ja.md)
 - [用語集](glossary.ja.md)
 
@@ -20,3 +21,4 @@
 - これらの文書は現在の実装に集中させます。過去の判断は pull request、commit message、changelog に残してください。
 - `@be-music/json` は pure IR、`@be-music/chart` は beat 解決やイベント順序などの譜面意味論を担当します。
 - `@be-music/player` は共有 engine package です。terminal 固有の挙動は `@be-music/player-tui`、browser 固有の挙動は `@be-music/player-web` に置きます。
+- `@be-music/lr2-skin` と `@be-music/beatoraja-skin` は skin parsing を renderer 非依存に保ちます。browser PixiJS rendering は `@be-music/player-web` 側に記述します。

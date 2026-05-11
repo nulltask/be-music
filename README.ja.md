@@ -15,8 +15,9 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/player`: 再生 engine、timing、判定、score、gauge、BGA timeline、UI/audio adapter 契約を共有する core package
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
-- `@be-music/player-web`: 選曲、LR2 skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
-- `@be-music/player-web-demo`: folder / ZIP drop、LR2 theme、debug control、browser 再生を接続する private Vite demo
+- `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
+- `@be-music/player-web`: 選曲、LR2 / beatoraja skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
+- `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、debug control、browser 再生を接続する private Vite demo
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
 ## 必要環境
@@ -69,6 +70,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
+- [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
 - [用語集](docs/glossary.ja.md)
 
@@ -140,17 +142,27 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - image、number、text、slider、bargraph、button、BGA、judge line、measure line、gauge、score chart、result graph element を parse
 - case-insensitive / wildcard asset lookup、TGA decode、DXA archive extraction で theme asset を読み込み
 
+### beatoraja skin (`@be-music/beatoraja-skin`)
+
+- beatoraja JSON skin と Lua `.luaskin` entry を PixiJS 非依存で parse
+- beatoraja の 2-phase Lua contract を制限付き Fengari sandbox 上で評価
+- play / select / decide / result / course-result entry を discovery し、play skin を `5` / `7` / `9` / `10` / `14` / `24` / `24d` ごとに group 化
+- `property[]`、`filepath[]`、category group、custom offset、wildcard source path、case-insensitive asset を解決
+- image、imageset、value、float-value、text、slider、note、judge、gauge、graph、BPM graph、timing graph、song-list、custom event、destination、PM character element を normalize
+
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
-- dropped folder、ZIP、BMS/LR2 theme 混在 drop を扱う browser song library
+- dropped folder、ZIP、song / LR2 / beatoraja theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
+- beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
+- destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
 - key / BGM / master を分けた compressor control 付き WebAudio preview / gameplay bus
 - BGA still / video 描画、browser-side video transcode fallback、WebM gameplay recording
 - 1 つの renderer context を所有する PixiJS scene host と scene transition 時の resource dispose
-- hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、auto-scratch、DP flip、random/mirror、gauge variant を扱う LR2 PLAY OPTION control
+- hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、lift、auto-scratch、DP flip、random/mirror、gauge variant、skin option を扱う LR2 / beatoraja PLAY OPTION control
 
 ### editor (`@be-music/editor`)
 
@@ -236,7 +248,7 @@ pnpm run player chart.bms --no-ln-type-auto
 pnpm run player:web
 ```
 
-demo は Vite dev server を起動します。BMS/BMSON の楽曲 folder、LR2 theme folder、ZIP、または楽曲 folder と theme folder の組み合わせを browser に drop できます。
+demo は Vite dev server を起動します。BMS/BMSON の楽曲 folder、LR2 theme folder、beatoraja theme folder、ZIP、または楽曲 folder と LR2 / beatoraja theme folder の組み合わせを browser に drop できます。
 
 ### 6. エディタ
 
@@ -292,16 +304,18 @@ pnpm run editor export chart.json chart.bms
 - `.bms` -> `5 KEY SP/DP`
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
+- `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
 
 ### 代表モードのチャンネルと入力
 
-| Mode | Channel -> Input |
-| --- | --- |
-| `5 KEY SP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c` |
-| `5 KEY DP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
-| `7 KEY SP` | `5 KEY SP` + `18 -> f`, `19 -> v` |
-| `14 KEY DP` | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift` |
-| `9 KEY` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b` |
+| Mode                     | Channel -> Input                                                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                        |
+| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
+| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                            |
+| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
+| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
+| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
 
 ## FREE ZONE (`17` / `27`)
 

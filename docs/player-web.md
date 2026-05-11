@@ -9,17 +9,18 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 
 The browser player drives gameplay through `@be-music/player/core/engine`.
 The engine owns judgment, fallback keysound routing, long-note handling, mine priority, score, gauge, and chart-finish
-semantics. `PixiGameplayView` starts one engine run at the LR2 `PLAYSTART` gate, mirrors engine frame snapshots into
-the scene state, and translates engine UI commands into Pixi visual effects.
+semantics. The LR2 gameplay scene starts one engine run at the LR2 `PLAYSTART` gate, while the beatoraja gameplay
+scene mounts the engine behind `BeatorajaRuntimeAdapter`. Both paths mirror engine frame snapshots into scene state
+and translate engine UI commands into Pixi visual effects.
 
 The browser runtime uses these adapter modules:
 
-| module | role |
-| --- | --- |
+| module                                                                            | role                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`web-audio-session.ts`](../packages/player-web/src/runtime/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
-| [`web-input-runtime.ts`](../packages/player-web/src/runtime/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
-| [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
-| [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
+| [`web-input-runtime.ts`](../packages/player-web/src/runtime/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps.                                    |
+| [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts)       | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects.                                                 |
+| [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts)         | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play.                                                                                                                                |
 
 `@be-music/player/core/engine` no longer imports `node:path` / `node:timers/promises`, so the module can be
 bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
@@ -27,8 +28,8 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
 
 ## Scope
 
-- `@be-music/player-web` provides browser-friendly song loading, preview playback, LR2 skin parsing, PixiJS scenes, WebAudio bus construction, and gameplay recording.
-- `@be-music/player-web-demo` is a private Vite application that wires the core package to drag-and-drop loading, theme loading, debug controls, and recording controls.
+- `@be-music/player-web` provides browser-friendly song loading, preview playback, LR2/beatoraja skin rendering, PixiJS scenes, WebAudio bus construction, and gameplay recording.
+- `@be-music/player-web-demo` is a private Vite application that wires the core package to drag-and-drop loading, LR2/beatoraja theme loading, debug controls, and recording controls.
 - The browser player supports both BMS/BME/BML/PMS and bmson charts through the same parser, chart, and player helpers used by the shared core and terminal player.
 
 ## Running the demo
@@ -42,16 +43,17 @@ The command starts the Vite demo. Drop any of the following into the page:
 - A BMS/BMSON song folder
 - A ZIP that contains a song folder
 - An LR2 theme folder
-- A song folder and an LR2 theme folder together
+- A beatoraja theme folder
+- A song folder and an LR2 or beatoraja theme folder together
 
 When a mixed drop contains chart files, the loader treats the chart directories as song files and the remaining files as theme files.
-When no chart file is present, the whole drop is treated as a theme.
+When no chart file is present, the whole drop is treated as a theme candidate. LR2 detection uses `.lr2skin` files, while beatoraja detection uses `.luaskin` files or JSON files under a `skin/` path segment.
 
 ## Browser loading model
 
 - Dropped paths are normalized with the shared `@be-music/utils/core` path helpers.
 - Chart discovery accepts `.bms`, `.bme`, `.bml`, `.pms`, and `.bmson`.
-- File lookup is case-insensitive so browser drops work with LR2-style asset references that differ only by letter case.
+- File lookup is case-insensitive so browser drops work with LR2 and beatoraja asset references that differ only by letter case.
 - Large audio and video files stay as lazy `File` references by default. Image, skin, chart, and smaller metadata files are read into bytes during collection loading.
 - Folder walking and file reads use bounded concurrency and progress callbacks so large folders can load without flooding the browser's FileSystem APIs or UI update loop.
 - Parse errors are accumulated in the collection instead of aborting the whole drop.
@@ -84,17 +86,36 @@ Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/pl
 sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
 state-specific value resolution, timers, and input behavior.
 
+## beatoraja skin and theme support
+
+`@be-music/player-web` consumes `@be-music/beatoraja-skin` through `loadBeatorajaThemeFromFiles()`.
+The package discovers JSON and Lua skin entries, then the browser layer loads sources, textures, fonts, theme BGM,
+and system sounds from the same dropped bundle.
+
+Implemented beatoraja browser features include:
+
+- Select, decide, gameplay, and result scenes backed by `BeatorajaPlaySkinView`
+- Play variants `5`, `7`, `9`, `10`, and `14`; `24` and `24d` skins are discovered but not mounted for chart gameplay
+- Skin `property[]`, `filepath[]`, custom offsets, category groups, and mid-session `replaceSkin()` refreshes
+- Runtime `TIMER_*`, `OPTION_*`, `TEXT`, and `NUM` wiring for score, combo, judge, gauge, chart metadata, clear lamp, rank, and play options
+- Beatoraja-style notes, LN/CN/HCN caps and bodies, lane markers, BGA still/video layers, judge popups, timing visualizers, gauge graphs, BPM graphs, note-distribution graphs, and result score/gauge history graphs
+- Select-scene folder browsing, search, keymode filtering, sort cycling, favorites, chart preview playback, select BGM, and navigation system sounds
+- Decide and result BGM, chart-image synthetic slots for `STAGEFILE` / `BACKBMP` / `BANNER`, and loading-progress visuals
+
+See [beatoraja skin implementation notes](./beatoraja-skin.md) for the renderer-independent parser and theme-loader boundary.
+The default beatoraja skin is the primary compatibility target. Community themes work best when they use the normalized element families and runtime IDs listed there.
+
 ## Scene lifecycle
 
 The browser player uses one `PixiSceneHost` for the whole session.
 The host owns a single PixiJS `Application`, attaches one scene root at a time, serializes scene transitions, and destroys the renderer only when the host is disposed.
 
-The current scene set is:
+The LR2 and beatoraja paths each provide the same high-level scene set:
 
 - Select scene for chart browsing, preview playback, and skin-side interactions
 - Decide scene for the short transition before gameplay
 - Gameplay scene for notes, lanes, BGA, HUD, judgment, audio, and recording taps
-- Result scene for score summary and LR2 result skin rendering
+- Result scene for score summary and skin-rendered result presentation
 
 Scenes implement `enter()`, `exit()`, and `dispose()`.
 `exit()` detaches transient listeners and ticker work for transitions, while `dispose()` permanently releases scene-owned resources.
@@ -103,8 +124,9 @@ Scenes implement `enter()`, `exit()`, and `dispose()`.
 
 - PixiJS defaults to a WebGPU preference and falls back through PixiJS when the browser cannot initialize it.
 - `?renderer=webgl` forces WebGL for renderer comparison.
-- Loaded skin and BGA textures use nearest sampling to preserve LR2 pixel-art assets.
-- The gameplay path preloads chart parse, audio decode, and BGA resources before the decide scene hands off to gameplay.
+- Loaded skin and BGA textures use nearest sampling to preserve LR2 and beatoraja pixel-art assets.
+- beatoraja source textures are downscaled before upload when a bitmap exceeds the conservative GPU texture-size cap.
+- The gameplay paths preload chart parse, audio decode, and BGA resources before the decide scene hands off to gameplay.
 - Shared scroll-distance helpers keep CLI and browser note-placement behavior aligned.
 - Benchmarks include browser-core helpers that are pure enough to run outside a WebGL context:
 
@@ -118,6 +140,7 @@ pnpm bench -- --packages player-web
 - Gameplay audio separates key, BGM, and master compressor stages in the default split topology.
 - `?compressor=legacy` keeps the old single-compressor shape for comparison.
 - `?compressor=off` disables compressor construction in the demo.
+- beatoraja theme audio uses the same browser bundle lookup for Lua `main_state.audio_play` / `audio_loop` calls, select BGM, navigation system sounds, decide BGM, and result jingles.
 - BGA supports still images and video assets referenced by chart BGA events.
 - BMS rendering applies the implemented `#BGAxx` sub-region, `#SWBGAxx` switching, and `#ARGBxx` / `#EXBMPxx` tint and alpha subset.
 - bmson rendering uses `bga.bga_events`, `bga.layer_events`, and `bga.poor_events`; unlike BMS layer channels, bmson layer images preserve black pixels instead of treating black as transparent.
@@ -126,6 +149,6 @@ pnpm bench -- --packages player-web
 
 ## Compatibility boundary
 
-The browser player is a runtime consumer of the repository's shared parser, chart, audio-renderer, player, and utils packages.
+The browser player is a runtime consumer of the repository's shared parser, chart, audio-renderer, player, utils, LR2 skin, and beatoraja skin packages.
 When browser behavior diverges from the terminal player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
 PixiJS scene wiring can remain in `player-web` when the behavior depends on browser rendering or WebAudio resources.

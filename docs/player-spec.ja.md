@@ -15,7 +15,7 @@
 
 この文書が対象にするのは、`autoPlay()` と `manualPlay()` が返す結果、およびそれらが内部で使う判定・表示・音声処理です。
 `@be-music/player-tui` の CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
-terminal player と browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用します。Terminal UI の挙動は `@be-music/player-tui` 側にあり、PixiJS scene、LR2 skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
+terminal player と browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用します。Terminal UI の挙動は `@be-music/player-tui` 側にあり、PixiJS scene、LR2 / beatoraja skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
 
 core engine の既定ゲージは LR2 の `NORMAL` gauge に相当する `GROOVE` gauge です。
 export している gauge helper は browser PLAY OPTION control 向けに `HARD`、`DEATH`、`EASY` も扱います。bundled terminal player には現時点で gauge type switch はありません。
@@ -28,66 +28,66 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 ### 対応チャンネル
 
-| channel | player における扱い |
-| --- | --- |
-| `#xxx01` | BGM / sample trigger として再生します。 |
-| `#xxx02` | 小節長として時間解決と beat 解決に反映します。 |
-| `#xxx03`, `#xxx08` | BPM change として時間解決に反映します。 |
-| `#xxx04`, `#xxx07`, `#xxx0A` | BGA base / layer / layer2 として描画します。 |
-| `#xxx06` | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。 |
-| `#xxx09` | STOP として時間解決に反映します。 |
-| `#xxx11-19`, `#xxx21-29` | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY 以外では FREE ZONE、9KEY では通常ノートです。 |
-| `#xxx31-39`, `#xxx41-49` | 不可視ノートとして扱います。手動入力の候補と表示補助には使いますが、`summary.total` には含めません。`AUTO` では発音しません。 |
-| `#xxx51-59`, `#xxx61-69` | BMS legacy long note として扱います。 |
-| `#xxx97`, `#xxx98` | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。 |
-| `#xxxA0` | `#EXRANKxx` を参照する動的判定幅変更として扱います。 |
-| `#xxxSC` | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。 |
-| `#xxxSP` | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。 |
-| `#xxxD1-D9`, `#xxxE1-E9` | 地雷として扱います。 |
+| channel                      | player における扱い                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                     | BGM / sample trigger として再生します。                                                                                       |
+| `#xxx02`                     | 小節長として時間解決と beat 解決に反映します。                                                                                |
+| `#xxx03`, `#xxx08`           | BPM change として時間解決に反映します。                                                                                       |
+| `#xxx04`, `#xxx07`, `#xxx0A` | BGA base / layer / layer2 として描画します。                                                                                  |
+| `#xxx06`                     | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                          |
+| `#xxx09`                     | STOP として時間解決に反映します。                                                                                             |
+| `#xxx11-19`, `#xxx21-29`     | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY 以外では FREE ZONE、9KEY では通常ノートです。       |
+| `#xxx31-39`, `#xxx41-49`     | 不可視ノートとして扱います。手動入力の候補と表示補助には使いますが、`summary.total` には含めません。`AUTO` では発音しません。 |
+| `#xxx51-59`, `#xxx61-69`     | BMS legacy long note として扱います。                                                                                         |
+| `#xxx97`, `#xxx98`           | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                            |
+| `#xxxA0`                     | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                          |
+| `#xxxSC`                     | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。                                                                |
+| `#xxxSP`                     | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。                                                                 |
+| `#xxxD1-D9`, `#xxxE1-E9`     | 地雷として扱います。                                                                                                          |
 
 ### 対応コマンド
 
-| command | player における扱い |
-| --- | --- |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT` | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。 |
-| `#BANNER` | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。 |
-| `#STAGEFILE` | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。 |
-| `#PLAYLEVEL`, `#DIFFICULTY` | 選曲画面の表示、ソート、フィルタ、結果表示に使います。 |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP` | 時間解決に使います。 |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL` | 判定幅、表示ランク、groove gauge 計算に使います。 |
-| `#WAVxx`, `#BMPxx` | 音声・BGA リソース解決に使います。 |
-| `#BASE` | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。 |
-| `#PREVIEW` | 選曲画面のプレビュー再生で優先的に使います。 |
-| `#PATH_WAV` | 選曲画面プレビューのファイル探索にだけ使います。通常プレイ中の sample 解決には使いません。 |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ` | BMS long note の解釈に使います。 |
-| `#PLAYER` | レーンモード推定と表示上の player metadata に使います。 |
-| `#VOLWAV` | 譜面全体の音量倍率として使います。 |
-| `#POORBGA` | POOR 画像の既定値上書きに使います。 |
-| `#SCROLLxx`, `#SPEEDxx` | ノート描画距離の計算に使います。 |
-| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。 |
+| command                                                                                                                                 | player における扱い                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。                                                    |
+| `#BANNER`                                                                                                                               | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。                                                                  |
+| `#STAGEFILE`                                                                                                                            | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。                                                          |
+| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | 選曲画面の表示、ソート、フィルタ、結果表示に使います。                                                                                                 |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | 時間解決に使います。                                                                                                                                   |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | 判定幅、表示ランク、groove gauge 計算に使います。                                                                                                      |
+| `#WAVxx`, `#BMPxx`                                                                                                                      | 音声・BGA リソース解決に使います。                                                                                                                     |
+| `#BASE`                                                                                                                                 | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。 |
+| `#PREVIEW`                                                                                                                              | 選曲画面のプレビュー再生で優先的に使います。                                                                                                           |
+| `#PATH_WAV`                                                                                                                             | 選曲画面プレビューのファイル探索にだけ使います。通常プレイ中の sample 解決には使いません。                                                             |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                       |
+| `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                |
+| `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                     |
+| `#POORBGA`                                                                                                                              | POOR 画像の既定値上書きに使います。                                                                                                                    |
+| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                       |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                 |
 
 ### 未対応チャンネル
 
-| channel | 現在の player 実装 |
-| --- | --- |
-| `#xxxA6` | `#CHANGEOPTIONxx` の実行時反映チャンネルとしては未対応です。event として保持されても player runtime は参照しません。 |
+| channel                                                                     | 現在の player 実装                                                                                                                                                                              |
+| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxxA6`                                                                    | `#CHANGEOPTIONxx` の実行時反映チャンネルとしては未対応です。event として保持されても player runtime は参照しません。                                                                            |
 | `#xxx1A-1Z`, `#xxx2A-2Z` など、上の対応一覧に含まれない演奏系拡張チャンネル | 現在の runtime では playable note channel として扱いません。`24 KEY SP` / `48 KEY DP` の表示モード推定と入力割り当てはありますが、これらのチャンネル自体は score/judge 対象ノートになりません。 |
-| 上の対応一覧に含まれないその他の object channel | parser が保持しても、player runtime は意味解釈しません。 |
+| 上の対応一覧に含まれないその他の object channel                             | parser が保持しても、player runtime は意味解釈しません。                                                                                                                                        |
 
 ### 未対応コマンド
 
-| command | 現在の player 実装 |
-| --- | --- |
-| `#TEXTxx`, `#TEXT00` | parser は保持しますが、player の表示や runtime 演出には使いません。 |
-| `#OPTION`, `#CHANGEOPTIONxx` | parser は保持しますが、core runtime での play option 強制変更は未対応です。 |
-| `#WAVCMD`, `#EXWAVxx` | parser は保持します。bundled Node realtime audio session は適用しませんが、audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
-| `#BACKBMP` | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。 |
-| `#MAKER` | metadata-only / unsupported です。 |
-| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。 |
-| `#BASEBPM` | parser は保持しますが、player は時間解決に使いません。 |
-| `#VIDEOFILE` | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。 |
-| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` | parser は保持しますが、player runtime は参照しません。 |
-| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。 |
+| command                                                                                                                                     | 現在の player 実装                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#TEXTxx`, `#TEXT00`                                                                                                                        | parser は保持しますが、player の表示や runtime 演出には使いません。                                                                                                                                                                        |
+| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | parser は保持しますが、core runtime での play option 強制変更は未対応です。                                                                                                                                                                |
+| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | parser は保持します。bundled Node realtime audio session は適用しませんが、audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
+| `#BACKBMP`                                                                                                                                  | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。                                                                                                                                       |
+| `#MAKER`                                                                                                                                    | metadata-only / unsupported です。                                                                                                                                                                                                         |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。                                                                                     |
+| `#BASEBPM`                                                                                                                                  | parser は保持しますが、player は時間解決に使いません。                                                                                                                                                                                     |
+| `#VIDEOFILE`                                                                                                                                | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。                                                                                                            |
+| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | parser は保持しますが、player runtime は参照しません。                                                                                                                                                                                     |
+| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | 現在の player 実装では未対応です。                                                                                                                                                                                                         |
 
 ## 実行フロー
 

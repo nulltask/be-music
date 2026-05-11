@@ -24,7 +24,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **BGA**: Background image or video displayed during gameplay. BGA timelines can have base, layer, layer2, and POOR cues.
 - **POOR BGA**: Dedicated visual shown during `POOR` judgment when the chart defines one.
 - **STAGEFILE**: Loading-screen image shown after chart selection. It is separate from gameplay BGA.
-- **BACKBMP**: LR2 skin special graphic slot backed by BMS `#BACKBMP` or bmson back-image metadata.
+- **BACKBMP**: Skin special graphic slot backed by BMS `#BACKBMP` or bmson back-image metadata. Browser LR2 and beatoraja scenes can resolve it as chart imagery.
 - **BANNER**: Horizontal image shown in Music Select. BMS uses `#BANNER`; bmson uses `info.banner_image`.
 
 ## Playback And Judgment
@@ -56,8 +56,9 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 
 - **player core**: The shared `@be-music/player` engine and helper surface. It owns timing, note extraction, judgment, scoring, gauge helpers, BGA timelines, and UI/audio adapter contracts.
 - **terminal player**: The `@be-music/player-tui` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
-- **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. It handles browser drops, LR2 skin rendering, browser gameplay, result scenes, and recording.
+- **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. It handles browser drops, LR2/beatoraja skin rendering, browser gameplay, result scenes, and recording.
 - **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/lr2-skin`. The package parses skin files and resolves theme assets independently from PixiJS.
+- **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/beatoraja-skin`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
 
 ## Internal Model
 
@@ -101,4 +102,5 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - [Player implementation specification](./player-spec.md)
 - [Browser player implementation notes](./player-web.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
+- [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)

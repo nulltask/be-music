@@ -24,7 +24,7 @@
 - **BGA**: gameplay 中に表示する背景画像/動画です。base、layer、layer2、POOR などの cue を持ちます。
 - **POOR BGA**: `POOR` 判定時に表示する専用 BGA です。譜面側で定義されている場合だけ使います。
 - **STAGEFILE**: chart 選択後の loading screen に表示する画像です。gameplay 中の BGA とは別用途です。
-- **BACKBMP**: BMS `#BACKBMP` または bmson の back-image metadata から解決する LR2 skin special graphic slot です。
+- **BACKBMP**: BMS `#BACKBMP` または bmson の back-image metadata から解決する skin special graphic slot です。browser LR2 / beatoraja scene は chart imagery として解決できます。
 - **BANNER**: Music Select に表示する横長画像です。BMS では `#BANNER`、bmson では `info.banner_image` を使います。
 
 ## 再生と判定
@@ -56,8 +56,9 @@
 
 - **player core**: `@be-music/player` の共有 engine と helper surface です。timing、note extraction、judgment、scoring、gauge helper、BGA timeline、UI/audio adapter 契約を担当します。
 - **terminal player**: `@be-music/player-tui` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
-- **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。browser drop、LR2 skin rendering、browser gameplay、result scene、recording を扱います。
+- **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。browser drop、LR2 / beatoraja skin rendering、browser gameplay、result scene、recording を扱います。
 - **LR2 skin**: `@be-music/lr2-skin` が扱う Lunatic Rave 2 CSV skin format です。この package は PixiJS に依存せず、skin file の parse と theme asset 解決を行います。
+- **beatoraja skin**: `@be-music/beatoraja-skin` が扱う beatoraja JSON / Lua skin format です。この package は PixiJS に依存せず、header / full skin の parse、option / asset 解決、element normalization を行います。
 
 ## 内部モデル
 
@@ -101,4 +102,5 @@
 - [Player 実装仕様](./player-spec.ja.md)
 - [Browser player 実装メモ](./player-web.ja.md)
 - [LR2 skin 実装メモ](./lr2-skin.ja.md)
+- [beatoraja skin 実装メモ](./beatoraja-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.ja.md)
