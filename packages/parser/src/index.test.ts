@@ -23,6 +23,50 @@ describe('parser', () => {
     expect(json.events.some((event) => event.channel === '11' && event.value === '01')).toBe(true);
   });
 
+  test('BMS: LN test fixtures cover modes 1/2/3 with matching chart data but distinct #LNMODE', async () => {
+    // Each fixture defines `#LNMODE` and the same LN test pattern (count-in tap on measure 0,
+    // 2-beat LN on measure 1 channel 11, 3-beat LN on measure 2 channel 13, parallel LNs on
+    // measure 3, 7-key extension LNs on measure 4, follow-up tap on measure 5). The three
+    // files differ ONLY in `#LNMODE` so renderers / engines can be exercised on each mode
+    // with a known-good baseline.
+    const fixtures: ReadonlyArray<{ path: string; expectedMode: number; expectedTitle: string }> = [
+      { path: 'examples/test/ln-mode-1-long-note.bms', expectedMode: 1, expectedTitle: 'LN Mode 1 Test (LN)' },
+      { path: 'examples/test/ln-mode-2-charge-note.bms', expectedMode: 2, expectedTitle: 'LN Mode 2 Test (CN)' },
+      {
+        path: 'examples/test/ln-mode-3-hell-charge-note.bms',
+        expectedMode: 3,
+        expectedTitle: 'LN Mode 3 Test (HCN)',
+      },
+    ];
+    for (const { path, expectedMode, expectedTitle } of fixtures) {
+      const json = await parseChartFile(resolve(rootDir, path));
+      expect(json.metadata.title).toBe(expectedTitle);
+      expect(json.bms.lnMode).toBe(expectedMode);
+      expect(json.bms.lnObjs).toContain('ZZ');
+      // Each fixture has measure 1 channel 11 with a head (value '01') AND a tail (LNOBJ
+      // marker 'ZZ') — verifies the LN spans correctly survive parsing.
+      const measure1Ch11 = json.events.filter((e) => e.measure === 1 && e.channel === '11');
+      expect(measure1Ch11.some((e) => e.value === '01')).toBe(true);
+      expect(measure1Ch11.some((e) => e.value === 'ZZ')).toBe(true);
+    }
+  });
+
+  test('BMS: 9-key POPN LN fixture authors all 9 lanes with #PLAYER 3', async () => {
+    // Verifies the `.bme`-style POPN-9 LN fixture parses with player=3 (the POPN marker) and
+    // surfaces LN events on every 9-key channel 11..19. This is the chart the renderer's
+    // 9-key `chartVariant` + key-binding stack consumes in manual-play test scenarios.
+    const json = await parseChartFile(resolve(rootDir, 'examples/test/ln-9key-popn.bms'));
+    expect(json.metadata.title).toBe('LN 9-key Test (POPN)');
+    expect(json.bms.player).toBe(3);
+    expect(json.bms.lnObjs).toContain('ZZ');
+    // Each POPN-9 lane (channels 11..19) appears at least once in events — confirms the
+    // measure-4 "all 9 lanes at once" pattern survives the parser.
+    const lanes = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+    for (const channel of lanes) {
+      expect(json.events.some((e) => e.channel === channel)).toBe(true);
+    }
+  });
+
   test('BMS: auto-detects and reads Shift_JIS files', async () => {
     const chartPath = resolve(rootDir, 'examples/test/sjis-encoding-test.bms');
     const json = await parseChartFile(chartPath);

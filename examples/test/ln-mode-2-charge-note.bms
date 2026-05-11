@@ -1,0 +1,51 @@
+*---------------------- METADATA FIELD
+
+#TITLE LN Mode 2 Test (CN)
+#SUBTITLE Charge Note — held continuously to tail; release-before-tail is NOT BAD
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 2
+#TOTAL 200
+#DIFFICULTY 2
+
+*---------------------- EXTENDED HEADER FIELD
+* LNMODE 2 = CN (charge note). Same chart structure as Mode 1, but the
+* engine doesn't penalize early release — the player can let go of the
+* key mid-hold and still get the head's verdict at the tail. Useful for
+* charts authored with deliberately-brief hold cues.
+
+#PLAYER 1
+#LNTYPE 1
+#LNMODE 2
+#LNOBJ ZZ
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAVZZ sample.wav
+
+*---------------------- OBJECT DATA FIELD
+
+* measure 0: count-in tap notes on lane 1 (Z key)
+#00011:01010101
+
+* measure 1: 2-beat LN on lane 1 (Z) — beat 1 head → beat 3 tail
+#00111:0100ZZ00
+
+* measure 2: 3-beat LN on lane 3 (X) — beat 1 head → beat 4 tail
+#00213:010000ZZ
+
+* measure 3: parallel 2-beat LNs on lanes 1, 3, 5 (Z, X, C)
+#00311:0100ZZ00
+#00313:0100ZZ00
+#00315:0100ZZ00
+
+* measure 4: 7-key extension LNs on lanes 6, 7 (F, V)
+#00418:0100ZZ00
+#00419:0100ZZ00
+
+* measure 5: follow-up tap on lane 1
+#00511:01000000
+
+*---------------------- CONTROL FLOW FIELD
