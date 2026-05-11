@@ -129,7 +129,7 @@ const SIDE_GAUGE_MAX_OPS: Record<1 | 2 | 3, number> = { 1: 90100, 2: 90101, 3: 9
 export function expandBeatorajaJudgeDestinations(
   judges: ReadonlyArray<BeatorajaJudgeElement>,
   /**
-   * Optional lookup of `value[]` declarations by id. When supplied, judge.numbers[i] children
+   * Mutable lookup of `value[]` declarations by id. When supplied, judge.numbers[i] children
    * receive upstream's combo-digit-specific treatment:
    *
    *   1. PRE-SHIFT: each child dst's `x` is decremented by `dst.w * value.digit / 2`. Mirrors
@@ -139,6 +139,13 @@ export function expandBeatorajaJudgeDestinations(
    *   2. ALIGN OVERRIDE: the matching value's `align` is mutated to `2` (CENTER), mirroring
    *      `SkinJudge`'s hard-coded center-align mode for combo digits regardless of any
    *      `value.align` the JSON authored.
+   *   3. PER-PLATE REF + ID CLONE: each non-1P plate's combo digit gets a freshly-cloned value
+   *      entry with a plate-suffixed id (`judgen-pg__plate2` / `__plate3`) so the renderer sees
+   *      a distinct `value.ref` per plate. Without the clone, all plates referencing the same
+   *      original `judgen-*` id share a single `value` object and the last-processed plate's
+   *      ref overwrites the others' — making every plate display the same `lastJudgeCombo`.
+   *      The matching destination's `id` is rewritten to the clone so it picks up the cloned
+   *      value at render time.
    *
    * Without these, default `play5.json`'s combo digit "46" rendered far to the right of the
    * judge popup (= 4 leading-blank slot widths × 40 px = 160 px gap before the visible "46"),
@@ -148,7 +155,7 @@ export function expandBeatorajaJudgeDestinations(
    * Omitting the lookup falls back to the previous behaviour (parent.x + child.x as-is, no
    * align override) — useful for tests that don't need the full skin context.
    */
-  valuesById?: ReadonlyMap<BeatorajaImageId, BeatorajaValueElement>,
+  valuesById?: Map<BeatorajaImageId, BeatorajaValueElement>,
   /**
    * Optional set of judge-element ids that the skin's `parts.destination` actually
    * references — produced upstream by walking `parts.destination[]` and collecting every
@@ -254,32 +261,55 @@ export function expandBeatorajaJudgeDestinations(
       // Look up the matching `value[]` declaration to apply the combo-digit-specific
       // adjustments (see {@link expandBeatorajaJudgeDestinations}'s `valuesById` doc).
       const valueId = typeof child.id === 'string' || typeof child.id === 'number' ? child.id : undefined;
-      const valueElement = valueId !== undefined ? valuesById?.get(valueId as BeatorajaImageId) : undefined;
-      const valueDigit = valueElement !== undefined ? Math.max(1, Math.trunc(valueElement.digit)) : undefined;
+      const originalValue =
+        valueId !== undefined ? valuesById?.get(valueId as BeatorajaImageId) : undefined;
+      const valueDigit = originalValue !== undefined ? Math.max(1, Math.trunc(originalValue.digit)) : undefined;
       const folded =
         parent !== undefined ? foldChildDestIntoParent(child, parent, valueDigit) : child;
-      // Override the value's align to 2 (CENTER) — beatoraja's `SkinJudge` hardcodes center-
-      // align for combo digits regardless of the JSON's `value.align` field. Mutation is safe
-      // because `judgen-*` ids are conventionally only referenced from `judge[].numbers[]`.
-      //
-      // Also rewrite `value.ref` to the synthetic per-side judge-combo code so the renderer
-      // paints the LIVE combo at the time of the latest judge, mirroring upstream
-      // `SkinJudge.prepare()` (`SkinJudge.java:108`) which calls
-      // `nowCount.prepare(time, state, JudgeManager.getNowCombo(player), ox, oy)` — the
-      // explicit-value overload bypasses whatever ref the JSON authored. ModernChic / default
-      // both author `ref = MAIN.NUM.MAXCOMBO` (= 75) on `judgen-*`; without this override every
-      // judge popup paints the running max combo, so a player who breaks combo still sees the
-      // peak number until the next judge advances it.
-      if (valueElement !== undefined) {
-        (valueElement as { align: number }).align = 2;
-        (valueElement as { ref: number }).ref =
-          side === 1
-            ? SYNTHETIC_NUM_JUDGE_COMBO_1P
-            : side === 2
-              ? SYNTHETIC_NUM_JUDGE_COMBO_2P
-              : SYNTHETIC_NUM_JUDGE_COMBO_3P;
+      // Resolve the per-plate combo-ref + matching value-id. Plate 1 keeps the original `value[]`
+      // entry; plates 2 / 3 get a freshly-cloned value with a plate-suffixed id so each plate's
+      // `value.ref` is independent. Without the clone, every `judgen-pg` reference across the
+      // three judge entries would point at the same `value` object, and the last expansion's
+      // ref write would overwrite the earlier plates' refs — making all three plates display
+      // the same `lastJudgeCombo`. Mirrors upstream's per-`(plate, player)` combo display in
+      // `SkinJudge.prepare()` (`SkinJudge.java:108`) where `getNowCombo(player)` returns the
+      // plate-local latched value.
+      const perPlateRef =
+        side === 1
+          ? SYNTHETIC_NUM_JUDGE_COMBO_1P
+          : side === 2
+            ? SYNTHETIC_NUM_JUDGE_COMBO_2P
+            : SYNTHETIC_NUM_JUDGE_COMBO_3P;
+      let foldedId = (folded as { id?: unknown }).id;
+      if (originalValue !== undefined && valuesById !== undefined && valueId !== undefined) {
+        if (side === 1) {
+          // Plate 1 mutates the original value in place — there's only one plate-1 entry per
+          // chart, so the mutation is unambiguous and there's no shared-aliasing risk.
+          (originalValue as { align: number }).align = 2;
+          (originalValue as { ref: number }).ref = perPlateRef;
+        } else {
+          const clonedId = `${String(valueId)}__plate${side}` as unknown as BeatorajaImageId;
+          let clone = valuesById.get(clonedId);
+          if (clone === undefined) {
+            clone = { ...originalValue, id: clonedId, align: 2, ref: perPlateRef } as BeatorajaValueElement;
+            valuesById.set(clonedId, clone);
+          } else {
+            // Per-frame idempotency: an earlier walk over the same judge already cloned this
+            // value; re-apply the per-plate mutations defensively so a future caller can't
+            // race the clone state into an unexpected combination.
+            (clone as { align: number }).align = 2;
+            (clone as { ref: number }).ref = perPlateRef;
+          }
+          foldedId = clonedId;
+        }
       }
-      out.push(addOpGate(folded, gate));
+      // Stamp the (possibly-cloned) value id on the destination so the renderer's value lookup
+      // picks up THIS plate's ref / align rather than the shared original's.
+      const idStamped =
+        foldedId !== undefined && foldedId !== (folded as { id?: unknown }).id
+          ? ({ ...folded, id: foldedId } as Readonly<Record<string, unknown>>)
+          : folded;
+      out.push(addOpGate(idStamped, gate));
     }
   }
   return out;

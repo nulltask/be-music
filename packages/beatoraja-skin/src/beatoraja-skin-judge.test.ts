@@ -121,12 +121,15 @@ describe('expandBeatorajaJudgeDestinations', () => {
     expect(expanded[5]).toMatchObject({ id: 'judgef-ms', op: [246] });
   });
 
-  it('rewrites the combo number ref to SYNTHETIC_NUM_JUDGE_COMBO_3P for plate 3', () => {
-    // Mirrors the 1P / 2P number-ref rewrite for the POPN-9 third plate. Without this rewrite
-    // the plate's combo digit falls through to whatever `ref` the JSON authored (typically
-    // `MAIN.NUM.MAXCOMBO = 75`), so it prints the running max combo instead of the live latched
-    // combo at the moment of the last plate-3 verdict — the user-reported "combo display is
-    // wrong" symptom on the POPN-9 right-most plate.
+  it('clones the combo value with SYNTHETIC_NUM_JUDGE_COMBO_3P for plate 3 (per-plate ref)', () => {
+    // The POPN-9 right plate (`judge.index === 2`) must NOT mutate the shared `judgen-*` value
+    // in place — multiple plates reference the same value id, so a per-plate mutation would
+    // race the last-processed plate's ref onto all earlier plates' combo digits. Instead, the
+    // expander clones the value with a plate-suffixed id (`__plate3`), sets `ref` to the 3P
+    // synthetic on the clone, and rewrites the destination's `id` to the clone. The ORIGINAL
+    // value stays untouched (= plate 1's id and ref) and the cloned value carries plate 3's
+    // ref. Pairs with `valuesById.set(...)` so the renderer's value lookup finds the clone at
+    // render time.
     const judges = normalizeBeatorajaJudges([
       {
         id: 2012,
@@ -135,16 +138,46 @@ describe('expandBeatorajaJudgeDestinations', () => {
         numbers: [{ id: 'judgen-pg' }],
       },
     ]);
-    const valueElement = { id: 'judgen-pg', digit: 6, align: 0, ref: 75 /* = MAXCOMBO */ };
+    const original = { id: 'judgen-pg', digit: 6, align: 0, ref: 75 /* = MAXCOMBO */ };
+    const valuesById = new Map([['judgen-pg', original]]);
+    const expanded = expandBeatorajaJudgeDestinations(
+      judges,
+      valuesById as unknown as Parameters<typeof expandBeatorajaJudgeDestinations>[1],
+    );
+    // Original stays untouched — that entry belongs to plate 1.
+    expect(original.ref).toBe(75);
+    expect(original.align).toBe(0);
+    // A cloned entry exists with the per-plate ref + center-align override.
+    const clone = valuesById.get('judgen-pg__plate3' as never) as
+      | { id: string; align: number; ref: number; digit: number }
+      | undefined;
+    expect(clone).toBeDefined();
+    expect(clone?.ref).toBe(20103);
+    expect(clone?.align).toBe(2);
+    expect(clone?.digit).toBe(6);
+    // The destination's `id` is rewritten to the clone so the renderer's value lookup hits it.
+    const judgenDest = expanded.find((d) => typeof (d as { id?: unknown }).id === 'string' && (d as { id: string }).id.startsWith('judgen-pg'));
+    expect((judgenDest as { id: string } | undefined)?.id).toBe('judgen-pg__plate3');
+  });
+
+  it('mutates the value in place for plate 1 (single-plate idiom — no aliasing risk)', () => {
+    // Plate 1 (`judge.index === 0`) keeps the in-place mutation since there's exactly one
+    // plate-1 entry per chart and the value isn't aliased across plates. Documents the
+    // intentional asymmetry between plate 1 (mutate) and plates 2 / 3 (clone) so a future
+    // refactor doesn't accidentally start cloning every plate.
+    const judges = normalizeBeatorajaJudges([
+      { id: 2010, index: 0, images: [{ id: 'judgef-pg' }], numbers: [{ id: 'judgen-pg' }] },
+    ]);
+    const valueElement = { id: 'judgen-pg', digit: 6, align: 0, ref: 75 };
     const valuesById = new Map([['judgen-pg', valueElement]]);
     expandBeatorajaJudgeDestinations(
       judges,
       valuesById as unknown as Parameters<typeof expandBeatorajaJudgeDestinations>[1],
     );
-    // Plate 3 → `SYNTHETIC_NUM_JUDGE_COMBO_3P = 20103`. Hardcoded literal here so a future bump
-    // of the synthetic id range surfaces the change in this test rather than silently sliding.
-    expect(valueElement.ref).toBe(20103);
+    expect(valueElement.ref).toBe(20101); // SYNTHETIC_NUM_JUDGE_COMBO_1P
     expect(valueElement.align).toBe(2);
+    // No clone entries — plate 1 mutated in place.
+    expect([...valuesById.keys()]).toEqual(['judgen-pg']);
   });
 
   it('preserves an existing op gate by appending the judge op (AND semantics)', () => {
