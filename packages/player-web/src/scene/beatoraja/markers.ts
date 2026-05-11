@@ -103,7 +103,7 @@ export interface BeatorajaMarkerLayerOptions {
 // marker layer stays in lock-step with the note layer.
 
 export class BeatorajaMarkerLayer {
-  readonly container = new Container();
+  readonly container: Container = new Container();
   /** Resolved per-kind prototype data. `[]` means the skin didn't author markers of that kind. */
   private readonly kindData: {
     group: MarkerKindData[];

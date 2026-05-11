@@ -126,7 +126,7 @@ export interface PixiBeatorajaResultSceneOptions {
 const DEFAULT_RESULT_INPUT_MS = 500;
 
 export class PixiBeatorajaResultScene implements PixiScene {
-  readonly root = new Container();
+  readonly root: Container = new Container();
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaResultSceneOptions;

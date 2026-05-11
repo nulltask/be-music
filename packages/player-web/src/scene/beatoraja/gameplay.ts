@@ -193,7 +193,7 @@ export interface PixiBeatorajaGameplayViewOptions {
 }
 
 export class PixiBeatorajaGameplayView implements PixiScene {
-  readonly root = new Container();
+  readonly root: Container = new Container();
   /**
    * Backdrop that fills the full canvas behind the (letterboxed) skin container. The Pixi `Application`
    * runs with `backgroundAlpha: 0` so all scenes share a transparent canvas and decide for themselves

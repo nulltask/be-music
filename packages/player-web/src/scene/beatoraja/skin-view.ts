@@ -639,7 +639,7 @@ type ViewEntry =
   | PmCharaEntry;
 
 export class BeatorajaPlaySkinView {
-  readonly container = new Container();
+  readonly container: Container = new Container();
   readonly width: number;
   readonly height: number;
   /**

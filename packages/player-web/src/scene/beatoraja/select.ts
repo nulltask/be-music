@@ -338,7 +338,7 @@ const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
 
 export class PixiBeatorajaSelectScene implements PixiScene {
-  readonly root = new Container();
+  readonly root: Container = new Container();
   /** Full-canvas backdrop behind the skin container — see `PixiBeatorajaGameplayView` for rationale. */
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;

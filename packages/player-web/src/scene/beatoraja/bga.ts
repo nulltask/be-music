@@ -57,7 +57,7 @@ export interface BeatorajaBgaLayerOptions {
 }
 
 export class BeatorajaBgaLayer {
-  readonly container = new Container();
+  readonly container: Container = new Container();
   private readonly sprite: Sprite;
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;

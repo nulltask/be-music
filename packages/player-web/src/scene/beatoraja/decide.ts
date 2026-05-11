@@ -153,7 +153,7 @@ const DEFAULT_DECIDE_SCENE_MS = 3000;
 const DEFAULT_DECIDE_INPUT_MS = 500;
 
 export class PixiBeatorajaDecideScene implements PixiScene {
-  readonly root = new Container();
+  readonly root: Container = new Container();
   private readonly backdrop = new Graphics();
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaDecideSceneOptions;

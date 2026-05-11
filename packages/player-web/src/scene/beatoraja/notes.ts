@@ -109,7 +109,7 @@ interface CroppedSprite {
 }
 
 export class BeatorajaNoteLayer {
-  readonly container = new Container();
+  readonly container: Container = new Container();
   /**
    * Two-tier layering so LN bodies always sit BEHIND head/tail caps and tap notes,
    * regardless of pool-reuse order across frames.
