@@ -974,7 +974,10 @@ export class BeatorajaRuntimeAdapter {
    * the previous one. FAST / SLOW are surfaced separately via the `_*p_early` / `_*p_late` ops.
    */
   applyJudgeCombo(state: PlayerJudgeComboSignalState): void {
-    const side: BeatorajaSide = state.channel?.startsWith('2') ? 2 : 1;
+    // Same `chartPlayVariant === '9'` collapse as `resolveSide`: under POPN-9 every channel
+    // (including the PMS-STD `22..25` POPN keys 6..9) routes to the 1P side, since the skin
+    // only authors `judge_1p` / `combo_1p` chrome for single-side play.
+    const side: BeatorajaSide = state.channel ? this.resolveSide(state.channel) : 1;
     const op = judgeOpForKind(side, state.judge);
     const sideState = this.judgeState[side];
     if (sideState.lastJudgeOp !== undefined && sideState.lastJudgeOp !== op) {
@@ -2545,6 +2548,14 @@ export class BeatorajaRuntimeAdapter {
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
 
   private resolveSide(channel: string): BeatorajaSide {
+    // POPN-9 (PMS) is single-side play. Its PMS-STD channel layout authors the right-half POPN
+    // keys (`22..25` for keys 6..9) on the BMS `2X` channel block — sharing the channel space with
+    // genuine IIDX 2P-side play — so the literal `startsWith('2')` test would route those POPN
+    // keys to the 2P-side timers (`bomb_2p_keyN` / `judge_2p` / `combo_2p`, etc.) and the skin's
+    // 1P-side chrome (which is the only side it authors for POPN) would never light up. Collapse
+    // every channel onto the 1P side when the chart variant is `'9'`. Mirrors the same gate the
+    // LR2 path applies at `pixi-gameplay.ts:3458` (`chartPlayVariant !== '9' && channel.startsWith('2')`).
+    if (this.chartPlayVariant === '9') return 1;
     return channel.startsWith('2') ? 2 : 1;
   }
 

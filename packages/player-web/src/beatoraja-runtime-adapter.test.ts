@@ -405,6 +405,67 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     // Sanity: scratch timer (100) stays unstamped — POPN_9K has no scratch lane.
     expect(adapter.getTimerStart(keyOnTimerId(1, 0)!)).toBeUndefined();
   });
+
+  it('9K (PMS-STD) collapses channels 22..25 onto the 1P-side timer bank (lanes 6..9)', () => {
+    // PMS-STD authors POPN keys 6..9 on the BMS `2X` channel block (`22..25`), sharing the
+    // channel space with genuine IIDX 2P-side play. Without a `chartPlayVariant === '9'`
+    // collapse the literal `startsWith('2')` side-detection would route the lane timers to
+    // the 2P-side bank (`bomb_2p_keyN`, `keyon_2p_keyN`, etc.) and the skin's 1P-side chrome
+    // — which is the only side an LR2 / beatoraja 9-key skin authors — would never light up.
+    // User report (visual): coffee-bean theme on a PMS-STD chord chart painted bombs only on
+    // lanes 0..4 (the genuine `11..15` 1P keys) and silenced lanes 5..8 (= PMS-STD `22..25`).
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '9',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    for (const channel of ['22', '23', '24', '25']) {
+      adapter.applyCommand({ kind: 'press-lane', channel });
+    }
+    // Channels 22..25 must land on 1P-side timers 106..109, NOT the 2P-side 116..119.
+    expect(adapter.getTimerStart(keyOnTimerId(1, 6)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 7)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 8)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(1, 9)!)).toBe(100);
+    expect(adapter.getTimerStart(keyOnTimerId(2, 6)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(2, 7)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(2, 8)!)).toBeUndefined();
+    expect(adapter.getTimerStart(keyOnTimerId(2, 9)!)).toBeUndefined();
+  });
+
+  it('9K applyJudgeCombo on channels 22..25 fires 1P judge / combo / bomb timers (PMS-STD)', () => {
+    // Pairs with the press-lane regression above: every per-judge timer the skin animates
+    // against (`judge_1p` = 46, `combo_1p` = 446, `bomb_1p_keyN` = 51+lane) must also collapse
+    // onto the 1P-side bank under POPN-9. Without the collapse the user saw GREAT-flash + bomb
+    // sprites only on lanes 0..4 (real `11..15` channels) and silence on lanes 5..8 (PMS-STD
+    // `22..25` channels), even though the engine fired all 9 publishes per chord (verified by
+    // a headless autoPlay run reaching combo 144 / 144).
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '9',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(100);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 6, channel: '22', updatedAtMs: 100 });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 9, channel: '25', updatedAtMs: 100 });
+    // Side-1 judge / combo timers must be stamped; side-2 must stay untouched.
+    expect(adapter.getTimerStart(judgeTimerId(1))).toBe(100);
+    expect(adapter.getTimerStart(judgeTimerId(2))).toBeUndefined();
+    // Bomb timers — `bomb_1p_keyN = 50+N`. Channels 22 / 25 → lanes 6 / 9.
+    // We don't import the timer-id helper for bombs here (no public export), so probe via the
+    // 1P-side bomb timer IDs directly: `bomb_1p_key6 = 56`, `bomb_1p_key9 = 59`.
+    expect(adapter.getTimerStart(56)).toBe(100);
+    expect(adapter.getTimerStart(59)).toBe(100);
+    // 2P-side equivalents (66 / 69) must stay unstamped.
+    expect(adapter.getTimerStart(66)).toBeUndefined();
+    expect(adapter.getTimerStart(69)).toBeUndefined();
+    // 1P-side judge op must be active (PERFECT = 241); 2P-side equivalents stay inactive.
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P2_JUDGE_PERFECT)).toBe(false);
+  });
 });
 
 describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
