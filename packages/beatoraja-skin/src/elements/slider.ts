@@ -22,7 +22,7 @@
 // Direction codes (0=up, 1=right, 2=down, 3=left) are sourced from `SkinSlider.java` line 26.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
-import { isBeatorajaLuaFunctionValue } from '../lua.ts';
+import { floatPropertyField, numberField, sourceIdField } from './fields.ts';
 import type { BeatorajaImageId } from './image.ts';
 import type { BeatorajaSkinSourceId } from '../types.ts';
 import type { BeatorajaFloatPropertyRef } from './graph.ts';
@@ -103,26 +103,4 @@ function angleField(value: unknown): BeatorajaSliderDirection {
     }
   }
   return 'right';
-}
-
-function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function floatPropertyField(value: unknown): BeatorajaFloatPropertyRef | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (isBeatorajaLuaFunctionValue(value)) return value;
-  return undefined;
-}
-
-function sourceIdField(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  fallback: BeatorajaSkinSourceId,
-): BeatorajaSkinSourceId {
-  const v = record[key];
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) return v;
-  return fallback;
 }

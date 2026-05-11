@@ -10,7 +10,14 @@
 // and `bpmgraph` destinations. Caches at the host level keyed by `song.id` — the analysis
 // is pure-data and stable for the chart's lifetime.
 
-import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
+import type { BeMusicJson } from '@be-music/json';
+import {
+  beatorajaEventBeat,
+  computeBeatorajaMeasureBaseBeats,
+  hasBeatorajaEventValue,
+  resolveBeatorajaBpmEventValue,
+  resolveBeatorajaStopDurationBeats,
+} from './timing.ts';
 
 /**
  * Note distribution category indices. Mirrors `SkinNoteDistributionGraph.JGRAPH[0]` —
@@ -87,9 +94,6 @@ export interface BeatorajaChartNoteDistribution {
   maxBpm: number;
 }
 
-const BEATS_PER_STANDARD_MEASURE = 4;
-const STOP_UNITS_PER_MEASURE = 192;
-
 /**
  * Walk a chart's events in beat-then-time order, accumulating wallclock seconds across
  * BPM changes and stops, and bucket every playable note into 1-second windows by
@@ -99,7 +103,7 @@ const STOP_UNITS_PER_MEASURE = 192;
  * `SkinBPMGraph.updateGraph(BMSModel)` for the BPM segment + mainbpm computation.
  */
 export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): BeatorajaChartNoteDistribution {
-  const measureBaseBeat = computeMeasureBaseBeats(chart);
+  const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
   if (measureBaseBeat.length === 0) {
     return {
       buckets: [],
@@ -127,25 +131,18 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
   const lnObjs = new Set((chart.bms?.lnObjs ?? []).map((v) => v.toUpperCase()));
 
   for (const event of chart.events ?? []) {
-    if (event.value === '00' || event.value === '') continue;
-    const beat = eventBeat(event, measureBaseBeat);
+    if (!hasBeatorajaEventValue(event.value)) continue;
+    const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
     if (event.channel === '03') {
-      const parsed = parseInt(event.value, 16);
-      if (Number.isFinite(parsed) && parsed > 0) entries.push({ beat, kind: 'bpm', bpm: parsed });
+      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
+      if (bpm !== undefined && bpm > 0) entries.push({ beat, kind: 'bpm', bpm });
     } else if (event.channel === '08') {
-      const looked =
-        bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
-      const bpm =
-        typeof looked === 'number' ? looked : typeof looked === 'string' ? Number.parseFloat(looked) : Number.NaN;
-      if (Number.isFinite(bpm) && bpm > 0) entries.push({ beat, kind: 'bpm', bpm });
+      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
+      if (bpm !== undefined && bpm > 0) entries.push({ beat, kind: 'bpm', bpm });
     } else if (event.channel === '09') {
-      const looked =
-        stopTable[event.value] ?? stopTable[event.value.toLowerCase()] ?? stopTable[event.value.toUpperCase()];
-      const stopUnits =
-        typeof looked === 'number' ? looked : typeof looked === 'string' ? Number.parseFloat(looked) : Number.NaN;
-      if (Number.isFinite(stopUnits) && stopUnits > 0) {
-        const durationBeats = (stopUnits / STOP_UNITS_PER_MEASURE) * BEATS_PER_STANDARD_MEASURE;
+      const durationBeats = resolveBeatorajaStopDurationBeats(event.value, stopTable);
+      if (durationBeats !== undefined) {
         entries.push({ beat, kind: 'stop', durationBeats });
       }
     } else if (isNoteChannel(event.channel)) {
@@ -328,37 +325,6 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
   if (maxBpm <= 0) maxBpm = initialBpm;
 
   return { buckets, maxCount, totalMs, bpmSegments, mainBpm, minBpm, maxBpm };
-}
-
-function computeMeasureBaseBeats(chart: BeMusicJson): number[] {
-  const lengths = new Map<number, number>();
-  let maxMeasure = 0;
-  for (const event of chart.events ?? []) {
-    if (event.measure > maxMeasure) maxMeasure = event.measure;
-  }
-  for (const measure of chart.measures ?? []) {
-    const idx = Math.max(0, Math.floor(measure.index));
-    if (idx > maxMeasure) maxMeasure = idx;
-    if (Number.isFinite(measure.length) && measure.length > 0) {
-      lengths.set(idx, measure.length);
-    }
-  }
-  const measureBaseBeat: number[] = [];
-  let beat = 0;
-  for (let m = 0; m <= maxMeasure; m += 1) {
-    measureBaseBeat.push(beat);
-    const length = lengths.get(m) ?? 1;
-    beat += length * BEATS_PER_STANDARD_MEASURE;
-  }
-  return measureBaseBeat;
-}
-
-function eventBeat(event: BeMusicEvent, measureBaseBeat: number[]): number | undefined {
-  const base = measureBaseBeat[event.measure];
-  if (base === undefined) return undefined;
-  const [num, denom] = event.position;
-  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return base;
-  return base + (num / denom) * BEATS_PER_STANDARD_MEASURE;
 }
 
 function isNoteChannel(channel: string): boolean {

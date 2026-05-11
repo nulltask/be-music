@@ -7,13 +7,18 @@ import {
   compareFractions,
   dirname,
   extname,
+  asLoadedFileEntryBytes,
   findFirstIndexAtOrAfter,
   findFirstIndexNumberAtOrAfter,
+  findCaseInsensitiveMapPath,
   findLastIndexAtOrBefore,
   findLastIndexBefore,
   gcd,
+  isAudioAssetPath,
   isMaliciousAssetPath,
   lcm,
+  loadFileEntryBytes,
+  lookupCaseInsensitiveMapEntry,
   normalizePath,
   normalizeAsciiBase36Code,
   normalizeAsciiBase62Code,
@@ -21,6 +26,7 @@ import {
   normalizeNonNegativeInt,
   normalizeSortedUniqueNonNegativeIntegers,
   normalizePositiveInt,
+  readFilesIntoEntryMap,
   resolveCliPath,
   runWithConcurrency,
 } from './index.ts';
@@ -183,6 +189,63 @@ describe('utils', () => {
     );
   });
 
+  test('case-insensitive file entry helpers: resolve exact, folded, and rejected paths', () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const files = new Map<string, Uint8Array>([['Song/Kick.WAV', bytes]]);
+
+    expect(findCaseInsensitiveMapPath(files, 'Song/Kick.WAV')).toBe('Song/Kick.WAV');
+    expect(findCaseInsensitiveMapPath(files, 'song/kick.wav')).toBe('Song/Kick.WAV');
+    expect(lookupCaseInsensitiveMapEntry(files, 'SONG/KICK.WAV')).toBe(bytes);
+    expect(findCaseInsensitiveMapPath(files, '/etc/passwd', { rejectCandidate: isMaliciousAssetPath })).toBeUndefined();
+  });
+
+  test('file entry byte helpers: read eager and lazy entries', async () => {
+    const eager = new Uint8Array([1, 2]);
+    const lazy = {
+      arrayBuffer: async () => new Uint8Array([3, 4]).buffer,
+    };
+
+    expect(await loadFileEntryBytes(eager)).toBe(eager);
+    expect(await loadFileEntryBytes(lazy)).toEqual(new Uint8Array([3, 4]));
+    expect(asLoadedFileEntryBytes(eager)).toBe(eager);
+    expect(asLoadedFileEntryBytes(lazy)).toBeUndefined();
+  });
+
+  test('readFilesIntoEntryMap: normalizes paths, defers audio, reports progress, and skips unreadable files', async () => {
+    const reads: string[] = [];
+    const errors: string[] = [];
+    const files = [
+      {
+        name: 'kick.wav',
+        webkitRelativePath: String.raw`Song\\kick.wav`,
+        arrayBuffer: async () => new Uint8Array([1]).buffer,
+      },
+      {
+        name: 'chart.bms',
+        webkitRelativePath: 'Song/chart.bms',
+        arrayBuffer: async () => new Uint8Array([2]).buffer,
+      },
+      {
+        name: 'broken.txt',
+        arrayBuffer: async () => {
+          throw new Error('nope');
+        },
+      },
+    ];
+
+    const out = await readFilesIntoEntryMap(files, {
+      concurrency: 1,
+      onRead: (path) => reads.push(path),
+      onReadError: (path) => errors.push(path),
+    });
+
+    expect(out.get('Song/kick.wav')).toBe(files[0]);
+    expect(out.get('Song/chart.bms')).toEqual(new Uint8Array([2]));
+    expect(out.has('broken.txt')).toBe(false);
+    expect(reads).toEqual(['Song/kick.wav', 'Song/chart.bms', 'broken.txt']);
+    expect(errors).toEqual(['broken.txt']);
+  });
+
   test('normalizeAsciiBase36Code: normalizes ASCII 0-9/A-Z/a-z to uppercase base36 codes', () => {
     expect(normalizeAsciiBase36Code(0x30)).toBe(0x30);
     expect(normalizeAsciiBase36Code(0x39)).toBe(0x39);
@@ -246,5 +309,12 @@ describe('utils', () => {
     expect(isMaliciousAssetPath('Lab..rinth.wav')).toBe(false);
     expect(isMaliciousAssetPath('./local.wav')).toBe(false);
     expect(isMaliciousAssetPath('')).toBe(false);
+  });
+
+  test('isAudioAssetPath: recognizes deferred audio extensions', () => {
+    expect(isAudioAssetPath('sound/KICK.WAV')).toBe(true);
+    expect(isAudioAssetPath('sound/kick.ogg')).toBe(true);
+    expect(isAudioAssetPath('sound/kick.wav/readme')).toBe(false);
+    expect(isAudioAssetPath('image.png')).toBe(false);
   });
 });

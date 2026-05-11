@@ -214,6 +214,124 @@ export async function runWithConcurrency<T>(
   await Promise.all(Array.from({ length: workerCount }, worker));
 }
 
+export interface AssetInputFile {
+  readonly name: string;
+  readonly webkitRelativePath?: string;
+  arrayBuffer(): Promise<ArrayBuffer>;
+}
+
+export type AssetFileEntry<TFile extends AssetInputFile = AssetInputFile> = Uint8Array | TFile;
+
+export interface FindCaseInsensitiveMapPathOptions {
+  rejectCandidate?: (candidate: string) => boolean;
+}
+
+const caseInsensitivePathIndexCache: WeakMap<ReadonlyMap<string, unknown>, ReadonlyMap<string, string>> = new WeakMap();
+
+export function findCaseInsensitiveMapPath<T>(
+  files: ReadonlyMap<string, T>,
+  candidate: string,
+  options: FindCaseInsensitiveMapPathOptions = {},
+): string | undefined {
+  if (options.rejectCandidate?.(candidate)) {
+    return undefined;
+  }
+  if (files.has(candidate)) {
+    return candidate;
+  }
+  const index = getCaseInsensitivePathIndex(files);
+  return index.get(candidate.toLowerCase());
+}
+
+export function lookupCaseInsensitiveMapEntry<T>(
+  files: ReadonlyMap<string, T>,
+  candidate: string,
+  options: FindCaseInsensitiveMapPathOptions = {},
+): T | undefined {
+  const key = findCaseInsensitiveMapPath(files, candidate, options);
+  return key === undefined ? undefined : files.get(key);
+}
+
+export async function loadFileEntryBytes<TFile extends Pick<AssetInputFile, 'arrayBuffer'>>(
+  entry: Uint8Array | TFile | undefined,
+): Promise<Uint8Array | undefined> {
+  if (entry === undefined) return undefined;
+  if (entry instanceof Uint8Array) return entry;
+  return new Uint8Array(await entry.arrayBuffer());
+}
+
+export function asLoadedFileEntryBytes(entry: Uint8Array | unknown | undefined): Uint8Array | undefined {
+  if (entry === undefined) return undefined;
+  return entry instanceof Uint8Array ? entry : undefined;
+}
+
+export interface ReadFilesIntoEntryMapOptions {
+  concurrency?: number;
+  onRead?: (path: string, current: number, total: number) => void;
+  deferAudio?: boolean;
+  shouldDefer?: (path: string) => boolean;
+  onReadError?: (path: string, error: unknown) => void;
+}
+
+export async function readFilesIntoEntryMap<TFile extends AssetInputFile>(
+  files: ReadonlyArray<TFile>,
+  options: ReadFilesIntoEntryMapOptions = {},
+): Promise<Map<string, AssetFileEntry<TFile>>> {
+  const concurrency = options.concurrency ?? 32;
+  const deferAudio = options.deferAudio ?? true;
+  const decideDefer = options.shouldDefer ?? (deferAudio ? isAudioAssetPath : neverDefer);
+  const result = new Map<string, AssetFileEntry<TFile>>();
+  let completed = 0;
+  const total = files.length;
+  await runWithConcurrency(files, concurrency, async (file) => {
+    const path = normalizePath(file.webkitRelativePath || file.name);
+    if (decideDefer(path)) {
+      result.set(path, file);
+    } else {
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        result.set(path, bytes);
+      } catch (error) {
+        options.onReadError?.(path, error);
+      }
+    }
+    completed += 1;
+    options.onRead?.(path, completed, total);
+  });
+  return result;
+}
+
+export function isAudioAssetPath(path: string): boolean {
+  const dot = path.lastIndexOf('.');
+  if (dot < 0) return false;
+  const slash = path.lastIndexOf('/');
+  if (slash > dot) return false;
+  return AUDIO_ASSET_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
+function getCaseInsensitivePathIndex<T>(files: ReadonlyMap<string, T>): ReadonlyMap<string, string> {
+  const cacheKey = files as ReadonlyMap<string, unknown>;
+  const cached = caseInsensitivePathIndexCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const index = new Map<string, string>();
+  for (const key of files.keys()) {
+    const lower = key.toLowerCase();
+    if (!index.has(lower)) {
+      index.set(lower, key);
+    }
+  }
+  caseInsensitivePathIndexCache.set(cacheKey, index);
+  return index;
+}
+
+function neverDefer(): boolean {
+  return false;
+}
+
+const AUDIO_ASSET_EXTENSIONS = new Set(['.wav', '.ogg', '.mp3', '.opus', '.flac', '.oga']);
+
 export function findLastIndexAtOrBefore<T>(
   items: ReadonlyArray<T>,
   target: number,

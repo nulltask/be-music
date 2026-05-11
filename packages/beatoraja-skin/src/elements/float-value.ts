@@ -14,6 +14,7 @@
 // the dot slot.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
+import { integerPropertyField, numberArrayField, numberField, positiveIntField, sourceIdValueField } from './fields.ts';
 import type { BeatorajaImageId } from './image.ts';
 import type { BeatorajaSkinSourceId } from '../types.ts';
 import type { BeatorajaIntegerPropertyRef, BeatorajaValueDigitCell } from './value.ts';
@@ -96,7 +97,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaFloatValueElement | un
   const valueProperty = integerPropertyField(f.value);
   return {
     id,
-    src: sourceIdField(f.src, -1),
+    src: sourceIdValueField(f.src, -1),
     x: numberField(f, 'x', 0),
     y: numberField(f, 'y', 0),
     w: numberField(f, 'w', 0),
@@ -117,43 +118,6 @@ function normalizeOne(entry: NormalizedElement): BeatorajaFloatValueElement | un
     cycle: numberField(f, 'cycle', 0),
     ifCodes: entry.ifCodes,
   };
-}
-
-function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function numberArrayField(record: Readonly<Record<string, unknown>>, key: string): ReadonlyArray<number> {
-  const v = record[key];
-  if (!Array.isArray(v)) return [];
-  const out: number[] = [];
-  for (const x of v) {
-    if (typeof x === 'number' && Number.isFinite(x)) out.push(x);
-  }
-  return out;
-}
-
-function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
-  const truncated = Math.trunc(v);
-  return truncated >= 1 ? truncated : fallback;
-}
-
-function sourceIdField(value: unknown, fallback: BeatorajaSkinSourceId): BeatorajaSkinSourceId {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string' && value.length > 0) return value;
-  return fallback;
-}
-
-function integerPropertyField(value: unknown): BeatorajaIntegerPropertyRef | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  // BeatorajaLuaFunctionValue path matches `value[].valueProperty` — we share the same type.
-  if (value !== null && typeof value === 'object' && (value as { kind?: unknown }).kind === 'beatoraja-lua-function') {
-    return value as BeatorajaIntegerPropertyRef;
-  }
-  return undefined;
 }
 
 // ─── FloatFormatter cell-glyph constants ────────────────────────────────────────────────────

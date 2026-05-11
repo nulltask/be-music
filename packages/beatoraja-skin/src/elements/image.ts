@@ -7,6 +7,7 @@
 // list of `BeatorajaImageElement` with every field present and validated.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
+import { boolField, numberField, positiveIntField, sourceIdField } from './fields.ts';
 import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from '../lua.ts';
 import type { BeatorajaSkinSourceId } from '../types.ts';
 
@@ -140,38 +141,6 @@ function normalizeOne(entry: NormalizedElement): BeatorajaImageElement | undefin
     isDisapearLineLinkLift: boolField(f, 'isDisapearLineLinkLift', false),
     ifCodes: entry.ifCodes,
   };
-}
-
-function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function sourceIdField(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  fallback: BeatorajaSkinSourceId,
-): BeatorajaSkinSourceId {
-  const v = record[key];
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) return v;
-  return fallback;
-}
-
-function boolField(record: Readonly<Record<string, unknown>>, key: string, fallback: boolean): boolean {
-  const v = record[key];
-  if (typeof v === 'boolean') return v;
-  // Lua serializes booleans into JS booleans, but JSON skin authors sometimes write `1` / `0`
-  // for boolean fields. Honor both shapes — `1` truthy, `0` falsy, anything else falls back.
-  if (typeof v === 'number') return v !== 0;
-  return fallback;
-}
-
-function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
-  const truncated = Math.trunc(v);
-  return truncated >= 1 ? truncated : fallback;
 }
 
 /**

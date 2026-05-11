@@ -2,7 +2,7 @@ import { unzipSync } from 'fflate';
 import { isPlayableChannel, resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-music/chart';
 import { extractDeclaredBmsCharset, parseBms, parseBmson } from '@be-music/parser';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
-import { basename, dirname, normalizePath, runWithConcurrency } from '@be-music/utils/core';
+import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
   BrowserSongAssetEntry,
@@ -216,13 +216,6 @@ async function collectFilesFromEntry(
 }
 
 /**
- * Default concurrency cap for parallel file reads. Tuned high enough that 4000 small files saturate disk I/O without
- * the browser starting to thrash on micro-task scheduling. Tweakable per-call via {@link readFilesIntoBytesMap}'s
- * options.
- */
-const FILE_READ_CONCURRENCY = 32;
-
-/**
  * Reads `files` into a `Map<path, bytes>` using a worker-pool pattern so up to `concurrency` reads are in-flight at
  * once. Replaces the textbook `for ... await arrayBuffer()` serial loop, which on a 4000-file drop spent the bulk of
  * its time idling on disk between reads.
@@ -254,50 +247,18 @@ export async function readFilesIntoBytesMap(
     shouldDefer?: (path: string) => boolean;
   } = {},
 ): Promise<Map<string, BrowserSongAssetEntry>> {
-  const concurrency = options.concurrency ?? FILE_READ_CONCURRENCY;
-  const deferAudio = options.deferAudio ?? true;
-  const decideDefer = options.shouldDefer ?? (deferAudio ? isAudioPath : neverDefer);
-  const result = new Map<string, BrowserSongAssetEntry>();
-  let completed = 0;
-  const total = files.length;
-  await runWithConcurrency(files, concurrency, async (file) => {
-    const path = normalizePath(file.webkitRelativePath || file.name);
-    if (decideDefer(path)) {
-      result.set(path, file);
-    } else {
-      try {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        result.set(path, bytes);
-      } catch (error) {
-        // A single file failing to read shouldn't kill the entire drop. The map simply omits that path; the caller's
-        // chart parser / asset resolver will treat it as missing, which matches what happens for genuinely-missing
-        // files.
-        log.warn(`skipped (arrayBuffer failed): ${path}`, error);
-      }
-    }
-    completed += 1;
-    options.onRead?.(path, completed, total);
+  return readFilesIntoEntryMap(files, {
+    concurrency: options.concurrency,
+    onRead: options.onRead,
+    deferAudio: options.deferAudio,
+    shouldDefer: options.shouldDefer,
+    onReadError: (path, error) => {
+      // A single file failing to read shouldn't kill the entire drop. The map simply omits that path; the caller's
+      // chart parser / asset resolver will treat it as missing, which matches what happens for genuinely-missing
+      // files.
+      log.warn(`skipped (arrayBuffer failed): ${path}`, error);
+    },
   });
-  return result;
-}
-
-function neverDefer(): boolean {
-  return false;
-}
-
-/**
- * Audio extensions for which we defer the byte-load by default. Mirrors the codec fallback chain in {@link
- * audioFallbackPaths} so a chart's `#WAV xx.wav` declaration finds the deferred `xx.opus` / `.ogg` / `.mp3` file as
- * transparently as it found the eager bytes before.
- */
-const AUDIO_EXTENSIONS = new Set(['.wav', '.ogg', '.mp3', '.opus', '.flac', '.oga']);
-
-function isAudioPath(path: string): boolean {
-  const dot = path.lastIndexOf('.');
-  if (dot < 0) return false;
-  const slash = path.lastIndexOf('/');
-  if (slash > dot) return false;
-  return AUDIO_EXTENSIONS.has(path.slice(dot).toLowerCase());
 }
 
 /**
