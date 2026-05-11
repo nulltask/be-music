@@ -15,7 +15,7 @@ Regarding the acceptance rules of musical score formats and the meaning of IR, p
 
 This document covers the results returned by `autoPlay()` and `manualPlay()`, as well as the judgment, display, and audio processing they use internally.
 Invocation methods such as `@be-music/player-tui` CLI arguments, configuration file persistence, and Node worker communication are not covered.
-The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior lives in `@be-music/player-tui`, while PixiJS scenes, LR2 skin rendering, browser file loading, and WebAudio lifecycle are documented separately in [Browser player implementation notes](./player-web.md).
+The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior lives in `@be-music/player-tui`, while PixiJS scenes, LR2/beatoraja skin rendering, browser file loading, and WebAudio lifecycle are documented separately in [Browser player implementation notes](./player-web.md).
 
 The core engine defaults to the LR2-compatible `GROOVE` gauge, which corresponds to LR2's `NORMAL` gauge.
 The exported gauge helper also supports `HARD`, `DEATH`, and `EASY` for browser PLAY OPTION controls. The bundled terminal player currently has no gauge-type switch.
@@ -28,66 +28,66 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 ### Supported channels
 
-| channel | Handling in player |
-| --- | --- |
-| `#xxx01` | Play as BGM / sample trigger. |
-| `#xxx02` | Reflected in time resolution and beat resolution as bar length. |
-| `#xxx03`, `#xxx08` | Reflected in time resolution as BPM change. |
-| `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2. |
-| `#xxx06` | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback. |
-| `#xxx09` | Reflects in time resolution as STOP. |
-| `#xxx11-19`, `#xxx21-29` | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY. |
-| `#xxx31-39`, `#xxx41-49` | Treated as invisible notes. It is used for manual input suggestions and display aids, but is not included in `summary.total`. `AUTO` does not produce a sound. |
-| `#xxx51-59`, `#xxx61-69` | Treated as BMS legacy long note. |
-| `#xxx97`, `#xxx98` | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that. |
-| `#xxxA0` | Treated as a dynamic judgment width change that refers to `#EXRANKxx`. |
-| `#xxxSC` | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference. |
-| `#xxxSP` | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference. |
-| `#xxxD1-D9`, `#xxxE1-E9` | Treated as a landmine. |
+| channel                      | Handling in player                                                                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                     | Play as BGM / sample trigger.                                                                                                                                  |
+| `#xxx02`                     | Reflected in time resolution and beat resolution as bar length.                                                                                                |
+| `#xxx03`, `#xxx08`           | Reflected in time resolution as BPM change.                                                                                                                    |
+| `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2.                                                                                                                           |
+| `#xxx06`                     | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                         |
+| `#xxx09`                     | Reflects in time resolution as STOP.                                                                                                                           |
+| `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY.                              |
+| `#xxx31-39`, `#xxx41-49`     | Treated as invisible notes. It is used for manual input suggestions and display aids, but is not included in `summary.total`. `AUTO` does not produce a sound. |
+| `#xxx51-59`, `#xxx61-69`     | Treated as BMS legacy long note.                                                                                                                               |
+| `#xxx97`, `#xxx98`           | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                              |
+| `#xxxA0`                     | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                         |
+| `#xxxSC`                     | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                             |
+| `#xxxSP`                     | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                  |
+| `#xxxD1-D9`, `#xxxE1-E9`     | Treated as a landmine.                                                                                                                                         |
 
 ### Supported commands
 
-| command | Handling in player |
-| --- | --- |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT` | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens. |
-| `#BANNER` | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose. |
-| `#STAGEFILE` | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay. |
-| `#PLAYLEVEL`, `#DIFFICULTY` | Used to display, sort, filter, and display the results of the song selection screen. |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP` | Used for time resolution. |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL` | Used for judgment range, display rank, groove gauge calculation. |
-| `#WAVxx`, `#BMPxx` | Used for audio/BGA resource resolution. |
-| `#BASE` | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values. |
-| `#PREVIEW` | Used preferentially for preview playback on the song selection screen. |
-| `#PATH_WAV` | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play. |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ` | Used to interpret BMS long notes. |
-| `#PLAYER` | Used for mode estimation and display player lane metadata. |
-| `#VOLWAV` | Used as a volume multiplier for the entire score. |
-| `#POORBGA` | Used to override the default value of POOR images. |
-| `#SCROLLxx`, `#SPEEDxx` | Used to calculate note drawing distance. |
-| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts. |
+| command                                                                                                                                 | Handling in player                                                                                                                                                   |
+| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens.                                    |
+| `#BANNER`                                                                                                                               | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose.                                                        |
+| `#STAGEFILE`                                                                                                                            | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay.                                     |
+| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | Used to display, sort, filter, and display the results of the song selection screen.                                                                                 |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | Used for time resolution.                                                                                                                                            |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | Used for judgment range, display rank, groove gauge calculation.                                                                                                     |
+| `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                              |
+| `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values. |
+| `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                               |
+| `#PATH_WAV`                                                                                                                             | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play.                                              |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                    |
+| `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                           |
+| `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                    |
+| `#POORBGA`                                                                                                                              | Used to override the default value of POOR images.                                                                                                                   |
+| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | Used to calculate note drawing distance.                                                                                                                             |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts.                                                                                                                   |
 
 ### Unsupported channels
 
-| channel | Current player implementation |
-| --- | --- |
-| `#xxxA6` | It is not supported as a runtime reflection channel for `#CHANGEOPTIONxx`. Even if it is kept as an event, the player runtime does not refer to it. |
+| channel                                                                                                                      | Current player implementation                                                                                                                                                                                                             |
+| ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxxA6`                                                                                                                     | It is not supported as a runtime reflection channel for `#CHANGEOPTIONxx`. Even if it is kept as an event, the player runtime does not refer to it.                                                                                       |
 | Performance-related expansion channels such as `#xxx1A-1Z` and `#xxx2A-2Z` that are not included in the above supported list | are not treated as playable note channels in the current runtime. Although there is display mode estimation and input assignment for `24 KEY SP` / `48 KEY DP`, these channels themselves do not become the target notes for score/judge. |
-| Other object channels that are not included in the above list of correspondence | Even if the parser holds them, the player runtime does not interpret them. |
+| Other object channels that are not included in the above list of correspondence                                              | Even if the parser holds them, the player runtime does not interpret them.                                                                                                                                                                |
 
 ### Unsupported commands
 
-| command | Current player implementation |
-| --- | --- |
-| `#TEXTxx`, `#TEXT00` | The parser is retained, but it is not used for player display or runtime performance. |
-| `#OPTION`, `#CHANGEOPTIONxx` | Parser is retained, but forced play-option changes are not supported by the core runtime. |
-| `#WAVCMD`, `#EXWAVxx` | Parser is retained. The bundled Node realtime audio session does not apply them, while audio-renderer and browser WebAudio apply the implemented volume subset (`#WAVCMD 01` and `#EXWAVxx v`). Pitch, loop, pan, and frequency parameters are still unsupported. |
-| `#BACKBMP` | The core/terminal runtime has no dedicated behavior for this command. Browser LR2 special graphics can use it. |
-| `#MAKER` | Metadata-only/unsupported. |
-| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | The parser retains them. The terminal/core runtime does not apply them, while the browser player renders the implemented BGA sub-region, switching, tint, and alpha subset. |
-| `#BASEBPM` | The parser is retained, but the player is not used for time resolution. |
-| `#VIDEOFILE` | The parser is retained, but it is not used for BGA video resolution in the player. Real-world video playback only handles video files referenced with `#BMPxx`. |
-| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` | Retains the parser but does not refer to the player runtime. |
-| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | Not supported by the current player implementation. |
+| command                                                                                                                                     | Current player implementation                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#TEXTxx`, `#TEXT00`                                                                                                                        | The parser is retained, but it is not used for player display or runtime performance.                                                                                                                                                                             |
+| `#OPTION`, `#CHANGEOPTIONxx`                                                                                                                | Parser is retained, but forced play-option changes are not supported by the core runtime.                                                                                                                                                                         |
+| `#WAVCMD`, `#EXWAVxx`                                                                                                                       | Parser is retained. The bundled Node realtime audio session does not apply them, while audio-renderer and browser WebAudio apply the implemented volume subset (`#WAVCMD 01` and `#EXWAVxx v`). Pitch, loop, pan, and frequency parameters are still unsupported. |
+| `#BACKBMP`                                                                                                                                  | The core/terminal runtime has no dedicated behavior for this command. Browser LR2 special graphics can use it.                                                                                                                                                    |
+| `#MAKER`                                                                                                                                    | Metadata-only/unsupported.                                                                                                                                                                                                                                        |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx`                                                                                                 | The parser retains them. The terminal/core runtime does not apply them, while the browser player renders the implemented BGA sub-region, switching, tint, and alpha subset.                                                                                       |
+| `#BASEBPM`                                                                                                                                  | The parser is retained, but the player is not used for time resolution.                                                                                                                                                                                           |
+| `#VIDEOFILE`                                                                                                                                | The parser is retained, but it is not used for BGA video resolution in the player. Real-world video playback only handles video files referenced with `#BMPxx`.                                                                                                   |
+| `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET`                                                                                        | Retains the parser but does not refer to the player runtime.                                                                                                                                                                                                      |
+| `#SONGxx`, `#EXBPMxx`, `#CHARFILE`, `#ExtChr`, `#CDDA`, `#VIDEOFPS`, `#VIDEODLY`, `#VIDEOCOLORS`, `#SEEK`, `#MATERIALSBMP`, `#MATERIALSWAV` | Not supported by the current player implementation.                                                                                                                                                                                                               |
 
 ## Execution flow
 

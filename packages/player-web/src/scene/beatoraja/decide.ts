@@ -14,8 +14,6 @@
 //
 // What this scene does NOT do:
 //   - Score-best-record lookups (no DB layer)
-//   - Audio cues (the LR2 splash plays a per-theme `decide.wav`; beatoraja themes typically
-//     bundle their own — wiring decide BGM is a follow-up patch)
 //   - Per-side (1P / 2P) chart info — only single-player decide is exercised today.
 
 import { Container, Graphics, type Ticker } from 'pixi.js';
