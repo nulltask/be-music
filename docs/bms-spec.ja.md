@@ -59,7 +59,8 @@
 - [x] メタヘッダ `#GENRE` を解釈
 - [x] メタヘッダ `#COMMENT` を解釈
 - [x] `#SUBARTIST` を `metadata.extras.SUBARTIST` として保持し、player の選曲画面 metadata に使用
-- [x] `#BANNER` を `metadata.extras.BANNER` として保持し、player の選曲画面 banner に使用
+- [x] `#BACKBMP` を browser LR2 special graphic 向けに `metadata.backBmp` として保持
+- [x] `#BANNER` を `metadata.banner` として保持し、player の選曲画面 banner に使用
 - [x] メタヘッダ `#STAGEFILE` を解釈
 - [x] `#STAGEFILE` を選曲後の loading screen 専用画像として表示
 - [x] メタヘッダ `#PLAYLEVEL` を解釈
@@ -171,6 +172,10 @@
 - [x] `#xxx98` を playable/key 側の動的音量変更として解釈
 - [x] `#EXRANKxx` と `#xxxA0` を player の動的判定幅変更として解釈
 - [x] `#BPMxx` による LR2 100001倍 BPM 系ギミックを時刻解決でサポート
+- [x] すべての `#WAVCMD` 行を `bms.wavCmds` に保持し、audio-renderer と browser WebAudio では `01` volume parameter を反映
+- [x] `#EXWAVxx` を parse し、`v` volume parameter を audio-renderer と browser WebAudio で反映
+- [x] `#BASEBPM` を `@be-music/chart` 経由で browser HS-FIX calibration の reference BPM として使用
+- [x] Browser player で `#BGAxx` sub-region BGA、`#SWBGAxx` switching BGA、`#ARGBxx` / `#EXBMPxx` tint/alpha を反映
 
 ### `#BASE`
 
@@ -245,7 +250,7 @@ runtime と round-trip の扱い:
 - [x] `#LNOBJ` 複数宣言時の扱い（`bms.lnObjs` に宣言順保持）
 - [x] `#LNOBJ` 終端での Keyup 発音拡張の互換方針（HDX Keyup は非採用、終端トリガは抑止）
 - [x] `#xxx51-69` と `#LNOBJ` が競合する譜面での優先順位定義（同一レーン・同一位置は `#xxx51-69` 優先）
-- [ ] ヘッダ `#BACKBMP` / `#MAKER` の専用解釈
+- [ ] ヘッダ `#MAKER` の専用解釈
 - [ ] `#SUBTITLE` / `#SUBARTIST` / `#COMMENT` の複数行定義（Multiplex）の解釈
 - [ ] 旧式互換ヘッダ `#SONGxx` を `#TEXTxx` 相当として扱う規則
 - [ ] 互換ヘッダ `#EXBPMxx` の読み取り方針（`#BPMxx` との差分）
@@ -254,7 +259,7 @@ runtime と round-trip の扱い:
 - [ ] 旧動画系ヘッダ `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK` 系の扱い
 - [ ] 素材分離ヘッダ `#MATERIALSBMP` / `#MATERIALSWAV` の扱い
 - [x] `#STP` の実時間反映
-- [ ] `#WAVCMD` の実行仕様（現状は保持のみ）
+- [ ] `#WAVCMD` の pitch / loop 実行。現状の runtime support は audio-renderer と browser WebAudio の `01` volume parameter のみです。
 - [ ] `#OPTION` 複数行の同時適用ルール（現状は単一値保持）
 - [ ] オブジェクトチャンネル `#xxxA6`（`#CHANGEOPTIONxx`）の実行時反映
 - [ ] `#TEXTxx` / `#TEXT00` のプレイ中表示挙動（現状は保持のみ）
@@ -266,10 +271,11 @@ runtime と round-trip の扱い:
 - [ ] 同一タイムラインでの `#xxx08` と `#xxx09` の競合時優先順位
 - [ ] `#BPMxx` の不正値（負数/ゼロ/文字列/指数表記など）入力時の互換挙動
 - [x] `#STP` 書式 `xxx[.yyy] zzzz` と省略形 `xxx zzzz` の timing 解釈
-- [ ] `#BGAxx` 詳細定義（切り出し/配置パラメータ）の解釈と描画反映
+- [x] Browser player: `#BGAxx` の sub-region 切り出し/配置パラメータ解釈
 - [ ] `#@BGAxx` の実行時反映（分岐/条件付き BGA 定義）
-- [ ] `#SWBGAxx` の実行時反映（条件に応じた BGA 切替）
-- [ ] `#ARGBxx` の実行時反映（透過・合成パラメータ）
+- [x] Browser player: `#SWBGAxx` の実行時反映（条件に応じた BGA 切替）
+- [x] Browser player: `#ARGBxx` / `#EXBMPxx` の実行時反映（透過・合成パラメータ）
+- [ ] CLI/TUI での `#BGAxx`、`#SWBGAxx`、`#ARGBxx`、`#EXBMPxx` 反映
 - [ ] `#DEFEXRANK 0` を含む境界値の判定幅解釈
 - [ ] `#PATH_WAV` を再生/レンダリング時の実ファイル解決に適用
 - [x] チャンネル `0A` (BGA LAYER2) の描画対応
@@ -295,13 +301,13 @@ runtime と round-trip の扱い:
 - [ ] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針
 - [ ] 制御構文の別表記 `#ELSE IF` / `#END IF` / `#END` の受理方針
 - [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
-- [ ] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
-- [ ] Bemuse 拡張チャンネル `#xxxSP`（spacing factor）の受理と描画反映
+- [x] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
+- [x] Bemuse 拡張チャンネル `#xxxSP`（spacing factor）の受理と描画反映
 - [ ] Bemuse 拡張行 `#EXT #xxxyy:...` の受理規則（通常オブジェクトとの差分）
 - [ ] 256x256 超過 BGA（oversize BGA）の描画方針（切り抜き・縮小・配置）
 - [x] BGA 合成の最大レイヤ数と優先順位（通常時は 3 層: `04` < `07` < `0A`、POOR 表示中は POOR を最優先）
 - [ ] 動画 BGA に対する `#ARGBxx` / `#BGAxx` パラメータ適用の有無
-- [ ] `#BASEBPM` の実時間反映（速度表示・HI-SPEED 計算・内部時刻計算）方針
+- [ ] `#BASEBPM` の core time-resolution 反映方針。browser HS-FIX は視覚上の reference BPM として使いますが、内部 chart timing は BPM event に従います。
 - [ ] player: `#PLAYER` 未指定時の既定値 `1` を選曲画面・TUI・結果表示へ反映
 - [ ] player: `#PLAYER=2` / `#PLAYER=4` の表示と実装実態を一致させる（meta only 明示 or 専用モード実装）
 - [ ] editor: `setMetadata` / `set-meta` で `#PLAYER` を `metadata.extras` ではなく `bms.player` へ書き込む

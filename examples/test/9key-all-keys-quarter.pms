@@ -1,0 +1,86 @@
+*---------------------- METADATA FIELD
+
+#TITLE 9 KEY All-Lane Quarter Chord
+#SUBTITLE PMS-STD — simultaneous 9-key chord on every quarter note
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 1
+#TOTAL 200
+#DIFFICULTY 1
+
+*---------------------- EXTENDED HEADER FIELD
+* Authored as `.pms` with the PMS-STD channel layout: 1P side `11..15`
+* (POPN keys 1..5 = Z S X D C) plus 2P-side POPN columns `22..25` (POPN
+* keys 6..9 = F V G B). Every quarter note in measures 1..4 hits all
+* nine lanes simultaneously, so AUTO PLAY paints a column of 9 sprites
+* falling in unison and manual play requires a 9-finger chord on every
+* beat (= visual + timer-stamping verification, not playable hand-wise).
+*
+* This chart exists to validate:
+*   - PMS-STD channel layout (`POPN_9KEY_PMS_BINDINGS` routes 22..25 → lanes 6..9)
+*   - 9-key chord rendering with the maximum simultaneous-press count
+*   - The skin's `play_9.lr2skin` / `play_9.json` lane chrome lines up
+*     all 9 sprite columns
+
+#PLAYER 1
+#LNTYPE 1
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 — empty count-in (one bar of silence so the player can read
+* the first chord before it lands)
+
+* Measures 1..4 — quarter-note chord on every lane.
+* Encoding: 8 chars / 2 = 4 slots per channel = 4 quarter notes per measure,
+* with `01` (= #WAV01) at every position.
+
+* Measure 1
+#00111:01010101
+#00112:01010101
+#00113:01010101
+#00114:01010101
+#00115:01010101
+#00122:01010101
+#00123:01010101
+#00124:01010101
+#00125:01010101
+
+* Measure 2
+#00211:01010101
+#00212:01010101
+#00213:01010101
+#00214:01010101
+#00215:01010101
+#00222:01010101
+#00223:01010101
+#00224:01010101
+#00225:01010101
+
+* Measure 3
+#00311:01010101
+#00312:01010101
+#00313:01010101
+#00314:01010101
+#00315:01010101
+#00322:01010101
+#00323:01010101
+#00324:01010101
+#00325:01010101
+
+* Measure 4
+#00411:01010101
+#00412:01010101
+#00413:01010101
+#00414:01010101
+#00415:01010101
+#00422:01010101
+#00423:01010101
+#00424:01010101
+#00425:01010101
+
+*---------------------- CONTROL FLOW FIELD

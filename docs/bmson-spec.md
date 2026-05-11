@@ -42,11 +42,16 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] `l` in `sound_channels[].notes[]`
 - [x] `c` in `sound_channels[].notes[]`
 - [x] `measure` / `position` resolution using `lines`
-- [x] `x <= 0` (or unspecified) Interpret notes as background music (`01`)- [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
+- [x] Interpret `x <= 0` or omitted `x` as background music (`01`)
+- [x] Read the beatoraja `key_channels` extension as landmine channels and keep per-note `damage`
+- [x] Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into unified `metadata.backBmp`, `metadata.banner`, and `metadata.stageFile`
+- [x] Treat an explicit `lines: []` as barline suppression and keep it in `bmson.barlinesSuppressed`
+- [x] Treat missing `lines` as the bmson 4/4 default model
+- [x] Treat missing or non-positive `info.total` as the bmson default `100`
+- [x] Treat missing, zero, negative, or non-numeric `info.init_bpm` as a parse error
+- [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
 - [ ] Clarification of policy for determining compatibility of `version` with SemVer
-- [ ] `info.init_bpm` Treat unspecified as a fatal error
 - [ ] Error policy when required information such as `info.title` / `artist` / `genre` is missing
-- [ ] Fixed completion rule assuming 4/4 (`resolution * 4` interval) when `lines` is not specified.
 - [ ] `sound_channels[].name` extension fallback search (`.wav`/`.ogg`/`.m4a`)
 - [ ] `sound_channels[].name` path normalization (`\` and `/`) and directory traversal prevention
 - [ ] `sound_channels[].notes[]` Priority rules when `c=true/false` are mixed in the same pulse
@@ -54,7 +59,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [ ] `stop_events` Same `y` "Addition" normalization when overloaded
 - [ ] When the same `id` of `bga.bga_header` is defined multiple times, it is interpreted as the winner.
 - [ ] Acceptance of `info.title_image` and retention in IR
-- [ ] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
+- [x] Retention rules for `key:value` format (`music:`/`chart:` etc.) of `subartists`
 - [ ] Transparent preservation of unknown root keys
 
 ### stringifier (`@be-music/json` -> bmson)
@@ -81,6 +86,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] `bga.bga_events` output
 - [x] `bga.layer_events` output
 - [x] `bga.poor_events` output
+- [x] Preserve explicit `lines: []` through `bmson.barlinesSuppressed`
 - [ ] `bpm_events` Normalize and output events with the same `y` to "last priority"
 - [ ] `stop_events` Add and normalize events of the same `y` and output
 - [ ] Output of `info.title_image`
@@ -99,10 +105,11 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] Time resolution using `stop_events`
 - [x] Sample continuation offset interpretation with `notes.c`
 - [x] Long note end interpretation using `notes.l`
-- [ ] `bga.bga_events` playback reflection
-- [ ] `bga.layer_events` playback reflection
-- [ ] `bga.poor_events` playback reflection
-- [ ] Video BGA playback
+- [x] Shared BGA timeline extraction for `bga.bga_events`
+- [x] Shared BGA timeline extraction for `bga.layer_events`
+- [x] Shared BGA timeline extraction for `bga.poor_events`
+- [x] Browser player renders bmson BGA still/video assets through the shared BGA timeline
+- [ ] CLI/TUI BGA resource loading for bmson header filenames
 - [ ] Fixed the processing order of the same pulse (Note/BGA → BPM → STOP) as specified.
 - [ ] Apply `bpm_events` of the same `y` with priority to the end
 - [ ] Add and apply `stop_events` of the same `y`
@@ -115,6 +122,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `bpm_events`, `stop_events`, `bga`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`
+- `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
 ## bmson -> BMS/BMSON intermediate representation (`@be-music/json`) conversion
@@ -123,6 +131,9 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Keep `lines[].y` in `preservation.bmson.lines`
 - Keep `info.resolution` in `bmson.info.resolution`
 - Also read the root `resolution` for compatibility, and adopt it if `info.resolution` is not present.
+- Reject the document when `info.init_bpm` is missing or not a positive finite number.
+- Use `info.total` as-is when finite, otherwise apply the bmson default `100`.
+- Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into normalized metadata image fields.
 - Register `sound_channels[i].name` in `resources.wav[key]`
 - Convert `key = base36(i + 1)` to 2 digits
 - Convert `notes[].y` to fractional position and turn it into an event
@@ -135,6 +146,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
 - Original array of `stop_events` is kept in `preservation.bmson.stopEvents`
 - Original array of `sound_channels` is kept in `preservation.bmson.soundChannels`
+- `key_channels` entries are registered after `sound_channels`, routed through the same `mode_hint` lane map, converted to BMS landmine channels, and keep `events[].bmson.damage`
 - `bga` is kept in `bmson.bga`
 
 ## BMS/BMSON intermediate representation -> BMSON conversion (stringifier)
@@ -145,6 +157,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Output extended items of `bmson.info` (`subartists`, `chart_name`, `judge_rank`, `total`, image/preview etc.)
 - If `preservation.bmson.lines` exists, output as `lines[].y`
 - If `preservation.bmson.lines` is not present, `lines` will be automatically generated from the bar length of IR.
+- If `bmson.barlinesSuppressed` is `true`, output `lines: []`.
 - `sound_channels` outputs in `wav` keys
 - Generate `bpm_events` from `03` / `08` channels
 - Generate `stop_events` from `09` channel

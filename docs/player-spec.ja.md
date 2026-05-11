@@ -2,7 +2,7 @@
 
 # Player 実装仕様
 
-この文書は、`@be-music/player` の実行時仕様を定義します。
+この文書は、共有 `@be-music/player` core engine の実行時仕様を定義します。
 譜面フォーマットの受理規則や IR の意味は [`bms-spec.md`](./bms-spec.ja.md)、[`bmson-spec.md`](./bmson-spec.ja.md)、[`json-spec.md`](./json-spec.ja.md) を優先し、この文書では player がそれらをどのように再生・判定・表示するかだけを扱います。
 
 ## 目的
@@ -14,11 +14,11 @@
 ## 対象範囲
 
 この文書が対象にするのは、`autoPlay()` と `manualPlay()` が返す結果、およびそれらが内部で使う判定・表示・音声処理です。
-CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
-browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用しますが、PixiJS scene、LR2 skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
+`@be-music/player-tui` の CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
+terminal player と browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用します。Terminal UI の挙動は `@be-music/player-tui` 側にあり、PixiJS scene、LR2 skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
 
-現時点で実装しているゲージは Lunatic Rave 2 互換の `NORMAL` groove gauge のみです。
-`HARD` / `EX-HARD` / `HAZARD` / 段位ゲージは未実装です。
+core engine の既定ゲージは LR2 の `NORMAL` gauge に相当する `GROOVE` gauge です。
+export している gauge helper は browser PLAY OPTION control 向けに `HARD`、`DEATH`、`EASY` も扱います。bundled terminal player には現時点で gauge type switch はありません。
 
 ## BMS 対応範囲
 
@@ -79,9 +79,11 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | command | 現在の player 実装 |
 | --- | --- |
 | `#TEXTxx`, `#TEXT00` | parser は保持しますが、player の表示や runtime 演出には使いません。 |
-| `#OPTION`, `#CHANGEOPTIONxx`, `#WAVCMD` | parser は保持しますが、play option の強制変更や `WAVCMD` 実行は未対応です。 |
-| `#BACKBMP`, `#MAKER` | player runtime 専用の表示・挙動は未実装です。 |
-| `#EXWAVxx`, `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | parser は保持しますが、player runtime は参照しません。 |
+| `#OPTION`, `#CHANGEOPTIONxx` | parser は保持しますが、core runtime での play option 強制変更は未対応です。 |
+| `#WAVCMD`, `#EXWAVxx` | parser は保持します。bundled Node realtime audio session は適用しませんが、audio-renderer と browser WebAudio は実装済みの volume subset (`#WAVCMD 01` と `#EXWAVxx v`) を反映します。pitch、loop、pan、frequency parameter は未対応です。 |
+| `#BACKBMP` | core/terminal runtime には専用挙動がありません。browser LR2 special graphic はこの値を利用できます。 |
+| `#MAKER` | metadata-only / unsupported です。 |
+| `#EXBMPxx`, `#BGAxx`, `#SWBGAxx`, `#ARGBxx` | parser は保持します。terminal/core runtime は適用しませんが、browser player は BGA sub-region、switching、tint、alpha の実装済み subset を描画します。 |
 | `#BASEBPM` | parser は保持しますが、player は時間解決に使いません。 |
 | `#VIDEOFILE` | parser は保持しますが、player の BGA 動画解決には使いません。現実装の動画再生は `#BMPxx` で参照した動画ファイルだけを扱います。 |
 | `#MIDIFILE`, `#MATERIALS`, `#DIVIDEPROP`, `#CHARSET` | parser は保持しますが、player runtime は参照しません。 |
@@ -380,23 +382,27 @@ combo bonus は 1 ノートごとに最大 10 段階まで加算します。
 
 ### 基本方針
 
-- `NORMAL` groove gauge は Lunatic Rave 2 の既定値に合わせます。
-- ゲージ表示範囲は `0-100%` ではなく、内部値 `2-100%` を使います。
-- クリア判定は演奏終了時のゲージ `80%以上` です。
+- 既定の `GROOVE` gauge は Lunatic Rave 2 の `NORMAL` gauge に合わせます。
+- `GROOVE` / `EASY` は soft floor を持ち、`HARD` / `DEATH` は `0%` まで落ちます。
+- クリア判定は gauge type ごとの threshold を演奏終了時に判定します。
 
 ### 初期値と既定値
 
-- 初期ゲージは `20%`
-- 演奏中の下限は `2%`
+- 既定 `GROOVE` の初期ゲージは `20%`
+- 既定 `GROOVE` の演奏中下限は `2%`
 - 上限は `100%`
-- クリアラインは `80%`
+- 既定 `GROOVE` のクリアラインは `80%`
 - `#TOTAL` 未指定時の既定値は `160`
 - `#TOTAL` 指定時はその値をそのまま使います
+
+`HARD` と `DEATH` は `100%` から始まり `0%` まで落ちます。`EASY` は `20%` から始まり、`2%` floor を持ち、`60%` で clear です。
 
 ### 増減量
 
 `noteCount` は TOTAL / EX-SCORE / SCORE の対象になる演奏ノート数です。
 FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めません。
+
+次の delta は既定の `GROOVE` gauge 向けです。`HARD`、`DEATH`、`EASY` は [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) にある variant-specific delta を使います。
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -407,7 +413,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 - `POOR`: `-6`
 - 手動地雷ヒット: `-(mineValue(base36) / 2)`
 
-ゲージ更新後の値は `2-100%` に clamp します。
+ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
 ## ロングノート
 
@@ -454,8 +460,7 @@ long note の確定タイミングは `AUTO` と同じく終点です。
 ### `MANUAL`
 
 `MANUAL` は入力トークンに対応するレーン集合から、`BAD` 窓内で最も適切な候補ノートを選びます。
-候補がない場合は何も起こりません。
-keysound fallback が存在する場合は、その音だけを鳴らせます。
+候補がない場合、runtime は keysound fallback があれば先に再生し、その後 FREE ZONE 上のチャンネルまたは long-note repeat-suppress 窓内でない限り、LR2 互換の空POORを適用します。
 
 手動入力では、ノート未入力のまま `BAD` 窓を過ぎた対象を自動的に `POOR` とします。
 不可視ノートはこの miss 判定の対象に含めません。
@@ -631,7 +636,7 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 
 ## 既知の未対応
 
-- LR2 の `NORMAL` 以外のゲージ種別
-- ゲージ種別切り替えオプション
+- terminal player と core `autoPlay()` / `manualPlay()` result path での gauge type switching
+- browser gameplay での 2P 独立 gauge variant
 - ゲージ推移タイムライン表示
 - `AUTO` での `#LNMODE` 分岐

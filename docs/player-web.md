@@ -16,10 +16,10 @@ The browser runtime uses these adapter modules:
 
 | module | role |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
-| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
-| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
-| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
+| [`web-audio-session.ts`](../packages/player-web/src/runtime/web-audio-session.ts) | Implements the engine's `AudioSession` contract with Web Audio. It handles immediate triggers, BGM scheduling, channel stops, pause/resume, key/BGM routing, dynamic volume changes, bmson `c=true` continuation, and `#WAVCMD` gain. |
+| [`web-input-runtime.ts`](../packages/player-web/src/runtime/web-input-runtime.ts) | Maps DOM `keydown` / `keyup` events to the engine input bus. It filters OS auto-repeat, routes `Escape` / `F5` / `Space` to command events, and sends lane presses with physical event timestamps. |
+| [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts) | Drains engine UI signals into the Pixi host. Frame snapshots update notes, score, gauge, and result state; commands drive lane flashes, key holds, POOR BGA, and judge/combo effects. |
+| [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts) | Wires audio, input, and UI adapters together and invokes `manualPlay` / `autoPlay` for one chart play. |
 
 `@be-music/player/core/engine` no longer imports `node:path` / `node:timers/promises`, so the module can be
 bundled into the browser as-is. The Node-only `createNodeAudioSink` backend is loaded lazily and is never reached
@@ -29,7 +29,7 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
 
 - `@be-music/player-web` provides browser-friendly song loading, preview playback, LR2 skin parsing, PixiJS scenes, WebAudio bus construction, and gameplay recording.
 - `@be-music/player-web-demo` is a private Vite application that wires the core package to drag-and-drop loading, theme loading, debug controls, and recording controls.
-- The browser player supports both BMS/BME/BML/PMS and bmson charts through the same parser and player helpers used by the CLI.
+- The browser player supports both BMS/BME/BML/PMS and bmson charts through the same parser, chart, and player helpers used by the shared core and terminal player.
 
 ## Running the demo
 
@@ -73,8 +73,14 @@ Implemented skin features include:
 
 The demo also loads LR2 theme BGM and system sounds for select and decide screens when those files exist in the dropped theme.
 
-Scene-independent LR2 Pixi helpers live in [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) and
-[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts). They handle destination keyframe evaluation,
+See [LR2 skin implementation notes](./lr2-skin.md) for the renderer-independent parser and theme-loader boundary.
+The default LR2 skin is the verified compatibility target; custom themes work best when they stay within the implemented directive families.
+
+The select scene exposes in-scene LR2 PLAY OPTION controls for hi-speed, autoplay, BGA mode/size, filters, sort, HS-FIX, HIDDEN/SUDDEN, lane cover, auto scratch, DP flip, 1P/2P random and mirror modes, and gauge variants.
+Select-time options are carried into gameplay during chart preparation.
+
+Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) and
+[`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts). They handle destination keyframe evaluation,
 sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
 state-specific value resolution, timers, and input behavior.
 
@@ -113,11 +119,13 @@ pnpm bench -- --packages player-web
 - `?compressor=legacy` keeps the old single-compressor shape for comparison.
 - `?compressor=off` disables compressor construction in the demo.
 - BGA supports still images and video assets referenced by chart BGA events.
+- BMS rendering applies the implemented `#BGAxx` sub-region, `#SWBGAxx` switching, and `#ARGBxx` / `#EXBMPxx` tint and alpha subset.
+- bmson rendering uses `bga.bga_events`, `bga.layer_events`, and `bga.poor_events`; unlike BMS layer channels, bmson layer images preserve black pixels instead of treating black as transparent.
 - The browser demo can transcode unsupported video assets through the ffmpeg.wasm path before playback.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
 
 ## Compatibility boundary
 
 The browser player is a runtime consumer of the repository's shared parser, chart, audio-renderer, player, and utils packages.
-When browser behavior diverges from the CLI player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
+When browser behavior diverges from the terminal player, prefer moving pure path, timing, scroll, lookup, or event-mapping helpers into shared packages and covering them with package-local tests.
 PixiJS scene wiring can remain in `player-web` when the behavior depends on browser rendering or WebAudio resources.

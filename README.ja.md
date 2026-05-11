@@ -12,7 +12,9 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/parser`: `.bms` / `.bme` / `.bml` / `.pms` / `.bmson` / JSON のパーサ
 - `@be-music/stringifier`: JSON から `.bms` / `.bmson` への文字列化
 - `@be-music/audio-renderer`: 譜面をレンダリングして `.wav` / `.aiff` を出力
-- `@be-music/player`: CLI プレイヤー (オートプレイ / キーボード演奏 / TUI)
+- `@be-music/player`: 再生 engine、timing、判定、score、gauge、BGA timeline、UI/audio adapter 契約を共有する core package
+- `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend
+- `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/player-web`: 選曲、LR2 skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
 - `@be-music/player-web-demo`: folder / ZIP drop、LR2 theme、debug control、browser 再生を接続する private Vite demo
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
@@ -53,7 +55,7 @@ pnpm run release:version
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
 - release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
 - その状態で `devel -> main` の release PR を merge すると、version が上がった package だけ GitHub Release が個別に作成されます
-- `@be-music/player` と `@be-music/audio-renderer` は個別 release に SEA zip が添付されます
+- player SEA 実行ファイルは `@be-music/player-tui` から build し、`@be-music/player` release に添付します。`@be-music/audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
 tag は `@be-music/package-name@x.y.z` 形式で作成されます。
@@ -66,6 +68,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
+- [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
 - [用語集](docs/glossary.ja.md)
 
@@ -81,12 +84,15 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - BMS 拡張ヘッダ (`#PREVIEW`, `#LNTYPE`, `#LNMODE`, `#LNOBJ`, `#VOLWAV`, `#SCROLLxx`, `#VIDEOFILE` など) を保持
 - BMSON の `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga` を解釈
 - BMS テキストの文字コード推測 (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1` など)
+- BMSON の `info.init_bpm` は parser が必須扱いにし、欠落・不正値は `130` fallback ではなく早期 error にします
+- BMSON の `key_channels` mine note を `mode_hint` lane resolver 経由で map し、mine ごとの `damage` を保持
 
 ### stringifier (`@be-music/stringifier`)
 
 - 中間表現(JSON) から BMS/BMSON を出力
 - `position: [numerator, denominator]` を使って小節解像度を安定再現
 - BMSON 拡張情報 (`info` 拡張, `bga`, `notes.l/c`) を出力
+- `preservation` layer が normalized event と一致している場合、BMS source 構造を優先して再出力
 
 ### audio-renderer (`@be-music/audio-renderer`)
 
@@ -95,8 +101,17 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - サンプル読込: `WAV` / `MP3` / `OGG` (Vorbis/Opus) / `OPUS`
 - 小節長 / BPM / STOP を反映
 - LR2 系の 100001 倍 BPM ギミック値を時刻解決で処理
+- `#VOLWAV`、`#xxx97` / `#xxx98`、BMSON `notes.c`、`#WAVCMD 01 xx vv`、`#EXWAVxx v` の volume scaling を反映
 
-### player (`@be-music/player`)
+### player core (`@be-music/player`)
+
+- terminal と browser runtime が共有する `autoPlay()` / `manualPlay()` engine
+- lane flash、POOR BGA command、frame snapshot、pause、restart、high-speed change を流す UI / input signal bus
+- playable note、legacy long note、`#LNOBJ`、FREE ZONE、mine、invisible note の共通抽出
+- 判定幅、動的 `#EXRANKxx`、score、groove gauge、scroll distance、BGA timeline、result summary の共通意味論
+- `core/engine`、`core/bga-timeline`、`core/scroll-distance`、`core/groove-gauge`、`playable-notes` などの browser-safe subpath export
+
+### terminal player (`@be-music/player-tui`)
 
 - MANUAL / AUTO SCRATCH / AUTO の 3 モード
 - TUI プレイ画面と選曲画面
@@ -116,6 +131,14 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - 再生前 audio render (`--render-audio`) と bus ごとの音量調整 (`--volume`, `--bgm-volume`, `--key-volume`)
 - compressor / limiter の有効化切り替えと threshold / release 系の出力ダイナミクス調整
 - 構造化ログ出力 (`~/.be-music/logs/player.ndjson`, `--log-file` で上書き)
+- gameplay、TUI 描画、video BGA decode を分離する Node worker 構成
+
+### LR2 skin (`@be-music/lr2-skin`)
+
+- LR2 の select / decide / play / result skin CSV を PixiJS 非依存で parse
+- `#INCLUDE`、`#CUSTOMOPTION`、`#CUSTOMFILE`、`#LR2FONT`、system font、skin timer、op condition、play-skin variant を解決
+- image、number、text、slider、bargraph、button、BGA、judge line、measure line、gauge、score chart、result graph element を parse
+- case-insensitive / wildcard asset lookup、TGA decode、DXA archive extraction で theme asset を読み込み
 
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
@@ -123,10 +146,11 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
-- note、timing、scroll distance、BGA cue、score、result は CLI player と共通の再生意味論を使用
+- note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用
 - key / BGM / master を分けた compressor control 付き WebAudio preview / gameplay bus
 - BGA still / video 描画、browser-side video transcode fallback、WebM gameplay recording
 - 1 つの renderer context を所有する PixiJS scene host と scene transition 時の resource dispose
+- hi-speed、BGA mode/size、filter、sort、HS-FIX、lane cover、auto-scratch、DP flip、random/mirror、gauge variant を扱う LR2 PLAY OPTION control
 
 ### editor (`@be-music/editor`)
 
@@ -312,7 +336,7 @@ pnpm run editor export chart.json chart.bms
 
 - 判定種別: `PERFECT`, `GREAT`, `GOOD`, `BAD`, `POOR`
 - `FAST` / `SLOW` は `GREAT` / `GOOD` の早押し・遅押し時のみ加算
-- 対応する未判定ノートが存在しない空打鍵は、判定も groove gauge 変動も発生しません
+- 対応する未判定ノートが存在しない空打鍵は LR2-style empty POOR として扱います。judge counter、score、EX-SCORE、combo は変えませんが、empty POOR の gauge delta を適用し、POOR BGA を起動します
 - EX-SCORE:
   - `PERFECT = +2`
   - `GREAT = +1`
@@ -349,7 +373,7 @@ pnpm run player:sea
 pnpm run audio-renderer:sea
 
 # 生成物
-./packages/player/dist-sea/be-music-player chart.bms
+./packages/player-tui/dist-sea/be-music-player chart.bms
 ./packages/audio-renderer/dist-sea/be-music-audio-render chart.bms output.wav
 
 # Node 実行ファイルを明示する場合

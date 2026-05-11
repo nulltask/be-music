@@ -15,10 +15,10 @@ browser runtime は次の adapter module を使います。
 
 | module | 役割 |
 | --- | --- |
-| [`web-audio-session.ts`](../packages/player-web/src/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio で実装します。即時発音、BGM scheduling、channel stop、pause/resume、key/BGM routing、動的 volume change、bmson `c=true` continuation、`#WAVCMD` gain を扱います。 |
-| [`web-input-runtime.ts`](../packages/player-web/src/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の input bus へ写像します。OS auto-repeat を除外し、`Escape` / `F5` / `Space` を command event へ送り、lane press には物理 event timestamp を付けます。 |
-| [`web-ui-runtime.ts`](../packages/player-web/src/web-ui-runtime.ts) | engine UI signal を Pixi host へ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。 |
-| [`engine-driver.ts`](../packages/player-web/src/engine-driver.ts) | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。 |
+| [`web-audio-session.ts`](../packages/player-web/src/runtime/web-audio-session.ts) | engine の `AudioSession` 契約を Web Audio で実装します。即時発音、BGM scheduling、channel stop、pause/resume、key/BGM routing、動的 volume change、bmson `c=true` continuation、`#WAVCMD` gain を扱います。 |
+| [`web-input-runtime.ts`](../packages/player-web/src/runtime/web-input-runtime.ts) | DOM `keydown` / `keyup` を engine の input bus へ写像します。OS auto-repeat を除外し、`Escape` / `F5` / `Space` を command event へ送り、lane press には物理 event timestamp を付けます。 |
+| [`web-ui-runtime.ts`](../packages/player-web/src/runtime/web-ui-runtime.ts) | engine UI signal を Pixi host へ流します。frame snapshot は note、score、gauge、result state を更新し、command は lane flash、key hold、POOR BGA、judge/combo effect を駆動します。 |
+| [`engine-driver.ts`](../packages/player-web/src/runtime/engine-driver.ts) | audio、input、UI adapter を組み立て、1 譜面分の `manualPlay` / `autoPlay` を呼び出します。 |
 
 `@be-music/player/core/engine` は `node:path` / `node:timers/promises` 依存を排除済みで、 browser bundle にそのまま
 含められます。 `createNodeAudioSink` (Node 専用 audio backend) も lazy import なので、 host が
@@ -28,7 +28,7 @@ browser runtime は次の adapter module を使います。
 
 - `@be-music/player-web` は browser 向けの song loading、preview playback、LR2 skin parsing、PixiJS scene、WebAudio bus、gameplay recording を提供します。
 - `@be-music/player-web-demo` は core package を drag-and-drop loading、theme loading、debug control、recording control へ接続する private Vite application です。
-- browser player は CLI と同じ parser / player helper を通して BMS/BME/BML/PMS と bmson の譜面を扱います。
+- browser player は shared core と terminal player と同じ parser、chart、player helper を通して BMS/BME/BML/PMS と bmson の譜面を扱います。
 
 ## demo の起動
 
@@ -72,8 +72,14 @@ play skin は key variant (`5`, `7`, `9`, `10`, `14`) ごとにまとめ、play 
 
 demo は、dropped theme に存在する場合、select / decide screen 向けの LR2 theme BGM と system sound も読み込みます。
 
-scene に依存しない LR2 Pixi helper は [`lr2-render.ts`](../packages/player-web/src/lr2-render.ts) と
-[`lr2-scene-render.ts`](../packages/player-web/src/lr2-scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
+[LR2 skin 実装メモ](./lr2-skin.ja.md) では、renderer に依存しない parser と theme loader の境界をまとめています。
+LR2 default skin を verified compatibility target とし、custom theme は実装済み directive family の範囲に収まるほど安定して動きます。
+
+select scene は、hi-speed、autoplay、BGA mode/size、filter、sort、HS-FIX、HIDDEN/SUDDEN、lane cover、auto scratch、DP flip、1P/2P random / mirror mode、gauge variant を扱う LR2 PLAY OPTION control を scene 内で提供します。
+select 時の option は chart preparation 時に gameplay へ引き継ぎます。
+
+scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) と
+[`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
 
 ## Scene lifecycle
 
@@ -96,7 +102,7 @@ scene は `enter()`, `exit()`, `dispose()` を実装します。
 - `?renderer=webgl` で renderer 比較用に WebGL を強制できます。
 - skin / BGA texture は LR2 の pixel-art asset を保つため nearest sampling を使います。
 - gameplay path は decide scene から gameplay へ渡す前に、chart parse、audio decode、BGA resource preload を進めます。
-- 共有の scroll-distance helper により、CLI と browser の note placement behavior を揃えます。
+- 共有の scroll-distance helper により、terminal player と browser の note placement behavior を揃えます。
 - WebGL context に依存しない pure な browser-core helper は benchmark 対象です。
 
 ```bash
@@ -110,11 +116,13 @@ pnpm bench -- --packages player-web
 - `?compressor=legacy` は比較用に旧 single-compressor 構成を維持します。
 - `?compressor=off` は demo で compressor construction を無効化します。
 - BGA は chart BGA event が参照する still image と video asset を扱います。
+- BMS rendering は、実装済み subset として `#BGAxx` sub-region、`#SWBGAxx` switching、`#ARGBxx` / `#EXBMPxx` tint / alpha を反映します。
+- bmson rendering は `bga.bga_events`、`bga.layer_events`、`bga.poor_events` を使います。BMS layer channel と異なり、bmson layer image は黒を透明化せず黒ピクセルとして保持します。
 - browser demo は、未対応 video asset を playback 前に ffmpeg.wasm path で transcode できます。
 - gameplay recorder は WebM output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
 
 ## Compatibility boundary
 
 browser player は、この repository の parser、chart、audio-renderer、player、utils package を共有する runtime consumer です。
-browser behavior が CLI player と分岐する場合は、pure な path、timing、scroll、lookup、event mapping helper を shared package へ移し、package-local test で覆う方針を優先します。
+browser behavior が terminal player と分岐する場合は、pure な path、timing、scroll、lookup、event mapping helper を shared package へ移し、package-local test で覆う方針を優先します。
 PixiJS scene wiring は browser rendering や WebAudio resource に依存する場合、`player-web` に残してかまいません。

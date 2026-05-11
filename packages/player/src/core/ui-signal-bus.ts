@@ -23,6 +23,8 @@ export interface PlayerUiFrameSummary {
     initial: number;
     effectiveTotal: number;
     cleared: boolean;
+    /** Gauge variant — `'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`. */
+    type?: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH';
   };
 }
 
@@ -35,6 +37,26 @@ export interface PlayerUiFrameNote {
   judged: boolean;
   mine?: boolean;
   invisible?: boolean;
+  /**
+   * Long-note mode for the note's pair: `1` = LN (legacy long note), `2` = CN (charge note),
+   * `3` = HCN (hell charge note). Only meaningful when `endBeat` is set. Undefined for tap
+   * notes.
+   *
+   * Surfaces to the renderer so it can match upstream beatoraja's `LaneRenderer.drawLongNote`
+   * (`LaneRenderer.java:671-697`) per-mode visual divergence:
+   *   - mode 1 (LN): draws body + tail only; HEAD is rendered through the regular `note[]`
+   *     image (the same sprite a tap note uses). The upstream LN code path explicitly skips
+   *     `longImage[0]` (= `lnstart`) for LN.
+   *   - mode 2 (CN): draws head (`lnstart[]`) + body + tail.
+   *   - mode 3 (HCN): same as CN visually; head + body + tail.
+   *
+   * Without this field the renderer cannot replicate the LN-vs-CN head distinction and ends
+   * up drawing every LN with the small `lnstart` cap on top of the body — user-visible
+   * symptom: the LN head's small `lns-*` cap stuck onto the body looked off compared to
+   * upstream's full note-sized head. LR2 renderers that don't
+   * inspect this field continue to render as before.
+   */
+  longNoteMode?: 1 | 2 | 3;
 }
 
 export interface PlayerUiFramePayload {

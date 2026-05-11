@@ -1,0 +1,51 @@
+*---------------------- METADATA FIELD
+
+#TITLE LN Mode 3 Test (HCN)
+#SUBTITLE Hell Charge Note — gauge drains while NOT holding mid-LN
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 3
+#TOTAL 200
+#DIFFICULTY 3
+
+*---------------------- EXTENDED HEADER FIELD
+* LNMODE 3 = HCN (hell charge note). Same chart structure as Mode 1 / 2,
+* but the engine drains the groove gauge at ~2.5 %/sec for every interval
+* the player is NOT actively holding the LN. Sustained holds gain gauge
+* at the same rate, so a perfect hold-through pattern is gauge-neutral.
+
+#PLAYER 1
+#LNTYPE 1
+#LNMODE 3
+#LNOBJ ZZ
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAVZZ sample.wav
+
+*---------------------- OBJECT DATA FIELD
+
+* measure 0: count-in tap notes on lane 1 (Z key)
+#00011:01010101
+
+* measure 1: 2-beat LN on lane 1 (Z) — beat 1 head → beat 3 tail
+#00111:0100ZZ00
+
+* measure 2: 3-beat LN on lane 3 (X) — beat 1 head → beat 4 tail
+#00213:010000ZZ
+
+* measure 3: parallel 2-beat LNs on lanes 1, 3, 5 (Z, X, C)
+#00311:0100ZZ00
+#00313:0100ZZ00
+#00315:0100ZZ00
+
+* measure 4: 7-key extension LNs on lanes 6, 7 (F, V)
+#00418:0100ZZ00
+#00419:0100ZZ00
+
+* measure 5: follow-up tap on lane 1
+#00511:01000000
+
+*---------------------- CONTROL FLOW FIELD

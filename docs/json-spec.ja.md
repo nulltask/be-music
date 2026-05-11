@@ -31,7 +31,13 @@
 {
   "format": "be-music-json/0.1.0",
   "sourceFormat": "bms | bmson | json",
-  "metadata": {},
+  "metadata": {
+    "title": "Example",
+    "bpm": 130,
+    "backBmp": "back.png",
+    "banner": "banner.png",
+    "extras": {}
+  },
   "resources": {},
   "measures": [],
   "events": [],
@@ -56,6 +62,7 @@
       "01": "MIRROR"
     },
     "wavCmd": "legacy",
+    "wavCmds": ["01 01 64"],
     "exWav": {
       "01": "sample_ex.wav"
     },
@@ -95,7 +102,8 @@
             "value": "01",
             "bmson": {
               "l": 120,
-              "c": true
+              "c": true,
+              "damage": 50
             }
           }
         ]
@@ -107,8 +115,14 @@
     "info": {
       "resolution": 240,
       "chartName": "HYPER",
-      "modeHint": "beat-7k"
+      "modeHint": "beat-7k",
+      "judgeRank": 100,
+      "total": 100,
+      "backImage": "back.png",
+      "bannerImage": "banner.png",
+      "previewMusic": "preview.ogg"
     },
+    "barlinesSuppressed": false,
     "bga": {
       "header": [
         {
@@ -178,6 +192,18 @@
 }
 ```
 
+`metadata` は、format に依存しない normalized metadata 領域です。
+
+- `stageFile`: BMS `#STAGEFILE`。bmson では `info.eyecatch_image` が存在する場合にここへ mirror します
+- `backBmp`: BMS `#BACKBMP`。bmson では `info.back_image` が存在する場合にここへ mirror します
+- `banner`: BMS `#BANNER`。bmson では `info.banner_image` が存在する場合にここへ mirror します
+- `playLevel`: BMS `#PLAYLEVEL` または bmson `info.level`。number または string を保持できます
+- `rank`: BMS `#RANK` または bmson `info.judge_rank`
+- `total`: BMS `#TOTAL` または bmson `info.total`
+- `difficulty`: BMS `#DIFFICULTY`
+- `bpm`: BMS `#BPM` または bmson `info.init_bpm`。BMS は `130` を既定値にしますが、bmson は正の `init_bpm` を必須にします
+- `extras`: normalized field を持たない format 固有 metadata
+
 `bms` は BMS 固有の追加情報を保持する拡張領域です。
 
 - `lnType`: `#LNTYPE` の値
@@ -193,7 +219,8 @@
 - `stp`: `#STP` の値配列
 - `option`: `#OPTION` の値
 - `changeOption`: `#CHANGEOPTIONxx` のマップ
-- `wavCmd`: `#WAVCMD` の値
+- `wavCmd`: legacy compatibility のために保持する最初の `#WAVCMD` 値
+- `wavCmds`: すべての `#WAVCMD` 行の directive 後テキスト。宣言順で保持します
 - `exWav`: `#EXWAVxx` のマップ
 - `exBmp`: `#EXBMPxx` のマップ
 - `bga`: `#BGAxx` のマップ
@@ -229,7 +256,8 @@ ID を消費する code は手動で upper-case せず、`resolveBmsBase(json)` 
 `bmson` は bmson 固有の追加情報を保持する拡張領域です。
 
 - `version`: bmson のバージョン文字列
-- `info`: `resolution` に加え、`subartists`, `chartName`, `modeHint`, `judgeRank`, `total`, 画像/プレビュー系を保持
+- `info`: `resolution` に加え、`subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, 画像/preview 系を保持
+- `barlinesSuppressed`: bmson source が明示的に `lines: []` を書いた場合だけ `true` になります。`lines` 欠落とは区別し、欠落時は既定の 4/4 barline model を意味します
 - `bga`: `header`, `events`, `layerEvents`, `poorEvents` を保持
 
 `preservation` は round-trip のための source-level 情報を保持する補助層です。
@@ -257,9 +285,13 @@ interface BeMusicEvent {
   bmson?: {
     l?: number;
     c?: boolean;
+    damage?: number;
   };
 }
 ```
+
+`bmson.damage` は beatoraja-style bmson `key_channels` の mine note に使います。
+譜面で authoring された gauge damage を非負数で保持し、通常の `sound_channels` note では省略します。
 
 ## `position` の意味
 

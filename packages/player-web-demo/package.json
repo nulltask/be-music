@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-web-demo",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,13 +14,14 @@
     "format:check": "oxfmt . --check"
   },
   "dependencies": {
+    "@be-music/beatoraja-skin": "workspace:*",
     "@be-music/lr2-skin": "workspace:*",
     "@be-music/player-web": "workspace:*",
     "lil-gui": "^0.21.0"
   },
   "devDependencies": {
     "ts-ebml": "^3.0.2",
-    "vite": "^8.0.10",
+    "vite": "^8.0.11",
     "vite-plugin-node-polyfills": "^0.26.0"
   }
 }

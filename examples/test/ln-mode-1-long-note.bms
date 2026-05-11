@@ -1,0 +1,52 @@
+*---------------------- METADATA FIELD
+
+#TITLE LN Mode 1 Test (LN)
+#SUBTITLE Traditional Long Note — early release counts as BAD
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 2
+#TOTAL 200
+#DIFFICULTY 2
+
+*---------------------- EXTENDED HEADER FIELD
+* LNMODE 1 = LN (legacy long note). Releasing the key before the tail
+* timing produces a BAD verdict. Held continuously through the tail
+* awards the head's verdict (PERFECT for clean head taps).
+
+#PLAYER 1
+#LNTYPE 1
+#LNMODE 1
+#LNOBJ ZZ
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAVZZ sample.wav
+
+*---------------------- OBJECT DATA FIELD
+
+* measure 0: count-in tap notes on lane 1 (Z key)
+#00011:01010101
+
+* measure 1: 2-beat LN on lane 1 (Z) — beat 1 head → beat 3 tail
+#00111:0100ZZ00
+
+* measure 2: 3-beat LN on lane 3 (X) — beat 1 head → beat 4 tail
+#00213:010000ZZ
+
+* measure 3: parallel 2-beat LNs on lanes 1, 3, 5 (Z, X, C) — tests multi-lane
+* simultaneous holds
+#00311:0100ZZ00
+#00313:0100ZZ00
+#00315:0100ZZ00
+
+* measure 4: 7-key extension LNs on lanes 6, 7 (F, V) — 2-beat each
+#00418:0100ZZ00
+#00419:0100ZZ00
+
+* measure 5: tail-only follow-up tap on lane 1 — verifies the LN cleanly
+* releases and a subsequent tap is not blocked by the prior hold-grace window
+#00511:01000000
+
+*---------------------- CONTROL FLOW FIELD

@@ -491,7 +491,8 @@ async function buildChartSummary(
     if (isAbortError(error)) {
       throw error;
     }
-    // 一覧表示のメタ情報取得失敗は再生可否と分離し、欠損扱いで続行する。
+    // Treat metadata-extraction failures as a display-only concern, decoupled from whether the
+    // chart can be played — the entry continues with the missing fields blank.
   }
 
   return {

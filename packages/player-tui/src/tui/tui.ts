@@ -1892,7 +1892,7 @@ export function formatJudgeComboDisplay(latestJudge: string, combo: number, nowM
   const normalizedJudge = latestJudge === 'PERFECT' ? 'GREAT' : latestJudge;
   // LR2 convention: the judge plate pairs with the combo readout for clean hits (PERFECT / GREAT / GOOD)
   // but reads as a bare verdict for misses (BAD / POOR). The previous code appended the combo unconditionally,
-  // which made `POOR 5` appear after an EMPTY POOR (空POOR — phantom press) — the engine preserves combo on
+  // which made `POOR 5` appear after an EMPTY POOR (kara-poor — phantom press) — the engine preserves combo on
   // empty POOR per beatoraja behavior, so the combo argument is non-zero there even though no note was hit.
   const showCombo = latestJudge !== 'BAD' && latestJudge !== 'POOR';
   const safeCombo = Math.max(0, Math.floor(combo));

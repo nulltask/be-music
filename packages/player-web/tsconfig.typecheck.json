@@ -1,4 +1,4 @@
 {
   "extends": "../../tsconfig.typecheck.json",
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "../beatoraja-skin/src/**/*.d.ts"]
 }

@@ -62,7 +62,7 @@ import {
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
-import { type LaneBinding } from './lane-layout.ts';
+import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TuiNoteHeight } from './ui-options.ts';
@@ -95,7 +95,7 @@ import {
   createScoreTracker,
   type JudgeKind,
 } from './scoring.ts';
-import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
 import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
@@ -197,6 +197,26 @@ export interface PlayerOptions {
   onHighSpeedChange?: (highSpeed: number) => void;
   laneModeExtension?: string;
   /**
+   * Direct lane-mode override. When set, the engine's `resolveLaneMode` skips its content-based
+   * heuristic and routes straight to the corresponding `LaneMode`:
+   *
+   *   - `'5'`  → `5-key-sp`     - `'10'` → `5-key-dp`
+   *   - `'7'`  → `7-key-sp`     - `'14'` → `14-key-dp`
+   *   - `'9'`  → `9-key`        - `'24'` → `24-key-sp` / `48-key-dp` (resolved against 2P presence)
+   *
+   * Mirrors the renderer-side `chartVariant` the host has already classified the chart as. The
+   * engine's own heuristic only escalates to `9-key` when the chart is `.pms` OR `#PLAYER=3`
+   * with channel `17`, which under-classifies BME-format POPN-9 charts that author `#PLAYER 1`
+   * + channels 16/17/18/19. Without this override, those charts mounted on a 9-key skin /
+   * adapter (via the host) had their `f/v/g/b` inputs dropped because the engine's lane
+   * bindings followed `7-key-sp` (channel 16 → scratch, channel 17 → FREE ZONE, etc.).
+   *
+   * User report: 9 KEY laser and bomb sprites failed to appear. The previous
+   * `laneModeExtension`-only inference (c0da7b5) only worked for charts the heuristic could
+   * classify; this override lets the host force the engine into the variant it already decided on.
+   */
+  playVariant?: ChartPlayVariant;
+  /**
    * Pre-built playback chart data the host wants the engine to use verbatim instead of running its own
    * `preparePlaybackChartData` pass. When provided, the engine treats the supplied {@link PreparedPlaybackChartData}
    * as the single source of truth for the playable / landmine / invisible / scorable note arrays, the lane
@@ -261,6 +281,13 @@ export interface PlayerGrooveGaugeSummary {
   initial: number;
   effectiveTotal: number;
   cleared: boolean;
+  /**
+   * Gauge variant the engine ran with — `'GROOVE'` (cumulative gain, default), `'EASY'` (gentler
+   * GROOVE, lower clear threshold), `'HARD'` (drains on miss, fails at 0), or `'DEATH'` (any miss
+   * ends the chart). Optional for backward compatibility with consumers that built summary
+   * payloads before this field existed; `'GROOVE'` is the documented default when absent.
+   */
+  type?: GrooveGaugeType;
 }
 
 export interface PlayerLoadProgress {
@@ -428,6 +455,14 @@ interface ActiveLongNoteState {
   note: TimedPlayableNote;
   mode: 1 | 2 | 3;
   headJudge: TimedManualJudge;
+  /**
+   * Last second-mark already accounted for by the HCN gauge gain / drain accumulator.
+   * Per-frame advances apply `(nowSec - cursor) × rate` either to the gain or drain side
+   * (mode 3 only) before pushing the cursor forward to `nowSec`. Mirrors upstream
+   * `JudgeManager.java:299-349`'s `mpassingcount` accumulator, but at the per-frame
+   * granularity our engine ticks rather than upstream's 200 ms timer step — the integrated
+   * gauge delta is mathematically equivalent for the same elapsed duration.
+   */
   gaugeDrainCursorSeconds: number;
   audioStopped: boolean;
 }
@@ -444,7 +479,31 @@ const AUTO_AUDIO_TARGET_LEAD_MS = MANUAL_AUDIO_TARGET_LEAD_MS;
 const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
-const HELL_CHARGE_GAUGE_DRAIN_PER_SECOND = 6;
+/**
+ * Per-second gauge drain rate while a Hell-Charge LN (mode 3) is being held UNHELD (= the
+ * player isn't actively pressing the key during the body of the LN).
+ *
+ * Upstream `JudgeManager.java:324-340` integrates 0.5% per 200 ms tick = 2.5%/sec. We
+ * apply the same rate continuously per frame because the engine doesn't have a hard
+ * 200 ms ticker — `(nowSec - cursor) × rate` integrated each frame produces the same
+ * total drain over the same elapsed duration.
+ *
+ * The previous value (`6` = 6%/sec) was empirically tuned without referencing upstream and
+ * made HCN charts effectively unclear-able: a 1-second hold-break drained ~6% in addition
+ * to the BAD-on-tail penalty, so a player who momentarily lost grip lost roughly twice
+ * the gauge upstream would have taken.
+ */
+const HELL_CHARGE_GAUGE_DRAIN_PER_SECOND = 2.5;
+/**
+ * Per-second gauge GAIN rate while a Hell-Charge LN (mode 3) is being held SUCCESSFULLY.
+ *
+ * Upstream `JudgeManager.java:324-329` calls `gauge.update(1, 0.5f)` per 200 ms tick under
+ * the gain branch = 2.5%/sec. The previous TS impl had no gain branch at all (held HCNs
+ * couldn't recover gauge at all), which contradicted HCN's design intent: the chart
+ * authors EXPECT the player to claw back gauge by sustaining holds across the body. With
+ * gain disabled, breaking a hold for any duration was permanently destructive.
+ */
+const HELL_CHARGE_GAUGE_GAIN_PER_SECOND = 2.5;
 const IIDX_BAD_WINDOW_MS = 250;
 const PAUSE_POLL_INTERVAL_MS = 16;
 const AUDIO_TARGET_LEAD_MAX_MS = 32;
@@ -1726,6 +1785,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       {
         showInvisibleNotes: options.showInvisibleNotes,
         laneModeExtension: options.laneModeExtension,
+        playVariant: options.playVariant,
       },
       inferBmsLnTypeWhenMissing,
       realtimeAudioEndSeconds,
@@ -2317,6 +2377,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       {
         showInvisibleNotes: options.showInvisibleNotes,
         laneModeExtension: options.laneModeExtension,
+        playVariant: options.playVariant,
       },
       inferBmsLnTypeWhenMissing,
       nonPlayableRealtimeAudioEndSeconds,
@@ -2735,7 +2796,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         playbackEventTracer.logPoorTriggered(referenceSeconds);
       }
       setLoggedCombo(referenceSeconds, 0, 'miss', 'POOR', note.channel);
-      activeStateSignals?.publishJudgeCombo('POOR', combo, note.channel);
+      // Miss-without-press: positive `signedDeltaMs` because the engine reached the note's
+      // judgement deadline without an input. The visualizer plots these in the "late" band.
+      activeStateSignals?.publishJudgeCombo(
+        'POOR',
+        combo,
+        note.channel,
+        undefined,
+        (referenceSeconds - note.seconds) * 1000,
+      );
     }
   };
 
@@ -2755,7 +2824,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           ['deltaMs', Math.round(deltaMs)],
         ]);
       } else {
-        activeStateSignals?.publishJudgeCombo(judge.kind, combo, channel);
+        activeStateSignals?.publishJudgeCombo(judge.kind, combo, channel, undefined, judge.signedDeltaMs);
       }
       if (!uiEnabled) {
         playbackEventTracer.logPoorCleared(atSeconds);
@@ -2772,7 +2841,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           ['deltaMs', Math.round(deltaMs)],
         ]);
       } else {
-        activeStateSignals?.publishJudgeCombo('BAD', combo, channel);
+        activeStateSignals?.publishJudgeCombo('BAD', combo, channel, undefined, judge.signedDeltaMs);
       }
       return;
     }
@@ -2789,7 +2858,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ['deltaMs', Math.round(deltaMs)],
       ]);
     } else {
-      activeStateSignals?.publishJudgeCombo('POOR', combo, channel);
+      activeStateSignals?.publishJudgeCombo('POOR', combo, channel, undefined, judge.signedDeltaMs);
     }
   };
 
@@ -2917,8 +2986,22 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event, resolveBmsBase(resolvedJson));
       const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, resolvedJson.resources.wav);
+      // **Active-LN guard** — mirrors upstream `JudgeManager.java:253-259`. When a mine note is
+      // passed while the same lane's LN is currently being held, the engine treats it as a
+      // SILENT gauge drain: the damage is applied, the keysound plays at key volume, but NO
+      // verdict / combo reset is emitted. This preserves HCN chart authoring intent where
+      // the artist deliberately routes a mine column through an active hold — penalizing the
+      // player only via gauge pressure, not by breaking their combo. The previous TS impl
+      // emitted a full BAD which both reset the combo AND cost an exScore slot (since `total`
+      // doesn't shrink), making any HCN with mines-during-hold practically unclear-able.
+      const heldLongNote = activeLongNotesByChannel.get(landmineCandidate.channel);
+      const silentDuringHold = heldLongNote !== undefined;
       if (landmineExplosionEvent) {
         if (!uiEnabled) {
+          // The sample trigger log uses the same `'mine-hit'` kind for both branches —
+          // it's the audio-trigger record, and the keysound plays at the same volume in
+          // both cases. The verdict-vs-silent distinction is logged via the `mine-hit`
+          // / `mine-hit-during-hold` runtime-event-log entry below.
           writePlayableSampleTriggerEventLog(
             writeOutput,
             landmineExplosionEvent,
@@ -2930,6 +3013,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           );
         }
         audioSession?.triggerEvent?.(landmineExplosionEvent);
+      }
+      if (silentDuringHold) {
+        // Gauge damage only — no verdict / combo / score change. Matches upstream's
+        // `gauge.addValue(-mnote.getDamage())` without an accompanying `updateMicro` call.
+        applyLoggedGaugeDelta(nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit-during-hold');
+        if (!uiEnabled) {
+          writeRuntimeEventLog(writeOutput, 'mine-hit-during-hold', [
+            ['time', formatSeconds(nowSec)],
+            ['channel', landmineCandidate.channel],
+            ['value', landmineGaugeEffect.objectValue],
+            ['damage', landmineGaugeEffect.damage],
+            ['deltaMs', Math.round(landmineDelta * 1000)],
+          ]);
+        }
+        return;
       }
       applyJudgeToSummary(summary, 'BAD', scoreTracker);
       applyLoggedGaugeDelta(nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit');
@@ -2978,7 +3076,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      // LR2-compatible 空POOR (empty POOR): phantom press with no candidate and no benign explanation. Apply the gauge
+      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press with no candidate and no benign explanation. Apply the gauge
       // delta (GROOVE / HARD -2, EASY -1, DEATH -100 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR
       // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behavior: NORMAL / EASY make this nearly
       // harmless; HARD / DEATH actually drain.
@@ -3274,15 +3372,32 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           continue;
         }
         if (hold.mode === 3) {
-          const drainUntilSeconds = Math.min(nowSec, hold.endSeconds);
-          if (!isHolding && drainUntilSeconds > hold.gaugeDrainCursorSeconds) {
-            applyLoggedGaugeDelta(
-              nowSec,
-              -(drainUntilSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-              'hold-drain',
-            );
+          const accumulateUntilSeconds = Math.min(nowSec, hold.endSeconds);
+          if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
+            const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
+            if (isHolding) {
+              // HCN GAIN — held cleanly through this frame. Mirrors upstream
+              // `JudgeManager.java:324-329`'s `gauge.update(1, 0.5f)` per 200 ms tick under
+              // the gain branch. Continuous integration produces the same total gauge gain
+              // over the same elapsed duration. Without this branch HCNs were one-shot
+              // gauge sinks — once a player broke a hold, the only recovery path was
+              // through subsequent normal-note PERFECTs.
+              applyLoggedGaugeDelta(
+                nowSec,
+                elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND,
+                'hold-gain',
+              );
+            } else {
+              // HCN DRAIN — hold broken during this frame. Mirrors upstream
+              // `JudgeManager.java:341-344`'s `gauge.update(3, 0.5f)` per 200 ms tick.
+              applyLoggedGaugeDelta(
+                nowSec,
+                -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
+                'hold-drain',
+              );
+            }
           }
-          hold.gaugeDrainCursorSeconds = drainUntilSeconds;
+          hold.gaugeDrainCursorSeconds = accumulateUntilSeconds;
           if (!isHolding && !hold.audioStopped) {
             playbackStateLogger.logLongNoteState(nowSec, {
               channel,
@@ -3321,11 +3436,23 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             finalizeActiveLongNote(channel, hold, hold.headJudge, nowSec);
             continue;
           }
-          if (hold.mode === 3 && !isHolding && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
+          if (hold.mode === 3 && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
+            // Catch up the gauge accumulator to the tail mark. The per-frame loop above
+            // (line ~3358) clamps to `Math.min(nowSec, endSeconds)`, so when the frame's
+            // `nowSec` exceeds `endSeconds` (= the tail has just passed) there's still a
+            // residual `[cursor, endSeconds]` slice unaccounted for. Direction picks gain
+            // vs drain based on the player's hold state DURING that slice; we approximate
+            // it with the current frame's `isHolding` since the engine doesn't track
+            // hold-state samples per-tick (the slice is bounded by 1 frame ≈ 16ms at 60Hz
+            // so the approximation error is at most ~0.04% gauge — negligible vs the 2.5%
+            // /sec rate).
+            const elapsedSeconds = hold.endSeconds - hold.gaugeDrainCursorSeconds;
             applyLoggedGaugeDelta(
               nowSec,
-              -(hold.endSeconds - hold.gaugeDrainCursorSeconds) * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-              'hold-drain',
+              isHolding
+                ? elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND
+                : -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
+              isHolding ? 'hold-gain' : 'hold-drain',
             );
             hold.gaugeDrainCursorSeconds = hold.endSeconds;
           }

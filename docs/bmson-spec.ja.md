@@ -42,12 +42,16 @@
 - [x] `sound_channels[].notes[]` の `l`
 - [x] `sound_channels[].notes[]` の `c`
 - [x] `lines` を使った `measure` / `position` 解決
-- [x] `x <= 0` (または未指定) ノートを BGM (`01`) として解釈
+- [x] `x <= 0` または `x` 未指定の note を BGM (`01`) として解釈
+- [x] beatoraja `key_channels` extension を landmine channel として読み、note ごとの `damage` を保持
+- [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBmp`, `metadata.banner`, `metadata.stageFile` へ mirror
+- [x] 明示的な `lines: []` を barline suppression として扱い、`bmson.barlinesSuppressed` に保持
+- [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
+- [x] `info.total` 欠落または非正値は bmson 既定値 `100` として扱う
+- [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
 - [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
 - [ ] `version` の互換判定を SemVer で行う方針の明文化
-- [ ] `info.init_bpm` 未指定を fatal error として扱う
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
-- [ ] `lines` 未指定時に 4/4（`resolution * 4` 間隔）を前提とした補完規則の固定
 - [ ] `sound_channels[].name` の拡張子フォールバック探索（`.wav`/`.ogg`/`.m4a`）
 - [ ] `sound_channels[].name` のパス正規化（`\` と `/`）およびディレクトリトラバーサル防止
 - [ ] `sound_channels[].notes[]` 同一 pulse で `c=true/false` が混在する場合の優先規則
@@ -55,7 +59,7 @@
 - [ ] `stop_events` 同一 `y` 多重定義時の「加算」正規化
 - [ ] `bga.bga_header` の同一 `id` 多重定義時に後勝ちで解釈
 - [ ] `info.title_image` の受理と IR への保持
-- [ ] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
+- [x] `subartists` の `key:value` 形式（`music:`/`chart:` 等）の保持規則
 - [ ] 未知ルートキーの透過保持
 
 ### stringifier (`@be-music/json` -> bmson)
@@ -82,6 +86,7 @@
 - [x] `bga.bga_events` 出力
 - [x] `bga.layer_events` 出力
 - [x] `bga.poor_events` 出力
+- [x] `bmson.barlinesSuppressed` により明示的な `lines: []` を保持
 - [ ] `bpm_events` 同一 `y` のイベントを「末尾優先」へ正規化して出力
 - [ ] `stop_events` 同一 `y` のイベントを加算正規化して出力
 - [ ] `info.title_image` の出力
@@ -100,10 +105,11 @@
 - [x] `stop_events` を使った時刻解決
 - [x] `notes.c` によるサンプル継続オフセット解釈
 - [x] `notes.l` を使ったロングノート終端解釈
-- [ ] `bga.bga_events` の再生反映
-- [ ] `bga.layer_events` の再生反映
-- [ ] `bga.poor_events` の再生反映
-- [ ] 動画 BGA 再生
+- [x] `bga.bga_events` の shared BGA timeline 抽出
+- [x] `bga.layer_events` の shared BGA timeline 抽出
+- [x] `bga.poor_events` の shared BGA timeline 抽出
+- [x] Browser player は shared BGA timeline 経由で bmson BGA の still / video asset を描画
+- [ ] CLI/TUI の bmson header filename 向け BGA resource loading
 - [ ] 同一 pulse の処理順（Note/BGA → BPM → STOP）を仕様通りに固定
 - [ ] 同一 `y` の `bpm_events` を末尾優先で適用
 - [ ] 同一 `y` の `stop_events` を加算して適用
@@ -116,6 +122,7 @@
 - ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `bpm_events`, `stop_events`, `bga`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`
+- `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
 ## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
@@ -124,6 +131,9 @@
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
+- `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
+- `info.total` が有限数ならそのまま使い、それ以外は bmson 既定値 `100` を適用
+- `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
 - `key = base36(i + 1)` を2桁化
 - `notes[].y` を分数位置へ変換してイベント化
@@ -136,6 +146,7 @@
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
+- `key_channels` entry は `sound_channels` の後に登録し、同じ `mode_hint` lane map で BMS landmine channel へ変換し、`events[].bmson.damage` を保持
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)
@@ -146,6 +157,7 @@
 - `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
 - `preservation.bmson.lines` があれば `lines[].y` として出力
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
+- `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力
 - `sound_channels` は `wav` キー単位で出力
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成

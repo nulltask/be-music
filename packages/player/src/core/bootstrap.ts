@@ -75,6 +75,10 @@ export function createInitialPlayerSummary(
     initial: grooveGauge.initial,
     effectiveTotal: grooveGauge.effectiveTotal,
     cleared: isGrooveGaugeCleared(grooveGauge),
+    // The gauge state's `type` is fixed at construction; mirror it onto the summary so consumers
+    // can label the run's clear lamp without inferring from the threshold (which collides
+    // between EASY's 60 and DEATH's 0+ε).
+    type: grooveGauge.type,
   };
   const syncGrooveGaugeSummary = (): void => {
     gaugeSummary.current = grooveGauge.current;
@@ -115,7 +119,7 @@ export function createInitialPlayerSummary(
 
 export function preparePlaybackChartData(
   resolvedJson: BeMusicJson,
-  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension'>,
+  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension' | 'playVariant'>,
   inferBmsLnTypeWhenMissing: boolean,
   auxiliaryPlaybackEndSeconds: number,
 ): PreparedPlaybackChartData {
@@ -135,7 +139,11 @@ export function preparePlaybackChartData(
     auxiliaryPlaybackEndSeconds,
   );
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
-  const laneModeOptions = { player: resolvedJson.bms.player, chartExtension: options.laneModeExtension };
+  const laneModeOptions = {
+    player: resolvedJson.bms.player,
+    chartExtension: options.laneModeExtension,
+    playVariant: options.playVariant,
+  };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);
   appendFreeZoneInputChannels(inputTokenToChannels, laneBindings, channels);

@@ -1,0 +1,69 @@
+*---------------------- METADATA FIELD
+
+#TITLE LN 9-key Test (POPN)
+#SUBTITLE Pop'n 9-key LN — channels 11..19, keys Z S X D C F V G B
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 2
+#TOTAL 200
+#DIFFICULTY 2
+
+*---------------------- EXTENDED HEADER FIELD
+* PLAYER 3 marks this as a Pop'n 9-key chart. The engine routes channels
+* 11..19 to slots 1..9 (no scratch) and binds them to Z/S/X/D/C/F/V/G/B
+* respectively. Channel 17 carries an actual lane note in 9-key (NOT a
+* free zone), so LNs authored on it stay scorable.
+
+#PLAYER 3
+#LNTYPE 1
+#LNMODE 1
+#LNOBJ ZZ
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAVZZ sample.wav
+
+*---------------------- OBJECT DATA FIELD
+
+* measure 0: count-in tap notes on every 9-key lane (lanes 1..9)
+#00011:01000000
+#00012:00010000
+#00013:00000100
+#00014:00000001
+#00015:01000000
+#00016:00010000
+#00017:00000100
+#00018:00000001
+#00019:01000000
+
+* measure 1: 2-beat LNs on the outer lanes (1, 5, 9 — Z, C, B)
+#00111:0100ZZ00
+#00115:0100ZZ00
+#00119:0100ZZ00
+
+* measure 2: 3-beat LN on the centre lane (5 — C)
+#00215:010000ZZ
+
+* measure 3: 9-key extension lanes 6, 7, 8, 9 (F, V, G, B) — the LR2 7-key
+* binding only covers 6 and 7, so this measure exercises the POPN-specific
+* G/B inputs
+#00316:0100ZZ00
+#00317:0100ZZ00
+#00318:0100ZZ00
+#00319:0100ZZ00
+
+* measure 4: all 9 lanes simultaneously (impossible to hand-play but useful for
+* AUTO PLAY visual / timer-stamping verification)
+#00411:0100ZZ00
+#00412:0100ZZ00
+#00413:0100ZZ00
+#00414:0100ZZ00
+#00415:0100ZZ00
+#00416:0100ZZ00
+#00417:0100ZZ00
+#00418:0100ZZ00
+#00419:0100ZZ00
+
+*---------------------- CONTROL FLOW FIELD

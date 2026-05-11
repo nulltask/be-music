@@ -819,9 +819,7 @@ describe('player', () => {
 
     const holdIndex = commands.findIndex((c) => c.kind === 'hold-lane-until-beat' && c.channel === '11');
     expect(holdIndex).toBeGreaterThanOrEqual(0);
-    const releaseIndex = commands.findIndex(
-      (c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '11',
-    );
+    const releaseIndex = commands.findIndex((c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '11');
     expect(releaseIndex).toBeGreaterThan(holdIndex);
   });
 
@@ -854,9 +852,7 @@ describe('player', () => {
 
     const holdIndex = commands.findIndex((c) => c.kind === 'hold-lane-until-beat' && c.channel === '16');
     expect(holdIndex).toBeGreaterThanOrEqual(0);
-    const releaseIndex = commands.findIndex(
-      (c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '16',
-    );
+    const releaseIndex = commands.findIndex((c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '16');
     expect(releaseIndex).toBeGreaterThan(holdIndex);
   });
 
@@ -884,8 +880,8 @@ describe('player', () => {
     expect(summary.great).toBe(0);
     expect(summary.good).toBe(0);
     expect(summary.bad).toBe(0);
-    // 空POOR is NOT counted in `summary.poor` — that slot is reserved for 見逃しPOOR (notes that passed without input).
-    // Matches LR2.
+    // Empty POOR (kara-poor / 空POOR) is NOT counted in `summary.poor` — that slot is reserved for miss POOR
+    // (minogashi-poor / 見逃しPOOR, i.e. notes that passed without input). Matches LR2.
     expect(summary.poor).toBe(0);
     // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see `applyGrooveGaugeJudge`), giving 18. Matches LR2:
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
@@ -1438,6 +1434,71 @@ describe('player', () => {
     expect(summary.great).toBe(0);
     expect(summary.good).toBe(0);
     expect(summary.bad + summary.poor).toBe(1);
+  });
+
+  test('player: mine notes inside an active LN hold deal silent gauge damage (upstream JudgeManager.java:253-259)', async () => {
+    // When a mine passes the judge line while the same lane's LN is being held, upstream
+    // beatoraja applies the mine's gauge damage but emits NO verdict — the player's combo
+    // and score are preserved. Without this guard, an HCN-style chart that routes mine
+    // columns through active holds was unclear-able: every mine inside a hold cost a BAD
+    // (combo reset + scoreboard slot waste) on top of the gauge hit.
+    //
+    // BPM 480 → measure 1 = 0.5 sec, measure 3 = 1.5 sec.  Schedule:
+    //   - Player taps 'z' at 520 ms (real time) → LN head at chart 0.5 sec (PERFECT).
+    //   - Mine on D1 lands at chart 0.75 sec (measure 1.5) → 230 ms after head, inside
+    //     the 380 ms initial hold grace window.
+    //   - LN tail at chart 1.5 sec; the per-frame loop reaches it before the interrupt
+    //     and finalizes with the head's PERFECT verdict.
+    //   - Interrupt fires at 1700 ms (200 ms after tail) — well within the tail-finalize
+    //     window, matching the LNMODE=3 baseline test's timing.
+    //
+    // We run a baseline scenario without the mine to capture the reference gauge value
+    // (PERFECT-only run), then assert the mine-present run lands the SAME verdict counts
+    // but a STRICTLY LOWER gauge — proving the mine drained gauge silently.
+    // Two lane-input taps: the first hits the LN head, the second taps again at the mine
+    // time so `handleMappedInputTokens` is called with the LN still active — that's the
+    // codepath that resolves a mine candidate (the engine only looks for landmines on
+    // lane-input dispatches, not as a per-frame sweep). Without the second tap, the mine
+    // expires silently via `markExpiredLandmines` and the silent-damage branch never runs.
+    const inputSchedule: Array<{ delayMs: number; command: PlayerInputCommand }> = [
+      { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 750, command: { kind: 'lane-input', tokens: ['z'] } },
+      { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+    ];
+    const baselineSummary = await manualPlay(createLnobjLongNoteChart(2), {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime(inputSchedule),
+    });
+
+    const json = createLnobjLongNoteChart(2);
+    json.events.push({ measure: 1, channel: 'D1', position: [1, 2] as const, value: '08' });
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime(inputSchedule),
+    });
+
+    // Verdict counts MATCH the mine-free baseline — adding a mine inside the hold doesn't
+    // add a BAD/POOR slot, doesn't reset combo. We compare against the baseline (rather
+    // than pinning specific values) because the LN's tail-finalize verdict depends on
+    // tick alignment that's independent of the mine-handling code path being verified.
+    expect(summary.perfect).toBe(baselineSummary.perfect);
+    expect(summary.great).toBe(baselineSummary.great);
+    expect(summary.good).toBe(baselineSummary.good);
+    expect(summary.bad).toBe(baselineSummary.bad);
+    expect(summary.poor).toBe(baselineSummary.poor);
+    expect(summary.total).toBe(baselineSummary.total);
+    // Gauge took the mine's damage despite the silent treatment — strictly below the
+    // mine-free baseline. This is the affirmative half: silent doesn't mean free.
+    const baselineGauge = baselineSummary.gauge?.current ?? 100;
+    const withMineGauge = summary.gauge?.current ?? 100;
+    expect(withMineGauge).toBeLessThan(baselineGauge);
   });
 
   test('player: LNMODE=3 drains groove gauge while the hold is broken', async () => {
