@@ -20,7 +20,7 @@
 // re-importing from another module is harmless. Requires `useBackBuffer: true` at app init
 // — see `scene/host.ts`.
 import 'pixi.js/advanced-blend-modes';
-import { Rectangle, Texture } from 'pixi.js';
+import { Texture } from 'pixi.js';
 import {
   applyBeatorajaOffsetAlpha,
   combineBeatorajaOffsets,
@@ -33,6 +33,7 @@ import {
   type BeatorajaLuaRuntimeContext,
   type BeatorajaSkinOffsetValue,
 } from '@be-music/beatoraja-skin';
+import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.ts';
 
 export interface BeatorajaSpriteProps {
   visible: boolean;
@@ -534,50 +535,16 @@ function clamp255(v: number): number {
 }
 
 /**
- * Per-base-texture cache of cropped sub-textures. Mirrors the LR2 renderer's `createCroppedTexture` cache so a
- * gameplay frame doesn't allocate a fresh `Texture` + `Rectangle` per sprite each tick. The cache is `WeakMap`-keyed
- * on the base texture so an entry vanishes once the owning view drops the texture.
- */
-const cropCache = new WeakMap<Texture, Map<string, Texture>>();
-
-/**
  * Build a `Texture` view that crops `texture` to `rect`. Reuses the same `TextureSource` (no GPU re-upload). Returns
  * `undefined` for empty / missing rectangles. Cached — repeated calls with the same `(texture, x, y, w, h)` return
  * the same `Texture` instance.
  */
-export function createCroppedBeatorajaTexture(
-  texture: Texture | undefined,
-  rect: { x: number; y: number; w: number; h: number },
-): Texture | undefined {
-  if (
-    !texture ||
-    !Number.isFinite(rect.x) ||
-    !Number.isFinite(rect.y) ||
-    !Number.isFinite(rect.w) ||
-    !Number.isFinite(rect.h) ||
-    rect.w <= 0 ||
-    rect.h <= 0
-  ) {
-    // PixiJS v8 + WebGPU crashes inside `BindGroupSystem._createBindGroup` (`Cannot read properties of null
-    // (reading 'textureSource1')`) when a sub-texture is created with a zero-extent or NaN frame — the source
-    // never finishes its GPU upload and the bind group lookup deref's a null. Guard against every degenerate rect
-    // here so the renderer can simply skip the sprite when the source cell is empty.
-    return undefined;
-  }
-  let bySource = cropCache.get(texture);
-  if (!bySource) {
-    bySource = new Map();
-    cropCache.set(texture, bySource);
-  }
-  // Encode raw numeric values rather than rounding so cells with fractional widths (`w / divx` not an integer) get
-  // their own cache slot.
-  const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
-  let cached = bySource.get(key);
-  if (!cached) {
-    cached = new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
-    bySource.set(key, cached);
-  }
-  return cached;
+export function createCroppedBeatorajaTexture(texture: Texture | undefined, rect: PixiCropRect): Texture | undefined {
+  // PixiJS v8 + WebGPU crashes inside `BindGroupSystem._createBindGroup` (`Cannot read properties of null
+  // (reading 'textureSource1')`) when a sub-texture is created with a zero-extent or NaN frame — the source
+  // never finishes its GPU upload and the bind group lookup deref's a null. Guard against every degenerate rect
+  // here so the renderer can simply skip the sprite when the source cell is empty.
+  return createCachedCroppedTexture(texture, rect, { requireFiniteFrame: true });
 }
 
 /**

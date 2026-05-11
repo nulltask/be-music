@@ -1,4 +1,4 @@
-import { type BLEND_MODES, type Container, Rectangle, Sprite, Texture } from 'pixi.js';
+import { type BLEND_MODES, type Container, Sprite, Texture } from 'pixi.js';
 import type {
   Lr2BarGraphElement,
   Lr2DestinationRect,
@@ -8,6 +8,7 @@ import type {
   Lr2SpecialGraphic,
 } from '@be-music/lr2-skin';
 import { isLr2SpecialGraphic } from '@be-music/lr2-skin';
+import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.ts';
 
 /**
  * Shared LR2 sprite-rendering helpers used by both the gameplay view (`scene/lr2/gameplay.ts`) and the song-select view
@@ -122,44 +123,12 @@ function mapLr2BlendMode(blend: number): BLEND_MODES {
 }
 
 /**
- * Per-base-texture cache of cropped sub-textures.
- *
- * LR2 skins reference the same atlas crops every frame (frame chrome, lane decorations, fixed UI panels, animated cells
- * with a small cycle). Allocating a fresh `Texture` + `Rectangle` per call from `createCroppedTexture` was producing a
- * steady stream of GC-eligible objects each tick — measurable as occasional sub-60 fps stutters during gameplay.
- *
- * The cache is keyed on the base `Texture` (WeakMap → entry vanishes once the base is dropped from its owning view) and
- * an `(x, y, w, h)` string sub-key. The cropped values reference `texture.source`, which is the same source the base
- * texture already pins, so caching adds no extra GPU lifetime.
- */
-const cropCache = new WeakMap<Texture, Map<string, Texture>>();
-
-/**
  * Returns a `Texture` view that crops `texture` to `rect`. Reuses the same `BaseTexture` (no GPU re-upload). Returns
  * `undefined` for empty or absent rectangles. Cached: repeated calls with the same `(texture, x, y, w, h)` return the
  * same `Texture` instance.
  */
-export function createCroppedTexture(
-  texture: Texture | undefined,
-  rect: { x: number; y: number; w: number; h: number },
-): Texture | undefined {
-  if (!texture || rect.w <= 0 || rect.h <= 0) {
-    return undefined;
-  }
-  let bySource = cropCache.get(texture);
-  if (!bySource) {
-    bySource = new Map();
-    cropCache.set(texture, bySource);
-  }
-  // Animation cells can have fractional widths when the source w/h doesn't divide evenly by divx/divy, so encode the
-  // full numeric value rather than rounding.
-  const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
-  let cached = bySource.get(key);
-  if (!cached) {
-    cached = new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
-    bySource.set(key, cached);
-  }
-  return cached;
+export function createCroppedTexture(texture: Texture | undefined, rect: PixiCropRect): Texture | undefined {
+  return createCachedCroppedTexture(texture, rect);
 }
 
 /**

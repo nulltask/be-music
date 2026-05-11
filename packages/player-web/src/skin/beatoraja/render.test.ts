@@ -1,3 +1,4 @@
+import { Rectangle, Texture } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import {
   evaluateBeatorajaLuaSkin,
@@ -9,6 +10,7 @@ import {
   applyBeatorajaStretchRect,
   BEATORAJA_STRETCH,
   blendCodeToPixi,
+  createCroppedBeatorajaTexture,
   destinationToSpriteProps,
   flipRectToPixi,
 } from './render.ts';
@@ -46,6 +48,13 @@ const groupOf = (overrides: Record<string, unknown> = {}) => {
 };
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
+
+function texture(width = 64, height = 64): Texture {
+  return new Texture({
+    source: Texture.EMPTY.source,
+    frame: new Rectangle(0, 0, width, height),
+  });
+}
 
 function luaFunction(source: string): BeatorajaLuaFunctionValue {
   const result = evaluateBeatorajaLuaSkin({
@@ -478,6 +487,17 @@ describe('blendCodeToPixi', () => {
     // (alpha hole-punch), a fundamentally different operation.
     expect(blendCodeToPixi(9)).toBe('difference');
     expect(blendCodeToPixi(99)).toBe('normal'); // unknown code falls back
+  });
+});
+
+describe('createCroppedBeatorajaTexture', () => {
+  it('reuses valid crops but rejects non-finite beatoraja frames', () => {
+    const base = texture();
+    const first = createCroppedBeatorajaTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+    const second = createCroppedBeatorajaTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+
+    expect(first).toBe(second);
+    expect(createCroppedBeatorajaTexture(base, { x: Number.NaN, y: 0, w: 1, h: 1 })).toBeUndefined();
   });
 });
 

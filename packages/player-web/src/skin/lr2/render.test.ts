@@ -1,6 +1,7 @@
 import { Rectangle, Texture } from 'pixi.js';
 import { describe, expect, test } from 'vitest';
 import {
+  createCroppedTexture,
   evaluateElementDestination,
   makeLr2BargraphSprite,
   makeLr2SliderSprite,
@@ -105,6 +106,17 @@ describe('makeLr2StaticImageSprite', () => {
     expect(sprite?.texture.width).toBe(320);
     expect(sprite?.width).toBe(120);
     expect(sprite?.height).toBe(90);
+  });
+});
+
+describe('createCroppedTexture', () => {
+  test('reuses cached crop textures for repeated LR2 frame requests', () => {
+    const base = texture();
+    const first = createCroppedTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+    const second = createCroppedTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+
+    expect(first).toBe(second);
+    expect(first?.source).toBe(base.source);
   });
 });
 
