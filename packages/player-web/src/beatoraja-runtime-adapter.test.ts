@@ -9,6 +9,7 @@ import {
   lnHoldTimerId,
   SYNTHETIC_NUM_JUDGE_COMBO_1P,
   SYNTHETIC_NUM_JUDGE_COMBO_2P,
+  SYNTHETIC_NUM_JUDGE_COMBO_3P,
   TIMER_FADEOUT,
   TIMER_PLAY,
   TIMER_READY,
@@ -634,6 +635,26 @@ describe('BeatorajaRuntimeAdapter — applyJudgeCombo', () => {
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 5, channel: '21', updatedAtMs: 0 });
     expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_2P)).toBe(5);
     expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_1P)).toBe(0);
+  });
+
+  it('latches per-plate combo for POPN-9 (`_1P` / `_2P` / `_3P` synthetic refs)', () => {
+    // POPN-9 dispatches each chord publish to one of three plates by lane group; each plate's
+    // `judgen-*` combo digit reads `SYNTHETIC_NUM_JUDGE_COMBO_{1,2,3}P`, latched here from the
+    // most recent verdict on that plate. User-reported symptom prior to the per-plate
+    // synthetic ref: plate 3's combo digit fell through to `MAIN.NUM.MAXCOMBO` (= 75) and
+    // displayed the running max combo instead of the live latched combo.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '9',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    // Chord with one judgement per plate — channels 11 / 14 / 25 land on plates 1 / 2 / 3.
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 7, channel: '11', updatedAtMs: 0 });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 8, channel: '14', updatedAtMs: 0 });
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 9, channel: '25', updatedAtMs: 0 });
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_1P)).toBe(7);
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_2P)).toBe(8);
+    expect(adapter.resolveNumberValue(SYNTHETIC_NUM_JUDGE_COMBO_3P)).toBe(9);
   });
 
   it('per-lane keybeam ref encodes the latest verdict as judgeIndex+1 within the window', () => {

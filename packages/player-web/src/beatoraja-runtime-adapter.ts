@@ -55,6 +55,7 @@ import {
   lnHoldTimerId,
   SYNTHETIC_NUM_JUDGE_COMBO_1P,
   SYNTHETIC_NUM_JUDGE_COMBO_2P,
+  SYNTHETIC_NUM_JUDGE_COMBO_3P,
   TIMER_FADEOUT,
   TIMER_FAILED,
   TIMER_FULLCOMBO_1P,
@@ -2219,6 +2220,8 @@ export class BeatorajaRuntimeAdapter {
         return this.judgeState[1].lastJudgeCombo;
       case SYNTHETIC_NUM_JUDGE_COMBO_2P:
         return this.judgeState[2].lastJudgeCombo;
+      case SYNTHETIC_NUM_JUDGE_COMBO_3P:
+        return this.judgeState[3].lastJudgeCombo;
       // Ref 75 (`NUMBER_MAXCOMBO`) — running max combo of the CURRENT run; upstream's
       // `IntegerPropertyFactory` returns `JudgeManager.getScoreData().getCombo()` refreshed
       // via `score.setCombo(Math.max(score.getCombo(), combo))` on every judge. Score boards

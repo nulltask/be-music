@@ -21,6 +21,7 @@ import type { BeatorajaImageId } from './beatoraja-skin-image.ts';
 import {
   SYNTHETIC_NUM_JUDGE_COMBO_1P,
   SYNTHETIC_NUM_JUDGE_COMBO_2P,
+  SYNTHETIC_NUM_JUDGE_COMBO_3P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P,
   SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P,
 } from './beatoraja-runtime-ids.ts';
@@ -64,8 +65,17 @@ export function normalizeBeatorajaJudges(input: unknown): BeatorajaJudgeElement[
   return out;
 }
 
-/** Per-judge op codes per side (1P / 2P), in PG → MS order. From prop.lua's `_*p_*` block. */
-const SIDE_JUDGE_OPS: Record<1 | 2, ReadonlyArray<number>> = {
+/**
+ * Per-judge op codes per side (1P / 2P / 3P), in PG → MS order. From prop.lua's `_*p_*` block.
+ *
+ * Side 3 is the POPN-9 third judge plate (`play9.json` `id: 2012`, `index: 2`). Upstream only
+ * defines PERFECT / GREAT / GOOD ops for the 3P plate (`SkinProperty.java:830-834`); BAD / POOR /
+ * MISS aren't routed per-plate (combo-breaks are treated globally on the 1P bank), so those
+ * slots fall back to the 1P ops — the 1P gate would activate when a combo-break verdict hits
+ * any plate, but the plate's `timer = 247` only re-fires when plate 3 itself was judged, so the
+ * fallback image only paints during plate 3's recent-verdict window.
+ */
+const SIDE_JUDGE_OPS: Record<1 | 2 | 3, ReadonlyArray<number>> = {
   1: [
     241, // _1p_perfect
     242, // _1p_great
@@ -82,12 +92,23 @@ const SIDE_JUDGE_OPS: Record<1 | 2, ReadonlyArray<number>> = {
     265, // _2p_poor
     266, // _2p_miss
   ],
+  3: [
+    361, // _3p_perfect
+    362, // _3p_great
+    363, // _3p_good
+    244, // BAD / POOR / MISS fall back to the 1P ops (upstream has no `_3p_bad/poor/miss`).
+    245,
+    246,
+  ],
 };
 
-/** Synthetic "gauge is currently at max" op codes per side (audit 1.2). Mirrors the keys
+/**
+ * Synthetic "gauge is currently at max" op codes per side (audit 1.2). Mirrors the keys
  * defined in `beatoraja-runtime-ids.ts` (`BEATORAJA_OP.GAUGE_NOW_AT_MAX_*`); kept inline as
- * literal numbers here to avoid a circular import with the broader OP registry. */
-const SIDE_GAUGE_MAX_OPS: Record<1 | 2, number> = { 1: 90100, 2: 90101 };
+ * literal numbers here to avoid a circular import with the broader OP registry. Side 3 (POPN-9
+ * third plate) reuses 1P's gauge-max op — POPN-9 plays the single-player gauge.
+ */
+const SIDE_GAUGE_MAX_OPS: Record<1 | 2 | 3, number> = { 1: 90100, 2: 90101, 3: 90100 };
 
 /**
  * Expand the parsed judge entries into raw destination-shaped records the standard destination
@@ -158,7 +179,11 @@ export function expandBeatorajaJudgeDestinations(
   const out: Array<Readonly<Record<string, unknown>>> = [];
   for (const judge of judges) {
     if (referencedJudgeIds !== undefined && !referencedJudgeIds.has(judge.id)) continue;
-    const side: 1 | 2 = judge.index === 1 ? 2 : 1;
+    // `judge.index` is the plate index in upstream's `judge[]` array (`SkinJudge(images,
+    // numbers, judge.index, judge.shift)`). 0 = 1P plate, 1 = 2P plate, 2 = POPN-9 third plate
+    // (only present in `play9.json`-class skins). Map to our `BeatorajaSide` (1 / 2 / 3); any
+    // unknown index falls back to side 1 defensively.
+    const side: 1 | 2 | 3 = judge.index === 1 ? 2 : judge.index === 2 ? 3 : 1;
     const ops = SIDE_JUDGE_OPS[side];
     // Detect whether the skin authored the modern fullgauge-PG substitute at index 6 (audit
     // 1.2). When it has, beatoraja's `SkinJudge.prepare()` makes `judge[0]` and `judge[6]`
@@ -174,6 +199,12 @@ export function expandBeatorajaJudgeDestinations(
     // authored anchor regardless of digit count. Implemented by appending a synthetic
     // offset id that the runtime adapter resolves to the dynamic shift value (= the
     // adapter knows the live combo and slot width).
+    // Plate 3 (POPN-9 third plate) falls through to the 2P shift offset — upstream `play9.json`
+    // authors `"shift": false` on every plate so this path doesn't fire in practice for POPN-9,
+    // but the fallback keeps the contract well-defined if a future skin opts in. Both 1P and 2P
+    // shift offsets resolve to a per-plate `-combo_width/2` value in the adapter; a 3P plate
+    // sharing the 2P resolver would still produce a sensible centre-of-digit-row shift, just
+    // computed against `maxCombo` rather than the plate-3 latch.
     const judgeWordShiftOffsetId = judge.shift
       ? side === 1
         ? SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_1P
@@ -242,7 +273,11 @@ export function expandBeatorajaJudgeDestinations(
       if (valueElement !== undefined) {
         (valueElement as { align: number }).align = 2;
         (valueElement as { ref: number }).ref =
-          side === 1 ? SYNTHETIC_NUM_JUDGE_COMBO_1P : SYNTHETIC_NUM_JUDGE_COMBO_2P;
+          side === 1
+            ? SYNTHETIC_NUM_JUDGE_COMBO_1P
+            : side === 2
+              ? SYNTHETIC_NUM_JUDGE_COMBO_2P
+              : SYNTHETIC_NUM_JUDGE_COMBO_3P;
       }
       out.push(addOpGate(folded, gate));
     }

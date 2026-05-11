@@ -1292,3 +1292,10 @@ export const SYNTHETIC_OFFSET_JUDGE_WORD_SHIFT_2P = 20002;
  */
 export const SYNTHETIC_NUM_JUDGE_COMBO_1P = 20101;
 export const SYNTHETIC_NUM_JUDGE_COMBO_2P = 20102;
+/**
+ * POPN-9 third judge plate's combo readout. Mirrors `SkinJudge.prepare`'s
+ * `nowCount.prepare(time, state, getNowCombo(player=2), …)` for the plate at `judge.index === 2`
+ * — the same explicit-value override mechanism as 1P / 2P, but reading the third plate's
+ * `judgecombo[2]` latch.
+ */
+export const SYNTHETIC_NUM_JUDGE_COMBO_3P = 20103;

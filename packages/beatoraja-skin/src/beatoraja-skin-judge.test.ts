@@ -91,6 +91,62 @@ describe('expandBeatorajaJudgeDestinations', () => {
     expect(expandBeatorajaJudgeDestinations(judges)[0]).toMatchObject({ op: [261] }); // _2p_perfect
   });
 
+  it('uses the 3P op block when index === 2 (POPN-9 third judge plate)', () => {
+    // Upstream `play9.json` authors `id: 2012, index: 2` for the right-most judge plate over
+    // POPN-9's single playfield. Each per-tier image gets the matching `_3p_*` op:
+    //   PG → 361, GR → 362, GD → 363. BAD / POOR / MISS fall back to the 1P ops upstream
+    //   (`SkinProperty.java` defines no `_3p_bad/poor/miss`).
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2012,
+        index: 2,
+        images: [
+          { id: 'judgef-pg' },
+          { id: 'judgef-gr' },
+          { id: 'judgef-gd' },
+          { id: 'judgef-bd' },
+          { id: 'judgef-pr' },
+          { id: 'judgef-ms' },
+        ],
+        numbers: [],
+      },
+    ]);
+    const expanded = expandBeatorajaJudgeDestinations(judges);
+    expect(expanded[0]).toMatchObject({ id: 'judgef-pg', op: [361] });
+    expect(expanded[1]).toMatchObject({ id: 'judgef-gr', op: [362] });
+    expect(expanded[2]).toMatchObject({ id: 'judgef-gd', op: [363] });
+    // BAD / POOR / MISS borrow the 1P ops since the 3P plate has no per-tier op upstream.
+    expect(expanded[3]).toMatchObject({ id: 'judgef-bd', op: [244] });
+    expect(expanded[4]).toMatchObject({ id: 'judgef-pr', op: [245] });
+    expect(expanded[5]).toMatchObject({ id: 'judgef-ms', op: [246] });
+  });
+
+  it('rewrites the combo number ref to SYNTHETIC_NUM_JUDGE_COMBO_3P for plate 3', () => {
+    // Mirrors the 1P / 2P number-ref rewrite for the POPN-9 third plate. Without this rewrite
+    // the plate's combo digit falls through to whatever `ref` the JSON authored (typically
+    // `MAIN.NUM.MAXCOMBO = 75`), so it prints the running max combo instead of the live latched
+    // combo at the moment of the last plate-3 verdict — the user-reported "combo display is
+    // wrong" symptom on the POPN-9 right-most plate.
+    const judges = normalizeBeatorajaJudges([
+      {
+        id: 2012,
+        index: 2,
+        images: [{ id: 'judgef-pg' }],
+        numbers: [{ id: 'judgen-pg' }],
+      },
+    ]);
+    const valueElement = { id: 'judgen-pg', digit: 6, align: 0, ref: 75 /* = MAXCOMBO */ };
+    const valuesById = new Map([['judgen-pg', valueElement]]);
+    expandBeatorajaJudgeDestinations(
+      judges,
+      valuesById as unknown as Parameters<typeof expandBeatorajaJudgeDestinations>[1],
+    );
+    // Plate 3 → `SYNTHETIC_NUM_JUDGE_COMBO_3P = 20103`. Hardcoded literal here so a future bump
+    // of the synthetic id range surfaces the change in this test rather than silently sliding.
+    expect(valueElement.ref).toBe(20103);
+    expect(valueElement.align).toBe(2);
+  });
+
   it('preserves an existing op gate by appending the judge op (AND semantics)', () => {
     // Authors that gate the judge image on a play-side op (e.g. `op = {920}`) expect both
     // gates to be active for the image to render. The expansion appends the judge op to the
