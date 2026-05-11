@@ -152,15 +152,38 @@ describe('resolveChartPlayVariant', () => {
     ).toBe('9');
   });
 
-  test('PMS / 9 KEY: a `.bme` chart on the PMS-STD layout WITHOUT the legacy `#PLAYER=3 + 17` marker is treated as DP', () => {
-    // The PMS-STD channel signature (`22..25`) is shared with genuine DP charts, so it can't be used as a 9KEY signal
-    // on its own — we'd misclassify regular DP charts. The CLI player reaches the same conclusion (it only uses the
-    // `22..25` block as a layout disambiguator AFTER the 9KEY mode has been decided by extension or `#PLAYER=3 + 17`).
+  test('PMS / 9 KEY: a `.bme` chart on the PMS-STD layout WITHOUT scratch / 6-7K / non-POPN 2P channels routes to 9', () => {
+    // PMS-STD content authored as `.bme` (or `.bms`) — `11..15 + 22..25` only, no scratch (`16`/`26`), no
+    // `21` / `27..29` 2P channels, no `18`/`19` 6-7K columns. This pattern doesn't match any genuine IIDX
+    // 5K DP chart (which always pairs each side's keyboard with scratch and typically `21`), so we route
+    // it to `'9'` and let the engine apply POPN_9KEY_PMS_BINDINGS (`22..25` → POPN keys 6..9). User-reported
+    // symptom: charts that author PMS-STD as `.bme` were silently classified as 5K DP and the f/v/g/b lane
+    // bindings were lost.
     expect(
       resolveChartPlayVariant(
         makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
       ),
+    ).toBe('9');
+    // Genuine IIDX 5K DP — has scratch on both sides AND channel `21`. PMS-STD detection requires the
+    // ABSENCE of scratch / non-POPN 2P, so this stays at `'10'`.
+    expect(
+      resolveChartPlayVariant(
+        makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '16', '21', '22', '25', '26'] }),
+      ),
     ).toBe('10');
+  });
+
+  test('PMS / 9 KEY: a `.bme` chart that authors all of `11..19` on `#PLAYER 1` is BME POPN-9', () => {
+    // POPN-9 charts authored as `.bme` (the BME-COMPAT layout — `16`/`17`/`18`/`19` as POPN keys 6-9
+    // instead of IIDX scratch / FREE-ZONE / 6 / 7) typically populate every one of `11..19`. IIDX 7K
+    // uses at most 8 of those (`11..15 + 16 + 18 + 19`), so a full 1P keyboard is a strong POPN-9 signal.
+    // Without this detection the chart fell through to `'7'` and the engine bound `16` as scratch and
+    // `17` as FREE-ZONE.
+    expect(
+      resolveChartPlayVariant(
+        makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '16', '17', '18', '19'] }),
+      ),
+    ).toBe('9');
   });
 });
 

@@ -199,6 +199,23 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 
 /**
  * Resolves the LR2/play-skin lane family for a chart from its extension, `#PLAYER`, and playable lane usage.
+ *
+ * Detection order — first match wins:
+ *
+ *   1. **`.pms` extension** — unambiguous POPN-9 marker. Trumps all content heuristics so a `.pms` file authored
+ *      with `#PLAYER 1` and an unusual channel layout still routes to `'9'`.
+ *   2. **`#PLAYER 3` + channel `17`** — `#PLAYER 3` is "DP or 9-key" and channel `17` is FREE ZONE under IIDX
+ *      conventions; if a `#PLAYER 3` chart authors notes on `17` it can only be POPN-9.
+ *   3. **BME POPN-9 (PLAYER 1, full 1P keyboard)** — 1P-only chart that populates ALL nine of `11..19` as
+ *      playable channels. IIDX 7K uses at most `11..15 + 16 + 18 + 19` (8 channels, with `16` = scratch and `17`
+ *      typically unused or FREE-ZONE keysound only); a chart that lights up all 9 columns is POPN-9 authored as
+ *      BME. Without this rule the chart would fall through to `'7'` and the engine's 7-key SP bindings would
+ *      treat `16` as scratch, `17` as FREE-ZONE, and drop the POPN-9 `f/v/g/b` lane bindings.
+ *   4. **PMS-STD authored as `.bms`/`.bme`** — 1P side + channels `22..25` only (no `2P` scratch, no other 2P
+ *      channels, no `16` scratch on 1P, no `18/19/28/29` 6/7K columns). This is the de-facto PMS-STD layout
+ *      surfaced through a non-`.pms` filename — common when chart authors export PMS charts to `.bme` for
+ *      table-friendly tooling. The matching POPN_9KEY_PMS_BINDINGS routes `22..25` to lanes 6..9.
+ *   5. **Fallback** — classify by `2X` presence (`usesPlayer2`) and `18/19/28/29` (`uses6or7`) as IIDX `5/7/10/14`.
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
   const channels = new Set<string>();
@@ -215,7 +232,27 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
     return '9';
   }
   const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
+
+  // Rule 3 — BME POPN-9: 1P chart that authors every one of `11..19`. The IIDX 7K format never populates all
+  // nine, so a full 1P keyboard is a strong POPN-9 signal regardless of `#PLAYER` or filename extension.
+  const p1NineKeyChannels = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+  const p1Count = p1NineKeyChannels.reduce((n, c) => (channels.has(c) ? n + 1 : n), 0);
+  if (p1Count === 9 && !usesPlayer2) {
+    return '9';
+  }
+
+  // Rule 4 — PMS-STD masquerading as `.bms` / `.bme`. PMS-STD = 1P (`11..15`) + 2P-side POPN columns
+  // (`22..25`), no scratch, no 6/7K columns, no other 2P channels. The absence of scratch / 6-7K / non-POPN
+  // 2P together discriminates this from IIDX 5K DP, which always pairs each side's keyboard with `16` / `26`
+  // and typically `21`.
+  const usesPmsStd2P = ['22', '23', '24', '25'].some((c) => channels.has(c));
+  const usesOther2P = ['21', '26', '27', '28', '29'].some((c) => channels.has(c));
+  const hasScratchOn1P = channels.has('16');
   const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
+  if (usesPmsStd2P && !usesOther2P && !hasScratchOn1P && !uses6or7) {
+    return '9';
+  }
+
   if (usesPlayer2) {
     return uses6or7 ? '14' : '10';
   }

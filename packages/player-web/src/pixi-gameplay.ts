@@ -1689,6 +1689,17 @@ export class PixiGameplayView {
     // engine's, and `applyEngineFrame` ended up mirroring `judged` flags onto the wrong note. Sharing the
     // instance means the parallel arrays are no longer parallel — they're the same array, the engine mutates
     // `judged` directly, and the renderer just reads it. There is no second extract that could disagree.
+    // Resolve the chart's intended play variant up front so the lane-binding pass sees the host's
+    // classification (instead of falling back to the engine's content heuristic). Mirrors the beatoraja
+    // path's `composeBeatorajaEngineOptions` wiring at `pixi-beatoraja-gameplay.ts:1338-1340`. Without this:
+    //   - `.bme` POPN-9 charts (full `11..19` on `#PLAYER 1`) classify as `'7'` via the engine's heuristic
+    //     and lose the POPN-9 `f/v/g/b` lane bindings on channels `16..19`.
+    //   - `.bms` / `.bme` charts that author PMS-STD content (`11..15 + 22..25`, no scratch) classify as
+    //     `'10'` (IIDX 5K DP) and route the right-side POPN columns through the IIDX 2P key bindings.
+    // `resolveChartPlayVariant` already encodes the right rules for both (see `@be-music/chart`); threading
+    // the result here gives the engine + adapter + renderer a single source of truth without each one
+    // re-running its own heuristic.
+    const hostPlayVariant = this.song ? resolveChartPlayVariant(this.song) : undefined;
     const prepared = preparePlaybackChartData(
       resolved,
       {
@@ -1698,6 +1709,7 @@ export class PixiGameplayView {
         // bails immediately when the flag is off.
         showInvisibleNotes: true,
         laneModeExtension: extractChartExtension(this.song?.chartPath),
+        playVariant: hostPlayVariant,
       },
       true /* inferBmsLnTypeWhenMissing */,
       0 /* auxiliaryPlaybackEndSeconds — engine recomputes its own audio horizon from realtime triggers */,
