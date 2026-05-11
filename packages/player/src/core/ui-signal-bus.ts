@@ -52,8 +52,8 @@ export interface PlayerUiFrameNote {
    *
    * Without this field the renderer cannot replicate the LN-vs-CN head distinction and ends
    * up drawing every LN with the small `lnstart` cap on top of the body — user-visible
-   * symptom: "head の描画が正しくないかも" (the LN head's small `lns-*` cap stuck onto the
-   * body looked off compared to upstream's full note-sized head). LR2 renderers that don't
+   * symptom: the LN head's small `lns-*` cap stuck onto the body looked off compared to
+   * upstream's full note-sized head. LR2 renderers that don't
    * inspect this field continue to render as before.
    */
   longNoteMode?: 1 | 2 | 3;

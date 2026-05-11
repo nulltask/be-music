@@ -132,7 +132,8 @@ export function makeLr2BitmapTextSprite(
     cursorX += item.advance;
   }
   // LR2 shrink-to-fit: when the rendered string is wider than `dst.w`, the spec auto-compresses it to fit
-  // (`docs/LR2SkinHelp.md` line 1343: "表示文字列の横幅がDSTのw値を超えるサイズになった場合は自動的に縮小されます"). We squeeze the inner container's
+  // (`docs/LR2SkinHelp.md` line 1343 — translated from Japanese: "If the rendered text width exceeds the DST w value,
+  // it is automatically scaled down to fit"). We squeeze the inner container's
   // `scale.x` so glyph height stays at `targetHeight` and only the horizontal stride compresses — same shape as the LR2
   // reference renderer (and why the spec calls `filter` "essentially required": the squeeze stretches glyphs
   // horizontally and looks jagged without bilinear filtering).

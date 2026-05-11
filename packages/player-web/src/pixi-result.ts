@@ -1392,8 +1392,8 @@ function resolveResultRankIndex(data: PixiGameplayResultData): number {
 }
 
 /**
- * Resolves an LR2 `#SRC_NUMBER` slot to a numeric value from the play result. Coverage matches `docs/LR2SkinHelp.md` `#
- * num 一覧`:
+ * Resolves an LR2 `#SRC_NUMBER` slot to a numeric value from the play result. Coverage matches `docs/LR2SkinHelp.md`'s
+ * `# num list` section (`# num 一覧` in the original Japanese):
  *
  * - **70..76** — best-score panel slots, treated here as the just-played chart's totals (no history yet, so "best" =
  *   "current"). 72 = theoretical EX max = `totalNotes * 2`.

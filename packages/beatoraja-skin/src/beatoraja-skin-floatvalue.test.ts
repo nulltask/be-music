@@ -204,14 +204,14 @@ describe('composeBeatorajaFloatValueCells (audit A-1 / A-2 — upstream FloatFor
   });
 });
 
-describe('composeBeatorajaFloatValueShift (audit A-1 — align=0:左 / 1:右 / 2:中央)', () => {
+describe('composeBeatorajaFloatValueShift (audit A-1 — align=0=LEFT / 1=RIGHT / 2=CENTER)', () => {
   // 10-cell digits-only strip with iketa=3, fketa=0 — the TRAILING nulls when value's int
   // width is shorter than iketa drive shiftbase. Per `SkinFloat.java:60-62`:
   //   align=0 LEFT (default) → no shift.
   //   align=1 RIGHT          → shift = shiftbase * (slotW + space). Renderer ADDS shift to slot.x.
   //   align=2 CENTER         → shift = shiftbase * (slotW + space) * 0.5.
   //
-  // These align meanings are the OPPOSITE of `SkinNumber.java`'s 0:右 / 1:左 / 2:中央 — the
+  // These align meanings are the OPPOSITE of `SkinNumber.java`'s 0=RIGHT / 1=LEFT / 2=CENTER — the
   // two element types share the field name but author them with mirror-image conventions.
   const digitOnlyElement: BeatorajaFloatValueElement = {
     id: 'fv',
@@ -237,7 +237,7 @@ describe('composeBeatorajaFloatValueShift (audit A-1 — align=0:左 / 1:右 / 2
   };
 
   it('returns 0 for align=0 (LEFT-flush, the upstream default)', () => {
-    // align=0 is `0:左` in `SkinFloat.java:60-62`. Visible content sits at LOW slot indices
+    // align=0 is `0=LEFT` in `SkinFloat.java:60-62`. Visible content sits at LOW slot indices
     // naturally — no shift needed for left-flush.
     expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 0 }, 5, 40)).toBe(0);
   });
@@ -248,7 +248,7 @@ describe('composeBeatorajaFloatValueShift (audit A-1 — align=0:左 / 1:右 / 2
     expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 2 }, 123, 40)).toBe(0);
   });
 
-  it('returns shiftbase * (slotW + space) for align=1 (RIGHT-flush, upstream "1:右")', () => {
+  it('returns shiftbase * (slotW + space) for align=1 (RIGHT-flush, upstream "1=RIGHT")', () => {
     // value=5 in iketa=3, fketa=0: digits walks [5, hidden, hidden] at slots 0/1/2.
     // shiftbase=2 (two trailing nulls). shift = 2 * (40 + 0) = 80.
     // Renderer ADDS this shift to slot.x so visible "5" lands at slot 0 + shift = 80px,
@@ -256,7 +256,7 @@ describe('composeBeatorajaFloatValueShift (audit A-1 — align=0:左 / 1:右 / 2
     expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 1 }, 5, 40)).toBe(80);
   });
 
-  it('returns half shiftbase * slotWidth for align=2 (CENTER, upstream "2:中央")', () => {
+  it('returns half shiftbase * slotWidth for align=2 (CENTER, upstream "2=CENTER")', () => {
     // value=5, shiftbase=2, slotW=40 → shift = 2 * 40 * 0.5 = 40.
     expect(composeBeatorajaFloatValueShift({ ...digitOnlyElement, align: 2 }, 5, 40)).toBe(40);
   });

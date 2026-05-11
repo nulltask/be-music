@@ -211,9 +211,9 @@ export interface PlayerOptions {
    * adapter (via the host) had their `f/v/g/b` inputs dropped because the engine's lane
    * bindings followed `7-key-sp` (channel 16 → scratch, channel 17 → FREE ZONE, etc.).
    *
-   * User report: "9 KEY でレーザーとボムが表示されません". The previous `laneModeExtension`-only
-   * inference (c0da7b5) only worked for charts the heuristic could classify; this override
-   * lets the host force the engine into the variant it already decided on.
+   * User report: 9 KEY laser and bomb sprites failed to appear. The previous
+   * `laneModeExtension`-only inference (c0da7b5) only worked for charts the heuristic could
+   * classify; this override lets the host force the engine into the variant it already decided on.
    */
   playVariant?: ChartPlayVariant;
   /**
@@ -3076,7 +3076,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      // LR2-compatible 空POOR (empty POOR): phantom press with no candidate and no benign explanation. Apply the gauge
+      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press with no candidate and no benign explanation. Apply the gauge
       // delta (GROOVE / HARD -2, EASY -1, DEATH -100 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR
       // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behavior: NORMAL / EASY make this nearly
       // harmless; HARD / DEATH actually drain.

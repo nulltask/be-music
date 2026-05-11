@@ -124,7 +124,7 @@ export function unicodeToLr2CharCode(char: string): number | undefined {
   const sjis = unicodeToSjis(codePoint);
   if (sjis === undefined) return undefined;
   // SJIS double-byte: split into high/low and decimal-encode as `(high << 8) | low` (i.e. `high * 256 + low` per LR2
-  // spec "Shift-JIS文字コードを10進数に変換").
+  // spec; the original Japanese phrasing translates to "convert the Shift-JIS character code to decimal").
   const decimal = sjis;
   if (decimal >= 33088 && decimal < 33088 + (SJIS_RANGE_1_END - 256 + 1) * 1) {
     // Range 1: `0x8140..0x9FFC` → 256..8126

@@ -1,7 +1,7 @@
 // Regression test for the beatoraja `angle` direction codes on graph[] and slider[]. The two
 // element types share a JSON field name but NOT the value space:
 //
-//   - `slider[].angle` (`SkinSlider.java:26`): 4 values — `0:上 1:右 2:下 3:左` (up/right/down/left).
+//   - `slider[].angle` (`SkinSlider.java:26`): 4 values — `0=up 1=right 2=down 3=left`.
 //     The `draw()` math `region.y + (dir==0 ? +v*range : dir==2 ? -v*range : 0)` confirms
 //     libGDX Y-UP semantics where direction 0 adds to skin y (visually up in Y-UP). After our
 //     Pixi Y-DOWN flip, the source labels line up with screen-visual direction labels.

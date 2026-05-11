@@ -608,7 +608,8 @@ async function startPreviewPlayback(rendered: RenderResult): Promise<PreviewPlay
 
   const chunk = Buffer.allocUnsafe(PREVIEW_CHUNK_FRAMES * 4);
 
-  // 起動直後の失敗を検知するため、最初のチャンクを先に書き込む。
+  // Write the first chunk eagerly so that any immediate startup failure surfaces synchronously,
+  // before we enter the streaming loop.
   playhead = writeLoopedPreviewPcmChunk(chunk, rendered, playhead);
   const firstWritable = output.write(chunk);
   if (!firstWritable) {

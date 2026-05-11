@@ -338,7 +338,8 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
   };
 }
 
-// Vite alias は string で starts-with マッチするので、長いサブパスを先に並べる必要がある。
+// Vite resolves aliases by string `startsWith` match, so longer subpaths must come first — otherwise
+// a shorter prefix entry would shadow them.
 //
 // `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
 // lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as

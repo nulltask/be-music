@@ -311,8 +311,7 @@ export interface Lr2GaugeChartElement {
 
 /**
  * `#SRC_SCORECHART` source-rect — same extra columns as gauge-chart but the `index` enum is different per spec
- * (`docs/LR2SkinHelp.md` lines 10392+): - 0 = 今回のスコア (this play) - 1 = 自己ベストスコア (personal best) - 2 = ライバルスコア (rival /
- * target)
+ * (`docs/LR2SkinHelp.md` lines 10392+): - 0 = this play - 1 = personal best - 2 = rival / target
  *
  * The `value` axis runs 0..1 (EX-score / theoretical max) so the polyline maps the same way GAUGECHART does.
  */
@@ -336,7 +335,8 @@ export interface Lr2ScoreChartElement {
 /**
  * `#SRC_BUTTON` + `#DST_BUTTON`. A button element shows a per-state cell from a sprite sheet: `divx*divy` cells
  * correspond to the possible states of the button's `type` (sort, difficulty filter, play-mode, panel toggle, etc.) —
- * see `# button_type 一覧` in `docs/LR2SkinHelp.md` (lines 5887+) for the full enum.
+ * see the `# button_type` list (`# button_type 一覧` in the original Japanese spec) in
+ * `docs/LR2SkinHelp.md` (lines 5887+) for the full enum.
  *
  * State management & click handling aren't wired yet; the renderer just paints the cell at the current button state
  * index (cell 0 by default) so the static frame shows the right artwork.
@@ -1017,8 +1017,9 @@ const NOTE_COMMANDS: Record<string, keyof Lr2Skin['notes']> = {
   '#SRC_AUTO_MINE': 'automine',
 };
 
-// LR2 NOWJUDGE_1P index mapping (per the LR2skin spec): 0 = early POOR (空POOR), 1 = POOR (見逃し), 2 = BAD, 3 = GOOD, 4 =
-// GREAT, 5 = PERFECT (= JUST GREAT). Both POOR variants render with the same kind.
+// LR2 NOWJUDGE_1P index mapping (per the LR2skin spec): 0 = early POOR (empty-press / kara-poor), 1 = POOR
+// (miss / minogashi-poor), 2 = BAD, 3 = GOOD, 4 = GREAT, 5 = PERFECT (= JUST GREAT). Both POOR variants render
+// with the same kind.
 const NOW_JUDGE_1P_KIND_BY_INDEX: ReadonlyMap<number, keyof Lr2Skin['judges']> = new Map([
   [0, 'poor'],
   [1, 'poor'],

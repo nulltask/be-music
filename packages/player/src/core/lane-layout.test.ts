@@ -128,8 +128,9 @@ describe('lane mode `playVariant` host override (PlayerOptions.playVariant)', ()
   test('forces 9-key bindings on a `.bme` chart authored with #PLAYER 1 + channels 16/17/18/19', () => {
     // BME-format POPN-9 charts that authored `#PLAYER 1` and used channels 16/17/18/19 fell
     // through the content-based heuristic to `7-key-sp`, dropping channel 17 from
-    // `scorableNotes` (FREE ZONE clamp) and binding f/v to 18/19 only (no g/b). User report:
-    // "9 KEY でレーザーとボムが表示されません". With the host's `playVariant: '9'` override,
+    // `scorableNotes` (FREE ZONE clamp) and binding f/v to 18/19 only (no g/b). User-reported
+    // symptom: 9 KEY laser and bomb sprites failed to appear. With the host's
+    // `playVariant: '9'` override,
     // the engine routes those channels through POPN-9 bindings regardless of the heuristic.
     const channels = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
     const withOverride = createLaneBindings(channels, { player: 1, chartExtension: '.bme', playVariant: '9' });

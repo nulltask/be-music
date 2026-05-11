@@ -880,8 +880,8 @@ describe('player', () => {
     expect(summary.great).toBe(0);
     expect(summary.good).toBe(0);
     expect(summary.bad).toBe(0);
-    // 空POOR is NOT counted in `summary.poor` — that slot is reserved for 見逃しPOOR (notes that passed without input).
-    // Matches LR2.
+    // Empty POOR (kara-poor / 空POOR) is NOT counted in `summary.poor` — that slot is reserved for miss POOR
+    // (minogashi-poor / 見逃しPOOR, i.e. notes that passed without input). Matches LR2.
     expect(summary.poor).toBe(0);
     // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see `applyGrooveGaugeJudge`), giving 18. Matches LR2:
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).

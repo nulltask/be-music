@@ -205,9 +205,10 @@ export function renderGrooveGaugeElement(
   if (!baseTexture) {
     return;
   }
-  // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012):
+  // LR2 spec (`docs/LR2SkinHelp.md` 8975 / 9012), translated from Japanese:
   //
-  // ゲージ点灯時の赤・緑、ゲージ消灯時の赤・緑の順に並べて src分割を行ってください。4の倍数でcycle>0ならちゃんと アニメーションします
+  //   "Lay out the src cells in this order: gauge-lit red, gauge-lit green, gauge-unlit red,
+  //    gauge-unlit green. When the total cell count is a multiple of 4 and cycle > 0 it animates correctly."
   //
   // So `divx × divy` cells decompose into `frames = N / 4` animation frames; each frame is a contiguous group of 4
   // cells in declaration order (active-red / active-green / inactive-red / inactive-green). The frame index advances by
@@ -242,8 +243,8 @@ export function renderGrooveGaugeElement(
     const isPeakIndicator = !isActive && unitIndex === peakIndex && peakIndex >= activeUnits;
     const useActiveCell = isActive || isPeakIndicator;
     const isClearZone = unitIndex >= clearThresholdUnit;
-    // LR2 spec ordering inside each 4-cell frame: offset 0: 表赤 — lit, red (warning zone, below 80 %) offset 1: 表緑 —
-    // lit, green (clear zone, ≥ 80 %) offset 2: 裏赤 — unlit, red (warning zone) offset 3: 裏緑 — unlit, green (clear zone)
+    // LR2 spec ordering inside each 4-cell frame: offset 0: lit-red (warning zone, below 80 %), offset 1: lit-green
+    // (clear zone, ≥ 80 %), offset 2: unlit-red (warning zone), offset 3: unlit-green (clear zone).
     // i.e. red marks the *below*-clear-threshold beads, green marks the clear zone — matches the IIDX-style "your gauge
     // is below 80, you're in danger" color cue. Earlier the frame ordering was correct but the zone mapping was
     // inverted; this patch restores `clearZone ? 1 : 0`.

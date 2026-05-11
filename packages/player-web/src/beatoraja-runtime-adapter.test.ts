@@ -199,7 +199,9 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     //
     // Upstream `JudgeManager` stamps the HOLD timer (`hold_*p_keyN`) automatically on
     // every LN tail verdict; this regression test pins that synthesis at the adapter
-    // boundary.  User report: "tail でボムが表示されない (modernchic 限定)".
+    // boundary.  User report: the lnbomb sprite disappeared at the LN tail (ModernChic
+    // only — the symptom is skin-specific because most skins don't author a per-tail
+    // bomb animation).
     //
     // Sequence:
     //   1. hold-lane-until-beat at t=100 → LN-hold timer = 100, latch set
@@ -223,8 +225,9 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     // LN-hold timer re-stamped at the tail moment so ModernChic's lnbomb cycle resyncs.
     expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBe(300);
     // Combo timer (446 = 1P) also re-stamped — PERFECT advances combo, so ModernChic's
-    // combo digit animation resyncs at the tail in tandem. Addresses "tail でコンボ数が
-    // カウントアップされない (modernchic 限定)".
+    // combo digit animation resyncs at the tail in tandem. Addresses the user report
+    // that the combo-digit animation failed to re-trigger on the LN tail under
+    // ModernChic.
     expect(adapter.getTimerStart(446)).toBe(300);
   });
 
@@ -233,7 +236,8 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     // beatoraja `Destination.loop` default, which ModernChic's lnbomb declaration inherits
     // by omitting the field) stop animating after their cycle. Without auto-release, a
     // re-stamped HOLD timer stays "on" forever and the lnbomb sprite loops indefinitely.
-    // User report: "AUTO PLAY で LN 判定後ボムが消えない".
+    // User report: under AUTO PLAY the lnbomb sprite never disappeared after the LN
+    // verdict landed — it stayed on screen indefinitely.
     //
     // We use vitest's fake timers to verify the timeout fires; the exact window (320 ms)
     // is documented in the adapter under `LN_TAIL_BOMB_HOLD_MS`.

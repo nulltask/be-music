@@ -205,8 +205,10 @@ export class BeatorajaSkinOptionsGui {
     };
 
     // Build the category-id → display-label map up front. Header `category[]` (community-skin
-    // only — GdbG_Skin and ModernChic populate it) declares groups like `{name: "メイン", item:
-    // ["main_1", "main_2", …]}`. Each property's / filepath's `category` field is one of those
+    // only — GdbG_Skin and ModernChic populate it) declares groups like `{name: "Main", item:
+    // ["main_1", "main_2", …]}` (community skins author the labels in Japanese — e.g. `メイン`
+    // / `プレイ` — and we surface them verbatim in the dropdown). Each property's / filepath's
+    // `category` field is one of those
     // ids; the GUI inverts the relationship to render category-named folders. Skins that don't
     // author the table fall through to the legacy flat "Options" / "Files" folders, so existing
     // single-folder skins (the reference theme) keep working unchanged.
@@ -288,9 +290,9 @@ export class BeatorajaSkinOptionsGui {
         for (const candidate of candidates) optionMap[candidate] = candidate;
         if (this.state.file[fp.name] === undefined) this.state.file[fp.name] = '';
         // Filepath folders prefix with `'Files: '` to disambiguate from property folders that
-        // happen to share a category label (e.g. GdbG's `'プレイ'` covers both options and
-        // files). Without the prefix the two would collide and lil-gui would error on duplicate
-        // folder names within the same parent.
+        // happen to share a category label (e.g. GdbG's "Play" category — authored as `プレイ`
+        // in the skin JSON — covers both options and files). Without the prefix the two would
+        // collide and lil-gui would error on duplicate folder names within the same parent.
         const rawLabel = resolveCategoryFolderName(fp.category) ?? 'Files';
         const folderLabel = rawLabel === 'Files' ? 'Files' : `Files: ${rawLabel}`;
         folderFor(folderLabel).add(this.state.file, fp.name, optionMap).name(fp.name).onChange(emit);

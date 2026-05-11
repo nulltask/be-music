@@ -79,7 +79,7 @@ export type EngineDriverResult = PlayerSummary;
  *
  * Beatoraja-compatible behavior the engine drives for both runtimes (TUI + Web):
  * - Look-ahead lane keysound fallback (`findLaneSoundCandidate`) on out-of-window presses.
- * - Free-Zone (`17` / `27`) channels — empty press plays the keysound, no 空POOR.
+ * - Free-Zone (`17` / `27`) channels — empty press plays the keysound, no empty-POOR penalty.
  * - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
  * - LN early-release audio cut via `AudioSession.stopChannel`.
  * - Mine vs note delta-based priority (closest delta wins).

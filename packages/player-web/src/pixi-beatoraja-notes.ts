@@ -121,8 +121,8 @@ export class BeatorajaNoteLayer {
    * tap-note via `acquireSprite(0)` before any LN exists captures `spritePool[0]` at
    * Z position 0. A later frame that drops the tap-note and uses pool index 0 for an LN
    * START CAP draws the head behind every subsequently-mounted body sprite (which were
-   * added LATER and thus sit on top). User report: "LN の head が body の手前に表示
-   * されない".
+   * added LATER and thus sit on top). User-reported symptom: the LN head sprite
+   * appeared BEHIND the body instead of in front of it.
    *
    * Splitting bodies and caps into their own containers fixes the Z order at the
    * CONTAINER level, which doesn't depend on pool slot ordering. The body container
@@ -231,8 +231,8 @@ export class BeatorajaNoteLayer {
       // flags `note.judged = true` at LN head time (manual `markScorableJudged` at
       // `engine.ts:3077` / autoplay's `note.judged = true` at `engine.ts:2139`), so a naive
       // `if (note.judged) continue` here would clip the entire LN — body, tail, and all —
-      // the moment the head was hit. User report: "head の判定が始まると LN ノートが
-      // 消えてしまう". The LN branch below handles its own tail-past culling via the
+      // the moment the head was hit. User-reported symptom: LN notes disappeared
+      // as soon as the head's judge fired. The LN branch below handles its own tail-past culling via the
       // `yEnd` check.
       if (!isLongNote && note.judged) continue;
       const lane = this.resolveLane(note);
@@ -264,8 +264,8 @@ export class BeatorajaNoteLayer {
         // ONLY for the LN whose head has been judged (mirrors upstream's `state.processing`
         // pointer in `JudgeManager`, which holds the specific `LongNote` pair currently
         // resolving).  Result: only the judged LN gets the held / glow sprite; unrelated
-        // LNs further down the lane render their unheld variant.  User report: "判定して
-        // いない同一レーンの LN ノートも光ってしまう".
+        // LNs further down the lane render their unheld variant. User-reported symptom:
+        // un-judged LNs on the same lane glowed alongside the currently-judged one.
         const isThisNoteBeingJudged = note.judged;
         const heldChannel = isLaneLnHeld !== undefined ? isLaneLnHeld(note.channel) : true;
         const held = isThisNoteBeingJudged && heldChannel;
@@ -430,8 +430,8 @@ export class BeatorajaNoteLayer {
       // height regardless of lane width — default skin's note images are 12 px tall but
       // 21 / 27 / 46 px wide depending on key flavour, while lane widths are 40 / 50 / 70
       // px. Scaling H by `lane.w / cellW` (the obvious "preserve aspect ratio" choice)
-      // produced 22-23 px tall notes — the user reported "ノートの高さが beatoraja より
-      // 高く". The pinned bottom edge stays at the judgement line via `y - drawH`.
+      // produced 22-23 px tall notes — the user reported the notes were visibly taller
+      // than in upstream beatoraja. The pinned bottom edge stays at the judgement line via `y - drawH`.
       const drawH = cropped.cellH;
       // Apply the skin's `note.expansionrate` (default `[100, 100]` = no scaling). 9K's
       // `play9.json` authors `[115, 112]` (1.15× wider, 1.12× taller) for chunkier popn-style

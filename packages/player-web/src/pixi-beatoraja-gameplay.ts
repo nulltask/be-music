@@ -195,8 +195,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * runs with `backgroundAlpha: 0` so all scenes share a transparent canvas and decide for themselves
    * what to paint behind their content. Without this Graphics, the page's white background bleeds into
    * the letterbox bars on either side of a 16:9 skin in a non-16:9 viewport — which makes the rendered
-   * area look narrower than it actually is and was the most likely cause of "ステージサイズがおかしい"
-   * after the chrome was rendering correctly.
+   * area look narrower than it actually is and was the most likely cause of user reports
+   * about the stage appearing wrongly-sized after the chrome was rendering correctly.
    */
   private readonly backdrop = new Graphics();
   // Visual layers — re-built in `replaceSkin` so option changes can hot-swap the chrome without

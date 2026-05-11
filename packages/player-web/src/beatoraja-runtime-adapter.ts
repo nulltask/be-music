@@ -206,8 +206,9 @@ const FLASH_LANE_HOLD_MS = 60;
  *
  * Our adapter doesn't run a per-frame `switchTimer` sweep, so without an explicit
  * auto-release the re-stamp would leave the timer permanently `on` — and a `loop = 0`
- * bomb destination would animate forever. User report: "AUTO PLAY で LN 判定後ボムが
- * 消えない". Pinning the window at 320 ms covers all surveyed lnbomb cycles
+ * bomb destination would animate forever. User-reported symptom: in AUTO PLAY the LN
+ * bomb sprite stayed visible after the LN finished judging. Pinning the window at
+ * 320 ms covers all surveyed lnbomb cycles
  * (ModernChic `lnbombCycle = 160`, GdbG variants up to ~200) with a comfortable
  * safety margin, while still being short enough that a subsequent LN on the same
  * lane stamps a fresh start time before the auto-release fires.
@@ -1054,15 +1055,15 @@ export class BeatorajaRuntimeAdapter {
     // `timer = MAIN.TIMER.HOLD_1P_KEY*` (= 71..77) and `cycle = 160`. Without this re-stamp
     // the timer's last `t=0` mark was at LN HEAD time — the 160 ms cycle elapsed long before
     // the tail, so the lnbomb sprite was past frame 8 (= invisible) by the time the tail
-    // landed. User report: "tail でボムが表示されない (modernchic 限定)". GdbG's lnbomb
-    // declaration uses the same timer IDs but a longer cycle, so its head-time stamp was
-    // still within the visible window when the tail arrived — hence GdbG's tail bombs
-    // appeared even without this synthesis.
+    // landed. User-reported symptom: LN tail bomb didn't show on ModernChic (GdbG was fine).
+    // GdbG's lnbomb declaration uses the same timer IDs but a longer cycle, so its head-time
+    // stamp was still within the visible window when the tail arrived — hence GdbG's tail
+    // bombs appeared even without this synthesis.
     //
     // The companion combo-timer re-stamp at line 1005 (`comboTimerId(side)`) already runs
     // for LN tail verdicts (they're combo-advancing judges), so ModernChic's combo digit
-    // animation also resyncs at the tail — addresses "tail でコンボ数がカウントアップ
-    // されない (modernchic 限定)" in tandem with this change.
+    // animation also resyncs at the tail — addresses the user's matching "ModernChic combo
+    // doesn't tick up at the LN tail" report in tandem with this change.
     if (state.channel !== undefined && this.lnTailVerdictLatch.has(state.channel)) {
       this.startLaneLnHoldTimer(state.channel);
       this.lnTailVerdictLatch.delete(state.channel);
@@ -1072,7 +1073,8 @@ export class BeatorajaRuntimeAdapter {
       // `switchTimer(holdTimerId, processing != null)` (`JudgeManager.java:546-547`) which
       // flips the timer OFF on the tick after the tail's `processing` clears. Without this,
       // a re-stamped tail-time HOLD timer stays "on" forever and the lnbomb animation
-      // loops indefinitely. User report: "AUTO PLAY で LN 判定後ボムが消えない".
+      // loops indefinitely. User-reported symptom: in AUTO PLAY the LN bomb sprite stayed
+      // visible after the LN finished judging.
       const channel = state.channel;
       const handle = setTimeout(() => {
         this.lnTailBombReleaseHandles.delete(handle);

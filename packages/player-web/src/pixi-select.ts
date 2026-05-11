@@ -278,7 +278,7 @@ const BGA_SIZE_CYCLE: readonly PixiBgaSize[] = ['NORMAL', 'EXTEND'];
 
 /**
  * Cycle order for {@link PixiPlayOptions.difficultyFilter}. Matches the LR2 `#SRC_BUTTON,type=10` cell order (off /
- * easy / normal / hard / expert / 発狂). The direct-set buttons (types 91..96) map onto specific entries here via {@link
+ * easy / normal / hard / expert / insane). The direct-set buttons (types 91..96) map onto specific entries here via {@link
  * DIFFICULTY_FILTER_BY_DIRECT_BUTTON}.
  */
 const DIFFICULTY_FILTER_CYCLE: readonly PixiDifficultyFilter[] = [
@@ -1936,7 +1936,7 @@ export class PixiSongSelectView {
       this.togglePanel(type);
       return;
     }
-    // HS-1P / HS-2P (button_type 57 / 58). Spec: "数値変化機能のみ". The `plusOnly` field tells us the click direction: - `1` →
+    // HS-1P / HS-2P (button_type 57 / 58). Spec: "numeric-change function only". The `plusOnly` field tells us the click direction: - `1` →
     // this button raises HS by one step - `-1` → this button lowers HS by one step - `0` → ambiguous; treat left-click
     // as +step (right-click could be wired to -step in a future pass, but we don't track button affinities yet)
     if (type === 57 || type === 58) {
@@ -2003,7 +2003,7 @@ export class PixiSongSelectView {
       this.cyclePlayOption('hiddenSudden2P', HIDDEN_SUDDEN_CYCLE);
       return;
     }
-    // LANE COVER (シャッター) ON / OFF toggle (button_type 46). Per LR2's `button.txt`: type 46 is "シャッター" with no declared
+    // LANE COVER (shutter) ON / OFF toggle (button_type 46). Per LR2's `button.txt`: type 46 is "shutter" with no declared
     // cycle values — it's a binary toggle. The height (slider type 4 / 5) is preserved across toggles via
     // `playOptions.shutter`.
     if (type === 46) {
@@ -2385,8 +2385,8 @@ export class PixiSongSelectView {
     if (isEditableTarget(event.target)) {
       return;
     }
-    // Space toggles LR2 panel 1 (the play-options panel by convention — LR2SkinHelp line 9101: "選曲スキンでのみ
-    // 『スタートボタンでパネル1の呼び出し』が行えます"). We bind it to Space rather than Enter because Enter is already the song-pick /
+    // Space toggles LR2 panel 1 (the play-options panel by convention — LR2SkinHelp line 9101: only the song-select skin
+    // supports invoking panel 1 via the start button). We bind it to Space rather than Enter because Enter is already the song-pick /
     // folder-enter accelerator on this view.
     if (event.code === 'Space') {
       event.preventDefault();
@@ -3047,7 +3047,7 @@ export class PixiSongSelectView {
     if (timer >= 10 && timer <= 13) {
       return this.timerStartedAt.has(timer);
     }
-    // Panel-open timers 21..29 — active iff that panel is currently open. LR2 spec: "パネルが閉じたらオフになります" so the timer
+    // Panel-open timers 21..29 — active iff that panel is currently open. LR2 spec: the timer is OFF once the panel closes, so the timer
     // implicitly stops when `togglePanel` clears the state, even if the seed timestamp is left in `timerStartedAt`.
     if (timer >= 21 && timer <= 29) {
       const which = timer - 20;
@@ -3268,7 +3268,7 @@ export class PixiSongSelectView {
    * Returns a 0..1 value for an `#SRC_SLIDER` element on the select screen, or `undefined` when the type isn't
    * meaningful here (e.g. play-time hi-speed / shutter sliders that LR2 still allows in select skins as decoration).
    *
-   * The only slider we currently drive is `type=1` ("曲セレクト ポジション") — the orange / teal scroll-position bar that lives
+   * The only slider we currently drive is `type=1` ("song-select position") — the orange / teal scroll-position bar that lives
    * to the right of the bar list. Its value is the **visual** cursor index normalized against the visible entry count,
    * where "visual" means we lag the discrete selectedIndex by the active smooth-scroll offset so the knob slides in
    * lockstep with the bars (LR2 itself doesn't define slider easing in the skin format — `#SRC_SLIDER` / `#DST_SLIDER`
@@ -3473,7 +3473,7 @@ export class PixiSongSelectView {
         }
       }
       if (entry) {
-        // BAR_TITLE DST x/y are RELATIVE to the bar's top-left (`bar.txt`: "DST座標はバーのxy座標からの相対位置を指定").
+        // BAR_TITLE DST x/y are RELATIVE to the bar's top-left (`bar.txt`: DST coordinates are specified relative to the bar's xy origin).
         this.drawBarTitleText(entry, dst, layout.title, skin);
       }
       // BAR_LEVEL: per-bar level number for SONG entries only. Folder entries don't carry a level so they leave the
@@ -3674,7 +3674,7 @@ export class PixiSongSelectView {
         // System sans-serif looks too "thick" at small sizes vs an image font. A regular weight reads cleaner.
         fontWeight: '500',
         fontFamily: 'system-ui, sans-serif',
-        // 袋文字 (outlined text) — LR2 reference skins bake a 1–2 px black outline into their bar-title bitmaps so titles
+        // Outlined text — LR2 reference skins bake a 1–2 px black outline into their bar-title bitmaps so titles
         // read cleanly against the colored BAR_BODY artwork. Match that by stroking the fallback.
         stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
       }),
@@ -3982,7 +3982,7 @@ function resolveSelectText(
       return playOptions.scoreGraph ? 'ON' : 'OFF';
     case 72: // ghost
       return 'OFF';
-    case 73: // LANE COVER (シャッター)
+    case 73: // LANE COVER (shutter)
       // LR2's SYSTEM OPTION row labels this slot "LANE COVER" and shows the binary ON / OFF state — the height
       // percentage belongs to the slider next to the value, not the value text itself. (We previously rendered a
       // percentage here, which made the row look like a numeric option instead of a toggle.)
@@ -4045,7 +4045,7 @@ function resolveSelectText(
     case 28:
       return resolveDifficultyName(song.chart.metadata.difficulty);
     case 29:
-      // 発狂レベル (insane level) — same source as playLevel for now, since we don't ship a separate insane-table
+      // Insane level — same source as playLevel for now, since we don't ship a separate insane-table
       // integration.
       return song.chart.metadata.difficulty === 5 ? (song.playLevel?.toString() ?? '') : '';
     default:
@@ -4055,7 +4055,7 @@ function resolveSelectText(
 
 /**
  * Resolves an LR2 `#SRC_NUMBER` source-num onto a numeric value pulled from the focused song's metadata or static skin
- * state. Numbers map to the canonical slots in `docs/LR2SkinHelp.md` `# num 一覧`:
+ * state. Numbers map to the canonical slots in `docs/LR2SkinHelp.md` `# num list`:
  *
  * - **10..15** — play option values (HS, JUDGE TIMING, SUD+). Mostly placeholder until preferences persist.
  * - **20..26** — fps / date / time. Only `20=fps` actively varies.
@@ -4133,7 +4133,7 @@ function resolveSelectNumber(
     case 70: // best score
     case 71: // best exscore
       return 0;
-    case 72: // exscore 理論値 (= totalnotes * 2)
+    case 72: // exscore theoretical max (= totalnotes * 2)
       return totalNotes * 2;
     case 73: // best rate
       return 0;
@@ -4387,7 +4387,7 @@ export function matchesSearchQuery(entry: BrowserBrowseEntry, lowerQuery: string
 }
 
 /**
- * Returns the cell index a `#SRC_BUTTON` should display for the current option state. Mapped per LR2 `# button_type 一覧`
+ * Returns the cell index a `#SRC_BUTTON` should display for the current option state. Mapped per LR2 `# button_type list`
  * (`docs/LR2SkinHelp.md` lines 5887+). Types not yet tracked by {@link PixiPlayOptions} fall back to cell 0 ("OFF" /
  * "ALL" / "GROOVE" / etc.). The `cellCount = divx * divy` cap prevents an out-of-range index from sampling outside the
  * source rect.
@@ -4424,7 +4424,7 @@ function resolveButtonStateIndex(type: number, cellCount: number, playOptions: P
     // HIDDEN/SUDDEN 2P — independent cycle from the 1P button.
     stateIndex = HIDDEN_SUDDEN_CYCLE.indexOf(playOptions.hiddenSudden2P);
   } else if (type === 46) {
-    // LANE COVER (シャッター): cell 0 = OFF, cell 1 = ON.
+    // LANE COVER (shutter): cell 0 = OFF, cell 1 = ON.
     stateIndex = playOptions.laneCover ? 1 : 0;
   } else if (type === 44) {
     // Autoscratch 1P: cell 0 = OFF, cell 1 = ON.

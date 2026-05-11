@@ -85,7 +85,7 @@ function normalizeOne(entry: NormalizedElement): BeatorajaSliderElement | undefi
 function angleField(value: unknown): BeatorajaSliderDirection {
   if (typeof value === 'number') {
     // Beatoraja's direction codes are explicit in `SkinSlider.java` line 26:
-    // `slider移動方向(0:上, 1:右, 2:下, 3:左)` (0=up, 1=right, 2=down, 3=left). The `draw()` math
+    // slider travel direction `0=up, 1=right, 2=down, 3=left`. The `draw()` math
     // (`region.y + (dir==0 ? +currentValue*range : dir==2 ? -currentValue*range : 0)`) confirms
     // libGDX Y-UP — direction 0 ADDS to skin y, which is visually upward. We Y-flip dst rects on
     // the way to Pixi, so the screen-visual direction labels line up with the source labels here.

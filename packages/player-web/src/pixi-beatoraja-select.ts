@@ -1471,11 +1471,11 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * Cycle the keymode filter and rebuild the song list against the new filter. Wraps at 0..7.
    *
    * Preserves the active folder stack — the filter narrows the songs visible WITHIN whatever
-   * folder the user is currently browsing instead of yanking them back to root. User report:
-   * "SONG SELECT で KEY の絞り込みを変更するとフォルダ一覧に戻ってしまう。表示しているフォルダ
-   * 内で絞り込みを行う。" The previous "pop back to root on filter change" behavior was a
-   * defensive measure against folders becoming empty after filtering, but folders going
-   * empty is a fine state — the user can back out with Escape.
+   * folder the user is currently browsing instead of yanking them back to root. User-reported
+   * symptom: cycling the KEY filter in SONG SELECT bounced the cursor back to the folder list
+   * instead of filtering within the open folder. The previous "pop back to root on filter
+   * change" behavior was a defensive measure against folders becoming empty after filtering,
+   * but folders going empty is a fine state — the user can back out with Escape.
    *
    * Cursor restoration: when the previously-focused song still exists in the post-filter
    * entries, snap the cursor to its new index. Otherwise clamp to whatever the filter left
@@ -2608,7 +2608,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
   /**
    * Move the cursor by `delta` rows, wrapping around list bounds (last row → first row on
    * forward overflow, first row → last row on backward overflow). Beatoraja's reference song
-   * select wheel is circular and this matches that behavior — the user reported "選曲リストは循環します".
+   * select wheel is circular and this matches that behavior — the user reported the song-select
+   * list should wrap around at the ends.
    *
    * Wrap detection adjusts `scrollPosition` so the smooth-scroll tween takes the SHORT path
    * around the boundary instead of sliding visually through every row in between. Without

@@ -470,7 +470,8 @@ describe('loadLr2SkinFromSourceFiles', () => {
     expect(skin?.images[0]?.source.imagePath).toMatch(/\*\.tga$/u);
     const bytes = resolveLr2AssetBytes(skin!, skin!.images[0]!.source.imagePath);
     expect(bytes).toBe(tga);
-    // 同じ basename の `parts.tga` (Decide フォルダ) は close フォルダ要求では選ばれない
+    // A `parts.tga` with the same basename sitting in the Decide folder must NOT be selected
+    // when the wildcard scope is the close folder — the wildcard must stay folder-scoped.
     const candidatePaths = [...skin!.files.keys()];
     expect(candidatePaths).toContain('skin/Decide/parts.tga');
   });

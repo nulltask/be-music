@@ -1925,7 +1925,7 @@ export class PixiGameplayView {
       34, // ghost off
       // ops 38 / 39 (scoregraph off / on) — set dynamically below from `options.scoreGraph`. ops 40 / 41 (BGA off / on)
       // — set dynamically below from `options.bga` so the runtime gating matches the live setting. ops 42 / 43 (1P
-      // normal / 赤 gauge), 44 / 45 (2P) — set dynamically below from `options.gauge`.
+      // normal / red gauge), 44 / 45 (2P) — set dynamically below from `options.gauge`.
       47, // difficulty filter disabled
       50, // offline
       52, // EXTRA MODE OFF — gates wallpaper / decoration elements in
@@ -2055,7 +2055,7 @@ export class PixiGameplayView {
       }
       return Math.max(0, now - this.sceneStartTime);
     }
-    // Timer 140 — リズムタイマー (rhythm timer). Per the LR2 skin help: 「一拍を1000としたときのタイマーです」 — one beat remaps to 1000
+    // Timer 140 — rhythm timer. Per the LR2 skin help: "this timer treats one beat as 1000" — one beat remaps to 1000
     // logical ms regardless of BPM. The LR2 default 7-keys skin's lane-bottom aura keyframes (`#SRC_IMAGE,..., y=2007`
     // at `#DST_IMAGE,...,33,286,194,29,...,0,140,...`) ride this timer so the glow pulses bright on every beat boundary
     // and fades over the rest of the beat. We map the chart's current beat fractional part to that 0..1000 window so
@@ -2097,7 +2097,7 @@ export class PixiGameplayView {
     if (timer === 46 || timer === 47) {
       return true;
     }
-    // Timer 140 — リズムタイマー. Beat-locked, but suppressed during the LR2 LOADING → DONE intro window so the lane- bottom
+    // Timer 140 — rhythm timer. Beat-locked, but suppressed during the LR2 LOADING → DONE intro window so the lane- bottom
     // aura keyframes stay invisible until notes actually start scrolling. Without this gate the glow would already be
     // pulsing in the empty playfield while the title plate / ring chrome is still sliding in. `isIntroPlaying()` is the
     // same gate that hides falling notes / measure lines, so pinning the aura to it lines up with the "the chart has
@@ -4414,7 +4414,7 @@ export class PixiGameplayView {
   private resolveBarGraphProgress(type: number): number {
     switch (type) {
       case 1: {
-        // 曲進行状態: ratio of currentSeconds to total chart duration.
+        // Chart progress: ratio of currentSeconds to total chart duration.
         const total = this.resolveSongDurationSeconds();
         if (total <= 0) {
           return 0;
@@ -4422,7 +4422,7 @@ export class PixiGameplayView {
         return Math.max(0, Math.min(1, this.currentSeconds() / total));
       }
       case 2:
-        // ロード状態 — we always finish loading before play, so 1.
+        // Load state — we always finish loading before play, so 1.
         return 1;
       case 10:
       case 11:
@@ -4495,12 +4495,12 @@ export class PixiGameplayView {
   private resolveSliderValue(type: number): number {
     switch (type) {
       case 2: {
-        // ハイスピ1P: map the multiplier into [0..1] over the supported range.
+        // HiSpeed 1P: map the multiplier into [0..1] over the supported range.
         const span = HISPEED_MAX - HISPEED_MIN;
         return span <= 0 ? 0 : Math.max(0, Math.min(1, (this.hiSpeed - HISPEED_MIN) / span));
       }
       case 6: {
-        // 曲進行度
+        // Chart progress ratio
         const total = this.resolveSongDurationSeconds();
         return total <= 0 ? 0 : Math.max(0, Math.min(1, this.currentSeconds() / total));
       }
@@ -4703,7 +4703,7 @@ export class PixiGameplayView {
     const skin = this.options.skin;
     const pixelsPerBeat = PIXELS_PER_BEAT * this.hiSpeed;
     this.renderMeasureLines(currentBeat, pixelsPerBeat);
-    // Note: the lane-bottom beat-pulse glow is drawn by the LR2 skin itself — the "リズムタイマー" `#DST_IMAGE` at SRC y=2007
+    // Note: the lane-bottom beat-pulse glow is drawn by the LR2 skin itself — the "rhythm timer" `#DST_IMAGE` at SRC y=2007
     // in the default 7-keys skin, anchored to timer 140. `elapsedSinceTimer(140)` remaps the chart's current fractional
     // beat to the 0..1000 ms keyframe window the LR2 skin's keyframe chain authored, so the glow flashes on every beat
     // regardless of BPM. The custom `renderBeatAura` we used to call here was duplicate visual noise and has been

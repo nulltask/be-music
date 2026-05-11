@@ -174,8 +174,8 @@ const KETAMAX = 8; // max combined int+frac digit count per `FloatFormatter.java
  *     while upstream emits visible content at low j with TRAILING nulls at high j (when the
  *     authored iketa exceeds the value's natural int width).
  *   - **Shift sign**: applied `- shift` to slot x, but `SkinFloat.draw()` uses `+ shift`.
- *   - **Align convention**: treated `align=0:右 / 1:左 / 2:中央` (matching SkinNumber), but
- *     `SkinFloat.java:60-62` documents `0:左 / 1:右 / 2:中央` (the OPPOSITE for 0/1).
+ *   - **Align convention**: treated `align=0=RIGHT / 1=LEFT / 2=CENTER` (matching SkinNumber), but
+ *     `SkinFloat.java:60-62` documents `0=LEFT / 1=RIGHT / 2=CENTER` (the OPPOSITE for 0/1).
  *
  * The three bugs together meant skins authoring `floatvalue[]` with explicit `align` rendered
  * with the WRONG flush direction, while the natural `align=0` default rendered with the
@@ -373,8 +373,8 @@ export function beatorajaFloatValueSlotCount(element: BeatorajaFloatValueElement
  *
  * Where `shiftbase` is the count of `null` slots (= trailing-null int positions when
  * iketa exceeds the value's natural width). Per `SkinFloat.java:60-62` the align values
- * are `0:左 (LEFT)`, `1:右 (RIGHT)`, `2:中央 (CENTER)` — the OPPOSITE of `SkinNumber`'s
- * `0:RIGHT, 1:LEFT, 2:CENTER` convention. The previous TS impl wrongly mirrored
+ * are `0=LEFT`, `1=RIGHT`, `2=CENTER` — the OPPOSITE of `SkinNumber`'s
+ * `0=RIGHT, 1=LEFT, 2=CENTER` convention. The previous TS impl wrongly mirrored
  * SkinNumber's mapping for floatvalue.
  *
  * The renderer ADDS this value to each slot's x per `SkinFloat.java:193, 195`'s

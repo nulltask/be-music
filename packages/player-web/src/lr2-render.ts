@@ -114,7 +114,7 @@ function mapLr2BlendMode(blend: number): BLEND_MODES {
     case 11:
       return 'multiply';
     case 3:
-      // LR2 "減算" — PixiJS v8 has no native subtractive blend.
+      // LR2 "subtract" blend — PixiJS v8 has no native subtractive blend.
       return 'normal';
     default:
       return 'normal';
@@ -343,7 +343,7 @@ export function evaluateKeyframes(keyframes: ReadonlyArray<Lr2DestinationRect>, 
   if (elapsedMs > finalTime) {
     // Past the final keyframe — decide between hide vs. hold vs. real loop.
     //
-    // Per `docs/LR2SkinHelp.md` line 629: "loop=-1の場合のみ、動作が終了した後にパーツが非表示になります" = "with loop=-1 only, the part becomes
+    // Per `docs/LR2SkinHelp.md` line 629: with loop=-1 only, the part becomes
     // invisible after the animation finishes". So we synthesize a hidden version of the last keyframe (alpha=0) —
     // preserves position / size for anything that still queries them, but makes the element disappear visually. The LR2
     // default skin's "DONE" plate uses exactly this idiom: 2 alpha=1 keyframes spanning 500 ms with loop=-1, so it

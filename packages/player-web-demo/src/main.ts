@@ -1788,7 +1788,8 @@ class PlayerWebDemoApp {
     //     `resolveLaneMode` only escalates to 9-key when the chart is `.pms` or
     //     `#PLAYER=3` with channel `17` — and most 9-key BMEs that authored f/v/g/b
     //     inputs satisfy neither
-    // User report: "9 KEY で lane 6-9 が挙動しない (f,v,g,b 不反応)". c0da7b5 partially
+    // User report: 9 KEY charts wouldn't accept input on lanes 6-9 (f,v,g,b keys
+    // unresponsive). c0da7b5 partially
     // addressed this by forwarding the chart's filename to the engine for the
     // extension-based heuristic, but skipped the variant separation here.
     const skinVariant = this.resolveBeatorajaSkinVariant(song);
@@ -2867,7 +2868,8 @@ class PlayerWebDemoApp {
    *   ModernChic decide.lua's `lockonAnimation` calls `CUSTOM.NUM.diffRGB()` which does
    *   `main_state.option(MAIN.OP.DIFFICULTY1..)` → returns false → falls through to `nil` →
    *   `RGB[1]` index crashes the entire `main()` evaluation → the load fails silently and
-   *   `showBeatorajaDecide` returns false (= "演出されずすぐさま PLAY 画面に遷移" the user reported).
+   *   `showBeatorajaDecide` returns false (= the user's reported "no decide animation,
+   *   the scene jumps straight to PLAY" symptom).
    *
    * The context's `option` reflects the same op set the scene would compute on mount, so any
    * pre-computed RGB / position / asset choice the skin makes at load time matches what would

@@ -113,16 +113,19 @@ export interface BeatorajaSkinFilepath {
 
 /**
  * Category group declared in `header.category[]`. Each entry pairs a display name (e.g.
- * `"メイン"`) with the list of category ids (`"main_1"`, `"main_2"`, …) that belong under it.
- * `BeatorajaSkinProperty.category` / `BeatorajaSkinFilepath.category` reference these ids; the
- * host UI inverts the mapping to render category-named folders containing their members.
+ * `"Main"`) with the list of category ids (`"main_1"`, `"main_2"`, …) that belong under it.
+ * Community skins author these labels in Japanese (e.g. `メイン` for "Main", `プレイ` for
+ * "Play") and the host surfaces them verbatim — the values are display strings, not
+ * translation keys. `BeatorajaSkinProperty.category` / `BeatorajaSkinFilepath.category`
+ * reference these ids; the host UI inverts the mapping to render category-named folders
+ * containing their members.
  *
  * Reference-theme skins don't author this — only community skins (GdbG_Skin, ModernChic) do, so
  * the field is optional throughout. Skins without categories render properties / filepaths in a
  * single flat folder.
  */
 export interface BeatorajaSkinCategoryGroup {
-  /** Display label shown to the user (e.g. `"メイン"`, `"プレイ"`). */
+  /** Display label shown to the user (community skins typically author this in Japanese). */
   name: string;
   /** Category ids that belong under this group. Order matters: members render in this order. */
   item: string[];
@@ -224,7 +227,7 @@ export interface BeatorajaSkinHeader {
    * Optional category groups for the property / filepath UI — see
    * {@link BeatorajaSkinCategoryGroup}. Reference-theme skins omit this and the host renders a
    * flat options panel; GdbG_Skin and ModernChic populate it to group their ~20 options under
-   * `"メイン"` / `"プレイ"` etc. headings.
+   * Japanese-authored headings such as "Main" / "Play" (`メイン` / `プレイ`).
    */
   category?: BeatorajaSkinCategoryGroup[];
 }

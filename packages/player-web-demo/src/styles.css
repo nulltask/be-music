@@ -307,7 +307,7 @@ body {
    * Without `will-change`, the first time we change `transform`
    * the browser has to re-layer the card on the GPU mid-
    * animation, which is the classic source of a one-frame
-   * "thunk" the user sees as カクッ.
+   * "thunk" the user perceives as a sudden jerk.
    */
   will-change: transform;
   /*
@@ -783,7 +783,7 @@ body {
    * NOT change `width` / `height` here — animating those
    * properties would trigger a layout reflow on the card's
    * flex column, which (combined with the card's own
-   * scale-up transition) was a contributor to the "カクッ"
+   * scale-up transition) was a contributor to the perceived
    * jolt. The card's `transform: scale(1.14)` already grows
    * the icon proportionally; that's enough perceived size
    * change without any property-driven layout work.
