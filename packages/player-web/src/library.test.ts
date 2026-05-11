@@ -152,20 +152,33 @@ describe('resolveChartPlayVariant', () => {
     ).toBe('9');
   });
 
-  test('PMS / 9 KEY: a `.bme` chart on the PMS-STD layout WITHOUT scratch / 6-7K / non-POPN 2P channels routes to 9', () => {
-    // PMS-STD content authored as `.bme` (or `.bms`) — `11..15 + 22..25` only, no scratch (`16`/`26`), no
-    // `21` / `27..29` 2P channels, no `18`/`19` 6-7K columns. This pattern doesn't match any genuine IIDX
-    // 5K DP chart (which always pairs each side's keyboard with scratch and typically `21`), so we route
-    // it to `'9'` and let the engine apply POPN_9KEY_PMS_BINDINGS (`22..25` → POPN keys 6..9). User-reported
-    // symptom: charts that author PMS-STD as `.bme` were silently classified as 5K DP and the f/v/g/b lane
-    // bindings were lost.
+  test('PMS / 9 KEY: any of `22..25` (without traditional IIDX 2P channels `21`/`26..29`) routes to 9', () => {
+    // PMS-STD detection: presence of any POPN-specific channel (`22..25`) combined with the ABSENCE
+    // of `21` / `26..29` (the genuine IIDX 2P-side channels). Holds across `.bme` / `.bms` extensions
+    // and across various 1P-side configurations (with / without scratch, with / without 6-7K). User-
+    // reported symptom: charts that author PMS-STD content under a non-`.pms` extension were silently
+    // classified as IIDX `'10'` / `'14'` and the engine's POPN-9 lane bindings on `22..25` were lost.
     expect(
       resolveChartPlayVariant(
         makeSong({ chartPath: 'Song/main.bme', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
       ),
     ).toBe('9');
+    // Hybrid PMS-STD with 1P scratch — non-standard authoring but `22..25` is the POPN-specific
+    // discriminator, so still POPN-9.
+    expect(
+      resolveChartPlayVariant(
+        makeSong({
+          chartPath: 'Song/main.bme',
+          channels: ['11', '12', '13', '14', '15', '16', '22', '23', '24', '25'],
+        }),
+      ),
+    ).toBe('9');
+    // Sparse — single POPN-side channel use.
+    expect(
+      resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '22'] })),
+    ).toBe('9');
     // Genuine IIDX 5K DP — has scratch on both sides AND channel `21`. PMS-STD detection requires the
-    // ABSENCE of scratch / non-POPN 2P, so this stays at `'10'`.
+    // ABSENCE of `21`/`26..29`, so this stays at `'10'`.
     expect(
       resolveChartPlayVariant(
         makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15', '16', '21', '22', '25', '26'] }),
