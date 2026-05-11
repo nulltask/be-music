@@ -15,8 +15,9 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
-- `@be-music/player-web`: Browser PixiJS player core for song selection, LR2 skin rendering, gameplay, result scenes, and recording
-- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2 themes, debug controls, and browser playback together
+- `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
+- `@be-music/player-web`: Browser PixiJS player core for song selection, LR2 and beatoraja skin rendering, gameplay, result scenes, and recording
+- `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
 
 ## Required environment
@@ -69,6 +70,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Player implementation specification](./docs/player-spec.md)
 - [Browser player implementation notes](./docs/player-web.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
+- [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
 - [Glossary](./docs/glossary.md)
 
@@ -140,17 +142,27 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Parses image, number, text, slider, bargraph, button, BGA, judge-line, measure-line, gauge, score-chart, and result graph elements
 - Loads theme assets with case-insensitive and wildcard lookup, TGA decoding, and DXA archive extraction
 
+### beatoraja skin (`@be-music/beatoraja-skin`)
+
+- Parses beatoraja JSON skins and Lua `.luaskin` entries independently from PixiJS
+- Evaluates the beatoraja two-phase Lua contract on a restricted Fengari sandbox
+- Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d`
+- Resolves `property[]`, `filepath[]`, category groups, custom offsets, wildcard source paths, and case-insensitive assets
+- Normalizes image, imageset, value, float-value, text, slider, note, judge, gauge, graph, BPM graph, timing graph, song-list, custom event, destination, and PM character elements
+
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
-- Browser song library for dropped folders, ZIPs, and mixed BMS/LR2 theme drops
+- Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
+- beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
 - Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
+- Shared beatoraja Pixi helpers for destination sampling, source-cell selection, text, values, sliders, gauges, graphs, timing visualizers, notes, markers, BGA, and runtime op/timer wiring
 - Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results
 - WebAudio preview and gameplay buses with split key/BGM/master compressor controls
 - BGA still/video rendering, browser-side video transcode fallback, and WebM gameplay recording
 - Single PixiJS scene host that owns one renderer context and disposes scene resources on transitions
-- In-scene LR2 PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, auto-scratch, DP flip, random/mirror modes, and gauge variants
+- In-scene LR2 and beatoraja PLAY OPTION controls for hi-speed, BGA mode/size, filters, sort, HS-FIX, lane cover, lift, auto-scratch, DP flip, random/mirror modes, gauge variants, and skin options
 
 ### editor (`@be-music/editor`)
 
@@ -236,7 +248,7 @@ pnpm run player chart.bms --no-ln-type-auto
 pnpm run player:web
 ```
 
-The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme folder, a ZIP, or a song folder and theme folder together into the browser.
+The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
 
 ### 6. Editor
 
@@ -292,16 +304,18 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 - `.bms` -> `5 KEY SP/DP`
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
+- A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
 
 ### Representative mode channels and inputs
 
-| Mode | Channel -> Input |
-| --- | --- |
-| `5 KEY SP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c` |
-| `5 KEY DP` | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
-| `7 KEY SP` | `5 KEY SP` + `18 -> f`, `19 -> v` |
-| `14 KEY DP` | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift` |
-| `9 KEY` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b` |
+| Mode                     | Channel -> Input                                                                                                                             |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                        |
+| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
+| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                            |
+| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
+| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
+| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
 
 ## FREE ZONE (`17` / `27`)
 

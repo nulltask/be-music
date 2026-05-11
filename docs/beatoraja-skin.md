@@ -21,9 +21,9 @@ and Lua skin themes into renderer-independent data structures. PixiJS rendering 
 
 beatoraja themes ship two interchangeable entry formats:
 
-| extension | format | discovery |
-| --- | --- | --- |
-| `*.json` | static JSON skin tree (with optional trailing commas, which we strip) | parsed eagerly via `JSON.parse` |
+| extension                     | format                                                                         | discovery                       |
+| ----------------------------- | ------------------------------------------------------------------------------ | ------------------------------- |
+| `*.json`                      | static JSON skin tree (with optional trailing commas, which we strip)          | parsed eagerly via `JSON.parse` |
 | `*.luaskin` + sibling `*.lua` | Lua 5.3 script that returns a skin table; uses `require()` for sibling modules | evaluated by Fengari, see below |
 
 Both formats produce values matching `BeatorajaSkin` (full) and `BeatorajaSkinHeader` (selector-UI summary).
@@ -34,27 +34,27 @@ The numeric `type` field on every skin matches beatoraja's upstream `SkinType` e
 `BEATORAJA_SKIN_TYPE` and the helpers `playVariantForSkinType` / `sceneForSkinType` so consumers can route entries
 without hard-coding integer literals.
 
-| code | label | scene |
-| --- | --- | --- |
-| 0 | `PLAY_7KEYS` | play (`'7'`) |
-| 1 | `PLAY_5KEYS` | play (`'5'`) |
-| 2 | `PLAY_14KEYS` | play (`'14'`) |
-| 3 | `PLAY_10KEYS` | play (`'10'`) |
-| 4 | `PLAY_9KEYS` | play (`'9'`) |
-| 5 | `MUSIC_SELECT` | select |
-| 6 | `DECIDE` | decide |
-| 7 | `RESULT` | result |
-| 8 | `KEY_CONFIG` | other |
-| 9 | `SKIN_SELECT` | other |
-| 10 | `SOUND_SET` | other |
-| 11 | `THEME` | other |
-| 12 | `PLAY_7KEYS_BATTLE` | play (unsupported battle layout) |
-| 13 | `PLAY_5KEYS_BATTLE` | play (unsupported battle layout) |
-| 14 | `PLAY_9KEYS_BATTLE` | play (unsupported battle layout) |
-| 15 | `COURSE_RESULT` | course-result |
-| 16 | `PLAY_24KEYS` | play (`'24'`) |
-| 17 | `PLAY_24KEYS_DOUBLE` | play (`'24d'`) |
-| 18 | `PLAY_24KEYS_BATTLE` | play (unsupported battle layout) |
+| code | label                | scene                            |
+| ---- | -------------------- | -------------------------------- |
+| 0    | `PLAY_7KEYS`         | play (`'7'`)                     |
+| 1    | `PLAY_5KEYS`         | play (`'5'`)                     |
+| 2    | `PLAY_14KEYS`        | play (`'14'`)                    |
+| 3    | `PLAY_10KEYS`        | play (`'10'`)                    |
+| 4    | `PLAY_9KEYS`         | play (`'9'`)                     |
+| 5    | `MUSIC_SELECT`       | select                           |
+| 6    | `DECIDE`             | decide                           |
+| 7    | `RESULT`             | result                           |
+| 8    | `KEY_CONFIG`         | other                            |
+| 9    | `SKIN_SELECT`        | other                            |
+| 10   | `SOUND_SET`          | other                            |
+| 11   | `THEME`              | other                            |
+| 12   | `PLAY_7KEYS_BATTLE`  | play (unsupported battle layout) |
+| 13   | `PLAY_5KEYS_BATTLE`  | play (unsupported battle layout) |
+| 14   | `PLAY_9KEYS_BATTLE`  | play (unsupported battle layout) |
+| 15   | `COURSE_RESULT`      | course-result                    |
+| 16   | `PLAY_24KEYS`        | play (`'24'`)                    |
+| 17   | `PLAY_24KEYS_DOUBLE` | play (`'24d'`)                   |
+| 18   | `PLAY_24KEYS_BATTLE` | play (unsupported battle layout) |
 
 ## Lua sandbox
 
@@ -86,6 +86,17 @@ Pass `skinConfig: undefined` for the first phase and a populated `BeatorajaSkinC
 `flattenBeatorajaElements()`. Each normalized entry carries the active `if` op-codes so the renderer can gate
 visibility at runtime via `isElementVisible()`. Negative codes are treated as negation (the op must NOT be active).
 
+## Element normalization
+
+The package keeps the loaded skin tree close to upstream, then exposes typed normalizers for renderer work.
+Normalizers live under `src/elements/` and cover image, imageset, value, float-value, text, slider, note, judge,
+judge graph, gauge, gauge graph, BPM graph, timing visualizer, timing distribution graph, song list, custom event,
+direction, destination, PM character, and generic graph elements.
+
+Destination normalization carries keyframes, offsets, op gates, and interpolation data in renderer-independent
+objects. Value and image helpers resolve `divx` / `divy` cell math, carry-forward frames, and loop wrapping so a
+renderer can sample the current frame without reinterpreting the source JSON or Lua tables.
+
 ## Asset resolution
 
 `resolveBeatorajaPath()` resolves a `path` field relative to its entry skin file. `..` segments are honored, slashes
@@ -98,22 +109,29 @@ selection (when present) overrides the wildcard; otherwise the first sorted matc
 ## Theme discovery
 
 `discoverBeatorajaTheme()` walks a file map and produces a `BeatorajaTheme` whose fields point at the per-scene
-entries. Play skins are grouped by variant (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`); when both a `.json`
-and a `.luaskin` cover the same variant, the JSON entry wins (parsing is faster and deterministic). Errors are
-collected as `BeatorajaThemeDiscoveryWarning[]` instead of aborting discovery so a single bad skin can't break the
-whole theme.
+entries. Play skins are grouped by variant (`'7' / '5' / '9' / '10' / '14' / '24' / '24d'`). When multiple entries
+cover the same slot, JSON entries win over Lua entries, `skin/default/` wins over community skins, and lexicographic
+order resolves the final tie. Errors are collected as `BeatorajaThemeDiscoveryWarning[]` instead of aborting
+discovery so a single bad skin can't break the whole theme.
 
 `pickBeatorajaPlaySkin(playSkins, desired)` resolves a chart's variant against a fallback chain.
 
 ## Browser player wiring
 
-`@be-music/player-web` ships `loadBeatorajaThemeFromFiles()` and helper functions
-(`loadBeatorajaPlaySkinFromBundle`, `loadBeatorajaSelectSkinFromBundle`, `loadBeatorajaResultSkinFromBundle`,
-`loadBeatorajaDecideSkinFromBundle`) that wrap the parser pipeline behind a browser-friendly `File[]` API. The
-state lives in parallel with the LR2 theme state; the demo logs both summaries when a drop carries either format.
+`@be-music/player-web` ships `loadBeatorajaThemeFromFiles()` to wrap dropped browser `File[]` objects into a
+`BeatorajaThemeBundle`. Hosts then call `loadBeatorajaSkin()` or `loadBeatorajaPlaySkin()` from this package,
+`bundleBeatorajaSources()` for `source[]`, `loadBeatorajaTexturesFromBundle()` for Pixi textures, and
+`loadBeatorajaFonts()` for CSS or bitmap fonts. The state lives in parallel with LR2 theme state, so the demo can
+hold both theme formats at once.
 
-PixiJS rendering for beatoraja skins is implemented in a follow-up patch — for now the parser is wired, theme
-discovery runs on drop, and the resulting bundle is exposed for inspection.
+The browser renderer uses `BeatorajaPlaySkinView` as the shared view for select, decide, gameplay, and result
+skins. Scene modules provide the runtime-specific resolvers for `TEXT`, `NUM`, `OPTION`, timers, chart images,
+graphs, gauges, note layers, BGA layers, system sounds, and result histories. Gameplay uses
+`BeatorajaRuntimeAdapter` to translate engine UI signals into beatoraja timers, op codes, judge popups, combo
+digits, key beams, LN hold timers, and timing samples.
+
+The browser gameplay path mounts chart variants `5`, `7`, `9`, `10`, and `14`. The parser still discovers `24` and
+`24d` skins, but the current shared player engine does not drive 24-key chart gameplay.
 
 ## Compatibility boundary
 

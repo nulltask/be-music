@@ -13,13 +13,10 @@
 //     combobreak aliases, max combo, gauge percent. Best-record and rival diff slots stay 0
 //     (no DB / IR layer yet).
 //
-// What this scene does NOT yet do:
-//   - Score graph / gauge polyline rendering (`SRC_SCORECHART` / `SRC_GAUGECHART_*` in LR2;
-//     beatoraja's equivalent is per-skin authored chart polylines we don't yet emit)
-//   - Per-rank / clear-lamp op gates (CLEAR_RANK_AAA / CLEAR_LAMP_FULLCOMBO in prop.lua) —
-//     these need the score DB to compute "vs best" deltas; we surface only LIVE-run data
-//   - Result BGM (clear / fail jingles) — beatoraja themes ship per-theme audio that we
-//     haven't yet routed through the audio bus
+// What this scene still leaves to a score database:
+//   - Best-record and rival-difference slots.
+//   - Per-rank / clear-lamp comparisons that need "vs best" deltas. Current clear/rank ops reflect
+//     only the just-finished run.
 
 import { Container, Graphics, type Texture, type Ticker } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';

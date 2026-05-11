@@ -19,9 +19,8 @@
 // own clock. The adapter keeps a single mutable `activeOps` Set + timer Map; `view.update(ctx)` re-samples
 // every destination keyframe against the current state.
 //
-// Notes / BGA / fallback chrome are not yet wired here — the skin paints lane backgrounds, key-beam
-// glows, judge plates and HUD text from the engine state, but the actual scrolling notes and BGA video
-// land in follow-up patches that add a sub-container layered on top of the skin view.
+// The gameplay scene layers authored skin chrome, scrolling notes, markers, BGA still/video textures, judge popups,
+// key-beam glows, LN hold effects, and HUD text on top of the same engine-driven state.
 
 import { Container, Graphics, Text, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';

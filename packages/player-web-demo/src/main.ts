@@ -347,9 +347,12 @@ app.innerHTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
-                play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skin
-                files (<code>.lr2skin</code>) — drop your <code>LR2files</code> folder onto the
-                page (alongside or before the chart drop) and the theme is applied automatically.
+                play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skins
+                (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
+                (<code>.json</code> / <code>.luaskin</code>) — drop your
+                <code>LR2files</code> folder, or your beatoraja <code>skin/</code> folder, onto
+                the page (alongside or before the chart drop) and the theme is applied
+                automatically.
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -378,10 +381,12 @@ app.innerHTML = `
                   yet — refreshing the page or revisiting later loses every result.
                 </li>
                 <li>
-                  <strong>Only the Lunatic Rave 2 default skin has been verified.</strong> Other LR2
-                  skins parse and load, but their layout is unverified — expect element overlap,
-                  off-by-a-few-pixels positioning, or missing animation frames on third-party
-                  themes.
+                  <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
+                  beatoraja default skin (<code>skin/default</code>),
+                  <code>ModernChic</code>, and <code>GdbG Original Skin</code>. Other LR2 /
+                  beatoraja skins parse and load, but their layout is unverified — expect element
+                  overlap, off-by-a-few-pixels positioning, or missing animation frames on
+                  third-party themes.
                 </li>
                 <li>Use at your own risk. No warranty is provided.</li>
               </ul>
@@ -389,11 +394,14 @@ app.innerHTML = `
             <h3 class="help-section-title">Loading songs</h3>
             <ul class="help-list">
               <li>Drop a BMS folder anywhere on the page to register its charts.</li>
-              <li>Drop an <code>LR2files</code> folder (or its contents) to apply an LR2 skin theme.</li>
+              <li>
+                Drop an <code>LR2files</code> folder, or a beatoraja <code>skin/</code> folder
+                (or their contents), to apply a skin theme.
+              </li>
               <li>
                 Or click <strong>Open Folder</strong> in the lil-gui panel (top-right) to use the native
-                file picker — same handling as a drag-drop, so a folder containing both an LR2 theme and
-                BMS charts loads both in one shot. Press the button again to add another folder.
+                file picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
+                theme and BMS charts loads both in one shot. Press the button again to add another folder.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
             </ul>
@@ -402,7 +410,7 @@ app.innerHTML = `
             <ul class="help-list">
               <li><kbd>/</kbd> focuses the search input. Filter by title, artist, or genre.</li>
               <li><kbd>Esc</kbd> clears the search filter.</li>
-              <li>Click a song row, or click the LR2 skin's <em>PLAY</em> button, to start.</li>
+              <li>Click a song row, or click the active skin's <em>PLAY</em> button, to start.</li>
             </ul>
 
             <h3 class="help-section-title">Gameplay (default keys)</h3>
@@ -439,7 +447,7 @@ app.innerHTML = `
                 MediaRecorder support — see Open source / browser checks).
               </li>
               <li>
-                Open the LR2 skin's <strong>PLAY OPTION</strong> panel during song select to set per-side
+                Open the active skin's <strong>PLAY OPTION</strong> panel during song select to set per-side
                 modifiers (Random / Mirror / Auto-scratch / hi-speed).
               </li>
             </ul>
@@ -448,7 +456,7 @@ app.innerHTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
-                <strong>Lunatic Rave 2</strong> のスキンファイル (<code>.lr2skin</code>) を解釈するので、<code>LR2files</code> フォルダをページにドロップすれば既存の LR2 用スキンをそのまま適用できます。
+                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) を解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -477,8 +485,8 @@ app.innerHTML = `
                   永続化やランキング機能は未実装で、ページをリロード / 再訪するとリザルトはすべて失われます。
                 </li>
                 <li>
-                  <strong>Lunatic Rave 2 のデフォルトスキンのみ動作確認しています。</strong>
-                  他の LR2 スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
+                  <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
+                  これら以外の LR2 / beatoraja スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
                 </li>
                 <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
               </ul>
@@ -486,10 +494,10 @@ app.innerHTML = `
             <h3 class="help-section-title">楽曲の読み込み</h3>
             <ul class="help-list">
               <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
-              <li><code>LR2files</code> フォルダ (またはその中身) をドロップすると LR2 スキンが適用されます。</li>
+              <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
               <li>
                 右上 lil-gui パネルの <strong>Open Folder</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
-                ドラッグ&ドロップと同じ処理経路を通るので、テーマとチャートが同居したフォルダもまとめて読み込めます。
+                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
@@ -499,7 +507,7 @@ app.innerHTML = `
             <ul class="help-list">
               <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
               <li><kbd>Esc</kbd> で検索条件をクリア。</li>
-              <li>曲の行をクリック、または LR2 スキンの <em>PLAY</em> ボタンで再生開始。</li>
+              <li>曲の行をクリック、または現在のスキンの <em>PLAY</em> ボタンで再生開始。</li>
             </ul>
 
             <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>
@@ -535,7 +543,7 @@ app.innerHTML = `
                 <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
               </li>
               <li>
-                選曲画面で LR2 スキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。
+                選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。
               </li>
             </ul>
           </div>
