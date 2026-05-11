@@ -244,9 +244,12 @@ export class BeatorajaRuntimeAdapter {
    */
   private readonly judgeComboMetrics: { 1: { width: number; space: number }; 2: { width: number; space: number } };
   private frame: PlayerUiFramePayload | null = null;
+  // Per-judge-plate state. Side `3` is the POPN-9 third plate (upstream `play9.json` `id: 2012`,
+  // `index: 2`, timers `247` / `448`); it stays unused for SP / DP variants. See {@link resolveJudgePlate}.
   private readonly judgeState: Record<BeatorajaSide, SideJudgeState> = {
     1: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
     2: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
+    3: { lastJudgeOp: undefined, lastFastSlowOp: undefined, lastJudgeCombo: 0 },
   };
   /**
    * Per-(side, lane) most-recent-judge ring. Sized to `JUDGE_LANE_REF_RANGE` (10 lanes per side
@@ -274,6 +277,10 @@ export class BeatorajaRuntimeAdapter {
   private readonly lastJudgeOnLane: Record<BeatorajaSide, Array<{ kind: number; at: number }>> = {
     1: createEmptyLaneJudgeRing(),
     2: createEmptyLaneJudgeRing(),
+    // POPN-9's per-plate `judge[].numbers` doesn't address per-lane judge ref ops (those are 1P /
+    // 2P only — `JUDGE_LANE_REF_*P_BASE`), but we allocate side `3`'s ring defensively so a stray
+    // resolver call doesn't have to branch on side. Stays empty in practice under SP / DP.
+    3: createEmptyLaneJudgeRing(),
   };
   private poorBgaActive = false;
   /**
@@ -523,16 +530,23 @@ export class BeatorajaRuntimeAdapter {
    * latched value we mark the side's endofnote timer so any "song complete" reveal animation
    * gated on it can play out.
    */
-  private readonly lastNoteBeatBySide: { 1: number | undefined; 2: number | undefined } = { 1: undefined, 2: undefined };
-  /** Latched once we stamp the side's endofnote timer so we don't re-stamp on subsequent frames. */
-  private readonly endOfNoteStamped: { 1: boolean; 2: boolean } = { 1: false, 2: false };
+  private readonly lastNoteBeatBySide: Record<BeatorajaSide, number | undefined> = {
+    1: undefined,
+    2: undefined,
+    // POPN-9 collapses every channel onto 1P (`resolveSide`), so side 3 stays unused here. The
+    // entry exists purely so `[laneSide]` indexing remains a typechecked `BeatorajaSide` lookup.
+    3: undefined,
+  };
+  /** Latched once the side's endofnote timer has fired so subsequent frames don't re-stamp. */
+  private readonly endOfNoteStamped: Record<BeatorajaSide, boolean> = { 1: false, 2: false, 3: false };
   /**
    * Per-side latch — `true` once `TIMER_FULLCOMBO_*P` has been stamped this run. Mirrors
    * `endOfNoteStamped` but for the FC celebration. A re-judge (engine seeks backwards then
    * forwards) doesn't re-stamp; the FC animation runs once from the moment FC was first
-   * achieved, matching beatoraja's reference behaviour.
+   * achieved, matching beatoraja's reference behaviour. Side 3 stays unused for the same
+   * reason as `endOfNoteStamped`.
    */
-  private readonly fullComboStamped: { 1: boolean; 2: boolean } = { 1: false, 2: false };
+  private readonly fullComboStamped: Record<BeatorajaSide, boolean> = { 1: false, 2: false, 3: false };
   /**
    * Per-ref "we already logged that this isn't wired" set. Keeps `resolveNumberValue` quiet on the hot
    * path while still surfacing each missing prop.lua num exactly once per session.
@@ -974,12 +988,25 @@ export class BeatorajaRuntimeAdapter {
    * the previous one. FAST / SLOW are surfaced separately via the `_*p_early` / `_*p_late` ops.
    */
   applyJudgeCombo(state: PlayerJudgeComboSignalState): void {
-    // Same `chartPlayVariant === '9'` collapse as `resolveSide`: under POPN-9 every channel
-    // (including the PMS-STD `22..25` POPN keys 6..9) routes to the 1P side, since the skin
-    // only authors `judge_1p` / `combo_1p` chrome for single-side play.
-    const side: BeatorajaSide = state.channel ? this.resolveSide(state.channel) : 1;
-    const op = judgeOpForKind(side, state.judge);
-    const sideState = this.judgeState[side];
+    // Two distinct side semantics flow through this method:
+    //
+    //   - `judgeSide` (= `resolveJudgePlate`): which judge / combo PLATE in the skin authoring
+    //     does this verdict belong to. SP / DP have 2 plates (1P / 2P). POPN-9 authors THREE
+    //     plates (`play9.json` `id: 2010/2011/2012`, `index: 0/1/2`) over a single playfield,
+    //     dispatched by lane group per upstream `JudgeManager.notifyJudge:700`
+    //     (`judgeindex = lane / (lanelength / judgenow.length)`). Drives the per-plate timers
+    //     (`judge_*p` = 46/47/247, `combo_*p` = 446/447/448) and the per-plate verdict ops
+    //     (PERFECT / GREAT / GOOD / EARLY / LATE — see `judgeOpForKind`).
+    //
+    //   - `laneSide` (= `resolveSide`): which PLAYER does this verdict belong to. SP / DP keep
+    //     the 1P / 2P distinction; POPN-9 collapses onto 1P (single-side play). Drives the
+    //     globally-per-player chrome — full combo (`fullcombo_*p`), end-of-note, gauge-increase
+    //     sparkle, and the per-(side, lane) judge ref ring (`JUDGE_LANE_REF_*P_BASE`, which only
+    //     has 1P / 2P banks upstream).
+    const judgeSide: BeatorajaSide = state.channel ? this.resolveJudgePlate(state.channel) : 1;
+    const laneSide: BeatorajaSide = state.channel ? this.resolveSide(state.channel) : 1;
+    const op = judgeOpForKind(judgeSide, state.judge);
+    const sideState = this.judgeState[judgeSide];
     if (sideState.lastJudgeOp !== undefined && sideState.lastJudgeOp !== op) {
       this.activeOps.delete(sideState.lastJudgeOp);
     }
@@ -992,27 +1019,18 @@ export class BeatorajaRuntimeAdapter {
     // `judgecombo[judgeindex] = getCourseCombo()` (`JudgeManager.java:710`). Combo-break
     // verdicts (BAD / POOR) intentionally stamp `0` so the popup reads "broke at 0".
     sideState.lastJudgeCombo = state.combo;
-    // FAST / SLOW gate (`_*p_early = 1242 / 1262`, `_*p_late = 1243 / 1263`) — beatoraja's
-    // default play skin gates a "FAST" / "SLOW" badge on these ops so the player sees which
-    // side of the judge window their hit landed on. Mirrors the `lastJudgeOp` pattern: only
-    // one of EARLY / LATE per side stays active at a time; the next judge with a delta swaps
-    // them. Hits without a `deltaMs` (READY publish, AUTO PLAY confirmation, mine BAD) leave
-    // the previous gate untouched — beatoraja keeps the badge until the NEXT judged hit.
+    // FAST / SLOW gate (`_*p_early = 1242 / 1262 / 1362`, `_*p_late = 1243 / 1263 / 1363`) —
+    // beatoraja's default play skin gates a "FAST" / "SLOW" badge on these ops so the player
+    // sees which side of the judge window their hit landed on. Mirrors the `lastJudgeOp` pattern:
+    // only one of EARLY / LATE per plate stays active at a time; the next judge with a delta
+    // swaps them. Hits without a `deltaMs` (READY publish, AUTO PLAY confirmation, mine BAD)
+    // leave the previous gate untouched — beatoraja keeps the badge until the NEXT judged hit.
     //
     // Sign convention matches our engine: `deltaMs > 0` = late (player pressed AFTER the
     // note's exact time → SLOW); `deltaMs < 0` = early (BEFORE → FAST). A `deltaMs === 0`
     // perfect-on-time hit clears any prior gate without setting a new one.
     if (typeof state.deltaMs === 'number' && Number.isFinite(state.deltaMs)) {
-      const fastSlowOp =
-        state.deltaMs < 0
-          ? side === 1
-            ? BEATORAJA_OP.P1_JUDGE_EARLY
-            : BEATORAJA_OP.P2_JUDGE_EARLY
-          : state.deltaMs > 0
-            ? side === 1
-              ? BEATORAJA_OP.P1_JUDGE_LATE
-              : BEATORAJA_OP.P2_JUDGE_LATE
-            : undefined;
+      const fastSlowOp = pickFastSlowOp(judgeSide, state.deltaMs);
       if (sideState.lastFastSlowOp !== undefined && sideState.lastFastSlowOp !== fastSlowOp) {
         this.activeOps.delete(sideState.lastFastSlowOp);
       }
@@ -1021,20 +1039,17 @@ export class BeatorajaRuntimeAdapter {
       }
       sideState.lastFastSlowOp = fastSlowOp;
     }
-    this.markTimer(judgeTimerId(side));
+    this.markTimer(judgeTimerId(judgeSide));
 
-    // Restart the side's combo timer (prop.lua `combo_1p = 446` / `combo_2p = 447`) on every
-    // combo-keeping verdict. Skins use this to drive the combo number's pop-in / flicker
-    // animation — the keyframe sampler reads `now - timerStart[combo_*p]` so re-stamping makes
-    // the animation replay from t=0 on every successful hit. PERFECT / GREAT / GOOD all advance
-    // the combo; BAD / POOR / MISS break it (and intentionally DON'T restart the timer —
-    // beatoraja keeps the combo number's idle pose during a break, then resumes the animation
-    // from the next successful hit). Using judge kind directly (not the post-publish combo value)
-    // because the combo counter is shared across sides in double-play — a side-2 hit advancing
-    // the combo to N+1 wouldn't differ in `state.combo` from a side-1 hit, so the only reliable
-    // signal of "this side advanced" is the verdict.
+    // Restart the plate's combo timer (prop.lua `combo_1p = 446` / `combo_2p = 447` /
+    // `combo_3p = 448`) on every combo-keeping verdict. Skins use this to drive the combo
+    // number's pop-in / flicker animation — the keyframe sampler reads
+    // `now - timerStart[combo_*p]` so re-stamping makes the animation replay from t=0 on every
+    // successful hit. PERFECT / GREAT / GOOD all advance the combo; BAD / POOR / MISS break it
+    // (and intentionally DON'T restart the timer — beatoraja keeps the combo number's idle
+    // pose during a break, then resumes the animation from the next successful hit).
     if (isComboAdvanceJudge(state.judge)) {
-      this.markTimer(comboTimerId(side));
+      this.markTimer(comboTimerId(judgeSide));
     }
 
     // Fire the lane bomb timer ONLY for clean hits (PERFECT / GREAT). The bomb is a positive-
@@ -1103,7 +1118,10 @@ export class BeatorajaRuntimeAdapter {
       if (lane !== undefined && lane >= 0 && lane < JUDGE_LANE_REF_RANGE) {
         const judgeIndex = judgeKindToIndex(state.judge);
         if (judgeIndex >= 0) {
-          this.lastJudgeOnLane[side][lane] = { kind: judgeIndex, at: this.getNowMs() };
+          // Use `laneSide` (1P / 2P player), NOT `judgeSide` (per-plate 1/2/3). Upstream's
+          // per-lane judge ref ops only have 1P / 2P banks (`JUDGE_LANE_REF_*P_BASE`), so the
+          // POPN-9 third plate's verdicts land in the 1P bank along with the other plates.
+          this.lastJudgeOnLane[laneSide][lane] = { kind: judgeIndex, at: this.getNowMs() };
         }
       }
     }
@@ -1111,9 +1129,10 @@ export class BeatorajaRuntimeAdapter {
     // Re-stamp the gauge-increase timer on each clean hit. ModernChic's
     // `lamp_gaugeinclease` cycles a 2-frame sparkle at `cycle = 50ms` keyed off this stamp;
     // dirty hits (GOOD / BAD / POOR / MISS) typically don't gain gauge so we skip them.
-    // Side-aware (1P / 2P) so DP charts get the right per-side feedback.
+    // Side-aware (1P / 2P) so DP charts get the right per-side feedback; POPN-9 has only the
+    // 1P-side gauge timer authored upstream so `laneSide` correctly collapses there.
     if (isCleanHitJudge(state.judge)) {
-      this.markTimer(side === 1 ? TIMER_GAUGE_INCREASE_1P : TIMER_GAUGE_INCREASE_2P);
+      this.markTimer(laneSide === 2 ? TIMER_GAUGE_INCREASE_2P : TIMER_GAUGE_INCREASE_1P);
     }
 
     // Latch the running combo for `prop.lua num.combo = 104` resolution. The engine emits the
@@ -1135,9 +1154,11 @@ export class BeatorajaRuntimeAdapter {
     // payload); we wait for at least one frame so this is populated before the first judgement
     // can fire FC. Charts with `total === 0` (empty / parser edge case) skip the stamp.
     const total = this.frame?.summary.total ?? 0;
-    if (total > 0 && state.combo >= total && !this.fullComboStamped[side]) {
-      this.markTimer(side === 1 ? TIMER_FULLCOMBO_1P : TIMER_FULLCOMBO_2P);
-      this.fullComboStamped[side] = true;
+    // FC fires per PLAYER (laneSide), not per judge plate — upstream only authors
+    // `TIMER_FULLCOMBO_1P/2P` (no `_3P`). POPN-9 collapses onto 1P.
+    if (total > 0 && state.combo >= total && !this.fullComboStamped[laneSide]) {
+      this.markTimer(laneSide === 2 ? TIMER_FULLCOMBO_2P : TIMER_FULLCOMBO_1P);
+      this.fullComboStamped[laneSide] = true;
     }
 
     // Capture the signed timing delta when the engine supplied one. Two sinks:
@@ -1189,7 +1210,8 @@ export class BeatorajaRuntimeAdapter {
     console.log(
       '[beatoraja-adapter] apply judge',
       JSON.stringify({
-        side,
+        judgeSide,
+        laneSide,
         kind: state.judge,
         op,
         combo: state.combo,
@@ -1300,7 +1322,10 @@ export class BeatorajaRuntimeAdapter {
     // and the standard offset-summing path in `combineBeatorajaOffsets` adds our resolved
     // value to the keyframe's x. Same observable effect as upstream's inline shift.
     if (offsetId === 20001 || offsetId === 20002) {
-      const side: BeatorajaSide = offsetId === 20001 ? 1 : 2;
+      // Synthetic per-side judge-word-shift offset; only 1P (20001) / 2P (20002) are addressable
+      // upstream — the POPN-9 third plate doesn't author `judge.shift = true` (its digit width
+      // already fits the per-plate 140-px rect), so this stays narrowed to `1 | 2`.
+      const side: 1 | 2 = offsetId === 20001 ? 1 : 2;
       // `maxCombo` matches what ref:75 (BEATORAJA_NUM.MAXCOMBO_NOW / BEST_MAXCOMBO_LIVE)
       // displays in the digit row — same value the combo number element renders.
       const combo = this.maxCombo;
@@ -2508,6 +2533,9 @@ export class BeatorajaRuntimeAdapter {
     this.judgeState[2].lastJudgeOp = undefined;
     this.judgeState[2].lastFastSlowOp = undefined;
     this.judgeState[2].lastJudgeCombo = 0;
+    this.judgeState[3].lastJudgeOp = undefined;
+    this.judgeState[3].lastFastSlowOp = undefined;
+    this.judgeState[3].lastJudgeCombo = 0;
     this.judgeKindCounts = {};
     this.poorBgaActive = false;
     this.runningCombo = 0;
@@ -2518,8 +2546,10 @@ export class BeatorajaRuntimeAdapter {
     this.failedTimerStamped = false;
     this.endOfNoteStamped[1] = false;
     this.endOfNoteStamped[2] = false;
+    this.endOfNoteStamped[3] = false;
     this.fullComboStamped[1] = false;
     this.fullComboStamped[2] = false;
+    this.fullComboStamped[3] = false;
     this.pressedChannels.clear();
     this.lnHoldHeldByChannel.clear();
     for (const kind of Object.keys(this.earlyLateCounts) as Array<keyof typeof this.earlyLateCounts>) {
@@ -2542,20 +2572,50 @@ export class BeatorajaRuntimeAdapter {
     for (let i = 0; i < JUDGE_LANE_REF_RANGE; i += 1) {
       this.lastJudgeOnLane[1][i] = { kind: -1, at: 0 };
       this.lastJudgeOnLane[2][i] = { kind: -1, at: 0 };
+      this.lastJudgeOnLane[3][i] = { kind: -1, at: 0 };
     }
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
 
+  /**
+   * Per-channel "which side does this lane TIMER belong to" — the answer the bomb / key-on /
+   * key-off / LN-hold timer banks need. POPN-9 has only ONE lane-timer bank (the upstream 1P
+   * `bomb_1p_keyN` / `keyon_1p_keyN` / `lnHold_1p_keyN` block, extended to lanes 6..9), so every
+   * channel collapses onto side `1` under variant `'9'`. SP / DP variants follow the literal
+   * `2X` ⇒ `2P` mapping.
+   */
   private resolveSide(channel: string): BeatorajaSide {
-    // POPN-9 (PMS) is single-side play. Its PMS-STD channel layout authors the right-half POPN
-    // keys (`22..25` for keys 6..9) on the BMS `2X` channel block — sharing the channel space with
-    // genuine IIDX 2P-side play — so the literal `startsWith('2')` test would route those POPN
-    // keys to the 2P-side timers (`bomb_2p_keyN` / `judge_2p` / `combo_2p`, etc.) and the skin's
-    // 1P-side chrome (which is the only side it authors for POPN) would never light up. Collapse
-    // every channel onto the 1P side when the chart variant is `'9'`. Mirrors the same gate the
-    // LR2 path applies at `pixi-gameplay.ts:3458` (`chartPlayVariant !== '9' && channel.startsWith('2')`).
     if (this.chartPlayVariant === '9') return 1;
+    return channel.startsWith('2') ? 2 : 1;
+  }
+
+  /**
+   * Per-channel "which JUDGE PLATE does this judgement belong to" — distinct from
+   * {@link resolveSide} because beatoraja's `play9.json` authors THREE judge / combo plates
+   * over POPN-9's single playfield (one per 3-lane group). Mirrors upstream
+   * `JudgeManager.notifyJudge`'s dispatch (`JudgeManager.java:700`):
+   *
+   *   final int judgeindex = state.lane / (lanelength / judgenow.length);
+   *
+   * For POPN-9 (lanelength = 9, judgenow.length = 3) the formula collapses to `floor(lane / 3)`,
+   * so lanes 0..2 → plate 0 (side `1`), 3..5 → plate 1 (side `2`), 6..8 → plate 2 (side `3`).
+   * (`state.lane` in upstream is 0-based; `resolveSideKeySlot` here returns 1-based slots, so we
+   * subtract 1 before dividing.) The plate indices line up with `judge[].index` in the skin and
+   * pick the matching `TIMER_JUDGE_*P` / `TIMER_COMBO_*P` / `judgeOpForKind` family.
+   *
+   * SP / DP variants only address plates `1` (1P) and `2` (2P), matching the existing `resolveSide`
+   * behaviour. The third plate is POPN-9-specific.
+   */
+  private resolveJudgePlate(channel: string): BeatorajaSide {
+    if (this.chartPlayVariant === '9') {
+      const slot = resolveSideKeySlot(channel, this.chartPlayVariant);
+      if (slot >= 1 && slot <= 3) return 1;
+      if (slot >= 4 && slot <= 6) return 2;
+      if (slot >= 7 && slot <= 9) return 3;
+      // Out-of-range / scratch (slot 0 — POPN-9 has none, but defensively map to plate 1).
+      return 1;
+    }
     return channel.startsWith('2') ? 2 : 1;
   }
 
@@ -2678,6 +2738,23 @@ function isCleanHitJudge(kind: string): boolean {
  * imageset ref encoding in `resolveLaneJudgeRef` adds 1 so frame 0 stays reserved for the
  * "no judge" case — see {@link BeatorajaRuntimeAdapter.lastJudgeOnLane} for the full table.
  */
+/**
+ * Pick the FAST / SLOW gating op for a (judge plate, signed delta) pair. Returns `undefined`
+ * for `deltaMs === 0` (perfect-on-time — neither gate active).
+ *
+ * Per-plate ops (`SkinProperty.java`):
+ *   - plate 0 (1P): `_1p_early = 1242`, `_1p_late = 1243`
+ *   - plate 1 (2P): `_2p_early = 1262`, `_2p_late = 1263`
+ *   - plate 2 (POPN-9 third plate): `_3p_early = 1362`, `_3p_late = 1363`
+ */
+function pickFastSlowOp(judgeSide: BeatorajaSide, deltaMs: number): number | undefined {
+  if (deltaMs === 0) return undefined;
+  const isEarly = deltaMs < 0;
+  if (judgeSide === 1) return isEarly ? BEATORAJA_OP.P1_JUDGE_EARLY : BEATORAJA_OP.P1_JUDGE_LATE;
+  if (judgeSide === 2) return isEarly ? BEATORAJA_OP.P2_JUDGE_EARLY : BEATORAJA_OP.P2_JUDGE_LATE;
+  return isEarly ? BEATORAJA_OP.P3_JUDGE_EARLY : BEATORAJA_OP.P3_JUDGE_LATE;
+}
+
 function judgeKindToIndex(kind: string): number {
   switch (kind.toUpperCase()) {
     case 'PERFECT':

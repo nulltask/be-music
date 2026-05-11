@@ -435,13 +435,18 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(keyOnTimerId(2, 9)!)).toBeUndefined();
   });
 
-  it('9K applyJudgeCombo on channels 22..25 fires 1P judge / combo / bomb timers (PMS-STD)', () => {
-    // Pairs with the press-lane regression above: every per-judge timer the skin animates
-    // against (`judge_1p` = 46, `combo_1p` = 446, `bomb_1p_keyN` = 51+lane) must also collapse
-    // onto the 1P-side bank under POPN-9. Without the collapse the user saw GREAT-flash + bomb
-    // sprites only on lanes 0..4 (real `11..15` channels) and silence on lanes 5..8 (PMS-STD
-    // `22..25` channels), even though the engine fired all 9 publishes per chord (verified by
-    // a headless autoPlay run reaching combo 144 / 144).
+  it('9K applyJudgeCombo dispatches per-judge-plate (PMS-STD lane groups → plate 1/2/3)', () => {
+    // Upstream `JudgeManager.notifyJudge:700` dispatches each judgement to a plate via
+    // `judgeindex = state.lane / (lanelength / judgenow.length)`. For POPN-9 (9 lanes, 3 plates):
+    //   - lanes 0..2 (= ch 11/12/13) → plate 0 → `TIMER_JUDGE_1P = 46`, `TIMER_COMBO_1P = 446`
+    //   - lanes 3..5 (= ch 14/15/22) → plate 1 → `TIMER_JUDGE_2P = 47`, `TIMER_COMBO_2P = 447`
+    //   - lanes 6..8 (= ch 23/24/25) → plate 2 → `TIMER_JUDGE_3P = 247`, `TIMER_COMBO_3P = 448`
+    //
+    // Lane-bomb timers (`bomb_1p_keyN`) and the FC timer still collapse onto laneSide 1 under
+    // POPN-9 (single-side play), so bomb timers `56..59` are 1P-side regardless of which judge
+    // plate the verdict fires on. User-reported symptom prior to per-plate dispatch: the GREAT /
+    // PERFECT plate fired on plate 1 only (because every channel resolved to side 1), so the
+    // center / right judge plates stayed dark.
     const clock = makeClock();
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '9',
@@ -449,22 +454,35 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
       getNowMs: clock.now,
     });
     clock.advance(100);
+    // Channel 11 → lane 1 (slot) → plate 1 (`floor((1-1)/3) = 0` ⇒ side 1).
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 100 });
+    // Channel 14 → lane 4 → plate 2 (`floor((4-1)/3) = 1` ⇒ side 2).
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 4, channel: '14', updatedAtMs: 100 });
+    // Channel 22 → lane 6 → plate 2 (`floor((6-1)/3) = 1` ⇒ side 2).
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 6, channel: '22', updatedAtMs: 100 });
+    // Channel 23 → lane 7 → plate 3 (`floor((7-1)/3) = 2` ⇒ side 3).
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 7, channel: '23', updatedAtMs: 100 });
+    // Channel 25 → lane 9 → plate 3 (`floor((9-1)/3) = 2` ⇒ side 3).
     adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 9, channel: '25', updatedAtMs: 100 });
-    // Side-1 judge / combo timers must be stamped; side-2 must stay untouched.
+    // All three judge timers must be stamped (one per plate).
     expect(adapter.getTimerStart(judgeTimerId(1))).toBe(100);
-    expect(adapter.getTimerStart(judgeTimerId(2))).toBeUndefined();
-    // Bomb timers — `bomb_1p_keyN = 50+N`. Channels 22 / 25 → lanes 6 / 9.
-    // We don't import the timer-id helper for bombs here (no public export), so probe via the
-    // 1P-side bomb timer IDs directly: `bomb_1p_key6 = 56`, `bomb_1p_key9 = 59`.
+    expect(adapter.getTimerStart(judgeTimerId(2))).toBe(100);
+    expect(adapter.getTimerStart(judgeTimerId(3))).toBe(100);
+    // Same for the per-plate combo timers (`446` / `447` / `448`).
+    expect(adapter.getTimerStart(comboTimerId(1))).toBe(100);
+    expect(adapter.getTimerStart(comboTimerId(2))).toBe(100);
+    expect(adapter.getTimerStart(comboTimerId(3))).toBe(100);
+    // Per-plate verdict ops all active simultaneously — distinct from SP / DP where the last
+    // publish's plate would be the only PERFECT-active side.
+    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P2_JUDGE_PERFECT)).toBe(true);
+    expect(adapter.hasOp(BEATORAJA_OP.P3_JUDGE_PERFECT)).toBe(true);
+    // Bomb timers — lane-side resolution stays 1P for POPN-9, so channels 22 / 25 (= lanes 6 / 9)
+    // stamp `bomb_1p_key6 = 56` and `bomb_1p_key9 = 59`. 2P-side equivalents stay unstamped.
     expect(adapter.getTimerStart(56)).toBe(100);
     expect(adapter.getTimerStart(59)).toBe(100);
-    // 2P-side equivalents (66 / 69) must stay unstamped.
     expect(adapter.getTimerStart(66)).toBeUndefined();
     expect(adapter.getTimerStart(69)).toBeUndefined();
-    // 1P-side judge op must be active (PERFECT = 241); 2P-side equivalents stay inactive.
-    expect(adapter.hasOp(BEATORAJA_OP.P1_JUDGE_PERFECT)).toBe(true);
-    expect(adapter.hasOp(BEATORAJA_OP.P2_JUDGE_PERFECT)).toBe(false);
   });
 });
 

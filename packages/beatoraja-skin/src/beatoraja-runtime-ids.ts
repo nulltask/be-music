@@ -24,7 +24,22 @@
  * sides onto side `1` from beatoraja's perspective; the renderer-side resolver translates lane channels
  * into the corresponding side before calling these helpers.
  */
-export type BeatorajaSide = 1 | 2;
+/**
+ * Identifies which judge / combo plate index a given judgement belongs to.
+ *
+ * For SP / DP variants this maps 1-to-1 onto the 1P / 2P player concept:
+ *   - `1` — 1P side (channels `1X`, plate index 0 in skin authoring).
+ *   - `2` — 2P side (channels `2X`, plate index 1).
+ *
+ * For POPN-9 (`chartPlayVariant === '9'`) the skin authors THREE judge / combo plates over the
+ * single playfield — one per 3-lane group — and upstream's `JudgeManager.notifyJudge`
+ * (`JudgeManager.java:700`) dispatches each judgement to a plate via
+ * `judgeindex = state.lane / (lanelength / judgenow.length)`. The third plate uses dedicated
+ * upstream timer / op constants (`TIMER_JUDGE_3P = 247`, `TIMER_COMBO_3P = 448`, `OPTION_3P_*`
+ * = 361 / 362 / 363 / 1362 / 1363), so we extend the side enum to `3` here. Lane-timer banks
+ * (bomb / key-on / LN-hold) still only use sides `1` / `2` and collapse onto `1` under POPN-9.
+ */
+export type BeatorajaSide = 1 | 2 | 3;
 
 // ─── Built-in scene timers ──────────────────────────────────────────────────────────────────────────
 // Sources: prop.lua `local timer = { ... }`. Names mirror prop.lua's; we keep the `TIMER_` prefix for
@@ -60,10 +75,19 @@ export const TIMER_SONGBAR_CHANGE = 11;
 export const TIMER_JUDGE_1P = 46;
 /** prop.lua `judge_2p` — restarts on every judgement on side 2. */
 export const TIMER_JUDGE_2P = 47;
+/**
+ * prop.lua `judge_3p = 247` — restarts on every judgement on side 3. Only POPN-9 (and any
+ * other layout with `judgenow.length >= 3` in the skin's `judge[]` declarations) addresses
+ * this slot; the upstream `play9.json` default skin authors its right-most judge plate
+ * (`id: 2012, index: 2`) against it.
+ */
+export const TIMER_JUDGE_3P = 247;
 
-/** prop.lua `combo_1p` / `combo_2p` — restarts when the combo counter advances. */
+/** prop.lua `combo_1p` / `combo_2p` / `combo_3p` — restarts when the combo counter advances. */
 export const TIMER_COMBO_1P = 446;
 export const TIMER_COMBO_2P = 447;
+/** prop.lua `combo_3p = 448` — POPN-9 third combo plate. See {@link TIMER_JUDGE_3P}. */
+export const TIMER_COMBO_3P = 448;
 
 /** prop.lua `endofnote_1p` / `endofnote_2p` — fires at the last note of each side. */
 export const TIMER_ENDOFNOTE_1P = 143;
@@ -142,6 +166,12 @@ export const LR2_LANE_INDEX_MAX = 9;
 /**
  * Per-side base for a given timer category, returning the value to which a 0..N lane index is added.
  * Lanes 0..9 use the side-relative base; 10+ uses the 1000-block extension regardless of side.
+ *
+ * Lane-timer banks only distinguish 1P / 2P (there is no per-plate `bomb_3p_keyN` bank in
+ * upstream — POPN-9's bombs / key-on / LN-hold all share the 1P-side bank), so a `side === 3`
+ * caller falls through to the 1P bank. In practice the adapter's `resolveSide` collapses every
+ * channel onto side 1 under POPN-9 so this fallback is defensive — the side-3 plate is only
+ * meaningful for `judgeTimerId` / `comboTimerId` / `judgeOpForKind`.
  */
 function timerBase(category: 'bomb' | 'lnHold' | 'keyOn' | 'keyOff', side: BeatorajaSide, isExt: boolean): number {
   if (isExt) {
@@ -156,15 +186,16 @@ function timerBase(category: 'bomb' | 'lnHold' | 'keyOn' | 'keyOff', side: Beato
         return TIMER_KEY_OFF_EXT_BASE;
     }
   }
+  const usePlayer2 = side === 2;
   switch (category) {
     case 'bomb':
-      return side === 1 ? TIMER_BOMB_1P_BASE : TIMER_BOMB_2P_BASE;
+      return usePlayer2 ? TIMER_BOMB_2P_BASE : TIMER_BOMB_1P_BASE;
     case 'lnHold':
-      return side === 1 ? TIMER_LN_HOLD_1P_BASE : TIMER_LN_HOLD_2P_BASE;
+      return usePlayer2 ? TIMER_LN_HOLD_2P_BASE : TIMER_LN_HOLD_1P_BASE;
     case 'keyOn':
-      return side === 1 ? TIMER_KEY_ON_1P_BASE : TIMER_KEY_ON_2P_BASE;
+      return usePlayer2 ? TIMER_KEY_ON_2P_BASE : TIMER_KEY_ON_1P_BASE;
     case 'keyOff':
-      return side === 1 ? TIMER_KEY_OFF_1P_BASE : TIMER_KEY_OFF_2P_BASE;
+      return usePlayer2 ? TIMER_KEY_OFF_2P_BASE : TIMER_KEY_OFF_1P_BASE;
   }
 }
 
@@ -199,19 +230,27 @@ export function keyOffTimerId(side: BeatorajaSide, lane: number): number | undef
   return laneTimerId('keyOff', side, lane);
 }
 
-/** Per-side judge timer (`46` for 1P, `47` for 2P). */
+/** Per-side judge timer (`46` for 1P, `47` for 2P, `247` for the POPN-9 third plate). */
 export function judgeTimerId(side: BeatorajaSide): number {
-  return side === 1 ? TIMER_JUDGE_1P : TIMER_JUDGE_2P;
+  return side === 1 ? TIMER_JUDGE_1P : side === 2 ? TIMER_JUDGE_2P : TIMER_JUDGE_3P;
 }
 
-/** Per-side combo timer (prop.lua `combo_1p = 446`, `combo_2p = 447`). Restarts when the combo advances. */
+/**
+ * Per-side combo timer (prop.lua `combo_1p = 446`, `combo_2p = 447`, `combo_3p = 448`). Restarts
+ * when the combo advances on this plate. POPN-9 uses three plates, so the third entry is real
+ * runtime state — not a skin-only constant.
+ */
 export function comboTimerId(side: BeatorajaSide): number {
-  return side === 1 ? TIMER_COMBO_1P : TIMER_COMBO_2P;
+  return side === 1 ? TIMER_COMBO_1P : side === 2 ? TIMER_COMBO_2P : TIMER_COMBO_3P;
 }
 
-/** Per-side end-of-note timer (prop.lua `endofnote_1p = 143`, `endofnote_2p = 144`). */
+/**
+ * Per-side end-of-note timer (prop.lua `endofnote_1p = 143`, `endofnote_2p = 144`). No upstream
+ * `endofnote_3p` — POPN-9's "end of chart" cue collapses onto 1P, so a `side === 3` caller falls
+ * through to the 1P slot.
+ */
 export function endOfNoteTimerId(side: BeatorajaSide): number {
-  return side === 1 ? TIMER_ENDOFNOTE_1P : TIMER_ENDOFNOTE_2P;
+  return side === 2 ? TIMER_ENDOFNOTE_2P : TIMER_ENDOFNOTE_1P;
 }
 
 // ─── Runtime op-codes ──────────────────────────────────────────────────────────────────────────────
@@ -286,6 +325,22 @@ export const BEATORAJA_OP = {
   P2_JUDGE_EARLY: 1262,
   /** prop.lua `_2p_late = 1263`. */
   P2_JUDGE_LATE: 1263,
+
+  // ─── 3P last-judge op (prop.lua `_3p_*`) ─────────────────────────────────────────────────────
+  // Only addressed under POPN-9 (`judgenow.length >= 3` in the upstream sense). Upstream
+  // `SkinProperty.java:830-834` defines PERFECT / GREAT / EARLY / GOOD / LATE for the 3P plate;
+  // BAD / POOR / MISS are intentionally OMITTED upstream (they only exist on `_1p_*` — those
+  // verdicts are treated as global combo-breaks and aren't routed to the per-plate flash slot).
+  /** prop.lua `_3p_perfect = 361`. */
+  P3_JUDGE_PERFECT: 361,
+  /** prop.lua `_3p_great = 362`. */
+  P3_JUDGE_GREAT: 362,
+  /** prop.lua `_3p_good = 363`. */
+  P3_JUDGE_GOOD: 363,
+  /** prop.lua `_3p_early = 1362`. */
+  P3_JUDGE_EARLY: 1362,
+  /** prop.lua `_3p_late = 1363`. */
+  P3_JUDGE_LATE: 1363,
 
   // ─── Live rank ops (prop.lua `_1p_aaa = 200` ... `_1p_f = 207`) ────────────────────────────
   // Set live during gameplay, recomputed every frame from `summary.exScore` vs the chart's
@@ -611,20 +666,23 @@ export type BeatorajaButtonCode = (typeof BEATORAJA_BUTTON)[keyof typeof BEATORA
  * neither active nor inactive.
  */
 export function computeRankOp(exScore: number, maxExScore: number, side: BeatorajaSide = 1): number {
+  // `side === 2` is the only "this is the 2P side" case; everything else (including the POPN-9
+  // third plate) shares the 1P rank bank because upstream has no `_3p_rank_*` ops.
+  const usePlayer2 = side === 2;
   const ratio = maxExScore > 0 ? exScore / maxExScore : 0;
   const thresholds: ReadonlyArray<readonly [number, number]> = [
-    [8 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_AAA : BEATORAJA_OP.P2_RANK_AAA],
-    [7 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_AA : BEATORAJA_OP.P2_RANK_AA],
-    [6 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_A : BEATORAJA_OP.P2_RANK_A],
-    [5 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_B : BEATORAJA_OP.P2_RANK_B],
-    [4 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_C : BEATORAJA_OP.P2_RANK_C],
-    [3 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_D : BEATORAJA_OP.P2_RANK_D],
-    [2 / 9, side === 1 ? BEATORAJA_OP.P1_RANK_E : BEATORAJA_OP.P2_RANK_E],
+    [8 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_AAA : BEATORAJA_OP.P1_RANK_AAA],
+    [7 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_AA : BEATORAJA_OP.P1_RANK_AA],
+    [6 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_A : BEATORAJA_OP.P1_RANK_A],
+    [5 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_B : BEATORAJA_OP.P1_RANK_B],
+    [4 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_C : BEATORAJA_OP.P1_RANK_C],
+    [3 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_D : BEATORAJA_OP.P1_RANK_D],
+    [2 / 9, usePlayer2 ? BEATORAJA_OP.P2_RANK_E : BEATORAJA_OP.P1_RANK_E],
   ];
   for (const [t, op] of thresholds) {
     if (ratio >= t) return op;
   }
-  return side === 1 ? BEATORAJA_OP.P1_RANK_F : BEATORAJA_OP.P2_RANK_F;
+  return usePlayer2 ? BEATORAJA_OP.P2_RANK_F : BEATORAJA_OP.P1_RANK_F;
 }
 
 /**
@@ -802,19 +860,35 @@ export function judgeOpForKind(side: BeatorajaSide, kind: string): number | unde
         return undefined;
     }
   }
+  if (side === 2) {
+    switch (upper) {
+      case 'PERFECT':
+        return BEATORAJA_OP.P2_JUDGE_PERFECT;
+      case 'GREAT':
+        return BEATORAJA_OP.P2_JUDGE_GREAT;
+      case 'GOOD':
+        return BEATORAJA_OP.P2_JUDGE_GOOD;
+      case 'BAD':
+        return BEATORAJA_OP.P2_JUDGE_BAD;
+      case 'POOR':
+        return BEATORAJA_OP.P2_JUDGE_POOR;
+      case 'MISS':
+        return BEATORAJA_OP.P2_JUDGE_MISS;
+      default:
+        return undefined;
+    }
+  }
+  // side === 3 — POPN-9 third plate. Upstream `SkinProperty.java` only defines PERFECT / GREAT /
+  // GOOD / EARLY / LATE for this plate; BAD / POOR / MISS aren't routed per-plate (combo-breaks
+  // are treated as global) so we fall through to `undefined` and let `applyJudgeCombo`'s previous-
+  // op cleanup retire the prior verdict without setting a new one.
   switch (upper) {
     case 'PERFECT':
-      return BEATORAJA_OP.P2_JUDGE_PERFECT;
+      return BEATORAJA_OP.P3_JUDGE_PERFECT;
     case 'GREAT':
-      return BEATORAJA_OP.P2_JUDGE_GREAT;
+      return BEATORAJA_OP.P3_JUDGE_GREAT;
     case 'GOOD':
-      return BEATORAJA_OP.P2_JUDGE_GOOD;
-    case 'BAD':
-      return BEATORAJA_OP.P2_JUDGE_BAD;
-    case 'POOR':
-      return BEATORAJA_OP.P2_JUDGE_POOR;
-    case 'MISS':
-      return BEATORAJA_OP.P2_JUDGE_MISS;
+      return BEATORAJA_OP.P3_JUDGE_GOOD;
     default:
       return undefined;
   }
