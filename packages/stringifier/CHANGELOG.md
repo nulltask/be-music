@@ -1,5 +1,13 @@
 # @be-music/stringifier
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [06a2db9]
+  - @be-music/chart@0.3.0
+  - @be-music/parser@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
@@ -7,6 +15,7 @@
 - 632f274: End-to-end support for the beatoraja `#BASE 62` ID extension
   (case-sensitive 62-character object IDs `0-9A-Za-z`, four
   times the address space of the original `0-9A-Z` 36-base).
+
   - **`@be-music/parser`**: detects the `#BASE 62` header and
     decodes channel-row IDs case-sensitively under it.
   - **`@be-music/chart`** / **`@be-music/stringifier`**: thread
