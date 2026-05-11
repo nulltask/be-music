@@ -1,10 +1,19 @@
 import * as playerWebCoreApi from '@be-music/player-web';
+import type {
+  BeatorajaDestinationGroup,
+  BeatorajaPlaySkinMap,
+  BeatorajaSkin,
+  BeatorajaSkinEntry,
+  BeatorajaSkinFileEntry,
+  BeatorajaSourceBundle,
+} from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
+const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
 const BENCH_WAV_FILE = makeBenchFile('Songs/Bench/kick.wav', 'RIFF');
 const BENCH_SOURCE = makeBenchSource();
 const BENCH_SONG = makeBenchSong();
@@ -24,8 +33,58 @@ const BENCH_SCORE = {
   exScore: 150,
   score: 75_000,
 };
+const BENCH_BEATORAJA_FILES = new Map<string, BeatorajaSkinFileEntry>([
+  ['sound/cursor.wav', BENCH_BYTES],
+  ['sound/decide.wav', BENCH_BYTES],
+  ['sound/cancel.wav', BENCH_BYTES],
+  ['Bgm/select.ogg', BENCH_BYTES],
+]);
+const BENCH_BEATORAJA_SKIN_ENTRY = {
+  entryPath: 'skin/bench/play7.json',
+  header: { type: 0, name: 'Bench', w: 1280, h: 720 },
+} satisfies BeatorajaSkinEntry;
+const BENCH_BEATORAJA_PLAY_SKINS = {
+  '7': BENCH_BEATORAJA_SKIN_ENTRY,
+} satisfies BeatorajaPlaySkinMap;
+const BENCH_BEATORAJA_THEME_BUNDLE = {
+  files: BENCH_BEATORAJA_FILES,
+  theme: { playSkins: BENCH_BEATORAJA_PLAY_SKINS, entries: [BENCH_BEATORAJA_SKIN_ENTRY] },
+  warnings: [],
+};
+const BENCH_BEATORAJA_SOURCE_BUNDLE = {
+  assets: [],
+  byId: new Map(),
+  unresolved: [],
+} satisfies BeatorajaSourceBundle;
+const BENCH_BEATORAJA_DESTINATION = {
+  id: 'bench',
+  timer: 0,
+  loop: 0,
+  offset: 0,
+  op: [],
+  blend: 2,
+  filter: 0,
+  center: 0,
+  offsets: [],
+  ifCodes: [],
+  dst: [{ time: 0, x: 10, y: 20, w: 100, h: 50, r: 255, g: 255, b: 255, a: 255, angle: 0, acc: 0 }],
+  acc: 0,
+  stretch: 0,
+  mouseRect: undefined,
+  relative: false,
+  declarationOrder: 0,
+} satisfies BeatorajaDestinationGroup;
 
 export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): void {
+  define('player-web.applyBeatorajaStretchRect', {
+    run: () => {
+      playerWebCoreApi.applyBeatorajaStretchRect(
+        { x: 0, y: 0, width: 320, height: 180 },
+        { width: 128, height: 256 },
+        2,
+      );
+    },
+  });
   define('player-web.asLoadedBytes', {
     run: () => {
       playerWebCoreApi.asLoadedBytes(BENCH_BYTES);
@@ -44,9 +103,94 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       bus.dispose();
     },
   });
-  define('player-web.BrowserSongCollectionStore', {
+  define('player-web.BeatorajaBgaLayer', {
     run: () => {
-      new playerWebCoreApi.BrowserSongCollectionStore();
+      const layer = new playerWebCoreApi.BeatorajaBgaLayer({
+        skin: makeBenchBeatorajaSkin(),
+        textures: new Map(),
+        cues: { base: [], layer: [], poor: [] },
+      });
+      layer.dispose();
+    },
+  });
+  define('player-web.BeatorajaMarkerLayer', {
+    run: () => {
+      const layer = new playerWebCoreApi.BeatorajaMarkerLayer({
+        group: [],
+        bpm: [],
+        stop: [],
+        time: [],
+        images: new Map(),
+        textures: makeEmptyBeatorajaTextureCache(),
+        canvasHeight: 720,
+      });
+      layer.dispose();
+    },
+  });
+  define('player-web.BeatorajaNoteLayer', {
+    run: () => {
+      const layer = new playerWebCoreApi.BeatorajaNoteLayer({
+        noteSection: makeBenchBeatorajaNoteSection(),
+        variant: '7',
+        images: new Map(),
+        textures: makeEmptyBeatorajaTextureCache(),
+        canvasHeight: 720,
+      });
+      layer.dispose();
+    },
+  });
+  define('player-web.beatorajaPixelsPerBeat', {
+    run: () => {
+      playerWebCoreApi.beatorajaPixelsPerBeat(580, 2.5);
+    },
+  });
+  define('player-web.BeatorajaPlaySkinView', {
+    run: () => {
+      const view = new playerWebCoreApi.BeatorajaPlaySkinView({
+        skin: makeBenchBeatorajaSkin(),
+        textures: makeEmptyBeatorajaTextureCache(),
+      });
+      view.update({
+        activeOps: new Set(),
+        getTimerStart: () => 0,
+        nowMs: 0,
+      });
+      view.dispose();
+    },
+    interactive: true,
+  });
+  define('player-web.BeatorajaRuntimeAdapter', {
+    run: () => {
+      const adapter = new playerWebCoreApi.BeatorajaRuntimeAdapter({
+        chartPlayVariant: '7',
+        baseOps: new Set(),
+        getNowMs: () => 1000,
+        chart: BENCH_SONG.chart,
+        directoryLabel: BENCH_SONG.directoryLabel,
+      });
+      adapter.getRenderContext();
+      adapter.reset();
+    },
+  });
+  define('player-web.BeatorajaSkinAudioPlayer', {
+    run: () => {
+      const player = new playerWebCoreApi.BeatorajaSkinAudioPlayer({ files: BENCH_BEATORAJA_FILES });
+      player.play('sound/missing.wav', 1);
+      player.stop('sound/missing.wav');
+      player.dispose();
+    },
+  });
+  define('player-web.blendCodeToPixi', {
+    run: () => {
+      playerWebCoreApi.blendCodeToPixi(3);
+      playerWebCoreApi.blendCodeToPixi(9);
+    },
+  });
+  define('player-web.BrowserSongCollectionStore', {
+    run: async () => {
+      const store = new playerWebCoreApi.BrowserSongCollectionStore();
+      await store.loadFromFiles([BENCH_BMS_FILE]);
+      await store.appendFromFiles([BENCH_APPEND_BMS_FILE]);
     },
   });
   define('player-web.ChartPreviewEngine', {
@@ -67,14 +211,46 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.collectChartPreviewTriggers(fixtures.sampleBmsJson, 3);
     },
   });
+  define('player-web.computeBeatorajaChartMarkers', {
+    run: (fixtures) => {
+      playerWebCoreApi.computeBeatorajaChartMarkers(fixtures.sampleBmsJson, {
+        timeIntervalSec: 1,
+        totalSeconds: 5,
+      });
+    },
+  });
   define('player-web.computeResultOps', {
     run: () => {
       playerWebCoreApi.computeResultOps(makeResultData(), makeLr2Skin());
     },
   });
+  define('player-web.createCroppedBeatorajaTexture', {
+    run: () => {
+      playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });
+    },
+  });
+  define('player-web.destinationToSpriteProps', {
+    run: () => {
+      playerWebCoreApi.destinationToSpriteProps(
+        BENCH_BEATORAJA_DESTINATION,
+        { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 },
+        720,
+      );
+    },
+  });
   define('player-web.describeSongCollection', {
     run: () => {
       playerWebCoreApi.describeSongCollection(BENCH_COLLECTION);
+    },
+  });
+  define('player-web.discoverBeatorajaSelectBgmPath', {
+    run: () => {
+      playerWebCoreApi.discoverBeatorajaSelectBgmPath(BENCH_BEATORAJA_FILES);
+    },
+  });
+  define('player-web.discoverBeatorajaSystemSoundPaths', {
+    run: () => {
+      playerWebCoreApi.discoverBeatorajaSystemSoundPaths(BENCH_BEATORAJA_FILES);
     },
   });
   define('player-web.dirname', {
@@ -106,9 +282,29 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       recorder.dispose();
     },
   });
+  define('player-web.findBeatorajaThemeBgm', {
+    run: async () => {
+      await playerWebCoreApi.findBeatorajaThemeBgm(BENCH_BEATORAJA_THEME_BUNDLE);
+    },
+  });
+  define('player-web.flipRectToPixi', {
+    run: () => {
+      playerWebCoreApi.flipRectToPixi({ x: 10, y: 20, w: 100, h: 50 }, 720);
+    },
+  });
   define('player-web.groupSongsByFolder', {
     run: () => {
       playerWebCoreApi.groupSongsByFolder([BENCH_SONG]);
+    },
+  });
+  define('player-web.isBeatorajaLuaSkinFilePath', {
+    run: () => {
+      playerWebCoreApi.isBeatorajaLuaSkinFilePath('skin/bench/play7.luaskin');
+    },
+  });
+  define('player-web.isBeatorajaSkinIndicator', {
+    run: () => {
+      playerWebCoreApi.isBeatorajaSkinIndicator('skin/bench/play7.json');
     },
   });
   define('player-web.isChartFilePath', {
@@ -122,9 +318,33 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.isInsideLr2DefaultSearchBox({ width: 640, height: 480, x: 460, y: 561 });
     },
   });
+  define('player-web.isLr2SkinFilePath', {
+    run: () => {
+      playerWebCoreApi.isLr2SkinFilePath('theme/play_7.lr2skin');
+    },
+  });
   define('player-web.loadAssetBytes', {
     run: async () => {
       await playerWebCoreApi.loadAssetBytes(BENCH_BYTES);
+    },
+  });
+  define('player-web.loadBeatorajaFonts', {
+    run: async () => {
+      await playerWebCoreApi.loadBeatorajaFonts({
+        files: BENCH_BEATORAJA_FILES,
+        entryPath: 'skin/bench/play7.json',
+        fonts: [],
+      });
+    },
+  });
+  define('player-web.loadBeatorajaTexturesFromBundle', {
+    run: async () => {
+      await playerWebCoreApi.loadBeatorajaTexturesFromBundle(BENCH_BEATORAJA_SOURCE_BUNDLE);
+    },
+  });
+  define('player-web.loadBeatorajaThemeFromFiles', {
+    run: async () => {
+      await playerWebCoreApi.loadBeatorajaThemeFromFiles([]);
     },
   });
   define('player-web.logger', {
@@ -143,6 +363,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: async () => {
       await playerWebCoreApi.loadSongCollectionFromFiles([BENCH_BMS_FILE, BENCH_WAV_FILE]);
     },
+  });
+  define('player-web.loadTextureFromBytes', {
+    run: async () => {
+      await playerWebCoreApi.loadTextureFromBytes('bench.png', BENCH_BYTES);
+    },
+    interactive: true,
   });
   define('player-web.makeWebmSeekable', {
     run: async () => {
@@ -169,6 +395,49 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');
     },
+  });
+  define('player-web.pickBeatorajaPlayableSkinVariant', {
+    run: () => {
+      playerWebCoreApi.pickBeatorajaPlayableSkinVariant(BENCH_BEATORAJA_PLAY_SKINS, '7');
+    },
+  });
+  define('player-web.pickBeatorajaPlayableVariant', {
+    run: () => {
+      playerWebCoreApi.pickBeatorajaPlayableVariant({ keys: 7, isDouble: false, isPms: false });
+      playerWebCoreApi.pickBeatorajaPlayableVariant({ keys: 9, isDouble: false, isPms: true });
+    },
+  });
+  define('player-web.PixiBeatorajaDecideScene', {
+    run: () => {
+      new playerWebCoreApi.PixiBeatorajaDecideScene(
+        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaDecideScene>[0],
+      );
+    },
+    interactive: true,
+  });
+  define('player-web.PixiBeatorajaGameplayView', {
+    run: () => {
+      new playerWebCoreApi.PixiBeatorajaGameplayView(
+        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaGameplayView>[0],
+      );
+    },
+    interactive: true,
+  });
+  define('player-web.PixiBeatorajaResultScene', {
+    run: () => {
+      new playerWebCoreApi.PixiBeatorajaResultScene(
+        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaResultScene>[0],
+      );
+    },
+    interactive: true,
+  });
+  define('player-web.PixiBeatorajaSelectScene', {
+    run: () => {
+      new playerWebCoreApi.PixiBeatorajaSelectScene(
+        {} as ConstructorParameters<typeof playerWebCoreApi.PixiBeatorajaSelectScene>[0],
+      );
+    },
+    interactive: true,
   });
   define('player-web.PixiDecideView', {
     run: () => {
@@ -197,6 +466,15 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.PixiSongSelectView', {
     run: () => {
       new playerWebCoreApi.PixiSongSelectView();
+    },
+    interactive: true,
+  });
+  define('player-web.prepareBeatorajaGameplayChart', {
+    run: async () => {
+      await playerWebCoreApi.prepareBeatorajaGameplayChart({
+        song: BENCH_SONG,
+        source: BENCH_SOURCE,
+      });
     },
     interactive: true,
   });
@@ -246,6 +524,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveRendererPreference('?renderer=webgl');
     },
   });
+  define('player-web.Rectangle', {
+    run: () => {
+      new playerWebCoreApi.Rectangle(0, 0, 320, 180);
+    },
+  });
   define('player-web.resolveSongSource', {
     run: () => {
       playerWebCoreApi.resolveSongSource(BENCH_COLLECTION, BENCH_SONG);
@@ -274,6 +557,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
           },
         ],
       });
+    },
+  });
+  define('player-web.summarizeBeatorajaPlaySkins', {
+    run: () => {
+      playerWebCoreApi.summarizeBeatorajaPlaySkins(BENCH_BEATORAJA_PLAY_SKINS);
     },
   });
   define('player-web.wrappedCursorDelta', {
@@ -360,6 +648,34 @@ function makeLr2Skin(): Lr2Skin {
     scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
     files: new Map([['parts.tga', BENCH_BYTES]]),
   } as Lr2Skin;
+}
+
+function makeBenchBeatorajaSkin(): BeatorajaSkin {
+  return {
+    type: 0,
+    name: 'bench',
+    w: 1280,
+    h: 720,
+    destination: [],
+  };
+}
+
+function makeBenchBeatorajaNoteSection(): ConstructorParameters<
+  typeof playerWebCoreApi.BeatorajaNoteLayer
+>[0]['noteSection'] {
+  return {
+    id: 'notes',
+    dst: [],
+  } as unknown as ConstructorParameters<typeof playerWebCoreApi.BeatorajaNoteLayer>[0]['noteSection'];
+}
+
+function makeEmptyBeatorajaTextureCache(): playerWebCoreApi.BeatorajaTextureCache {
+  const textures = new Map<never, NonNullable<ReturnType<playerWebCoreApi.BeatorajaTextureCache['get']>>>();
+  return {
+    get: () => undefined,
+    values: () => textures.values(),
+    pathOf: () => undefined,
+  };
 }
 
 function makeResultData(): playerWebCoreApi.PixiGameplayResultData {
