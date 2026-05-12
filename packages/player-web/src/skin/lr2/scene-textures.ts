@@ -5,6 +5,8 @@ import { loadAssetBytes, resolveChartImageAsset, resolveSongSource } from '../..
 import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
 
 type TextureLoadValidity = () => boolean;
+type SkinTexturePathCollector = (paths: Set<string>, skin: Lr2Skin) => void;
+type SkinTextureSourceElement = { source: { imagePath: string } };
 
 export class Lr2SkinTextureStore {
   private readonly textures = new Map<string, Texture>();
@@ -133,39 +135,19 @@ export class Lr2ChartGraphicTextureStore {
 }
 
 export function collectSelectSkinTexturePaths(skin: Lr2Skin): Set<string> {
-  const paths = new Set<string>();
-  addImageTexturePaths(paths, skin);
-  for (const number of skin.numbers) {
-    addSkinTexturePath(paths, number.source.imagePath);
-  }
-  for (const slider of skin.sliders) {
-    addSkinTexturePath(paths, slider.source.imagePath);
-  }
-  for (const body of skin.barLayout.bodies) {
-    addSkinTexturePath(paths, body.source.imagePath);
-  }
-  for (const level of skin.barLayout.levels) {
-    addSkinTexturePath(paths, level.source.imagePath);
-  }
-  for (const lamp of skin.barLayout.lamps) {
-    addSkinTexturePath(paths, lamp.source.imagePath);
-  }
-  for (const rank of skin.barLayout.ranks) {
-    addSkinTexturePath(paths, rank.source.imagePath);
-  }
-  for (const button of skin.buttons) {
-    addSkinTexturePath(paths, button.source.imagePath);
-  }
-  for (const onMouse of skin.onMouseElements) {
-    addSkinTexturePath(paths, onMouse.source.imagePath);
-  }
-  for (const cursor of skin.mouseCursors) {
-    addSkinTexturePath(paths, cursor.source.imagePath);
-  }
-  if (skin.barLayout.flash) {
-    addSkinTexturePath(paths, skin.barLayout.flash.source.imagePath);
-  }
-  return paths;
+  return collectSkinTexturePaths(skin, [
+    addImageTexturePaths,
+    addNumberTexturePaths,
+    addSliderTexturePaths,
+    addBarBodyTexturePaths,
+    addBarLevelTexturePaths,
+    addBarLampTexturePaths,
+    addBarRankTexturePaths,
+    addButtonTexturePaths,
+    addOnMouseTexturePaths,
+    addMouseCursorTexturePaths,
+    addBarFlashTexturePath,
+  ]);
 }
 
 export function collectResultSkinTexturePaths(skin: Lr2Skin): Set<string> {
@@ -173,12 +155,7 @@ export function collectResultSkinTexturePaths(skin: Lr2Skin): Set<string> {
 }
 
 export function collectDecideSkinTexturePaths(skin: Lr2Skin): Set<string> {
-  const paths = new Set<string>();
-  addImageTexturePaths(paths, skin);
-  for (const number of skin.numbers) {
-    addSkinTexturePath(paths, number.source.imagePath);
-  }
-  return paths;
+  return collectSkinTexturePaths(skin, [addImageTexturePaths, addNumberTexturePaths]);
 }
 
 function resolveSpecialGraphicAssetPath(song: BrowserSongEntry, path: Lr2SpecialGraphic): string | undefined {
@@ -193,23 +170,75 @@ function resolveSpecialGraphicAssetPath(song: BrowserSongEntry, path: Lr2Special
 }
 
 function collectBaseSkinTexturePaths(skin: Lr2Skin): Set<string> {
+  return collectSkinTexturePaths(skin, [
+    addImageTexturePaths,
+    addNumberTexturePaths,
+    addBargraphTexturePaths,
+    addSliderTexturePaths,
+  ]);
+}
+
+function collectSkinTexturePaths(skin: Lr2Skin, collectors: readonly SkinTexturePathCollector[]): Set<string> {
   const paths = new Set<string>();
-  addImageTexturePaths(paths, skin);
-  for (const number of skin.numbers) {
-    addSkinTexturePath(paths, number.source.imagePath);
-  }
-  for (const bargraph of skin.bargraphs) {
-    addSkinTexturePath(paths, bargraph.source.imagePath);
-  }
-  for (const slider of skin.sliders) {
-    addSkinTexturePath(paths, slider.source.imagePath);
+  for (const collector of collectors) {
+    collector(paths, skin);
   }
   return paths;
 }
 
 function addImageTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
-  for (const image of skin.images) {
-    addSkinTexturePath(paths, image.source.imagePath);
+  addSourceTexturePaths(paths, skin.images);
+}
+
+function addNumberTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.numbers);
+}
+
+function addBargraphTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.bargraphs);
+}
+
+function addSliderTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.sliders);
+}
+
+function addBarBodyTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.barLayout.bodies);
+}
+
+function addBarLevelTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.barLayout.levels);
+}
+
+function addBarLampTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.barLayout.lamps);
+}
+
+function addBarRankTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.barLayout.ranks);
+}
+
+function addButtonTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.buttons);
+}
+
+function addOnMouseTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.onMouseElements);
+}
+
+function addMouseCursorTexturePaths(paths: Set<string>, skin: Lr2Skin): void {
+  addSourceTexturePaths(paths, skin.mouseCursors);
+}
+
+function addBarFlashTexturePath(paths: Set<string>, skin: Lr2Skin): void {
+  if (skin.barLayout.flash) {
+    addSkinTexturePath(paths, skin.barLayout.flash.source.imagePath);
+  }
+}
+
+function addSourceTexturePaths(paths: Set<string>, elements: readonly SkinTextureSourceElement[]): void {
+  for (const element of elements) {
+    addSkinTexturePath(paths, element.source.imagePath);
   }
 }
 
