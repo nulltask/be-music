@@ -17,13 +17,34 @@ export interface FindClosestCandidateOptions<T extends JudgeCandidate> {
   isConsumed?: (candidate: T) => boolean;
 }
 
+function lowerBoundBySeconds<T extends JudgeCandidate>(
+  notes: ReadonlyArray<T>,
+  target: number,
+): number {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    if (notes[mid]!.seconds < target) {
+      low = mid + 1;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
 export function findClosestCandidateInWindow<T extends JudgeCandidate>(
   notes: ReadonlyArray<T>,
   options: FindClosestCandidateOptions<T>,
 ): T | undefined {
   let best: T | undefined;
   let bestDelta = Number.POSITIVE_INFINITY;
-  const startIndex = Math.max(0, Math.trunc(options.startIndex ?? 0));
+  let startIndex = Math.max(0, Math.trunc(options.startIndex ?? 0));
+  if (options.sortedBySeconds === true && options.startIndex === undefined) {
+    // Skip the entire prefix before the window opens — O(log N) instead of O(N).
+    startIndex = lowerBoundBySeconds(notes, options.nowSec - options.judgeWindowSec);
+  }
   for (let index = startIndex; index < notes.length; index += 1) {
     const note = notes[index]!;
     const signedDelta = note.seconds - options.nowSec;
@@ -52,7 +73,7 @@ export function findClosestCandidateInWindow<T extends JudgeCandidate>(
 }
 
 export function findBestCandidate<T extends JudgeableNote>(
-  notes: T[],
+  notes: ReadonlyArray<T>,
   candidateChannels: ReadonlySet<string>,
   nowSec: number,
   judgeWindowSec: number,
@@ -61,39 +82,61 @@ export function findBestCandidate<T extends JudgeableNote>(
     candidateChannels,
     nowSec,
     judgeWindowSec,
-    isConsumed: (note) => note.judged,
+    sortedBySeconds: true,
+    isConsumed: noteIsJudged,
   });
 }
 
+function noteIsJudged(note: JudgeableNote): boolean {
+  return note.judged;
+}
+
 export function findLaneSoundCandidate<T extends JudgeableNote>(
-  notes: T[],
+  notes: ReadonlyArray<T>,
   candidateChannels: ReadonlySet<string>,
   nowSec: number,
 ): T | undefined {
-  let nearestUnjudged: T | undefined;
-  let nearestUnjudgedDelta = Number.POSITIVE_INFINITY;
+  if (notes.length === 0 || candidateChannels.size === 0) {
+    return undefined;
+  }
+
+  // Bidirectional walk from the bisect pivot. Notes are sorted by `seconds`, so the
+  // first matching unjudged note we encounter is the nearest unjudged candidate; once
+  // we have one, every further note can only be farther away and we can stop.
+  const pivot = lowerBoundBySeconds(notes, nowSec);
+  let left = pivot - 1;
+  let right = pivot;
   let nearestAny: T | undefined;
   let nearestAnyDelta = Number.POSITIVE_INFINITY;
 
-  for (const note of notes) {
+  while (left >= 0 || right < notes.length) {
+    const leftDelta = left >= 0 ? nowSec - notes[left]!.seconds : Number.POSITIVE_INFINITY;
+    const rightDelta = right < notes.length ? notes[right]!.seconds - nowSec : Number.POSITIVE_INFINITY;
+    const stepLeft = leftDelta <= rightDelta;
+    let note: T;
+    let delta: number;
+    if (stepLeft) {
+      note = notes[left]!;
+      delta = leftDelta;
+      left -= 1;
+    } else {
+      note = notes[right]!;
+      delta = rightDelta;
+      right += 1;
+    }
+
     if (!candidateChannels.has(note.channel)) {
       continue;
     }
-
-    const delta = Math.abs(note.seconds - nowSec);
+    if (!note.judged) {
+      // Closest unjudged found — outward walk is monotonic in delta, so this is optimal.
+      return note;
+    }
     if (delta < nearestAnyDelta) {
       nearestAnyDelta = delta;
       nearestAny = note;
     }
-
-    if (note.judged) {
-      continue;
-    }
-    if (delta < nearestUnjudgedDelta) {
-      nearestUnjudgedDelta = delta;
-      nearestUnjudged = note;
-    }
   }
 
-  return nearestUnjudged ?? nearestAny;
+  return nearestAny;
 }
