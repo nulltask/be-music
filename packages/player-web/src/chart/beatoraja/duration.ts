@@ -14,10 +14,10 @@
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
   beatorajaEventBeat,
+  collectBeatorajaChartTimingEntries,
   computeBeatorajaMeasureBaseBeats,
   hasBeatorajaEventValue,
-  resolveBeatorajaBpmEventValue,
-  resolveBeatorajaStopDurationBeats,
+  resolveBeatorajaInitialBpm,
 } from './timing.ts';
 
 /**
@@ -42,38 +42,8 @@ export function computeBeatorajaChartTotalSeconds(chart: BeMusicJson): number {
 
   // Build the BPM segment list — beat → bpm transitions. Initial BPM is `metadata.bpm` (fall
   // back to 130 — beatoraja's default for malformed headers).
-  const initialBpm = chart.metadata.bpm > 0 ? chart.metadata.bpm : 130;
-  const bpmTable = chart.resources?.bpm ?? {};
-  const stopTable = chart.resources?.stop ?? {};
-  type Transition = { beat: number; kind: 'bpm'; bpm: number } | { beat: number; kind: 'stop'; durationBeats: number };
-  const transitions: Transition[] = [];
-  for (const event of chart.events ?? []) {
-    if (!hasBeatorajaEventValue(event.value)) continue;
-    const beat = beatorajaEventBeat(event, measureBaseBeat);
-    if (beat === undefined) continue;
-    if (event.channel === '03') {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) {
-        transitions.push({ beat, kind: 'bpm', bpm });
-      }
-    } else if (event.channel === '08') {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) {
-        transitions.push({ beat, kind: 'bpm', bpm });
-      }
-    } else if (event.channel === '09') {
-      const durationBeats = resolveBeatorajaStopDurationBeats(event.value, stopTable);
-      if (durationBeats !== undefined) {
-        transitions.push({ beat, kind: 'stop', durationBeats });
-      }
-    }
-  }
-  // Sort by beat. Stops at the same beat as a BPM change apply to the NEW bpm — push them after
-  // BPM changes by giving stops a slightly larger sort key on tie.
-  transitions.sort((a, b) => {
-    if (a.beat !== b.beat) return a.beat - b.beat;
-    return a.kind === 'bpm' ? -1 : 1;
-  });
+  const initialBpm = resolveBeatorajaInitialBpm(chart);
+  const transitions = collectBeatorajaChartTimingEntries(chart, measureBaseBeat);
 
   // Walk the segment list. `seconds` accumulates wallclock duration; `beat` is the running
   // chart-beat cursor; `bpm` is the active tempo.

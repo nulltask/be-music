@@ -2,14 +2,30 @@ import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
 import {
   beatorajaEventBeat,
+  collectBeatorajaChartTimedEntries,
+  collectBeatorajaChartTimingEntries,
   computeBeatorajaMeasureLayout,
   hasBeatorajaEventValue,
+  isBeatorajaBpmEventChannel,
+  isBeatorajaStopEventChannel,
   resolveBeatorajaBpmEventValue,
+  resolveBeatorajaInitialBpm,
   resolveBeatorajaStopDurationBeats,
 } from './timing.ts';
 
-function chartWith(overrides: Partial<BeMusicJson>): BeMusicJson {
-  return { ...createEmptyJson(), ...overrides };
+type ChartOverrides = Omit<Partial<BeMusicJson>, 'metadata' | 'resources'> & {
+  metadata?: Partial<BeMusicJson['metadata']>;
+  resources?: Partial<BeMusicJson['resources']>;
+};
+
+function chartWith(overrides: ChartOverrides): BeMusicJson {
+  const empty = createEmptyJson();
+  return {
+    ...empty,
+    ...overrides,
+    metadata: { ...empty.metadata, ...overrides.metadata },
+    resources: { ...empty.resources, ...overrides.resources },
+  };
 }
 
 describe('beatoraja timing helpers', () => {
@@ -42,6 +58,19 @@ describe('beatoraja timing helpers', () => {
     expect(hasBeatorajaEventValue('01')).toBe(true);
   });
 
+  it('resolves the initial BPM with beatoraja fallback semantics', () => {
+    expect(resolveBeatorajaInitialBpm(chartWith({ metadata: { title: '', bpm: 175 } }))).toBe(175);
+    expect(resolveBeatorajaInitialBpm(chartWith({ metadata: { title: '', bpm: 0 } }))).toBe(130);
+  });
+
+  it('classifies BPM and STOP timing channels', () => {
+    expect(isBeatorajaBpmEventChannel('03')).toBe(true);
+    expect(isBeatorajaBpmEventChannel('08')).toBe(true);
+    expect(isBeatorajaBpmEventChannel('09')).toBe(false);
+    expect(isBeatorajaStopEventChannel('09')).toBe(true);
+    expect(isBeatorajaStopEventChannel('08')).toBe(false);
+  });
+
   it('resolves BPM event values from inline hex and case-insensitive table keys', () => {
     expect(resolveBeatorajaBpmEventValue('03', 'F0')).toBe(240);
     expect(resolveBeatorajaBpmEventValue('08', 'aa', { AA: '175.5' })).toBe(175.5);
@@ -53,5 +82,55 @@ describe('beatoraja timing helpers', () => {
     expect(resolveBeatorajaStopDurationBeats('XX', { xx: 192 })).toBe(4);
     expect(resolveBeatorajaStopDurationBeats('YY', { YY: '96' })).toBe(2);
     expect(resolveBeatorajaStopDurationBeats('ZZ', { ZZ: 0 })).toBeUndefined();
+  });
+
+  it('collects resolved BPM and STOP timing entries in beat order', () => {
+    const chart = chartWith({
+      metadata: { title: '', bpm: 130 },
+      resources: {
+        bpm: { AA: 180 },
+        stop: { BB: 96 },
+      },
+      events: [
+        { measure: 0, channel: '11', position: [1, 2], value: '01' },
+        { measure: 0, channel: '09', position: [1, 2], value: 'BB' },
+        { measure: 0, channel: '08', position: [1, 2], value: 'AA' },
+        { measure: 1, channel: '03', position: [0, 1], value: '78' },
+        { measure: 1, channel: '08', position: [1, 2], value: 'ZZ' },
+        { measure: 1, channel: '09', position: [1, 2], value: 'ZZ' },
+      ],
+    });
+
+    expect(collectBeatorajaChartTimingEntries(chart)).toEqual([
+      { beat: 2, kind: 'bpm', bpm: 180 },
+      { beat: 2, kind: 'stop', durationBeats: 2 },
+      { beat: 4, kind: 'bpm', bpm: 120 },
+    ]);
+  });
+
+  it('collects note entries after same-beat timing entries', () => {
+    const chart = chartWith({
+      metadata: { title: '', bpm: 130 },
+      resources: {
+        bpm: { AA: 180 },
+        stop: { BB: 96 },
+      },
+      events: [
+        { measure: 0, channel: '11', position: [1, 2], value: '01' },
+        { measure: 0, channel: '09', position: [1, 2], value: 'BB' },
+        { measure: 0, channel: '08', position: [1, 2], value: 'AA' },
+      ],
+    });
+    const measureBaseBeat = computeBeatorajaMeasureLayout(chart).measureBaseBeat;
+
+    expect(
+      collectBeatorajaChartTimedEntries(chart, measureBaseBeat, (event) =>
+        event.channel === '11' ? { channel: event.channel, value: event.value } : undefined,
+      ),
+    ).toEqual([
+      { beat: 2, kind: 'bpm', bpm: 180 },
+      { beat: 2, kind: 'stop', durationBeats: 2 },
+      { beat: 2, kind: 'note', note: { channel: '11', value: '01' } },
+    ]);
   });
 });

@@ -12,11 +12,9 @@
 
 import type { BeMusicJson } from '@be-music/json';
 import {
-  beatorajaEventBeat,
+  collectBeatorajaChartTimedEntries,
   computeBeatorajaMeasureBaseBeats,
-  hasBeatorajaEventValue,
-  resolveBeatorajaBpmEventValue,
-  resolveBeatorajaStopDurationBeats,
+  resolveBeatorajaInitialBpm,
 } from './timing.ts';
 
 /**
@@ -116,46 +114,16 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
     };
   }
 
-  // Build a unified entry list keyed by beat. Note events carry channel + value so we
-  // can classify them (scratch vs. key, normal vs. LN, mine).
-  type Entry =
-    | { beat: number; kind: 'note'; channel: string; value: string }
-    | { beat: number; kind: 'bpm'; bpm: number }
-    | { beat: number; kind: 'stop'; durationBeats: number };
-  const entries: Entry[] = [];
-  const bpmTable = chart.resources?.bpm ?? {};
-  const stopTable = chart.resources?.stop ?? {};
   // LN object table — channels `1X..2X` notes whose value matches an `lnObjs` entry close
   // an LN that opened earlier on the same lane. We track open LN states per lane while
   // walking events.
   const lnObjs = new Set((chart.bms?.lnObjs ?? []).map((v) => v.toUpperCase()));
 
-  for (const event of chart.events ?? []) {
-    if (!hasBeatorajaEventValue(event.value)) continue;
-    const beat = beatorajaEventBeat(event, measureBaseBeat);
-    if (beat === undefined) continue;
-    if (event.channel === '03') {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) entries.push({ beat, kind: 'bpm', bpm });
-    } else if (event.channel === '08') {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) entries.push({ beat, kind: 'bpm', bpm });
-    } else if (event.channel === '09') {
-      const durationBeats = resolveBeatorajaStopDurationBeats(event.value, stopTable);
-      if (durationBeats !== undefined) {
-        entries.push({ beat, kind: 'stop', durationBeats });
-      }
-    } else if (isNoteChannel(event.channel)) {
-      entries.push({ beat, kind: 'note', channel: event.channel, value: event.value });
-    }
-  }
-
-  // Sort: same-beat ordering — BPM first, then stop (applies under new bpm), then notes.
-  entries.sort((a, b) => {
-    if (a.beat !== b.beat) return a.beat - b.beat;
-    const order = (k: Entry['kind']): number => (k === 'bpm' ? 0 : k === 'stop' ? 1 : 2);
-    return order(a.kind) - order(b.kind);
-  });
+  // Build a unified entry list keyed by beat. Note events carry channel + value so we
+  // can classify them (scratch vs. key, normal vs. LN, mine).
+  const entries = collectBeatorajaChartTimedEntries(chart, measureBaseBeat, (event) =>
+    isNoteChannel(event.channel) ? { channel: event.channel, value: event.value } : undefined,
+  );
 
   // Walk and convert to wallclock ms. Track:
   //   - `bpmSegments`: list of (timeMs, bpm) BPM transitions. Stops emit `(stopStart, 0)`
@@ -163,7 +131,7 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
   //   - `bpmNoteCount`: per-BPM total note count for `mainBpm` resolution.
   //   - LN body span: per-lane (channel) tracking of open LNs so each bucket the LN
   //     covers gets its body cell incremented.
-  const initialBpm = chart.metadata.bpm > 0 ? chart.metadata.bpm : 130;
+  const initialBpm = resolveBeatorajaInitialBpm(chart);
   let bpm = initialBpm;
   let timeMs = 0;
   let cursorBeat = 0;
@@ -196,7 +164,7 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
       timeMs += (e.durationBeats * 60_000) / bpm;
       bpmSegments.push({ timeMs, bpm });
     } else if (e.kind === 'note') {
-      const channel = e.channel;
+      const { channel, value } = e.note;
       const isScratch = isScratchChannel(channel);
       const isLnChannel = channel[0] === '5' || channel[0] === '6';
       const isMine = channel[0] === 'D' || channel[0] === 'E' || channel[0] === 'd' || channel[0] === 'e';
@@ -217,39 +185,17 @@ export function computeBeatorajaChartNoteDistribution(chart: BeMusicJson): Beato
         }
         // Closing — emit body events spanning [openTimeMs, timeMs] in 1-second buckets.
         // Body category depends on lane; end gets its own category.
-        const bodyCat = isScratch
-          ? NOTE_DISTRIBUTION_CATEGORIES.SCRATCH_LN_BODY
-          : NOTE_DISTRIBUTION_CATEGORIES.KEY_LN_BODY;
-        const endCat = isScratch
-          ? NOTE_DISTRIBUTION_CATEGORIES.SCRATCH_LN_END
-          : NOTE_DISTRIBUTION_CATEGORIES.KEY_LN_END;
-        const startBucket = Math.floor(open / 1000);
-        const endBucket = Math.floor(timeMs / 1000);
-        for (let b = startBucket; b <= endBucket; b += 1) {
-          noteEvents.push({ timeMs: b * 1000, category: bodyCat });
-        }
-        noteEvents.push({ timeMs, category: endCat });
+        pushLongNoteDistributionEvents(noteEvents, open, timeMs, isScratch);
         openLns.delete(channel);
         continue;
       }
       // Visible note channel (`1X` / `2X`). LNOBJ-marker closure: if the value matches
       // an `lnObjs` entry AND a previous note opened on the same lane, this note CLOSES
       // the LN at body end time.
-      if (lnObjs.has(e.value.toUpperCase())) {
+      if (lnObjs.has(value.toUpperCase())) {
         const open = openLns.get(channel);
         if (open !== undefined) {
-          const bodyCat = isScratch
-            ? NOTE_DISTRIBUTION_CATEGORIES.SCRATCH_LN_BODY
-            : NOTE_DISTRIBUTION_CATEGORIES.KEY_LN_BODY;
-          const endCat = isScratch
-            ? NOTE_DISTRIBUTION_CATEGORIES.SCRATCH_LN_END
-            : NOTE_DISTRIBUTION_CATEGORIES.KEY_LN_END;
-          const startBucket = Math.floor(open / 1000);
-          const endBucket = Math.floor(timeMs / 1000);
-          for (let b = startBucket; b <= endBucket; b += 1) {
-            noteEvents.push({ timeMs: b * 1000, category: bodyCat });
-          }
-          noteEvents.push({ timeMs, category: endCat });
+          pushLongNoteDistributionEvents(noteEvents, open, timeMs, isScratch);
           openLns.delete(channel);
           continue;
         }
@@ -340,6 +286,22 @@ function isNoteChannel(channel: string): boolean {
     lead === 'd' ||
     lead === 'e'
   );
+}
+
+function pushLongNoteDistributionEvents(
+  noteEvents: Array<{ timeMs: number; category: number }>,
+  openTimeMs: number,
+  closeTimeMs: number,
+  isScratch: boolean,
+): void {
+  const bodyCat = isScratch ? NOTE_DISTRIBUTION_CATEGORIES.SCRATCH_LN_BODY : NOTE_DISTRIBUTION_CATEGORIES.KEY_LN_BODY;
+  const endCat = isScratch ? NOTE_DISTRIBUTION_CATEGORIES.SCRATCH_LN_END : NOTE_DISTRIBUTION_CATEGORIES.KEY_LN_END;
+  const startBucket = Math.floor(openTimeMs / 1000);
+  const endBucket = Math.floor(closeTimeMs / 1000);
+  for (let b = startBucket; b <= endBucket; b += 1) {
+    noteEvents.push({ timeMs: b * 1000, category: bodyCat });
+  }
+  noteEvents.push({ timeMs: closeTimeMs, category: endCat });
 }
 
 function isScratchChannel(channel: string): boolean {

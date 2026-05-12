@@ -12,11 +12,9 @@
 
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import {
-  beatorajaEventBeat,
+  collectBeatorajaChartTimedEntries,
   computeBeatorajaMeasureBaseBeats,
-  hasBeatorajaEventValue,
-  resolveBeatorajaBpmEventValue,
-  resolveBeatorajaStopDurationBeats,
+  resolveBeatorajaInitialBpm,
 } from './timing.ts';
 
 /** Density readout in notes-per-second. Integer part + first decimal. */
@@ -49,40 +47,13 @@ export function computeBeatorajaChartDensity(chart: BeMusicJson): ChartDensity {
 
   // Build a unified timeline: every event with its computed beat. Sort by beat. Walk in beat
   // order, applying BPM transitions and STOP durations to derive wallclock seconds.
-  type Entry = { beat: number; kind: 'note' | 'bpm' | 'stop'; payload?: number };
-  const entries: Entry[] = [];
-  const bpmTable = chart.resources?.bpm ?? {};
-  const stopTable = chart.resources?.stop ?? {};
-  for (const event of chart.events ?? []) {
-    if (!hasBeatorajaEventValue(event.value)) continue;
-    const beat = beatorajaEventBeat(event, measureBaseBeat);
-    if (beat === undefined) continue;
-    if (event.channel === '03') {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) entries.push({ beat, kind: 'bpm', payload: bpm });
-    } else if (event.channel === '08') {
-      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) entries.push({ beat, kind: 'bpm', payload: bpm });
-    } else if (event.channel === '09') {
-      const durationBeats = resolveBeatorajaStopDurationBeats(event.value, stopTable);
-      if (durationBeats !== undefined) {
-        entries.push({ beat, kind: 'stop', payload: durationBeats });
-      }
-    } else if (isPlayableNote(event)) {
-      entries.push({ beat, kind: 'note' });
-    }
-  }
-  // Sort: same-beat ordering — BPM first, then stop (applies under new bpm), then notes (which
-  // anyway fire AT the start of their beat so the order doesn't matter for density bucketing).
-  entries.sort((a, b) => {
-    if (a.beat !== b.beat) return a.beat - b.beat;
-    const order = (k: Entry['kind']): number => (k === 'bpm' ? 0 : k === 'stop' ? 1 : 2);
-    return order(a.kind) - order(b.kind);
-  });
+  const entries = collectBeatorajaChartTimedEntries(chart, measureBaseBeat, (event) =>
+    isPlayableNote(event) ? true : undefined,
+  );
 
   // Walk and convert to wallclock seconds. Note events get their seconds-stamp pushed into a
   // sorted list (entries are already in beat order, so the seconds list comes out sorted).
-  const initialBpm = chart.metadata.bpm > 0 ? chart.metadata.bpm : 130;
+  const initialBpm = resolveBeatorajaInitialBpm(chart);
   let bpm = initialBpm;
   let seconds = 0;
   let cursorBeat = 0;
@@ -92,10 +63,10 @@ export function computeBeatorajaChartDensity(chart: BeMusicJson): ChartDensity {
       seconds += ((e.beat - cursorBeat) * 60) / bpm;
       cursorBeat = e.beat;
     }
-    if (e.kind === 'bpm' && typeof e.payload === 'number') {
-      bpm = e.payload;
-    } else if (e.kind === 'stop' && typeof e.payload === 'number') {
-      seconds += (e.payload * 60) / bpm;
+    if (e.kind === 'bpm') {
+      bpm = e.bpm;
+    } else if (e.kind === 'stop') {
+      seconds += (e.durationBeats * 60) / bpm;
     } else if (e.kind === 'note') {
       noteSeconds.push(seconds);
     }

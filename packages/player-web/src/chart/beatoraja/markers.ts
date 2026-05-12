@@ -15,7 +15,13 @@
 
 import type { BeMusicJson } from '@be-music/json';
 import type { BeatorajaMarkerBeats } from '../../scene/beatoraja/markers.ts';
-import { beatorajaEventBeat, computeBeatorajaMeasureBaseBeats, hasBeatorajaEventValue } from './timing.ts';
+import {
+  beatorajaEventBeat,
+  computeBeatorajaMeasureBaseBeats,
+  hasBeatorajaEventValue,
+  isBeatorajaBpmEventChannel,
+  isBeatorajaStopEventChannel,
+} from './timing.ts';
 
 /**
  * Compute marker beat lists for the given chart. `time` markers are spaced at `timeIntervalSec`
@@ -46,9 +52,9 @@ export function computeBeatorajaChartMarkers(
     if (!hasBeatorajaEventValue(event.value)) continue;
     const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
-    if (event.channel === '03' || event.channel === '08') {
+    if (isBeatorajaBpmEventChannel(event.channel)) {
       bpm.push(beat);
-    } else if (event.channel === '09') {
+    } else if (isBeatorajaStopEventChannel(event.channel)) {
       stop.push(beat);
     }
   }

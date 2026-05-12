@@ -1,4 +1,4 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 
 /** Standard 4-beat measure baseline. Authors override measure length at the measure boundary. */
 export const BEATS_PER_STANDARD_MEASURE = 4;
@@ -13,8 +13,26 @@ export interface BeatorajaMeasureLayout {
   totalBeats: number;
 }
 
+export type BeatorajaChartTimingEntry =
+  | { beat: number; kind: 'bpm'; bpm: number }
+  | { beat: number; kind: 'stop'; durationBeats: number };
+
+export type BeatorajaChartTimedEntry<TNote> = BeatorajaChartTimingEntry | { beat: number; kind: 'note'; note: TNote };
+
 export function hasBeatorajaEventValue(value: string): boolean {
   return value !== '00' && value !== '';
+}
+
+export function resolveBeatorajaInitialBpm(chart: BeMusicJson): number {
+  return chart.metadata.bpm > 0 ? chart.metadata.bpm : 130;
+}
+
+export function isBeatorajaBpmEventChannel(channel: string): boolean {
+  return channel === '03' || channel === '08';
+}
+
+export function isBeatorajaStopEventChannel(channel: string): boolean {
+  return channel === '09';
 }
 
 export function computeBeatorajaMeasureLayout(chart: BeMusicJson): BeatorajaMeasureLayout {
@@ -77,6 +95,69 @@ export function resolveBeatorajaStopDurationBeats(
   const stopUnits = resolveBeatorajaTableNumber(value, table);
   if (stopUnits === undefined || stopUnits <= 0) return undefined;
   return (stopUnits / STOP_UNITS_PER_MEASURE) * BEATS_PER_STANDARD_MEASURE;
+}
+
+export function collectBeatorajaChartTimingEntries(
+  chart: BeMusicJson,
+  measureBaseBeat: readonly number[] = computeBeatorajaMeasureBaseBeats(chart),
+): BeatorajaChartTimingEntry[] {
+  return collectBeatorajaChartTimedEntries<never>(chart, measureBaseBeat, () => undefined).filter(
+    (entry): entry is BeatorajaChartTimingEntry => entry.kind !== 'note',
+  );
+}
+
+export function collectBeatorajaChartTimedEntries<TNote>(
+  chart: BeMusicJson,
+  measureBaseBeat: readonly number[],
+  resolveNote: (event: BeMusicEvent) => TNote | undefined,
+): BeatorajaChartTimedEntry<TNote>[] {
+  const entries: BeatorajaChartTimedEntry<TNote>[] = [];
+  const bpmTable = chart.resources?.bpm ?? {};
+  const stopTable = chart.resources?.stop ?? {};
+
+  for (const event of chart.events ?? []) {
+    if (!hasBeatorajaEventValue(event.value)) continue;
+    const beat = beatorajaEventBeat(event, measureBaseBeat);
+    if (beat === undefined) continue;
+
+    if (isBeatorajaBpmEventChannel(event.channel)) {
+      const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
+      if (bpm !== undefined && bpm > 0) {
+        entries.push({ beat, kind: 'bpm', bpm });
+      }
+      continue;
+    }
+
+    if (isBeatorajaStopEventChannel(event.channel)) {
+      const durationBeats = resolveBeatorajaStopDurationBeats(event.value, stopTable);
+      if (durationBeats !== undefined) {
+        entries.push({ beat, kind: 'stop', durationBeats });
+      }
+      continue;
+    }
+
+    const note = resolveNote(event);
+    if (note !== undefined) {
+      entries.push({ beat, kind: 'note', note });
+    }
+  }
+
+  entries.sort(compareBeatorajaChartTimedEntries);
+  return entries;
+}
+
+function compareBeatorajaChartTimedEntries(
+  left: { beat: number; kind: string },
+  right: { beat: number; kind: string },
+): number {
+  if (left.beat !== right.beat) return left.beat - right.beat;
+  return beatorajaTimedEntryOrder(left.kind) - beatorajaTimedEntryOrder(right.kind);
+}
+
+function beatorajaTimedEntryOrder(kind: string): number {
+  if (kind === 'bpm') return 0;
+  if (kind === 'stop') return 1;
+  return 2;
 }
 
 function resolveBeatorajaTableNumber(key: string, table: Readonly<Record<string, unknown>>): number | undefined {
