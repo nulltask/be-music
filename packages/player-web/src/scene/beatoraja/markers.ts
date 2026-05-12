@@ -146,38 +146,43 @@ export class BeatorajaMarkerLayer {
     ];
     for (const { kind, beats } of ranges) {
       if (kind.length === 0 || beats.length === 0) continue;
-      // Pick the first prototype with a resolved texture — most skins author at most one
-      // destination per marker kind. Multi-destination kinds (e.g., color-coded BPM markers)
-      // would need richer logic; treat them as "use the first" for now.
-      const proto = kind.find((k) => k.texture !== undefined);
-      if (proto === undefined) continue;
-      for (const beat of beats) {
-        const scrollY = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
-        // Apply the authored bottom offset relative to the lane's authored bottom — mirrors
-        // upstream's `line.draw(..., 0, y - hl)` (`LaneRenderer.java:373`). Without this the
-        // barline lands at the lane's BOTTOM EDGE instead of the authored bar position
-        // (which for ModernChic is 12 px above the lane bottom, crossing through the note
-        // head's middle).
-        const y = scrollY + proto.bottomOffsetFromLaneBottomPixi;
-        // Cull markers outside the lane area. Test against the OFFSET y so a marker that sits
-        // well above the lane bottom (e.g., a hypothetical "ceiling marker") doesn't get
-        // culled prematurely. 24-pixel slack matches the note layer's culling so markers
-        // don't pop in/out at the edge.
-        if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
-        const sprite = this.acquireSprite(used);
-        sprite.texture = proto.texture!;
-        // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.
-        // Combined with the offset above, this puts the marker bottom at `scrollY + offset`
-        // — i.e., the offset relative to where the timeline's scroll position is at this
-        // beat, exactly mirroring upstream's `authored_marker_y + (scroll_y - lane_bottom_y)`.
-        sprite.anchor.set(0, 1);
-        sprite.x = proto.rect.x;
-        sprite.y = y;
-        sprite.width = proto.rect.w;
-        sprite.height = Math.max(1, proto.rect.h);
-        sprite.tint = proto.tint;
-        sprite.alpha = proto.alpha;
-        used += 1;
+      // Iterate EVERY prototype with a resolved texture per marker kind. DP skins author one
+      // destination per side (1P-side x, 2P-side x) for `group` / `bpm` / `stop` / `time` —
+      // upstream `LaneRenderer.java:412-416` mirrors this with a `for (SkinImage line :
+      // skin.getLine())` loop that draws each registered image. A previous `kind.find(...)`
+      // short-circuit picked only the FIRST prototype and painted it at every beat, so DP
+      // 2P-side measure lines / BPM-change / STOP / time markers never rendered. The user-
+      // reported symptom: "2P 側に小節線や BPM 変更線が表示されない" on DP charts.
+      for (const proto of kind) {
+        if (proto.texture === undefined) continue;
+        for (const beat of beats) {
+          const scrollY = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
+          // Apply the authored bottom offset relative to the lane's authored bottom — mirrors
+          // upstream's `line.draw(..., 0, y - hl)` (`LaneRenderer.java:373`). Without this the
+          // barline lands at the lane's BOTTOM EDGE instead of the authored bar position
+          // (which for ModernChic is 12 px above the lane bottom, crossing through the note
+          // head's middle).
+          const y = scrollY + proto.bottomOffsetFromLaneBottomPixi;
+          // Cull markers outside the lane area. Test against the OFFSET y so a marker that sits
+          // well above the lane bottom (e.g., a hypothetical "ceiling marker") doesn't get
+          // culled prematurely. 24-pixel slack matches the note layer's culling so markers
+          // don't pop in/out at the edge.
+          if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
+          const sprite = this.acquireSprite(used);
+          sprite.texture = proto.texture;
+          // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.
+          // Combined with the offset above, this puts the marker bottom at `scrollY + offset`
+          // — i.e., the offset relative to where the timeline's scroll position is at this
+          // beat, exactly mirroring upstream's `authored_marker_y + (scroll_y - lane_bottom_y)`.
+          sprite.anchor.set(0, 1);
+          sprite.x = proto.rect.x;
+          sprite.y = y;
+          sprite.width = proto.rect.w;
+          sprite.height = Math.max(1, proto.rect.h);
+          sprite.tint = proto.tint;
+          sprite.alpha = proto.alpha;
+          used += 1;
+        }
       }
     }
     this.shrinkPoolTo(used);

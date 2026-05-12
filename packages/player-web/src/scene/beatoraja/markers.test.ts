@@ -128,6 +128,54 @@ describe('BeatorajaMarkerLayer — barline alignment vs lane bottom (upstream `y
     expect((sprite as { y: number }).y).toBe(800 - 200 - 12);
   });
 
+  it('DP-style multi-destination markers paint each prototype (1P + 2P side)', () => {
+    // DP skins author one `group[]` destination per side (typical layout: a 1P-side x and a
+    // 2P-side x), so a chart with a single section-line beat must emit TWO sprites — one per
+    // authored destination. Upstream `LaneRenderer.java:412-416` mirrors this with a
+    // `for (SkinImage line : skin.getLine())` loop over every registered marker image. Prior
+    // to this fix `kind.find(...)` short-circuited to the FIRST prototype and painted it at
+    // every beat, leaving the 2P-side markers invisible. User-reported symptom: "2P 側に
+    // 小節線や BPM 変更線が表示されない" on DP charts.
+    const layer = new BeatorajaMarkerLayer({
+      group: [
+        // 1P-side barline — authored at x=50.
+        {
+          id: 'section-line',
+          dst: [{ x: 50, y: NOTES_JUDGE_Y_GDX, w: 300, h: 3, a: 255, r: 255, g: 255, b: 255 }],
+        },
+        // 2P-side barline — authored at x=600 (the right-hand DP playfield).
+        {
+          id: 'section-line',
+          dst: [{ x: 600, y: NOTES_JUDGE_Y_GDX, w: 300, h: 3, a: 255, r: 255, g: 255, b: 255 }],
+        },
+      ],
+      bpm: [],
+      stop: [],
+      time: [],
+      images: makeImages(),
+      textures: fakeTextureCache(),
+      canvasHeight,
+      laneAuthoredBottomY: LANE_AUTHORED_BOTTOM_Y_PIXI,
+    });
+
+    layer.update({
+      currentBeat: 0,
+      judgementY: 850,
+      laneTopY: 0,
+      pixelsPerBeat: 100,
+      markers: { group: [0], bpm: [], stop: [], time: [] },
+    });
+
+    // Both 1P (x=50) and 2P (x=600) prototypes must paint at the same scroll position.
+    const sprites = layer.container.children as Array<{ x: number; y: number }>;
+    expect(sprites).toHaveLength(2);
+    expect(sprites[0]?.x).toBe(50);
+    expect(sprites[1]?.x).toBe(600);
+    // Both share the same y (= the offset-adjusted judgement position).
+    expect(sprites[0]?.y).toBe(850 - 12);
+    expect(sprites[1]?.y).toBe(850 - 12);
+  });
+
   it('omitting laneAuthoredBottomY falls back to "marker bottom = scroll position" (legacy behaviour)', () => {
     // Hosts that haven't wired the new arg yet should still render markers — just at the
     // pre-fix position (= bug-compatible). Ensures the constructor remains backwards-compat
