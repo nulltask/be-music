@@ -159,6 +159,15 @@ export interface Lr2DestinationElement {
   keyframes: Lr2DestinationRect[];
 }
 
+type NormalizedLr2Rect = ReturnType<typeof normalizeRect>;
+type Lr2TextureSourceElement = { source: { imagePath: string } };
+
+interface Lr2ValueSpriteMetrics {
+  texture: Texture;
+  rect: NormalizedLr2Rect;
+  ratio: number;
+}
+
 export function evaluateElementDestination(
   element: Lr2DestinationElement,
   elapsedSinceTimer: (timer: number) => number,
@@ -220,29 +229,24 @@ export function makeLr2BargraphSprite(
   value: number,
   textures: ReadonlyMap<string, Texture>,
 ): Sprite | undefined {
-  const texture = textures.get(element.source.imagePath);
-  if (!texture) return undefined;
-  const rect = normalizeRect(dst);
-  if (rect.w <= 0 || rect.h <= 0) return undefined;
-  const ratio = Math.max(0, Math.min(1, value));
-  const horizontal = element.muki === 'horizontal';
-  const cropW = horizontal ? element.source.w * ratio : element.source.w;
-  const cropH = horizontal ? element.source.h : element.source.h * ratio;
-  const cropY = horizontal ? element.source.y : element.source.y + (element.source.h - cropH);
-  const cropped = createCroppedTexture(texture, {
-    x: element.source.x,
-    y: cropY,
-    w: cropW,
-    h: cropH,
+  return renderValueSprite(element, dst, value, textures, ({ texture, rect, ratio }) => {
+    const horizontal = element.muki === 'horizontal';
+    const cropW = horizontal ? element.source.w * ratio : element.source.w;
+    const cropH = horizontal ? element.source.h : element.source.h * ratio;
+    const cropY = horizontal ? element.source.y : element.source.y + (element.source.h - cropH);
+    const cropped = createCroppedTexture(texture, {
+      x: element.source.x,
+      y: cropY,
+      w: cropW,
+      h: cropH,
+    });
+    if (!cropped) return undefined;
+    return createLr2DestinationSprite(cropped, `bargraph[type=${element.type}]`, dst, (sprite) => {
+      sprite.position.set(rect.x, horizontal ? rect.y : rect.y + rect.h * (1 - ratio));
+      sprite.width = horizontal ? rect.w * ratio : rect.w;
+      sprite.height = horizontal ? rect.h : rect.h * ratio;
+    });
   });
-  if (!cropped) return undefined;
-  const sprite = new Sprite(cropped);
-  sprite.label = `bargraph[type=${element.type}]`;
-  sprite.position.set(rect.x, horizontal ? rect.y : rect.y + rect.h * (1 - ratio));
-  sprite.width = horizontal ? rect.w * ratio : rect.w;
-  sprite.height = horizontal ? rect.h : rect.h * ratio;
-  applyDestinationToSprite(sprite, dst);
-  return sprite;
 }
 
 export function makeLr2SliderSprite(
@@ -251,39 +255,75 @@ export function makeLr2SliderSprite(
   value: number,
   textures: ReadonlyMap<string, Texture>,
 ): Sprite | undefined {
+  return renderValueSprite(element, dst, value, textures, ({ texture, rect, ratio }) => {
+    const cropped = createCroppedTexture(texture, {
+      x: element.source.x,
+      y: element.source.y,
+      w: element.source.w / Math.max(1, element.source.divx),
+      h: element.source.h / Math.max(1, element.source.divy),
+    });
+    if (!cropped) return undefined;
+    let x = rect.x;
+    let y = rect.y;
+    switch (element.muki) {
+      case 'down':
+        y = rect.y + element.range * ratio;
+        break;
+      case 'up':
+        y = rect.y - element.range * ratio;
+        break;
+      case 'right':
+        x = rect.x + element.range * ratio;
+        break;
+      case 'left':
+        x = rect.x - element.range * ratio;
+        break;
+    }
+    return createLr2DestinationSprite(cropped, `slider[type=${element.type}]`, dst, (sprite) => {
+      sprite.position.set(x, y);
+      sprite.width = rect.w;
+      sprite.height = rect.h;
+    });
+  });
+}
+
+function renderValueSprite(
+  element: Lr2TextureSourceElement,
+  dst: Lr2DestinationRect,
+  value: number,
+  textures: ReadonlyMap<string, Texture>,
+  render: (metrics: Lr2ValueSpriteMetrics) => Sprite | undefined,
+): Sprite | undefined {
+  const metrics = resolveValueSpriteMetrics(element, dst, value, textures);
+  return metrics ? render(metrics) : undefined;
+}
+
+function resolveValueSpriteMetrics(
+  element: Lr2TextureSourceElement,
+  dst: Lr2DestinationRect,
+  value: number,
+  textures: ReadonlyMap<string, Texture>,
+): Lr2ValueSpriteMetrics | undefined {
   const texture = textures.get(element.source.imagePath);
   if (!texture) return undefined;
   const rect = normalizeRect(dst);
   if (rect.w <= 0 || rect.h <= 0) return undefined;
-  const ratio = Math.max(0, Math.min(1, value));
-  const cropped = createCroppedTexture(texture, {
-    x: element.source.x,
-    y: element.source.y,
-    w: element.source.w / Math.max(1, element.source.divx),
-    h: element.source.h / Math.max(1, element.source.divy),
-  });
-  if (!cropped) return undefined;
-  const sprite = new Sprite(cropped);
-  sprite.label = `slider[type=${element.type}]`;
-  let x = rect.x;
-  let y = rect.y;
-  switch (element.muki) {
-    case 'down':
-      y = rect.y + element.range * ratio;
-      break;
-    case 'up':
-      y = rect.y - element.range * ratio;
-      break;
-    case 'right':
-      x = rect.x + element.range * ratio;
-      break;
-    case 'left':
-      x = rect.x - element.range * ratio;
-      break;
-  }
-  sprite.position.set(x, y);
-  sprite.width = rect.w;
-  sprite.height = rect.h;
+  return {
+    texture,
+    rect,
+    ratio: Math.max(0, Math.min(1, value)),
+  };
+}
+
+function createLr2DestinationSprite(
+  texture: Texture,
+  label: string,
+  dst: Lr2DestinationRect,
+  layout: (sprite: Sprite) => void,
+): Sprite {
+  const sprite = new Sprite(texture);
+  sprite.label = label;
+  layout(sprite);
   applyDestinationToSprite(sprite, dst);
   return sprite;
 }
