@@ -37,6 +37,12 @@ describe('scroll distance', () => {
     expect(mapper.maxBeatWithinDistance(4, 1)).toBeCloseTo(7, 6);
   });
 
+  test('maxBeatWithinDistance solves within interpolated speed segments', () => {
+    const mapper = createScrollDistanceMapper(undefined, [{ beat: 4, speed: 3 }], { lookaheadBeats: 8 });
+
+    expect(mapper.maxBeatWithinDistance(0, 4)).toBeCloseTo(-2 + 2 * Math.sqrt(5), 6);
+  });
+
   test('invalidDistance option customizes invalid input fallback', () => {
     const mapper = createScrollDistanceMapper(undefined, undefined, { invalidDistance: 0 });
     expect(mapper.distanceBetween(Number.NaN, 2)).toBe(0);

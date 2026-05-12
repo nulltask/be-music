@@ -22,6 +22,16 @@ interface ScrollSegment {
   startDistance: number;
 }
 
+interface SegmentDistanceTerms {
+  linear: number;
+  quadratic: number;
+}
+
+interface TimelinePointNormalizerOptions {
+  allowNegativeSpeed: boolean;
+  dropConsecutiveSameSpeed: boolean;
+}
+
 const DEFAULT_SCROLL_LOOKAHEAD_BEATS = 4 * 64;
 const BEAT_EPSILON = 1e-9;
 
@@ -184,41 +194,31 @@ function buildScrollSegments(
 }
 
 function normalizeScrollPoints(timeline?: ReadonlyArray<ScrollTimelinePoint>): ScrollTimelinePoint[] {
-  const points: ScrollTimelinePoint[] = [{ beat: 0, speed: 1 }];
-  for (const point of timeline ?? []) {
-    if (!Number.isFinite(point.beat) || !Number.isFinite(point.speed) || point.beat < 0) {
-      continue;
-    }
-    points.push({
-      beat: point.beat,
-      speed: point.speed,
-    });
-  }
-  points.sort((left, right) => left.beat - right.beat);
-
-  const merged: ScrollTimelinePoint[] = [];
-  for (const point of points) {
-    const previous = merged.at(-1);
-    if (!previous) {
-      merged.push({ ...point });
-      continue;
-    }
-    if (Math.abs(point.beat - previous.beat) < BEAT_EPSILON) {
-      previous.speed = point.speed;
-      continue;
-    }
-    if (Math.abs(point.speed - previous.speed) < BEAT_EPSILON) {
-      continue;
-    }
-    merged.push({ ...point });
-  }
-  return merged;
+  return normalizeTimelinePoints(timeline, {
+    allowNegativeSpeed: true,
+    dropConsecutiveSameSpeed: true,
+  });
 }
 
 function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): SpeedTimelinePoint[] {
-  const points: SpeedTimelinePoint[] = [{ beat: 0, speed: 1 }];
+  return normalizeTimelinePoints(timeline, {
+    allowNegativeSpeed: false,
+    dropConsecutiveSameSpeed: false,
+  });
+}
+
+function normalizeTimelinePoints<T extends ScrollTimelinePoint | SpeedTimelinePoint>(
+  timeline: ReadonlyArray<T> | undefined,
+  options: TimelinePointNormalizerOptions,
+): T[] {
+  const points: Array<{ beat: number; speed: number }> = [{ beat: 0, speed: 1 }];
   for (const point of timeline ?? []) {
-    if (!Number.isFinite(point.beat) || !Number.isFinite(point.speed) || point.beat < 0 || point.speed < 0) {
+    if (
+      !Number.isFinite(point.beat) ||
+      !Number.isFinite(point.speed) ||
+      point.beat < 0 ||
+      (!options.allowNegativeSpeed && point.speed < 0)
+    ) {
       continue;
     }
     points.push({
@@ -228,7 +228,7 @@ function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): Spe
   }
   points.sort((left, right) => left.beat - right.beat);
 
-  const merged: SpeedTimelinePoint[] = [];
+  const merged: Array<{ beat: number; speed: number }> = [];
   for (const point of points) {
     const previous = merged.at(-1);
     if (!previous) {
@@ -239,9 +239,12 @@ function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): Spe
       previous.speed = point.speed;
       continue;
     }
+    if (options.dropConsecutiveSameSpeed && Math.abs(point.speed - previous.speed) < BEAT_EPSILON) {
+      continue;
+    }
     merged.push({ ...point });
   }
-  return merged;
+  return merged as T[];
 }
 
 function resolveScrollSpeedAtBeat(points: ReadonlyArray<ScrollTimelinePoint>, beat: number): number {
@@ -261,23 +264,24 @@ function resolveInterpolatedSpeedAtBeat(points: ReadonlyArray<SpeedTimelinePoint
 }
 
 function integratedSignedSegmentDistance(segment: ScrollSegment, fromBeat: number, toBeat: number): number {
-  const delta = Math.max(0, toBeat - fromBeat);
-  if (delta <= 0) {
-    return 0;
-  }
-  const offset = Math.max(0, fromBeat - segment.startBeat);
-  const startSpeed = segment.speedStart + segment.speedSlope * offset;
-  return segment.scrollSpeed * (startSpeed * delta + 0.5 * segment.speedSlope * delta * delta);
+  return integratedSegmentDistance(segment, fromBeat, toBeat, segment.scrollSpeed);
 }
 
 function integratedAbsoluteSegmentDistance(segment: ScrollSegment, fromBeat: number, toBeat: number): number {
+  return integratedSegmentDistance(segment, fromBeat, toBeat, Math.abs(segment.scrollSpeed));
+}
+
+function integratedSegmentDistance(
+  segment: ScrollSegment,
+  fromBeat: number,
+  toBeat: number,
+  scrollScale: number,
+): number {
   const delta = Math.max(0, toBeat - fromBeat);
   if (delta <= 0) {
     return 0;
   }
-  const offset = Math.max(0, fromBeat - segment.startBeat);
-  const startSpeed = segment.speedStart + segment.speedSlope * offset;
-  return Math.abs(segment.scrollSpeed) * (startSpeed * delta + 0.5 * segment.speedSlope * delta * delta);
+  return integrateSegmentDistanceTerms(segmentDistanceTerms(segment, fromBeat, scrollScale), delta);
 }
 
 function solveBeatDeltaWithinSegment(segment: ScrollSegment, fromBeat: number, distance: number): number {
@@ -286,14 +290,11 @@ function solveBeatDeltaWithinSegment(segment: ScrollSegment, fromBeat: number, d
     return 0;
   }
 
-  const offset = Math.max(0, fromBeat - segment.startBeat);
-  const baseSpeed = segment.speedStart + segment.speedSlope * offset;
   const absScroll = Math.abs(segment.scrollSpeed);
   if (absScroll <= BEAT_EPSILON) {
     return 0;
   }
-  const linear = absScroll * baseSpeed;
-  const quadratic = 0.5 * absScroll * segment.speedSlope;
+  const { linear, quadratic } = segmentDistanceTerms(segment, fromBeat, absScroll);
   if (Math.abs(quadratic) <= BEAT_EPSILON) {
     return linear <= BEAT_EPSILON ? 0 : safeDistance / linear;
   }
@@ -302,6 +303,19 @@ function solveBeatDeltaWithinSegment(segment: ScrollSegment, fromBeat: number, d
     return 0;
   }
   return Math.max(0, (-linear + Math.sqrt(discriminant)) / (2 * quadratic));
+}
+
+function segmentDistanceTerms(segment: ScrollSegment, fromBeat: number, scrollScale: number): SegmentDistanceTerms {
+  const offset = Math.max(0, fromBeat - segment.startBeat);
+  const baseSpeed = segment.speedStart + segment.speedSlope * offset;
+  return {
+    linear: scrollScale * baseSpeed,
+    quadratic: 0.5 * scrollScale * segment.speedSlope,
+  };
+}
+
+function integrateSegmentDistanceTerms({ linear, quadratic }: SegmentDistanceTerms, deltaBeats: number): number {
+  return linear * deltaBeats + quadratic * deltaBeats * deltaBeats;
 }
 
 function findLastSegmentIndexByBeat(segments: ScrollSegment[], beat: number): number {
