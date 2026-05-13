@@ -3,7 +3,14 @@ import { asLoadedBytes, readFilesIntoBytesMap } from './file-lookup.ts';
 import type { Lr2SkinFileEntry, Lr2SkinInputFile } from './file-lookup.ts';
 import { normalizeLr2Path, resolveLr2IncludePath } from './assets.ts';
 import { decodeText, parseRows } from './csv.ts';
-import { isSkinPathOfKind, scoreSkinPath, type Lr2PlayVariant, type Lr2SkinKind } from './paths.ts';
+import {
+  informationTypeToKind,
+  isSkinPathOfKind,
+  peekLr2SkinInformationType,
+  scoreSkinPath,
+  type Lr2PlayVariant,
+  type Lr2SkinKind,
+} from './paths.ts';
 import { LR2_SPECIAL_GRAPHIC, type Lr2SpecialGraphic } from './special-graphic.ts';
 
 export { resolveLr2AssetBytes } from './assets.ts';
@@ -983,6 +990,24 @@ interface ParseContext {
   width: number;
   height: number;
   /**
+   * `true` once the parser has seen an explicit `#RESOLUTION,<w>,<h>` directive. When the skin omits the directive
+   * entirely we leave this `false` and {@link autoDetectCanvasFromObservedCoordinates} kicks in at the end of the
+   * parse, snapping {@link width} / {@link height} to the smallest standard canvas that contains the bulk of the
+   * skin's authored DST coordinates. LR2 themes from the 1280×720 / 1920×1080 era frequently ship without
+   * `#RESOLUTION` (LITONE4 is the smoking gun — every coord is in 1920×1080 space, header is empty), so the
+   * post-parse detection is what keeps the chrome from getting clipped to the legacy 640×480 default canvas.
+   */
+  explicitResolution: boolean;
+  /**
+   * Right-bottom corner `(x + w, y + h)` of every `#DST_*` keyframe parsed in this skin. Used by the canvas
+   * auto-detector to find the design resolution when `#RESOLUTION` is omitted. We push from
+   * {@link appendDestinationKeyframe} so EVERY `#DST_*` lineage contributes — image / number / text / slider / bar
+   * body / etc. all share the same canvas. Entries with negative `x` or `y` (animation slide-in / slide-out
+   * starting points that arrive from / depart to off-screen) are excluded; including them would skew the
+   * percentile-based detection toward the animation reach instead of the rendered canvas.
+   */
+  observedDstCorners: Array<readonly [number, number]>;
+  /**
    * Monotonic counter that increments every time we record a `#SRC_*` declaration the renderer wants z-order context
    * for (currently `#SRC_SLIDER` and the first `#SRC_BAR_BODY`). The counter is process-local to a single skin parse —
    * so a later reference's `declarationOrder > earlier reference's` iff it appeared later in the CSV stream (including
@@ -1061,12 +1086,33 @@ export function loadLr2SkinFromSourceFiles(
   options: LoadLr2SkinOptions = {},
 ): Lr2Skin | undefined {
   const kind = options.kind ?? 'play';
-  // Filter `.lr2skin` candidates to the requested kind first so a theme bundle that contains both `Play/play_7.lr2skin`
-  // and `Select/select.lr2skin` doesn't accidentally feed the play skin into the select view (or vice versa). Falls
-  // back to ANY `.lr2skin` if the kind-specific filter matches nothing — useful for one-off skins that ship a single
-  // CSV.
+  // Index every `.lr2skin` payload's `#INFORMATION,<type>,...` declaration once, up front. The type is the canonical
+  // way an authored skin tells LR2 which scene it belongs to (play/select/decide/result/…); filename conventions
+  // (`play_7.lr2skin` / `select.lr2skin` / …) are a secondary signal that not every theme follows — LITONE4 ships
+  // `AC7.lr2skin` for type=0, etc. Building the map once lets the filter + scorer both consult it without re-decoding
+  // SJIS bytes per candidate.
   const lr2SkinPaths = [...sourceFiles.keys()].filter((path) => path.toLowerCase().endsWith('.lr2skin'));
-  const filtered = lr2SkinPaths.filter((path) => isSkinPathOfKind(path, kind));
+  const skinTypeByPath = new Map<string, number>();
+  for (const path of lr2SkinPaths) {
+    const type = peekLr2SkinInformationType(asLoadedBytes(sourceFiles.get(path)));
+    if (type !== undefined) skinTypeByPath.set(path, type);
+  }
+  // Two-tier filter:
+  //   1. The skin's declared `#INFORMATION` type matches the requested kind — strongest signal, used regardless of
+  //      filename. Themes like LITONE4 land here.
+  //   2. Filename / folder heuristic via {@link isSkinPathOfKind}. Used as a fallback for skins that omit
+  //      `#INFORMATION` entirely (rare in practice) and as the universal path for the LR2 default theme (whose play
+  //      skins also pass the heuristic on top of their declared type).
+  // We unify both into a single Set so a skin that satisfies BOTH only counts once.
+  const filtered = lr2SkinPaths.filter((path) => {
+    const declaredType = skinTypeByPath.get(path);
+    if (declaredType !== undefined && informationTypeToKind(declaredType) === kind) return true;
+    // If a type was successfully parsed but it doesn't match the requested kind, the skin is definitively the wrong
+    // scene — drop it rather than letting the filename heuristic accidentally re-include it (e.g. a `Play/`-folder
+    // file that's actually a course-result skin).
+    if (declaredType !== undefined) return false;
+    return isSkinPathOfKind(path, kind);
+  });
   // Falling back to ANY `.lr2skin` is only safe for `play`: a single-skin bundle is most often a play skin (the
   // gameplay scene has been the only consumer for most of this loader's lifetime). For `select` and `result` we'd
   // otherwise pick up `play_7.lr2skin` and parse it as a select / result skin — every DST element gates on
@@ -1079,7 +1125,8 @@ export function loadLr2SkinFromSourceFiles(
       .slice()
       .sort(
         (left, right) =>
-          scoreSkinPath(left, kind, variant) - scoreSkinPath(right, kind, variant) || left.localeCompare(right, 'ja'),
+          scoreSkinPath(left, kind, { variant, type: skinTypeByPath.get(left) }) -
+            scoreSkinPath(right, kind, { variant, type: skinTypeByPath.get(right) }) || left.localeCompare(right, 'ja'),
       )[0] ??
     // Last-resort `.csv` lookup mirrors the play-only "single-CSV bundle" behavior. Skipped for non-play kinds for the
     // same reason as above.
@@ -1163,9 +1210,23 @@ export function loadLr2SkinFromSourceFiles(
     name: basename(entryPath),
     width: 640,
     height: 480,
+    explicitResolution: false,
+    observedDstCorners: [],
     nextDeclarationOrder: 0,
   };
   readLr2Path(sourceFiles, entryPath, context, new Set());
+  // Auto-detect the design canvas when the skin omits `#RESOLUTION`. LITONE4 (and many other 1280×720 / 1920×1080
+  // era LR2 themes) ship the directive empty, leaving the design space at the legacy 640×480 default — at which
+  // point every DST coordinate overflows and the chrome appears clipped. The detector ignores aspect-ratio nuance
+  // and just snaps to the smallest standard canvas (640×480, 1280×720, 1920×1080, 2560×1440) that contains the
+  // 90 % percentile of observed DST corner coordinates. See {@link autoDetectCanvasFromObservedCoordinates}.
+  if (!context.explicitResolution && context.observedDstCorners.length > 0) {
+    const detected = autoDetectCanvasFromObservedCoordinates(context.observedDstCorners);
+    if (detected !== undefined) {
+      context.width = detected.width;
+      context.height = detected.height;
+    }
+  }
 
   return {
     name: context.name,
@@ -1324,6 +1385,9 @@ function readLr2Path(
     } else if (command === '#RESOLUTION') {
       context.width = toNumber(row[1], context.width);
       context.height = toNumber(row[2], context.height);
+      // Mark the resolution as authored-explicit so the post-parse auto-detector skips this skin. Authored
+      // `#RESOLUTION` is the canonical signal — we always trust it over our heuristic.
+      context.explicitResolution = true;
     } else if (command === '#IMAGE') {
       const normalized = normalizeLr2Path(row[1] ?? '');
       const expanded = context.customFileLookup.get(normalized.toLowerCase()) ?? normalized;
@@ -1425,7 +1489,17 @@ function readLr2Path(
       // intent.
       context.scratchFlip.reloadBanner = true;
     } else if (command === '#INCLUDE') {
-      const includePath = resolveLr2IncludePath(sourceFiles, dirname(path), row[1] ?? '');
+      // `#INCLUDE` honors `#CUSTOMFILE` wildcard substitutions the same way `#IMAGE` / `#LR2FONT` do. LITONE4's
+      // `Select/select.lr2skin` declares `#CUSTOMFILE,全体色,...¥Select¥csv¥*.csv,blue,` then `#INCLUDE,...¥Select¥csv¥*.csv,`
+      // — without the customFileLookup pre-check the wildcard reaches `resolveLr2IncludePath` literally and the
+      // include resolves to nothing (no file in the bundle matches `*.csv` directly). Symptom was an empty select
+      // skin (`images.length === 0`, `barLayout.slots === 0`) which fell back to the default-family chrome.
+      // Pre-expansion lets the resolver see the real path (`Select/csv/blue.csv`) and the rest of the CSV walk
+      // proceeds normally. Falls through to the regular include resolution when the pattern isn't a customFile
+      // wildcard (= every LR2 theme that pre-dates LITONE4's wildcard-include trick).
+      const rawInclude = row[1] ?? '';
+      const customExpanded = context.customFileLookup.get(normalizeLr2Path(rawInclude).toLowerCase());
+      const includePath = customExpanded ?? resolveLr2IncludePath(sourceFiles, dirname(path), rawInclude);
       if (includePath) {
         readLr2Path(sourceFiles, includePath, context, visited);
       }
@@ -1435,7 +1509,7 @@ function readLr2Path(
     } else if (command === '#DST_IMAGE') {
       const group = context.imageDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_NOWJUDGE_1P') {
       const id = toNumber(row[1], 0);
@@ -1445,7 +1519,7 @@ function readLr2Path(
     } else if (command === '#DST_NOWJUDGE_1P') {
       const id = toNumber(row[1], 0);
       const group = context.nowJudge1PDstGroups[id] ?? [];
-      appendDestinationKeyframe(group, row);
+      appendDestinationKeyframe(group, row, context);
       context.nowJudge1PDstGroups[id] = group;
     } else if (command === '#SRC_NOWJUDGE_2P') {
       const id = toNumber(row[1], 0);
@@ -1455,7 +1529,7 @@ function readLr2Path(
     } else if (command === '#DST_NOWJUDGE_2P') {
       const id = toNumber(row[1], 0);
       const group = context.nowJudge2PDstGroups[id] ?? [];
-      appendDestinationKeyframe(group, row);
+      appendDestinationKeyframe(group, row, context);
       context.nowJudge2PDstGroups[id] = group;
     } else if (command === '#SRC_NUMBER') {
       context.numberSources.push({
@@ -1468,7 +1542,7 @@ function readLr2Path(
     } else if (command === '#DST_NUMBER') {
       const group = context.numberDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_GROOVEGAUGE') {
       context.grooveGaugeSources.push({
@@ -1481,7 +1555,7 @@ function readLr2Path(
     } else if (command === '#DST_GROOVEGAUGE') {
       const group = context.grooveGaugeDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_NOWCOMBO_1P' || command === '#SRC_NOWCOMBO_2P') {
       // #SRC_NOWCOMBO_*,index,gr,x,y,w,h,divx,divy,cycle,timer,(null),align,keta
@@ -1499,7 +1573,7 @@ function readLr2Path(
       // the same permissive "extend the last group" semantics LR2 itself uses.
       const group = context.nowComboDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_JUDGELINE') {
       // #SRC_JUDGELINE,index,gr,x,y,w,h,divx,divy,cycle,timer,op1,op2,op3
@@ -1511,7 +1585,7 @@ function readLr2Path(
     } else if (command === '#DST_JUDGELINE') {
       const group = context.judgeLineDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_LINE') {
       // #SRC_LINE,index,gr,x,y,w,h,divx,divy,cycle,timer,op1,op2,op3
@@ -1523,7 +1597,7 @@ function readLr2Path(
     } else if (command === '#DST_LINE') {
       const group = context.measureLineDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_BGA') {
       // #SRC_BGA,(NULL),(NULL),…(unused),nobase,nolayer,nopoor Columns 11/12/13 are the per-DST suppression flags;
@@ -1537,7 +1611,7 @@ function readLr2Path(
     } else if (command === '#DST_BGA') {
       const group = context.bgaDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_TEXT') {
       // #SRC_TEXT,(NULL),font,st,align,edit,panel
@@ -1555,7 +1629,7 @@ function readLr2Path(
     } else if (command === '#DST_TEXT') {
       const group = context.textDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_BARGRAPH') {
       // #SRC_BARGRAPH,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,muki
@@ -1568,7 +1642,7 @@ function readLr2Path(
     } else if (command === '#DST_BARGRAPH') {
       const group = context.bargraphDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_SLIDER') {
       // #SRC_SLIDER,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,muki,range,type,disable `parseSource` already stamps
@@ -1583,7 +1657,7 @@ function readLr2Path(
     } else if (command === '#DST_SLIDER') {
       const group = context.sliderDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_GAUGECHART_1P' || command === '#SRC_GAUGECHART_2P') {
       // #SRC_GAUGECHART_*,index,gr,x,y,w,h,divx,divy,cycle,timer,field_w,field_h,start,end The LR2 spec puts `index` at
@@ -1614,7 +1688,7 @@ function readLr2Path(
       if (lastSideIndex >= 0) {
         const group = context.gaugeChartDstGroups[lastSideIndex];
         if (group) {
-          appendDestinationKeyframe(group, row);
+          appendDestinationKeyframe(group, row, context);
         }
       }
     } else if (command === '#SRC_SCORECHART') {
@@ -1632,7 +1706,7 @@ function readLr2Path(
     } else if (command === '#DST_SCORECHART') {
       const group = context.scoreChartDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_BUTTON') {
       // #SRC_BUTTON,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,type,click,panel,plusonly `plusonly` is optional in the LR2
@@ -1648,7 +1722,7 @@ function readLr2Path(
     } else if (command === '#DST_BUTTON') {
       const group = context.buttonDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_ONMOUSE') {
       // #SRC_ONMOUSE,(NULL),gr,x,y,w,h,divx,divy,cycle,timer,panel,x2,y2,w2,h2
@@ -1664,7 +1738,7 @@ function readLr2Path(
     } else if (command === '#DST_ONMOUSE') {
       const group = context.onMouseDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_README') {
       // #SRC_README,(NULL),font,(NULL),(NULL),kankaku
@@ -1676,7 +1750,7 @@ function readLr2Path(
     } else if (command === '#DST_README') {
       const group = context.readmeDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_MOUSECURSOR') {
       // #SRC_MOUSECURSOR,(NULL),gr,x,y,w,h,divx,divy,cycle,timer
@@ -1685,14 +1759,14 @@ function readLr2Path(
     } else if (command === '#DST_MOUSECURSOR') {
       const group = context.mouseCursorDstGroups.at(-1);
       if (group) {
-        appendDestinationKeyframe(group, row);
+        appendDestinationKeyframe(group, row, context);
       }
     } else if (command === '#SRC_BAR_FLASH') {
       // Spec only allows one — last wins. Used as the focused-bar pulse / glow overlay; DST coordinates are relative to
       // the focused bar's `BAR_BODY_ON` rect.
       context.barFlashSource = parseSource(row, context);
     } else if (command === '#DST_BAR_FLASH') {
-      appendDestinationKeyframe(context.barFlashDst, row);
+      appendDestinationKeyframe(context.barFlashDst, row, context);
     } else if (command === '#SRC_BAR_RIVAL') {
       // #SRC_BAR_RIVAL,index,gr,x,y,w,h,divx,divy,cycle,timer index 0=WIN / 1=LOSE / 2=DRAW (3=NOT PLAYED is
       // recommended omitted by the spec; we accept it but don't model it).
@@ -1707,7 +1781,7 @@ function readLr2Path(
         }
       }
     } else if (command === '#DST_BAR_RIVAL') {
-      appendDestinationKeyframe(context.barRivalDst, row);
+      appendDestinationKeyframe(context.barRivalDst, row, context);
     } else if (command === '#SRC_BAR_MY_LAMP') {
       // Rival-mode self lamp. Same kind enum as `#SRC_BAR_LAMP`.
       const kind = parseBarLampKind(row[1]);
@@ -1721,7 +1795,7 @@ function readLr2Path(
         }
       }
     } else if (command === '#DST_BAR_MY_LAMP') {
-      appendDestinationKeyframe(context.barMyLampDst, row);
+      appendDestinationKeyframe(context.barMyLampDst, row, context);
     } else if (command === '#SRC_BAR_RIVAL_LAMP') {
       // Rival-mode opponent lamp. Same kind enum.
       const kind = parseBarLampKind(row[1]);
@@ -1735,7 +1809,7 @@ function readLr2Path(
         }
       }
     } else if (command === '#DST_BAR_RIVAL_LAMP') {
-      appendDestinationKeyframe(context.barRivalLampDst, row);
+      appendDestinationKeyframe(context.barRivalLampDst, row, context);
     } else if (command === '#SRC_BAR_BODY') {
       // #SRC_BAR_BODY,kind,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarBodyKind(row[1]);
@@ -1758,12 +1832,12 @@ function readLr2Path(
     } else if (command === '#DST_BAR_BODY_OFF') {
       const slot = Math.max(0, Math.trunc(toNumber(row[1], 0)));
       const group = context.barBodyOffDstGroups[slot] ?? [];
-      appendDestinationKeyframe(group, row);
+      appendDestinationKeyframe(group, row, context);
       context.barBodyOffDstGroups[slot] = group;
     } else if (command === '#DST_BAR_BODY_ON') {
       const slot = Math.max(0, Math.trunc(toNumber(row[1], 0)));
       const group = context.barBodyOnDstGroups[slot] ?? [];
-      appendDestinationKeyframe(group, row);
+      appendDestinationKeyframe(group, row, context);
       context.barBodyOnDstGroups[slot] = group;
     } else if (command === '#BAR_CENTER') {
       context.barCenter = Math.max(0, Math.trunc(toNumber(row[1], 0)));
@@ -1774,7 +1848,7 @@ function readLr2Path(
       // for SRC-row format symmetry with #SRC_TEXT.
       context.barTitleSource = { font: Math.max(0, Math.trunc(toNumber(row[2], 0))) };
     } else if (command === '#DST_BAR_TITLE') {
-      appendDestinationKeyframe(context.barTitleDst, row);
+      appendDestinationKeyframe(context.barTitleDst, row, context);
     } else if (command === '#SRC_BAR_LEVEL') {
       // #SRC_BAR_LEVEL,index,gr,x,y,w,h,divx,divy,cycle,timer,(null),align,keta
       const kind = parseBarLevelKind(row[1]);
@@ -1793,7 +1867,7 @@ function readLr2Path(
         }
       }
     } else if (command === '#DST_BAR_LEVEL') {
-      appendDestinationKeyframe(context.barLevelDst, row);
+      appendDestinationKeyframe(context.barLevelDst, row, context);
     } else if (command === '#SRC_BAR_LAMP') {
       // #SRC_BAR_LAMP,index,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarLampKind(row[1]);
@@ -1807,7 +1881,7 @@ function readLr2Path(
         }
       }
     } else if (command === '#DST_BAR_LAMP') {
-      appendDestinationKeyframe(context.barLampDst, row);
+      appendDestinationKeyframe(context.barLampDst, row, context);
     } else if (command === '#SRC_BAR_RANK') {
       // #SRC_BAR_RANK,index,gr,x,y,w,h,divx,divy,cycle,timer
       const kind = parseBarRankKind(row[1]);
@@ -1821,7 +1895,7 @@ function readLr2Path(
         }
       }
     } else if (command === '#DST_BAR_RANK') {
-      appendDestinationKeyframe(context.barRankDst, row);
+      appendDestinationKeyframe(context.barRankDst, row, context);
     } else if (command in NOTE_COMMANDS) {
       const kind = NOTE_COMMANDS[command]!;
       const lane = toNumber(row[1], 0);
@@ -2016,7 +2090,7 @@ function parseDestination(row: string[]): Lr2DestinationRect {
  * with op=55, …) leak in unrelated modes. The destination check uses the *final* keyframe, so its `ops` MUST carry the
  * gate forward.
  */
-function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): void {
+function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[], context?: ParseContext): void {
   const dst = parseDestination(row);
   const previous = group[group.length - 1];
   if (dst.timer === -1) {
@@ -2042,6 +2116,77 @@ function appendDestinationKeyframe(group: Lr2DestinationRect[], row: string[]): 
     }
   }
   group.push(dst);
+  // Feed the right-bottom corner into the canvas auto-detector's sample set. We skip entries with negative `x` or
+  // `y` (animation slide-in / slide-out start points authored off-screen) so the detector's percentile is dominated
+  // by ON-screen authored geometry. Entries with zero width / height also drop out — they don't render anything
+  // and add noise at the origin. `context` is optional so callers that just want the inheritance semantics
+  // (currently none, but the signature stays open for unit tests) can pass `undefined`.
+  if (context !== undefined && dst.x >= 0 && dst.y >= 0 && dst.w > 0 && dst.h > 0) {
+    context.observedDstCorners.push([dst.x + dst.w, dst.y + dst.h]);
+  }
+}
+
+/**
+ * Standard LR2 / BMS skin canvas options, ordered ascending so the auto-detector picks the SMALLEST canvas that
+ * still contains the bulk of authored DST coordinates. Covers 640×480 (LR2 default theme), 1280×720 (HD), 1920×1080
+ * (FHD — LITONE4 lives here), and 2560×1440 (QHD — rare but cheap to support). Anything beyond falls back to QHD's
+ * cap; real authored LR2 themes at 4K don't exist in the wild.
+ */
+const STANDARD_CANVAS_SIZES: ReadonlyArray<{ readonly width: number; readonly height: number }> = [
+  { width: 640, height: 480 },
+  { width: 1280, height: 720 },
+  { width: 1920, height: 1080 },
+  { width: 2560, height: 1440 },
+];
+
+/**
+ * Slack factor that lets a candidate canvas "absorb" the 90 %-percentile overshoot from authored animations. Set to
+ * 15 % empirically against LITONE4's CSV bodies: the bulk of authored DST corners cluster at canvas edges
+ * (`y+h=1080`, `x+w=1920`) but slide-in animations on Play / Select push the 90 %-percentile x+w up to ~2080 — about
+ * 8.5 % beyond the 1920 canvas. A flat 15 % tolerance comfortably absorbs that overshoot while staying tight
+ * enough not to mis-classify legitimately wider canvases (the next standard tier is 2560 = 33 % above 1920, well
+ * outside the tolerance).
+ */
+const CANVAS_OVERSHOOT_TOLERANCE = 0.15;
+
+/**
+ * Picks the canvas for a `.lr2skin` that omits `#RESOLUTION`. Computes the 90 % percentile of the right-edge and
+ * bottom-edge coordinates across all observed DST keyframes, then returns the smallest {@link STANDARD_CANVAS_SIZES}
+ * entry that contains both percentiles within a {@link CANVAS_OVERSHOOT_TOLERANCE} slack. Returns `undefined` only
+ * when there are no observed corners (= skin parsed no DSTs, in which case the caller keeps the 640×480 default).
+ *
+ * **Joint 90 % inclusion + tolerance**: authored slide-in animations frequently push elements past the canvas edge
+ * for a couple of keyframes (LITONE4's `AC7LEFT.csv` has Play DST corners up to `y+h=2179` and `x+w=3144` for sprites
+ * that fly in from off-screen; LR2 default's `decide.lr2skin` slides bracket decorations in from `x=800` against a
+ * 640×480 design). We pick the smallest standard canvas whose `(width, height) × (1+tolerance)` rectangle contains
+ * **at least 90 % of the observed corner points jointly** (both axes pass for the same corner). The 15 % tolerance
+ * absorbs the residual overshoot from slide animations that BARELY exceed the canvas edge.
+ *
+ * The previous implementation used per-axis 90th percentiles independently: it would accept a candidate iff the
+ * 90th-percentile x AND 90th-percentile y both fit. That mis-classified LR2 default's decide skin as 1280×720 — the
+ * x percentile fit 640 (90 % of corners had x ≤ 640) but the y percentile landed inside a slide-in tail at y ≈ 600,
+ * outside 640×480's allowed 552. Joint inclusion fixes this by requiring the SAME corners to fit on both axes,
+ * which the on-screen bulk does even when slide-in keyframes scatter outliers far away.
+ *
+ * Exported for testability.
+ */
+export function autoDetectCanvasFromObservedCoordinates(
+  corners: ReadonlyArray<readonly [number, number]>,
+): { width: number; height: number } | undefined {
+  if (corners.length === 0) return undefined;
+  const inclusionThreshold = 0.9 * corners.length;
+  for (const candidate of STANDARD_CANVAS_SIZES) {
+    const widthAllowed = candidate.width * (1 + CANVAS_OVERSHOOT_TOLERANCE);
+    const heightAllowed = candidate.height * (1 + CANVAS_OVERSHOOT_TOLERANCE);
+    let cornersInside = 0;
+    for (const [x, y] of corners) {
+      if (x <= widthAllowed && y <= heightAllowed) cornersInside += 1;
+    }
+    if (cornersInside >= inclusionThreshold) return candidate;
+  }
+  // Bigger than every standard size — cap at the largest entry. The renderer scales-to-fit at the screen level
+  // anyway so the only practical effect of this cap is that DST coordinates beyond 2560×1440 get clipped.
+  return STANDARD_CANVAS_SIZES[STANDARD_CANVAS_SIZES.length - 1];
 }
 
 function isBlank(value: string | undefined): boolean {

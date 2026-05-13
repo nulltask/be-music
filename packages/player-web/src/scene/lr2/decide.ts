@@ -151,7 +151,17 @@ export class PixiDecideView {
   private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
   private target: PixiDecideTarget | undefined;
   private sceneStartedAt = 0;
-  private animationFrame = 0;
+  /**
+   * Whether the keyframe-driven render loop is currently attached to the host's `app.ticker`. Replaces the previous
+   * standalone `requestAnimationFrame` chain so we no longer schedule two RAFs per frame (one for PixiJS's auto-render
+   * and one for this scene's own tick).
+   */
+  private tickerAttached = false;
+  /** Tick handler bound once so the host ticker can register / unregister it by reference. */
+  private readonly tickerHandle = (): void => {
+    if (this.disposed) return;
+    this.render();
+  };
   private disposed = false;
   private continuedFired = false;
   private autoAdvanceHandle: ReturnType<typeof setTimeout> | undefined;
@@ -215,10 +225,7 @@ export class PixiDecideView {
       return;
     }
     this.disposed = true;
-    if (this.animationFrame !== 0) {
-      cancelAnimationFrame(this.animationFrame);
-      this.animationFrame = 0;
-    }
+    this.stopAnimationLoop();
     if (this.autoAdvanceHandle !== undefined) {
       clearTimeout(this.autoAdvanceHandle);
       this.autoAdvanceHandle = undefined;
@@ -268,15 +275,15 @@ export class PixiDecideView {
   }
 
   private startAnimationLoop(): void {
-    const tick = (): void => {
-      if (this.disposed) {
-        this.animationFrame = 0;
-        return;
-      }
-      this.animationFrame = requestAnimationFrame(tick);
-      this.render();
-    };
-    this.animationFrame = requestAnimationFrame(tick);
+    if (this.tickerAttached || !this.host) return;
+    this.host.app.ticker.add(this.tickerHandle);
+    this.tickerAttached = true;
+  }
+
+  private stopAnimationLoop(): void {
+    if (!this.tickerAttached) return;
+    this.host?.app.ticker.remove(this.tickerHandle);
+    this.tickerAttached = false;
   }
 
   private render(): void {

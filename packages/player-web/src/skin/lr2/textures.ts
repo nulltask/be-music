@@ -1,5 +1,5 @@
 import { Texture, VideoSource } from 'pixi.js';
-import { resolveLr2AssetBytes, type Lr2Skin } from '@be-music/lr2-skin';
+import { decodeDdsImageData, resolveLr2AssetBytes, type Lr2Skin } from '@be-music/lr2-skin';
 import { logger } from '../../logger.ts';
 
 const log = logger('bga-video');
@@ -22,8 +22,16 @@ interface TextureWithBlobUrl extends Texture {
 /**
  * Records the blob `objectUrl` the texture was decoded from. The URL is revoked the next time the texture passes
  * through {@link destroyTextureAndRevokeBlobUrl}.
+ *
+ * Defensively no-op when `texture` is null/undefined: Pixi v8's `Assets.load(url)` occasionally resolves with a
+ * falsy value for unsupported payloads (notably when the URL points at bytes that don't match the MIME-implied
+ * format — e.g. a `.dds` file blob-loaded as `image/png` falls through every decoder and resolves to null). The
+ * defensive branch keeps a stray null from cascading into a `Cannot set properties of null (setting 'Symbol...')`
+ * crash and lets the caller route the decode result through its normal "unsupported asset" fallback. Returns the
+ * texture unchanged so existing callers can keep using `attachBlobUrlToTexture(t, url)` as a pass-through.
  */
-export function attachBlobUrlToTexture(texture: Texture, objectUrl: string): void {
+export function attachBlobUrlToTexture(texture: Texture | null | undefined, objectUrl: string): void {
+  if (texture === null || texture === undefined) return;
   (texture as TextureWithBlobUrl)[TEXTURE_BLOB_URL] = objectUrl;
 }
 
@@ -830,8 +838,30 @@ export async function loadTextureFromBytes(
   transparentColorOrOptions?: { r: number; g: number; b: number } | LoadTextureOptions,
 ): Promise<Texture | undefined> {
   const options = normalizeLoadTextureOptions(transparentColorOrOptions);
-  if (path.toLowerCase().endsWith('.tga')) {
+  const lower = path.toLowerCase();
+  if (lower.endsWith('.tga')) {
     return decodeTgaTexture(bytes, options, path);
+  }
+  if (lower.endsWith('.dds')) {
+    // Browsers don't decode DDS natively — route through the in-tree decoder (LR2 themes like LITONE4 ship every
+    // skin texture as `.dds`). The decoder yields an RGBA buffer; we wrap it in `ImageData` and feed
+    // `createImageBitmap` so the rest of the texture pipeline (chroma key, nearest sampling, blob-url tracking)
+    // stays uniform with the PNG / BMP / JPG branches. Unsupported DDS variants (DXT-compressed, R5G6B5, etc.)
+    // return `undefined` from the decoder — falls through to the blob path below, which then fails gracefully via
+    // `createImageBitmap`'s exception handling and the skin element is just not painted.
+    const decoded = decodeDdsImageData(bytes);
+    if (decoded) {
+      return loadTextureFromImageData(decoded.rgba, decoded.width, decoded.height, path, options);
+    }
+  }
+  if (lower.endsWith('.avi')) {
+    // Authored themes occasionally reference `.avi` for clear / fail lamp animations (LITONE4 ships them under
+    // `Play/parts/movie/`). The browser's `HTMLVideoElement` can play some AVI containers but the legacy codec mix
+    // (MS-MPEG4 / Cinepak / etc.) used by these themes isn't decodable in any modern browser without the ffmpeg
+    // transcode pipeline that the BGA loader uses — and that pipeline is built for chart-side BGA, not skin chrome.
+    // Returning `undefined` here makes the skin renderer skip the element, which is the desired behaviour for v1
+    // LITONE4 support (the lamp animations are decorative; the surrounding chrome paints fine without them).
+    return undefined;
   }
   // `bytes` is already a `Uint8Array`; `new Blob([bytes])` is sufficient. Wrapping it in another `new Uint8Array(...)`
   // forces an extra copy of the entire byte buffer (the `Uint8Array(buffer)` ctor copies when the source is a typed
@@ -839,6 +869,56 @@ export async function loadTextureFromBytes(
   // `tryLoadVideoTextureFromBytes` for the matching `ArrayBuffer` cast rationale.
   const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
   return loadTextureFromBlob(blob, path, options);
+}
+
+/**
+ * Wraps a decoded RGBA8 buffer in a Pixi `Texture`. Mirrors {@link loadTextureFromBlob}'s post-decode behaviour
+ * (chroma key, nearest sampling, transparent-color handling) so DDS-sourced textures look identical to PNG/BMP
+ * counterparts at the same authored size.
+ *
+ * `new ImageData(...)` allocates its own buffer copy when given a `Uint8ClampedArray`, so we avoid the
+ * `createImageBitmap(blob)` round-trip altogether — DDS bytes never become a blob, only a typed-array view.
+ */
+async function loadTextureFromImageData(
+  rgba: Uint8ClampedArray,
+  width: number,
+  height: number,
+  label: string,
+  options: LoadTextureOptions,
+): Promise<Texture | undefined> {
+  try {
+    // `new ImageData(rgba, width, height)` rejects a `Uint8ClampedArray` whose backing buffer is typed as
+    // `ArrayBufferLike` (the DOM lib only narrows to `ArrayBuffer`-backed views). Copy into a fresh buffer that's
+    // unambiguously typed as a regular `ArrayBuffer` — the bytes themselves are the same, just the type narrows.
+    const ownedBuffer = new ArrayBuffer(rgba.byteLength);
+    new Uint8ClampedArray(ownedBuffer).set(rgba);
+    const imageData = new ImageData(new Uint8ClampedArray(ownedBuffer), width, height);
+    const imageBitmap = await createImageBitmap(imageData);
+    let finalBitmap = imageBitmap;
+    if (options.transparentColor || options.keyOutBlack) {
+      const keyedBitmap = await applyChromaKeyToBitmap(imageBitmap, options);
+      if (keyedBitmap) {
+        imageBitmap.close();
+        finalBitmap = keyedBitmap;
+      }
+    }
+    let texture: Texture;
+    try {
+      texture = Texture.from(finalBitmap);
+    } catch (error) {
+      finalBitmap.close();
+      throw error;
+    }
+    // Match the blob-path's pixel-art policy: nearest-neighbor sampling so the upscaled DDS chrome stays crisp
+    // (LR2 themes are typically authored at 1280×720 design space and scaled to the canvas).
+    texture.source.scaleMode = 'nearest';
+    texture.label = label;
+    texture.source.label = label;
+    return texture;
+  } catch (error) {
+    log.warn('dds texture decode failed', { path: label, error });
+    return undefined;
+  }
 }
 
 /**

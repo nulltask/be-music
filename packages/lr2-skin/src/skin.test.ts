@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isLr2SpecialGraphic, loadLr2SkinFromSourceFiles, LR2_SPECIAL_GRAPHIC, resolveLr2AssetBytes } from './skin.ts';
+import {
+  autoDetectCanvasFromObservedCoordinates,
+  isLr2SpecialGraphic,
+  loadLr2SkinFromSourceFiles,
+  LR2_SPECIAL_GRAPHIC,
+  resolveLr2AssetBytes,
+} from './skin.ts';
 
 const lines = (...rows: string[]): Uint8Array => new TextEncoder().encode(rows.join('\n'));
 
@@ -51,6 +57,36 @@ describe('loadLr2SkinFromSourceFiles', () => {
       { name: 'LANESIZE', defaultOp: 910, numChoices: 3 },
     ]);
     expect(imagePathsOf(skin)).toEqual(['left.png', 'normal.png']);
+  });
+
+  it('expands #INCLUDE wildcards through #CUSTOMFILE substitution (LITONE4-style palette switch)', () => {
+    // LITONE4's `Select/select.lr2skin` declares a customFile + a wildcard include against the same pattern:
+    //
+    //   #CUSTOMFILE,palette,csv/*.csv,blue,
+    //   #INCLUDE,csv/*.csv,
+    //
+    // The customFile picks `blue` as the default value, which expands `csv/*.csv` to `csv/blue.csv`. The include
+    // directive must consult the same customFile lookup so the wildcard resolves to `csv/blue.csv` rather than
+    // hitting the resolver as a literal `*.csv` (which finds nothing). Without this the LITONE4 select skin's body
+    // CSV is never loaded — `images` ends up empty and `barLayout.slots` stays 0, so the scene falls back to the
+    // default-family chrome.
+    const files = new Map<string, Uint8Array>([
+      ['theme/select.lr2skin', lines('#CUSTOMFILE,palette,csv/*.csv,blue,', '#ENDOFHEADER', '#INCLUDE,csv/*.csv,')],
+      ['theme/csv/blue.csv', imageCsv('blue-body')],
+      ['theme/csv/pink.csv', imageCsv('pink-body')],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(imagePathsOf(skin)).toEqual(['blue-body.png']);
+  });
+
+  it('falls back to the regular include resolver when no #CUSTOMFILE matches the include pattern', () => {
+    // Sanity check that the customFile pre-check doesn't break the non-wildcard include path. Plain
+    // `#INCLUDE,sibling.csv` (no wildcard, no customFile) must still resolve via `resolveLr2IncludePath`.
+    const files = new Map<string, Uint8Array>([
+      ['theme/main.lr2skin', lines('#ENDOFHEADER', '#INCLUDE,sibling.csv,')],
+      ['theme/sibling.csv', imageCsv('sibling')],
+    ]);
+    expect(imagePathsOf(loadLr2SkinFromSourceFiles(files))).toEqual(['sibling.png']);
   });
 
   it('skips IF blocks whose ops are not all true', () => {
@@ -733,6 +769,86 @@ describe('loadLr2SkinFromSourceFiles', () => {
     });
   });
 
+  // -- Type-aware dispatch (LITONE4 / themes with non-canonical filenames) -----------------------------------------
+  // Covers the `#INFORMATION,<type>,...` peek path: themes whose `.lr2skin` files aren't named `play_N.lr2skin` /
+  // `select.lr2skin` / etc. still classify correctly when their declared type matches the requested kind. Regression
+  // shield for LITONE4 support (which ships `AC7.lr2skin` for type=0).
+  describe('#INFORMATION type-aware skin dispatch', () => {
+    // Helper that prepends a `#INFORMATION,<type>,...` row to a regular image CSV — mimics the layout of a real
+    // authored skin's entry CSV.
+    const informationCsv = (type: number, imageName: string): Uint8Array =>
+      lines(
+        `#INFORMATION,${type},test skin,nobody,thumb.bmp,`,
+        '#ENDOFHEADER',
+        `#IMAGE,${imageName}.png`,
+        '#SRC_IMAGE,0,0,0,0,100,100,1,1,0,0',
+        '#DST_IMAGE,0,0,0,0,100,100,0,255,255,255,255',
+      );
+
+    it('picks LITONE4-style AC7.lr2skin for kind: play via the declared type', () => {
+      const files = new Map<string, Uint8Array>([
+        ['Theme/LITONE4/Play/AC7.lr2skin', informationCsv(0, 'ac7')],
+        // Decoy: a select-type skin sitting in the same theme but irrelevant to the play request.
+        ['Theme/LITONE4/Select/select.lr2skin', informationCsv(5, 'select')],
+      ]);
+      const skin = loadLr2SkinFromSourceFiles(files, { kind: 'play' });
+      expect(imagePathsOf(skin)).toEqual(['ac7.png']);
+    });
+
+    it('picks LITONE4-style select.lr2skin for kind: select even though decide and result are also present', () => {
+      const files = new Map<string, Uint8Array>([
+        ['Theme/LITONE4/Play/AC7.lr2skin', informationCsv(0, 'play')],
+        ['Theme/LITONE4/Decide/decide.lr2skin', informationCsv(6, 'decide')],
+        ['Theme/LITONE4/Result/result.lr2skin', informationCsv(7, 'result')],
+        ['Theme/LITONE4/Select/select.lr2skin', informationCsv(5, 'select')],
+      ]);
+      // Each kind should resolve to its declared sibling — no cross-pollination.
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['select.png']);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'decide' }))).toEqual(['decide.png']);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'result' }))).toEqual(['result.png']);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['play.png']);
+    });
+
+    it('drops a skin whose declared type contradicts its folder name', () => {
+      // Filename heuristic would put `Select/play_7.lr2skin` into the play candidate set, but the declared type
+      // says it's a select skin — we trust the declared type. The pure-filename play skin should still win for the
+      // play request; the misnamed file gets rejected from BOTH kinds' candidate lists.
+      const files = new Map<string, Uint8Array>([
+        // Misplaced: declared type 5 (select) under the Play folder.
+        ['Theme/T/Play/play_7.lr2skin', informationCsv(5, 'misplaced')],
+        ['Theme/T/Select/select.lr2skin', informationCsv(5, 'real-select')],
+      ]);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['real-select.png']);
+      // Play has no valid candidate after the type filter rejects the misplaced one. The legacy single-skin fallback
+      // for kind: play kicks in and grabs the misplaced file regardless of its declared type — same behaviour as
+      // before this change for the "one .lr2skin in the bundle" case. Documenting that explicitly here.
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['misplaced.png']);
+    });
+
+    it('prefers play_<variant>.lr2skin over a type-only AC<N>.lr2skin in the same bundle', () => {
+      // Bundles that ship BOTH the canonical filename and a non-canonical type-tagged file should pick the canonical
+      // one — keeps the LR2 default theme's behaviour identical even when the type peek is enabled.
+      const files = new Map<string, Uint8Array>([
+        ['Theme/X/Play/play_7.lr2skin', informationCsv(0, 'canonical')],
+        ['Theme/X/Play/AC7.lr2skin', informationCsv(0, 'ac7')],
+      ]);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play', playVariant: '7' }))).toEqual([
+        'canonical.png',
+      ]);
+    });
+
+    it('falls back to the filename heuristic when no #INFORMATION row is present', () => {
+      // Older skins / hand-edited CSVs may omit `#INFORMATION` entirely. We fall back to the path heuristic so the
+      // pre-type-aware behaviour is preserved for those.
+      const files = new Map<string, Uint8Array>([
+        ['Theme/X/Play/play_7.lr2skin', imageCsv('legacy-play')],
+        ['Theme/X/Select/select.lr2skin', imageCsv('legacy-select')],
+      ]);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'play' }))).toEqual(['legacy-play.png']);
+      expect(imagePathsOf(loadLr2SkinFromSourceFiles(files, { kind: 'select' }))).toEqual(['legacy-select.png']);
+    });
+  });
+
   // -- defaultParseOps ---------------------------------------------- Op 90 (cleared) and 91 (failed) are runtime-only
   // flags but the LR2 default `Result/result_normal.csv` wraps the `#IMAGE` declarations themselves in `#IF,90` /
   // `#IF,91`. The parser has to enter BOTH branches at parse time so both atlases (parts.tga and parts_fail.tga) reach
@@ -928,5 +1044,139 @@ describe('loadLr2SkinFromSourceFiles', () => {
       const bytes = resolveLr2AssetBytes(skin!, 'parts.png');
       expect(bytes).toEqual(new Uint8Array([0xde, 0xad, 0xbe, 0xef]));
     });
+  });
+});
+
+describe('autoDetectCanvasFromObservedCoordinates', () => {
+  // The helper is exported standalone so the data-shape coverage stays cheap to add — the integration path (a real
+  // skin without `#RESOLUTION` gets its `width`/`height` upgraded by the loader) is exercised in the
+  // `loadLr2SkinFromSourceFiles` block below.
+  it('returns undefined when no corners were observed', () => {
+    expect(autoDetectCanvasFromObservedCoordinates([])).toBeUndefined();
+  });
+
+  it('snaps to 640×480 for LR2-default-style coordinates', () => {
+    // 200 entries clustered around (300, 200) — should land squarely in the 640×480 tier.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 200; i += 1) corners.push([300, 200]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 640, height: 480 });
+  });
+
+  it('snaps to 1280×720 for HD-era coordinates', () => {
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 200; i += 1) corners.push([1100, 650]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 1280, height: 720 });
+  });
+
+  it('snaps to 1920×1080 for FHD-era coordinates (LITONE4 case)', () => {
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 200; i += 1) corners.push([1800, 1000]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('ignores off-canvas animation outliers via the 90th-percentile cut', () => {
+    // 100 on-screen entries clustered at (1800, 1000) + 5 animation outliers at (5000, 5000). The 90th-percentile
+    // y lands inside the on-screen cluster (= 1000), not the outlier reach — the detector should still pick
+    // 1920×1080 rather than the next-larger tier.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 100; i += 1) corners.push([1800, 1000]);
+    for (let i = 0; i < 5; i += 1) corners.push([5000, 5000]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('keeps 640×480 for LR2-default-style 640×480 design + horizontal slide-in animations', () => {
+    // Regression for the LR2 default decide-skin shape: on-screen bulk authored at 640×480, with a small number of
+    // slide-in keyframes pushing `x+w` to ~800 (off-screen right). Per-axis 90th-percentile checks mis-classified
+    // these as 1280×720 because the y percentile landed inside a slide-in band at y ≈ 600 — outside 640×480's
+    // tolerance of 552. Joint inclusion correctly sees that the on-screen 90 % of corners fit 640×480 jointly.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 90; i += 1) corners.push([600, 400]);
+    for (let i = 0; i < 10; i += 1) corners.push([800, 600]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 640, height: 480 });
+  });
+
+  it('escalates when slide-in fraction exceeds the inclusion threshold (= bulk is genuinely off the small canvas)', () => {
+    // Inverse check: when MORE than 10 % of corners land outside 640×480, the on-screen bulk isn't actually 640×480
+    // — the skin is FHD-authored with a 640×480 "intro" region. Escalate to 1280×720 (which contains both clusters).
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 60; i += 1) corners.push([600, 400]);
+    for (let i = 0; i < 40; i += 1) corners.push([1200, 700]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 1280, height: 720 });
+  });
+
+  it('escalates to a bigger canvas when the 90th percentile genuinely overflows the smaller tier', () => {
+    // 50 entries at (700, 600) — beyond 480 even with the 15 % overshoot tolerance (480 × 1.15 = 552 ≤ 600), so
+    // 640×480 isn't enough. 1280×720 contains both with room to spare.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 50; i += 1) corners.push([700, 600]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 1280, height: 720 });
+  });
+
+  it('absorbs a slight 90th-percentile overshoot via the canvas-overshoot tolerance', () => {
+    // 100 entries at (1950, 910) — `1950 > 1920` but only by 1.6 %, well within the 15 % tolerance. This is the
+    // LITONE4 Select-skin shape (slide-in animations push p90 just past the canvas right edge). The detector
+    // should NOT escalate to 2560×1440; the skin's design intent is 1920×1080.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 100; i += 1) corners.push([1950, 910]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('caps at 2560×1440 for skins whose coordinates exceed every standard tier', () => {
+    // The renderer scales-to-fit at the screen layer; the cap just avoids inventing a non-standard canvas. 100
+    // entries at (4000, 3000) — way beyond every preset — should land at the largest entry rather than escalate
+    // indefinitely.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 100; i += 1) corners.push([4000, 3000]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 2560, height: 1440 });
+  });
+});
+
+describe('loadLr2SkinFromSourceFiles — #RESOLUTION-less canvas auto-detection', () => {
+  const fhdLikeBody = (imageName: string): Uint8Array =>
+    // Single `#IMAGE` with one `#DST_IMAGE` at FHD coordinates — `(x+w, y+h) = (1920, 1080)`. Authored without
+    // `#RESOLUTION` to exercise the auto-detector path. LITONE4-shaped.
+    new TextEncoder().encode(
+      [
+        '#IMAGE,' + imageName + '.png',
+        '#SRC_IMAGE,0,0,0,0,100,100,1,1,0,0',
+        '#DST_IMAGE,0,0,0,0,1920,1080,0,255,255,255,255',
+      ].join('\n'),
+    );
+
+  it('snaps the canvas to 1920×1080 when the skin omits #RESOLUTION but uses FHD coordinates', () => {
+    const files = new Map<string, Uint8Array>([['theme/play.lr2skin', fhdLikeBody('chrome')]]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.width).toBe(1920);
+    expect(skin?.height).toBe(1080);
+  });
+
+  it('respects an explicit #RESOLUTION over the auto-detected size', () => {
+    // If the author DID declare `#RESOLUTION,1280,720` but a stray DST lives outside that box, we trust the
+    // author's declaration (matches LR2's own behavior).
+    const files = new Map<string, Uint8Array>([
+      [
+        'theme/play.lr2skin',
+        new TextEncoder().encode(
+          [
+            '#RESOLUTION,1280,720',
+            '#IMAGE,a.png',
+            '#SRC_IMAGE,0,0,0,0,100,100,1,1,0,0',
+            // DST at FHD coordinates — would auto-detect to 1920×1080 if `#RESOLUTION` was absent.
+            '#DST_IMAGE,0,0,0,0,1920,1080,0,255,255,255,255',
+          ].join('\n'),
+        ),
+      ],
+    ]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.width).toBe(1280);
+    expect(skin?.height).toBe(720);
+  });
+
+  it('keeps the 640×480 fallback when the skin has no DST entries at all', () => {
+    // No `#DST_*` parsed → no observed corners → auto-detector returns undefined → 640×480 default stays.
+    const files = new Map<string, Uint8Array>([['theme/play.lr2skin', new TextEncoder().encode('#IMAGE,a.png\n')]]);
+    const skin = loadLr2SkinFromSourceFiles(files);
+    expect(skin?.width).toBe(640);
+    expect(skin?.height).toBe(480);
   });
 });

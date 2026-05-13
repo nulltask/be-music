@@ -27,11 +27,19 @@ export * from './scene/beatoraja/result.ts';
 export * from './scene/beatoraja/select.ts';
 export * from './scene/beatoraja/notes.ts';
 export * from './scene/beatoraja/skin-view.ts';
+export * from './scene/default/index.ts';
 export * from './scene/lr2/decide.ts';
 export * from './scene/lr2/gameplay.ts';
 export * from './scene/lr2/result.ts';
 export * from './scene/host.ts';
 export * from './scene/lr2/select.ts';
+// Skin family abstraction. Hosts use {@link skinFamilyRegistry} to route dropped files to the right theme loader and
+// to pick the right scene classes for a given play session. See `skin/family.ts` for the contract.
+export * from './skin/family.ts';
+export * from './skin/lr2/family.ts';
+export * from './skin/beatoraja/family.ts';
+export * from './skin/default/family.ts';
+export * from './skin/registry.ts';
 export * from './collection/types.ts';
 // Targeted re-exports of helpers used by the demo's beatoraja decide path so it can decode
 // the chart's #STAGEFILE / #BACKBMP / #BANNER bitmaps without reaching into private modules.

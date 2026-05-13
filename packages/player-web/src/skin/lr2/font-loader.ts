@@ -1,5 +1,6 @@
 import { Texture, Assets } from 'pixi.js';
 import {
+  decodeDdsImageData,
   decodeTga,
   isTgaImage,
   parseLr2Font,
@@ -180,6 +181,15 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
   if (ext === 'tga' || isTgaImage(bytes)) {
     return loadTgaTexture(bytes, relPath);
   }
+  // DDS branch — modern LR2 themes (LITONE4 etc.) ship bitmap-font textures as `.dds` (typically uncompressed
+  // 32-bit BGRA inside a DXA archive). Browsers don't decode DDS natively; running it through `Assets.load(blobUrl)`
+  // makes Pixi resolve the URL with a null texture (the loader treats unrecognised payloads as a soft failure),
+  // which then crashed `attachBlobUrlToTexture(null, url)` with `Cannot set properties of null (...)`. Pre-decode via
+  // {@link decodeDdsImageData} bypasses Pixi's URL pipeline entirely and produces the same texture shape as the TGA
+  // branch — same canvas → `Texture.from(canvas)` chain so chroma keying / nearest sampling stays consistent.
+  if (ext === 'dds') {
+    return loadDdsTexture(bytes, relPath);
+  }
   // Pixi v8 `Assets.load` accepts a URL — we mint an in-memory blob URL so the loader's WebGL upload pipeline is
   // reused. The URL is *not* revoked synchronously after the upload because the texture's `<img>` source keeps a
   // reference to it for the lifetime of the GPU upload (and for re-decode on a WebGL context-loss event); revoking
@@ -195,6 +205,17 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
   const url = URL.createObjectURL(blob);
   try {
     const texture = await Assets.load<Texture>(url);
+    // Pixi v8 occasionally resolves `Assets.load` with a falsy value for unsupported payloads (notably when the URL
+    // points at bytes that don't match the MIME-implied format — Pixi probes a few decoders and returns null when
+    // every one rejects). Guard so the `attachBlobUrlToTexture` call below doesn't blow up on null; return undefined
+    // so the caller falls back to the system-font / placeholder text path. Earlier this surfaced as a crashing
+    // `Cannot set properties of null (setting 'Symbol...')` whenever a DDS bitmap-font slipped past the extension
+    // dispatch above.
+    if (!texture) {
+      URL.revokeObjectURL(url);
+      log.info(`decoder returned no texture for ${relPath} — falling back to system font`);
+      return undefined;
+    }
     attachBlobUrlToTexture(texture, url);
     return texture;
   } catch (error) {
@@ -202,6 +223,34 @@ async function loadTextureFromBytes(bytes: Uint8Array, relPath: string): Promise
     URL.revokeObjectURL(url);
     return undefined;
   }
+}
+
+/**
+ * Decodes a DDS font sheet into a Pixi `Texture` via the OffscreenCanvas path. Mirrors {@link loadTgaTexture}'s
+ * shape so the two pre-decoded branches stay symmetric; the only differences are the DDS decoder call and the
+ * (compressed) DDS variants that aren't supported yet returning `undefined` (a soft failure — the renderer falls
+ * back to system-font placeholder rendering for that font slot).
+ */
+async function loadDdsTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {
+  const decoded = decodeDdsImageData(bytes);
+  if (!decoded) {
+    // `decodeDdsImageData` returns undefined for DXT-compressed / non-32-bit / DX10-header DDS variants. Logged at
+    // INFO since "unsupported variant" is expected for some themes and the chrome stays usable via system-font
+    // fallback.
+    log.info(`unsupported DDS variant: ${relPath} (compressed or non-BGRA32) — falling back`);
+    return undefined;
+  }
+  if (typeof OffscreenCanvas === 'undefined') return undefined;
+  const canvas = new OffscreenCanvas(decoded.width, decoded.height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return undefined;
+  // `decoded.rgba` is a `Uint8ClampedArray`. `ctx.createImageData` allocates a fresh data array; we copy our pixel
+  // bytes into it so the `ImageData` instance owns the buffer (matches the TGA path; lets the GC drop the original
+  // typed array after the upload completes).
+  const imageData = ctx.createImageData(decoded.width, decoded.height);
+  imageData.data.set(decoded.rgba);
+  ctx.putImageData(imageData, 0, 0);
+  return Texture.from(canvas as unknown as HTMLCanvasElement);
 }
 
 async function loadTgaTexture(bytes: Uint8Array, relPath: string): Promise<Texture | undefined> {

@@ -1,8 +1,14 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { BGA, BG, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD, YELLOW } from './gameplay-constants.ts';
+import { BGA, BG, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD, YELLOW } from '../lr2/gameplay-constants.ts';
 
 /*
- * Palette: dark gray chrome panels + a few accent tones lifted from `Theme/LR2/Play/ss_7.png`. The LR2 default skin
+ * Default-skin gameplay chrome renderer. This is the painter for the `default` skin family — the built-in chrome
+ * shown when neither an LR2 theme nor a beatoraja theme has been dropped. Historically this lived inside
+ * `scene/lr2/` as a "fallback" path; it now sits under `scene/default/` as the canonical renderer for an independent
+ * skin family. The LR2 gameplay scene falls back to this renderer when no `Lr2Skin` is supplied (transitional —
+ * eventually the LR2 scene will require a skin and only the default scene calls into this module).
+ *
+ * Palette: dark gray chrome panels + a few accent tones lifted from `Theme/LR2/Play/ss_7.png`. LR2's default skin
  * paints everything with a single `frame.tga` bitmap; we evoke that with flat-fill rectangles at each `#DST_IMAGE`
  * rectangle the skin authors. Nothing here is invented — every position below has a corresponding `#DST_*` literal in
  * `Theme/LR2/Play/7keys/7_LL0.csv`.

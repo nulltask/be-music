@@ -142,7 +142,11 @@ import {
   resolveJudgeSkinKind,
   resolveNumberValue,
 } from './gameplay-hud.ts';
-import { renderFallbackLr2Frame } from './gameplay-fallback.ts';
+// Default-family fallback renderer. Shown when no `Lr2Skin` is supplied — see `scene/default/gameplay-render.ts` for
+// the rationale (the default skin is its own family, and this scene delegates to that family's renderer when no LR2
+// skin is loaded). Long-term the LR2 scene should require a non-optional skin and `DefaultPixiGameplayView` would be
+// the only caller of `renderFallbackLr2Frame`; this import is the transitional bridge.
+import { renderFallbackLr2Frame } from '../default/gameplay-render.ts';
 import { resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
@@ -807,7 +811,13 @@ export class PixiGameplayView {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
-  private frame: number | undefined;
+  /**
+   * Whether the gameplay tick is currently registered on the host's `app.ticker`. Previously this scene drove its own
+   * `requestAnimationFrame` chain at the bottom of `tick`, running in parallel with PixiJS's auto-render ticker — two
+   * RAFs were scheduled per frame, doubling per-frame event-loop overhead. The ticker now fires `tick` inline with the
+   * renderer's frame.
+   */
+  private tickerAttached = false;
   private chartEndTimeout: number | undefined;
   /**
    * `setTimeout` handles for the LR2 scene-exit sequence (timers 2 = FADEOUT, 3 = CLOSE). Cleared on dispose so the
@@ -1296,7 +1306,7 @@ export class PixiGameplayView {
       this.launchSharedEngine();
     });
     this.app.canvas.focus();
-    this.tick();
+    this.startAnimationLoop();
   }
 
   /**
@@ -1450,12 +1460,9 @@ export class PixiGameplayView {
       return;
     }
     this.disposed = true;
-    // Cancel our own rAF (the gameplay tick loop). The shared `Application` and its ticker keep running for the next
-    // active scene — only the per-scene state below is freed.
-    if (this.frame !== undefined) {
-      cancelAnimationFrame(this.frame);
-      this.frame = undefined;
-    }
+    // Detach the gameplay tick from the host ticker. The shared `Application` keeps running for the next active scene
+    // — only the per-scene state below is freed.
+    this.stopAnimationLoop();
     // Detach window-level event listeners so a stray keypress doesn't hit a disposed view.
     window.removeEventListener('keydown', this.handleSharedEngineExitKey);
     if (this.host) {
@@ -3193,8 +3200,24 @@ export class PixiGameplayView {
       // Info console with per-frame counts.
       log.debug('perf', report);
     }
-    this.frame = requestAnimationFrame(this.tick);
   };
+
+  /**
+   * Registers the gameplay tick handler on the host's shared `app.ticker`. Replaces the previous self-scheduling rAF
+   * loop so we don't run a second `requestAnimationFrame` callback alongside PixiJS's auto-render ticker. The handler
+   * itself ({@link tick}) is unchanged — only the scheduling mechanism moved.
+   */
+  private startAnimationLoop(): void {
+    if (this.tickerAttached || !this.host) return;
+    this.host.app.ticker.add(this.tick);
+    this.tickerAttached = true;
+  }
+
+  private stopAnimationLoop(): void {
+    if (!this.tickerAttached) return;
+    this.host?.app.ticker.remove(this.tick);
+    this.tickerAttached = false;
+  }
 
   /**
    * Sample frame rate over a sliding 1-second window. The published value drives the LR2 RATE NUMBER panel (which we
