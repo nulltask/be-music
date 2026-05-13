@@ -1,5 +1,8 @@
 import {
   BrowserSongCollectionStore,
+  DefaultPixiGameplayView,
+  DefaultPixiResultView,
+  DefaultPixiSongSelectView,
   PixiGameplayView,
   PixiDecideView,
   PixiResultView,
@@ -15,20 +18,22 @@ import {
   parseCompressorMode,
   readDroppedFiles,
   resolveSongSource,
+  skinFamilyRegistry,
   splitDroppedSongAndThemeFiles,
-  summarizeBrowserCompat,
-  type BrowserCompatReport,
   type BrowserSongCollection,
   type BrowserSongEntry,
   type CompressorMode,
   type LoadProgress,
   type PixiGameplayResultData,
   type PixiSongSelectNavigation,
+  type SkinFamilyId,
 } from '@be-music/player-web';
 import {
+  discoverLr2Themes,
   loadLr2ThemeSkinsFromFiles,
   pickLr2PlaySkin,
   summarizeLr2PlaySkins,
+  type Lr2DiscoveredTheme,
   type Lr2PlaySkinMap,
   type Lr2PlayVariant,
   type Lr2Skin,
@@ -42,7 +47,6 @@ import {
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   PixiBeatorajaSelectScene,
-  isBeatorajaSkinIndicator,
   loadBeatorajaFonts,
   loadBeatorajaTexturesFromBundle,
   findBeatorajaThemeBgm,
@@ -88,6 +92,17 @@ const gameplayLog = logger('gameplay');
 // import its CSS explicitly — its package.json doesn't expose the file via `exports` anyway.
 import GUI, { type Controller } from 'lil-gui';
 import { wireHelpModal } from './help-modal.ts';
+import { DEMO_APP_HTML } from './dom-template.ts';
+import { renderBrowserCompatPanel } from './compat-panel.ts';
+import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
+import { phaseLabels, playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
+import type {
+  ChartImageTexture,
+  DemoGuiState,
+  PlayerWebDemoElements,
+  SkinFamilyOverride,
+  SkinFamilySceneKind,
+} from './types.ts';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -95,573 +110,7 @@ if (!app) {
   throw new Error('missing #app');
 }
 
-app.innerHTML = `
-  <div class="shell empty">
-    <!--
-      Hidden file input — triggered by the GUI's "Open folder /
-      ZIP" button. lil-gui has no native file controller, so we
-      forward a synthetic click to this hidden input from the
-      function controller's handler. \`webkitdirectory\` makes the
-      browser show a folder picker on Chromium / Safari; multiple
-      ZIPs / charts can also be selected via the same input.
-    -->
-    <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
-    <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
-    <div class="stage" id="stage">
-      <!--
-        Drop hint. Visible whenever the shell carries the
-        \`.empty\` class (no songs loaded yet) so the user has a
-        clear "drop a folder here" target up-front, plus during
-        an active drag (\`.dragging\`) so the hint reappears even
-        once charts are loaded. Falls behind the canvas otherwise.
-
-        Structured as three layers:
-        - \`.drop-frame\`: subtle outer ring spanning the whole
-          stage, lights up during a live drag.
-        - \`.drop-card\`: centered glassmorphism panel hosting the
-          actual content; hosts the entry / hover animations.
-        - icon + title + subtitle for the hierarchy.
-      -->
-      <div class="drop">
-        <div class="drop-frame"></div>
-        <div class="drop-card">
-          <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
-            <!--
-              Stylized download arrow. The two halves animate
-              independently so the head bounces while the
-              shaft holds steady — feels lighter than a single
-              translateY.
-            -->
-            <path
-              class="drop-icon-shaft"
-              d="M24 6 L24 30"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-            />
-            <path
-              class="drop-icon-head"
-              d="M14 22 L24 32 L34 22"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M10 38 L38 38"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="3"
-              stroke-linecap="round"
-              opacity="0.55"
-            />
-          </svg>
-          <div class="drop-title">Drop to load</div>
-          <div class="drop-subtitle">
-            <span>BMS folder</span>
-            <span class="drop-subtitle-sep">·</span>
-            <span>LR2 Files</span>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!--
-      Browser-compatibility panel. Lives at the shell level — NOT
-      inside the drop card — so it reads as a separate diagnostic
-      widget rather than as decoration on the call-to-action.
-      Header (icon + eyebrow + status) communicates at-a-glance
-      readiness; the body lists every probed feature split into
-      \`Required\` / \`Optional\` sections so the user can see
-      exactly which feature is responsible for an unsupported
-      verdict. Populated once at boot from \`checkBrowserCompat()\`.
-    -->
-    <aside class="compat-panel" id="compat-panel" aria-label="Browser compatibility check">
-      <header class="compat-panel-header">
-        <div class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
-          <!--
-            Status mark. The default check arc paints when the
-            browser is fully supported; the JS swaps in a cross
-            path for the unsupported state by toggling a class on
-            the panel root.
-          -->
-          <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--check"
-              d="M7 12 L11 16 L17 9"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--cross"
-              d="M8 8 L16 16 M16 8 L8 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-            />
-          </svg>
-        </div>
-        <div class="compat-panel-heading">
-          <div class="compat-panel-eyebrow">System check</div>
-          <div class="compat-panel-status" id="compat-panel-status">Browser ready</div>
-        </div>
-      </header>
-      <div class="compat-panel-sections">
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Required</h3>
-          <ul class="compat-panel-list" id="compat-panel-required"></ul>
-        </section>
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Optional</h3>
-          <ul class="compat-panel-list" id="compat-panel-optional"></ul>
-        </section>
-      </div>
-    </aside>
-    <!--
-      Loading overlay. Hidden by default; revealed via the
-      "visible" class while a folder / ZIP drop is mid-load. The
-      bar below moves between "indeterminate" (CSS animation) and
-      "determinate" (inline width %) states depending on whether
-      the active phase reports a known total. The card sits in the
-      center of the shell so it's visible regardless of which
-      scene is currently mounted (select / gameplay / result).
-    -->
-    <div class="loading-overlay" id="loading-overlay" aria-hidden="true">
-      <div class="loading-card" role="status" aria-live="polite">
-        <div class="loading-label" id="loading-label">Loading…</div>
-        <div class="loading-bar"><div class="loading-bar-fill" id="loading-bar-fill"></div></div>
-        <div class="loading-counter" id="loading-counter"></div>
-      </div>
-    </div>
-    <!--
-      Bottom-right floating Help button. Pinned so it stays
-      reachable from every scene (select / gameplay / result)
-      without having to compete with lil-gui (top-right) or the
-      search bar (bottom-left). Opens the unified Help dialog
-      that hosts both the usage guide and the third-party
-      attribution required by the libraries we ship.
-    -->
-    <button class="help-button" id="help-button" type="button" aria-haspopup="dialog" aria-controls="help-modal">
-      <svg class="help-button-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.8" />
-        <path
-          d="M9.4 9.5 a2.6 2.6 0 1 1 3.6 2.4 c-0.7 0.3 -1 0.9 -1 1.6 V14.5"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.8"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-        <circle cx="12" cy="17.2" r="1.1" fill="currentColor" />
-      </svg>
-      <span class="help-button-label">Help</span>
-    </button>
-    <!--
-      Help modal. Two tabs:
-      - Usage: drag-drop instructions, keyboard shortcuts,
-        gameplay keys, options.
-      - Open source: build-time-resolved acknowledgement list
-        (one card per npm dependency that ships in the runtime
-        bundle, with verbatim LICENSE text).
-      Hidden by default; toggled via the \`.visible\` class on
-      the overlay.
-    -->
-    <div class="help-modal" id="help-modal" role="dialog" aria-modal="true" aria-labelledby="help-modal-title" aria-hidden="true">
-      <div class="help-modal-backdrop" id="help-modal-backdrop"></div>
-      <div class="help-modal-card">
-        <header class="help-modal-header">
-          <div>
-            <div class="help-modal-eyebrow">Help &amp; About</div>
-            <h2 class="help-modal-title" id="help-modal-title">be-music player</h2>
-          </div>
-          <button class="help-modal-close" id="help-modal-close" type="button" aria-label="Close">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M7 7 L17 17 M17 7 L7 17"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-              />
-            </svg>
-          </button>
-        </header>
-        <div class="help-modal-tabs" role="tablist">
-          <button
-            class="help-modal-tab is-active"
-            id="help-tab-usage"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="help-pane-usage"
-            data-pane="usage"
-          >
-            Usage
-          </button>
-          <button
-            class="help-modal-tab"
-            id="help-tab-oss"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="help-pane-oss"
-            data-pane="oss"
-          >
-            Open source
-          </button>
-        </div>
-        <section
-          class="help-modal-pane is-active"
-          id="help-pane-usage"
-          role="tabpanel"
-          aria-labelledby="help-tab-usage"
-          tabindex="0"
-        >
-          <!--
-            Language switcher. The two \`.help-lang\` blocks below
-            carry parallel translations; only one is shown at a
-            time. Default selection comes from \`navigator.language\`
-            at boot — \`ja-*\` users land on Japanese, everyone else
-            on English.
-          -->
-          <div class="help-lang-switch" role="group" aria-label="Language">
-            <button
-              class="help-lang-toggle is-active"
-              type="button"
-              data-lang="en"
-              aria-pressed="true"
-            >
-              English
-            </button>
-            <button class="help-lang-toggle" type="button" data-lang="ja" aria-pressed="false">
-              日本語
-            </button>
-          </div>
-          <div class="help-lang is-active" data-lang="en">
-            <section class="help-about">
-              <p class="help-about-summary">
-                A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
-                play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skins
-                (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
-                (<code>.json</code> / <code>.luaskin</code>) — drop your
-                <code>LR2files</code> folder, or your beatoraja <code>skin/</code> folder, onto
-                the page (alongside or before the chart drop) and the theme is applied
-                automatically.
-              </p>
-              <ul class="help-about-meta">
-                <li>
-                  <span class="help-about-key">Author</span>
-                  <a href="https://nulltask.dev" target="_blank" rel="noopener noreferrer">nulltask · nulltask.dev</a>
-                </li>
-                <li>
-                  <span class="help-about-key">Source</span>
-                  <a href="https://github.com/nulltask/be-music" target="_blank" rel="noopener noreferrer">
-                    github.com/nulltask/be-music
-                  </a>
-                </li>
-                <li>
-                  <span class="help-about-key">Also available</span>
-                  <span>A TUI build (terminal frontend) ships in the same monorepo as <code>@be-music/player-tui</code>.</span>
-                </li>
-              </ul>
-              <ul class="help-about-notes">
-                <li>
-                  Dropped files stay entirely in your browser. Charts, audio, and BGA assets are
-                  <strong>never uploaded to any server</strong>.
-                </li>
-                <li>Some features are still missing or incomplete — expect rough edges.</li>
-                <li>
-                  <strong>Scores are not saved.</strong> There is no persistence or leaderboard
-                  yet — refreshing the page or revisiting later loses every result.
-                </li>
-                <li>
-                  <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
-                  beatoraja default skin (<code>skin/default</code>),
-                  <code>ModernChic</code>, and <code>GdbG Original Skin</code>. Other LR2 /
-                  beatoraja skins parse and load, but their layout is unverified — expect element
-                  overlap, off-by-a-few-pixels positioning, or missing animation frames on
-                  third-party themes.
-                </li>
-                <li>Use at your own risk. No warranty is provided.</li>
-              </ul>
-            </section>
-            <h3 class="help-section-title">Loading songs</h3>
-            <ul class="help-list">
-              <li>Drop a BMS folder anywhere on the page to register its charts.</li>
-              <li>
-                Drop an <code>LR2files</code> folder, or a beatoraja <code>skin/</code> folder
-                (or their contents), to apply a skin theme.
-              </li>
-              <li>
-                Or click <strong>Open Folder</strong> in the lil-gui panel (top-right) to use the native
-                file picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
-                theme and BMS charts loads both in one shot. Press the button again to add another folder.
-              </li>
-              <li>Subsequent drops add to the library and keep the current theme.</li>
-            </ul>
-
-            <h3 class="help-section-title">Song select</h3>
-            <ul class="help-list">
-              <li><kbd>/</kbd> focuses the search input. Filter by title, artist, or genre.</li>
-              <li><kbd>Esc</kbd> clears the search filter.</li>
-              <li>Click a song row, or click the active skin's <em>PLAY</em> button, to start.</li>
-            </ul>
-
-            <h3 class="help-section-title">Gameplay (default keys)</h3>
-            <div class="help-keymap">
-              <div class="help-keymap-row">
-                <span class="help-keymap-side">1P</span>
-                <span class="help-keymap-keys">
-                  <kbd>Shift</kbd>
-                  <span class="help-keymap-sep">·</span>
-                  <kbd>Z</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>V</kbd>
-                </span>
-              </div>
-              <div class="help-keymap-row">
-                <span class="help-keymap-side">2P</span>
-                <span class="help-keymap-keys">
-                  <kbd>Shift</kbd> <span class="help-keymap-sep">·</span>
-                  <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd>
-                </span>
-              </div>
-              <div class="help-keymap-note">Left Shift = 1P scratch · Right Shift = 2P scratch · K = 2P 6th key.</div>
-            </div>
-            <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> adjusts hi-speed.</li>
-              <li><kbd>Space</kbd> pauses / resumes.</li>
-              <li><kbd>F5</kbd> restarts the current chart.</li>
-              <li><kbd>Esc</kbd> exits to the result screen (or back to song select).</li>
-            </ul>
-
-            <h3 class="help-section-title">Options &amp; recording</h3>
-            <ul class="help-list">
-              <li>The lil-gui panel (top-right) holds auto-play, compressor, BGA transcode, and recording controls.</li>
-              <li>
-                Click <strong>Record</strong> to capture the next play as a downloadable WebM (requires
-                MediaRecorder support — see Open source / browser checks).
-              </li>
-              <li>
-                Open the active skin's <strong>PLAY OPTION</strong> panel during song select to set per-side
-                modifiers (Random / Mirror / Auto-scratch / hi-speed).
-              </li>
-            </ul>
-          </div>
-          <div class="help-lang" data-lang="ja" hidden>
-            <section class="help-about">
-              <p class="help-about-summary">
-                ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
-                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) を解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
-              </p>
-              <ul class="help-about-meta">
-                <li>
-                  <span class="help-about-key">作者</span>
-                  <a href="https://nulltask.dev" target="_blank" rel="noopener noreferrer">nulltask · nulltask.dev</a>
-                </li>
-                <li>
-                  <span class="help-about-key">ソースコード</span>
-                  <a href="https://github.com/nulltask/be-music" target="_blank" rel="noopener noreferrer">
-                    github.com/nulltask/be-music
-                  </a>
-                </li>
-                <li>
-                  <span class="help-about-key">関連</span>
-                  <span>同じモノレポに TUI 版 (<code>@be-music/player-tui</code>) も同梱されています。</span>
-                </li>
-              </ul>
-              <ul class="help-about-notes">
-                <li>
-                  ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
-                  <strong>サーバへ送信することは一切ありません</strong>。
-                </li>
-                <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
-                <li>
-                  <strong>スコアは保存されません。</strong>
-                  永続化やランキング機能は未実装で、ページをリロード / 再訪するとリザルトはすべて失われます。
-                </li>
-                <li>
-                  <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
-                  これら以外の LR2 / beatoraja スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
-                </li>
-                <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
-              </ul>
-            </section>
-            <h3 class="help-section-title">楽曲の読み込み</h3>
-            <ul class="help-list">
-              <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
-              <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
-              <li>
-                右上 lil-gui パネルの <strong>Open Folder</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
-                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
-                ボタンを押し直せば別フォルダを追加で読み込めます。
-              </li>
-              <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
-            </ul>
-
-            <h3 class="help-section-title">選曲画面</h3>
-            <ul class="help-list">
-              <li><kbd>/</kbd> で検索入力にフォーカス。タイトル / アーティスト / ジャンルで絞り込めます。</li>
-              <li><kbd>Esc</kbd> で検索条件をクリア。</li>
-              <li>曲の行をクリック、または現在のスキンの <em>PLAY</em> ボタンで再生開始。</li>
-            </ul>
-
-            <h3 class="help-section-title">ゲームプレイ (デフォルトキー)</h3>
-            <div class="help-keymap">
-              <div class="help-keymap-row">
-                <span class="help-keymap-side">1P</span>
-                <span class="help-keymap-keys">
-                  <kbd>Shift</kbd>
-                  <span class="help-keymap-sep">·</span>
-                  <kbd>Z</kbd> <kbd>S</kbd> <kbd>X</kbd> <kbd>D</kbd> <kbd>C</kbd> <kbd>F</kbd> <kbd>V</kbd>
-                </span>
-              </div>
-              <div class="help-keymap-row">
-                <span class="help-keymap-side">2P</span>
-                <span class="help-keymap-keys">
-                  <kbd>Shift</kbd> <span class="help-keymap-sep">·</span>
-                  <kbd>B</kbd> <kbd>H</kbd> <kbd>N</kbd> <kbd>J</kbd> <kbd>M</kbd> <kbd>K</kbd>
-                </span>
-              </div>
-              <div class="help-keymap-note">左 Shift = 1P スクラッチ · 右 Shift = 2P スクラッチ · K = 2P 6 鍵。</div>
-            </div>
-            <ul class="help-list">
-              <li><kbd>↑</kbd> / <kbd>↓</kbd> でハイスピード調整。</li>
-              <li><kbd>Space</kbd> でポーズ / 再開。</li>
-              <li><kbd>F5</kbd> で現在のチャートをリスタート。</li>
-              <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
-            </ul>
-
-            <h3 class="help-section-title">オプションと録画</h3>
-            <ul class="help-list">
-              <li>右上 lil-gui パネルにオートプレイ / コンプレッサー / BGA トランスコード / 録画コントロールがあります。</li>
-              <li>
-                <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
-              </li>
-              <li>
-                選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。
-              </li>
-            </ul>
-          </div>
-        </section>
-        <section
-          class="help-modal-pane"
-          id="help-pane-oss"
-          role="tabpanel"
-          aria-labelledby="help-tab-oss"
-          tabindex="0"
-          hidden
-        >
-          <p class="help-pane-intro">
-            This player is built on the open source libraries listed below. Each entry shows the
-            verbatim copyright / license text shipped with the package.
-          </p>
-          <ol class="help-oss-list" id="help-oss-list"></ol>
-        </section>
-      </div>
-    </div>
-  </div>
-`;
-
-interface PlayerWebDemoElements {
-  stage: HTMLDivElement;
-  shell: HTMLDivElement;
-  /**
-   * Hidden `<input type="file" webkitdirectory>` triggered from a lil-gui function controller. The DOM element survives
-   * across lil-gui rebuilds (e.g. theme changes) so the underlying `change` listener stays bound through the session.
-   */
-  songInput: HTMLInputElement;
-  /**
-   * Floating DOM `<input>` overlay positioned near the LR2 default skin's search-text rect. Focus is given to it when
-   * the user clicks the skin's `#SRC_TEXT,st=30,edit=1` region or hits the `/` shortcut; typing into it filters the
-   * song list via `PixiSongSelectView.setSearchQuery`.
-   */
-  searchInput: HTMLInputElement;
-  /**
-   * Centered overlay shown while a dropped folder / ZIP is being read + parsed. Toggled via the `.visible` class so CSS
-   * controls the fade-in / fade-out, and the `aria-hidden` attribute mirrors the visibility for screen readers.
-   */
-  loadingOverlay: HTMLDivElement;
-  loadingLabel: HTMLDivElement;
-  loadingBarFill: HTMLDivElement;
-  loadingCounter: HTMLDivElement;
-}
-
-/**
- * Plain-data state object backing the lil-gui controllers. Each key matches a controller; reads / writes go through the
- * same `state.foo` reference so a programmatic update (e.g. `setAudioCompressor` triggered by a URL flag) can call
- * `controller.updateDisplay()` and the GUI reflects the new value. Function members are bound to the host so `this`
- * keeps its meaning when lil-gui invokes them.
- */
-interface DemoGuiState {
-  autoPlay: boolean;
-  /**
-   * When true, gameplay auto-pauses on tab visibility change / window blur and auto-resumes on focus. False (the
-   * default) keeps the play scene running in the background — convenient for capturing recordings while another window
-   * holds focus.
-   */
-  autoPauseOnBlur: boolean;
-  compressor: boolean;
-  compressorKey: boolean;
-  compressorBgm: boolean;
-  compressorMaster: boolean;
-  /**
-   * Pixel cap for the longest edge of BGA videos that need the ffmpeg.wasm transcode fallback. Single-threaded libx264
-   * cost is linear in pixel count, so capping the long edge is the biggest single-threaded encode-time lever — at the
-   * cost of a (usually imperceptible) reduction in BGA texture sharpness.
-   *
-   * `0` is the special "Off" value: no resize happens and the source resolution passes through unchanged. Off by
-   * default so the BMS-author resolution is preserved unless the user explicitly opts in via the GUI dropdown. Any
-   * positive value activates the resize path with that pixel cap; the `Math.max` guard at the consumer side rejects
-   * accidental negatives.
-   */
-  bgaResizeMaxEdgePx: number;
-  /**
-   * When true, BGA transcoding uses the browser's WebCodecs `VideoEncoder` (hardware-accelerated where supported)
-   * instead of the libx264 wasm encoder. Decoding still goes through ffmpeg.wasm because WebCodecs' decoder doesn't
-   * speak the legacy MPEG-1 / VC-1 codecs BMS BGA usually ships in.
-   *
-   * Forced to `false` and disabled in the GUI when the browser doesn't expose `VideoEncoder` (Safari < 17, older
-   * Firefox builds). Ignored at runtime if the encoder rejects the configured parameters or the raw decoded frames
-   * would blow the memory budget — the transcode then silently falls back to the ffmpeg encode path.
-   */
-  bgaUseWebCodecs: boolean;
-  /**
-   * Debug overlay — when true, every invisible / keysound note the chart authors on channels `3x` / `4x` paints as the
-   * 9-keys POP green note (or a flat green bar fallback) in its assigned playable lane during gameplay. Useful for
-   * verifying which lane each `#WAV` sample is wired to without affecting scoring or judgement. Defaults to false so
-   * the regular play surface stays uncluttered.
-   *
-   * Live-toggleable — the gameplay view always extracts the invisible-note array and preloads the green sprite at
-   * chart-prepare time, so flipping the flag mid-song flips the per-frame render branch on the very next paint.
-   */
-  showInvisibleNotes: boolean;
-  /**
-   * Single-note visibility after a judgement lands.
-   *
-   * - `'HIDE'` (default) — judged notes disappear at the judgement instant, matching the LR2 / beatoraja default.
-   * - `'KEEP_SCROLLING'` — judged notes keep scrolling past the judgement line (≈ beatoraja's `LANEEFFECT ON`).
-   *
-   * Long-note bodies are unaffected — they always persist until the tail crosses the line.
-   */
-  judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
-  /**
-   * Read-only status text (loading summaries, "Playing: …", recording state, etc.). Bound to a disabled string
-   * controller so users can copy it out of the GUI but can't edit it. The runtime updates this via {@link setStatus}
-   * which also pushes the new value into the controller.
-   */
-  status: string;
-  /** Triggered by clicking the GUI's "Open Folder" button. */
-  openFolder: () => void;
-  /** Triggered by clicking the GUI's record toggle. */
-  record: () => void;
-  /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
-  screenshot: () => void;
-}
+app.innerHTML = DEMO_APP_HTML;
 
 class PlayerWebDemoApp {
   private readonly collectionStore = new BrowserSongCollectionStore();
@@ -670,6 +119,18 @@ class PlayerWebDemoApp {
    * `playSkins['14']` while a regular SP chart picks `playSkins['7']`.
    */
   private readonly playSkins: Lr2PlaySkinMap = {};
+  /**
+   * LR2 themes detected in the most recent drop, scoped to `LR2files/Theme/<name>/` subdirs that contain at least
+   * one `.lr2skin`. Populated by {@link loadTheme}; the Debug Menu's "LR2 theme" picker reads from here and lets
+   * the user swap between themes without re-dropping. Empty when no LR2 theme is loaded.
+   */
+  private availableLr2Themes: ReadonlyArray<Lr2DiscoveredTheme<File>> = [];
+  /**
+   * Name of the LR2 theme currently mounted into the `playSkins` / `selectSkin` / … slots. Used by the picker to
+   * (a) compute the initial selection on rebuild and (b) preserve the user's chosen theme across drops that ship
+   * the same theme name. `undefined` when no LR2 theme is loaded.
+   */
+  private activeLr2ThemeName: string | undefined;
   /**
    * Single PixiJS host shared by every scene (select / gameplay / result). Scenes are attached and detached through
    * `PixiSceneHost` instead of constructing a separate Pixi `Application` per view.
@@ -881,6 +342,21 @@ class PlayerWebDemoApp {
   private compressorStageFolder: GUI | undefined;
   private recordController: Controller | undefined;
   /**
+   * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
+   * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
+   * dropped; beatoraja only after a `.luaskin` / `skin/*.json` drop; Auto + Default always present). Holding the
+   * controller reference lets `rebuildSkinFamilyPicker` swap the options in-place via lil-gui's
+   * `Controller#options` API without disturbing the insertion order of subsequent controllers.
+   */
+  private skinFamilyController: Controller | undefined;
+  /**
+   * "LR2 theme" picker. Visible only when {@link availableLr2Themes} has 2+ entries; rebuilt on each theme drop so
+   * its option list tracks what was just loaded. The lil-gui option-controller pattern (`Controller#options(...)`)
+   * preserves the previously-attached `onChange` listener across rebuilds — see {@link rebuildSkinFamilyPicker}
+   * for the same idiom.
+   */
+  private lr2ThemeController: Controller | undefined;
+  /**
    * Disabled string controller used as the read-only status row inside the lil-gui panel. We hold a reference so {@link
    * setStatus} can call `updateDisplay()` directly rather than relying on lil-gui's `.listen()` polling.
    */
@@ -923,6 +399,10 @@ class PlayerWebDemoApp {
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
+      // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
+      // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
+      // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
+      skinFamilyOverride: 'auto',
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -1106,6 +586,15 @@ class PlayerWebDemoApp {
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open Folder');
+    // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
+    // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
+    // in place once a theme drop adds LR2 / beatoraja to the pool. Parked here (right after Open Folder) so the
+    // family pick reads as a top-level navigation control, above per-family detail folders.
+    this.rebuildSkinFamilyPicker();
+    // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
+    // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
+    // 1-option dropdown.
+    this.rebuildLr2ThemePicker();
     // Per-scene skin picker. Empty (= no controllers visible) until a beatoraja theme is
     // dropped — `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a
     // non-default entry for a scene records it on `beatorajaSkinOverridesByType`; the next
@@ -1535,18 +1024,16 @@ class PlayerWebDemoApp {
     const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
     // `splitDroppedSongAndThemeFiles` routes any non-chart files outside a chart directory into `themeFiles`. That
     // includes stray `readme.txt` / `info.json` / album-art images sitting at the root of a BMS pack that isn't a real
-    // LR2 theme. Only run the theme loader when the drop actually carries an `.lr2skin` file — otherwise an "extra
-    // files at the BMS root" drop wipes the previously-loaded LR2 theme by overwriting `selectSkin` / `playSkins` /
-    // etc. with `undefined`.
-    const carriesLr2Theme = themeFiles.some((file) =>
-      (file.webkitRelativePath || file.name).toLowerCase().endsWith('.lr2skin'),
+    // theme bundle. Funnel the detection through `skinFamilyRegistry` so each family's `matchesThemeFile` predicate
+    // owns its own decision — this keeps "what counts as an LR2 theme file?" colocated with the LR2 family metadata
+    // (and the same for beatoraja). Adding a fourth family in the future is a one-line registry edit instead of an
+    // edit here.
+    const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
+      themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    const carriesBeatorajaTheme = themeFiles.some((file) =>
-      isBeatorajaSkinIndicator(file.webkitRelativePath || file.name),
-    );
-    const themeMarkers = [carriesLr2Theme ? 'lr2' : null, carriesBeatorajaTheme ? 'beatoraja' : null].filter(
-      (marker): marker is string => marker !== null,
-    );
+    const carriesLr2Theme = themeFamilies.has('lr2');
+    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
+    const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
         themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
@@ -1609,8 +1096,50 @@ class PlayerWebDemoApp {
   }
 
   private async loadTheme(files: File[]): Promise<void> {
-    this.setStatus('Loading LR2 theme...');
-    const loadedTheme = await loadLr2ThemeSkinsFromFiles(files, {
+    // Themes are discovered first so a multi-theme drop (e.g. `LR2files/Theme/{default,LITONE4}/...`) surfaces every
+    // subtree to the picker. The picker UI then lets the user pick which one to mount; the rest of the dropped
+    // files (Bgm / Sound under `LR2files/`) stay accessible to the selected theme via the loader's shared file map.
+    const discovered = discoverLr2Themes(files);
+    if (discovered.length === 0) {
+      // Drop carried a `.lr2skin` but no `LR2files/Theme/<name>/` shape (rare — handcrafted bundle or zip flattened
+      // without keeping the parent dirs). Fall back to "treat everything as one theme" so the legacy single-bundle
+      // path keeps working — the picker stays empty in this case.
+      this.availableLr2Themes = [];
+      await this.mountLr2Theme(files, undefined);
+      return;
+    }
+    // Accumulate themes across drops — mirrors how the song collection store appends rather than replaces. Newer
+    // drops replace same-named entries (so the user can refresh a theme's files by re-dropping), older drops stay
+    // visible in the picker. Without this the user would need to keep ALL themes in a single drop to switch
+    // between them, defeating the picker's purpose.
+    const mergedByName = new Map<string, Lr2DiscoveredTheme<File>>();
+    for (const existing of this.availableLr2Themes) {
+      mergedByName.set(existing.name, existing);
+    }
+    for (const incoming of discovered) {
+      mergedByName.set(incoming.name, incoming);
+    }
+    this.availableLr2Themes = [...mergedByName.values()].sort((a, b) => a.name.localeCompare(b.name));
+    // Pick the theme to mount this drop. Priority order:
+    //   1. The currently-active theme if THIS drop covered it (= the user re-dropped to refresh its assets).
+    //   2. The first theme from the new drop (alphabetic) — gives a sensible default for fresh drops.
+    //   3. Fall back to whatever was active before this drop, in case the user dropped a non-active theme just to
+    //      populate the picker without forcing a swap.
+    const active = this.activeLr2ThemeName;
+    const refreshedActive = active !== undefined ? discovered.find((theme) => theme.name === active) : undefined;
+    const next = refreshedActive ?? discovered[0]!;
+    await this.mountLr2Theme(next.files, next.name);
+  }
+
+  /**
+   * Loads a specific LR2 theme's files through the underlying `loadLr2ThemeSkinsFromFiles` and stamps the result
+   * onto the host's skin / BGM / system-sound slots. Centralised so both the initial drop path
+   * ({@link loadTheme}) and the Debug Menu's theme-picker path go through the same wiring — without this split the
+   * picker would have to re-implement the slot assignment block.
+   */
+  private async mountLr2Theme(files: ReadonlyArray<File>, themeName: string | undefined): Promise<void> {
+    this.setStatus(themeName ? `Loading LR2 theme "${themeName}"...` : 'Loading LR2 theme...');
+    const loadedTheme = await loadLr2ThemeSkinsFromFiles([...files], {
       onProgress: (progress) => this.applyLoadProgress(progress),
     });
     for (const variant of Object.keys(this.playSkins) as Lr2PlayVariant[]) {
@@ -1633,6 +1162,7 @@ class PlayerWebDemoApp {
       optionClose: loadedTheme.systemSounds.optionClose?.bytes,
       optionChange: loadedTheme.systemSounds.optionChange?.bytes,
     };
+    this.activeLr2ThemeName = themeName;
     // BGM / decide / system-sound bytes are stashed on the host here, but NOT pushed onto the live select view yet —
     // that happens in `showSelect()` once every load task has resolved. Otherwise the small theme bundle would land
     // first and start BGM playing before the larger song collection has even finished parsing, which felt jarring with
@@ -1642,6 +1172,71 @@ class PlayerWebDemoApp {
     // moment the user enters song-select; spelling it out in the toolbar status panel was redundant and made the
     // toolbar wider than it needed to be. `handleDrop` writes a terse "Theme loaded" / "N charts loaded" once
     // everything lands.
+    // Refresh the Debug Menu's "Skin family" dropdown so the LR2 entry becomes selectable now that the theme has
+    // contributed at least one LR2 skin asset. Also rebuild the LR2 theme picker so it reflects the new options.
+    this.rebuildSkinFamilyPicker();
+    this.rebuildLr2ThemePicker();
+  }
+
+  /**
+   * Apply a user-picked LR2 theme. Disposes the persistent select view so it gets reconstructed against the new
+   * skin on the next `showSelect`, mounts the theme into the slot fields, and returns to song-select.
+   */
+  private async applyLr2ThemeByName(name: string): Promise<void> {
+    const theme = this.availableLr2Themes.find((entry) => entry.name === name);
+    if (theme === undefined) return;
+    if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
+      this.lastSelectNavigation = this.selectView.getNavigation();
+    }
+    this.selectView?.dispose();
+    this.selectView = undefined;
+    await this.mountLr2Theme(theme.files, theme.name);
+    await this.showSelect();
+  }
+
+  /**
+   * Builds (or rebuilds in place) the Debug Menu's "LR2 theme" dropdown. Visible whenever at least one theme has
+   * been discovered from the dropped tree — a single-theme drop still gets the picker (with one option) so the
+   * user can SEE which theme is active, and subsequent drops that add more themes flip it into a real switcher
+   * without the picker disappearing and reappearing.
+   *
+   * Implementation detail: lil-gui's `OptionController#options(values)` updates the option list in-place on an
+   * existing option controller (returns the same instance, preserves the attached `onChange` listener). Same
+   * pattern the skin-family picker uses — keeps the controller's position in the panel stable across rebuilds.
+   */
+  private rebuildLr2ThemePicker(): void {
+    const gui = this.gui;
+    if (gui === undefined) return;
+    const themes = this.availableLr2Themes;
+    if (themes.length === 0) {
+      // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
+      // Tear the controller down so the panel doesn't show a stale picker with options that no longer resolve.
+      this.lr2ThemeController?.destroy();
+      this.lr2ThemeController = undefined;
+      return;
+    }
+    // `themes` is already alphabetised by `discoverLr2Themes`. Use the theme name as both the dropdown label and
+    // the bound value — the picker proxy stores the name and `applyLr2ThemeByName` resolves it back to the files.
+    const options: Record<string, string> = {};
+    for (const theme of themes) {
+      options[theme.name] = theme.name;
+    }
+    if (this.lr2ThemeController !== undefined) {
+      this.lr2ThemeController.options(options).updateDisplay();
+      return;
+    }
+    const proxy = { lr2Theme: this.activeLr2ThemeName ?? themes[0]!.name };
+    this.lr2ThemeController = gui
+      .add(proxy, 'lr2Theme', options)
+      .name('LR2 theme')
+      .onChange((value: string) => {
+        // Hosting the proxy on a literal lets us re-read the picked name without leaking a separate `guiState`
+        // field — the theme name is fully redundant with `activeLr2ThemeName`, which `mountLr2Theme` writes.
+        // No-op when the user "picks" the already-active theme — `applyLr2ThemeByName` early-returns inside
+        // `mountLr2Theme` since the same files re-mount to the same slots, but we still call through so a
+        // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
+        void this.applyLr2ThemeByName(value);
+      });
   }
 
   /**
@@ -1686,6 +1281,8 @@ class PlayerWebDemoApp {
       // the GUI honest.
       this.beatorajaSkinOverridesByType.clear();
       this.rebuildBeatorajaSkinPickers();
+      // The beatoraja entry just became selectable in the top-level "Skin family" dropdown.
+      this.rebuildSkinFamilyPicker();
       // Scan the dropped bundle for decide / clear / fail / result BGM. Heuristic by basename —
       // see `findBeatorajaThemeBgm` for the rules. Awaited because some entries are read lazily;
       // the load is small (<1 MiB) and serialized so it doesn't add visible latency.
@@ -1759,6 +1356,145 @@ class PlayerWebDemoApp {
       isDouble: variant === '14' || variant === '10',
       isPms: variant === '9',
     };
+  }
+
+  /**
+   * Returns the set of skin families that can render the given scene with the currently-loaded assets. `'default'`
+   * is always present (it's the catch-all chrome with no asset dependency); `'lr2'` and `'beatoraja'` only appear
+   * when the matching theme actually ships a skin for that scene type — passing `song` matters for `'gameplay'`
+   * (the beatoraja path needs a play-variant skin compatible with the chart's key mode) and `'decide'` (skip
+   * entirely when the beatoraja theme has no decide skin) where the per-chart availability differs from the
+   * per-theme availability.
+   */
+  private availableFamiliesForScene(scene: SkinFamilySceneKind, song?: BrowserSongEntry): Set<SkinFamilyId> {
+    const available = new Set<SkinFamilyId>(['default']);
+    // Beatoraja availability per scene. The play scene additionally needs a chart so we can check whether the
+    // theme has a play-variant skin compatible with this chart's key mode.
+    const beatorajaTheme = this.beatorajaTheme?.theme;
+    if (beatorajaTheme !== undefined) {
+      if (scene === 'select' && beatorajaTheme.selectSkin !== undefined) available.add('beatoraja');
+      else if (scene === 'decide' && beatorajaTheme.decideSkin !== undefined) available.add('beatoraja');
+      else if (scene === 'result' && beatorajaTheme.resultSkin !== undefined) available.add('beatoraja');
+      else if (scene === 'gameplay' && song !== undefined && this.canPlaySongBeatoraja(song)) {
+        available.add('beatoraja');
+      }
+    }
+    // LR2 availability per scene. The play scene needs an LR2 skin for the chart's variant — if `pickLr2PlaySkin`
+    // returns `undefined` the play path would fall through to the default-family scene anyway, so it's correct to
+    // mark LR2 unavailable here. The other scenes consult the slot directly because every LR2 theme can ship a
+    // partial set (e.g. a play-only theme has no `selectSkin`).
+    if (scene === 'select' && this.selectSkin !== undefined) available.add('lr2');
+    else if (scene === 'decide' && this.decideSkin !== undefined) available.add('lr2');
+    else if (scene === 'result' && this.resultSkin !== undefined) available.add('lr2');
+    else if (scene === 'gameplay' && song !== undefined && pickLr2PlaySkin(this.playSkins, song) !== undefined) {
+      available.add('lr2');
+    }
+    return available;
+  }
+
+  /**
+   * Pick the family that should actually render the given scene right now. Honours the user's Debug Menu pick
+   * (`guiState.skinFamilyOverride`) when it's available for this scene; otherwise falls through to the auto
+   * priority. Auto priority is:
+   *
+   *   beatoraja  →  lr2  →  default
+   *
+   * The order matches the legacy implicit behaviour (beatoraja was the first branch in every scene dispatcher,
+   * LR2 second with internal fallback, default emerged as the bottom layer). Explicit override values that aren't
+   * available for the scene fall through to `'default'` rather than the auto chain — picking `'beatoraja'` when
+   * no beatoraja decide skin is loaded shouldn't silently land on the LR2 decide scene.
+   */
+  private pickActiveFamilyForScene(scene: SkinFamilySceneKind, song?: BrowserSongEntry): SkinFamilyId {
+    const available = this.availableFamiliesForScene(scene, song);
+    const override = this.guiState.skinFamilyOverride;
+    if (override !== 'auto') {
+      return available.has(override) ? override : 'default';
+    }
+    if (available.has('beatoraja')) return 'beatoraja';
+    if (available.has('lr2')) return 'lr2';
+    return 'default';
+  }
+
+  /**
+   * Returns `true` when any LR2 skin asset is loaded — used by {@link rebuildSkinFamilyPicker} to decide whether
+   * the `'LR2'` dropdown entry should be enabled. A play-only theme without `selectSkin` still counts: the
+   * gameplay scene will paint LR2 chrome even though the select stays on the default family.
+   */
+  private hasAnyLr2Skin(): boolean {
+    if (this.selectSkin !== undefined) return true;
+    if (this.decideSkin !== undefined) return true;
+    if (this.resultSkin !== undefined) return true;
+    return Object.keys(this.playSkins).length > 0;
+  }
+
+  /**
+   * Rebuilds (or first-builds) the Debug Menu's "Skin family" dropdown. Called once during `buildGui` and again
+   * after every theme load / wipe so the available options track the loaded asset state. When the user's
+   * previously-selected override becomes unavailable, silently resets to `'auto'` before swapping options in so
+   * the dropdown never displays a value that wouldn't actually be honoured.
+   *
+   * Implementation detail: lil-gui's `Controller#options(values)` destroys the underlying controller and
+   * recreates it in place — same approach the beatoraja per-scene skin picker uses, see
+   * `rebuildBeatorajaSkinPickers`. The replacement preserves insertion order, so the dropdown stays where
+   * `buildGui` parked it (right after `Open Folder`).
+   */
+  private rebuildSkinFamilyPicker(): void {
+    const gui = this.gui;
+    if (gui === undefined) return;
+    const lr2Available = this.hasAnyLr2Skin();
+    const beatorajaAvailable = this.beatorajaTheme !== undefined;
+    // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
+    // Without this guard a user-picked LR2 / beatoraja override that became unavailable mid-session would render
+    // as a phantom dropdown value the runtime silently ignored.
+    const override = this.guiState.skinFamilyOverride;
+    if ((override === 'lr2' && !lr2Available) || (override === 'beatoraja' && !beatorajaAvailable)) {
+      this.guiState.skinFamilyOverride = 'auto';
+    }
+    const options: Record<string, SkinFamilyOverride> = { 'Auto (prefer loaded theme)': 'auto' };
+    if (lr2Available) options['LR2'] = 'lr2';
+    if (beatorajaAvailable) options['beatoraja'] = 'beatoraja';
+    options['Default (no skin)'] = 'default';
+    if (this.skinFamilyController !== undefined) {
+      // `OptionController#options(values)` updates the option list **in place** on an existing option controller
+      // (see lil-gui v0.21.0 source: the subclass override mutates `_values` / `_names` + replaces the `<option>`
+      // DOM nodes, returning `this`). The previously-attached `onChange` listener stays bound to the same
+      // controller instance — re-attaching here would stack a second handler and fire `handleSkinFamilyOverrideChange`
+      // twice per user pick. `updateDisplay()` is enough to snap the visible label to whatever value
+      // `rebuildSkinFamilyPicker` just settled on (e.g. the silent revert to `'auto'` when the prior pick became
+      // unavailable).
+      this.skinFamilyController.options(options).updateDisplay();
+      return;
+    }
+    // First-time build (called from `buildGui` before any theme has been loaded).
+    this.skinFamilyController = gui
+      .add(this.guiState, 'skinFamilyOverride', options)
+      .name('Skin family')
+      .onChange((value: SkinFamilyOverride) => {
+        this.handleSkinFamilyOverrideChange(value);
+      });
+  }
+
+  /**
+   * Apply a Debug Menu skin-family change. The persistent select scene needs an explicit dispose-and-rebuild
+   * (the underlying class differs across families — `PixiSongSelectView` vs `DefaultPixiSongSelectView` vs the
+   * beatoraja scene), then `showSelect` reconstructs whichever family the new override resolves to. The gameplay
+   * / decide / result scenes pick up the new override on their next mount — they're transient and there's
+   * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
+   * even reach the GUI).
+   */
+  private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
+    this.guiState.skinFamilyOverride = value;
+    if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
+      this.lastSelectNavigation = this.selectView.getNavigation();
+    }
+    this.selectView?.dispose();
+    this.selectView = undefined;
+    if (this.beatorajaSelectScene !== undefined) {
+      this.beatorajaSelectSnapshot = this.beatorajaSelectScene.captureSnapshot();
+    }
+    this.beatorajaSelectScene?.dispose();
+    this.beatorajaSelectScene = undefined;
+    void this.showSelect();
   }
 
   /**
@@ -3062,10 +2798,12 @@ class PlayerWebDemoApp {
     // splash drawing over it.
     this.decideView?.dispose();
     this.decideView = undefined;
-    // Beatoraja select scene takes precedence when a beatoraja theme with a select skin is loaded.
-    // Falls through to the LR2 select path otherwise — same heuristic as `canPlaySongBeatoraja` for
-    // gameplay: opt-in when the theme covers the surface, fall back when it doesn't.
-    if (this.beatorajaTheme?.theme.selectSkin !== undefined && this.collection.songs.length > 0) {
+    // Family dispatch. The Debug Menu's "Skin family" pick overrides the auto chain (beatoraja → LR2 → default);
+    // when the user hasn't overridden, the auto branch matches the legacy behaviour. The select scene also
+    // gates on `songs.length > 0` for the beatoraja path because the beatoraja select scene's chrome assumes a
+    // non-empty library (it paints empty-state hints separately from the LR2 path).
+    const activeFamily = this.pickActiveFamilyForScene('select');
+    if (activeFamily === 'beatoraja' && this.collection.songs.length > 0) {
       // Hide / dispose the LR2 select view if it was up — only one select can own the scene host.
       this.selectView?.setVisible(false);
       await this.showBeatorajaSelect();
@@ -3086,12 +2824,16 @@ class PlayerWebDemoApp {
     this.beatorajaDecideScene = undefined;
     this.beatorajaResultScene?.dispose();
     this.beatorajaResultScene = undefined;
+    // The active family for this select mount. `'lr2'` flows the loaded LR2 select skin through, `'default'` strips
+    // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
+    // earlier, so we only have these two cases here.
+    const lr2SelectSkin = activeFamily === 'lr2' ? this.selectSkin : undefined;
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
       // the bytes, and (because we're still hidden) defers the actual `start()` until `setVisible(true)` lands a moment
       // later. Doing it the other way round would briefly start the prior theme's BGM during the visibility flip.
-      this.selectView.setSkin(this.selectSkin);
+      this.selectView.setSkin(lr2SelectSkin);
       this.selectView.setSelectBgm(this.selectBgmBytes);
       this.selectView.setDecideBgm(this.decideBgmBytes);
       this.selectView.setSystemSounds(this.systemSoundBundle);
@@ -3102,8 +2844,12 @@ class PlayerWebDemoApp {
       }
       return;
     }
-    this.selectView = new PixiSongSelectView({
-      skin: this.selectSkin,
+    // Pick the right family's select scene: when an LR2 select skin is loaded, use the LR2 scene; otherwise the
+    // default family takes over (visually the built-in 640×480 chrome). The previous code constructed
+    // `PixiSongSelectView` with `skin: this.selectSkin` and relied on the LR2 scene's internal `if (skin)` fallback —
+    // now that "no skin" is its own family at the type level, the dispatch happens here and the LR2 scene type
+    // signals to readers that a real LR2 skin is required to take this path.
+    const selectSceneOptions = {
       selectBgm: this.selectBgmBytes,
       decideBgm: this.decideBgmBytes,
       systemSounds: this.systemSoundBundle,
@@ -3111,17 +2857,17 @@ class PlayerWebDemoApp {
       // Seed the in-scene panel's autoPlay value from the cached demo state (carries the last value the user picked
       // across re-mounts of the select view).
       initialPlayOptions: { autoPlay: this.guiState.autoPlay },
-      onPlayOptionsChange: (options) => {
+      onPlayOptionsChange: (options: { autoPlay: boolean }) => {
         // Cache the last value so it survives a select-view re-mount even though the lil-gui toggle is gone.
         this.guiState.autoPlay = options.autoPlay;
       },
-      onSongSelected: (song) => {
+      onSongSelected: (song: BrowserSongEntry) => {
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
         // the view is hidden, so the cue isn't cut by the gameplay mount.
         void this.selectView?.playDecideSound();
         void this.showDecide(song);
       },
-      onSongAutoPlay: (song) => {
+      onSongAutoPlay: (song: BrowserSongEntry) => {
         // The skin's AUTOPLAY button forces the auto flag on for this session regardless of the toolbar checkbox state.
         // We DON'T mutate the checkbox here — the user might want to keep it off for the next manual play.
         void this.selectView?.playDecideSound();
@@ -3131,7 +2877,10 @@ class PlayerWebDemoApp {
         this.elements.searchInput.focus();
         this.elements.searchInput.select();
       },
-    });
+    };
+    this.selectView = lr2SelectSkin
+      ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
+      : new DefaultPixiSongSelectView(selectSceneOptions);
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
   }
@@ -3145,17 +2894,18 @@ class PlayerWebDemoApp {
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
    */
   private async showDecide(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
-    // Beatoraja gameplay path. When the loaded theme ships a decide skin (`type = 6`), mount it
-    // and route confirmation into the beatoraja gameplay scene. When it doesn't, hand straight to
-    // `playSong` — the beatoraja branch there picks up the chart without a splash.
-    if (this.canPlaySongBeatoraja(song)) {
+    // Family dispatch for the decide splash. Note this is decoupled from the gameplay family pick: a user can be
+    // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
+    // overlay so each scene transition consults the family helper afresh.
+    const decideFamily = this.pickActiveFamilyForScene('decide', song);
+    if (decideFamily === 'beatoraja') {
       const mounted = await this.showBeatorajaDecide(song, overrides);
       if (!mounted) await this.playSong(song, overrides);
       return;
     }
-    if (!this.decideSkin) {
-      // No decide skin in the bundle (or skinless demo) — skip the splash entirely. The select view's `playDecideSound`
-      // already fired so the audio cue still plays.
+    if (decideFamily === 'default' || !this.decideSkin) {
+      // Default family has no decide splash by design — same for an LR2-only setup that didn't ship a decide skin.
+      // The select view's `playDecideSound` already fired so the audio cue still plays.
       await this.playSong(song, overrides);
       return;
     }
@@ -3204,10 +2954,34 @@ class PlayerWebDemoApp {
    */
   private preloadGameplay(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
-    const playSkin = pickLr2PlaySkin(this.playSkins, song);
+    // Same family check as `playSong` — picking `'default'` from the Debug Menu strips the LR2 skin even when one
+    // is loaded for this chart. Computing `gameplayFamily` here keeps the decide → gameplay preload path consistent
+    // with the no-decide fast-path.
+    const gameplayFamily = this.pickActiveFamilyForScene('gameplay', song);
+    const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
+    this.gameplayView = this.buildLr2GameplayView(song, playSkin, overrides);
+    return this.gameplayView.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
+  }
+
+  /**
+   * Constructs the LR2-family (or default-family fallback) gameplay scene for `song` with the current option snapshot.
+   * Branches on `playSkin`:
+   *
+   * - **`Lr2Skin`** present → constructs {@link PixiGameplayView} with that skin. LR2 chrome paints from the skin.
+   * - **`undefined`** (no LR2 theme dropped, or the dropped theme has no skin for this chart's key mode) →
+   *   constructs {@link DefaultPixiGameplayView}. The default family's chrome (`renderFallbackLr2Frame` under the
+   *   hood) takes over.
+   *
+   * The two branches share every other option — pulling the option-marshalling into one helper avoids the previous
+   * two-place duplication between `preloadGameplay` and `playSong` (LR2 fallback path).
+   */
+  private buildLr2GameplayView(
+    song: BrowserSongEntry,
+    playSkin: Lr2Skin | undefined,
+    overrides: { autoPlay?: boolean },
+  ): PixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
-    this.gameplayView = new PixiGameplayView({
-      skin: playSkin,
+    const sharedOptions = {
       autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
       autoPauseOnBlur: this.guiState.autoPauseOnBlur,
       initialHiSpeed: playOptions?.hiSpeed,
@@ -3235,22 +3009,32 @@ class PlayerWebDemoApp {
       bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
       bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
       showInvisibleNotes: this.guiState.showInvisibleNotes,
-      // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3 is
-      // the sprite the gameplay view paints over each invisible note when {@link DemoGuiState.showInvisibleNotes} is
-      // on. Falls back to a flat green rectangle when the dropped theme didn't ship `play_9.lr2skin`.
-      invisibleNoteSkin: this.playSkins['9'],
       judgedNoteDisplay: this.guiState.judgedNoteDisplay,
       onExit: () => {
         void this.finishGameplayThen(() => this.showSelect());
       },
-      onChartFinished: (result) => {
+      onChartFinished: (result: PixiGameplayResultData) => {
         void this.finishGameplayThen(() => this.showResult(result));
       },
       onRestart: () => {
         void this.finishGameplayThen(() => this.playSong(song));
       },
+    };
+    if (playSkin === undefined) {
+      // Default-family path: no LR2 skin loaded for this chart. `DefaultPixiGameplayView` strips the skin / invisible-
+      // note-skin slots from its option shape, so neither value flows in here.
+      return new DefaultPixiGameplayView(sharedOptions);
+    }
+    return new PixiGameplayView({
+      ...sharedOptions,
+      skin: playSkin,
+      // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3
+      // is the sprite the gameplay view paints over each invisible note when
+      // {@link DemoGuiState.showInvisibleNotes} is on. Falls back to a flat green rectangle when the dropped theme
+      // didn't ship `play_9.lr2skin`. Only meaningful with an LR2 theme loaded — the default family wouldn't have
+      // anywhere to source the sprite from.
+      invisibleNoteSkin: this.playSkins['9'],
     });
-    return this.gameplayView.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
   }
 
   /**
@@ -3295,11 +3079,11 @@ class PlayerWebDemoApp {
   }
 
   private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
-    // Beatoraja gameplay path. Branch out early when a beatoraja theme is loaded and the chart shape
-    // resolves to a variant the renderer can mount (with `pickBeatorajaPlayableSkinVariant` fallback so
-    // a 5K chart on a 7-keys-only theme still takes this path). Falls through to the LR2 path
-    // otherwise — e.g. a 24-key chart on a beatoraja-only theme still gets the LR2 frame chrome.
-    if (this.canPlaySongBeatoraja(song)) {
+    // Family dispatch for the gameplay scene. The Debug Menu's "Skin family" pick funnels through here so a user
+    // override of `'lr2'` / `'default'` forces that family even when beatoraja is technically available, while
+    // `'auto'` keeps the legacy preference (beatoraja → LR2 → default).
+    const gameplayFamily = this.pickActiveFamilyForScene('gameplay', song);
+    if (gameplayFamily === 'beatoraja') {
       await this.playSongBeatoraja(song, overrides);
       return;
     }
@@ -3316,60 +3100,12 @@ class PlayerWebDemoApp {
     // Refresh the recording filename base for the upcoming play — each session writes to a unique file in the user's
     // downloads folder rather than overwriting the previous one.
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
-    const playSkin = pickLr2PlaySkin(this.playSkins, song);
-    // Pull the canonical play-option snapshot (HiSpeed + AutoPlay tweaked from the in-scene "PLAY OPTIONS" panel) so
-    // the gameplay scene starts with the user's chosen values. The explicit `overrides.autoPlay` from `onSongAutoPlay`
-    // still wins so the AUTOPLAY skin button forces auto-judging on for a single launch regardless of the panel state.
-    const playOptions = this.selectView?.getPlayOptions();
-    this.gameplayView = new PixiGameplayView({
-      skin: playSkin,
-      autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
-      autoPauseOnBlur: this.guiState.autoPauseOnBlur,
-      initialHiSpeed: playOptions?.hiSpeed,
-      bga: playOptions?.bga,
-      bgaSize: playOptions?.bgaSize,
-      scoreGraph: playOptions?.scoreGraph,
-      hsFix: playOptions?.hsFix,
-      hiddenSudden1P: playOptions?.hiddenSudden1P,
-      hiddenSudden2P: playOptions?.hiddenSudden2P,
-      shutter: playOptions?.shutter,
-      laneCover: playOptions?.laneCover,
-      autoScratch1P: playOptions?.autoScratch1P,
-      autoScratch2P: playOptions?.autoScratch2P,
-      dpFlip: playOptions?.dpFlip,
-      random1P: playOptions?.random1P,
-      random2P: playOptions?.random2P,
-      gauge: playOptions?.gauge1P,
-      audioCompressor: this.guiState.compressor,
-      audioCompressorMode: this.compressorMode,
-      audioCompressorStages: {
-        key: this.guiState.compressorKey,
-        bgm: this.guiState.compressorBgm,
-        master: this.guiState.compressorMaster,
-      },
-      bgaTranscodeMaxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
-      bgaTranscodeUseWebCodecs: this.guiState.bgaUseWebCodecs,
-      showInvisibleNotes: this.guiState.showInvisibleNotes,
-      // Pass the loaded 9-keys play variant as the invisible-note sprite source — Pop'n's green wide note at index 3 is
-      // the sprite the gameplay view paints over each invisible note when {@link DemoGuiState.showInvisibleNotes} is
-      // on. Falls back to a flat green rectangle when the dropped theme didn't ship `play_9.lr2skin`.
-      invisibleNoteSkin: this.playSkins['9'],
-      judgedNoteDisplay: this.guiState.judgedNoteDisplay,
-      onExit: () => {
-        // Sequence finalize → transition. The transition methods (`showSelect` / `showResult` / `playSong`) all dispose
-        // the gameplay view, which closes its AudioContext and tears down the bus the recorder taps. If we kicked the
-        // transition off in parallel with `finalizeRecordingIfActive`, `MediaRecorder.stop()` would race the dispose
-        // and lose its `'stop'` event under the closed context — the user would never see the auto-download. ESC /
-        // chart-end / restart all converge on the same flow for that reason.
-        void this.finishGameplayThen(() => this.showSelect());
-      },
-      onChartFinished: (result) => {
-        void this.finishGameplayThen(() => this.showResult(result));
-      },
-      onRestart: () => {
-        void this.finishGameplayThen(() => this.playSong(song));
-      },
-    });
+    // Resolve the LR2 play skin only when the family pick actually says LR2 — overriding to `'default'` skips the
+    // skin even if one is loaded. `buildLr2GameplayView` then constructs `DefaultPixiGameplayView` when the skin
+    // is undefined and `PixiGameplayView` otherwise; see `preloadGameplay` for the matching call shape (both feed
+    // the same helper so option marshalling stays in one place).
+    const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
+    this.gameplayView = this.buildLr2GameplayView(song, playSkin, overrides);
     this.setStatus(`Playing: ${song.title}`);
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
     // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`
@@ -3419,8 +3155,13 @@ class PlayerWebDemoApp {
   private async showResult(data: PixiGameplayResultData): Promise<void> {
     await this.ensureHostMounted();
     this.resultView?.dispose();
-    this.resultView = new PixiResultView({
-      skin: this.resultSkin,
+    // Family dispatch for result. We currently only model the LR2 / default split here — the beatoraja result
+    // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
+    // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting
+    // strips the slot even if the loaded theme has a result skin.
+    const resultFamily = this.pickActiveFamilyForScene('result');
+    const lr2ResultSkin = resultFamily === 'lr2' ? this.resultSkin : undefined;
+    const sharedResultOptions = {
       collection: this.collection,
       clearBgm: this.clearBgmBytes,
       failBgm: this.failBgmBytes,
@@ -3428,7 +3169,10 @@ class PlayerWebDemoApp {
       onContinue: () => {
         void this.showSelect();
       },
-    });
+    };
+    this.resultView = lr2ResultSkin
+      ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
+      : new DefaultPixiResultView(sharedResultOptions);
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose();
     this.gameplayView = undefined;
@@ -3455,195 +3199,3 @@ new PlayerWebDemoApp({
   loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
   loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
 }).start();
-
-/**
- * Renders the browser-compatibility diagnostic panel that lives alongside (not inside) the drop card. Feature support
- * doesn't change at runtime so this is a one-shot side-effect — call once at boot and the DOM stays in sync for the
- * session.
- *
- * The panel is the *only* place the compat verdict surfaces; the drop card stays focused on its call-to-action. When
- * required features are missing the panel flips into a red "Browser not supported" mode and lists each missing item
- * with its dependency note, so the user can identify exactly what's blocking them.
- */
-function renderBrowserCompatPanel(report: BrowserCompatReport): void {
-  const panel = document.querySelector<HTMLElement>('#compat-panel');
-  const requiredList = document.querySelector<HTMLUListElement>('#compat-panel-required');
-  const optionalList = document.querySelector<HTMLUListElement>('#compat-panel-optional');
-  const statusLabel = document.querySelector<HTMLDivElement>('#compat-panel-status');
-  if (!panel || !requiredList || !optionalList || !statusLabel) return;
-
-  // `--ok` / `--fail` toggles the badge palette and the check-vs-cross mark visibility (the two icon `<path>`s share
-  // the SVG, only one is shown at a time per CSS).
-  panel.classList.toggle('compat-panel--ok', report.ok);
-  panel.classList.toggle('compat-panel--fail', !report.ok);
-
-  if (report.ok) {
-    // Distinguish "everything works" from "core works but you're missing some optional niceties" — the latter is still
-    // a green verdict but the count tells power users at a glance whether Web­Codecs / WebGPU / etc. are reachable.
-    const missingOptional = report.items.filter((item) => !item.required && !item.supported).length;
-    statusLabel.textContent =
-      missingOptional > 0 ? `Browser ready · ${missingOptional} optional missing` : 'Browser ready';
-  } else {
-    statusLabel.textContent = summarizeBrowserCompat(report) ?? 'Browser not supported';
-  }
-
-  requiredList.replaceChildren();
-  optionalList.replaceChildren();
-  for (const item of report.items) {
-    const target = item.required ? requiredList : optionalList;
-    target.appendChild(buildCompatRow(item));
-  }
-}
-
-/**
- * Builds one feature row inside the compat panel. Status color is encoded both as a CSS modifier class (drives the
- * icon / background) and as a screen-reader-friendly text fallback so the verdict is accessible without color vision.
- */
-function buildCompatRow(item: BrowserCompatReport['items'][number]): HTMLLIElement {
-  const li = document.createElement('li');
-  // `ok` = supported, `warn` = optional & missing (the player still works), `fail` = required & missing (player won't
-  // function). Required-supported and optional-supported both map to `ok` — visual hierarchy comes from the section
-  // split (Required vs Optional) above, not from a distinction here.
-  const status = item.supported ? 'ok' : item.required ? 'fail' : 'warn';
-  li.className = `compat-row compat-row--${status}`;
-  li.title = item.note;
-
-  const icon = document.createElement('span');
-  icon.className = 'compat-row-icon';
-  icon.setAttribute('aria-hidden', 'true');
-  // Plain text glyphs over inline SVG — keeps the markup compact and lets us color the glyph via `color:
-  // currentColor`. The accessibility verdict is carried by the screen-reader text span below, not by the symbol.
-  icon.textContent = item.supported ? '✓' : item.required ? '✕' : '–';
-  li.appendChild(icon);
-
-  const label = document.createElement('span');
-  label.className = 'compat-row-label';
-  label.textContent = item.label;
-  li.appendChild(label);
-
-  const sr = document.createElement('span');
-  sr.className = 'compat-row-sr';
-  // Read-aloud text for assistive tech — `✓` / `✕` / `–` carry visual semantics but no name on their own. `aria-hidden`
-  // on the icon hands the verdict to this hidden label instead.
-  sr.textContent = item.supported ? 'supported' : item.required ? 'missing (required)' : 'missing (optional)';
-  li.appendChild(sr);
-
-  return li;
-}
-
-/**
- * Human-readable labels shown alongside the loading-overlay progress bar. Keyed by the `LoadProgressPhase`
- * discriminator the `player-web` loaders emit. The web UI is English-only, so these strings stay in English even though
- * the surrounding project conversation is in Japanese.
- */
-const phaseLabels: Record<LoadProgress['phase'], string> = {
-  enumerating: 'Collecting files…',
-  reading: 'Reading files…',
-  parsing: 'Parsing charts…',
-  theme: 'Loading LR2 theme…',
-};
-
-/**
- * Produces a filesystem-safe base for the auto-downloaded recording filename. Strips characters that browsers / OSes
- * reject (`/`, `\`, `:`, `*`, `?`, `"`, `<`, `>`, `|`), collapses runs of whitespace into single spaces, and trims the
- * result to a sensible cap so an absurdly long song title doesn't produce a path the OS rejects on save.
- */
-function sanitizeFilenameStem(input: string): string {
-  return input
-    .replace(/[/\\:*?"<>|]/gu, '')
-    .replace(/\s+/gu, ' ')
-    .trim()
-    .slice(0, 80);
-}
-
-/** Map a playable variant to the matching `BEATORAJA_SKIN_TYPE` code. */
-function playSkinTypeForVariant(variant: BeatorajaPlayableVariant): number {
-  switch (variant) {
-    case '7':
-      return BEATORAJA_SKIN_TYPE.PLAY_7KEYS;
-    case '5':
-      return BEATORAJA_SKIN_TYPE.PLAY_5KEYS;
-    case '14':
-      return BEATORAJA_SKIN_TYPE.PLAY_14KEYS;
-    case '10':
-      return BEATORAJA_SKIN_TYPE.PLAY_10KEYS;
-    case '9':
-      return BEATORAJA_SKIN_TYPE.PLAY_9KEYS;
-  }
-}
-
-/**
- * Pixi `Texture` type as exposed by player-web's re-exported `loadTextureFromBytes`. Derived
- * from the function's return type so the demo doesn't need a direct `pixi.js` dependency for
- * the chart-image plumbing. `Awaited<…>` strips the `Promise` wrapper; `NonNullable<…>` strips
- * the `| undefined` so callers can branch on presence.
- */
-type ChartImageTexture = NonNullable<Awaited<ReturnType<typeof loadTextureFromBytes>>>;
-
-/**
- * Decode a byte buffer with the named encoding via the platform `TextDecoder`. Throws if the
- * runtime doesn't recognise the encoding name (some browsers gate non-UTF-8 decoders).
- */
-function decodeText(bytes: Uint8Array, encoding: string): string {
-  return new TextDecoder(encoding).decode(bytes);
-}
-
-/**
- * Lightweight read-text overlay. Injects a `<dialog>` at body root, populates it with the
- * decoded chart notes, and wires Escape / outside-click dismissal. Replaces any prior overlay
- * so repeated clicks just rebuild the panel against the latest song.
- */
-function showReadtextOverlay(opts: { title: string; filename: string; body: string }): void {
-  if (typeof document === 'undefined') return;
-  // Tear down any prior overlay so back-to-back clicks don't stack.
-  const existing = document.getElementById('beatoraja-readtext-overlay');
-  if (existing !== null && existing instanceof HTMLDialogElement) {
-    existing.close();
-    existing.remove();
-  }
-  const dialog = document.createElement('dialog');
-  dialog.id = 'beatoraja-readtext-overlay';
-  // Inline styles — avoids needing a CSS file edit for this one-off surface.
-  dialog.style.maxWidth = 'min(640px, 80vw)';
-  dialog.style.maxHeight = '70vh';
-  dialog.style.padding = '0';
-  dialog.style.border = '1px solid #333';
-  dialog.style.borderRadius = '6px';
-  dialog.style.background = '#111';
-  dialog.style.color = '#eee';
-  dialog.style.fontFamily = 'sans-serif';
-  dialog.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.6)';
-
-  const header = document.createElement('div');
-  header.style.padding = '10px 14px';
-  header.style.borderBottom = '1px solid #333';
-  header.style.fontSize = '13px';
-  header.textContent = `${opts.title}  〔${opts.filename}〕`;
-  dialog.appendChild(header);
-
-  const body = document.createElement('pre');
-  body.textContent = opts.body;
-  body.style.margin = '0';
-  body.style.padding = '12px 14px';
-  body.style.maxHeight = 'calc(70vh - 80px)';
-  body.style.overflow = 'auto';
-  body.style.whiteSpace = 'pre-wrap';
-  body.style.wordBreak = 'break-word';
-  body.style.fontFamily = 'inherit';
-  body.style.fontSize = '13px';
-  body.style.lineHeight = '1.5';
-  dialog.appendChild(body);
-
-  document.body.appendChild(dialog);
-  // Native `<dialog>` Escape handling closes us; outside-click via the backdrop pattern.
-  dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) {
-      dialog.close();
-      dialog.remove();
-    }
-  });
-  dialog.addEventListener('close', () => {
-    dialog.remove();
-  });
-  dialog.showModal();
-}
