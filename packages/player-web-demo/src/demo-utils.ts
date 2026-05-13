@@ -1,4 +1,5 @@
-import type { BeatorajaPlayableVariant, LoadProgress } from '@be-music/player-web';
+import type { BeatorajaPlayableVariant } from '@be-music/player-web/skin';
+import type { LoadProgress } from '@be-music/player-web/collection';
 import { BEATORAJA_SKIN_TYPE } from '@be-music/beatoraja-skin';
 
 /**

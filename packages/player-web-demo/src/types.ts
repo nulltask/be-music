@@ -1,4 +1,4 @@
-import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web';
+import type { SkinFamilyId, loadTextureFromBytes } from '@be-music/player-web/skin';
 
 /**
  * DOM handles passed into the `PlayerWebDemoApp` constructor. The lookups happen once at boot in `main.ts`; the app

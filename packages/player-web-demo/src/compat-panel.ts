@@ -1,4 +1,4 @@
-import { summarizeBrowserCompat, type BrowserCompatReport } from '@be-music/player-web';
+import { summarizeBrowserCompat, type BrowserCompatReport } from '@be-music/player-web/collection';
 
 /**
  * Renders the browser-compatibility diagnostic panel that lives alongside (not inside) the drop card. Feature support
