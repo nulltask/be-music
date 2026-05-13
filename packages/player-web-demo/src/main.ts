@@ -35,7 +35,6 @@ import {
   type BeatorajaTextureCache,
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
-  type SkinFamilyId,
 } from '@be-music/player-web/skin';
 import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } from '@be-music/player-web/chart';
 import {
@@ -93,7 +92,8 @@ import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
-import { canPlaySongBeatoraja, chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
+import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
+import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
 import {
   captureScreenshot,
@@ -101,13 +101,7 @@ import {
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
-import type {
-  ChartImageTexture,
-  DemoGuiState,
-  PlayerWebDemoElements,
-  SkinFamilyOverride,
-  SkinFamilySceneKind,
-} from './types.ts';
+import type { ChartImageTexture, DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import './styles.css';
 
 const app = document.querySelector<HTMLDivElement>('#app');
@@ -1130,72 +1124,19 @@ class PlayerWebDemoApp {
   private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
 
   /**
-   * Returns the set of skin families that can render the given scene with the currently-loaded assets. `'default'`
-   * is always present (it's the catch-all chrome with no asset dependency); `'lr2'` and `'beatoraja'` only appear
-   * when the matching theme actually ships a skin for that scene type — passing `song` matters for `'gameplay'`
-   * (the beatoraja path needs a play-variant skin compatible with the chart's key mode) and `'decide'` (skip
-   * entirely when the beatoraja theme has no decide skin) where the per-chart availability differs from the
-   * per-theme availability.
+   * Bundle the demo's theme / skin / override fields into the {@link FamilyDispatchState} shape consumed by
+   * `./family-dispatch.ts`. Built per call (cheap — a half-dozen direct references) so the pure helpers can stay
+   * unaware of the demo's private state layout.
    */
-  private availableFamiliesForScene(scene: SkinFamilySceneKind, song?: BrowserSongEntry): Set<SkinFamilyId> {
-    const available = new Set<SkinFamilyId>(['default']);
-    // Beatoraja availability per scene. The play scene additionally needs a chart so we can check whether the
-    // theme has a play-variant skin compatible with this chart's key mode.
-    const beatorajaTheme = this.beatorajaTheme?.theme;
-    if (beatorajaTheme !== undefined) {
-      if (scene === 'select' && beatorajaTheme.selectSkin !== undefined) available.add('beatoraja');
-      else if (scene === 'decide' && beatorajaTheme.decideSkin !== undefined) available.add('beatoraja');
-      else if (scene === 'result' && beatorajaTheme.resultSkin !== undefined) available.add('beatoraja');
-      else if (scene === 'gameplay' && song !== undefined && canPlaySongBeatoraja(this.beatorajaTheme, song)) {
-        available.add('beatoraja');
-      }
-    }
-    // LR2 availability per scene. The play scene needs an LR2 skin for the chart's variant — if `pickLr2PlaySkin`
-    // returns `undefined` the play path would fall through to the default-family scene anyway, so it's correct to
-    // mark LR2 unavailable here. The other scenes consult the slot directly because every LR2 theme can ship a
-    // partial set (e.g. a play-only theme has no `selectSkin`).
-    if (scene === 'select' && this.selectSkin !== undefined) available.add('lr2');
-    else if (scene === 'decide' && this.decideSkin !== undefined) available.add('lr2');
-    else if (scene === 'result' && this.resultSkin !== undefined) available.add('lr2');
-    else if (scene === 'gameplay' && song !== undefined && pickLr2PlaySkin(this.playSkins, song) !== undefined) {
-      available.add('lr2');
-    }
-    return available;
-  }
-
-  /**
-   * Pick the family that should actually render the given scene right now. Honours the user's Debug Menu pick
-   * (`guiState.skinFamilyOverride`) when it's available for this scene; otherwise falls through to the auto
-   * priority. Auto priority is:
-   *
-   *   beatoraja  →  lr2  →  default
-   *
-   * The order matches the legacy implicit behaviour (beatoraja was the first branch in every scene dispatcher,
-   * LR2 second with internal fallback, default emerged as the bottom layer). Explicit override values that aren't
-   * available for the scene fall through to `'default'` rather than the auto chain — picking `'beatoraja'` when
-   * no beatoraja decide skin is loaded shouldn't silently land on the LR2 decide scene.
-   */
-  private pickActiveFamilyForScene(scene: SkinFamilySceneKind, song?: BrowserSongEntry): SkinFamilyId {
-    const available = this.availableFamiliesForScene(scene, song);
-    const override = this.guiState.skinFamilyOverride;
-    if (override !== 'auto') {
-      return available.has(override) ? override : 'default';
-    }
-    if (available.has('beatoraja')) return 'beatoraja';
-    if (available.has('lr2')) return 'lr2';
-    return 'default';
-  }
-
-  /**
-   * Returns `true` when any LR2 skin asset is loaded — used by {@link rebuildSkinFamilyPicker} to decide whether
-   * the `'LR2'` dropdown entry should be enabled. A play-only theme without `selectSkin` still counts: the
-   * gameplay scene will paint LR2 chrome even though the select stays on the default family.
-   */
-  private hasAnyLr2Skin(): boolean {
-    if (this.selectSkin !== undefined) return true;
-    if (this.decideSkin !== undefined) return true;
-    if (this.resultSkin !== undefined) return true;
-    return Object.keys(this.playSkins).length > 0;
+  private familyDispatchState(): FamilyDispatchState {
+    return {
+      beatorajaTheme: this.beatorajaTheme,
+      selectSkin: this.selectSkin,
+      decideSkin: this.decideSkin,
+      resultSkin: this.resultSkin,
+      playSkins: this.playSkins,
+      skinFamilyOverride: this.guiState.skinFamilyOverride,
+    };
   }
 
   /**
@@ -1212,7 +1153,7 @@ class PlayerWebDemoApp {
   private rebuildSkinFamilyPicker(): void {
     const gui = this.gui;
     if (gui === undefined) return;
-    const lr2Available = this.hasAnyLr2Skin();
+    const lr2Available = hasAnyLr2Skin(this.familyDispatchState());
     const beatorajaAvailable = this.beatorajaTheme !== undefined;
     // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
     // Without this guard a user-picked LR2 / beatoraja override that became unavailable mid-session would render
@@ -2573,7 +2514,7 @@ class PlayerWebDemoApp {
     // when the user hasn't overridden, the auto branch matches the legacy behaviour. The select scene also
     // gates on `songs.length > 0` for the beatoraja path because the beatoraja select scene's chrome assumes a
     // non-empty library (it paints empty-state hints separately from the LR2 path).
-    const activeFamily = this.pickActiveFamilyForScene('select');
+    const activeFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'select');
     if (activeFamily === 'beatoraja' && this.collection.songs.length > 0) {
       // Hide / dispose the LR2 select view if it was up — only one select can own the scene host.
       this.selectView?.setVisible(false);
@@ -2668,7 +2609,7 @@ class PlayerWebDemoApp {
     // Family dispatch for the decide splash. Note this is decoupled from the gameplay family pick: a user can be
     // playing in LR2 mode and have a beatoraja-only decide skin, or vice versa. The decide splash is a one-shot
     // overlay so each scene transition consults the family helper afresh.
-    const decideFamily = this.pickActiveFamilyForScene('decide', song);
+    const decideFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'decide', song);
     if (decideFamily === 'beatoraja') {
       const mounted = await this.showBeatorajaDecide(song, overrides);
       if (!mounted) await this.playSong(song, overrides);
@@ -2728,7 +2669,7 @@ class PlayerWebDemoApp {
     // Same family check as `playSong` — picking `'default'` from the Debug Menu strips the LR2 skin even when one
     // is loaded for this chart. Computing `gameplayFamily` here keeps the decide → gameplay preload path consistent
     // with the no-decide fast-path.
-    const gameplayFamily = this.pickActiveFamilyForScene('gameplay', song);
+    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
     const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, overrides);
     return this.gameplayView.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
@@ -2853,7 +2794,7 @@ class PlayerWebDemoApp {
     // Family dispatch for the gameplay scene. The Debug Menu's "Skin family" pick funnels through here so a user
     // override of `'lr2'` / `'default'` forces that family even when beatoraja is technically available, while
     // `'auto'` keeps the legacy preference (beatoraja → LR2 → default).
-    const gameplayFamily = this.pickActiveFamilyForScene('gameplay', song);
+    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
     if (gameplayFamily === 'beatoraja') {
       await this.playSongBeatoraja(song, overrides);
       return;
@@ -2920,7 +2861,7 @@ class PlayerWebDemoApp {
     // scene is constructed inside `playSongBeatoraja`'s onComplete handler, not via `showResult`, so this method
     // never sees the `'beatoraja'` family. Pick the LR2 result skin only when the family pick says so; defaulting
     // strips the slot even if the loaded theme has a result skin.
-    const resultFamily = this.pickActiveFamilyForScene('result');
+    const resultFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'result');
     const lr2ResultSkin = resultFamily === 'lr2' ? this.resultSkin : undefined;
     const sharedResultOptions = {
       collection: this.collection,
