@@ -2155,18 +2155,25 @@ const CANVAS_OVERSHOOT_TOLERANCE = 0.15;
  * entry that contains both percentiles within a {@link CANVAS_OVERSHOOT_TOLERANCE} slack. Returns `undefined` only
  * when there are no observed corners (= skin parsed no DSTs, in which case the caller keeps the 640×480 default).
  *
- * **Joint 90 % inclusion + tolerance**: authored slide-in animations frequently push elements past the canvas edge
- * for a couple of keyframes (LITONE4's `AC7LEFT.csv` has Play DST corners up to `y+h=2179` and `x+w=3144` for sprites
- * that fly in from off-screen; LR2 default's `decide.lr2skin` slides bracket decorations in from `x=800` against a
- * 640×480 design). We pick the smallest standard canvas whose `(width, height) × (1+tolerance)` rectangle contains
- * **at least 90 % of the observed corner points jointly** (both axes pass for the same corner). The 15 % tolerance
- * absorbs the residual overshoot from slide animations that BARELY exceed the canvas edge.
+ * **Joint inclusion + plateau detection**: authored slide-in animations frequently push elements past the canvas
+ * edge for a couple of keyframes (LITONE4's `AC7LEFT.csv` has Play DST corners up to `y+h=2179` and `x+w=3144` for
+ * sprites that fly in from off-screen; LR2 default's `decide.lr2skin` slides bracket decorations in from x≈1500
+ * against a 640×480 design — 32 % of its 62 corners are off-screen animation keyframes).
  *
- * The previous implementation used per-axis 90th percentiles independently: it would accept a candidate iff the
- * 90th-percentile x AND 90th-percentile y both fit. That mis-classified LR2 default's decide skin as 1280×720 — the
- * x percentile fit 640 (90 % of corners had x ≤ 640) but the y percentile landed inside a slide-in tail at y ≈ 600,
- * outside 640×480's allowed 552. Joint inclusion fixes this by requiring the SAME corners to fit on both axes,
- * which the on-screen bulk does even when slide-in keyframes scatter outliers far away.
+ * Two-stage decision per candidate canvas tier, picking the smallest match:
+ *
+ * - **High inclusion (≥ 90 %)** — the candidate covers nearly all corners, so it's the design canvas. Used by skins
+ *   without significant off-screen animation: LR2 default select (95 % within 640×480), LITONE4 (95 % within
+ *   1920×1080).
+ * - **Plateau** — the candidate already has a non-trivial fraction (> 30 %) of corners inside it AND the next
+ *   bigger tier doesn't add many more (< 10 % gain). The corners outside this tier are far-off animation keyframes
+ *   that the next tier doesn't catch either — they're "off-canvas slides", not on-screen elements. Used by skins
+ *   with heavy slide animations: LR2 default decide (68 % inside 640×480, same 68 % inside 1280×720 because the
+ *   outliers all sit at x≈1500 → 640×480 is the actual design canvas).
+ *
+ * Together: the 90 % rule covers cleanly-authored skins; the plateau rule rescues small skins (LR2 default decide)
+ * whose animation fraction would otherwise push them over the threshold. The 15 % tolerance on each tier absorbs
+ * tiny single-pixel overshoots from authoring tools.
  *
  * Exported for testability.
  */
@@ -2174,18 +2181,33 @@ export function autoDetectCanvasFromObservedCoordinates(
   corners: ReadonlyArray<readonly [number, number]>,
 ): { width: number; height: number } | undefined {
   if (corners.length === 0) return undefined;
-  const inclusionThreshold = 0.9 * corners.length;
-  for (const candidate of STANDARD_CANVAS_SIZES) {
+  const total = corners.length;
+  // Pre-compute inclusion counts for every candidate so the plateau check can look one tier ahead.
+  const inclusion = STANDARD_CANVAS_SIZES.map((candidate) => {
     const widthAllowed = candidate.width * (1 + CANVAS_OVERSHOOT_TOLERANCE);
     const heightAllowed = candidate.height * (1 + CANVAS_OVERSHOOT_TOLERANCE);
     let cornersInside = 0;
     for (const [x, y] of corners) {
       if (x <= widthAllowed && y <= heightAllowed) cornersInside += 1;
     }
-    if (cornersInside >= inclusionThreshold) return candidate;
+    return cornersInside;
+  });
+  for (let i = 0; i < STANDARD_CANVAS_SIZES.length; i += 1) {
+    const cornersInside = inclusion[i]!;
+    const ratio = cornersInside / total;
+    if (ratio >= 0.9) return STANDARD_CANVAS_SIZES[i]!;
+    // Plateau: this tier already captures a meaningful chunk (>30 %) and the next bigger tier adds few new corners
+    // (<10 % of total). Those uncaught corners are far-off animation keyframes, not on-screen elements at the next
+    // tier's scale — so this tier is the real design canvas.
+    if (ratio > 0.3 && i + 1 < STANDARD_CANVAS_SIZES.length) {
+      const nextInside = inclusion[i + 1]!;
+      const increment = (nextInside - cornersInside) / total;
+      if (increment < 0.1) return STANDARD_CANVAS_SIZES[i]!;
+    }
   }
-  // Bigger than every standard size — cap at the largest entry. The renderer scales-to-fit at the screen level
-  // anyway so the only practical effect of this cap is that DST coordinates beyond 2560×1440 get clipped.
+  // No tier reached the high-inclusion or plateau gate — cap at the largest entry. The renderer scales-to-fit at the
+  // screen level anyway so the only practical effect of this cap is that DST coordinates beyond 2560×1440 get
+  // clipped.
   return STANDARD_CANVAS_SIZES[STANDARD_CANVAS_SIZES.length - 1];
 }
 

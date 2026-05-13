@@ -1095,6 +1095,18 @@ describe('autoDetectCanvasFromObservedCoordinates', () => {
     expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 640, height: 480 });
   });
 
+  it('keeps 640×480 for LR2-default-decide-style shape (32 % off-canvas slide-out at x≈1500)', () => {
+    // Regression for LR2 default's `decide.lr2skin`: 62 corners, 42 on-screen within 640×480, 20 slide-out animation
+    // keyframes clustered at x≈1500 (also outside 1280×720). The naive 90 % inclusion threshold fails (42/62 = 68 %),
+    // but the plateau rule catches it: 1280×720 doesn't add any new corners over 640×480 (the outliers are far
+    // beyond it too), so 640×480 is recognized as the real design canvas. Sample shape mirrors what the demo's
+    // `[diag] autoDetect` log surfaced on the real theme drop.
+    const corners: Array<readonly [number, number]> = [];
+    for (let i = 0; i < 42; i += 1) corners.push([300, 200]);
+    for (let i = 0; i < 20; i += 1) corners.push([1500, 400]);
+    expect(autoDetectCanvasFromObservedCoordinates(corners)).toEqual({ width: 640, height: 480 });
+  });
+
   it('escalates when slide-in fraction exceeds the inclusion threshold (= bulk is genuinely off the small canvas)', () => {
     // Inverse check: when MORE than 10 % of corners land outside 640×480, the on-screen bulk isn't actually 640×480
     // — the skin is FHD-authored with a 640×480 "intro" region. Escalate to 1280×720 (which contains both clusters).
