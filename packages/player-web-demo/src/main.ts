@@ -27,7 +27,6 @@ import {
   loadBeatorajaTexturesFromBundle,
   loadBeatorajaThemeFromFiles,
   loadTextureFromBytes,
-  pickBeatorajaPlayableSkinVariant,
   pickBeatorajaPlayableVariant,
   skinFamilyRegistry,
   summarizeBeatorajaPlaySkins,
@@ -45,15 +44,13 @@ import {
   describeSongCollection,
   loadAssetBytes,
   readDroppedFiles,
-  resolveChartPlayVariant,
   resolveSongSource,
   splitDroppedSongAndThemeFiles,
   type BrowserSongCollection,
   type BrowserSongEntry,
-  type LoadProgress,
 } from '@be-music/player-web/collection';
-import { downloadBlob, makeWebmSeekable, parseCompressorMode, type CompressorMode } from '@be-music/player-web/runtime';
-import { Rectangle, logger } from '@be-music/player-web';
+import { parseCompressorMode, type CompressorMode } from '@be-music/player-web/runtime';
+import { logger } from '@be-music/player-web';
 import {
   discoverLr2Themes,
   loadLr2ThemeSkinsFromFiles,
@@ -95,7 +92,15 @@ import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
-import { phaseLabels, playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
+import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
+import { canPlaySongBeatoraja, chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
+import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
+import {
+  captureScreenshot,
+  finalizeRecordingIfActive,
+  toggleRecording,
+  type RecordingDeps,
+} from './recording-controller.ts';
 import type {
   ChartImageTexture,
   DemoGuiState,
@@ -406,10 +411,10 @@ class PlayerWebDemoApp {
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
-        void this.toggleRecording();
+        void toggleRecording(this.recordingDeps());
       },
       screenshot: () => {
-        void this.captureScreenshot();
+        void captureScreenshot(this.recordingDeps());
       },
     };
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
@@ -448,7 +453,7 @@ class PlayerWebDemoApp {
         // Browser file-picker drops go through the same loading overlay as drag-drop so a folder picked via the GUI
         // shows progress too. Hide the select scene up-front so its rendering / BGM stays paused while we read + parse
         // — the user shouldn't see the song list flicker mid-load.
-        this.showLoadingOverlay();
+        showLoadingOverlay(this.elements);
         this.selectView?.setVisible(false);
         try {
           // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
@@ -456,7 +461,7 @@ class PlayerWebDemoApp {
           // instead of the previous `loadSongs`-only path that quietly skipped any LR2 assets in the selection.
           await this.processIncomingFiles(fileList);
         } finally {
-          this.hideLoadingOverlay();
+          hideLoadingOverlay(this.elements);
         }
       })();
     });
@@ -727,261 +732,42 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Flip the gameplay recorder on / off. First click during a play session begins capture; second click finalizes the
-   * blob and triggers a browser download as `<song>.webm`. Errors (codec unavailable, no gameplay view) surface to the
-   * status panel.
-   *
-   * Visual state lives entirely on the lil-gui record controller: `name()` swaps the label between `● Record` / `■
-   * Stop`, and `disable()` grays it out while the WebM blob is being assembled on stop. The `.recording` CSS class on
-   * the controller's DOM element drives the red-glow accent so the lil-gui style takes precedence over our highlight.
-   */
-  /**
-   * Capture the active scene at its SKIN-authored stage size and download as a PNG. When
-   * the active scene exposes a `getStageInfo()` descriptor (the four beatoraja scenes do),
-   * we capture at the skin's native resolution (e.g. 1280×720 for default play, 1920×1080
-   * for ModernChic) regardless of how the canvas is currently scaled to fit the window.
-   * Falls back to capturing the entire stage at the window size when the active scene
-   * doesn't expose stage info (LR2 path scenes today).
-   *
-   * Pipeline (skin-stage-size path):
-   *   1. Read `getStageInfo()` → {container, width, height}.
-   *   2. Save the container's transform (scale + position).
-   *   3. Reset to identity so children render at native skin coords.
-   *   4. `renderer.extract.canvas({ target: container, frame, resolution: 1 })` — Pixi
-   *      pre-renders into an offscreen RT at the requested frame; result is exactly
-   *      width × height pixels.
-   *   5. Restore the saved transform.
-   *
-   * The transform reset / restore happens within a single synchronous JS task — extract is
-   * synchronous and the next ticker fire restores the transform via fitToStage's cached-
-   * dims early-out short-circuit.
-   *
-   * Filename includes a UTC timestamp so multiple captures in one session don't collide.
-   * Errors (renderer not ready, encoder failure) surface to the status panel.
-   */
-  private async captureScreenshot(): Promise<void> {
-    const app = this.sceneHost.app;
-    if (app.renderer === undefined) {
-      this.setStatus('Screenshot failed: renderer not ready');
-      return;
-    }
-    try {
-      const activeScene = this.sceneHost.getCurrentScene();
-      const stageInfo = activeScene?.getStageInfo?.();
-      // `extract.canvas` returns Pixi's `ICanvas` (HTMLCanvasElement | OffscreenCanvas
-      // union). Demo doesn't depend directly on `pixi.js` so we type it via the runtime
-      // duck-type `{ toBlob }` we actually consume below.
-      let canvas: { toBlob?: (cb: (blob: Blob | null) => void, type?: string) => void };
-      let captureWidth: number;
-      let captureHeight: number;
-      if (stageInfo !== undefined) {
-        // Native skin-size path. Reset the container's fitToStage transform around the
-        // extract call; the next tick's fitToStage no-ops on cached screen dims and the
-        // user never sees the broken state on the live canvas.
-        const { container, width, height } = stageInfo;
-        const savedScaleX = container.scale.x;
-        const savedScaleY = container.scale.y;
-        const savedX = container.x;
-        const savedY = container.y;
-        container.scale.set(1, 1);
-        container.position.set(0, 0);
-        try {
-          // Frame MUST be an actual `Rectangle` instance — Pixi's `extract.canvas`
-          // internally calls `options.frame.copyTo(tempRect)` (see
-          // `GenerateTextureSystem.js`'s `generateTexture`). A plain `{x, y, width,
-          // height}` literal returns `undefined` from the optional chain there and the
-          // code falls through to `getLocalBounds(container)`, which on a transform-reset
-          // container yields a zero / negative rect → blank canvas, blob fails to encode,
-          // download silently fails. Rectangle is re-exported from `@be-music/player-web`
-          // so this package doesn't need a direct `pixi.js` dep.
-          canvas = app.renderer.extract.canvas({
-            target: container,
-            frame: new Rectangle(0, 0, width, height),
-            resolution: 1,
-          }) as typeof canvas;
-        } finally {
-          container.scale.set(savedScaleX, savedScaleY);
-          container.position.set(savedX, savedY);
-        }
-        captureWidth = width;
-        captureHeight = height;
-      } else {
-        // Fallback: capture the entire stage at the visible window size. Used when the
-        // scene isn't a beatoraja `PixiScene` (= LR2 path today). Same toBlob pipeline.
-        canvas = app.renderer.extract.canvas(app.stage) as typeof canvas;
-        captureWidth = app.screen.width;
-        captureHeight = app.screen.height;
-      }
-      // Both HTMLCanvasElement and OffscreenCanvas expose `toBlob` in modern browsers.
-      // Narrow defensively in case a runtime returns something exotic.
-      const toBlob = canvas.toBlob;
-      if (typeof toBlob !== 'function') {
-        this.setStatus('Screenshot failed: canvas.toBlob unavailable');
-        return;
-      }
-      const blob = await new Promise<Blob | null>((resolve) => {
-        toBlob.call(canvas, (b) => resolve(b), 'image/png');
-      });
-      if (blob === null) {
-        this.setStatus('Screenshot failed: encoder returned null');
-        return;
-      }
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace(/Z$/, '');
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `bms-screenshot-${timestamp}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      // Revoke after a short delay — some browsers race the download against immediate
-      // revocation. 5s is enough for the download dialog to grab the URL.
-      setTimeout(() => URL.revokeObjectURL(url), 5_000);
-      this.setStatus(`Screenshot saved (${captureWidth}×${captureHeight})`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.setStatus(`Screenshot failed: ${message}`);
-    }
-  }
-
-  /**
-   * Pick whichever gameplay view is currently mounted (LR2 or beatoraja). Both expose the
-   * same recording API surface (`startRecording` / `stopRecording` / `isRecording`), so
-   * the rest of `toggleRecording` can stay path-agnostic. Returns `undefined` when neither
-   * is mounted (= the user pressed Record on the song-select screen) so the caller
-   * branches into the auto-arm flow instead.
-   */
-  private activeGameplayRecorder():
-    | {
-        startRecording(): void;
-        stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number } | undefined>;
-        isRecording(): boolean;
-      }
-    | undefined {
-    return this.gameplayView ?? this.beatorajaGameplayView;
-  }
-
-  private async toggleRecording(): Promise<void> {
-    const gameplay = this.activeGameplayRecorder();
-    const controller = this.recordController;
-    if (!gameplay) {
-      // No chart is playing yet — interpret the click as "arm capture for the next song I pick" so the user can stage
-      // recording from the song-select screen without having to hit Record at the precise moment gameplay starts. A
-      // second click before picking a song disarms.
-      this.autoRecordArmed = !this.autoRecordArmed;
-      if (this.autoRecordArmed) {
-        controller?.domElement.classList.add('arming');
-        controller?.name('◉ Recording on next song');
-        this.setStatus('Recording armed — pick a song to start capturing');
-      } else {
-        controller?.domElement.classList.remove('arming');
-        controller?.name('● Record');
-        this.setStatus('Recording disarmed');
-      }
-      return;
-    }
-    if (gameplay.isRecording()) {
-      controller?.disable();
-      this.setStatus('Finalizing recording…');
-      try {
-        const result = await gameplay.stopRecording();
-        if (result) {
-          // `MediaRecorder`'s native WebM stream is play-only — post-process the blob to inject `Duration` + `Cues` so
-          // external players can seek inside it. Cheap on the typical chart-length take (a few hundred ms for a 1-3
-          // minute recording on M-series hardware) and gracefully falls back to the raw blob if the patch fails, so a
-          // corrupt take is never silently lost.
-          const seekable = await makeWebmSeekable(result.blob);
-          const filename = `${this.recordingFilenameBase}.webm`;
-          downloadBlob(seekable, filename);
-          const seconds = (result.durationMs / 1000).toFixed(1);
-          const sizeMb = (seekable.size / (1024 * 1024)).toFixed(1);
-          this.setStatus(`Saved ${filename} (${seconds}s, ${sizeMb} MB)`);
-        }
-      } finally {
-        controller?.domElement.classList.remove('recording');
-        controller?.name('● Record');
-        controller?.enable();
-      }
-      return;
-    }
-    try {
-      gameplay.startRecording();
-      controller?.domElement.classList.add('recording');
-      controller?.name('■ Stop');
-      this.setStatus('Recording…');
-    } catch (error) {
-      recordLog.warn('start failed', error);
-      this.setStatus(`Recording unavailable: ${(error as Error).message}`);
-    }
-  }
-
-  /**
    * Filename base for the next saved recording. Derived from the currently-playing song's title (sanitized for
    * filesystem safety) or `gameplay-<timestamp>` when no song info is available. Updated on every `playSong` so
    * back-to-back recordings don't overwrite each other in the user's downloads folder.
+   *
+   * Read by `toggleRecording` (in `./recording-controller.ts`) when assembling the download filename; mutated in
+   * `playSong` / `playSongBeatoraja` / `preloadGameplay` as each chart starts.
    */
   private recordingFilenameBase = 'gameplay';
 
   /**
-   * Reveals the centered loading overlay and reset its readout to a neutral "Loading…" state. The actual phase / counter
-   * text fills in via `applyLoadProgress` as events fire from the loaders.
+   * Bundle the demo's recording-related fields into the `RecordingDeps` shape that
+   * `./recording-controller.ts` consumes. Built as a getter-based bundle (rather than a structural copy of `this`) so
+   * `RecordingDeps` can stay an interface of getter / setter functions — TypeScript otherwise refuses to satisfy a
+   * structural `RecordingHost` from a class whose backing fields are `private`. Cheap to allocate per call; called at
+   * most a handful of times per session (record toggle / screenshot / chart-end recording finalize).
    */
-  private showLoadingOverlay(): void {
-    this.elements.loadingOverlay.classList.add('visible');
-    this.elements.loadingOverlay.setAttribute('aria-hidden', 'false');
-    this.elements.loadingLabel.textContent = 'Loading…';
-    this.elements.loadingCounter.textContent = '';
-    // Reset to indeterminate (no inline width) until the first `applyLoadProgress` lands. The CSS animates the bar so
-    // the user sees motion even before the first phase event fires.
-    this.elements.loadingBarFill.classList.add('indeterminate');
-    this.elements.loadingBarFill.style.width = '';
-  }
-
-  private hideLoadingOverlay(): void {
-    this.elements.loadingOverlay.classList.remove('visible');
-    this.elements.loadingOverlay.setAttribute('aria-hidden', 'true');
-  }
-
-  /**
-   * Maps a `LoadProgress` event from the player-web loaders onto the overlay DOM. Phases:
-   *
-   * - `enumerating` — total is `-1` (we're still walking the drop tree). Show the running file count + the current
-   *   path, leave the bar in indeterminate animation mode.
-   * - `reading` / `parsing` / `theme` — total is known. Switch the bar to determinate mode and set its width to
-   *   `current / total`.
-   *
-   * Phase prefixes (`Reading files…` etc.) come from the `phaseLabels` map; the per-item label surfaces the underlying
-   * filename / sub-task so the user can see which file is the current bottleneck.
-   */
-  private applyLoadProgress(progress: LoadProgress): void {
-    const phaseLabel = phaseLabels[progress.phase];
-    const counterFragments: string[] = [];
-    if (progress.total > 0) {
-      // Determinate phase — set explicit width and pin the counter to "X / N (P%)" so the user can eyeball ETA.
-      const ratio = Math.max(0, Math.min(1, progress.current / progress.total));
-      this.elements.loadingBarFill.classList.remove('indeterminate');
-      this.elements.loadingBarFill.style.width = `${(ratio * 100).toFixed(1)}%`;
-      counterFragments.push(`${progress.current} / ${progress.total}`);
-    } else {
-      // Indeterminate (enumeration) — only `current` is meaningful.
-      this.elements.loadingBarFill.classList.add('indeterminate');
-      this.elements.loadingBarFill.style.width = '';
-      if (progress.current > 0) {
-        counterFragments.push(`${progress.current}`);
-      }
-    }
-    if (progress.label) {
-      counterFragments.push(progress.label);
-    }
-    this.elements.loadingLabel.textContent = phaseLabel;
-    this.elements.loadingCounter.textContent = counterFragments.join(' · ');
+  private recordingDeps(): RecordingDeps {
+    return {
+      sceneHost: this.sceneHost,
+      recordController: this.recordController,
+      getActiveGameplay: () => this.gameplayView ?? this.beatorajaGameplayView,
+      isLr2GameplayRecording: () => this.gameplayView?.isRecording() ?? false,
+      getAutoRecordArmed: () => this.autoRecordArmed,
+      setAutoRecordArmed: (value) => {
+        this.autoRecordArmed = value;
+      },
+      getRecordingFilenameBase: () => this.recordingFilenameBase,
+      setStatus: (text) => this.setStatus(text),
+    };
   }
 
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
     // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
     // with tens of thousands of WAVs visibly stalls the UI for several seconds, and we want the user to see "we're
     // working on it" immediately rather than after the slow phase finishes.
-    this.showLoadingOverlay();
+    showLoadingOverlay(this.elements);
     // Take the select scene offline for the duration of the load. `setVisible(false)` pauses BGM + the rAF tick + the
     // song list rendering, so:
     //
@@ -994,13 +780,13 @@ class PlayerWebDemoApp {
     this.selectView?.setVisible(false);
     try {
       const files = await readDroppedFiles(dataTransfer, {
-        onProgress: (progress) => this.applyLoadProgress(progress),
+        onProgress: (progress) => applyLoadProgress(this.elements, progress),
       });
       await this.processIncomingFiles(files);
     } finally {
       // Always tear the overlay down — even when one of the sub-loaders threw or `splitDroppedSongAndThemeFiles`
       // produced an empty bucket. Otherwise a failed drop would leave the UI permanently masked.
-      this.hideLoadingOverlay();
+      hideLoadingOverlay(this.elements);
     }
   }
 
@@ -1086,7 +872,7 @@ class PlayerWebDemoApp {
     // very first drop is just `append onto an empty collection`, which produces the same result as `loadFromFiles`
     // would have.
     this.collection = await this.collectionStore.appendFromFiles(files, {
-      onProgress: (progress) => this.applyLoadProgress(progress),
+      onProgress: (progress) => applyLoadProgress(this.elements, progress),
     });
     // Suppress the "0 charts loaded" reading — that text reads like a parse error to the user. The post-load status
     // text is set by `handleDrop` once both theme + songs land, so a mid-flight transient is plenty.
@@ -1158,7 +944,7 @@ class PlayerWebDemoApp {
   private async mountLr2Theme(files: ReadonlyArray<File>, themeName: string | undefined): Promise<void> {
     this.setStatus(themeName ? `Loading LR2 theme "${themeName}"...` : 'Loading LR2 theme...');
     const loadedTheme = await loadLr2ThemeSkinsFromFiles([...files], {
-      onProgress: (progress) => this.applyLoadProgress(progress),
+      onProgress: (progress) => applyLoadProgress(this.elements, progress),
     });
     for (const variant of Object.keys(this.playSkins) as Lr2PlayVariant[]) {
       delete this.playSkins[variant];
@@ -1267,7 +1053,7 @@ class PlayerWebDemoApp {
     this.setStatus('Loading beatoraja theme...');
     try {
       const bundle = await loadBeatorajaThemeFromFiles(files, {
-        onProgress: (progress) => this.applyLoadProgress(progress),
+        onProgress: (progress) => applyLoadProgress(this.elements, progress),
       });
       // Drop the per-entry texture caches from the previous theme (we don't destroy individual
       // beatoraja textures in this session — see `beatorajaTextureCachesByEntry`'s field comment).
@@ -1344,39 +1130,6 @@ class PlayerWebDemoApp {
   private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
 
   /**
-   * Returns true when the loaded beatoraja theme has a play skin we can mount for this chart — directly
-   * or through the playable-variant fallback chain (a 5K chart will happily render on a 7K skin if the
-   * theme author only shipped the 7-keys variant). Used by `playSong` / `showDecide` to decide whether
-   * to branch into the beatoraja gameplay path.
-   */
-  private canPlaySongBeatoraja(song: BrowserSongEntry): boolean {
-    return this.resolveBeatorajaSkinVariant(song) !== undefined;
-  }
-
-  /**
-   * Resolve the actual skin variant the beatoraja gameplay path will mount for a chart. Returns the
-   * desired variant verbatim when the theme ships it, the closest playable fallback otherwise, or
-   * `undefined` when the theme has nothing playable.
-   */
-  private resolveBeatorajaSkinVariant(song: BrowserSongEntry) {
-    const bundle = this.beatorajaTheme;
-    if (!bundle) return undefined;
-    const desired = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
-    if (desired === undefined) return undefined;
-    return pickBeatorajaPlayableSkinVariant(bundle.theme.playSkins, desired);
-  }
-
-  /** Map a song's parsed chart onto the shape input `pickBeatorajaPlayableVariant` expects. */
-  private chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble: boolean; isPms: boolean } {
-    const variant = resolveChartPlayVariant(song);
-    return {
-      keys: variant === '14' ? 14 : variant === '10' ? 10 : variant === '7' ? 7 : variant === '5' ? 5 : 9,
-      isDouble: variant === '14' || variant === '10',
-      isPms: variant === '9',
-    };
-  }
-
-  /**
    * Returns the set of skin families that can render the given scene with the currently-loaded assets. `'default'`
    * is always present (it's the catch-all chrome with no asset dependency); `'lr2'` and `'beatoraja'` only appear
    * when the matching theme actually ships a skin for that scene type — passing `song` matters for `'gameplay'`
@@ -1393,7 +1146,7 @@ class PlayerWebDemoApp {
       if (scene === 'select' && beatorajaTheme.selectSkin !== undefined) available.add('beatoraja');
       else if (scene === 'decide' && beatorajaTheme.decideSkin !== undefined) available.add('beatoraja');
       else if (scene === 'result' && beatorajaTheme.resultSkin !== undefined) available.add('beatoraja');
-      else if (scene === 'gameplay' && song !== undefined && this.canPlaySongBeatoraja(song)) {
+      else if (scene === 'gameplay' && song !== undefined && canPlaySongBeatoraja(this.beatorajaTheme, song)) {
         available.add('beatoraja');
       }
     }
@@ -1553,9 +1306,9 @@ class PlayerWebDemoApp {
     // unresponsive). c0da7b5 partially
     // addressed this by forwarding the chart's filename to the engine for the
     // extension-based heuristic, but skipped the variant separation here.
-    const skinVariant = this.resolveBeatorajaSkinVariant(song);
+    const skinVariant = resolveBeatorajaSkinVariant(this.beatorajaTheme, song);
     if (skinVariant === undefined) return;
-    const chartVariant = pickBeatorajaPlayableVariant(this.chartShapeFor(song));
+    const chartVariant = pickBeatorajaPlayableVariant(chartShapeFor(song));
     if (chartVariant === undefined) return;
     if (skinVariant !== chartVariant) {
       // Theme doesn't ship the chart's native skin variant (e.g. a 9-key chart on a
@@ -3148,16 +2901,6 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * If a recording is active, calls {@link toggleRecording} to finalize + download. Used at chart end / exit / restart
-   * so the user doesn't lose footage when transitioning out of gameplay.
-   */
-  private async finalizeRecordingIfActive(): Promise<void> {
-    if (this.gameplayView?.isRecording()) {
-      await this.toggleRecording();
-    }
-  }
-
-  /**
    * Closes out an in-flight recording (if any) and then runs the caller-supplied transition (`showSelect` /
    * `showResult` / `playSong`). Sequencing here is non-negotiable: every one of those transitions disposes the gameplay
    * view, which in turn closes the AudioContext the `MediaRecorder` is tapping. Doing the dispose first leaves
@@ -3166,7 +2909,7 @@ class PlayerWebDemoApp {
    * recorder flush + download cleanly before the graph it depends on goes away.
    */
   private async finishGameplayThen(transition: () => Promise<void>): Promise<void> {
-    await this.finalizeRecordingIfActive();
+    await finalizeRecordingIfActive(this.recordingDeps());
     await transition();
   }
 
