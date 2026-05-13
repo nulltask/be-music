@@ -1128,7 +1128,25 @@ class PlayerWebDemoApp {
     const active = this.activeLr2ThemeName;
     const refreshedActive = active !== undefined ? discovered.find((theme) => theme.name === active) : undefined;
     const next = refreshedActive ?? discovered[0]!;
-    await this.mountLr2Theme(next.files, next.name);
+    // Union the theme's own files with shared LR2files siblings (`WallPaper/`, `Bgm/`, `Sound/`, etc.) so the loader
+    // can resolve `#CUSTOMFILE`-style wildcard assets like `LR2files/WallPaper/Select/*.bmp` — those live OUTSIDE
+    // `LR2files/Theme/<name>/` and are dropped by `discoverLr2Themes`, which intentionally scopes its return to the
+    // theme subtree. Without this union the LR2 default select skin's main backdrop (decoded from `WallPaper/Select/`)
+    // never reaches `skin.files`, so the wildcard `resolveLr2AssetBytes` lookup misses and the chrome paints with a
+    // black background.
+    const themeFileSet = new Set(next.files);
+    const otherLr2Files = files.filter((file) => {
+      if (themeFileSet.has(file)) return false;
+      const lower = (file.webkitRelativePath || file.name).toLowerCase();
+      // Keep anything under `lr2files/` that isn't under any theme subtree. We deliberately don't restrict to
+      // `lr2files/{wallpaper,bgm,sound}/` so future LR2 shared-asset directories (e.g. a `Common/` folder some skins
+      // reference) automatically come along.
+      const idx = lower.indexOf('lr2files/');
+      if (idx === -1) return false;
+      const afterLr2Files = lower.slice(idx + 'lr2files/'.length);
+      return !afterLr2Files.startsWith('theme/');
+    });
+    await this.mountLr2Theme([...next.files, ...otherLr2Files], next.name);
   }
 
   /**
