@@ -1055,6 +1055,7 @@ class PlayerWebDemoApp {
       // underlying Pixi textures stay allocated until page reload, but they're unreachable from
       // the renderer once the new theme replaces `beatorajaTheme`.
       this.beatorajaTextureCachesByEntry.clear();
+      this.disposeBeatorajaFontCaches();
       // Tear down the previous theme's audio player — its file-map cache references bytes from
       // the old bundle that we're about to replace. A fresh player gets created below tied to
       // the new bundle.
@@ -1117,11 +1118,17 @@ class PlayerWebDemoApp {
    */
   private readonly beatorajaTextureCachesByEntry = new Map<string, BeatorajaTextureCache>();
   /**
-   * Per-entry skin font cache. Same lifecycle as the texture cache — the registered `FontFace`s outlive
-   * the scene (they sit on `document.fonts`), so re-mounting the same skin reuses the family lookup
-   * without re-parsing the TTF bytes.
+   * Per-entry skin font cache. Reused while the same theme is active, then disposed when a new
+   * theme is dropped so `document.fonts` and Pixi's bitmap-font cache don't accumulate old entries.
    */
   private readonly beatorajaFontCachesByEntry = new Map<string, BeatorajaFontCache>();
+
+  private disposeBeatorajaFontCaches(): void {
+    for (const cache of this.beatorajaFontCachesByEntry.values()) {
+      (cache as BeatorajaFontCache & { dispose?: () => void }).dispose?.();
+    }
+    this.beatorajaFontCachesByEntry.clear();
+  }
 
   /**
    * Bundle the demo's theme / skin / override fields into the {@link FamilyDispatchState} shape consumed by
