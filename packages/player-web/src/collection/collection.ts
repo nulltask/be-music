@@ -462,17 +462,17 @@ export async function loadSongCollectionFromFiles(
 }
 
 /**
- * Schedules a microtask that resolves on the next browser macrotask, giving the event loop a chance to paint a frame
- * and dispatch any pending progress events. Cheaper than `setTimeout(0)` (no minimum-delay clamp) and works in
- * Node-environment tests too (the Promise resolves on the next tick).
+ * Yields to a browser task boundary so the host can paint a frame and dispatch pending progress events during large
+ * chart drops. `queueMicrotask` is intentionally not used here: microtasks run before the browser gets a render
+ * opportunity, so they still let a large parse loop monopolize the page.
  */
 function yieldToEventLoop(): Promise<void> {
+  const schedulerYield = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler?.yield;
+  if (schedulerYield !== undefined) {
+    return schedulerYield();
+  }
   return new Promise((resolve) => {
-    if (typeof queueMicrotask === 'function') {
-      queueMicrotask(resolve);
-    } else {
-      Promise.resolve().then(resolve);
-    }
+    setTimeout(resolve, 0);
   });
 }
 
