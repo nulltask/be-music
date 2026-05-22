@@ -98,19 +98,10 @@ export class BeatorajaBgaLayer {
       return;
     }
     const props = destinationToSpriteProps(this.group, context, this.canvasHeight);
-    this.sprite.visible = props.visible;
-    if (!props.visible) return;
-    this.sprite.x = props.x;
-    this.sprite.y = props.y;
-    this.sprite.width = props.width;
-    this.sprite.height = props.height;
-    this.sprite.alpha = props.alpha;
-    this.sprite.tint = props.tint;
-    this.sprite.angle = props.angle;
-    this.sprite.blendMode = props.blendMode;
-
     const effectiveKey = this.pickEffectiveKey(seconds, poorBgaActive);
-    if (effectiveKey !== this.currentKey) {
+    const texture = effectiveKey !== undefined ? this.textures.get(effectiveKey) : undefined;
+    const keyChanged = effectiveKey !== this.currentKey;
+    if (keyChanged) {
       // Pause + reset the video on the OLD key (when one was a video) before swapping.
       // Without this, multiple video BGAs queued back-to-back would keep playing in the
       // background, contending for compositor frame callbacks.
@@ -122,25 +113,43 @@ export class BeatorajaBgaLayer {
         }
       }
       this.currentKey = effectiveKey;
-      const texture = effectiveKey !== undefined ? this.textures.get(effectiveKey) : undefined;
-      // Falling through to `Texture.EMPTY` rather than hiding the sprite preserves the skin-side BGA
-      // chrome (the rectangle authored in the destination group) — the skin's frame keeps painting,
-      // and the BGA-area sub-rect goes black until the next cue arrives. Matches LR2 behaviour.
-      this.sprite.texture = texture ?? Texture.EMPTY;
-      // Start the new key's video from the beginning. Browsers gate `.play()` behind the
-      // user-gesture autoplay policy — when the gameplay scene mounts as a result of a
-      // click / keypress (the typical entry path), the gesture transfers and play() resolves
-      // synchronously. Otherwise the promise rejects silently and the video stays at frame
-      // 0 until the next cue brings it into focus.
-      if (effectiveKey !== undefined) {
-        const nextVideo = this.videoElements.get(effectiveKey);
-        if (nextVideo !== undefined) {
-          nextVideo.currentTime = 0;
-          // Use the promise form so we can swallow the autoplay-rejection cleanly.
-          const playPromise = nextVideo.play();
-          if (playPromise !== undefined && typeof playPromise.catch === 'function') {
-            playPromise.catch(() => undefined);
-          }
+    }
+
+    // No decoded texture (or Pixi's source-less EMPTY singleton) must not enter the renderer's
+    // batch. Other beatoraja skin paths already skip EMPTY because WebGPU can crash while creating
+    // the bind group for that source; BGA cues can hit the same path when a chart references a
+    // missing/corrupt BMP slot mid-play.
+    if (!props.visible || texture === undefined || texture === Texture.EMPTY) {
+      this.sprite.visible = false;
+      return;
+    }
+
+    if (this.sprite.texture !== texture) {
+      this.sprite.texture = texture;
+    }
+    this.sprite.visible = true;
+    this.sprite.x = props.x;
+    this.sprite.y = props.y;
+    this.sprite.width = props.width;
+    this.sprite.height = props.height;
+    this.sprite.alpha = props.alpha;
+    this.sprite.tint = props.tint;
+    this.sprite.angle = props.angle;
+    this.sprite.blendMode = props.blendMode;
+
+    // Start the new key's video from the beginning. Browsers gate `.play()` behind the
+    // user-gesture autoplay policy — when the gameplay scene mounts as a result of a
+    // click / keypress (the typical entry path), the gesture transfers and play() resolves
+    // synchronously. Otherwise the promise rejects silently and the video stays at frame
+    // 0 until the next cue brings it into focus.
+    if (keyChanged && effectiveKey !== undefined) {
+      const nextVideo = this.videoElements.get(effectiveKey);
+      if (nextVideo !== undefined) {
+        nextVideo.currentTime = 0;
+        // Use the promise form so we can swallow the autoplay-rejection cleanly.
+        const playPromise = nextVideo.play();
+        if (playPromise !== undefined && typeof playPromise.catch === 'function') {
+          playPromise.catch(() => undefined);
         }
       }
     }
