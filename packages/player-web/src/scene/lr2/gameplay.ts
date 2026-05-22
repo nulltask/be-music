@@ -1651,7 +1651,7 @@ export class PixiGameplayView {
     // Destroy our scene-graph subtree. With the shared host pattern we never call `app.destroy` here — that would nuke
     // the canvas and the select scene would lose its rendering target.
     try {
-      this.sceneRoot.destroy({ children: true });
+      this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }

@@ -1437,7 +1437,7 @@ export class PixiSongSelectView {
       log.warn('texture cleanup threw', error);
     }
     try {
-      this.sceneRoot.destroy({ children: true });
+      this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
