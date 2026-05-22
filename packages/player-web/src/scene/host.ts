@@ -193,6 +193,18 @@ export class PixiSceneHost {
           await scene.enter(this);
         } catch (error) {
           log.warn('next scene.enter threw', error);
+          if (scene.root.parent === this.app.stage) {
+            this.app.stage.removeChild(scene.root);
+          }
+          if (this.current === scene) {
+            this.current = undefined;
+          }
+          try {
+            scene.dispose();
+          } catch (disposeError) {
+            log.warn('failed scene.dispose threw after enter failure', disposeError);
+          }
+          throw error;
         }
         if (!this.disposed) {
           this.app.stage.addChild(scene.root);
