@@ -44,6 +44,7 @@ import {
 } from '../../collection/collection.ts';
 import {
   type Lr2BarGraphElement,
+  type Lr2BgaElement,
   type Lr2DestinationRect,
   type Lr2ImageElement,
   type Lr2ImageRect,
@@ -881,6 +882,7 @@ export class PixiGameplayView {
   private gaugeIncreaseTimeout: number | undefined;
   private readonly bombStartedAt = new Map<string, number>();
   private bombTexture: Texture | undefined;
+  private readonly visibleBgasScratch: Lr2BgaElement[] = [];
   private readonly runtimeOps = new Set<number>();
   /**
    * LR2 groove-gauge state. Replaces the simpler hard-coded +1/+0.5/-2/-6 deltas with the proper LR2 formula:
@@ -3621,7 +3623,7 @@ export class PixiGameplayView {
       return;
     }
     const now = this.playClock();
-    for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
+    for (const [channel, startedAt] of this.bombStartedAt) {
       const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
       const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
       const timerId = (isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
@@ -3736,7 +3738,7 @@ export class PixiGameplayView {
     const cellHeight = this.bombTexture.frame.height / divy;
     const cycle = lr2Layout ? 150 / totalFrames : BOMB_CYCLE_MS;
     const now = this.playClock();
-    for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
+    for (const [channel, startedAt] of this.bombStartedAt) {
       const elapsed = now - startedAt;
       const lane = this.laneX.get(channel);
       if (!lane) {
@@ -3778,6 +3780,7 @@ export class PixiGameplayView {
    */
   private renderBga(seconds: number): void {
     this.bgaLayerPool.begin();
+    this.visibleBgasScratch.length = 0;
     // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
     // only when autoplay is on - `'ON'` (default) → render whenever the chart has BGA
     const bgaMode = this.options.bga ?? 'ON';
@@ -3800,7 +3803,12 @@ export class PixiGameplayView {
     // pair of op-30 NORMAL panels stacked vertically on the right side. The previous `find(...)` short-circuited at the
     // first match and clipped the second NORMAL panel, so DP charts under "BGA NORMAL" mode showed only the top panel
     // and left the bottom one blank.
-    const visibleBgas = skin.bgas.filter((entry) => this.isDestinationVisible(entry.destination));
+    const visibleBgas = this.visibleBgasScratch;
+    for (const entry of skin.bgas) {
+      if (this.isDestinationVisible(entry.destination)) {
+        visibleBgas.push(entry);
+      }
+    }
     if (visibleBgas.length === 0) {
       this.bgaLayerPool.end();
       return;
