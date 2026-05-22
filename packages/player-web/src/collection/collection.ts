@@ -467,9 +467,9 @@ export async function loadSongCollectionFromFiles(
  * opportunity, so they still let a large parse loop monopolize the page.
  */
 function yieldToEventLoop(): Promise<void> {
-  const schedulerYield = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler?.yield;
-  if (schedulerYield !== undefined) {
-    return schedulerYield();
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (scheduler?.yield !== undefined) {
+    return scheduler.yield();
   }
   return new Promise((resolve) => {
     setTimeout(resolve, 0);
