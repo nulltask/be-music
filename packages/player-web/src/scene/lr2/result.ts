@@ -378,8 +378,9 @@ export class PixiResultView {
       ? (this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm)
       : (this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm);
     if (!bytes || this.disposed) return;
+    let audioContext: AudioContext | undefined;
     try {
-      const audioContext = new AudioContext();
+      audioContext = new AudioContext();
       this.bgmContext = audioContext;
       const buffer = await audioContext.decodeAudioData(bytes.slice().buffer);
       if (this.disposed) {
@@ -394,6 +395,13 @@ export class PixiResultView {
       source.start();
       this.bgmSource = source;
     } catch (error) {
+      if (audioContext !== undefined) {
+        if (this.bgmContext === audioContext) {
+          this.bgmContext = undefined;
+        }
+        await audioContext.close().catch(() => undefined);
+      }
+      this.bgmSource = undefined;
       log.warn('BGM playback failed', error);
     }
   }
