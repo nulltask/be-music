@@ -21,6 +21,11 @@
       "@be-music/utils/path": ["./packages/utils/src/path.ts"],
       "@be-music/utils/pcm": ["./packages/utils/src/pcm.ts"],
       "@be-music/utils/workerize": ["./packages/utils/src/workerize.ts"],
+      "@be-music/player-web/scenes": ["./packages/player-web/src/scene/index.ts"],
+      "@be-music/player-web/skin": ["./packages/player-web/src/skin/index.ts"],
+      "@be-music/player-web/chart": ["./packages/player-web/src/chart/index.ts"],
+      "@be-music/player-web/collection": ["./packages/player-web/src/collection/index.ts"],
+      "@be-music/player-web/runtime": ["./packages/player-web/src/runtime/index.ts"],
       "@be-music/*": ["./packages/*/src/index.ts"]
     }
   },
