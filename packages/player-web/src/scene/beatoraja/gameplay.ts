@@ -248,11 +248,6 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private exitRequested = false;
   private disposed = false;
   /**
-   * Frame-counter for periodic-summary debug logs. Avoids per-tick spam by gating heavy summaries on
-   * a multiple-of-300 (~5 s at 60 fps) frame counter.
-   */
-  private debugFrameCounter = 0;
-  /**
    * Active canvas + audio recorder when the host has called {@link startRecording}. Tied to
    * the `audio.audioContext` / `audio.audioBus.outputNode` passed at construction so the
    * captured audio matches what the player hears (the bus's `outputNode` is the same node
@@ -1003,34 +998,6 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
 
-    // Periodic state snapshot — every 300 frames (≈ 5 s at 60 fps). `JSON.stringify` so the payload
-    // is selectable / copy-pasteable from devtools (vs the collapsible tree the bare object form
-    // would render). Direct `console.log` so the source link points at this exact line.
-    this.debugFrameCounter += 1;
-    if (this.debugFrameCounter % 300 === 0 && this.currentFrame) {
-      const summary = this.currentFrame.summary;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-gameplay] frame snapshot',
-        JSON.stringify({
-          seconds: +this.currentFrame.currentSeconds.toFixed(2),
-          beat: +this.currentFrame.currentBeat.toFixed(2),
-          notesInFlight: this.currentFrame.notes.length,
-          score: summary.score,
-          judges: {
-            perfect: summary.perfect,
-            great: summary.great,
-            good: summary.good,
-            bad: summary.bad,
-            poor: summary.poor,
-          },
-          hiSpeed: this.hiSpeed,
-          activeOps: ctx.activeOps.size,
-          timers: this.adapter.timerSnapshot().length,
-          poorBga: this.adapter.isPoorBgaActive(),
-        }),
-      );
-    }
   }
 
   private fitToStage(): void {
