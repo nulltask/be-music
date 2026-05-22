@@ -4,6 +4,22 @@ import { logger } from '../../logger.ts';
 
 const log = logger('bga-video');
 
+let ffmpegQueue: Promise<void> = Promise.resolve();
+
+async function withExclusiveFfmpeg<T>(task: () => Promise<T>): Promise<T> {
+  const previous = ffmpegQueue;
+  let release: () => void = () => {};
+  ffmpegQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+}
+
 /**
  * Symbol used to attach a blob `objectUrl` to a `Texture` so that downstream destroy paths
  * (`destroyUniqueTextures`, `Lr2SkinTextureStore.clear()`) can revoke the URL alongside the GPU resource.
@@ -208,6 +224,14 @@ async function transcodeVideoToBrowserCodec(
   path: string,
   options?: VideoTranscodeOptions,
 ): Promise<Uint8Array | undefined> {
+  return withExclusiveFfmpeg(() => transcodeVideoToBrowserCodecLocked(bytes, path, options));
+}
+
+async function transcodeVideoToBrowserCodecLocked(
+  bytes: Uint8Array,
+  path: string,
+  options?: VideoTranscodeOptions,
+): Promise<Uint8Array | undefined> {
   const startedAt = performance.now();
   const maxLongEdge = resolveMaxLongEdge(options);
   log.info(`transcode start: ${path} (${bytes.byteLength} bytes${maxLongEdge ? `, resize ≤ ${maxLongEdge}px` : ''})`);
@@ -343,6 +367,14 @@ function buildScaleFilterArg(maxLongEdge: number): string {
 const MAX_CHUNK_BYTES = 256 * 1024 * 1024; // 256 MiB
 const MIN_CHUNK_SECONDS = 5;
 async function transcodeViaWebCodecs(
+  bytes: Uint8Array,
+  path: string,
+  options: VideoTranscodeOptions,
+): Promise<Uint8Array | undefined> {
+  return withExclusiveFfmpeg(() => transcodeViaWebCodecsLocked(bytes, path, options));
+}
+
+async function transcodeViaWebCodecsLocked(
   bytes: Uint8Array,
   path: string,
   options: VideoTranscodeOptions,
