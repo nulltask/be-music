@@ -211,6 +211,7 @@ export class BeatorajaSkinAudioPlayer {
     const promise = (async (): Promise<AudioBuffer | undefined> => {
       const entry = this.options.files.get(canonicalPath);
       const bytes = asLoadedBytes(entry) ?? (await loadAssetBytes(entry));
+      if (this.disposed) return undefined;
       if (bytes === undefined) {
         this.buffers.set(canonicalPath, null);
         return undefined;
@@ -219,9 +220,11 @@ export class BeatorajaSkinAudioPlayer {
         // `decodeAudioData` consumes the ArrayBuffer in some browsers; slice a fresh copy so the
         // bundle's original bytes remain re-decodable in case dispose+rebuild happens later.
         const decoded = await context.decodeAudioData(bytes.slice().buffer);
+        if (this.disposed) return undefined;
         this.buffers.set(canonicalPath, decoded);
         return decoded;
       } catch {
+        if (this.disposed) return undefined;
         // Audio file format unsupported by this browser. Cache the failure as null so we don't
         // keep retrying on every play.
         this.buffers.set(canonicalPath, null);
