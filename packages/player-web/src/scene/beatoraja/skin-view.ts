@@ -82,6 +82,8 @@ import {
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { NOTE_DISTRIBUTION_COLORS } from '../../chart/beatoraja/note-distribution.ts';
 
+const BEATORAJA_VIEW_DIAGNOSTICS = false;
+
 export interface BeatorajaPlaySkinViewOptions {
   skin: BeatorajaSkin;
   textures: BeatorajaTextureCache;
@@ -2513,11 +2515,13 @@ export class BeatorajaPlaySkinView {
             : '';
     if (text.text !== next) {
       text.text = next;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-view] text content',
-        JSON.stringify({ id: entry.element.id, ref: entry.element.ref, text: next }),
-      );
+      if (BEATORAJA_VIEW_DIAGNOSTICS) {
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-view] text content',
+          JSON.stringify({ id: entry.element.id, ref: entry.element.ref, text: next }),
+        );
+      }
     }
 
     // The destination's `x` is the ANCHOR POINT, not the bounding-box left edge. Upstream
@@ -3763,75 +3767,77 @@ export class BeatorajaPlaySkinView {
         entry.overlay.blendMode = props.blendMode;
       }
     }
-    // ─── Diagnostic logging (opt-in via console scrub) ─────────────────────────────────────
-    // First-frame snapshot — emit once per entry covering the resolved (value, max, border,
-    // mode) tuple plus the picker's pick / hide breakdown. Gives an answer to "is the gauge
-    // black because the state resolver fed us NaN/0, or because the picker resolved nodes the
-    // texture map doesn't have?".
-    if (!entry.diag.initialDeclLogged) {
-      entry.diag.initialDeclLogged = true;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-view] gauge first paint',
-        JSON.stringify({
-          groupId: String(entry.group.id),
-          state: {
-            value: state.value,
-            max: state.max,
-            border: state.border,
-            mode: state.mode,
-          },
-          parts: entry.element.parts,
-          visibleCellCount,
-          pickerEmptyCount,
-          textureMissingCount,
-          lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
-        }),
-      );
-    }
-    // Subsequent transition snapshots — emit when the (mode, value-bucket, border-bucket) key
-    // changes. Buckets are coarse (Math.round) so ordinary frame-by-frame value drift doesn't
-    // spam the log; only meaningful state shifts (e.g. mode swap on Result, value crashing
-    // through 0, border flip) hit. visibleCellCount tracks alongside so we can see whether the
-    // visual paint actually followed the state change.
-    const bucketKey = `${state.mode}|${Math.round(state.value)}|${Math.round(state.border)}`;
-    if (bucketKey !== entry.diag.lastSnapshotKey) {
-      entry.diag.lastSnapshotKey = bucketKey;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-view] gauge state shift',
-        JSON.stringify({
-          groupId: String(entry.group.id),
-          state: {
-            value: state.value,
-            max: state.max,
-            border: state.border,
-            mode: state.mode,
-          },
-          visibleCellCount,
-          pickerEmptyCount,
-          textureMissingCount,
-        }),
-      );
-    }
-    // All-hidden warning — fires the first frame the gauge resolves with zero visible cells.
-    // The most common cause is texture-missing for every node id (visually a black gauge),
-    // which we surface here so the bug report can map straight to the missing image[]
-    // declaration rather than chasing the visible symptom.
-    if (visibleCellCount === 0 && !entry.diag.allHiddenLogged && entry.element.parts > 0) {
-      entry.diag.allHiddenLogged = true;
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[beatoraja-view] gauge all-cells-hidden',
-        JSON.stringify({
-          groupId: String(entry.group.id),
-          parts: entry.element.parts,
-          pickerEmptyCount,
-          textureMissingCount,
-          lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
-          state: { value: state.value, max: state.max, border: state.border, mode: state.mode },
-        }),
-      );
+    if (BEATORAJA_VIEW_DIAGNOSTICS) {
+      // ─── Diagnostic logging (opt-in via local constant) ───────────────────────────────────
+      // First-frame snapshot — emit once per entry covering the resolved (value, max, border,
+      // mode) tuple plus the picker's pick / hide breakdown. Gives an answer to "is the gauge
+      // black because the state resolver fed us NaN/0, or because the picker resolved nodes the
+      // texture map doesn't have?".
+      if (!entry.diag.initialDeclLogged) {
+        entry.diag.initialDeclLogged = true;
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-view] gauge first paint',
+          JSON.stringify({
+            groupId: String(entry.group.id),
+            state: {
+              value: state.value,
+              max: state.max,
+              border: state.border,
+              mode: state.mode,
+            },
+            parts: entry.element.parts,
+            visibleCellCount,
+            pickerEmptyCount,
+            textureMissingCount,
+            lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
+          }),
+        );
+      }
+      // Subsequent transition snapshots — emit when the (mode, value-bucket, border-bucket) key
+      // changes. Buckets are coarse (Math.round) so ordinary frame-by-frame value drift doesn't
+      // spam the log; only meaningful state shifts (e.g. mode swap on Result, value crashing
+      // through 0, border flip) hit. visibleCellCount tracks alongside so we can see whether the
+      // visual paint actually followed the state change.
+      const bucketKey = `${state.mode}|${Math.round(state.value)}|${Math.round(state.border)}`;
+      if (bucketKey !== entry.diag.lastSnapshotKey) {
+        entry.diag.lastSnapshotKey = bucketKey;
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-view] gauge state shift',
+          JSON.stringify({
+            groupId: String(entry.group.id),
+            state: {
+              value: state.value,
+              max: state.max,
+              border: state.border,
+              mode: state.mode,
+            },
+            visibleCellCount,
+            pickerEmptyCount,
+            textureMissingCount,
+          }),
+        );
+      }
+      // All-hidden warning — fires the first frame the gauge resolves with zero visible cells.
+      // The most common cause is texture-missing for every node id (visually a black gauge),
+      // which we surface here so the bug report can map straight to the missing image[]
+      // declaration rather than chasing the visible symptom.
+      if (visibleCellCount === 0 && !entry.diag.allHiddenLogged && entry.element.parts > 0) {
+        entry.diag.allHiddenLogged = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[beatoraja-view] gauge all-cells-hidden',
+          JSON.stringify({
+            groupId: String(entry.group.id),
+            parts: entry.element.parts,
+            pickerEmptyCount,
+            textureMissingCount,
+            lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
+            state: { value: state.value, max: state.max, border: state.border, mode: state.mode },
+          }),
+        );
+      }
     }
   }
 
