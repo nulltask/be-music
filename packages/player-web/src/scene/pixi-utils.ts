@@ -303,11 +303,17 @@ export function destroyUniqueTextures(textures: Iterable<Texture | undefined>, d
   return destroyed.size;
 }
 
+export interface StaggerDestroyTexturesHandle {
+  count: number;
+  drain: () => void;
+  cancel: () => void;
+}
+
 /**
  * Drop-in {@link destroyUniqueTextures} replacement that spreads the destroy + blob-revoke calls across multiple
- * frames via the supplied scheduler (typically `Application.ticker.add` / `requestAnimationFrame`). Returns the unique
- * texture count immediately, identical to the synchronous variant; the actual destroy work runs in batches of
- * `perFrame` per scheduler tick.
+ * frames via the supplied scheduler (typically `Application.ticker.add` / `requestAnimationFrame`). Returns a small
+ * handle with the unique texture count plus `drain()` for callers that must finish the queue synchronously before the
+ * scheduler can tick again (for example when the owning Pixi Application is being destroyed).
  *
  * Why this exists: the synchronous `destroyUniqueTextures` destroys every texture in one pass, which on a scene
  * transition (gameplay → result) means several hundred `texture.destroy(true)` calls landing in the same frame.
@@ -329,7 +335,7 @@ export function staggerDestroyTextures(
   textures: Iterable<Texture | undefined>,
   scheduler: (callback: () => void) => () => void,
   options: { perFrame?: number; destroySource?: boolean } = {},
-): number {
+): StaggerDestroyTexturesHandle {
   const perFrame = Math.max(1, options.perFrame ?? 8);
   const destroySource = options.destroySource ?? true;
   // Flatten + dedupe up-front so the iterable can't generate fresh references between frames (a `Map.values()` view
@@ -342,10 +348,23 @@ export function staggerDestroyTextures(
     seen.add(texture);
     queue.push(texture);
   }
-  if (queue.length === 0) return 0;
+  if (queue.length === 0) {
+    return { count: 0, drain: () => undefined, cancel: () => undefined };
+  }
   let cursor = 0;
-  let stop: () => void = () => undefined;
-  const tick = (): void => {
+  let stopImpl: (() => void) | undefined;
+  let stopRequested = false;
+  let stopped = false;
+  const stopScheduler = (): void => {
+    if (stopped) return;
+    if (stopImpl === undefined) {
+      stopRequested = true;
+      return;
+    }
+    stopped = true;
+    stopImpl();
+  };
+  const destroyBatch = (): void => {
     const end = Math.min(cursor + perFrame, queue.length);
     for (let i = cursor; i < end; i += 1) {
       try {
@@ -356,9 +375,21 @@ export function staggerDestroyTextures(
     }
     cursor = end;
     if (cursor >= queue.length) {
-      stop();
+      stopScheduler();
     }
   };
-  stop = scheduler(tick);
-  return queue.length;
+  stopImpl = scheduler(destroyBatch);
+  if (stopRequested) {
+    stopScheduler();
+  }
+  return {
+    count: queue.length,
+    drain: () => {
+      while (cursor < queue.length) {
+        destroyBatch();
+      }
+      stopScheduler();
+    },
+    cancel: stopScheduler,
+  };
 }

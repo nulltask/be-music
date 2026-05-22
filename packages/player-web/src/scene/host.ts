@@ -219,6 +219,10 @@ export class PixiSceneHost {
     return this.current;
   }
 
+  public isDisposed(): boolean {
+    return this.disposed;
+  }
+
   public dispose(): void {
     if (this.disposed) {
       return;

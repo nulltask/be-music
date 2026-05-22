@@ -1575,26 +1575,35 @@ export class PixiGameplayView {
         ...this.bgaLayerTextures.values(),
         this.bombTexture,
       ];
+      const hostIsDisposing = this.host?.isDisposed() === true;
       if (ticker) {
-        staggerDestroyTextures(queue, (callback) => {
+        const cleanup = staggerDestroyTextures(queue, (callback) => {
           ticker.add(callback);
           return () => ticker.remove(callback);
         });
+        if (hostIsDisposing) {
+          cleanup.drain();
+        }
       } else {
-        // No live ticker (defensive — host is normally still alive at this point). Fall back to a microtask scheduler
-        // so the destroy chain still spreads across event-loop turns rather than blocking the dispose call.
-        staggerDestroyTextures(queue, (callback) => {
+        // No live ticker (defensive — host is normally still alive at this point). Fall back to a macrotask scheduler
+        // so the destroy chain yields to paint/input between batches rather than monopolizing the current task.
+        const cleanup = staggerDestroyTextures(queue, (callback) => {
           let cancelled = false;
+          let timeout: ReturnType<typeof setTimeout> | undefined;
           const loop = (): void => {
             if (cancelled) return;
             callback();
-            queueMicrotask(loop);
+            if (!cancelled) timeout = setTimeout(loop, 0);
           };
-          queueMicrotask(loop);
+          timeout = setTimeout(loop, 0);
           return () => {
             cancelled = true;
+            if (timeout !== undefined) clearTimeout(timeout);
           };
         });
+        if (hostIsDisposing) {
+          cleanup.drain();
+        }
       }
       this.textures.clear();
       this.bgaTextures.clear();
