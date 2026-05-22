@@ -803,6 +803,14 @@ export class PixiBeatorajaSelectScene implements PixiScene {
       void this.previewAudioContext.close().catch(() => {});
       this.previewAudioContext = undefined;
     }
+    this.destroySearchPrompt();
+    this.destroyRowVisuals();
+    if (this.listLayer.parent) {
+      this.listLayer.parent.removeChild(this.listLayer);
+    }
+    if (!this.listLayer.destroyed) {
+      this.listLayer.destroy({ children: true });
+    }
     this.view.dispose();
     if (!this.backdrop.destroyed) {
       this.backdrop.destroy({ children: false, context: true });
@@ -833,6 +841,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     fonts?: BeatorajaFontCache;
   }): void {
     if (this.disposed) return;
+    this.destroySearchPrompt();
     this.view.dispose();
     this.cachedBaseOps = undefined;
 
@@ -901,6 +910,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     this.valueElementsById = undefined;
     this.buildRowVisuals(opts.fonts);
     this.refreshRowVisuals();
+    this.refreshSearchPrompt();
 
     this.lastFitWidth = 0;
     this.lastFitHeight = 0;
@@ -1775,12 +1785,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     return this.rowRectAt(0)!;
   }
 
-  private buildRowVisuals(fonts: BeatorajaFontCache | undefined): void {
-    const skinFamily = fonts?.values()[0]?.family;
-    const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
-    // Tear down old visuals when rebuilding (e.g. on `replaceSkin` against a skin whose
-    // songlist length differs from the previous one). Pixi children stay attached to
-    // listLayer; clearing the arrays lets the new loop allocate the right count.
+  private destroyRowVisuals(): void {
     for (const t of this.rowLabels) t?.destroy();
     for (const t of this.rowLevelLabels) t?.destroy();
     for (const sprites of this.rowLevelDigitSprites) {
@@ -1802,6 +1807,23 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // base texture is owned by the texture cache); just drop the references so the
     // rebuild loop populates a fresh array indexed alongside `rowBarSprites`.
     this.rowBarFrameTextures.length = 0;
+  }
+
+  private destroySearchPrompt(): void {
+    if (this.searchPromptText === undefined) return;
+    if (!this.searchPromptText.destroyed) {
+      this.searchPromptText.destroy();
+    }
+    this.searchPromptText = undefined;
+  }
+
+  private buildRowVisuals(fonts: BeatorajaFontCache | undefined): void {
+    const skinFamily = fonts?.values()[0]?.family;
+    const fontFamily = skinFamily !== undefined ? `'${skinFamily}', sans-serif` : 'sans-serif';
+    // Tear down old visuals when rebuilding (e.g. on `replaceSkin` against a skin whose
+    // songlist length differs from the previous one). Pixi children stay attached to
+    // listLayer; clearing the arrays lets the new loop allocate the right count.
+    this.destroyRowVisuals();
     // Resolve the songlist's `level[].id` against the skin's `value[]` declarations
     // FIRST. When it matches (e.g. default beatoraja's `playlevel_bar` value points at
     // `number.png`), each row's level slot composes per-digit sprites cropped from the
