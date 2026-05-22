@@ -55,6 +55,11 @@ interface PendingDecode {
   promise: Promise<AudioBuffer | undefined>;
 }
 
+interface SkinAudioSourceHandle {
+  source: AudioBufferSourceNode;
+  gain: GainNode | undefined;
+}
+
 /**
  * Stateful audio player keyed off a single theme bundle. Construct one per bundle — when the user
  * drops a fresh theme, dispose the old player and create a new one (the cached paths from the
@@ -70,7 +75,7 @@ export class BeatorajaSkinAudioPlayer {
   /** Resolved bundle path → in-flight decode promise (deduplicates concurrent calls). */
   private readonly pending = new Map<string, PendingDecode>();
   /** Active looped sources, keyed by the resolved bundle path. `audioStop(path)` consults this. */
-  private readonly loopingSources = new Map<string, Set<AudioBufferSourceNode>>();
+  private readonly loopingSources = new Map<string, Set<SkinAudioSourceHandle>>();
   private disposed = false;
 
   public constructor(private readonly options: BeatorajaSkinAudioPlayerOptions) {
@@ -117,12 +122,13 @@ export class BeatorajaSkinAudioPlayer {
     if (resolved === undefined) return false;
     const sources = this.loopingSources.get(resolved);
     if (sources === undefined || sources.size === 0) return false;
-    for (const source of sources) {
+    for (const handle of sources) {
       try {
-        source.stop();
+        handle.source.stop();
       } catch {
         // Source was already stopped or never started — fine.
       }
+      this.disconnectSource(handle);
     }
     sources.clear();
     return true;
@@ -133,17 +139,25 @@ export class BeatorajaSkinAudioPlayer {
     if (this.disposed) return;
     this.disposed = true;
     for (const sources of this.loopingSources.values()) {
-      for (const source of sources) {
+      for (const handle of sources) {
         try {
-          source.stop();
+          handle.source.stop();
         } catch {
           // Already stopped.
         }
+        this.disconnectSource(handle);
       }
     }
     this.loopingSources.clear();
     this.buffers.clear();
     this.pending.clear();
+    if (this.gain !== undefined) {
+      try {
+        this.gain.disconnect();
+      } catch {
+        // Already disconnected / context closed.
+      }
+    }
     if (this.ownsContext && this.context !== undefined) {
       void this.context.close().catch(() => undefined);
     }
@@ -234,35 +248,54 @@ export class BeatorajaSkinAudioPlayer {
     const source = audio.context.createBufferSource();
     source.buffer = buffer;
     source.loop = loop;
+    let perSource: GainNode | undefined;
     if (vol === 1) {
       source.connect(audio.gain);
     } else {
       // Per-source gain so multi-source mixes can run different volumes simultaneously without
       // re-using the shared gain node (which would cross-talk).
-      const perSource = audio.context.createGain();
+      perSource = audio.context.createGain();
       perSource.gain.value = Math.max(0, Math.min(1, vol));
       source.connect(perSource).connect(audio.gain);
     }
-    source.start();
+    const handle: SkinAudioSourceHandle = { source, gain: perSource };
+    try {
+      source.start();
+    } catch {
+      this.disconnectSource(handle);
+      return;
+    }
     if (loop) {
       let bucket = this.loopingSources.get(canonicalPath);
       if (bucket === undefined) {
         bucket = new Set();
         this.loopingSources.set(canonicalPath, bucket);
       }
-      bucket.add(source);
+      bucket.add(handle);
       source.onended = (): void => {
-        bucket?.delete(source);
+        bucket?.delete(handle);
+        this.disconnectSource(handle);
       };
     } else {
       // Auto-cleanup once the buffer finishes — no manual stop tracking needed for one-shots.
       source.onended = (): void => {
-        try {
-          source.disconnect();
-        } catch {
-          // Already disconnected.
-        }
+        this.disconnectSource(handle);
       };
+    }
+  }
+
+  private disconnectSource(handle: SkinAudioSourceHandle): void {
+    try {
+      handle.source.disconnect();
+    } catch {
+      // Already disconnected / context closed.
+    }
+    if (handle.gain !== undefined) {
+      try {
+        handle.gain.disconnect();
+      } catch {
+        // Already disconnected / context closed.
+      }
     }
   }
 }

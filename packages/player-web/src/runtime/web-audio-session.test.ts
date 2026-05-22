@@ -12,6 +12,7 @@ function createMocks(): {
   audioContext: AudioContext;
   audioBus: AudioBusHandle;
   trackedBufferSources: { buffer: AudioBuffer | null; connectedTo: GainNode | null; node: AudioBufferSourceNode }[];
+  createdGains: GainNode[];
   keyMixer: GainNode;
   bgmMixer: GainNode;
 } {
@@ -20,6 +21,7 @@ function createMocks(): {
     connectedTo: GainNode | null;
     node: AudioBufferSourceNode;
   }[] = [];
+  const createdGains: GainNode[] = [];
 
   const makeGainNode = (): GainNode => {
     const gain = {
@@ -67,7 +69,11 @@ function createMocks(): {
       trackedBufferSources.push(tracker);
       return node as unknown as AudioBufferSourceNode;
     }),
-    createGain: vi.fn(() => makeGainNode()),
+    createGain: vi.fn(() => {
+      const gain = makeGainNode();
+      createdGains.push(gain);
+      return gain;
+    }),
     suspend: vi.fn(async () => undefined),
     resume: vi.fn(async () => undefined),
   } as unknown as AudioContext;
@@ -88,7 +94,7 @@ function createMocks(): {
     dispose: vi.fn(),
   } as unknown as AudioBusHandle;
 
-  return { audioContext, audioBus, trackedBufferSources, keyMixer, bgmMixer };
+  return { audioContext, audioBus, trackedBufferSources, createdGains, keyMixer, bgmMixer };
 }
 
 function makeChartWithSamples(): ReturnType<typeof createEmptyJson> {
@@ -151,6 +157,23 @@ describe('createWebAudioSession', () => {
     // The source connects to the gain node first (not directly to keyMixer); the per-slot gain then connects to
     // the mixer.
     expect(trackedBufferSources[0]!.connectedTo).not.toBe(keyMixer);
+  });
+
+  test('disconnects the #WAVCMD GainNode when the source ends', () => {
+    const { audioContext, audioBus, trackedBufferSources, createdGains } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer()]]),
+      wavCmdVolumeMultipliers: new Map([['01', 0.5]]),
+    });
+
+    session.triggerEvent?.(mkEvent('11', '01'));
+    trackedBufferSources[0]!.node.onended?.(new Event('ended') as Event);
+
+    expect(trackedBufferSources[0]!.node.disconnect).toHaveBeenCalled();
+    expect(createdGains[0]!.disconnect).toHaveBeenCalled();
   });
 
   test('honours bmson c=true continuation by suppressing retriggers of an in-flight slot', () => {
