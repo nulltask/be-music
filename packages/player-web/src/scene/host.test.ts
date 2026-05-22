@@ -1,4 +1,4 @@
-import { Container } from 'pixi.js';
+import { Container, RendererType } from 'pixi.js';
 import { describe, expect, it, vi } from 'vitest';
 import { PixiSceneHost, resolveRendererPreference, type PixiScene } from './host.ts';
 
@@ -40,6 +40,39 @@ describe('resolveRendererPreference', () => {
 });
 
 describe('PixiSceneHost', () => {
+  it('keeps texture GC sweeps out of the hot gameplay cadence', async () => {
+    const host = new PixiSceneHost();
+    const canvas = {
+      setAttribute: vi.fn(),
+      style: {} as Record<string, string>,
+      tabIndex: 0,
+    };
+    const init = vi.spyOn(host.app, 'init').mockImplementation(async function initMock(this: typeof host.app, options) {
+      (this as unknown as { renderer: { canvas: typeof canvas; type: RendererType } }).renderer = {
+        canvas,
+        type: RendererType.WEBGL,
+      };
+      expect(options).toEqual(
+        expect.objectContaining({
+          gcFrequency: 60_000,
+          gcMaxUnusedTime: 120_000,
+        }),
+      );
+    });
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const container = { appendChild: vi.fn() } as unknown as HTMLElement;
+
+    try {
+      await host.mount(container);
+
+      expect(init).toHaveBeenCalledTimes(1);
+      expect(container.appendChild).toHaveBeenCalledWith(canvas);
+    } finally {
+      info.mockRestore();
+      init.mockRestore();
+    }
+  });
+
   it('disposes and forgets a scene whose enter hook fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const host = new PixiSceneHost();
