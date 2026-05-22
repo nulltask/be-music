@@ -3897,22 +3897,22 @@ export class BeatorajaPlaySkinView {
           entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
           break;
         case 'polyline-graph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'bpmgraph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'judgegraph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'gaugegraph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'timingvisualizer':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'timingdistribution':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'slider':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
@@ -3936,7 +3936,7 @@ export class BeatorajaPlaySkinView {
     // explicitly — it doesn't appear in `entries[]` and would otherwise leak its
     // GraphicsContext / GPU buffer.
     this.container.mask = null;
-    this.clipMask.destroy({ children: false, texture: false, textureSource: false });
+    this.clipMask.destroy({ children: false, texture: false, textureSource: false, context: true });
     this.container.destroy({ children: false });
   }
 }

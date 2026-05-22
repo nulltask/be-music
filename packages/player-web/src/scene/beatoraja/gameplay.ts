@@ -573,6 +573,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.noteLayer.dispose();
     this.markerLayer.dispose();
     this.view.dispose();
+    if (!this.backdrop.destroyed) {
+      this.backdrop.destroy({ children: false, context: true });
+    }
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
     }

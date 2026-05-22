@@ -237,6 +237,9 @@ export class PixiBeatorajaResultScene implements PixiScene {
     this.exit();
     this.bgm.stop();
     this.view.dispose();
+    if (!this.backdrop.destroyed) {
+      this.backdrop.destroy({ children: false, context: true });
+    }
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
     }

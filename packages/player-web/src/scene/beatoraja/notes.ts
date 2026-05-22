@@ -292,7 +292,7 @@ export class BeatorajaNoteLayer {
 
   dispose(): void {
     if (!this.container.destroyed) {
-      this.container.destroy({ children: true });
+      this.container.destroy({ children: true, context: true });
     }
     this.graphicsPool.length = 0;
     this.spritePool.length = 0;
