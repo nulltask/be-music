@@ -128,7 +128,7 @@ function mapLr2BlendMode(blend: number): BLEND_MODES {
  * same `Texture` instance.
  */
 export function createCroppedTexture(texture: Texture | undefined, rect: PixiCropRect): Texture | undefined {
-  return createCachedCroppedTexture(texture, rect);
+  return createCachedCroppedTexture(texture, rect, { requireFiniteFrame: true });
 }
 
 /**

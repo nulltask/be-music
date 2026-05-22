@@ -118,6 +118,15 @@ describe('createCroppedTexture', () => {
     expect(first).toBe(second);
     expect(first?.source).toBe(base.source);
   });
+
+  test('rejects non-finite LR2 frame requests before constructing a Pixi texture', () => {
+    const base = texture();
+
+    expect(createCroppedTexture(base, { x: Number.NaN, y: 0, w: 16, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: Number.POSITIVE_INFINITY, w: 16, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: 0, w: Number.NaN, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: 0, w: 16, h: Number.POSITIVE_INFINITY })).toBeUndefined();
+  });
 });
 
 describe('makeLr2BargraphSprite', () => {
