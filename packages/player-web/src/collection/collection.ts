@@ -2,7 +2,7 @@ import { unzipSync } from 'fflate';
 import { isPlayableChannel, resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-music/chart';
 import { extractDeclaredBmsCharset, parseBms, parseBmson } from '@be-music/parser';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
-import { basename, dirname, normalizePath, runWithConcurrency } from '@be-music/utils/core';
+import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
   BrowserSongAssetEntry,
@@ -21,6 +21,8 @@ export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 const log = logger('drop');
+const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
+const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
 
 /**
  * Optional progress hook for the dropped-folder loaders. When supplied, the loader fires the callback as it walks
@@ -216,13 +218,6 @@ async function collectFilesFromEntry(
 }
 
 /**
- * Default concurrency cap for parallel file reads. Tuned high enough that 4000 small files saturate disk I/O without
- * the browser starting to thrash on micro-task scheduling. Tweakable per-call via {@link readFilesIntoBytesMap}'s
- * options.
- */
-const FILE_READ_CONCURRENCY = 32;
-
-/**
  * Reads `files` into a `Map<path, bytes>` using a worker-pool pattern so up to `concurrency` reads are in-flight at
  * once. Replaces the textbook `for ... await arrayBuffer()` serial loop, which on a 4000-file drop spent the bulk of
  * its time idling on disk between reads.
@@ -254,50 +249,18 @@ export async function readFilesIntoBytesMap(
     shouldDefer?: (path: string) => boolean;
   } = {},
 ): Promise<Map<string, BrowserSongAssetEntry>> {
-  const concurrency = options.concurrency ?? FILE_READ_CONCURRENCY;
-  const deferAudio = options.deferAudio ?? true;
-  const decideDefer = options.shouldDefer ?? (deferAudio ? isAudioPath : neverDefer);
-  const result = new Map<string, BrowserSongAssetEntry>();
-  let completed = 0;
-  const total = files.length;
-  await runWithConcurrency(files, concurrency, async (file) => {
-    const path = normalizePath(file.webkitRelativePath || file.name);
-    if (decideDefer(path)) {
-      result.set(path, file);
-    } else {
-      try {
-        const bytes = new Uint8Array(await file.arrayBuffer());
-        result.set(path, bytes);
-      } catch (error) {
-        // A single file failing to read shouldn't kill the entire drop. The map simply omits that path; the caller's
-        // chart parser / asset resolver will treat it as missing, which matches what happens for genuinely-missing
-        // files.
-        log.warn(`skipped (arrayBuffer failed): ${path}`, error);
-      }
-    }
-    completed += 1;
-    options.onRead?.(path, completed, total);
+  return readFilesIntoEntryMap(files, {
+    concurrency: options.concurrency,
+    onRead: options.onRead,
+    deferAudio: options.deferAudio,
+    shouldDefer: options.shouldDefer,
+    onReadError: (path, error) => {
+      // A single file failing to read shouldn't kill the entire drop. The map simply omits that path; the caller's
+      // chart parser / asset resolver will treat it as missing, which matches what happens for genuinely-missing
+      // files.
+      log.warn(`skipped (arrayBuffer failed): ${path}`, error);
+    },
   });
-  return result;
-}
-
-function neverDefer(): boolean {
-  return false;
-}
-
-/**
- * Audio extensions for which we defer the byte-load by default. Mirrors the codec fallback chain in {@link
- * audioFallbackPaths} so a chart's `#WAV xx.wav` declaration finds the deferred `xx.opus` / `.ogg` / `.mp3` file as
- * transparently as it found the eager bytes before.
- */
-const AUDIO_EXTENSIONS = new Set(['.wav', '.ogg', '.mp3', '.opus', '.flac', '.oga']);
-
-function isAudioPath(path: string): boolean {
-  const dot = path.lastIndexOf('.');
-  if (dot < 0) return false;
-  const slash = path.lastIndexOf('/');
-  if (slash > dot) return false;
-  return AUDIO_EXTENSIONS.has(path.slice(dot).toLowerCase());
 }
 
 /**
@@ -356,6 +319,7 @@ export async function loadSongCollectionFromFiles(
   const sources: BrowserSongAssetSource[] = [];
   const looseFiles = new Map<string, BrowserSongAssetEntry>();
   const looseLabels = new Set<string>();
+  const errors: BrowserSongCollection['errors'] = [];
 
   // Materialize the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
   // is a no-op spread; it just lets the typing accept any iterable.
@@ -392,8 +356,23 @@ export async function loadSongCollectionFromFiles(
   }
   // ZIPs read after the loose pool — there's typically zero or one of them per drop, so serializing here costs nothing.
   for (const file of zipFiles) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    sources.push(createZipSource(file.name, bytes));
+    const sourceId = `zip:${file.name}`;
+    if (file.size > MAX_ZIP_ARCHIVE_BYTES) {
+      errors.push({
+        sourceId,
+        message: `ZIP archive is too large (${formatBytes(file.size)}; limit ${formatBytes(MAX_ZIP_ARCHIVE_BYTES)})`,
+      });
+      continue;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      sources.push(createZipSource(file.name, bytes));
+    } catch (error) {
+      errors.push({
+        sourceId,
+        message: error instanceof Error ? error.message : 'failed to read ZIP archive',
+      });
+    }
   }
   // Final 100 % emit for the read phase — the throttled wrapper may have suppressed the last one.
   onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
@@ -408,7 +387,6 @@ export async function loadSongCollectionFromFiles(
   }
 
   const songs: BrowserSongEntry[] = [];
-  const errors: BrowserSongCollection['errors'] = [];
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
@@ -484,17 +462,17 @@ export async function loadSongCollectionFromFiles(
 }
 
 /**
- * Schedules a microtask that resolves on the next browser macrotask, giving the event loop a chance to paint a frame
- * and dispatch any pending progress events. Cheaper than `setTimeout(0)` (no minimum-delay clamp) and works in
- * Node-environment tests too (the Promise resolves on the next tick).
+ * Yields to a browser task boundary so the host can paint a frame and dispatch pending progress events during large
+ * chart drops. `queueMicrotask` is intentionally not used here: microtasks run before the browser gets a render
+ * opportunity, so they still let a large parse loop monopolize the page.
  */
 function yieldToEventLoop(): Promise<void> {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (scheduler?.yield !== undefined) {
+    return scheduler.yield();
+  }
   return new Promise((resolve) => {
-    if (typeof queueMicrotask === 'function') {
-      queueMicrotask(resolve);
-    } else {
-      Promise.resolve().then(resolve);
-    }
+    setTimeout(resolve, 0);
   });
 }
 
@@ -505,7 +483,20 @@ export function describeSongCollection(collection: BrowserSongCollection): strin
 }
 
 function createZipSource(name: string, bytes: Uint8Array): BrowserSongAssetSource {
-  const entries = unzipSync(bytes);
+  let uncompressedBytes = 0;
+  const entries = unzipSync(bytes, {
+    filter: (file) => {
+      const normalizedPath = normalizePath(file.name);
+      if (!normalizedPath || normalizedPath.endsWith('/')) return false;
+      uncompressedBytes += file.originalSize;
+      if (uncompressedBytes > MAX_ZIP_UNCOMPRESSED_BYTES) {
+        throw new Error(
+          `ZIP archive expands beyond ${formatBytes(MAX_ZIP_UNCOMPRESSED_BYTES)}; use a smaller archive or drop an extracted folder`,
+        );
+      }
+      return true;
+    },
+  });
   const files = new Map<string, Uint8Array>();
   for (const [path, entryBytes] of Object.entries(entries)) {
     const normalizedPath = normalizePath(path);
@@ -520,6 +511,14 @@ function createZipSource(name: string, bytes: Uint8Array): BrowserSongAssetSourc
     label: name,
     files,
   };
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return 'unknown size';
+  const mib = bytes / (1024 * 1024);
+  if (mib < 1024) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MiB`;
+  const gib = mib / 1024;
+  return `${gib.toFixed(gib >= 10 ? 0 : 1)} GiB`;
 }
 
 function parseChart(path: string, bytes: Uint8Array) {

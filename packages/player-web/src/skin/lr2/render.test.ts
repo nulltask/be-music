@@ -1,6 +1,7 @@
 import { Rectangle, Texture } from 'pixi.js';
 import { describe, expect, test } from 'vitest';
 import {
+  createCroppedTexture,
   evaluateElementDestination,
   makeLr2BargraphSprite,
   makeLr2SliderSprite,
@@ -105,6 +106,26 @@ describe('makeLr2StaticImageSprite', () => {
     expect(sprite?.texture.width).toBe(320);
     expect(sprite?.width).toBe(120);
     expect(sprite?.height).toBe(90);
+  });
+});
+
+describe('createCroppedTexture', () => {
+  test('reuses cached crop textures for repeated LR2 frame requests', () => {
+    const base = texture();
+    const first = createCroppedTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+    const second = createCroppedTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+
+    expect(first).toBe(second);
+    expect(first?.source).toBe(base.source);
+  });
+
+  test('rejects non-finite LR2 frame requests before constructing a Pixi texture', () => {
+    const base = texture();
+
+    expect(createCroppedTexture(base, { x: Number.NaN, y: 0, w: 16, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: Number.POSITIVE_INFINITY, w: 16, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: 0, w: Number.NaN, h: 16 })).toBeUndefined();
+    expect(createCroppedTexture(base, { x: 0, y: 0, w: 16, h: Number.POSITIVE_INFINITY })).toBeUndefined();
   });
 });
 

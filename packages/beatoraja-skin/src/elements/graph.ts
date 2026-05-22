@@ -43,7 +43,8 @@
 // else is preserved verbatim for forward compat but not interpreted here.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
-import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from '../lua.ts';
+import { floatPropertyField, numberField, sourceIdField } from './fields.ts';
+import type { BeatorajaLuaFunctionValue } from '../lua.ts';
 import type { BeatorajaImageId } from './image.ts';
 import type { BeatorajaSkinSourceId } from '../types.ts';
 
@@ -123,26 +124,4 @@ function angleField(value: unknown): BeatorajaGraphFillDirection {
   if (typeof value === 'number' && value === 1) return 'vertical';
   if (value === undefined) return 'vertical'; // JsonSkin default = 1 = vertical.
   return 'horizontal';
-}
-
-function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function floatPropertyField(value: unknown): BeatorajaFloatPropertyRef | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (isBeatorajaLuaFunctionValue(value)) return value;
-  return undefined;
-}
-
-function sourceIdField(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  fallback: BeatorajaSkinSourceId,
-): BeatorajaSkinSourceId {
-  const v = record[key];
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) return v;
-  return fallback;
 }

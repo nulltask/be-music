@@ -202,6 +202,9 @@ export class ChartPreviewEngine {
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    // Bump the sequence just like `stop()` so async loads/decodes already in flight cannot resurrect playback after
+    // permanent teardown.
+    this.activeSequence += 1;
     this.cancelPending();
     this.stopAllSources();
     this.emitPlaybackStop();
@@ -244,8 +247,12 @@ export class ChartPreviewEngine {
     this.onPlaybackStop?.();
   }
 
+  private isStale(sequence: number): boolean {
+    return this.disposed || sequence !== this.activeSequence;
+  }
+
   private async startPreview(target: ChartPreviewTarget, sequence: number): Promise<void> {
-    if (this.disposed || sequence !== this.activeSequence) return;
+    if (this.isStale(sequence)) return;
     const previewPath = resolveChartPreviewPath(target.song.chart);
     if (previewPath !== undefined) {
       await this.playPreviewFile(target, previewPath, sequence);
@@ -258,7 +265,7 @@ export class ChartPreviewEngine {
     const entry = resolveChartAudioAsset(target.source, target.song.chartPath, previewPath);
     const bytes = await loadAssetBytes(entry);
     if (!bytes) return;
-    if (sequence !== this.activeSequence) return;
+    if (this.isStale(sequence)) return;
     let buffer: AudioBuffer;
     try {
       buffer = await this.audioContext.decodeAudioData(bytes.slice().buffer);
@@ -267,21 +274,26 @@ export class ChartPreviewEngine {
       // strictly better than throwing into the rAF tick.
       return;
     }
-    if (sequence !== this.activeSequence) return;
+    if (this.isStale(sequence)) return;
     // LR2 / packages/player both trim leading silence from the preview rendering so the user hears the first audible
     // sample the moment the focus delay elapses, not several hundred milliseconds of "did anything happen?" silence
     // baked into the source file. Web Audio's `start(when, offset)` is exactly the right tool: skip past the silent
     // prefix on first play, and pin the loop boundary to the same offset so every subsequent loop iteration also starts
     // at the first audible sample.
     const audibleOffsetSeconds = findFirstAudibleOffsetSeconds(buffer);
-    const source = this.audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.loop = this.loopPreviewFile;
-    if (this.loopPreviewFile && audibleOffsetSeconds > 0) {
-      source.loopStart = audibleOffsetSeconds;
-      // `loopEnd = 0` means "end of buffer", which is what we want.
+    let source: AudioBufferSourceNode;
+    try {
+      source = this.audioContext.createBufferSource();
+      source.buffer = buffer;
+      source.loop = this.loopPreviewFile;
+      if (this.loopPreviewFile && audibleOffsetSeconds > 0) {
+        source.loopStart = audibleOffsetSeconds;
+        // `loopEnd = 0` means "end of buffer", which is what we want.
+      }
+      source.connect(this.output);
+    } catch {
+      return;
     }
-    source.connect(this.output);
     source.onended = (): void => {
       this.activeSources.delete(source);
       try {
@@ -296,7 +308,17 @@ export class ChartPreviewEngine {
       }
     };
     this.activeSources.add(source);
-    source.start(0, audibleOffsetSeconds);
+    try {
+      source.start(0, audibleOffsetSeconds);
+    } catch {
+      this.activeSources.delete(source);
+      try {
+        source.disconnect();
+      } catch {
+        // See `stopAllSources`.
+      }
+      return;
+    }
     this.emitPlaybackStart(target);
   }
 
@@ -315,23 +337,23 @@ export class ChartPreviewEngine {
     const buffers = new Map<string, AudioBuffer>();
     await Promise.all(
       [...sampleKeys].map(async (key) => {
-        if (sequence !== this.activeSequence) return;
+        if (this.isStale(sequence)) return;
         const path = chart.resources.wav[key];
         if (typeof path !== 'string') return;
         const entry = resolveChartAudioAsset(target.source, target.song.chartPath, path);
         const bytes = await loadAssetBytes(entry);
         if (!bytes) return;
-        if (sequence !== this.activeSequence) return;
+        if (this.isStale(sequence)) return;
         try {
           const buffer = await this.audioContext.decodeAudioData(bytes.slice().buffer);
-          if (sequence !== this.activeSequence) return;
+          if (this.isStale(sequence)) return;
           buffers.set(key, buffer);
         } catch {
           // Skipped — same rationale as the file branch above.
         }
       }),
     );
-    if (sequence !== this.activeSequence) return;
+    if (this.isStale(sequence)) return;
     // Charts often have a few seconds of silent intro (no events until measure 1+). Pinning the first DECODABLE trigger
     // to `t=0` removes that lead-in so the user hears the first hit as soon as the focus delay elapses, matching how
     // `packages/player`'s CLI preview trims its rendered waveform. We pick the earliest trigger whose WAV actually
@@ -346,11 +368,17 @@ export class ChartPreviewEngine {
     }
     const startAt = this.audioContext.currentTime;
     for (const trigger of triggers) {
+      if (this.isStale(sequence)) return;
       const buffer = buffers.get(trigger.sampleKey);
       if (!buffer) continue;
-      const source = this.audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.connect(this.output);
+      let source: AudioBufferSourceNode;
+      try {
+        source = this.audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(this.output);
+      } catch {
+        continue;
+      }
       const offset = trigger.sampleOffsetSeconds ?? 0;
       const when = startAt + Math.max(0, trigger.seconds - leadOffsetSeconds);
       source.onended = (): void => {
@@ -377,6 +405,11 @@ export class ChartPreviewEngine {
         // `start` rejects on negative offsets / out-of-range values that can sneak in for malformed bmson slice
         // metadata. Keep going — one bad trigger shouldn't mute the rest of the preview.
         this.activeSources.delete(source);
+        try {
+          source.disconnect();
+        } catch {
+          // See `stopAllSources`.
+        }
       }
     }
     if (this.activeSources.size > 0) {

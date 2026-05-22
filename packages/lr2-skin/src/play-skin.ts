@@ -1,6 +1,7 @@
 import { resolveChartPlayVariant } from '@be-music/chart';
 import { normalizePath } from '@be-music/utils/core';
-import { readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
+import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
+import { asLoadedBytes, readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
 import { loadLr2SkinFromSourceFiles, type Lr2PlayVariant, type Lr2Skin } from './skin.ts';
 
@@ -131,6 +132,27 @@ export async function loadLr2ThemeSkinsFromFiles(
   // duplication entirely; the play / select / result / decide skins all share the same map by reference, so memory cost
   // is also lower.
   const sharedFiles = await readFilesIntoBytesMap(sourceFiles);
+  // DXA flattening pass. Themes like LITONE4 pack most of their textures + bitmap fonts into `.dxa` archives sitting
+  // beside the bare `.dds` / `.lr2font` files (`Play/parts/common.dxa` containing `default.dds`, etc.). The skin's
+  // CSV directives reference those inner paths as if the DXA were a folder (`#IMAGE,Play/parts/common/default.dds`),
+  // so the asset resolver needs to see the unpacked contents.
+  //
+  // We expand here, once per theme load, into the same map every downstream consumer reads. On-disk files always win
+  // over DXA-internal candidates so an explicitly extracted folder (LR2 default ships `parts/normal/lane/default.dds`
+  // both as a bare file AND inside `parts/normal.dxa`) doesn't get shadowed by stale bytes from inside the archive.
+  // Failures during DXA decode are silent — a malformed archive simply contributes no virtual entries.
+  const dxaSeed: Array<readonly [string, Uint8Array]> = [];
+  for (const [path, entry] of sharedFiles) {
+    if (!path.toLowerCase().endsWith('.dxa')) continue;
+    const bytes = asLoadedBytes(entry);
+    if (bytes) dxaSeed.push([path, bytes]);
+  }
+  for (const { path, bytes } of extractDxaArchivesAsFlatFiles(dxaSeed)) {
+    if (sharedFiles.has(path)) continue;
+    // The asset map is `Map<string, Lr2SkinFileEntry>` where `AssetFileEntry = Uint8Array | InputFile`. The Uint8Array
+    // branch is the eager-loaded one that `asLoadedBytes` returns directly, so DXA-extracted bytes can go in as-is.
+    (sharedFiles as Map<string, Lr2SkinFileEntry>).set(path, bytes);
+  }
   // Total = play variants (one per LR2_PLAY_VARIANTS entry) + select skin + result skin + decide skin + 5 theme BGMs
   // (select / decide / clear / fail / result) + 6 system sounds (cursor-move + folder open/close + option
   // open/close/change). Hard-coding it to the structural shape below keeps the count honest if anyone adds another

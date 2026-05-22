@@ -16,15 +16,10 @@
 //   - Score-best-record lookups (no DB layer)
 //   - Per-side (1P / 2P) chart info — only single-player decide is exercised today.
 
-import { Container, Graphics, type Ticker } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
-  BEATORAJA_TEXT,
-  TIMER_PLAY,
-  TIMER_READY,
-  TIMER_SCENE_START,
-  TIMER_STARTINPUT,
   buildBaseOpSet,
   type BeatorajaSkin,
   type BeatorajaSkinConfig,
@@ -32,14 +27,25 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
-import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
+import type { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
+import {
+  attachBeatorajaSceneLifecycle,
+  BeatorajaSceneBgmPlayer,
+  fitBeatorajaViewToStage,
+  hasBeatorajaSceneFadingTransition,
+  isBeatorajaSceneInputReady,
+  resolveBeatorajaChartImage,
+  resolveBeatorajaSkinTimingMs,
+  resolveBeatorajaSongText,
+  type BeatorajaChartImages,
+  type BeatorajaSceneLoopAttachment,
+} from './shared-scene.ts';
 
 export interface PixiBeatorajaDecideSceneOptions {
   /** Decide skin (`header.type === 6`). */
@@ -73,11 +79,7 @@ export interface PixiBeatorajaDecideSceneOptions {
    * matching destinations. Loading is the host's responsibility — the scene doesn't own a
    * decoder for arbitrary BMP / PNG / JPG paths.
    */
-  chartImages?: {
-    stageFile?: import('pixi.js').Texture;
-    backBmp?: import('pixi.js').Texture;
-    banner?: import('pixi.js').Texture;
-  };
+  chartImages?: BeatorajaChartImages;
   /**
    * Optional override for the auto-advance window in ms. When unset, the scene reads
    * {@link BeatorajaSkin.scene} from the parsed skin (mirrors upstream `MusicDecide.render`'s
@@ -156,7 +158,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaDecideSceneOptions;
   private host?: PixiSceneHost;
-  private tickerHandle?: (ticker: Ticker) => void;
+  private sceneLoop?: BeatorajaSceneLoopAttachment;
   private startMs = 0;
   /**
    * Stamped at scene `enter()`. Subsequent calls clamp to this value so the timer ladder is
@@ -175,14 +177,8 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   private transitionToContinue: BeatorajaSceneTransition | undefined;
   private transitionToCancel: BeatorajaSceneTransition | undefined;
   private disposed = false;
+  private readonly bgm = new BeatorajaSceneBgmPlayer('beatoraja-decide', () => this.disposed);
   private cachedBaseOps: ReadonlySet<number> | undefined;
-  /**
-   * Scene-owned `AudioContext` for the decide BGM. Lazily created on first `enter()` when
-   * `bgmBytes` is set. Closed in `dispose()` so the OS audio output isn't held open longer than
-   * the scene's visible lifetime.
-   */
-  private audioContext: AudioContext | undefined;
-  private bgmSource: AudioBufferSourceNode | undefined;
   /** Cached BPM polyline for the picked chart — `[]` when no chart was supplied. */
   private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
   /**
@@ -223,7 +219,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       // Synthetic-id chart-image lookup. `-100 STAGEFILE` / `-101 BACKBMP` / `-102 BANNER`
       // resolve to the host-supplied textures; missing entries return `undefined` and the
       // matching destinations stay hidden.
-      chartImageProvider: (id) => this.resolveChartImage(id),
+      chartImageProvider: (id) => resolveBeatorajaChartImage(this.options.chartImages, id),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -246,54 +242,30 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     // Resolve `Skin.input` per upstream `MusicDecide.render` line 22-24. Reference theme
     // ships `input = 500`; we fall back to the same value when the skin omits the field
     // so headless tests / hand-rolled fixtures behave consistently.
-    const inputDelayMs =
-      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
-        ? this.options.skin.input
-        : DEFAULT_DECIDE_INPUT_MS;
-    // Stamp the timer ladder at scene-start. `TIMER_SCENE_START = 0` is always at 0 ms (the global
-    // clock); `TIMER_STARTINPUT = 1` fires after the `Skin.input` idle so input-gated chrome only
-    // appears once the splash has settled. `TIMER_READY = 40` and `TIMER_PLAY = 41` are present so
-    // chrome gated on "post-load" / "now playing" ops also reveals during the splash — the gameplay
-    // scene re-stamps them when it mounts, so nothing in the live path notices.
-    this.timerStartedAt = new Map([
-      [TIMER_SCENE_START, 0],
-      [TIMER_STARTINPUT, inputDelayMs],
-      [TIMER_READY, inputDelayMs],
-      [TIMER_PLAY, inputDelayMs],
-    ]);
-    // Two parallel transition slots — one for the "continue" hand-off (auto-advance / Enter /
-    // Space) and one for "cancel" (Escape). Whichever fires first wins (the helpers are gated
-    // by `isFadingOut()` to ignore late triggers); they only differ in which callback fires
-    // when the fadeout window completes.
-    const fadeoutMs = this.options.skin.fadeout;
-    this.transitionToContinue = new BeatorajaSceneTransition({
-      fadeoutMs,
+    const inputDelayMs = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_DECIDE_INPUT_MS);
+    const lifecycle = attachBeatorajaSceneLifecycle({
+      host,
+      skin: this.options.skin,
+      inputDelayMs,
       getElapsedMs: () => performance.now() - this.startMs,
-      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
-      onComplete: () => this.options.onContinue?.(),
+      tick: () => this.tick(),
+      handleKeyDown: this.handleKeyDown,
+      transitionCompletions: [
+        () => this.options.onContinue?.(),
+        () => (this.options.onCancel ?? this.options.onContinue)?.(),
+      ],
     });
-    this.transitionToCancel = new BeatorajaSceneTransition({
-      fadeoutMs,
-      getElapsedMs: () => performance.now() - this.startMs,
-      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
-      onComplete: () => (this.options.onCancel ?? this.options.onContinue)?.(),
-    });
-    this.tickerHandle = () => this.tick();
-    host.app.ticker.add(this.tickerHandle);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.handleKeyDown);
-    }
-    void this.startBgm();
+    const [continueTransition, cancelTransition] = lifecycle.transitions;
+    this.timerStartedAt = lifecycle.timerStartedAt;
+    this.transitionToContinue = continueTransition;
+    this.transitionToCancel = cancelTransition;
+    this.sceneLoop = lifecycle.sceneLoop;
+    void this.bgm.start(this.options.bgmBytes);
   }
 
   exit(): void {
-    if (this.tickerHandle && this.host) {
-      this.host.app.ticker.remove(this.tickerHandle);
-    }
-    this.tickerHandle = undefined;
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleKeyDown);
-    }
+    this.sceneLoop?.dispose();
+    this.sceneLoop = undefined;
     this.host = undefined;
     // Drop the per-enter() transition helpers so a future re-entry rebuilds them. The
     // helpers' internal `completed` latch would otherwise carry over and silently no-op
@@ -306,8 +278,11 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     if (this.disposed) return;
     this.disposed = true;
     this.exit();
-    this.stopBgm();
+    this.bgm.stop();
     this.view.dispose();
+    if (!this.backdrop.destroyed) {
+      this.backdrop.destroy({ children: false, context: true });
+    }
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
     }
@@ -316,61 +291,6 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   /** Screenshot capture descriptor — see `PixiScene.getStageInfo`. */
   getStageInfo(): { container: Container; width: number; height: number } {
     return { container: this.view.container, width: this.view.width, height: this.view.height };
-  }
-
-  /**
-   * Decode + start the decide BGM. Lazy in two senses: the `AudioContext` is constructed on
-   * demand (so headless tests that never `enter()` the scene don't allocate one), and the bytes
-   * are decoded inline on first play (cheap for the few hundred KB BGM payloads — fast enough
-   * that the splash isn't visibly silent on the first frame).
-   *
-   * No-op when `bgmBytes` is unset, the browser doesn't expose `AudioContext`, or the decode
-   * fails. Failures are logged once and don't tear down the scene — the user still sees the
-   * splash, just silent.
-   */
-  private async startBgm(): Promise<void> {
-    const bytes = this.options.bgmBytes;
-    if (bytes === undefined) return;
-    if (typeof globalThis === 'undefined' || typeof globalThis.AudioContext === 'undefined') return;
-    try {
-      if (this.audioContext === undefined) {
-        this.audioContext = new globalThis.AudioContext();
-      }
-      const ctx = this.audioContext;
-      // The user just confirmed a song pick — that gesture should be enough to satisfy autoplay
-      // policy. Ignore resume failures (they happen in tests / iframe sandboxes); the rest of
-      // the scene still works without sound.
-      void ctx.resume().catch(() => undefined);
-      const buffer = await ctx.decodeAudioData(bytes.slice().buffer);
-      if (this.disposed) return;
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start();
-      this.bgmSource = source;
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[beatoraja-decide] bgm playback failed', error);
-    }
-  }
-
-  /** Halt + tear down the decide BGM. Idempotent; safe to call before `startBgm` ever ran. */
-  private stopBgm(): void {
-    if (this.bgmSource !== undefined) {
-      try {
-        this.bgmSource.stop();
-      } catch {
-        /* already stopped — ignore */
-      }
-      this.bgmSource.disconnect();
-      this.bgmSource = undefined;
-    }
-    if (this.audioContext !== undefined) {
-      // Closing the context is async but we don't await — the OS resource cleanup happens
-      // on its own schedule and we don't block the scene's tear-down on it.
-      void this.audioContext.close().catch(() => undefined);
-      this.audioContext = undefined;
-    }
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
@@ -431,10 +351,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
       return override;
     }
     const skinScene = this.options.skin.scene;
-    if (typeof skinScene === 'number' && Number.isFinite(skinScene) && skinScene >= 0) {
-      return skinScene;
-    }
-    return DEFAULT_DECIDE_SCENE_MS;
+    return resolveBeatorajaSkinTimingMs(skinScene, DEFAULT_DECIDE_SCENE_MS, { min: 0 });
   }
 
   /**
@@ -443,7 +360,7 @@ export class PixiBeatorajaDecideScene implements PixiScene {
    * `if (timer.isTimerOn(TIMER_FADEOUT))` short-circuit.
    */
   private isAnyTransitionActive(): boolean {
-    return this.transitionToContinue?.isFadingOut() === true || this.transitionToCancel?.isFadingOut() === true;
+    return hasBeatorajaSceneFadingTransition(this.transitionToContinue, this.transitionToCancel);
   }
 
   /** Stable per-skin op set (skin_config.option picks). Live ops are added by `computeActiveOps`. */
@@ -540,69 +457,12 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     return undefined;
   }
 
-  /**
-   * Synthetic chart-image resolver. Maps the negative-id sentinels onto whichever pre-decoded
-   * chart bitmaps the host supplied via `chartImages`. Missing entries return `undefined`,
-   * which the view interprets as "destination hidden".
-   *
-   *   -100 STAGEFILE — the chart's `#STAGEFILE` (loading-screen art).
-   *   -101 BACKBMP   — the chart's `#BACKBMP` (select-screen preview).
-   *   -102 BANNER    — the chart's `#BANNER` (small song-bar banner).
-   */
-  private resolveChartImage(syntheticId: number): import('pixi.js').Texture | undefined {
-    const images = this.options.chartImages;
-    if (images === undefined) return undefined;
-    switch (syntheticId) {
-      case -100:
-        return images.stageFile;
-      case -101:
-        return images.backBmp;
-      case -102:
-        return images.banner;
-      default:
-        return undefined;
-    }
-  }
-
   private resolveSongText(refOp: number): string | undefined {
-    const song = this.options.song;
-    const skin = this.options.skin;
-    switch (refOp) {
-      case BEATORAJA_TEXT.TITLE:
-        return song?.title ?? '';
-      case BEATORAJA_TEXT.SUBTITLE:
-        return song?.subtitle ?? '';
-      case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(song?.title, song?.subtitle);
-      case BEATORAJA_TEXT.GENRE:
-        return song?.genre ?? '';
-      case BEATORAJA_TEXT.ARTIST:
-        return song?.artist ?? '';
-      case BEATORAJA_TEXT.SUBARTIST:
-        // BMS `#SUBARTIST` lands in `metadata.extras.SUBARTIST`; bmson's structured
-        // `info.subartists[]` joins with spaces. Both paths surface the same string here.
-        return extractChartSubartist(song?.chart);
-      case BEATORAJA_TEXT.FULLARTIST:
-        return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
-      // Skin / directory metadata. The skin header is always present (we just mounted it); the
-      // song's directory label may be empty when the host didn't preserve folder info.
-      case BEATORAJA_TEXT.SKIN_NAME:
-        return skin.name ?? '';
-      case BEATORAJA_TEXT.SKIN_AUTHOR:
-        return skin.author ?? '';
-      case BEATORAJA_TEXT.DIRECTORY:
-        return song?.directoryLabel ?? '';
-      // Difficulty-table refs (1001/1002/1003) — used by GdbG_Skin's decide for "★1" labels
-      // when the user is playing through a dan-grade table course. We don't have table mode
-      // yet, so return empty strings — keeps the destinations alive (skin authors style the
-      // row regardless) without rendering stale / placeholder text.
-      case BEATORAJA_TEXT.TABLE_NAME:
-      case BEATORAJA_TEXT.TABLE_LEVEL:
-      case BEATORAJA_TEXT.TABLE_FULL:
-        return '';
-      default:
-        return undefined;
-    }
+    return resolveBeatorajaSongText(refOp, {
+      song: this.options.song,
+      skin: this.options.skin,
+      tableTextFallback: '',
+    });
   }
 
   /**
@@ -643,20 +503,13 @@ export class PixiBeatorajaDecideScene implements PixiScene {
   }
 
   private fitToStage(): void {
-    const host = this.host;
-    if (!host) return;
-    const { width, height } = host.app.screen;
-    if (width === this.lastFitWidth && height === this.lastFitHeight) return;
-    if (width <= 0 || height <= 0) return;
-    this.lastFitWidth = width;
-    this.lastFitHeight = height;
-    const scale = Math.min(width / this.view.width, height / this.view.height);
-    if (!Number.isFinite(scale) || scale <= 0) return;
-    const c = this.view.container;
-    c.scale.set(scale, scale);
-    c.x = (width - this.view.width * scale) / 2;
-    c.y = (height - this.view.height * scale) / 2;
-    this.backdrop.clear().rect(0, 0, width, height).fill(0x000000);
+    const fitted = fitBeatorajaViewToStage(this.host, this.view, this.backdrop, {
+      width: this.lastFitWidth,
+      height: this.lastFitHeight,
+    });
+    if (fitted === undefined) return;
+    this.lastFitWidth = fitted.width;
+    this.lastFitHeight = fitted.height;
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -671,12 +524,8 @@ export class PixiBeatorajaDecideScene implements PixiScene {
     // getSkin().getInput()`. Stops the user from accidentally dismissing the splash within
     // the first few hundred ms while their finger is still on the Enter key from the
     // select scene's confirmation.
-    const elapsed = performance.now() - this.startMs;
-    const inputDelay =
-      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
-        ? this.options.skin.input
-        : DEFAULT_DECIDE_INPUT_MS;
-    if (elapsed < inputDelay) return;
+    const inputDelay = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_DECIDE_INPUT_MS);
+    if (!isBeatorajaSceneInputReady(this.startMs, inputDelay, performance.now())) return;
     switch (event.key) {
       case 'Enter':
       case ' ':
@@ -689,8 +538,4 @@ export class PixiBeatorajaDecideScene implements PixiScene {
         break;
     }
   };
-}
-
-function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
-  return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
 }

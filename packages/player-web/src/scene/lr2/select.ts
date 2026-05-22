@@ -15,6 +15,7 @@ import type {
   Lr2NumberElement,
   Lr2OnMouseElement,
   Lr2Skin,
+  Lr2SliderElement,
   Lr2SpecialGraphic,
   Lr2TextElement,
 } from '@be-music/lr2-skin';
@@ -521,6 +522,21 @@ export interface PixiSongSelectViewOptions {
   onPlayOptionsChange?: (options: PixiPlayOptions) => void;
 }
 
+/**
+ * One entry in the precomputed {@link PixiSongSelectView.sortedChromeEntries} array. Tagged union over the six
+ * chrome-element kinds the LR2 select view paints (`#SRC_IMAGE`, `#SRC_NUMBER`, `#SRC_TEXT`, `#SRC_BUTTON`,
+ * `#SRC_ONMOUSE`, `#SRC_SLIDER`). The `order` field is the CSV-declaration order used as the inter-kind sort key —
+ * matching LR2's "later declaration paints on top" rule. `layerIsForeground` caches the result of `pickChromeLayer` so
+ * the per-frame switch can resolve the destination container without re-reading the skin's bar layout each time.
+ */
+type SortedSelectChromeEntry =
+  | { kind: 'image'; order: number; layerIsForeground: boolean; element: Lr2ImageElement }
+  | { kind: 'number'; order: number; layerIsForeground: boolean; element: Lr2NumberElement }
+  | { kind: 'text'; order: number; layerIsForeground: boolean; element: Lr2TextElement }
+  | { kind: 'button'; order: number; layerIsForeground: boolean; element: Lr2ButtonElement }
+  | { kind: 'onMouse'; order: number; layerIsForeground: boolean; element: Lr2OnMouseElement }
+  | { kind: 'slider'; order: number; layerIsForeground: boolean; element: Lr2SliderElement };
+
 export class PixiSongSelectView {
   /**
    * Host owning the shared `Application`. Set in {@link mount}; the `app` accessor below throws before that. With one
@@ -554,6 +570,20 @@ export class PixiSongSelectView {
   private cachedDesignHeight = -1;
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
+  /**
+   * Precomputed, declaration-order-sorted union of every chrome-element kind the LR2 skin defines for the select view.
+   * Rebuilt only when the bound skin reference changes — the underlying skin structure (declaration order, layer
+   * routing, panel masks) is static for a given skin, so building this list per render frame was pure waste in the
+   * previous `work[]` + `.sort()` implementation. Per-frame visibility (ops gating, panel-open gating, DST keyframe
+   * eval, pointer hit-test) still happens during the per-entry switch dispatch; only the merge/sort step is hoisted
+   * out.
+   */
+  private sortedChromeEntries: SortedSelectChromeEntry[] = [];
+  /**
+   * Skin reference used to build {@link sortedChromeEntries}. Comparing identity is enough — the LR2 skin objects are
+   * frozen after parse, so a structural change requires {@link setSkin} to swap in a fresh reference.
+   */
+  private sortedChromeSkinRef: Lr2Skin | undefined;
   /** Skin static images (gated on `SELECT_DEFAULT_OPS`). */
   private readonly skinLayer = new Container();
   /**
@@ -700,8 +730,18 @@ export class PixiSongSelectView {
    * (scene main) so the skin's intro / loop animations on `#DST_*` keyframes play out.
    */
   private sceneStartedAt = 0;
-  /** rAF handle so dispose can cancel the keyframe-driven render loop. */
-  private animationFrame = 0;
+  /**
+   * Whether the keyframe-driven render loop is currently attached to {@link PixiSceneHost.app}'s ticker. The previous
+   * implementation drove the loop via its own `requestAnimationFrame` callback, which ran alongside PixiJS's built-in
+   * auto-render ticker — two RAFs were scheduled per frame, doubling the event-loop overhead. Now the tick handler is
+   * registered on the shared `app.ticker` so it fires inline with the renderer's frame.
+   */
+  private tickerAttached = false;
+  /**
+   * Tick handler bound once at construction so {@link PixiSceneHost.app}'s ticker can register / unregister it by
+   * reference. The handler runs the same per-frame render path the previous rAF callback did.
+   */
+  private readonly tickerHandle = (): void => this.tickFrame();
   /** Idempotency guard for {@link dispose}. */
   private disposed = false;
   /**
@@ -1310,37 +1350,53 @@ export class PixiSongSelectView {
   }
 
   /**
-   * Drives `requestAnimationFrame`-paced re-renders so DST keyframe sequences (intro slide-in, loop animations,
-   * focused-bar pulse, etc.) play out. Skips when no skin is mounted because the fallback list UI is purely
-   * event-driven.
+   * Attaches the keyframe-driven re-render handler to the host's shared `app.ticker` so DST keyframe sequences (intro
+   * slide-in, loop animations, focused-bar pulse, etc.) play out. The handler is bound once at construction
+   * ({@link tickerHandle}); this method just registers it. The previous implementation kicked its own
+   * `requestAnimationFrame` chain, which ran alongside PixiJS's auto-render ticker — fixing the double-RAF doubles the
+   * frame budget available to the select scene.
    */
   private startAnimationLoop(): void {
-    const tick = (): void => {
-      // Bail when hidden (host swapped to gameplay). Without this the select view's rAF tick + PixiJS auto-render keep
-      // running on a `display:none` canvas, eating ~10–15 ms per frame for nothing and starving the gameplay view of
-      // frame budget.
-      if (!this.visible) {
-        this.animationFrame = 0;
-        return;
-      }
-      this.perf.beginTick();
-      this.animationFrame = requestAnimationFrame(tick);
-      const skin = this.options.skin;
-      if (skin && skin.barLayout.slots.length > 0) {
-        this.perf.time('render', () => this.render());
-      }
-      const report = this.perf.endFrame(() => ({
-        skin: this.skinLayer.children.length,
-        list: this.listLayer.children.length,
-        songs: this.collection.songs.length,
-      }));
-      if (report) {
-        // High-volume (~every sampled frame) — keep on the verbose-only `debug` level so it doesn't drown out the
-        // host's Info console.
-        log.debug('perf', report);
-      }
-    };
-    this.animationFrame = requestAnimationFrame(tick);
+    if (this.tickerAttached || !this.host) {
+      return;
+    }
+    this.host.app.ticker.add(this.tickerHandle);
+    this.tickerAttached = true;
+  }
+
+  private stopAnimationLoop(): void {
+    if (!this.tickerAttached) {
+      return;
+    }
+    this.host?.app.ticker.remove(this.tickerHandle);
+    this.tickerAttached = false;
+  }
+
+  /**
+   * One tick of the keyframe-driven re-render loop. Mirrors the body of the previous rAF callback verbatim — the only
+   * change is the scheduling layer (shared ticker now drives the cadence). Skips when hidden (host swapped to
+   * gameplay) so we don't burn CPU on a `display:none` canvas; the ticker stays registered so DST animations resume
+   * cleanly the moment the scene becomes visible again.
+   */
+  private tickFrame(): void {
+    if (!this.visible) {
+      return;
+    }
+    this.perf.beginTick();
+    const skin = this.options.skin;
+    if (skin && skin.barLayout.slots.length > 0) {
+      this.perf.time('render', () => this.render());
+    }
+    const report = this.perf.endFrame(() => ({
+      skin: this.skinLayer.children.length,
+      list: this.listLayer.children.length,
+      songs: this.collection.songs.length,
+    }));
+    if (report) {
+      // High-volume (~every sampled frame) — keep on the verbose-only `debug` level so it doesn't drown out the
+      // host's Info console.
+      log.debug('perf', report);
+    }
   }
 
   public dispose(): void {
@@ -1348,10 +1404,7 @@ export class PixiSongSelectView {
       return;
     }
     this.disposed = true;
-    if (this.animationFrame !== 0) {
-      cancelAnimationFrame(this.animationFrame);
-      this.animationFrame = 0;
-    }
+    this.stopAnimationLoop();
     window.removeEventListener('keydown', this.handleKeyDown);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
@@ -1384,7 +1437,7 @@ export class PixiSongSelectView {
       log.warn('texture cleanup threw', error);
     }
     try {
-      this.sceneRoot.destroy({ children: true });
+      this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
@@ -1405,6 +1458,10 @@ export class PixiSongSelectView {
     // chart-graphic (BACKBMP / BANNER / STAGEFILE) cache stays valid since it's keyed by song id, not by skin.
     this.skinTextures.clear();
     this.bitmapFonts = new Map();
+    // Invalidate the precomputed sorted chrome entry list — `ensureSortedChromeEntries` keys on reference identity, so
+    // dropping the cached ref forces a rebuild against the new skin on the next render.
+    this.sortedChromeSkinRef = undefined;
+    this.sortedChromeEntries = [];
     if (skin && skin.barLayout.slots.length > 0) {
       void this.prepareSkinTextures(skin);
       void this.prepareBitmapFonts(skin);
@@ -1442,9 +1499,7 @@ export class PixiSongSelectView {
       // re-entry from a play session — see `resetSceneTimers` for the rationale. Without this the persistent select
       // scene's `sceneStartedAt` would be minutes-stale on return.
       this.resetSceneTimers();
-      if (this.animationFrame === 0) {
-        this.startAnimationLoop();
-      }
+      this.startAnimationLoop();
       // Resume the BGM. Always safe — a no-op if no BGM is set or if a gesture hasn't unlocked the AudioContext yet.
       void this.startSelectBgm();
       // Re-arm the chart preview against the focused song. On back-from-play the engine was stopped by the prior
@@ -1459,10 +1514,7 @@ export class PixiSongSelectView {
       // have spent its `setTimeout` budget while the user was already in gameplay and start blasting keysounds through
       // the gameplay AudioContext on top of the chart.
       this.chartPreviewEngine?.stop();
-      if (this.animationFrame !== 0) {
-        cancelAnimationFrame(this.animationFrame);
-        this.animationFrame = 0;
-      }
+      this.stopAnimationLoop();
     }
   }
 
@@ -3100,6 +3152,77 @@ export class PixiSongSelectView {
     return this.skinLayer;
   }
 
+  /**
+   * Returns the cached, declaration-order-sorted entry list for `skin`. Rebuilds on the first call after a skin swap
+   * (detected by reference identity against {@link sortedChromeSkinRef}) — the LR2 skin shape is immutable per
+   * `setSkin`, so reference equality is a sufficient invalidation key.
+   *
+   * The build merges every chrome-element kind into one array, records each entry's pre-resolved layer choice via
+   * {@link pickChromeLayer}, and stable-sorts by `declarationOrder` so the final paint order on each Pixi container
+   * matches the CSV's left-to-right declaration sequence.
+   */
+  private ensureSortedChromeEntries(skin: Lr2Skin): readonly SortedSelectChromeEntry[] {
+    if (this.sortedChromeSkinRef === skin) {
+      return this.sortedChromeEntries;
+    }
+    const barOrder = skin.barLayout.declarationOrder;
+    const isForeground = (declarationOrder: number): boolean =>
+      barOrder !== undefined && declarationOrder > barOrder;
+    const entries: SortedSelectChromeEntry[] = [];
+    for (const element of skin.images) {
+      entries.push({
+        kind: 'image',
+        order: element.declarationOrder,
+        layerIsForeground: isForeground(element.declarationOrder),
+        element,
+      });
+    }
+    for (const element of skin.numbers) {
+      entries.push({
+        kind: 'number',
+        order: element.declarationOrder,
+        layerIsForeground: isForeground(element.declarationOrder),
+        element,
+      });
+    }
+    for (const element of skin.texts) {
+      entries.push({
+        kind: 'text',
+        order: element.declarationOrder,
+        layerIsForeground: isForeground(element.declarationOrder),
+        element,
+      });
+    }
+    for (const element of skin.buttons) {
+      entries.push({
+        kind: 'button',
+        order: element.declarationOrder,
+        layerIsForeground: isForeground(element.declarationOrder),
+        element,
+      });
+    }
+    for (const element of skin.onMouseElements) {
+      entries.push({
+        kind: 'onMouse',
+        order: element.declarationOrder,
+        layerIsForeground: isForeground(element.declarationOrder),
+        element,
+      });
+    }
+    for (const element of skin.sliders) {
+      entries.push({
+        kind: 'slider',
+        order: element.declarationOrder,
+        layerIsForeground: isForeground(element.declarationOrder),
+        element,
+      });
+    }
+    entries.sort((a, b) => a.order - b.order);
+    this.sortedChromeEntries = entries;
+    this.sortedChromeSkinRef = skin;
+    return entries;
+  }
+
   private renderSkinFrame(skin: Lr2Skin, ops: ReadonlySet<number>): void {
     // Resolve the song the cursor is sitting on by going through the browse stack — `selectedIndex` indexes
     // `currentEntries()`, which is per-folder (or the folder list at root). Indexing `collection.songs` (the flat
@@ -3108,158 +3231,82 @@ export class PixiSongSelectView {
     // offset.
     const focusedSong = this.focusedSong();
 
-    // Build a unified work list of (declarationOrder, layer, paint) tuples spanning every chrome-element kind, then run
-    // the paint thunks in declaration order. LR2's render contract is "later declaration paints on top": panel
-    // backgrounds declared after the song-info text need to cover the title even when the text loop runs separately.
-    // The previous kind-grouped loop (images first, then numbers, texts, buttons, …) inverted the z-order whenever a
-    // later-kind element was declared earlier than a same-layer earlier-kind element — see the LR2 default theme's PLAY
-    // OPTION panel, where the song title (#SRC_TEXT ~line 1587) bled through the panel background (#SRC_IMAGE ~line
-    // 6300+) because images iterated before texts.
-    interface ChromePaint {
-      order: number;
-      layer: Container;
-      paint: () => void;
-    }
-    const work: ChromePaint[] = [];
-
-    for (const image of skin.images) {
-      // Visibility uses the interpolated DST so an alpha=0 keyframe still keeps the element technically visible — only
-      // the per-DST op gating (and timer activity) controls hidden vs shown.
-      if (!isDestinationVisible(this.evaluateElementDst(image), ops, this.timerActive)) {
-        continue;
-      }
-      const layer = this.pickChromeLayer(image.declarationOrder);
-      work.push({
-        order: image.declarationOrder,
-        layer,
-        paint: () => {
-          const sprite = this.makeStaticImageSprite(image);
+    // Walk the pre-sorted chrome entry list and dispatch by kind. The order, layer choice, and the entry list itself
+    // are all static for a given skin (skin shape doesn't change between frames), so we cache the merged sorted list in
+    // `ensureSortedChromeEntries` and reuse it every render. The previous implementation built a fresh `work[]` of
+    // `{order, layer, paint: () => …}` closures per element per frame and then `.sort()`d it — for the LR2 default skin
+    // that's ~hundreds of allocations + sort comparator calls per `requestAnimationFrame` tick.
+    const entries = this.ensureSortedChromeEntries(skin);
+    const skinTextures = this.skinTextures.asReadonlyMap();
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i]!;
+      const layer = entry.layerIsForeground ? this.skinForegroundLayer : this.skinLayer;
+      switch (entry.kind) {
+        case 'image': {
+          // Visibility uses the interpolated DST so an alpha=0 keyframe still keeps the element technically visible —
+          // only the per-DST op gating (and timer activity) controls hidden vs shown.
+          if (!isDestinationVisible(this.evaluateElementDst(entry.element), ops, this.timerActive)) break;
+          const sprite = this.makeStaticImageSprite(entry.element);
           if (sprite) layer.addChild(sprite);
-        },
-      });
-    }
-
-    // Song-info NUMBER panels: BPM, total notes, play level. We resolve a small whitelist of LR2 number ids relevant to
-    // the select view — the gameplay-only ids (score, gauge, judges, …) leave their slots blank when shown here, which
-    // matches LR2's behavior off-stage.
-    for (const number of skin.numbers) {
-      const dst = this.evaluateElementDst(number);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) {
-        continue;
-      }
-      const value = resolveSelectNumber(number.source.num, focusedSong, this.playOptions);
-      if (value === undefined) {
-        continue;
-      }
-      const layer = this.pickChromeLayer(number.declarationOrder);
-      work.push({
-        order: number.declarationOrder,
-        layer,
-        paint: () => {
-          renderNumberElement(containerSpriteSink(layer), number, value, this.skinTextures.asReadonlyMap(), dst);
-        },
-      });
-    }
-
-    // TEXT panels — title / artist / genre / level label / etc. The `panel` field hides labels scoped to closed option
-    // panels.
-    for (const text of skin.texts) {
-      if (!this.isPanelOpen(text.panel)) {
-        continue;
-      }
-      const dst = this.evaluateElementDst(text);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) {
-        continue;
-      }
-      const value = resolveSelectText(text.st, focusedSong, this.playOptions);
-      if (value === undefined || value.length === 0) {
-        continue;
-      }
-      const layer = this.pickChromeLayer(text.declarationOrder);
-      work.push({
-        order: text.declarationOrder,
-        layer,
-        paint: () => {
+          break;
+        }
+        case 'number': {
+          // Song-info NUMBER panels: BPM, total notes, play level. We resolve a small whitelist of LR2 number ids
+          // relevant to the select view — the gameplay-only ids (score, gauge, judges, …) leave their slots blank when
+          // shown here, which matches LR2's behavior off-stage.
+          const dst = this.evaluateElementDst(entry.element);
+          if (!isDestinationVisible(dst, ops, this.timerActive)) break;
+          const value = resolveSelectNumber(entry.element.source.num, focusedSong, this.playOptions);
+          if (value === undefined) break;
+          renderNumberElement(containerSpriteSink(layer), entry.element, value, skinTextures, dst);
+          break;
+        }
+        case 'text': {
+          // TEXT panels — title / artist / genre / level label / etc. The `panel` field hides labels scoped to closed
+          // option panels.
+          if (!this.isPanelOpen(entry.element.panel)) break;
+          const dst = this.evaluateElementDst(entry.element);
+          if (!isDestinationVisible(dst, ops, this.timerActive)) break;
+          const value = resolveSelectText(entry.element.st, focusedSong, this.playOptions);
+          if (value === undefined || value.length === 0) break;
           layer.addChild(
-            makeLr2TextSprite(value, text, dst, {
+            makeLr2TextSprite(value, entry.element, dst, {
               bitmapFonts: this.bitmapFonts,
               systemFontSizes: skin.systemFontSizes,
             }),
           );
-        },
-      });
-    }
-
-    // BUTTON panels — sort / filter / panel-toggle / play / replay / option buttons etc. We render the cell that
-    // matches the button's current state; click handling lands separately.
-    for (const button of skin.buttons) {
-      if (!this.isPanelOpen(button.panel)) {
-        continue;
-      }
-      if (!isDestinationVisible(this.evaluateElementDst(button), ops, this.timerActive)) {
-        continue;
-      }
-      const layer = this.pickChromeLayer(button.declarationOrder);
-      work.push({
-        order: button.declarationOrder,
-        layer,
-        paint: () => {
-          this.renderButtonElement(button, layer);
-        },
-      });
-    }
-
-    // ONMOUSE — hover overlays. Drawn on top of buttons / images when the pointer is inside the SRC's hit-test rect
-    // (relative to the DST top-left).
-    for (const onMouse of skin.onMouseElements) {
-      if (!this.isPanelOpen(onMouse.panel)) {
-        continue;
-      }
-      const dst = this.evaluateElementDst(onMouse);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) {
-        continue;
-      }
-      if (!this.isPointerInHitRect(dst, onMouse)) {
-        continue;
-      }
-      const layer = this.pickChromeLayer(onMouse.declarationOrder);
-      work.push({
-        order: onMouse.declarationOrder,
-        layer,
-        paint: () => {
-          const sprite = this.makeSlicedSprite(onMouse.source, dst, 'onmouse');
+          break;
+        }
+        case 'button': {
+          // BUTTON panels — sort / filter / panel-toggle / play / replay / option buttons etc. We render the cell that
+          // matches the button's current state; click handling lands separately.
+          if (!this.isPanelOpen(entry.element.panel)) break;
+          if (!isDestinationVisible(this.evaluateElementDst(entry.element), ops, this.timerActive)) break;
+          this.renderButtonElement(entry.element, layer);
+          break;
+        }
+        case 'onMouse': {
+          // ONMOUSE — hover overlays. Drawn on top of buttons / images when the pointer is inside the SRC's hit-test
+          // rect (relative to the DST top-left).
+          if (!this.isPanelOpen(entry.element.panel)) break;
+          const dst = this.evaluateElementDst(entry.element);
+          if (!isDestinationVisible(dst, ops, this.timerActive)) break;
+          if (!this.isPointerInHitRect(dst, entry.element)) break;
+          const sprite = this.makeSlicedSprite(entry.element.source, dst, 'onmouse');
           if (sprite) layer.addChild(sprite);
-        },
-      });
-    }
-
-    // SLIDER — runtime-positioned indicator knobs.
-    for (const slider of skin.sliders) {
-      const dst = this.evaluateElementDst(slider);
-      if (!isDestinationVisible(dst, ops, this.timerActive)) {
-        continue;
-      }
-      const value = this.resolveSelectSliderValue(slider.type);
-      if (value === undefined) {
-        continue;
-      }
-      const layer = this.pickChromeLayer(slider.declarationOrder);
-      work.push({
-        order: slider.declarationOrder,
-        layer,
-        paint: () => {
-          const sprite = makeLr2SliderSprite(slider, dst, value, this.skinTextures.asReadonlyMap());
+          break;
+        }
+        case 'slider': {
+          // SLIDER — runtime-positioned indicator knobs.
+          const dst = this.evaluateElementDst(entry.element);
+          if (!isDestinationVisible(dst, ops, this.timerActive)) break;
+          const value = this.resolveSelectSliderValue(entry.element.type);
+          if (value === undefined) break;
+          const sprite = makeLr2SliderSprite(entry.element, dst, value, skinTextures);
           if (sprite) layer.addChild(sprite);
-        },
-      });
-    }
-
-    // Stable-sort by declarationOrder so the addChild order on each Pixi Container matches the CSV-declared paint
-    // order. Earlier declarations land lower in the children array (drawn first / behind), later declarations end up on
-    // top — matching LR2.
-    work.sort((a, b) => a.order - b.order);
-    for (const item of work) {
-      item.paint();
+          break;
+        }
+      }
     }
 
     // MOUSECURSOR — replaces the system cursor with the skin's sprite. Always lands on the foreground layer regardless

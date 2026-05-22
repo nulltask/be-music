@@ -36,9 +36,9 @@ jobs:
       release_base: ${{ steps.release_refs.outputs.release_base }}
       has_releases: ${{ steps.release_packages.outputs.has_releases }}
       has_sea_releases: ${{ steps.release_packages.outputs.has_sea_releases }}
-      release_player: ${{ steps.release_packages.outputs.release_player }}
+      release_player_tui: ${{ steps.release_packages.outputs.release_player_tui }}
       release_audio_renderer: ${{ steps.release_packages.outputs.release_audio_renderer }}
-      player_version: ${{ steps.release_packages.outputs.player_version }}
+      player_tui_version: ${{ steps.release_packages.outputs.player_tui_version }}
       audio_renderer_version: ${{ steps.release_packages.outputs.audio_renderer_version }}
       releases_json: ${{ steps.release_packages.outputs.releases_json }}
       sea_releases_json: ${{ steps.release_packages.outputs.sea_releases_json }}
@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -115,7 +115,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.release_target }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -144,7 +144,7 @@ jobs:
           "archive_suffix=$os-$arch" >> $env:GITHUB_OUTPUT
 
       - name: Build player SEA executable
-        if: needs.prepare.outputs.release_player == 'true'
+        if: needs.prepare.outputs.release_player_tui == 'true'
         # The CLI / TUI bin moved to `@be-music/player-tui` during the player-tui-split refactor; the
         # `build:sea` script lives there now (the SEA bundle still ships under `be-music-player` for
         # backward compatibility with existing release assets).
@@ -224,7 +224,7 @@ jobs:
           fi
 
           files=()
-          if [ "${{ needs.prepare.outputs.release_player }}" = 'true' ]; then
+          if [ "${{ needs.prepare.outputs.release_player_tui }}" = 'true' ]; then
             files+=(packages/player-tui/dist-sea/be-music-player)
           fi
           if [ "${{ needs.prepare.outputs.release_audio_renderer }}" = 'true' ]; then
@@ -245,12 +245,12 @@ jobs:
 
           mkdir -p tmp/release-assets/player tmp/release-assets/audio-renderer
 
-          if [ "${{ needs.prepare.outputs.release_player }}" = 'true' ]; then
+          if [ "${{ needs.prepare.outputs.release_player_tui }}" = 'true' ]; then
             cp packages/player-tui/dist-sea/be-music-player tmp/release-assets/player/
             chmod +x tmp/release-assets/player/be-music-player
             (
               cd tmp/release-assets/player
-              zip -9 -q "../be-music-player-${{ needs.prepare.outputs.player_version }}-${suffix}.zip" be-music-player
+              zip -9 -q "../be-music-player-${{ needs.prepare.outputs.player_tui_version }}-${suffix}.zip" be-music-player
             )
           fi
 
@@ -270,7 +270,7 @@ jobs:
           $assetDir = 'tmp/release-assets'
 
           New-Item -ItemType Directory -Force -Path $assetDir | Out-Null
-          if ('${{ needs.prepare.outputs.release_player }}' -eq 'true') {
+          if ('${{ needs.prepare.outputs.release_player_tui }}' -eq 'true') {
             Copy-Item 'packages/player-tui/dist-sea/be-music-player.exe' "$assetDir/be-music-player.exe"
           }
           if ('${{ needs.prepare.outputs.release_audio_renderer }}' -eq 'true') {
@@ -300,7 +300,7 @@ jobs:
           ref: ${{ github.sha }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v5
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -344,7 +344,7 @@ jobs:
             exit 1
           fi
 
-          if [ "${{ needs.prepare.outputs.release_player }}" = 'true' ] && [ ! -f tmp/release-assets/be-music-player.exe ]; then
+          if [ "${{ needs.prepare.outputs.release_player_tui }}" = 'true' ] && [ ! -f tmp/release-assets/be-music-player.exe ]; then
             echo "Unsigned Windows SEA executable for player is missing." >&2
             exit 1
           fi
@@ -367,7 +367,7 @@ jobs:
             -passin "pass:$WINDOWS_SIGNING_PFX_PASSWORD" |
             openssl x509 -outform DER -out "tmp/release-assets/be-music-self-signed-windows.cer"
 
-          if [ "${{ needs.prepare.outputs.release_player }}" = 'true' ]; then
+          if [ "${{ needs.prepare.outputs.release_player_tui }}" = 'true' ]; then
             osslsigncode sign \
               -pkcs12 "$signing_dir/self-signed.pfx" \
               -pass "$WINDOWS_SIGNING_PFX_PASSWORD" \
@@ -376,7 +376,7 @@ jobs:
               -out "$signing_dir/player/be-music-player.exe"
             (
               cd "$signing_dir/player"
-              zip -9 -q "../../../release-assets/be-music-player-${{ needs.prepare.outputs.player_version }}-windows-x64.zip" be-music-player.exe
+              zip -9 -q "../../../release-assets/be-music-player-${{ needs.prepare.outputs.player_tui_version }}-windows-x64.zip" be-music-player.exe
             )
           fi
 

@@ -10,6 +10,12 @@
 // `resolveBpmGraphPoints` resolver. Without this resolver the bpmgraph hides itself.
 
 import type { BeMusicJson } from '@be-music/json';
+import {
+  beatorajaEventBeat,
+  computeBeatorajaMeasureLayout,
+  hasBeatorajaEventValue,
+  resolveBeatorajaBpmEventValue,
+} from './timing.ts';
 
 /** Polyline point in normalized destination-box coordinates. */
 export interface BpmCurvePoint {
@@ -19,14 +25,12 @@ export interface BpmCurvePoint {
   y: number;
 }
 
-const BEATS_PER_STANDARD_MEASURE = 4;
-
 /**
  * Build the step polyline. Returns `[]` when the chart has no BPM data — the caller hides the
  * graph in that case.
  */
 export function computeBeatorajaBpmCurve(chart: BeMusicJson): ReadonlyArray<BpmCurvePoint> {
-  const layout = computeMeasureLayout(chart);
+  const layout = computeBeatorajaMeasureLayout(chart);
   if (layout.measureBaseBeat.length === 0) return [];
 
   // Total chart beats = end of the final measure. Curve x = 0 at chart start, x = 1 at chart end.
@@ -40,11 +44,11 @@ export function computeBeatorajaBpmCurve(chart: BeMusicJson): ReadonlyArray<BpmC
   const initialBpm = chart.metadata.bpm > 0 ? chart.metadata.bpm : 130;
   const segments: { beat: number; bpm: number }[] = [{ beat: 0, bpm: initialBpm }];
   for (const event of chart.events ?? []) {
-    if (event.value === '00' || event.value === '') continue;
+    if (!hasBeatorajaEventValue(event.value)) continue;
     if (event.channel !== '03' && event.channel !== '08') continue;
-    const beat = eventBeat(event, measureBaseBeat);
+    const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
-    const bpm = resolveBpmEventValue(event.channel, event.value, chart.resources.bpm);
+    const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, chart.resources.bpm);
     if (bpm === undefined || bpm <= 0) continue;
     segments.push({ beat, bpm });
   }
@@ -81,66 +85,4 @@ function clampUnit(v: number): number {
   if (v <= 0) return 0;
   if (v >= 1) return 1;
   return v;
-}
-
-function computeMeasureLayout(chart: BeMusicJson): { measureBaseBeat: number[]; totalBeats: number } {
-  const lengths = new Map<number, number>();
-  let maxMeasure = 0;
-  for (const event of chart.events ?? []) {
-    if (event.measure > maxMeasure) maxMeasure = event.measure;
-  }
-  for (const measure of chart.measures ?? []) {
-    const idx = Math.max(0, Math.floor(measure.index));
-    if (idx > maxMeasure) maxMeasure = idx;
-    if (Number.isFinite(measure.length) && measure.length > 0) {
-      lengths.set(idx, measure.length);
-    }
-  }
-  const measureBaseBeat: number[] = [];
-  let beat = 0;
-  for (let m = 0; m <= maxMeasure; m += 1) {
-    measureBaseBeat.push(beat);
-    const length = lengths.get(m) ?? 1;
-    beat += length * BEATS_PER_STANDARD_MEASURE;
-  }
-  return { measureBaseBeat, totalBeats: beat };
-}
-
-function eventBeat(
-  event: { measure: number; position: readonly [number, number] },
-  measureBaseBeat: number[],
-): number | undefined {
-  const base = measureBaseBeat[event.measure];
-  if (base === undefined) return undefined;
-  const [num, denom] = event.position;
-  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return base;
-  // Same approximation as `computeBeatorajaChartMarkers` — assume standard 4-beat measure for the
-  // intra-measure fraction. Custom-length measures are visually approximate; refinable later.
-  return base + (num / denom) * BEATS_PER_STANDARD_MEASURE;
-}
-
-/**
- * Resolve a BPM event value into a numeric BPM. Channel `03` carries an inline hex byte
- * (0x00..0xFF — but skin authors use plain numbers up to 255 BPM); channel `08` references the
- * `#BPMxx` table on the chart's resources.
- */
-function resolveBpmEventValue(
-  channel: string,
-  value: string,
-  table: Readonly<Record<string, unknown>>,
-): number | undefined {
-  if (channel === '03') {
-    const parsed = parseInt(value, 16);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  if (channel === '08') {
-    const looked = table[value] ?? table[value.toLowerCase()] ?? table[value.toUpperCase()];
-    if (typeof looked === 'number' && Number.isFinite(looked)) return looked;
-    if (typeof looked === 'string') {
-      const parsed = Number.parseFloat(looked);
-      return Number.isFinite(parsed) ? parsed : undefined;
-    }
-    return undefined;
-  }
-  return undefined;
 }

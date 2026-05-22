@@ -1,6 +1,14 @@
 import * as utilsApi from '@be-music/utils';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+const caseInsensitiveFiles = new Map<string, Uint8Array>([['Song/Kick.WAV', new Uint8Array([1, 2, 3])]]);
+const eagerEntry = new Uint8Array([1, 2, 3]);
+const lazyEntry = {
+  name: 'chart.bms',
+  webkitRelativePath: 'Song/chart.bms',
+  arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+};
+
 export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
   define('utils.resolveCliPath', {
     run: () => {
@@ -82,6 +90,31 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
       await utilsApi.runWithConcurrency([1, 2, 3, 4], 2, async () => undefined);
     },
   });
+  define('utils.findCaseInsensitiveMapPath', {
+    run: () => {
+      utilsApi.findCaseInsensitiveMapPath(caseInsensitiveFiles, 'song/kick.wav');
+    },
+  });
+  define('utils.lookupCaseInsensitiveMapEntry', {
+    run: () => {
+      utilsApi.lookupCaseInsensitiveMapEntry(caseInsensitiveFiles, 'SONG/KICK.WAV');
+    },
+  });
+  define('utils.loadFileEntryBytes', {
+    run: async () => {
+      await utilsApi.loadFileEntryBytes(eagerEntry);
+    },
+  });
+  define('utils.asLoadedFileEntryBytes', {
+    run: () => {
+      utilsApi.asLoadedFileEntryBytes(eagerEntry);
+    },
+  });
+  define('utils.readFilesIntoEntryMap', {
+    run: async () => {
+      await utilsApi.readFilesIntoEntryMap([lazyEntry], { deferAudio: false });
+    },
+  });
   define('utils.normalizeAsciiBase36Code', {
     run: () => {
       utilsApi.normalizeAsciiBase36Code(0x66);
@@ -144,6 +177,12 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
     run: () => {
       utilsApi.isMaliciousAssetPath('../../../etc/passwd');
       utilsApi.isMaliciousAssetPath('sounds/kick.wav');
+    },
+  });
+  define('utils.isAudioAssetPath', {
+    run: () => {
+      utilsApi.isAudioAssetPath('sounds/kick.wav');
+      utilsApi.isAudioAssetPath('images/title.png');
     },
   });
   define('utils.throwIfAborted', {

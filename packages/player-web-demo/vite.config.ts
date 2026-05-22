@@ -375,6 +375,28 @@ const workspaceAliases = [
   { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
   { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
   { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
+  // Longer subpaths must precede the main `@be-music/player-web` alias — Vite resolves aliases via `startsWith`, so a
+  // shorter prefix match would shadow them and try to load e.g. `packages/player-web/src/index.ts/scenes` as a file.
+  {
+    find: '@be-music/player-web/scenes',
+    replacement: resolve(repositoryDir, 'packages/player-web/src/scene/index.ts'),
+  },
+  {
+    find: '@be-music/player-web/skin',
+    replacement: resolve(repositoryDir, 'packages/player-web/src/skin/index.ts'),
+  },
+  {
+    find: '@be-music/player-web/chart',
+    replacement: resolve(repositoryDir, 'packages/player-web/src/chart/index.ts'),
+  },
+  {
+    find: '@be-music/player-web/collection',
+    replacement: resolve(repositoryDir, 'packages/player-web/src/collection/index.ts'),
+  },
+  {
+    find: '@be-music/player-web/runtime',
+    replacement: resolve(repositoryDir, 'packages/player-web/src/runtime/index.ts'),
+  },
   { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
 ];
 

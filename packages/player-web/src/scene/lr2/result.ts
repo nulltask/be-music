@@ -272,7 +272,13 @@ export class PixiResultView {
    * `performance.now()` of mount — reference point for timer 0 and the `#STARTINPUT`-derived timer 1 / 150.
    */
   private sceneStartedAt = 0;
-  private animationFrame = 0;
+  /** Whether the render loop is currently attached to the host's `app.ticker`; replaces the previous standalone rAF. */
+  private tickerAttached = false;
+  /** Tick handler bound once so the host ticker can register / unregister it by reference. */
+  private readonly tickerHandle = (): void => {
+    if (this.disposed) return;
+    this.render();
+  };
   private disposed = false;
   /**
    * Web Audio plumbing for the result-screen BGM. Created lazily the first time `mount` runs and torn down by
@@ -372,8 +378,9 @@ export class PixiResultView {
       ? (this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm)
       : (this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm);
     if (!bytes || this.disposed) return;
+    let audioContext: AudioContext | undefined;
     try {
-      const audioContext = new AudioContext();
+      audioContext = new AudioContext();
       this.bgmContext = audioContext;
       const buffer = await audioContext.decodeAudioData(bytes.slice().buffer);
       if (this.disposed) {
@@ -388,6 +395,13 @@ export class PixiResultView {
       source.start();
       this.bgmSource = source;
     } catch (error) {
+      if (audioContext !== undefined) {
+        if (this.bgmContext === audioContext) {
+          this.bgmContext = undefined;
+        }
+        await audioContext.close().catch(() => undefined);
+      }
+      this.bgmSource = undefined;
       log.warn('BGM playback failed', error);
     }
   }
@@ -401,10 +415,7 @@ export class PixiResultView {
       window.clearTimeout(timeout);
     }
     this.timeoutHandles.clear();
-    if (this.animationFrame !== 0) {
-      cancelAnimationFrame(this.animationFrame);
-      this.animationFrame = 0;
-    }
+    this.stopAnimationLoop();
     if (this.bgmSource) {
       try {
         this.bgmSource.stop();
@@ -432,7 +443,7 @@ export class PixiResultView {
       log.warn('texture cleanup threw', error);
     }
     try {
-      this.sceneRoot.destroy({ children: true });
+      this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
@@ -472,15 +483,15 @@ export class PixiResultView {
   }
 
   private startAnimationLoop(): void {
-    const tick = (): void => {
-      if (this.disposed) {
-        this.animationFrame = 0;
-        return;
-      }
-      this.animationFrame = requestAnimationFrame(tick);
-      this.render();
-    };
-    this.animationFrame = requestAnimationFrame(tick);
+    if (this.tickerAttached || !this.host) return;
+    this.host.app.ticker.add(this.tickerHandle);
+    this.tickerAttached = true;
+  }
+
+  private stopAnimationLoop(): void {
+    if (!this.tickerAttached) return;
+    this.host?.app.ticker.remove(this.tickerHandle);
+    this.tickerAttached = false;
   }
 
   /**
@@ -1265,6 +1276,17 @@ export class PixiResultView {
  */
 export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): ReadonlySet<number> {
   const ops = new Set<number>(RESULT_BASE_OPS);
+  // CUSTOMOPTION defaults declared by the loaded skin — same idiom as `computeSelectOps` (see `select-ops.ts`) and
+  // `PixiGameplayView.initializeRuntimeOps`. Without this, every `#IF,N` block gated on a CUSTOMOPTION's default
+  // value gets filtered out at render time, leaving the LITONE4-style result screen with only the few elements that
+  // happen to lack CUSTOMOPTION gating. Visible symptom on LITONE4 RESULT: most chrome missing, only the BACKBMP +
+  // bitmap-font title / artist labels survive.
+  //
+  // Defensive iteration guard — existing unit tests build stub `Lr2Skin` objects that only fill the fields they
+  // exercise (`customOptions` was previously unused by `computeResultOps`). Treat a missing array as empty.
+  for (const option of skin.customOptions ?? []) {
+    ops.add(option.defaultOp);
+  }
   ops.add(data.cleared ? RESULT_DYNAMIC_OPS.RESULT_CLEARED : RESULT_DYNAMIC_OPS.RESULT_FAILED);
   ops.add(RESULT_DYNAMIC_OPS.BAR_IS_SONG);
   ops.add(RESULT_DYNAMIC_OPS.BAR_IS_PLAYABLE);

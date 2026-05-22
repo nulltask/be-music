@@ -25,6 +25,7 @@
 //   width = 301, judgeWidthMillis = 150, lineWidth = 1, transparent = 0, drawDecay = 1.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
+import { numberField, pickHex, stringField } from './fields.ts';
 import type { BeatorajaImageId } from './image.ts';
 
 export interface BeatorajaTimingVisualizerElement {
@@ -101,22 +102,4 @@ function normalizeOne(entry: NormalizedElement): BeatorajaTimingVisualizerElemen
     prColor: pickHex(f, ['prColor', 'PRColor']),
     ifCodes: entry.ifCodes,
   };
-}
-
-function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function stringField(record: Readonly<Record<string, unknown>>, key: string, fallback: string): string {
-  const v = record[key];
-  return typeof v === 'string' ? v : fallback;
-}
-
-function pickHex(record: Readonly<Record<string, unknown>>, keys: ReadonlyArray<string>): string {
-  for (const key of keys) {
-    const v = record[key];
-    if (typeof v === 'string' && v.length > 0) return v;
-  }
-  return '';
 }

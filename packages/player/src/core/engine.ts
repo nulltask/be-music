@@ -1800,6 +1800,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     inputTokenToChannels,
   } = playbackChart;
   let { totalSeconds } = playbackChart;
+  // Hoist values that are constant for the entire play session out of the per-frame / per-event hot loops. Both fields
+  // live on `resolvedJson`, which the engine treats as immutable from this point on. The auto-play loop touches each
+  // many times per tick (LN body, every triggered sample, mine resolution, ...), and `resolveBmsBase` does a tiny
+  // property walk each call — small individually but accumulates into measurable per-second overhead on dense charts.
+  const idBase = resolveBmsBase(resolvedJson);
+  const wavResources = resolvedJson.resources.wav;
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
   const scoreTracker = createScoreTracker();
@@ -1854,7 +1860,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       });
   const playbackStateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
-    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: resolveBmsBase(resolvedJson) });
+    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: idBase });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
     applyGaugeJudgeWithLogging({
       summary,
@@ -2039,7 +2045,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         break;
       }
       if (!uiEnabled) {
-        writeRealtimeTriggeredEventLog(writeOutput, trigger, resolvedJson.resources.wav[trigger.sampleKey], 'realtime');
+        writeRealtimeTriggeredEventLog(writeOutput, trigger, wavResources[trigger.sampleKey], 'realtime');
       }
       triggerEvent(trigger.event);
       realtimeAudioTriggerIndex += 1;
@@ -2078,7 +2084,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         state: 'complete',
         mode: resolveLoggedLongNoteMode(pending.note),
         event: pending.note.event,
-        resources: resolvedJson.resources.wav,
+        resources: wavResources,
         endSeconds: pending.endSeconds,
       });
       applyAutoPerfectJudge(pending.note, pending.endSeconds);
@@ -2171,10 +2177,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
               writeOutput,
               note.event,
               note.seconds,
-              resolvedJson.resources.wav,
+              wavResources,
               'auto-note',
               note.channel,
-              resolveBmsBase(resolvedJson),
+              idBase,
             );
           }
           audioSession?.triggerEvent?.(note.event);
@@ -2208,7 +2214,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
               state: 'start',
               mode: resolveLoggedLongNoteMode(note),
               event: note.event,
-              resources: resolvedJson.resources.wav,
+              resources: wavResources,
               endSeconds,
             });
             insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
@@ -2394,6 +2400,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     inputTokenToChannels,
   } = playbackChart;
   let { totalSeconds } = playbackChart;
+  // Hoisted constants — see the matching block in `autoPlay`. Same rationale: the manual-play loop touches both heavily
+  // per tick / per input event, and these don't change across the play session.
+  const idBase = resolveBmsBase(resolvedJson);
+  const wavResources = resolvedJson.resources.wav;
   const scratchPlayableChannels = new Set(
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
@@ -2454,7 +2464,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       });
   const playbackStateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
-    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: resolveBmsBase(resolvedJson) });
+    : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: idBase });
   const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
     applyGaugeJudgeWithLogging({
       summary,
@@ -2680,10 +2690,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           writeOutput,
           note.event,
           note.seconds,
-          resolvedJson.resources.wav,
+          wavResources,
           'auto-scratch',
           note.channel,
-          resolveBmsBase(resolvedJson),
+          idBase,
         );
       }
       audioSession?.triggerEvent?.(note.event);
@@ -2703,7 +2713,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           state: 'start',
           mode: resolveLoggedLongNoteMode(note),
           event: note.event,
-          resources: resolvedJson.resources.wav,
+          resources: wavResources,
           endSeconds,
         });
         insertPendingAutoLongNote(pendingAutoScratchLongNotes, note, endSeconds);
@@ -2740,7 +2750,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         state: 'complete',
         mode: resolveLoggedLongNoteMode(pending.note),
         event: pending.note.event,
-        resources: resolvedJson.resources.wav,
+        resources: wavResources,
         endSeconds: pending.endSeconds,
       });
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
@@ -2916,7 +2926,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         break;
       }
       if (!uiEnabled) {
-        writeRealtimeTriggeredEventLog(writeOutput, trigger, resolvedJson.resources.wav[trigger.sampleKey], 'realtime');
+        writeRealtimeTriggeredEventLog(writeOutput, trigger, wavResources[trigger.sampleKey], 'realtime');
       }
       triggerEvent(trigger.event);
       nonPlayableRealtimeAudioTriggerIndex += 1;
@@ -2984,8 +2994,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markLandmineJudged(landmineCandidate)) {
         return;
       }
-      const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event, resolveBmsBase(resolvedJson));
-      const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, resolvedJson.resources.wav);
+      const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event, idBase);
+      const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, wavResources);
       // **Active-LN guard** — mirrors upstream `JudgeManager.java:253-259`. When a mine note is
       // passed while the same lane's LN is currently being held, the engine treats it as a
       // SILENT gauge drain: the damage is applied, the keysound plays at key volume, but NO
@@ -3006,10 +3016,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             writeOutput,
             landmineExplosionEvent,
             nowSec,
-            resolvedJson.resources.wav,
+            wavResources,
             'mine-hit',
             landmineCandidate.channel,
-            resolveBmsBase(resolvedJson),
+            idBase,
           );
         }
         audioSession?.triggerEvent?.(landmineExplosionEvent);
@@ -3064,10 +3074,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             writeOutput,
             fallback.event,
             nowSec,
-            resolvedJson.resources.wav,
+            wavResources,
             'lane-fallback',
             fallback.channel,
-            resolveBmsBase(resolvedJson),
+            idBase,
           );
         }
         audioSession?.triggerEvent?.(fallback.event);
@@ -3109,10 +3119,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         writeOutput,
         candidate.event,
         nowSec,
-        resolvedJson.resources.wav,
+        wavResources,
         'manual-note',
         channel,
-        resolveBmsBase(resolvedJson),
+        idBase,
       );
     }
     audioSession?.triggerEvent?.(candidate.event);
@@ -3128,7 +3138,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         state: 'start',
         mode: longNoteMode === 2 || longNoteMode === 3 ? longNoteMode : 1,
         event: candidate.event,
-        resources: resolvedJson.resources.wav,
+        resources: wavResources,
         endSeconds,
       });
       candidate.visibleUntilBeat = candidate.endBeat;
@@ -3346,7 +3356,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               state: 'release',
               mode: hold.mode,
               event: hold.note.event,
-              resources: resolvedJson.resources.wav,
+              resources: wavResources,
               endSeconds: hold.endSeconds,
             });
             if (!uiEnabled) {
@@ -3356,8 +3366,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 nowSec,
                 'long-note-release',
                 hold.note.event,
-                resolvedJson.resources.wav,
-                resolveBmsBase(resolvedJson),
+                wavResources,
+                idBase,
               );
             }
             audioSession?.stopChannel?.(channel);
@@ -3404,7 +3414,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               state: 'break',
               mode: hold.mode,
               event: hold.note.event,
-              resources: resolvedJson.resources.wav,
+              resources: wavResources,
               endSeconds: hold.endSeconds,
             });
             if (!uiEnabled) {
@@ -3414,8 +3424,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 nowSec,
                 'long-note-break',
                 hold.note.event,
-                resolvedJson.resources.wav,
-                resolveBmsBase(resolvedJson),
+                wavResources,
+                idBase,
               );
             }
             audioSession?.stopChannel?.(channel);
@@ -3430,7 +3440,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               state: 'complete',
               mode: hold.mode,
               event: hold.note.event,
-              resources: resolvedJson.resources.wav,
+              resources: wavResources,
               endSeconds: hold.endSeconds,
             });
             finalizeActiveLongNote(channel, hold, hold.headJudge, nowSec);
@@ -3461,7 +3471,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             state: 'complete',
             mode: hold.mode,
             event: hold.note.event,
-            resources: resolvedJson.resources.wav,
+            resources: wavResources,
             endSeconds: hold.endSeconds,
           });
           const finalJudge =
@@ -3485,7 +3495,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               state: 'release',
               mode: hold.mode,
               event: hold.note.event,
-              resources: resolvedJson.resources.wav,
+              resources: wavResources,
               endSeconds: hold.endSeconds,
             });
             if (!uiEnabled) {
@@ -3495,8 +3505,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 nowSec,
                 'long-note-release',
                 hold.note.event,
-                resolvedJson.resources.wav,
-                resolveBmsBase(resolvedJson),
+                wavResources,
+                idBase,
               );
             }
             audioSession?.stopChannel?.(channel);

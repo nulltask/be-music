@@ -3,7 +3,7 @@
 // every destination keyframe per frame. Engine-driven dynamics (notes, judge flashes, key-on, BGA, lamps) are
 // owned by the gameplay scene that drives this view from outside.
 
-import { BitmapText, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { BitmapText, Container, Graphics, Rectangle, Sprite, Text, Texture } from 'pixi.js';
 import {
   centerToAnchor,
   composeBeatorajaValueCells,
@@ -81,6 +81,8 @@ import {
 } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { NOTE_DISTRIBUTION_COLORS } from '../../chart/beatoraja/note-distribution.ts';
+
+const BEATORAJA_VIEW_DIAGNOSTICS = false;
 
 export interface BeatorajaPlaySkinViewOptions {
   skin: BeatorajaSkin;
@@ -339,6 +341,8 @@ interface SpriteEntry {
    * crop is used.
    */
   lastDisapearRatio: number;
+  /** Reused for runtime-dependent crop rects so lift / hidden-cover animation does not grow the global crop cache. */
+  dynamicCropTexture: Texture | undefined;
 }
 
 interface FloatValueEntry {
@@ -406,6 +410,8 @@ interface GraphEntry {
    * element.h)`; the live render samples a sub-rect that grows from one edge based on the angle.
    */
   sprite: Sprite;
+  /** Reused for runtime-dependent crop rects so graph ratios do not allocate one cached Texture per frame. */
+  dynamicCropTexture: Texture | undefined;
 }
 
 interface PolylineGraphEntry {
@@ -1151,6 +1157,7 @@ export class BeatorajaPlaySkinView {
           sprite,
           currentFrame: 0,
           lastDisapearRatio: 1,
+          dynamicCropTexture: undefined,
         });
         continue;
       }
@@ -1173,6 +1180,7 @@ export class BeatorajaPlaySkinView {
             sprite,
             currentFrame: 0,
             lastDisapearRatio: 1,
+            dynamicCropTexture: undefined,
           });
         }
         continue;
@@ -1321,7 +1329,16 @@ export class BeatorajaPlaySkinView {
           });
         });
       }
-      this.entries.push({ kind: 'image', group, image, baseTexture, sprite, currentFrame, lastDisapearRatio: 1 });
+      this.entries.push({
+        kind: 'image',
+        group,
+        image,
+        baseTexture,
+        sprite,
+        currentFrame,
+        lastDisapearRatio: 1,
+        dynamicCropTexture: undefined,
+      });
     }
 
     // Resolve each layer-anchor's insert position. Anchors were captured during the destination
@@ -1621,7 +1638,7 @@ export class BeatorajaPlaySkinView {
     const sprite = new Sprite({ texture: initialTexture, alpha: 0 });
     this.container.addChild(sprite);
     applyTextureFilterMode(baseTexture, group.filter);
-    return { kind: 'graph', group, element, baseTexture, sprite };
+    return { kind: 'graph', group, element, baseTexture, sprite, dynamicCropTexture: undefined };
   }
 
   /**
@@ -2079,14 +2096,25 @@ export class BeatorajaPlaySkinView {
       // through unscaled — `disapearRatio < 1` cases still use the cropper for their partial
       // re-crop, but those are mutually exclusive with the "full texture" sentinel.
       const useFullTexture = entry.image.w <= 0 || entry.image.h <= 0;
-      const cropped = useFullTexture
-        ? entry.baseTexture
-        : createCroppedBeatorajaTexture(entry.baseTexture, {
-            x: cell.x,
-            y: cell.y,
-            w: cell.w,
-            h: cell.h * disapearRatio,
-          });
+      let cropped: Texture | undefined;
+      if (useFullTexture) {
+        entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
+        cropped = entry.baseTexture;
+      } else {
+        const rect = {
+          x: cell.x,
+          y: cell.y,
+          w: cell.w,
+          h: cell.h * disapearRatio,
+        };
+        if (disapearRatio === 1) {
+          entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
+          cropped = createCroppedBeatorajaTexture(entry.baseTexture, rect);
+        } else {
+          entry.dynamicCropTexture = updateDynamicCropTexture(entry.dynamicCropTexture, entry.baseTexture, rect);
+          cropped = entry.dynamicCropTexture;
+        }
+      }
       if (cropped === undefined) {
         // Cell width/height collapsed to 0 — hiding avoids the same null-source bind-group crash above.
         sprite.visible = false;
@@ -2487,11 +2515,13 @@ export class BeatorajaPlaySkinView {
             : '';
     if (text.text !== next) {
       text.text = next;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-view] text content',
-        JSON.stringify({ id: entry.element.id, ref: entry.element.ref, text: next }),
-      );
+      if (BEATORAJA_VIEW_DIAGNOSTICS) {
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-view] text content',
+          JSON.stringify({ id: entry.element.id, ref: entry.element.ref, text: next }),
+        );
+      }
     }
 
     // The destination's `x` is the ANCHOR POINT, not the bounding-box left edge. Upstream
@@ -2665,12 +2695,13 @@ export class BeatorajaPlaySkinView {
       cropW = el.w * ratio;
       destW = props.width * ratio;
     }
-    const cropped = createCroppedBeatorajaTexture(baseTexture, {
+    entry.dynamicCropTexture = updateDynamicCropTexture(entry.dynamicCropTexture, baseTexture, {
       x: cropX,
       y: cropY,
       w: cropW,
       h: cropH,
     });
+    const cropped = entry.dynamicCropTexture;
     if (cropped === undefined) {
       sprite.visible = false;
       return;
@@ -3736,75 +3767,77 @@ export class BeatorajaPlaySkinView {
         entry.overlay.blendMode = props.blendMode;
       }
     }
-    // ─── Diagnostic logging (opt-in via console scrub) ─────────────────────────────────────
-    // First-frame snapshot — emit once per entry covering the resolved (value, max, border,
-    // mode) tuple plus the picker's pick / hide breakdown. Gives an answer to "is the gauge
-    // black because the state resolver fed us NaN/0, or because the picker resolved nodes the
-    // texture map doesn't have?".
-    if (!entry.diag.initialDeclLogged) {
-      entry.diag.initialDeclLogged = true;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-view] gauge first paint',
-        JSON.stringify({
-          groupId: String(entry.group.id),
-          state: {
-            value: state.value,
-            max: state.max,
-            border: state.border,
-            mode: state.mode,
-          },
-          parts: entry.element.parts,
-          visibleCellCount,
-          pickerEmptyCount,
-          textureMissingCount,
-          lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
-        }),
-      );
-    }
-    // Subsequent transition snapshots — emit when the (mode, value-bucket, border-bucket) key
-    // changes. Buckets are coarse (Math.round) so ordinary frame-by-frame value drift doesn't
-    // spam the log; only meaningful state shifts (e.g. mode swap on Result, value crashing
-    // through 0, border flip) hit. visibleCellCount tracks alongside so we can see whether the
-    // visual paint actually followed the state change.
-    const bucketKey = `${state.mode}|${Math.round(state.value)}|${Math.round(state.border)}`;
-    if (bucketKey !== entry.diag.lastSnapshotKey) {
-      entry.diag.lastSnapshotKey = bucketKey;
-      // eslint-disable-next-line no-console
-      console.log(
-        '[beatoraja-view] gauge state shift',
-        JSON.stringify({
-          groupId: String(entry.group.id),
-          state: {
-            value: state.value,
-            max: state.max,
-            border: state.border,
-            mode: state.mode,
-          },
-          visibleCellCount,
-          pickerEmptyCount,
-          textureMissingCount,
-        }),
-      );
-    }
-    // All-hidden warning — fires the first frame the gauge resolves with zero visible cells.
-    // The most common cause is texture-missing for every node id (visually a black gauge),
-    // which we surface here so the bug report can map straight to the missing image[]
-    // declaration rather than chasing the visible symptom.
-    if (visibleCellCount === 0 && !entry.diag.allHiddenLogged && entry.element.parts > 0) {
-      entry.diag.allHiddenLogged = true;
-      // eslint-disable-next-line no-console
-      console.warn(
-        '[beatoraja-view] gauge all-cells-hidden',
-        JSON.stringify({
-          groupId: String(entry.group.id),
-          parts: entry.element.parts,
-          pickerEmptyCount,
-          textureMissingCount,
-          lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
-          state: { value: state.value, max: state.max, border: state.border, mode: state.mode },
-        }),
-      );
+    if (BEATORAJA_VIEW_DIAGNOSTICS) {
+      // ─── Diagnostic logging (opt-in via local constant) ───────────────────────────────────
+      // First-frame snapshot — emit once per entry covering the resolved (value, max, border,
+      // mode) tuple plus the picker's pick / hide breakdown. Gives an answer to "is the gauge
+      // black because the state resolver fed us NaN/0, or because the picker resolved nodes the
+      // texture map doesn't have?".
+      if (!entry.diag.initialDeclLogged) {
+        entry.diag.initialDeclLogged = true;
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-view] gauge first paint',
+          JSON.stringify({
+            groupId: String(entry.group.id),
+            state: {
+              value: state.value,
+              max: state.max,
+              border: state.border,
+              mode: state.mode,
+            },
+            parts: entry.element.parts,
+            visibleCellCount,
+            pickerEmptyCount,
+            textureMissingCount,
+            lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
+          }),
+        );
+      }
+      // Subsequent transition snapshots — emit when the (mode, value-bucket, border-bucket) key
+      // changes. Buckets are coarse (Math.round) so ordinary frame-by-frame value drift doesn't
+      // spam the log; only meaningful state shifts (e.g. mode swap on Result, value crashing
+      // through 0, border flip) hit. visibleCellCount tracks alongside so we can see whether the
+      // visual paint actually followed the state change.
+      const bucketKey = `${state.mode}|${Math.round(state.value)}|${Math.round(state.border)}`;
+      if (bucketKey !== entry.diag.lastSnapshotKey) {
+        entry.diag.lastSnapshotKey = bucketKey;
+        // eslint-disable-next-line no-console
+        console.log(
+          '[beatoraja-view] gauge state shift',
+          JSON.stringify({
+            groupId: String(entry.group.id),
+            state: {
+              value: state.value,
+              max: state.max,
+              border: state.border,
+              mode: state.mode,
+            },
+            visibleCellCount,
+            pickerEmptyCount,
+            textureMissingCount,
+          }),
+        );
+      }
+      // All-hidden warning — fires the first frame the gauge resolves with zero visible cells.
+      // The most common cause is texture-missing for every node id (visually a black gauge),
+      // which we surface here so the bug report can map straight to the missing image[]
+      // declaration rather than chasing the visible symptom.
+      if (visibleCellCount === 0 && !entry.diag.allHiddenLogged && entry.element.parts > 0) {
+        entry.diag.allHiddenLogged = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[beatoraja-view] gauge all-cells-hidden',
+          JSON.stringify({
+            groupId: String(entry.group.id),
+            parts: entry.element.parts,
+            pickerEmptyCount,
+            textureMissingCount,
+            lastMissingNodeId: lastMissingNodeId !== undefined ? String(lastMissingNodeId) : undefined,
+            state: { value: state.value, max: state.max, border: state.border, mode: state.mode },
+          }),
+        );
+      }
     }
   }
 
@@ -3848,6 +3881,7 @@ export class BeatorajaPlaySkinView {
       switch (entry.kind) {
         case 'image':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
           break;
         case 'value':
           for (const sprite of entry.digitSprites) {
@@ -3866,24 +3900,25 @@ export class BeatorajaPlaySkinView {
           break;
         case 'graph':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
+          entry.dynamicCropTexture = destroyTextureView(entry.dynamicCropTexture);
           break;
         case 'polyline-graph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'bpmgraph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'judgegraph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'gaugegraph':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'timingvisualizer':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'timingdistribution':
-          entry.graphics.destroy({ children: false, texture: false, textureSource: false });
+          entry.graphics.destroy({ children: false, texture: false, textureSource: false, context: true });
           break;
         case 'slider':
           entry.sprite.destroy({ children: false, texture: false, textureSource: false });
@@ -3907,7 +3942,7 @@ export class BeatorajaPlaySkinView {
     // explicitly — it doesn't appear in `entries[]` and would otherwise leak its
     // GraphicsContext / GPU buffer.
     this.container.mask = null;
-    this.clipMask.destroy({ children: false, texture: false, textureSource: false });
+    this.clipMask.destroy({ children: false, texture: false, textureSource: false, context: true });
     this.container.destroy({ children: false });
   }
 }
@@ -4081,6 +4116,40 @@ function clampUnit01(v: number): number {
   if (v <= 0) return 0;
   if (v >= 1) return 1;
   return v;
+}
+
+function updateDynamicCropTexture(
+  current: Texture | undefined,
+  baseTexture: Texture | undefined,
+  rect: { x: number; y: number; w: number; h: number },
+): Texture | undefined {
+  if (
+    baseTexture === undefined ||
+    baseTexture === Texture.EMPTY ||
+    rect.w <= 0 ||
+    rect.h <= 0 ||
+    !Number.isFinite(rect.x) ||
+    !Number.isFinite(rect.y) ||
+    !Number.isFinite(rect.w) ||
+    !Number.isFinite(rect.h)
+  ) {
+    return destroyTextureView(current);
+  }
+  const frame = new Rectangle(rect.x, rect.y, rect.w, rect.h);
+  if (current !== undefined && !current.destroyed && current.source === baseTexture.source) {
+    current.frame.copyFrom(frame);
+    current.update();
+    return current;
+  }
+  destroyTextureView(current);
+  return new Texture({ source: baseTexture.source, frame, dynamic: true });
+}
+
+function destroyTextureView(texture: Texture | undefined): undefined {
+  if (texture !== undefined && !texture.destroyed) {
+    texture.destroy(false);
+  }
+  return undefined;
 }
 
 /**

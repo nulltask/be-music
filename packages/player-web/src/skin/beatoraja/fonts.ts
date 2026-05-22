@@ -57,6 +57,19 @@ export interface BeatorajaFontCache {
   kind(id: BeatorajaSkinFontId): BeatorajaFontKind | undefined;
   /** All successfully-loaded fonts, in declaration order. */
   values(): ReadonlyArray<BeatorajaLoadedFont>;
+  /** Unregisters CSS/bitmap fonts owned by this cache. Safe to call more than once. */
+  dispose(): void;
+}
+
+interface BeatorajaFontOwnedResources {
+  cssFaces: FontFace[];
+  bitmapFonts: { cacheKey: string; font: BitmapFont }[];
+}
+
+interface RegisteredBitmapFont {
+  loaded: BeatorajaLoadedFont;
+  cacheKey: string;
+  font: BitmapFont;
 }
 
 /**
@@ -73,6 +86,7 @@ export async function loadBeatorajaFonts(options: {
   fonts: ReadonlyArray<{ id: BeatorajaSkinFontId; path: string }>;
 }): Promise<BeatorajaFontCache> {
   const out = new Map<BeatorajaSkinFontId, BeatorajaLoadedFont>();
+  const ownedResources: BeatorajaFontOwnedResources = { cssFaces: [], bitmapFonts: [] };
   const familyPrefix = `beatoraja-skin-${stableEntryHash(options.entryPath)}`;
   // CSS-side prerequisites only matter for the FontFace branch. The BMFont branch needs Pixi's
   // runtime cache, which exists in any environment that loaded `pixi.js` — tests use jsdom which
@@ -99,14 +113,17 @@ export async function loadBeatorajaFonts(options: {
       }
       const family = `${familyPrefix}-${fontIdFamilySuffix(decl.id)}`;
       if (isAngelCodeFntPath(resolved)) {
-        const loaded = await registerBitmapFont({
+        const registered = await registerBitmapFont({
           declId: decl.id,
           family,
           fntPath: resolved,
           fntBytes: bytes,
           files: options.files,
         });
-        if (loaded !== undefined) out.set(decl.id, loaded);
+        if (registered !== undefined) {
+          out.set(decl.id, registered.loaded);
+          ownedResources.bitmapFonts.push({ cacheKey: registered.cacheKey, font: registered.font });
+        }
         return;
       }
       if (!canRegisterCssFont) return;
@@ -120,20 +137,62 @@ export async function loadBeatorajaFonts(options: {
         await face.load();
         document.fonts.add(face);
         out.set(decl.id, { id: decl.id, family, path: resolved, kind: 'css' });
+        ownedResources.cssFaces.push(face);
       } catch (error) {
         log.warn(`font[${decl.id}] '${resolved}': failed to register`, error);
       }
     }),
   );
-  return makeCache(out);
+  return makeCache(out, ownedResources);
 }
 
-function makeCache(map: Map<BeatorajaSkinFontId, BeatorajaLoadedFont>): BeatorajaFontCache {
+function makeCache(
+  map: Map<BeatorajaSkinFontId, BeatorajaLoadedFont>,
+  ownedResources: BeatorajaFontOwnedResources,
+): BeatorajaFontCache {
+  let disposed = false;
   return {
     family: (id) => map.get(id)?.family,
     kind: (id) => map.get(id)?.kind,
     values: () => Array.from(map.values()),
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      unregisterCssFaces(ownedResources.cssFaces);
+      unregisterBitmapFonts(ownedResources.bitmapFonts);
+      ownedResources.cssFaces.length = 0;
+      ownedResources.bitmapFonts.length = 0;
+      map.clear();
+    },
   };
+}
+
+function unregisterCssFaces(faces: ReadonlyArray<FontFace>): void {
+  if (typeof document === 'undefined' || !('fonts' in document) || typeof document.fonts.delete !== 'function') {
+    return;
+  }
+  for (const face of faces) {
+    try {
+      document.fonts.delete(face);
+    } catch (error) {
+      log.warn(`failed to unregister font face '${face.family}'`, error);
+    }
+  }
+}
+
+function unregisterBitmapFonts(fonts: ReadonlyArray<{ cacheKey: string; font: BitmapFont }>): void {
+  for (const { cacheKey, font } of fonts) {
+    try {
+      Cache.remove(cacheKey);
+    } catch (error) {
+      log.warn(`failed to remove bitmap font cache '${cacheKey}'`, error);
+    }
+    try {
+      font.destroy();
+    } catch (error) {
+      log.warn(`failed to destroy bitmap font '${cacheKey}'`, error);
+    }
+  }
 }
 
 function fontIdFamilySuffix(id: BeatorajaSkinFontId): string {
@@ -161,11 +220,12 @@ async function registerBitmapFont(args: {
   fntPath: string;
   fntBytes: Uint8Array;
   files: ReadonlyMap<string, BeatorajaSkinFileEntry>;
-}): Promise<BeatorajaLoadedFont | undefined> {
+}): Promise<RegisteredBitmapFont | undefined> {
   // BMFont text format is ASCII / Latin-1 — TextDecoder defaults to UTF-8 which is a strict
   // superset for the printable subset BMFont uses, so this is safe even when the file was authored
   // on Windows with code-page 1252 line endings (the parser tolerates `\r\n`).
   let parsed: ReturnType<typeof bitmapFontTextParser.parse>;
+  let font: BitmapFont | undefined;
   try {
     const text = new TextDecoder('utf-8').decode(args.fntBytes);
     if (!bitmapFontTextParser.test(text)) {
@@ -249,9 +309,10 @@ async function registerBitmapFont(args: {
     // artist appeared upside-down).
     const normalizedFontSize = Math.abs(parsed.fontSize);
     const data = { ...parsed, fontFamily: args.family, fontSize: normalizedFontSize };
-    const font = new BitmapFont({ data, textures: pageTextures });
+    font = new BitmapFont({ data, textures: pageTextures });
     // Pixi's `BitmapText` looks up `Cache.get(`${family}-bitmap`)` — register under that exact key.
-    Cache.set(`${args.family}-bitmap`, font);
+    const cacheKey = `${args.family}-bitmap`;
+    Cache.set(cacheKey, font);
     // eslint-disable-next-line no-console
     console.log(
       '[beatoraja-fonts] bitmap font registered',
@@ -266,10 +327,27 @@ async function registerBitmapFont(args: {
         rawFontSize: parsed.fontSize,
       }),
     );
-    return { id: args.declId, family: args.family, path: args.fntPath, kind: 'bitmap' };
+    return {
+      loaded: { id: args.declId, family: args.family, path: args.fntPath, kind: 'bitmap' },
+      cacheKey,
+      font,
+    };
   } catch (error) {
+    if (font !== undefined) {
+      font.destroy();
+    } else {
+      destroyPageTextures(pageTextures);
+    }
     log.warn(`font[${args.declId}] '${args.fntPath}': failed to construct BitmapFont`, error);
     return undefined;
+  }
+}
+
+function destroyPageTextures(textures: ReadonlyArray<Texture>): void {
+  for (const texture of textures) {
+    if (!texture.destroyed) {
+      texture.destroy(true);
+    }
   }
 }
 

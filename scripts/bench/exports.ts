@@ -2,11 +2,12 @@ import { execFileSync } from 'node:child_process';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { Bench, type TaskResult } from 'tinybench';
 import * as jsonApi from '@be-music/json';
 import * as parserApi from '@be-music/parser';
 import type { RenderResult } from '@be-music/audio-renderer';
+import { parseNonNegativeCliNumber, parsePositiveCliNumber, resolveCliValue, runCliMain } from './cli-utils.ts';
 import {
   PACKAGE_NAMES,
   type PackageName,
@@ -525,25 +526,25 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     }
 
     if (token === '--output') {
-      options.outputPath = resolveValue(args[index + 1], '--output');
+      options.outputPath = resolveCliValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
 
     if (token === '--time') {
-      options.timeMs = parsePositiveNumber(args[index + 1], '--time');
+      options.timeMs = parsePositiveCliNumber(args[index + 1], '--time');
       index += 1;
       continue;
     }
 
     if (token === '--warmup-time') {
-      options.warmupTimeMs = parseNonNegativeNumber(args[index + 1], '--warmup-time');
+      options.warmupTimeMs = parseNonNegativeCliNumber(args[index + 1], '--warmup-time');
       index += 1;
       continue;
     }
 
     if (token === '--packages') {
-      options.packages = parsePackageNames(resolveValue(args[index + 1], '--packages'));
+      options.packages = parsePackageNames(resolveCliValue(args[index + 1], '--packages'));
       index += 1;
       continue;
     }
@@ -554,7 +555,7 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     }
 
     if (token === '--filter') {
-      options.filter = resolveValue(args[index + 1], '--filter');
+      options.filter = resolveCliValue(args[index + 1], '--filter');
       index += 1;
       continue;
     }
@@ -583,29 +584,6 @@ function printUsage(defaults: CliDefaults): void {
     '  -h, --help              Show this help',
   ];
   process.stdout.write(`${lines.join('\n')}\n`);
-}
-
-function resolveValue(value: string | undefined, optionName: string): string {
-  if (!value) {
-    throw new Error(`Missing value for ${optionName}`);
-  }
-  return value;
-}
-
-function parsePositiveNumber(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseFloat(resolveValue(value, optionName));
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`${optionName} must be a positive number`);
-  }
-  return parsed;
-}
-
-function parseNonNegativeNumber(value: string | undefined, optionName: string): number {
-  const parsed = Number.parseFloat(resolveValue(value, optionName));
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error(`${optionName} must be a non-negative number`);
-  }
-  return parsed;
 }
 
 function parsePackageNames(value: string): PackageName[] {
@@ -660,18 +638,4 @@ function printSummary(snapshot: ExportsBenchmarkSnapshot, outputPath: string): v
   }
 }
 
-function isExecutedAsScript(): boolean {
-  const entryPath = process.argv[1];
-  if (!entryPath) {
-    return false;
-  }
-  return import.meta.url === pathToFileURL(entryPath).href;
-}
-
-if (isExecutedAsScript()) {
-  void main().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exit(1);
-  });
-}
+runCliMain(import.meta.url, main);

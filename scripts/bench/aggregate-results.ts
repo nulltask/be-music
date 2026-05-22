@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { loadExportsBenchmarkSnapshot, resolveCliValue, runCliMain } from './cli-utils.ts';
 import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
 
 interface CliDefaults {
@@ -34,7 +35,7 @@ const BENCHMARK_RESULT_FIELDS = [
 export async function aggregateBenchmarkSnapshotsFromFiles(
   inputPaths: readonly string[],
 ): Promise<ExportsBenchmarkSnapshot> {
-  const snapshots = await Promise.all(inputPaths.map((inputPath) => loadSnapshot(inputPath)));
+  const snapshots = await Promise.all(inputPaths.map((inputPath) => loadExportsBenchmarkSnapshot(inputPath)));
   return aggregateBenchmarkSnapshots(snapshots);
 }
 
@@ -81,21 +82,6 @@ export async function runAggregateBenchmarkSnapshotsCli(
     process.stdout.write(`Strategy=${snapshot.aggregation.strategy} runCount=${snapshot.aggregation.runCount}\n`);
   }
   return snapshot;
-}
-
-async function loadSnapshot(pathValue: string): Promise<ExportsBenchmarkSnapshot> {
-  const raw = await readFile(pathValue, 'utf8');
-  const parsed = JSON.parse(raw) as Partial<ExportsBenchmarkSnapshot>;
-  if (parsed.schemaVersion !== 1) {
-    throw new Error(`Unsupported snapshot schema at ${pathValue}`);
-  }
-  if (!parsed.results || typeof parsed.results !== 'object') {
-    throw new Error(`Invalid snapshot (results is missing): ${pathValue}`);
-  }
-  if (!parsed.totals || typeof parsed.totals !== 'object') {
-    throw new Error(`Invalid snapshot (totals is missing): ${pathValue}`);
-  }
-  return parsed as ExportsBenchmarkSnapshot;
 }
 
 function assertCompatibleSnapshot(expected: ExportsBenchmarkSnapshot, actual: ExportsBenchmarkSnapshot): void {
@@ -164,13 +150,13 @@ function parseArgs(args: string[], defaults: CliDefaults): CliOptions {
     }
 
     if (token === '--output') {
-      options.outputPath = resolveValue(args[index + 1], '--output');
+      options.outputPath = resolveCliValue(args[index + 1], '--output');
       index += 1;
       continue;
     }
 
     if (token === '--input') {
-      options.inputPaths.push(resolveValue(args[index + 1], '--input'));
+      options.inputPaths.push(resolveCliValue(args[index + 1], '--input'));
       index += 1;
       continue;
     }
@@ -206,25 +192,4 @@ function printUsage(defaults: CliDefaults): void {
   process.stdout.write(`${lines.join('\n')}\n`);
 }
 
-function resolveValue(value: string | undefined, optionName: string): string {
-  if (!value) {
-    throw new Error(`Missing value for ${optionName}`);
-  }
-  return value;
-}
-
-function isExecutedAsScript(): boolean {
-  const entryPath = process.argv[1];
-  if (!entryPath) {
-    return false;
-  }
-  return import.meta.url === pathToFileURL(entryPath).href;
-}
-
-if (isExecutedAsScript()) {
-  void runAggregateBenchmarkSnapshotsCli().catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
-    process.exit(1);
-  });
-}
+runCliMain(import.meta.url, () => runAggregateBenchmarkSnapshotsCli());

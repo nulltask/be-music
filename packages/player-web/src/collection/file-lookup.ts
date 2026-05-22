@@ -1,4 +1,10 @@
-import { isMaliciousAssetPath } from '@be-music/utils/core';
+import {
+  asLoadedFileEntryBytes,
+  findCaseInsensitiveMapPath,
+  isMaliciousAssetPath,
+  loadFileEntryBytes,
+  lookupCaseInsensitiveMapEntry,
+} from '@be-music/utils/core';
 import type { BrowserSongAssetEntry } from './types.ts';
 
 export { isMaliciousAssetPath } from '@be-music/utils/core';
@@ -25,31 +31,6 @@ export { isMaliciousAssetPath } from '@be-music/utils/core';
  * cache vanishes the moment the source itself does (and we never re-scan the same source twice).
  */
 
-const indexCache: WeakMap<ReadonlyMap<string, BrowserSongAssetEntry>, ReadonlyMap<string, string>> = new WeakMap();
-
-/**
- * Returns a `Map<lowerKey, originalKey>` for `files`, building it once and caching afterwards. Multiple distinct keys
- * that lowercase to the same string are collapsed onto the **first** key encountered during iteration — there's no good
- * universal answer when a source legitimately has both `parts.tga` and `PARTS.TGA` (filesystems that allow it are
- * rare), and picking the first means iteration order in the original map is the tiebreaker, which matches what a
- * single-pass loader sees.
- */
-function getCaseInsensitiveIndex(files: ReadonlyMap<string, BrowserSongAssetEntry>): ReadonlyMap<string, string> {
-  const cached = indexCache.get(files);
-  if (cached) {
-    return cached;
-  }
-  const index = new Map<string, string>();
-  for (const key of files.keys()) {
-    const lower = key.toLowerCase();
-    if (!index.has(lower)) {
-      index.set(lower, key);
-    }
-  }
-  indexCache.set(files, index);
-  return index;
-}
-
 /**
  * Returns the original key in `files` matching `candidate`, comparing exact-match first and falling back to a
  * case-insensitive match. Returns `undefined` when no key matches under either comparison.
@@ -61,14 +42,7 @@ export function findCaseInsensitivePath(
   files: ReadonlyMap<string, BrowserSongAssetEntry>,
   candidate: string,
 ): string | undefined {
-  if (isMaliciousAssetPath(candidate)) {
-    return undefined;
-  }
-  if (files.has(candidate)) {
-    return candidate;
-  }
-  const index = getCaseInsensitiveIndex(files);
-  return index.get(candidate.toLowerCase());
+  return findCaseInsensitiveMapPath(files, candidate, { rejectCandidate: isMaliciousAssetPath });
 }
 
 /**
@@ -79,8 +53,7 @@ export function lookupBytesCaseInsensitive(
   files: ReadonlyMap<string, BrowserSongAssetEntry>,
   candidate: string,
 ): BrowserSongAssetEntry | undefined {
-  const key = findCaseInsensitivePath(files, candidate);
-  return key === undefined ? undefined : files.get(key);
+  return lookupCaseInsensitiveMapEntry(files, candidate, { rejectCandidate: isMaliciousAssetPath });
 }
 
 /**
@@ -92,9 +65,7 @@ export function lookupBytesCaseInsensitive(
  * `loadAssetBytes(lookupBytesCaseInsensitive(...))` stays readable without an extra null-guard.
  */
 export async function loadAssetBytes(entry: BrowserSongAssetEntry | undefined): Promise<Uint8Array | undefined> {
-  if (entry === undefined) return undefined;
-  if (entry instanceof Uint8Array) return entry;
-  return new Uint8Array(await entry.arrayBuffer());
+  return loadFileEntryBytes(entry);
 }
 
 /**
@@ -103,6 +74,5 @@ export async function loadAssetBytes(entry: BrowserSongAssetEntry | undefined): 
  * go async at the call site.
  */
 export function asLoadedBytes(entry: BrowserSongAssetEntry | undefined): Uint8Array | undefined {
-  if (entry === undefined) return undefined;
-  return entry instanceof Uint8Array ? entry : undefined;
+  return asLoadedFileEntryBytes(entry);
 }

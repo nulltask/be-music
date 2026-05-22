@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'vitest';
+import { zipSync } from 'fflate';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import {
   BrowserSongCollectionStore,
   loadSongCollectionFromFiles,
@@ -31,7 +32,24 @@ function makeFile(path: string, contents = ''): File {
   return stub as File;
 }
 
+function makeZipFile(name: string, entries: Record<string, string>): File {
+  const zipped = zipSync(
+    Object.fromEntries(Object.entries(entries).map(([path, contents]) => [path, new TextEncoder().encode(contents)])),
+  );
+  const buffer = zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength);
+  return {
+    name,
+    webkitRelativePath: '',
+    size: zipped.byteLength,
+    arrayBuffer: () => Promise.resolve(buffer),
+  } as File;
+}
+
 const MINIMAL_BMS = ['#TITLE Test', '#BPM 120', '#PLAYER 1', '#00111:0F'].join('\n');
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('loadSongCollectionFromFiles progress events', () => {
   test('reports the reading phase with a monotonic current and a guaranteed terminal event', async () => {
@@ -85,6 +103,54 @@ describe('loadSongCollectionFromFiles progress events', () => {
     // tests) that haven't migrated keep working.
     const collection = await loadSongCollectionFromFiles([makeFile('Song/main.bms', MINIMAL_BMS)]);
     expect(collection.songs.length).toBe(1);
+  });
+
+  test('calls scheduler.yield with the scheduler receiver during large parse batches', async () => {
+    const scheduler = {
+      yield: vi.fn(function (this: typeof scheduler) {
+        if (this !== scheduler) {
+          throw new TypeError('Illegal invocation');
+        }
+        return Promise.resolve();
+      }),
+    };
+    vi.stubGlobal('scheduler', scheduler);
+
+    const files = Array.from({ length: 32 }, (_, index) =>
+      makeFile(`Pack/${String(index).padStart(2, '0')}.bms`, MINIMAL_BMS),
+    );
+
+    const collection = await loadSongCollectionFromFiles(files);
+
+    expect(collection.songs).toHaveLength(32);
+    expect(scheduler.yield).toHaveBeenCalledTimes(1);
+  });
+
+  test('loads charts from zip archives', async () => {
+    const collection = await loadSongCollectionFromFiles([makeZipFile('Pack.zip', { 'Song/main.bms': MINIMAL_BMS })]);
+
+    expect(collection.sources).toHaveLength(1);
+    expect(collection.sources[0]?.kind).toBe('zip');
+    expect(collection.songs.map((song) => song.chartPath)).toEqual(['Song/main.bms']);
+  });
+
+  test('rejects oversized zip archives before reading their bytes', async () => {
+    const arrayBuffer = vi.fn(async () => new ArrayBuffer(0));
+    const oversized = {
+      name: 'Huge.zip',
+      webkitRelativePath: '',
+      size: Number.MAX_SAFE_INTEGER,
+      arrayBuffer,
+    } as unknown as File;
+
+    const collection = await loadSongCollectionFromFiles([oversized]);
+
+    expect(arrayBuffer).not.toHaveBeenCalled();
+    expect(collection.sources).toHaveLength(0);
+    expect(collection.errors[0]).toMatchObject({
+      sourceId: 'zip:Huge.zip',
+    });
+    expect(collection.errors[0]?.message).toContain('ZIP archive is too large');
   });
 });
 

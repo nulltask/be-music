@@ -15,9 +15,13 @@
 
 import type { BeMusicJson } from '@be-music/json';
 import type { BeatorajaMarkerBeats } from '../../scene/beatoraja/markers.ts';
-
-/** Standard 4-beat measure baseline. Authors override via `chart.measures[].length`. */
-const BEATS_PER_STANDARD_MEASURE = 4;
+import {
+  beatorajaEventBeat,
+  computeBeatorajaMeasureBaseBeats,
+  hasBeatorajaEventValue,
+  isBeatorajaBpmEventChannel,
+  isBeatorajaStopEventChannel,
+} from './timing.ts';
 
 /**
  * Compute marker beat lists for the given chart. `time` markers are spaced at `timeIntervalSec`
@@ -30,7 +34,7 @@ export function computeBeatorajaChartMarkers(
 ): BeatorajaMarkerBeats {
   // 1. Build per-measure base beats. We need this for BPM / STOP event positions too, so it's
   //    computed unconditionally even when only the `group` markers are wanted.
-  const measureBaseBeat = computeMeasureBaseBeats(chart);
+  const measureBaseBeat = computeBeatorajaMeasureBaseBeats(chart);
 
   // 2. Section lines — beat 0 of every measure that exists in the chart.
   const group: number[] = [];
@@ -45,12 +49,12 @@ export function computeBeatorajaChartMarkers(
   const bpm: number[] = [];
   const stop: number[] = [];
   for (const event of chart.events ?? []) {
-    if (event.value === '00' || event.value === '') continue;
-    const beat = eventBeat(event, measureBaseBeat);
+    if (!hasBeatorajaEventValue(event.value)) continue;
+    const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
-    if (event.channel === '03' || event.channel === '08') {
+    if (isBeatorajaBpmEventChannel(event.channel)) {
       bpm.push(beat);
-    } else if (event.channel === '09') {
+    } else if (isBeatorajaStopEventChannel(event.channel)) {
       stop.push(beat);
     }
   }
@@ -79,50 +83,4 @@ export function computeBeatorajaChartMarkers(
   }
 
   return { group, bpm, stop, time };
-}
-
-/**
- * Compute each measure's start beat, summing the cumulative length of prior measures. Measures
- * not declared in `chart.measures[]` default to `length = 1` (= 4 beats). `chart.events[]`'s
- * `measure` field can also reference measures beyond the declared list — they get the default.
- */
-function computeMeasureBaseBeats(chart: BeMusicJson): number[] {
-  const lengths = new Map<number, number>();
-  let maxMeasure = 0;
-  for (const event of chart.events ?? []) {
-    if (event.measure > maxMeasure) maxMeasure = event.measure;
-  }
-  for (const measure of chart.measures ?? []) {
-    const idx = Math.max(0, Math.floor(measure.index));
-    if (idx > maxMeasure) maxMeasure = idx;
-    if (Number.isFinite(measure.length) && measure.length > 0) {
-      lengths.set(idx, measure.length);
-    }
-  }
-  const out: number[] = [];
-  let beat = 0;
-  for (let m = 0; m <= maxMeasure; m += 1) {
-    out.push(beat);
-    const length = lengths.get(m) ?? 1;
-    beat += length * BEATS_PER_STANDARD_MEASURE;
-  }
-  return out;
-}
-
-/**
- * Compute a single event's beat position. `position = [num, denom]` is a fraction of the measure;
- * multiply by the measure's length × 4 (= beats per measure) and add the measure-base beat.
- */
-function eventBeat(
-  event: { measure: number; position: readonly [number, number] },
-  measureBaseBeat: number[],
-): number | undefined {
-  const base = measureBaseBeat[event.measure];
-  if (base === undefined) return undefined;
-  const [num, denom] = event.position;
-  if (!Number.isFinite(num) || !Number.isFinite(denom) || denom <= 0) return base;
-  // We don't have direct access to `measureLength` here; assume 1.0 (the standard 4-beat measure)
-  // when the measure-length lookup at `measureBaseBeat` doesn't surface it. Marker positioning
-  // accuracy in custom-length measures is therefore approximate — refinable when needed.
-  return base + (num / denom) * BEATS_PER_STANDARD_MEASURE;
 }

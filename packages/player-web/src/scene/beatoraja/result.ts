@@ -18,16 +18,11 @@
 //   - Per-rank / clear-lamp comparisons that need "vs best" deltas. Current clear/rank ops reflect
 //     only the just-finished run.
 
-import { Container, Graphics, type Texture, type Ticker } from 'pixi.js';
+import { Container, Graphics } from 'pixi.js';
 import type { PlayerSummary } from '@be-music/player/core/engine';
 import {
   BEATORAJA_NUM,
   BEATORAJA_OP,
-  BEATORAJA_TEXT,
-  TIMER_PLAY,
-  TIMER_READY,
-  TIMER_SCENE_START,
-  TIMER_STARTINPUT,
   buildBaseOpSet,
   computeClearLampOp,
   computeGenericRankOp,
@@ -40,14 +35,25 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
-import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
-import { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
+import type { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
+import {
+  attachBeatorajaSceneLifecycle,
+  BeatorajaSceneBgmPlayer,
+  fitBeatorajaViewToStage,
+  hasBeatorajaSceneLockedTransition,
+  isBeatorajaSceneInputReady,
+  resolveBeatorajaChartImage,
+  resolveBeatorajaSkinTimingMs,
+  resolveBeatorajaSongText,
+  type BeatorajaChartImages,
+  type BeatorajaSceneLoopAttachment,
+} from './shared-scene.ts';
 
 export interface PixiBeatorajaResultSceneOptions {
   /** Result skin (`header.type === 7`). */
@@ -97,11 +103,7 @@ export interface PixiBeatorajaResultSceneOptions {
    * `op:[910, 191]`; default skin paints the stagefile under the score readouts on cleared /
    * failed outcomes. Missing entries hide the matching destinations.
    */
-  chartImages?: {
-    stageFile?: Texture;
-    backBmp?: Texture;
-    banner?: Texture;
-  };
+  chartImages?: BeatorajaChartImages;
   /** Fired exactly once when the user dismisses the result (Enter / Space / Escape). */
   onContinue?: () => void;
   /** Optional audio backend for `main_state.audio_play / loop / stop` Lua calls. */
@@ -128,7 +130,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
   private view: BeatorajaPlaySkinView;
   private readonly options: PixiBeatorajaResultSceneOptions;
   private host?: PixiSceneHost;
-  private tickerHandle?: (ticker: Ticker) => void;
+  private sceneLoop?: BeatorajaSceneLoopAttachment;
   private startMs = 0;
   private timerStartedAt: Map<number, number> = new Map();
   private lastFitWidth = 0;
@@ -145,10 +147,8 @@ export class PixiBeatorajaResultScene implements PixiScene {
    */
   private transitionToContinue: BeatorajaSceneTransition | undefined;
   private disposed = false;
+  private readonly bgm = new BeatorajaSceneBgmPlayer('beatoraja-result', () => this.disposed);
   private cachedBaseOps: ReadonlySet<number> | undefined;
-  /** Scene-owned `AudioContext` for the result jingle. Closed in `dispose()`. */
-  private audioContext: AudioContext | undefined;
-  private bgmSource: AudioBufferSourceNode | undefined;
   /** Cached BPM polyline for the chart that was just played — `[]` when no chart was supplied. */
   private readonly chartBpmCurve: ReadonlyArray<BpmCurvePoint>;
 
@@ -176,7 +176,7 @@ export class PixiBeatorajaResultScene implements PixiScene {
       // Synthetic chart-image ids — GdbG_Skin's result paints `-100 STAGEFILE` under the
       // top-right song-info pane gated on `op:[910, 191]`; default skin uses it for the
       // results-screen background. Missing entries hide their destinations.
-      chartImageProvider: (id) => this.resolveChartImage(id),
+      chartImageProvider: (id) => resolveBeatorajaChartImage(this.options.chartImages, id),
     });
     this.root.addChild(this.backdrop);
     this.root.addChild(this.view.container);
@@ -202,45 +202,28 @@ export class PixiBeatorajaResultScene implements PixiScene {
     this.fitToStage();
     // Resolve `Skin.input` per upstream `MusicResult.render` line 12-14. Reference theme
     // ships `input = 500`; we fall back to the same value when the skin omits the field.
-    const inputDelayMs =
-      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
-        ? this.options.skin.input
-        : DEFAULT_RESULT_INPUT_MS;
-    // Result scenes have their own timer ladder. We surface the same scene-relative timers as
-    // gameplay so chrome gated on `TIMER_PLAY` / `TIMER_READY` (e.g., "music finished" reveals)
-    // also fires here. The scene-start timer is at 0 ms so author keyframes run from the moment
-    // the scene is visible.
-    this.timerStartedAt = new Map([
-      [TIMER_SCENE_START, 0],
-      [TIMER_STARTINPUT, inputDelayMs],
-      [TIMER_READY, 0],
-      [TIMER_PLAY, 0],
-    ]);
-    // Per-enter() transition slot. Fired by the keyboard handler on Enter / Space / Escape;
-    // the helper waits `Skin.fadeout` ms before invoking `onContinue`, mirroring upstream
-    // `MusicResult.render` `if (timer.getNowTime(TIMER_FADEOUT) > skin.getFadeout())`.
-    this.transitionToContinue = new BeatorajaSceneTransition({
-      fadeoutMs: this.options.skin.fadeout,
+    const inputDelayMs = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_RESULT_INPUT_MS);
+    const lifecycle = attachBeatorajaSceneLifecycle({
+      host,
+      skin: this.options.skin,
+      inputDelayMs,
+      readyAtMs: 0,
+      playAtMs: 0,
       getElapsedMs: () => performance.now() - this.startMs,
-      stampFadeoutTimer: (timerId, atMs) => this.timerStartedAt.set(timerId, atMs),
-      onComplete: () => this.options.onContinue?.(),
+      tick: () => this.tick(),
+      handleKeyDown: this.handleKeyDown,
+      transitionCompletions: [() => this.options.onContinue?.()],
     });
-    this.tickerHandle = () => this.tick();
-    host.app.ticker.add(this.tickerHandle);
-    if (typeof window !== 'undefined') {
-      window.addEventListener('keydown', this.handleKeyDown);
-    }
-    void this.startBgm();
+    const [continueTransition] = lifecycle.transitions;
+    this.timerStartedAt = lifecycle.timerStartedAt;
+    this.transitionToContinue = continueTransition;
+    this.sceneLoop = lifecycle.sceneLoop;
+    void this.bgm.start(this.options.bgmBytes);
   }
 
   exit(): void {
-    if (this.tickerHandle && this.host) {
-      this.host.app.ticker.remove(this.tickerHandle);
-    }
-    this.tickerHandle = undefined;
-    if (typeof window !== 'undefined') {
-      window.removeEventListener('keydown', this.handleKeyDown);
-    }
+    this.sceneLoop?.dispose();
+    this.sceneLoop = undefined;
     this.host = undefined;
     // Drop the per-enter() transition helper so a future re-entry rebuilds it. The
     // helper's internal `completed` latch would otherwise carry over and silently no-op
@@ -252,8 +235,11 @@ export class PixiBeatorajaResultScene implements PixiScene {
     if (this.disposed) return;
     this.disposed = true;
     this.exit();
-    this.stopBgm();
+    this.bgm.stop();
     this.view.dispose();
+    if (!this.backdrop.destroyed) {
+      this.backdrop.destroy({ children: false, context: true });
+    }
     if (!this.root.destroyed) {
       this.root.destroy({ children: false });
     }
@@ -262,50 +248,6 @@ export class PixiBeatorajaResultScene implements PixiScene {
   /** Screenshot capture descriptor — see `PixiScene.getStageInfo`. */
   getStageInfo(): { container: Container; width: number; height: number } {
     return { container: this.view.container, width: this.view.width, height: this.view.height };
-  }
-
-  /**
-   * Decode + start the result BGM. Same lazy-init pattern as the decide scene's `startBgm`. The
-   * jingle plays once (no loop) — beatoraja's result audio is typically a single-play fanfare,
-   * not a looping background track.
-   */
-  private async startBgm(): Promise<void> {
-    const bytes = this.options.bgmBytes;
-    if (bytes === undefined) return;
-    if (typeof globalThis === 'undefined' || typeof globalThis.AudioContext === 'undefined') return;
-    try {
-      if (this.audioContext === undefined) {
-        this.audioContext = new globalThis.AudioContext();
-      }
-      const ctx = this.audioContext;
-      void ctx.resume().catch(() => undefined);
-      const buffer = await ctx.decodeAudioData(bytes.slice().buffer);
-      if (this.disposed) return;
-      const source = ctx.createBufferSource();
-      source.buffer = buffer;
-      source.connect(ctx.destination);
-      source.start();
-      this.bgmSource = source;
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('[beatoraja-result] bgm playback failed', error);
-    }
-  }
-
-  private stopBgm(): void {
-    if (this.bgmSource !== undefined) {
-      try {
-        this.bgmSource.stop();
-      } catch {
-        /* already stopped */
-      }
-      this.bgmSource.disconnect();
-      this.bgmSource = undefined;
-    }
-    if (this.audioContext !== undefined) {
-      void this.audioContext.close().catch(() => undefined);
-      this.audioContext = undefined;
-    }
   }
 
   // ─── Internals ────────────────────────────────────────────────────────────────────────────────
@@ -384,56 +326,11 @@ export class PixiBeatorajaResultScene implements PixiScene {
     return this.cachedBaseOps;
   }
 
-  /**
-   * Synthetic chart-image resolver. Maps the negative-id sentinels onto whichever pre-decoded
-   * chart bitmaps the host supplied via `chartImages`. Same shape as the decide / play scenes.
-   */
-  private resolveChartImage(syntheticId: number): Texture | undefined {
-    const images = this.options.chartImages;
-    if (images === undefined) return undefined;
-    switch (syntheticId) {
-      case -100:
-        return images.stageFile;
-      case -101:
-        return images.backBmp;
-      case -102:
-        return images.banner;
-      default:
-        return undefined;
-    }
-  }
-
   private resolveSongText(refOp: number): string | undefined {
-    const song = this.options.song;
-    const skin = this.options.skin;
-    switch (refOp) {
-      case BEATORAJA_TEXT.TITLE:
-        return song?.title ?? '';
-      case BEATORAJA_TEXT.SUBTITLE:
-        return song?.subtitle ?? '';
-      case BEATORAJA_TEXT.FULLTITLE:
-        return joinNonEmpty(song?.title, song?.subtitle);
-      case BEATORAJA_TEXT.GENRE:
-        return song?.genre ?? '';
-      case BEATORAJA_TEXT.ARTIST:
-        return song?.artist ?? '';
-      case BEATORAJA_TEXT.SUBARTIST:
-        // BMS `#SUBARTIST` lands in `metadata.extras.SUBARTIST`; bmson's structured
-        // `info.subartists[]` joins with spaces. Both paths surface the same string here.
-        return extractChartSubartist(song?.chart);
-      case BEATORAJA_TEXT.FULLARTIST:
-        return joinNonEmpty(song?.artist, extractChartSubartist(song?.chart));
-      // Skin / directory metadata — same contract as decide / gameplay paths. Lets the result
-      // panel display "Played: <directory> / <song.title>" in skins that author the layout.
-      case BEATORAJA_TEXT.SKIN_NAME:
-        return skin.name ?? '';
-      case BEATORAJA_TEXT.SKIN_AUTHOR:
-        return skin.author ?? '';
-      case BEATORAJA_TEXT.DIRECTORY:
-        return song?.directoryLabel ?? '';
-      default:
-        return undefined;
-    }
+    return resolveBeatorajaSongText(refOp, {
+      song: this.options.song,
+      skin: this.options.skin,
+    });
   }
 
   /**
@@ -781,38 +678,25 @@ export class PixiBeatorajaResultScene implements PixiScene {
   private cachedNoteBreakdownBars: ReadonlyArray<number> | undefined;
 
   private fitToStage(): void {
-    const host = this.host;
-    if (!host) return;
-    const { width, height } = host.app.screen;
-    if (width === this.lastFitWidth && height === this.lastFitHeight) return;
-    if (width <= 0 || height <= 0) return;
-    this.lastFitWidth = width;
-    this.lastFitHeight = height;
-    const scale = Math.min(width / this.view.width, height / this.view.height);
-    if (!Number.isFinite(scale) || scale <= 0) return;
-    const c = this.view.container;
-    c.scale.set(scale, scale);
-    c.x = (width - this.view.width * scale) / 2;
-    c.y = (height - this.view.height * scale) / 2;
-    this.backdrop.clear().rect(0, 0, width, height).fill(0x000000);
+    const fitted = fitBeatorajaViewToStage(this.host, this.view, this.backdrop, {
+      width: this.lastFitWidth,
+      height: this.lastFitHeight,
+    });
+    if (fitted === undefined) return;
+    this.lastFitWidth = fitted.width;
+    this.lastFitHeight = fitted.height;
   }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
     // Mirrors upstream `MusicResult.render` line 16's `if (timer.isTimerOn(TIMER_FADEOUT))`
     // short-circuit — once the fadeout has begun, additional key presses are ignored.
-    if (this.transitionToContinue?.isFadingOut() === true || this.transitionToContinue?.isCompleted() === true) {
-      return;
-    }
+    if (hasBeatorajaSceneLockedTransition(this.transitionToContinue)) return;
     // Gate input on `Skin.input` per upstream `MusicResult.render` line 12. Stops the
     // player from accidentally dismissing the result splash within the first few hundred
     // ms while their hand is still on the gameplay key.
-    const elapsed = performance.now() - this.startMs;
-    const inputDelay =
-      typeof this.options.skin.input === 'number' && Number.isFinite(this.options.skin.input)
-        ? this.options.skin.input
-        : DEFAULT_RESULT_INPUT_MS;
-    if (elapsed < inputDelay) return;
+    const inputDelay = resolveBeatorajaSkinTimingMs(this.options.skin.input, DEFAULT_RESULT_INPUT_MS);
+    if (!isBeatorajaSceneInputReady(this.startMs, inputDelay, performance.now())) return;
     switch (event.key) {
       case 'Enter':
       case ' ':
@@ -824,8 +708,4 @@ export class PixiBeatorajaResultScene implements PixiScene {
         break;
     }
   };
-}
-
-function joinNonEmpty(...parts: ReadonlyArray<string | undefined>): string {
-  return parts.filter((p): p is string => typeof p === 'string' && p.length > 0).join(' ');
 }

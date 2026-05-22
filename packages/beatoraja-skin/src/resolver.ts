@@ -28,6 +28,54 @@ export function resolveBeatorajaPath(
   return findCaseInsensitivePath(files, normalized);
 }
 
+/** One file entry inside a directory bucket of {@link BeatorajaPathIndex}. */
+interface BeatorajaDirIndexEntry {
+  readonly originalKey: string;
+  readonly basenameLower: string;
+}
+
+interface BeatorajaPathIndex {
+  /**
+   * Files grouped by their lowercased parent directory. The root directory is keyed `''`. Each entry preserves the
+   * original-case key (returned to callers as the canonical path) plus its precomputed lowercase basename so the
+   * wildcard pattern match doesn't repeat the slicing per call.
+   */
+  readonly byDir: ReadonlyMap<string, readonly BeatorajaDirIndexEntry[]>;
+}
+
+/**
+ * WeakMap-backed cache so each `files` map's directory index is built exactly once. The previous resolver iterated
+ * `for (const key of files.keys()) { key.toLowerCase(); lastIndexOf('/'); slice(...) }` per wildcard expansion — every
+ * `source[]` entry in `bundleBeatorajaSources` (dozens per skin) triggered a full O(allFiles) scan that re-lowered
+ * every key and recomputed the same parent-dir slice on every call.
+ */
+const beatorajaPathIndexCache: WeakMap<ReadonlyMap<string, unknown>, BeatorajaPathIndex> = new WeakMap();
+
+function getBeatorajaPathIndex(files: ReadonlyMap<string, BeatorajaSkinFileEntry>): BeatorajaPathIndex {
+  const cacheKey = files as ReadonlyMap<string, unknown>;
+  const cached = beatorajaPathIndexCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const byDir = new Map<string, BeatorajaDirIndexEntry[]>();
+  for (const originalKey of files.keys()) {
+    const lowerKey = originalKey.toLowerCase();
+    const lastSlash = lowerKey.lastIndexOf('/');
+    const dirLower = lastSlash >= 0 ? lowerKey.slice(0, lastSlash) : '';
+    const basenameLower = lastSlash >= 0 ? lowerKey.slice(lastSlash + 1) : lowerKey;
+    const entry: BeatorajaDirIndexEntry = { originalKey, basenameLower };
+    const bucket = byDir.get(dirLower);
+    if (bucket) {
+      bucket.push(entry);
+    } else {
+      byDir.set(dirLower, [entry]);
+    }
+  }
+  const index: BeatorajaPathIndex = { byDir };
+  beatorajaPathIndexCache.set(cacheKey, index);
+  return index;
+}
+
 /**
  * Expand a possibly-wildcarded `path` into the set of files that match. Beatoraja only supports a single `*` wildcard
  * in the basename ("play/background/*.png"); we honor that contract and also tolerate `*` mid-segment because some
@@ -56,15 +104,17 @@ export function expandBeatorajaWildcard(
   const dirPartLower = dirPart.toLowerCase();
   const matcher = compileWildcard(filePattern);
 
+  // Bucket lookup by the precomputed directory index avoids re-scanning the whole files map and re-lowering every key
+  // on each call — drops the cost from O(allFiles) per wildcard to O(filesInTargetDir).
+  const bucket = getBeatorajaPathIndex(files).byDir.get(dirPartLower);
+  if (!bucket) {
+    return [];
+  }
   const matches: string[] = [];
-  for (const key of files.keys()) {
-    const lowerKey = key.toLowerCase();
-    const lastSlash = lowerKey.lastIndexOf('/');
-    const keyDir = lastSlash >= 0 ? lowerKey.slice(0, lastSlash) : '';
-    const keyName = lastSlash >= 0 ? lowerKey.slice(lastSlash + 1) : lowerKey;
-    if (keyDir !== dirPartLower) continue;
-    if (matcher(keyName)) {
-      matches.push(key);
+  for (let i = 0; i < bucket.length; i += 1) {
+    const entry = bucket[i]!;
+    if (matcher(entry.basenameLower)) {
+      matches.push(entry.originalKey);
     }
   }
   matches.sort();
@@ -225,22 +275,18 @@ export function describeMissingWildcardDirectory(
   const dirPartLower = dirPart.toLowerCase();
   const insidePrefix = `${dirPartLower}/`;
 
-  const insideDir: string[] = [];
-  for (const key of files.keys()) {
-    const lower = key.toLowerCase();
-    const lastSlash = lower.lastIndexOf('/');
-    const keyDir = lastSlash >= 0 ? lower.slice(0, lastSlash) : '';
-    // Files DIRECTLY under the resolved directory; we deliberately don't recurse — the wildcard
-    // matcher itself doesn't recurse, so deeper files aren't relevant to this diagnostic.
-    if (keyDir === dirPartLower) insideDir.push(key);
-  }
-
-  // Count any entry whose path falls under the resolved directory tree (recursive). Useful
-  // when the basename pattern fails but the directory clearly exists with neighboring assets.
-  let underTree = 0;
-  for (const key of files.keys()) {
-    const lower = key.toLowerCase();
-    if (lower === dirPartLower || lower.startsWith(insidePrefix)) underTree += 1;
+  // Reuse the precomputed directory index: `bucket` is the list of files directly inside the resolved directory, and
+  // every other bucket whose `dirLower` starts with `${dirPartLower}/` lives under the resolved tree. This replaces
+  // two full `for (const key of files.keys())` scans with one pass over the much-smaller set of unique directories.
+  const index = getBeatorajaPathIndex(files);
+  const insideBucket = index.byDir.get(dirPartLower);
+  const insideDir: string[] = insideBucket ? insideBucket.map((entry) => entry.originalKey) : [];
+  let underTree = insideDir.length;
+  for (const [otherDir, bucket] of index.byDir) {
+    if (otherDir === dirPartLower) continue;
+    if (otherDir === dirPartLower || otherDir.startsWith(insidePrefix)) {
+      underTree += bucket.length;
+    }
   }
 
   if (insideDir.length === 0 && underTree === 0) {

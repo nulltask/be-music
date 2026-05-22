@@ -1,5 +1,49 @@
 # @be-music/player-web
 
+## 0.5.0
+
+### Minor Changes
+
+- 69f77d1: Split `@be-music/player-web`'s public surface from a single grab-bag `./` entry into five per-area subpaths: `./scenes`, `./skin`, `./chart`, `./collection`, `./runtime`. The main `.` export keeps re-exporting everything, so existing imports continue to work unchanged. New code should prefer the per-area subpaths to make the dependency surface explicit (e.g. importing only from `@be-music/player-web/scenes` shows the consumer doesn't reach into chart preprocessing or song-collection helpers).
+
+### Patch Changes
+
+- 3ee4d90: Refactor shared beatoraja chart timing entry collection.
+- d4b427c: Refactor shared beatoraja decide and result scene lifecycle helpers.
+- 69f77d1: `BeatorajaMarkerLayer.update` previously picked only the first prototype per marker kind (`group` / `bpm` / `stop` / `time`) via `kind.find(...)` and painted it at every beat. DP skins that author one destination per side (1P-side + 2P-side) only saw markers rendered on the 1P side as a result. Iterate every registered prototype per kind, matching beatoraja's upstream `LaneRenderer.java` loop, so both sides paint measure lines / BPM-change lines / STOP markers / time-tick markers.
+- 69f77d1: Bound the zip-archive decode path's working memory so opening a multi-gigabyte chart pack no longer materializes every entry in RAM at once. Entries are now streamed through the song-collection loader and released as soon as their files are handed off.
+- 69f77d1: Destroy beatoraja-scene Pixi `GraphicsContext` instances during scene teardown so the underlying GPU resources are released. Without this the WebGL renderer's context cache grew unbounded as the player moved between scenes.
+- 69f77d1: Discard scenes whose `enter()` throws (e.g. a skin failed to prepare, or an audio dependency rejected) instead of leaving them attached to the shared `PixiSceneHost`. Subsequent mounts no longer inherit half-initialized state from the failed predecessor.
+- 69f77d1: Disconnect each per-source `GainNode` from the Web Audio graph as soon as its `BufferSourceNode` ends, so long sessions no longer leak nodes that the audio session's `dispose()` would have to chase down on shutdown.
+- 69f77d1: Drain pending staggered-texture cleanup queues during scene shutdown so textures scheduled for delayed destruction don't outlive their owning scene and leak into the next chart's prepare pass.
+- 69f77d1: Skip beatoraja sprite props whose `src` index points at a missing image entry so a malformed theme no longer renders a placeholder rectangle in its place.
+- 69f77d1: Suppress beatoraja BGA sprites whose backing texture failed to load instead of painting a transparent placeholder; charts referencing missing BMP entries no longer leak unbacked sprites onto the BGA composite layer.
+- 69f77d1: Prevent the chart-preview audio scheduler from resuming playback after the preview has been disposed (e.g. the user moved off the song before the buffer decoded), so a previously-disposed `ChartPreview` no longer emits sample triggers into the next preview's audio context.
+- 69f77d1: Reject LR2 `#SRC_*` entries whose crop rectangle is empty or extends past the source texture, so the renderer never asks Pixi to crop to a zero-area or out-of-bounds region.
+- 69f77d1: Cache dynamic beatoraja crop textures across frames in the skin view so animated sprite layers no longer allocate a fresh cropped `Texture` per tick. Frees the GC pressure that surfaced as periodic stalls on sprite-heavy beatoraja themes.
+- 4275fef: Call `scheduler.yield()` through the `scheduler` receiver instead of extracting the method into a bare variable. Detached method invocation lost the `this` binding and crashed with `Illegal invocation` on browsers that ship the Scheduler API natively, so `loadSongCollectionFromFiles` froze mid-parse on Chrome's scheduler-yield code path. The `setTimeout(0)` fallback for browsers without the API is unchanged.
+- 69f77d1: Serialize BGA video FFmpeg transcodes through a single-flight queue so charts that reference several `.mpg` / `.avi` BGAs no longer launch parallel `ffmpeg.wasm` workers and exhaust browser memory.
+- 69f77d1: Yield to macrotasks while parsing a large chart so the page stays responsive (loading overlay animation, scrollbar, click handlers) and the browser doesn't flag the tab as unresponsive on multi-MB BMS / BMSON files.
+- cc37f42: Refactor shared LR2 scene texture path collection.
+- 18e4a48: Refactor shared LR2 value sprite rendering setup.
+- 69f77d1: Precompute `sortedChromeEntries` (tagged union over image / number / text / button / onMouse / slider) once per LR2 select-scene skin reference. The previous render path merged six arrays into `work[]` and called `.sort()` every frame; the underlying skin is frozen after parse so the order is static. Per-frame visibility (op gating, panel-open gating, DST keyframe evaluation) still happens during the switch dispatch — only the merge / sort step is hoisted out.
+- a66b7aa: Refactor LR2 and beatoraja Pixi cropped texture caching through a shared helper.
+- 73dff9a: Refactor shared chart timing, skin element field parsing, file lookup, and beatoraja scene helpers.
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [956fd01]
+- Updated dependencies [73dff9a]
+  - @be-music/lr2-skin@0.1.3
+  - @be-music/beatoraja-skin@0.1.1
+  - @be-music/player@0.4.1
+  - @be-music/utils@0.2.1
+  - @be-music/audio-renderer@0.2.2
+  - @be-music/json@0.2.1
+  - @be-music/parser@0.2.2
+  - @be-music/chart@0.3.1
+
 ## 0.4.0
 
 ### Minor Changes

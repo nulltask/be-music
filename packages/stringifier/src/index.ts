@@ -29,21 +29,35 @@ import {
 export interface BmsStringifyOptions {
   eol?: '\n' | '\r\n';
   maxResolution?: number;
+  /**
+   * When `true`, skip the round-trip re-parse that normally verifies the preserved source / object lines still encode
+   * the same chart as `json`. The default (`false`) re-runs `parseBms` against the just-rendered output and falls back
+   * to canonical sections on mismatch — the safe choice when callers may have mutated the JSON between parse and
+   * stringify. Set to `true` only when you can guarantee the preservation arrays were produced by an in-process parse
+   * of unchanged content (e.g. a pure round-trip in tests, a SHA-stable export pipeline); doing so halves stringify
+   * time on charts large enough for the re-parse to dominate (`stringifier:200`).
+   */
+  skipPreservationValidation?: boolean;
 }
 
 export interface BmsonStringifyOptions {
   resolution?: number;
   indent?: number;
+  /** See {@link BmsStringifyOptions.skipPreservationValidation}. */
+  skipPreservationValidation?: boolean;
 }
 
 export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {}): string {
   const eol = options.eol ?? '\n';
   const maxResolution = options.maxResolution;
-  const preservedSourceLines = maxResolution === undefined ? resolvePreservedBmsSourceLinesForOutput(json) : undefined;
+  const skipValidation = options.skipPreservationValidation === true;
+  const preservedSourceLines =
+    maxResolution === undefined ? resolvePreservedBmsSourceLinesForOutput(json, skipValidation) : undefined;
   if (preservedSourceLines) {
     return preservedSourceLines.join(eol);
   }
-  const preservedObjectLines = maxResolution === undefined ? resolvePreservedObjectLinesForOutput(json) : undefined;
+  const preservedObjectLines =
+    maxResolution === undefined ? resolvePreservedObjectLinesForOutput(json, skipValidation) : undefined;
   const lines: string[] = [];
 
   pushBmsSectionComment(lines, 'METADATA');
@@ -65,8 +79,11 @@ export function stringifyBms(json: BeMusicJson, options: BmsStringifyOptions = {
 export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions = {}): string {
   const resolution = resolveBmsonResolutionForOutput(json, options);
   const indent = options.indent ?? 2;
+  const skipValidation = options.skipPreservationValidation === true;
   const preservedDocument =
-    options.resolution === undefined ? resolvePreservedBmsonDocumentForOutput(json, resolution) : undefined;
+    options.resolution === undefined
+      ? resolvePreservedBmsonDocumentForOutput(json, resolution, skipValidation)
+      : undefined;
   if (preservedDocument) {
     return `${JSON.stringify(preservedDocument, null, indent)}\n`;
   }
@@ -157,7 +174,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   return `${JSON.stringify(bmson, null, indent)}\n`;
 }
 
-function resolvePreservedBmsSourceLinesForOutput(json: BeMusicJson): string[] | undefined {
+function resolvePreservedBmsSourceLinesForOutput(json: BeMusicJson, skipValidation: boolean): string[] | undefined {
   const sourceLines = json.preservation.bms.sourceLines;
   if (!Array.isArray(sourceLines) || sourceLines.length === 0) {
     return undefined;
@@ -166,6 +183,11 @@ function resolvePreservedBmsSourceLinesForOutput(json: BeMusicJson): string[] | 
   const lines = renderPreservedBmsSourceLines(sourceLines);
   if (lines.length === 0) {
     return undefined;
+  }
+  // `skipValidation` halves stringify time on large charts (the re-parse below dominates), but trusts the caller to
+  // have left the JSON untouched between parse and stringify. See `BmsStringifyOptions.skipPreservationValidation`.
+  if (skipValidation) {
+    return lines;
   }
   return doPreservedBmsSourceLinesMatchChart(json, lines) ? lines : undefined;
 }
@@ -204,6 +226,7 @@ function doPreservedBmsSourceLinesMatchChart(json: BeMusicJson, lines: string[])
 function resolvePreservedBmsonDocumentForOutput(
   json: BeMusicJson,
   resolution: number,
+  skipValidation: boolean,
 ): Record<string, unknown> | undefined {
   if (
     json.preservation.bmson.soundChannels.length === 0 &&
@@ -214,6 +237,9 @@ function resolvePreservedBmsonDocumentForOutput(
   }
 
   const document = createPreservedBmsonDocumentForOutput(json, resolution);
+  if (skipValidation) {
+    return document;
+  }
   return doPreservedBmsonDocumentMatchChart(json, document) ? document : undefined;
 }
 
@@ -529,10 +555,16 @@ function pushEventLines(
   }
 }
 
-function resolvePreservedObjectLinesForOutput(json: BeMusicJson): BmsObjectLineEntry[] | undefined {
+function resolvePreservedObjectLinesForOutput(
+  json: BeMusicJson,
+  skipValidation: boolean,
+): BmsObjectLineEntry[] | undefined {
   const objectLines = json.preservation.bms.objectLines;
   if (!Array.isArray(objectLines) || objectLines.length === 0) {
     return undefined;
+  }
+  if (skipValidation) {
+    return objectLines;
   }
   return doPreservedObjectLinesMatchChart(json, objectLines) ? objectLines : undefined;
 }

@@ -44,6 +44,7 @@ import {
 } from '../../collection/collection.ts';
 import {
   type Lr2BarGraphElement,
+  type Lr2BgaElement,
   type Lr2DestinationRect,
   type Lr2ImageElement,
   type Lr2ImageRect,
@@ -142,7 +143,11 @@ import {
   resolveJudgeSkinKind,
   resolveNumberValue,
 } from './gameplay-hud.ts';
-import { renderFallbackLr2Frame } from './gameplay-fallback.ts';
+// Default-family fallback renderer. Shown when no `Lr2Skin` is supplied — see `scene/default/gameplay-render.ts` for
+// the rationale (the default skin is its own family, and this scene delegates to that family's renderer when no LR2
+// skin is loaded). Long-term the LR2 scene should require a non-optional skin and `DefaultPixiGameplayView` would be
+// the only caller of `renderFallbackLr2Frame`; this import is the transitional bridge.
+import { renderFallbackLr2Frame } from '../default/gameplay-render.ts';
 import { resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
@@ -807,7 +812,13 @@ export class PixiGameplayView {
     '1P': { judge: '', until: 0, combo: 0 },
     '2P': { judge: '', until: 0, combo: 0 },
   };
-  private frame: number | undefined;
+  /**
+   * Whether the gameplay tick is currently registered on the host's `app.ticker`. Previously this scene drove its own
+   * `requestAnimationFrame` chain at the bottom of `tick`, running in parallel with PixiJS's auto-render ticker — two
+   * RAFs were scheduled per frame, doubling per-frame event-loop overhead. The ticker now fires `tick` inline with the
+   * renderer's frame.
+   */
+  private tickerAttached = false;
   private chartEndTimeout: number | undefined;
   /**
    * `setTimeout` handles for the LR2 scene-exit sequence (timers 2 = FADEOUT, 3 = CLOSE). Cleared on dispose so the
@@ -815,6 +826,11 @@ export class PixiGameplayView {
    */
   private exitFadeOutHandle: number | undefined;
   private exitCloseHandle: number | undefined;
+  /**
+   * Intro / scene-stage timers that gate LR2 `#STARTINPUT`, `#LOADEND`, and `#PLAYSTART`. These are independent from
+   * input flash timers and can otherwise retain a disposed gameplay scene until their delay elapses.
+   */
+  private readonly sceneStageTimeouts = new Set<number>();
   /**
    * True once {@link beginExitSequence} starts the FADEOUT → CLOSE → host-callback chain. Re-entry is suppressed so a
    * frantic second ESC press while the fade is animating doesn't leak a second callback or restart the timeline.
@@ -866,6 +882,7 @@ export class PixiGameplayView {
   private gaugeIncreaseTimeout: number | undefined;
   private readonly bombStartedAt = new Map<string, number>();
   private bombTexture: Texture | undefined;
+  private readonly visibleBgasScratch: Lr2BgaElement[] = [];
   private readonly runtimeOps = new Set<number>();
   /**
    * LR2 groove-gauge state. Replaces the simpler hard-coded +1/+0.5/-2/-6 deltas with the proper LR2 formula:
@@ -1267,10 +1284,9 @@ export class PixiGameplayView {
     // bail out instead of mutating a fresh scene's state.
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
-    const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
     // LOAD END gate — both the configured `#LOADEND` delay AND the BGA preload need to finish. Fires LR2 timer 40 and
     // flips op 80→81 (READY), which the skin's load-complete animations key off of.
-    void Promise.all([bgaReady, delay(loadEndOffsetMs)]).then(() => {
+    void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
       this.timerStartedAt.set(40, this.playClock());
@@ -1280,7 +1296,7 @@ export class PixiGameplayView {
     // PLAY START gate — same pattern, but for the configured `#PLAYSTART` (or fallback intro). Fires timer 41
     // (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so the chart engine
     // and BGM samples share a single t=0.
-    void Promise.all([bgaReady, delay(introMs)]).then(() => {
+    void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
       this.timerStartedAt.set(41, this.playClock());
@@ -1296,7 +1312,7 @@ export class PixiGameplayView {
       this.launchSharedEngine();
     });
     this.app.canvas.focus();
-    this.tick();
+    this.startAnimationLoop();
   }
 
   /**
@@ -1312,10 +1328,23 @@ export class PixiGameplayView {
       this.timerStartedAt.set(timer, this.sceneStartTime);
       return;
     }
-    window.setTimeout(() => {
+    this.setSceneStageTimeout(() => {
       if (this.disposed) return;
       this.timerStartedAt.set(timer, this.playClock());
     }, safeOffset);
+  }
+
+  private delaySceneStage(offsetMs: number): Promise<void> {
+    return new Promise((resolve) => this.setSceneStageTimeout(resolve, Math.max(0, offsetMs)));
+  }
+
+  private setSceneStageTimeout(callback: () => void, offsetMs: number): void {
+    let handle = 0;
+    handle = window.setTimeout(() => {
+      this.sceneStageTimeouts.delete(handle);
+      callback();
+    }, Math.max(0, offsetMs));
+    this.sceneStageTimeouts.add(handle);
   }
 
   /**
@@ -1450,12 +1479,9 @@ export class PixiGameplayView {
       return;
     }
     this.disposed = true;
-    // Cancel our own rAF (the gameplay tick loop). The shared `Application` and its ticker keep running for the next
-    // active scene — only the per-scene state below is freed.
-    if (this.frame !== undefined) {
-      cancelAnimationFrame(this.frame);
-      this.frame = undefined;
-    }
+    // Detach the gameplay tick from the host ticker. The shared `Application` keeps running for the next active scene
+    // — only the per-scene state below is freed.
+    this.stopAnimationLoop();
     // Detach window-level event listeners so a stray keypress doesn't hit a disposed view.
     window.removeEventListener('keydown', this.handleSharedEngineExitKey);
     if (this.host) {
@@ -1486,6 +1512,10 @@ export class PixiGameplayView {
       window.clearTimeout(this.exitCloseHandle);
       this.exitCloseHandle = undefined;
     }
+    for (const timeout of this.sceneStageTimeouts) {
+      window.clearTimeout(timeout);
+    }
+    this.sceneStageTimeouts.clear();
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
       this.chartEndTimeout = undefined;
@@ -1568,26 +1598,35 @@ export class PixiGameplayView {
         ...this.bgaLayerTextures.values(),
         this.bombTexture,
       ];
+      const hostIsDisposing = this.host?.isDisposed() === true;
       if (ticker) {
-        staggerDestroyTextures(queue, (callback) => {
+        const cleanup = staggerDestroyTextures(queue, (callback) => {
           ticker.add(callback);
           return () => ticker.remove(callback);
         });
+        if (hostIsDisposing) {
+          cleanup.drain();
+        }
       } else {
-        // No live ticker (defensive — host is normally still alive at this point). Fall back to a microtask scheduler
-        // so the destroy chain still spreads across event-loop turns rather than blocking the dispose call.
-        staggerDestroyTextures(queue, (callback) => {
+        // No live ticker (defensive — host is normally still alive at this point). Fall back to a macrotask scheduler
+        // so the destroy chain yields to paint/input between batches rather than monopolizing the current task.
+        const cleanup = staggerDestroyTextures(queue, (callback) => {
           let cancelled = false;
+          let timeout: ReturnType<typeof setTimeout> | undefined;
           const loop = (): void => {
             if (cancelled) return;
             callback();
-            queueMicrotask(loop);
+            if (!cancelled) timeout = setTimeout(loop, 0);
           };
-          queueMicrotask(loop);
+          timeout = setTimeout(loop, 0);
           return () => {
             cancelled = true;
+            if (timeout !== undefined) clearTimeout(timeout);
           };
         });
+        if (hostIsDisposing) {
+          cleanup.drain();
+        }
       }
       this.textures.clear();
       this.bgaTextures.clear();
@@ -1614,7 +1653,7 @@ export class PixiGameplayView {
     // Destroy our scene-graph subtree. With the shared host pattern we never call `app.destroy` here — that would nuke
     // the canvas and the select scene would lose its rendering target.
     try {
-      this.sceneRoot.destroy({ children: true });
+      this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
@@ -3193,8 +3232,24 @@ export class PixiGameplayView {
       // Info console with per-frame counts.
       log.debug('perf', report);
     }
-    this.frame = requestAnimationFrame(this.tick);
   };
+
+  /**
+   * Registers the gameplay tick handler on the host's shared `app.ticker`. Replaces the previous self-scheduling rAF
+   * loop so we don't run a second `requestAnimationFrame` callback alongside PixiJS's auto-render ticker. The handler
+   * itself ({@link tick}) is unchanged — only the scheduling mechanism moved.
+   */
+  private startAnimationLoop(): void {
+    if (this.tickerAttached || !this.host) return;
+    this.host.app.ticker.add(this.tick);
+    this.tickerAttached = true;
+  }
+
+  private stopAnimationLoop(): void {
+    if (!this.tickerAttached) return;
+    this.host?.app.ticker.remove(this.tick);
+    this.tickerAttached = false;
+  }
 
   /**
    * Sample frame rate over a sliding 1-second window. The published value drives the LR2 RATE NUMBER panel (which we
@@ -3568,7 +3623,7 @@ export class PixiGameplayView {
       return;
     }
     const now = this.playClock();
-    for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
+    for (const [channel, startedAt] of this.bombStartedAt) {
       const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
       const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
       const timerId = (isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
@@ -3683,7 +3738,7 @@ export class PixiGameplayView {
     const cellHeight = this.bombTexture.frame.height / divy;
     const cycle = lr2Layout ? 150 / totalFrames : BOMB_CYCLE_MS;
     const now = this.playClock();
-    for (const [channel, startedAt] of Array.from(this.bombStartedAt.entries())) {
+    for (const [channel, startedAt] of this.bombStartedAt) {
       const elapsed = now - startedAt;
       const lane = this.laneX.get(channel);
       if (!lane) {
@@ -3725,6 +3780,7 @@ export class PixiGameplayView {
    */
   private renderBga(seconds: number): void {
     this.bgaLayerPool.begin();
+    this.visibleBgasScratch.length = 0;
     // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
     // only when autoplay is on - `'ON'` (default) → render whenever the chart has BGA
     const bgaMode = this.options.bga ?? 'ON';
@@ -3747,7 +3803,12 @@ export class PixiGameplayView {
     // pair of op-30 NORMAL panels stacked vertically on the right side. The previous `find(...)` short-circuited at the
     // first match and clipped the second NORMAL panel, so DP charts under "BGA NORMAL" mode showed only the top panel
     // and left the bottom one blank.
-    const visibleBgas = skin.bgas.filter((entry) => this.isDestinationVisible(entry.destination));
+    const visibleBgas = this.visibleBgasScratch;
+    for (const entry of skin.bgas) {
+      if (this.isDestinationVisible(entry.destination)) {
+        visibleBgas.push(entry);
+      }
+    }
     if (visibleBgas.length === 0) {
       this.bgaLayerPool.end();
       return;

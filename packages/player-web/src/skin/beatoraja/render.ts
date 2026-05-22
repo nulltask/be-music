@@ -20,7 +20,7 @@
 // re-importing from another module is harmless. Requires `useBackBuffer: true` at app init
 // — see `scene/host.ts`.
 import 'pixi.js/advanced-blend-modes';
-import { Rectangle, Texture } from 'pixi.js';
+import { Texture } from 'pixi.js';
 import {
   applyBeatorajaOffsetAlpha,
   combineBeatorajaOffsets,
@@ -33,6 +33,7 @@ import {
   type BeatorajaLuaRuntimeContext,
   type BeatorajaSkinOffsetValue,
 } from '@be-music/beatoraja-skin';
+import { createCachedCroppedTexture, type PixiCropRect } from '../pixi-texture.ts';
 
 export interface BeatorajaSpriteProps {
   visible: boolean;
@@ -230,10 +231,11 @@ export function destinationToSpriteProps(
   // when no intermediate accumulation crosses [0, 1] — most skins author a single offset and
   // satisfy that condition, but skins chaining brightness + flicker offsets need the per-step
   // semantics to render correctly. See `applyBeatorajaOffsetAlpha` for the full derivation.
-  const alpha =
+  const rawAlpha =
     combinedOffsetIds !== undefined && context.resolveOffset !== undefined
       ? applyBeatorajaOffsetAlpha(keyframe.a / 255, combinedOffsetIds, context.resolveOffset)
       : clampUnit(keyframe.a / 255);
+  const alpha = clampUnit(rawAlpha);
   if (alpha <= 0) return HIDDEN_PROPS;
 
   // Y-flip from beatoraja's libGDX Y-UP coordinates (origin at canvas bottom-left, with `(x, y)`
@@ -266,6 +268,9 @@ export function destinationToSpriteProps(
   const mirrorY = rawHeight < 0;
   const width = Math.abs(rawWidth);
   const height = Math.abs(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return HIDDEN_PROPS;
+  }
   // Center-anchored offset application — mirrors beatoraja's `SkinObject.prepareDraw`:
   //
   //     if (!relative) {
@@ -301,6 +306,17 @@ export function destinationToSpriteProps(
   const baseY = keyframe.y + offset.y + centerShiftY;
   const xLeft = mirrorX ? baseX + rawWidth : baseX;
   const yLibgdxBottom = mirrorY ? baseY + rawHeight : baseY;
+  const y = canvasHeight - yLibgdxBottom - height;
+  const angle = -(keyframe.angle + offset.r);
+  if (
+    !Number.isFinite(canvasHeight) ||
+    !Number.isFinite(xLeft) ||
+    !Number.isFinite(yLibgdxBottom) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(angle)
+  ) {
+    return HIDDEN_PROPS;
+  }
 
   // Mouse-hover visibility gate (audit C-12). Mirrors upstream `SkinObject.java:513-517`:
   //
@@ -326,7 +342,7 @@ export function destinationToSpriteProps(
   return {
     visible: true,
     x: xLeft,
-    y: canvasHeight - yLibgdxBottom - height,
+    y,
     width,
     height,
     mirrorX,
@@ -340,7 +356,7 @@ export function destinationToSpriteProps(
     // visually backwards — most visible on ModernChic Play's `attack.lua` 14 keyframe attack
     // motion (was rotating the wrong way), 7K-skin scratch wheels, and Select-scene focus
     // rings (audit 1.8).
-    angle: -(keyframe.angle + offset.r),
+    angle,
     blendMode: blendCodeToPixi(group.blend),
   };
 }
@@ -515,6 +531,7 @@ export function applyBeatorajaStretchRect(
 }
 
 function clampUnit(v: number): number {
+  if (!Number.isFinite(v)) return 0;
   if (v <= 0) return 0;
   if (v >= 1) return 1;
   return v;
@@ -534,50 +551,16 @@ function clamp255(v: number): number {
 }
 
 /**
- * Per-base-texture cache of cropped sub-textures. Mirrors the LR2 renderer's `createCroppedTexture` cache so a
- * gameplay frame doesn't allocate a fresh `Texture` + `Rectangle` per sprite each tick. The cache is `WeakMap`-keyed
- * on the base texture so an entry vanishes once the owning view drops the texture.
- */
-const cropCache = new WeakMap<Texture, Map<string, Texture>>();
-
-/**
  * Build a `Texture` view that crops `texture` to `rect`. Reuses the same `TextureSource` (no GPU re-upload). Returns
  * `undefined` for empty / missing rectangles. Cached — repeated calls with the same `(texture, x, y, w, h)` return
  * the same `Texture` instance.
  */
-export function createCroppedBeatorajaTexture(
-  texture: Texture | undefined,
-  rect: { x: number; y: number; w: number; h: number },
-): Texture | undefined {
-  if (
-    !texture ||
-    !Number.isFinite(rect.x) ||
-    !Number.isFinite(rect.y) ||
-    !Number.isFinite(rect.w) ||
-    !Number.isFinite(rect.h) ||
-    rect.w <= 0 ||
-    rect.h <= 0
-  ) {
-    // PixiJS v8 + WebGPU crashes inside `BindGroupSystem._createBindGroup` (`Cannot read properties of null
-    // (reading 'textureSource1')`) when a sub-texture is created with a zero-extent or NaN frame — the source
-    // never finishes its GPU upload and the bind group lookup deref's a null. Guard against every degenerate rect
-    // here so the renderer can simply skip the sprite when the source cell is empty.
-    return undefined;
-  }
-  let bySource = cropCache.get(texture);
-  if (!bySource) {
-    bySource = new Map();
-    cropCache.set(texture, bySource);
-  }
-  // Encode raw numeric values rather than rounding so cells with fractional widths (`w / divx` not an integer) get
-  // their own cache slot.
-  const key = `${rect.x}|${rect.y}|${rect.w}|${rect.h}`;
-  let cached = bySource.get(key);
-  if (!cached) {
-    cached = new Texture({ source: texture.source, frame: new Rectangle(rect.x, rect.y, rect.w, rect.h) });
-    bySource.set(key, cached);
-  }
-  return cached;
+export function createCroppedBeatorajaTexture(texture: Texture | undefined, rect: PixiCropRect): Texture | undefined {
+  // PixiJS v8 + WebGPU crashes inside `BindGroupSystem._createBindGroup` (`Cannot read properties of null
+  // (reading 'textureSource1')`) when a sub-texture is created with a zero-extent or NaN frame — the source
+  // never finishes its GPU upload and the bind group lookup deref's a null. Guard against every degenerate rect
+  // here so the renderer can simply skip the sprite when the source cell is empty.
+  return createCachedCroppedTexture(texture, rect, { requireFiniteFrame: true });
 }
 
 /**

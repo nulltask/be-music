@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readDxaArchive } from './dxa.ts';
+import { extractDxaArchivesAsFlatFiles, readDxaArchive } from './dxa.ts';
 
 describe('readDxaArchive', () => {
   it('rejects non-DXA bytes (no DX magic after decryption)', () => {
@@ -88,5 +88,103 @@ describe('readDxaArchive', () => {
     expect(archive!.files).toHaveLength(1);
     expect(archive!.files[0]!.path).toBe('file.txt');
     expect(new TextDecoder().decode(archive!.files[0]!.data)).toBe('hello world');
+  });
+});
+
+describe('extractDxaArchivesAsFlatFiles', () => {
+  // Tiny helper that synthesises an encrypted V3 archive containing a single uncompressed file. Mirrors the layout
+  // exercised by the `readDxaArchive` round-trip test above; copy-pasted here so the flattening cases stay
+  // self-contained.
+  function buildSingleFileDxa(filename: string, payload: string): Uint8Array {
+    const dataPayload = new TextEncoder().encode(payload);
+    const nameBytes = new TextEncoder().encode(filename);
+    const rootNameEntry = new Uint8Array(4);
+    const nameEntry = new Uint8Array(4 + nameBytes.byteLength + 1);
+    nameEntry.set(nameBytes, 4);
+    const fileNameTable = new Uint8Array(rootNameEntry.byteLength + nameEntry.byteLength);
+    fileNameTable.set(rootNameEntry, 0);
+    fileNameTable.set(nameEntry, rootNameEntry.byteLength);
+    const fileTable = new Uint8Array(2 * 44);
+    new DataView(fileTable.buffer).setUint32(0, 0, true);
+    new DataView(fileTable.buffer).setUint32(4, 0x10, true);
+    new DataView(fileTable.buffer).setUint32(40, 0xffffffff, true);
+    new DataView(fileTable.buffer).setUint32(44 + 0, rootNameEntry.byteLength, true);
+    new DataView(fileTable.buffer).setUint32(44 + 4, 0x20, true);
+    new DataView(fileTable.buffer).setUint32(44 + 32, 0, true);
+    new DataView(fileTable.buffer).setUint32(44 + 36, dataPayload.byteLength, true);
+    new DataView(fileTable.buffer).setUint32(44 + 40, 0xffffffff, true);
+    const dirTable = new Uint8Array(16);
+    new DataView(dirTable.buffer).setUint32(0, 0, true);
+    new DataView(dirTable.buffer).setUint32(4, 0xffffffff, true);
+    new DataView(dirTable.buffer).setUint32(8, 1, true);
+    new DataView(dirTable.buffer).setUint32(12, 44, true);
+    const HEADER = 24;
+    const fileNameTableHead = HEADER + dataPayload.byteLength;
+    const fileTableHead = fileNameTable.byteLength;
+    const directoryTableHead = fileTableHead + fileTable.byteLength;
+    const totalTableSize = fileTableHead + fileTable.byteLength + dirTable.byteLength;
+    const total = fileNameTableHead + totalTableSize;
+    const plain = new Uint8Array(total);
+    const view = new DataView(plain.buffer);
+    plain[0] = 0x44;
+    plain[1] = 0x58;
+    plain[2] = 3;
+    plain[3] = 0;
+    view.setUint32(4, totalTableSize, true);
+    view.setUint32(8, HEADER, true);
+    view.setUint32(12, fileNameTableHead, true);
+    view.setUint32(16, fileTableHead, true);
+    view.setUint32(20, directoryTableHead, true);
+    plain.set(dataPayload, HEADER);
+    plain.set(fileNameTable, fileNameTableHead);
+    plain.set(fileTable, fileNameTableHead + fileTableHead);
+    plain.set(dirTable, fileNameTableHead + directoryTableHead);
+    const key = [0x55, 0xaa, 0x20, 0x55, 0x55, 0x06, 0x55, 0xaa, 0x55, 0xd5, 0x7c, 0x66];
+    const encrypted = new Uint8Array(plain.length);
+    for (let i = 0; i < plain.length; i += 1) {
+      encrypted[i] = plain[i]! ^ key[i % 12]!;
+    }
+    return encrypted;
+  }
+
+  it('flattens a DXA placed in a nested folder under <dir>/<stem>/<inner>', () => {
+    // `Play/parts/common.dxa` containing `default.dds` → yielded as `Play/parts/common/default.dds`. Same convention
+    // LR2 itself uses for transparent DXA-as-folder lookup; the LITONE4 theme depends on it.
+    const dxa = buildSingleFileDxa('default.dds', 'pretend-pixels');
+    const entries: Array<readonly [string, Uint8Array]> = [['Play/parts/common.dxa', dxa]];
+    const flattened = [...extractDxaArchivesAsFlatFiles(entries)];
+    expect(flattened).toEqual([
+      {
+        path: 'Play/parts/common/default.dds',
+        bytes: expect.any(Uint8Array),
+      },
+    ]);
+    expect(new TextDecoder().decode(flattened[0]!.bytes)).toBe('pretend-pixels');
+  });
+
+  it('places a top-level DXA under <stem>/<inner> (no leading slash)', () => {
+    const dxa = buildSingleFileDxa('inside.dds', 'data');
+    const flattened = [...extractDxaArchivesAsFlatFiles([['root.dxa', dxa]])];
+    expect(flattened).toEqual([{ path: 'root/inside.dds', bytes: expect.any(Uint8Array) }]);
+  });
+
+  it('skips non-DXA entries silently (passes them through without yielding)', () => {
+    // Caller's file map contains both real assets and `.dxa` archives; the flattener should only yield from DXAs.
+    const dxa = buildSingleFileDxa('a.dds', 'a-bytes');
+    const flattened = [
+      ...extractDxaArchivesAsFlatFiles([
+        ['Play/skin.lr2skin', new TextEncoder().encode('#INFORMATION,0,...')],
+        ['Play/parts/things.dxa', dxa],
+        ['Play/parts/loose.dds', new TextEncoder().encode('loose-bytes')],
+      ]),
+    ];
+    expect(flattened).toEqual([{ path: 'Play/parts/things/a.dds', bytes: expect.any(Uint8Array) }]);
+  });
+
+  it('yields nothing for a malformed DXA without throwing', () => {
+    // Random bytes with no valid DX magic after decryption — `readDxaArchive` returns `undefined`, the flattener
+    // skips the entry without surfacing an error so a corrupted theme bundle still loads its other assets.
+    const broken = new Uint8Array(32);
+    expect([...extractDxaArchivesAsFlatFiles([['Play/parts/broken.dxa', broken]])]).toEqual([]);
   });
 });

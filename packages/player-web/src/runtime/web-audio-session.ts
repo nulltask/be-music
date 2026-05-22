@@ -12,6 +12,12 @@ import { logger } from '../logger.ts';
 
 const log = logger('web-audio-session');
 
+interface WebAudioSourceHandle {
+  node: AudioBufferSourceNode;
+  buffer: AudioBuffer;
+  gain: GainNode | undefined;
+}
+
 /**
  * Per-event playback override produced by the bmson 1.0.0 slicing pipeline. Each entry carries the seek `offset` into
  * the source `sound_channels[]` WAV plus an optional `duration` cap that bounds how long this slice plays before the
@@ -113,10 +119,10 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
   const sampleIdBase = resolveBmsBase(chart);
   /** Active BufferSource per `#WAVxx` slot. Used to honor bmson `c = true` (skip retrigger of a still-playing sample)
    *  and to wipe the slot once the source ends naturally. */
-  const activeBySlot = new Map<string, AudioBufferSourceNode>();
+  const activeBySlot = new Map<string, WebAudioSourceHandle>();
   /** Active BufferSource per BMS channel (lane). Populated for player-input lanes so `stopChannel` can silence the
    *  most recent keysound when the engine releases an LN early. */
-  const activeByChannel = new Map<string, AudioBufferSourceNode>();
+  const activeByChannel = new Map<string, WebAudioSourceHandle>();
   let paused = false;
   let disposed = false;
   let started = false;
@@ -136,21 +142,37 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     sampleKey: string,
     path: string,
     bus: GainNode,
-  ): { node: AudioBufferSourceNode; buffer: AudioBuffer } | undefined => {
+  ): WebAudioSourceHandle | undefined => {
     const buffer = decodedSamples.get(normalizePath(path).toLowerCase());
     if (!buffer) return undefined;
     const node = audioContext.createBufferSource();
     node.buffer = buffer;
+    let gain: GainNode | undefined;
     const multiplier = wavCmdVolumeMultipliers.get(sampleKey);
     if (multiplier !== undefined && multiplier !== 1) {
-      const gain = audioContext.createGain();
+      gain = audioContext.createGain();
       gain.gain.value = multiplier;
       node.connect(gain);
       gain.connect(bus);
     } else {
       node.connect(bus);
     }
-    return { node, buffer };
+    return { node, buffer, gain };
+  };
+
+  const disconnectSource = (handle: WebAudioSourceHandle): void => {
+    try {
+      handle.node.disconnect();
+    } catch {
+      // Already disconnected / context closed — both terminal states.
+    }
+    if (handle.gain !== undefined) {
+      try {
+        handle.gain.disconnect();
+      } catch {
+        // Same as above; source cleanup is best-effort.
+      }
+    }
   };
 
   const playSampleEvent = (event: BeMusicEvent, audioContextStartSeconds?: number): void => {
@@ -171,13 +193,9 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     const { node, buffer } = built;
 
     node.onended = (): void => {
-      try {
-        node.disconnect();
-      } catch {
-        // Already disconnected / context closed — both terminal states.
-      }
-      if (activeBySlot.get(sampleKey) === node) activeBySlot.delete(sampleKey);
-      if (isPlayerLane && activeByChannel.get(channel) === node) activeByChannel.delete(channel);
+      disconnectSource(built);
+      if (activeBySlot.get(sampleKey) === built) activeBySlot.delete(sampleKey);
+      if (isPlayerLane && activeByChannel.get(channel) === built) activeByChannel.delete(channel);
     };
 
     const slice = bmsonSlicePlayback?.get(event);
@@ -189,8 +207,8 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       audioContextStartSeconds !== undefined ? Math.max(audioContext.currentTime, audioContextStartSeconds) : undefined;
     startSampleNode(node, startAt, offsetSeconds, durationSeconds);
 
-    activeBySlot.set(sampleKey, node);
-    if (isPlayerLane) activeByChannel.set(channel, node);
+    activeBySlot.set(sampleKey, built);
+    if (isPlayerLane) activeByChannel.set(channel, built);
   };
 
   const applyDynamicVolumeEvent = (event: BeMusicEvent): void => {
@@ -263,12 +281,13 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // Hard-stop every still-playing source so they don't survive into the next chart's bus and bleed audio. The
       // engine's dispose path runs after `finish` (the abort variant) — the source set is empty in the graceful
       // path so this loop is a no-op there.
-      for (const node of activeBySlot.values()) {
+      for (const handle of activeBySlot.values()) {
         try {
-          node.stop();
+          handle.node.stop();
         } catch {
           // Already stopped — `BufferSourceNode.stop` throws when called after `onended` fired.
         }
+        disconnectSource(handle);
       }
       activeBySlot.clear();
       activeByChannel.clear();
@@ -293,14 +312,15 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       playSampleEvent(event, audioContextStartSeconds);
     },
     stopChannel: (channel: string): void => {
-      const node = activeByChannel.get(channel);
-      if (!node) return;
+      const handle = activeByChannel.get(channel);
+      if (!handle) return;
       activeByChannel.delete(channel);
       try {
-        node.stop();
+        handle.node.stop();
       } catch {
         // Already stopped — see dispose() rationale.
       }
+      disconnectSource(handle);
     },
   };
 }

@@ -1,6 +1,6 @@
 {
   "name": "@be-music/editor",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CLI editor for importing, editing, and exporting BMS charts",
   "license": "MIT",
   "bin": {

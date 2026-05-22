@@ -1,5 +1,22 @@
 # @be-music/player
 
+## 0.4.1
+
+### Patch Changes
+
+- 69f77d1: Two hot-loop optimisations:
+
+  - `core/engine.ts`: hoist `resolveBmsBase(resolvedJson)` and `resolvedJson.resources.wav` out of the autoplay tick into local constants. Both fields are immutable from the autoplay entry point on, but were re-walked dozens of times per second (LN body, every triggered sample, mine resolution).
+  - `judging.ts`: `lowerBoundBySeconds` now binary-searches `startIndex` when the caller declares `sortedBySeconds: true` and doesn't supply an explicit `startIndex`. Drops the per-call prefix scan from O(N) to O(log N) once the judge window opens deep into the chart.
+
+- 956fd01: Refactor shared scroll-distance segment integration terms.
+- Updated dependencies [73dff9a]
+  - @be-music/utils@0.2.1
+  - @be-music/audio-renderer@0.2.2
+  - @be-music/json@0.2.1
+  - @be-music/parser@0.2.2
+  - @be-music/chart@0.3.1
+
 ## 0.4.0
 
 ### Minor Changes

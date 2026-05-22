@@ -97,6 +97,41 @@ export function readDxaArchive(
   return { files, version };
 }
 
+/**
+ * Iterates the entries of a file map, decodes every `.dxa` archive, and yields the virtual `{path, bytes}` entries
+ * its contents should appear at in the flat file map.
+ *
+ * Naming rule: a DXA at `Play/parts/common.dxa` exposes inner `default.dds` at `Play/parts/common/default.dds` —
+ * the directory the DXA lives in, plus the DXA's basename minus extension, plus the inner file's path. This matches
+ * how LR2 transparently treats DXAs as folders during asset lookup.
+ *
+ * Designed for use during {@link loadLr2ThemeSkinsFromFiles}'s shared-files preparation step: callers pass the file
+ * map (with on-disk entries) and add the yielded `(path, bytes)` pairs back into the SAME map, taking care to skip
+ * paths that already exist on disk (= prefer the real file when both are present). The function itself doesn't write
+ * to the map — it just yields candidates so the caller can apply its own write-vs-skip policy.
+ *
+ * Failures are silent — a malformed DXA produces no entries, callers don't have to special-case it.
+ */
+export function* extractDxaArchivesAsFlatFiles(
+  files: Iterable<readonly [path: string, bytes: Uint8Array]>,
+  key?: ReadonlyArray<number>,
+): Generator<{ path: string; bytes: Uint8Array }> {
+  for (const [path, bytes] of files) {
+    if (!path.toLowerCase().endsWith('.dxa')) continue;
+    const archive = key === undefined ? readDxaArchive(bytes) : readDxaArchive(bytes, key);
+    if (!archive) continue;
+    // `Play/parts/common.dxa` → directory `Play/parts`, stem `common`.
+    const lastSlash = path.lastIndexOf('/');
+    const directory = lastSlash >= 0 ? path.slice(0, lastSlash) : '';
+    const baseWithExt = lastSlash >= 0 ? path.slice(lastSlash + 1) : path;
+    const stem = baseWithExt.replace(/\.dxa$/iu, '');
+    const prefix = directory === '' ? `${stem}/` : `${directory}/${stem}/`;
+    for (const file of archive.files) {
+      yield { path: `${prefix}${file.path}`, bytes: file.data };
+    }
+  }
+}
+
 interface WalkContext {
   bytes: Uint8Array;
   view: DataView;

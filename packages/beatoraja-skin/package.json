@@ -1,6 +1,6 @@
 {
   "name": "@be-music/beatoraja-skin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Renderer-independent beatoraja JSON / Lua skin parser and theme loader for be-music",
   "license": "MIT",
   "files": [

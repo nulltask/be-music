@@ -1,5 +1,43 @@
 # @be-music/player-web-demo
 
+## 0.2.5
+
+### Patch Changes
+
+- 69f77d1: `discoverLr2Themes` scopes its return to `LR2files/Theme/<name>/`, which dropped shared `LR2files/` siblings (`WallPaper/`, `Bgm/`, `Sound/`, …) from the file list handed to the skin loader. The LR2 default select skin references its backdrop via the wildcard `LR2files/WallPaper/Select/*.bmp`; without the siblings the lookup failed and the select scene painted black. Union the theme's own files with all other files under `LR2files/` that aren't part of any other theme subtree, so wildcard `#CUSTOMFILE` assets resolve as before.
+- 69f77d1: Extract the pure family-dispatch derivations (`availableFamiliesForScene`, `pickActiveFamilyForScene`, `hasAnyLr2Skin`) out of the demo's `PlayerWebDemoApp` god-class into a standalone `family-dispatch.ts` module that consumes a `FamilyDispatchState` snapshot. No behaviour change; the demo class trims by ~60 lines.
+- 69f77d1: Split the 3,979-line demo entry point into feature modules: pull the inline HTML template (`dom-template.ts`), shared type declarations (`types.ts`), browser-compat panel (`compat-panel.ts`), READTEXT overlay (`readtext-overlay.ts`), and standalone utilities (`demo-utils.ts`) out of `main.ts`. `PlayerWebDemoApp` itself is unchanged; main.ts drops to ~3,200 lines.
+- 69f77d1: Extract three self-contained slices of `PlayerWebDemoApp` into standalone modules: `chart-shape.ts` (pure derivations for chart shape + beatoraja-skin selection), `loading-overlay.ts` (DOM-only controller), `recording-controller.ts` (gameplay recorder / screenshot logic). No behaviour change; the demo class trims by ~260 lines.
+- 69f77d1: Rewrite every `@be-music/player-web` import to use the matching per-area subpath (`/scenes`, `/skin`, `/chart`, `/collection`, `/runtime`). The main `@be-music/player-web` entry is reserved for top-level utilities (`logger`, `Rectangle`) that don't belong to a single area. Vite alias ordering is updated so the dev/build resolver hits the per-area barrels directly.
+- Updated dependencies [3ee4d90]
+- Updated dependencies [d4b427c]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [4275fef]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [cc37f42]
+- Updated dependencies [18e4a48]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [69f77d1]
+- Updated dependencies [a66b7aa]
+- Updated dependencies [73dff9a]
+  - @be-music/player-web@0.5.0
+  - @be-music/lr2-skin@0.1.3
+  - @be-music/beatoraja-skin@0.1.1
+
 ## 0.2.4
 
 ### Patch Changes

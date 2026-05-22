@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Core playback engine and shared gameplay helpers for be-music",
   "license": "MIT",
   "files": [
@@ -123,7 +123,7 @@
     "@be-music/json": "workspace:*",
     "@be-music/parser": "workspace:*",
     "@be-music/utils": "workspace:*",
-    "alien-signals": "^3.1.2",
+    "alien-signals": "^3.2.1",
     "node-web-audio-api": "^1.0.9"
   }
 }

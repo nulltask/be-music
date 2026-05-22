@@ -1,5 +1,19 @@
 # @be-music/stringifier
 
+## 0.3.0
+
+### Minor Changes
+
+- 69f77d1: Add an opt-in `skipPreservationValidation` flag to `stringifyBmsJson` that bypasses the round-trip re-parse + canonical fallback. In-process pipelines that can guarantee the preservation arrays match the JSON (tests, SHA-stable exports) save a parse + diff pass per call. Default behaviour (validate + fallback) is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [73dff9a]
+  - @be-music/utils@0.2.1
+  - @be-music/json@0.2.1
+  - @be-music/parser@0.2.2
+  - @be-music/chart@0.3.1
+
 ## 0.2.1
 
 ### Patch Changes

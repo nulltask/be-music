@@ -103,10 +103,11 @@ describe('destroyUniqueTextures', () => {
 /**
  * `staggerDestroyTextures` is the dispose-time staggered variant of `destroyUniqueTextures`. The contract:
  *
- * 1. Returns the unique texture count immediately (synchronously), regardless of how the scheduler queues work.
+ * 1. Exposes the unique texture count immediately (synchronously), regardless of how the scheduler queues work.
  * 2. Runs at most `perFrame` destroy calls per scheduler tick.
  * 3. Stops the scheduler once the queue drains (no leaked tick callbacks).
  * 4. Skips duplicate / undefined entries, matching `destroyUniqueTextures`.
+ * 5. Lets shutdown callers drain the remaining queue synchronously before their scheduler is destroyed.
  */
 describe('staggerDestroyTextures', () => {
   test('spreads destroys across ticks at perFrame cadence and stops when drained', () => {
@@ -117,8 +118,8 @@ describe('staggerDestroyTextures', () => {
       ticks.push(callback);
       return stop;
     });
-    const total = staggerDestroyTextures(textures, scheduler, { perFrame: 3 });
-    expect(total).toBe(7);
+    const cleanup = staggerDestroyTextures(textures, scheduler, { perFrame: 3 });
+    expect(cleanup.count).toBe(7);
     expect(scheduler).toHaveBeenCalledTimes(1);
     // Synchronous return — no destroys yet.
     for (const t of textures) expect(t.destroy).toHaveBeenCalledTimes(0);
@@ -149,7 +150,8 @@ describe('staggerDestroyTextures', () => {
       ticks.push(callback);
       return () => undefined;
     });
-    expect(staggerDestroyTextures([textureA, undefined, textureA, textureB], scheduler, { perFrame: 8 })).toBe(2);
+    const cleanup = staggerDestroyTextures([textureA, undefined, textureA, textureB], scheduler, { perFrame: 8 });
+    expect(cleanup.count).toBe(2);
     ticks[0]!();
     expect(textureA.destroy).toHaveBeenCalledTimes(1);
     expect(textureB.destroy).toHaveBeenCalledTimes(1);
@@ -157,9 +159,28 @@ describe('staggerDestroyTextures', () => {
 
   test('returns 0 and never schedules a tick when the input is empty', () => {
     const scheduler = vi.fn();
-    expect(staggerDestroyTextures([], scheduler)).toBe(0);
-    expect(staggerDestroyTextures([undefined], scheduler)).toBe(0);
+    expect(staggerDestroyTextures([], scheduler).count).toBe(0);
+    expect(staggerDestroyTextures([undefined], scheduler).count).toBe(0);
     expect(scheduler).not.toHaveBeenCalled();
+  });
+
+  test('drains remaining textures synchronously and stops the scheduler', () => {
+    const textures = Array.from({ length: 5 }, () => ({ destroy: vi.fn() }) as unknown as Texture);
+    const ticks: Array<() => void> = [];
+    const stop = vi.fn();
+    const scheduler = vi.fn((callback: () => void) => {
+      ticks.push(callback);
+      return stop;
+    });
+    const cleanup = staggerDestroyTextures(textures, scheduler, { perFrame: 2 });
+
+    ticks[0]!();
+    cleanup.drain();
+
+    for (const texture of textures) expect(texture.destroy).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
+    ticks[0]!();
+    for (const texture of textures) expect(texture.destroy).toHaveBeenCalledTimes(1);
   });
 });
 

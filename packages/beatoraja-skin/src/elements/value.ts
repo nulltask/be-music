@@ -22,7 +22,8 @@
 // `divx = 10` declaration with `padding = 0` (leading-blank) silently falls back to leading zero.
 
 import { flattenBeatorajaElements, type NormalizedElement } from './base.ts';
-import { isBeatorajaLuaFunctionValue, type BeatorajaLuaFunctionValue } from '../lua.ts';
+import { integerPropertyField, numberArrayField, numberField, positiveIntField, sourceIdField } from './fields.ts';
+import type { BeatorajaLuaFunctionValue } from '../lua.ts';
 import type { BeatorajaImageId } from './image.ts';
 import type { BeatorajaSkinSourceId } from '../types.ts';
 
@@ -173,45 +174,6 @@ function normalizeOne(entry: NormalizedElement): BeatorajaValueElement | undefin
     cycle: numberField(f, 'cycle', 0),
     ifCodes: entry.ifCodes,
   };
-}
-
-function numberArrayField(record: Readonly<Record<string, unknown>>, key: string): ReadonlyArray<number> {
-  const v = record[key];
-  if (!Array.isArray(v)) return [];
-  const out: number[] = [];
-  for (const x of v) {
-    if (typeof x === 'number' && Number.isFinite(x)) out.push(x);
-  }
-  return out;
-}
-
-function numberField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  return typeof v === 'number' && Number.isFinite(v) ? v : fallback;
-}
-
-function integerPropertyField(value: unknown): BeatorajaIntegerPropertyRef | undefined {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (isBeatorajaLuaFunctionValue(value)) return value;
-  return undefined;
-}
-
-function sourceIdField(
-  record: Readonly<Record<string, unknown>>,
-  key: string,
-  fallback: BeatorajaSkinSourceId,
-): BeatorajaSkinSourceId {
-  const v = record[key];
-  if (typeof v === 'number' && Number.isFinite(v)) return v;
-  if (typeof v === 'string' && v.length > 0) return v;
-  return fallback;
-}
-
-function positiveIntField(record: Readonly<Record<string, unknown>>, key: string, fallback: number): number {
-  const v = record[key];
-  if (typeof v !== 'number' || !Number.isFinite(v)) return fallback;
-  const truncated = Math.trunc(v);
-  return truncated >= 1 ? truncated : fallback;
 }
 
 export interface BeatorajaValueDigitCell {

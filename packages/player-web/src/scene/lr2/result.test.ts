@@ -83,6 +83,36 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
 }
 
 describe('computeResultOps', () => {
+  // -- CUSTOMOPTION defaults --------------------------------------- LITONE4 (and many 1920×1080 LR2 themes) gates a
+  // large fraction of its result chrome on `#IF,<customOptionDefault>` blocks. The runtime op set MUST include the
+  // skin's CUSTOMOPTION default values or those elements get filtered out at render time. Mirrors how
+  // `computeSelectOps` / `PixiGameplayView.initializeRuntimeOps` already feed the same defaults into their op sets.
+  describe('skin CUSTOMOPTION defaults', () => {
+    it('adds every customOptions[*].defaultOp to the runtime op set', () => {
+      const skin = {
+        scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
+        customOptions: [
+          { name: 'graph BG', defaultOp: 984, numChoices: 4 },
+          { name: 'lane BG', defaultOp: 990, numChoices: 3 },
+          { name: 'BG', defaultOp: 996, numChoices: 3 },
+        ],
+      } as unknown as Lr2Skin;
+      const ops = computeResultOps(makeResult({ cleared: true }), skin);
+      expect(ops.has(984)).toBe(true);
+      expect(ops.has(990)).toBe(true);
+      expect(ops.has(996)).toBe(true);
+    });
+
+    it('treats a missing customOptions field as empty (legacy stub-skin safety net)', () => {
+      // Pre-existing call sites and tests build minimal `Lr2Skin` stubs that omit `customOptions`. The new
+      // iteration must tolerate that without crashing — same defensive shape as the runtime select-scene path.
+      const skin = {
+        scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
+      } as Lr2Skin;
+      expect(() => computeResultOps(makeResult({ cleared: true }), skin)).not.toThrow();
+    });
+  });
+
   // -- Cleared / failed gating (op 90 / 91) ------------------------- The default LR2 result skin gates the chrome
   // atlas (parts.tga vs parts_fail.tga) and the big "CLEARED" / "FAILED" graphic on these. Exactly one must be set per
   // result.

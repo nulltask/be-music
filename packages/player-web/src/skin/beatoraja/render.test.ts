@@ -1,3 +1,4 @@
+import { Rectangle, Texture } from 'pixi.js';
 import { describe, expect, it } from 'vitest';
 import {
   evaluateBeatorajaLuaSkin,
@@ -9,6 +10,7 @@ import {
   applyBeatorajaStretchRect,
   BEATORAJA_STRETCH,
   blendCodeToPixi,
+  createCroppedBeatorajaTexture,
   destinationToSpriteProps,
   flipRectToPixi,
 } from './render.ts';
@@ -46,6 +48,13 @@ const groupOf = (overrides: Record<string, unknown> = {}) => {
 };
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
+
+function texture(width = 64, height = 64): Texture {
+  return new Texture({
+    source: Texture.EMPTY.source,
+    frame: new Rectangle(0, 0, width, height),
+  });
+}
 
 function luaFunction(source: string): BeatorajaLuaFunctionValue {
   const result = evaluateBeatorajaLuaSkin({
@@ -95,6 +104,40 @@ describe('destinationToSpriteProps', () => {
 
   it('hides when alpha hits zero exactly', () => {
     const props = destinationToSpriteProps(groupOf(), ctx({ nowMs: 1000 }), TEST_CANVAS_HEIGHT);
+    expect(props.visible).toBe(false);
+  });
+
+  it('hides non-finite destination geometry before it reaches Pixi sprite setters', () => {
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: Number.NaN, y: 0, w: 0, h: 0, r: 0, a: 255 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+
+    expect(props.visible).toBe(false);
+  });
+
+  it('hides non-finite alpha values instead of returning a visible sprite with NaN alpha', () => {
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 0, h: 0, r: 0, a: Number.NaN } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+
     expect(props.visible).toBe(false);
   });
 
@@ -478,6 +521,17 @@ describe('blendCodeToPixi', () => {
     // (alpha hole-punch), a fundamentally different operation.
     expect(blendCodeToPixi(9)).toBe('difference');
     expect(blendCodeToPixi(99)).toBe('normal'); // unknown code falls back
+  });
+});
+
+describe('createCroppedBeatorajaTexture', () => {
+  it('reuses valid crops but rejects non-finite beatoraja frames', () => {
+    const base = texture();
+    const first = createCroppedBeatorajaTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+    const second = createCroppedBeatorajaTexture(base, { x: 1, y: 2, w: 16, h: 24 });
+
+    expect(first).toBe(second);
+    expect(createCroppedBeatorajaTexture(base, { x: Number.NaN, y: 0, w: 1, h: 1 })).toBeUndefined();
   });
 });
 
