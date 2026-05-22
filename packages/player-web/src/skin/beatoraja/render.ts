@@ -231,10 +231,11 @@ export function destinationToSpriteProps(
   // when no intermediate accumulation crosses [0, 1] — most skins author a single offset and
   // satisfy that condition, but skins chaining brightness + flicker offsets need the per-step
   // semantics to render correctly. See `applyBeatorajaOffsetAlpha` for the full derivation.
-  const alpha =
+  const rawAlpha =
     combinedOffsetIds !== undefined && context.resolveOffset !== undefined
       ? applyBeatorajaOffsetAlpha(keyframe.a / 255, combinedOffsetIds, context.resolveOffset)
       : clampUnit(keyframe.a / 255);
+  const alpha = clampUnit(rawAlpha);
   if (alpha <= 0) return HIDDEN_PROPS;
 
   // Y-flip from beatoraja's libGDX Y-UP coordinates (origin at canvas bottom-left, with `(x, y)`
@@ -267,6 +268,9 @@ export function destinationToSpriteProps(
   const mirrorY = rawHeight < 0;
   const width = Math.abs(rawWidth);
   const height = Math.abs(rawHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return HIDDEN_PROPS;
+  }
   // Center-anchored offset application — mirrors beatoraja's `SkinObject.prepareDraw`:
   //
   //     if (!relative) {
@@ -302,6 +306,17 @@ export function destinationToSpriteProps(
   const baseY = keyframe.y + offset.y + centerShiftY;
   const xLeft = mirrorX ? baseX + rawWidth : baseX;
   const yLibgdxBottom = mirrorY ? baseY + rawHeight : baseY;
+  const y = canvasHeight - yLibgdxBottom - height;
+  const angle = -(keyframe.angle + offset.r);
+  if (
+    !Number.isFinite(canvasHeight) ||
+    !Number.isFinite(xLeft) ||
+    !Number.isFinite(yLibgdxBottom) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(angle)
+  ) {
+    return HIDDEN_PROPS;
+  }
 
   // Mouse-hover visibility gate (audit C-12). Mirrors upstream `SkinObject.java:513-517`:
   //
@@ -327,7 +342,7 @@ export function destinationToSpriteProps(
   return {
     visible: true,
     x: xLeft,
-    y: canvasHeight - yLibgdxBottom - height,
+    y,
     width,
     height,
     mirrorX,
@@ -341,7 +356,7 @@ export function destinationToSpriteProps(
     // visually backwards — most visible on ModernChic Play's `attack.lua` 14 keyframe attack
     // motion (was rotating the wrong way), 7K-skin scratch wheels, and Select-scene focus
     // rings (audit 1.8).
-    angle: -(keyframe.angle + offset.r),
+    angle,
     blendMode: blendCodeToPixi(group.blend),
   };
 }
@@ -516,6 +531,7 @@ export function applyBeatorajaStretchRect(
 }
 
 function clampUnit(v: number): number {
+  if (!Number.isFinite(v)) return 0;
   if (v <= 0) return 0;
   if (v >= 1) return 1;
   return v;

@@ -107,6 +107,40 @@ describe('destinationToSpriteProps', () => {
     expect(props.visible).toBe(false);
   });
 
+  it('hides non-finite destination geometry before it reaches Pixi sprite setters', () => {
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: Number.NaN, y: 0, w: 0, h: 0, r: 0, a: 255 } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+
+    expect(props.visible).toBe(false);
+  });
+
+  it('hides non-finite alpha values instead of returning a visible sprite with NaN alpha', () => {
+    const g = groupOf({
+      offset: 3,
+      dst: [{ time: 0, x: 0, y: 0, w: 100, h: 50, a: 255 }],
+    });
+    const props = destinationToSpriteProps(
+      g,
+      {
+        ...ctx({ nowMs: 0 }),
+        resolveOffset: (id) => (id === 3 ? { x: 0, y: 0, w: 0, h: 0, r: 0, a: Number.NaN } : undefined),
+      },
+      TEST_CANVAS_HEIGHT,
+    );
+
+    expect(props.visible).toBe(false);
+  });
+
   it('negates the authored angle to convert libGDX CCW-positive into Pixi CW-positive (audit 1.8)', () => {
     // libGDX rotates counter-clockwise on positive angles (Y-UP convention); Pixi rotates
     // clockwise on positive angles (Y-DOWN). The Y-flip on the position alone doesn't
