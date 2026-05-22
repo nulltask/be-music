@@ -9,6 +9,7 @@ import type {
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import type { Lr2Skin } from '@be-music/lr2-skin';
+import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
@@ -224,10 +225,40 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.computeResultOps(makeResultData(), makeLr2Skin());
     },
   });
+  define('player-web.createSkinFamilyRegistry', {
+    run: () => {
+      const registry = playerWebCoreApi.createSkinFamilyRegistry([
+        { id: 'default', label: 'Default' },
+        { id: 'lr2', label: 'LR2', matchesThemeFile: (path) => path.endsWith('.lr2skin') },
+        { id: 'beatoraja', label: 'beatoraja', matchesThemeFile: (path) => path.endsWith('.luaskin') },
+      ]);
+      registry.byId('lr2');
+      registry.detectThemeFile('Theme/play_7.lr2skin');
+      registry.detectThemeFamilies(['Theme/play_7.lr2skin', 'Skin/play7.luaskin']);
+    },
+  });
   define('player-web.createCroppedBeatorajaTexture', {
     run: () => {
       playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });
     },
+  });
+  define('player-web.DefaultPixiGameplayView', {
+    run: () => {
+      new playerWebCoreApi.DefaultPixiGameplayView();
+    },
+    interactive: true,
+  });
+  define('player-web.DefaultPixiResultView', {
+    run: () => {
+      new playerWebCoreApi.DefaultPixiResultView();
+    },
+    interactive: true,
+  });
+  define('player-web.DefaultPixiSongSelectView', {
+    run: () => {
+      new playerWebCoreApi.DefaultPixiSongSelectView();
+    },
+    interactive: true,
   });
   define('player-web.destinationToSpriteProps', {
     run: () => {
@@ -330,11 +361,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
   define('player-web.loadBeatorajaFonts', {
     run: async () => {
-      await playerWebCoreApi.loadBeatorajaFonts({
+      const cache = await playerWebCoreApi.loadBeatorajaFonts({
         files: BENCH_BEATORAJA_FILES,
         entryPath: 'skin/bench/play7.json',
         fonts: [],
       });
+      cache.dispose();
     },
   });
   define('player-web.loadBeatorajaTexturesFromBundle', {
@@ -522,6 +554,22 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.resolveRendererPreference', {
     run: () => {
       playerWebCoreApi.resolveRendererPreference('?renderer=webgl');
+    },
+  });
+  define('player-web.renderFallbackLr2Frame', {
+    run: () => {
+      const layer = new Container();
+      playerWebCoreApi.renderFallbackLr2Frame(layer, {
+        songTitle: 'Bench Song',
+        bpm: 130,
+        hiSpeed: 2.5,
+        score: 75_000,
+        exScore: 150,
+        exScoreMax: 200,
+        combo: 90,
+        rank: 'AA',
+      });
+      layer.destroy({ children: true, context: true });
     },
   });
   define('player-web.Rectangle', {
