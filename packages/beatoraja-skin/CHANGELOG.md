@@ -1,5 +1,14 @@
 # @be-music/beatoraja-skin
 
+## 0.1.1
+
+### Patch Changes
+
+- 69f77d1: Cache a `BeatorajaPathIndex` per source map (WeakMap-keyed) that groups files by lowercased parent directory. `expandBeatorajaWildcard` used to walk every key in the source map and re-run `path.toLowerCase()` + `lastIndexOf('/')` per call — once per `source[]` entry in `bundleBeatorajaSources`. Now resolves in `O(filesInTargetDir)` via the precomputed directory bucket. `describeMissingWildcardDirectory` shares the same index instead of running two more full scans.
+- 73dff9a: Refactor shared chart timing, skin element field parsing, file lookup, and beatoraja scene helpers.
+- Updated dependencies [73dff9a]
+  - @be-music/utils@0.2.1
+
 ## 0.1.0
 
 ### Minor Changes

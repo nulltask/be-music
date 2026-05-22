@@ -1,5 +1,15 @@
 # @be-music/audio-renderer
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [73dff9a]
+  - @be-music/utils@0.2.1
+  - @be-music/json@0.2.1
+  - @be-music/parser@0.2.2
+  - @be-music/chart@0.3.1
+
 ## 0.2.1
 
 ### Patch Changes

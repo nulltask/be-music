@@ -1,5 +1,17 @@
 # @be-music/editor
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [69f77d1]
+- Updated dependencies [73dff9a]
+  - @be-music/stringifier@0.3.0
+  - @be-music/utils@0.2.1
+  - @be-music/json@0.2.1
+  - @be-music/parser@0.2.2
+  - @be-music/chart@0.3.1
+
 ## 0.2.1
 
 ### Patch Changes
