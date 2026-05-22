@@ -21,6 +21,8 @@ export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 const log = logger('drop');
+const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
+const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
 
 /**
  * Optional progress hook for the dropped-folder loaders. When supplied, the loader fires the callback as it walks
@@ -317,6 +319,7 @@ export async function loadSongCollectionFromFiles(
   const sources: BrowserSongAssetSource[] = [];
   const looseFiles = new Map<string, BrowserSongAssetEntry>();
   const looseLabels = new Set<string>();
+  const errors: BrowserSongCollection['errors'] = [];
 
   // Materialize the iterable so we can report "X / N" totals up front. The callers always pass an array today, so this
   // is a no-op spread; it just lets the typing accept any iterable.
@@ -353,8 +356,23 @@ export async function loadSongCollectionFromFiles(
   }
   // ZIPs read after the loose pool — there's typically zero or one of them per drop, so serializing here costs nothing.
   for (const file of zipFiles) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    sources.push(createZipSource(file.name, bytes));
+    const sourceId = `zip:${file.name}`;
+    if (file.size > MAX_ZIP_ARCHIVE_BYTES) {
+      errors.push({
+        sourceId,
+        message: `ZIP archive is too large (${formatBytes(file.size)}; limit ${formatBytes(MAX_ZIP_ARCHIVE_BYTES)})`,
+      });
+      continue;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      sources.push(createZipSource(file.name, bytes));
+    } catch (error) {
+      errors.push({
+        sourceId,
+        message: error instanceof Error ? error.message : 'failed to read ZIP archive',
+      });
+    }
   }
   // Final 100 % emit for the read phase — the throttled wrapper may have suppressed the last one.
   onProgress?.({ phase: 'reading', current: fileList.length, total: fileList.length });
@@ -369,7 +387,6 @@ export async function loadSongCollectionFromFiles(
   }
 
   const songs: BrowserSongEntry[] = [];
-  const errors: BrowserSongCollection['errors'] = [];
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
@@ -466,7 +483,20 @@ export function describeSongCollection(collection: BrowserSongCollection): strin
 }
 
 function createZipSource(name: string, bytes: Uint8Array): BrowserSongAssetSource {
-  const entries = unzipSync(bytes);
+  let uncompressedBytes = 0;
+  const entries = unzipSync(bytes, {
+    filter: (file) => {
+      const normalizedPath = normalizePath(file.name);
+      if (!normalizedPath || normalizedPath.endsWith('/')) return false;
+      uncompressedBytes += file.originalSize;
+      if (uncompressedBytes > MAX_ZIP_UNCOMPRESSED_BYTES) {
+        throw new Error(
+          `ZIP archive expands beyond ${formatBytes(MAX_ZIP_UNCOMPRESSED_BYTES)}; use a smaller archive or drop an extracted folder`,
+        );
+      }
+      return true;
+    },
+  });
   const files = new Map<string, Uint8Array>();
   for (const [path, entryBytes] of Object.entries(entries)) {
     const normalizedPath = normalizePath(path);
@@ -481,6 +511,14 @@ function createZipSource(name: string, bytes: Uint8Array): BrowserSongAssetSourc
     label: name,
     files,
   };
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return 'unknown size';
+  const mib = bytes / (1024 * 1024);
+  if (mib < 1024) return `${mib.toFixed(mib >= 10 ? 0 : 1)} MiB`;
+  const gib = mib / 1024;
+  return `${gib.toFixed(gib >= 10 ? 0 : 1)} GiB`;
 }
 
 function parseChart(path: string, bytes: Uint8Array) {
