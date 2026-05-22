@@ -826,6 +826,11 @@ export class PixiGameplayView {
   private exitFadeOutHandle: number | undefined;
   private exitCloseHandle: number | undefined;
   /**
+   * Intro / scene-stage timers that gate LR2 `#STARTINPUT`, `#LOADEND`, and `#PLAYSTART`. These are independent from
+   * input flash timers and can otherwise retain a disposed gameplay scene until their delay elapses.
+   */
+  private readonly sceneStageTimeouts = new Set<number>();
+  /**
    * True once {@link beginExitSequence} starts the FADEOUT → CLOSE → host-callback chain. Re-entry is suppressed so a
    * frantic second ESC press while the fade is animating doesn't leak a second callback or restart the timeline.
    */
@@ -1277,10 +1282,9 @@ export class PixiGameplayView {
     // bail out instead of mutating a fresh scene's state.
     const sceneEpoch = this.sceneStartTime;
     const bgaReady = this.bgaReadyPromise ?? Promise.resolve();
-    const delay = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, Math.max(0, ms)));
     // LOAD END gate — both the configured `#LOADEND` delay AND the BGA preload need to finish. Fires LR2 timer 40 and
     // flips op 80→81 (READY), which the skin's load-complete animations key off of.
-    void Promise.all([bgaReady, delay(loadEndOffsetMs)]).then(() => {
+    void Promise.all([bgaReady, this.delaySceneStage(loadEndOffsetMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
       this.timerStartedAt.set(40, this.playClock());
@@ -1290,7 +1294,7 @@ export class PixiGameplayView {
     // PLAY START gate — same pattern, but for the configured `#PLAYSTART` (or fallback intro). Fires timer 41
     // (animation clock) and anchors the wall-clock + audio-context start times (chart-engine clock) so the chart engine
     // and BGM samples share a single t=0.
-    void Promise.all([bgaReady, delay(introMs)]).then(() => {
+    void Promise.all([bgaReady, this.delaySceneStage(introMs)]).then(() => {
       if (this.disposed) return;
       if (this.sceneStartTime !== sceneEpoch) return;
       this.timerStartedAt.set(41, this.playClock());
@@ -1322,10 +1326,23 @@ export class PixiGameplayView {
       this.timerStartedAt.set(timer, this.sceneStartTime);
       return;
     }
-    window.setTimeout(() => {
+    this.setSceneStageTimeout(() => {
       if (this.disposed) return;
       this.timerStartedAt.set(timer, this.playClock());
     }, safeOffset);
+  }
+
+  private delaySceneStage(offsetMs: number): Promise<void> {
+    return new Promise((resolve) => this.setSceneStageTimeout(resolve, Math.max(0, offsetMs)));
+  }
+
+  private setSceneStageTimeout(callback: () => void, offsetMs: number): void {
+    let handle = 0;
+    handle = window.setTimeout(() => {
+      this.sceneStageTimeouts.delete(handle);
+      callback();
+    }, Math.max(0, offsetMs));
+    this.sceneStageTimeouts.add(handle);
   }
 
   /**
@@ -1493,6 +1510,10 @@ export class PixiGameplayView {
       window.clearTimeout(this.exitCloseHandle);
       this.exitCloseHandle = undefined;
     }
+    for (const timeout of this.sceneStageTimeouts) {
+      window.clearTimeout(timeout);
+    }
+    this.sceneStageTimeouts.clear();
     if (this.chartEndTimeout !== undefined) {
       window.clearTimeout(this.chartEndTimeout);
       this.chartEndTimeout = undefined;
