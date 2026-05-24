@@ -159,8 +159,8 @@ importers:
         specifier: ^3.2.1
         version: 3.2.1
       node-web-audio-api:
-        specifier: ^1.0.9
-        version: 1.0.9
+        specifier: ^2.0.0
+        version: 2.0.0
 
   packages/player-tui:
     dependencies:
@@ -2258,9 +2258,9 @@ packages:
     resolution: {integrity: sha512-X75ZN8DCLftGM5iKwoYLA3rjnrAEs97MkzvSd4q2746Tgpg8b8XWiBGiBG4ZpgcAqBgtgPHTiAc8ZMCvZuikDw==}
     engines: {node: '>=10'}
 
-  node-web-audio-api@1.0.9:
-    resolution: {integrity: sha512-udyabeRtRcnxUx4XWvvSAvwTqsAUHAawiVWg0IHFSUAPD8m+5cAAL6RPXgF7BOHxPmJq2s77ceBF4tlG45K0/Q==}
-    engines: {node: '>= 14'}
+  node-web-audio-api@2.0.0:
+    resolution: {integrity: sha512-I8r10N26N4ssu7KbL70ywWZIVu5F6eSas/DO1wHWwLjiBSo7TKSOXgCVd0mfEvrewDY5vkmqGCUL3ix/iMr4yA==}
+    engines: {node: '>= 22'}
 
   object-inspect@1.13.4:
     resolution: {integrity: sha512-W67iLl4J2EXEGTbfeHCffrjDfitvLANg0UlX3wFUUSTx92KXRFegMHUVgSqE+wvhAbi4WqjGg9czysTV2Epbew==}
@@ -2968,9 +2968,9 @@ packages:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
 
-  webidl-conversions@7.0.0:
-    resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
-    engines: {node: '>=12'}
+  webidl-conversions@8.0.1:
+    resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
+    engines: {node: '>=20'}
 
   which-typed-array@1.1.20:
     resolution: {integrity: sha512-LYfpUkmqwl0h9A2HL09Mms427Q1RZWuOHsukfVcKRq9q95iQxdw0ix1JQrqbcDR9PH1QDwf5Qo8OZb5lksZ8Xg==}
@@ -4669,11 +4669,11 @@ snapshots:
       util: 0.12.5
       vm-browserify: 1.1.2
 
-  node-web-audio-api@1.0.9:
+  node-web-audio-api@2.0.0:
     dependencies:
       caller: 1.1.0
       node-fetch: 3.3.2
-      webidl-conversions: 7.0.0
+      webidl-conversions: 8.0.1
 
   object-inspect@1.13.4: {}
 
@@ -5426,7 +5426,7 @@ snapshots:
 
   web-streams-polyfill@3.3.3: {}
 
-  webidl-conversions@7.0.0: {}
+  webidl-conversions@8.0.1: {}
 
   which-typed-array@1.1.20:
     dependencies:
