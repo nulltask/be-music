@@ -73,6 +73,8 @@ import {
   type BeatorajaSkinOffsetValue,
 } from '@be-music/beatoraja-skin';
 
+const BEATORAJA_ADAPTER_DIAGNOSTICS = false;
+
 export interface BeatorajaRuntimeAdapterOptions {
   /** Chart variant (matches `ChartPlayVariant` from `@be-music/player`). Used to resolve channel → lane index. */
   chartPlayVariant: ChartPlayVariant;
@@ -152,6 +154,14 @@ interface SideJudgeState {
   lastJudgeCombo: number;
 }
 
+type GraphPolylinePoint = { x: number; y: number };
+
+interface CachedScorePolyline {
+  readonly historyLength: number;
+  readonly maxExScore: number;
+  readonly points: ReadonlyArray<GraphPolylinePoint>;
+}
+
 /**
  * Default lane height (in skin-pixel units) when the host doesn't supply a per-skin value via
  * `BeatorajaRuntimeAdapterOptions.laneHeight`. Matches `play7main.lua`'s `lanecover` slider
@@ -225,6 +235,10 @@ export class BeatorajaRuntimeAdapter {
   private readonly activeOps: Set<number>;
   private baseOps: ReadonlySet<number>;
   private readonly timerStartedAt = new Map<number, number>();
+  private readonly renderContext: BeatorajaRenderContext;
+  private readonly getTimerStartForRenderContext = (id: number) => this.timerStartedAt.get(id);
+  private readonly resolveOffsetForRenderContext = (id: number) => this.resolveOffset(id);
+  private readonly resolveGaugeStateForRenderContext = () => this.resolveGaugeState();
   private readonly chartPlayVariant: ChartPlayVariant;
   private readonly getNowMs: () => number;
   private readonly chart: BeMusicJson | undefined;
@@ -402,6 +416,7 @@ export class BeatorajaRuntimeAdapter {
    * polyline density proportional to "how much actually happened" rather than wallclock time.
    */
   private readonly scoreHistory: Array<{ progress: number; exScore: number }> = [];
+  private scorePolylineCache: CachedScorePolyline | undefined;
   /** Per-judge `(progress, gauge%)` samples — gauge polyline source. Same lifecycle as scoreHistory. */
   private readonly gaugeHistory: Array<{ progress: number; value: number }> = [];
   /**
@@ -563,6 +578,13 @@ export class BeatorajaRuntimeAdapter {
     this.chartPlayVariant = options.chartPlayVariant;
     this.baseOps = options.baseOps;
     this.activeOps = new Set(options.baseOps);
+    this.renderContext = {
+      activeOps: this.activeOps,
+      getTimerStart: this.getTimerStartForRenderContext,
+      nowMs: 0,
+      resolveOffset: this.resolveOffsetForRenderContext,
+      resolveGaugeState: this.resolveGaugeStateForRenderContext,
+    };
     this.getNowMs = options.getNowMs;
     this.chart = options.chart;
     this.skinHeaderName = options.skinHeaderName;
@@ -691,8 +713,10 @@ export class BeatorajaRuntimeAdapter {
   markTimer(timerId: number): void {
     const now = this.getNowMs();
     this.timerStartedAt.set(timerId, now);
-    // eslint-disable-next-line no-console
-    console.log('[beatoraja-adapter] mark timer', JSON.stringify({ timer: timerId, atMs: now }));
+    if (BEATORAJA_ADAPTER_DIAGNOSTICS) {
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-adapter] mark timer', JSON.stringify({ timer: timerId, atMs: now }));
+    }
   }
 
   /** Stamp the `startinput` timer (prop.lua `startinput = 1`). Fires when the engine input bus is ready. */
@@ -912,8 +936,10 @@ export class BeatorajaRuntimeAdapter {
    * {@link PlayerUiCommand}. Unknown command kinds (forward-compat) are ignored.
    */
   applyCommand(command: PlayerUiCommand): void {
-    // eslint-disable-next-line no-console
-    console.log('[beatoraja-adapter] apply command', JSON.stringify(command));
+    if (BEATORAJA_ADAPTER_DIAGNOSTICS) {
+      // eslint-disable-next-line no-console
+      console.log('[beatoraja-adapter] apply command', JSON.stringify(command));
+    }
     switch (command.kind) {
       case 'press-lane':
         // Press: stamp KEY_ON, deactivate KEY_OFF. Beatoraja's `KeyInputProccessor` does
@@ -1210,23 +1236,25 @@ export class BeatorajaRuntimeAdapter {
     // case-insensitive on the kind string.
     const kindKey = state.judge.toUpperCase();
     this.judgeKindCounts[kindKey] = (this.judgeKindCounts[kindKey] ?? 0) + 1;
-    // eslint-disable-next-line no-console
-    console.log(
-      '[beatoraja-adapter] apply judge',
-      JSON.stringify({
-        judgeSide,
-        laneSide,
-        kind: state.judge,
-        op,
-        combo: state.combo,
-        maxCombo: this.maxCombo,
-        channel: state.channel,
-        deltaMs: state.deltaMs,
-        // Snapshot the running per-kind histogram so a single log line carries enough context
-        // to diagnose flicker / missing-kind reports without needing to scan the whole stream.
-        counts: { ...this.judgeKindCounts },
-      }),
-    );
+    if (BEATORAJA_ADAPTER_DIAGNOSTICS) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[beatoraja-adapter] apply judge',
+        JSON.stringify({
+          judgeSide,
+          laneSide,
+          kind: state.judge,
+          op,
+          combo: state.combo,
+          maxCombo: this.maxCombo,
+          channel: state.channel,
+          deltaMs: state.deltaMs,
+          // Snapshot the running per-kind histogram so a single log line carries enough context
+          // to diagnose flicker / missing-kind reports without needing to scan the whole stream.
+          counts: { ...this.judgeKindCounts },
+        }),
+      );
+    }
   }
 
   /**
@@ -1247,20 +1275,15 @@ export class BeatorajaRuntimeAdapter {
   }
 
   /**
-   * Read-only handle the skin view consumes per frame. The same `activeOps` Set instance
-   * persists across calls (no per-frame allocation), but membership is mutated as derived ops
-   * (lanecover / lift cover toggles, cover-changing window) come and go.
+   * Mutable handle the skin view consumes per frame. The same context object and `activeOps` Set
+   * persist across calls (no per-frame closure/object allocation); `nowMs` and set membership are
+   * refreshed before returning.
    */
   getRenderContext(): BeatorajaRenderContext {
     this.refreshCoverOps();
     this.refreshGaugeMaxOp();
-    return {
-      activeOps: this.activeOps,
-      getTimerStart: (id) => this.timerStartedAt.get(id),
-      nowMs: this.getNowMs(),
-      resolveOffset: (id) => this.resolveOffset(id),
-      resolveGaugeState: () => this.resolveGaugeState(),
-    };
+    this.renderContext.nowMs = this.getNowMs();
+    return this.renderContext;
   }
 
   /**
@@ -1987,10 +2010,16 @@ export class BeatorajaRuntimeAdapter {
         const summary = this.frame?.summary;
         const maxExScore = (summary?.total ?? 0) * 2;
         if (maxExScore <= 0) return undefined;
-        return history.map((s) => ({
+        const cached = this.scorePolylineCache;
+        if (cached !== undefined && cached.historyLength === history.length && cached.maxExScore === maxExScore) {
+          return cached.points;
+        }
+        const points = history.map((s) => ({
           x: Math.max(0, Math.min(1, s.progress)),
           y: Math.max(0, Math.min(1, s.exScore / maxExScore)),
         }));
+        this.scorePolylineCache = { historyLength: history.length, maxExScore, points };
+        return points;
       }
       default:
         return undefined;
@@ -2531,6 +2560,9 @@ export class BeatorajaRuntimeAdapter {
     for (const op of this.baseOps) this.activeOps.add(op);
     this.activeOps.add(wasAutoplay ? BEATORAJA_OP.AUTOPLAY_ON : BEATORAJA_OP.AUTOPLAY_OFF);
     this.activeOps.add(BEATORAJA_OP.NOW_LOADING);
+    this.activeOps.add(BEATORAJA_OP.GAUGE_GROOVE);
+    this.applyChartVariantOps(this.chartPlayVariant);
+    this.applyChartTraitOps(this.chart);
     this.timerStartedAt.clear();
     this.timerStartedAt.set(TIMER_SCENE_START, 0);
     this.timerStartedAt.set(TIMER_PREVIEW, 0);
@@ -2551,6 +2583,22 @@ export class BeatorajaRuntimeAdapter {
     this.lastFrameBeat = undefined;
     this.lastFrameGauge = undefined;
     this.failedTimerStamped = false;
+    this.gaugeMaxStamped = false;
+    this.lastRankOps.side = undefined;
+    this.lastRankOps.generic = undefined;
+    this.lastRankOps.now = undefined;
+    this.lastRankOps.band = undefined;
+    this.scoreHistory.length = 0;
+    this.gaugeHistory.length = 0;
+    this.recentTimings.length = 0;
+    this.allTimings.length = 0;
+    this.scorePolylineCache = undefined;
+    this.judgeStateBuckets = [];
+    this.judgeStateMaxNotesPerBucket = 0;
+    this.judgeStateTotalMs = 0;
+    this.bpmSegments = [];
+    this.cachedMainBpm = 0;
+    if (this.chart !== undefined) this.initJudgeStateBuckets(this.chart);
     this.endOfNoteStamped[1] = false;
     this.endOfNoteStamped[2] = false;
     this.endOfNoteStamped[3] = false;

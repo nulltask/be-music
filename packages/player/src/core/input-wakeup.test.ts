@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { createPlayerInputSignalBus } from './input-signal-bus.ts';
 import { createInputWakeUp } from './input-wakeup.ts';
 
@@ -53,6 +53,42 @@ describe('createInputWakeUp', () => {
     inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
     await Promise.all([a, b]);
     wakeUp.dispose();
+  });
+
+  test('waitForInputOrTimeout resolves timeout and does not consume a later input', async () => {
+    vi.useFakeTimers();
+    const inputSignals = createPlayerInputSignalBus();
+    const wakeUp = createInputWakeUp(inputSignals);
+    try {
+      const timedOut = wakeUp.waitForInputOrTimeout(25);
+      await vi.advanceTimersByTimeAsync(25);
+      await expect(timedOut).resolves.toBe('timeout');
+
+      inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+      await expect(wakeUp.waitForInputOrTimeout(25)).resolves.toBe('input');
+    } finally {
+      wakeUp.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  test('waitForInputOrTimeout resolves input before the timeout fires', async () => {
+    vi.useFakeTimers();
+    const inputSignals = createPlayerInputSignalBus();
+    const wakeUp = createInputWakeUp(inputSignals);
+    try {
+      const pending = wakeUp.waitForInputOrTimeout(100);
+      inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+      await expect(pending).resolves.toBe('input');
+
+      await vi.advanceTimersByTimeAsync(100);
+      const next = wakeUp.waitForInputOrTimeout(10);
+      await vi.advanceTimersByTimeAsync(10);
+      await expect(next).resolves.toBe('timeout');
+    } finally {
+      wakeUp.dispose();
+      vi.useRealTimers();
+    }
   });
 
   test('dispose() resolves any pending waiter so the engine loop can exit cleanly', async () => {

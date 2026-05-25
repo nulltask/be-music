@@ -46,6 +46,21 @@ describe('loadBeatorajaThemeFromFiles', () => {
     expect(bundle.theme.selectSkin?.entryPath).toBe('skin/default/select.json');
     expect(bundle.warnings.length).toBeGreaterThan(0);
   });
+
+  it('keeps unrelated beatoraja distribution binaries deferred', async () => {
+    const files = [
+      new FakeFile('skin/default/play7.json', enc(jsonSkin(0))),
+      new FakeFile('skin/default/system.png', enc('image bytes')),
+      new FakeFile('beatoraja/jre/lib/modules', new Uint8Array(1024)),
+      new FakeFile('beatoraja/beatoraja.jar', new Uint8Array(2048)),
+    ];
+    const bundle = await loadBeatorajaThemeFromFiles(files);
+
+    expect(bundle.theme.playSkins['7']?.entryPath).toBe('skin/default/play7.json');
+    expect(bundle.files.get('skin/default/system.png')).toBeInstanceOf(Uint8Array);
+    expect(bundle.files.get('beatoraja/jre/lib/modules')).toBe(files[2]);
+    expect(bundle.files.get('beatoraja/beatoraja.jar')).toBe(files[3]);
+  });
 });
 
 describe('summarizeBeatorajaPlaySkins', () => {

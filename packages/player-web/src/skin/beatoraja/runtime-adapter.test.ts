@@ -1712,6 +1712,89 @@ describe('BeatorajaRuntimeAdapter — reset', () => {
     expect(adapter.getTimerStart(keyOnTimerId(1, 1)!)).toBeUndefined();
     expect(adapter.getTimerStart(TIMER_SCENE_START)).toBe(0);
   });
+
+  it('clears per-run histories and graph caches', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+    adapter.applyFrame({
+      currentSeconds: 10,
+      totalSeconds: 100,
+      summary: {
+        score: 0,
+        total: 2,
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        fast: 0,
+        slow: 0,
+        exScore: 2,
+      } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', deltaMs: -4, updatedAtMs: 100 });
+    expect(adapter.getResultHistory().scoreHistory).toHaveLength(1);
+    expect(adapter.resolveTimingSamples()).toHaveLength(1);
+    expect(adapter.resolveGraphPolyline(110)).toBeDefined();
+
+    adapter.reset();
+
+    expect(adapter.getResultHistory().scoreHistory).toHaveLength(0);
+    expect(adapter.getResultHistory().gaugeHistory).toHaveLength(0);
+    expect(adapter.getResultHistory().timingHistory).toHaveLength(0);
+    expect(adapter.resolveTimingSamples()).toHaveLength(0);
+    expect(adapter.resolveGraphPolyline(110)).toBeUndefined();
+  });
+});
+
+describe('BeatorajaRuntimeAdapter — graph polyline cache', () => {
+  function applyScoreFrame(adapter: BeatorajaRuntimeAdapter, currentSeconds: number, exScore: number): void {
+    adapter.applyFrame({
+      currentSeconds,
+      totalSeconds: 100,
+      summary: {
+        score: 0,
+        total: 2,
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        fast: 0,
+        slow: 0,
+        exScore,
+      } as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+  }
+
+  it('reuses normalized score points until a new judge sample lands', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+    });
+
+    applyScoreFrame(adapter, 10, 2);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 1, channel: '11', updatedAtMs: 100 });
+    const first = adapter.resolveGraphPolyline(110);
+    expect(first).toEqual([{ x: 0.1, y: 0.5 }]);
+    expect(adapter.resolveGraphPolyline(110)).toBe(first);
+
+    applyScoreFrame(adapter, 20, 4);
+    adapter.applyJudgeCombo({ judge: 'PERFECT', combo: 2, channel: '11', updatedAtMs: 200 });
+    const second = adapter.resolveGraphPolyline(110);
+    expect(second).not.toBe(first);
+    expect(second).toEqual([
+      { x: 0.1, y: 0.5 },
+      { x: 0.2, y: 1 },
+    ]);
+    expect(adapter.resolveGraphPolyline(110)).toBe(second);
+  });
 });
 
 // ─── judgegraph type=1 (TYPE_JUDGE) — per-second × per-state stacked histogram ────────

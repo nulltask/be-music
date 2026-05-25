@@ -583,6 +583,46 @@ describe('player', () => {
     expect(frameEndSeconds.at(-1)).toBeGreaterThanOrEqual(2);
   });
 
+  test('player: browser fallback yield does not spin through queueMicrotask during manual play', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    const setImmediateDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'setImmediate');
+    const queueMicrotaskDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'queueMicrotask');
+    const originalQueueMicrotask = globalThis.queueMicrotask.bind(globalThis);
+    const queueMicrotaskSpy = vi.fn((callback: VoidFunction) => originalQueueMicrotask(callback));
+    Object.defineProperty(globalThis, 'setImmediate', {
+      configurable: true,
+      writable: true,
+      value: undefined,
+    });
+    Object.defineProperty(globalThis, 'queueMicrotask', {
+      configurable: true,
+      writable: true,
+      value: queueMicrotaskSpy,
+    });
+    try {
+      await manualPlay(json, {
+        speed: 1000,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        writeOutput: () => undefined,
+      });
+      expect(queueMicrotaskSpy).not.toHaveBeenCalled();
+    } finally {
+      if (setImmediateDescriptor) {
+        Object.defineProperty(globalThis, 'setImmediate', setImmediateDescriptor);
+      } else {
+        delete (globalThis as { setImmediate?: unknown }).setImmediate;
+      }
+      if (queueMicrotaskDescriptor) {
+        Object.defineProperty(globalThis, 'queueMicrotask', queueMicrotaskDescriptor);
+      }
+    }
+  });
+
   test('player: defaults groove gauge TOTAL to LR2 160 when #TOTAL is omitted', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;

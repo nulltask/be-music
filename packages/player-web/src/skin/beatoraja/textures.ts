@@ -8,9 +8,12 @@
 
 import { Texture } from 'pixi.js';
 import type { BeatorajaSkinSourceId, BeatorajaSourceAsset, BeatorajaSourceBundle } from '@be-music/beatoraja-skin';
+import { runWithConcurrency } from '@be-music/utils/core';
 import { logger } from '../../logger.ts';
 
 const log = logger('beatoraja-tex');
+
+const TEXTURE_DECODE_CONCURRENCY = 4;
 
 export interface BeatorajaTextureCache {
   /**
@@ -35,18 +38,16 @@ export async function loadBeatorajaTexturesFromBundle(bundle: BeatorajaSourceBun
   const textures = new Map<BeatorajaSkinSourceId, Texture>();
   const paths = new Map<BeatorajaSkinSourceId, string>();
 
-  await Promise.all(
-    bundle.assets.map(async (asset) => {
-      try {
-        const texture = await decodeAsset(asset);
-        textures.set(asset.id, texture);
-        paths.set(asset.id, asset.path);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        log.warn(`failed to decode source[${asset.id}] '${asset.path}': ${message}`);
-      }
-    }),
-  );
+  await runWithConcurrency(bundle.assets, TEXTURE_DECODE_CONCURRENCY, async (asset) => {
+    try {
+      const texture = await decodeAsset(asset);
+      textures.set(asset.id, texture);
+      paths.set(asset.id, asset.path);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.warn(`failed to decode source[${asset.id}] '${asset.path}': ${message}`);
+    }
+  });
 
   return {
     get: (sourceId) => textures.get(sourceId),
