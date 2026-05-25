@@ -1,5 +1,14 @@
 # @be-music/player-web
 
+## 0.5.1
+
+### Patch Changes
+
+- eb92249: Bump `fflate` from 0.8.2 to 0.8.3.
+- eb92249: Cap beatoraja texture decoding at four concurrent jobs through `runWithConcurrency` instead of dispatching every asset in parallel via `Promise.all`. Themes that ship hundreds of bitmaps (the LITONE families, several Hi-Speed packs) used to allocate every decoded `ImageBitmap` plus its backing `ArrayBuffer` at the same time, peaking gameplay heap by several hundred MB before the GC could reclaim the input buffers. The bounded scheduler keeps memory pressure proportional to the worker count.
+- Updated dependencies [eb92249]
+  - @be-music/player@0.4.2
+
 ## 0.5.0
 
 ### Minor Changes

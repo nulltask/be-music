@@ -47,12 +47,34 @@ export async function loadBeatorajaThemeFromFiles(
 ): Promise<BeatorajaThemeBundle> {
   const total = files.length;
   const fileMap = await readFilesIntoBytesMap(files, {
+    shouldDefer: shouldDeferBeatorajaThemeFile,
     onRead: (_path, current) => {
       options.onProgress?.({ phase: 'reading', current, total });
     },
   });
   const { theme, warnings } = discoverBeatorajaTheme(fileMap);
   return { files: fileMap, theme, warnings };
+}
+
+const EAGER_BEATORAJA_THEME_EXTENSIONS = [
+  '.json',
+  '.luaskin',
+  '.lua',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.bmp',
+  '.gif',
+  '.webp',
+  '.tga',
+  '.svg',
+] as const;
+
+function shouldDeferBeatorajaThemeFile(path: string): boolean {
+  // Whole beatoraja folder drops often include JRE/runtime artifacts. Keep only skin scripts and
+  // images eager; fonts/audio/other files are loaded on demand by their dedicated loaders.
+  const lower = path.toLowerCase();
+  return !EAGER_BEATORAJA_THEME_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 
 /**

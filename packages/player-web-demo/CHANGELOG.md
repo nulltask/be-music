@@ -1,5 +1,13 @@
 # @be-music/player-web-demo
 
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [eb92249]
+- Updated dependencies [eb92249]
+  - @be-music/player-web@0.5.1
+
 ## 0.2.5
 
 ### Patch Changes

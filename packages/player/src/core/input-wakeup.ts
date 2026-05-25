@@ -18,6 +18,10 @@ import type { PlayerInputSignalBus } from './input-signal-bus.ts';
  * resolves. Concurrent waiters all observe the same notification — there's no per-call resolver leak. This
  * matters because the engine loop calls `wait()` on every tick, and the alien-signals `effect` callback fires
  * once per `pushCommand`; without re-arming we'd either lose notifications or accumulate stale resolvers.
+ *
+ * The engine's hot wait path uses {@link InputWakeUp.waitForInputOrTimeout} instead of `Promise.race(wait(), timer)`.
+ * `Promise.race` cannot cancel its losing branch, so a timeout-heavy run (AUTO play or a long stretch with no
+ * manual input) would leave stale reactions attached to the shared wake-up promise until the next key press.
  */
 export interface InputWakeUp {
   /**
@@ -25,6 +29,12 @@ export interface InputWakeUp {
    * the next wake-up after that, so a caller can `wait()` in a loop without missing edges.
    */
   wait: () => Promise<void>;
+  /**
+   * Resolves with `'input'` when the next input arrives before `timeoutMs`, or `'timeout'` when the timeout elapses
+   * first. Unlike `Promise.race([wait(), timer])`, the timeout path unregisters its input listener immediately so
+   * no stale PromiseReaction chain accumulates while the player is not pressing keys.
+   */
+  waitForInputOrTimeout: (timeoutMs: number) => Promise<'timeout' | 'input'>;
   /**
    * Releases the alien-signals effect subscription and resolves any pending waiter so the engine loop can
    * exit cleanly. Idempotent.
@@ -37,6 +47,7 @@ export function createInputWakeUp(inputSignals: PlayerInputSignalBus): InputWake
   let nextWake: Promise<void> = new Promise<void>((resolve) => {
     resolveNext = resolve;
   });
+  const timeoutWaiters = new Set<() => void>();
   // `observedTick` advances only when a `wait()` call actually consumes the most-recent push. The effect
   // reads but doesn't update it. This produces level-triggered semantics: a push that happens BETWEEN the
   // loop's `consumeInputCommands` and its next `wait()` is still observed by that next `wait()` (it
@@ -60,6 +71,7 @@ export function createInputWakeUp(inputSignals: PlayerInputSignalBus): InputWake
       resolveNext = resolve;
     });
     pendingResolve?.();
+    for (const listener of Array.from(timeoutWaiters)) listener();
   });
 
   return {
@@ -74,11 +86,54 @@ export function createInputWakeUp(inputSignals: PlayerInputSignalBus): InputWake
       }
       return nextWake;
     },
+    waitForInputOrTimeout: (timeoutMs) => {
+      if (disposed) return Promise.resolve('input');
+      const currentTick = inputSignals.tick();
+      if (currentTick !== observedTick) {
+        // Level-triggered path: an input landed after the caller last drained commands but before it armed the wait.
+        observedTick = currentTick;
+        return Promise.resolve('input');
+      }
+      return new Promise<'timeout' | 'input'>((resolve) => {
+        let settled = false;
+        let cancelTimeout: () => void = () => undefined;
+        let onInput: () => void = () => undefined;
+        const finish = (result: 'timeout' | 'input') => {
+          if (settled) return;
+          settled = true;
+          timeoutWaiters.delete(onInput);
+          cancelTimeout();
+          if (result === 'input') observedTick = inputSignals.tick();
+          resolve(result);
+        };
+        onInput = () => finish('input');
+        cancelTimeout = scheduleInputTimeout(() => finish('timeout'), timeoutMs);
+        timeoutWaiters.add(onInput);
+      });
+    },
     dispose: () => {
       if (disposed) return;
       disposed = true;
       unsubscribe();
       resolveNext?.();
+      for (const listener of Array.from(timeoutWaiters)) listener();
     },
   };
+}
+
+function scheduleInputTimeout(callback: () => void, timeoutMs: number): () => void {
+  if (timeoutMs > 0) {
+    const handle = setTimeout(callback, timeoutMs);
+    return () => clearTimeout(handle);
+  }
+  const timers = globalThis as {
+    setImmediate?: (callback: () => void) => unknown;
+    clearImmediate?: (handle: unknown) => void;
+  };
+  if (typeof timers.setImmediate === 'function') {
+    const handle = timers.setImmediate(callback);
+    return () => timers.clearImmediate?.(handle);
+  }
+  const handle = setTimeout(callback, 0);
+  return () => clearTimeout(handle);
 }

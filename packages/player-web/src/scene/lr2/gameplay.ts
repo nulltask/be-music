@@ -33,7 +33,7 @@ import {
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter } from '@be-music/utils/core';
+import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
   loadAssetBytes,
@@ -206,6 +206,8 @@ const BOMB_CLEANUP_FALLBACK_MS = 150;
  * one.
  */
 const GAUGE_INCREASE_FALLBACK_MS = 300;
+const AUDIO_DECODE_CONCURRENCY = 8;
+const BGA_DECODE_CONCURRENCY = 4;
 
 /**
  * Snapshot of the play session, captured at chart-end (or whenever the host asks for it via {@link
@@ -1572,7 +1574,9 @@ export class PixiGameplayView {
     // The bus doesn't own the AudioContext itself; closing that is the next step.
     this.audioBus?.dispose();
     this.audioBus = undefined;
-    void this.audioContext?.close();
+    const audioContext = this.audioContext;
+    this.audioContext = undefined;
+    void audioContext?.close();
     // Detach our subtree from the host's stage. The host owns the `Application` lifetime; we just stop contributing to
     // its scene graph. The sceneRoot Container itself stays alive in case the host wants to re-enter the same view (we
     // don't, but it's harmless).
@@ -1657,13 +1661,14 @@ export class PixiGameplayView {
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
     }
-    // Drop large per-song reference holders explicitly. The view instance itself becomes unreachable shortly after
-    // `dispose()` returns, but the maps below pin objects whose retained memory dwarfs everything else (decoded PCM
-    // for every #WAV slot, dozens of cached `TextStyle`s with paragraph-layout state) — clearing them here lets the
-    // GC reclaim that memory immediately, instead of waiting for the next major collection that happens to evict the
-    // view. `bgaActiveVideos` was already reset above; the rest of the small Maps / Sets follow the view to GC.
+    // Drop large per-song reference holders explicitly. Async gates and cancelled browser decode tasks can retain the
+    // view for a little while after `dispose()` returns; clearing these fields keeps that short tail from pinning a
+    // full chart bundle, decoded PCM, BGA timelines, and skin/font caches.
     this.decodedSamples.clear();
+    this.bmsonSlicePlayback = undefined;
+    this.autoSampleTriggers = [];
     this.skinTextStyleCache.clear();
+    this.bitmapFonts.clear();
 
     this.runtimeOps.clear();
     this.pressedChannels.clear();
@@ -1679,7 +1684,24 @@ export class PixiGameplayView {
     this.switchingBgas.clear();
     this.gaugeHistory.length = 0;
     this.scoreHistory.length = 0;
+    this.notes = [];
+    this.mineNotes = [];
     this.invisibleNotes.length = 0;
+    this.preparedChart = undefined;
+    this.resolvedChart = undefined;
+    this.beatAtSeconds = undefined;
+    this.scrollMapper = undefined;
+    this.timingResolver = undefined;
+    this.bgaTimeline = { base: [], layer: [], poor: [] };
+    this.visibleBgasScratch.length = 0;
+    this.laneChannels = [];
+    this.laneX.clear();
+    this.poorBgaFallbackKey = undefined;
+    this.poorBgaFallbackUntilSeconds = Number.POSITIVE_INFINITY;
+    this.hasBga = false;
+    this.bgaReadyPromise = undefined;
+    this.song = undefined;
+    this.source = undefined;
     this.host = undefined;
   }
 
@@ -2448,35 +2470,34 @@ export class PixiGameplayView {
     // walks the prefixed form first when set so a chart authored as `wav/` + bare `kick.wav` references resolves the
     // file as `wav/kick.wav`.
     const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
-    await Promise.all(
-      wavPaths.map(async (path) => {
-        if (this.disposed || !this.source || !this.song || !this.audioContext) return;
-        // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
-        // `.mp3`. Try the codec fallback chain (opus → ogg → mp3 → wav → original). Audio entries are stored as lazy
-        // `File` references in the source map (the drop pipeline defers their byte load to keep gigabytes of WAV
-        // samples out of memory), so `loadAssetBytes` is the unwrap step that actually calls `arrayBuffer()` on demand
-        // for THIS chart.
-        const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path, {
-          pathPrefix: pathWavPrefix,
-        });
-        const bytes = await loadAssetBytes(entry);
-        if (this.disposed || !this.audioContext) return;
-        if (!bytes) {
-          return;
-        }
-        try {
-          // Cache key is the chart-declared path (not the actually loaded codec path) so `playSampleByKey` /
-          // `playSample` continue to look up by the chart's `#WAV` value.
-          const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
-          if (this.disposed) return;
-          this.decodedSamples.set(normalizePath(path).toLowerCase(), decoded);
-        } catch {
-          // Browsers vary in codec support; unsupported samples are skipped. `decodeAudioData` also rejects when the
-          // AudioContext is closed mid-decode (e.g. ESC pressed during loading) — the catch swallows that as well so
-          // dispose can complete cleanly.
-        }
-      }),
-    );
+    await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
+      if (this.disposed || !this.source || !this.song || !this.audioContext) return;
+      // Audio-aware asset lookup: charts almost universally declare `.wav` paths but archives often ship `.ogg` /
+      // `.mp3`. Try the codec fallback chain (opus → ogg → mp3 → wav → original). Audio entries are stored as lazy
+      // `File` references in the source map (the drop pipeline defers their byte load to keep gigabytes of WAV
+      // samples out of memory), so `loadAssetBytes` is the unwrap step that actually calls `arrayBuffer()` on demand
+      // for THIS chart. The bounded worker pool prevents hundreds of browser audio decoders from allocating PCM at
+      // once on dense charts.
+      const entry = resolveChartAudioAsset(this.source, this.song.chartPath, path, {
+        pathPrefix: pathWavPrefix,
+      });
+      const bytes = await loadAssetBytes(entry);
+      if (this.disposed || !this.audioContext) return;
+      if (!bytes) {
+        return;
+      }
+      try {
+        // Cache key is the chart-declared path (not the actually loaded codec path) so `playSampleByKey` /
+        // `playSample` continue to look up by the chart's `#WAV` value.
+        const decoded = await this.audioContext.decodeAudioData(bytes.slice().buffer);
+        if (this.disposed) return;
+        this.decodedSamples.set(normalizePath(path).toLowerCase(), decoded);
+      } catch {
+        // Browsers vary in codec support; unsupported samples are skipped. `decodeAudioData` also rejects when the
+        // AudioContext is closed mid-decode (e.g. ESC pressed during loading) — the catch swallows that as well so
+        // dispose can complete cleanly.
+      }
+    });
     // Build the WebAudioSession now that the sample cache is populated. The session captures the maps by reference
     // (the underlying entries can still grow if asset loading races onto a later tick), and owns every sample
     // playback path from this point on — `playSample` / `playSampleByKey` / `scheduleAutoSamples` all delegate to
@@ -2495,8 +2516,8 @@ export class PixiGameplayView {
 
   /**
    * Decodes every BMP resource referenced by the chart's BGA timelines into a Pixi `Texture`, keyed by the same string
-   * the timeline cues reference. Loads run in parallel so a long preamble doesn't gate the playfield, and unsupported
-   * formats (video) are silently skipped.
+   * the timeline cues reference. Loads run with bounded parallelism so a long preamble doesn't gate the playfield
+   * without fanning browser decoders out without limit.
    */
   private async prepareBga(): Promise<void> {
     const song = this.song;
@@ -2538,86 +2559,86 @@ export class PixiGameplayView {
         refs.set(entry.name, entry.name);
       }
     }
-    await Promise.all(
-      [...refs.entries()].map(async ([key, path]) => {
-        if (this.disposed) return;
-        // BMP / video assets are stored as lazy `File` references in the song bundle. Read on demand so memory stays
-        // low while browsing — the bytes only land in the heap for BGA assets actually referenced by the focused chart.
-        // Use the image-aware resolver so charts that declare `#BMPxx foo.bmp` but ship `foo.png` (or `.jpg` / `.gif`)
-        // still find the asset; video extensions fall through to the original path verbatim.
-        const entry = resolveChartImageAsset(source, song.chartPath, path);
-        const bytes = await loadAssetBytes(entry);
-        if (this.disposed) return;
-        if (!bytes) {
-          return;
-        }
-        const usedAsBase = baseTrackKeys.has(key);
-        const usedAsLayer = layerTrackKeys.has(key);
-        try {
-          if (isVideoExtension(path)) {
-            // Video BGA — wraps a `<video>` element in a Pixi texture. The same texture handle is used on both tracks
-            // (no chroma-key on layer; black-keying a moving video looks worse than just letting the artist's blacks
-            // show).
-            const handle = await loadVideoTextureFromBytes(path, bytes, {
-              maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
-              useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
-            });
-            if (!handle) return;
-            // Late-arriving video decode after the player ESC'd back to the song select — drop the texture / video
-            // immediately so we don't leak it onto a dead app.
-            if (this.disposed) {
-              try {
-                handle.video.pause();
-                handle.video.removeAttribute('src');
-                handle.video.load();
-              } catch {
-                // Best effort; the video will be GC'd anyway.
-              }
-              URL.revokeObjectURL(handle.objectUrl);
-              try {
-                handle.texture.destroy(true);
-              } catch {
-                // Already-destroyed Pixi resources throw; swallow.
-              }
-              return;
+    await runWithConcurrency([...refs.entries()], BGA_DECODE_CONCURRENCY, async ([key, path]) => {
+      if (this.disposed) return;
+      // BMP / video assets are stored as lazy `File` references in the song bundle. Read on demand so memory stays
+      // low while browsing — the bytes only land in the heap for BGA assets actually referenced by the focused chart.
+      // Use the image-aware resolver so charts that declare `#BMPxx foo.bmp` but ship `foo.png` (or `.jpg` / `.gif`)
+      // still find the asset; video extensions fall through to the original path verbatim. Decoding is bounded because
+      // image/video decoders allocate native memory outside the JS heap; fanning every BGA out at once can kill the
+      // Chrome renderer before any decode promise rejects.
+      const entry = resolveChartImageAsset(source, song.chartPath, path);
+      const bytes = await loadAssetBytes(entry);
+      if (this.disposed) return;
+      if (!bytes) {
+        return;
+      }
+      const usedAsBase = baseTrackKeys.has(key);
+      const usedAsLayer = layerTrackKeys.has(key);
+      try {
+        if (isVideoExtension(path)) {
+          // Video BGA — wraps a `<video>` element in a Pixi texture. The same texture handle is used on both tracks
+          // (no chroma-key on layer; black-keying a moving video looks worse than just letting the artist's blacks
+          // show).
+          const handle = await loadVideoTextureFromBytes(path, bytes, {
+            maxLongEdgePx: this.options.bgaTranscodeMaxLongEdgePx,
+            useWebCodecs: this.options.bgaTranscodeUseWebCodecs,
+          });
+          if (!handle) return;
+          // Late-arriving video decode after the player ESC'd back to the song select — drop the texture / video
+          // immediately so we don't leak it onto a dead app.
+          if (this.disposed) {
+            try {
+              handle.video.pause();
+              handle.video.removeAttribute('src');
+              handle.video.load();
+            } catch {
+              // Best effort; the video will be GC'd anyway.
             }
-            this.bgaVideos.set(key, { video: handle.video, objectUrl: handle.objectUrl });
-            if (usedAsBase) this.bgaTextures.set(key, handle.texture);
-            if (usedAsLayer) this.bgaLayerTextures.set(key, handle.texture);
+            URL.revokeObjectURL(handle.objectUrl);
+            try {
+              handle.texture.destroy(true);
+            } catch {
+              // Already-destroyed Pixi resources throw; swallow.
+            }
             return;
           }
-          if (usedAsBase) {
-            const texture = await loadTextureFromBytes(path, bytes);
-            if (this.disposed) {
-              texture?.destroy(true);
-              return;
-            }
-            if (texture) {
-              this.bgaTextures.set(key, texture);
-            }
-          }
-          if (usedAsLayer) {
-            // BMS' layer track (`#xxx07`) chroma-keys pure black pixels by convention so the foreground composites over
-            // the base BGA. The bmson 1.0.0 spec breaks explicitly with that: "Unlike BMS Layer Channel #xxx07, black
-            // pixels will not be made transparent." Bmson layer authors deliver pre-multiplied / alpha- channel artwork
-            // and expect blacks to render as black. Gate the chroma-key on chart source so BMS-derived layers keep the
-            // historical blend while bmson layers come through untouched.
-            const keyOutBlack = chart.sourceFormat !== 'bmson';
-            const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack });
-            if (this.disposed) {
-              texture?.destroy(true);
-              return;
-            }
-            if (texture) {
-              this.bgaLayerTextures.set(key, texture);
-            }
-          }
-        } catch {
-          // Decode failures (corrupt files, unsupported encodings) are skipped silently so the rest of the chart still
-          // renders.
+          this.bgaVideos.set(key, { video: handle.video, objectUrl: handle.objectUrl });
+          if (usedAsBase) this.bgaTextures.set(key, handle.texture);
+          if (usedAsLayer) this.bgaLayerTextures.set(key, handle.texture);
+          return;
         }
-      }),
-    );
+        if (usedAsBase) {
+          const texture = await loadTextureFromBytes(path, bytes);
+          if (this.disposed) {
+            texture?.destroy(true);
+            return;
+          }
+          if (texture) {
+            this.bgaTextures.set(key, texture);
+          }
+        }
+        if (usedAsLayer) {
+          // BMS' layer track (`#xxx07`) chroma-keys pure black pixels by convention so the foreground composites over
+          // the base BGA. The bmson 1.0.0 spec breaks explicitly with that: "Unlike BMS Layer Channel #xxx07, black
+          // pixels will not be made transparent." Bmson layer authors deliver pre-multiplied / alpha- channel artwork
+          // and expect blacks to render as black. Gate the chroma-key on chart source so BMS-derived layers keep the
+          // historical blend while bmson layers come through untouched.
+          const keyOutBlack = chart.sourceFormat !== 'bmson';
+          const texture = await loadTextureFromBytes(path, bytes, { keyOutBlack });
+          if (this.disposed) {
+            texture?.destroy(true);
+            return;
+          }
+          if (texture) {
+            this.bgaLayerTextures.set(key, texture);
+          }
+        }
+      } catch {
+        // Decode failures (corrupt files, unsupported encodings) are skipped silently so the rest of the chart still
+        // renders.
+      }
+    });
     this.registerSubRegionBgaTextures(chart);
     if (this.disposed) return;
     // Eager-upload every freshly loaded BGA texture (and any sub-region aliases registered above) so the first BGA

@@ -39,6 +39,7 @@
 //     prep.dispose();   // closes the AudioContext + destroys BGA textures
 
 import { Texture } from 'pixi.js';
+import { runWithConcurrency } from '@be-music/utils/core';
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
@@ -59,6 +60,9 @@ import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/
 import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 
 const log = logger('beatoraja-prep');
+
+const AUDIO_DECODE_CONCURRENCY = 8;
+const BGA_DECODE_CONCURRENCY = 4;
 
 export interface PrepareBeatorajaGameplayChartOptions {
   song: BrowserSongEntry;
@@ -135,20 +139,18 @@ export async function prepareBeatorajaGameplayChart(
   const decodedSamples = new Map<string, AudioBuffer>();
   const wavPaths = Object.values(chart.resources.wav).filter((path): path is string => typeof path === 'string');
   const pathWavPrefix = typeof chart.bms.pathWav === 'string' ? chart.bms.pathWav : undefined;
-  await Promise.all(
-    wavPaths.map(async (path) => {
-      const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: pathWavPrefix });
-      const bytes = await loadAssetBytes(entry);
-      if (!bytes) return;
-      try {
-        const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
-        decodedSamples.set(normalizePath(path), decoded);
-      } catch (error) {
-        // Browsers vary in codec support; unsupported samples are silently skipped (matches LR2 behavior).
-        log.debug('decode skipped', { path, error });
-      }
-    }),
-  );
+  await runWithConcurrency(wavPaths, AUDIO_DECODE_CONCURRENCY, async (path) => {
+    const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: pathWavPrefix });
+    const bytes = await loadAssetBytes(entry);
+    if (!bytes) return;
+    try {
+      const decoded = await audioContext.decodeAudioData(bytes.slice().buffer);
+      decodedSamples.set(normalizePath(path), decoded);
+    } catch (error) {
+      // Browsers vary in codec support; unsupported samples are silently skipped (matches LR2 behavior).
+      log.debug('decode skipped', { path, error });
+    }
+  });
 
   // 4. WAVCMD + EXWAV volume multipliers. Both fold into the same map; same-slot entries multiply.
   const wavCmdVolumeMultipliers = collectBmsWavCmdVolumeMultipliers(chart.bms.wavCmds, resolveBmsBase(chart));
@@ -193,47 +195,45 @@ export async function prepareBeatorajaGameplayChart(
   // underlying memory (Blob references hang around forever otherwise). Stored in parallel
   // with `bgaVideoElements` for symmetric cleanup.
   const bgaVideoObjectUrls: string[] = [];
-  await Promise.all(
-    [...referencedKeys].map(async (key) => {
-      const path = chart.resources.bmp[key];
-      if (typeof path !== 'string') return;
-      const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: undefined });
-      const bytes = await loadAssetBytes(entry);
-      if (!bytes) return;
-      // Video paths route through the LR2-derived video loader. Browsers that can't
-      // natively decode the source codec fall through to the libav / ffmpeg.wasm
-      // transcode path inside `loadVideoTextureFromBytes`.
-      if (isVideoExtension(path)) {
-        try {
-          const handle = await loadVideoTextureFromBytes(path, bytes);
-          if (handle === undefined) return;
-          handle.texture.label = `bga[${key}]:video`;
-          handle.video.muted = true;
-          handle.video.loop = false;
-          handle.video.playsInline = true;
-          // Start paused — the BGA layer triggers `.play()` when this key becomes the
-          // active cue. Seeking to 0 first guarantees frame-0 is already decoded so the
-          // first paint isn't black.
-          handle.video.pause();
-          bgaTextures.set(key, handle.texture);
-          bgaVideoElements.set(key, handle.video);
-          bgaVideoObjectUrls.push(handle.objectUrl);
-        } catch (error) {
-          log.debug('bga video decode skipped', { key, path, error });
-        }
-        return;
-      }
+  await runWithConcurrency([...referencedKeys], BGA_DECODE_CONCURRENCY, async (key) => {
+    const path = chart.resources.bmp[key];
+    if (typeof path !== 'string') return;
+    const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: undefined });
+    const bytes = await loadAssetBytes(entry);
+    if (!bytes) return;
+    // Video paths route through the LR2-derived video loader. Browsers that can't
+    // natively decode the source codec fall through to the libav / ffmpeg.wasm
+    // transcode path inside `loadVideoTextureFromBytes`.
+    if (isVideoExtension(path)) {
       try {
-        const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
-        const bitmap = await createImageBitmap(blob);
-        const texture = Texture.from(bitmap);
-        texture.label = `bga[${key}]`;
-        bgaTextures.set(key, texture);
+        const handle = await loadVideoTextureFromBytes(path, bytes);
+        if (handle === undefined) return;
+        handle.texture.label = `bga[${key}]:video`;
+        handle.video.muted = true;
+        handle.video.loop = false;
+        handle.video.playsInline = true;
+        // Start paused — the BGA layer triggers `.play()` when this key becomes the
+        // active cue. Seeking to 0 first guarantees frame-0 is already decoded so the
+        // first paint isn't black.
+        handle.video.pause();
+        bgaTextures.set(key, handle.texture);
+        bgaVideoElements.set(key, handle.video);
+        bgaVideoObjectUrls.push(handle.objectUrl);
       } catch (error) {
-        log.debug('bga decode skipped', { key, path, error });
+        log.debug('bga video decode skipped', { key, path, error });
       }
-    }),
-  );
+      return;
+    }
+    try {
+      const blob = new Blob([bytes as Uint8Array<ArrayBuffer>]);
+      const bitmap = await createImageBitmap(blob);
+      const texture = Texture.from(bitmap);
+      texture.label = `bga[${key}]`;
+      bgaTextures.set(key, texture);
+    } catch (error) {
+      log.debug('bga decode skipped', { key, path, error });
+    }
+  });
 
   // 8. Package up.
   const audio: EngineDriverAudioContext = {

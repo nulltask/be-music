@@ -41,7 +41,7 @@ import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import type { BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaPixelsPerBeat } from './notes.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
-import { flipRectToPixi } from '../../skin/beatoraja/render.ts';
+import { flipRectToPixi, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import {
@@ -230,6 +230,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private bgaLayer: BeatorajaBgaLayer | undefined;
   private readonly adapter: BeatorajaRuntimeAdapter;
   private readonly options: PixiBeatorajaGameplayViewOptions;
+  private readonly skinAudioRenderContext: BeatorajaRenderContext;
   private currentFrame: PlayerUiFramePayload | null = null;
   // Hispeed fallback used until `stateSignals.highSpeed()` reports a host-driven value (which it
   // does on every update tick — see line ~929). Aligned with `DEFAULT_PLAY_OPTIONS.hiSpeed = 2.0`
@@ -275,6 +276,14 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // BGA timeline) see the same flipped chart.
     const effectiveChart = options.dpFlip === true ? flipDpChart(options.chart) : options.chart;
     this.options = effectiveChart === options.chart ? options : { ...options, chart: effectiveChart };
+    this.skinAudioRenderContext = {
+      activeOps: new Set<number>(),
+      getTimerStart: () => undefined,
+      nowMs: 0,
+      audioPlay: (path, vol) => this.options.skinAudio?.play(path, vol),
+      audioLoop: (path, vol) => this.options.skinAudio?.loop(path, vol),
+      audioStop: (path) => this.options.skinAudio?.stop(path),
+    };
 
     // Skin-config-level op set built ONCE from the user's selected skin options. Threaded into
     // every consumer that runs `normalizeBeatorajaDestinations` (the play-skin view, BGA layer,
@@ -964,16 +973,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
     const ctx = this.adapter.getRenderContext();
     const skinAudio = this.options.skinAudio;
-    this.view.update(
-      skinAudio === undefined
-        ? ctx
-        : {
-            ...ctx,
-            audioPlay: (path, vol) => skinAudio.play(path, vol),
-            audioLoop: (path, vol) => skinAudio.loop(path, vol),
-            audioStop: (path) => skinAudio.stop(path),
-          },
-    );
+    this.view.update(skinAudio === undefined ? ctx : this.renderContextWithSkinAudio(ctx));
     if (this.currentFrame) {
       this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps, (channel) =>
         this.adapter.isLaneLnHeld(channel),
@@ -998,6 +998,18 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
 
+  }
+
+  private renderContextWithSkinAudio(ctx: BeatorajaRenderContext): BeatorajaRenderContext {
+    const audioCtx = this.skinAudioRenderContext;
+    audioCtx.activeOps = ctx.activeOps;
+    audioCtx.getTimerStart = ctx.getTimerStart;
+    audioCtx.nowMs = ctx.nowMs;
+    audioCtx.lua = ctx.lua;
+    audioCtx.resolveOffset = ctx.resolveOffset;
+    audioCtx.resolveGaugeState = ctx.resolveGaugeState;
+    audioCtx.mousePosition = ctx.mousePosition;
+    return audioCtx;
   }
 
   private fitToStage(): void {

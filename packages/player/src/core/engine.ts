@@ -11,10 +11,8 @@ import {
 // Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
 // engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
 // web-engine integration plan) without depending on bundler-side aliases. The behaviors below are deliberately
-// minimal — `basename` only needs the trailing-segment semantics for log output, `delay` only needs to resolve
-// after `ms` ms (matches `node:timers/promises.setTimeout`), and `delayImmediate` matches
-// `node:timers/promises.setImmediate` whenever a global `setImmediate` is available (= Node) so the TUI's
-// frame-loop spin doesn't starve stdin / stdout I/O.
+// minimal — `basename` only needs the trailing-segment semantics for log output, and `delay` only needs to resolve
+// after `ms` ms (matches `node:timers/promises.setTimeout`).
 const basename = (path: string): string => {
   // Match `node:path.basename`'s "drop the trailing separator(s) and return the final segment" semantics for both
   // POSIX and Windows-style separators. An all-separator input ("/" / "\\") returns an empty string.
@@ -23,25 +21,6 @@ const basename = (path: string): string => {
   return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
 };
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-/**
- * Cooperative yield used by {@link waitPreciseOrInput}'s sub-8 ms tail spin. Prefers Node's `setImmediate` when
- * available so the spin re-enters via the event loop's `check` phase — that gives the I/O / timers phases a
- * chance to run between iterations, which matters in the TUI runtime where `process.stdin` keypress delivery
- * and `process.stdout` flushes happen on those phases. Falls back to `queueMicrotask` only in environments
- * without `setImmediate` (i.e. browsers), where the microtask-only path is fine because the runtime there is
- * driven by `requestAnimationFrame` / Web Audio's clock instead of stdin polling. A bare `queueMicrotask`
- * implementation would starve I/O during the tail spin under Node because `await queueMicrotask(...)` keeps
- * appending continuations to the microtask queue, preventing the loop from descending into `poll` / `check`.
- */
-const delayImmediate = (): Promise<void> => {
-  const setImmediateFn = (globalThis as { setImmediate?: (callback: () => void) => unknown }).setImmediate;
-  if (typeof setImmediateFn === 'function') {
-    return new Promise((resolve) => {
-      setImmediateFn(() => resolve());
-    });
-  }
-  return new Promise((resolve) => queueMicrotask(resolve));
-};
 import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
 import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import {
@@ -4743,12 +4722,10 @@ const PRESSED_AT_MAX_DELTA_MS = 50;
  * woke us up early. The caller decides what to do on `'input'` — typically re-drain the input queue and
  * continue waiting for the rest of the original tick.
  *
- * The two sleep waiters race each other in the same `Promise.race`. The losing waiter (the timer when input
- * arrived; the wake-up when timeout fired) is left to settle naturally — for the timer that's harmless
- * (`setTimeout` resolves and the result is discarded), and for the wake-up it's harmless because the wake-up
- * is a shared promise that resolves on the next `pushCommand` regardless of who's listening. Each call uses
- * a fresh wake-up promise (it's re-armed inside `createInputWakeUp` after every resolve), so we never
- * miss an edge by calling `wait()` after a `pushCommand` already happened.
+ * The input wake-up owns a cancellable input-vs-timeout wait. That matters for timeout-heavy runs: using
+ * `Promise.race([wakeUp.wait(), timer])` leaves the losing wake-up branch attached to the shared input promise
+ * until the next key press, which can retain a growing PromiseReaction chain during AUTO play or long no-input
+ * stretches.
  *
  * Why the race exists at all: `pressedAt` ensures the JUDGE timestamp is correct regardless of drain timing,
  * but the audio / visual response (keysound playback, lane flash queueing) still happens at drain time.
@@ -4758,25 +4735,22 @@ const PRESSED_AT_MAX_DELTA_MS = 50;
  */
 async function waitPreciseOrInput(
   delayMs: number,
-  wakeUp: { wait: () => Promise<void> },
+  wakeUp: { waitForInputOrTimeout: (timeoutMs: number) => Promise<'timeout' | 'input'> },
 ): Promise<'timeout' | 'input'> {
   const target = performance.now() + Math.max(0, delayMs);
-  // Capture the wake-up promise once per call. `wait()` returns the SAME shared promise until it resolves
-  // (then re-arms internally), so racing it across multiple iterations of this function's inner loop is safe.
-  const inputArrival = wakeUp.wait().then(() => 'input' as const);
   while (true) {
     const remaining = target - performance.now();
     if (remaining <= 0) {
       return 'timeout';
     }
     if (remaining > 8) {
-      const winner = await Promise.race([delay(remaining - 4).then(() => 'timeout' as const), inputArrival]);
+      const winner = await wakeUp.waitForInputOrTimeout(remaining - 4);
       if (winner === 'input') {
         return 'input';
       }
       continue;
     }
-    const winner = await Promise.race([delayImmediate().then(() => 'timeout' as const), inputArrival]);
+    const winner = await wakeUp.waitForInputOrTimeout(0);
     if (winner === 'input') {
       return 'input';
     }
