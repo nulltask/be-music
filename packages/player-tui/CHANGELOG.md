@@ -1,5 +1,12 @@
 # @be-music/player
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [eb92249]
+  - @be-music/player@0.4.2
+
 ## 0.2.4
 
 ### Patch Changes
