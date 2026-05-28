@@ -20,6 +20,7 @@ import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
+import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 
 const log = logger('decide');
 
@@ -429,7 +430,7 @@ export class PixiDecideView {
         fill: TEXT_COLOR,
         fontSize: 28,
         fontWeight: '700',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
         fontStyle: 'italic',
         stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
       }),
@@ -443,7 +444,7 @@ export class PixiDecideView {
       style: new TextStyle({
         fill: MUTED,
         fontSize: 10,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
       }),
     });
     subtitleText.label = 'decide/subtitle';
@@ -455,7 +456,7 @@ export class PixiDecideView {
       style: new TextStyle({
         fill: MUTED,
         fontSize: 11,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
       }),
     });
     artistText.label = 'decide/artist';
@@ -470,7 +471,7 @@ export class PixiDecideView {
         fill: 0xb19cd9,
         fontSize: 24,
         fontWeight: '900',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
         stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
       }),
     });

@@ -13,7 +13,7 @@ body,
 body {
   background: #08090d;
   color: #f8fafc;
-  font-family: system-ui, sans-serif;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
   overflow: hidden;
 }
 
@@ -57,7 +57,7 @@ body {
   --focus-color: #ffd166;
   --number-color: #ffd166;
   --string-color: #ffd166;
-  --font-family: system-ui, sans-serif;
+  --font-family: 'LINE Seed JP', system-ui, sans-serif;
   z-index: 10;
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
@@ -152,7 +152,7 @@ body {
   background: rgb(11 14 22 / 0.85);
   color: #f8fafc;
   font-size: 13px;
-  font-family: system-ui, sans-serif;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
   outline: none;
 }
 
@@ -734,7 +734,7 @@ body {
    * gentle infinite oscillation on top of the static target.
    */
   transform: scale(1.14);
-  background: linear-gradient(180deg, rgb(40 36 22 / 0.86), rgb(22 19 8 / 0.86));
+  background: linear-gradient(180deg, rgb(24 31 45 / 0.86), rgb(9 14 25 / 0.86));
   border-color: rgb(255 209 102 / 0.85);
   box-shadow:
     0 32px 80px rgb(0 0 0 / 0.6),
@@ -944,7 +944,7 @@ body {
   border-radius: 10px;
   background: rgb(17 22 32 / 0.94);
   color: #f8fafc;
-  font-family: system-ui, sans-serif;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
   /*
    * Card has its own pointer-events so a future "Cancel" button
    * inside it would be clickable; the parent overlay stays
@@ -1078,7 +1078,7 @@ body {
   backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   color: #d2d9e4;
-  font-family: system-ui, sans-serif;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -1248,7 +1248,7 @@ body {
 .help-modal-close:focus-visible {
   color: #ffd166;
   border-color: rgb(255 209 102 / 0.4);
-  background: rgb(34 28 12 / 0.7);
+  background: rgb(20 24 34 / 0.78);
   outline: none;
 }
 
@@ -1285,7 +1285,7 @@ body {
   padding: 6px 14px;
   border-radius: 8px;
   color: rgb(151 163 179 / 0.85);
-  font-family: system-ui, sans-serif;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -1485,7 +1485,7 @@ body {
   padding: 5px 14px;
   border-radius: 999px;
   color: rgb(151 163 179 / 0.85);
-  font-family: system-ui, sans-serif;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1541,7 +1541,7 @@ body {
   padding: 14px 16px;
   border: 1px solid rgb(255 209 102 / 0.2);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgb(34 28 12 / 0.55), rgb(20 17 8 / 0.55));
+  background: linear-gradient(180deg, rgb(20 24 34 / 0.55), rgb(8 13 24 / 0.55));
   margin-bottom: 18px;
 }
 

@@ -64,13 +64,20 @@ import type {
   BrowserSongCollection,
   BrowserSongEntry,
 } from '../../collection/types.ts';
+import { LR2_NUMERIC_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 
 const log = logger('select');
-const BG = new Color('#08090d');
-const PANEL = new Color('#151923');
-const ACTIVE = new Color('#ffd166');
-const TEXT = new Color('#f8fafc');
-const MUTED = new Color('#9aa6b2');
+const BG = new Color('#050912');
+const PANEL = new Color('#101827');
+const ACTIVE = new Color('#4bd7c8');
+const TEXT = new Color('#f6f2e8');
+const MUTED = new Color('#a9a39a');
+const SURFACE = 0x080d16;
+const PANEL_DARK = 0x030711;
+const PANEL_SOFT = 0x0b1320;
+const PANEL_ACTION = 0x121a28;
+const PANEL_ACTION_ACTIVE = 0x162238;
+const LINE = 0x2a3548;
 /**
  * Design canvas the no-skin select scene renders into. 640×480 matches the LR2 default `select.lr2skin` (no
  * `#RESOLUTION` declared, so the loader's seed at width=640 / height=480 wins).
@@ -394,7 +401,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
 /**
  * Allowed range for {@link PixiPlayOptions.hiSpeed}. Mirrors gameplay's `HISPEED_MIN` / `HISPEED_MAX` so values seeded
  * from the select scene cover the same domain the in-play adjust hotkeys (`ArrowUp` / `ArrowDown`) can produce.
- * Duplicated here rather than re-exported from `scene/lr2/gameplay-constants.ts` so the select view stays free of gameplay
+ * Duplicated here rather than re-exported from `scene/gameplay-constants.ts` so the select view stays free of gameplay
  * imports.
  */
 const HISPEED_MIN = 0.1;
@@ -610,7 +617,7 @@ export class PixiSongSelectView {
       // and looks sparse with mixed-case.
       fontSize: 22,
       fontWeight: '700',
-      fontFamily: 'system-ui, sans-serif',
+      fontFamily: LR2_TEXT_FALLBACK_FONT,
     }),
   });
   /**
@@ -644,7 +651,7 @@ export class PixiSongSelectView {
     style: new TextStyle({
       fill: MUTED,
       fontSize: 12,
-      fontFamily: 'system-ui, sans-serif',
+      fontFamily: LR2_TEXT_FALLBACK_FONT,
     }),
   });
   /** True while the readtext modal is open. */
@@ -667,12 +674,12 @@ export class PixiSongSelectView {
       fill: TEXT,
       fontSize: 28,
       fontWeight: '700',
-      fontFamily: 'system-ui, sans-serif',
+      fontFamily: LR2_TEXT_FALLBACK_FONT,
     }),
   });
   private readonly hint = new Text({
     text: 'Select: Arrow keys / Enter',
-    style: new TextStyle({ fill: MUTED, fontSize: 14, fontFamily: 'system-ui, sans-serif' }),
+    style: new TextStyle({ fill: MUTED, fontSize: 14, fontFamily: LR2_TEXT_FALLBACK_FONT }),
   });
   private collection: BrowserSongCollection = { sources: [], songs: [], errors: [] };
   /**
@@ -759,13 +766,14 @@ export class PixiSongSelectView {
    */
   private readonly timerStartedAt = new Map<number, number>();
   /**
-   * Pixel offset applied to `listLayer` during a scroll transition. Right after a cursor move, the entry-to-slot
-   * mapping shifts instantly; we counter that by pushing `listLayer.y` so the bars appear to stay where they were, then
-   * decay the offset back to 0 over a few frames to produce a smooth slide.
+   * Pixel offset applied to `listLayer` during a skinned bar-list scroll transition. Right after a cursor move, the
+   * entry-to-slot mapping shifts instantly; we counter that by pushing `listLayer.y` so the bars appear to stay where they
+   * were, then decay the offset back to 0 over a few frames to produce a smooth slide.
    *
    * Convention: positive offset = "bars look like they're still at the previous song's positions". For a `down` press
    * (selectedIndex +1) the entries move up one slot, so we add `+slotHeight` and decay to 0 — visually this looks like
-   * the bars sliding up.
+   * the bars sliding up. The built-in default select screen does not use this because its background chrome also lives in
+   * `listLayer`; applying the offset there makes the whole screen move instead of just changing the highlighted row.
    */
   private listScrollOffset = 0;
   /**
@@ -1203,10 +1211,14 @@ export class PixiSongSelectView {
     this.timerStartedAt.set(10, now);
     this.timerStartedAt.set(11, now);
     this.timerStartedAt.set(delta < 0 ? 12 : 13, now);
-    // Seed the scroll offset. Adding `delta * slotHeight` offsets the listLayer to keep the bars visually pinned at
-    // their previous positions; the per-frame decay slides them to the new slots.
-    const slotHeight = this.estimateSlotHeight();
-    this.listScrollOffset += delta * slotHeight;
+    // Seed the scroll offset only for external LR2 skins. The default select chrome is also mounted on `listLayer`, so
+    // offsetting that layer would scroll the entire screen. In that path, cursor movement simply changes the active row.
+    if (this.options.skin && this.options.skin.barLayout.slots.length > 0) {
+      const slotHeight = this.estimateSlotHeight();
+      this.listScrollOffset += delta * slotHeight;
+    } else {
+      this.listScrollOffset = 0;
+    }
     // LR2 system effect — `Sound/lr2/scratch.wav` fires on every bar move regardless of direction. Fire-and-forget; the
     // one-shot decode caches after the first use so a fast wheel-scroll doesn't thrash the audio decoder.
     void this.playOneShotSound('cursor-move');
@@ -1597,7 +1609,8 @@ export class PixiSongSelectView {
 
   /**
    * Returns the entries to render in the bar list at the current navigation depth. At the root we surface one bar per
-   * top-level folder; inside a folder we surface the folder's songs.
+   * top-level folder, except while searching: search results are flattened to matching charts so typing a title rewrites
+   * the visible list immediately. Inside a folder we surface that folder's songs.
    *
    * Honors `searchQuery` (lower-cased substring match) when set — the filter applies at every depth so a user can type
    * while inside a folder and only see matching songs in that folder.
@@ -1623,7 +1636,9 @@ export class PixiSongSelectView {
     }
     const baseEntries: BrowserBrowseEntry[] = top
       ? top.songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
-      : groupSongsByFolder(songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
+      : this.searchQuery.length > 0
+        ? songs.map((song): BrowserBrowseEntry => ({ kind: 'song', song }))
+        : groupSongsByFolder(songs).map((folder): BrowserBrowseEntry => ({ kind: 'folder', folder }));
     let filtered = baseEntries;
     if (this.playOptions.difficultyFilter !== 'ALL') {
       const target = DIFFICULTY_FILTER_CYCLE.indexOf(this.playOptions.difficultyFilter);
@@ -1840,7 +1855,7 @@ export class PixiSongSelectView {
         fill: TEXT,
         fontSize: 16,
         fontWeight: '700',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
       }),
     });
     text.label = 'empty-state/hint';
@@ -1853,7 +1868,7 @@ export class PixiSongSelectView {
         style: new TextStyle({
           fill: MUTED,
           fontSize: 11,
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: LR2_TEXT_FALLBACK_FONT,
         }),
       });
       errorText.label = 'empty-state/errors';
@@ -2407,35 +2422,39 @@ export class PixiSongSelectView {
     // window centers on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
     // no-op.
     const listX = 320;
-    const listTop = 36;
-    const listBottom = designHeight - 110;
-    const rowHeight = 26;
+    const listTop = 54;
+    const listBottom = designHeight - 26;
+    const rowHeight = 28;
     if (virtualX < listX || virtualY < listTop || virtualY > listBottom) {
       return;
     }
-    const fallbackSongs = this.collection.songs;
-    if (fallbackSongs.length === 0) {
+    const fallbackEntries = this.currentEntries();
+    if (fallbackEntries.length === 0) {
       return;
     }
     const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowHeight));
     const start = Math.max(
       0,
-      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackSongs.length - visibleRows)),
+      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackEntries.length - visibleRows)),
     );
     const visibleRow = Math.floor((virtualY - listTop) / rowHeight);
-    const songIndex = start + visibleRow;
-    if (songIndex < 0 || songIndex >= fallbackSongs.length) {
+    const entryIndex = start + visibleRow;
+    if (entryIndex < 0 || entryIndex >= fallbackEntries.length) {
       return;
     }
-    const song = fallbackSongs[songIndex];
-    if (!song) return;
+    const entry = fallbackEntries[entryIndex];
+    if (!entry) return;
     const previous = this.selectedIndex;
-    if (songIndex !== previous) {
-      this.noteCursorChange(wrappedCursorDelta(songIndex - previous, fallbackSongs.length));
+    if (entryIndex !== previous) {
+      this.noteCursorChange(wrappedCursorDelta(entryIndex - previous, fallbackEntries.length));
     }
-    this.selectedIndex = songIndex;
+    this.selectedIndex = entryIndex;
     this.render();
-    this.options.onSongSelected?.(song);
+    if (entry.kind === 'folder') {
+      this.enterFolder(entry.folder);
+    } else {
+      this.options.onSongSelected?.(entry.song);
+    }
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
@@ -2518,7 +2537,7 @@ export class PixiSongSelectView {
       return;
     }
     // HS adjustment via the 1P 5 / 7 lane keys (LR2 convention: pressing the 5-key inside the play-options panel
-    // decreases HiSpeed, the 7-key increases it). Bindings come from `scene/lr2/gameplay-lanes::CHANNEL_KEY_BINDINGS` — PLAY
+    // decreases HiSpeed, the 7-key increases it). Bindings follow the common gameplay lane convention — PLAY
     // OPTIONS panel (panel 1) keyboard shortcuts. While the panel is open, each 7K lane key cycles a corresponding play
     // option — same "adjacent-key shortcuts" family LR2 hardcodes for option panels. The mapping mirrors the panel's
     // visible button layout:
@@ -2649,14 +2668,14 @@ export class PixiSongSelectView {
     }
     const dt = now - this.lastScrollUpdate;
     this.lastScrollUpdate = now;
-    if (this.listScrollOffset !== 0) {
+    if (useSkin && this.listScrollOffset !== 0) {
       const decay = Math.exp(-dt / 80);
       this.listScrollOffset *= decay;
       if (Math.abs(this.listScrollOffset) < 0.5) {
         this.listScrollOffset = 0;
       }
     }
-    this.listLayer.y = this.listScrollOffset;
+    this.listLayer.y = useSkin ? this.listScrollOffset : 0;
 
     if (useSkin && skin) {
       this.title.visible = false;
@@ -2679,387 +2698,237 @@ export class PixiSongSelectView {
       return;
     }
 
-    // Fallback chrome modeled on `Theme/LR2/Select/ss_select.png`: top tab bar, center-left song banner, right-column
-    // bar list, bottom-left button row + search, bottom-right score panel. The chrome now paints the focused-song title
-    // / artist / BPM / level itself, so the legacy `this.title` / `this.hint` Text overlays (which used to render
-    // generic "Song Select" / "Drop a BMS folder or ZIP" placeholders) are hidden — they'd otherwise overlap the
-    // chrome's real song-title text.
-    this.renderFallbackSelectChrome(designWidth, designHeight);
+    // Default-family chrome paints only live library / focused-chart data, so the legacy `this.title` / `this.hint`
+    // overlays are hidden; the host-level drop overlay remains responsible for the empty-library callout.
+    const fallbackEntries = this.currentEntries();
+    this.renderFallbackSelectChrome(designWidth, designHeight, fallbackEntries);
     this.title.visible = false;
     this.hint.visible = false;
 
-    // Right-column song bar list — LR2's `#DST_BAR_BODY_OFF` slots park at x=397, w=259. We render rows of 24 px each
-    // centered on the selected index so the active bar stays in the middle of the column (mirroring LR2's centered-bar
-    // feel).
+    // Right-column song bar list. Keep the selected entry near the vertical center so keyboard / wheel navigation feels
+    // stable with or without a loaded external skin.
     const listX = 320;
     const listWidth = designWidth - listX - 16;
-    const rowHeight = 26;
-    const listTop = 36;
-    const listBottom = designHeight - 110;
+    const rowHeight = 28;
+    const listTop = 54;
+    const listBottom = designHeight - 26;
     const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowHeight));
     const start = Math.max(
       0,
-      Math.min(
-        this.selectedIndex - Math.floor(visibleRows / 2),
-        Math.max(0, this.collection.songs.length - visibleRows),
-      ),
+      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackEntries.length - visibleRows)),
     );
     for (let visibleIndex = 0; visibleIndex < visibleRows; visibleIndex += 1) {
-      const songIndex = start + visibleIndex;
-      const song = this.collection.songs[songIndex];
-      if (!song) {
+      const entryIndex = start + visibleIndex;
+      const entry = fallbackEntries[entryIndex];
+      if (!entry) {
         break;
       }
-      this.drawFallbackSongRow(song, songIndex, visibleIndex, listX, listTop, listWidth, rowHeight);
+      this.drawFallbackEntryRow(entry, entryIndex, visibleIndex, listX, listTop, listWidth, rowHeight);
     }
     this.renderReadTextOverlay(designWidth, designHeight);
   }
 
   /**
-   * Background chrome for the no-skin select scene — mirrors the footprint of LR2's default `select.lr2skin` so a
-   * viewer can recognize the layout even without the skin's bitmap atlas.
-   *
-   * Layout (640×480 design canvas): - Top tab bar (TITLE / LEVEL / ALL) — y=0..30 - Center-left song banner (title /
-   * artist / mode / BPM / level pills) — x=8..312, y=34..280 - Right-column bar list — x=316..632, y=32..372 -
-   * Bottom-left button row (HELP / REPLAY / AUTOPLAY / READTEXT) — x=8..308, y=288..330 - Bottom-left search box —
-   * x=8..308, y=336..360 - Bottom-right score panel (SCORE / EX / RANK / FULL COMBO / AAA grade) — x=316..632,
-   * y=378..476
+   * Background chrome for the no-skin select scene. Unlike LR2 skin rendering, this path only displays live library and
+   * focused-chart data; it does not paint fake score history or decorative buttons that are not wired in skinless mode.
    */
-  private renderFallbackSelectChrome(designWidth: number, designHeight: number): void {
+  private renderFallbackSelectChrome(
+    designWidth: number,
+    designHeight: number,
+    entries: readonly BrowserBrowseEntry[],
+  ): void {
     const chrome = new Graphics();
-    chrome.label = 'fallback-select-chrome';
-    // Outer dark backdrop with a faint vertical sweep echoing the screenshot's purple-tinged photo background.
+    chrome.label = 'default-select/chrome';
+    const addText = (
+      text: string,
+      x: number,
+      y: number,
+      options: {
+        size?: number;
+        weight?: '400' | '500' | '600' | '700' | '800' | '900';
+        fill?: number | Color;
+        fontFamily?: string;
+        letterSpacing?: number;
+        anchorX?: number;
+        anchorY?: number;
+        maxWidth?: number;
+      } = {},
+    ): Text => {
+      const node = new Text({
+        text,
+        style: new TextStyle({
+          fill: options.fill ?? TEXT,
+          fontSize: options.size ?? 10,
+          fontWeight: options.weight ?? '500',
+          fontFamily: options.fontFamily ?? LR2_TEXT_FALLBACK_FONT,
+          letterSpacing: options.letterSpacing ?? 0,
+        }),
+      });
+      node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+      node.position.set(x, y);
+      if (options.maxWidth !== undefined && node.width > options.maxWidth) {
+        node.scale.x = options.maxWidth / node.width;
+      }
+      this.listLayer.addChild(node);
+      return node;
+    };
+
     chrome.rect(0, 0, designWidth, designHeight).fill(BG);
-    chrome.rect(0, 0, designWidth, designHeight).fill({ color: 0x1d1330, alpha: 0.35 });
+    chrome.rect(0, 0, designWidth, 40).fill(SURFACE);
+    chrome.rect(0, 39, designWidth, 1).fill({ color: LINE, alpha: 0.9 });
 
-    // ── Top tab bar ─────────────────────────────────────────
-    chrome.rect(0, 0, designWidth, 30).fill(0x1c1632);
-    chrome.rect(0, 28, designWidth, 2).fill(0x4a3a73);
-    const tabWidth = 60;
-    const tabs = ['TITLE', 'LEVEL', 'ALL'];
-    for (let i = 0; i < tabs.length; i += 1) {
-      const tx = 6 + i * (tabWidth + 4);
-      const active = i === 0;
-      chrome
-        .roundRect(tx, 4, tabWidth, 22, 3)
-        .fill(active ? 0x6a3aa0 : 0x281f3e)
-        .stroke({ color: 0x8a5dc0, width: 1, alpha: active ? 1 : 0.45 });
-      const tabText = new Text({
-        text: tabs[i]!,
-        style: new TextStyle({
-          fill: active ? 0xffffff : 0xb09cd0,
-          fontSize: 10,
-          fontWeight: '700',
-          fontFamily: 'system-ui, sans-serif',
-          letterSpacing: 1,
-        }),
-      });
-      tabText.anchor.set(0.5, 0.5);
-      tabText.position.set(tx + tabWidth / 2, 15);
-      this.listLayer.addChild(tabText);
-    }
-    // Right-side category label slot ("Lightstep" in screenshot — shows the focused folder / category name).
-    chrome
-      .roundRect(designWidth - 130, 4, 124, 22, 3)
-      .fill(0x281f3e)
-      .stroke({ color: 0x8a5dc0, width: 1 });
-    // Folder name comes from the focused song's source label when we're inside a folder; otherwise fall back to a
-    // catch-all string so the chrome reads coherently.
-    const categoryName = this.focusedSong()?.sourceLabel ?? 'ALL CHARTS';
-    const categoryText = new Text({
-      text: categoryName,
-      style: new TextStyle({
-        fill: 0xb09cd0,
-        fontSize: 10,
-        fontWeight: '600',
-        fontFamily: 'system-ui, sans-serif',
-        wordWrapWidth: 120,
-      }),
-    });
-    categoryText.anchor.set(0.5, 0.5);
-    categoryText.position.set(designWidth - 68, 15);
-    this.listLayer.addChild(categoryText);
-
-    // ── Center-left song banner ─────────────────────────────
-    chrome.rect(8, 34, 304, 246).fill({ color: 0x10131d, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
-    // Backplates for title / sub-title / mode-pills / difficulty bar / filename strip — the actual text is painted as
-    // `Text` nodes below so the user reads real chart info, not empty placeholder rectangles.
-    chrome.rect(14, 64, 292, 22).fill({ color: 0x281f3e, alpha: 0.6 });
-    chrome.rect(14, 96, 200, 12).fill({ color: 0x281f3e, alpha: 0.45 });
-    chrome.roundRect(14, 154, 70, 28, 4).fill(0x1f2a3e).stroke({ color: 0x4a6390, width: 1 });
-    chrome.roundRect(96, 154, 70, 28, 4).fill(0x1f2a3e).stroke({ color: 0x4a6390, width: 1 });
-    chrome.roundRect(178, 154, 124, 38, 4).fill(0x3a1a1a).stroke({ color: 0xc04040, width: 1 });
-    chrome.rect(14, 218, 292, 12).fill(0x06080c);
-    chrome.rect(14, 240, 292, 14).fill({ color: 0x281f3e, alpha: 0.4 });
-
-    // Resolve the focused song so we can paint live values into the banner. Falls back to placeholder labels on the
-    // empty collection / pre-load state so the layout still reads as "song info goes here".
     const song = this.focusedSong();
-    const songTitle = song?.title ?? '— No Song Selected —';
-    const songArtist = song?.artist ?? song?.subtitle ?? '';
-    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '—';
-    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '—';
+    const songTitle = song?.title ?? 'No chart selected';
+    const songArtist = song?.artist || song?.subtitle || '';
+    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
+    const playLevelNumber =
+      song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
+    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
     const fileLabel = song?.fileLabel ?? '';
-    // Mode label derives from the chart's PlayVariant when we have one; before a song is focused we fall back to a
-    // placeholder so the pill keeps its visual weight.
-    const modeLabel = song ? formatPlayVariantLabel(song) : '— KEYS';
-    // Difficulty color matches the LR2 default skin's HARD ribbon (red). When we have richer difficulty info from the
-    // chart we'll route it; for now HARD is the visible-state placeholder per ss_select.png.
-    const difficultyLabel = 'HARD';
+    const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
+    const currentFolder = this.browseStack[this.browseStack.length - 1];
+    const categoryName = this.searchQuery ? `Search: ${this.searchQuery}` : (currentFolder?.label ?? 'Library');
+    const selectedPosition =
+      entries.length > 0 ? `${Math.min(this.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
 
-    // Song-title display: LR2-spec auto-shrink horizontally when the rendered string overflows the banner's text rect
-    // (`docs/LR2SkinHelp.md` line 1343). No `wordWrap` — long titles squeeze, they don't break to a second line.
-    const titleText = new Text({
-      text: songTitle,
-      style: new TextStyle({
-        fill: TEXT,
-        fontSize: 16,
-        fontWeight: '800',
-        fontFamily: 'system-ui, sans-serif',
-      }),
+    addText('MUSIC SELECT', 16, 12, { size: 12, weight: '900', fill: TEXT, letterSpacing: 1.4 });
+    addText(categoryName, designWidth - 16, 12, {
+      size: 10,
+      weight: '700',
+      fill: MUTED,
+      anchorX: 1,
+      maxWidth: 260,
     });
-    titleText.label = 'select-fallback/title';
-    titleText.position.set(20, 66);
-    const titleMaxWidth = 282;
-    if (titleText.width > titleMaxWidth) {
-      titleText.scale.x = titleMaxWidth / titleText.width;
+
+    chrome.roundRect(12, 54, 292, 306, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
+    chrome.rect(24, 94, 268, 1).fill({ color: LINE, alpha: 0.7 });
+    chrome.roundRect(24, 150, 76, 48, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
+    chrome.roundRect(112, 150, 76, 48, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
+    chrome.roundRect(200, 150, 92, 48, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
+    chrome.rect(24, 226, 268, 12).fill(PANEL_DARK);
+    if (Number.isFinite(playLevelNumber)) {
+      const levelRatio = Math.max(0.04, Math.min(1, playLevelNumber / 12));
+      chrome.rect(24, 226, Math.round(268 * levelRatio), 12).fill(0x4bd7c8);
     }
-    this.listLayer.addChild(titleText);
+    chrome.roundRect(24, 312, 82, 28, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
+    chrome.roundRect(112, 312, 180, 28, 5).fill(PANEL_ACTION_ACTIVE).stroke({ color: 0xffc857, width: 1 });
 
-    const artistText = new Text({
-      text: songArtist,
-      style: new TextStyle({
-        fill: MUTED,
-        fontSize: 9,
-        fontFamily: 'system-ui, sans-serif',
-      }),
-    });
-    artistText.label = 'select-fallback/artist';
-    artistText.position.set(20, 96);
-    const artistMaxWidth = 282;
-    if (artistText.width > artistMaxWidth) {
-      artistText.scale.x = artistMaxWidth / artistText.width;
+    addText('SELECTED', 24, 70, { size: 8, weight: '800', fill: 0x6e685d, letterSpacing: 1 });
+    addText(songTitle, 24, 104, { size: 18, weight: '900', fill: TEXT, maxWidth: 268 });
+    if (songArtist) {
+      addText(songArtist, 24, 128, { size: 10, weight: '600', fill: MUTED, maxWidth: 268 });
     }
-    this.listLayer.addChild(artistText);
-
-    // Mode pill: small label dab + value
-    const modeLabelText = new Text({
-      text: 'MODE',
-      style: new TextStyle({ fill: MUTED, fontSize: 7, fontFamily: 'system-ui, sans-serif' }),
+    addText('MODE', 34, 160, { size: 8, weight: '800', fill: 0x6e685d });
+    addText(modeLabel, 34, 174, {
+      size: 12,
+      weight: '900',
+      fill: TEXT,
+      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
+      maxWidth: 56,
     });
-    modeLabelText.position.set(20, 158);
-    this.listLayer.addChild(modeLabelText);
-    const modeValueText = new Text({
-      text: modeLabel,
-      style: new TextStyle({ fill: TEXT, fontSize: 12, fontWeight: '800', fontFamily: 'system-ui, sans-serif' }),
+    addText('BPM', 122, 160, { size: 8, weight: '800', fill: 0x6e685d });
+    addText(songBpm, 122, 173, {
+      size: 15,
+      weight: '900',
+      fill: ACTIVE,
+      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
     });
-    modeValueText.position.set(20, 168);
-    this.listLayer.addChild(modeValueText);
-
-    // BPM pill
-    const bpmLabelText = new Text({
-      text: 'BPM',
-      style: new TextStyle({ fill: MUTED, fontSize: 7, fontFamily: 'system-ui, sans-serif' }),
+    addText('LEVEL', 210, 160, { size: 8, weight: '800', fill: 0x6e685d });
+    addText(playLevel, 210, 171, {
+      size: 18,
+      weight: '900',
+      fill: 0xffc857,
+      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
     });
-    bpmLabelText.position.set(102, 158);
-    this.listLayer.addChild(bpmLabelText);
-    const bpmValueText = new Text({
-      text: songBpm,
-      style: new TextStyle({ fill: ACTIVE, fontSize: 14, fontWeight: '800', fontFamily: 'system-ui, sans-serif' }),
-    });
-    bpmValueText.position.set(102, 167);
-    this.listLayer.addChild(bpmValueText);
-
-    // Difficulty pill (HARD-style red panel with judge label and the level number).
-    const difficultyLabelText = new Text({
-      text: 'JUDGE LEVEL',
-      style: new TextStyle({ fill: MUTED, fontSize: 7, fontFamily: 'system-ui, sans-serif' }),
-    });
-    difficultyLabelText.position.set(186, 158);
-    this.listLayer.addChild(difficultyLabelText);
-    const difficultyValueText = new Text({
-      text: `${difficultyLabel}  Lv.${playLevel}`,
-      style: new TextStyle({
-        fill: 0xfff0f0,
-        fontSize: 14,
-        fontWeight: '800',
-        fontFamily: 'system-ui, sans-serif',
-        stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
-      }),
-    });
-    difficultyValueText.position.set(186, 168);
-    this.listLayer.addChild(difficultyValueText);
-
-    // Difficulty mini-bar fill (proportional to playLevel / typical max 12). Caps at the rectangle width.
-    const fillRatio = song?.playLevel !== undefined ? Math.max(0.05, Math.min(1, Number(song.playLevel) / 12)) : 0.35;
-    chrome.rect(16, 220, Math.round(288 * fillRatio), 8).fill(0x56b6f7);
-
-    // Filename row — small monospace-ish text along the bottom of the banner.
-    const fileLabelText = new Text({
-      text: fileLabel,
-      style: new TextStyle({
+    if (fileLabel) {
+      addText(fileLabel, 24, 250, {
+        size: 8,
+        weight: '600',
         fill: MUTED,
-        fontSize: 8,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      }),
-    });
-    fileLabelText.label = 'select-fallback/file';
-    fileLabelText.position.set(20, 242);
-    this.listLayer.addChild(fileLabelText);
-
-    // ── Right-column bar list backdrop ──────────────────────
-    chrome
-      .rect(316, 32, designWidth - 332, 340)
-      .fill({ color: 0x06080c, alpha: 0.55 })
-      .stroke({ color: 0x4a3a73, width: 1, alpha: 0.65 });
-
-    // ── Bottom-left button row ──────────────────────────────
-    const buttons = ['HELP', 'REPLAY', 'AUTOPLAY', 'READTEXT'];
-    const btnY = 290;
-    const btnW = 70;
-    for (let i = 0; i < buttons.length; i += 1) {
-      const bx = 8 + i * (btnW + 4);
-      chrome.roundRect(bx, btnY, btnW, 26, 3).fill(0x281f3e).stroke({ color: 0x8a5dc0, width: 1 });
-      // Small play-arrow glyph
-      chrome.poly([bx + 8, btnY + 8, bx + 14, btnY + 13, bx + 8, btnY + 18]).fill(0xffd166);
-      const btnText = new Text({
-        text: buttons[i]!,
-        style: new TextStyle({
-          fill: 0xb09cd0,
-          fontSize: 9,
-          fontWeight: '700',
-          fontFamily: 'system-ui, sans-serif',
-          letterSpacing: 0.5,
-        }),
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
+        maxWidth: 268,
       });
-      btnText.position.set(bx + 18, btnY + 9);
-      this.listLayer.addChild(btnText);
     }
+    addText('PLAY', 65, 321, {
+      size: 9,
+      weight: '900',
+      fill: TEXT,
+      anchorX: 0.5,
+      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
+    });
+    addText('AUTO PLAY', 202, 321, {
+      size: 9,
+      weight: '900',
+      fill: 0xffc857,
+      anchorX: 0.5,
+      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
+      maxWidth: 158,
+    });
+    addText(selectedPosition, 24, 348, { size: 10, weight: '700', fill: MUTED, fontFamily: LR2_NUMERIC_FALLBACK_FONT });
 
-    // ── Search input ────────────────────────────────────────
-    chrome.roundRect(8, 336, 300, 24, 3).fill({ color: 0x06080c, alpha: 0.85 }).stroke({ color: 0x4a3a73, width: 1 });
-    const searchLabelText = new Text({
-      text: 'SEARCH',
-      style: new TextStyle({
-        fill: 0xb09cd0,
-        fontSize: 9,
-        fontWeight: '700',
-        fontFamily: 'system-ui, sans-serif',
-        letterSpacing: 1,
-      }),
+    chrome
+      .roundRect(316, 50, designWidth - 332, designHeight - 76, 6)
+      .fill({ color: PANEL_DARK, alpha: 0.85 })
+      .stroke({ color: LINE, width: 1 });
+    addText(this.searchQuery ? 'SEARCH RESULTS' : currentFolder ? 'CHARTS' : 'FOLDERS', 328, 28, {
+      size: 8,
+      weight: '800',
+      fill: 0x6e685d,
+      letterSpacing: 1,
     });
-    searchLabelText.position.set(14, 344);
-    this.listLayer.addChild(searchLabelText);
-    const searchValueText = new Text({
-      text: this.searchQuery || 'タイトル / アーティスト / ジャンル',
-      style: new TextStyle({
-        fill: this.searchQuery ? TEXT : 0x6a6580,
-        fontSize: 10,
-        fontFamily: 'system-ui, sans-serif',
-      }),
+
+    chrome.roundRect(12, 376, 292, 28, 5).fill(PANEL_DARK).stroke({ color: LINE, width: 1 });
+    addText('SEARCH', 24, 386, { size: 8, weight: '800', fill: 0x6e685d, letterSpacing: 1 });
+    addText(this.searchQuery || 'Title / artist / genre', 82, 384, {
+      size: 10,
+      weight: '600',
+      fill: this.searchQuery ? TEXT : 0x6e685d,
+      maxWidth: 210,
     });
-    searchValueText.position.set(58, 343);
-    this.listLayer.addChild(searchValueText);
-    // Click target — sits above the chrome rectangle and catches pointer-down events anywhere in the search box. The
-    // actual text input lives off-canvas as a DOM `<input>`, so the host forwards the activation to that element
-    // through `onSearchActivate`. Filling with `alpha: 0.001` instead of a no-fill keeps the Graphics hit-testable
-    // while staying visually invisible (Pixi's hit-test treats unfilled Graphics as having zero hit area).
+
     const searchHit = new Graphics();
-    searchHit.rect(8, 336, 300, 24).fill({ color: 0xffffff, alpha: 0.001 });
+    searchHit.rect(12, 376, 292, 28).fill({ color: 0xffffff, alpha: 0.001 });
     searchHit.eventMode = 'static';
     searchHit.cursor = 'text';
     searchHit.on('pointerdown', () => this.options.onSearchActivate?.());
     this.listLayer.addChild(searchHit);
 
-    // ── Bottom-right score panel ────────────────────────────
-    chrome
-      .rect(316, 378, designWidth - 332, 96)
-      .fill({ color: 0x06080c, alpha: 0.85 })
-      .stroke({ color: 0x4a3a73, width: 1 });
-    // Five score rows — labels on the left, values right-aligned. Without persistent best-score storage we render "—"
-    // for the numeric values, but the labels still fix the layout to LR2.
-    const scoreRows: Array<readonly [string, string]> = [
-      ['SCORE', '------'],
-      ['EX SCORE', '----'],
-      ['BEST EX SCORE', '----'],
-      ['BEST RANK', '—'],
-      ['TOTAL RATE', '—'],
-    ];
-    for (let i = 0; i < scoreRows.length; i += 1) {
-      const ry = 384 + i * 14;
-      const [label, value] = scoreRows[i]!;
-      const labelText = new Text({
-        text: label,
-        style: new TextStyle({
-          fill: 0xb09cd0,
-          fontSize: 8,
-          fontWeight: '700',
-          fontFamily: 'system-ui, sans-serif',
-          letterSpacing: 0.5,
-        }),
-      });
-      labelText.position.set(322, ry);
-      this.listLayer.addChild(labelText);
-      const valueText = new Text({
-        text: value,
-        style: new TextStyle({
-          fill: TEXT,
-          fontSize: 9,
-          fontWeight: '600',
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        }),
-      });
-      valueText.position.set(404, ry);
-      this.listLayer.addChild(valueText);
-    }
-    // Big AA / AAA grade letters on the right
-    chrome
-      .rect(designWidth - 110, 392, 90, 60)
-      .fill(0x06080c)
-      .stroke({ color: 0x4a3a73, width: 1 });
-    const gradeText = new Text({
-      text: 'AA',
-      style: new TextStyle({
-        fill: 0xc8b64a,
-        fontSize: 32,
-        fontWeight: '900',
-        fontFamily: 'system-ui, sans-serif',
-        letterSpacing: 2,
-        stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
-      }),
-    });
-    gradeText.anchor.set(0.5, 0.5);
-    gradeText.position.set(designWidth - 65, 422);
-    this.listLayer.addChild(gradeText);
-    // FULL COMBO ribbon below the AA grade
-    chrome.roundRect(designWidth - 110, 456, 90, 14, 2).fill(0x4a6390);
-    const fcText = new Text({
-      text: 'FULL COMBO',
-      style: new TextStyle({
-        fill: 0xffffff,
-        fontSize: 8,
-        fontWeight: '700',
-        fontFamily: 'system-ui, sans-serif',
-        letterSpacing: 0.5,
-      }),
-    });
-    fcText.anchor.set(0.5, 0.5);
-    fcText.position.set(designWidth - 65, 463);
-    this.listLayer.addChild(fcText);
-    // PROGRESS STATUS line at the very bottom
-    const progressText = new Text({
-      text: `PROGRESS STATUS: ${this.collection.songs.length}/${this.collection.songs.length}`,
-      style: new TextStyle({
-        fill: 0xb09cd0,
-        fontSize: 8,
-        fontFamily: 'system-ui, sans-serif',
-        letterSpacing: 0.5,
-      }),
-    });
-    progressText.position.set(8, designHeight - 14);
-    this.listLayer.addChild(progressText);
+    const launchFocused = (autoPlay: boolean): void => {
+      const focused = this.focusedSong();
+      if (!focused) return;
+      if (autoPlay) {
+        if (this.options.onSongAutoPlay) {
+          this.options.onSongAutoPlay(focused);
+        } else {
+          this.options.onSongSelected?.(focused);
+        }
+        return;
+      }
+      this.options.onSongSelected?.(focused);
+    };
+    const playHit = new Graphics();
+    playHit.rect(24, 312, 82, 28).fill({ color: 0xffffff, alpha: 0.001 });
+    playHit.eventMode = 'static';
+    playHit.cursor = 'pointer';
+    playHit.on('pointerdown', () => launchFocused(false));
+    this.listLayer.addChild(playHit);
 
-    this.listLayer.addChild(chrome);
+    const autoPlayHit = new Graphics();
+    autoPlayHit.rect(112, 312, 180, 28).fill({ color: 0xffffff, alpha: 0.001 });
+    autoPlayHit.eventMode = 'static';
+    autoPlayHit.cursor = 'pointer';
+    autoPlayHit.on('pointerdown', () => launchFocused(true));
+    this.listLayer.addChild(autoPlayHit);
+
+    chrome.roundRect(12, 420, 292, 42, 5).fill(PANEL).stroke({ color: LINE, width: 1 });
+    addText('LIBRARY', 24, 432, { size: 8, weight: '800', fill: 0x6e685d, letterSpacing: 1 });
+    addText(`${entries.length} shown / ${this.collection.songs.length} charts`, 24, 446, {
+      size: 11,
+      weight: '700',
+      fill: MUTED,
+    });
+
+    this.listLayer.addChildAt(chrome, 0);
   }
 
   /**
@@ -3166,8 +3035,7 @@ export class PixiSongSelectView {
       return this.sortedChromeEntries;
     }
     const barOrder = skin.barLayout.declarationOrder;
-    const isForeground = (declarationOrder: number): boolean =>
-      barOrder !== undefined && declarationOrder > barOrder;
+    const isForeground = (declarationOrder: number): boolean => barOrder !== undefined && declarationOrder > barOrder;
     const entries: SortedSelectChromeEntry[] = [];
     for (const element of skin.images) {
       entries.push({
@@ -3722,8 +3590,8 @@ export class PixiSongSelectView {
       this.listLayer.addChild(sprite);
       return;
     }
-    // No `#SRC_BAR_TITLE` — fall back to a basic system-font `Text`. LR2 default skins use pixel-art fonts (typically
-    // 12 px tall) for BAR_TITLE; Pixi `Text` with the system sans-serif is taller pixel-for-pixel, so cap the font size
+    // No `#SRC_BAR_TITLE` — fall back to a basic font-backed `Text`. LR2 default skins use pixel-art fonts (typically
+    // 12 px tall) for BAR_TITLE; Pixi `Text` is taller pixel-for-pixel, so cap the font size
     // at 14 px and leave 2 px breathing room below `h`.
     const titleFontSize = clampFontSize(h - 2, 8, 14);
     // No `wordWrap` — LR2 spec auto-shrinks long titles horizontally rather than wrapping (`docs/LR2SkinHelp.md` line
@@ -3733,9 +3601,9 @@ export class PixiSongSelectView {
       style: new TextStyle({
         fill: TEXT,
         fontSize: titleFontSize,
-        // System sans-serif looks too "thick" at small sizes vs an image font. A regular weight reads cleaner.
+        // A regular weight reads cleaner at small sizes than the heavy title face.
         fontWeight: '500',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
         // Outlined text — LR2 reference skins bake a 1–2 px black outline into their bar-title bitmaps so titles
         // read cleanly against the colored BAR_BODY artwork. Match that by stroking the fallback.
         stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
@@ -3749,9 +3617,9 @@ export class PixiSongSelectView {
     this.listLayer.addChild(titleText);
   }
 
-  private drawFallbackSongRow(
-    song: BrowserSongEntry,
-    songIndex: number,
+  private drawFallbackEntryRow(
+    entry: BrowserBrowseEntry,
+    entryIndex: number,
     visibleIndex: number,
     listX: number,
     listY: number,
@@ -3760,57 +3628,106 @@ export class PixiSongSelectView {
   ): void {
     const y = listY + visibleIndex * rowHeight;
     const row = new Graphics();
-    const active = songIndex === this.selectedIndex;
-    row.label = `fallback-row[idx=${songIndex}${active ? ',active' : ''}]`;
-    // LR2's selected `#DST_BAR_BODY_OFF` slot is 259×26 with a brighter accent color; non-selected slots are 31 px
-    // tall. We fake the same hierarchy with a wider/taller active row.
+    const active = entryIndex === this.selectedIndex;
+    const song = entry.kind === 'song' ? entry.song : undefined;
+    const folder = entry.kind === 'folder' ? entry.folder : undefined;
+    const titleText = song?.title ?? folder?.label ?? '';
+    const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
+    const metaText = song
+      ? [song.playLevel !== undefined ? `Lv ${song.playLevel}` : undefined, song.bpm ? `${song.bpm}BPM` : undefined]
+          .filter(Boolean)
+          .join('  ·  ')
+      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
+    const playLevelText =
+      song?.playLevel !== undefined ? String(song.playLevel) : folder ? String(folder.songs.length) : '-';
+    const keyPillX = listX + 6;
+    const keyPillW = 28;
+    const levelPillX = keyPillX + keyPillW + 4;
+    const levelPillW = 28;
+    const titleX = levelPillX + levelPillW + 8;
+    const textMaxWidth = Math.max(24, listWidth - (titleX - listX) - 8);
+    row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
     if (active) {
       row
-        .roundRect(listX - 4, y - 1, listWidth + 8, rowHeight, 4)
+        .roundRect(listX - 4, y - 1, listWidth + 8, rowHeight, 5)
         .fill({ color: ACTIVE, alpha: 0.95 })
-        .stroke({ color: 0xffffff, width: 1, alpha: 0.6 });
+        .stroke({ color: 0xffffff, width: 1, alpha: 0.55 });
     } else {
       row
-        .roundRect(listX, y, listWidth, rowHeight - 2, 3)
+        .roundRect(listX, y, listWidth, rowHeight - 3, 4)
         .fill({ color: PANEL, alpha: 0.78 })
-        .stroke({ color: 0x4a3a73, width: 1, alpha: 0.5 });
+        .stroke({ color: LINE, width: 1, alpha: 0.75 });
     }
     this.listLayer.addChild(row);
 
-    // Left mode badge (LR2 puts a small mode/lamp lozenge at the far-left of every bar in `select.csv`).
-    row.roundRect(listX + 4, y + 4, 18, rowHeight - 10, 2).fill(active ? 0xffffff : 0x4a6390);
+    row.roundRect(keyPillX, y + 5, keyPillW, rowHeight - 12, 3).fill(active ? SURFACE : PANEL_SOFT);
 
-    // Right-side level number badge — lifted from `#DST_BAR_LEVEL` positions where the difficulty number lives.
     row
-      .roundRect(listX + listWidth - 28, y + 4, 22, rowHeight - 10, 2)
-      .fill(0x06080c)
-      .stroke({ color: 0x4a3a73, width: 1, alpha: 0.6 });
+      .roundRect(levelPillX, y + 5, levelPillW, rowHeight - 12, 3)
+      .fill(active ? SURFACE : PANEL_DARK)
+      .stroke({ color: active ? 0xffffff : LINE, width: 1, alpha: active ? 0.35 : 0.8 });
 
-    const title = new Text({
-      text: song.title,
+    const keyLabel = new Text({
+      text: keyText,
       style: new TextStyle({
-        fill: active ? 0x111318 : TEXT,
-        fontSize: 11,
-        fontWeight: '700',
-        fontFamily: 'system-ui, sans-serif',
+        fill: active ? 0xffffff : MUTED,
+        fontSize: 8,
+        fontWeight: '900',
+        fontFamily: LR2_NUMERIC_FALLBACK_FONT,
       }),
     });
-    title.label = `fallback-title[idx=${songIndex}]`;
-    title.position.set(listX + 28, y + 4);
+    keyLabel.anchor.set(0.5, 0.5);
+    keyLabel.position.set(keyPillX + keyPillW / 2, y + rowHeight / 2 - 1);
+    if (keyLabel.width > keyPillW - 4) {
+      keyLabel.scale.x = (keyPillW - 4) / keyLabel.width;
+    }
+    this.listLayer.addChild(keyLabel);
+
+    const playLevel = new Text({
+      text: playLevelText,
+      style: new TextStyle({
+        fill: active ? 0xffffff : 0xffc857,
+        fontSize: 10,
+        fontWeight: '900',
+        fontFamily: LR2_NUMERIC_FALLBACK_FONT,
+      }),
+    });
+    playLevel.anchor.set(0.5, 0.5);
+    playLevel.position.set(levelPillX + levelPillW / 2, y + rowHeight / 2 - 1);
+    if (playLevel.width > levelPillW - 4) {
+      playLevel.scale.x = (levelPillW - 4) / playLevel.width;
+    }
+    this.listLayer.addChild(playLevel);
+
+    const title = new Text({
+      text: titleText,
+      style: new TextStyle({
+        fill: active ? 0x06101c : TEXT,
+        fontSize: 11,
+        fontWeight: '800',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
+      }),
+    });
+    title.label = `fallback-title[idx=${entryIndex}]`;
+    title.position.set(titleX, y + 4);
+    if (title.width > textMaxWidth) {
+      title.scale.x = textMaxWidth / title.width;
+    }
     this.listLayer.addChild(title);
 
     const meta = new Text({
-      text: [song.playLevel !== undefined ? `Lv ${song.playLevel}` : undefined, song.bpm ? `${song.bpm}BPM` : undefined]
-        .filter(Boolean)
-        .join('  ·  '),
+      text: metaText,
       style: new TextStyle({
-        fill: active ? 0x34302a : MUTED,
+        fill: active ? 0x24403d : MUTED,
         fontSize: 8,
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_NUMERIC_FALLBACK_FONT,
       }),
     });
-    meta.label = `fallback-meta[idx=${songIndex}]`;
-    meta.position.set(listX + 28, y + 16);
+    meta.label = `fallback-meta[idx=${entryIndex}]`;
+    meta.position.set(titleX, y + 17);
+    if (meta.width > textMaxWidth) {
+      meta.scale.x = textMaxWidth / meta.width;
+    }
     this.listLayer.addChild(meta);
   }
 }

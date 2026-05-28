@@ -1,7 +1,13 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, it } from 'vitest';
-import { buildBgaTimeline, isVideoExtension, pickActiveBgaCue, pickActiveBgaKey } from './gameplay-bga.ts';
+import {
+  buildBgaTimeline,
+  collectBgaTextureLoadKeys,
+  isVideoExtension,
+  pickActiveBgaCue,
+  pickActiveBgaKey,
+} from './gameplay-bga.ts';
 
 const resolver = {
   eventToSeconds: (event) => event.measure * 10 + event.position[0] / event.position[1],
@@ -69,6 +75,48 @@ describe('BGA cue helpers', () => {
     expect(pickActiveBgaKey(cues, 1)).toBe('a');
     expect(pickActiveBgaKey(cues, 4)).toBe('b');
     expect(pickActiveBgaKey(cues, 6)).toBeUndefined();
+  });
+});
+
+describe('collectBgaTextureLoadKeys', () => {
+  it('includes source BMPs for referenced #BGA sub-region aliases', () => {
+    const chart = createEmptyJson('bms');
+    chart.bms.bga = {
+      '01': '10 0 0 64 64 0 0',
+      '02': '20 0 0 64 64 0 0',
+      '03': '30 0 0 64 64 0 0',
+    };
+    const keys = collectBgaTextureLoadKeys(
+      chart,
+      {
+        base: [{ seconds: 0, bmpKey: '01' }],
+        layer: [{ seconds: 1, bmpKey: '02' }],
+        poor: [{ seconds: 2, bmpKey: '04' }],
+      },
+      '00',
+    );
+
+    expect([...keys.base].sort()).toEqual(['00', '01', '04', '10']);
+    expect([...keys.layer].sort()).toEqual(['02', '20']);
+  });
+
+  it('normalizes base-62 #BGA slots before matching timeline keys', () => {
+    const chart = createEmptyJson('bms');
+    chart.bms.base = 62;
+    chart.bms.bga = {
+      a: 'Zz 0 0 64 64 0 0',
+    };
+    const keys = collectBgaTextureLoadKeys(
+      chart,
+      {
+        base: [{ seconds: 0, bmpKey: '0a' }],
+        layer: [],
+        poor: [],
+      },
+      undefined,
+    );
+
+    expect([...keys.base].sort()).toEqual(['0a', 'Zz']);
   });
 });
 
