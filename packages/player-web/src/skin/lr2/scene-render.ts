@@ -3,6 +3,8 @@ import { normalizeRect } from './render.ts';
 import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './bitmap-text.ts';
 
+const FALLBACK_TEXT_FONT = 'LINE Seed JP, system-ui, sans-serif';
+
 export interface ScaledViewport {
   x: number;
   y: number;
@@ -97,7 +99,7 @@ export function makeLr2TextSprite(
     style: new TextStyle({
       fill: dst.alpha > 0 ? (dst.r << 16) | (dst.g << 8) | dst.b : 0xffffff,
       fontSize,
-      fontFamily: 'system-ui, sans-serif',
+      fontFamily: FALLBACK_TEXT_FONT,
       stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
     }),
   });

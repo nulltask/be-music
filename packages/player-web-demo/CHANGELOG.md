@@ -1,5 +1,13 @@
 # @be-music/player-web-demo
 
+## 0.2.7
+
+### Patch Changes
+
+- a36c2b1: Track the player-web default-chrome refactor: update `index.html` / `styles.css` for the rearranged default gameplay layout, adjust `main.ts` wiring to follow the new chrome injection seam, and clean up `readtext-overlay.ts` against the same surface.
+- Updated dependencies [a36c2b1]
+  - @be-music/player-web@0.6.0
+
 ## 0.2.6
 
 ### Patch Changes

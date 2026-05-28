@@ -16,7 +16,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
-- `@be-music/player-web`: 選曲、LR2 / beatoraja skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
+- `@be-music/player-web`: 選曲、built-in default / LR2 / beatoraja skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
 - `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、debug control、browser 再生を接続する private Vite demo
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
 
@@ -154,8 +154,10 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 - dropped folder、ZIP、song / LR2 / beatoraja theme 混在 drop を扱う browser song library
 - 大きな audio / video file を lazy に扱い、case-insensitive に path lookup
+- skinless select、gameplay、result scene 向けの built-in default skin family
 - LR2 の select / decide / gameplay / result skin を parse して PixiJS で描画
 - beatoraja の select / decide / gameplay / result skin を parse して PixiJS で描画
+- default gameplay chrome injection を分離し、default skin 描画が LR2 renderer module に依存しない構成
 - destination 補間、sprite transform、number、text、slider、bargraph を扱う共通 LR2 Pixi helper
 - destination sampling、source cell selection、text、value、slider、gauge、graph、timing visualizer、note、marker、BGA、runtime op/timer wiring を扱う共通 beatoraja Pixi helper
 - note、timing、scroll distance、BGA cue、score、result は terminal player と共通の再生意味論を使用

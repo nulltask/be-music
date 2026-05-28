@@ -111,6 +111,22 @@ if (!app) {
 
 app.innerHTML = DEMO_APP_HTML;
 
+const DEFAULT_UI_FONT_LOADS = ['400 22px "LINE Seed JP"', '700 18px "LINE Seed JP"', '900 32px "Azeret Mono"'] as const;
+
+async function waitForDefaultUiFonts(): Promise<void> {
+  if (!('fonts' in document)) return;
+  try {
+    await Promise.race([
+      Promise.all(DEFAULT_UI_FONT_LOADS.map((font) => document.fonts.load(font))),
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 1500);
+      }),
+    ]);
+  } catch {
+    // The stylesheet uses font-display=swap, so the app can still start with browser fallbacks if Google Fonts is blocked.
+  }
+}
+
 class PlayerWebDemoApp {
   private readonly collectionStore = new BrowserSongCollectionStore();
   /**
@@ -2688,8 +2704,7 @@ class PlayerWebDemoApp {
    *
    * - **`Lr2Skin`** present → constructs {@link PixiGameplayView} with that skin. LR2 chrome paints from the skin.
    * - **`undefined`** (no LR2 theme dropped, or the dropped theme has no skin for this chart's key mode) →
-   *   constructs {@link DefaultPixiGameplayView}. The default family's chrome (`renderFallbackLr2Frame` under the
-   *   hood) takes over.
+   *   constructs {@link DefaultPixiGameplayView}. The default family's injected chrome renderer takes over.
    *
    * The two branches share every other option — pulling the option-marshalling into one helper avoids the previous
    * two-place duplication between `preloadGameplay` and `playSong` (LR2 fallback path).
@@ -2883,7 +2898,7 @@ class PlayerWebDemoApp {
       ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
       : new DefaultPixiResultView(sharedResultOptions);
     await this.resultView.mount(this.sceneHost, data);
-    this.gameplayView?.dispose();
+    this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
   }
@@ -2898,13 +2913,15 @@ renderBrowserCompatPanel(checkBrowserCompat());
 // open of the OSS tab, so the initial paint isn't blocked on rendering ~30 dependency cards.
 wireHelpModal();
 
-new PlayerWebDemoApp({
-  stage: document.querySelector<HTMLDivElement>('#stage')!,
-  shell: document.querySelector<HTMLDivElement>('.shell')!,
-  songInput: document.querySelector<HTMLInputElement>('#songs')!,
-  searchInput: document.querySelector<HTMLInputElement>('#search')!,
-  loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
-  loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
-  loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
-  loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
-}).start();
+void waitForDefaultUiFonts().finally(() => {
+  void new PlayerWebDemoApp({
+    stage: document.querySelector<HTMLDivElement>('#stage')!,
+    shell: document.querySelector<HTMLDivElement>('.shell')!,
+    songInput: document.querySelector<HTMLInputElement>('#songs')!,
+    searchInput: document.querySelector<HTMLInputElement>('#search')!,
+    loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
+    loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,
+    loadingBarFill: document.querySelector<HTMLDivElement>('#loading-bar-fill')!,
+    loadingCounter: document.querySelector<HTMLDivElement>('#loading-counter')!,
+  }).start();
+});

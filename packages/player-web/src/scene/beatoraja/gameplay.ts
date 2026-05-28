@@ -66,7 +66,7 @@ import { BeatorajaRuntimeAdapter } from '../../skin/beatoraja/runtime-adapter.ts
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
-import { HISPEED_MAX, HISPEED_MIN } from '../lr2/gameplay-constants.ts';
+import { HISPEED_MAX, HISPEED_MIN } from '../gameplay-constants.ts';
 import { drainWebUiSignals } from '../../runtime/web-ui-runtime.ts';
 import { logger } from '../../logger.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';

@@ -556,6 +556,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveRendererPreference('?renderer=webgl');
     },
   });
+  // Both `renderDefaultGameplayFrame` (canonical, added in 94d425e) and its backwards-compatibility alias
+  // `renderFallbackLr2Frame` ultimately construct Pixi v8 `Text` objects whose layout measurement reaches for
+  // `document.createElement('canvas')`. The bench harness runs under raw Node so `document` is undefined and
+  // the call throws. Mark both cases `interactive: true` so they're skipped in non-interactive bench runs (the
+  // coverage checker still sees a case for each export). Restore once the harness gets a DOM-equipped Pixi
+  // shim.
   define('player-web.renderFallbackLr2Frame', {
     run: () => {
       const layer = new Container();
@@ -571,6 +577,24 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       });
       layer.destroy({ children: true, context: true });
     },
+    interactive: true,
+  });
+  define('player-web.renderDefaultGameplayFrame', {
+    run: () => {
+      const layer = new Container();
+      playerWebCoreApi.renderDefaultGameplayFrame(layer, {
+        songTitle: 'Bench Song',
+        bpm: 130,
+        hiSpeed: 2.5,
+        score: 75_000,
+        exScore: 150,
+        exScoreMax: 200,
+        combo: 90,
+        rank: 'AA',
+      });
+      layer.destroy({ children: true, context: true });
+    },
+    interactive: true,
   });
   define('player-web.Rectangle', {
     run: () => {

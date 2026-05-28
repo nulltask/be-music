@@ -21,7 +21,9 @@ import {
   PlayerInterruptedError,
   preparePlaybackChartData,
   type PreparedPlaybackChartData,
+  type PlayerSummary,
 } from '@be-music/player/core/engine';
+import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
@@ -79,7 +81,7 @@ import { ChildPool, disposeChildren, staggerDestroyTextures } from '../pixi-util
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
-import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   collectBmsExWavVolumeMultipliers,
@@ -94,6 +96,7 @@ import {
 } from '@be-music/chart';
 import {
   BG,
+  BGA,
   BLUE,
   BOMB_CYCLE_MS,
   BOMB_DIVX,
@@ -117,15 +120,26 @@ import {
   RED,
   WHITE,
   YELLOW,
-} from './gameplay-constants.ts';
-import { buildBgaTimeline, isVideoExtension, pickActiveBgaCue, pickActiveBgaKey, type BgaCue } from './gameplay-bga.ts';
+} from '../gameplay-constants.ts';
+import {
+  buildBgaTimeline,
+  collectBgaTextureLoadKeys,
+  isVideoExtension,
+  pickActiveBgaCue,
+  pickActiveBgaKey,
+  type BgaCue,
+} from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
-  isScratch,
+  isScratchLaneForVariant,
+  resolveFallbackLaneLayout,
   resolveLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
-} from './gameplay-lanes.ts';
+  shouldPreserveFallbackSideWidth,
+} from '../gameplay-lanes.ts';
+import type { SkinlessGameplayChromeRenderer, SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
+import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import {
   computeBombDurationsMs,
   computeFullComboDurationMs,
@@ -134,7 +148,6 @@ import {
   computeLnHoldDurationsMs,
   computeRankOp,
   createEmptyScore,
-  formatTime,
   isLr2OverlayImage,
   lastJudgeToNowComboKind,
   renderGrooveGaugeElement,
@@ -143,11 +156,7 @@ import {
   resolveJudgeSkinKind,
   resolveNumberValue,
 } from './gameplay-hud.ts';
-// Default-family fallback renderer. Shown when no `Lr2Skin` is supplied — see `scene/default/gameplay-render.ts` for
-// the rationale (the default skin is its own family, and this scene delegates to that family's renderer when no LR2
-// skin is loaded). Long-term the LR2 scene should require a non-optional skin and `DefaultPixiGameplayView` would be
-// the only caller of `renderFallbackLr2Frame`; this import is the transitional bridge.
-import { renderFallbackLr2Frame } from '../default/gameplay-render.ts';
+import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 import { resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
@@ -208,6 +217,33 @@ const BOMB_CLEANUP_FALLBACK_MS = 150;
 const GAUGE_INCREASE_FALLBACK_MS = 300;
 const AUDIO_DECODE_CONCURRENCY = 8;
 const BGA_DECODE_CONCURRENCY = 4;
+const DEFAULT_BGA_DESTINATION: Lr2DestinationRect = {
+  time: 0,
+  x: BGA.x,
+  y: BGA.y,
+  w: BGA.w,
+  h: BGA.h,
+  acc: 0,
+  alpha: 1,
+  r: 255,
+  g: 255,
+  b: 255,
+  blend: 1,
+  filter: 0,
+  angle: 0,
+  center: 0,
+  loop: -1,
+  timer: 0,
+  ops: [],
+  op4: 0,
+};
+const DEFAULT_BGA_ELEMENT: Lr2BgaElement = {
+  destination: DEFAULT_BGA_DESTINATION,
+  keyframes: [DEFAULT_BGA_DESTINATION],
+  noBase: false,
+  noLayer: false,
+  noPoor: false,
+};
 
 /**
  * Snapshot of the play session, captured at chart-end (or whenever the host asks for it via {@link
@@ -262,6 +298,11 @@ export interface PixiGameplayResultData {
 
 export interface PixiGameplayViewOptions {
   skin?: Lr2Skin;
+  /**
+   * Skinless chrome renderer supplied by another skin family, currently the built-in default family. LR2 itself does
+   * not import or own that renderer; it only provides the shared gameplay runtime and layers.
+   */
+  skinlessChromeRenderer?: SkinlessGameplayChromeRenderer;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -450,6 +491,14 @@ export interface PixiGameplayViewOptions {
   judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
 }
 
+interface PixiGameplayDisposeOptions {
+  /**
+   * Natural chart end can transition visually to result while a long final sample still rings out. Keep the Web Audio
+   * graph alive briefly in that path instead of closing the AudioContext as part of visual teardown.
+   */
+  preserveAudioTail?: boolean;
+}
+
 export class PixiGameplayView {
   /**
    * The host that owns the underlying `Application`. Set by {@link mount}; before that, accessing `this.app` throws —
@@ -538,7 +587,7 @@ export class PixiGameplayView {
       fontSize: 22,
       fontWeight: '700',
       align: 'center',
-      fontFamily: 'system-ui, sans-serif',
+      fontFamily: LR2_TEXT_FALLBACK_FONT,
     }),
   });
   private song: BrowserSongEntry | undefined;
@@ -1342,10 +1391,13 @@ export class PixiGameplayView {
 
   private setSceneStageTimeout(callback: () => void, offsetMs: number): void {
     let handle = 0;
-    handle = window.setTimeout(() => {
-      this.sceneStageTimeouts.delete(handle);
-      callback();
-    }, Math.max(0, offsetMs));
+    handle = window.setTimeout(
+      () => {
+        this.sceneStageTimeouts.delete(handle);
+        callback();
+      },
+      Math.max(0, offsetMs),
+    );
     this.sceneStageTimeouts.add(handle);
   }
 
@@ -1476,7 +1528,7 @@ export class PixiGameplayView {
     return this.recorder?.isActive() ?? false;
   }
 
-  public dispose(): void {
+  public dispose(options: PixiGameplayDisposeOptions = {}): void {
     if (this.disposed) {
       return;
     }
@@ -1568,15 +1620,35 @@ export class PixiGameplayView {
     this.sharedEngineInputSignals = undefined;
     this.sharedEngineClockAnchored = false;
     this.sharedEnginePromise = undefined;
-    void this.webAudioSession?.dispose();
+    const preserveAudioTail = options.preserveAudioTail === true && this.chartEnded;
+    const audioTailChart = this.resolvedChart ?? this.song?.chart;
+    const audioTailCleanupDelayMs =
+      preserveAudioTail && audioTailChart !== undefined
+        ? resolveGameplayAudioTailCleanupDelayMs({
+            chart: audioTailChart,
+            notes: this.notes,
+            autoSampleTriggers: this.autoSampleTriggers,
+            decodedSamples: this.decodedSamples,
+            bmsonSlicePlayback: this.bmsonSlicePlayback,
+            currentSeconds: this.currentSeconds(),
+          })
+        : 0;
+    const webAudioSession = this.webAudioSession;
     this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
-    this.audioBus?.dispose();
+    const audioBus = this.audioBus;
     this.audioBus = undefined;
     const audioContext = this.audioContext;
     this.audioContext = undefined;
-    void audioContext?.close();
+    disposeGameplayAudioGraphAfterDelay(
+      {
+        session: webAudioSession,
+        bus: audioBus,
+        context: audioContext,
+      },
+      preserveAudioTail ? audioTailCleanupDelayMs : 0,
+    );
     // Detach our subtree from the host's stage. The host owns the `Application` lifetime; we just stop contributing to
     // its scene graph. The sceneRoot Container itself stays alive in case the host wants to re-enter the same view (we
     // don't, but it's harmless).
@@ -2525,30 +2597,22 @@ export class PixiGameplayView {
     if (!song || !source || !this.hasBga) {
       return;
     }
-    // Partition the referenced BMP keys by which track(s) they appear in. The base + POOR tracks share decode settings
-    // (no chroma key, since they sit at the bottom of the BGA composite); the layer track gets a black→transparent
-    // decode so the foreground can punch through. Mirrors the per-mode load split in `packages/player/src/bga.ts`
-    // (`baseKeys` / `poorKeys` use `mode: 'base'`; `layerKeys` / `layer2Keys` use `mode: 'layer'`).
-    const baseTrackKeys = new Set<string>();
-    const layerTrackKeys = new Set<string>();
-    for (const cue of [...this.bgaTimeline.base, ...this.bgaTimeline.poor]) {
-      if (cue.bmpKey) baseTrackKeys.add(cue.bmpKey);
-    }
-    for (const cue of this.bgaTimeline.layer) {
-      if (cue.bmpKey) layerTrackKeys.add(cue.bmpKey);
-    }
-    // Preload the BMP00 POOR fallback alongside the regular POOR cues so the very first miss shows the placeholder
-    // instantly instead of waiting for an on-demand decode.
-    if (this.poorBgaFallbackKey) {
-      baseTrackKeys.add(this.poorBgaFallbackKey);
-    }
     // Build a map of `bmpKey → file path` covering both BMS-style ids and bmson `bga.header[].name`s. The bmson header
     // carries the actual resource name; the id-keyed `resources.bmp` map is fed from BMS `#BMPxx` directives (and
     // ignored for bmson charts).
     const refs = new Map<string, string>();
-    const referencedKeys = new Set<string>([...baseTrackKeys, ...layerTrackKeys]);
     // Use the control-flow-resolved chart so #IF-gated BMP / bga header declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? song.chart;
+    // Partition the referenced BMP keys by which track(s) they appear in. The base + POOR tracks share decode settings
+    // (no chroma key, since they sit at the bottom of the BGA composite); the layer track gets a black→transparent
+    // decode so the foreground can punch through. `collectBgaTextureLoadKeys` also pulls in the source BMPs for referenced
+    // `#BGAxx` sub-region aliases — without those, BGA+ charts can have a timeline cue but no decoded source texture.
+    const { base: baseTrackKeys, layer: layerTrackKeys } = collectBgaTextureLoadKeys(
+      chart,
+      this.bgaTimeline,
+      this.poorBgaFallbackKey,
+    );
+    const referencedKeys = new Set<string>([...baseTrackKeys, ...layerTrackKeys]);
     for (const [id, path] of Object.entries(chart.resources.bmp)) {
       if (typeof path === 'string' && referencedKeys.has(id)) {
         refs.set(id, path);
@@ -2663,6 +2727,7 @@ export class PixiGameplayView {
   private registerSubRegionBgaTextures(chart: BeMusicJson): void {
     const base = resolveBmsBase(chart);
     for (const [bgaSlot, raw] of Object.entries(chart.bms.bga)) {
+      const normalizedBgaSlot = normalizeObjectKey(bgaSlot, base);
       const parsed = parseBmsBga(raw, base);
       if (!parsed) continue;
       const frameWidth = parsed.ex - parsed.sx;
@@ -2680,11 +2745,11 @@ export class PixiGameplayView {
       // as a cheap view, no extra GPU upload. Keeping `frame` in pixel coordinates that match the source image size
       // guarantees the crop the chart author intended.
       const frame = new Rectangle(parsed.sx, parsed.sy, frameWidth, frameHeight);
-      if (sourceBase && !this.bgaTextures.has(bgaSlot)) {
-        this.bgaTextures.set(bgaSlot, new Texture({ source: sourceBase.source, frame }));
+      if (sourceBase && !this.bgaTextures.has(normalizedBgaSlot)) {
+        this.bgaTextures.set(normalizedBgaSlot, new Texture({ source: sourceBase.source, frame }));
       }
-      if (sourceLayer && !this.bgaLayerTextures.has(bgaSlot)) {
-        this.bgaLayerTextures.set(bgaSlot, new Texture({ source: sourceLayer.source, frame }));
+      if (sourceLayer && !this.bgaLayerTextures.has(normalizedBgaSlot)) {
+        this.bgaLayerTextures.set(normalizedBgaSlot, new Texture({ source: sourceLayer.source, frame }));
       }
     }
   }
@@ -3388,7 +3453,7 @@ export class PixiGameplayView {
     this.root.alpha = Math.max(0, Math.min(1, 1 - elapsed / fadeOutMs));
   }
 
-  private beginExitSequence(callback: () => void): void {
+  private beginExitSequence(callback: () => void, options: { fadeAudio?: boolean } = {}): void {
     if (this.exiting || this.disposed) {
       callback();
       return;
@@ -3406,7 +3471,7 @@ export class PixiGameplayView {
     // node sits AFTER the recording tap, so a recording in flight keeps capturing the unattenuated mix; only the
     // speakers go quiet. Skipped when the skin has no `#FADEOUT` (the screen also stays at full alpha in that path), so
     // a skinless / non-LR2 demo gets the historical immediate-cut behavior.
-    if (fadeOutMs > 0) {
+    if (fadeOutMs > 0 && options.fadeAudio !== false) {
       this.audioBus?.fadeOutAudibleTo(0, fadeOutMs);
     }
     const fireClose = (): void => {
@@ -3746,17 +3811,29 @@ export class PixiGameplayView {
     // When an LR2 skin is loaded the bomb sprite is already part of the skin's `#DST_IMAGE` set (one entry per lane,
     // gated on bomb timer 50–57 / 60–67). Drawing our own copy on top would double-render the explosion, so this
     // fallback only fires for the default (skinless) demo experience.
-    if (this.options.skin !== undefined || !this.bombTexture || this.bombStartedAt.size === 0) {
+    if (this.options.skin !== undefined || this.bombStartedAt.size === 0) {
       this.bombLayerPool.end();
       return;
     }
-    const naturalRatio = this.bombTexture.frame.width / Math.max(1, this.bombTexture.frame.height);
+
+    if (this.bombTexture) {
+      this.renderTexturedBombs();
+    } else {
+      this.renderDefaultBombs();
+    }
+    this.bombLayerPool.end();
+  }
+
+  private renderTexturedBombs(): void {
+    const bombTexture = this.bombTexture;
+    if (!bombTexture) return;
+    const naturalRatio = bombTexture.frame.width / Math.max(1, bombTexture.frame.height);
     const lr2Layout = naturalRatio >= 6;
     const divx = lr2Layout ? 9 : BOMB_DIVX;
     const divy = lr2Layout ? 1 : BOMB_DIVY;
     const totalFrames = divx * divy;
-    const cellWidth = this.bombTexture.frame.width / divx;
-    const cellHeight = this.bombTexture.frame.height / divy;
+    const cellWidth = bombTexture.frame.width / divx;
+    const cellHeight = bombTexture.frame.height / divy;
     const cycle = lr2Layout ? 150 / totalFrames : BOMB_CYCLE_MS;
     const now = this.playClock();
     for (const [channel, startedAt] of this.bombStartedAt) {
@@ -3769,7 +3846,7 @@ export class PixiGameplayView {
       const frameIndex = Math.min(totalFrames - 1, Math.max(0, Math.floor(elapsed / cycle)));
       const cellX = frameIndex % divx;
       const cellY = Math.floor(frameIndex / divx);
-      const cropped = createCroppedTexture(this.bombTexture, {
+      const cropped = createCroppedTexture(bombTexture, {
         x: cellWidth * cellX,
         y: cellHeight * cellY,
         w: cellWidth,
@@ -3788,13 +3865,71 @@ export class PixiGameplayView {
       sprite.height = displayHeight;
       sprite.blendMode = 'add';
     }
-    this.bombLayerPool.end();
+  }
+
+  private renderDefaultBombs(): void {
+    const now = this.playClock();
+    for (const [channel, startedAt] of this.bombStartedAt) {
+      const lane = this.laneX.get(channel);
+      if (!lane) continue;
+
+      const elapsed = Math.max(0, now - startedAt);
+      const progress = Math.max(0, Math.min(1, elapsed / BOMB_CLEANUP_FALLBACK_MS));
+      const fade = 1 - progress;
+      const eased = 1 - (1 - progress) * (1 - progress);
+      const centerX = lane.x + lane.w / 2;
+      const centerY = lane.bottom - Math.max(5, lane.w * 0.18);
+      const coreRadius = Math.max(3, lane.w * (0.28 + 0.12 * eased));
+      const haloRadius = Math.max(7, lane.w * (0.58 + 1.05 * eased));
+      const rayCount = 8;
+      const rayInner = coreRadius * (0.74 + eased * 0.14);
+      const rayOuter = haloRadius * (0.62 + eased * 0.08);
+      const lineWidth = Math.max(1, lane.w * (0.09 - progress * 0.04));
+      const graphic = this.bombLayerPool.acquireGraphics();
+      graphic.label = `default-bomb[ch=${channel}]`;
+      graphic.blendMode = 'add';
+      graphic.alpha = 1;
+
+      graphic
+        .roundRect(
+          lane.x + lane.w * 0.18,
+          centerY - haloRadius * 0.45,
+          lane.w * 0.64,
+          haloRadius * 0.62,
+          Math.max(2, lane.w * 0.18),
+        )
+        .fill({ color: 0x56b6f7, alpha: 0.12 * fade });
+      graphic.circle(centerX, centerY, haloRadius).stroke({
+        color: 0x56b6f7,
+        width: Math.max(1, lane.w * 0.08),
+        alpha: 0.3 * fade,
+        alignment: 0.5,
+      });
+      graphic.circle(centerX, centerY, coreRadius).fill({ color: 0xffffff, alpha: 0.34 * fade });
+      graphic.circle(centerX, centerY, coreRadius * 1.55).fill({ color: 0xffd166, alpha: 0.14 * fade });
+      for (let index = 0; index < rayCount; index += 1) {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * index) / rayCount;
+        const innerX = centerX + Math.cos(angle) * rayInner;
+        const innerY = centerY + Math.sin(angle) * rayInner;
+        const outerX = centerX + Math.cos(angle) * rayOuter;
+        const outerY = centerY + Math.sin(angle) * rayOuter;
+        graphic.moveTo(innerX, innerY).lineTo(outerX, outerY);
+      }
+      graphic.stroke({
+        color: 0xffd166,
+        width: lineWidth,
+        alpha: 0.62 * fade,
+        cap: 'round',
+        alignment: 0.5,
+      });
+    }
   }
 
   /**
-   * Composites the chart's BGA into the LR2 skin's `#DST_BGA` rectangle. Three layers stack from back to front: base
-   * (channel 04 / bmson `bga.events`), layer (channel 07 / 0A / bmson `layerEvents`), and a POOR override (channel 06 /
-   * `poorEvents`) that briefly replaces the base while the player is in a 2-second POOR-judgement window.
+   * Composites the chart's BGA into the active skin's `#DST_BGA` rectangles, or the default-family BGA rectangle when
+   * no external skin is loaded. Three layers stack from back to front: base (channel 04 / bmson `bga.events`), layer
+   * (channel 07 / 0A / bmson `layerEvents`), and a POOR override (channel 06 / `poorEvents`) that briefly replaces the
+   * base while the player is in a 2-second POOR-judgement window.
    *
    * The renderer is idempotent per frame — it tears down any existing sprites and rebuilds from the active cues, so cue
    * switches show up the next frame without explicit dirty tracking.
@@ -3813,11 +3948,11 @@ export class PixiGameplayView {
       this.bgaLayerPool.end();
       return;
     }
-    const skin = this.options.skin;
-    if (!skin || !this.hasBga || skin.bgas.length === 0) {
+    if (!this.hasBga) {
       this.bgaLayerPool.end();
       return;
     }
+    const skin = this.options.skin;
     // Render ALL `#DST_BGA` rectangles whose op gating is true. For SP charts the LR2 default skin authors two — op 30
     // ("BGA NORMAL") and op 31 ("BGA EXTEND") — and only one is visible at a time, so the loop produces a single
     // sprite. For DP (`14keys/14_LR0.csv` line 78+) the skin authors *three* rects: one big op-31 EXTEND square plus a
@@ -3825,10 +3960,18 @@ export class PixiGameplayView {
     // first match and clipped the second NORMAL panel, so DP charts under "BGA NORMAL" mode showed only the top panel
     // and left the bottom one blank.
     const visibleBgas = this.visibleBgasScratch;
-    for (const entry of skin.bgas) {
-      if (this.isDestinationVisible(entry.destination)) {
-        visibleBgas.push(entry);
+    if (skin) {
+      if (skin.bgas.length === 0) {
+        this.bgaLayerPool.end();
+        return;
       }
+      for (const entry of skin.bgas) {
+        if (this.isDestinationVisible(entry.destination)) {
+          visibleBgas.push(entry);
+        }
+      }
+    } else {
+      visibleBgas.push(DEFAULT_BGA_ELEMENT);
     }
     if (visibleBgas.length === 0) {
       this.bgaLayerPool.end();
@@ -3994,41 +4137,58 @@ export class PixiGameplayView {
     });
   }
 
+  private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
+    const total = this.score.total > 0 ? this.score.total : 0;
+    return {
+      songTitle: this.song?.title,
+      songArtist: this.song?.artist,
+      bpm: this.song?.bpm,
+      hiSpeed: this.hiSpeed,
+      score: this.score.score,
+      exScore: this.score.exScore,
+      exScoreMax: total * 2,
+      combo: this.tracker.combo,
+      maxCombo: this.maxCombo,
+      perfect: this.score.perfect,
+      great: this.score.great,
+      good: this.score.good,
+      bad: this.score.bad,
+      poor: this.score.poor,
+      gauge: this.gaugeState.current,
+      clearThreshold: this.gaugeState.clearThreshold,
+      laneCount: this.laneChannels.length,
+      laneChannels: this.laneChannels,
+      playVariant: this.chartPlayVariant,
+      lastJudge: this.lastJudge,
+      rank: total <= 0 ? undefined : resolveIidxRankLabel(this.score.exScore, total),
+      autoplay: this.options.autoPlay === true,
+      hasBga: this.hasBga,
+    };
+  }
+
   private renderSkin(width: number, height: number): void {
     const skin = this.options.skin;
     if (!skin) {
-      // Fallback (no-LR2-skin) path uses the simpler `disposeChildren` + Graphics/Text rebuild — its alloc churn
-      // is bounded and the fallback file owns one Graphics + ~20 Texts. Reset the pools to a clean slate so a
-      // subsequent skin load doesn't try to recycle children we just destroyed via `disposeChildren`.
-      this.skinLayerPool.destroy();
-      this.overlayLayerPool.destroy();
-      this.skinLayerPool = new ChildPool(this.skinLayer);
-      this.overlayLayerPool = new ChildPool(this.overlayLayer);
-      disposeChildren(this.skinLayer);
-      disposeChildren(this.overlayLayer);
-      // Pass live runtime values into the fallback chrome so its text overlays (score / combo / BPM / hi-speed / judge
-      // counter / rank) render real chart numbers — same as the LR2 default skin would via `#DST_NUMBER` digit cells.
-      const total = this.score.total > 0 ? this.score.total : 0;
-      const exScoreMax = total * 2;
-      renderFallbackLr2Frame(this.skinLayer, {
-        songTitle: this.song?.title,
-        songArtist: this.song?.artist,
-        bpm: this.song?.bpm,
-        hiSpeed: this.hiSpeed,
-        score: this.score.score,
-        exScore: this.score.exScore,
-        exScoreMax,
-        combo: this.tracker.combo,
-        maxCombo: this.maxCombo,
-        perfect: this.score.perfect,
-        great: this.score.great,
-        good: this.score.good,
-        bad: this.score.bad,
-        poor: this.score.poor,
-        lastJudge: this.lastJudge,
-        rank: total <= 0 ? '—' : resolveIidxRankLabel(this.score.exScore, total),
-        autoplay: this.options.autoPlay === true,
-      });
+      this.skinLayerPool.begin();
+      this.overlayLayerPool.begin();
+      try {
+        this.skinLayer.scale.set(1);
+        this.skinLayer.position.set(0, 0);
+        this.overlayLayer.scale.set(1);
+        this.overlayLayer.position.set(0, 0);
+        this.bgaLayer.scale.set(1);
+        this.bgaLayer.position.set(0, 0);
+        this.options.skinlessChromeRenderer?.({
+          layer: this.skinLayer,
+          overlayLayer: this.overlayLayer,
+          layerPool: this.skinLayerPool,
+          overlayLayerPool: this.overlayLayerPool,
+          runtime: this.resolveSkinlessGameplayChromeRuntime(),
+        });
+      } finally {
+        this.skinLayerPool.end();
+        this.overlayLayerPool.end();
+      }
       return;
     }
     this.skinLayerPool.begin();
@@ -4377,7 +4537,7 @@ export class PixiGameplayView {
         fill: tint,
         fontSize,
         fontWeight: '600',
-        fontFamily: 'system-ui, sans-serif',
+        fontFamily: LR2_TEXT_FALLBACK_FONT,
       });
       this.skinTextStyleCache.set(styleKey, style);
     }
@@ -4744,16 +4904,23 @@ export class PixiGameplayView {
     const skinY = skin ? (height - skin.height * scale) / 2 : 0;
     const fallbackTop = PLAYFIELD.y;
     const fallbackBottom = PLAYFIELD.judgementY;
-    const laneWidth = PLAYFIELD.w / Math.max(1, this.laneChannels.length);
-    const startX = PLAYFIELD.x;
+    const fallbackLanes = resolveFallbackLaneLayout({
+      channels: this.laneChannels,
+      laneCount: this.laneChannels.length,
+      playVariant: this.chartPlayVariant,
+      x: PLAYFIELD.x,
+      w: PLAYFIELD.w,
+      preserveSideWidth: shouldPreserveFallbackSideWidth(this.laneChannels, this.chartPlayVariant),
+    });
 
     this.laneChannels.forEach((channel, index) => {
       // Skin's `#DST_NOTE,index,...` puts 1P-side rects at 0..9 and 2P-side rects at 10..19. We index with the LR2-spec
       // lane id (channel-derived) so a DP chart's 2P notes land on the 2P-side rects the skin actually authored — not
       // on whatever happens to sit at iteration position 8..15 in `laneRects`.
       const lr2Lane = skin?.laneRects[resolveLr2LaneIndex(channel, this.chartPlayVariant)];
-      const x = lr2Lane ? skinX + lr2Lane.x * scale : startX + index * laneWidth;
-      const w = lr2Lane ? Math.max(4, lr2Lane.w * scale) : laneWidth - 2;
+      const fallbackLane = fallbackLanes[index];
+      const x = lr2Lane ? skinX + lr2Lane.x * scale : (fallbackLane?.x ?? PLAYFIELD.x);
+      const w = lr2Lane ? Math.max(4, lr2Lane.w * scale) : Math.max(4, fallbackLane?.w ?? PLAYFIELD.w);
       const top = lr2Lane ? skinY : fallbackTop;
       // `lr2Lane.y` is the TOP of the judgement-line bar (LR2 #DST_NOTE convention); the just-timing reference is the
       // BOTTOM edge of that bar, which is `y + h`. For the LR2 default 7-keys skin (y=315, h=6) that puts the just line
@@ -4770,17 +4937,46 @@ export class PixiGameplayView {
         return;
       }
 
+      const scratchLane = fallbackLane?.isScratch ?? isScratchLaneForVariant(channel, this.chartPlayVariant);
       this.laneLayer
         .rect(x, top, w, Math.max(1, bottom - top))
-        .fill({ color: isScratch(channel) ? RED : PANEL, alpha: isScratch(channel) ? 0.72 : 0.62 });
-      if (this.pressedChannels.has(channel)) {
+        .fill({ color: scratchLane ? 0x07080a : PANEL, alpha: scratchLane ? 0.54 : 0.5 });
+      const laserAlpha = this.resolveFallbackLaneLaserAlpha(channel);
+      if (laserAlpha > 0) {
         this.laneLayer
           .rect(x, top, w, Math.max(1, bottom - top))
-          .fill({ color: isScratch(channel) ? YELLOW : WHITE, alpha: 0.45 });
+          .fill({ color: scratchLane ? RED : WHITE, alpha: (scratchLane ? 0.36 : 0.42) * laserAlpha });
       }
-      this.laneLayer.rect(x, bottom - 4, w, 6).fill(isScratch(channel) ? RED : WHITE);
-      this.laneLayer.rect(x, bottom + 2, w, 4).fill(YELLOW);
+      this.laneLayer
+        .rect(x, bottom - 4, w, 6)
+        .fill({ color: scratchLane ? MUTED : WHITE, alpha: scratchLane ? 0.74 : 1 });
+      this.laneLayer.rect(x, bottom + 2, w, 4).fill({ color: YELLOW, alpha: 0.78 });
     });
+  }
+
+  private resolveFallbackLaneLaserAlpha(channel: string): number {
+    const timerId = this.resolveKeyOnTimerId(channel);
+    if (timerId === undefined) {
+      return 0;
+    }
+    if (this.pressedChannels.has(channel)) {
+      return 1;
+    }
+    if (!this.timerStartedAt.has(timerId)) {
+      return 0;
+    }
+    const fadeStart = this.keyOnFadeOutStart.get(timerId);
+    if (fadeStart === undefined) {
+      return 1;
+    }
+    const fadeMs = this.keyOnFadeDurationMs.get(timerId) ?? KEY_ON_FADE_OUT_MS;
+    const elapsed = Math.max(0, this.playClock() - fadeStart);
+    if (elapsed >= fadeMs) {
+      this.keyOnFadeOutStart.delete(timerId);
+      this.timerStartedAt.delete(timerId);
+      return 0;
+    }
+    return Math.max(0, 1 - elapsed / fadeMs);
   }
 
   private renderNotes(seconds: number, _height: number): void {
@@ -5169,7 +5365,9 @@ export class PixiGameplayView {
     }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    graphic.roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2).fill(noteFallbackColor(channel, laneIndex));
+    graphic
+      .roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2)
+      .fill(noteFallbackColor(channel, laneIndex, this.chartPlayVariant));
   }
 
   /**
@@ -5216,7 +5414,7 @@ export class PixiGameplayView {
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
       graphic
         .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
-        .fill({ color: noteFallbackColor(channel, laneIndex), alpha: 0.6 });
+        .fill({ color: noteFallbackColor(channel, laneIndex, this.chartPlayVariant), alpha: 0.6 });
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     if (endSrc) {
@@ -5251,25 +5449,7 @@ export class PixiGameplayView {
 
   private renderText(width: number, height: number, seconds: number): void {
     this.textLayerPool.begin();
-    // Bottom-left status (title / time / HS / judge counts) is only useful when there's no LR2 skin painting the same
-    // information via NUMBER / TEXT elements. With a skin loaded we'd duplicate every figure on top of the skin's
-    // panels, so suppress it.
-    if (!this.options.skin) {
-      const status = this.textLayerPool.acquireText();
-      // Pool keeps the previous render's `style` instance — re-assigning the same `style` would force a full
-      // paragraph rebuild on every frame, so we pin a single shared `TextStyle` for this slot lazily and only flip
-      // the .style assignment when the pooled Text was just freshly allocated (style === undefined / default).
-      if (this.fallbackStatusStyle === undefined) {
-        this.fallbackStatusStyle = new TextStyle({ fill: MUTED, fontSize: 10, fontFamily: 'system-ui, sans-serif' });
-      }
-      if (status.style !== this.fallbackStatusStyle) {
-        status.style = this.fallbackStatusStyle;
-      }
-      status.text = `${this.song?.title ?? ''}  ${formatTime(seconds)}  HS×${this.hiSpeed.toFixed(2)}  PG:${this.score.perfect} GR:${this.score.great} GD:${this.score.good} BD:${this.score.bad} PR:${this.score.poor}  F:${this.fastCount} S:${this.slowCount}`;
-      status.label = 'fallback-status';
-      status.position.set(18, height - 22);
-    }
-    if (this.lastJudge && seconds <= this.lastJudgeUntil && !this.hasSkinnedJudge()) {
+    if (this.options.skin && this.lastJudge && seconds <= this.lastJudgeUntil && !this.hasSkinnedJudge()) {
       const judge = this.textLayerPool.acquireText();
       if (this.fallbackJudgeStyle === undefined) {
         this.fallbackJudgeStyle = new TextStyle({
@@ -5277,7 +5457,7 @@ export class PixiGameplayView {
           stroke: { color: 0xffffff, width: 2 },
           fontSize: 32,
           fontWeight: '800',
-          fontFamily: 'system-ui, sans-serif',
+          fontFamily: LR2_JUDGE_FALLBACK_FONT,
         });
       }
       if (judge.style !== this.fallbackJudgeStyle) {
@@ -5299,11 +5479,10 @@ export class PixiGameplayView {
   }
 
   /**
-   * Lazily-built `TextStyle` instances for the fallback (no-skin) status / judge text. Held so we re-use the same
+   * Lazily-built `TextStyle` instance for fallback (no-skin) judge text. Held so we re-use the same
    * `TextStyle` reference across frames — re-assigning a Text's `.style` to a freshly-constructed `TextStyle` (even
    * with identical fields) invalidates Pixi's paragraph layout cache and forces a full re-shape every frame.
    */
-  private fallbackStatusStyle: TextStyle | undefined;
   private fallbackJudgeStyle: TextStyle | undefined;
 
   private hasSkinnedJudge(): boolean {
@@ -5314,7 +5493,7 @@ export class PixiGameplayView {
     const kind = resolveJudgeSkinKind(this.lastJudge);
     if (!kind) return false;
     // Either side authoring the verdict counts — the renderer falls back to 1P when the 2P slot is empty, so the
-    // fallback-status text path needs to follow the same either-side rule.
+    // fallback judge text path needs to follow the same either-side rule.
     return Boolean(skin.judges[kind]?.length || skin.judges2P[kind]?.length);
   }
 
@@ -5433,9 +5612,12 @@ export class PixiGameplayView {
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
       },
     })
-      .then(() => {
+      .then((summary) => {
         log.info('shared engine driver finished');
-        this.handleSharedEngineChartFinished();
+        this.drainSharedEngineSignals();
+        this.applyEngineSummary(summary);
+        this.applyFinalComboSummary(summary);
+        this.handleSharedEngineChartFinished(summary);
       })
       .catch((error: unknown) => {
         // The view's own ESC / F5 handler (`handleSharedEngineExitKey`) drives the LR2 fadeout animation, calls
@@ -5500,7 +5682,10 @@ export class PixiGameplayView {
       this.audioContextStartTime = this.audioContext.currentTime - frame.currentSeconds;
       this.sharedEngineClockAnchored = true;
     }
-    const summary = frame.summary;
+    this.applyEngineSummary(frame.summary);
+  }
+
+  private applyEngineSummary(summary: Readonly<PlayerSummary>): void {
     // `summary.total` is the engine's authoritative scorable-note count (`scorableNotes.length`, which excludes
     // Free-Zone channels). The view's own initial `score.total` is computed independently in `prepareSong` from
     // `notes.filter(isPlayableInputChannel).length`, which DOES include Free-Zone — so on charts that use
@@ -5558,6 +5743,15 @@ export class PixiGameplayView {
     // mid-chart full-combo cue, and the AUTO PLAY < 200_000 score regressions — every one of them was
     // really "engine extract produced a different array than view extract." With the shared instance
     // there is no second extract.
+  }
+
+  private applyFinalComboSummary(summary: Readonly<PlayerSummary>): void {
+    if (this.options.autoPlay !== true) return;
+    if (summary.total <= 0) return;
+    if (summary.perfect + summary.great + summary.good < summary.total) return;
+    if (summary.bad > 0 || summary.poor > 0) return;
+    this.tracker.combo = Math.max(this.tracker.combo, summary.total);
+    this.maxCombo = Math.max(this.maxCombo, summary.total);
   }
 
   /**
@@ -5664,24 +5858,51 @@ export class PixiGameplayView {
    * is the authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
    * own bookkeeping, so we don't gate on it.
    */
-  private handleSharedEngineChartFinished(): void {
+  private handleSharedEngineChartFinished(finalSummary: Readonly<PlayerSummary> | undefined): void {
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
-    const result = this.getResultData();
-    // Defer one frame so the final render (last judgement plate, terminal combo number) is committed before the
-    // exit fade kicks in.
+    const delayMs = resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds());
+    // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
+    // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
+    // charts whose non-note tail has already carried us past the target.
     this.chartEndTimeout = window.setTimeout(() => {
       this.chartEndTimeout = undefined;
       if (this.disposed) return;
+      this.drainSharedEngineSignals();
+      if (finalSummary !== undefined) {
+        this.applyEngineSummary(finalSummary);
+        this.applyFinalComboSummary(finalSummary);
+      }
+      const result = this.getResultData();
       this.beginExitSequence(() => {
         if (this.options.onChartFinished && result) {
           this.options.onChartFinished(result);
           return;
         }
         this.options.onExit?.();
-      });
-    }, 50);
+      }, { fadeAudio: false });
+    }, delayMs);
   }
+}
+
+function disposeGameplayAudioGraphAfterDelay(
+  graph: {
+    session: WebAudioSession | undefined;
+    bus: AudioBusHandle | undefined;
+    context: AudioContext | undefined;
+  },
+  delayMs: number,
+): void {
+  const cleanup = (): void => {
+    void graph.session?.dispose();
+    graph.bus?.dispose();
+    void graph.context?.close();
+  };
+  if (delayMs <= 0) {
+    cleanup();
+    return;
+  }
+  window.setTimeout(cleanup, delayMs);
 }
 
 /**
@@ -5877,10 +6098,14 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
  *   blue.
  *
  * `laneIndex` is the LR2 lane id (`resolveLr2LaneIndex`-style): 0 / 10 = scratch, 1..9 = 1P-side keys, 11..19 = 2P-side
- * keys. Modding by 10 strips the side-offset so the same rule applies to both sides.
+ * keys. `playVariant` matters because 9 KEY charts use channel 16 as a normal keyboard lane, not scratch.
  */
-function noteFallbackColor(channel: string, laneIndex: number): typeof WHITE {
-  if (isScratch(channel)) return RED;
+function noteFallbackColor(
+  channel: string,
+  laneIndex: number,
+  playVariant: ChartPlayVariant | undefined,
+): typeof WHITE {
+  if (isScratchLaneForVariant(channel, playVariant)) return RED;
   const keyIndex = laneIndex % 10;
   if (keyIndex % 2 === 0) return BLUE;
   return WHITE;

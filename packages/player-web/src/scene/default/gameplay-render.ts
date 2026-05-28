@@ -1,363 +1,432 @@
 import { Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { BGA, BG, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD, YELLOW } from '../lr2/gameplay-constants.ts';
+import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { BGA, BG, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../gameplay-constants.ts';
+import {
+  resolveFallbackLaneLayout,
+  shouldPreserveFallbackSideWidth,
+  type FallbackLaneLayoutRect,
+} from '../gameplay-lanes.ts';
+import type { SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
+import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT, DEFAULT_TEXT_FONT } from './fonts.ts';
+import type { ChildPool } from '../pixi-utils.ts';
 
-/*
- * Default-skin gameplay chrome renderer. This is the painter for the `default` skin family — the built-in chrome
- * shown when neither an LR2 theme nor a beatoraja theme has been dropped. Historically this lived inside
- * `scene/lr2/` as a "fallback" path; it now sits under `scene/default/` as the canonical renderer for an independent
- * skin family. The LR2 gameplay scene falls back to this renderer when no `Lr2Skin` is supplied (transitional —
- * eventually the LR2 scene will require a skin and only the default scene calls into this module).
- *
- * Palette: dark gray chrome panels + a few accent tones lifted from `Theme/LR2/Play/ss_7.png`. LR2's default skin
- * paints everything with a single `frame.tga` bitmap; we evoke that with flat-fill rectangles at each `#DST_IMAGE`
- * rectangle the skin authors. Nothing here is invented — every position below has a corresponding `#DST_*` literal in
- * `Theme/LR2/Play/7keys/7_LL0.csv`.
- */
-const PANEL_BG = 0x12141a;
-const PANEL_BG_2 = 0x191c25;
-const PANEL_BORDER = 0x2c333d;
-const PANEL_HIGHLIGHT = 0x39414d;
-const TEXT_DIM = 0x9aa6b2;
-const TEXT_BRIGHT = 0xf8fafc;
-const ACCENT_BLUE = 0x56b6f7;
-const ACCENT_AMBER = 0xffd166;
-const ACCENT_RED = 0xff5050;
+const SURFACE = 0x080d16;
+const PANEL = 0x101827;
+const PANEL_DARK = 0x030711;
+const LINE = 0x2a3548;
+const LANE = 0x01040b;
+const LANE_ALT = 0x0b1320;
+const TEXT = 0xf6f2e8;
+const MUTED = 0xa9a39a;
+const SUBTLE = 0x6e685d;
+const TEAL = 0x4bd7c8;
+const AMBER = 0xffc857;
+const RED = 0xff5c5c;
+const GREEN = 0x6ee07f;
+const BLUE = 0x76a8ff;
+const ORANGE = 0xff9b54;
+const FONT = DEFAULT_TEXT_FONT;
+const NUMERIC_FONT = DEFAULT_NUMERIC_FONT;
 
 /**
- * Live runtime values painted into the fallback chrome's text slots — score / combo / BPM / hi-speed / judge counter.
- * Missing values render as `----` placeholders.
+ * Live runtime values painted into the built-in gameplay chrome.
  */
-export interface FallbackGameplayRuntime {
-  songTitle?: string;
-  songArtist?: string;
-  bpm?: number;
-  hiSpeed?: number;
-  score?: number;
-  exScore?: number;
-  exScoreMax?: number;
-  combo?: number;
-  maxCombo?: number;
-  perfect?: number;
-  great?: number;
-  good?: number;
-  bad?: number;
-  poor?: number;
-  /** PERFECT / GREAT / GOOD / BAD / POOR — empty when no recent judge. */
-  lastJudge?: string;
-  /** AAA / AA / A / B / C / D / E / F. */
-  rank?: string;
-  autoplay?: boolean;
+export type FallbackGameplayRuntime = SkinlessGameplayChromeRuntime;
+
+export interface FallbackGameplayRenderOptions {
+  /**
+   * Optional front layer for judgement/combo text. The no-skin gameplay scene passes its overlay layer so those texts
+   * stay above the live lane-background layer.
+   */
+  overlayLayer?: Container;
+  layerPool?: ChildPool;
+  overlayLayerPool?: ChildPool;
+}
+
+interface FallbackPlayfieldLayout {
+  lanes: FallbackLaneLayoutRect[];
+  x: number;
+  w: number;
+  centerX: number;
+  right: number;
 }
 
 /**
- * No-skin chrome that follows LR2's default 7K skin (`Theme/LR2/Play/7keys/7_LL0.csv`) verbatim — every rectangle sits
- * at a coordinate the skin's `#DST_IMAGE` / `#DST_*` line authors. The skin's `frame.tga` would normally paint art on
- * top; without it we draw flat dark rectangles so the layout footprint is preserved, then overlay numeric / text values
- * with Pixi `Text` at the skin's `#DST_NUMBER` / `#DST_TEXT` coordinates.
- *
- * Anything LR2 doesn't author with a `#DST_*` is not drawn — we explicitly avoid inventing decorative elements (key
- * buttons, turntable, lane stripes, score-graph polylines, etc.) that the LR2 default skin doesn't carry. `frame.tga`
- * is decorative bitmap chrome we can't reproduce with primitives, but the positions below are everything LR2 *does*
- * author as data.
+ * Built-in gameplay chrome for the default skin family. It is intentionally not an LR2 atlas facsimile: this path is the
+ * skinless experience, so it keeps only the information a player can act on while playing.
  */
-export function renderFallbackLr2Frame(layer: Container, runtime: FallbackGameplayRuntime = {}): void {
-  const frame = new Graphics();
-  frame.label = 'fallback-frame/chrome';
-  frame.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+export function renderDefaultGameplayFrame(
+  layer: Container,
+  runtime: FallbackGameplayRuntime = {},
+  options: FallbackGameplayRenderOptions = {},
+): void {
+  const layerPool = options.layerPool;
+  const frame = layerPool?.acquireGraphics() ?? new Graphics();
+  const hasBga = runtime.hasBga === true;
+  const playfield = resolveFallbackPlayfieldLayout(runtime.laneChannels, runtime.laneCount, runtime.playVariant);
+  frame.label = 'default-gameplay/chrome';
+  if (hasBga) {
+    drawBackgroundAroundBga(frame);
+  } else {
+    frame.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+  }
+  frame.rect(0, 0, DESIGN_WIDTH, 48).fill({ color: SURFACE, alpha: 0.9 });
+  frame.rect(0, 46, DESIGN_WIDTH, 2).fill({ color: LINE, alpha: 0.85 });
 
-  // ── Lane area: x=33..227, full-height down to the judge bar. LR2 paints this as part of frame.tga; we use a uniform
-  // black fill so notes scroll over a consistent dark background. Authored references: #DST_NOTE,0..7 →
-  // x=33/76/100/119/143/162/186/205, y=315 #DST_LINE → x=33, y=320, w=194, h=1 #DST_JUDGELINE → x=33, y=315, w=194, h=6
-  frame.rect(PLAYFIELD.x, PLAYFIELD.y, PLAYFIELD.w, PLAYFIELD.judgementY - PLAYFIELD.y).fill(0x000000);
-  // Judge bar (yellow)
-  frame.rect(PLAYFIELD.x, PLAYFIELD.judgementY - 6, PLAYFIELD.w, 6).fill(YELLOW);
-  // 1-px white DST_LINE just below the judge bar
-  frame.rect(PLAYFIELD.x, 320, PLAYFIELD.w, 1).fill({ color: 0xffffff, alpha: 0.45 });
-
-  // ── #DST_IMAGE,...,1,0,75,384 — left chrome panel.
-  frame.rect(1, 0, 75, 384).fill(PANEL_BG);
-
-  // ── #DST_IMAGE,...,20,0,11,323 — left vertical accent.
-  frame.rect(20, 0, 11, 323).fill(PANEL_HIGHLIGHT);
-
-  // ── #DST_BGA,...,291,56,256,256 (NORMAL) — BGA window.
-  frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill(0x000000);
-
-  // ── #DST_IMAGE,...,523,0,118,480 — right info column.
-  frame.rect(523, 0, 118, DESIGN_HEIGHT).fill(PANEL_BG);
-  frame.rect(523, 0, 118, DESIGN_HEIGHT).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,488,67/96/125,128,7 — three lamp stripes (CLEAR / FAILED / FULLCOMBO indicators, gated on op 39).
-  for (const ly of [67, 96, 125]) {
-    frame.rect(488, ly, 128, 7).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
+  drawPlayfield(frame, playfield);
+  drawBgaFrame(frame, hasBga);
+  drawInfoPanel(frame);
+  drawGauge(frame, runtime.gauge, runtime.clearThreshold);
+  drawSongPlate(frame);
+  drawScorePlate(frame);
+  if (!layerPool) {
+    layer.addChildAt(frame, 0);
   }
 
-  // ── #DST_BARGRAPH,...,500/540/580,303,36,-259 — three vertical bargraphs (current / target / next-rank). Visible
-  // footprint is x..x+36, y=44..303.
-  for (const bx of [500, 540, 580]) {
-    frame.rect(bx, 44, 36, 259).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-  }
+  addText(layer, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', 24, 14, {
+    size: 10,
+    weight: '800',
+    fill: runtime.autoplay ? AMBER : TEAL,
+    letterSpacing: 1.2,
+  }, layerPool);
+  addText(layer, formatNumber(runtime.bpm, 'BPM --'), 116, 14, {
+    size: 10,
+    weight: '700',
+    fill: MUTED,
+    fontFamily: NUMERIC_FONT,
+  }, layerPool);
+  addText(layer, `HS ${formatHiSpeed(runtime.hiSpeed)}`, 176, 14, {
+    size: 10,
+    weight: '700',
+    fill: MUTED,
+    fontFamily: NUMERIC_FONT,
+  }, layerPool);
 
-  // ── #DST_TEXT,...,504,362,94,15 — hi-speed text panel.
-  frame.rect(504, 362, 94, 15).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,11,374,252,39 — wide score ribbon.
-  frame.rect(11, 374, 252, 39).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,238,371,85,36 — decorative band beneath BGA.
-  frame.rect(238, 371, 85, 36).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,320,392,200,31 — center-bottom bar.
-  frame.rect(320, 392, 200, 31).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,465,392,144,88 — right square panel (rank / grade letter target).
-  frame.rect(465, 392, 144, 88).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,182,401,144,79 — autoplay / clear lamp.
-  frame.rect(182, 401, 144, 79).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,1,406,185,74 — chart-info / autoplay band (slid in from x=-185 to x=1).
-  frame.rect(1, 406, 185, 74).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,325,406,57,42 / 409,406,57,42 — flank panels.
-  frame.rect(325, 406, 57, 42).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-  frame.rect(409, 406, 57, 42).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,320,422,151,58 — center-bottom info card (judge counter container).
-  frame.rect(320, 422, 151, 58).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_IMAGE,...,70,322,174,59 — bottom-left BPM / HS popup.
-  frame.rect(70, 322, 174, 59).fill(PANEL_BG).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_GROOVEGAUGE,...,44,387,4,14 × 50 cells = 200×14.
-  frame.rect(GROOVE.x, GROOVE.y, GROOVE.w, GROOVE.h).fill(0x06080c).stroke({
-    color: PANEL_BORDER,
-    width: 1,
-  });
-  // Filled portion + cell separators (matches LR2's tiled-cell render).
-  frame.rect(GROOVE.x, GROOVE.y, 110, GROOVE.h).fill({ color: 0x72d677, alpha: 0.65 });
-  for (let i = 1; i < 50; i += 1) {
-    frame.rect(GROOVE.x + i * 4, GROOVE.y, 1, GROOVE.h).fill({ color: 0x000000, alpha: 0.45 });
-  }
-
-  // ── #DST_SLIDER,...,19,15,18,24 — playmode slider knob area.
-  frame.rect(19, 15, 18, 24).fill(PANEL_BG_2).stroke({ color: PANEL_BORDER, width: 1 });
-
-  // ── #DST_NOWJUDGE_1P,...,73,230,102,30 — judge text panel backdrop. The actual judge string + combo number are
-  // painted as Text overlays below.
-  frame.rect(73, 230, 102, 30).fill({ color: 0x000000, alpha: 0.55 });
-
-  layer.addChildAt(frame, 0);
-
-  // ════════════════════════════════════════════════════════ TEXT / NUMBER OVERLAYS Painted as Pixi `Text` at the LR2
-  // skin's authored `#DST_NUMBER` / `#DST_TEXT` / `#DST_NOWJUDGE_1P` / `#DST_NOWCOMBO_1P` coordinates so the values
-  // land in the same place a bitmap-font LR2 skin would. ════════════════════════════════════════════════════════
-
-  // #DST_NUMBER 579,13,8,5 — score (right-aligned digits, 7 wide). #DST_NUMBER 579,22,8,5 — ex-score (same lay).
-  layer.addChild(
-    makeText(formatScore(runtime.score, 7), 579 + 8, 13, {
-      fontSize: 8,
-      fontWeight: '900',
-      fill: ACCENT_AMBER,
-      anchorX: 1,
-    }),
+  addText(layer, 'SCORE', 532, 52, labelStyle(), layerPool);
+  addText(layer, formatCount(runtime.score), 616, 68, metricStyle(18, AMBER, 1), layerPool);
+  addText(layer, 'EX SCORE', 532, 98, labelStyle(), layerPool);
+  addText(
+    layer,
+    `${formatCount(runtime.exScore)} / ${formatCount(runtime.exScoreMax)}`,
+    616,
+    114,
+    metricStyle(13, TEXT, 1),
+    layerPool,
   );
-  layer.addChild(
-    makeText(formatScore(runtime.exScore, 4), 579 + 8, 22, {
-      fontSize: 8,
-      fontWeight: '700',
-      fill: TEXT_DIM,
-      anchorX: 1,
-    }),
-  );
+  addText(layer, 'COMBO', 532, 144, labelStyle(), layerPool);
+  addText(layer, formatCount(runtime.combo), 616, 160, {
+    ...metricStyle(18, TEAL, 1),
+    fontFamily: DEFAULT_JUDGE_FONT,
+  }, layerPool);
+  addText(layer, 'MAX', 532, 190, labelStyle(), layerPool);
+  addText(layer, formatCount(runtime.maxCombo), 616, 206, {
+    ...metricStyle(16, TEXT, 1),
+    fontFamily: DEFAULT_JUDGE_FONT,
+  }, layerPool);
+  addText(layer, 'RANK', 532, 236, labelStyle(), layerPool);
+  addText(layer, runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F', 616, 250, metricStyle(26, AMBER, 1), layerPool);
 
-  // #DST_TEXT 504,362,94,15 — hi-speed display.
-  layer.addChild(
-    makeText(`HS ${formatHiSpeed(runtime.hiSpeed)}`, 504 + 4, 362 + 1, {
-      fontSize: 11,
-      fontWeight: '700',
-      fill: TEXT_BRIGHT,
-    }),
-  );
-
-  // #DST_NUMBER 52,413,16,12 — bottom-left big number 1. #DST_NUMBER 52,421,16,12 — bottom-left big number 2. (Score
-  // panel main readout in LR2 default — score / max score side-by-side at this position.)
-  layer.addChild(
-    makeText(formatScore(runtime.score, 6), 52, 376, {
-      fontSize: 14,
-      fontWeight: '900',
-      fill: ACCENT_RED,
-    }),
-  );
-  layer.addChild(
-    makeText(formatScore(runtime.exScore, 6), 52, 394, {
-      fontSize: 12,
-      fontWeight: '900',
-      fill: TEXT_DIM,
-    }),
-  );
-
-  // #DST_NUMBER 266,383,13,11 — combo (center-bottom, ribbon).
-  layer.addChild(
-    makeText(formatScore(runtime.combo, 4), 218, 376, {
-      fontSize: 12,
-      fontWeight: '900',
-      fill: ACCENT_AMBER,
-    }),
-  );
-
-  // #DST_NUMBER 374,435,14,10 — center-bottom progress / extra.
-  layer.addChild(
-    makeText(formatScore(runtime.maxCombo, 4), 326, 397, {
-      fontSize: 10,
-      fontWeight: '900',
-      fill: ACCENT_BLUE,
-    }),
-  );
-
-  // #DST_NUMBER 216,424/431/438/445/452,6,5 — 5-row judge counter (PG / G / Gd / B / P). Coordinates are inside the
-  // (182, 401) autoplay/clear lamp panel.
   const judgeRows: Array<readonly [string, number | undefined, number]> = [
-    ['PG', runtime.perfect, ACCENT_AMBER],
-    ['GR', runtime.great, 0x72d677],
-    ['GD', runtime.good, ACCENT_BLUE],
-    ['BD', runtime.bad, 0xff8b3d],
-    ['PR', runtime.poor, ACCENT_RED],
+    ['PG', runtime.perfect, AMBER],
+    ['GR', runtime.great, GREEN],
+    ['GD', runtime.good, BLUE],
+    ['BD', runtime.bad, ORANGE],
+    ['PR', runtime.poor, RED],
   ];
-  for (let i = 0; i < judgeRows.length; i += 1) {
-    const [label, value, color] = judgeRows[i]!;
-    const ly = 424 + i * 7;
-    layer.addChild(makeText(label, 196, ly, { fontSize: 5, fontWeight: '900', fill: color, letterSpacing: 0.5 }));
-    layer.addChild(
-      makeText(formatScore(value, 4), 216, ly, {
-        fontSize: 5,
-        fontWeight: '900',
-        fill: TEXT_BRIGHT,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-      }),
-    );
+  for (let index = 0; index < judgeRows.length; index += 1) {
+    const [label, value, fill] = judgeRows[index]!;
+    const y = 292 + index * 24;
+    addText(layer, label, 532, y, { size: 10, weight: '800', fill }, layerPool);
+    addText(layer, formatCount(value), 616, y - 2, metricStyle(13, TEXT, 1), layerPool);
   }
 
-  // #DST_NUMBER 105,210,8,7 / 229,210,8,7 — FAST / SLOW counters shown on the lane sides (between the lane and the
-  // BGA).
-  layer.addChild(
-    makeText(formatScore(undefined, 3), 105, 210, {
-      fontSize: 7,
-      fontWeight: '900',
-      fill: 0xff8b3d,
-      anchorX: 1,
-    }),
-  );
-  layer.addChild(
-    makeText(formatScore(undefined, 3), 229, 210, {
-      fontSize: 7,
-      fontWeight: '900',
-      fill: ACCENT_BLUE,
-      anchorX: 1,
-    }),
-  );
+  const gauge = clampPercent(runtime.gauge ?? 0);
+  addText(layer, 'GAUGE', GROOVE.x, GROOVE.y - 18, labelStyle(), layerPool);
+  addText(layer, `${Math.round(gauge)}%`, GROOVE.x + GROOVE.w, GROOVE.y - 21, metricStyle(14, TEXT, 1), layerPool);
 
-  // #DST_NUMBER 119,20,8,7 — top BPM display.
-  layer.addChild(
-    makeText(formatNumber(runtime.bpm), 119, 20, {
-      fontSize: 7,
-      fontWeight: '900',
-      fill: TEXT_BRIGHT,
-    }),
-  );
+  const title = runtime.songTitle?.trim() || 'Untitled chart';
+  addText(layer, title, 28, 416, {
+    size: 16,
+    weight: '800',
+    fill: TEXT,
+    maxWidth: 324,
+  }, layerPool);
+  const artist = runtime.songArtist?.trim();
+  if (artist) {
+    addText(layer, artist, 28, 438, {
+      size: 10,
+      weight: '600',
+      fill: MUTED,
+      maxWidth: 324,
+    }, layerPool);
+  }
 
-  // #DST_NUMBER 508,453,8,5 / 260,453,8,5 — small bottom numbers.
-  layer.addChild(makeText(formatScore(undefined, 3), 260, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }));
-  layer.addChild(makeText(formatScore(undefined, 3), 508, 453, { fontSize: 5, fontWeight: '700', fill: TEXT_DIM }));
+  addText(layer, 'SCORE', 394, 397, labelStyle(), layerPool);
+  addText(layer, formatCount(runtime.score), 492, 412, metricStyle(18, AMBER, 1), layerPool);
+  addText(layer, 'EX RATE', 394, 438, labelStyle(), layerPool);
+  addText(layer, formatExRate(runtime.exScore, runtime.exScoreMax), 492, 438, metricStyle(13, TEXT, 1), layerPool);
 
-  // #DST_NOWJUDGE_1P 73,230,102,30 — judge text + #DST_NOWCOMBO_1P 112,0,22,30 (RELATIVE to NOWJUDGE) — combo digit
-  // count.
   if (runtime.lastJudge) {
-    const judgeText = makeText(runtime.lastJudge, 73 + 51, 230 + 6, {
-      fontSize: 18,
-      fontWeight: '900',
-      fill: ACCENT_BLUE,
-      stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
-      letterSpacing: 1,
+    const judgeLayer = options.overlayLayer ?? layer;
+    const judgePool = judgeLayer === layer ? layerPool : options.overlayLayerPool;
+    const combo =
+      runtime.combo !== undefined && Number.isFinite(runtime.combo) ? Math.max(0, Math.floor(runtime.combo)) : 0;
+    addText(judgeLayer, runtime.lastJudge, playfield.centerX, 232, {
+      size: 22,
+      weight: '900',
+      fill: judgeColor(runtime.lastJudge),
+      fontFamily: DEFAULT_JUDGE_FONT,
       anchorX: 0.5,
-    });
-    layer.addChild(judgeText);
-  }
-  // Combo number to the right of the judge text (NOWCOMBO_1P relative offset (112, 0)).
-  layer.addChild(
-    makeText(formatScore(runtime.combo, 4), 73 + 112, 230 + 6, {
-      fontSize: 14,
-      fontWeight: '900',
-      fill: ACCENT_AMBER,
-      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-    }),
-  );
-
-  // ── Rank letter on the (465, 392, 144, 88) right square panel. LR2 paints the rank lamp as a `#DST_IMAGE` cell from
-  // rank.tga; we substitute the rank string as Text.
-  if (runtime.rank) {
-    const rankText = makeText(runtime.rank, 465 + 72, 392 + 36, {
-      fontSize: 36,
-      fontWeight: '900',
-      fill: 0xc8b64a,
-      stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
-      letterSpacing: 4,
-      anchorX: 0.5,
-    });
-    layer.addChild(rankText);
+      stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
+      maxWidth: 160,
+    }, judgePool);
+    if (combo > 0) {
+      addText(judgeLayer, formatCount(combo), playfield.centerX, 258, {
+        size: 18,
+        weight: '900',
+        fill: TEXT,
+        fontFamily: DEFAULT_JUDGE_FONT,
+        anchorX: 0.5,
+        stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
+        maxWidth: 120,
+      }, judgePool);
+    }
   }
 }
 
 /**
- * Pixi `Text` factory tuned for the LR2-style HUD typography (system-ui sans, 9 px regular). Wraps the verbose `new
- * Text({ style: new TextStyle({ ... }) })` form.
+ * Compatibility alias for older callers. New code should use {@link renderDefaultGameplayFrame}.
+ *
+ * The explicit `typeof` annotation keeps `--isolatedDeclarations` happy — without it the d.ts generator
+ * (`rolldown-plugin-dts`) can't infer the exported binding's type from the right-hand expression, which fails
+ * the build with `TS9010: Variable must have an explicit type annotation`.
  */
-function makeText(
+export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
+
+function drawBackgroundAroundBga(frame: Graphics): void {
+  frame.rect(0, 0, DESIGN_WIDTH, BGA.y).fill(BG);
+  frame.rect(0, BGA.y + BGA.h, DESIGN_WIDTH, DESIGN_HEIGHT - (BGA.y + BGA.h)).fill(BG);
+  frame.rect(0, BGA.y, BGA.x, BGA.h).fill(BG);
+  frame.rect(BGA.x + BGA.w, BGA.y, DESIGN_WIDTH - (BGA.x + BGA.w), BGA.h).fill(BG);
+}
+
+function resolveFallbackPlayfieldLayout(
+  laneChannels: readonly string[] | undefined,
+  laneCount: number | undefined,
+  playVariant: ChartPlayVariant | undefined,
+): FallbackPlayfieldLayout {
+  const lanes = resolveFallbackLaneLayout({
+    channels: laneChannels,
+    laneCount,
+    playVariant,
+    x: PLAYFIELD.x,
+    w: PLAYFIELD.w,
+    preserveSideWidth: shouldPreserveFallbackSideWidth(laneChannels, playVariant),
+  });
+  const right = Math.max(PLAYFIELD.x + PLAYFIELD.w, ...lanes.map((lane) => lane.x + lane.w));
+  const w = Math.max(1, right - PLAYFIELD.x);
+  return {
+    lanes,
+    x: PLAYFIELD.x,
+    w,
+    centerX: PLAYFIELD.x + w / 2,
+    right,
+  };
+}
+
+function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout): void {
+  const lanes = playfield.lanes;
+  const playfieldHeight = PLAYFIELD.judgementY - PLAYFIELD.y;
+  frame
+    .roundRect(playfield.x - 10, 54, playfield.w + 20, PLAYFIELD.judgementY - 38, 6)
+    .fill(PANEL)
+    .stroke({ color: LINE, width: 1 });
+  frame.rect(playfield.x, PLAYFIELD.y, playfield.w, playfieldHeight).fill(LANE);
+  for (let index = 0; index < lanes.length; index += 1) {
+    const lane = lanes[index]!;
+    if (lane.isScratch) {
+      frame.rect(lane.x, PLAYFIELD.y, lane.w, playfieldHeight).fill({ color: PANEL_DARK, alpha: 0.72 });
+    } else if (index % 2 === 1) {
+      frame.rect(lane.x, PLAYFIELD.y, lane.w, playfieldHeight).fill({ color: LANE_ALT, alpha: 0.28 });
+    }
+    frame.rect(lane.x, PLAYFIELD.y, 1, playfieldHeight).fill({ color: 0xffffff, alpha: 0.08 });
+  }
+  frame.rect(playfield.right, PLAYFIELD.y, 1, playfieldHeight).fill({
+    color: 0xffffff,
+    alpha: 0.08,
+  });
+  frame.rect(playfield.x, PLAYFIELD.judgementY - 8, playfield.w, 8).fill(AMBER);
+  frame.rect(playfield.x, PLAYFIELD.judgementY, playfield.w, 2).fill({ color: 0xffffff, alpha: 0.85 });
+}
+
+function drawBgaFrame(frame: Graphics, hasBga: boolean): void {
+  if (!hasBga) {
+    frame.roundRect(BGA.x - 10, BGA.y - 28, BGA.w + 20, BGA.h + 52, 6).fill({ color: PANEL, alpha: 0.7 });
+  }
+  frame.roundRect(BGA.x - 10, BGA.y - 28, BGA.w + 20, BGA.h + 52, 6).stroke({ color: LINE, width: 1 });
+  frame.rect(BGA.x, BGA.y, BGA.w, 1).fill({ color: 0xffffff, alpha: 0.12 });
+  frame.rect(BGA.x, BGA.y + BGA.h - 1, BGA.w, 1).fill({ color: 0xffffff, alpha: 0.12 });
+  frame.rect(BGA.x, BGA.y, 1, BGA.h).fill({ color: 0xffffff, alpha: 0.12 });
+  frame.rect(BGA.x + BGA.w - 1, BGA.y, 1, BGA.h).fill({ color: 0xffffff, alpha: 0.12 });
+  if (!hasBga) {
+    frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: PANEL_DARK, alpha: 0.95 });
+  }
+}
+
+function drawInfoPanel(frame: Graphics): void {
+  frame.roundRect(520, 38, 106, 410, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
+  for (const y of [86, 132, 178, 224, 270, 310, 334, 358, 382]) {
+    frame.rect(532, y, 82, 1).fill({ color: LINE, alpha: 0.45 });
+  }
+}
+
+function drawGauge(frame: Graphics, value: number | undefined, threshold: number | undefined): void {
+  const gauge = clampPercent(value ?? 0);
+  const clear = clampPercent(threshold ?? 80);
+  const fillWidth = Math.round(GROOVE.w * (gauge / 100));
+  const clearX = GROOVE.x + Math.round(GROOVE.w * (clear / 100));
+  frame
+    .roundRect(GROOVE.x - 8, GROOVE.y - 28, GROOVE.w + 16, 50, 6)
+    .fill(PANEL)
+    .stroke({ color: LINE, width: 1 });
+  frame.rect(GROOVE.x, GROOVE.y, GROOVE.w, GROOVE.h).fill(PANEL_DARK);
+  frame.rect(GROOVE.x, GROOVE.y, fillWidth, GROOVE.h).fill(gauge >= clear ? GREEN : AMBER);
+  frame.rect(clearX, GROOVE.y - 3, 2, GROOVE.h + 6).fill({ color: TEXT, alpha: 0.9 });
+}
+
+function drawSongPlate(frame: Graphics): void {
+  frame.roundRect(18, 404, 352, 58, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
+}
+
+function drawScorePlate(frame: Graphics): void {
+  frame.roundRect(384, 386, 128, 76, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
+}
+
+function addText(
+  layer: Container,
   text: string,
   x: number,
   y: number,
   opts: {
-    fontSize?: number;
-    fontWeight?: '400' | '500' | '600' | '700' | '800' | '900';
+    size?: number;
+    weight?: '400' | '500' | '600' | '700' | '800' | '900';
     fill?: number;
     fontFamily?: string;
     letterSpacing?: number;
     anchorX?: number;
+    anchorY?: number;
+    maxWidth?: number;
     stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
   } = {},
+  pool?: ChildPool,
 ): Text {
-  const node = new Text({
-    text,
-    style: new TextStyle({
-      fill: opts.fill ?? TEXT_BRIGHT,
-      fontSize: opts.fontSize ?? 9,
-      fontWeight: opts.fontWeight ?? '400',
-      fontFamily: opts.fontFamily ?? 'system-ui, sans-serif',
-      letterSpacing: opts.letterSpacing ?? 0,
-      stroke: opts.stroke,
-    }),
-  });
-  if (opts.anchorX !== undefined) {
-    node.anchor.set(opts.anchorX, 0);
+  const node = pool?.acquireText() ?? new Text();
+  const style = resolveTextStyle(opts);
+  node.text = text;
+  if (node.style !== style) {
+    node.style = style;
   }
+  node.anchor.set(opts.anchorX ?? 0, opts.anchorY ?? 0);
   node.position.set(x, y);
+  node.scale.set(1, 1);
+  if (opts.maxWidth !== undefined && node.width > opts.maxWidth) {
+    node.scale.x = opts.maxWidth / node.width;
+  }
+  if (!pool) {
+    layer.addChild(node);
+  }
   return node;
 }
 
-/** Right-aligned padded number (or `----…` placeholder). */
-function formatScore(value: number | undefined, width: number): string {
-  if (value === undefined || !Number.isFinite(value)) {
-    return '-'.repeat(width);
+function resolveTextStyle(opts: {
+  size?: number;
+  weight?: '400' | '500' | '600' | '700' | '800' | '900';
+  fill?: number;
+  fontFamily?: string;
+  letterSpacing?: number;
+  stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
+}): TextStyle {
+  const stroke = opts.stroke;
+  const key = [
+    opts.fill ?? TEXT,
+    opts.size ?? 10,
+    opts.weight ?? '500',
+    opts.fontFamily ?? FONT,
+    opts.letterSpacing ?? 0,
+    stroke?.color ?? '',
+    stroke?.width ?? '',
+    stroke?.alignment ?? '',
+    stroke?.join ?? '',
+  ].join('|');
+  let style = TEXT_STYLE_CACHE.get(key);
+  if (!style) {
+    style = new TextStyle({
+      fill: opts.fill ?? TEXT,
+      fontSize: opts.size ?? 10,
+      fontWeight: opts.weight ?? '500',
+      fontFamily: opts.fontFamily ?? FONT,
+      letterSpacing: opts.letterSpacing ?? 0,
+      stroke: opts.stroke,
+    });
+    TEXT_STYLE_CACHE.set(key, style);
   }
-  return String(Math.max(0, Math.floor(value))).padStart(width, '0');
+  return style;
 }
 
-function formatNumber(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return '---';
-  return String(Math.round(value));
+const TEXT_STYLE_CACHE = new Map<string, TextStyle>();
+
+function labelStyle(): { size: number; weight: '700'; fill: number; letterSpacing: number } {
+  return { size: 8, weight: '700', fill: SUBTLE, letterSpacing: 0.8 };
+}
+
+function metricStyle(
+  size: number,
+  fill: number,
+  anchorX = 0,
+): { size: number; weight: '900'; fill: number; fontFamily: string; anchorX: number } {
+  return { size, weight: '900', fill, fontFamily: NUMERIC_FONT, anchorX };
+}
+
+function formatCount(value: number | undefined): string {
+  if (value === undefined || !Number.isFinite(value)) return '0';
+  return String(Math.max(0, Math.floor(value)));
+}
+
+function formatNumber(value: number | undefined, fallback: string): string {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return `BPM ${Math.round(value)}`;
 }
 
 function formatHiSpeed(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return '—';
+  if (value === undefined || !Number.isFinite(value)) return '0.0';
   return value.toFixed(1);
+}
+
+function formatExRate(exScore: number | undefined, max: number | undefined): string {
+  if (exScore === undefined || max === undefined || !Number.isFinite(exScore) || !Number.isFinite(max) || max <= 0) {
+    return '0.0%';
+  }
+  return `${((exScore / max) * 100).toFixed(1)}%`;
+}
+
+function clampPercent(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+}
+
+function judgeColor(judge: string): number {
+  switch (judge) {
+    case 'PERFECT':
+      return AMBER;
+    case 'GREAT':
+      return GREEN;
+    case 'GOOD':
+      return BLUE;
+    case 'BAD':
+      return ORANGE;
+    case 'POOR':
+      return RED;
+    default:
+      return TEXT;
+  }
 }

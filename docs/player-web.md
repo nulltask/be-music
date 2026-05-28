@@ -28,7 +28,7 @@ when the host supplies a `PlayerOptions.createAudioSession` factory (e.g. `creat
 
 ## Scope
 
-- `@be-music/player-web` provides browser-friendly song loading, preview playback, LR2/beatoraja skin rendering, PixiJS scenes, WebAudio bus construction, and gameplay recording.
+- `@be-music/player-web` provides browser-friendly song loading, preview playback, built-in default / LR2 / beatoraja skin rendering, PixiJS scenes, WebAudio bus construction, and gameplay recording.
 - `@be-music/player-web-demo` is a private Vite application that wires the core package to drag-and-drop loading, LR2/beatoraja theme loading, debug controls, and recording controls.
 - The browser player supports both BMS/BME/BML/PMS and bmson charts through the same parser, chart, and player helpers used by the shared core and terminal player.
 
@@ -86,6 +86,23 @@ Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/pl
 sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
 state-specific value resolution, timers, and input behavior.
 
+## Default skin family
+
+The built-in default family is the skinless path used when no LR2 or beatoraja theme is available, or when the host
+explicitly chooses the default family. It provides select, gameplay, and result presentation without requiring theme
+files.
+
+Gameplay still shares the common engine, note renderer, BGA renderer, audio bus, and input handling with
+`PixiGameplayView`, but the default chrome is injected from `scene/default/gameplay.ts` through the
+`skinlessChromeRenderer` option. The LR2 gameplay scene does not import the default renderer; it only provides the
+shared gameplay runtime and render layers. This keeps default-skin visual changes under `scene/default/` while LR2
+skin rendering remains tied to parsed `.lr2skin` data.
+
+Default gameplay chrome uses the shared lane geometry helpers in `scene/gameplay-lanes.ts`. Scratch lanes are wider
+than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width instead
+of shrinking every lane to fit both sides into the original SP footprint. The default family uses LINE Seed JP for
+general text and Azeret Mono for judgment and combo readouts.
+
 ## beatoraja skin and theme support
 
 `@be-music/player-web` consumes `@be-music/beatoraja-skin` through `loadBeatorajaThemeFromFiles()`.
@@ -110,10 +127,11 @@ The default beatoraja skin is the primary compatibility target. Community themes
 The browser player uses one `PixiSceneHost` for the whole session.
 The host owns a single PixiJS `Application`, attaches one scene root at a time, serializes scene transitions, and destroys the renderer only when the host is disposed.
 
-The LR2 and beatoraja paths each provide the same high-level scene set:
+The LR2 and beatoraja paths each provide the same high-level scene set, while the default family provides the same
+select, gameplay, and result shape without a decide scene:
 
 - Select scene for chart browsing, preview playback, and skin-side interactions
-- Decide scene for the short transition before gameplay
+- Decide scene for the short transition before gameplay when the active family supplies one
 - Gameplay scene for notes, lanes, BGA, HUD, judgment, audio, and recording taps
 - Result scene for score summary and skin-rendered result presentation
 
@@ -128,6 +146,8 @@ Scenes implement `enter()`, `exit()`, and `dispose()`.
 - beatoraja source textures are downscaled before upload when a bitmap exceeds the conservative GPU texture-size cap.
 - The gameplay paths preload chart parse, audio decode, and BGA resources before the decide scene hands off to gameplay.
 - Shared scroll-distance helpers keep CLI and browser note-placement behavior aligned.
+- The default gameplay chrome reuses pooled Pixi children for graphics and text, and caches text styles to avoid
+  per-frame allocation churn in the skinless renderer.
 - Benchmarks include browser-core helpers that are pure enough to run outside a WebGL context:
 
 ```bash
@@ -142,9 +162,12 @@ pnpm bench -- --packages player-web
 - `?compressor=off` disables compressor construction in the demo.
 - beatoraja theme audio uses the same browser bundle lookup for Lua `main_state.audio_play` / `audio_loop` calls, select BGM, navigation system sounds, decide BGM, and result jingles.
 - BGA supports still images and video assets referenced by chart BGA events.
+- The default family renders the same chart BGA layer stack as LR2 skins inside its built-in BGA frame.
 - BMS rendering applies the implemented `#BGAxx` sub-region, `#SWBGAxx` switching, and `#ARGBxx` / `#EXBMPxx` tint and alpha subset.
 - bmson rendering uses `bga.bga_events`, `bga.layer_events`, and `bga.poor_events`; unlike BMS layer channels, bmson layer images preserve black pixels instead of treating black as transparent.
 - The browser demo can transcode unsupported video assets through the ffmpeg.wasm path before playback.
+- Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
+  does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
 
 ## Compatibility boundary
