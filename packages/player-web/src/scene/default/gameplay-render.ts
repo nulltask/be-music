@@ -196,8 +196,12 @@ export function renderDefaultGameplayFrame(
 
 /**
  * Compatibility alias for older callers. New code should use {@link renderDefaultGameplayFrame}.
+ *
+ * The explicit `typeof` annotation keeps `--isolatedDeclarations` happy — without it the d.ts generator
+ * (`rolldown-plugin-dts`) can't infer the exported binding's type from the right-hand expression, which fails
+ * the build with `TS9010: Variable must have an explicit type annotation`.
  */
-export const renderFallbackLr2Frame = renderDefaultGameplayFrame;
+export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
 
 function drawBackgroundAroundBga(frame: Graphics): void {
   frame.rect(0, 0, DESIGN_WIDTH, BGA.y).fill(BG);
