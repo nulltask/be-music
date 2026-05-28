@@ -57,6 +57,8 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **player core**: The shared `@be-music/player` engine and helper surface. It owns timing, note extraction, judgment, scoring, gauge helpers, BGA timelines, and UI/audio adapter contracts.
 - **terminal player**: The `@be-music/player-tui` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
 - **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. It handles browser drops, LR2/beatoraja skin rendering, browser gameplay, result scenes, and recording.
+- **skin family**: Browser-player scene family selected from the loaded theme state. The current families are LR2, beatoraja, and the built-in default family.
+- **default skin family**: Built-in browser-player skin family used when no external theme is active or when the host explicitly selects it. It supplies skinless select, gameplay, and result chrome; gameplay injects its chrome into the shared gameplay runtime without making LR2 import the default renderer.
 - **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/lr2-skin`. The package parses skin files and resolves theme assets independently from PixiJS.
 - **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/beatoraja-skin`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
 

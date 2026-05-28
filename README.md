@@ -16,7 +16,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
-- `@be-music/player-web`: Browser PixiJS player core for song selection, LR2 and beatoraja skin rendering, gameplay, result scenes, and recording
+- `@be-music/player-web`: Browser PixiJS player core for song selection, built-in default / LR2 / beatoraja skin rendering, gameplay, result scenes, and recording
 - `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
 
@@ -154,8 +154,10 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 - Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
+- Built-in default skin family for skinless select, gameplay, and result scenes
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
+- Separated default gameplay chrome injection so default-skin rendering does not depend on LR2 renderer modules
 - Shared LR2 Pixi helpers for destination interpolation, sprite transforms, numbers, text, sliders, and bargraphs
 - Shared beatoraja Pixi helpers for destination sampling, source-cell selection, text, values, sliders, gauges, graphs, timing visualizers, notes, markers, BGA, and runtime op/timer wiring
 - Shared playback semantics with the terminal player for notes, timing, scroll distance, BGA cues, score, and results

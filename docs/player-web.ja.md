@@ -27,7 +27,7 @@ browser runtime は次の adapter module を使います。
 
 ## 対象範囲
 
-- `@be-music/player-web` は browser 向けの song loading、preview playback、LR2 / beatoraja skin rendering、PixiJS scene、WebAudio bus、gameplay recording を提供します。
+- `@be-music/player-web` は browser 向けの song loading、preview playback、built-in default / LR2 / beatoraja skin rendering、PixiJS scene、WebAudio bus、gameplay recording を提供します。
 - `@be-music/player-web-demo` は core package を drag-and-drop loading、LR2 / beatoraja theme loading、debug control、recording control へ接続する private Vite application です。
 - browser player は shared core と terminal player と同じ parser、chart、player helper を通して BMS/BME/BML/PMS と bmson の譜面を扱います。
 
@@ -83,6 +83,20 @@ select 時の option は chart preparation 時に gameplay へ引き継ぎます
 scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) と
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
 
+## Default skin family
+
+built-in default family は、LR2 / beatoraja theme がない場合、または host が default family を明示的に選んだ場合に使う skinless path です。
+theme file なしで select、gameplay、result の表示を提供します。
+
+gameplay は `PixiGameplayView` と共通の engine、note renderer、BGA renderer、audio bus、input handling を共有します。
+ただし default chrome は `scene/default/gameplay.ts` から `skinlessChromeRenderer` option 経由で注入します。
+LR2 gameplay scene は default renderer を import せず、共有 gameplay runtime と render layer だけを提供します。
+これにより、default skin の見た目の変更は `scene/default/` 配下に閉じ、LR2 skin rendering は parse 済み `.lr2skin` data に紐づいたままになります。
+
+default gameplay chrome は `scene/gameplay-lanes.ts` の共通 lane geometry helper を使います。
+scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
+default family は通常テキストに LINE Seed JP、判定と combo 表示に Azeret Mono を使います。
+
 ## beatoraja skin と theme support
 
 `@be-music/player-web` は `loadBeatorajaThemeFromFiles()` 経由で `@be-music/beatoraja-skin` を利用します。
@@ -106,10 +120,10 @@ beatoraja default skin を primary compatibility target とし、community theme
 browser player は session 全体で 1 つの `PixiSceneHost` を使います。
 host は 1 つの PixiJS `Application` を所有し、同時に 1 つの scene root だけを attach し、scene transition を直列化し、host dispose 時だけ renderer を破棄します。
 
-LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。
+LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。default family は decide scene を持たず、同じ select、gameplay、result の形を skinless に提供します。
 
 - chart browsing、preview playback、skin-side interaction を扱う select scene
-- gameplay 前の短い transition を扱う decide scene
+- active family が提供する場合、gameplay 前の短い transition を扱う decide scene
 - note、lane、BGA、HUD、judgment、audio、recording tap を扱う gameplay scene
 - score summary と skin-rendered result presentation を扱う result scene
 
@@ -124,6 +138,7 @@ scene は `enter()`, `exit()`, `dispose()` を実装します。
 - beatoraja source texture は bitmap が保守的な GPU texture-size cap を超える場合、upload 前に downscale します。
 - gameplay path は decide scene から gameplay へ渡す前に、chart parse、audio decode、BGA resource preload を進めます。
 - 共有の scroll-distance helper により、terminal player と browser の note placement behavior を揃えます。
+- default gameplay chrome は pooled Pixi child を graphics / text に再利用し、text style を cache して skinless renderer の frame ごとの allocation churn を抑えます。
 - WebGL context に依存しない pure な browser-core helper は benchmark 対象です。
 
 ```bash
@@ -138,9 +153,11 @@ pnpm bench -- --packages player-web
 - `?compressor=off` は demo で compressor construction を無効化します。
 - beatoraja theme audio は Lua `main_state.audio_play` / `audio_loop` call、select BGM、navigation system sound、decide BGM、result jingle に同じ browser bundle lookup を使います。
 - BGA は chart BGA event が参照する still image と video asset を扱います。
+- default family は LR2 skin と同じ chart BGA layer stack を built-in BGA frame 内に描画します。
 - BMS rendering は、実装済み subset として `#BGAxx` sub-region、`#SWBGAxx` switching、`#ARGBxx` / `#EXBMPxx` tint / alpha を反映します。
 - bmson rendering は `bga.bga_events`、`bga.layer_events`、`bga.poor_events` を使います。BMS layer channel と異なり、bmson layer image は黒を透明化せず黒ピクセルとして保持します。
 - browser demo は、未対応 video asset を playback 前に ffmpeg.wasm path で transcode できます。
+- chart の自然終了時は、短い post-chart delay を置いてから result scene を開きます。視覚的に result へ遷移しても、残っている gameplay audio tail は中断しません。
 - gameplay recorder は WebM output を書き出し、active recording が gameplay bus の破棄前に flush されるよう、scene disposal より前に stop / finalization を終えます。
 
 ## Compatibility boundary
