@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "be-music-player-web",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-06-02",
+  // Account is resolved automatically: from the logged-in user locally (single account), and from the auto-generated
+  // token in Workers Builds CI. If you ever belong to multiple accounts, set CLOUDFLARE_ACCOUNT_ID instead of hardcoding
+  // it here.
+  // Static Assets host the built SPA. `single-page-application` returns index.html for any unmatched path; the
+  // `run_worker_first` glob forces `/ffmpeg-core/*` through the Worker (see worker/index.ts) so it can stream the
+  // oversized ffmpeg core out of R2 instead of being swallowed by the SPA fallback.
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/ffmpeg-core/*"],
+  },
+  // Holds `ffmpeg-core.wasm` (~31 MB, over the 25 MiB Static Assets per-file limit) and its `ffmpeg-core.js` loader.
+  // Create the bucket with `pnpm cf:r2:create` and upload the files with `pnpm cf:r2:push`.
+  "r2_buckets": [
+    {
+      "binding": "FFMPEG_CORE",
+      "bucket_name": "be-music-ffmpeg-core",
+    },
+  ],
+  "observability": {
+    "enabled": true,
+  },
+}
