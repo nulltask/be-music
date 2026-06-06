@@ -27,6 +27,9 @@ const BLUE = 0x76a8ff;
 const ORANGE = 0xff9b54;
 const FONT = DEFAULT_TEXT_FONT;
 const NUMERIC_FONT = DEFAULT_NUMERIC_FONT;
+const SCORE_PANEL = { x: 384, y: 350, w: 238, h: 112 } as const;
+
+type PlaySide = '1P' | '2P';
 
 /**
  * Live runtime values painted into the built-in gameplay chrome.
@@ -49,6 +52,8 @@ interface FallbackPlayfieldLayout {
   w: number;
   centerX: number;
   right: number;
+  sideCenters: Partial<Record<PlaySide, number>>;
+  sideGap?: { x: number; w: number };
 }
 
 /**
@@ -70,12 +75,9 @@ export function renderDefaultGameplayFrame(
   } else {
     frame.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
   }
-  frame.rect(0, 0, DESIGN_WIDTH, 48).fill({ color: SURFACE, alpha: 0.9 });
-  frame.rect(0, 46, DESIGN_WIDTH, 2).fill({ color: LINE, alpha: 0.85 });
 
   drawPlayfield(frame, playfield);
   drawBgaFrame(frame, hasBga);
-  drawInfoPanel(frame);
   drawGauge(frame, runtime.gauge, runtime.clearThreshold);
   drawSongPlate(frame);
   drawScorePlate(frame);
@@ -83,113 +85,185 @@ export function renderDefaultGameplayFrame(
     layer.addChildAt(frame, 0);
   }
 
-  addText(layer, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', 24, 14, {
-    size: 10,
-    weight: '800',
-    fill: runtime.autoplay ? AMBER : TEAL,
-    letterSpacing: 1.2,
-  }, layerPool);
-  addText(layer, formatNumber(runtime.bpm, 'BPM --'), 116, 14, {
-    size: 10,
-    weight: '700',
-    fill: MUTED,
-    fontFamily: NUMERIC_FONT,
-  }, layerPool);
-  addText(layer, `HS ${formatHiSpeed(runtime.hiSpeed)}`, 176, 14, {
-    size: 10,
-    weight: '700',
-    fill: MUTED,
-    fontFamily: NUMERIC_FONT,
-  }, layerPool);
-
-  addText(layer, 'SCORE', 532, 52, labelStyle(), layerPool);
-  addText(layer, formatCount(runtime.score), 616, 68, metricStyle(18, AMBER, 1), layerPool);
-  addText(layer, 'EX SCORE', 532, 98, labelStyle(), layerPool);
+  const frontLayer = options.overlayLayer && options.overlayLayerPool ? options.overlayLayer : layer;
+  const frontPool = frontLayer === layer ? layerPool : options.overlayLayerPool;
+  drawStatusBar(frontLayer, frontPool);
   addText(
-    layer,
-    `${formatCount(runtime.exScore)} / ${formatCount(runtime.exScoreMax)}`,
-    616,
-    114,
-    metricStyle(13, TEXT, 1),
-    layerPool,
+    frontLayer,
+    runtime.autoplay ? 'AUTO PLAY' : 'PLAY',
+    24,
+    14,
+    {
+      size: 10,
+      weight: '800',
+      fill: runtime.autoplay ? AMBER : TEAL,
+      letterSpacing: 1.2,
+    },
+    frontPool,
   );
-  addText(layer, 'COMBO', 532, 144, labelStyle(), layerPool);
-  addText(layer, formatCount(runtime.combo), 616, 160, {
-    ...metricStyle(18, TEAL, 1),
-    fontFamily: DEFAULT_JUDGE_FONT,
-  }, layerPool);
-  addText(layer, 'MAX', 532, 190, labelStyle(), layerPool);
-  addText(layer, formatCount(runtime.maxCombo), 616, 206, {
-    ...metricStyle(16, TEXT, 1),
-    fontFamily: DEFAULT_JUDGE_FONT,
-  }, layerPool);
-  addText(layer, 'RANK', 532, 236, labelStyle(), layerPool);
-  addText(layer, runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F', 616, 250, metricStyle(26, AMBER, 1), layerPool);
-
-  const judgeRows: Array<readonly [string, number | undefined, number]> = [
-    ['PG', runtime.perfect, AMBER],
-    ['GR', runtime.great, GREEN],
-    ['GD', runtime.good, BLUE],
-    ['BD', runtime.bad, ORANGE],
-    ['PR', runtime.poor, RED],
-  ];
-  for (let index = 0; index < judgeRows.length; index += 1) {
-    const [label, value, fill] = judgeRows[index]!;
-    const y = 292 + index * 24;
-    addText(layer, label, 532, y, { size: 10, weight: '800', fill }, layerPool);
-    addText(layer, formatCount(value), 616, y - 2, metricStyle(13, TEXT, 1), layerPool);
-  }
+  addText(
+    frontLayer,
+    formatNumber(runtime.bpm, 'BPM --'),
+    116,
+    14,
+    {
+      size: 10,
+      weight: '700',
+      fill: MUTED,
+      fontFamily: NUMERIC_FONT,
+    },
+    frontPool,
+  );
+  addText(
+    frontLayer,
+    `HS ${formatHiSpeed(runtime.hiSpeed)}`,
+    176,
+    14,
+    {
+      size: 10,
+      weight: '700',
+      fill: MUTED,
+      fontFamily: NUMERIC_FONT,
+    },
+    frontPool,
+  );
 
   const gauge = clampPercent(runtime.gauge ?? 0);
   addText(layer, 'GAUGE', GROOVE.x, GROOVE.y - 18, labelStyle(), layerPool);
   addText(layer, `${Math.round(gauge)}%`, GROOVE.x + GROOVE.w, GROOVE.y - 21, metricStyle(14, TEXT, 1), layerPool);
 
   const title = runtime.songTitle?.trim() || 'Untitled chart';
-  addText(layer, title, 28, 416, {
-    size: 16,
-    weight: '800',
-    fill: TEXT,
-    maxWidth: 324,
-  }, layerPool);
+  addText(
+    layer,
+    title,
+    28,
+    416,
+    {
+      size: 16,
+      weight: '800',
+      fill: TEXT,
+      maxWidth: 324,
+    },
+    layerPool,
+  );
   const artist = runtime.songArtist?.trim();
   if (artist) {
-    addText(layer, artist, 28, 438, {
-      size: 10,
-      weight: '600',
-      fill: MUTED,
-      maxWidth: 324,
-    }, layerPool);
+    addText(
+      layer,
+      artist,
+      28,
+      438,
+      {
+        size: 10,
+        weight: '600',
+        fill: MUTED,
+        maxWidth: 324,
+      },
+      layerPool,
+    );
   }
 
-  addText(layer, 'SCORE', 394, 397, labelStyle(), layerPool);
-  addText(layer, formatCount(runtime.score), 492, 412, metricStyle(18, AMBER, 1), layerPool);
-  addText(layer, 'EX RATE', 394, 438, labelStyle(), layerPool);
-  addText(layer, formatExRate(runtime.exScore, runtime.exScoreMax), 492, 438, metricStyle(13, TEXT, 1), layerPool);
-
-  if (runtime.lastJudge) {
-    const judgeLayer = options.overlayLayer ?? layer;
-    const judgePool = judgeLayer === layer ? layerPool : options.overlayLayerPool;
-    const combo =
-      runtime.combo !== undefined && Number.isFinite(runtime.combo) ? Math.max(0, Math.floor(runtime.combo)) : 0;
-    addText(judgeLayer, runtime.lastJudge, playfield.centerX, 232, {
-      size: 22,
-      weight: '900',
-      fill: judgeColor(runtime.lastJudge),
+  const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
+  addText(layer, 'SCORE', SCORE_PANEL.x + 12, SCORE_PANEL.y + 16, labelStyle(), layerPool);
+  addText(
+    layer,
+    formatCount(runtime.score),
+    SCORE_PANEL.x + 96,
+    SCORE_PANEL.y + 22,
+    {
+      ...metricStyle(20, AMBER, 1),
+      maxWidth: 126,
+    },
+    layerPool,
+  );
+  addText(layer, 'EX SCORE', SCORE_PANEL.x + 12, SCORE_PANEL.y + 48, labelStyle(), layerPool);
+  addText(
+    layer,
+    `${formatCount(runtime.exScore)} / ${formatCount(runtime.exScoreMax)}`,
+    SCORE_PANEL.x + 126,
+    SCORE_PANEL.y + 48,
+    {
+      ...metricStyle(12, TEXT, 1),
+      maxWidth: 96,
+    },
+    layerPool,
+  );
+  addText(layer, 'EX RATE', SCORE_PANEL.x + 12, SCORE_PANEL.y + 78, labelStyle(), layerPool);
+  addText(
+    layer,
+    formatExRate(runtime.exScore, runtime.exScoreMax),
+    SCORE_PANEL.x + 126,
+    SCORE_PANEL.y + 78,
+    {
+      ...metricStyle(12, TEXT, 1),
+      maxWidth: 96,
+    },
+    layerPool,
+  );
+  addText(layer, 'COMBO', SCORE_PANEL.x + 148, SCORE_PANEL.y + 16, labelStyle(), layerPool);
+  addText(
+    layer,
+    formatCount(runtime.combo),
+    SCORE_PANEL.x + 226,
+    SCORE_PANEL.y + 16,
+    {
+      ...metricStyle(14, TEAL, 1),
       fontFamily: DEFAULT_JUDGE_FONT,
-      anchorX: 0.5,
-      stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
-      maxWidth: 160,
-    }, judgePool);
-    if (combo > 0) {
-      addText(judgeLayer, formatCount(combo), playfield.centerX, 258, {
-        size: 18,
+      maxWidth: 58,
+    },
+    layerPool,
+  );
+  addText(layer, 'MAX', SCORE_PANEL.x + 148, SCORE_PANEL.y + 48, labelStyle(), layerPool);
+  addText(
+    layer,
+    formatCount(runtime.maxCombo),
+    SCORE_PANEL.x + 226,
+    SCORE_PANEL.y + 48,
+    {
+      ...metricStyle(13, TEXT, 1),
+      fontFamily: DEFAULT_JUDGE_FONT,
+      maxWidth: 58,
+    },
+    layerPool,
+  );
+  addText(layer, 'RANK', SCORE_PANEL.x + 148, SCORE_PANEL.y + 78, labelStyle(), layerPool);
+  addText(layer, rank, SCORE_PANEL.x + 226, SCORE_PANEL.y + 70, metricStyle(22, AMBER, 1), layerPool);
+
+  for (const display of resolveJudgeDisplays(runtime, playfield)) {
+    const combo = resolveVisibleCombo(display.judge, display.combo);
+    addText(
+      frontLayer,
+      display.judge,
+      display.x,
+      232,
+      {
+        size: 22,
         weight: '900',
-        fill: TEXT,
+        fill: judgeColor(display.judge),
         fontFamily: DEFAULT_JUDGE_FONT,
         anchorX: 0.5,
         stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
-        maxWidth: 120,
-      }, judgePool);
+        maxWidth: display.maxWidth,
+      },
+      frontPool,
+    );
+    if (combo > 0) {
+      addText(
+        frontLayer,
+        formatCount(combo),
+        display.x,
+        258,
+        {
+          size: 18,
+          weight: '900',
+          fill: TEXT,
+          fontFamily: DEFAULT_JUDGE_FONT,
+          anchorX: 0.5,
+          stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
+          maxWidth: Math.max(72, display.maxWidth - 36),
+        },
+        frontPool,
+      );
     }
   }
 }
@@ -225,13 +299,41 @@ function resolveFallbackPlayfieldLayout(
   });
   const right = Math.max(PLAYFIELD.x + PLAYFIELD.w, ...lanes.map((lane) => lane.x + lane.w));
   const w = Math.max(1, right - PLAYFIELD.x);
+  const sideBounds = resolveSideBounds(lanes);
+  const sideCenters: Partial<Record<PlaySide, number>> = {};
+  if (sideBounds['1P']) {
+    sideCenters['1P'] = (sideBounds['1P'].left + sideBounds['1P'].right) / 2;
+  }
+  if (sideBounds['2P']) {
+    sideCenters['2P'] = (sideBounds['2P'].left + sideBounds['2P'].right) / 2;
+  }
   return {
     lanes,
     x: PLAYFIELD.x,
     w,
     centerX: PLAYFIELD.x + w / 2,
     right,
+    sideCenters,
+    sideGap:
+      sideBounds['1P'] && sideBounds['2P'] && sideBounds['2P'].left > sideBounds['1P'].right
+        ? { x: sideBounds['1P'].right, w: sideBounds['2P'].left - sideBounds['1P'].right }
+        : undefined,
   };
+}
+
+function resolveSideBounds(
+  lanes: readonly FallbackLaneLayoutRect[],
+): Partial<Record<PlaySide, { left: number; right: number }>> {
+  const bounds: Partial<Record<PlaySide, { left: number; right: number }>> = {};
+  for (const lane of lanes) {
+    const side = lane.side;
+    const current = bounds[side];
+    const right = lane.x + lane.w;
+    bounds[side] = current
+      ? { left: Math.min(current.left, lane.x), right: Math.max(current.right, right) }
+      : { left: lane.x, right };
+  }
+  return bounds;
 }
 
 function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout): void {
@@ -242,6 +344,16 @@ function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout): voi
     .fill(PANEL)
     .stroke({ color: LINE, width: 1 });
   frame.rect(playfield.x, PLAYFIELD.y, playfield.w, playfieldHeight).fill(LANE);
+  if (playfield.sideGap) {
+    frame.rect(playfield.sideGap.x, PLAYFIELD.y, playfield.sideGap.w, playfieldHeight).fill({
+      color: PANEL_DARK,
+      alpha: 0.96,
+    });
+    frame.rect(playfield.sideGap.x + playfield.sideGap.w / 2 - 0.5, PLAYFIELD.y, 1, playfieldHeight).fill({
+      color: LINE,
+      alpha: 0.55,
+    });
+  }
   for (let index = 0; index < lanes.length; index += 1) {
     const lane = lanes[index]!;
     if (lane.isScratch) {
@@ -273,10 +385,13 @@ function drawBgaFrame(frame: Graphics, hasBga: boolean): void {
   }
 }
 
-function drawInfoPanel(frame: Graphics): void {
-  frame.roundRect(520, 38, 106, 410, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
-  for (const y of [86, 132, 178, 224, 270, 310, 334, 358, 382]) {
-    frame.rect(532, y, 82, 1).fill({ color: LINE, alpha: 0.45 });
+function drawStatusBar(layer: Container, pool?: ChildPool): void {
+  const status = pool?.acquireGraphics() ?? new Graphics();
+  status.label = 'default-gameplay/status';
+  status.rect(0, 0, DESIGN_WIDTH, 48).fill({ color: SURFACE, alpha: 0.94 });
+  status.rect(0, 46, DESIGN_WIDTH, 2).fill({ color: LINE, alpha: 0.85 });
+  if (!pool) {
+    layer.addChild(status);
   }
 }
 
@@ -299,7 +414,52 @@ function drawSongPlate(frame: Graphics): void {
 }
 
 function drawScorePlate(frame: Graphics): void {
-  frame.roundRect(384, 386, 128, 76, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
+  frame.roundRect(SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, SCORE_PANEL.h, 6).fill(PANEL).stroke({
+    color: LINE,
+    width: 1,
+  });
+  frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 40, SCORE_PANEL.w - 24, 1).fill({ color: LINE, alpha: 0.45 });
+  frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 70, SCORE_PANEL.w - 24, 1).fill({ color: LINE, alpha: 0.45 });
+  frame.rect(SCORE_PANEL.x + 140, SCORE_PANEL.y + 12, 1, SCORE_PANEL.h - 24).fill({ color: LINE, alpha: 0.45 });
+}
+
+interface ResolvedJudgeDisplay {
+  judge: string;
+  combo: number | undefined;
+  x: number;
+  maxWidth: number;
+}
+
+function resolveJudgeDisplays(
+  runtime: FallbackGameplayRuntime,
+  playfield: FallbackPlayfieldLayout,
+): ResolvedJudgeDisplay[] {
+  const isDoublePlay = playfield.sideCenters['2P'] !== undefined;
+  const maxWidth = isDoublePlay ? 122 : 160;
+  const sideStates = runtime.judgeSides?.filter((state) => typeof state.judge === 'string' && state.judge.length > 0);
+  if (sideStates?.length) {
+    return sideStates.map((state) => ({
+      judge: state.judge!,
+      combo: state.combo,
+      x: resolveJudgeDisplayX(playfield, state.side),
+      maxWidth,
+    }));
+  }
+  if (!runtime.lastJudge) {
+    return [];
+  }
+  return [{ judge: runtime.lastJudge, combo: runtime.combo, x: resolveJudgeDisplayX(playfield, '1P'), maxWidth }];
+}
+
+function resolveJudgeDisplayX(playfield: FallbackPlayfieldLayout, side: PlaySide): number {
+  return playfield.sideCenters[side] ?? playfield.centerX;
+}
+
+function resolveVisibleCombo(judge: string, combo: number | undefined): number {
+  if (judge !== 'PERFECT' && judge !== 'GREAT' && judge !== 'GOOD') {
+    return 0;
+  }
+  return combo !== undefined && Number.isFinite(combo) ? Math.max(0, Math.floor(combo)) : 0;
 }
 
 function addText(

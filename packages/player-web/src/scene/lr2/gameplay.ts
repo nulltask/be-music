@@ -138,7 +138,11 @@ import {
   resolveSideRelativeLaneIndex,
   shouldPreserveFallbackSideWidth,
 } from '../gameplay-lanes.ts';
-import type { SkinlessGameplayChromeRenderer, SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
+import type {
+  SkinlessGameplayChromeRenderer,
+  SkinlessGameplayChromeRuntime,
+  SkinlessGameplayJudgeState,
+} from '../gameplay-chrome.ts';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import {
   computeBombDurationsMs,
@@ -4139,6 +4143,18 @@ export class PixiGameplayView {
 
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
+    const seconds = this.currentSeconds();
+    const usesPlayer2 = this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
+    const judgeSides: SkinlessGameplayJudgeState[] = [];
+    for (const side of ['1P', '2P'] as const) {
+      if (side === '2P' && !usesPlayer2) {
+        continue;
+      }
+      const state = this.judgeSideState[side];
+      if (state.judge && seconds <= state.until) {
+        judgeSides.push({ side, judge: state.judge, combo: state.combo });
+      }
+    }
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
@@ -4159,7 +4175,8 @@ export class PixiGameplayView {
       laneCount: this.laneChannels.length,
       laneChannels: this.laneChannels,
       playVariant: this.chartPlayVariant,
-      lastJudge: this.lastJudge,
+      lastJudge: seconds <= this.lastJudgeUntil ? this.lastJudge : undefined,
+      judgeSides,
       rank: total <= 0 ? undefined : resolveIidxRankLabel(this.score.exScore, total),
       autoplay: this.options.autoPlay === true,
       hasBga: this.hasBga,
