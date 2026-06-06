@@ -260,6 +260,9 @@ importers:
       '@be-music/player-web':
         specifier: workspace:*
         version: link:../player-web
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       lil-gui:
         specifier: ^0.21.0
         version: 0.21.0
@@ -2393,9 +2396,6 @@ packages:
   fetch-blob@3.2.0:
     resolution: {integrity: sha512-7yAQpD2UMJzLi1Dqv7qFYnPbaPx7ZfFK6PiIxQ4PfkGPyNyl2Ugx+a/umUonmKqjhM4DnfbMvdX6otXq83soQQ==}
     engines: {node: ^12.20 || >= 14.13}
-
-  fflate@0.8.2:
-    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
 
   fflate@0.8.3:
     resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
@@ -5223,7 +5223,7 @@ snapshots:
 
   fast-png@8.0.0:
     dependencies:
-      fflate: 0.8.2
+      fflate: 0.8.3
       iobuffer: 6.0.1
 
   fastq@1.20.1:
@@ -5253,8 +5253,6 @@ snapshots:
     dependencies:
       node-domexception: 1.0.0
       web-streams-polyfill: 3.3.3
-
-  fflate@0.8.2: {}
 
   fflate@0.8.3: {}
 

@@ -7,13 +7,13 @@
   // token in Workers Builds CI. If you ever belong to multiple accounts, set CLOUDFLARE_ACCOUNT_ID instead of hardcoding
   // it here.
   // Static Assets host the built SPA. `single-page-application` returns index.html for any unmatched path; the
-  // `run_worker_first` glob forces `/ffmpeg-core/*` through the Worker (see worker/index.ts) so it can stream the
-  // oversized ffmpeg core out of R2 instead of being swallowed by the SPA fallback.
+  // `run_worker_first` entries force `/ffmpeg-core/*` and `/__url-load-proxy` through the Worker (see worker/index.ts)
+  // so oversized ffmpeg assets can stream from R2 and URL auto-load archives can bypass browser CORS.
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/ffmpeg-core/*"],
+    "run_worker_first": ["/ffmpeg-core/*", "/__url-load-proxy"],
   },
   // Holds `ffmpeg-core.wasm` (~31 MB, over the 25 MiB Static Assets per-file limit) and its `ffmpeg-core.js` loader.
   // Create the bucket with `pnpm cf:r2:create` and upload the files with `pnpm cf:r2:push`.
