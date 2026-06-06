@@ -119,10 +119,9 @@ export const LEGACY_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
 /**
  * Makeup gain (linear, not dB) applied after the master compressor stage. Pinned at unity gain (1.0 = 0 dB) —
  * the per-bus compressors are doing most of the level shaping; the master is a limiter, not a loudness
- * booster. Phase 4c's beatoraja-compatible behaviors (look-ahead lane keysound fallback, Free-Zone 17/27
- * empty-press keysound playback) increased the typical simultaneous-sample count by 2-3× compared to the
- * legacy self-judge path, which made the previous +1 dB makeup audible as compressor pumping under load. 0 dB
- * keeps the post-compression level flat without forcing a loudness boost the limiter then has to fight.
+ * booster. The shared engine can trigger dense key/BGM bursts through the Web Audio bus, and the previous +1 dB
+ * makeup made that density audible as compressor pumping under load. 0 dB keeps the post-compression level flat
+ * without forcing a loudness boost the limiter then has to fight.
  */
 export const MASTER_MAKEUP_GAIN_LINEAR = 1.0;
 

@@ -37,7 +37,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#xxx06`                     | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                          |
 | `#xxx09`                     | STOP として時間解決に反映します。                                                                                             |
 | `#xxx11-19`, `#xxx21-29`     | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY 以外では FREE ZONE、9KEY では通常ノートです。       |
-| `#xxx31-39`, `#xxx41-49`     | 不可視ノートとして扱います。手動入力の候補と表示補助には使いますが、`summary.total` には含めません。`AUTO` では発音しません。 |
+| `#xxx31-39`, `#xxx41-49`     | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。 |
 | `#xxx51-59`, `#xxx61-69`     | BMS legacy long note として扱います。                                                                                         |
 | `#xxx97`, `#xxx98`           | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                            |
 | `#xxxA0`                     | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                          |
@@ -140,6 +140,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 ### 不可視ノート
 
 不可視ノートは通常の演奏対象とは別に保持します。
+可視ノートと同じタイミングルールで同レーンの keysound fallback state を更新します。不可視オブジェクトの early `BAD` 窓が開いた時点で、その WAV が後続の可視または不可視オブジェクトに置き換わるまで、そのレーンの現在 fallback 音になります。
 `showInvisibleNotes` が有効な場合だけ UI 描画対象へ含めますが、判定数や `summary.total` には含めません。
 
 ### FREE ZONE
@@ -322,6 +323,8 @@ bmson の基準値は `100%` です。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
 keysound fallback が存在する場合は、fallback 音を先に再生できます。
+fallback は early `BAD` 窓がすでに開いた同レーン最新 WAV です。そのため 2 ノート間の空打鍵では、次ノートの判定窓が始まるまで前 WAV を鳴らし続けます。
+次ノートの WAV は、その判定窓が開く前には使いません。
 fallback 再生後、 FREE ZONE 上のチャンネルなら空POOR は発火させずそのまま return します (FREE ZONE は author が空打鍵による発音を意図したエリアなので、 phantom press 扱いしない)。
 LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させません (直前 LN の意図された tail re-tap として扱う)。
 
@@ -460,7 +463,8 @@ long note の確定タイミングは `AUTO` と同じく終点です。
 ### `MANUAL`
 
 `MANUAL` は入力トークンに対応するレーン集合から、`BAD` 窓内で最も適切な候補ノートを選びます。
-候補がない場合、runtime は keysound fallback があれば先に再生し、その後 FREE ZONE 上のチャンネルまたは long-note repeat-suppress 窓内でない限り、LR2 互換の空POORを適用します。
+候補がない場合、runtime は early `BAD` 窓がすでに開いた同レーン最新 keysound を再生でき、その後 FREE ZONE 上のチャンネルまたは long-note repeat-suppress 窓内でない限り、LR2 互換の空POORを適用します。
+次ノートの keysound は、そのノートの判定窓が開く前には再生しません。
 
 手動入力では、ノート未入力のまま `BAD` 窓を過ぎた対象を自動的に `POOR` とします。
 不可視ノートはこの miss 判定の対象に含めません。

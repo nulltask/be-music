@@ -8,7 +8,7 @@ timing、note、判定、score、gauge、BGA event の意味など、CLI と共�
 ## 共通 runtime 連携
 
 browser player は gameplay を `@be-music/player/core/engine` 経由で駆動します。
-判定、fallback keysound routing、long note、地雷優先度、score、gauge、chart finish の意味論は engine が担当します。
+判定、keysound trigger routing、long note、地雷優先度、score、gauge、chart finish の意味論は engine が担当します。
 LR2 gameplay scene は LR2 の `PLAYSTART` gate で 1 回 engine を起動し、beatoraja gameplay scene は `BeatorajaRuntimeAdapter` の背後に engine を mount します。
 どちらの経路も engine の frame snapshot を scene state へ反映し、UI command を Pixi の視覚効果へ変換します。
 

@@ -2368,7 +2368,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       nonPlayableRealtimeAudioEndSeconds,
     );
   const {
-    notes,
+    laneSoundNotes,
     landmineNotes,
     invisibleNotes,
     renderNotes,
@@ -2940,6 +2940,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     return candidateChannelsBuffer;
   };
+  const isLongNoteRepeatSuppressedInput = (candidateChannels: ReadonlySet<string>, nowSec: number): boolean => {
+    for (const channel of candidateChannels) {
+      const suppressUntil = longNoteSuppressUntilSecondsByChannel.get(channel);
+      if (suppressUntil !== undefined && nowSec < suppressUntil) {
+        return true;
+      }
+    }
+    return false;
+  };
 
   const handleMappedInputTokens = (tokens: readonly string[], nowMs: number, nowSec: number): void => {
     const candidateChannels = resolveMappedInputChannels(tokens);
@@ -3040,14 +3049,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         // Active LN re-tap inside the hold-grace window — input is part of the sustain, not a phantom press.
         return;
       }
-      const fallback = findLaneSoundCandidate(notes, candidateChannels, nowSec);
+      if (isLongNoteRepeatSuppressedInput(candidateChannels, nowSec)) {
+        // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side. Treat as benign.
+        return;
+      }
+      const fallback = findLaneSoundCandidate(laneSoundNotes, candidateChannels, nowSec, badWindowSeconds);
       if (fallback) {
-        const suppressUntil = longNoteSuppressUntilSecondsByChannel.get(fallback.channel);
-        const shouldSuppressFallback = suppressUntil !== undefined && nowSec < suppressUntil;
-        if (shouldSuppressFallback) {
-          // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side. Treat as benign.
-          return;
-        }
         if (!uiEnabled) {
           writePlayableSampleTriggerEventLog(
             writeOutput,

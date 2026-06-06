@@ -8,7 +8,7 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 ## Shared runtime integration
 
 The browser player drives gameplay through `@be-music/player/core/engine`.
-The engine owns judgment, fallback keysound routing, long-note handling, mine priority, score, gauge, and chart-finish
+The engine owns judgment, keysound trigger routing, long-note handling, mine priority, score, gauge, and chart-finish
 semantics. The LR2 gameplay scene starts one engine run at the LR2 `PLAYSTART` gate, while the beatoraja gameplay
 scene mounts the engine behind `BeatorajaRuntimeAdapter`. Both paths mirror engine frame snapshots into scene state
 and translate engine UI commands into Pixi visual effects.

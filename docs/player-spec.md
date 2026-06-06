@@ -37,7 +37,7 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#xxx06`                     | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                         |
 | `#xxx09`                     | Reflects in time resolution as STOP.                                                                                                                           |
 | `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY.                              |
-| `#xxx31-39`, `#xxx41-49`     | Treated as invisible notes. It is used for manual input suggestions and display aids, but is not included in `summary.total`. `AUTO` does not produce a sound. |
+| `#xxx31-39`, `#xxx41-49`     | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound. |
 | `#xxx51-59`, `#xxx61-69`     | Treated as BMS legacy long note.                                                                                                                               |
 | `#xxx97`, `#xxx98`           | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                              |
 | `#xxxA0`                     | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                         |
@@ -140,7 +140,8 @@ If `#WAV00` is defined, the player uses it as the explosion sound when a landmin
 ### Invisible Note
 
 Invisible notes are kept separate from the normal playing target.
-It is included in the UI drawing target only when `showInvisibleNotes` is enabled, but it is not included in the number of judgments or `summary.total`.
+They update the same-lane keysound fallback state using the same timing rule as visible notes: once the invisible object's early `BAD` window opens, that WAV becomes the lane's current fallback sound until a later visible or invisible object takes over.
+They are included in the UI drawing target only when `showInvisibleNotes` is enabled, but are not included in the number of judgments or `summary.total`.
 
 ### FREE ZONE
 
@@ -322,6 +323,8 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
 If a keysound fallback exists, play it first.
+The fallback is the latest same-lane WAV whose early `BAD` window has already opened, so a blank press between two notes keeps playing the previous WAV until the next note's judgment window begins.
+The next note's WAV is never used before that window opens.
 After the fallback, if the channel sits in a FREE ZONE, suppress empty POOR and return — FREE ZONE is the author's explicit "press here for ambience" region, not a phantom press.
 The LN repeat-suppress window after a long-note release is treated the same way (the input is the intended tail re-tap, not phantom).
 
@@ -460,7 +463,8 @@ No judgment window or manual input candidate search is used.
 ### `MANUAL`
 
 `MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, the runtime first plays a keysound fallback when one exists, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
+If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
+It does not play the next pending lane keysound before that note's judgment window opens.
 
 In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.
 Invisible notes are not included in this miss judgment.

@@ -91,52 +91,27 @@ function noteIsJudged(note: JudgeableNote): boolean {
   return note.judged;
 }
 
-export function findLaneSoundCandidate<T extends JudgeableNote>(
+export function findLaneSoundCandidate<T extends JudgeCandidate>(
   notes: ReadonlyArray<T>,
   candidateChannels: ReadonlySet<string>,
   nowSec: number,
+  activationWindowSec = 0,
 ): T | undefined {
   if (notes.length === 0 || candidateChannels.size === 0) {
     return undefined;
   }
 
-  // Bidirectional walk from the bisect pivot. Notes are sorted by `seconds`, so the
-  // first matching unjudged note we encounter is the nearest unjudged candidate; once
-  // we have one, every further note can only be farther away and we can stop.
-  const pivot = lowerBoundBySeconds(notes, nowSec);
-  let left = pivot - 1;
-  let right = pivot;
-  let nearestAny: T | undefined;
-  let nearestAnyDelta = Number.POSITIVE_INFINITY;
-
-  while (left >= 0 || right < notes.length) {
-    const leftDelta = left >= 0 ? nowSec - notes[left]!.seconds : Number.POSITIVE_INFINITY;
-    const rightDelta = right < notes.length ? notes[right]!.seconds - nowSec : Number.POSITIVE_INFINITY;
-    const stepLeft = leftDelta <= rightDelta;
-    let note: T;
-    let delta: number;
-    if (stepLeft) {
-      note = notes[left]!;
-      delta = leftDelta;
-      left -= 1;
-    } else {
-      note = notes[right]!;
-      delta = rightDelta;
-      right += 1;
-    }
-
+  // LR2-style lane sound hold: do not look ahead to the closest future note. A lane's fallback sound only advances
+  // when that note's early judgment window has opened, then remains current until the next same-lane window opens.
+  const latestEligibleSeconds = nowSec + Math.max(0, activationWindowSec) + 1e-9;
+  for (let index = lowerBoundBySeconds(notes, latestEligibleSeconds); index > 0; ) {
+    index -= 1;
+    const note = notes[index]!;
     if (!candidateChannels.has(note.channel)) {
       continue;
     }
-    if (!note.judged) {
-      // Closest unjudged found — outward walk is monotonic in delta, so this is optimal.
-      return note;
-    }
-    if (delta < nearestAnyDelta) {
-      nearestAnyDelta = delta;
-      nearestAny = note;
-    }
+    return note;
   }
 
-  return nearestAny;
+  return undefined;
 }

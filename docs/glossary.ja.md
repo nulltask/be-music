@@ -79,7 +79,7 @@
 ## 実行時と表示
 
 - **candidate note**: 入力イベントが来たときに、そのレーン集合で判定対象として探す未判定ノートです。
-- **keysound fallback**: 判定候補ノートはないが、対応レーンに補助発音がある場合に鳴らす fallback 音です。fallback 後、通常レーンでは LR2 互換の空POORを発火し、FREE ZONE と long-note repeat-suppress 窓内では発火しません。
+- **keysound fallback**: LR2 互換の空打鍵時発音です。判定対象ノートがない場合、manual play は early BAD 窓がすでに開いた同レーン最新の可視または不可視 WAV を再発音できます。ただし、そのノートの判定窓が開く前の未来 pending WAV は先読みしません。
 - **empty POOR / 空POOR**: LR2 互換の空打鍵副作用です。judge 表示を `POOR` にし、POOR BGA を発火し、`EMPTY_POOR` gauge delta を適用しますが、judge counter、combo、EX-SCORE、score は変えません。
 - **stateSignals / uiSignals**: engine 本体から UI adapter へ状態を渡す信号群です。judge、combo、frame、lane flash、hold state などを通知します。
 - **UI runtime**: player core と TUI/PixiJS などの具体的 frontend をつなぐ runtime display adapter です。
