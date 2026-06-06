@@ -4,17 +4,19 @@
  * Three modes are supported:
  *
  * - **`'split'`** (default) — separate compressors on the key-sound and BGM buses, plus a master compressor that
- *   catches the summed peaks. Each bus is tuned for its content: key bus is transient-aggressive (jacks / dense input
- *   bursts), BGM bus is gentler / more musical, master is a final clip-protection limiter. This pattern matches the
- *   standard mastering bus layout and prevents the BGM from ducking under dense input bursts (the classic single-bus
- *   failure mode).
+ *   catches the summed peaks. Each compressed mode trims the signal before compression, then restores most of that
+ *   level after the compressor stack, so hot source files do not drive the compressors as hard. Each bus is tuned for
+ *   its content: key bus is transient-aware (jacks / dense input bursts), BGM bus is gentler / more musical, master is
+ *   a final clip-protection limiter. This pattern matches the standard mastering bus layout and prevents the BGM from
+ *   ducking under dense input bursts (the classic single-bus failure mode).
  *
  * - **`'legacy'`** — the original single-compressor bus, kept for A/B comparison via the demo's `?compressor=legacy`
  *   URL flag. Sample sources still connect to the same `keyMixer` / `bgmMixer` nodes so the gameplay code stays
  *   mode-agnostic; the builder just collapses both into a single compressor stage.
  *
- * - **`'off'`** — bypass every compressor. The two bus mixers wire directly to `audioContext.destination`. Used by the
- *   demo checkbox to compare against an unprocessed signal path.
+ * - **`'off'`** — bypass every compressor, compressed-mode input trim, and makeup gain. The two bus mixers still pass
+ *   through the chart-level `#VOLWAV` gain and output tap. Used by the demo checkbox to compare against an unprocessed
+ *   signal path.
  *
  * The graph topology stays stable across mode switches: the `keyMixer` / `bgmMixer` `GainNode`s are always the
  * connection point for sample sources, so flipping the mode is a `disconnect()` + reconnect of the downstream wiring
@@ -49,40 +51,38 @@ export interface CompressorParams {
 }
 
 /**
- * Key-sound bus compressor. Tuned to catch transient peak summing during dense jacks and 16th-note input bursts without
- * dulling single-hit transients too much.
+ * Key-sound bus compressor. Tuned to catch transient peak summing during dense jacks and 16th-note input bursts while
+ * leaving normal single-hit source files mostly alone.
  *
- * Rationale per parameter: - `threshold = -10`: lower than the master so the key bus engages first under load. Quiet
- * single hits don't trigger anything. - `ratio = 6`: aggressive enough to flatten jack bursts, not a limiter (ratio
- * 10+) so each hit still carries through. - `attack = 0.001`: as fast as Web Audio practically goes — percussive
- * transients (drums / scratch) need to be caught at the leading edge. - `release = 0.08`: 80 ms = roughly one 16th note
- * at 180 BPM, so the compressor recovers between hits in dense bursts but stays engaged across same-position summing. -
- * `knee = 4`: slightly hard, biased toward "limiter-ish" feel.
+ * Rationale per parameter: - `threshold = -6`: high enough that hot-but-normal hits are not constantly smashed after
+ * the compressor input trim, while dense same-lane bursts still cross it. - `ratio = 4`: controls bursts without
+ * flattening attacks as much as the previous more aggressive setting. - `attack = 0.002`: fast, but leaves a tiny bit
+ * more transient than the hard limiter-style 1 ms setting. - `release = 0.10`: fast enough to recover between dense
+ * hits, long enough to avoid obvious chatter. - `knee = 6`: smoother onset to reduce audible threshold artifacts.
  */
 export const KEY_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
-  threshold: -10,
-  ratio: 6,
-  attack: 0.001,
-  release: 0.08,
-  knee: 4,
+  threshold: -6,
+  ratio: 4,
+  attack: 0.002,
+  release: 0.1,
+  knee: 6,
 };
 
 /**
  * BGM bus compressor. Tuned to gently glue the auto-triggered background bed without the per-hit pumping of the key bus
  * compressor.
  *
- * Rationale per parameter: - `threshold = -12`: a touch lower than key bus because the BGM bed is generally hotter /
- * steadier in level, so we want any compression to feel "always-on" rather than gated. - `ratio = 3`: gentle, musical
- * compression — keep the bed feeling natural. - `attack = 0.005`: 5 ms lets BGM drum-loop kicks pass largely intact (1
- * ms would dull them). - `release = 0.20`: 200 ms is long enough to avoid pumping on the beat grid. - `knee = 10`:
- * soft, so the compressor doesn't introduce a detectable threshold artefact.
+ * Rationale per parameter: - `threshold = -8`: avoids constant gain reduction on already-mastered BGM samples after
+ * input trim, but still catches overloaded beds. - `ratio = 2.5`: gentle, musical compression. - `attack = 0.01`: lets
+ * BGM drum-loop kicks breathe. - `release = 0.25`: long enough to avoid pumping on the beat grid. - `knee = 12`: soft,
+ * so the compressor doesn't introduce a detectable threshold artefact.
  */
 export const BGM_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
-  threshold: -12,
-  ratio: 3,
-  attack: 0.005,
-  release: 0.2,
-  knee: 10,
+  threshold: -8,
+  ratio: 2.5,
+  attack: 0.01,
+  release: 0.25,
+  knee: 12,
 };
 
 /**
@@ -90,14 +90,14 @@ export const BGM_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
  * buses, the master only needs to catch the summed peaks, so it's tuned as a hard limiter rather than a musical
  * compressor.
  *
- * Rationale per parameter: - `threshold = -3`: leaves 3 dB of explicit headroom below 0 dBFS, so even worst-case
+ * Rationale per parameter: - `threshold = -2`: leaves 2 dB of explicit headroom below 0 dBFS, so even worst-case
  * summing won't clip the destination. - `ratio = 10`: ≈ limiter behavior. The bus inputs are already processed, so we
  * can be aggressive here without "smashing". - `attack = 0.001`, `release = 0.10`: fast capture, moderate release for
  * transparent peak control. - `knee = 2`: hard knee so the limiter activates decisively at the threshold (no slow
  * onset).
  */
 export const MASTER_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
-  threshold: -3,
+  threshold: -2,
   ratio: 10,
   attack: 0.001,
   release: 0.1,
@@ -117,13 +117,18 @@ export const LEGACY_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
 };
 
 /**
- * Makeup gain (linear, not dB) applied after the master compressor stage. Pinned at unity gain (1.0 = 0 dB) —
- * the per-bus compressors are doing most of the level shaping; the master is a limiter, not a loudness
- * booster. The shared engine can trigger dense key/BGM bursts through the Web Audio bus, and the previous +1 dB
- * makeup made that density audible as compressor pumping under load. 0 dB keeps the post-compression level flat
- * without forcing a loudness boost the limiter then has to fight.
+ * Compressor input trim (linear, not dB) applied only in compressed modes (`'split'` / `'legacy'`). This gives hot
+ * source files extra headroom before they hit the compressor thresholds, so normal playback stays more transparent and
+ * the compressors spend most of their work on real overloads.
  */
-export const MASTER_MAKEUP_GAIN_LINEAR = 1.0;
+export const COMPRESSOR_INPUT_TRIM_GAIN_LINEAR: number = 10 ** (-3 / 20);
+
+/**
+ * Makeup gain (linear, not dB) applied after the compressor stack. It broadly offsets
+ * `COMPRESSOR_INPUT_TRIM_GAIN_LINEAR`, but remains inside the master limiter path so peaks are still caught before the
+ * chart-level `#VOLWAV` gain and output tap.
+ */
+export const MASTER_MAKEUP_GAIN_LINEAR: number = 10 ** (3 / 20);
 
 /**
  * Per-mixer summing-headroom gain (linear). Each `BufferSourceNode` connects to `keyMixer` / `bgmMixer` at unity, so N
@@ -132,10 +137,11 @@ export const MASTER_MAKEUP_GAIN_LINEAR = 1.0;
  * mixer gain below unity buys `1/MIXER_HEADROOM_GAIN_LINEAR` clean voices before the compressor stack has to do
  * anything; remaining peaks are caught by the master limiter.
  *
- * `0.5` ≈ −6 dB → ~2 simultaneous unity-amplitude samples sum to full scale. Combined with the split-bus master limiter
- * (threshold = −3 dB, ratio 10) the perceived headroom is generous enough that sustained clipping is essentially
- * impossible on typical BMS charts. Single-source playback is ~5 dB quieter than with unity mixers — the user can
- * compensate with system volume, which is preferable to having the player surreptitiously clip.
+ * `0.5` ≈ −6 dB → ~2 simultaneous unity-amplitude samples sum to full scale. Combined with compressed-mode input trim
+ * and the split-bus master limiter (threshold = −2 dB, ratio 10), the perceived headroom is generous enough that
+ * sustained clipping is essentially impossible on typical BMS charts. Single-source playback is quieter than with unity
+ * mixers, but compressed modes restore a measured amount after the compressor stack; this is preferable to having the
+ * player surreptitiously clip.
  */
 export const MIXER_HEADROOM_GAIN_LINEAR = 0.5;
 
@@ -185,9 +191,10 @@ export interface AudioBusHandle {
   setMode(next: CompressorMode): void;
   getMode(): CompressorMode;
   /**
-   * Toggle one compressor stage in `'split'` mode. With every stage off the split bus collapses to `keyMixer → makeup →
-   * destination` and `bgmMixer → makeup → destination` (the per-bus / master compressors are all bypassed but the
-   * makeup gain still applies, distinct from the global `'off'` mode that bypasses everything).
+   * Toggle one compressor stage in `'split'` mode. With every stage off the split bus collapses to
+   * `keyMixer → input trim → makeup → destination` and `bgmMixer → input trim → makeup → destination` (the per-bus /
+   * master compressors are all bypassed but compressed-mode gain staging still applies, distinct from the global
+   * `'off'` mode that bypasses everything).
    *
    * No-op in `'legacy'` / `'off'` modes — but the state is still remembered, so a later `setMode('split')` picks it up.
    */
@@ -255,6 +262,10 @@ export function buildAudioBus(
   // chance to react. See `MIXER_HEADROOM_GAIN_LINEAR` for why ~−6 dB.
   keyMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
   bgmMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
+  const keyCompressorInput = audioContext.createGain();
+  const bgmCompressorInput = audioContext.createGain();
+  keyCompressorInput.gain.value = COMPRESSOR_INPUT_TRIM_GAIN_LINEAR;
+  bgmCompressorInput.gain.value = COMPRESSOR_INPUT_TRIM_GAIN_LINEAR;
   // Per-bus compressors plus the master — created up front, wired in/out by `applyMode`. Held even when the active mode
   // doesn't use them so the next `setMode` call can splice them back in without re-creating Web Audio nodes (cheap, but
   // recreating would also reset their internal envelope state which wastes any "warm" gain reduction the mode switch
@@ -311,6 +322,8 @@ export function buildAudioBus(
   function applyRouting(): void {
     keyMixer.disconnect();
     bgmMixer.disconnect();
+    keyCompressorInput.disconnect();
+    bgmCompressorInput.disconnect();
     keyComp.disconnect();
     bgmComp.disconnect();
     masterComp.disconnect();
@@ -324,25 +337,29 @@ export function buildAudioBus(
       return;
     }
     if (activeMode === 'legacy') {
-      // keyMixer + bgmMixer → legacyComp → makeup → destination. Stage toggles are intentionally ignored here — legacy
-      // is a single-comp architecture, "disable key only" doesn't map onto its topology. The flags persist so toggling
-      // back to split mode picks them up.
-      keyMixer.connect(legacyComp);
-      bgmMixer.connect(legacyComp);
+      // keyMixer + bgmMixer → input trim → legacyComp → makeup → destination. Stage toggles are intentionally ignored
+      // here — legacy is a single-comp architecture, "disable key only" doesn't map onto its topology. The flags
+      // persist so toggling back to split mode picks them up.
+      keyMixer.connect(keyCompressorInput);
+      bgmMixer.connect(bgmCompressorInput);
+      keyCompressorInput.connect(legacyComp);
+      bgmCompressorInput.connect(legacyComp);
       legacyComp.connect(makeup);
       return;
     }
     // 'split' — 3-stage architecture with per-stage bypass.
     //
-    // `stages.key` — engage `keyComp` (else keyMixer skips ahead) `stages.bgm` — engage `bgmComp` (else bgmMixer skips
-    // ahead) `stages.master` — engage `masterComp` (else key/BGM tails meet at `makeup`)
+    // `stages.key` — engage `keyComp` (else key input-trim skips ahead) `stages.bgm` — engage `bgmComp` (else BGM
+    // input-trim skips ahead) `stages.master` — engage `masterComp` (else key/BGM tails meet at `makeup`)
     //
     // The branch graph stays the same shape; only which intermediate node each path threads through changes.
     // Sample-source mixers never see the difference.
-    const keyTail: AudioNode = stages.key ? keyComp : keyMixer;
-    const bgmTail: AudioNode = stages.bgm ? bgmComp : bgmMixer;
-    if (stages.key) keyMixer.connect(keyComp);
-    if (stages.bgm) bgmMixer.connect(bgmComp);
+    keyMixer.connect(keyCompressorInput);
+    bgmMixer.connect(bgmCompressorInput);
+    const keyTail: AudioNode = stages.key ? keyComp : keyCompressorInput;
+    const bgmTail: AudioNode = stages.bgm ? bgmComp : bgmCompressorInput;
+    if (stages.key) keyCompressorInput.connect(keyComp);
+    if (stages.bgm) bgmCompressorInput.connect(bgmComp);
     if (stages.master) {
       keyTail.connect(masterComp);
       bgmTail.connect(masterComp);
@@ -428,6 +445,8 @@ export function buildAudioBus(
       try {
         keyMixer.disconnect();
         bgmMixer.disconnect();
+        keyCompressorInput.disconnect();
+        bgmCompressorInput.disconnect();
         keyComp.disconnect();
         bgmComp.disconnect();
         masterComp.disconnect();

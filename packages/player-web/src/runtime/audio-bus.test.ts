@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BGM_BUS_COMPRESSOR_PARAMS,
+  COMPRESSOR_INPUT_TRIM_GAIN_LINEAR,
   KEY_BUS_COMPRESSOR_PARAMS,
   LEGACY_COMPRESSOR_PARAMS,
   MASTER_BUS_COMPRESSOR_PARAMS,
@@ -155,22 +156,19 @@ describe('compressor parameter constants', () => {
     expect(inSpecRange(LEGACY_COMPRESSOR_PARAMS)).toBe(true);
   });
 
-  it('orders thresholds master <= key <= BGM (later stage = lower threshold)', () => {
-    // The split design intentionally engages each bus before the master so peaks are shaped per-source, then the master
-    // only catches summed-bus peaks. If someone "fixed" master to be less aggressive than its inputs, the design intent
-    // breaks.
+  it('keeps the master limiter threshold above the per-bus compressor thresholds', () => {
+    // The split design trims compressor input first, lets each bus catch overloads, then leaves the master mostly as
+    // clip protection. A lower master threshold would make the final limiter do musical compression again.
     expect(MASTER_BUS_COMPRESSOR_PARAMS.threshold).toBeGreaterThan(KEY_BUS_COMPRESSOR_PARAMS.threshold);
     expect(MASTER_BUS_COMPRESSOR_PARAMS.threshold).toBeGreaterThan(BGM_BUS_COMPRESSOR_PARAMS.threshold);
   });
 
-  it('keeps the master makeup gain near unity', () => {
-    // Anything wildly above 1 would be a loudness boost rather than a make-up — at these compression ratios the
-    // "lost" level is small, so >1.5 (≈ +3.5 dB) would suggest a typo. The lower bound is 1.0 (= 0 dB, no
-    // makeup); Phase 4c pinned this at unity because the engine's LR2-compatible lane keysound fallback /
-    // Free-Zone empty-press playback increased typical simultaneous-sample density and a non-unity
-    // makeup made compressor pumping audible.
+  it('balances compressed-mode input trim with restrained makeup gain', () => {
+    expect(COMPRESSOR_INPUT_TRIM_GAIN_LINEAR).toBeGreaterThan(0);
+    expect(COMPRESSOR_INPUT_TRIM_GAIN_LINEAR).toBeLessThan(1);
     expect(MASTER_MAKEUP_GAIN_LINEAR).toBeGreaterThanOrEqual(1);
     expect(MASTER_MAKEUP_GAIN_LINEAR).toBeLessThan(1.5);
+    expect(COMPRESSOR_INPUT_TRIM_GAIN_LINEAR * MASTER_MAKEUP_GAIN_LINEAR).toBeCloseTo(1, 9);
   });
 });
 
@@ -198,28 +196,35 @@ describe('buildAudioBus graph topology', () => {
   // downstream-only re-wire. Verifying topology this way (rather than on the real Web Audio graph) lets the tests run
   // under Node — and lets us assert the structure without depending on the browser implementation.
 
-  it('routes both mixers through key/BGM/master compressors in split mode', () => {
+  it('routes both mixers through input trims before key/BGM/master compressors in split mode', () => {
     const { context, destination } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
     expect(reachesDestination(keyMixer, destination)).toBe(true);
     expect(reachesDestination(bgmMixer, destination)).toBe(true);
-    // Walk the chain: keyMixer's first edge must be a compressor (the key bus comp), not the destination directly. Same
-    // for BGM.
-    expect([...keyMixer.outgoing].every((node) => node.type === 'compressor')).toBe(true);
-    expect([...bgmMixer.outgoing].every((node) => node.type === 'compressor')).toBe(true);
+    // Walk the chain: each mixer first hits compressed-mode input trim, then the per-bus compressor.
+    const keyTrim = [...keyMixer.outgoing][0]!;
+    const bgmTrim = [...bgmMixer.outgoing][0]!;
+    expect(keyTrim.type).toBe('gain');
+    expect(bgmTrim.type).toBe('gain');
+    expect([...keyTrim.outgoing].every((node) => node.type === 'compressor')).toBe(true);
+    expect([...bgmTrim.outgoing].every((node) => node.type === 'compressor')).toBe(true);
   });
 
-  it('collapses both buses into a single compressor in legacy mode', () => {
+  it('collapses both buses through input trims into a single compressor in legacy mode', () => {
     const { context, destination } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'legacy');
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
     expect(reachesDestination(keyMixer, destination)).toBe(true);
     expect(reachesDestination(bgmMixer, destination)).toBe(true);
-    // Legacy mode: both mixers should share the same downstream compressor target (no per-bus comps in this mode).
-    const sharedTargets = [...keyMixer.outgoing].filter((node) => bgmMixer.outgoing.has(node));
+    const keyTrim = [...keyMixer.outgoing][0]!;
+    const bgmTrim = [...bgmMixer.outgoing][0]!;
+    expect(keyTrim.type).toBe('gain');
+    expect(bgmTrim.type).toBe('gain');
+    // Legacy mode: both trim nodes should share the same downstream compressor target (no per-bus comps in this mode).
+    const sharedTargets = [...keyTrim.outgoing].filter((node) => bgmTrim.outgoing.has(node));
     expect(sharedTargets).toHaveLength(1);
     expect(sharedTargets[0]?.type).toBe('compressor');
   });
@@ -417,8 +422,8 @@ describe('buildAudioBus per-stage toggles', () => {
     bus.setStageEnabled('master', false);
     const keyMixer = bus.keyMixer as unknown as FakeNode;
     const bgmMixer = bus.bgmMixer as unknown as FakeNode;
-    // No compressors on either path, but the makeup gain is still there — distinct from `'off'` mode which bypasses
-    // makeup too.
+    // No compressors on either path, but compressed-mode trim + makeup are still there — distinct from `'off'` mode
+    // which bypasses both.
     expect(compressorsReachableFrom(keyMixer)).toBe(0);
     expect(compressorsReachableFrom(bgmMixer)).toBe(0);
     expect(reachesDestination(keyMixer, destination)).toBe(true);
