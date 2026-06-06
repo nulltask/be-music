@@ -2,6 +2,7 @@ import type { BeMusicJson } from '@be-music/json';
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
 import {
+  CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
   collectChartPreviewTriggers,
   DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS,
   findFirstAudibleOffsetSeconds,
@@ -103,6 +104,25 @@ describe('collectChartPreviewTriggers', () => {
     // Sorted by seconds ascending.
     expect(triggers[0]!.seconds).toBeLessThan(triggers[1]!.seconds);
   });
+
+  test('excludes visible and invisible play-lane keysounds from fallback preview playback', () => {
+    // The song-select fallback is only meant to audition authored BGM-ish sample triggers. Play-lane keysounds belong
+    // to gameplay input, including invisible objects that update a lane's keysound during play.
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' },
+      { measure: 0, channel: '11', position: [1, 4], value: 'BB' },
+      { measure: 0, channel: '31', position: [1, 2], value: 'CC' },
+      { measure: 0, channel: '51', position: [3, 4], value: 'DD' },
+    ];
+    chart.resources.wav = { AA: 'bgm.wav', BB: 'visible.wav', CC: 'invisible.wav', DD: 'long-note.wav' };
+
+    const triggers = collectChartPreviewTriggers(chart, 3);
+    expect(triggers.map((trigger) => trigger.channel)).toEqual(['01']);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA']);
+  });
 });
 
 describe('findFirstAudibleOffsetSeconds', () => {
@@ -179,5 +199,9 @@ describe('exported constants', () => {
     // Same rationale as above — used for the in-place chart playback when a chart didn't ship `#PREVIEW`. 30 s gives
     // intro + first verse without scheduling thousands of triggers up-front.
     expect(DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS).toBe(30);
+  });
+
+  test('preview stop fade defaults to 250 ms', () => {
+    expect(CHART_PREVIEW_STOP_FADE_OUT_SECONDS).toBe(0.25);
   });
 });
