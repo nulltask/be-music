@@ -2,7 +2,6 @@
 // Node-only modules (fs / path / fluent-ffmpeg) that Vite can't bundle for the demo target — see
 // `packages/player-web-demo/vite.config.ts` which explicitly drops the root alias for that reason.
 import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import { isPlayLaneSoundChannel } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
@@ -294,6 +293,22 @@ export class ChartPreviewEngine {
     this.finishSource(handle);
   }
 
+  private stopSourceAt(handle: PreviewSourceHandle, stopAt: number): void {
+    const scheduledStopAt = Number.isFinite(stopAt) ? Math.max(this.audioContext.currentTime, stopAt) : undefined;
+    try {
+      if (scheduledStopAt !== undefined) {
+        handle.source.stop(scheduledStopAt);
+      } else {
+        handle.source.stop();
+      }
+    } catch {
+      // Already stopped, never started, or context closed.
+    }
+    if (scheduledStopAt === undefined || scheduledStopAt <= this.audioContext.currentTime + 1e-6) {
+      this.finishSource(handle);
+    }
+  }
+
   private finishSource(handle: PreviewSourceHandle): void {
     const wasActive = this.activeSources.delete(handle);
     try {
@@ -429,8 +444,15 @@ export class ChartPreviewEngine {
     }
     const startAt = this.audioContext.currentTime;
     let scheduledCount = 0;
+    const activeBySlot = new Map<string, PreviewSourceHandle>();
     for (const trigger of triggers) {
       if (this.isStale(sequence)) return;
+      const activeSameSlot = activeBySlot.get(trigger.sampleKey);
+      // bmson `c = true` mirrors AUTO PLAY: the event continues the previous instance of this sample slot instead of
+      // retriggering a fresh attack.
+      if (chart.sourceFormat === 'bmson' && trigger.event.bmson?.c === true && activeSameSlot) {
+        continue;
+      }
       const buffer = buffers.get(trigger.sampleKey);
       if (!buffer) continue;
       let source: AudioBufferSourceNode;
@@ -445,15 +467,22 @@ export class ChartPreviewEngine {
       const offset = trigger.sampleOffsetSeconds ?? 0;
       const when = startAt + Math.max(0, trigger.seconds - leadOffsetSeconds);
       source.onended = (): void => {
+        if (activeBySlot.get(trigger.sampleKey) === handle) {
+          activeBySlot.delete(trigger.sampleKey);
+        }
         this.finishSource(handle);
       };
       try {
+        if (chart.sourceFormat === 'bms' && activeSameSlot) {
+          this.stopSourceAt(activeSameSlot, when);
+        }
         if (typeof trigger.sampleDurationSeconds === 'number') {
           source.start(when, offset, trigger.sampleDurationSeconds);
         } else {
           source.start(when, offset);
         }
         scheduledCount += 1;
+        activeBySlot.set(trigger.sampleKey, handle);
       } catch {
         // `start` rejects on negative offsets / out-of-range values that can sneak in for malformed bmson slice
         // metadata. Keep going — one bad trigger shouldn't mute the rest of the preview.
@@ -467,10 +496,9 @@ export class ChartPreviewEngine {
 }
 
 /**
- * Pure helper: pulls every non-play-lane sample-trigger event out of `chart` whose chart-time falls inside the preview
- * window. Play-lane sounds (visible notes, invisible notes, long-note channels, etc.) are gameplay keysounds, not
- * select-preview BGM, so they stay silent unless a real gameplay input targets them. Exported for tests so the
- * windowing math has direct coverage; production callers reach this through {@link ChartPreviewEngine}.
+ * Pure helper: pulls every sample-trigger event out of `chart` whose chart-time falls inside the preview window.
+ * Exported for tests so the windowing math has direct coverage; production callers reach this through {@link
+ * ChartPreviewEngine}.
  *
  * `cutoffSeconds <= 0` returns an empty array — the engine skips the in-place fallback entirely in that case.
  */
@@ -481,9 +509,7 @@ export function collectChartPreviewTriggers(
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   const resolver = createTimingResolver(chart);
   const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  return all
-    .filter((trigger) => !isPlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
-    .sort((left, right) => left.seconds - right.seconds);
+  return all.filter((trigger) => trigger.seconds < cutoffSeconds).sort((left, right) => left.seconds - right.seconds);
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

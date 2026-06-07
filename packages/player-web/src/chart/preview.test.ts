@@ -1,8 +1,10 @@
 import type { BeMusicJson } from '@be-music/json';
 import { createEmptyJson } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
 import {
   CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
+  ChartPreviewEngine,
+  type ChartPreviewTarget,
   collectChartPreviewTriggers,
   DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS,
   findFirstAudibleOffsetSeconds,
@@ -10,12 +12,16 @@ import {
   resolveChartPreviewPath,
 } from './preview.ts';
 
+const collectionMocks = vi.hoisted(() => ({
+  loadAssetBytes: vi.fn(),
+  resolveChartAudioAsset: vi.fn(),
+}));
+
+vi.mock('../collection/collection.ts', () => collectionMocks);
+
 /**
- * Pure helpers for the chart-preview engine — testable without a real `AudioContext` because they only inspect the
- * chart JSON.
- *
- * The engine itself is only meaningful in a browser AudioContext environment so it isn't tested here; the wiring it
- * depends on (`resolveChartAudioAsset`) is already covered in `library`-level tests.
+ * Pure helpers plus a tiny fake-AudioContext harness for the chart-preview engine. The real asset lookup wiring is
+ * already covered in collection-level tests; here we only need to observe preview scheduling behavior.
  */
 
 function makeBmsChart(preview: string | undefined): BeMusicJson {
@@ -33,6 +39,82 @@ function makeBmsonChart(previewMusic: string | undefined): BeMusicJson {
   }
   return json;
 }
+
+interface FakeBufferSource {
+  buffer: AudioBuffer | null;
+  onended: (() => void) | null;
+  connect: ReturnType<typeof vi.fn>;
+  disconnect: ReturnType<typeof vi.fn>;
+  start: ReturnType<typeof vi.fn>;
+  stop: ReturnType<typeof vi.fn>;
+}
+
+function makeMockAudioBuffer(durationSeconds = 1): AudioBuffer {
+  return { duration: durationSeconds, length: 44_100, numberOfChannels: 2, sampleRate: 44_100 } as AudioBuffer;
+}
+
+function makePreviewAudioMocks(): { audioContext: AudioContext; output: AudioNode; sources: FakeBufferSource[] } {
+  const sources: FakeBufferSource[] = [];
+  const makeGainNode = (): GainNode =>
+    ({
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      gain: {
+        value: 1,
+        cancelScheduledValues: vi.fn(),
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+    }) as unknown as GainNode;
+  const audioContext = {
+    currentTime: 0,
+    createBufferSource: vi.fn(() => {
+      const source: FakeBufferSource = {
+        buffer: null,
+        onended: null,
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+        start: vi.fn(),
+        stop: vi.fn(),
+      };
+      sources.push(source);
+      return source as unknown as AudioBufferSourceNode;
+    }),
+    createGain: vi.fn(makeGainNode),
+    decodeAudioData: vi.fn(async () => makeMockAudioBuffer()),
+  } as unknown as AudioContext;
+  return { audioContext, output: makeGainNode() as unknown as AudioNode, sources };
+}
+
+function makePreviewTarget(chart: BeMusicJson): ChartPreviewTarget {
+  return {
+    song: {
+      id: 'song',
+      sourceId: 'source',
+      sourceLabel: 'source',
+      sourceKind: 'files',
+      chartPath: 'song/test.bms',
+      directoryLabel: 'song',
+      fileLabel: 'test.bms',
+      title: 'test',
+      totalNotes: 0,
+      chart,
+    },
+    source: {
+      id: 'source',
+      kind: 'files',
+      label: 'source',
+      files: new Map(),
+    },
+  };
+}
+
+beforeEach(() => {
+  collectionMocks.loadAssetBytes.mockReset();
+  collectionMocks.resolveChartAudioAsset.mockReset();
+  collectionMocks.loadAssetBytes.mockResolvedValue(new Uint8Array([1, 2, 3]));
+  collectionMocks.resolveChartAudioAsset.mockImplementation((_source, _chartPath, path) => ({ path }));
+});
 
 describe('resolveChartPreviewPath', () => {
   test('returns `#PREVIEW` from a BMS chart', () => {
@@ -105,9 +187,9 @@ describe('collectChartPreviewTriggers', () => {
     expect(triggers[0]!.seconds).toBeLessThan(triggers[1]!.seconds);
   });
 
-  test('excludes visible and invisible play-lane keysounds from fallback preview playback', () => {
-    // The song-select fallback is only meant to audition authored BGM-ish sample triggers. Play-lane keysounds belong
-    // to gameplay input, including invisible objects that update a lane's keysound during play.
+  test('includes visible and invisible play-lane keysounds in fallback preview playback', () => {
+    // The fallback is AUTO PLAY-style chart playback, so play-lane sounds are part of the audible preview. Invisible
+    // objects are sample triggers too; they should not be dropped here.
     const chart = createEmptyJson('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
@@ -120,8 +202,50 @@ describe('collectChartPreviewTriggers', () => {
     chart.resources.wav = { AA: 'bgm.wav', BB: 'visible.wav', CC: 'invisible.wav', DD: 'long-note.wav' };
 
     const triggers = collectChartPreviewTriggers(chart, 3);
-    expect(triggers.map((trigger) => trigger.channel)).toEqual(['01']);
-    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA']);
+    expect(triggers.map((trigger) => trigger.channel)).toEqual(['01', '11', '31', '51']);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'CC', 'DD']);
+  });
+});
+
+describe('ChartPreviewEngine', () => {
+  test('schedules fallback preview keysounds alongside BGM triggers', async () => {
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' },
+      { measure: 0, channel: '11', position: [1, 4], value: 'BB' },
+      { measure: 0, channel: '31', position: [1, 2], value: 'CC' },
+    ];
+    chart.resources.wav = { AA: 'bgm.wav', BB: 'visible.wav', CC: 'invisible.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 3 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(3));
+    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0, 0.5, 1]);
+  });
+
+  test('stops the previous BMS source when the same WAV slot retriggers', async () => {
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: 'AA' },
+      { measure: 0, channel: '12', position: [1, 2], value: 'AA' },
+    ];
+    chart.resources.wav = { AA: 'same.wav' };
+    const { audioContext, output, sources } = makePreviewAudioMocks();
+    const engine = new ChartPreviewEngine(audioContext, output, { focusDelayMs: 0, fallbackDurationSeconds: 3 });
+
+    engine.focus(makePreviewTarget(chart));
+
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    expect(sources[0]!.start).toHaveBeenCalledWith(0, 0);
+    expect(sources[0]!.stop).toHaveBeenCalledWith(1);
+    expect(sources[1]!.start).toHaveBeenCalledWith(1, 0);
+    expect(sources[1]!.stop).not.toHaveBeenCalled();
   });
 });
 
