@@ -187,9 +187,9 @@ describe('collectChartPreviewTriggers', () => {
     expect(triggers[0]!.seconds).toBeLessThan(triggers[1]!.seconds);
   });
 
-  test('includes visible and invisible play-lane keysounds in fallback preview playback', () => {
-    // The fallback is AUTO PLAY-style chart playback, so play-lane sounds are part of the audible preview. Invisible
-    // objects are sample triggers too; they should not be dropped here.
+  test('includes visible keysounds but excludes invisible objects in fallback preview playback', () => {
+    // The fallback is AUTO PLAY-style chart playback: visible keysounds are audible, but invisible objects only update
+    // lane keysound state during gameplay and should not directly sound in AUTO/preview.
     const chart = createEmptyJson('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
@@ -202,13 +202,13 @@ describe('collectChartPreviewTriggers', () => {
     chart.resources.wav = { AA: 'bgm.wav', BB: 'visible.wav', CC: 'invisible.wav', DD: 'long-note.wav' };
 
     const triggers = collectChartPreviewTriggers(chart, 3);
-    expect(triggers.map((trigger) => trigger.channel)).toEqual(['01', '11', '31', '51']);
-    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'CC', 'DD']);
+    expect(triggers.map((trigger) => trigger.channel)).toEqual(['01', '11', '51']);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'DD']);
   });
 });
 
 describe('ChartPreviewEngine', () => {
-  test('schedules fallback preview keysounds alongside BGM triggers', async () => {
+  test('schedules visible fallback preview keysounds alongside BGM triggers', async () => {
     const chart = createEmptyJson('bms');
     chart.metadata.bpm = 120;
     chart.measures = [{ index: 0, length: 1 }];
@@ -223,8 +223,9 @@ describe('ChartPreviewEngine', () => {
 
     engine.focus(makePreviewTarget(chart));
 
-    await vi.waitFor(() => expect(sources).toHaveLength(3));
-    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0, 0.5, 1]);
+    await vi.waitFor(() => expect(sources).toHaveLength(2));
+    expect(sources.map((source) => source.start.mock.calls[0]?.[0])).toEqual([0, 0.5]);
+    expect(collectionMocks.resolveChartAudioAsset.mock.calls.map((call) => call[2])).not.toContain('invisible.wav');
   });
 
   test('stops the previous BMS source when the same WAV slot retriggers', async () => {

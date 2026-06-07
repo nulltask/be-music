@@ -2,7 +2,7 @@
 // Node-only modules (fs / path / fluent-ffmpeg) that Vite can't bundle for the demo target — see
 // `packages/player-web-demo/vite.config.ts` which explicitly drops the root alias for that reason.
 import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import type { BeMusicJson } from '@be-music/json';
+import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
 
@@ -107,10 +107,10 @@ export function resolveChartPreviewPath(chart: BeMusicJson): string | undefined 
  * 1. **`#PREVIEW` present** — the chart shipped a preview audio file. We resolve it through {@link
  *    resolveChartAudioAsset} (case-insensitive + codec fallback), decode once, and play it on a looped `BufferSource`.
  *
- * 2. **`#PREVIEW` absent** — fall back to playing the chart "in place": collect every `TimedSampleTrigger` whose
- *    `seconds` fall inside the fallback duration window, decode just those WAVs (a small subset of the chart's full
- *    `#WAVxx` table), and schedule each as a one-shot at `audioContext.currentTime + trigger.seconds`. Stops scheduling
- *    further triggers once the user moves cursor.
+ * 2. **`#PREVIEW` absent** — fall back to playing the chart "in place": collect every AUTO PLAY-audible
+ *    `TimedSampleTrigger` whose `seconds` fall inside the fallback duration window, decode just those WAVs (a small
+ *    subset of the chart's full `#WAVxx` table), and schedule each as a one-shot at `audioContext.currentTime +
+ *    trigger.seconds`. Stops scheduling further triggers once the user moves cursor.
  *
  * Lifecycle:
  *
@@ -496,9 +496,10 @@ export class ChartPreviewEngine {
 }
 
 /**
- * Pure helper: pulls every sample-trigger event out of `chart` whose chart-time falls inside the preview window.
- * Exported for tests so the windowing math has direct coverage; production callers reach this through {@link
- * ChartPreviewEngine}.
+ * Pure helper: pulls every AUTO PLAY-audible sample-trigger event out of `chart` whose chart-time falls inside the
+ * preview window. Invisible objects update lane keysound state during gameplay, but AUTO PLAY does not directly sound
+ * them, so the fallback preview skips them too. Exported for tests so the windowing math has direct coverage;
+ * production callers reach this through {@link ChartPreviewEngine}.
  *
  * `cutoffSeconds <= 0` returns an empty array — the engine skips the in-place fallback entirely in that case.
  */
@@ -509,7 +510,17 @@ export function collectChartPreviewTriggers(
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   const resolver = createTimingResolver(chart);
   const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  return all.filter((trigger) => trigger.seconds < cutoffSeconds).sort((left, right) => left.seconds - right.seconds);
+  return all
+    .filter((trigger) => !isInvisiblePlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
+    .sort((left, right) => left.seconds - right.seconds);
+}
+
+function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) return false;
+  const high = normalized.charCodeAt(0);
+  const low = normalized.charCodeAt(1);
+  return (high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39;
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {
