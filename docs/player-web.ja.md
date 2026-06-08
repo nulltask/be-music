@@ -79,6 +79,7 @@ LR2 default skin を verified compatibility target とし、custom theme は実�
 
 select scene は、hi-speed、autoplay、BGA mode/size、filter、sort、HS-FIX、HIDDEN/SUDDEN、lane cover、auto scratch、DP flip、1P/2P random / mirror mode、gauge variant を扱う LR2 PLAY OPTION control を scene 内で提供します。
 select 時の option は chart preparation 時に gameplay へ引き継ぎます。
+現在の shared-engine path は引き続き `GROOVE` gauge summary を publish します。LR2 gauge button は主に skin op state と scene-local setup を駆動し、2P independent gauge math はまだ接続していません。
 
 scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) と
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。

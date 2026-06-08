@@ -80,6 +80,7 @@ The default LR2 skin is the verified compatibility target; custom themes work be
 
 The select scene exposes in-scene LR2 PLAY OPTION controls for hi-speed, autoplay, BGA mode/size, filters, sort, HS-FIX, HIDDEN/SUDDEN, lane cover, auto scratch, DP flip, 1P/2P random and mirror modes, and gauge variants.
 Select-time options are carried into gameplay during chart preparation.
+The current shared-engine path still publishes a `GROOVE` gauge summary; LR2 gauge buttons mainly drive skin op state and the scene-local setup, and independent 2P gauge math is not wired yet.
 
 Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) and
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts). They handle destination keyframe evaluation,
