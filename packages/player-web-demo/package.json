@@ -27,7 +27,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260608.1",
     "ts-ebml": "^3.0.2",
-    "vite": "^8.0.11",
+    "vite": "^8.0.16",
     "vite-plugin-node-polyfills": "^0.28.0",
     "wrangler": "^4.98.0"
   }
