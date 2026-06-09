@@ -95,6 +95,7 @@ import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
+import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
@@ -447,7 +448,9 @@ class PlayerWebDemoApp {
 
   public start(): void {
     this.buildGui();
-    void this.showSelect();
+    // Keep the initial mount's promise so URL auto-load (below) can wait for the Pixi host to finish initializing
+    // before it drives its own `showSelect` — two concurrent first-mounts race and read the renderer before it exists.
+    const initialSelectReady = this.showSelect();
 
     this.elements.songInput.addEventListener('change', () => {
       const files = this.elements.songInput.files;
@@ -559,6 +562,16 @@ class PlayerWebDemoApp {
       dragDepth = 0;
       setDragging(false);
     });
+
+    // `?music=<url.zip>` / `?skin=<url.zip>` auto-load: fetch + expand the archives at boot and run them through the
+    // same pipeline as a drag-drop, so the select screen lists the archive's charts (with any skin already applied).
+    // Sequenced after the initial mount so it doesn't race the Pixi host's first-time renderer init.
+    const mediaParams = parseUrlMediaParams(window.location.href);
+    if (mediaParams.musicUrl || mediaParams.skinUrl) {
+      void initialSelectReady.then(() => this.loadFromUrl(mediaParams));
+    } else {
+      void initialSelectReady;
+    }
   }
 
   private async ensureHostMounted(): Promise<void> {
@@ -873,6 +886,46 @@ class PlayerWebDemoApp {
       this.setStatus('Theme loaded');
     }
     await this.showSelect();
+  }
+
+  /**
+   * Auto-loads a music and/or skin archive named by the `?music=` / `?skin=` URL parameters at boot, reusing the drop
+   * pipeline so nothing about song listing or skin application is special-cased.
+   *
+   * - The skin archive is expanded into per-file `File`s and handed to {@link processIncomingFiles}, which detects the
+   *   LR2 / beatoraja family and mounts it (it carries no charts, so it routes entirely to the theme loaders).
+   * - The music archive is passed as a single `.zip` to {@link loadSongs}, letting the player-web loader expand it via
+   *   its own guarded `unzipSync`; the select scene then lists every chart inside.
+   *
+   * Skin is loaded first so the select screen that follows is already themed. Failures (bad link, CORS, HTTP error)
+   * surface as a status line rather than throwing, so a broken URL never wedges the boot.
+   */
+  private async loadFromUrl(params: { musicUrl: string | undefined; skinUrl: string | undefined }): Promise<void> {
+    if (!params.musicUrl && !params.skinUrl) {
+      return;
+    }
+    showLoadingOverlay(this.elements);
+    this.selectView?.setVisible(false);
+    try {
+      if (params.skinUrl) {
+        this.setStatus('Fetching skin…');
+        await this.processIncomingFiles(await fetchZipAsFiles(params.skinUrl));
+      }
+      if (params.musicUrl) {
+        this.setStatus('Fetching music…');
+        await this.loadSongs([await fetchZipAsFile(params.musicUrl)]);
+        await this.showSelect();
+      }
+      if (this.collection.songs.length > 0) {
+        this.setStatus(describeSongCollection(this.collection));
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      dropLog.error('URL auto-load failed', error);
+      this.setStatus(`URL load failed: ${message}`);
+    } finally {
+      hideLoadingOverlay(this.elements);
+    }
   }
 
   private async loadSongs(files: File[]): Promise<void> {

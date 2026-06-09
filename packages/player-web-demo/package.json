@@ -1,11 +1,15 @@
 {
   "name": "@be-music/player-web-demo",
-  "version": "0.2.7",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
+    "build:cf": "vite build && printf 'ffmpeg-core/\\n.DS_Store\\n' > dist/.assetsignore",
+    "deploy:cf": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs && wrangler deploy",
+    "cf:r2:create": "wrangler r2 bucket create be-music-ffmpeg-core",
+    "cf:r2:push": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force",
     "clean": "rimraf dist tsconfig.tsbuildinfo node_modules/.vite",
     "typecheck": "tsgo -p tsconfig.typecheck.json --pretty",
     "lint": "oxlint .",
@@ -17,11 +21,14 @@
     "@be-music/beatoraja-skin": "workspace:*",
     "@be-music/lr2-skin": "workspace:*",
     "@be-music/player-web": "workspace:*",
+    "fflate": "^0.8.3",
     "lil-gui": "^0.21.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260608.1",
     "ts-ebml": "^3.0.2",
-    "vite": "^8.0.11",
-    "vite-plugin-node-polyfills": "^0.28.0"
+    "vite": "^8.0.16",
+    "vite-plugin-node-polyfills": "^0.28.0",
+    "wrangler": "^4.98.0"
   }
 }

@@ -89,6 +89,7 @@ import {
   resolveHighSpeedControlActionFromLaneChannels,
   formatRandomPatternSummary,
   PlayerInterruptedError,
+  preparePlaybackChartData,
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
@@ -927,6 +928,158 @@ describe('player', () => {
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = {
+      '01': 'a.wav',
+      '02': 'b.wav',
+    };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel: '11', position: [1, 2] as const, value: '02' },
+    ];
+    const preparedChart = preparePlaybackChartData(json, {}, false, 0);
+    expect(preparedChart.scorableNotes[0]?.seconds).toBeCloseTo(1, 6);
+    expect(preparedChart.scorableNotes[1]?.seconds).toBeCloseTo(1.5, 6);
+
+    const triggeredEvents: string[] = [];
+    const output: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      judgeWindowMs: 50,
+      preparedChart,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1300, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1380, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(triggeredEvents).toEqual(['01']);
+    expect(preparedChart.scorableNotes[0]?.judged).toBe(true);
+    expect(preparedChart.scorableNotes[1]?.judged).toBe(false);
+    expect(summary.poor).toBe(1);
+    expect(output.some((line) => line.includes('kind:sample-trigger') && line.includes('source:lane-fallback'))).toBe(
+      true,
+    );
+    expect(output.some((line) => line.includes('kind:judge') && line.includes('result:EMPTY_POOR'))).toBe(true);
+  });
+
+  test('player: invisible objects update the same-lane fallback keysound', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = {
+      '01': 'a.wav',
+      '02': 'b.wav',
+      '03': 'invisible.wav',
+    };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel: '31', position: [1, 5] as const, value: '03' },
+      { measure: 1, channel: '11', position: [1, 2] as const, value: '02' },
+    ];
+    const preparedChart = preparePlaybackChartData(json, {}, false, 0);
+    expect(preparedChart.scorableNotes[0]?.seconds).toBeCloseTo(1, 6);
+    expect(preparedChart.invisibleNotes[0]?.seconds).toBeCloseTo(1.2, 6);
+    expect(preparedChart.scorableNotes[1]?.seconds).toBeCloseTo(1.5, 6);
+
+    const triggeredEvents: string[] = [];
+    const output: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      judgeWindowMs: 50,
+      preparedChart,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1180, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1260, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(triggeredEvents).toEqual(['03']);
+    expect(triggeredEvents).not.toContain('02');
+    expect(preparedChart.scorableNotes[1]?.judged).toBe(false);
+    expect(summary.poor).toBe(1);
+    expect(output.some((line) => line.includes('kind:sample-trigger') && line.includes('value:03'))).toBe(true);
+    expect(output.some((line) => line.includes('kind:judge') && line.includes('result:EMPTY_POOR'))).toBe(true);
+  });
+
+  test('player: invisible objects do not auto-trigger without lane input in manual play', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = {
+      '03': 'invisible.wav',
+    };
+    json.events = [{ measure: 1, channel: '31', position: [1, 5] as const, value: '03' }];
+    const preparedChart = preparePlaybackChartData(json, {}, false, 0);
+    expect(preparedChart.invisibleNotes[0]?.seconds).toBeCloseTo(1.2, 6);
+
+    const triggeredEvents: string[] = [];
+    await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      preparedChart,
+      writeOutput: () => undefined,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(triggeredEvents).toEqual([]);
   });
 
   test('player: `#BASE 62` lowercase sample IDs are looked up case-sensitively at runtime', async () => {

@@ -67,6 +67,13 @@ export default defineConfig({
       {
         extends: true as const,
         test: {
+          name: '@be-music/player-web-demo',
+          include: ['packages/player-web-demo/src/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true as const,
+        test: {
           name: 'benchmark-scripts',
           include: ['scripts/bench/**/*.test.ts'],
         },

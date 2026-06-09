@@ -41,6 +41,7 @@ function resolveDefaultBaseDir(): string {
 
 export interface PreparedPlaybackChartData {
   notes: TimedPlayableNote[];
+  laneSoundNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
   invisibleNotes: TimedPlayableNote[];
   renderNotes: TimedPlayableNote[];
@@ -125,12 +126,15 @@ export function preparePlaybackChartData(
 ): PreparedPlaybackChartData {
   const extractedNotes = extractTimedNotes(resolvedJson, {
     includeLandmine: true,
-    includeInvisible: Boolean(options.showInvisibleNotes),
+    // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
+    // Keep extraction independent from the debug overlay option so audio semantics never depend on rendering settings.
+    includeInvisible: true,
     inferBmsLnTypeWhenMissing,
   });
   const notes = extractedNotes.playableNotes;
   const landmineNotes = extractedNotes.landmineNotes;
   const invisibleNotes = extractedNotes.invisibleNotes;
+  const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
   const totalSeconds = Math.max(
     resolvePlayableNotesTailSeconds(notes),
@@ -153,6 +157,7 @@ export function preparePlaybackChartData(
 
   return {
     notes,
+    laneSoundNotes,
     landmineNotes,
     invisibleNotes,
     renderNotes,
@@ -243,6 +248,21 @@ function resolvePlayableNotesTailSeconds(notes: ReadonlyArray<TimedPlayableNote>
     }
   }
   return tailSeconds;
+}
+
+function compareLaneSoundNotes(left: TimedPlayableNote, right: TimedPlayableNote): number {
+  if (left.seconds !== right.seconds) {
+    return left.seconds - right.seconds;
+  }
+  const leftSourceChannel = normalizeChannel(left.event.channel);
+  const rightSourceChannel = normalizeChannel(right.event.channel);
+  if (leftSourceChannel !== rightSourceChannel) {
+    return leftSourceChannel < rightSourceChannel ? -1 : 1;
+  }
+  if (left.event.value !== right.event.value) {
+    return left.event.value < right.event.value ? -1 : 1;
+  }
+  return 0;
 }
 
 function collectUniqueNoteChannels(

@@ -15,10 +15,10 @@ Regarding the acceptance rules of musical score formats and the meaning of IR, p
 
 This document covers the results returned by `autoPlay()` and `manualPlay()`, as well as the judgment, display, and audio processing they use internally.
 Invocation methods such as `@be-music/player-tui` CLI arguments, configuration file persistence, and Node worker communication are not covered.
-The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior lives in `@be-music/player-tui`, while PixiJS scenes, LR2/beatoraja skin rendering, browser file loading, and WebAudio lifecycle are documented separately in [Browser player implementation notes](./player-web.md).
+The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior is documented separately in [Terminal player implementation notes](./player-tui.md), while PixiJS scenes, LR2/beatoraja skin rendering, browser file loading, and WebAudio lifecycle are documented in [Browser player implementation notes](./player-web.md).
 
 The core engine defaults to the LR2-compatible `GROOVE` gauge, which corresponds to LR2's `NORMAL` gauge.
-The exported gauge helper also supports `HARD`, `DEATH`, and `EASY` for browser PLAY OPTION controls. The bundled terminal player currently has no gauge-type switch.
+The exported gauge helper also supports `HARD`, `DEATH`, and `EASY`, but `autoPlay()` and `manualPlay()` do not currently expose a gauge-type option. Engine-owned `PlayerSummary.gauge.type` is therefore `GROOVE` in the current result path, and the bundled terminal player has no gauge-type switch.
 
 ## BMS compatible range
 
@@ -28,22 +28,22 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 ### Supported channels
 
-| channel                      | Handling in player                                                                                                                                             |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxx01`                     | Play as BGM / sample trigger.                                                                                                                                  |
-| `#xxx02`                     | Reflected in time resolution and beat resolution as bar length.                                                                                                |
-| `#xxx03`, `#xxx08`           | Reflected in time resolution as BPM change.                                                                                                                    |
-| `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2.                                                                                                                           |
-| `#xxx06`                     | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                         |
-| `#xxx09`                     | Reflects in time resolution as STOP.                                                                                                                           |
-| `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY.                              |
-| `#xxx31-39`, `#xxx41-49`     | Treated as invisible notes. It is used for manual input suggestions and display aids, but is not included in `summary.total`. `AUTO` does not produce a sound. |
-| `#xxx51-59`, `#xxx61-69`     | Treated as BMS legacy long note.                                                                                                                               |
-| `#xxx97`, `#xxx98`           | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                              |
-| `#xxxA0`                     | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                         |
-| `#xxxSC`                     | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                             |
-| `#xxxSP`                     | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                  |
-| `#xxxD1-D9`, `#xxxE1-E9`     | Treated as a landmine.                                                                                                                                         |
+| channel                      | Handling in player                                                                                                                                                                                                     |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                     | Play as BGM / sample trigger.                                                                                                                                                                                          |
+| `#xxx02`                     | Reflected in time resolution and beat resolution as bar length.                                                                                                                                                        |
+| `#xxx03`, `#xxx08`           | Reflected in time resolution as BPM change.                                                                                                                                                                            |
+| `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2.                                                                                                                                                                                   |
+| `#xxx06`                     | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                                                                                 |
+| `#xxx09`                     | Reflects in time resolution as STOP.                                                                                                                                                                                   |
+| `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY.                                                                                      |
+| `#xxx31-39`, `#xxx41-49`     | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound. |
+| `#xxx51-59`, `#xxx61-69`     | Treated as BMS legacy long note.                                                                                                                                                                                       |
+| `#xxx97`, `#xxx98`           | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                      |
+| `#xxxA0`                     | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                                                                                 |
+| `#xxxSC`                     | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                                                                                     |
+| `#xxxSP`                     | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                                                                          |
+| `#xxxD1-D9`, `#xxxE1-E9`     | Treated as a landmine.                                                                                                                                                                                                 |
 
 ### Supported commands
 
@@ -140,7 +140,8 @@ If `#WAV00` is defined, the player uses it as the explosion sound when a landmin
 ### Invisible Note
 
 Invisible notes are kept separate from the normal playing target.
-It is included in the UI drawing target only when `showInvisibleNotes` is enabled, but it is not included in the number of judgments or `summary.total`.
+They update the same-lane keysound fallback state using the same timing rule as visible notes: once the invisible object's early `BAD` window opens, that WAV becomes the lane's current fallback sound until a later visible or invisible object takes over.
+They are included in the UI drawing target only when `showInvisibleNotes` is enabled, but are not included in the number of judgments or `summary.total`.
 
 ### FREE ZONE
 
@@ -322,6 +323,8 @@ Empty POOR mirrors LR2's phantom-press behaviour:
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
 If a keysound fallback exists, play it first.
+The fallback is the latest same-lane WAV whose early `BAD` window has already opened, so a blank press between two notes keeps playing the previous WAV until the next note's judgment window begins.
+The next note's WAV is never used before that window opens.
 After the fallback, if the channel sits in a FREE ZONE, suppress empty POOR and return — FREE ZONE is the author's explicit "press here for ambience" region, not a phantom press.
 The LN repeat-suppress window after a long-note release is treated the same way (the input is the intended tail re-tap, not phantom).
 
@@ -385,6 +388,10 @@ Calculate the bonus unit price for each number of notes so that it is always `20
 - The default `GROOVE` gauge matches the Lunatic Rave 2 `NORMAL` gauge.
 - `GROOVE` / `EASY` use a soft floor, while `HARD` / `DEATH` can fall to `0%`.
 - Clear judgment is resolved from each gauge type's threshold at the end of the performance.
+
+The variant rules live in `@be-music/player/core/groove-gauge`.
+The core engine's summary path constructs the default `GROOVE` state today.
+Browser scenes may use the helper for skin-side gauge UI state, but the shared engine remains the authority for final score and summary values.
 
 ### Initial and default values
 
@@ -460,7 +467,8 @@ No judgment window or manual input candidate search is used.
 ### `MANUAL`
 
 `MANUAL` selects the most appropriate candidate note within the `BAD` window from the set of lanes corresponding to the input token.
-If there are no candidates, the runtime first plays a keysound fallback when one exists, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
+If there are no candidates, the runtime may play the latest same-lane keysound whose early `BAD` window has already opened, then applies LR2-compatible empty POOR unless the channel is FREE ZONE or the input falls inside the long-note repeat-suppress window.
+It does not play the next pending lane keysound before that note's judgment window opens.
 
 In manual input, objects that pass the `BAD` window without any note input are automatically set to `POOR`.
 Invisible notes are not included in this miss judgment.
@@ -636,7 +644,8 @@ The main items are:
 
 ## Known unsupported
 
-- Gauge type switching in the terminal player and core `autoPlay()` / `manualPlay()` result path
+- Gauge type switching in `PlayerOptions` and the core `autoPlay()` / `manualPlay()` result path
+- Gauge type switching in the bundled terminal player
 - Independent 2P gauge variant in browser gameplay
 - Gauge timeline display
 - `#LNMODE` branch on `AUTO`

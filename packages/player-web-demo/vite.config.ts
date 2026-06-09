@@ -25,6 +25,7 @@ const repositoryDir = resolve(import.meta.dirname, '../..');
 const playerWebCoreRequire = createRequire(resolve(repositoryDir, 'packages/player-web/package.json'));
 const ffmpegCorePackageRoot = dirname(dirname(dirname(playerWebCoreRequire.resolve('@ffmpeg/core'))));
 const ffmpegCoreEsmDir = resolve(ffmpegCorePackageRoot, 'dist/esm');
+const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
 
 // `ebml` v3 ships a `"browser": "lib/ebml.iife.js"` field that Vite picks for browser builds — but the IIFE wraps
 // everything in a private closure and never assigns to the outer `module.exports`, so `ts-ebml`'s downstream `const {
@@ -91,6 +92,73 @@ function ffmpegCorePlugin(sourceDir: string): Plugin {
           source: data,
         });
       }
+    },
+  };
+}
+
+function resolveUrlLoadProxyTarget(rawUrl: string | null): URL {
+  if (!rawUrl) {
+    throw new Error('missing url query parameter');
+  }
+  const target = new URL(rawUrl);
+  if (target.protocol !== 'https:') {
+    throw new Error('only https proxy targets are allowed');
+  }
+  if (target.username || target.password) {
+    throw new Error('proxy target credentials are not allowed');
+  }
+  return target;
+}
+
+function urlLoadProxyPlugin(): Plugin {
+  return {
+    name: 'be-music:url-load-proxy',
+    configureServer(server) {
+      server.middlewares.use(URL_LOAD_PROXY_PATH, (req, res) => {
+        void (async () => {
+          if (req.method !== 'GET' && req.method !== 'HEAD') {
+            res.statusCode = 405;
+            res.setHeader('Allow', 'GET, HEAD');
+            res.end('Method Not Allowed');
+            return;
+          }
+
+          let target: URL;
+          try {
+            const requestUrl = new URL(req.url ?? '/', 'http://localhost');
+            target = resolveUrlLoadProxyTarget(requestUrl.searchParams.get('url'));
+          } catch (error) {
+            res.statusCode = 400;
+            res.end(error instanceof Error ? error.message : 'invalid proxy target');
+            return;
+          }
+
+          let upstream: Response;
+          try {
+            upstream = await fetch(target, {
+              method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+              redirect: 'follow',
+            });
+          } catch (error) {
+            res.statusCode = 502;
+            res.end(`failed to fetch ${target.href}: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+          }
+
+          res.statusCode = upstream.status;
+          res.statusMessage = upstream.statusText;
+          res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'application/octet-stream');
+          res.setHeader('Cache-Control', 'no-store');
+          res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+          if (req.method === 'HEAD') {
+            res.end();
+            return;
+          }
+          const data = Buffer.from(await upstream.arrayBuffer());
+          res.setHeader('Content-Length', String(data.byteLength));
+          res.end(data);
+        })();
+      });
     },
   };
 }
@@ -433,6 +501,7 @@ export default defineConfig({
       },
     },
     ffmpegCorePlugin(ffmpegCoreEsmDir),
+    urlLoadProxyPlugin(),
     // Build-time acknowledgement collector. Walks the runtime dep tree from the demo + `player-web` package.json entry
     // points so every npm dependency that ships in the bundle (direct or transitive) ends up listed in the about modal
     // — no manual maintenance, just `pnpm install` and rebuild.

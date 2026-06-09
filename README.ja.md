@@ -68,6 +68,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [BMSON 実装仕様](docs/bmson-spec.ja.md)
 - [Bemuse 実装仕様](docs/bemuse-spec.ja.md)
 - [Player 実装仕様](docs/player-spec.ja.md)
+- [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)

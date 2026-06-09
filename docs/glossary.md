@@ -79,7 +79,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 ## Runtime And Display
 
 - **candidate note**: Unjudged note searched as the judgment target when an input event arrives for a lane set.
-- **keysound fallback**: Auxiliary sound played when an input has no candidate note but the lane has a fallback sound. After the fallback, normal lanes still fire LR2-compatible empty POOR; FREE ZONE and long-note repeat-suppress windows skip it.
+- **keysound fallback**: LR2-compatible blank-press sound routing. If no note is judged, manual play may retrigger the latest same-lane visible or invisible WAV whose early BAD window has already opened; it never looks ahead to a future pending WAV before that note's window opens.
 - **empty POOR**: LR2-compatible blank-keystroke side effect. It flashes `POOR`, triggers POOR BGA, and applies the `EMPTY_POOR` gauge delta without changing judge counters, combo, EX-SCORE, or score.
 - **stateSignals / uiSignals**: Signal groups that send engine state to UI adapters, including judge, combo, frame, lane flash, and hold state.
 - **UI runtime**: Runtime display adapter between the player core and a concrete frontend such as TUI or PixiJS.

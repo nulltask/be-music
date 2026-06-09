@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { findBestCandidate, findClosestCandidateInWindow } from './judging.ts';
+import { findBestCandidate, findClosestCandidateInWindow, findLaneSoundCandidate } from './judging.ts';
 
 describe('judging helpers', () => {
   test('findClosestCandidateInWindow picks the nearest unconsumed candidate on the requested lane', () => {
@@ -50,5 +50,24 @@ describe('judging helpers', () => {
     ];
 
     expect(findBestCandidate(notes, channels, 1, 0.05)).toBe(notes[1]);
+  });
+
+  test('findLaneSoundCandidate keeps the previous lane sound until the next note window opens', () => {
+    const channels = new Set(['11']);
+    const notes = [
+      { channel: '11', seconds: 1.0, judged: true },
+      { channel: '12', seconds: 1.2, judged: false },
+      { channel: '11', seconds: 1.5, judged: false },
+    ];
+
+    expect(findLaneSoundCandidate(notes, channels, 1.3, 0.05)).toBe(notes[0]);
+    expect(findLaneSoundCandidate(notes, channels, 1.45, 0.05)).toBe(notes[2]);
+  });
+
+  test('findLaneSoundCandidate does not look ahead before the first note window', () => {
+    const channels = new Set(['11']);
+    const notes = [{ channel: '11', seconds: 1.0, judged: false }];
+
+    expect(findLaneSoundCandidate(notes, channels, 0.94, 0.05)).toBeUndefined();
   });
 });

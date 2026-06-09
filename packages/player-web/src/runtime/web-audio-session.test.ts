@@ -193,6 +193,43 @@ describe('createWebAudioSession', () => {
     expect(trackedBufferSources).toHaveLength(1);
   });
 
+  test('stops the previous BMS source when the same #WAV slot is retriggered', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['kick.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+
+    session.triggerEvent?.(mkEvent('11', '01'));
+    const firstSource = trackedBufferSources[0]!.node;
+    session.triggerEvent?.(mkEvent('12', '01'));
+
+    expect(trackedBufferSources).toHaveLength(2);
+    expect(firstSource.stop).toHaveBeenCalledTimes(1);
+    expect(firstSource.disconnect).toHaveBeenCalled();
+  });
+
+  test('schedules the previous BMS source to stop when a later same-slot BGM cue starts', () => {
+    const { audioContext, audioBus, trackedBufferSources } = createMocks();
+    const session = createWebAudioSession({
+      audioContext,
+      audioBus,
+      chart: makeChartWithSamples(),
+      decodedSamples: new Map([['bgm.wav', makeMockAudioBuffer(5)]]),
+      wavCmdVolumeMultipliers: new Map(),
+    });
+
+    session.scheduleEvent(mkEvent('01', '03'), 1);
+    const firstSource = trackedBufferSources[0]!.node;
+    session.scheduleEvent(mkEvent('01', '03'), 2);
+
+    expect(trackedBufferSources).toHaveLength(2);
+    expect(firstSource.stop).toHaveBeenCalledWith(2);
+  });
+
   test('stopChannel halts the most recent BufferSource on that channel', () => {
     const { audioContext, audioBus, trackedBufferSources } = createMocks();
     const session = createWebAudioSession({

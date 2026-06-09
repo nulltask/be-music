@@ -320,6 +320,12 @@ export const DEMO_APP_HTML = `
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
+              <li>
+                Or link straight to a pack: open the page with
+                <code>?music=https://…/song.zip</code> to auto-load a chart archive, and/or
+                <code>?skin=https://…/theme.zip</code> to apply a skin — the charts are listed in this select
+                screen. Cross-origin archive links are fetched through the demo proxy and must use HTTPS.
+              </li>
             </ul>
 
             <h3 class="help-section-title">Song select</h3>

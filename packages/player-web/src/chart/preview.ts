@@ -2,7 +2,7 @@
 // Node-only modules (fs / path / fluent-ffmpeg) that Vite can't bundle for the demo target — see
 // `packages/player-web-demo/vite.config.ts` which explicitly drops the root alias for that reason.
 import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import type { BeMusicJson } from '@be-music/json';
+import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
 
@@ -31,9 +31,21 @@ export const LR2_PREVIEW_FOCUS_DELAY_MS = 1000;
  */
 export const DEFAULT_CHART_PREVIEW_FALLBACK_DURATION_SECONDS = 30;
 
+/**
+ * Short fade used when the focused song changes or the select scene hides. Long enough to avoid an audible hard cut,
+ * short enough that rapid cursor movement still feels responsive.
+ */
+export const CHART_PREVIEW_STOP_FADE_OUT_SECONDS: number = 0.25;
+
 export interface ChartPreviewTarget {
   song: BrowserSongEntry;
   source: BrowserSongAssetSource;
+}
+
+interface PreviewSourceHandle {
+  source: AudioBufferSourceNode;
+  gain: GainNode;
+  stopping: boolean;
 }
 
 export interface ChartPreviewEngineOptions {
@@ -95,10 +107,10 @@ export function resolveChartPreviewPath(chart: BeMusicJson): string | undefined 
  * 1. **`#PREVIEW` present** — the chart shipped a preview audio file. We resolve it through {@link
  *    resolveChartAudioAsset} (case-insensitive + codec fallback), decode once, and play it on a looped `BufferSource`.
  *
- * 2. **`#PREVIEW` absent** — fall back to playing the chart "in place": collect every `TimedSampleTrigger` whose
- *    `seconds` fall inside the fallback duration window, decode just those WAVs (a small subset of the chart's full
- *    `#WAVxx` table), and schedule each as a one-shot at `audioContext.currentTime + trigger.seconds`. Stops scheduling
- *    further triggers once the user moves cursor.
+ * 2. **`#PREVIEW` absent** — fall back to playing the chart "in place": collect every AUTO PLAY-audible
+ *    `TimedSampleTrigger` whose `seconds` fall inside the fallback duration window, decode just those WAVs (a small
+ *    subset of the chart's full `#WAVxx` table), and schedule each as a one-shot at `audioContext.currentTime +
+ *    trigger.seconds`. Stops scheduling further triggers once the user moves cursor.
  *
  * Lifecycle:
  *
@@ -127,11 +139,11 @@ export class ChartPreviewEngine {
   private activeSequence = 0;
   private pendingFocusTimer: ReturnType<typeof setTimeout> | undefined;
   /**
-   * Live `BufferSource`s currently playing. Tracked so a subsequent `stop()` can disconnect them all in one pass —
-   * necessary because the in-place fallback typically schedules many sources at once and the loopable preview-file
-   * branch keeps a single source alive across the entire focus.
+   * Live preview sources, including short fade-out tails from the previous focus. Tracked so a subsequent `stop()` can
+   * disconnect them all in one pass — necessary because the in-place fallback typically schedules many sources at once
+   * and the loopable preview-file branch keeps a single source alive across the entire focus.
    */
-  private activeSources = new Set<AudioBufferSourceNode>();
+  private activeSources = new Set<PreviewSourceHandle>();
   /**
    * `true` once the engine has emitted `onPlaybackStart` for the current sequence and not yet emitted the matching
    * `onPlaybackStop`. Keeps the start / stop callbacks paired even when the in-place fallback's first audible sample is
@@ -164,14 +176,14 @@ export class ChartPreviewEngine {
     if (sameTarget(this.currentTarget, target)) {
       return;
     }
+    const sequence = ++this.activeSequence;
     this.cancelPending();
-    this.stopAllSources();
+    this.stopAllSources({ fade: true });
     this.emitPlaybackStop();
     this.currentTarget = target;
     if (!target) {
       return;
     }
-    const sequence = ++this.activeSequence;
     if (this.focusDelayMs <= 0) {
       void this.startPreview(target, sequence);
       return;
@@ -188,11 +200,11 @@ export class ChartPreviewEngine {
    */
   public stop(): void {
     if (this.disposed) return;
-    this.cancelPending();
-    this.stopAllSources();
-    this.emitPlaybackStop();
-    // Bump the sequence so any async decode in flight bails out even though `currentTarget` didn't change identity.
+    // Bump first so async loads/decodes already in flight cannot schedule new sources while we fade the old ones out.
     this.activeSequence += 1;
+    this.cancelPending();
+    this.stopAllSources({ fade: true });
+    this.emitPlaybackStop();
   }
 
   /**
@@ -206,7 +218,7 @@ export class ChartPreviewEngine {
     // permanent teardown.
     this.activeSequence += 1;
     this.cancelPending();
-    this.stopAllSources();
+    this.stopAllSources({ fade: false });
     this.emitPlaybackStop();
     this.currentTarget = undefined;
   }
@@ -218,21 +230,100 @@ export class ChartPreviewEngine {
     }
   }
 
-  private stopAllSources(): void {
-    for (const source of this.activeSources) {
-      try {
-        source.stop();
-      } catch {
-        // `stop()` throws when the source hasn't started yet (a future-scheduled trigger we never reached) or has
-        // already ended. Both are fine — we just want it gone.
+  private stopAllSources(options: { fade: boolean }): void {
+    const now = this.audioContext.currentTime;
+    for (const handle of [...this.activeSources]) {
+      if (options.fade) {
+        this.fadeOutSource(handle, now);
+      } else {
+        this.stopSourceImmediately(handle);
       }
+    }
+  }
+
+  private attachSource(source: AudioBufferSourceNode): PreviewSourceHandle | undefined {
+    let gain: GainNode;
+    try {
+      gain = this.audioContext.createGain();
+      gain.gain.value = 1;
+      source.connect(gain);
+      gain.connect(this.output);
+    } catch {
       try {
         source.disconnect();
       } catch {
-        // Same — disconnect is idempotent + safe to silence.
+        // Disconnect is best-effort — failure just means there is nothing useful to tear down.
       }
+      return undefined;
     }
-    this.activeSources.clear();
+    const handle: PreviewSourceHandle = { source, gain, stopping: false };
+    this.activeSources.add(handle);
+    return handle;
+  }
+
+  private fadeOutSource(handle: PreviewSourceHandle, now: number): void {
+    if (handle.stopping) return;
+    handle.stopping = true;
+    const fadeEnd = now + CHART_PREVIEW_STOP_FADE_OUT_SECONDS;
+    try {
+      const gain = handle.gain.gain;
+      gain.cancelScheduledValues(now);
+      gain.setValueAtTime(gain.value, now);
+      gain.linearRampToValueAtTime(0, fadeEnd);
+      handle.source.stop(fadeEnd);
+    } catch {
+      this.finishSource(handle);
+      return;
+    }
+    setTimeout(() => {
+      if (handle.stopping) {
+        this.finishSource(handle);
+      }
+    }, CHART_PREVIEW_STOP_FADE_OUT_SECONDS * 1000 + 50);
+  }
+
+  private stopSourceImmediately(handle: PreviewSourceHandle): void {
+    handle.stopping = true;
+    try {
+      handle.source.stop();
+    } catch {
+      // `stop()` throws when the source hasn't started yet (a future-scheduled trigger we never reached) or has already
+      // ended. Both are fine — we just want it gone.
+    }
+    this.finishSource(handle);
+  }
+
+  private stopSourceAt(handle: PreviewSourceHandle, stopAt: number): void {
+    const scheduledStopAt = Number.isFinite(stopAt) ? Math.max(this.audioContext.currentTime, stopAt) : undefined;
+    try {
+      if (scheduledStopAt !== undefined) {
+        handle.source.stop(scheduledStopAt);
+      } else {
+        handle.source.stop();
+      }
+    } catch {
+      // Already stopped, never started, or context closed.
+    }
+    if (scheduledStopAt === undefined || scheduledStopAt <= this.audioContext.currentTime + 1e-6) {
+      this.finishSource(handle);
+    }
+  }
+
+  private finishSource(handle: PreviewSourceHandle): void {
+    const wasActive = this.activeSources.delete(handle);
+    try {
+      handle.source.disconnect();
+    } catch {
+      // Disconnect is idempotent + safe to silence.
+    }
+    try {
+      handle.gain.disconnect();
+    } catch {
+      // Same.
+    }
+    if (wasActive && this.activeSources.size === 0) {
+      this.emitPlaybackStop();
+    }
   }
 
   private emitPlaybackStart(target: ChartPreviewTarget): void {
@@ -290,33 +381,18 @@ export class ChartPreviewEngine {
         source.loopStart = audibleOffsetSeconds;
         // `loopEnd = 0` means "end of buffer", which is what we want.
       }
-      source.connect(this.output);
     } catch {
       return;
     }
+    const handle = this.attachSource(source);
+    if (!handle) return;
     source.onended = (): void => {
-      this.activeSources.delete(source);
-      try {
-        source.disconnect();
-      } catch {
-        // See `stopAllSources` — silenced for the same reason.
-      }
-      // When the last live source ends, signal stop so the host can unduck the BGM. With `loop = true` (default) this
-      // path only fires on a manual `stop()`; without looping we want the natural end-of-buffer to release the duck.
-      if (this.activeSources.size === 0) {
-        this.emitPlaybackStop();
-      }
+      this.finishSource(handle);
     };
-    this.activeSources.add(source);
     try {
       source.start(0, audibleOffsetSeconds);
     } catch {
-      this.activeSources.delete(source);
-      try {
-        source.disconnect();
-      } catch {
-        // See `stopAllSources`.
-      }
+      this.finishSource(handle);
       return;
     }
     this.emitPlaybackStart(target);
@@ -367,61 +443,63 @@ export class ChartPreviewEngine {
       }
     }
     const startAt = this.audioContext.currentTime;
+    let scheduledCount = 0;
+    const activeBySlot = new Map<string, PreviewSourceHandle>();
     for (const trigger of triggers) {
       if (this.isStale(sequence)) return;
+      const activeSameSlot = activeBySlot.get(trigger.sampleKey);
+      // bmson `c = true` mirrors AUTO PLAY: the event continues the previous instance of this sample slot instead of
+      // retriggering a fresh attack.
+      if (chart.sourceFormat === 'bmson' && trigger.event.bmson?.c === true && activeSameSlot) {
+        continue;
+      }
       const buffer = buffers.get(trigger.sampleKey);
       if (!buffer) continue;
       let source: AudioBufferSourceNode;
       try {
         source = this.audioContext.createBufferSource();
         source.buffer = buffer;
-        source.connect(this.output);
       } catch {
         continue;
       }
+      const handle = this.attachSource(source);
+      if (!handle) continue;
       const offset = trigger.sampleOffsetSeconds ?? 0;
       const when = startAt + Math.max(0, trigger.seconds - leadOffsetSeconds);
       source.onended = (): void => {
-        this.activeSources.delete(source);
-        try {
-          source.disconnect();
-        } catch {
-          // See `stopAllSources`.
+        if (activeBySlot.get(trigger.sampleKey) === handle) {
+          activeBySlot.delete(trigger.sampleKey);
         }
-        // The fallback schedules every trigger inside the preview window in one shot — when the LAST one ends we want
-        // the BGM to unduck rather than stay silent until the user moves cursor.
-        if (this.activeSources.size === 0) {
-          this.emitPlaybackStop();
-        }
+        this.finishSource(handle);
       };
-      this.activeSources.add(source);
       try {
+        if (chart.sourceFormat === 'bms' && activeSameSlot) {
+          this.stopSourceAt(activeSameSlot, when);
+        }
         if (typeof trigger.sampleDurationSeconds === 'number') {
           source.start(when, offset, trigger.sampleDurationSeconds);
         } else {
           source.start(when, offset);
         }
+        scheduledCount += 1;
+        activeBySlot.set(trigger.sampleKey, handle);
       } catch {
         // `start` rejects on negative offsets / out-of-range values that can sneak in for malformed bmson slice
         // metadata. Keep going — one bad trigger shouldn't mute the rest of the preview.
-        this.activeSources.delete(source);
-        try {
-          source.disconnect();
-        } catch {
-          // See `stopAllSources`.
-        }
+        this.finishSource(handle);
       }
     }
-    if (this.activeSources.size > 0) {
+    if (scheduledCount > 0) {
       this.emitPlaybackStart(target);
     }
   }
 }
 
 /**
- * Pure helper: pulls every sample-trigger event out of `chart` whose chart-time falls inside the preview window.
- * Exported for tests so the windowing math has direct coverage; production callers reach this through {@link
- * ChartPreviewEngine}.
+ * Pure helper: pulls every AUTO PLAY-audible sample-trigger event out of `chart` whose chart-time falls inside the
+ * preview window. Invisible objects update lane keysound state during gameplay, but AUTO PLAY does not directly sound
+ * them, so the fallback preview skips them too. Exported for tests so the windowing math has direct coverage;
+ * production callers reach this through {@link ChartPreviewEngine}.
  *
  * `cutoffSeconds <= 0` returns an empty array — the engine skips the in-place fallback entirely in that case.
  */
@@ -432,7 +510,17 @@ export function collectChartPreviewTriggers(
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   const resolver = createTimingResolver(chart);
   const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  return all.filter((trigger) => trigger.seconds < cutoffSeconds).sort((left, right) => left.seconds - right.seconds);
+  return all
+    .filter((trigger) => !isInvisiblePlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
+    .sort((left, right) => left.seconds - right.seconds);
+}
+
+function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  if (normalized.length !== 2) return false;
+  const high = normalized.charCodeAt(0);
+  const low = normalized.charCodeAt(1);
+  return (high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39;
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

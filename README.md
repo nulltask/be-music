@@ -68,6 +68,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [BMSON implementation specification](./docs/bmson-spec.md)
 - [Bemuse implementation specification](./docs/bemuse-spec.md)
 - [Player implementation specification](./docs/player-spec.md)
+- [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)

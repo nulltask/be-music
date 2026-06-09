@@ -90,6 +90,37 @@ describe('resolveFallbackLaneLayout', () => {
     expect(twoScratch.x).toBeGreaterThan(Math.max(...twoKeys.map((lane) => lane.x)));
     expect(twoScratch.x + twoScratch.w).toBeCloseTo(Math.max(...lanes.map((lane) => lane.x + lane.w)));
   });
+
+  it('inserts a visible gap between 1P and 2P fallback lanes', () => {
+    const lanes = resolveFallbackLaneLayout({
+      channels: ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'],
+      playVariant: '14',
+      x: 33,
+      w: 194,
+      preserveSideWidth: true,
+    });
+
+    const oneRight = Math.max(...lanes.filter((lane) => lane.side === '1P').map((lane) => lane.x + lane.w));
+    const twoLeft = Math.min(...lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x));
+
+    expect(twoLeft - oneRight).toBeCloseTo(14);
+  });
+
+  it('uses the requested DP side gap when provided', () => {
+    const lanes = resolveFallbackLaneLayout({
+      channels: ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'],
+      playVariant: '14',
+      x: 33,
+      w: 194,
+      preserveSideWidth: true,
+      sideGap: 24,
+    });
+
+    const oneRight = Math.max(...lanes.filter((lane) => lane.side === '1P').map((lane) => lane.x + lane.w));
+    const twoLeft = Math.min(...lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x));
+
+    expect(twoLeft - oneRight).toBeCloseTo(24);
+  });
 });
 
 describe('shouldPreserveFallbackSideWidth', () => {

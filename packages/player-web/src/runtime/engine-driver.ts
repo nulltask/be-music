@@ -77,9 +77,11 @@ export type EngineDriverResult = PlayerSummary;
  * those caches, so adopting the driver in Phase 4b is a drop-in replacement for the gameplay view's self-judge
  * loop rather than a state-ownership refactor.
  *
- * Beatoraja-compatible behavior the engine drives for both runtimes (TUI + Web):
- * - Look-ahead lane keysound fallback (`findLaneSoundCandidate`) on out-of-window presses.
- * - Free-Zone (`17` / `27`) channels — empty press plays the keysound, no empty-POOR penalty.
+ * Engine behavior shared by both runtimes (TUI + Web):
+ * - Manual keysounds are emitted for the candidate note, or for the latest same-lane visible/invisible fallback whose
+ *   early BAD window has already opened.
+ * - Out-of-window presses do not play the next pending lane keysound before that note's judgment window opens.
+ * - Free-Zone (`17` / `27`) channels stay excluded from score/gauge targets and keep their scratch aliases.
  * - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
  * - LN early-release audio cut via `AudioSession.stopChannel`.
  * - Mine vs note delta-based priority (closest delta wins).
@@ -95,8 +97,8 @@ export type EngineDriverResult = PlayerSummary;
  *   which verifies the BufferSource → GainNode → mixer routing instead of BufferSource → mixer.
  * - **bmson c=true continuation** — covered by
  *   `packages/player-web/src/web-audio-session.test.ts:'honours bmson c=true continuation by suppressing
- *   retriggers of an in-flight slot'`. The engine's `findLaneSoundCandidate` fallback path doesn't bypass this
- *   guard because every trigger flows through `WebAudioSession.triggerEvent` (which checks `activeBySlot`).
+ *   retriggers of an in-flight slot'`. The engine's lane fallback path still flows through
+ *   `WebAudioSession.triggerEvent` (which checks `activeBySlot`).
  * - **#STP measure stops** — handled at the timing-resolver / timeline level inside `@be-music/chart`; the
  *   engine consumes chart-time seconds that already account for stops, so it doesn't have a separate code
  *   path. Covered by `packages/player/src/core/timeline.test.ts:'SCROLL/BPM/STOP: keeps zero and negative
