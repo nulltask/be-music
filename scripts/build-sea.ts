@@ -4,7 +4,7 @@ import { builtinModules } from 'node:module';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { build } from 'vite';
+import { build, defaultServerConditions, defaultServerMainFields } from 'vite';
 
 const execFileAsync = promisify(execFile);
 
@@ -234,11 +234,14 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
   const workspaceAliasPlugin = createWorkspaceAliasPlugin(config.aliases);
   await build({
     configFile: false,
-    resolve: config.aliases
-      ? {
-          alias: config.aliases,
-        }
-      : undefined,
+    resolve: {
+      ...(config.aliases ? { alias: config.aliases } : {}),
+      // The SEA bundle runs in Node, but `build()` uses the client environment whose default conditions and
+      // main fields prefer `browser` entries. That silently swapped in pino/browser (whose `flush` is a noop,
+      // hanging the logger close and writing no NDJSON) and isoworker's Web Worker implementation.
+      conditions: [...defaultServerConditions],
+      mainFields: [...defaultServerMainFields],
+    },
     build: {
       target: 'node25',
       outDir: seaDir,
