@@ -131,12 +131,16 @@ bmson's `l`, FREE ZONE (`17` / `27`), BMS's `#LNOBJ`, and BMS legacy LN (`#mmm51
 The terminal object of `#LNOBJ` itself is not left in the performance note string.
 Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
 
-### Landmine
+### Landmines
 
-The mine channel is mapped to the corresponding playable lane and stored as a separate array.
-Landmines are not included in `summary.total`, but when manually input, they may generate `BAD` with priority over normal notes.
-If `#WAV00` is defined, the player uses it as the explosion sound when a landmine is hit manually.
+Mines follow the LR2 detonation model (losak's LR2 mine writeup, confirmed against beatoraja's `JudgeManager`).
 
+- A mine explodes while "the lane's key is ON and the mine is within the `GOOD` window of the judge line": pressing with a mine in range detonates it, and **holding through a passing mine detonates it too**. A mine passing with the key up is harmless.
+- An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead.
+- Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
+- `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
+- kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
 ### Invisible Note
 
 Invisible notes are kept separate from the normal playing target.

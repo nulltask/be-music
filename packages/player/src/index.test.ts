@@ -1180,7 +1180,9 @@ describe('player', () => {
     });
 
     expect(summary.total).toBe(0);
-    expect(summary.bad).toBe(1);
+    // LR2 — mine hits never emit a verdict: gauge damage + explosion sound only.
+    expect(summary.bad).toBe(0);
+    expect(summary.poor).toBe(0);
     expect(
       output.some(
         (line) =>
@@ -1194,7 +1196,7 @@ describe('player', () => {
     expect(output.some((line) => line.includes('kind:mine-hit') && line.includes('channel:11'))).toBe(true);
   });
 
-  test('player: manual landmine hit applies value-based damage while keeping BAD judgment', async () => {
+  test('player: manual landmine hit applies the LR2 raw-value damage with no verdict', async () => {
     const summary = await manualPlay(createLandmineOnlyChart({ value: '08' }), {
       speed: 240,
       leadInMs: 0,
@@ -1210,9 +1212,11 @@ describe('player', () => {
     });
 
     expect(summary.total).toBe(0);
-    expect(summary.bad).toBe(1);
+    expect(summary.bad).toBe(0);
     expect(summary.poor).toBe(0);
-    expect(summary.gauge?.current).toBeCloseTo(16, 9);
+    // LR2 / beatoraja interpret the mine value directly as the damage percent ('08' = 8 %, NOT the nanasi-memo
+    // value/2): gauge 20 → 12.
+    expect(summary.gauge?.current).toBeCloseTo(12, 9);
   });
 
   test('player: manual landmine hit clamps large mine damage at the groove gauge minimum', async () => {
@@ -1230,13 +1234,14 @@ describe('player', () => {
       }),
     });
 
-    expect(summary.bad).toBe(1);
+    expect(summary.bad).toBe(0);
+    // ZZ (= 1295 % raw) wipes the gauge; GROOVE's 2 % soft floor catches it (a survival gauge would die instead).
     expect(summary.gauge?.current).toBeCloseTo(2, 9);
   });
 
   test('player: bmson per-mine damage overrides the BMS value/2 rule', async () => {
     // bmson `key_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
-    // present it wins over the BMS `value / 2` interpretation: value '08' alone would deal 4 %, the authored damage
+    // present it wins over the BMS raw-value interpretation: value '08' alone would deal 8 %, the authored damage
     // of 7 must deal exactly 7 % (gauge 20 → 13).
     const json = createLandmineOnlyChart({ value: '08' });
     json.events[0]!.bmson = { damage: 7 };
@@ -1255,7 +1260,7 @@ describe('player', () => {
       }),
     });
 
-    expect(summary.bad).toBe(1);
+    expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(13, 9);
   });
 
@@ -1277,7 +1282,70 @@ describe('player', () => {
       }),
     });
 
-    expect(summary.bad).toBe(1);
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: holding a key through a passing mine detonates it (LR2 hold-through)', async () => {
+    // BPM 120 → measure 1 = 2.0 s. Hold the lane from ~0.2 s via kitty press state (no release) and let the mine
+    // cross the judge line at 2.0 s — LR2 explodes mines that pass while the key is ON.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 200, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
+  });
+
+  test('player: a mine passing with the key up is harmless (LR2)', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: a press outside the GOOD window does not detonate an approaching mine (LR2)', async () => {
+    // BPM 120, NORMAL rank → GOOD window ±100 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
+    // outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1700, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
   });
 

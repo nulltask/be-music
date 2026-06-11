@@ -94,18 +94,19 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Reflect mine timing input in `BAD` judgment in MANUAL mode
-- [x] Apply mine object value as MANUAL mode groove gauge damage (`object value / 2` under the chart's ID base) while keeping the judgment display as `BAD`
+- [x] Detonate mines in MANUAL mode while "the key is ON and the mine is within the `GOOD` window" (both press and hold-through, LR2 behavior)
+- [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
 
 #### Landmine damage basis
 
-The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references.
+The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references and LR2-compatible implementations.
 
-- `value / 2` for landmine damage is based on Hitkey's command memo (`[01-ZZ]` damage amount, gauge decreases by `value / 2`).
-- `#WAV00` as the dedicated landmine reaction sound and the `ZZ` instant-death convention are corroborated by Obj Tech Lovers chapter3-2 and chapter4-7.
-- In `be-music`, the practical effect of `ZZ` is a clamp to the implemented groove gauge minimum `2%`, because the player keeps the LR2-compatible `2-100%` gauge range.
+- The detonation condition ("key ON and the mine within the `GOOD` window of the judge line, including hold-through") and "damage = the value itself (as a decimal percentage)" follow losak's LR2 mine writeup ("地雷オブジェに関するアレコレ"), verified against the real LR2. beatoraja (jbms-parser `Section.java` / `JudgeManager`) applies the raw value directly as damage, matching this.
+- Hitkey command memo's `value / 2` is the nanasi-lineage rule and differs from LR2's actual behavior, so it is not adopted.
+- `#WAV00` as the dedicated landmine reaction sound is corroborated by Hitkey's memo and Obj Tech Lovers chapter3-2 / chapter4-7.
+- `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); on the `2-100%` GROOVE / EASY gauges it clamps to the `2%` floor (matching losak's "EASY / GROOVE just drop to 2%").
 - [x] Keep channel `SC` as `#SCROLLxx` reference event
 - [x] Exclude channel `SC` from audio triggering
 - [x] Reflect scroll speed of channel `SC` to player drawing

@@ -329,13 +329,14 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 ### 地雷
 
-手動入力時に地雷候補が通常ノート候補より近いか同距離なら、地雷を優先します。
-地雷は `BAD` として扱い、combo を切ります。
-groove gauge ダメージは地雷オブジェクト値を大文字 base36 として解釈し、`damage = value / 2` で計算します。
-適用後のゲージ値は `2-100%` に clamp されるため、`ZZ` のような大きい値では実質 `2%` まで下がります。
-`#WAV00` が定義されている場合は、地雷ヒット経路でそのサンプルを鳴らします。
+地雷は LR2 の発動モデルに合わせます（losak「地雷オブジェに関するアレコレ」、beatoraja `JudgeManager` で確認）。
 
-このルールの根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) に記載しています。`value / 2` の直接根拠は Hitkey の command memo で、`#WAV00` / `ZZ` の扱いは Obj Tech Lovers chapter3-2 / chapter4-7 を補助一次参照として採っています。
+- 発動条件は「**レーンのキーが ON かつ 地雷が判定線の `GOOD` 窓以内**」です。押下した瞬間に `GOOD` 圏内の地雷は爆発し、**押しっぱなしで通過した地雷も爆発**します。キーが押されていない地雷の通過は無害です。
+- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
+- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
+- ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
+- `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
+- kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
 
 ## NOTES・combo・score
 
