@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { createAbortError, isAbortError, throwIfAborted } from '@be-music/utils/core';
+import { createSeaWorker, isSeaRuntime } from './node/sea-worker.ts';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
@@ -232,15 +233,18 @@ export async function decodeVideoFramesToSourceFramesInWorker(
   } = {},
 ): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
   throwIfAborted(signal);
-  const worker = new Worker(resolveBgaVideoWorkerUrl(), {
-    workerData: {
-      videoPath,
-      mode,
-      stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
-    } satisfies VideoDecodeWorkerInitData,
-    execArgv: resolveBgaVideoWorkerExecArgv(),
-    env: resolveBgaVideoWorkerEnv(),
-  });
+  const workerInitData = {
+    videoPath,
+    mode,
+    stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
+  } satisfies VideoDecodeWorkerInitData;
+  const worker = isSeaRuntime()
+    ? createSeaWorker('bga-video-worker', workerInitData)
+    : new Worker(resolveBgaVideoWorkerUrl(), {
+        workerData: workerInitData,
+        execArgv: resolveBgaVideoWorkerExecArgv(),
+        env: resolveBgaVideoWorkerEnv(),
+      });
 
   return await new Promise((resolve, reject) => {
     let settled = false;

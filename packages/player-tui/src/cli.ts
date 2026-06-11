@@ -1,10 +1,16 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMainThread } from 'node:worker_threads';
 import { main } from './cli/runner.ts';
 
 export * from './cli/runner.ts';
 
 function isCliEntryPoint(): boolean {
+  // In a SEA binary the bundle re-runs inside eval workers (see `./sea-main.ts`), where
+  // `process.argv[1]` still equals `process.execPath` — never start the CLI from a worker thread.
+  if (!isMainThread) {
+    return false;
+  }
   const entry = process.argv[1];
   if (!entry) {
     return false;

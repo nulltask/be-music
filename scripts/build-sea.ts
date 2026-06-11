@@ -24,6 +24,14 @@ interface CliArgs {
 interface SeaTargetConfig {
   packageDir: string;
   outputBaseName: string;
+  /** Bundle entry relative to `packageDir` (default: `src/cli.ts`). */
+  entry?: string;
+  /**
+   * Embed the bundle itself as the `sea-entry.cjs` asset so the running binary can spawn eval workers that
+   * re-execute it (worker scripts cannot be loaded from disk in a SEA). Requires an entry that dispatches on
+   * the workerData role marker, like `player-tui/src/sea-main.ts`.
+   */
+  embedBundleAsset?: boolean;
   optionalExternalModules?: string[];
   bundleBanner?: string;
   aliases?: Record<string, string>;
@@ -39,6 +47,8 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
   player: {
     packageDir: resolve(repositoryDir, 'packages/player-tui'),
     outputBaseName: 'be-music-player',
+    entry: 'src/sea-main.ts',
+    embedBundleAsset: true,
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
@@ -250,7 +260,7 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
       minify: false,
       sourcemap: false,
       lib: {
-        entry: resolve(config.packageDir, 'src/cli.ts'),
+        entry: resolve(config.packageDir, config.entry ?? 'src/cli.ts'),
         formats: ['cjs'],
         fileName: () => 'sea-entry.cjs',
       },
@@ -398,6 +408,8 @@ async function main(): Promise<void> {
     executable: nodeBinaryPath,
     disableExperimentalSEAWarning: true,
     useCodeCache: true,
+    // Asset name kept in sync with SEA_BUNDLE_ASSET_NAME in packages/player-tui/src/node/sea-worker.ts.
+    ...(targetConfig.embedBundleAsset ? { assets: { 'sea-entry.cjs': bundlePath } } : {}),
   };
   await writeFile(configPath, `${JSON.stringify(seaConfig, null, 2)}\n`, 'utf8');
 
