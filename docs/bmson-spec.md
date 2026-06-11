@@ -33,6 +33,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] `info` extended item: `mode_hint`
 - [x] `info` extended item: `judge_rank`
 - [x] `info` extended item: `total`
+- [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and stringifier output
 - [x] `info` extended item: `back_image`
 - [x] `info` extended item: `eyecatch_image`
 - [x] `info` extended item: `banner_image`

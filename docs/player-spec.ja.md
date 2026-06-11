@@ -434,7 +434,8 @@ player はロングノートを 1 本につき 1 ノートとして扱います�
 ### `#LNMODE`
 
 BMS の `#LNMODE` 未指定時は `1` として扱います。
-bmson と FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱います。
+bmson は beatoraja 拡張の `info.ln_type` と note 単位の `t`（1: LN / 2: CN / 3: HCN、`t` が `ln_type` より優先）でモードを決め、どちらも未指定の場合は LR2 準拠の既定として `1`（LN）を使います。
+FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱います。
 
 ### Manual Play
 

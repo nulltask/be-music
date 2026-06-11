@@ -105,7 +105,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
 
   const soundChannels = new Map<
     string,
-    { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean }> }
+    { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean; t?: number }> }
   >();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
@@ -130,9 +130,14 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
           ? Math.floor(event.bmson.l)
           : 0;
       const continuation = event.bmson?.c === true;
+      // beatoraja bmson extension — per-note long-note type rides along only on actual long notes.
+      const longNoteType =
+        length > 0 && (event.bmson?.t === 1 || event.bmson?.t === 2 || event.bmson?.t === 3)
+          ? event.bmson.t
+          : undefined;
 
       const slot = soundChannels.get(key) ?? { name: fileName, notes: [] };
-      slot.notes.push({ x, y, l: length, c: continuation });
+      slot.notes.push({ x, y, l: length, c: continuation, ...(longNoteType !== undefined ? { t: longNoteType } : {}) });
       soundChannels.set(key, slot);
     }
 
@@ -302,6 +307,9 @@ function createPreservedBmsonInfoForOutput(json: BeMusicJson, resolution: number
   }
   if (typeof info.judgeRank === 'number') {
     output.judge_rank = info.judgeRank;
+  }
+  if (info.lnType === 1 || info.lnType === 2 || info.lnType === 3) {
+    output.ln_type = info.lnType;
   }
   if (typeof info.total === 'number') {
     output.total = info.total;

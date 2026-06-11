@@ -319,13 +319,21 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
       };
       const noteLength = normalizeBmsonNoteLength(note.l);
       const noteContinue = typeof note.c === 'boolean' ? note.c : undefined;
-      if (noteLength !== undefined || noteContinue !== undefined) {
+      // beatoraja bmson extension — per-note long-note type, only meaningful on actual long notes (`l > 0`).
+      const noteLongNoteType =
+        (note.t === 1 || note.t === 2 || note.t === 3) && noteLength !== undefined && noteLength > 0
+          ? note.t
+          : undefined;
+      if (noteLength !== undefined || noteContinue !== undefined || noteLongNoteType !== undefined) {
         event.bmson = {};
         if (noteLength !== undefined) {
           event.bmson.l = noteLength;
         }
         if (noteContinue !== undefined) {
           event.bmson.c = noteContinue;
+        }
+        if (noteLongNoteType !== undefined) {
+          event.bmson.t = noteLongNoteType;
         }
       }
       if (isBgmNote) {

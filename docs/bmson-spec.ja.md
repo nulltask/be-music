@@ -33,6 +33,7 @@
 - [x] `info` 拡張項目: `mode_hint`
 - [x] `info` 拡張項目: `judge_rank`
 - [x] `info` 拡張項目: `total`
+- [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、player の LN モード解決と stringifier 出力に使用
 - [x] `info` 拡張項目: `back_image`
 - [x] `info` 拡張項目: `eyecatch_image`
 - [x] `info` 拡張項目: `banner_image`

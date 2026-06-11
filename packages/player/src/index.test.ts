@@ -1395,6 +1395,25 @@ describe('player', () => {
     expect(notes).toHaveLength(1);
     expect(notes[0].beat).toBe(0);
     expect(notes[0].endBeat).toBeCloseTo(1, 6);
+    // beatoraja bmson extension: unspecified `info.ln_type` / note `t` falls back to the LR2-aligned default LN
+    // (mode 1, no tail release judgment) — the same default the BMS side uses for a missing #LNMODE.
+    expect(notes[0].longNoteMode).toBe(1);
+  });
+
+  test('player: bmson note t overrides info.ln_type, which overrides the LN default', () => {
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.bmson.info.resolution = 240;
+    json.bmson.info.lnType = 2;
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240, t: 3 } },
+      { measure: 1, channel: '12', position: [0, 1], value: '02', bmson: { l: 240 } },
+    ];
+
+    const notes = extractPlayableNotes(json);
+    expect(notes).toHaveLength(2);
+    expect(notes[0].longNoteMode).toBe(3); // per-note t wins
+    expect(notes[1].longNoteMode).toBe(2); // chart-level info.ln_type
   });
 
   test('player: derives long-note end beat from bms #LNOBJ', () => {

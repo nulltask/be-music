@@ -434,7 +434,8 @@ Long notes derived from `#mmm51-69` are also counted as one starting note.
 ### `#LNMODE`
 
 If `#LNMODE` of BMS is not specified, it is treated as `1`.
-bmson and FREE ZONE are not subject to `#LNMODE` and are treated as notes with a terminal.
+bmson resolves the mode via the beatoraja extensions `info.ln_type` and the per-note `t` (1: LN / 2: CN / 3: HCN, `t` takes precedence over `ln_type`); when neither is specified the LR2-aligned default `1` (LN) is used.
+FREE ZONE is not subject to `#LNMODE` and is treated as a note with a terminal.
 
 ### Manual Play
 

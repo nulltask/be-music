@@ -934,6 +934,37 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: info.ln_type and notes[].t are preserved in the IR (beatoraja extension)', () => {
+    const document = {
+      version: '1.0.0',
+      info: { title: 'LN Type', init_bpm: 120, ln_type: 2 },
+      sound_channels: [
+        {
+          name: 'a.wav',
+          notes: [
+            { x: 1, y: 0, l: 240, t: 3 },
+            { x: 2, y: 480, l: 240 },
+            { x: 3, y: 960, l: 0, t: 2 }, // t on a non-long note is dropped (only meaningful when l > 0)
+            { x: 4, y: 1440, l: 240, t: 9 }, // out-of-range t is dropped
+          ],
+        },
+      ],
+    };
+    const json = parseBmson(JSON.stringify(document));
+
+    expect(json.bmson.info.lnType).toBe(2);
+    const byChannel = new Map(json.events.map((event) => [event.channel, event]));
+    expect(byChannel.get('11')?.bmson?.t).toBe(3);
+    expect(byChannel.get('12')?.bmson?.t).toBeUndefined();
+    expect(byChannel.get('13')?.bmson?.t).toBeUndefined();
+    expect(byChannel.get('14')?.bmson?.t).toBeUndefined();
+
+    // JSON round-trip keeps the per-note type and the chart-level type.
+    const reparsed = parseChart(JSON.stringify(json), 'json');
+    expect(reparsed.bmson.info.lnType).toBe(2);
+    expect(reparsed.events.find((event) => event.channel === '11')?.bmson?.t).toBe(3);
+  });
+
   test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', () => {
     const json = parseBmson(
       JSON.stringify({
