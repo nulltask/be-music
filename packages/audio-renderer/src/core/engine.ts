@@ -6,6 +6,7 @@ import {
   isBmsKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
+  usesMonophonicWavPlayback,
 } from '@be-music/chart';
 // `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
 // `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
@@ -336,7 +337,7 @@ async function scheduleSampleRenders(params: {
         sampleOffsetFrames: frameWindow.sampleOffsetFrames,
         sampleMaxFrames: frameWindow.sampleMaxFrames,
       }) - 1;
-    if (json.sourceFormat === 'bms') {
+    if (usesMonophonicWavPlayback(json)) {
       latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
     if (triggerGain > 0) {
@@ -425,7 +426,7 @@ function trimPreviousBmsRetrigger(
   scheduled: ScheduledSampleRender[],
   latestBmsScheduleBySampleKey: Map<string, number>,
 ): void {
-  if (json.sourceFormat !== 'bms') {
+  if (!usesMonophonicWavPlayback(json)) {
     return;
   }
   const previousIndex = latestBmsScheduleBySampleKey.get(trigger.sampleKey);

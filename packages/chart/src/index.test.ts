@@ -36,6 +36,7 @@ import {
   resolveBmsLongNotes,
   resolveLnobjLongNotes,
   sortEvents,
+  usesMonophonicWavPlayback,
 } from './index.ts';
 import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
 
@@ -547,6 +548,12 @@ describe('chart', () => {
     expect(parseBmsDynamicVolumeGain('80')).toBeCloseTo(0x80 / 0xff, 9);
     expect(parseBmsDynamicVolumeGain('00')).toBeUndefined();
     expect(parseBmsDynamicVolumeGain('GG')).toBeUndefined();
+  });
+
+  test('usesMonophonicWavPlayback is true only for BMS-sourced charts', () => {
+    expect(usesMonophonicWavPlayback({ sourceFormat: 'bms' })).toBe(true);
+    expect(usesMonophonicWavPlayback({ sourceFormat: 'bmson' })).toBe(false);
+    expect(usesMonophonicWavPlayback({ sourceFormat: 'json' })).toBe(false);
   });
 
   test('classifies normalized fallback inputs after trimming and case normalization', () => {

@@ -3,6 +3,7 @@ import {
   isBmsKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
+  usesMonophonicWavPlayback,
 } from '@be-music/chart';
 import {
   normalizeChannel,
@@ -240,7 +241,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
     // throwing for a past timestamp; player-input keysounds and immediate triggers go through the no-`when` path.
     const startAt =
       audioContextStartSeconds !== undefined ? Math.max(audioContext.currentTime, audioContextStartSeconds) : undefined;
-    if (chart.sourceFormat === 'bms') {
+    if (usesMonophonicWavPlayback(chart)) {
       const previous = activeBySlot.get(sampleKey);
       if (previous) {
         stopSource(previous, startAt);

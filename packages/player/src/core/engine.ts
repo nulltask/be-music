@@ -7,6 +7,7 @@ import {
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
   sortEvents,
+  usesMonophonicWavPlayback,
 } from '@be-music/chart';
 // Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
 // engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
@@ -3871,7 +3872,7 @@ async function createAudioSessionIfEnabled(
       if (offsetFrames >= endPosition) {
         return;
       }
-      if (json.sourceFormat === 'bms') {
+      if (usesMonophonicWavPlayback(json)) {
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
       }
       if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
@@ -3987,7 +3988,7 @@ async function createDebugActiveAudioEstimator(
     .filter((window) => window.endSeconds > window.startSeconds)
     .sort((left, right) => left.startSeconds - right.startSeconds);
 
-  if (json.sourceFormat === 'bms') {
+  if (usesMonophonicWavPlayback(json)) {
     const latestBySampleKey = new Map<string, number>();
     for (let index = 0; index < windows.length; index += 1) {
       const window = windows[index]!;
