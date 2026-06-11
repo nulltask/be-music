@@ -30,6 +30,11 @@
       "source": "./src/log.ts",
       "default": "./dist/log.js"
     },
+    "./optional-node-module": {
+      "types": "./dist/optional-node-module.d.ts",
+      "source": "./src/optional-node-module.ts",
+      "default": "./dist/optional-node-module.js"
+    },
     "./path": {
       "types": "./dist/path.d.ts",
       "source": "./src/path.ts",

@@ -3,6 +3,7 @@ import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { createAbortError, isAbortError, throwIfAborted } from '@be-music/utils/core';
+import { loadOptionalNodeModule } from '@be-music/utils/optional-node-module';
 import { createSeaWorker, isSeaRuntime } from './node/sea-worker.ts';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
@@ -632,7 +633,14 @@ async function createLibAvInstance(): Promise<LibAvInstance> {
     (globalThis as { self?: unknown }).self = globalThis;
   }
 
-  const libAvModule = (await import('@uwx/libav.js-fat')) as unknown as LibAvModule;
+  // In a SEA binary the bare-specifier import always fails; the helper retries from a `node_modules`
+  // directory next to the executable (or the working directory) before giving up.
+  const libAvModule = (await loadOptionalNodeModule('@uwx/libav.js-fat', () => import('@uwx/libav.js-fat'))) as
+    | LibAvModule
+    | undefined;
+  if (!libAvModule) {
+    throw new Error('@uwx/libav.js-fat is unavailable; cannot decode video BGA.');
+  }
   return libAvModule.default.LibAV({
     noworker: true,
     variant: 'fat',
