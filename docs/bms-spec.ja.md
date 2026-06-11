@@ -368,6 +368,7 @@ runtime と round-trip の扱い:
 ## イベント位置の扱い
 
 - `data` は 2文字単位で分割し、`00` は空イベント
+- `data` は最初の空白文字で打ち切り、それ以降の文字列は無視する
 - 位置は `position: [numerator, denominator]` として保持
 - `denominator = トークン数`
 - `numerator = トークンの0始まりインデックス`

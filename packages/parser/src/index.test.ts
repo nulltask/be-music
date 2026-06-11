@@ -94,6 +94,21 @@ describe('parser', () => {
     expect(parsed.metadata.bpm).toBe(120);
   });
 
+  test('BMS: object data is truncated at the first whitespace', () => {
+    // De-facto rule: the channel stream is one contiguous token run. Trailing text after whitespace must neither
+    // fabricate events (e.g. "junk" → JU/NK) nor inflate the denominator of the tokens before it.
+    const parsed = parseChart('#BPM 120\n#00111:0102 0304\n#00211:0102  junk words\n');
+
+    expect(parsed.events.filter((event) => event.measure === 1)).toEqual([
+      { measure: 1, channel: '11', position: [0, 2], value: '01' },
+      { measure: 1, channel: '11', position: [1, 2], value: '02' },
+    ]);
+    expect(parsed.events.filter((event) => event.measure === 2)).toEqual([
+      { measure: 2, channel: '11', position: [0, 2], value: '01' },
+      { measure: 2, channel: '11', position: [1, 2], value: '02' },
+    ]);
+  });
+
   test('BMS: accepts CR-only line endings', () => {
     const parsed = parseChart('#TITLE CR Only\r#BPM 150\r#00111:01\r');
 

@@ -30,6 +30,9 @@ export function normalizeBmsonNoteLength(value: unknown): number | undefined {
  * - The total `tokenCount` (= denominator) counts EVERY 2-char slot including `00` placeholders — needed to compute
  *   fractional beat positions.
  * - The returned `tokens` array only includes NON-ZERO entries (zeros are silent placeholders, not events).
+ * - The stream ENDS at the first whitespace character: de-facto BMS implementations treat the object data as one
+ *   contiguous token run, so trailing text (`#00111:0102  some note`) must not fabricate events or shift the
+ *   denominator of the legitimate tokens before it.
  *
  * `base` controls the per-character validator: - `36` (default): ASCII `[0-9A-Za-z]` is accepted and lowercase is
  * FOLDED to uppercase, so `0a` and `0A` collapse to the same ID. - `62`: lowercase is preserved, so `0a` and `0A` are
@@ -48,6 +51,9 @@ export function collectNonZeroObjectTokens(
   let highCode = -1;
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
+    if (code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c) {
+      break;
+    }
     const normalizedCode = normalize(code);
     if (normalizedCode < 0) {
       continue;

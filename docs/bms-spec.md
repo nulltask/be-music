@@ -368,6 +368,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 ## Handling of event location
 
 - `data` splits by two characters, `00` is empty event
+- `data` is truncated at the first whitespace character; everything after it is ignored
 - Position is kept as `position: [numerator, denominator]`
 - `denominator = number of tokens`
 - `numerator = zero-based token index`
