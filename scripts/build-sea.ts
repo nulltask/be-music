@@ -1,7 +1,8 @@
-import { chmod, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { builtinModules } from 'node:module';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { builtinModules, createRequire } from 'node:module';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { build, defaultServerConditions, defaultServerMainFields } from 'vite';
@@ -21,6 +22,13 @@ interface CliArgs {
   bundleOnly: boolean;
 }
 
+interface EmbeddedNodeModuleRoot {
+  /** Package embedded into the binary together with its production dependency closure. */
+  name: string;
+  /** Directory (relative to the repository root) whose dependency resolution finds the package. */
+  resolveFrom: string;
+}
+
 interface SeaTargetConfig {
   packageDir: string;
   outputBaseName: string;
@@ -32,6 +40,12 @@ interface SeaTargetConfig {
    * the workerData role marker, like `player-tui/src/sea-main.ts`.
    */
   embedBundleAsset?: boolean;
+  /**
+   * Optional packages (native addons and friends) embedded as SEA assets. The running binary extracts them
+   * to a cache directory at startup — native addons cannot be loaded from memory — and resolves them through
+   * `loadOptionalNodeModule`; see `player-tui/src/node/sea-embedded-modules.ts`.
+   */
+  embeddedNodeModules?: EmbeddedNodeModuleRoot[];
   optionalExternalModules?: string[];
   bundleBanner?: string;
   aliases?: Record<string, string>;
@@ -49,6 +63,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     outputBaseName: 'be-music-player',
     entry: 'src/sea-main.ts',
     embedBundleAsset: true,
+    embeddedNodeModules: [{ name: 'node-web-audio-api', resolveFrom: 'packages/player' }],
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
@@ -344,6 +359,108 @@ async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
   await Promise.all(localChunkFileNames.map((fileName) => unlink(resolve(seaDir, fileName))));
 }
 
+// Asset names kept in sync with packages/player-tui/src/node/sea-embedded-modules.ts.
+const EMBEDDED_MODULES_MANIFEST_ASSET = 'embedded-node-modules.json';
+const EMBEDDED_MODULE_ASSET_PREFIX = 'embedded-node-modules/';
+// The SEA binary targets the build host platform, so only the matching native addon is embedded.
+const NATIVE_ADDON_PLATFORM_TAG = `${process.platform}-${process.arch}`;
+
+interface EmbeddedModulesBuildResult {
+  /** Asset name → absolute source file path, ready to merge into the SEA config `assets` map. */
+  assets: Record<string, string>;
+  manifest: { cacheKey: string; files: string[] };
+}
+
+async function resolvePackageDir(name: string, fromDir: string): Promise<string> {
+  const requireFromBase = createRequire(join(fromDir, 'package.json'));
+  try {
+    return dirname(await realpath(requireFromBase.resolve(`${name}/package.json`)));
+  } catch {
+    // The package `exports` map may hide package.json; resolve the entry file and walk up to the package root.
+    let dir = dirname(await realpath(requireFromBase.resolve(name)));
+    while (true) {
+      try {
+        const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as { name?: string };
+        if (manifest.name === name) {
+          return dir;
+        }
+      } catch {
+        // No package.json at this level; keep walking up.
+      }
+      const parent = dirname(dir);
+      if (parent === dir) {
+        throw new Error(`Cannot locate the package directory of ${name}`);
+      }
+      dir = parent;
+    }
+  }
+}
+
+async function collectEmbeddedPackageDirs(roots: EmbeddedNodeModuleRoot[]): Promise<Map<string, string>> {
+  const packageDirs = new Map<string, string>();
+  const queue = roots.map((root) => ({ name: root.name, fromDir: resolve(repositoryDir, root.resolveFrom) }));
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next || packageDirs.has(next.name)) {
+      continue;
+    }
+    const packageDir = await resolvePackageDir(next.name, next.fromDir);
+    packageDirs.set(next.name, packageDir);
+    const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+    };
+    for (const dependencyName of Object.keys(manifest.dependencies ?? {})) {
+      queue.push({ name: dependencyName, fromDir: packageDir });
+    }
+  }
+  return packageDirs;
+}
+
+function shouldEmbedPackageFile(fileName: string): boolean {
+  return !fileName.endsWith('.node') || fileName.includes(NATIVE_ADDON_PLATFORM_TAG);
+}
+
+async function listEmbeddedPackageFiles(packageDir: string, currentDir = packageDir): Promise<string[]> {
+  const entries = await readdir(currentDir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const entryPath = join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules') {
+        continue;
+      }
+      files.push(...(await listEmbeddedPackageFiles(packageDir, entryPath)));
+      continue;
+    }
+    const isFile = entry.isFile() || (entry.isSymbolicLink() && (await stat(entryPath)).isFile());
+    if (isFile && shouldEmbedPackageFile(entry.name)) {
+      files.push(relative(packageDir, entryPath).replaceAll('\\', '/'));
+    }
+  }
+  return files.sort();
+}
+
+async function buildEmbeddedNodeModuleAssets(roots: EmbeddedNodeModuleRoot[]): Promise<EmbeddedModulesBuildResult> {
+  const packageDirs = await collectEmbeddedPackageDirs(roots);
+  const assets: Record<string, string> = {};
+  const manifestFiles: string[] = [];
+  const cacheKeyHash = createHash('sha256');
+  for (const [name, packageDir] of [...packageDirs.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const relativePath of await listEmbeddedPackageFiles(packageDir)) {
+      const manifestPath = `${name}/${relativePath}`;
+      const filePath = join(packageDir, ...relativePath.split('/'));
+      assets[`${EMBEDDED_MODULE_ASSET_PREFIX}${manifestPath}`] = filePath;
+      manifestFiles.push(manifestPath);
+      cacheKeyHash.update(manifestPath);
+      cacheKeyHash.update(await readFile(filePath));
+    }
+  }
+  return {
+    assets,
+    manifest: { cacheKey: cacheKeyHash.digest('hex').slice(0, 16), files: manifestFiles },
+  };
+}
+
 async function supportsNodeFlag(nodeBinaryPath: string, cwd: string, flag: string): Promise<boolean> {
   try {
     const { stdout, stderr } = await execFileAsync(nodeBinaryPath, ['--help'], { cwd });
@@ -410,6 +527,19 @@ async function main(): Promise<void> {
   await buildSeaBundle(targetConfig, seaDir);
   await inlineSeaRelativeChunks(seaDir);
 
+  let embeddedModules: EmbeddedModulesBuildResult | undefined;
+  const embeddedManifestPath = resolve(seaDir, EMBEDDED_MODULES_MANIFEST_ASSET);
+  if (targetConfig.embeddedNodeModules && targetConfig.embeddedNodeModules.length > 0) {
+    process.stdout.write('Collecting embedded node modules...\n');
+    embeddedModules = await buildEmbeddedNodeModuleAssets(targetConfig.embeddedNodeModules);
+    await writeFile(embeddedManifestPath, `${JSON.stringify(embeddedModules.manifest, null, 2)}\n`, 'utf8');
+  }
+
+  const assets: Record<string, string> = {
+    // Asset name kept in sync with SEA_BUNDLE_ASSET_NAME in packages/player-tui/src/node/sea-worker.ts.
+    ...(targetConfig.embedBundleAsset ? { 'sea-entry.cjs': bundlePath } : {}),
+    ...(embeddedModules ? { [EMBEDDED_MODULES_MANIFEST_ASSET]: embeddedManifestPath, ...embeddedModules.assets } : {}),
+  };
   const seaConfig = {
     main: bundlePath,
     mainFormat: 'commonjs',
@@ -417,8 +547,7 @@ async function main(): Promise<void> {
     executable: nodeBinaryPath,
     disableExperimentalSEAWarning: true,
     useCodeCache: true,
-    // Asset name kept in sync with SEA_BUNDLE_ASSET_NAME in packages/player-tui/src/node/sea-worker.ts.
-    ...(targetConfig.embedBundleAsset ? { assets: { 'sea-entry.cjs': bundlePath } } : {}),
+    ...(Object.keys(assets).length > 0 ? { assets } : {}),
   };
   await writeFile(configPath, `${JSON.stringify(seaConfig, null, 2)}\n`, 'utf8');
 
