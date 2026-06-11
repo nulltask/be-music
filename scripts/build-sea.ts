@@ -305,19 +305,6 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
   });
 }
 
-function replaceLocalChunkRequires(code: string, localChunkIds: Set<string>): string {
-  return code.replace(/require\((['"])(\.\/[^'"]+)\1\)/g, (match, _quote, id) =>
-    localChunkIds.has(id) ? `__sea_require(${JSON.stringify(id)})` : match,
-  );
-}
-
-function indentBlock(code: string): string {
-  return code
-    .split('\n')
-    .map((line) => (line.length > 0 ? `    ${line}` : ''))
-    .join('\n');
-}
-
 async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
   const entryFileName = 'sea-entry.cjs';
   const seaFiles = await readdir(seaDir);
@@ -328,31 +315,32 @@ async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
     return;
   }
 
-  const localChunkIds = new Set(localChunkFileNames.map((fileName) => `./${fileName}`));
   const localChunkSources = await Promise.all(
-    localChunkFileNames.map(async (fileName) => {
-      const chunkPath = resolve(seaDir, fileName);
-      const chunkCode = await readFile(chunkPath, 'utf8');
-      return {
-        fileName,
-        code: replaceLocalChunkRequires(chunkCode, localChunkIds),
-      };
-    }),
+    localChunkFileNames.map(async (fileName) => ({
+      fileName,
+      code: await readFile(resolve(seaDir, fileName), 'utf8'),
+    })),
   );
-
   const entryPath = resolve(seaDir, entryFileName);
-  const entryCode = replaceLocalChunkRequires(await readFile(entryPath, 'utf8'), localChunkIds);
-  const inlinedRuntime = [
+  const entryCode = await readFile(entryPath, 'utf8');
+
+  // Chunk and entry sources are embedded verbatim: any source transformation (re-indenting, rewriting
+  // `require("./chunk")` calls with a regex) can corrupt multi-line template literals that carry binary
+  // payloads — the yEnc-encoded decoder wasm of `@wasm-audio-decoders/*` broke exactly that way. Local
+  // chunk requires are redirected by shadowing `require` instead: chunk factories receive `__sea_require`
+  // as their `require` parameter, and the entry is wrapped in an IIFE whose `require` parameter shadows
+  // the SEA-injected one. `__sea_require` falls back to the real `require` for non-chunk ids.
+  const inlinedBundle = [
     'const __sea_modules = Object.create(null);',
     'const __sea_module_cache = Object.create(null);',
     'function __sea_require(id) {',
-    '  const cached = __sea_module_cache[id];',
-    '  if (cached) {',
-    '    return cached.exports;',
-    '  }',
     '  const factory = __sea_modules[id];',
     '  if (!factory) {',
     '    return require(id);',
+    '  }',
+    '  const cached = __sea_module_cache[id];',
+    '  if (cached) {',
+    '    return cached.exports;',
     '  }',
     '  const module = { exports: {} };',
     '  __sea_module_cache[id] = module;',
@@ -360,14 +348,17 @@ async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
     '  return module.exports;',
     '}',
     ...localChunkSources.flatMap(({ fileName, code }) => [
-      `__sea_modules[${JSON.stringify(`./${fileName}`)}] = (module, exports, __sea_require) => {`,
-      indentBlock(code),
+      `__sea_modules[${JSON.stringify(`./${fileName}`)}] = (module, exports, require) => {`,
+      code,
       '};',
     ]),
+    '(function(require) {',
+    entryCode,
+    '})(__sea_require);',
     '',
   ].join('\n');
 
-  await writeFile(entryPath, `${inlinedRuntime}${entryCode}`, 'utf8');
+  await writeFile(entryPath, inlinedBundle, 'utf8');
   await Promise.all(localChunkFileNames.map((fileName) => unlink(resolve(seaDir, fileName))));
 }
 
