@@ -354,6 +354,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - Playback audio uses real-time trigger method for any of `AUTO` / `AUTO SCRATCH` / `MANUAL`
 - `--play-volume` applies to performance lanes, `--bgm-volume` applies to non-performance lanes.
 - `SC` / Landmine / `LNOBJ` Exclude terminal suppression target events from audio trigger targets
+- Undefined, missing, or undecodable `#WAVxx` references are treated as silence (a substitute debug tone can be enabled with the `missingSampleToneSeconds` option)
 
 ### SCROLL/BPM/STOP compatibility policy
 

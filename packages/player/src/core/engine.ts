@@ -162,6 +162,12 @@ export interface PlayerOptions {
   bgmVolume?: number;
   playVolume?: number;
   audioBaseDir?: string;
+  /**
+   * Debug aid — synthesizes a short sine tone for `#WAVxx` references whose file is missing or fails to decode.
+   * The spec-compliant default is silence (LR2 / beatoraja play nothing for a broken keysound reference); enable
+   * this only in test rigs / chart debugging where hearing that a trigger fired matters.
+   */
+  missingSampleToneSeconds?: number;
   audioTailSeconds?: number;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
@@ -4466,7 +4472,12 @@ async function buildRuntimeSampleMap(
       baseDir: options.audioBaseDir ?? process.cwd(),
       sampleRate,
       gain: chartWavGain,
-      fallbackToneSeconds: 0.06,
+      fallbackToneSeconds:
+        typeof options.missingSampleToneSeconds === 'number' &&
+        Number.isFinite(options.missingSampleToneSeconds) &&
+        options.missingSampleToneSeconds > 0
+          ? options.missingSampleToneSeconds
+          : 0,
       signal,
       base: idBase,
     });

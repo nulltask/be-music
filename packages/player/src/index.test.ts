@@ -1339,6 +1339,31 @@ describe('player', () => {
   });
 
   test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {
+    // `explode.wav` doesn't exist on disk, so the audible assertion opts into the debug fallback tone — the
+    // spec-compliant default for a missing sample is silence (covered by the companion test below).
+    await manualPlay(createLandmineOnlyChart(), {
+      speed: 240,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      limiter: false,
+      tui: false,
+      missingSampleToneSeconds: 0.06,
+      writeOutput: () => undefined,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(true);
+  });
+
+  test('player: missing #WAVxx files are silent by default (no fallback tone)', async () => {
     await manualPlay(createLandmineOnlyChart(), {
       speed: 240,
       leadInMs: 0,
@@ -1357,7 +1382,7 @@ describe('player', () => {
       }),
     });
 
-    expect(hasAnyNonSilentAudioWrite()).toBe(true);
+    expect(hasAnyNonSilentAudioWrite()).toBe(false);
   });
 
   test('player: derives long-note end beat from bmson notes.l', () => {

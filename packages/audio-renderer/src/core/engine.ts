@@ -177,7 +177,10 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
   const gain = (options.gain ?? DEFAULT_GAIN) * resolveChartVolWavGain(json);
   const startSeconds = Number.isFinite(options.startSeconds) ? Math.max(0, options.startSeconds ?? 0) : 0;
-  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
+  // BMS spec — an undefined / missing / undecodable `#WAVxx` reference is SILENT (LR2 / beatoraja both skip it).
+  // `fallbackToneSeconds` exists as an opt-in debug aid; 0 renders a 1-frame silent placeholder so every downstream
+  // path (scheduling, gain, progress reporting) still sees a sample.
+  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0;
   const baseDir = options.baseDir ?? process.cwd();
   const signal = options.signal;
   const resolveTriggerGain = options.resolveTriggerGain;
@@ -477,7 +480,9 @@ export async function renderSingleSample(
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
   const baseDir = options.baseDir ?? process.cwd();
-  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
+  // Spec-compliant default: missing / undecodable samples are silent. Pass a positive value to opt into the
+  // debugging sine tone.
+  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0;
   throwIfAborted(options.signal);
   const sample = await getOrCreateSample({
     sampleKey: normalizedKey,

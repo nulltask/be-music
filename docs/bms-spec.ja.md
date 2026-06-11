@@ -354,6 +354,7 @@ runtime と round-trip の扱い:
 - `AUTO` / `AUTO SCRATCH` / `MANUAL` のいずれでも、再生音声はリアルタイムトリガ方式を使用する
 - `--play-volume` は演奏レーン系、`--bgm-volume` は非演奏レーン系へ適用する
 - `SC` / 地雷 / `LNOBJ` 終端抑止対象イベントは音声トリガ対象から除外する
+- 未定義・ファイル欠落・デコード失敗の `#WAVxx` 参照は無音として扱う（デバッグ用に `missingSampleToneSeconds` オプションで代替トーンを有効化できる）
 
 ### SCROLL/BPM/STOP 互換ポリシー
 
