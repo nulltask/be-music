@@ -1878,10 +1878,10 @@ describe('player', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 2;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(16.67, 6);
-    expect(windows.great).toBeCloseTo(33.33, 6);
-    expect(windows.good).toBeCloseTo(116.67, 6);
-    expect(windows.bad).toBeCloseTo(250, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
+    expect(windows.bad).toBe(200);
   });
 
   test('player: FAST/SLOW are counted only for GREAT/GOOD', () => {
@@ -1940,35 +1940,35 @@ describe('player', () => {
     expect(resolveChartVolWavGain(defaultChart)).toBe(2);
   });
 
-  test('player: narrows judge windows for bms RANK=0', () => {
+  test('player: narrows judge windows for bms RANK=0 (LR2 VERY HARD)', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 0;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo((16.67 * 25) / 75, 6);
-    expect(windows.great).toBeCloseTo((33.33 * 25) / 75, 6);
-    expect(windows.good).toBeCloseTo((116.67 * 25) / 75, 6);
-    expect(windows.bad).toBeCloseTo((250 * 25) / 75, 6);
+    expect(windows.pgreat).toBeCloseTo(8, 6);
+    expect(windows.great).toBeCloseTo(24, 6);
+    expect(windows.good).toBeCloseTo(40, 6);
+    expect(windows.bad).toBe(200);
   });
 
-  test('player: widens judge windows for bms RANK=4', () => {
+  test('player: bms RANK=4 maps onto NORMAL windows (LR2 behavior)', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 4;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo((16.67 * 125) / 75, 6);
-    expect(windows.great).toBeCloseTo((33.33 * 125) / 75, 6);
-    expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
-    expect(windows.bad).toBeCloseTo((250 * 125) / 75, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
+    expect(windows.bad).toBe(200);
   });
 
-  test('player: scales judge windows from bms DEFEXRANK using NORMAL baseline', () => {
+  test('player: scales judge windows from bms DEFEXRANK via the LR2 anchor interpolation', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 0;
-    json.bms.defExRank = 120;
+    json.bms.defExRank = 120; // percent 90 — between NORMAL (75) and EASY (100)
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(16.67 * 1.2, 6);
-    expect(windows.great).toBeCloseTo(33.33 * 1.2, 6);
-    expect(windows.good).toBeCloseTo(116.67 * 1.2, 6);
-    expect(windows.bad).toBeCloseTo(250 * 1.2, 6);
+    expect(windows.pgreat).toBeCloseTo(19.8, 6);
+    expect(windows.great).toBeCloseTo(52, 6);
+    expect(windows.good).toBeCloseTo(112, 6);
+    expect(windows.bad).toBe(200);
   });
 
   test('player: resolves displayed judge rank from bms DEFEXRANK and defaults', () => {
@@ -2023,23 +2023,23 @@ describe('player', () => {
     expect(summary.great).toBe(0);
   });
 
-  test('player: uses baseline judge windows for bmson judge_rank=100', () => {
+  test('player: uses NORMAL windows for bmson judge_rank=100', () => {
     const json = createEmptyJson('bmson');
     json.bmson.info.judgeRank = 100;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(16.67, 6);
-    expect(windows.great).toBeCloseTo(33.33, 6);
-    expect(windows.good).toBeCloseTo(116.67, 6);
-    expect(windows.bad).toBeCloseTo(250, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
+    expect(windows.bad).toBe(200);
   });
 
   test('player: debug judge window override affects BAD only', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 4;
     const windows = resolveJudgeWindowsMs(json, 180);
-    expect(windows.pgreat).toBeCloseTo((16.67 * 125) / 75, 6);
-    expect(windows.great).toBeCloseTo((33.33 * 125) / 75, 6);
-    expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
     expect(windows.bad).toBe(180);
   });
 

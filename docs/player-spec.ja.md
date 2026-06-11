@@ -175,14 +175,17 @@ kitty 非対応端末へフォールバックした場合、reverse scratch の 
 
 ### 基準幅
 
-player はまず IIDX 系の基準判定幅を持ちます。
-以後の rank 解決や拡張命令は、この基準値を倍率で拡縮する形で適用します。
+player は LR2 の実測判定幅を基準にします（hitkey 日記 2015-01-19 の実測値、lr2oraja の LR2 互換テーブルと一致）。
 
-- `PGREAT`: `16.67ms`
-- `GREAT`: `33.33ms`
-- `GOOD`: `116.67ms`
-- `BAD`: `250ms`
+| `#RANK` | `PGREAT` | `GREAT` | `GOOD` | `BAD` |
+| --- | --- | --- | --- | --- |
+| `0` `VERY HARD` | `±8ms` | `±24ms` | `±40ms` | `±200ms` |
+| `1` `HARD` | `±15ms` | `±30ms` | `±60ms` | `±200ms` |
+| `2` `NORMAL` | `±18ms` | `±40ms` | `±100ms` | `±200ms` |
+| `3` `EASY` | `±21ms` | `±60ms` | `±120ms` | `±200ms` |
+| `4` `VERY EASY` | `NORMAL` と同一（LR2 は `#RANK 4` を `NORMAL` として扱う） | | | |
 
+`BAD` 幅は rank・拡張命令に関わらず `±200ms` で固定です。スクラッチも鍵盤と同じ幅を使います。
 `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の境界は、この 4 本の幅から決まります。
 `POOR` は `BAD` 幅を超えた入力、またはノートの取り逃しで発生します。
 
@@ -198,22 +201,14 @@ BMS では、再生開始時点の判定幅を次の優先順位で決めます�
 `100` は基準値であり、`NORMAL` と同じ幅です。
 player は `#DEFEXRANK` を `Number.parseFloat()` で解釈し、有限かつ `0` より大きい値だけを採用します。
 
-`#RANK` は beatoraja 互換の倍率テーブル `[25, 50, 75, 100, 125]` として扱います。
+`#RANK` は内部の judgerank パーセント軸 `[25, 50, 75, 100, 75]`（`VERY HARD`=25 / `HARD`=50 / `NORMAL`=75 / `EASY`=100 / `VERY EASY`=`NORMAL` 扱い）へ写像します。
 `metadata.rank` は整数へ切り捨てて解釈し、範囲外の値は無効として既定値へフォールバックします。
-
-- `#RANK 0`: `25%` (`VERY HARD`)
-- `#RANK 1`: `50%` (`HARD`)
-- `#RANK 2`: `75%` (`NORMAL`)
-- `#RANK 3`: `100%` (`EASY`)
-- `#RANK 4`: `125%` (`VERY EASY`)
 
 ### BMS の換算式
 
-BMS の実際の判定幅は、`NORMAL = 75%` を基準にして計算します。
-たとえば `#DEFEXRANK 120` は「基準判定幅の `1.2` 倍」であり、`PGREAT=20.004ms`, `GREAT=39.996ms`, `GOOD=140.004ms`, `BAD=300ms` として扱います。
-
-`#RANK` から解決した値も同じ式で扱います。
-たとえば `#RANK 4` は `125 / 75` 倍なので、`VERY EASY` は `NORMAL` より約 `1.666...` 倍広い判定幅です。
+判定幅は、上の実測テーブルを judgerank パーセント軸上のアンカー（25 / 50 / 75 / 100）として区分線形補間して求めます（lr2oraja の `JudgeWindowRule.LR2` と同じモデル）。
+`#DEFEXRANK n` は `n × 75 / 100` でパーセント軸へ換算します。たとえば `#DEFEXRANK 120` は percent `90` であり、`PGREAT=19.8ms`, `GREAT=52ms`, `GOOD=112ms`, `BAD=200ms`（固定）になります。
+`EASY`（percent `100`）を超える値は最終区間の傾きで外挿し、スケール対象は `PGREAT` / `GREAT` / `GOOD` のみです。どれだけ広げても各幅は固定の `BAD` 幅 `±200ms` を超えません。
 
 ### BMS の動的判定幅変更
 
@@ -243,8 +238,8 @@ bmson では次の優先順位で判定幅を決めます。
 2. `metadata.rank`
 3. 既定値 `100`
 
-bmson の基準値は `100%` です。
-そのため `judgeRank=100` は IIDX 系の基準判定幅そのままで、`50` は半分、`150` は `1.5` 倍として扱います。
+bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱い、同じ LR2 アンカー補間で判定幅へ換算します。
+そのため `judgeRank=100` は `NORMAL`（`±18/±40/±100/±200ms`）そのままです。
 
 現在の実装では、bmson に BMS の `#EXRANKxx` 相当の動的判定幅変更はありません。
 

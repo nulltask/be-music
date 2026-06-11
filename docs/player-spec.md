@@ -198,22 +198,14 @@ BMS determines the judgment range at the start of playback using the following p
 `100` is the standard value and has the same width as `NORMAL`.
 The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts values ​​​​that are finite and greater than `0`.
 
-`#RANK` is treated as a beatoraja-compatible scaling table `[25, 50, 75, 100, 125]`.
+`#RANK` maps onto the internal judgerank percent axis `[25, 50, 75, 100, 75]` (`VERY HARD` = 25 / `HARD` = 50 / `NORMAL` = 75 / `EASY` = 100 / `VERY EASY` treated as `NORMAL`).
 `metadata.rank` is interpreted by rounding down to an integer, and values ​​​​outside the range are invalidated and fallback to the default value.
-
-- `#RANK 0`: `25%` (`VERY HARD`)
-- `#RANK 1`: `50%` (`HARD`)
-- `#RANK 2`: `75%` (`NORMAL`)
-- `#RANK 3`: `100%` (`EASY`)
-- `#RANK 4`: `125%` (`VERY EASY`)
 
 ### BMS conversion formula
 
-The actual decision width of BMS is calculated based on `NORMAL = 75%`.
-For example, `#DEFEXRANK 120` is ``1.2` times the standard judgment width'' and is treated as `PGREAT=20.004ms`, `GREAT=39.996ms`, `GOOD=140.004ms`, `BAD=300ms`.
-
-The same expression handles the value resolved from `#RANK`.
-For example, `#RANK 4` is `125 / 75` times, so `VERY EASY` is about `1.666...` times wider than `NORMAL`.
+Judgment widths are derived by piecewise-linear interpolation of the measured table above over the judgerank percent anchors (25 / 50 / 75 / 100) — the same model as lr2oraja's `JudgeWindowRule.LR2`.
+`#DEFEXRANK n` converts to the percent axis as `n × 75 / 100`. For example `#DEFEXRANK 120` is percent `90` and yields `PGREAT=19.8ms`, `GREAT=52ms`, `GOOD=112ms`, `BAD=200ms` (fixed).
+Values beyond `EASY` (percent `100`) extrapolate along the final segment; only `PGREAT` / `GREAT` / `GOOD` scale, and no width ever exceeds the fixed `BAD` gate of `±200ms`.
 
 ### BMS dynamic judgment width change
 
@@ -243,8 +235,8 @@ bmson determines the judgment width using the following priority order.
 2. `metadata.rank`
 3. Default value `100`
 
-The standard value for bmson is `100%`.
-Therefore, `judgeRank=100` is treated as the IIDX standard judgment width, `50` is treated as half, and `150` is treated as `1.5` times.
+bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
+Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
 
 In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
 
