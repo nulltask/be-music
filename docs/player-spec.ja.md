@@ -314,7 +314,7 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 - `summary` のジャッジカウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。 LR2 では「見逃しPOOR」(NOWJUDGE index 1) のみが POOR としてカウントされ、「空POOR」(index 0) はカウント外となるため。
 - EX-SCORE / IIDX score は **変化させない**。
 - combo は **切らない**。
-- groove gauge には `EMPTY_POOR` を適用する。デルタは [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) の `applyGrooveGaugeJudge('EMPTY_POOR')` 経由で算出され、 GROOVE / HARD で `-2`、 EASY で `-1`、 DEATH では `-100` (= 即時 0%)。 NORMAL / EASY ではほぼ無害だが、 HARD / DEATH では実害が出る。
+- groove gauge には `EMPTY_POOR` を適用する。デルタは [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) の `applyGrooveGaugeJudge('EMPTY_POOR')` 経由で算出され、 GROOVE で `-2`、 HARD で `-2`（TOTAL 補正対象）、 EASY で `-1.6`、 DEATH では `-10`。 NORMAL / EASY ではほぼ無害だが、 HARD / DEATH では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
@@ -417,6 +417,13 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 - 手動地雷ヒット: `-(mineValue(base36) / 2)`
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
+
+`HARD` / `EASY` / `DEATH` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`）に合わせます。
+
+- `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には `#TOTAL` 補正表（`TOTAL ≥240` で `×1.0` から `<120` で `×10` まで）を掛け、ゲージが `30%` 未満のときはさらに `×0.6` に緩和します。
+- `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
+- `DEATH`（LR2 HAZARD 相当）: `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR -10`。
+- `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
 
 ## ロングノート
 

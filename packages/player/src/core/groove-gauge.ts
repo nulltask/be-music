@@ -5,6 +5,27 @@ export const LR2_GROOVE_GAUGE_INITIAL = 20;
 export const LR2_GROOVE_GAUGE_MIN = 2;
 export const LR2_GROOVE_GAUGE_MAX = 100;
 export const LR2_GROOVE_GAUGE_CLEAR_THRESHOLD = 80;
+/**
+ * Survival gauges (HARD / DEATH) collapse to 0 % once they drop below 2 % — LR2 fails the stage at that point
+ * (iidx.org "you get a stage fail at 2%"; lr2oraja `GaugeProperty` `death = 2`). The gauge display granularity in
+ * LR2 is 2 %, so "below 2 %" and "reads 0 %" coincide.
+ */
+const LR2_SURVIVAL_GAUGE_DEATH_THRESHOLD = 2;
+/**
+ * LR2 HARD damage softening — below 30 % the damage is multiplied by 0.6 (single stage, unlike beatoraja's
+ * five-stage guts). Threshold is a strict less-than per beatoraja master's `HARD_LR2` guts `{30, 0.6}`; note
+ * lr2oraja ≥0.8.3 moved it to `< 32` ("display 30 % = internal 32 %"), which lacks first-party measurement — we
+ * follow beatoraja master until that's confirmed.
+ */
+const LR2_HARD_GUTS_THRESHOLD = 30;
+const LR2_HARD_GUTS_MULTIPLIER = 0.6;
+/**
+ * LR2 HARD damage scaling by #TOTAL (beatoraja `GrooveGauge.MODIFY_DAMAGE` `fix1total` / `fix1table`): low-TOTAL
+ * charts take disproportionally larger HARD damage. Applies to damage only — recovery is TOTAL-independent. The
+ * default #TOTAL 160 lands on ×2.0, which is the familiar "LR2 HARD hits twice as hard as beatoraja" behavior.
+ */
+const LR2_HARD_DAMAGE_TOTAL_THRESHOLDS = [240, 230, 210, 200, 180, 160, 150, 130, 120] as const;
+const LR2_HARD_DAMAGE_TOTAL_MULTIPLIERS = [1.0, 1.11, 1.25, 1.5, 1.666, 2.0, 2.5, 3.333, 5.0, 10.0] as const;
 
 export type GrooveGaugeJudgeKind = JudgeKind | 'EMPTY_POOR';
 
@@ -49,14 +70,44 @@ export function createGrooveGaugeState(
 }
 
 export function applyGrooveGaugeJudge(state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
-  const delta = resolveGrooveGaugeDelta(state, judge);
+  if (isSurvivalGaugeType(state.type) && state.current <= 0) {
+    // Dead survival gauges never recover (beatoraja `GrooveGauge.setValue` guards on `value > 0`).
+    return 0;
+  }
+  let delta = resolveGrooveGaugeDelta(state, judge);
+  if (state.type === 'HARD' && delta < 0 && state.current < LR2_HARD_GUTS_THRESHOLD) {
+    delta *= LR2_HARD_GUTS_MULTIPLIER;
+  }
   state.current = clampGrooveGauge(state.current + delta, state.min, state.max);
-  // DEATH gauge — any non-positive verdict zeroes the gauge so subsequent renders / fail-detection see an instant
-  // flat-line.
-  if (state.type === 'DEATH' && (judge === 'POOR' || judge === 'BAD' || judge === 'EMPTY_POOR')) {
+  collapseDeadSurvivalGauge(state);
+  return delta;
+}
+
+/**
+ * Applies a raw percentage delta (mine damage, HCN hold drain / recovery) with the survival-gauge life rules but
+ * WITHOUT the per-judge tables, HARD guts softening, or the #TOTAL damage multiplier — LR2 mine damage bypasses all
+ * of those (beatoraja `JudgeManager` calls `gauge.addValue()` directly).
+ */
+export function applyGrooveGaugeRawDelta(state: GrooveGaugeState, delta: number): number {
+  if (!Number.isFinite(delta) || delta === 0) {
+    return 0;
+  }
+  if (isSurvivalGaugeType(state.type) && state.current <= 0) {
+    return 0;
+  }
+  state.current = clampGrooveGauge(state.current + delta, state.min, state.max);
+  collapseDeadSurvivalGauge(state);
+  return delta;
+}
+
+function isSurvivalGaugeType(type: GrooveGaugeType): boolean {
+  return type === 'HARD' || type === 'DEATH';
+}
+
+function collapseDeadSurvivalGauge(state: GrooveGaugeState): void {
+  if (isSurvivalGaugeType(state.type) && state.current < LR2_SURVIVAL_GAUGE_DEATH_THRESHOLD) {
     state.current = state.min;
   }
-  return delta;
 }
 
 export function isGrooveGaugeCleared(state: GrooveGaugeState): boolean {
@@ -88,7 +139,9 @@ function resolveGrooveGaugeMin(type: GrooveGaugeType): number {
 }
 
 function resolveGrooveGaugeClearThreshold(type: GrooveGaugeType): number {
-  if (type === 'EASY') return 60;
+  // LR2's EASY clears at 80 % just like GROOVE (beatoraja `EASY_LR2` border = 80; the 60 % border belongs to
+  // ASSIST EASY, which this engine does not model).
+  if (type === 'EASY') return LR2_GROOVE_GAUGE_CLEAR_THRESHOLD;
   // HARD / DEATH "clear" if you survive past 0 — any positive gauge at end-of-chart counts, exactly 0 % is FAILED.
   // `isGrooveGaugeCleared` enforces the strict > 0 comparison for these types; the 0 here is the display threshold.
   if (type === 'HARD' || type === 'DEATH') return 0;
@@ -119,31 +172,43 @@ function resolveGrooveGaugeDeltaNormal(state: GrooveGaugeState, judge: GrooveGau
   return baseGain;
 }
 
-function resolveHardGaugeDelta(_state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
-  // HARD penalties are flat percentages — independent of TOTAL — because the gauge starts at 100 % and the penalty
-  // model is "how many BADs / POORs can you survive". Approximates LR2's canonical values; re-tune if score-history
-  // calibration says otherwise.
-  if (judge === 'BAD') return -6;
-  if (judge === 'POOR') return -10;
-  if (judge === 'EMPTY_POOR') return -2;
-  if (judge === 'GOOD') return 0.16;
-  // PERFECT / GREAT — small recovery nudge, capped by the 100 % ceiling.
-  return 0.16;
+function resolveHardGaugeDelta(state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
+  // LR2 HARD (beatoraja `HARD_LR2` {0.1, 0.1, 0.05, -6, -10, -2}): recovery is a fixed percentage independent of
+  // #TOTAL; damage scales with the low-TOTAL multiplier table.
+  const damageMultiplier = resolveHardDamageTotalMultiplier(state.effectiveTotal);
+  if (judge === 'BAD') return -6 * damageMultiplier;
+  if (judge === 'POOR') return -10 * damageMultiplier;
+  if (judge === 'EMPTY_POOR') return -2 * damageMultiplier;
+  if (judge === 'GOOD') return 0.05;
+  // PERFECT / GREAT.
+  return 0.1;
+}
+
+function resolveHardDamageTotalMultiplier(totalValue: number): number {
+  for (let index = 0; index < LR2_HARD_DAMAGE_TOTAL_THRESHOLDS.length; index += 1) {
+    if (totalValue >= LR2_HARD_DAMAGE_TOTAL_THRESHOLDS[index]!) {
+      return LR2_HARD_DAMAGE_TOTAL_MULTIPLIERS[index]!;
+    }
+  }
+  return LR2_HARD_DAMAGE_TOTAL_MULTIPLIERS.at(-1)!;
 }
 
 function resolveDeathGaugeDelta(_state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
-  // DEATH — any miss / poor zeroes the gauge (handled by the post-clamp nudge in `applyGrooveGaugeJudge`). Hits give a
-  // tiny token gain so the polyline reads as "alive" while the chart still has playable notes.
-  if (judge === 'BAD' || judge === 'POOR' || judge === 'EMPTY_POOR') return -100;
+  // LR2 HAZARD (beatoraja `HAZARD_LR2` {0.15, 0.06, 0, -100, -100, -10}): any BAD / missed POOR is instant death;
+  // an empty POOR drains 10 % rather than killing outright. No guts and no #TOTAL damage scaling.
+  if (judge === 'BAD' || judge === 'POOR') return -100;
+  if (judge === 'EMPTY_POOR') return -10;
   if (judge === 'GOOD') return 0;
-  return 0.16;
+  if (judge === 'GREAT') return 0.06;
+  return 0.15;
 }
 
 function resolveEasyGaugeDelta(state: GrooveGaugeState, judge: GrooveGaugeJudgeKind): number {
-  // EASY — gentler than GROOVE. ~1.2× baseline gains, ~50 % smaller miss penalties.
-  if (judge === 'BAD') return -2;
-  if (judge === 'POOR') return -3;
-  if (judge === 'EMPTY_POOR') return -1;
+  // LR2 EASY (beatoraja `EASY_LR2` {1.2, 1.2, 0.6, -3.2, -4.8, -1.6}): gains are 1.2× GROOVE, damage is 0.8×
+  // GROOVE. The clear threshold stays at 80 % — LR2's EASY is gentler, not lower-bar.
+  if (judge === 'BAD') return -3.2;
+  if (judge === 'POOR') return -4.8;
+  if (judge === 'EMPTY_POOR') return -1.6;
   if (state.noteCount <= 0) return 0;
   const baseGain = (state.effectiveTotal / state.noteCount) * 1.2;
   if (judge === 'GOOD') return baseGain / 2;

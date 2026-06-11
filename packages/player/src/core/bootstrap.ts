@@ -3,6 +3,7 @@ import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import {
   createGrooveGaugeState,
   applyGrooveGaugeJudge,
+  applyGrooveGaugeRawDelta,
   isGrooveGaugeCleared,
   type GrooveGaugeJudgeKind,
 } from './groove-gauge.ts';
@@ -109,10 +110,9 @@ export function createInitialPlayerSummary(
       syncGrooveGaugeSummary();
     },
     applyGaugeDelta: (delta: number): void => {
-      if (!Number.isFinite(delta) || delta === 0) {
-        return;
-      }
-      grooveGauge.current = Math.max(grooveGauge.min, Math.min(grooveGauge.max, grooveGauge.current + delta));
+      // Raw deltas (mine damage, HCN drain) go through the gauge module's survival rules — LR2 mine damage bypasses
+      // the per-judge tables / guts / #TOTAL scaling but still kills a survival gauge that bottoms out.
+      applyGrooveGaugeRawDelta(grooveGauge, delta);
       syncGrooveGaugeSummary();
     },
   };
