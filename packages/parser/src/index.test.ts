@@ -3,7 +3,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
-import { decodeBmsText, parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
+import {
+  decodeBmsText,
+  decodeUtf8Text,
+  parseBmson,
+  parseChart,
+  parseChartFile,
+  resolveBmsControlFlow,
+} from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -1333,5 +1340,11 @@ describe('parser', () => {
     const decoded = decodeBmsText(merged);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
+  });
+
+  test('decodeUtf8Text: decodes UTF-8 bytes and strips a leading BOM', () => {
+    const withBom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('#TITLE éclair\n')]);
+    expect(decodeUtf8Text(withBom)).toBe('#TITLE éclair\n');
+    expect(decodeUtf8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
   });
 });

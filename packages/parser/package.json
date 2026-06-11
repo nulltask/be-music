@@ -34,7 +34,6 @@
   "dependencies": {
     "@be-music/chart": "workspace:*",
     "@be-music/json": "workspace:*",
-    "@be-music/utils": "workspace:*",
-    "iconv-lite": "^0.7.0"
+    "@be-music/utils": "workspace:*"
   }
 }

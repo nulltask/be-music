@@ -134,9 +134,6 @@ importers:
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils
-      iconv-lite:
-        specifier: ^0.7.0
-        version: 0.7.2
 
   packages/player:
     dependencies:
