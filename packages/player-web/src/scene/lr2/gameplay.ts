@@ -27,7 +27,8 @@ import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import { createGrooveGaugeState, type GrooveGaugeState } from '@be-music/player/core/groove-gauge';
+import { createGrooveGaugeState, isGrooveGaugeCleared, type GrooveGaugeState } from '@be-music/player/core/groove-gauge';
+import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createScrollTimeline,
@@ -3523,9 +3524,9 @@ export class PixiGameplayView {
       score: { ...this.score },
       maxCombo: this.maxCombo,
       gauge: this.gaugeState.current,
-      // Pass threshold for the LR2 NORMAL gauge is 80 %. Until gauge-type selection lands, every chart is treated as
-      // NORMAL — see `applyGrooveGaugeJudge` for the same default.
-      cleared: this.gaugeState.current >= 80,
+      // Clear threshold is owned by the core gauge model (`clearThreshold` per gauge variant) — keep the comparison
+      // in `isGrooveGaugeCleared` so core-side threshold changes propagate here without a second edit.
+      cleared: isGrooveGaugeCleared(this.gaugeState),
       playSeconds: this.currentSeconds(),
       song: this.song,
       gaugeHistory,
@@ -3990,7 +3991,7 @@ export class PixiGameplayView {
     const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, seconds);
     const baseKey = baseCue?.bmpKey;
     const layerKey = layerCue?.bmpKey;
-    const poorWindowMs = 2000;
+    const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
     const inPoorWindow =
       !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
     let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;

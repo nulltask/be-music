@@ -8,7 +8,12 @@ import { resolveFirstExistingPath } from '@be-music/utils/path';
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
 import type { BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer';
-import { buildBgaTimelines, pickActiveBgaCue, type BgaCue } from '@be-music/player/core/bga-timeline';
+import {
+  buildBgaTimelines,
+  DEFAULT_POOR_BGA_DISPLAY_SECONDS,
+  pickActiveBgaCue,
+  type BgaCue,
+} from '@be-music/player/core/bga-timeline';
 import { decode as decodeBmpFast } from 'fast-bmp';
 import { decode as decodePngFast } from 'fast-png';
 import jpeg from 'jpeg-js';
@@ -18,7 +23,6 @@ import { DEFAULT_IMAGE_RESIZE_ALGORITHM, type ImageResizeAlgorithm } from '@be-m
 const MAX_NORMAL_BGA_COMPOSITE_LAYERS = 3;
 const DEFAULT_BGA_ASCII_WIDTH = 34;
 const DEFAULT_BGA_ASCII_HEIGHT = 20;
-const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 2;
 const KITTY_GRAPHICS_PIXEL_SCALE = 4;
 const TRANSPARENT_ALPHA_THRESHOLD = 16;
 const VIDEO_BLACK_BORDER_THRESHOLD = 8;
