@@ -40,6 +40,7 @@ import {
   createControlFlowObjectEntry,
   normalizeControlFlowCommand,
   resolveControlFlow,
+  resolveControlFlowAliasDirective,
   type ControlFlowCaptureFrameType,
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
@@ -138,6 +139,21 @@ export function parseBms(input: string): BeMusicJson {
       return;
     }
     const { command, commandRaw, value } = headerLine;
+
+    // Spelling variants (`#END IF` / `#END` / `#ELSE IF n`) normalize onto the canonical control-flow commands —
+    // captured entries store the canonical form, so round-tripped output is normalized too.
+    const aliasedDirective = resolveControlFlowAliasDirective(command, value);
+    if (aliasedDirective) {
+      const directiveEntry: BmsSourceLineEntry = {
+        kind: 'directive',
+        command: aliasedDirective.command,
+        value: aliasedDirective.value,
+      };
+      json.bms.controlFlow.push(directiveEntry);
+      json.preservation.bms.sourceLines.push(directiveEntry);
+      updateControlFlowCaptureStack(controlFlowCaptureStack, aliasedDirective.command);
+      return;
+    }
 
     if (isControlFlowCommand(command)) {
       const directiveEntry: BmsSourceLineEntry = {

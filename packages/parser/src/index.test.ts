@@ -94,6 +94,39 @@ describe('parser', () => {
     expect(parsed.metadata.bpm).toBe(120);
   });
 
+  test('BMS: accepts #END IF / #END / #ELSE IF control-flow spelling variants', () => {
+    // These misspellings exist in released charts. Without the aliases the #IF block never closes, so a
+    // non-matching #RANDOM roll silently dropped every line down to EOF.
+    const source = [
+      '#BPM 120',
+      '#RANDOM 2',
+      '#IF 1',
+      '#00111:01',
+      '#ELSE IF 2',
+      '#00111:02',
+      '#END IF',
+      '#00211:03',
+      '',
+    ].join('\n');
+    const parsed = parseChart(source);
+
+    const branch1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(branch1.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:01', '2:03']);
+    expect(branch1.metadata.extras.END).toBeUndefined();
+
+    const branch2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    expect(branch2.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:02', '2:03']);
+
+    // Bare `#END` also closes the block; the measure-2 note must survive a non-matching roll.
+    const bareEndSource = ['#BPM 120', '#RANDOM 2', '#IF 1', '#00111:01', '#END', '#00211:03', ''].join('\n');
+    const bareEnd = resolveBmsControlFlow(parseChart(bareEndSource), { random: () => 0.9999999 });
+    expect(bareEnd.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['2:03']);
+
+    // `#END <other value>` is NOT a control-flow alias — it stays an unknown header.
+    const endOther = parseChart('#BPM 120\n#END CREDITS\n#00111:01\n');
+    expect(endOther.metadata.extras.END).toBe('CREDITS');
+  });
+
   test('BMS: object data is truncated at the first whitespace', () => {
     // De-facto rule: the channel stream is one contiguous token run. Trailing text after whitespace must neither
     // fabricate events (e.g. "junk" → JU/NK) nor inflate the denominator of the tokens before it.

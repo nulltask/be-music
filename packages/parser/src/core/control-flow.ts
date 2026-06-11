@@ -125,6 +125,34 @@ export function createControlFlowObjectEntry(
   };
 }
 
+/**
+ * Maps real-world control-flow spelling variants onto their canonical commands: `#END IF` / bare `#END` → `#ENDIF`,
+ * `#ELSE IF n` → `#ELSEIF n`. hitkey's command memo records these misspellings in released charts; without the
+ * aliases the enclosing `#IF` never closes, and on a non-matching `#RANDOM` roll every line down to EOF silently
+ * disappears. `#END <anything else>` and a plain `#ELSE` are NOT aliased — they fall through to normal header
+ * handling.
+ */
+export function resolveControlFlowAliasDirective(
+  command: string,
+  value: string,
+): { command: ControlFlowCommand; value?: string } | undefined {
+  if (command === 'END') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || trimmed.toUpperCase() === 'IF') {
+      return { command: 'ENDIF' };
+    }
+    return undefined;
+  }
+  if (command === 'ELSE') {
+    const match = value.match(/^IF\b\s*(.*)$/i);
+    if (match) {
+      const rest = match[1]!.trim();
+      return { command: 'ELSEIF', value: rest.length > 0 ? rest : undefined };
+    }
+  }
+  return undefined;
+}
+
 export function normalizeControlFlowCommand(input: unknown): ControlFlowCommand | undefined {
   if (typeof input !== 'string') {
     return undefined;

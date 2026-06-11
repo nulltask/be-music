@@ -299,7 +299,7 @@ runtime と round-trip の扱い:
 - [ ] 未定義 `#BPMxx` / `#STOPxx` 参照時の互換挙動（無視・既定値・エラー）
 - [ ] `#STOPxx` 空定義参照（例: `#05209:` の未定義トークン）時の互換挙動
 - [ ] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針
-- [ ] 制御構文の別表記 `#ELSE IF` / `#END IF` / `#END` の受理方針
+- [x] 制御構文の別表記 `#ELSE IF n` / `#END IF` / 値なし `#END` を `#ELSEIF n` / `#ENDIF` として受理（保存・出力時は正規形へ正規化、`#END <他の値>` は未知ヘッダのまま）
 - [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
 - [x] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
 - [x] Bemuse 拡張チャンネル `#xxxSP`（spacing factor）の受理と描画反映

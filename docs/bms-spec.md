@@ -299,7 +299,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
 - [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
 - [ ] Acceptance policy for commands with leading indentation (leading blank + `#COMMAND`)
-- [ ] Acceptance policy for alternative notation of control syntax `#ELSE IF` / `#END IF` / `#END`
+- [x] Accept the alternative spellings `#ELSE IF n` / `#END IF` / bare `#END` as `#ELSEIF n` / `#ENDIF` (normalized to the canonical form on save / output; `#END <other value>` remains an unknown header)
 - [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
 - [x] Acceptance of Bemuse extension header `#SPEEDxx` and reflection in note drawing distance
 - [x] Bemuse expansion channel `#xxxSP` (spacing factor) acceptance and drawing reflection
