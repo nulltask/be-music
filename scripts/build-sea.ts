@@ -27,6 +27,8 @@ interface EmbeddedNodeModuleRoot {
   name: string;
   /** Directory (relative to the repository root) whose dependency resolution finds the package. */
   resolveFrom: string;
+  /** Files of this package (matched against the package-relative posix path) excluded from embedding. */
+  excludeFilePatterns?: RegExp[];
 }
 
 interface SeaTargetConfig {
@@ -63,7 +65,17 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
     outputBaseName: 'be-music-player',
     entry: 'src/sea-main.ts',
     embedBundleAsset: true,
-    embeddedNodeModules: [{ name: 'node-web-audio-api', resolveFrom: 'packages/player' }],
+    embeddedNodeModules: [
+      { name: 'node-web-audio-api', resolveFrom: 'packages/player' },
+      {
+        name: '@uwx/libav.js-fat',
+        resolveFrom: 'packages/player-tui',
+        // Node always selects the `.wasm` build (see the target() probe in dist/libav-fat.js) and the player
+        // initialises libav with `noworker: true`, so the asm.js fallback (~122MB), the worker-threaded
+        // build (~35MB), and the LGPL source tarballs (~30MB) are dead weight for the SEA runtime.
+        excludeFilePatterns: [/\.asm\.(js|mjs)$/, /\.thr\./, /\.d\.ts$/, /^sources\//],
+      },
+    ],
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
@@ -416,11 +428,19 @@ async function collectEmbeddedPackageDirs(roots: EmbeddedNodeModuleRoot[]): Prom
   return packageDirs;
 }
 
-function shouldEmbedPackageFile(fileName: string): boolean {
-  return !fileName.endsWith('.node') || fileName.includes(NATIVE_ADDON_PLATFORM_TAG);
+function shouldEmbedPackageFile(relativePosixPath: string, excludeFilePatterns: RegExp[] | undefined): boolean {
+  const fileName = relativePosixPath.split('/').at(-1) ?? relativePosixPath;
+  if (fileName.endsWith('.node') && !fileName.includes(NATIVE_ADDON_PLATFORM_TAG)) {
+    return false;
+  }
+  return !excludeFilePatterns?.some((pattern) => pattern.test(relativePosixPath));
 }
 
-async function listEmbeddedPackageFiles(packageDir: string, currentDir = packageDir): Promise<string[]> {
+async function listEmbeddedPackageFiles(
+  packageDir: string,
+  excludeFilePatterns: RegExp[] | undefined,
+  currentDir = packageDir,
+): Promise<string[]> {
   const entries = await readdir(currentDir, { withFileTypes: true });
   const files: string[] = [];
   for (const entry of entries) {
@@ -429,12 +449,13 @@ async function listEmbeddedPackageFiles(packageDir: string, currentDir = package
       if (entry.name === 'node_modules') {
         continue;
       }
-      files.push(...(await listEmbeddedPackageFiles(packageDir, entryPath)));
+      files.push(...(await listEmbeddedPackageFiles(packageDir, excludeFilePatterns, entryPath)));
       continue;
     }
     const isFile = entry.isFile() || (entry.isSymbolicLink() && (await stat(entryPath)).isFile());
-    if (isFile && shouldEmbedPackageFile(entry.name)) {
-      files.push(relative(packageDir, entryPath).replaceAll('\\', '/'));
+    const relativePosixPath = relative(packageDir, entryPath).replaceAll('\\', '/');
+    if (isFile && shouldEmbedPackageFile(relativePosixPath, excludeFilePatterns)) {
+      files.push(relativePosixPath);
     }
   }
   return files.sort();
@@ -442,11 +463,12 @@ async function listEmbeddedPackageFiles(packageDir: string, currentDir = package
 
 async function buildEmbeddedNodeModuleAssets(roots: EmbeddedNodeModuleRoot[]): Promise<EmbeddedModulesBuildResult> {
   const packageDirs = await collectEmbeddedPackageDirs(roots);
+  const excludeFilePatternsByName = new Map(roots.map((root) => [root.name, root.excludeFilePatterns]));
   const assets: Record<string, string> = {};
   const manifestFiles: string[] = [];
   const cacheKeyHash = createHash('sha256');
   for (const [name, packageDir] of [...packageDirs.entries()].sort(([a], [b]) => a.localeCompare(b))) {
-    for (const relativePath of await listEmbeddedPackageFiles(packageDir)) {
+    for (const relativePath of await listEmbeddedPackageFiles(packageDir, excludeFilePatternsByName.get(name))) {
       const manifestPath = `${name}/${relativePath}`;
       const filePath = join(packageDir, ...relativePath.split('/'));
       assets[`${EMBEDDED_MODULE_ASSET_PREFIX}${manifestPath}`] = filePath;
