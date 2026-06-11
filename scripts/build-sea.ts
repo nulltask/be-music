@@ -381,8 +381,15 @@ async function maybeAdhocSignMacBinary(cwd: string, pathValue: string): Promise<
   }
   try {
     await execFileAsync('codesign', ['--sign', '-', '--force', pathValue], { cwd });
-  } catch {
-    // Ad-hoc signing is best-effort for local execution.
+  } catch (error) {
+    // Ad-hoc signing is best-effort, but an unsigned SEA binary is killed by macOS with SIGKILL
+    // ("Killed: 9") at launch — surface the failure instead of producing a silently broken executable.
+    const message = error instanceof Error && error.message ? error.message : String(error);
+    process.stderr.write(
+      `Warning: ad-hoc code signing failed (${message.trim()}).\n` +
+        `The generated binary will likely be killed by macOS at launch. Sign it manually with:\n` +
+        `  codesign --sign - --force ${pathValue}\n`,
+    );
   }
 }
 
