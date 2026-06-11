@@ -635,13 +635,20 @@ async function createLibAvInstance(): Promise<LibAvInstance> {
 
   // In a SEA binary the bare-specifier import always fails; the helper retries from a `node_modules`
   // directory next to the executable (or the working directory) before giving up.
-  const libAvModule = (await loadOptionalNodeModule('@uwx/libav.js-fat', () => import('@uwx/libav.js-fat'))) as
+  const loadedModule = (await loadOptionalNodeModule('@uwx/libav.js-fat', () => import('@uwx/libav.js-fat'))) as
     | LibAvModule
+    | LibAvFactory
     | undefined;
-  if (!libAvModule) {
+  if (!loadedModule) {
     throw new Error('@uwx/libav.js-fat is unavailable; cannot decode video BGA.');
   }
-  return libAvModule.default.LibAV({
+  // `import()` wraps the CJS exports in a namespace whose `default` holds them; the createRequire fallback
+  // used inside a SEA returns the exports object directly. Accept both shapes.
+  const libAvFactory = 'default' in loadedModule ? loadedModule.default : loadedModule;
+  if (typeof libAvFactory.LibAV !== 'function') {
+    throw new Error('@uwx/libav.js-fat does not expose a LibAV factory; cannot decode video BGA.');
+  }
+  return libAvFactory.LibAV({
     noworker: true,
     variant: 'fat',
   });
