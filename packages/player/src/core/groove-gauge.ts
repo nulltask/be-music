@@ -60,6 +60,12 @@ export function applyGrooveGaugeJudge(state: GrooveGaugeState, judge: GrooveGaug
 }
 
 export function isGrooveGaugeCleared(state: GrooveGaugeState): boolean {
+  // Survival gauges (HARD / DEATH) fail the run the moment they bottom out at 0 % — playback continues to the end of
+  // the chart, but the result is FAILED. The epsilon-tolerant threshold comparison below would read 0 >= 0 as cleared,
+  // so they get a strict "still alive" check instead.
+  if (state.type === 'HARD' || state.type === 'DEATH') {
+    return state.current > 0;
+  }
   return state.current + 1e-9 >= state.clearThreshold;
 }
 
@@ -83,8 +89,8 @@ function resolveGrooveGaugeMin(type: GrooveGaugeType): number {
 
 function resolveGrooveGaugeClearThreshold(type: GrooveGaugeType): number {
   if (type === 'EASY') return 60;
-  // HARD / DEATH "clear" if you survive past 0 — any positive gauge at end-of-chart counts. We reuse 0 + epsilon as the
-  // threshold so `isGrooveGaugeCleared` uses the same comparison.
+  // HARD / DEATH "clear" if you survive past 0 — any positive gauge at end-of-chart counts, exactly 0 % is FAILED.
+  // `isGrooveGaugeCleared` enforces the strict > 0 comparison for these types; the 0 here is the display threshold.
   if (type === 'HARD' || type === 'DEATH') return 0;
   return LR2_GROOVE_GAUGE_CLEAR_THRESHOLD;
 }

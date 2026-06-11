@@ -18,8 +18,19 @@ describe('scroll distance', () => {
       ],
     );
 
-    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(8, 6);
+    // Before the first #SPEED keyframe its value (3) holds flat — Bemuse semantics — while #SCROLL stays at the
+    // implicit 1 until its first event: 3 × 1 × 4 beats.
+    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(12, 6);
     expect(mapper.distanceBetween(4, 8)).toBeCloseTo(16, 6);
+  });
+
+  test('#SPEED holds the first keyframe value before its beat instead of ramping from 1', () => {
+    const mapper = createScrollDistanceMapper(undefined, [{ beat: 4, speed: 2 }]);
+
+    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(8, 6);
+    // #SCROLL is genuinely 1 before its first event — the head seeding only applies to #SPEED.
+    const scrollOnly = createScrollDistanceMapper([{ beat: 4, speed: 2 }], undefined);
+    expect(scrollOnly.distanceBetween(0, 4)).toBeCloseTo(4, 6);
   });
 
   test('lookahead helpers handle bidirectional and zero-scroll segments', () => {
@@ -38,9 +49,18 @@ describe('scroll distance', () => {
   });
 
   test('maxBeatWithinDistance solves within interpolated speed segments', () => {
-    const mapper = createScrollDistanceMapper(undefined, [{ beat: 4, speed: 3 }], { lookaheadBeats: 8 });
+    const mapper = createScrollDistanceMapper(
+      undefined,
+      [
+        { beat: 4, speed: 1 },
+        { beat: 8, speed: 3 },
+      ],
+      { lookaheadBeats: 12 },
+    );
 
-    expect(mapper.maxBeatWithinDistance(0, 4)).toBeCloseTo(-2 + 2 * Math.sqrt(5), 6);
+    // Speed holds 1 until beat 4, then ramps 1 → 3 toward beat 8: distance(4..t) = (t - 4) + (t - 4)² / 4.
+    // distance(0, t) = 8 → solve 4 + (t-4) + (t-4)²/4 = 8 → t = 4 + (-2 + 2√5).
+    expect(mapper.maxBeatWithinDistance(0, 8)).toBeCloseTo(4 + (-2 + 2 * Math.sqrt(5)), 6);
   });
 
   test('invalidDistance option customizes invalid input fallback', () => {

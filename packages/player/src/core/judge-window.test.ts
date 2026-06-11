@@ -59,14 +59,14 @@ describe('judge-window', () => {
     expect(bmsExRankValueToJudgeRankPercent(0)).toBe(0);
   });
 
-  test('resolveBmsJudgeWindowsMsForExRankValue currently bypasses the unit conversion (spec audit A-2)', () => {
-    // Pins the documented status quo: the dynamic `#EXRANKxx` path feeds the raw value into the percent scaler, so
-    // `#EXRANK 100` is 100/75 wider than NORMAL. The intended behavior (same windows as `#DEFEXRANK 100`) is the
-    // single-line fix described on `resolveBmsJudgeWindowsMsForExRankValue` — update this case alongside that fix.
+  test('resolveBmsJudgeWindowsMsForExRankValue shares the RANK 2 = 100 unit with #DEFEXRANK', () => {
+    // `#EXRANK 100` mid-chart must land on the same windows as `#DEFEXRANK 100` (NORMAL) — the dynamic A0 path and the
+    // static header path go through the same unit conversion.
     const dynamic = resolveBmsJudgeWindowsMsForExRankValue(100);
-    const staticEquivalent = resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(100));
+    expect(dynamic).toEqual(resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(100)));
+    expect(dynamic.bad).toBeCloseTo(250, 6);
 
-    expect(dynamic.bad).toBeCloseTo(250 * (100 / 75), 6);
-    expect(staticEquivalent.bad).toBeCloseTo(250, 6);
+    // `#EXRANK 120` = 1.2× NORMAL, mirroring the documented `#DEFEXRANK 120` example.
+    expect(resolveBmsJudgeWindowsMsForExRankValue(120).bad).toBeCloseTo(300, 6);
   });
 });

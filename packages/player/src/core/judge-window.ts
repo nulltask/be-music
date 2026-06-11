@@ -64,15 +64,12 @@ export function resolveBmsJudgeWindowsMsForPercent(
 /**
  * Resolves judge windows for a dynamic `#EXRANKxx` value applied via channel `A0` mid-chart.
  *
- * KNOWN DEVIATION (spec audit A-2): the raw `#EXRANKxx` value is currently fed straight into the percent-based
- * scaler, skipping {@link bmsExRankValueToJudgeRankPercent}. The static `#DEFEXRANK` path applies that conversion, so
- * `#EXRANK 100` today yields windows 100/75 ≈ 1.33× wider than `#DEFEXRANK 100`. Spec-wise both directives share the
- * `RANK 2 = 100` unit, so the intended body is
- * `resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs)` — a
- * single-line fix here repairs every runtime at once.
+ * `#EXRANKxx` shares `#DEFEXRANK`'s unit (`RANK 2 = 100`, hitkey command memo), so the value goes through
+ * {@link bmsExRankValueToJudgeRankPercent} before scaling — `#EXRANK 100` lands on exactly the same windows as
+ * `#DEFEXRANK 100` (NORMAL).
  */
 export function resolveBmsJudgeWindowsMsForExRankValue(exRankValue: number, debugBadWindowMs?: number): JudgeWindowsMs {
-  return resolveBmsJudgeWindowsMsForPercent(exRankValue, debugBadWindowMs);
+  return resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs);
 }
 
 export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {

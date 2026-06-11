@@ -51,4 +51,30 @@ describe('groove gauge', () => {
     expect(highGauge.current).toBe(100);
     expect(isGrooveGaugeCleared(highGauge)).toBe(true);
   });
+
+  test('HARD gauge fails once it bottoms out at 0 %', () => {
+    const gauge = createGrooveGaugeState(20, 160, 'HARD');
+    expect(gauge.current).toBe(100);
+    expect(isGrooveGaugeCleared(gauge)).toBe(true);
+
+    for (let index = 0; index < 9; index += 1) {
+      applyGrooveGaugeJudge(gauge, 'POOR');
+    }
+    expect(gauge.current).toBeCloseTo(10, 9);
+    expect(isGrooveGaugeCleared(gauge)).toBe(true);
+
+    applyGrooveGaugeJudge(gauge, 'POOR');
+    expect(gauge.current).toBe(0);
+    expect(isGrooveGaugeCleared(gauge)).toBe(false);
+  });
+
+  test('DEATH gauge fails on any miss, including from a full gauge', () => {
+    const gauge = createGrooveGaugeState(20, 160, 'DEATH');
+    applyGrooveGaugeJudge(gauge, 'PERFECT');
+    expect(isGrooveGaugeCleared(gauge)).toBe(true);
+
+    applyGrooveGaugeJudge(gauge, 'POOR');
+    expect(gauge.current).toBe(0);
+    expect(isGrooveGaugeCleared(gauge)).toBe(false);
+  });
 });

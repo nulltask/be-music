@@ -219,6 +219,7 @@ For example, `#RANK 4` is `125 / 75` times, so `VERY EASY` is about `1.666...` t
 
 In BMS, you can use the `#xxxA0` channel and `#EXRANKxx` to change the judgment range during the performance.
 The player resolves the event value of the `A0` channel as a key in `#EXRANKxx`, reads the value with `Number.parseFloat()`, and uses it only if it is finite and greater than `0`.
+The adopted value shares `#DEFEXRANK`'s unit — a percentage with `RANK 2 = 100` as the baseline — so `#EXRANKxx 100` restores exactly the `NORMAL` judgment width.
 
 If `#EXRANKxx` is undefined, an empty string, a non-number, or less than or equal to `0`, the event does not change the judgment width.
 If there are multiple `A0` events, they are applied in chronological order, and the value reached later becomes the subsequent judgment width.
@@ -616,7 +617,7 @@ A playback progress indicator is displayed outside the lane, and the line closes
 
 Even on judged notes, drawing will remain until the judge line is crossed or the `visibleUntilBeat` expires.
 A long note is drawn as a single note with a body and tail lane, and the highlight continues while being held.
-The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
+The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the first keyframe's value holds flat (matching the Bemuse reference implementation). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
 
 ### Non-TUI output
 

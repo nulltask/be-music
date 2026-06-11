@@ -1205,6 +1205,53 @@ describe('player', () => {
     expect(summary.gauge?.current).toBeCloseTo(2, 9);
   });
 
+  test('player: bmson per-mine damage overrides the BMS value/2 rule', async () => {
+    // bmson `key_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
+    // present it wins over the BMS `value / 2` interpretation: value '08' alone would deal 4 %, the authored damage
+    // of 7 must deal exactly 7 % (gauge 20 → 13).
+    const json = createLandmineOnlyChart({ value: '08' });
+    json.events[0]!.bmson = { damage: 7 };
+
+    const summary = await manualPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.gauge?.current).toBeCloseTo(13, 9);
+  });
+
+  test('player: bmson damage 0 is a valid no-damage decoration mine', async () => {
+    const json = createLandmineOnlyChart({ value: '08' });
+    json.events[0]!.bmson = { damage: 0 };
+
+    const summary = await manualPlay(json, {
+      speed: 240,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.bad).toBe(1);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
   test('player: routes audio through createAudioSession factory when supplied', async () => {
     // Phase 1 of the web-engine integration plan exposes a `createAudioSession` factory option so the browser
     // runtime can plug in a Web Audio backend without forking the engine. The factory's returned `AudioSession`

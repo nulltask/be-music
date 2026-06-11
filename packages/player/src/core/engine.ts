@@ -857,7 +857,7 @@ function resolveLandmineExplosionEvent(
 }
 
 function resolveLandmineGaugeEffect(
-  landmineEvent: Pick<BeMusicEvent, 'value'>,
+  landmineEvent: Pick<BeMusicEvent, 'value' | 'bmson'>,
   base: 36 | 62 = 36,
 ): {
   objectValue: string;
@@ -870,6 +870,17 @@ function resolveLandmineGaugeEffect(
   // and use lowercase mine values will surface them verbatim here; the BASE36-pattern guard below still controls
   // whether the value is interpreted numerically.
   const objectValue = normalizeObjectKey(landmineEvent.value, base);
+  // bmson `key_channels[].notes[].damage` is an explicit per-mine gauge percentage; when present it wins over the BMS
+  // `value / 2` rule because the event value there is the WAV slot, not a damage encoding. `damage: 0` is a valid
+  // authored value (a no-damage decoration mine), so the guard checks finiteness rather than truthiness.
+  const bmsonDamage = landmineEvent.bmson?.damage;
+  if (typeof bmsonDamage === 'number' && Number.isFinite(bmsonDamage) && bmsonDamage >= 0) {
+    return {
+      objectValue,
+      damage: bmsonDamage,
+      gaugeDelta: -bmsonDamage,
+    };
+  }
   if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return {
       objectValue,
