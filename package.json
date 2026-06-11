@@ -37,7 +37,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260607.1",
     "@vitest/coverage-v8": "^4.0.18",
     "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0",
+    "oxlint": "^1.69.0",
     "rimraf": "^6.0.1",
     "tinybench": "^6.0.2",
     "tsdown": "^0.22.2",
