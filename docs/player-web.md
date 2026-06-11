@@ -82,6 +82,8 @@ The select scene exposes in-scene LR2 PLAY OPTION controls for hi-speed, autopla
 Select-time options are carried into gameplay during chart preparation.
 The current shared-engine path still publishes a `GROOVE` gauge summary; LR2 gauge buttons mainly drive skin op state and the scene-local setup, and independent 2P gauge math is not wired yet.
 
+The groove-gauge bar renders as LR2's 50 beads (2 % each) using the single `#SRC_GROOVEGAUGE` 4-cell sprite (`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green). Beads at or above the 80 % clear border use the green cell; below it they use red. Survival gauges (HARD / DEATH) have no clear border in LR2, so the whole bar renders red. The bar tracks the live gauge value only — there is no peak-hold / afterimage bead (LR2 has none). The bead cell-selection logic is the pure `resolveGrooveGaugeBeads` helper in `scene/lr2/gameplay-hud.ts`.
+
 Scene-independent LR2 Pixi helpers live in [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) and
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts). They handle destination keyframe evaluation,
 sprite transforms, source-cell selection, text rendering, numbers, sliders, and bargraphs. Scene modules keep the
