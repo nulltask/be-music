@@ -311,6 +311,9 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 
 空POOR は LR2 における phantom press の扱いに合わせ、次の挙動とします。
 
+- 発生条件は **同レーンのノートが押下時刻から 1 秒以内の未来にあること** です（lr2oraja の LR2 ミス窓 `{0, 1000000}`µs。rank / EXRANK に依存しない固定窓）。ノート通過後（遅い側）に空POOR は発生せず、1 秒以内に次のノートが無いレーンの空打鍵は keysound 再生のみで無害です。
+- 同一ノートの手前であれば連打で **何度でも** 発生します（LR2 の `MissCondition.ALWAYS`。判定済みノートの手前でも発生）。
+
 - `summary` のジャッジカウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。 LR2 では「見逃しPOOR」(NOWJUDGE index 1) のみが POOR としてカウントされ、「空POOR」(index 0) はカウント外となるため。
 - EX-SCORE / IIDX score は **変化させない**。
 - combo は **切らない**。

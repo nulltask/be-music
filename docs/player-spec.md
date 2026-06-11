@@ -306,6 +306,9 @@ When `POOR` occurs, do the following:
 
 If there is an input but no undecided notes inside the `BAD` window for that lane set, fire an LR2-compatible "empty POOR" (空POOR).
 
+- The trigger condition is that **a note on the same lane lies within the next 1 second** of the press (lr2oraja's LR2 miss window `{0, 1000000}`µs — fixed, independent of rank / EXRANK). Empty POORs never fire after a note passes (late side), and a press on a lane with no note within a second is harmless: only the keysound plays.
+- It fires **repeatedly** for the same note while mashing in front of it (LR2's `MissCondition.ALWAYS`, including in front of already-judged notes).
+
 Empty POOR mirrors LR2's phantom-press behaviour:
 
 - Do NOT update `summary` judge counters (`perfect` / `great` / `good` / `bad` / `poor`). LR2 only counts the "missed POOR" branch (NOWJUDGE index 1) into the POOR tally; the "empty POOR" branch (index 0) is excluded.

@@ -897,23 +897,22 @@ describe('player', () => {
     expect(releaseIndex).toBeGreaterThan(holdIndex);
   });
 
-  test('player: stray key fires LR2 empty POOR — gauge -2 but combo / score / poor counter untouched', async () => {
+  test('player: stray key in front of a note fires LR2 empty POOR — gauge -2, counters untouched', async () => {
+    // BPM 240 → measure 1 starts at chart 1.0 s. The press lands at ~0.3 s, i.e. ~0.7 s before the note — outside
+    // the BAD window but inside LR2's 1-second early 空POOR region.
     const json = createEmptyJson('bms');
-    json.metadata.bpm = 60;
+    json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
     const summary = await manualPlay(json, {
-      speed: 64,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 300, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 400, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
     });
 
     expect(summary.total).toBe(1);
@@ -928,6 +927,36 @@ describe('player', () => {
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: stray key with no note within 1 s is harmless (LR2 — no empty POOR)', async () => {
+    // BPM 60 → the only note sits at chart 4.0 s. A press at ~0 s is far outside LR2's 1-second early 空POOR
+    // region, so nothing charges: no gauge drain, no POOR.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 60;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    const output: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.poor).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+    expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
   });
 
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {

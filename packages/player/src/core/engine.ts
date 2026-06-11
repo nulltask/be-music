@@ -22,7 +22,7 @@ const basename = (path: string): string => {
   return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
 };
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
+import { findFirstIndexNumberAtOrAfter, floatToInt16, throwIfAborted } from '@be-music/utils/core';
 import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import {
   type BeMusicEvent,
@@ -499,6 +499,12 @@ const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
 const RUNTIME_AUDIO_SAMPLE_RATE = 44_100;
 const REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS = 1e-6;
+/**
+ * LR2 empty-POOR (空POOR) early window — a phantom press only charges while a note on the lane lies within the next
+ * second; presses after a note never charge (lr2oraja `JudgeProperty` LR2 miss window `{0, 1000000}`µs, fixed
+ * regardless of rank / EXRANK).
+ */
+const LR2_EMPTY_POOR_EARLY_WINDOW_SECONDS = 1;
 const DEFAULT_COMPRESSOR_THRESHOLD_DB = -12;
 const DEFAULT_COMPRESSOR_RATIO = 2.5;
 const DEFAULT_COMPRESSOR_ATTACK_MS = 8;
@@ -2584,6 +2590,32 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const autoScratchNotes = autoScratchEnabled
     ? scorableNotes.filter((note) => scratchPlayableChannels.has(note.channel))
     : [];
+  // LR2 empty-POOR reference times — a phantom press registers as 空POOR only while a note on that lane lies within
+  // the next second (lr2oraja `JudgeProperty` LR2 miss window `{0, 1000000}`µs, early side only). Per-channel sorted
+  // note times let the press handler binary-search the next upcoming note; judged notes stay valid references (LR2's
+  // `MissCondition.ALWAYS` keeps mashing in front of an already-judged note producing 空POORs).
+  const scorableNoteSecondsByChannel = new Map<string, number[]>();
+  for (const note of scorableNotes) {
+    const noteTimes = scorableNoteSecondsByChannel.get(note.channel);
+    if (noteTimes) {
+      noteTimes.push(note.seconds);
+    } else {
+      scorableNoteSecondsByChannel.set(note.channel, [note.seconds]);
+    }
+  }
+  const hasEmptyPoorReferenceNote = (channels: ReadonlySet<string>, nowSec: number): boolean => {
+    for (const channel of channels) {
+      const noteTimes = scorableNoteSecondsByChannel.get(channel);
+      if (!noteTimes) {
+        continue;
+      }
+      const index = findFirstIndexNumberAtOrAfter(noteTimes, nowSec);
+      if (index < noteTimes.length && noteTimes[index]! - nowSec <= LR2_EMPTY_POOR_EARLY_WINDOW_SECONDS) {
+        return true;
+      }
+    }
+    return false;
+  };
   let autoScratchCursor = 0;
   let scorableMissCursor = 0;
   let landmineExpireCursor = 0;
@@ -3091,10 +3123,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press with no candidate and no benign explanation. Apply the gauge
-      // delta (GROOVE / HARD -2, EASY -1, DEATH -100 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR
-      // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behavior: NORMAL / EASY make this nearly
-      // harmless; HARD / DEATH actually drain.
+      if (!hasEmptyPoorReferenceNote(candidateChannels, nowSec)) {
+        // LR2 — a press with no note on the lane within the next second is harmless: the keysound (fallback above)
+        // plays and nothing else happens. 空POOR only ever fires on the EARLY side of a note; presses after a note
+        // never charge.
+        return;
+      }
+      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press in front of an upcoming note (within 1 s,
+      // outside its judgable window). Apply the gauge delta (GROOVE -2, HARD -2 × TOTAL modifier, EASY -1.6,
+      // DEATH -10 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR BGA, but DO NOT break combo or
+      // increment `summary.poor`. Repeatable per note (LR2's MissCondition.ALWAYS).
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });
       if (!uiEnabled) {
