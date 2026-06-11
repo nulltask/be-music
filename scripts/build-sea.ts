@@ -279,7 +279,9 @@ function indentBlock(code: string): string {
 async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
   const entryFileName = 'sea-entry.cjs';
   const seaFiles = await readdir(seaDir);
-  const localChunkFileNames = seaFiles.filter((fileName) => fileName.endsWith('.cjs') && fileName !== entryFileName);
+  const localChunkFileNames = seaFiles.filter(
+    (fileName) => (fileName.endsWith('.cjs') || fileName.endsWith('.js')) && fileName !== entryFileName,
+  );
   if (localChunkFileNames.length === 0) {
     return;
   }
