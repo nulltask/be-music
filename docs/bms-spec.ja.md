@@ -374,8 +374,12 @@ runtime と round-trip の扱い:
 
 ## 文字コード
 
-- BOM 付き UTF-8 / UTF-16LE / UTF-16BE を優先
-- BOM がない場合は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
+- BOM 付き UTF-8 / UTF-16LE / UTF-16BE を最優先で採用
+- BOM がない場合は `#CHARSET` 宣言を解決（対応エンコーディングに正規化できた場合のみ）
+- ASCII のみのファイルは UTF-8 として扱う
+- 厳密 UTF-8 検証（マルチバイト列を含み fatal デコードに成功）を通れば UTF-8 とみなす
+- 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
+- この判定は `@be-music/parser` の `decodeBmsText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 
 ## stringifier ルール
 

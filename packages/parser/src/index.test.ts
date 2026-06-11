@@ -1347,4 +1347,47 @@ describe('parser', () => {
     expect(decodeUtf8Text(withBom)).toBe('#TITLE éclair\n');
     expect(decodeUtf8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
   });
+
+  test('decodeBmsText: decodes UTF-16LE charts via their BOM', () => {
+    const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
+    const bytes = new Uint8Array(Buffer.from(`﻿${source}`, 'utf16le'));
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('utf-16le');
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('てすと');
+    expect(parsed.metadata.bpm).toBe(150);
+    expect(parsed.events).toHaveLength(1);
+  });
+
+  test('decodeBmsText: decodes UTF-16BE charts via their BOM', () => {
+    const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
+    const littleEndian = Buffer.from(`﻿${source}`, 'utf16le');
+    const bytes = new Uint8Array(littleEndian.length);
+    for (let index = 0; index < littleEndian.length; index += 2) {
+      bytes[index] = littleEndian[index + 1]!;
+      bytes[index + 1] = littleEndian[index]!;
+    }
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('utf-16be');
+    expect(parseChart(decoded.text).metadata.title).toBe('てすと');
+  });
+
+  test('decodeBmsText: detects BOM-less UTF-8 via strict validation', () => {
+    const bytes = new TextEncoder().encode('#TITLE 灼熱\n#BPM 150\n#00111:01\n');
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('utf8');
+    expect(parseChart(decoded.text).metadata.title).toBe('灼熱');
+  });
+
+  test('decodeBmsText: scores BOM-less EUC-JP charts as euc-jp', () => {
+    // "テスト" in EUC-JP (A5C6 A5B9 A5C8) — invalid as strict UTF-8, half-width-kana garbage under shift_jis, clean
+    // kana under euc-jp, so the scoring walk must land on euc-jp.
+    const eucTitle = new Uint8Array([0xa5, 0xc6, 0xa5, 0xb9, 0xa5, 0xc8]);
+    const head = new TextEncoder().encode('#TITLE ');
+    const tail = new TextEncoder().encode('\n#BPM 150\n#00111:01\n');
+    const bytes = new Uint8Array([...head, ...eucTitle, ...tail]);
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('euc-jp');
+    expect(parseChart(decoded.text).metadata.title).toBe('テスト');
+  });
 });

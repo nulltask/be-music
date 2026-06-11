@@ -374,8 +374,12 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 ## Character Encoding
 
-- Prefer UTF-8 / UTF-16LE / UTF-16BE with BOM
-- If BOM is missing, infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
+- Adopt UTF-8 / UTF-16LE / UTF-16BE with BOM first
+- If there is no BOM, resolve the `#CHARSET` declaration (only when it canonicalizes to a supported encoding)
+- ASCII-only files are treated as UTF-8
+- A buffer that passes strict UTF-8 validation (fatal decode succeeds with multibyte sequences present) is UTF-8
+- Otherwise infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
+- This detection is unified in `@be-music/parser`'s `decodeBmsText`, so CLI / TUI / Web all produce the same result
 
 ## stringifier rules
 
