@@ -1,6 +1,11 @@
 import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
-import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
+import {
+  bmsExRankValueToJudgeRankPercent,
+  resolveBmsJudgeWindowsMsForExRankValue,
+  resolveBmsJudgeWindowsMsForPercent,
+  resolveJudgeWindowsMs,
+} from './judge-window.ts';
 
 describe('judge-window', () => {
   test('BMS: defExRank overrides metadata rank and scales all windows', () => {
@@ -46,5 +51,22 @@ describe('judge-window', () => {
     expect(windows.great).toBeCloseTo(55.55, 6);
     expect(windows.good).toBeCloseTo(194.45, 6);
     expect(windows.bad).toBe(310);
+  });
+
+  test('bmsExRankValueToJudgeRankPercent maps the RANK 2 = 100 unit onto the internal 75 baseline', () => {
+    expect(bmsExRankValueToJudgeRankPercent(100)).toBeCloseTo(75, 6);
+    expect(bmsExRankValueToJudgeRankPercent(120)).toBeCloseTo(90, 6);
+    expect(bmsExRankValueToJudgeRankPercent(0)).toBe(0);
+  });
+
+  test('resolveBmsJudgeWindowsMsForExRankValue currently bypasses the unit conversion (spec audit A-2)', () => {
+    // Pins the documented status quo: the dynamic `#EXRANKxx` path feeds the raw value into the percent scaler, so
+    // `#EXRANK 100` is 100/75 wider than NORMAL. The intended behavior (same windows as `#DEFEXRANK 100`) is the
+    // single-line fix described on `resolveBmsJudgeWindowsMsForExRankValue` — update this case alongside that fix.
+    const dynamic = resolveBmsJudgeWindowsMsForExRankValue(100);
+    const staticEquivalent = resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(100));
+
+    expect(dynamic.bad).toBeCloseTo(250 * (100 / 75), 6);
+    expect(staticEquivalent.bad).toBeCloseTo(250, 6);
   });
 });

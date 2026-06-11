@@ -76,7 +76,7 @@ import {
   type JudgeKind,
 } from './scoring.ts';
 import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
-import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
+import { resolveBmsJudgeWindowsMsForExRankValue, resolveJudgeWindowsMs } from './judge-window.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createBpmTimeline,
@@ -1306,13 +1306,13 @@ function createNoTuiPlaybackEventTracer(params: {
     .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
   const judgeRankEvents = collectDynamicBmsJudgeRankChanges(json, resolver)
     .map((change) => {
-      const badWindow = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, judgeWindowMs).bad;
+      const badWindow = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, judgeWindowMs).bad;
       return createScheduledPlaybackEvent(
         change.seconds,
         nextOrder++,
         createRuntimeEventLine('judge-rank-change', [
           ['time', formatSeconds(change.seconds)],
-          ['rank', formatLoggedNumericValue(change.rankPercent)],
+          ['rank', formatLoggedNumericValue(change.exRankValue)],
           ['bad', `${formatLoggedNumericValue(badWindow)}ms`],
         ]),
       );
@@ -1648,7 +1648,8 @@ export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomP
 
 interface DynamicBmsJudgeRankChange {
   seconds: number;
-  rankPercent: number;
+  /** Raw `#EXRANKxx` value (`RANK 2 = 100` unit) — conversion to judge windows is owned by `judge-window.ts`. */
+  exRankValue: number;
 }
 
 interface TimedAudioVolumeEvent {
@@ -1676,7 +1677,7 @@ function collectDynamicBmsJudgeRankChanges(
     }
     changes.push({
       seconds: resolver.eventToSeconds(event),
-      rankPercent: parsed,
+      exRankValue: parsed,
     });
   }
   return changes;
@@ -2337,7 +2338,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
   for (const change of dynamicJudgeRankChanges) {
-    const dynamicBadWindowMs = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, options.judgeWindowMs).bad;
+    const dynamicBadWindowMs = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs).bad;
     if (dynamicBadWindowMs > maxBadWindowMs) {
       maxBadWindowMs = dynamicBadWindowMs;
     }
@@ -2641,7 +2642,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (change.seconds > safeReferenceSeconds) {
         break;
       }
-      judgeWindows = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, options.judgeWindowMs);
+      judgeWindows = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs);
       badWindowMs = judgeWindows.bad;
       badWindowSeconds = badWindowMs / 1000;
       dynamicJudgeRankCursor += 1;
