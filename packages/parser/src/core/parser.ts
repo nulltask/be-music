@@ -14,6 +14,7 @@ import {
 } from '@be-music/json';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import {
+  buildBmsObjectLineEntry,
   collectNonZeroObjectTokens,
   normalizeBmsonNoteLength,
   sortAndNormalizeEvents,
@@ -119,7 +120,7 @@ export function parseBms(input: string): BeMusicJson {
           json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
-        const objectLine = createBmsObjectLineEntry(measure, channel, data, base);
+        const objectLine = buildBmsObjectLineEntry(measure, channel, data, base);
         if (objectLine) {
           json.preservation.bms.objectLines.push(objectLine);
           json.preservation.bms.sourceLines.push({
@@ -564,45 +565,6 @@ function pushObjectDataLine(
       value: token.value,
     });
   }
-}
-
-function createBmsObjectLineEntry(
-  measure: number,
-  channel: string,
-  data: string,
-  base: 36 | 62 = 36,
-): BmsObjectLineEntry | undefined {
-  if (channel === '02') {
-    const measureLength = Number.parseFloat(data);
-    if (!Number.isFinite(measureLength) || measureLength <= 0) {
-      return undefined;
-    }
-    return {
-      measure,
-      channel,
-      events: [],
-      measureLength,
-    };
-  }
-
-  const parsed = collectNonZeroObjectTokens(data, base);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-  if (events.length === 0) {
-    return undefined;
-  }
-  return {
-    measure,
-    channel,
-    events,
-  };
 }
 
 interface ParsedObjectDataLine {
@@ -1592,7 +1554,7 @@ function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undef
 
   if (normalizedEvents.length === 0 && measureLength === undefined) {
     const fallbackData = typeof raw.data === 'string' ? raw.data.trim() : '';
-    return createBmsObjectLineEntry(measure, channel, fallbackData);
+    return buildBmsObjectLineEntry(measure, channel, fallbackData);
   }
 
   return {

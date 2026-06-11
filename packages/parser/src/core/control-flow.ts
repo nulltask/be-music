@@ -2,12 +2,11 @@ import {
   cloneJson,
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
-  type BeMusicEvent,
   type BeMusicJson,
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
-import { collectNonZeroObjectTokens, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
+import { buildBmsObjectLineEntry, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
 
 type ControlFlowCommand = BmsControlFlowCommand;
 
@@ -114,39 +113,15 @@ export function createControlFlowObjectEntry(
   data: string,
   base: 36 | 62 = 36,
 ): Extract<BmsControlFlowEntry, { kind: 'object' }> | undefined {
-  if (channel === '02') {
-    const measureLength = Number.parseFloat(data);
-    if (!Number.isFinite(measureLength) || measureLength <= 0) {
-      return undefined;
-    }
-    return {
-      kind: 'object',
-      measure,
-      channel,
-      events: [],
-      measureLength,
-    };
-  }
-
-  const parsed = collectNonZeroObjectTokens(data, base);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-
-  if (events.length === 0) {
+  // Same line interpretation as the strict parse path — `buildBmsObjectLineEntry` owns the rule so captured
+  // control-flow bodies can never drift from regular object lines.
+  const entry = buildBmsObjectLineEntry(measure, channel, data, base);
+  if (!entry) {
     return undefined;
   }
   return {
     kind: 'object',
-    measure,
-    channel,
-    events,
+    ...entry,
   };
 }
 

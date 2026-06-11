@@ -5,6 +5,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
   type BeMusicPosition,
+  type BmsObjectLineEntry,
 } from '@be-music/json';
 import {
   normalizeAsciiBase36Code,
@@ -65,6 +66,57 @@ export function collectNonZeroObjectTokens(
     highCode = -1;
   }
   return { tokenCount, tokens };
+}
+
+/**
+ * Builds the canonical entry for one BMS object data line (`#mmmcc:data`).
+ *
+ * Single implementation of the line → entry rule shared by the strict parse path and the control-flow capture path
+ * (`#RANDOM` / `#IF` / `#SWITCH` bodies), so both interpret a line identically:
+ *
+ * - Channel `02` carries a measure-length factor — parsed as float, non-positive / non-finite values are dropped.
+ * - Every other channel is a token stream — `00` is a rest, non-zero 2-char tokens become events positioned as
+ *   `[tokenIndex, tokenCount]`.
+ *
+ * Returns `undefined` when the line contributes nothing (invalid measure length / only rests).
+ */
+export function buildBmsObjectLineEntry(
+  measure: number,
+  channel: string,
+  data: string,
+  base: 36 | 62 = 36,
+): BmsObjectLineEntry | undefined {
+  if (channel === '02') {
+    const measureLength = Number.parseFloat(data);
+    if (!Number.isFinite(measureLength) || measureLength <= 0) {
+      return undefined;
+    }
+    return {
+      measure,
+      channel,
+      events: [],
+      measureLength,
+    };
+  }
+
+  const parsed = collectNonZeroObjectTokens(data, base);
+  const events: BeMusicEvent[] = [];
+  for (const token of parsed.tokens) {
+    events.push({
+      measure,
+      channel,
+      position: [token.index, parsed.tokenCount],
+      value: token.value,
+    });
+  }
+  if (events.length === 0) {
+    return undefined;
+  }
+  return {
+    measure,
+    channel,
+    events,
+  };
 }
 
 export function sortAndNormalizeEvents(
