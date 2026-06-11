@@ -434,6 +434,11 @@ const workspaceAliases = [
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
   { find: '@be-music/utils/cli-path', replacement: resolve(repositoryDir, 'packages/utils/src/cli-path.ts') },
   { find: '@be-music/utils/log', replacement: resolve(repositoryDir, 'packages/utils/src/log.ts') },
+  // Browser-safe by design: Node built-ins load lazily inside the fallback path only (see the module header).
+  {
+    find: '@be-music/utils/optional-node-module',
+    replacement: resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
+  },
   { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
   { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
   { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
