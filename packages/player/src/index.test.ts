@@ -210,9 +210,19 @@ function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; val
   if (includeExplosionSound) {
     json.resources.wav['00'] = 'explode.wav';
   }
-  json.events = [{ measure: 0, channel: 'D1', position: [0, 1] as const, value }];
+  // Mine on measure 1 (chart 2.0 s at BPM 120) so a held key can deterministically detonate it as it crosses the
+  // judge line. A mine on measure 0 (chart 0 s) is racy under LR2's passage-based detonation: with playback sped up,
+  // a single poll tick can advance chart time past the mine's GOOD window before the input is processed.
+  json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value }];
   return json;
 }
+
+// Deterministic landmine detonation — holds the 1P key-1 lane (`z` → channel 11) from 0.2 s through the mine's
+// passage at chart 2.0 s, then ends the run at 2.3 s. Mirrors the proven hold-through test timing so CI doesn't race.
+const HELD_LANDMINE_INPUT: Array<{ delayMs: number; command: PlayerInputCommand }> = [
+  { delayMs: 200, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+  { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+];
 
 function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
@@ -1163,20 +1173,14 @@ describe('player', () => {
     const output: string[] = [];
 
     const summary = await manualPlay(json, {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
       writeOutput: (text) => {
         output.push(text);
       },
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.total).toBe(0);
@@ -1198,17 +1202,11 @@ describe('player', () => {
 
   test('player: manual landmine hit applies the LR2 raw-value damage with no verdict', async () => {
     const summary = await manualPlay(createLandmineOnlyChart({ value: '08' }), {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.total).toBe(0);
@@ -1221,17 +1219,11 @@ describe('player', () => {
 
   test('player: manual landmine hit clamps large mine damage at the groove gauge minimum', async () => {
     const summary = await manualPlay(createLandmineOnlyChart({ value: 'ZZ' }), {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.bad).toBe(0);
@@ -1247,17 +1239,11 @@ describe('player', () => {
     json.events[0]!.bmson = { damage: 7 };
 
     const summary = await manualPlay(json, {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.bad).toBe(0);
@@ -1269,17 +1255,11 @@ describe('player', () => {
     json.events[0]!.bmson = { damage: 0 };
 
     const summary = await manualPlay(json, {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.bad).toBe(0);
@@ -1439,7 +1419,7 @@ describe('player', () => {
     // `explode.wav` doesn't exist on disk, so the audible assertion opts into the debug fallback tone — the
     // spec-compliant default for a missing sample is silence (covered by the companion test below).
     await manualPlay(createLandmineOnlyChart(), {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: true,
       audioHeadPaddingMs: 0,
@@ -1449,12 +1429,7 @@ describe('player', () => {
       tui: false,
       missingSampleToneSeconds: 0.06,
       writeOutput: () => undefined,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(true);
@@ -1462,7 +1437,7 @@ describe('player', () => {
 
   test('player: missing #WAVxx files are silent by default (no fallback tone)', async () => {
     await manualPlay(createLandmineOnlyChart(), {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: true,
       audioHeadPaddingMs: 0,
@@ -1471,12 +1446,7 @@ describe('player', () => {
       limiter: false,
       tui: false,
       writeOutput: () => undefined,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(false);
