@@ -1,5 +1,38 @@
 # @be-music/player
 
+## 0.3.0
+
+### Minor Changes
+
+- ca1012c: Make the TUI player work as a Node single executable application (SEA).
+
+  - Gameplay, UI, and BGA-video workers are now spawned from an embedded copy of the SEA bundle (eval workers dispatched by the new `sea-main` entry on a workerData role marker); previously the worker URL resolution threw under SEA and playback silently never started.
+  - The CLI entry refuses to start from a worker thread, since inside SEA workers `process.argv[1]` still equals `process.execPath`.
+  - `@uwx/libav.js-fat` (video BGA) loads through the SEA-aware optional-module loader, so a `node_modules` directory next to the executable now works.
+  - SEA binaries embed `node-web-audio-api` (with its dependency closure, filtered to the target platform's native addon) and `@uwx/libav.js-fat` (filtered to the wasm build actually used at runtime), extracting them once into `~/.be-music/sea-embedded-modules` at startup, so audio playback and video BGA work out of the box; a `node_modules` directory next to the executable still takes precedence.
+
+### Patch Changes
+
+- Updated dependencies [b2c4f9b]
+- Updated dependencies [b9922cf]
+- Updated dependencies [4d5a89e]
+- Updated dependencies [254e213]
+- Updated dependencies [7bbf052]
+- Updated dependencies [811cdfc]
+- Updated dependencies [d0bb321]
+- Updated dependencies [ebfdba7]
+- Updated dependencies [ca1012c]
+- Updated dependencies [6ce9173]
+- Updated dependencies [7802f98]
+- Updated dependencies [cdc42a1]
+- Updated dependencies [ca1012c]
+  - @be-music/parser@0.2.3
+  - @be-music/json@0.2.2
+  - @be-music/player@0.5.0
+  - @be-music/audio-renderer@0.2.3
+  - @be-music/utils@0.3.0
+  - @be-music/chart@0.3.2
+
 ## 0.2.6
 
 ### Patch Changes

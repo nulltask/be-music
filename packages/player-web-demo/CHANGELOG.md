@@ -1,5 +1,15 @@
 # @be-music/player-web-demo
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [f07ff77]
+- Updated dependencies [99324e8]
+  - @be-music/player-web@0.6.2
+  - @be-music/lr2-skin@0.1.4
+  - @be-music/beatoraja-skin@0.1.2
+
 ## 0.3.0
 
 ### Minor Changes

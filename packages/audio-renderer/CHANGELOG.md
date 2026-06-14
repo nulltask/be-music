@@ -1,5 +1,20 @@
 # @be-music/audio-renderer
 
+## 0.2.3
+
+### Patch Changes
+
+- 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in: pass `fallbackToneSeconds` to the audio-renderer APIs or `missingSampleToneSeconds` to the player engine when a debugging tone is wanted.
+- Updated dependencies [b2c4f9b]
+- Updated dependencies [b9922cf]
+- Updated dependencies [4d5a89e]
+- Updated dependencies [cdc42a1]
+- Updated dependencies [ca1012c]
+  - @be-music/parser@0.2.3
+  - @be-music/json@0.2.2
+  - @be-music/utils@0.3.0
+  - @be-music/chart@0.3.2
+
 ## 0.2.2
 
 ### Patch Changes
