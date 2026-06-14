@@ -1,5 +1,12 @@
 # @be-music/beatoraja-skin
 
+## 0.1.2
+
+### Patch Changes
+
+- Updated dependencies [ca1012c]
+  - @be-music/utils@0.3.0
+
 ## 0.1.1
 
 ### Patch Changes

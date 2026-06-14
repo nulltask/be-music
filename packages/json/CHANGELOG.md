@@ -1,5 +1,13 @@
 # @be-music/json
 
+## 0.2.2
+
+### Patch Changes
+
+- b9922cf: Support the beatoraja bmson long-note type extensions: `info.ln_type` and per-note `t` (1: LN, 2: CN, 3: HCN) are preserved in the IR, round-trip through JSON and bmson output, and drive the player's long-note mode (per-note `t` wins over `info.ln_type`). Charts that specify neither now default to LN (no tail release judgment, matching the LR2-aligned BMS default) instead of always being treated as CN.
+- Updated dependencies [ca1012c]
+  - @be-music/utils@0.3.0
+
 ## 0.2.1
 
 ### Patch Changes

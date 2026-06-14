@@ -246,26 +246,42 @@ describe('createWebAudioSession', () => {
     expect(source.stop).toHaveBeenCalled();
   });
 
-  test('routes #xxx97 / #xxx98 dynamic volume events to the bgm / key mixers via setValueAtTime', () => {
-    const { audioContext, audioBus, keyMixer, bgmMixer } = createMocks();
+  test('applies #xxx97 / #xxx98 dynamic volume only to voices triggered afterward', () => {
+    const { audioContext, audioBus, trackedBufferSources, createdGains, keyMixer, bgmMixer } = createMocks();
     const session = createWebAudioSession({
       audioContext,
       audioBus,
       chart: makeChartWithSamples(),
-      decodedSamples: new Map(),
+      decodedSamples: new Map([
+        ['kick.wav', makeMockAudioBuffer(5)],
+        ['bgm.wav', makeMockAudioBuffer(5)],
+      ]),
       wavCmdVolumeMultipliers: new Map(),
     });
 
-    // `#xxx97 80` — half-volume on the BGM bus (0x80 / 0xff ≈ 0.5019).
+    // A BGM voice playing BEFORE the volume change keeps its level: no per-voice gain node, no bus write.
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(trackedBufferSources[0]!.connectedTo).toBe(bgmMixer);
+
+    // `#xxx97 80` — ~half volume for SUBSEQUENT BGM voices (0x80 / 0xff ≈ 0.5019).
     session.triggerEvent?.(mkEvent('97', '80'));
+    // Spec: already-playing voices are untouched — the shared bus mixers must not be written.
     expect(
       (bgmMixer.gain as unknown as { setValueAtTime: ReturnType<typeof vi.fn> }).setValueAtTime,
-    ).toHaveBeenCalled();
-    // `#xxx98 FF` — unity on the key bus.
+    ).not.toHaveBeenCalled();
+
+    // The next BGM voice picks the new level up as its initial per-voice gain.
+    session.triggerEvent?.(mkEvent('01', '03'));
+    expect(createdGains).toHaveLength(1);
+    expect((createdGains[0]!.gain as unknown as { value: number }).value).toBeCloseTo(0x80 / 0xff, 6);
+
+    // `#xxx98 FF` — unity on the key side: no gain node needed, the source connects straight to the key mixer.
     session.triggerEvent?.(mkEvent('98', 'FF'));
+    session.triggerEvent?.(mkEvent('11', '01'));
     expect(
       (keyMixer.gain as unknown as { setValueAtTime: ReturnType<typeof vi.fn> }).setValueAtTime,
-    ).toHaveBeenCalled();
+    ).not.toHaveBeenCalled();
+    expect(trackedBufferSources.at(-1)!.connectedTo).toBe(keyMixer);
   });
 
   test('dispose hard-stops every still-playing source so they do not survive into the next chart', async () => {

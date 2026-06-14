@@ -3,7 +3,14 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
-import { decodeBmsText, parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from './index.ts';
+import {
+  decodeBmsText,
+  decodeUtf8Text,
+  parseBmson,
+  parseChart,
+  parseChartFile,
+  resolveBmsControlFlow,
+} from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -85,6 +92,54 @@ describe('parser', () => {
     const parsed = parseChart(['#TITLE Explicit BPM', '#BPM 120', '#00111:01', ''].join('\n'));
     expect(parsed.sourceFormat).toBe('bms');
     expect(parsed.metadata.bpm).toBe(120);
+  });
+
+  test('BMS: accepts #END IF / #END / #ELSE IF control-flow spelling variants', () => {
+    // These misspellings exist in released charts. Without the aliases the #IF block never closes, so a
+    // non-matching #RANDOM roll silently dropped every line down to EOF.
+    const source = [
+      '#BPM 120',
+      '#RANDOM 2',
+      '#IF 1',
+      '#00111:01',
+      '#ELSE IF 2',
+      '#00111:02',
+      '#END IF',
+      '#00211:03',
+      '',
+    ].join('\n');
+    const parsed = parseChart(source);
+
+    const branch1 = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(branch1.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:01', '2:03']);
+    expect(branch1.metadata.extras.END).toBeUndefined();
+
+    const branch2 = resolveBmsControlFlow(parsed, { random: () => 0.9999999 });
+    expect(branch2.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['1:02', '2:03']);
+
+    // Bare `#END` also closes the block; the measure-2 note must survive a non-matching roll.
+    const bareEndSource = ['#BPM 120', '#RANDOM 2', '#IF 1', '#00111:01', '#END', '#00211:03', ''].join('\n');
+    const bareEnd = resolveBmsControlFlow(parseChart(bareEndSource), { random: () => 0.9999999 });
+    expect(bareEnd.events.map((event) => `${event.measure}:${event.value}`)).toEqual(['2:03']);
+
+    // `#END <other value>` is NOT a control-flow alias — it stays an unknown header.
+    const endOther = parseChart('#BPM 120\n#END CREDITS\n#00111:01\n');
+    expect(endOther.metadata.extras.END).toBe('CREDITS');
+  });
+
+  test('BMS: object data is truncated at the first whitespace', () => {
+    // De-facto rule: the channel stream is one contiguous token run. Trailing text after whitespace must neither
+    // fabricate events (e.g. "junk" → JU/NK) nor inflate the denominator of the tokens before it.
+    const parsed = parseChart('#BPM 120\n#00111:0102 0304\n#00211:0102  junk words\n');
+
+    expect(parsed.events.filter((event) => event.measure === 1)).toEqual([
+      { measure: 1, channel: '11', position: [0, 2], value: '01' },
+      { measure: 1, channel: '11', position: [1, 2], value: '02' },
+    ]);
+    expect(parsed.events.filter((event) => event.measure === 2)).toEqual([
+      { measure: 2, channel: '11', position: [0, 2], value: '01' },
+      { measure: 2, channel: '11', position: [1, 2], value: '02' },
+    ]);
   });
 
   test('BMS: accepts CR-only line endings', () => {
@@ -879,6 +934,37 @@ describe('parser', () => {
     expect(json.resources.stop[stopKeys[0]!]).toBeCloseTo(48, 6);
   });
 
+  test('bmson: info.ln_type and notes[].t are preserved in the IR (beatoraja extension)', () => {
+    const document = {
+      version: '1.0.0',
+      info: { title: 'LN Type', init_bpm: 120, ln_type: 2 },
+      sound_channels: [
+        {
+          name: 'a.wav',
+          notes: [
+            { x: 1, y: 0, l: 240, t: 3 },
+            { x: 2, y: 480, l: 240 },
+            { x: 3, y: 960, l: 0, t: 2 }, // t on a non-long note is dropped (only meaningful when l > 0)
+            { x: 4, y: 1440, l: 240, t: 9 }, // out-of-range t is dropped
+          ],
+        },
+      ],
+    };
+    const json = parseBmson(JSON.stringify(document));
+
+    expect(json.bmson.info.lnType).toBe(2);
+    const byChannel = new Map(json.events.map((event) => [event.channel, event]));
+    expect(byChannel.get('11')?.bmson?.t).toBe(3);
+    expect(byChannel.get('12')?.bmson?.t).toBeUndefined();
+    expect(byChannel.get('13')?.bmson?.t).toBeUndefined();
+    expect(byChannel.get('14')?.bmson?.t).toBeUndefined();
+
+    // JSON round-trip keeps the per-note type and the chart-level type.
+    const reparsed = parseChart(JSON.stringify(json), 'json');
+    expect(reparsed.bmson.info.lnType).toBe(2);
+    expect(reparsed.events.find((event) => event.channel === '11')?.bmson?.t).toBe(3);
+  });
+
   test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -1333,5 +1419,54 @@ describe('parser', () => {
     const decoded = decodeBmsText(merged);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
+  });
+
+  test('decodeUtf8Text: decodes UTF-8 bytes and strips a leading BOM', () => {
+    const withBom = new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('#TITLE éclair\n')]);
+    expect(decodeUtf8Text(withBom)).toBe('#TITLE éclair\n');
+    expect(decodeUtf8Text(new TextEncoder().encode('#TITLE plain\n'))).toBe('#TITLE plain\n');
+  });
+
+  test('decodeBmsText: decodes UTF-16LE charts via their BOM', () => {
+    const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
+    const bytes = new Uint8Array(Buffer.from(`﻿${source}`, 'utf16le'));
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('utf-16le');
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('てすと');
+    expect(parsed.metadata.bpm).toBe(150);
+    expect(parsed.events).toHaveLength(1);
+  });
+
+  test('decodeBmsText: decodes UTF-16BE charts via their BOM', () => {
+    const source = '#TITLE てすと\n#BPM 150\n#00111:01\n';
+    const littleEndian = Buffer.from(`﻿${source}`, 'utf16le');
+    const bytes = new Uint8Array(littleEndian.length);
+    for (let index = 0; index < littleEndian.length; index += 2) {
+      bytes[index] = littleEndian[index + 1]!;
+      bytes[index + 1] = littleEndian[index]!;
+    }
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('utf-16be');
+    expect(parseChart(decoded.text).metadata.title).toBe('てすと');
+  });
+
+  test('decodeBmsText: detects BOM-less UTF-8 via strict validation', () => {
+    const bytes = new TextEncoder().encode('#TITLE 灼熱\n#BPM 150\n#00111:01\n');
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('utf8');
+    expect(parseChart(decoded.text).metadata.title).toBe('灼熱');
+  });
+
+  test('decodeBmsText: scores BOM-less EUC-JP charts as euc-jp', () => {
+    // "テスト" in EUC-JP (A5C6 A5B9 A5C8) — invalid as strict UTF-8, half-width-kana garbage under shift_jis, clean
+    // kana under euc-jp, so the scoring walk must land on euc-jp.
+    const eucTitle = new Uint8Array([0xa5, 0xc6, 0xa5, 0xb9, 0xa5, 0xc8]);
+    const head = new TextEncoder().encode('#TITLE ');
+    const tail = new TextEncoder().encode('\n#BPM 150\n#00111:01\n');
+    const bytes = new Uint8Array([...head, ...eucTitle, ...tail]);
+    const decoded = decodeBmsText(bytes);
+    expect(decoded.encoding).toBe('euc-jp');
+    expect(parseChart(decoded.text).metadata.title).toBe('テスト');
   });
 });

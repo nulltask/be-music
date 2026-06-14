@@ -81,6 +81,8 @@ select scene は、hi-speed、autoplay、BGA mode/size、filter、sort、HS-FIX�
 select 時の option は chart preparation 時に gameplay へ引き継ぎます。
 現在の shared-engine path は引き続き `GROOVE` gauge summary を publish します。LR2 gauge button は主に skin op state と scene-local setup を駆動し、2P independent gauge math はまだ接続していません。
 
+グルーヴゲージのバーは LR2 の 50 ビード(各 2 %)として、単一の `#SRC_GROOVEGAUGE` の 4 セルスプライト(`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green)で描画します。80 % のクリア境界以上のビードは緑セル、未満は赤セルを使います。survival 系ゲージ(HARD / DEATH)は LR2 ではクリア境界が無いため、バー全体を赤で描画します。バーは現在のゲージ値のみを追従し、peak-hold(残像)ビードは描きません(LR2 にも無い)。ビードのセル選択ロジックは `scene/lr2/gameplay-hud.ts` の純関数 `resolveGrooveGaugeBeads` です。
+
 scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/player-web/src/skin/lr2/render.ts) と
 [`skin/lr2/scene-render.ts`](../packages/player-web/src/skin/lr2/scene-render.ts) にあります。destination keyframe 評価、sprite transform、source cell 選択、text rendering、number、slider、bargraph を共通化します。scene module は state 固有の値解決、timer、input behavior だけを保持します。
 

@@ -14,6 +14,7 @@ import {
 } from '@be-music/json';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import {
+  buildBmsObjectLineEntry,
   collectNonZeroObjectTokens,
   normalizeBmsonNoteLength,
   sortAndNormalizeEvents,
@@ -39,10 +40,11 @@ import {
   createControlFlowObjectEntry,
   normalizeControlFlowCommand,
   resolveControlFlow,
+  resolveControlFlowAliasDirective,
   type ControlFlowCaptureFrameType,
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
-import { extractDeclaredBmsCharset } from './bms-charset.ts';
+import { decodeBmsText, decodeUtf8Text } from './bms-text-decode.ts';
 
 const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
@@ -119,7 +121,7 @@ export function parseBms(input: string): BeMusicJson {
           json.preservation.bms.sourceLines.push(controlFlowObject);
         }
       } else {
-        const objectLine = createBmsObjectLineEntry(measure, channel, data, base);
+        const objectLine = buildBmsObjectLineEntry(measure, channel, data, base);
         if (objectLine) {
           json.preservation.bms.objectLines.push(objectLine);
           json.preservation.bms.sourceLines.push({
@@ -137,6 +139,21 @@ export function parseBms(input: string): BeMusicJson {
       return;
     }
     const { command, commandRaw, value } = headerLine;
+
+    // Spelling variants (`#END IF` / `#END` / `#ELSE IF n`) normalize onto the canonical control-flow commands —
+    // captured entries store the canonical form, so round-tripped output is normalized too.
+    const aliasedDirective = resolveControlFlowAliasDirective(command, value);
+    if (aliasedDirective) {
+      const directiveEntry: BmsSourceLineEntry = {
+        kind: 'directive',
+        command: aliasedDirective.command,
+        value: aliasedDirective.value,
+      };
+      json.bms.controlFlow.push(directiveEntry);
+      json.preservation.bms.sourceLines.push(directiveEntry);
+      updateControlFlowCaptureStack(controlFlowCaptureStack, aliasedDirective.command);
+      return;
+    }
 
     if (isControlFlowCommand(command)) {
       const directiveEntry: BmsSourceLineEntry = {
@@ -302,13 +319,21 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
       };
       const noteLength = normalizeBmsonNoteLength(note.l);
       const noteContinue = typeof note.c === 'boolean' ? note.c : undefined;
-      if (noteLength !== undefined || noteContinue !== undefined) {
+      // beatoraja bmson extension — per-note long-note type, only meaningful on actual long notes (`l > 0`).
+      const noteLongNoteType =
+        (note.t === 1 || note.t === 2 || note.t === 3) && noteLength !== undefined && noteLength > 0
+          ? note.t
+          : undefined;
+      if (noteLength !== undefined || noteContinue !== undefined || noteLongNoteType !== undefined) {
         event.bmson = {};
         if (noteLength !== undefined) {
           event.bmson.l = noteLength;
         }
         if (noteContinue !== undefined) {
           event.bmson.c = noteContinue;
+        }
+        if (noteLongNoteType !== undefined) {
+          event.bmson.t = noteLongNoteType;
         }
       }
       if (isBgmNote) {
@@ -536,80 +561,8 @@ export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsCon
   });
 }
 
-export { decodeBmsText };
+export { decodeBmsText, decodeUtf8Text, type DecodedBmsText } from './bms-text-decode.ts';
 export { canonicalizeBmsCharset, extractDeclaredBmsCharset } from './bms-charset.ts';
-
-export interface DecodedBmsText {
-  encoding: 'utf8' | 'shift_jis' | 'euc-jp' | 'utf-16le' | 'utf-16be' | 'iso-8859-1';
-  text: string;
-}
-
-function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
-  if (buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-    return {
-      encoding: 'utf8',
-      text: decodeUtf8Text(buffer),
-    };
-  }
-  // BMS spec — honor `#CHARSET <name>` at the top of the file before falling back to the shift_jis default. The
-  // directive is authored before any non-ASCII text, so a latin1 first-pass (every byte → its 0..255 code point) always
-  // surfaces it. The web `TextDecoder` accepts the same canonical encoding names `canonicalizeBmsCharset` produces
-  // (utf-8 / shift_jis / euc-jp / utf-16le / utf-16be / iso-8859-1), so we can route directly through it without an
-  // intermediate library.
-  const declaredCharset = extractDeclaredBmsCharset(decodeLatin1Text(buffer));
-  if (declaredCharset) {
-    const decoded = decodeWithDeclaredCharset(buffer, declaredCharset);
-    if (decoded) return decoded;
-  }
-  try {
-    return {
-      encoding: 'shift_jis',
-      text: new TextDecoder('shift_jis').decode(buffer),
-    };
-  } catch {
-    return {
-      encoding: 'utf8',
-      text: decodeUtf8Text(buffer),
-    };
-  }
-}
-
-function decodeLatin1Text(buffer: Uint8Array): string {
-  // `iso-8859-1` is required by the WHATWG Encoding spec, so every browser and Node ships it. Maps every byte 1:1 to a
-  // Unicode code point in [0, 255], which lets the `#CHARSET` scan look at the file's bytes without misinterpretation
-  // regardless of the actual encoding.
-  return new TextDecoder('iso-8859-1').decode(buffer);
-}
-
-function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): DecodedBmsText | undefined {
-  // BMS `#CHARSET` declares the encoding for the file. We map the canonicalized name onto a `TextDecoder` label and
-  // strip a leading BOM where applicable. `TextDecoder` throws synchronously for unrecognized labels, which we treat as
-  // "fall back to autodetection" — same as a value that didn't canonicalize.
-  try {
-    switch (charset) {
-      case 'utf-8':
-        return { encoding: 'utf8', text: decodeUtf8Text(buffer) };
-      case 'shift_jis':
-        return { encoding: 'shift_jis', text: new TextDecoder('shift_jis').decode(buffer) };
-      case 'euc-jp':
-        return { encoding: 'euc-jp', text: new TextDecoder('euc-jp').decode(buffer) };
-      case 'utf-16le':
-        return { encoding: 'utf-16le', text: new TextDecoder('utf-16le').decode(buffer).replace(/^﻿/u, '') };
-      case 'utf-16be':
-        return { encoding: 'utf-16be', text: new TextDecoder('utf-16be').decode(buffer).replace(/^﻿/u, '') };
-      case 'iso-8859-1':
-        return { encoding: 'iso-8859-1', text: new TextDecoder('iso-8859-1').decode(buffer) };
-      default:
-        return undefined;
-    }
-  } catch {
-    return undefined;
-  }
-}
-
-function decodeUtf8Text(buffer: Uint8Array): string {
-  return new TextDecoder('utf-8').decode(buffer).replace(/^\ufeff/u, '');
-}
 
 function pushObjectDataLine(
   json: BeMusicJson,
@@ -636,45 +589,6 @@ function pushObjectDataLine(
       value: token.value,
     });
   }
-}
-
-function createBmsObjectLineEntry(
-  measure: number,
-  channel: string,
-  data: string,
-  base: 36 | 62 = 36,
-): BmsObjectLineEntry | undefined {
-  if (channel === '02') {
-    const measureLength = Number.parseFloat(data);
-    if (!Number.isFinite(measureLength) || measureLength <= 0) {
-      return undefined;
-    }
-    return {
-      measure,
-      channel,
-      events: [],
-      measureLength,
-    };
-  }
-
-  const parsed = collectNonZeroObjectTokens(data, base);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-  if (events.length === 0) {
-    return undefined;
-  }
-  return {
-    measure,
-    channel,
-    events,
-  };
 }
 
 interface ParsedObjectDataLine {
@@ -1664,7 +1578,7 @@ function normalizeBmsObjectLineEntry(input: unknown): BmsObjectLineEntry | undef
 
   if (normalizedEvents.length === 0 && measureLength === undefined) {
     const fallbackData = typeof raw.data === 'string' ? raw.data.trim() : '';
-    return createBmsObjectLineEntry(measure, channel, fallbackData);
+    return buildBmsObjectLineEntry(measure, channel, fallbackData);
   }
 
   return {

@@ -2187,10 +2187,10 @@ describe('BeatorajaRuntimeAdapter — resolveJudgeWindowsMs', () => {
     expect(adapter.resolveJudgeWindowsMs()).toBeUndefined();
   });
 
-  it("resolves IIDX windows from the chart's judge rank", () => {
-    // RANK 2 (NORMAL) gives the IIDX baseline windows: PG ±16.67, GR ±33.33, GD ±116.67,
-    // BAD ±250 ms. Resolution path lives in `@be-music/player/core/judge-window` —
-    // tested there directly. Here we just verify the adapter forwards the call.
+  it("resolves LR2 windows from the chart's judge rank", () => {
+    // RANK 2 (NORMAL) gives the LR2 baseline windows: PG ±18, GR ±40, GD ±100, BAD ±200 ms.
+    // Resolution path lives in `@be-music/player/core/judge-window` — tested there directly.
+    // Here we just verify the adapter forwards the call.
     const adapter = new BeatorajaRuntimeAdapter({
       chartPlayVariant: '7',
       baseOps: new Set(),
@@ -2205,9 +2205,9 @@ describe('BeatorajaRuntimeAdapter — resolveJudgeWindowsMs', () => {
     });
     const windows = adapter.resolveJudgeWindowsMs();
     expect(windows).toBeDefined();
-    expect(windows!.pgreat).toBeCloseTo(16.67, 1);
-    expect(windows!.great).toBeCloseTo(33.33, 1);
-    expect(windows!.good).toBeCloseTo(116.67, 1);
-    expect(windows!.bad).toBeCloseTo(250, 1);
+    expect(windows!.pgreat).toBeCloseTo(18, 1);
+    expect(windows!.great).toBeCloseTo(40, 1);
+    expect(windows!.good).toBeCloseTo(100, 1);
+    expect(windows!.bad).toBeCloseTo(200, 1);
   });
 });

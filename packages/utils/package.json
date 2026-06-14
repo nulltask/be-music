@@ -1,6 +1,6 @@
 {
   "name": "@be-music/utils",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Shared utilities for be-music packages",
   "license": "MIT",
   "files": [
@@ -29,6 +29,11 @@
       "types": "./dist/log.d.ts",
       "source": "./src/log.ts",
       "default": "./dist/log.js"
+    },
+    "./optional-node-module": {
+      "types": "./dist/optional-node-module.d.ts",
+      "source": "./src/optional-node-module.ts",
+      "default": "./dist/optional-node-module.js"
     },
     "./path": {
       "types": "./dist/path.d.ts",

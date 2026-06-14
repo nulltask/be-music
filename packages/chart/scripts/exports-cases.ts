@@ -183,6 +183,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.parseBmsDynamicVolumeGain('80');
     },
   });
+  define('chart.usesMonophonicWavPlayback', {
+    run: (fixtures) => {
+      chartApi.usesMonophonicWavPlayback(fixtures.sampleBmsJson);
+    },
+  });
   define('chart.resolveBmsLongNotes', {
     run: (fixtures) => {
       chartApi.resolveBmsLongNotes(fixtures.sampleBmsJson, { inferLnTypeWhenMissing: true });

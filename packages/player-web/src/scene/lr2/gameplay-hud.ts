@@ -190,13 +190,54 @@ export function renderNowComboElement(
   }
 }
 
+/** LR2 groove gauge is drawn as 50 beads (2 % each). */
+export const LR2_GROOVE_GAUGE_UNITS = 50;
+/** GROOVE / EASY clear border — beads at or above this percentage render in the green cell. */
+export const LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT = 80;
+
+export interface GrooveGaugeBead {
+  unitIndex: number;
+  /** Offset within the SRC's 4-cell frame: 0 = lit-red, 1 = lit-green, 2 = unlit-red, 3 = unlit-green. */
+  cellOffset: number;
+}
+
+/**
+ * Resolves the per-bead cell selection for the LR2 groove gauge, matching LR2's own cell order
+ * (`表赤,表緑,裏赤,裏緑` = lit-red, lit-green, unlit-red, unlit-green; see the LR2 default 7K skin comment in
+ * `7keys/7_LL0.csv`).
+ *
+ * - Beads `0..activeUnits-1` are lit; the rest are the unlit track.
+ * - For GROOVE / EASY, beads at or above the 80 % clear border use the green cell (the "you reached clear" cue);
+ *   below it they use the red cell.
+ * - Survival gauges (HARD / DEATH) have NO clear border in LR2 — the whole bar renders red, so the green zone is
+ *   suppressed. (LR2 reuses the single `#SRC_GROOVEGAUGE` and lets the binary pick the red cells throughout; the
+ *   red-gauge ops 42/43 signal the type.)
+ *
+ * Pure function (no Pixi binding) so the cell-selection logic is unit-tested directly.
+ */
+export function resolveGrooveGaugeBeads(
+  percent: number,
+  options: { survivalGauge?: boolean } = {},
+): GrooveGaugeBead[] {
+  const clampedPercent = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
+  const activeUnits = Math.round((clampedPercent / 100) * LR2_GROOVE_GAUGE_UNITS);
+  const clearZoneUnit = Math.round((LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT / 100) * LR2_GROOVE_GAUGE_UNITS);
+  const beads: GrooveGaugeBead[] = [];
+  for (let unitIndex = 0; unitIndex < LR2_GROOVE_GAUGE_UNITS; unitIndex += 1) {
+    const isActive = unitIndex < activeUnits;
+    const isClearZone = !options.survivalGauge && unitIndex >= clearZoneUnit;
+    beads.push({ unitIndex, cellOffset: (isActive ? 0 : 2) + (isClearZone ? 1 : 0) });
+  }
+  return beads;
+}
+
 export function renderGrooveGaugeElement(
   sink: SpriteSink,
   gauge: Lr2GrooveGaugeElement,
   percent: number,
   textures: ReadonlyMap<string, Texture>,
   dst: Lr2DestinationRect,
-  options: { peakPercent?: number; elapsedMs?: number } = {},
+  options: { survivalGauge?: boolean; elapsedMs?: number } = {},
 ): void {
   if (dst.w === 0 || dst.h === 0) {
     return;
@@ -231,25 +272,9 @@ export function renderGrooveGaugeElement(
     return;
   }
 
-  const totalUnits = 50;
-  const clearThresholdUnit = Math.round((80 / 100) * totalUnits);
-  const activeUnits = Math.round((percent / 100) * totalUnits);
-  // Peak-hold indicator: the bead AT the peak position is painted with the "active" cell variant even when the live
-  // fill has dropped below it. Skin-agnostic — uses the same 4-cell sprite group, just at the peak's bead position.
-  const peakPercent = Math.max(0, Math.min(100, options.peakPercent ?? percent));
-  const peakIndex = Math.round((peakPercent / 100) * totalUnits) - 1;
-  for (let unitIndex = 0; unitIndex < totalUnits; unitIndex += 1) {
-    const isActive = unitIndex < activeUnits;
-    const isPeakIndicator = !isActive && unitIndex === peakIndex && peakIndex >= activeUnits;
-    const useActiveCell = isActive || isPeakIndicator;
-    const isClearZone = unitIndex >= clearThresholdUnit;
-    // LR2 spec ordering inside each 4-cell frame: offset 0: lit-red (warning zone, below 80 %), offset 1: lit-green
-    // (clear zone, ≥ 80 %), offset 2: unlit-red (warning zone), offset 3: unlit-green (clear zone).
-    // i.e. red marks the *below*-clear-threshold beads, green marks the clear zone — matches the IIDX-style "your gauge
-    // is below 80, you're in danger" color cue. Earlier the frame ordering was correct but the zone mapping was
-    // inverted; this patch restores `clearZone ? 1 : 0`.
-    const offsetWithinFrame = (useActiveCell ? 0 : 2) + (isClearZone ? 1 : 0);
-    const cellIndex = frameIndex * 4 + offsetWithinFrame;
+  const beads = resolveGrooveGaugeBeads(percent, { survivalGauge: options.survivalGauge });
+  for (const { unitIndex, cellOffset } of beads) {
+    const cellIndex = frameIndex * 4 + cellOffset;
     const cellX = cellIndex % divx;
     const cellY = Math.floor(cellIndex / divx);
     const cellTexture = createCroppedTexture(baseTexture, {
@@ -263,7 +288,7 @@ export function renderGrooveGaugeElement(
     }
     const sprite = sink.acquireSprite();
     sprite.texture = cellTexture;
-    sprite.label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}${isPeakIndicator ? ',peak' : ''}]`;
+    sprite.label = `gauge-bead[idx=${unitIndex},frame=${frameIndex},cell=${cellIndex}]`;
     sprite.position.set(dst.x + gauge.addX * unitIndex, dst.y + gauge.addY * unitIndex);
     sprite.width = dst.w;
     sprite.height = dst.h;

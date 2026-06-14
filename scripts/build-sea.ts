@@ -1,10 +1,11 @@
-import { chmod, mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, readdir, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
-import { builtinModules } from 'node:module';
-import { dirname, isAbsolute, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { builtinModules, createRequire } from 'node:module';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { build } from 'vite';
+import { build, defaultServerConditions, defaultServerMainFields } from 'vite';
 
 const execFileAsync = promisify(execFile);
 
@@ -21,9 +22,32 @@ interface CliArgs {
   bundleOnly: boolean;
 }
 
+interface EmbeddedNodeModuleRoot {
+  /** Package embedded into the binary together with its production dependency closure. */
+  name: string;
+  /** Directory (relative to the repository root) whose dependency resolution finds the package. */
+  resolveFrom: string;
+  /** Files of this package (matched against the package-relative posix path) excluded from embedding. */
+  excludeFilePatterns?: RegExp[];
+}
+
 interface SeaTargetConfig {
   packageDir: string;
   outputBaseName: string;
+  /** Bundle entry relative to `packageDir` (default: `src/cli.ts`). */
+  entry?: string;
+  /**
+   * Embed the bundle itself as the `sea-entry.cjs` asset so the running binary can spawn eval workers that
+   * re-execute it (worker scripts cannot be loaded from disk in a SEA). Requires an entry that dispatches on
+   * the workerData role marker, like `player-tui/src/sea-main.ts`.
+   */
+  embedBundleAsset?: boolean;
+  /**
+   * Optional packages (native addons and friends) embedded as SEA assets. The running binary extracts them
+   * to a cache directory at startup — native addons cannot be loaded from memory — and resolves them through
+   * `loadOptionalNodeModule`; see `player-tui/src/node/sea-embedded-modules.ts`.
+   */
+  embeddedNodeModules?: EmbeddedNodeModuleRoot[];
   optionalExternalModules?: string[];
   bundleBanner?: string;
   aliases?: Record<string, string>;
@@ -39,6 +63,19 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
   player: {
     packageDir: resolve(repositoryDir, 'packages/player-tui'),
     outputBaseName: 'be-music-player',
+    entry: 'src/sea-main.ts',
+    embedBundleAsset: true,
+    embeddedNodeModules: [
+      { name: 'node-web-audio-api', resolveFrom: 'packages/player' },
+      {
+        name: '@uwx/libav.js-fat',
+        resolveFrom: 'packages/player-tui',
+        // Node always selects the `.wasm` build (see the target() probe in dist/libav-fat.js) and the player
+        // initialises libav with `noworker: true`, so the asm.js fallback (~122MB), the worker-threaded
+        // build (~35MB), and the LGPL source tarballs (~30MB) are dead weight for the SEA runtime.
+        excludeFilePatterns: [/\.asm\.(js|mjs)$/, /\.thr\./, /\.d\.ts$/, /^sources\//],
+      },
+    ],
     optionalExternalModules: ['node-web-audio-api', '@uwx/libav.js-fat'],
     bundleBanner: SEA_WORKER_BANNER,
     aliases: {
@@ -63,6 +100,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
       '@be-music/utils/cli-path': resolve(repositoryDir, 'packages/utils/src/cli-path.ts'),
       '@be-music/utils/core': resolve(repositoryDir, 'packages/utils/src/core.ts'),
       '@be-music/utils/log': resolve(repositoryDir, 'packages/utils/src/log.ts'),
+      '@be-music/utils/optional-node-module': resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
       '@be-music/utils/path': resolve(repositoryDir, 'packages/utils/src/path.ts'),
       '@be-music/utils/pcm': resolve(repositoryDir, 'packages/utils/src/pcm.ts'),
       '@be-music/utils/workerize': resolve(repositoryDir, 'packages/utils/src/workerize.ts'),
@@ -82,6 +120,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
       '@be-music/utils/cli-path': resolve(repositoryDir, 'packages/utils/src/cli-path.ts'),
       '@be-music/utils/core': resolve(repositoryDir, 'packages/utils/src/core.ts'),
       '@be-music/utils/log': resolve(repositoryDir, 'packages/utils/src/log.ts'),
+      '@be-music/utils/optional-node-module': resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
       '@be-music/utils/path': resolve(repositoryDir, 'packages/utils/src/path.ts'),
       '@be-music/utils/pcm': resolve(repositoryDir, 'packages/utils/src/pcm.ts'),
       '@be-music/utils/workerize': resolve(repositoryDir, 'packages/utils/src/workerize.ts'),
@@ -234,11 +273,14 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
   const workspaceAliasPlugin = createWorkspaceAliasPlugin(config.aliases);
   await build({
     configFile: false,
-    resolve: config.aliases
-      ? {
-          alias: config.aliases,
-        }
-      : undefined,
+    resolve: {
+      ...(config.aliases ? { alias: config.aliases } : {}),
+      // The SEA bundle runs in Node, but `build()` uses the client environment whose default conditions and
+      // main fields prefer `browser` entries. That silently swapped in pino/browser (whose `flush` is a noop,
+      // hanging the logger close and writing no NDJSON) and isoworker's Web Worker implementation.
+      conditions: [...defaultServerConditions],
+      mainFields: [...defaultServerMainFields],
+    },
     build: {
       target: 'node25',
       outDir: seaDir,
@@ -247,7 +289,7 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
       minify: false,
       sourcemap: false,
       lib: {
-        entry: resolve(config.packageDir, 'src/cli.ts'),
+        entry: resolve(config.packageDir, config.entry ?? 'src/cli.ts'),
         formats: ['cjs'],
         fileName: () => 'sea-entry.cjs',
       },
@@ -263,52 +305,42 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
   });
 }
 
-function replaceLocalChunkRequires(code: string, localChunkIds: Set<string>): string {
-  return code.replace(/require\((['"])(\.\/[^'"]+)\1\)/g, (match, _quote, id) =>
-    localChunkIds.has(id) ? `__sea_require(${JSON.stringify(id)})` : match,
-  );
-}
-
-function indentBlock(code: string): string {
-  return code
-    .split('\n')
-    .map((line) => (line.length > 0 ? `    ${line}` : ''))
-    .join('\n');
-}
-
 async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
   const entryFileName = 'sea-entry.cjs';
   const seaFiles = await readdir(seaDir);
-  const localChunkFileNames = seaFiles.filter((fileName) => fileName.endsWith('.cjs') && fileName !== entryFileName);
+  const localChunkFileNames = seaFiles.filter(
+    (fileName) => (fileName.endsWith('.cjs') || fileName.endsWith('.js')) && fileName !== entryFileName,
+  );
   if (localChunkFileNames.length === 0) {
     return;
   }
 
-  const localChunkIds = new Set(localChunkFileNames.map((fileName) => `./${fileName}`));
   const localChunkSources = await Promise.all(
-    localChunkFileNames.map(async (fileName) => {
-      const chunkPath = resolve(seaDir, fileName);
-      const chunkCode = await readFile(chunkPath, 'utf8');
-      return {
-        fileName,
-        code: replaceLocalChunkRequires(chunkCode, localChunkIds),
-      };
-    }),
+    localChunkFileNames.map(async (fileName) => ({
+      fileName,
+      code: await readFile(resolve(seaDir, fileName), 'utf8'),
+    })),
   );
-
   const entryPath = resolve(seaDir, entryFileName);
-  const entryCode = replaceLocalChunkRequires(await readFile(entryPath, 'utf8'), localChunkIds);
-  const inlinedRuntime = [
+  const entryCode = await readFile(entryPath, 'utf8');
+
+  // Chunk and entry sources are embedded verbatim: any source transformation (re-indenting, rewriting
+  // `require("./chunk")` calls with a regex) can corrupt multi-line template literals that carry binary
+  // payloads — the yEnc-encoded decoder wasm of `@wasm-audio-decoders/*` broke exactly that way. Local
+  // chunk requires are redirected by shadowing `require` instead: chunk factories receive `__sea_require`
+  // as their `require` parameter, and the entry is wrapped in an IIFE whose `require` parameter shadows
+  // the SEA-injected one. `__sea_require` falls back to the real `require` for non-chunk ids.
+  const inlinedBundle = [
     'const __sea_modules = Object.create(null);',
     'const __sea_module_cache = Object.create(null);',
     'function __sea_require(id) {',
-    '  const cached = __sea_module_cache[id];',
-    '  if (cached) {',
-    '    return cached.exports;',
-    '  }',
     '  const factory = __sea_modules[id];',
     '  if (!factory) {',
     '    return require(id);',
+    '  }',
+    '  const cached = __sea_module_cache[id];',
+    '  if (cached) {',
+    '    return cached.exports;',
     '  }',
     '  const module = { exports: {} };',
     '  __sea_module_cache[id] = module;',
@@ -316,15 +348,130 @@ async function inlineSeaRelativeChunks(seaDir: string): Promise<void> {
     '  return module.exports;',
     '}',
     ...localChunkSources.flatMap(({ fileName, code }) => [
-      `__sea_modules[${JSON.stringify(`./${fileName}`)}] = (module, exports, __sea_require) => {`,
-      indentBlock(code),
+      `__sea_modules[${JSON.stringify(`./${fileName}`)}] = (module, exports, require) => {`,
+      code,
       '};',
     ]),
+    '(function(require) {',
+    entryCode,
+    '})(__sea_require);',
     '',
   ].join('\n');
 
-  await writeFile(entryPath, `${inlinedRuntime}${entryCode}`, 'utf8');
+  await writeFile(entryPath, inlinedBundle, 'utf8');
   await Promise.all(localChunkFileNames.map((fileName) => unlink(resolve(seaDir, fileName))));
+}
+
+// Asset names kept in sync with packages/player-tui/src/node/sea-embedded-modules.ts.
+const EMBEDDED_MODULES_MANIFEST_ASSET = 'embedded-node-modules.json';
+const EMBEDDED_MODULE_ASSET_PREFIX = 'embedded-node-modules/';
+// The SEA binary targets the build host platform, so only the matching native addon is embedded.
+const NATIVE_ADDON_PLATFORM_TAG = `${process.platform}-${process.arch}`;
+
+interface EmbeddedModulesBuildResult {
+  /** Asset name → absolute source file path, ready to merge into the SEA config `assets` map. */
+  assets: Record<string, string>;
+  manifest: { cacheKey: string; files: string[] };
+}
+
+async function resolvePackageDir(name: string, fromDir: string): Promise<string> {
+  const requireFromBase = createRequire(join(fromDir, 'package.json'));
+  try {
+    return dirname(await realpath(requireFromBase.resolve(`${name}/package.json`)));
+  } catch {
+    // The package `exports` map may hide package.json; resolve the entry file and walk up to the package root.
+    let dir = dirname(await realpath(requireFromBase.resolve(name)));
+    while (true) {
+      try {
+        const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8')) as { name?: string };
+        if (manifest.name === name) {
+          return dir;
+        }
+      } catch {
+        // No package.json at this level; keep walking up.
+      }
+      const parent = dirname(dir);
+      if (parent === dir) {
+        throw new Error(`Cannot locate the package directory of ${name}`);
+      }
+      dir = parent;
+    }
+  }
+}
+
+async function collectEmbeddedPackageDirs(roots: EmbeddedNodeModuleRoot[]): Promise<Map<string, string>> {
+  const packageDirs = new Map<string, string>();
+  const queue = roots.map((root) => ({ name: root.name, fromDir: resolve(repositoryDir, root.resolveFrom) }));
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (!next || packageDirs.has(next.name)) {
+      continue;
+    }
+    const packageDir = await resolvePackageDir(next.name, next.fromDir);
+    packageDirs.set(next.name, packageDir);
+    const manifest = JSON.parse(await readFile(join(packageDir, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+    };
+    for (const dependencyName of Object.keys(manifest.dependencies ?? {})) {
+      queue.push({ name: dependencyName, fromDir: packageDir });
+    }
+  }
+  return packageDirs;
+}
+
+function shouldEmbedPackageFile(relativePosixPath: string, excludeFilePatterns: RegExp[] | undefined): boolean {
+  const fileName = relativePosixPath.split('/').at(-1) ?? relativePosixPath;
+  if (fileName.endsWith('.node') && !fileName.includes(NATIVE_ADDON_PLATFORM_TAG)) {
+    return false;
+  }
+  return !excludeFilePatterns?.some((pattern) => pattern.test(relativePosixPath));
+}
+
+async function listEmbeddedPackageFiles(
+  packageDir: string,
+  excludeFilePatterns: RegExp[] | undefined,
+  currentDir = packageDir,
+): Promise<string[]> {
+  const entries = await readdir(currentDir, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const entryPath = join(currentDir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === 'node_modules') {
+        continue;
+      }
+      files.push(...(await listEmbeddedPackageFiles(packageDir, excludeFilePatterns, entryPath)));
+      continue;
+    }
+    const isFile = entry.isFile() || (entry.isSymbolicLink() && (await stat(entryPath)).isFile());
+    const relativePosixPath = relative(packageDir, entryPath).replaceAll('\\', '/');
+    if (isFile && shouldEmbedPackageFile(relativePosixPath, excludeFilePatterns)) {
+      files.push(relativePosixPath);
+    }
+  }
+  return files.sort();
+}
+
+async function buildEmbeddedNodeModuleAssets(roots: EmbeddedNodeModuleRoot[]): Promise<EmbeddedModulesBuildResult> {
+  const packageDirs = await collectEmbeddedPackageDirs(roots);
+  const excludeFilePatternsByName = new Map(roots.map((root) => [root.name, root.excludeFilePatterns]));
+  const assets: Record<string, string> = {};
+  const manifestFiles: string[] = [];
+  const cacheKeyHash = createHash('sha256');
+  for (const [name, packageDir] of [...packageDirs.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const relativePath of await listEmbeddedPackageFiles(packageDir, excludeFilePatternsByName.get(name))) {
+      const manifestPath = `${name}/${relativePath}`;
+      const filePath = join(packageDir, ...relativePath.split('/'));
+      assets[`${EMBEDDED_MODULE_ASSET_PREFIX}${manifestPath}`] = filePath;
+      manifestFiles.push(manifestPath);
+      cacheKeyHash.update(manifestPath);
+      cacheKeyHash.update(await readFile(filePath));
+    }
+  }
+  return {
+    assets,
+    manifest: { cacheKey: cacheKeyHash.digest('hex').slice(0, 16), files: manifestFiles },
+  };
 }
 
 async function supportsNodeFlag(nodeBinaryPath: string, cwd: string, flag: string): Promise<boolean> {
@@ -364,8 +511,15 @@ async function maybeAdhocSignMacBinary(cwd: string, pathValue: string): Promise<
   }
   try {
     await execFileAsync('codesign', ['--sign', '-', '--force', pathValue], { cwd });
-  } catch {
-    // Ad-hoc signing is best-effort for local execution.
+  } catch (error) {
+    // Ad-hoc signing is best-effort, but an unsigned SEA binary is killed by macOS with SIGKILL
+    // ("Killed: 9") at launch — surface the failure instead of producing a silently broken executable.
+    const message = error instanceof Error && error.message ? error.message : String(error);
+    process.stderr.write(
+      `Warning: ad-hoc code signing failed (${message.trim()}).\n` +
+        `The generated binary will likely be killed by macOS at launch. Sign it manually with:\n` +
+        `  codesign --sign - --force ${pathValue}\n`,
+    );
   }
 }
 
@@ -386,6 +540,19 @@ async function main(): Promise<void> {
   await buildSeaBundle(targetConfig, seaDir);
   await inlineSeaRelativeChunks(seaDir);
 
+  let embeddedModules: EmbeddedModulesBuildResult | undefined;
+  const embeddedManifestPath = resolve(seaDir, EMBEDDED_MODULES_MANIFEST_ASSET);
+  if (targetConfig.embeddedNodeModules && targetConfig.embeddedNodeModules.length > 0) {
+    process.stdout.write('Collecting embedded node modules...\n');
+    embeddedModules = await buildEmbeddedNodeModuleAssets(targetConfig.embeddedNodeModules);
+    await writeFile(embeddedManifestPath, `${JSON.stringify(embeddedModules.manifest, null, 2)}\n`, 'utf8');
+  }
+
+  const assets: Record<string, string> = {
+    // Asset name kept in sync with SEA_BUNDLE_ASSET_NAME in packages/player-tui/src/node/sea-worker.ts.
+    ...(targetConfig.embedBundleAsset ? { 'sea-entry.cjs': bundlePath } : {}),
+    ...(embeddedModules ? { [EMBEDDED_MODULES_MANIFEST_ASSET]: embeddedManifestPath, ...embeddedModules.assets } : {}),
+  };
   const seaConfig = {
     main: bundlePath,
     mainFormat: 'commonjs',
@@ -393,6 +560,7 @@ async function main(): Promise<void> {
     executable: nodeBinaryPath,
     disableExperimentalSEAWarning: true,
     useCodeCache: true,
+    ...(Object.keys(assets).length > 0 ? { assets } : {}),
   };
   await writeFile(configPath, `${JSON.stringify(seaConfig, null, 2)}\n`, 'utf8');
 

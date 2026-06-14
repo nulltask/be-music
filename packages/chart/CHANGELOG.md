@@ -1,5 +1,12 @@
 # @be-music/chart
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [b9922cf]
+  - @be-music/json@0.2.2
+
 ## 0.3.1
 
 ### Patch Changes

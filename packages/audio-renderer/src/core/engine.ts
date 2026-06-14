@@ -6,6 +6,7 @@ import {
   isBmsKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
+  usesMonophonicWavPlayback,
 } from '@be-music/chart';
 // `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
 // `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
@@ -176,7 +177,10 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
   const gain = (options.gain ?? DEFAULT_GAIN) * resolveChartVolWavGain(json);
   const startSeconds = Number.isFinite(options.startSeconds) ? Math.max(0, options.startSeconds ?? 0) : 0;
-  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
+  // BMS spec — an undefined / missing / undecodable `#WAVxx` reference is SILENT (LR2 / beatoraja both skip it).
+  // `fallbackToneSeconds` exists as an opt-in debug aid; 0 renders a 1-frame silent placeholder so every downstream
+  // path (scheduling, gain, progress reporting) still sees a sample.
+  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0;
   const baseDir = options.baseDir ?? process.cwd();
   const signal = options.signal;
   const resolveTriggerGain = options.resolveTriggerGain;
@@ -336,7 +340,7 @@ async function scheduleSampleRenders(params: {
         sampleOffsetFrames: frameWindow.sampleOffsetFrames,
         sampleMaxFrames: frameWindow.sampleMaxFrames,
       }) - 1;
-    if (json.sourceFormat === 'bms') {
+    if (usesMonophonicWavPlayback(json)) {
       latestBmsScheduleBySampleKey.set(trigger.sampleKey, scheduleIndex);
     }
     if (triggerGain > 0) {
@@ -425,7 +429,7 @@ function trimPreviousBmsRetrigger(
   scheduled: ScheduledSampleRender[],
   latestBmsScheduleBySampleKey: Map<string, number>,
 ): void {
-  if (json.sourceFormat !== 'bms') {
+  if (!usesMonophonicWavPlayback(json)) {
     return;
   }
   const previousIndex = latestBmsScheduleBySampleKey.get(trigger.sampleKey);
@@ -476,7 +480,9 @@ export async function renderSingleSample(
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const gain = typeof options.gain === 'number' && Number.isFinite(options.gain) ? options.gain : 1;
   const baseDir = options.baseDir ?? process.cwd();
-  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0.08;
+  // Spec-compliant default: missing / undecodable samples are silent. Pass a positive value to opt into the
+  // debugging sine tone.
+  const fallbackToneSeconds = options.fallbackToneSeconds ?? 0;
   throwIfAborted(options.signal);
   const sample = await getOrCreateSample({
     sampleKey: normalizedKey,

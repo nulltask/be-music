@@ -904,6 +904,18 @@ export function isBmsDynamicVolumeChangeChannel(channel: string): boolean {
   );
 }
 
+/**
+ * Whether a chart's keysounds restart from the head when the same `#WAVxx` slot is retriggered (one voice per slot).
+ *
+ * BMS uses the LR2-compatible monophonic policy: a retrigger stops the still-playing instance of that slot and plays
+ * it again from the start. bmson layers sample slices / `c: true` continuation instead, so its slots are polyphonic.
+ * Every audio backend (Node mixer, WebAudio session, offline renderer) must consult this single predicate rather than
+ * encoding the per-format rule locally.
+ */
+export function usesMonophonicWavPlayback(json: Pick<BeMusicJson, 'sourceFormat'>): boolean {
+  return json.sourceFormat === 'bms';
+}
+
 export function parseBmsDynamicVolumeGain(value: string): number | undefined {
   const normalized = normalizeObjectKey(value);
   const high = parseHexDigitFast(normalized.charCodeAt(0));

@@ -94,18 +94,19 @@
 - [x] `#PLAYER=4` (BATTLE) はメタ情報として保持し、現状は専用の 2 人対戦プレイを実装しない
 - [x] チャンネル `D1-D9` (地雷) を解釈
 - [x] チャンネル `E1-E9` (地雷) を解釈
-- [x] MANUAL モードで地雷タイミング入力を `BAD` 判定に反映
-- [x] MANUAL モードの地雷ダメージに譜面の ID base で解釈したオブジェクト値 (`object value / 2`) を適用しつつ、判定表示は `BAD` のままにする
+- [x] MANUAL モードで「キー ON かつ `GOOD` 窓以内」の地雷を爆発させる（押下時・押しっぱなし通過の両方。LR2 準拠）
+- [x] 地雷ダメージはオブジェクト値（大文字 base36）をそのままパーセントとして適用し、判定・コンボには影響させない（LR2 / beatoraja 準拠）
 - [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
 
 #### 地雷ダメージの根拠
 
-地雷ダメージは BM98 時代の基礎 BMS 仕様には含まれていないため、現実装では後年公開された地雷拡張系の資料を根拠にしています。
+地雷ダメージは BM98 時代の基礎 BMS 仕様には含まれていないため、現実装では後年公開された地雷拡張系の資料と LR2 互換実装を根拠にしています。
 
-- 地雷ダメージを `value / 2` とする根拠は Hitkey の command memo です。`[01-ZZ]` をダメージ量とし、ゲージが `value / 2` だけ減る整理に従います。
-- `#WAV00` を地雷リアクション専用とする扱いと、`ZZ` を即死級の値とみなす根拠は Obj Tech Lovers chapter3-2 / chapter4-7 で補強しています。
-- `be-music` では groove gauge を LR2 互換の `2-100%` で実装しているため、`ZZ` の実際の効果はゲージ下限 `2%` への clamp です。
+- 発動条件「キー ON かつ判定線との間隔が `GOOD` 判定以内（押しっぱなし通過を含む）」と「ダメージ = 指定値そのまま（10進換算%）」は losak「地雷オブジェに関するアレコレ (LR2)」の LR2 実機検証に従います。beatoraja（jbms-parser `Section.java` / `JudgeManager`）も生値をダメージとして直接適用しており一致します。
+- Hitkey command memo の `value / 2` は nanasi 系統の仕様であり、LR2 の実挙動とは異なるため採用していません。
+- `#WAV00` を地雷リアクション専用とする扱いは Hitkey memo / Obj Tech Lovers chapter3-2 / chapter4-7 で補強しています。
+- `ZZ`（= 1295%）は survival 系ゲージ（HARD / DEATH）では即 FAILED、`2-100%` の GROOVE / EASY ではゲージ下限 `2%` への clamp になります（losak の「EASY / GROOVE なら 2% になるだけ」と一致）。
 - [x] チャンネル `SC` を `#SCROLLxx` 参照イベントとして保持
 - [x] チャンネル `SC` を音声トリガー対象から除外
 - [x] チャンネル `SC` のスクロール速度を player 描画へ反映
@@ -299,7 +300,7 @@ runtime と round-trip の扱い:
 - [ ] 未定義 `#BPMxx` / `#STOPxx` 参照時の互換挙動（無視・既定値・エラー）
 - [ ] `#STOPxx` 空定義参照（例: `#05209:` の未定義トークン）時の互換挙動
 - [ ] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針
-- [ ] 制御構文の別表記 `#ELSE IF` / `#END IF` / `#END` の受理方針
+- [x] 制御構文の別表記 `#ELSE IF n` / `#END IF` / 値なし `#END` を `#ELSEIF n` / `#ENDIF` として受理（保存・出力時は正規形へ正規化、`#END <他の値>` は未知ヘッダのまま）
 - [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
 - [x] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
 - [x] Bemuse 拡張チャンネル `#xxxSP`（spacing factor）の受理と描画反映
@@ -354,6 +355,7 @@ runtime と round-trip の扱い:
 - `AUTO` / `AUTO SCRATCH` / `MANUAL` のいずれでも、再生音声はリアルタイムトリガ方式を使用する
 - `--play-volume` は演奏レーン系、`--bgm-volume` は非演奏レーン系へ適用する
 - `SC` / 地雷 / `LNOBJ` 終端抑止対象イベントは音声トリガ対象から除外する
+- 未定義・ファイル欠落・デコード失敗の `#WAVxx` 参照は無音として扱う（デバッグ用に `missingSampleToneSeconds` オプションで代替トーンを有効化できる）
 
 ### SCROLL/BPM/STOP 互換ポリシー
 
@@ -367,14 +369,19 @@ runtime と round-trip の扱い:
 ## イベント位置の扱い
 
 - `data` は 2文字単位で分割し、`00` は空イベント
+- `data` は最初の空白文字で打ち切り、それ以降の文字列は無視する
 - 位置は `position: [numerator, denominator]` として保持
 - `denominator = トークン数`
 - `numerator = トークンの0始まりインデックス`
 
 ## 文字コード
 
-- BOM 付き UTF-8 / UTF-16LE / UTF-16BE を優先
-- BOM がない場合は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
+- BOM 付き UTF-8 / UTF-16LE / UTF-16BE を最優先で採用
+- BOM がない場合は `#CHARSET` 宣言を解決（対応エンコーディングに正規化できた場合のみ）
+- ASCII のみのファイルは UTF-8 として扱う
+- 厳密 UTF-8 検証（マルチバイト列を含み fatal デコードに成功）を通れば UTF-8 とみなす
+- 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
+- この判定は `@be-music/parser` の `decodeBmsText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 
 ## stringifier ルール
 

@@ -406,13 +406,29 @@ function acknowledgementsPlugin(roots: string[]): Plugin {
   };
 }
 
-// Vite resolves aliases by string `startsWith` match, so longer subpaths must come first — otherwise
-// a shorter prefix entry would shadow them.
+interface WorkspaceAlias {
+  find: string;
+  replacement: string;
+}
+
+function workspaceRootAliasPlugin(entries: readonly WorkspaceAlias[]): Plugin {
+  return {
+    name: 'be-music:resolve-workspace-root-aliases',
+    enforce: 'pre',
+    resolveId(source) {
+      const entry = entries.find((candidate) => candidate.find === source);
+      return entry?.replacement ?? null;
+    },
+  };
+}
+
+// Vite/Rolldown string aliases are prefix matches, so root package aliases must stay out of `resolve.alias`; otherwise
+// `@be-music/utils` can shadow `@be-music/utils/optional-node-module` and resolve to `src/index.ts/optional-node-module`.
 //
 // `@be-music/utils` / `@be-music/audio-renderer` / `@be-music/player` keep Node-facing code behind subpath exports or
 // lazy dynamic imports. Browser imports stay on the browser-safe paths below; disk-facing functions such as
 // `renderChartFile` are not called from the demo runtime.
-const workspaceAliases = [
+const workspaceSubpathAliases: WorkspaceAlias[] = [
   {
     find: '@be-music/audio-renderer/triggers',
     replacement: resolve(repositoryDir, 'packages/audio-renderer/src/core/triggers.ts'),
@@ -430,19 +446,16 @@ const workspaceAliases = [
     replacement: resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
   },
   { find: '@be-music/player/core', replacement: resolve(repositoryDir, 'packages/player/src/core') },
-  { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
   { find: '@be-music/utils/core', replacement: resolve(repositoryDir, 'packages/utils/src/core.ts') },
   { find: '@be-music/utils/cli-path', replacement: resolve(repositoryDir, 'packages/utils/src/cli-path.ts') },
   { find: '@be-music/utils/log', replacement: resolve(repositoryDir, 'packages/utils/src/log.ts') },
+  // Browser-safe by design: Node built-ins load lazily inside the fallback path only (see the module header).
+  {
+    find: '@be-music/utils/optional-node-module',
+    replacement: resolve(repositoryDir, 'packages/utils/src/optional-node-module.ts'),
+  },
   { find: '@be-music/utils/path', replacement: resolve(repositoryDir, 'packages/utils/src/path.ts') },
   { find: '@be-music/utils/pcm', replacement: resolve(repositoryDir, 'packages/utils/src/pcm.ts') },
-  { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
-  { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
-  { find: '@be-music/beatoraja-skin', replacement: resolve(repositoryDir, 'packages/beatoraja-skin/src/index.ts') },
-  { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
-  { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
-  { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
-  { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
   // Longer subpaths must precede the main `@be-music/player-web` alias — Vite resolves aliases via `startsWith`, so a
   // shorter prefix match would shadow them and try to load e.g. `packages/player-web/src/index.ts/scenes` as a file.
   {
@@ -465,11 +478,25 @@ const workspaceAliases = [
     find: '@be-music/player-web/runtime',
     replacement: resolve(repositoryDir, 'packages/player-web/src/runtime/index.ts'),
   },
+];
+
+const workspaceRootAliases: WorkspaceAlias[] = [
+  { find: '@be-music/player', replacement: resolve(repositoryDir, 'packages/player/src/index.ts') },
+  { find: '@be-music/utils', replacement: resolve(repositoryDir, 'packages/utils/src/index.ts') },
+  { find: '@be-music/audio-renderer', replacement: resolve(repositoryDir, 'packages/audio-renderer/src/index.ts') },
+  { find: '@be-music/beatoraja-skin', replacement: resolve(repositoryDir, 'packages/beatoraja-skin/src/index.ts') },
+  { find: '@be-music/chart', replacement: resolve(repositoryDir, 'packages/chart/src/index.ts') },
+  { find: '@be-music/json', replacement: resolve(repositoryDir, 'packages/json/src/index.ts') },
+  { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
+  { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
   { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
 ];
 
+const workspaceAliases = [...workspaceSubpathAliases, ...workspaceRootAliases];
+
 export default defineConfig({
   plugins: [
+    workspaceRootAliasPlugin(workspaceRootAliases),
     // ts-ebml (used by `makeWebmSeekable` for the recording post-process) reaches into Node's `Buffer` and `events`
     // module from its CJS dependency chain (`ebml`, `ebml-block`, `int64-buffer`). Vite leaves those unpolyfilled by
     // default, which surfaces in the browser as `Cannot read properties of undefined (reading 'readVint')` the moment
@@ -511,7 +538,7 @@ export default defineConfig({
     ]),
   ],
   resolve: {
-    alias: workspaceAliases,
+    alias: workspaceSubpathAliases,
   },
   optimizeDeps: {
     exclude: [

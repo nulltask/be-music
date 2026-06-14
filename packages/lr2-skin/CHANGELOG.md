@@ -1,5 +1,15 @@
 # @be-music/lr2-skin
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [b9922cf]
+- Updated dependencies [ca1012c]
+  - @be-music/json@0.2.2
+  - @be-music/utils@0.3.0
+  - @be-music/chart@0.3.2
+
 ## 0.1.3
 
 ### Patch Changes

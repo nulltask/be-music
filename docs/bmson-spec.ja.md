@@ -33,6 +33,7 @@
 - [x] `info` 拡張項目: `mode_hint`
 - [x] `info` 拡張項目: `judge_rank`
 - [x] `info` 拡張項目: `total`
+- [x] beatoraja 拡張 `info.ln_type` と note 単位 `t`（1: LN / 2: CN / 3: HCN）を IR に保持し、player の LN モード解決と stringifier 出力に使用
 - [x] `info` 拡張項目: `back_image`
 - [x] `info` 拡張項目: `eyecatch_image`
 - [x] `info` 拡張項目: `banner_image`
@@ -47,7 +48,7 @@
 - [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBmp`, `metadata.banner`, `metadata.stageFile` へ mirror
 - [x] 明示的な `lines: []` を barline suppression として扱い、`bmson.barlinesSuppressed` に保持
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
-- [x] `info.total` 欠落または非正値は bmson 既定値 `100` として扱う
+- [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` は保持（ライフバーが増えない）として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
 - [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
 - [ ] `version` の互換判定を SemVer で行う方針の明文化
@@ -132,7 +133,7 @@
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
 - `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
-- `info.total` が有限数ならそのまま使い、それ以外は bmson 既定値 `100` を適用
+- `info.total` が有限数なら使い（負値は仕様どおり絶対値へ正規化）、それ以外は bmson 既定値 `100` を適用
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
 - `key = base36(i + 1)` を2桁化

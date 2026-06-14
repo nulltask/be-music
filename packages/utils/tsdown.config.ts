@@ -13,6 +13,7 @@ export default createPackageTsdownConfig({
     core: 'src/core.ts',
     'cli-path': 'src/cli-path.ts',
     log: 'src/log.ts',
+    'optional-node-module': 'src/optional-node-module.ts',
     path: 'src/path.ts',
     pcm: 'src/pcm.ts',
     workerize: 'src/workerize.ts',

@@ -210,9 +210,19 @@ function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; val
   if (includeExplosionSound) {
     json.resources.wav['00'] = 'explode.wav';
   }
-  json.events = [{ measure: 0, channel: 'D1', position: [0, 1] as const, value }];
+  // Mine on measure 1 (chart 2.0 s at BPM 120) so a held key can deterministically detonate it as it crosses the
+  // judge line. A mine on measure 0 (chart 0 s) is racy under LR2's passage-based detonation: with playback sped up,
+  // a single poll tick can advance chart time past the mine's GOOD window before the input is processed.
+  json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value }];
   return json;
 }
+
+// Deterministic landmine detonation — holds the 1P key-1 lane (`z` → channel 11) from 0.2 s through the mine's
+// passage at chart 2.0 s, then ends the run at 2.3 s. Mirrors the proven hold-through test timing so CI doesn't race.
+const HELD_LANDMINE_INPUT: Array<{ delayMs: number; command: PlayerInputCommand }> = [
+  { delayMs: 200, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+  { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+];
 
 function createScheduledInputRuntime(commands: Array<{ delayMs: number; command: PlayerInputCommand }>) {
   return ({ inputSignals }: { inputSignals: { pushCommand: (command: PlayerInputCommand) => void } }) => {
@@ -897,23 +907,22 @@ describe('player', () => {
     expect(releaseIndex).toBeGreaterThan(holdIndex);
   });
 
-  test('player: stray key fires LR2 empty POOR — gauge -2 but combo / score / poor counter untouched', async () => {
+  test('player: stray key in front of a note fires LR2 empty POOR — gauge -2, counters untouched', async () => {
+    // BPM 240 → measure 1 starts at chart 1.0 s. The press lands at ~0.3 s, i.e. ~0.7 s before the note — outside
+    // the BAD window but inside LR2's 1-second early 空POOR region.
     const json = createEmptyJson('bms');
-    json.metadata.bpm = 60;
+    json.metadata.bpm = 240;
     json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
 
     const summary = await manualPlay(json, {
-      speed: 64,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 300, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 400, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
     });
 
     expect(summary.total).toBe(1);
@@ -928,6 +937,36 @@ describe('player', () => {
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
+  });
+
+  test('player: stray key with no note within 1 s is harmless (LR2 — no empty POOR)', async () => {
+    // BPM 60 → the only note sits at chart 4.0 s. A press at ~0 s is far outside LR2's 1-second early 空POOR
+    // region, so nothing charges: no gauge drain, no POOR.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 60;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    const output: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+      createInputRuntime: ({ inputSignals }) => ({
+        start: () => {
+          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
+          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
+        },
+        stop: () => undefined,
+      }),
+    });
+
+    expect(summary.poor).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+    expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
   });
 
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {
@@ -1134,24 +1173,20 @@ describe('player', () => {
     const output: string[] = [];
 
     const summary = await manualPlay(json, {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
       writeOutput: (text) => {
         output.push(text);
       },
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.total).toBe(0);
-    expect(summary.bad).toBe(1);
+    // LR2 — mine hits never emit a verdict: gauge damage + explosion sound only.
+    expect(summary.bad).toBe(0);
+    expect(summary.poor).toBe(0);
     expect(
       output.some(
         (line) =>
@@ -1165,44 +1200,133 @@ describe('player', () => {
     expect(output.some((line) => line.includes('kind:mine-hit') && line.includes('channel:11'))).toBe(true);
   });
 
-  test('player: manual landmine hit applies value-based damage while keeping BAD judgment', async () => {
+  test('player: manual landmine hit applies the LR2 raw-value damage with no verdict', async () => {
     const summary = await manualPlay(createLandmineOnlyChart({ value: '08' }), {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
     expect(summary.total).toBe(0);
-    expect(summary.bad).toBe(1);
+    expect(summary.bad).toBe(0);
     expect(summary.poor).toBe(0);
-    expect(summary.gauge?.current).toBeCloseTo(16, 9);
+    // LR2 / beatoraja interpret the mine value directly as the damage percent ('08' = 8 %, NOT the nanasi-memo
+    // value/2): gauge 20 → 12.
+    expect(summary.gauge?.current).toBeCloseTo(12, 9);
   });
 
   test('player: manual landmine hit clamps large mine damage at the groove gauge minimum', async () => {
     const summary = await manualPlay(createLandmineOnlyChart({ value: 'ZZ' }), {
-      speed: 240,
+      speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-          inputSignals.pushCommand({ kind: 'interrupt', reason: 'escape' });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
-    expect(summary.bad).toBe(1);
+    expect(summary.bad).toBe(0);
+    // ZZ (= 1295 % raw) wipes the gauge; GROOVE's 2 % soft floor catches it (a survival gauge would die instead).
     expect(summary.gauge?.current).toBeCloseTo(2, 9);
+  });
+
+  test('player: bmson per-mine damage overrides the BMS value/2 rule', async () => {
+    // bmson `key_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
+    // present it wins over the BMS raw-value interpretation: value '08' alone would deal 8 %, the authored damage
+    // of 7 must deal exactly 7 % (gauge 20 → 13).
+    const json = createLandmineOnlyChart({ value: '08' });
+    json.events[0]!.bmson = { damage: 7 };
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(13, 9);
+  });
+
+  test('player: bmson damage 0 is a valid no-damage decoration mine', async () => {
+    const json = createLandmineOnlyChart({ value: '08' });
+    json.events[0]!.bmson = { damage: 0 };
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: holding a key through a passing mine detonates it (LR2 hold-through)', async () => {
+    // BPM 120 → measure 1 = 2.0 s. Hold the lane from ~0.2 s via kitty press state (no release) and let the mine
+    // cross the judge line at 2.0 s — LR2 explodes mines that pass while the key is ON.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 200, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
+  });
+
+  test('player: a mine passing with the key up is harmless (LR2)', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: a press outside the GOOD window does not detonate an approaching mine (LR2)', async () => {
+    // BPM 120, NORMAL rank → GOOD window ±100 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
+    // outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1700, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
   });
 
   test('player: routes audio through createAudioSession factory when supplied', async () => {
@@ -1292,8 +1416,28 @@ describe('player', () => {
   });
 
   test('player: manual landmine hit sounds #WAV00 when audio is enabled', async () => {
+    // `explode.wav` doesn't exist on disk, so the audible assertion opts into the debug fallback tone — the
+    // spec-compliant default for a missing sample is silence (covered by the companion test below).
     await manualPlay(createLandmineOnlyChart(), {
-      speed: 240,
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      limiter: false,
+      tui: false,
+      missingSampleToneSeconds: 0.06,
+      writeOutput: () => undefined,
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
+    });
+
+    expect(hasAnyNonSilentAudioWrite()).toBe(true);
+  });
+
+  test('player: missing #WAVxx files are silent by default (no fallback tone)', async () => {
+    await manualPlay(createLandmineOnlyChart(), {
+      speed: 1,
       leadInMs: 0,
       audio: true,
       audioHeadPaddingMs: 0,
@@ -1302,15 +1446,10 @@ describe('player', () => {
       limiter: false,
       tui: false,
       writeOutput: () => undefined,
-      createInputRuntime: ({ inputSignals }) => ({
-        start: () => {
-          inputSignals.pushCommand({ kind: 'lane-input', tokens: ['z'] });
-        },
-        stop: () => undefined,
-      }),
+      createInputRuntime: createScheduledInputRuntime(HELD_LANDMINE_INPUT),
     });
 
-    expect(hasAnyNonSilentAudioWrite()).toBe(true);
+    expect(hasAnyNonSilentAudioWrite()).toBe(false);
   });
 
   test('player: derives long-note end beat from bmson notes.l', () => {
@@ -1323,6 +1462,25 @@ describe('player', () => {
     expect(notes).toHaveLength(1);
     expect(notes[0].beat).toBe(0);
     expect(notes[0].endBeat).toBeCloseTo(1, 6);
+    // beatoraja bmson extension: unspecified `info.ln_type` / note `t` falls back to the LR2-aligned default LN
+    // (mode 1, no tail release judgment) — the same default the BMS side uses for a missing #LNMODE.
+    expect(notes[0].longNoteMode).toBe(1);
+  });
+
+  test('player: bmson note t overrides info.ln_type, which overrides the LN default', () => {
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.bmson.info.resolution = 240;
+    json.bmson.info.lnType = 2;
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1], value: '01', bmson: { l: 240, t: 3 } },
+      { measure: 1, channel: '12', position: [0, 1], value: '02', bmson: { l: 240 } },
+    ];
+
+    const notes = extractPlayableNotes(json);
+    expect(notes).toHaveLength(2);
+    expect(notes[0].longNoteMode).toBe(3); // per-note t wins
+    expect(notes[1].longNoteMode).toBe(2); // chart-level info.ln_type
   });
 
   test('player: derives long-note end beat from bms #LNOBJ', () => {
@@ -1787,10 +1945,10 @@ describe('player', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 2;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(16.67, 6);
-    expect(windows.great).toBeCloseTo(33.33, 6);
-    expect(windows.good).toBeCloseTo(116.67, 6);
-    expect(windows.bad).toBeCloseTo(250, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
+    expect(windows.bad).toBe(200);
   });
 
   test('player: FAST/SLOW are counted only for GREAT/GOOD', () => {
@@ -1849,35 +2007,35 @@ describe('player', () => {
     expect(resolveChartVolWavGain(defaultChart)).toBe(2);
   });
 
-  test('player: narrows judge windows for bms RANK=0', () => {
+  test('player: narrows judge windows for bms RANK=0 (LR2 VERY HARD)', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 0;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo((16.67 * 25) / 75, 6);
-    expect(windows.great).toBeCloseTo((33.33 * 25) / 75, 6);
-    expect(windows.good).toBeCloseTo((116.67 * 25) / 75, 6);
-    expect(windows.bad).toBeCloseTo((250 * 25) / 75, 6);
+    expect(windows.pgreat).toBeCloseTo(8, 6);
+    expect(windows.great).toBeCloseTo(24, 6);
+    expect(windows.good).toBeCloseTo(40, 6);
+    expect(windows.bad).toBe(200);
   });
 
-  test('player: widens judge windows for bms RANK=4', () => {
+  test('player: bms RANK=4 maps onto NORMAL windows (LR2 behavior)', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 4;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo((16.67 * 125) / 75, 6);
-    expect(windows.great).toBeCloseTo((33.33 * 125) / 75, 6);
-    expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
-    expect(windows.bad).toBeCloseTo((250 * 125) / 75, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
+    expect(windows.bad).toBe(200);
   });
 
-  test('player: scales judge windows from bms DEFEXRANK using NORMAL baseline', () => {
+  test('player: scales judge windows from bms DEFEXRANK via the LR2 anchor interpolation', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 0;
-    json.bms.defExRank = 120;
+    json.bms.defExRank = 120; // percent 90 — between NORMAL (75) and EASY (100)
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(16.67 * 1.2, 6);
-    expect(windows.great).toBeCloseTo(33.33 * 1.2, 6);
-    expect(windows.good).toBeCloseTo(116.67 * 1.2, 6);
-    expect(windows.bad).toBeCloseTo(250 * 1.2, 6);
+    expect(windows.pgreat).toBeCloseTo(19.8, 6);
+    expect(windows.great).toBeCloseTo(52, 6);
+    expect(windows.good).toBeCloseTo(112, 6);
+    expect(windows.bad).toBe(200);
   });
 
   test('player: resolves displayed judge rank from bms DEFEXRANK and defaults', () => {
@@ -1932,23 +2090,23 @@ describe('player', () => {
     expect(summary.great).toBe(0);
   });
 
-  test('player: uses baseline judge windows for bmson judge_rank=100', () => {
+  test('player: uses NORMAL windows for bmson judge_rank=100', () => {
     const json = createEmptyJson('bmson');
     json.bmson.info.judgeRank = 100;
     const windows = resolveJudgeWindowsMs(json);
-    expect(windows.pgreat).toBeCloseTo(16.67, 6);
-    expect(windows.great).toBeCloseTo(33.33, 6);
-    expect(windows.good).toBeCloseTo(116.67, 6);
-    expect(windows.bad).toBeCloseTo(250, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
+    expect(windows.bad).toBe(200);
   });
 
   test('player: debug judge window override affects BAD only', () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 4;
     const windows = resolveJudgeWindowsMs(json, 180);
-    expect(windows.pgreat).toBeCloseTo((16.67 * 125) / 75, 6);
-    expect(windows.great).toBeCloseTo((33.33 * 125) / 75, 6);
-    expect(windows.good).toBeCloseTo((116.67 * 125) / 75, 6);
+    expect(windows.pgreat).toBeCloseTo(18, 6);
+    expect(windows.great).toBeCloseTo(40, 6);
+    expect(windows.good).toBeCloseTo(100, 6);
     expect(windows.bad).toBe(180);
   });
 

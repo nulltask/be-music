@@ -2,12 +2,11 @@ import {
   cloneJson,
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
-  type BeMusicEvent,
   type BeMusicJson,
   normalizeChannel,
   normalizeObjectKey,
 } from '@be-music/json';
-import { collectNonZeroObjectTokens, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
+import { buildBmsObjectLineEntry, sortAndNormalizeEvents, upsertMeasureLength } from './event-utils.ts';
 
 type ControlFlowCommand = BmsControlFlowCommand;
 
@@ -114,40 +113,44 @@ export function createControlFlowObjectEntry(
   data: string,
   base: 36 | 62 = 36,
 ): Extract<BmsControlFlowEntry, { kind: 'object' }> | undefined {
-  if (channel === '02') {
-    const measureLength = Number.parseFloat(data);
-    if (!Number.isFinite(measureLength) || measureLength <= 0) {
-      return undefined;
-    }
-    return {
-      kind: 'object',
-      measure,
-      channel,
-      events: [],
-      measureLength,
-    };
-  }
-
-  const parsed = collectNonZeroObjectTokens(data, base);
-  const events: BeMusicEvent[] = [];
-  for (const token of parsed.tokens) {
-    events.push({
-      measure,
-      channel,
-      position: [token.index, parsed.tokenCount],
-      value: token.value,
-    });
-  }
-
-  if (events.length === 0) {
+  // Same line interpretation as the strict parse path — `buildBmsObjectLineEntry` owns the rule so captured
+  // control-flow bodies can never drift from regular object lines.
+  const entry = buildBmsObjectLineEntry(measure, channel, data, base);
+  if (!entry) {
     return undefined;
   }
   return {
     kind: 'object',
-    measure,
-    channel,
-    events,
+    ...entry,
   };
+}
+
+/**
+ * Maps real-world control-flow spelling variants onto their canonical commands: `#END IF` / bare `#END` → `#ENDIF`,
+ * `#ELSE IF n` → `#ELSEIF n`. hitkey's command memo records these misspellings in released charts; without the
+ * aliases the enclosing `#IF` never closes, and on a non-matching `#RANDOM` roll every line down to EOF silently
+ * disappears. `#END <anything else>` and a plain `#ELSE` are NOT aliased — they fall through to normal header
+ * handling.
+ */
+export function resolveControlFlowAliasDirective(
+  command: string,
+  value: string,
+): { command: ControlFlowCommand; value?: string } | undefined {
+  if (command === 'END') {
+    const trimmed = value.trim();
+    if (trimmed.length === 0 || trimmed.toUpperCase() === 'IF') {
+      return { command: 'ENDIF' };
+    }
+    return undefined;
+  }
+  if (command === 'ELSE') {
+    const match = value.match(/^IF\b\s*(.*)$/i);
+    if (match) {
+      const rest = match[1]!.trim();
+      return { command: 'ELSEIF', value: rest.length > 0 ? rest : undefined };
+    }
+  }
+  return undefined;
 }
 
 export function normalizeControlFlowCommand(input: unknown): ControlFlowCommand | undefined {

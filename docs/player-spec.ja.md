@@ -175,14 +175,17 @@ kitty 非対応端末へフォールバックした場合、reverse scratch の 
 
 ### 基準幅
 
-player はまず IIDX 系の基準判定幅を持ちます。
-以後の rank 解決や拡張命令は、この基準値を倍率で拡縮する形で適用します。
+player は LR2 の実測判定幅を基準にします（hitkey 日記 2015-01-19 の実測値、lr2oraja の LR2 互換テーブルと一致）。
 
-- `PGREAT`: `16.67ms`
-- `GREAT`: `33.33ms`
-- `GOOD`: `116.67ms`
-- `BAD`: `250ms`
+| `#RANK` | `PGREAT` | `GREAT` | `GOOD` | `BAD` |
+| --- | --- | --- | --- | --- |
+| `0` `VERY HARD` | `±8ms` | `±24ms` | `±40ms` | `±200ms` |
+| `1` `HARD` | `±15ms` | `±30ms` | `±60ms` | `±200ms` |
+| `2` `NORMAL` | `±18ms` | `±40ms` | `±100ms` | `±200ms` |
+| `3` `EASY` | `±21ms` | `±60ms` | `±120ms` | `±200ms` |
+| `4` `VERY EASY` | `NORMAL` と同一（LR2 は `#RANK 4` を `NORMAL` として扱う） | | | |
 
+`BAD` 幅は rank・拡張命令に関わらず `±200ms` で固定です。スクラッチも鍵盤と同じ幅を使います。
 `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の境界は、この 4 本の幅から決まります。
 `POOR` は `BAD` 幅を超えた入力、またはノートの取り逃しで発生します。
 
@@ -198,27 +201,20 @@ BMS では、再生開始時点の判定幅を次の優先順位で決めます�
 `100` は基準値であり、`NORMAL` と同じ幅です。
 player は `#DEFEXRANK` を `Number.parseFloat()` で解釈し、有限かつ `0` より大きい値だけを採用します。
 
-`#RANK` は beatoraja 互換の倍率テーブル `[25, 50, 75, 100, 125]` として扱います。
+`#RANK` は内部の judgerank パーセント軸 `[25, 50, 75, 100, 75]`（`VERY HARD`=25 / `HARD`=50 / `NORMAL`=75 / `EASY`=100 / `VERY EASY`=`NORMAL` 扱い）へ写像します。
 `metadata.rank` は整数へ切り捨てて解釈し、範囲外の値は無効として既定値へフォールバックします。
-
-- `#RANK 0`: `25%` (`VERY HARD`)
-- `#RANK 1`: `50%` (`HARD`)
-- `#RANK 2`: `75%` (`NORMAL`)
-- `#RANK 3`: `100%` (`EASY`)
-- `#RANK 4`: `125%` (`VERY EASY`)
 
 ### BMS の換算式
 
-BMS の実際の判定幅は、`NORMAL = 75%` を基準にして計算します。
-たとえば `#DEFEXRANK 120` は「基準判定幅の `1.2` 倍」であり、`PGREAT=20.004ms`, `GREAT=39.996ms`, `GOOD=140.004ms`, `BAD=300ms` として扱います。
-
-`#RANK` から解決した値も同じ式で扱います。
-たとえば `#RANK 4` は `125 / 75` 倍なので、`VERY EASY` は `NORMAL` より約 `1.666...` 倍広い判定幅です。
+判定幅は、上の実測テーブルを judgerank パーセント軸上のアンカー（25 / 50 / 75 / 100）として区分線形補間して求めます（lr2oraja の `JudgeWindowRule.LR2` と同じモデル）。
+`#DEFEXRANK n` は `n × 75 / 100` でパーセント軸へ換算します。たとえば `#DEFEXRANK 120` は percent `90` であり、`PGREAT=19.8ms`, `GREAT=52ms`, `GOOD=112ms`, `BAD=200ms`（固定）になります。
+`EASY`（percent `100`）を超える値は最終区間の傾きで外挿し、スケール対象は `PGREAT` / `GREAT` / `GOOD` のみです。どれだけ広げても各幅は固定の `BAD` 幅 `±200ms` を超えません。
 
 ### BMS の動的判定幅変更
 
 BMS では `#xxxA0` チャンネルと `#EXRANKxx` を使って、演奏途中で判定幅を変更できます。
 player は `A0` チャンネルのイベント値を `#EXRANKxx` のキーとして解決し、その値を `Number.parseFloat()` で読んで、有限かつ `0` より大きい場合だけ採用します。
+採用した値は `#DEFEXRANK` と同じ「`RANK 2 = 100`」基準の百分率として解釈するため、`#EXRANKxx 100` はちょうど `NORMAL` の判定幅に戻ります。
 
 `#EXRANKxx` が未定義、空文字列、非数、`0` 以下の場合、そのイベントは判定幅を変更しません。
 複数の `A0` イベントがある場合は、時刻順に適用し、後から到達した値が以後の判定幅になります。
@@ -242,8 +238,8 @@ bmson では次の優先順位で判定幅を決めます。
 2. `metadata.rank`
 3. 既定値 `100`
 
-bmson の基準値は `100%` です。
-そのため `judgeRank=100` は IIDX 系の基準判定幅そのままで、`50` は半分、`150` は `1.5` 倍として扱います。
+bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱い、同じ LR2 アンカー補間で判定幅へ換算します。
+そのため `judgeRank=100` は `NORMAL`（`±18/±40/±100/±200ms`）そのままです。
 
 現在の実装では、bmson に BMS の `#EXRANKxx` 相当の動的判定幅変更はありません。
 
@@ -315,10 +311,13 @@ bmson の基準値は `100%` です。
 
 空POOR は LR2 における phantom press の扱いに合わせ、次の挙動とします。
 
+- 発生条件は **同レーンのノートが押下時刻から 1 秒以内の未来にあること** です（lr2oraja の LR2 ミス窓 `{0, 1000000}`µs。rank / EXRANK に依存しない固定窓）。ノート通過後（遅い側）に空POOR は発生せず、1 秒以内に次のノートが無いレーンの空打鍵は keysound 再生のみで無害です。
+- 同一ノートの手前であれば連打で **何度でも** 発生します（LR2 の `MissCondition.ALWAYS`。判定済みノートの手前でも発生）。
+
 - `summary` のジャッジカウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。 LR2 では「見逃しPOOR」(NOWJUDGE index 1) のみが POOR としてカウントされ、「空POOR」(index 0) はカウント外となるため。
 - EX-SCORE / IIDX score は **変化させない**。
 - combo は **切らない**。
-- groove gauge には `EMPTY_POOR` を適用する。デルタは [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) の `applyGrooveGaugeJudge('EMPTY_POOR')` 経由で算出され、 GROOVE / HARD で `-2`、 EASY で `-1`、 DEATH では `-100` (= 即時 0%)。 NORMAL / EASY ではほぼ無害だが、 HARD / DEATH では実害が出る。
+- groove gauge には `EMPTY_POOR` を適用する。デルタは [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) の `applyGrooveGaugeJudge('EMPTY_POOR')` 経由で算出され、 GROOVE で `-2`、 HARD で `-2`（TOTAL 補正対象）、 EASY で `-1.6`、 DEATH では `-10`。 NORMAL / EASY ではほぼ無害だが、 HARD / DEATH では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
@@ -330,13 +329,14 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 ### 地雷
 
-手動入力時に地雷候補が通常ノート候補より近いか同距離なら、地雷を優先します。
-地雷は `BAD` として扱い、combo を切ります。
-groove gauge ダメージは地雷オブジェクト値を大文字 base36 として解釈し、`damage = value / 2` で計算します。
-適用後のゲージ値は `2-100%` に clamp されるため、`ZZ` のような大きい値では実質 `2%` まで下がります。
-`#WAV00` が定義されている場合は、地雷ヒット経路でそのサンプルを鳴らします。
+地雷は LR2 の発動モデルに合わせます（losak「地雷オブジェに関するアレコレ」、beatoraja `JudgeManager` で確認）。
 
-このルールの根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) に記載しています。`value / 2` の直接根拠は Hitkey の command memo で、`#WAV00` / `ZZ` の扱いは Obj Tech Lovers chapter3-2 / chapter4-7 を補助一次参照として採っています。
+- 発動条件は「**レーンのキーが ON かつ 地雷が判定線の `GOOD` 窓以内**」です。押下した瞬間に `GOOD` 圏内の地雷は爆発し、**押しっぱなしで通過した地雷も爆発**します。キーが押されていない地雷の通過は無害です。
+- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
+- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
+- ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
+- `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
+- kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
 
 ## NOTES・combo・score
 
@@ -422,6 +422,13 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
+`HARD` / `EASY` / `DEATH` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`）に合わせます。
+
+- `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には `#TOTAL` 補正表（`TOTAL ≥240` で `×1.0` から `<120` で `×10` まで）を掛け、ゲージが `30%` 未満のときはさらに `×0.6` に緩和します。
+- `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
+- `DEATH`（LR2 HAZARD 相当）: `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR -10`。
+- `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
+
 ## ロングノート
 
 ### NOTES の数え方
@@ -433,7 +440,8 @@ player はロングノートを 1 本につき 1 ノートとして扱います�
 ### `#LNMODE`
 
 BMS の `#LNMODE` 未指定時は `1` として扱います。
-bmson と FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱います。
+bmson は beatoraja 拡張の `info.ln_type` と note 単位の `t`（1: LN / 2: CN / 3: HCN、`t` が `ln_type` より優先）でモードを決め、どちらも未指定の場合は LR2 準拠の既定として `1`（LN）を使います。
+FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱います。
 
 ### Manual Play
 
@@ -616,7 +624,7 @@ TUI の描画上限はデフォルト `60fps` です。
 
 judge 済みノートでも、judge line を跨ぐまで、または `visibleUntilBeat` が切れるまでは描画を残します。
 long note は body と tail を持つ 1 本のノートとして描画し、保持中は lane highlight も継続します。
-ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
+ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。最初の keyframe より前の区間は、最初の keyframe の値で一定です（Bemuse 参照実装に準拠）。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
 
 ### TUI 以外の出力
 

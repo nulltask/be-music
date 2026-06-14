@@ -3,7 +3,9 @@ import { type BeMusicEvent, type BeMusicJson, normalizeChannel } from '@be-music
 import { createTimingResolver } from '@be-music/audio-renderer/triggers';
 const FREE_ZONE_BEAT_LENGTH = 1;
 const DEFAULT_BMS_LONG_NOTE_MODE = 1;
-const DEFAULT_OTHER_LONG_NOTE_MODE = 2;
+// beatoraja's bmson extension leaves an unspecified `info.ln_type` to the player's default LN mode. This project's
+// LR2-aligned default is LN (no tail release judgment) — the same default the BMS side uses for a missing #LNMODE.
+const DEFAULT_BMSON_LONG_NOTE_MODE = 1;
 
 export type LongNoteMode = 1 | 2 | 3;
 
@@ -50,6 +52,8 @@ interface TimedExtractionContext {
   beatResolver: ReturnType<typeof createBeatResolver>;
   sortedEvents: BeMusicEvent[];
   bmsonResolution?: number;
+  /** Chart-level bmson `info.ln_type` (1: LN, 2: CN, 3: HCN), already validated; per-note `t` overrides it. */
+  chartLongNoteType?: LongNoteMode;
 }
 
 interface TimedEventChannels {
@@ -104,6 +108,10 @@ function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext
     beatResolver: createBeatResolver(json),
     sortedEvents: sortEvents(json.events),
     bmsonResolution: json.sourceFormat === 'bmson' ? Math.max(1, json.bmson.info.resolution || 240) : undefined,
+    chartLongNoteType:
+      json.bmson.info.lnType === 1 || json.bmson.info.lnType === 2 || json.bmson.info.lnType === 3
+        ? json.bmson.info.lnType
+        : undefined,
   };
 }
 
@@ -145,7 +153,7 @@ function collectTimedNotes(
         beat,
         endBeat,
         endSeconds: endBeat !== undefined ? context.resolver.beatToSeconds(endBeat) : undefined,
-        longNoteMode: endBeat !== undefined ? DEFAULT_OTHER_LONG_NOTE_MODE : undefined,
+        longNoteMode: endBeat !== undefined ? resolveBmsonLongNoteMode(event, context.chartLongNoteType) : undefined,
         seconds,
         judged: false,
       });
@@ -315,12 +323,24 @@ function appendLegacyLongNotesIfNeeded(
 
 function resolveBmsLongNoteMode(json: BeMusicJson): LongNoteMode {
   if (json.sourceFormat !== 'bms') {
-    return DEFAULT_OTHER_LONG_NOTE_MODE;
+    return DEFAULT_BMSON_LONG_NOTE_MODE;
   }
   if (json.bms.lnMode === 2 || json.bms.lnMode === 3) {
     return json.bms.lnMode;
   }
   return DEFAULT_BMS_LONG_NOTE_MODE;
+}
+
+/**
+ * Long-note mode for a bmson-derived note, per the beatoraja bmson extension precedence: per-note `t` >
+ * chart-level `info.ln_type` > default (LN).
+ */
+function resolveBmsonLongNoteMode(event: BeMusicEvent, chartLongNoteType: LongNoteMode | undefined): LongNoteMode {
+  const noteType = event.bmson?.t;
+  if (noteType === 1 || noteType === 2 || noteType === 3) {
+    return noteType;
+  }
+  return chartLongNoteType ?? DEFAULT_BMSON_LONG_NOTE_MODE;
 }
 
 function resolveLongNoteEndBeat(

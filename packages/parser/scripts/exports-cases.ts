@@ -13,6 +13,11 @@ export function registerParserExportsCases(define: DefineBenchmarkCase): void {
       parserApi.decodeBmsText(fixtures.bmsBuffer);
     },
   });
+  define('parser.decodeUtf8Text', {
+    run: (fixtures) => {
+      parserApi.decodeUtf8Text(fixtures.bmsBuffer);
+    },
+  });
   define('parser.extractDeclaredBmsCharset', {
     run: () => {
       parserApi.extractDeclaredBmsCharset('#CHARSET Shift_JIS\n#TITLE Bench\n');

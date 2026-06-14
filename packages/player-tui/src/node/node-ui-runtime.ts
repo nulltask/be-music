@@ -10,6 +10,7 @@ import { resolveHighSpeedMultiplier } from '@be-music/player/core/high-speed-con
 import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
 import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
 import { createDeferredUiFlush } from './deferred-ui-flush.ts';
+import { createSeaWorker, isSeaRuntime } from './sea-worker.ts';
 import { createUiFramePatchBuilder } from './ui-frame-patch.ts';
 import type {
   NodeUiWorkerInboundMessage,
@@ -56,11 +57,13 @@ export interface NodeUiRuntime {
 }
 
 export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promise<NodeUiRuntime> {
-  const worker = new Worker(resolveNodeUiWorkerUrl(), {
-    workerData: createWorkerInitData(options),
-    execArgv: resolveNodeUiWorkerExecArgv(),
-    env: resolveNodeUiWorkerEnv(),
-  });
+  const worker = isSeaRuntime()
+    ? createSeaWorker('node-ui-worker', createWorkerInitData(options))
+    : new Worker(resolveNodeUiWorkerUrl(), {
+        workerData: createWorkerInitData(options),
+        execArgv: resolveNodeUiWorkerExecArgv(),
+        env: resolveNodeUiWorkerEnv(),
+      });
   const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress, options.onLog);
   if (!workerReady.enabled) {
     return {

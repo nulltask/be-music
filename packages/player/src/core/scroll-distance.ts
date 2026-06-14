@@ -30,6 +30,13 @@ interface SegmentDistanceTerms {
 interface TimelinePointNormalizerOptions {
   allowNegativeSpeed: boolean;
   dropConsecutiveSameSpeed: boolean;
+  /**
+   * Seeds the synthesized beat-0 head point with the FIRST keyframe's speed instead of `1`. `#SPEEDxx` semantics
+   * (Bemuse reference implementation) hold the first keyframe's value before its beat — without this, the span before
+   * the first keyframe would ramp linearly from 1.0. `#SCROLLxx` keeps the `1` head: scroll is piecewise-constant and
+   * the factor genuinely is 1 until the first `SC` event.
+   */
+  headSpeedFromFirstPoint: boolean;
 }
 
 const DEFAULT_SCROLL_LOOKAHEAD_BEATS = 4 * 64;
@@ -197,6 +204,7 @@ function normalizeScrollPoints(timeline?: ReadonlyArray<ScrollTimelinePoint>): S
   return normalizeTimelinePoints(timeline, {
     allowNegativeSpeed: true,
     dropConsecutiveSameSpeed: true,
+    headSpeedFromFirstPoint: false,
   });
 }
 
@@ -204,6 +212,7 @@ function normalizeSpeedPoints(timeline?: ReadonlyArray<SpeedTimelinePoint>): Spe
   return normalizeTimelinePoints(timeline, {
     allowNegativeSpeed: false,
     dropConsecutiveSameSpeed: false,
+    headSpeedFromFirstPoint: true,
   });
 }
 
@@ -211,7 +220,7 @@ function normalizeTimelinePoints<T extends ScrollTimelinePoint | SpeedTimelinePo
   timeline: ReadonlyArray<T> | undefined,
   options: TimelinePointNormalizerOptions,
 ): T[] {
-  const points: Array<{ beat: number; speed: number }> = [{ beat: 0, speed: 1 }];
+  const collected: Array<{ beat: number; speed: number }> = [];
   for (const point of timeline ?? []) {
     if (
       !Number.isFinite(point.beat) ||
@@ -221,12 +230,14 @@ function normalizeTimelinePoints<T extends ScrollTimelinePoint | SpeedTimelinePo
     ) {
       continue;
     }
-    points.push({
+    collected.push({
       beat: point.beat,
       speed: point.speed,
     });
   }
-  points.sort((left, right) => left.beat - right.beat);
+  collected.sort((left, right) => left.beat - right.beat);
+  const headSpeed = options.headSpeedFromFirstPoint && collected.length > 0 ? collected[0]!.speed : 1;
+  const points: Array<{ beat: number; speed: number }> = [{ beat: 0, speed: headSpeed }, ...collected];
 
   const merged: Array<{ beat: number; speed: number }> = [];
   for (const point of points) {

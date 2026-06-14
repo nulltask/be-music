@@ -3,6 +3,8 @@ import { basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { createAbortError, isAbortError, throwIfAborted } from '@be-music/utils/core';
+import { loadOptionalNodeModule } from '@be-music/utils/optional-node-module';
+import { createSeaWorker, isSeaRuntime } from './node/sea-worker.ts';
 
 const SUPPORTED_VIDEO_CODECS = new Set(['mpeg1video', 'h264', 'mjpeg']);
 // Keep chunks small so ff_decode_multi never allocates too many full-size frames at once.
@@ -232,15 +234,18 @@ export async function decodeVideoFramesToSourceFramesInWorker(
   } = {},
 ): Promise<{ codecName: 'mpeg1video' | 'h264' | 'mjpeg'; frameCount: number; durationSeconds?: number } | undefined> {
   throwIfAborted(signal);
-  const worker = new Worker(resolveBgaVideoWorkerUrl(), {
-    workerData: {
-      videoPath,
-      mode,
-      stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
-    } satisfies VideoDecodeWorkerInitData,
-    execArgv: resolveBgaVideoWorkerExecArgv(),
-    env: resolveBgaVideoWorkerEnv(),
-  });
+  const workerInitData = {
+    videoPath,
+    mode,
+    stopAfterFirstFrame: Boolean(options.stopAfterFirstFrame),
+  } satisfies VideoDecodeWorkerInitData;
+  const worker = isSeaRuntime()
+    ? createSeaWorker('bga-video-worker', workerInitData)
+    : new Worker(resolveBgaVideoWorkerUrl(), {
+        workerData: workerInitData,
+        execArgv: resolveBgaVideoWorkerExecArgv(),
+        env: resolveBgaVideoWorkerEnv(),
+      });
 
   return await new Promise((resolve, reject) => {
     let settled = false;
@@ -628,8 +633,22 @@ async function createLibAvInstance(): Promise<LibAvInstance> {
     (globalThis as { self?: unknown }).self = globalThis;
   }
 
-  const libAvModule = (await import('@uwx/libav.js-fat')) as unknown as LibAvModule;
-  return libAvModule.default.LibAV({
+  // In a SEA binary the bare-specifier import always fails; the helper retries from a `node_modules`
+  // directory next to the executable (or the working directory) before giving up.
+  const loadedModule = (await loadOptionalNodeModule('@uwx/libav.js-fat', () => import('@uwx/libav.js-fat'))) as
+    | LibAvModule
+    | LibAvFactory
+    | undefined;
+  if (!loadedModule) {
+    throw new Error('@uwx/libav.js-fat is unavailable; cannot decode video BGA.');
+  }
+  // `import()` wraps the CJS exports in a namespace whose `default` holds them; the createRequire fallback
+  // used inside a SEA returns the exports object directly. Accept both shapes.
+  const libAvFactory = 'default' in loadedModule ? loadedModule.default : loadedModule;
+  if (typeof libAvFactory.LibAV !== 'function') {
+    throw new Error('@uwx/libav.js-fat does not expose a LibAV factory; cannot decode video BGA.');
+  }
+  return libAvFactory.LibAV({
     noworker: true,
     variant: 'fat',
   });

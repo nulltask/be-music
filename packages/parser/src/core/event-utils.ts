@@ -5,6 +5,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
   type BeMusicPosition,
+  type BmsObjectLineEntry,
 } from '@be-music/json';
 import {
   normalizeAsciiBase36Code,
@@ -29,6 +30,9 @@ export function normalizeBmsonNoteLength(value: unknown): number | undefined {
  * - The total `tokenCount` (= denominator) counts EVERY 2-char slot including `00` placeholders — needed to compute
  *   fractional beat positions.
  * - The returned `tokens` array only includes NON-ZERO entries (zeros are silent placeholders, not events).
+ * - The stream ENDS at the first whitespace character: de-facto BMS implementations treat the object data as one
+ *   contiguous token run, so trailing text (`#00111:0102  some note`) must not fabricate events or shift the
+ *   denominator of the legitimate tokens before it.
  *
  * `base` controls the per-character validator: - `36` (default): ASCII `[0-9A-Za-z]` is accepted and lowercase is
  * FOLDED to uppercase, so `0a` and `0A` collapse to the same ID. - `62`: lowercase is preserved, so `0a` and `0A` are
@@ -47,6 +51,9 @@ export function collectNonZeroObjectTokens(
   let highCode = -1;
   for (let index = 0; index < input.length; index += 1) {
     const code = input.charCodeAt(index);
+    if (code === 0x20 || code === 0x09 || code === 0x0b || code === 0x0c) {
+      break;
+    }
     const normalizedCode = normalize(code);
     if (normalizedCode < 0) {
       continue;
@@ -65,6 +72,57 @@ export function collectNonZeroObjectTokens(
     highCode = -1;
   }
   return { tokenCount, tokens };
+}
+
+/**
+ * Builds the canonical entry for one BMS object data line (`#mmmcc:data`).
+ *
+ * Single implementation of the line → entry rule shared by the strict parse path and the control-flow capture path
+ * (`#RANDOM` / `#IF` / `#SWITCH` bodies), so both interpret a line identically:
+ *
+ * - Channel `02` carries a measure-length factor — parsed as float, non-positive / non-finite values are dropped.
+ * - Every other channel is a token stream — `00` is a rest, non-zero 2-char tokens become events positioned as
+ *   `[tokenIndex, tokenCount]`.
+ *
+ * Returns `undefined` when the line contributes nothing (invalid measure length / only rests).
+ */
+export function buildBmsObjectLineEntry(
+  measure: number,
+  channel: string,
+  data: string,
+  base: 36 | 62 = 36,
+): BmsObjectLineEntry | undefined {
+  if (channel === '02') {
+    const measureLength = Number.parseFloat(data);
+    if (!Number.isFinite(measureLength) || measureLength <= 0) {
+      return undefined;
+    }
+    return {
+      measure,
+      channel,
+      events: [],
+      measureLength,
+    };
+  }
+
+  const parsed = collectNonZeroObjectTokens(data, base);
+  const events: BeMusicEvent[] = [];
+  for (const token of parsed.tokens) {
+    events.push({
+      measure,
+      channel,
+      position: [token.index, parsed.tokenCount],
+      value: token.value,
+    });
+  }
+  if (events.length === 0) {
+    return undefined;
+  }
+  return {
+    measure,
+    channel,
+    events,
+  };
 }
 
 export function sortAndNormalizeEvents(
@@ -192,6 +250,10 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
   }
   if (typeof raw.c === 'boolean') {
     extension.c = raw.c;
+  }
+  // beatoraja bmson extension — per-note long-note type (1: LN, 2: CN, 3: HCN).
+  if (raw.t === 1 || raw.t === 2 || raw.t === 3) {
+    extension.t = raw.t;
   }
   // Per-mine gauge damage — sourced from bmson `key_channels[].notes[].damage`. 0 is a valid value (the chart authored
   // a no-damage decoration mine), so the guard checks `Number.isFinite` rather than truthiness.

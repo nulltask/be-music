@@ -26,6 +26,7 @@ import {
   type ImageResizeAlgorithm,
 } from '@be-music/player/image-resize-algorithm';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
+import { ensureSeaEmbeddedNodeModules } from '../node/sea-embedded-modules.ts';
 import {
   buildKittyGraphicsDeleteImageSequence,
   buildKittyGraphicsRenderSequence,
@@ -337,6 +338,13 @@ export async function main(): Promise<void> {
     input: args.input,
     logFile: resolvedLogFilePath,
   });
+
+  try {
+    // Must run before any worker spawn so the extraction directory propagates through the environment.
+    await ensureSeaEmbeddedNodeModules();
+  } catch (error) {
+    process.stdout.write(`Warning: failed to extract embedded optional modules (${formatCliParseError(error)}).\n`);
+  }
 
   if (typeof args.judgeWindowMs === 'number' && Number.isFinite(args.judgeWindowMs)) {
     process.stdout.write(`Warning: debug judge override enabled (BAD window: ${Math.round(args.judgeWindowMs)}ms).\n`);

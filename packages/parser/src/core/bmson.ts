@@ -23,6 +23,7 @@ export interface BmsonInfo {
   mode_hint?: string;
   judge_rank?: number;
   total?: number;
+  ln_type?: number;
   back_image?: string;
   eyecatch_image?: string;
   banner_image?: string;
@@ -475,6 +476,18 @@ export function createBmsonPositionResolver(
   };
 }
 
+
+/**
+ * beatoraja bmson extension — long-note type values are `1` (LN), `2` (CN), `3` (HCN). Anything else (including the
+ * spec-absent `0`) is treated as "unspecified" so the consumer falls back to the chart-level / player default.
+ */
+function normalizeBmsonLongNoteType(value: unknown): 1 | 2 | 3 | undefined {
+  if (value === 1 || value === 2 || value === 3) {
+    return value;
+  }
+  return undefined;
+}
+
 export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): BeMusicJson['bmson']['info'] {
   const normalized: BeMusicJson['bmson']['info'] = {};
   copyIfString(normalized, 'title', info.title);
@@ -509,6 +522,12 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
   // per the same spec section).
   copyIfFiniteNumberAbs(normalized, 'total', info.total);
+  // beatoraja bmson extension — `info.ln_type` picks the chart-wide long-note type (1: LN, 2: CN, 3: HCN). Per-note
+  // `t` entries override it downstream.
+  const lnType = normalizeBmsonLongNoteType(info.ln_type);
+  if (lnType !== undefined) {
+    normalized.lnType = lnType;
+  }
 
   if (resolution > 0) {
     normalized.resolution = resolution;
@@ -684,6 +703,10 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
     if (typeof raw.c === 'boolean') {
       note.c = raw.c;
     }
+    const noteType = normalizeBmsonLongNoteType(raw.t);
+    if (noteType !== undefined) {
+      note.t = noteType;
+    }
     notes.push(note);
   }
   return notes;
@@ -817,6 +840,10 @@ function normalizeBmsonInfoFromIr(input: unknown): BeMusicJson['bmson']['info'] 
   copyIfFiniteNumber(info, 'initBpm', raw.initBpm ?? raw.init_bpm);
   copyIfPositiveFiniteNumber(info, 'judgeRank', raw.judgeRank ?? raw.judge_rank);
   copyIfFiniteNumberAbs(info, 'total', raw.total);
+  const lnType = normalizeBmsonLongNoteType(raw.lnType ?? raw.ln_type);
+  if (lnType !== undefined) {
+    info.lnType = lnType;
+  }
 
   const resolution = normalizePositiveInteger(raw.resolution);
   if (resolution !== undefined && resolution > 0) {

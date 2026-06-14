@@ -33,6 +33,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] `info` extended item: `mode_hint`
 - [x] `info` extended item: `judge_rank`
 - [x] `info` extended item: `total`
+- [x] Preserve the beatoraja extensions `info.ln_type` and per-note `t` (1: LN / 2: CN / 3: HCN) in the IR, used for the player's LN mode resolution and stringifier output
 - [x] `info` extended item: `back_image`
 - [x] `info` extended item: `eyecatch_image`
 - [x] `info` extended item: `banner_image`
@@ -47,7 +48,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into unified `metadata.backBmp`, `metadata.banner`, and `metadata.stageFile`
 - [x] Treat an explicit `lines: []` as barline suppression and keep it in `bmson.barlinesSuppressed`
 - [x] Treat missing `lines` as the bmson 4/4 default model
-- [x] Treat missing or non-positive `info.total` as the bmson default `100`
+- [x] Treat missing / non-numeric `info.total` as the bmson default `100`, take the absolute value of a negative one, and keep `0` (the lifebar does not increase)
 - [x] Treat missing, zero, negative, or non-numeric `info.init_bpm` as a parse error
 - [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
 - [ ] Clarification of policy for determining compatibility of `version` with SemVer
@@ -132,7 +133,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Keep `info.resolution` in `bmson.info.resolution`
 - Also read the root `resolution` for compatibility, and adopt it if `info.resolution` is not present.
 - Reject the document when `info.init_bpm` is missing or not a positive finite number.
-- Use `info.total` as-is when finite, otherwise apply the bmson default `100`.
+- Use `info.total` when finite (normalizing a negative value to its absolute value per the spec), otherwise apply the bmson default `100`.
 - Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into normalized metadata image fields.
 - Register `sound_channels[i].name` in `resources.wav[key]`
 - Convert `key = base36(i + 1)` to 2 digits

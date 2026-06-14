@@ -1,4 +1,5 @@
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
+import { loadOptionalNodeModule } from '@be-music/utils/optional-node-module';
 
 // Browser-compatible cooperative-sleep helper. Mirrors what `node:timers/promises.setTimeout` returned (a Promise
 // that resolves after `ms` ms) but uses the global `setTimeout` available in both runtimes. Hand-rolled so this
@@ -271,8 +272,16 @@ async function loadNodeWebAudioContextConstructor(
 ): Promise<NodeWebAudioContextConstructor | undefined> {
   try {
     throwIfAborted(signal);
-    const imported = (await import('node-web-audio-api')) as NodeWebAudioModule;
+    // In a SEA binary the bare-specifier import always fails; the helper retries from a `node_modules`
+    // directory next to the executable (or the working directory) before giving up.
+    const imported = await loadOptionalNodeModule<NodeWebAudioModule>(
+      'node-web-audio-api',
+      () => import('node-web-audio-api') as Promise<NodeWebAudioModule>,
+    );
     throwIfAborted(signal);
+    if (!imported) {
+      return undefined;
+    }
     const candidate = imported.AudioContext ?? imported.default?.AudioContext ?? imported.default;
     if (typeof candidate !== 'function') {
       return undefined;

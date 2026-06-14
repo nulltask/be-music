@@ -7,6 +7,7 @@ import {
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
   sortEvents,
+  usesMonophonicWavPlayback,
 } from '@be-music/chart';
 // Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
 // engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
@@ -21,7 +22,7 @@ const basename = (path: string): string => {
   return lastSep === -1 ? trimmed : trimmed.slice(lastSep + 1);
 };
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-import { floatToInt16, throwIfAborted } from '@be-music/utils/core';
+import { findFirstIndexNumberAtOrAfter, floatToInt16, throwIfAborted } from '@be-music/utils/core';
 import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import {
   type BeMusicEvent,
@@ -75,7 +76,7 @@ import {
   type JudgeKind,
 } from './scoring.ts';
 import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
-import { resolveBmsJudgeWindowsMsForPercent, resolveJudgeWindowsMs } from './judge-window.ts';
+import { resolveBmsJudgeWindowsMsForExRankValue, resolveJudgeWindowsMs } from './judge-window.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createBpmTimeline,
@@ -161,6 +162,12 @@ export interface PlayerOptions {
   bgmVolume?: number;
   playVolume?: number;
   audioBaseDir?: string;
+  /**
+   * Debug aid — synthesizes a short sine tone for `#WAVxx` references whose file is missing or fails to decode.
+   * The spec-compliant default is silence (LR2 / beatoraja play nothing for a broken keysound reference); enable
+   * this only in test rigs / chart debugging where hearing that a trigger fired matters.
+   */
+  missingSampleToneSeconds?: number;
   audioTailSeconds?: number;
   audioOffsetMs?: number;
   audioHeadPaddingMs?: number;
@@ -492,6 +499,12 @@ const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
 const RUNTIME_AUDIO_SAMPLE_RATE = 44_100;
 const REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS = 1e-6;
+/**
+ * LR2 empty-POOR (空POOR) early window — a phantom press only charges while a note on the lane lies within the next
+ * second; presses after a note never charge (lr2oraja `JudgeProperty` LR2 miss window `{0, 1000000}`µs, fixed
+ * regardless of rank / EXRANK).
+ */
+const LR2_EMPTY_POOR_EARLY_WINDOW_SECONDS = 1;
 const DEFAULT_COMPRESSOR_THRESHOLD_DB = -12;
 const DEFAULT_COMPRESSOR_RATIO = 2.5;
 const DEFAULT_COMPRESSOR_ATTACK_MS = 8;
@@ -856,19 +869,32 @@ function resolveLandmineExplosionEvent(
 }
 
 function resolveLandmineGaugeEffect(
-  landmineEvent: Pick<BeMusicEvent, 'value'>,
+  landmineEvent: Pick<BeMusicEvent, 'value' | 'bmson'>,
   base: 36 | 62 = 36,
 ): {
   objectValue: string;
   damage: number;
   gaugeDelta: number;
 } {
-  // Mine damage encodes the value in base-36 regardless of the chart's `#BASE` setting (the damage formula `value/2` is
-  // a BMS-spec constant, not an indexed-resource lookup), so the ID is normalized under the chart's base only to keep
-  // the returned `objectValue` in sync with the rest of the resource-key reporting. Mine charts that opt into base-62
-  // and use lowercase mine values will surface them verbatim here; the BASE36-pattern guard below still controls
-  // whether the value is interpreted numerically.
+  // Mine damage encodes the value in base-36 regardless of the chart's `#BASE` setting (the damage encoding is a
+  // chart-format constant, not an indexed-resource lookup), so the ID is normalized under the chart's base only to
+  // keep the returned `objectValue` in sync with the rest of the resource-key reporting. LR2 and beatoraja both
+  // interpret the value DIRECTLY as the gauge-damage percentage (losak's LR2 mine writeup; jbms-parser passes the raw
+  // base-36 value into `MineNote`) — the nanasi-era `value / 2` rule in hitkey's memo is a different lineage and is
+  // NOT what LR2 does. `ZZ` (= 1295) therefore wipes any gauge: survival gauges die instantly, GROOVE / EASY hit
+  // their 2 % floor.
   const objectValue = normalizeObjectKey(landmineEvent.value, base);
+  // bmson `key_channels[].notes[].damage` is an explicit per-mine gauge percentage; when present it wins over the BMS
+  // `value / 2` rule because the event value there is the WAV slot, not a damage encoding. `damage: 0` is a valid
+  // authored value (a no-damage decoration mine), so the guard checks finiteness rather than truthiness.
+  const bmsonDamage = landmineEvent.bmson?.damage;
+  if (typeof bmsonDamage === 'number' && Number.isFinite(bmsonDamage) && bmsonDamage >= 0) {
+    return {
+      objectValue,
+      damage: bmsonDamage,
+      gaugeDelta: -bmsonDamage,
+    };
+  }
   if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return {
       objectValue,
@@ -876,7 +902,7 @@ function resolveLandmineGaugeEffect(
       gaugeDelta: -DEFAULT_LANDMINE_GAUGE_DAMAGE,
     };
   }
-  const parsedDamage = Number.parseInt(objectValue, 36) / 2;
+  const parsedDamage = Number.parseInt(objectValue, 36);
   if (!Number.isFinite(parsedDamage) || parsedDamage <= 0) {
     return {
       objectValue,
@@ -1305,13 +1331,13 @@ function createNoTuiPlaybackEventTracer(params: {
     .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
   const judgeRankEvents = collectDynamicBmsJudgeRankChanges(json, resolver)
     .map((change) => {
-      const badWindow = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, judgeWindowMs).bad;
+      const badWindow = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, judgeWindowMs).bad;
       return createScheduledPlaybackEvent(
         change.seconds,
         nextOrder++,
         createRuntimeEventLine('judge-rank-change', [
           ['time', formatSeconds(change.seconds)],
-          ['rank', formatLoggedNumericValue(change.rankPercent)],
+          ['rank', formatLoggedNumericValue(change.exRankValue)],
           ['bad', `${formatLoggedNumericValue(badWindow)}ms`],
         ]),
       );
@@ -1647,7 +1673,8 @@ export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomP
 
 interface DynamicBmsJudgeRankChange {
   seconds: number;
-  rankPercent: number;
+  /** Raw `#EXRANKxx` value (`RANK 2 = 100` unit) — conversion to judge windows is owned by `judge-window.ts`. */
+  exRankValue: number;
 }
 
 interface TimedAudioVolumeEvent {
@@ -1675,7 +1702,7 @@ function collectDynamicBmsJudgeRankChanges(
     }
     changes.push({
       seconds: resolver.eventToSeconds(event),
-      rankPercent: parsed,
+      exRankValue: parsed,
     });
   }
   return changes;
@@ -2336,7 +2363,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
   for (const change of dynamicJudgeRankChanges) {
-    const dynamicBadWindowMs = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, options.judgeWindowMs).bad;
+    const dynamicBadWindowMs = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs).bad;
     if (dynamicBadWindowMs > maxBadWindowMs) {
       maxBadWindowMs = dynamicBadWindowMs;
     }
@@ -2565,6 +2592,32 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const autoScratchNotes = autoScratchEnabled
     ? scorableNotes.filter((note) => scratchPlayableChannels.has(note.channel))
     : [];
+  // LR2 empty-POOR reference times — a phantom press registers as 空POOR only while a note on that lane lies within
+  // the next second (lr2oraja `JudgeProperty` LR2 miss window `{0, 1000000}`µs, early side only). Per-channel sorted
+  // note times let the press handler binary-search the next upcoming note; judged notes stay valid references (LR2's
+  // `MissCondition.ALWAYS` keeps mashing in front of an already-judged note producing 空POORs).
+  const scorableNoteSecondsByChannel = new Map<string, number[]>();
+  for (const note of scorableNotes) {
+    const noteTimes = scorableNoteSecondsByChannel.get(note.channel);
+    if (noteTimes) {
+      noteTimes.push(note.seconds);
+    } else {
+      scorableNoteSecondsByChannel.set(note.channel, [note.seconds]);
+    }
+  }
+  const hasEmptyPoorReferenceNote = (channels: ReadonlySet<string>, nowSec: number): boolean => {
+    for (const channel of channels) {
+      const noteTimes = scorableNoteSecondsByChannel.get(channel);
+      if (!noteTimes) {
+        continue;
+      }
+      const index = findFirstIndexNumberAtOrAfter(noteTimes, nowSec);
+      if (index < noteTimes.length && noteTimes[index]! - nowSec <= LR2_EMPTY_POOR_EARLY_WINDOW_SECONDS) {
+        return true;
+      }
+    }
+    return false;
+  };
   let autoScratchCursor = 0;
   let scorableMissCursor = 0;
   let landmineExpireCursor = 0;
@@ -2603,18 +2656,83 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     return true;
   };
 
-  const markExpiredLandmines = (referenceSeconds: number): void => {
+  const lastLanePressMsByChannel = new Map<string, number>();
+  const isLandmineChannelHeld = (channel: string, nowMs: number): boolean => {
+    if (activeKittyPressedChannels.has(channel)) {
+      return true;
+    }
+    // Non-kitty input carries no release events, so "held" is approximated with the same short grace window the LN
+    // hold logic uses for terminal key repeat.
+    const lastPressMs = lastLanePressMsByChannel.get(channel);
+    return lastPressMs !== undefined && nowMs - lastPressMs <= LONG_NOTE_REPEAT_HOLD_GRACE_MS;
+  };
+
+  const detonateLandmine = (landmine: TimedLandmineNote, nowSec: number): void => {
+    if (!markLandmineJudged(landmine)) {
+      return;
+    }
+    const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, idBase);
+    const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, wavResources);
+    if (landmineExplosionEvent) {
+      if (!uiEnabled) {
+        writePlayableSampleTriggerEventLog(
+          writeOutput,
+          landmineExplosionEvent,
+          nowSec,
+          wavResources,
+          'mine-hit',
+          landmine.channel,
+          idBase,
+        );
+      }
+      audioSession?.triggerEvent?.(landmineExplosionEvent);
+    }
+    // LR2 — a mine hit drains the gauge and plays the explosion sample, nothing else: no verdict, no combo break, no
+    // judge-counter change (beatoraja's JudgeManager likewise only calls `gauge.addValue`). The raw-delta path also
+    // bypasses the HARD guts softening and #TOTAL damage multiplier, matching `GrooveGauge.addValue`.
+    applyLoggedGaugeDelta(nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit');
+    if (!uiEnabled) {
+      writeRuntimeEventLog(writeOutput, 'mine-hit', [
+        ['time', formatSeconds(nowSec)],
+        ['channel', landmine.channel],
+        ['value', landmineGaugeEffect.objectValue],
+        ['damage', landmineGaugeEffect.damage],
+      ]);
+    }
+  };
+
+  /**
+   * LR2 mine model (losak's LR2 writeup, confirmed by otlovers): a mine explodes while its lane's key is ON and the
+   * mine sits within the GOOD window of the judge line — covering both "press while a mine is in range" and "hold
+   * through a passing mine". Mines that leave the window with the key up are retired silently (passing an
+   * un-pressed mine is harmless). Runs on every frame tick and on every press dispatch.
+   */
+  const processLandminePassage = (nowSec: number, nowMs: number): void => {
+    const goodWindowSeconds = judgeWindows.good / 1000;
     while (landmineExpireCursor < landmineNotes.length) {
       const landmine = landmineNotes[landmineExpireCursor]!;
       if (landmine.judged) {
         landmineExpireCursor += 1;
         continue;
       }
-      if (referenceSeconds - landmine.seconds <= badWindowSeconds) {
+      if (nowSec - landmine.seconds <= goodWindowSeconds) {
         break;
       }
       markLandmineJudged(landmine);
       landmineExpireCursor += 1;
+    }
+    for (let index = landmineExpireCursor; index < landmineNotes.length; index += 1) {
+      const landmine = landmineNotes[index]!;
+      if (landmine.seconds - nowSec > goodWindowSeconds) {
+        break;
+      }
+      if (landmine.judged) {
+        continue;
+      }
+      if (!isLandmineChannelHeld(landmine.channel, nowMs)) {
+        continue;
+      }
+      detonateLandmine(landmine, nowSec);
     }
   };
 
@@ -2640,7 +2758,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (change.seconds > safeReferenceSeconds) {
         break;
       }
-      judgeWindows = resolveBmsJudgeWindowsMsForPercent(change.rankPercent, options.judgeWindowMs);
+      judgeWindows = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs);
       badWindowMs = judgeWindows.bad;
       badWindowSeconds = badWindowMs / 1000;
       dynamicJudgeRankCursor += 1;
@@ -2973,76 +3091,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       refreshedHold = true;
     }
 
-    const candidate = findBestCandidate(scorableNotes, candidateChannels, nowSec, badWindowSeconds);
-    const landmineCandidate = findBestCandidate(landmineNotes, candidateChannels, nowSec, badWindowSeconds);
-    const candidateDelta = candidate ? Math.abs(candidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
-    const landmineDelta = landmineCandidate ? Math.abs(landmineCandidate.seconds - nowSec) : Number.POSITIVE_INFINITY;
-
-    if (landmineCandidate && landmineDelta <= candidateDelta) {
-      if (!markLandmineJudged(landmineCandidate)) {
-        return;
-      }
-      const landmineGaugeEffect = resolveLandmineGaugeEffect(landmineCandidate.event, idBase);
-      const landmineExplosionEvent = resolveLandmineExplosionEvent(landmineCandidate.event, wavResources);
-      // **Active-LN guard** — mirrors upstream `JudgeManager.java:253-259`. When a mine note is
-      // passed while the same lane's LN is currently being held, the engine treats it as a
-      // SILENT gauge drain: the damage is applied, the keysound plays at key volume, but NO
-      // verdict / combo reset is emitted. This preserves HCN chart authoring intent where
-      // the artist deliberately routes a mine column through an active hold — penalizing the
-      // player only via gauge pressure, not by breaking their combo. The previous TS impl
-      // emitted a full BAD which both reset the combo AND cost an exScore slot (since `total`
-      // doesn't shrink), making any HCN with mines-during-hold practically unclear-able.
-      const heldLongNote = activeLongNotesByChannel.get(landmineCandidate.channel);
-      const silentDuringHold = heldLongNote !== undefined;
-      if (landmineExplosionEvent) {
-        if (!uiEnabled) {
-          // The sample trigger log uses the same `'mine-hit'` kind for both branches —
-          // it's the audio-trigger record, and the keysound plays at the same volume in
-          // both cases. The verdict-vs-silent distinction is logged via the `mine-hit`
-          // / `mine-hit-during-hold` runtime-event-log entry below.
-          writePlayableSampleTriggerEventLog(
-            writeOutput,
-            landmineExplosionEvent,
-            nowSec,
-            wavResources,
-            'mine-hit',
-            landmineCandidate.channel,
-            idBase,
-          );
-        }
-        audioSession?.triggerEvent?.(landmineExplosionEvent);
-      }
-      if (silentDuringHold) {
-        // Gauge damage only — no verdict / combo / score change. Matches upstream's
-        // `gauge.addValue(-mnote.getDamage())` without an accompanying `updateMicro` call.
-        applyLoggedGaugeDelta(nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit-during-hold');
-        if (!uiEnabled) {
-          writeRuntimeEventLog(writeOutput, 'mine-hit-during-hold', [
-            ['time', formatSeconds(nowSec)],
-            ['channel', landmineCandidate.channel],
-            ['value', landmineGaugeEffect.objectValue],
-            ['damage', landmineGaugeEffect.damage],
-            ['deltaMs', Math.round(landmineDelta * 1000)],
-          ]);
-        }
-        return;
-      }
-      applyJudgeToSummary(summary, 'BAD', scoreTracker);
-      applyLoggedGaugeDelta(nowSec, landmineGaugeEffect.gaugeDelta, 'mine-hit');
-      setLoggedCombo(nowSec, 0, 'mine-hit', 'BAD', landmineCandidate.channel);
-      if (!uiEnabled) {
-        writeRuntimeEventLog(writeOutput, 'mine-hit', [
-          ['time', formatSeconds(nowSec)],
-          ['channel', landmineCandidate.channel],
-          ['value', landmineGaugeEffect.objectValue],
-          ['damage', landmineGaugeEffect.damage],
-          ['deltaMs', Math.round(landmineDelta * 1000)],
-        ]);
-      } else {
-        activeStateSignals?.publishJudgeCombo('BAD', combo, landmineCandidate.channel);
-      }
-      return;
+    // LR2 mine model — the press itself counts as "key ON": record the press instant for the non-kitty hold
+    // approximation, then let the shared passage processor detonate any mine currently inside the GOOD window on
+    // these lanes. Detonation never consumes the press: the regular note judgment below still runs, so a mine close
+    // to a real note no longer swallows the player's input.
+    for (const channel of candidateChannels) {
+      lastLanePressMsByChannel.set(channel, nowMs);
     }
+    processLandminePassage(nowSec, nowMs);
+
+    const candidate = findBestCandidate(scorableNotes, candidateChannels, nowSec, badWindowSeconds);
 
     if (!candidate) {
       if (refreshedHold) {
@@ -3072,10 +3130,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press with no candidate and no benign explanation. Apply the gauge
-      // delta (GROOVE / HARD -2, EASY -1, DEATH -100 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR
-      // BGA, but DO NOT break combo or increment `summary.poor`. Real LR2 behavior: NORMAL / EASY make this nearly
-      // harmless; HARD / DEATH actually drain.
+      if (!hasEmptyPoorReferenceNote(candidateChannels, nowSec)) {
+        // LR2 — a press with no note on the lane within the next second is harmless: the keysound (fallback above)
+        // plays and nothing else happens. 空POOR only ever fires on the EARLY side of a note; presses after a note
+        // never charge.
+        return;
+      }
+      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press in front of an upcoming note (within 1 s,
+      // outside its judgable window). Apply the gauge delta (GROOVE -2, HARD -2 × TOTAL modifier, EASY -1.6,
+      // DEATH -10 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR BGA, but DO NOT break combo or
+      // increment `summary.poor`. Repeatable per note (LR2's MissCondition.ALWAYS).
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });
       if (!uiEnabled) {
@@ -3521,7 +3585,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       applyExpiredScorableJudgements(nowSec);
       publishUiFrame(nowSec, nowBeat);
 
-      markExpiredLandmines(nowSec);
+      processLandminePassage(nowSec, nowMs);
       markExpiredInvisibleNotes(nowSec);
 
       const safeNowSeconds = Math.max(0, nowSec) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
@@ -3871,7 +3935,7 @@ async function createAudioSessionIfEnabled(
       if (offsetFrames >= endPosition) {
         return;
       }
-      if (json.sourceFormat === 'bms') {
+      if (usesMonophonicWavPlayback(json)) {
         removeActiveVoicesInPlace(activeVoices, (voice) => voice.sampleKey === normalized);
       }
       if (playback?.sliceId && activeVoices.some((voice) => voice.sliceId === playback.sliceId)) {
@@ -3987,7 +4051,7 @@ async function createDebugActiveAudioEstimator(
     .filter((window) => window.endSeconds > window.startSeconds)
     .sort((left, right) => left.startSeconds - right.startSeconds);
 
-  if (json.sourceFormat === 'bms') {
+  if (usesMonophonicWavPlayback(json)) {
     const latestBySampleKey = new Map<string, number>();
     for (let index = 0; index < windows.length; index += 1) {
       const window = windows[index]!;
@@ -4453,7 +4517,12 @@ async function buildRuntimeSampleMap(
       baseDir: options.audioBaseDir ?? process.cwd(),
       sampleRate,
       gain: chartWavGain,
-      fallbackToneSeconds: 0.06,
+      fallbackToneSeconds:
+        typeof options.missingSampleToneSeconds === 'number' &&
+        Number.isFinite(options.missingSampleToneSeconds) &&
+        options.missingSampleToneSeconds > 0
+          ? options.missingSampleToneSeconds
+          : 0,
       signal,
       base: idBase,
     });

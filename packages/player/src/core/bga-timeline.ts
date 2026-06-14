@@ -7,6 +7,13 @@ import {
   type BeMusicJson,
 } from '@be-music/json';
 
+/**
+ * How long a POOR / miss BGA layer stays visible after a miss before the normal base/layer composite returns.
+ * Shared by every renderer (TUI compositor, web LR2 scene) so the miss-layer feel is identical across runtimes —
+ * change it here, not per frontend.
+ */
+export const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 2;
+
 export interface BgaCue {
   seconds: number;
   key?: string;

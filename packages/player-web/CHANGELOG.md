@@ -1,5 +1,33 @@
 # @be-music/player-web
 
+## 0.6.2
+
+### Patch Changes
+
+- f07ff77: Match the LR2 groove gauge bar rendering: remove the peak-hold / afterimage bead (LR2 has none — the bar tracks only the live value) and suppress the green clear-zone split for survival gauges (HARD / DEATH render the whole bar red in LR2, since they have no 80% clear border). GROOVE / EASY keep the green ≥80% zone. The per-bead cell selection is now the pure, tested `resolveGrooveGaugeBeads` helper.
+- 99324e8: `#xxx97` / `#xxx98` dynamic volume changes in the WebAudio session now apply only to voices triggered after the event, matching the documented semantics and the Node engine. Previously the web runtime wrote the new gain onto the shared bus mixers, retroactively changing the volume of already-playing voices.
+- Updated dependencies [b2c4f9b]
+- Updated dependencies [b9922cf]
+- Updated dependencies [4d5a89e]
+- Updated dependencies [254e213]
+- Updated dependencies [7bbf052]
+- Updated dependencies [811cdfc]
+- Updated dependencies [d0bb321]
+- Updated dependencies [ebfdba7]
+- Updated dependencies [ca1012c]
+- Updated dependencies [6ce9173]
+- Updated dependencies [7802f98]
+- Updated dependencies [cdc42a1]
+- Updated dependencies [ca1012c]
+  - @be-music/parser@0.2.3
+  - @be-music/json@0.2.2
+  - @be-music/player@0.5.0
+  - @be-music/audio-renderer@0.2.3
+  - @be-music/utils@0.3.0
+  - @be-music/chart@0.3.2
+  - @be-music/lr2-skin@0.1.4
+  - @be-music/beatoraja-skin@0.1.2
+
 ## 0.6.1
 
 ### Patch Changes

@@ -9,6 +9,7 @@ import type { PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/en
 import { PlayerInterruptedError } from '@be-music/player/core/engine';
 import { createNodeInputRuntime, type NodeInputRuntime } from './node-input-runtime.ts';
 import { createNodeUiRuntime, type NodeUiRuntime } from './node-ui-runtime.ts';
+import { createSeaWorker, isSeaRuntime } from './sea-worker.ts';
 import type {
   NodeGameplayWorkerInboundMessage,
   NodeGameplayWorkerInitData,
@@ -36,11 +37,13 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
     throw createAbortError();
   }
 
-  const worker = new Worker(resolveNodeGameplayWorkerUrl(), {
-    workerData: createWorkerInitData(options),
-    execArgv: resolveNodeGameplayWorkerExecArgv(),
-    env: resolveNodeGameplayWorkerEnv(),
-  });
+  const worker = isSeaRuntime()
+    ? createSeaWorker('node-gameplay-worker', createWorkerInitData(options))
+    : new Worker(resolveNodeGameplayWorkerUrl(), {
+        workerData: createWorkerInitData(options),
+        execArgv: resolveNodeGameplayWorkerExecArgv(),
+        env: resolveNodeGameplayWorkerEnv(),
+      });
   const writeOutput = options.writeOutput ?? ((text: string) => process.stdout.write(text));
 
   let inputRuntime: NodeInputRuntime | undefined;

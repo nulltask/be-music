@@ -131,12 +131,16 @@ bmson's `l`, FREE ZONE (`17` / `27`), BMS's `#LNOBJ`, and BMS legacy LN (`#mmm51
 The terminal object of `#LNOBJ` itself is not left in the performance note string.
 Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
 
-### Landmine
+### Landmines
 
-The mine channel is mapped to the corresponding playable lane and stored as a separate array.
-Landmines are not included in `summary.total`, but when manually input, they may generate `BAD` with priority over normal notes.
-If `#WAV00` is defined, the player uses it as the explosion sound when a landmine is hit manually.
+Mines follow the LR2 detonation model (losak's LR2 mine writeup, confirmed against beatoraja's `JudgeManager`).
 
+- A mine explodes while "the lane's key is ON and the mine is within the `GOOD` window of the judge line": pressing with a mine in range detonates it, and **holding through a passing mine detonates it too**. A mine passing with the key up is harmless.
+- An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead.
+- Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
+- `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
+- kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
 ### Invisible Note
 
 Invisible notes are kept separate from the normal playing target.
@@ -198,27 +202,20 @@ BMS determines the judgment range at the start of playback using the following p
 `100` is the standard value and has the same width as `NORMAL`.
 The player interprets `#DEFEXRANK` with `Number.parseFloat()` and only accepts values ​​​​that are finite and greater than `0`.
 
-`#RANK` is treated as a beatoraja-compatible scaling table `[25, 50, 75, 100, 125]`.
+`#RANK` maps onto the internal judgerank percent axis `[25, 50, 75, 100, 75]` (`VERY HARD` = 25 / `HARD` = 50 / `NORMAL` = 75 / `EASY` = 100 / `VERY EASY` treated as `NORMAL`).
 `metadata.rank` is interpreted by rounding down to an integer, and values ​​​​outside the range are invalidated and fallback to the default value.
-
-- `#RANK 0`: `25%` (`VERY HARD`)
-- `#RANK 1`: `50%` (`HARD`)
-- `#RANK 2`: `75%` (`NORMAL`)
-- `#RANK 3`: `100%` (`EASY`)
-- `#RANK 4`: `125%` (`VERY EASY`)
 
 ### BMS conversion formula
 
-The actual decision width of BMS is calculated based on `NORMAL = 75%`.
-For example, `#DEFEXRANK 120` is ``1.2` times the standard judgment width'' and is treated as `PGREAT=20.004ms`, `GREAT=39.996ms`, `GOOD=140.004ms`, `BAD=300ms`.
-
-The same expression handles the value resolved from `#RANK`.
-For example, `#RANK 4` is `125 / 75` times, so `VERY EASY` is about `1.666...` times wider than `NORMAL`.
+Judgment widths are derived by piecewise-linear interpolation of the measured table above over the judgerank percent anchors (25 / 50 / 75 / 100) — the same model as lr2oraja's `JudgeWindowRule.LR2`.
+`#DEFEXRANK n` converts to the percent axis as `n × 75 / 100`. For example `#DEFEXRANK 120` is percent `90` and yields `PGREAT=19.8ms`, `GREAT=52ms`, `GOOD=112ms`, `BAD=200ms` (fixed).
+Values beyond `EASY` (percent `100`) extrapolate along the final segment; only `PGREAT` / `GREAT` / `GOOD` scale, and no width ever exceeds the fixed `BAD` gate of `±200ms`.
 
 ### BMS dynamic judgment width change
 
 In BMS, you can use the `#xxxA0` channel and `#EXRANKxx` to change the judgment range during the performance.
 The player resolves the event value of the `A0` channel as a key in `#EXRANKxx`, reads the value with `Number.parseFloat()`, and uses it only if it is finite and greater than `0`.
+The adopted value shares `#DEFEXRANK`'s unit — a percentage with `RANK 2 = 100` as the baseline — so `#EXRANKxx 100` restores exactly the `NORMAL` judgment width.
 
 If `#EXRANKxx` is undefined, an empty string, a non-number, or less than or equal to `0`, the event does not change the judgment width.
 If there are multiple `A0` events, they are applied in chronological order, and the value reached later becomes the subsequent judgment width.
@@ -242,8 +239,8 @@ bmson determines the judgment width using the following priority order.
 2. `metadata.rank`
 3. Default value `100`
 
-The standard value for bmson is `100%`.
-Therefore, `judgeRank=100` is treated as the IIDX standard judgment width, `50` is treated as half, and `150` is treated as `1.5` times.
+bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
+Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
 
 In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
 
@@ -313,12 +310,15 @@ When `POOR` occurs, do the following:
 
 If there is an input but no undecided notes inside the `BAD` window for that lane set, fire an LR2-compatible "empty POOR" (空POOR).
 
+- The trigger condition is that **a note on the same lane lies within the next 1 second** of the press (lr2oraja's LR2 miss window `{0, 1000000}`µs — fixed, independent of rank / EXRANK). Empty POORs never fire after a note passes (late side), and a press on a lane with no note within a second is harmless: only the keysound plays.
+- It fires **repeatedly** for the same note while mashing in front of it (LR2's `MissCondition.ALWAYS`, including in front of already-judged notes).
+
 Empty POOR mirrors LR2's phantom-press behaviour:
 
 - Do NOT update `summary` judge counters (`perfect` / `great` / `good` / `bad` / `poor`). LR2 only counts the "missed POOR" branch (NOWJUDGE index 1) into the POOR tally; the "empty POOR" branch (index 0) is excluded.
 - Do NOT change EX-SCORE / IIDX score.
 - Do NOT cut the combo.
-- Apply `EMPTY_POOR` to the groove gauge — the delta lives in [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) (`applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE / HARD `-2`, EASY `-1`, DEATH `-100` (instant 0%). Nearly harmless on NORMAL / EASY; meaningful drain on HARD / DEATH.
+- Apply `EMPTY_POOR` to the groove gauge — the delta lives in [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) (`applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on NORMAL / EASY; meaningful drain on HARD / DEATH.
 - Trigger POOR BGA (`trigger-poor-bga`).
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
@@ -422,6 +422,13 @@ The following deltas describe the default `GROOVE` gauge. `HARD`, `DEATH`, and `
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
+The `HARD` / `EASY` / `DEATH` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`).
+
+- `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by the `#TOTAL` table (`×1.0` at `TOTAL ≥ 240` up to `×10` below `120`) and softened by `×0.6` while the gauge is under `30%`.
+- `EASY`: gains are `1.2×` GROOVE, damage is `0.8×` GROOVE (`BAD -3.2` / `POOR -4.8` / `empty POOR -1.6`). The clear threshold stays at `80%`, same as GROOVE.
+- `DEATH` (LR2 HAZARD equivalent): `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`; `BAD` / missed `POOR` are `-100` (instant death); `empty POOR -10`.
+- `HARD` / `DEATH` collapse to `0%` (FAILED, no recovery) the moment they drop below `2%`. Raw deltas such as mine damage bypass the guts softening and the TOTAL multiplier.
+
 ## Long Note
 
 ### How to count NOTES
@@ -433,7 +440,8 @@ Long notes derived from `#mmm51-69` are also counted as one starting note.
 ### `#LNMODE`
 
 If `#LNMODE` of BMS is not specified, it is treated as `1`.
-bmson and FREE ZONE are not subject to `#LNMODE` and are treated as notes with a terminal.
+bmson resolves the mode via the beatoraja extensions `info.ln_type` and the per-note `t` (1: LN / 2: CN / 3: HCN, `t` takes precedence over `ln_type`); when neither is specified the LR2-aligned default `1` (LN) is used.
+FREE ZONE is not subject to `#LNMODE` and is treated as a note with a terminal.
 
 ### Manual Play
 
@@ -616,7 +624,7 @@ A playback progress indicator is displayed outside the lane, and the line closes
 
 Even on judged notes, drawing will remain until the judge line is crossed or the `visibleUntilBeat` expires.
 A long note is drawn as a single note with a body and tail lane, and the highlight continues while being held.
-The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
+The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the first keyframe's value holds flat (matching the Bemuse reference implementation). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
 
 ### Non-TUI output
 

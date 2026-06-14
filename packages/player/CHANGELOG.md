@@ -1,5 +1,39 @@
 # @be-music/player
 
+## 0.5.0
+
+### Minor Changes
+
+- 7bbf052: HARD / EASY / DEATH gauges now follow the LR2 tables (beatoraja GaugeProperty HARD_LR2 / EASY_LR2 / HAZARD_LR2): HARD recovers +0.1/+0.1/+0.05 with damage scaled by the #TOTAL multiplier table and softened ×0.6 under 30%; EASY damages -3.2/-4.8/-1.6 and clears at 80%; DEATH drains -10 on an empty POOR instead of dying and recovers +0.15/+0.06. Survival gauges collapse to 0% (FAILED, no recovery) below 2%, and raw deltas such as mine damage bypass the guts/TOTAL modifiers.
+- 811cdfc: Judge windows are now the measured LR2 tables instead of IIDX-baseline linear scaling: #RANK 0/1/2/3 map to ±8/±15/±18/±21ms PGREAT (±24/±30/±40/±60 GREAT, ±40/±60/±100/±120 GOOD), #RANK 4 is treated as NORMAL, the BAD gate is fixed at ±200ms for every rank, and #DEFEXRANK / #EXRANKxx / bmson judge_rank interpolate piecewise-linearly between the rank anchors (lr2oraja JudgeWindowRule.LR2 model) without ever exceeding the BAD gate.
+- d0bb321: Mines now follow the LR2 detonation model: a mine explodes while its lane's key is ON and the mine is within the GOOD window of the judge line — covering both presses with a mine in range and holding through a passing mine; a mine passing with the key up is harmless. Explosions only drain the gauge (raw base36 value as the damage percent, matching LR2 / beatoraja, instead of the nanasi value/2 rule) and play #WAV00 — no BAD verdict, no combo break, and mines no longer swallow presses aimed at nearby notes. Mine damage bypasses the HARD guts softening and #TOTAL multiplier; ZZ instantly fails survival gauges.
+
+### Patch Changes
+
+- b9922cf: Support the beatoraja bmson long-note type extensions: `info.ln_type` and per-note `t` (1: LN, 2: CN, 3: HCN) are preserved in the IR, round-trip through JSON and bmson output, and drive the player's long-note mode (per-note `t` wins over `info.ln_type`). Charts that specify neither now default to LN (no tail release judgment, matching the LR2-aligned BMS default) instead of always being treated as CN.
+- 254e213: Empty POORs (空 POOR) now follow the LR2 trigger condition: a phantom press charges only when a note on the same lane lies within the next 1 second (early side only, fixed window). Presses after a note or on lanes with no upcoming note are harmless keysound presses — previously every phantom press drained the gauge regardless of note proximity.
+- ebfdba7: Bump the `node-web-audio-api` runtime dependency from 1.0.9 to 2.0.0 (semver-major). The Node audio sink now runs on the 2.x WebAudio backend with no change to the player's public API.
+- ca1012c: Load `node-web-audio-api` through the SEA-aware optional-module loader. In a single executable application the bare-specifier import always fails, which permanently disabled audio playback; the player can now pick the module up from a `node_modules` directory next to the executable (or the working directory) before falling back to silent playback.
+- 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in: pass `fallbackToneSeconds` to the audio-renderer APIs or `missingSampleToneSeconds` to the player engine when a debugging tone is wanted.
+- 7802f98: Fix four spec-compliance deviations found by the BMS spec audit:
+
+  - HARD / DEATH gauges now report FAILED when they bottom out at 0 % (previously `isGrooveGaugeCleared` treated 0 % as cleared).
+  - Dynamic `#EXRANKxx` (channel `A0`) values now go through the same `RANK 2 = 100` unit conversion as `#DEFEXRANK`, so `#EXRANK 100` restores exactly the NORMAL judgment width instead of widening it by 4/3.
+  - bmson `key_channels[].notes[].damage` is now applied as the mine's gauge damage, taking precedence over the BMS `value / 2` rule.
+  - `#SPEEDxx` now holds the first keyframe's value before its beat (Bemuse reference semantics) instead of ramping linearly from 1.0.
+
+- Updated dependencies [b2c4f9b]
+- Updated dependencies [b9922cf]
+- Updated dependencies [4d5a89e]
+- Updated dependencies [6ce9173]
+- Updated dependencies [cdc42a1]
+- Updated dependencies [ca1012c]
+  - @be-music/parser@0.2.3
+  - @be-music/json@0.2.2
+  - @be-music/audio-renderer@0.2.3
+  - @be-music/utils@0.3.0
+  - @be-music/chart@0.3.2
+
 ## 0.4.3
 
 ### Patch Changes

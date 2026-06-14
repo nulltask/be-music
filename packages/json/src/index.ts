@@ -45,6 +45,11 @@ export interface BmsonEventExtensions {
   l?: number;
   c?: boolean;
   /**
+   * Per-note long-note type (beatoraja bmson extension `notes[].t`): `1` = LN, `2` = CN, `3` = HCN. Only meaningful
+   * on long notes (`l > 0`) and takes precedence over the chart-level `info.ln_type`.
+   */
+  t?: number;
+  /**
    * Per-mine gauge damage in 0..100, sourced from a bmson `key_channels[].notes[].damage` entry. Only set on mine
    * events emitted from `key_channels`; absent on regular `sound_channels`-derived note events. Consumers that don't
    * read this field fall through to the BMS-side default (`<value>/2` in base-36, floor 4).
@@ -78,6 +83,11 @@ export interface BmsonInfoExtensions {
   modeHint?: string;
   judgeRank?: number;
   total?: number;
+  /**
+   * Chart-level long-note type (beatoraja bmson extension `info.ln_type`): `1` = LN, `2` = CN, `3` = HCN. A per-note
+   * `t` overrides this; unspecified charts follow the player's default LN mode.
+   */
+  lnType?: number;
   backImage?: string;
   eyecatchImage?: string;
   bannerImage?: string;
@@ -116,6 +126,8 @@ export interface BmsonSoundNoteEntry {
   y: number;
   l?: number;
   c?: boolean;
+  /** beatoraja bmson extension — per-note long-note type (`1` = LN, `2` = CN, `3` = HCN) for notes with `l > 0`. */
+  t?: number;
 }
 
 export interface BmsonSoundChannelEntry {
