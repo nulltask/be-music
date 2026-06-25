@@ -45,7 +45,7 @@ jobs:
 
     steps:
       - name: Checkout workflow sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
@@ -110,7 +110,7 @@ jobs:
 
     steps:
       - name: Checkout release target
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.release_target }}
 
@@ -295,7 +295,7 @@ jobs:
 
     steps:
       - name: Checkout workflow sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
