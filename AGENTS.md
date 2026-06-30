@@ -12,6 +12,20 @@
 - Do not prefix pull request titles with `[codex]`.
 - Use plain, descriptive pull request titles.
 
+# Changeset Rules
+
+- Base the unreleased set on the diff from the last release: list candidates with `git log --oneline origin/main..origin/devel`. Skip commits already covered by an existing `.changeset/*.md` and only add entries for the uncovered ones.
+- One changeset per package. Putting several packages in a single markdown makes Changesets duplicate the same note into every package's CHANGELOG. For a commit that spans multiple packages, split it into one changeset per package and write each note from that package's own perspective.
+- Only write entries that are worth landing in a CHANGELOG:
+  - Include: `fix` / `feat` / `perf`, and bumps of public (runtime `dependencies`) packages (e.g. `fflate`, `node-web-audio-api`).
+  - Exclude: `devDependencies` dependabot bumps (e.g. `typescript`, `oxlint`, `wrangler`, `@typescript/native-preview`), tooling-only config changes that do not affect consumers (tsconfig paths, build scripts, bench cases), and WIP / in-progress features.
+- Bump level: new export / new subpath / new public API → `minor`; bug fix / internal refactor / dependency bump → `patch`.
+- Writing style:
+  - Keep each body paragraph on a single unwrapped line.
+  - Put each list item on its own line.
+  - State what changed and why, concisely; lead with the symptom when the change fixes an observable one.
+- Releasing: run `pnpm run release:version` on `devel`, commit the generated `packages/*/package.json` and `CHANGELOG.md` together as `chore: version packages`, then merge the `devel -> main` PR to publish. See README "Package Releases".
+
 # Markdown Localization Rules
 
 - Keep English as the canonical `.md` document and Japanese as the `.ja.md` counterpart, except for `AGENTS.md` and `.changeset/README.md`, which remain English only.
