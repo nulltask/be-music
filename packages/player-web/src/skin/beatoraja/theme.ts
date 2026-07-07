@@ -95,7 +95,7 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
  * If the dropped theme only ships a 24-key skin, the host should fall back to the LR2 theme for gameplay. This
  * matches how `pickLr2PlaySkin` chains through fallbacks for missing variants.
  */
-const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14'] as const satisfies ReadonlyArray<BeatorajaPlayVariant>;
+const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14'] as const;
 export type BeatorajaPlayableVariant = (typeof BEATORAJA_PLAYABLE_VARIANTS)[number];
 
 /**

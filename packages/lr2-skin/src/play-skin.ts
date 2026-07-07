@@ -5,7 +5,7 @@ import { asLoadedBytes, readFilesIntoBytesMap, type Lr2SkinFileEntry } from './f
 import type { Lr2SkinInputFile } from './file-lookup.ts';
 import { loadLr2SkinFromSourceFiles, type Lr2PlayVariant, type Lr2Skin } from './skin.ts';
 
-export const LR2_PLAY_VARIANTS = ['7', '14', '10', '5', '9'] as const satisfies readonly Lr2PlayVariant[];
+export const LR2_PLAY_VARIANTS: readonly Lr2PlayVariant[] = ['7', '14', '10', '5', '9'];
 
 export type Lr2PlaySkinMap = Partial<Record<Lr2PlayVariant, Lr2Skin>>;
 
