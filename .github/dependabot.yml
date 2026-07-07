@@ -1,9 +1,12 @@
 version: 2
 updates:
   - package-ecosystem: "npm"
-    directories:
-      - "/"
-      - "/packages/*"
+    # The root entry covers every pnpm workspace member: Dependabot bumps
+    # packages/*/package.json manifests together with the shared root
+    # pnpm-lock.yaml. Per-package directory entries must not be added back —
+    # they generate manifest-only PRs that leave pnpm-lock.yaml stale and fail
+    # CI with ERR_PNPM_OUTDATED_LOCKFILE.
+    directory: "/"
     schedule:
       interval: "weekly"
     ignore:
