@@ -124,6 +124,6 @@
     "@be-music/parser": "workspace:*",
     "@be-music/utils": "workspace:*",
     "alien-signals": "^3.2.1",
-    "node-web-audio-api": "^2.0.0"
+    "node-web-audio-api": "^2.1.0"
   }
 }
