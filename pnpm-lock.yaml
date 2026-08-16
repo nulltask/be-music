@@ -156,8 +156,8 @@ importers:
         specifier: ^3.2.1
         version: 3.2.1
       node-web-audio-api:
-        specifier: ^2.1.0
-        version: 2.1.0
+        specifier: ^2.2.0
+        version: 2.2.0
 
   packages/player-tui:
     dependencies:
@@ -2847,8 +2847,8 @@ packages:
     resolution: {integrity: sha512-X75ZN8DCLftGM5iKwoYLA3rjnrAEs97MkzvSd4q2746Tgpg8b8XWiBGiBG4ZpgcAqBgtgPHTiAc8ZMCvZuikDw==}
     engines: {node: '>=10'}
 
-  node-web-audio-api@2.1.0:
-    resolution: {integrity: sha512-5aI3ciSs60HlyybHJzPyf8smok8gH9c0Q6n1gjDQGJqcJLafjlPfn78gIkOljVXlS/8l/et3nUQyofsuzf9Tyw==}
+  node-web-audio-api@2.2.0:
+    resolution: {integrity: sha512-qM3dW3Z5HIz+O+++Uiia8x0OSNHcfJGUlexpCTdAkw8JlM17Ru1nV9a94wlxNRXqxT0Lr/ewwEnBXUwGMt24AA==}
     engines: {node: '>= 22'}
 
   object-inspect@1.13.4:
@@ -5657,7 +5657,7 @@ snapshots:
       util: 0.12.5
       vm-browserify: 1.1.2
 
-  node-web-audio-api@2.1.0:
+  node-web-audio-api@2.2.0:
     dependencies:
       caller: 1.1.0
       node-fetch: 3.3.2
