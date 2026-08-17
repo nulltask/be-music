@@ -1,5 +1,11 @@
 # @be-music/lr2-skin
 
+## 0.1.5
+
+### Patch Changes
+
+- Emit declaration-compatible types for the public `LR2_PLAY_VARIANTS` and path-table constants so consumers building under `isolatedDeclarations` no longer fail on the inferred `as const satisfies ...` types.
+
 ## 0.1.4
 
 ### Patch Changes

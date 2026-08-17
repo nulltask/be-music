@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-tui",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Terminal UI and CLI frontend for the be-music player",
   "license": "MIT",
   "bin": {
