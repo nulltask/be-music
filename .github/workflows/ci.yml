@@ -111,8 +111,6 @@ jobs:
       needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
-    outputs:
-      snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -156,12 +154,18 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/head.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      # The snapshot moves between jobs as an artifact, never as a job output. It outgrew both limits a job
+      # output would impose: a single argv/envp string caps at `MAX_ARG_STRLEN` (128 KiB) so the compare job
+      # could neither pass it to `node` nor even start `bash` with it in the environment, and job outputs
+      # themselves cap at 1 MiB. Artifacts have no such ceiling and keep the payload off the process image.
+      - name: Upload head benchmark snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-pr-head-snapshot
+          path: tmp/bench/head.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-pr-base:
     name: Benchmark Base (PR)
@@ -173,7 +177,6 @@ jobs:
     outputs:
       available: ${{ steps.detect-bench.outputs.available == 'true' &&
         steps.run-base-benchmark.outcome == 'success' }}
-      snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -259,12 +262,16 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/base.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload base benchmark snapshot
+        if: steps.detect-bench.outputs.available == 'true' &&
+          steps.run-base-benchmark.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-pr-base-snapshot
+          path: tmp/bench/base.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-pr:
     name: Benchmark (PR)
@@ -309,23 +316,17 @@ jobs:
       # `node: Argument list too long` (exit 126). `printf` is a bash builtin, so piping the env var into
       # `base64 -d` never execs with the payload attached.
       - name: Restore head benchmark snapshot
-        shell: bash
-        env:
-          HEAD_SNAPSHOT_B64: ${{ needs.benchmark-pr-head.outputs.snapshot_b64 }}
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          printf '%s' "$HEAD_SNAPSHOT_B64" | base64 -d > tmp/bench/head.json
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-pr-head-snapshot
+          path: tmp/bench
 
       - name: Restore base benchmark snapshot
         if: needs.benchmark-pr-base.outputs.available == 'true'
-        shell: bash
-        env:
-          BASE_SNAPSHOT_B64: ${{ needs.benchmark-pr-base.outputs.snapshot_b64 }}
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          printf '%s' "$BASE_SNAPSHOT_B64" | base64 -d > tmp/bench/base.json
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-pr-base-snapshot
+          path: tmp/bench
 
       - name: Generate benchmark report
         shell: bash
@@ -384,8 +385,6 @@ jobs:
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
-    outputs:
-      snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -429,12 +428,14 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/head.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload head benchmark snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-push-head-snapshot
+          path: tmp/bench/head.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-push-base:
     name: Benchmark Base (Push)
@@ -445,7 +446,6 @@ jobs:
     outputs:
       available: ${{ steps.detect-bench.outputs.available == 'true' &&
         steps.run-base-benchmark.outcome == 'success' }}
-      snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -536,12 +536,16 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/base.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload base benchmark snapshot
+        if: steps.detect-bench.outputs.available == 'true' &&
+          steps.run-base-benchmark.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-push-base-snapshot
+          path: tmp/bench/base.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-push:
     name: Benchmark (Push)
@@ -580,23 +584,17 @@ jobs:
 
       # Env + stdin, never argv — see the matching note on the PR-side restore steps (`MAX_ARG_STRLEN`).
       - name: Restore head benchmark snapshot
-        shell: bash
-        env:
-          HEAD_SNAPSHOT_B64: ${{ needs.benchmark-push-head.outputs.snapshot_b64 }}
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          printf '%s' "$HEAD_SNAPSHOT_B64" | base64 -d > tmp/bench/head.json
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-push-head-snapshot
+          path: tmp/bench
 
       - name: Restore base benchmark snapshot
         if: needs.benchmark-push-base.outputs.available == 'true'
-        shell: bash
-        env:
-          BASE_SNAPSHOT_B64: ${{ needs.benchmark-push-base.outputs.snapshot_b64 }}
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          printf '%s' "$BASE_SNAPSHOT_B64" | base64 -d > tmp/bench/base.json
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-push-base-snapshot
+          path: tmp/bench
 
       - name: Generate benchmark report
         shell: bash

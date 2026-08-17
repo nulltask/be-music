@@ -442,6 +442,10 @@ const workspaceSubpathAliases: WorkspaceAlias[] = [
     replacement: resolve(repositoryDir, 'packages/player/src/judging.ts'),
   },
   {
+    find: '@be-music/player/playlog',
+    replacement: resolve(repositoryDir, 'packages/player/src/playlog/index.ts'),
+  },
+  {
     find: '@be-music/player/state-signals',
     replacement: resolve(repositoryDir, 'packages/player/src/state-signals.ts'),
   },
