@@ -425,6 +425,16 @@ export interface PixiGameplayViewOptions {
    */
   replay?: BeMusicPlaylog;
   /**
+   * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): `'lr2'` (default) / `'beatoraja'`
+   * / `'iidx'`. Recorded into the play-log; replays re-apply the log's own value instead.
+   */
+  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  /**
+   * SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. Stamped into the recorded
+   * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
+   */
+  chartSha256?: string;
+  /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Drives both the gauge formula (`createGrooveGaugeState`) and the
    * gauge-on- red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — `createGrooveGaugeState`
    * consumes the 1P value and applies it to the single shared gauge.
@@ -5611,20 +5621,24 @@ export class PixiGameplayView {
         ...(this.options.replay !== undefined
           ? {
               // Replay playback — feed the recorded input stream; the engine ignores live lane input, and the run
-              // records no new play-log (replaying a replay would only duplicate the file). Auto scratch and the
-              // debug judge-window override are restored from the log so the judging setup matches the recording.
+              // records no new play-log (replaying a replay would only duplicate the file). Auto scratch, the
+              // judge ruleset, and the debug judge-window override are restored from the log so the judging setup
+              // matches the recording.
               replayInputs: this.options.replay.inputs,
               autoScratch: this.options.replay.play.autoScratch,
+              judgeRuleset: this.options.replay.play.judgeRuleset ?? 'lr2',
               ...(this.options.replay.play.judgeWindowOverrideMs !== undefined
                 ? { judgeWindowMs: this.options.replay.play.judgeWindowOverrideMs }
                 : {}),
             }
           : {
+              ...(this.options.judgeRuleset !== undefined ? { judgeRuleset: this.options.judgeRuleset } : {}),
               // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
               // replay, then hands the assembled log here right before the play promise settles. The host reads it
               // back through `getResultData().playlog` for the result screen's auto-save.
               recordPlaylog: {
                 gauge: this.options.gauge,
+                ...(this.options.chartSha256 !== undefined ? { chartSha256: this.options.chartSha256 } : {}),
                 ...(this.options.random1P !== undefined || this.options.random2P !== undefined
                   ? {
                       randomLane: {

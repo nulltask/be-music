@@ -16,6 +16,7 @@ import {
   PixiSongSelectView,
   type BeatorajaSelectSystemSoundPaths,
   type PixiGameplayResultData,
+  type PixiPlayOptions,
   type PixiSongSelectNavigation,
 } from '@be-music/player-web/scenes';
 import {
@@ -40,6 +41,7 @@ import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } fr
 import {
   BrowserSongCollectionStore,
   checkBrowserCompat,
+  computeChartFileSha256,
   describeSongCollection,
   loadAssetBytes,
   readDroppedFiles,
@@ -373,6 +375,14 @@ class PlayerWebDemoApp {
    */
   private playlogSaveController: Controller | undefined;
   /**
+   * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
+   * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
+   * a change (`refreshPlayOptionControllers`).
+   */
+  private readonly playOptionControllers: Controller[] = [];
+  /** Per-entry chart-file SHA-256 cache (`''` = lookup failed) — see {@link resolveChartSha256}. */
+  private readonly chartSha256Cache = new Map<string, string>();
+  /**
    * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
    * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
    * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
@@ -440,6 +450,16 @@ class PlayerWebDemoApp {
       // result scene mounts, so the input replay is preserved without the user having to remember anything. The
       // Debug Menu checkbox turns the download off for users who don't want per-play files piling up.
       autoSavePlaylog: true,
+      // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
+      // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
+      // play. The judge ruleset has no in-skin counterpart — the Debug Menu is its only surface.
+      judgeRuleset: 'lr2',
+      gauge: 'GROOVE',
+      random1P: 'OFF',
+      random2P: 'OFF',
+      dpFlip: false,
+      autoScratch1P: false,
+      autoScratch2P: false,
       // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
@@ -762,6 +782,78 @@ class PlayerWebDemoApp {
         this.guiState.judgedNoteDisplay = value;
         this.gameplayView?.setJudgedNoteDisplay(value);
       });
+    // Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the
+    // play-log. Two-way synced with the LR2 select scene's PLAY OPTION panel where a counterpart exists (the panel
+    // pushes user edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All
+    // of them are latched at song start and DISABLED during a play — mid-song changes never apply.
+    const playOptionsFolder = gui.addFolder('Play options');
+    const trackPlayOption = (controller: Controller): Controller => {
+      this.playOptionControllers.push(controller);
+      return controller;
+    };
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'autoPlay')
+        .name('Auto play')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ autoPlay: value });
+        }),
+    );
+    // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
+    // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
+        .name('Judge windows'),
+    );
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
+        .name('Gauge')
+        .onChange((value: DemoGuiState['gauge']) => {
+          this.selectView?.setPlayOptions({ gauge1P: value });
+        }),
+    );
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
+        .name('Random 1P')
+        .onChange((value: DemoGuiState['random1P']) => {
+          this.selectView?.setPlayOptions({ random1P: value });
+        }),
+    );
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
+        .name('Random 2P')
+        .onChange((value: DemoGuiState['random2P']) => {
+          this.selectView?.setPlayOptions({ random2P: value });
+        }),
+    );
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'dpFlip')
+        .name('DP flip')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ dpFlip: value });
+        }),
+    );
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'autoScratch1P')
+        .name('Auto scratch 1P')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ autoScratch1P: value });
+        }),
+    );
+    trackPlayOption(
+      playOptionsFolder
+        .add(this.guiState, 'autoScratch2P')
+        .name('Auto scratch 2P')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ autoScratch2P: value });
+        }),
+    );
     // Play-history auto-save — ON by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
     // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
@@ -952,7 +1044,7 @@ class PlayerWebDemoApp {
       this.setStatus(`Replay: invalid play-log (${(error as Error).message})`);
       return;
     }
-    const song = this.findSongForPlaylog(playlog);
+    const song = await this.findSongForPlaylog(playlog);
     if (!song) {
       this.setStatus(`Replay: song not loaded (${playlog.chart.title ?? 'untitled'})`);
       return;
@@ -970,10 +1062,19 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Finds the loaded song a play-log belongs to. Exact `chartPath` match first (recorded since the replay feature
-   * landed), then a title + artist heuristic for logs recorded before the path rode along.
+   * Finds the loaded song a play-log belongs to. Chart-file SHA-256 first (`chart.sha256`), then the recorded
+   * `chartPath`, then a title + artist heuristic for logs recorded before either rode along.
    */
-  private findSongForPlaylog(playlog: BeMusicPlaylog): BrowserSongEntry | undefined {
+  private async findSongForPlaylog(playlog: BeMusicPlaylog): Promise<BrowserSongEntry | undefined> {
+    // Content hash first — stable across sessions, machines, and file moves.
+    const sha256 = playlog.chart.sha256?.toLowerCase();
+    if (sha256 !== undefined && sha256.length > 0) {
+      for (const entry of this.collection.songs) {
+        if ((await this.resolveChartSha256(entry)) === sha256) {
+          return entry;
+        }
+      }
+    }
     const nativeChartPath = playlog.play.native?.chartPath;
     if (typeof nativeChartPath === 'string' && nativeChartPath.length > 0) {
       const exact = this.collection.songs.find((entry) => entry.chartPath === nativeChartPath);
@@ -988,6 +1089,21 @@ class PlayerWebDemoApp {
     return this.collection.songs.find(
       (entry) => entry.title === title && (playlog.chart.artist === undefined || entry.artist === playlog.chart.artist),
     );
+  }
+
+  /**
+   * SHA-256 (lowercase hex) of a song's source chart file, cached per entry id — the hash feeds both the play-log
+   * recording (`chart.sha256`) and dropped-log matching, and chart files are small enough that hashing the whole
+   * library on a dropped log stays cheap.
+   */
+  private async resolveChartSha256(song: BrowserSongEntry): Promise<string | undefined> {
+    const cached = this.chartSha256Cache.get(song.id);
+    if (cached !== undefined) {
+      return cached === '' ? undefined : cached;
+    }
+    const hash = await computeChartFileSha256(resolveSongSource(this.collection, song), song.chartPath);
+    this.chartSha256Cache.set(song.id, hash ?? '');
+    return hash;
   }
 
   /**
@@ -1400,6 +1516,8 @@ class PlayerWebDemoApp {
   private async playSongBeatoraja(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
     const bundle = this.beatorajaTheme;
     if (!bundle) return;
+    // Chart-file hash for the recorded play-log (matched back on a future play-log drop).
+    const chartSha256 = await this.resolveChartSha256(song);
     // **TWO distinct variants** flow into the gameplay scene:
     //   - `skinVariant`: which `play_*` skin file to load. The theme may not ship every
     //     variant (a popular 7-only theme lacks a `play_9` skin, etc.), so this falls back
@@ -1589,12 +1707,20 @@ class PlayerWebDemoApp {
       audio: prep.audio,
       skinAudio: this.beatorajaSkinAudio,
       mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',
-      // DP flip — when the user enabled it via the play-options panel AND the chart is a
-      // DP variant (10 / 14 keys), the chart's lane channels mirror at construction. SP
-      // charts pass through unchanged because they have no 2P channels to swap with.
-      // Reads from the LR2 select view's persisted play options (the same surface that
-      // already drives `dpFlip` on the LR2 path).
-      dpFlip: this.selectView?.getPlayOptions().dpFlip,
+      // DP flip — when the user enabled it via the Play options (Debug Menu / LR2 select panel, two-way synced
+      // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
+      // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
+      dpFlip: this.guiState.dpFlip,
+      // Judge-window ruleset + auto scratch + play-log extras ride the engine-options passthrough — the beatoraja
+      // scene forwards them onto the shared engine and merges `recordPlaylog` with its own fields.
+      engineOptions: {
+        judgeRuleset: this.guiState.judgeRuleset,
+        autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
+        recordPlaylog: {
+          gauge: this.guiState.gauge,
+          ...(chartSha256 !== undefined ? { chartSha256 } : {}),
+        },
+      },
       bgaTextures: prep.bga.textures,
       bgaVideoElements: prep.bga.videoElements,
       bgaCues: prep.bga.cues,
@@ -2753,12 +2879,28 @@ class PlayerWebDemoApp {
       decideBgm: this.decideBgmBytes,
       systemSounds: this.systemSoundBundle,
       initialNavigation: this.lastSelectNavigation,
-      // Seed the in-scene panel's autoPlay value from the cached demo state (carries the last value the user picked
-      // across re-mounts of the select view).
-      initialPlayOptions: { autoPlay: this.guiState.autoPlay },
-      onPlayOptionsChange: (options: { autoPlay: boolean }) => {
-        // Cache the last value so it survives a select-view re-mount even though the lil-gui toggle is gone.
+      // Seed the in-scene panel from the Debug Menu's "Play options" state (two-way sync: the panel's own edits
+      // come back through `onPlayOptionsChange` below; lil-gui edits push through `setPlayOptions`).
+      initialPlayOptions: {
+        autoPlay: this.guiState.autoPlay,
+        gauge1P: this.guiState.gauge,
+        random1P: this.guiState.random1P,
+        random2P: this.guiState.random2P,
+        dpFlip: this.guiState.dpFlip,
+        autoScratch1P: this.guiState.autoScratch1P,
+        autoScratch2P: this.guiState.autoScratch2P,
+      },
+      onPlayOptionsChange: (options: PixiPlayOptions) => {
+        // Mirror the in-skin PLAY OPTION panel's edits back into the Debug Menu state so both surfaces always
+        // agree, then repaint the lil-gui controllers.
         this.guiState.autoPlay = options.autoPlay;
+        this.guiState.gauge = options.gauge1P;
+        this.guiState.random1P = options.random1P;
+        this.guiState.random2P = options.random2P;
+        this.guiState.dpFlip = options.dpFlip;
+        this.guiState.autoScratch1P = options.autoScratch1P;
+        this.guiState.autoScratch2P = options.autoScratch2P;
+        this.refreshPlayOptionControllers();
       },
       onSongSelected: (song: BrowserSongEntry) => {
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
@@ -2851,14 +2993,18 @@ class PlayerWebDemoApp {
    * Wired up here (rather than inline in `showDecide`) because the same option-marshalling + callback wiring is needed
    * whether we're going through Decide or the no-decide fast-path. `playSong` shares this construction shape.
    */
-  private preloadGameplay(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
+  private async preloadGameplay(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
     this.recordingFilenameBase = sanitizeFilenameStem(song.title) || `gameplay-${Date.now()}`;
     // Same family check as `playSong` — picking `'default'` from the Debug Menu strips the LR2 skin even when one
     // is loaded for this chart. Computing `gameplayFamily` here keeps the decide → gameplay preload path consistent
     // with the no-decide fast-path.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
     const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
-    this.gameplayView = this.buildLr2GameplayView(song, playSkin, overrides);
+    const chartSha256 = await this.resolveChartSha256(song);
+    this.gameplayView = this.buildLr2GameplayView(song, playSkin, {
+      ...overrides,
+      ...(chartSha256 !== undefined ? { chartSha256 } : {}),
+    });
     return this.gameplayView.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
   }
 
@@ -2876,12 +3022,15 @@ class PlayerWebDemoApp {
   private buildLr2GameplayView(
     song: BrowserSongEntry,
     playSkin: Lr2Skin | undefined,
-    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog },
+    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; chartSha256?: string },
   ): PixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const sharedOptions = {
-      autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
+      // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
+      // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
+      // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
+      autoPlay: overrides.autoPlay ?? this.guiState.autoPlay,
       autoPauseOnBlur: this.guiState.autoPauseOnBlur,
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
@@ -2892,15 +3041,17 @@ class PlayerWebDemoApp {
       hiddenSudden2P: playOptions?.hiddenSudden2P,
       shutter: playOptions?.shutter,
       laneCover: playOptions?.laneCover,
-      // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge govern judging and the
-      // gauge readout, and the lane transforms stay off because the view re-applies the recorded arrangement
-      // directly (see `PixiGameplayViewOptions.replay`).
-      autoScratch1P: replay !== undefined ? replay.play.autoScratch : playOptions?.autoScratch1P,
-      autoScratch2P: replay !== undefined ? false : playOptions?.autoScratch2P,
-      dpFlip: replay !== undefined ? false : playOptions?.dpFlip,
-      random1P: replay !== undefined ? ('OFF' as const) : playOptions?.random1P,
-      random2P: replay !== undefined ? ('OFF' as const) : playOptions?.random2P,
-      gauge: replay !== undefined ? replay.play.gauge : playOptions?.gauge1P,
+      // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge / judge ruleset govern
+      // judging and the gauge readout, and the lane transforms stay off because the view re-applies the recorded
+      // arrangement directly (see `PixiGameplayViewOptions.replay`).
+      autoScratch1P: replay !== undefined ? replay.play.autoScratch : this.guiState.autoScratch1P,
+      autoScratch2P: replay !== undefined ? false : this.guiState.autoScratch2P,
+      dpFlip: replay !== undefined ? false : this.guiState.dpFlip,
+      random1P: replay !== undefined ? ('OFF' as const) : this.guiState.random1P,
+      random2P: replay !== undefined ? ('OFF' as const) : this.guiState.random2P,
+      gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
+      ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
+      ...(overrides.chartSha256 !== undefined ? { chartSha256: overrides.chartSha256 } : {}),
       replay,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
@@ -3013,7 +3164,12 @@ class PlayerWebDemoApp {
     // is undefined and `PixiGameplayView` otherwise; see `preloadGameplay` for the matching call shape (both feed
     // the same helper so option marshalling stays in one place).
     const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
-    this.gameplayView = this.buildLr2GameplayView(song, playSkin, overrides);
+    // Chart-file hash for the recorded play-log (skipped for replays — they record nothing).
+    const chartSha256 = overrides.replay === undefined ? await this.resolveChartSha256(song) : undefined;
+    this.gameplayView = this.buildLr2GameplayView(song, playSkin, {
+      ...overrides,
+      ...(chartSha256 !== undefined ? { chartSha256 } : {}),
+    });
     this.setStatus(`Playing: ${song.title}`);
     this.lockPlaylogOptionsForPlay();
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
@@ -3089,11 +3245,24 @@ class PlayerWebDemoApp {
   private lockPlaylogOptionsForPlay(): void {
     this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
     this.playlogSaveController?.disable();
+    for (const controller of this.playOptionControllers) {
+      controller.disable();
+    }
   }
 
   /** Re-enables the playlog option controllers once no play is in flight. */
   private unlockPlaylogOptions(): void {
     this.playlogSaveController?.enable();
+    for (const controller of this.playOptionControllers) {
+      controller.enable();
+    }
+  }
+
+  /** Repaints the "Play options" controllers after an external write (the LR2 select panel's edits). */
+  private refreshPlayOptionControllers(): void {
+    for (const controller of this.playOptionControllers) {
+      controller.updateDisplay();
+    }
   }
 
   /**

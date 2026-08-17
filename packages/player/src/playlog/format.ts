@@ -72,6 +72,8 @@ export interface PlaylogChart {
   subtitle?: string;
   artist?: string;
   genre?: string;
+  /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
+  sha256?: string;
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
@@ -95,6 +97,8 @@ export interface PlaylogPlay {
   dpFlip?: boolean;
   /** Debug BAD-window override (`PlayerOptions.judgeWindowMs`) — simulations of such plays are non-standard. */
   judgeWindowOverrideMs?: number;
+  /** Judge-window ruleset the live engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'` (the default). */
+  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
   /** True when the play ended early (ESC). The input stream stops at the abort point. */
   aborted?: boolean;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
@@ -261,6 +265,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     subtitle: optionalString(chart.subtitle, 'chart.subtitle'),
     artist: optionalString(chart.artist, 'chart.artist'),
     genre: optionalString(chart.genre, 'chart.genre'),
+    sha256: optionalString(chart.sha256, 'chart.sha256'),
     sourceFormat,
     laneMode: expectString(chart.laneMode, 'chart.laneMode'),
     total: optionalFiniteNumber(chart.total, 'chart.total'),
@@ -269,7 +274,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
     notes,
   };
-  for (const key of ['title', 'subtitle', 'artist', 'genre', 'total'] as const) {
+  for (const key of ['title', 'subtitle', 'artist', 'genre', 'sha256', 'total'] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }
   return parsed;
@@ -373,6 +378,12 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
   if (play.dpFlip !== undefined) parsed.dpFlip = play.dpFlip === true;
   const judgeWindowOverrideMs = optionalFiniteNumber(play.judgeWindowOverrideMs, 'play.judgeWindowOverrideMs');
   if (judgeWindowOverrideMs !== undefined) parsed.judgeWindowOverrideMs = judgeWindowOverrideMs;
+  if (play.judgeRuleset !== undefined) {
+    if (play.judgeRuleset !== 'lr2' && play.judgeRuleset !== 'beatoraja' && play.judgeRuleset !== 'iidx') {
+      throw new PlaylogParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | 'iidx'`);
+    }
+    parsed.judgeRuleset = play.judgeRuleset;
+  }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');

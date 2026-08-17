@@ -77,7 +77,12 @@ import {
 } from './scoring.ts';
 import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
 import { resolveLandmineGaugeEffect } from './landmine.ts';
-import { resolveBmsJudgeWindowsMsForExRankValue, resolveJudgeWindowsMs } from './judge-window.ts';
+import {
+  resolveBmsJudgeWindowsMsForExRankValue,
+  resolveJudgeWindowsMs,
+  resolveJudgeWindowsMsForRuleset,
+  type JudgeWindowRuleset,
+} from './judge-window.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import {
@@ -263,6 +268,15 @@ export interface PlayerOptions {
    * tools.
    */
   onPlaylogRecorded?: (playlog: BeMusicPlaylog) => void;
+  /**
+   * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
+   * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
+   * Only the WINDOW WIDTHS switch — note selection, empty-POOR, long-note mechanics, and the gauge stay on the
+   * engine's LR2-aligned semantics (the playlog simulators are the full per-ruleset reproduction). Dynamic
+   * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
+   * (`play.judgeRuleset`) so replays re-apply the same windows.
+   */
+  judgeRuleset?: JudgeWindowRuleset;
   /**
    * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
    * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
@@ -1799,17 +1813,22 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
   // cached native result carries the actual AUTO outcome).
   const playlogRecorder = options.onPlaylogRecorded
-    ? createPlaylogRecorder({
-        json: resolvedJson,
-        chart: playbackChart,
-        dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
-        play: {
-          mode: 'auto',
-          autoScratch: false,
-          judgeWindowOverrideMs: options.judgeWindowMs,
-          ...options.recordPlaylog,
-        },
-      })
+    ? (() => {
+        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        return createPlaylogRecorder({
+          json: resolvedJson,
+          chart: playbackChart,
+          chartSha256,
+          dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
+          play: {
+            mode: 'auto',
+            autoScratch: false,
+            judgeWindowOverrideMs: options.judgeWindowMs,
+            judgeRuleset: options.judgeRuleset,
+            ...hostPlaySettings,
+          },
+        });
+      })()
     : undefined;
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
@@ -2359,11 +2378,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
-  let judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
+  const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
+  let judgeWindows = resolveJudgeWindowsMsForRuleset(resolvedJson, judgeRuleset, options.judgeWindowMs);
   let badWindowMs = judgeWindows.bad;
   let badWindowSeconds = badWindowMs / 1000;
   const timingResolver = createTimingResolver(resolvedJson);
-  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver);
+  // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
+  // non-LR2 rulesets keep their initial windows for the whole chart.
+  const dynamicJudgeRankChanges =
+    judgeRuleset === 'lr2' ? collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver) : [];
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
@@ -2425,17 +2448,22 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   );
   const scoreTracker = createScoreTracker();
   const playlogRecorder = options.onPlaylogRecorded
-    ? createPlaylogRecorder({
-        json: resolvedJson,
-        chart: playbackChart,
-        dynamicJudgeRankChanges,
-        play: {
-          mode: 'manual',
-          autoScratch: autoScratchEnabled,
-          judgeWindowOverrideMs: options.judgeWindowMs,
-          ...options.recordPlaylog,
-        },
-      })
+    ? (() => {
+        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        return createPlaylogRecorder({
+          json: resolvedJson,
+          chart: playbackChart,
+          chartSha256,
+          dynamicJudgeRankChanges,
+          play: {
+            mode: 'manual',
+            autoScratch: autoScratchEnabled,
+            judgeWindowOverrideMs: options.judgeWindowMs,
+            judgeRuleset: options.judgeRuleset,
+            ...hostPlaySettings,
+          },
+        });
+      })()
     : undefined;
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);

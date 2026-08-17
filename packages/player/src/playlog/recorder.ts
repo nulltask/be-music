@@ -37,19 +37,29 @@ export interface PlaylogRecorderPlaySettings {
   randomLane?: { p1?: string; p2?: string };
   dpFlip?: boolean;
   judgeWindowOverrideMs?: number;
+  /** Judge-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
+  judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
   native?: Record<string, string | number | boolean | null>;
 }
 
 /**
- * Host-declared subset of the play settings — the fields the engine cannot know by itself. Passed through
- * `PlayerOptions.recordPlaylog`.
+ * Host-declared subset of the recording inputs — the fields the engine cannot know by itself. Passed through
+ * `PlayerOptions.recordPlaylog`. `chartSha256` is the SHA-256 (lowercase hex) of the source chart FILE bytes;
+ * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content.
  */
-export type PlaylogRecordingOptions = Pick<PlaylogRecorderPlaySettings, 'gauge' | 'randomLane' | 'dpFlip' | 'native'>;
+export type PlaylogRecordingOptions = Pick<
+  PlaylogRecorderPlaySettings,
+  'gauge' | 'randomLane' | 'dpFlip' | 'native'
+> & {
+  chartSha256?: string;
+};
 
 export interface PlaylogRecorderOptions {
   /** Resolved chart JSON (post `#RANDOM` control flow) — metadata source. */
   json: BeMusicJson;
   chart: PlaylogRecorderChartData;
+  /** SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. */
+  chartSha256?: string;
   play: PlaylogRecorderPlaySettings;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
@@ -112,6 +122,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
       if (options.play.judgeWindowOverrideMs !== undefined) {
         play.judgeWindowOverrideMs = options.play.judgeWindowOverrideMs;
       }
+      if (options.play.judgeRuleset !== undefined) play.judgeRuleset = options.play.judgeRuleset;
       if (aborted === true) play.aborted = true;
       if (options.play.native !== undefined) play.native = options.play.native;
 
@@ -205,6 +216,9 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     noteCount: chart.scorableNotes.length,
     notes,
   };
+  if (typeof options.chartSha256 === 'string' && options.chartSha256.length > 0) {
+    result.sha256 = options.chartSha256.toLowerCase();
+  }
   if (typeof json.metadata.title === 'string' && json.metadata.title.length > 0) result.title = json.metadata.title;
   if (typeof json.metadata.subtitle === 'string' && json.metadata.subtitle.length > 0) {
     result.subtitle = json.metadata.subtitle;

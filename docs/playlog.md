@@ -12,13 +12,15 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
 1. **`chart`** — the resolved chart that actually scrolled past the player: post-`#RANDOM` control flow, post
    lane-shuffle (RANDOM / MIRROR / S-RANDOM), post DP-flip. Long notes are stored as single objects with a
    `timeUs` / `endTimeUs` pair, mines carry their resolved gauge damage, and the raw `#TOTAL` / `#RANK` /
-   `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults.
+   `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults. `chart.sha256` stamps the
+   SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content.
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
    `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
-   lane-arrangement options that produced the resolved chart, the debug judge-window override, and an ESC flag.
+   lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
+   absent = `'lr2'`), the debug judge-window override, and an ESC flag.
 
 Judgments, EX-SCORE, combo, and gauge values live only in **`results`** — a regenerable cache keyed by ruleset id
 (`native` holds the engine's own summary at record time). Because the canonical data is the input stream, a later
@@ -46,14 +48,28 @@ In the browser player:
 - The beatoraja gameplay scene exposes it through `PixiBeatorajaGameplayView.getPlaylog()`.
 - The demo auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
   the Debug Menu's **Auto-save play history** checkbox (ON by default). Play-log options are latched at song start
-  and cannot change mid-play — the checkbox is disabled while a song is playing, and the value in effect when the
-  song started governs that play.
+  and cannot change mid-play — the controls are disabled while a song is playing, and the values in effect when
+  the song started govern that play.
+- The Debug Menu's **Play options** folder covers the recorded play settings: auto play, judge windows
+  (LR2 / beatoraja / IIDX), gauge, Random 1P/2P, DP flip, and auto scratch. Where the LR2 select scene's
+  PLAY OPTION panel has a counterpart, the two surfaces two-way sync.
+
+## Live judge-window rulesets
+
+The shared engine can judge a live play under `'lr2'` (default), `'beatoraja'`, or `'iidx'` windows
+(`PlayerOptions.judgeRuleset`). Only the WINDOW WIDTHS switch: LR2 uses the rank-interpolated LR2 windows,
+beatoraja scales its SEVENKEYS windows linearly by beatoraja's judgerank (the asymmetric BAD gate is symmetrized
+to ±250 ms × judgerank), and IIDX uses the fixed ±16.67/±33.33/±116.67/±250 ms widths. Note selection, empty-POOR
+behavior, long-note mechanics, and the groove gauge stay on the engine's LR2-aligned semantics — the playlog
+simulators remain the full per-ruleset reproduction. Dynamic `#EXRANKxx` only applies under `'lr2'`. The selected
+ruleset is recorded as `play.judgeRuleset` and replays re-apply it automatically.
 
 ## Replay playback
 
 Dropping a `*.bmplay.json` file onto the browser player starts replay playback when the matching song is loaded
-(dropping the song folder together with the log works too — the songs load first). Matching prefers the exact
-`chartPath` recorded in `play.native.chartPath`, with a title + artist fallback for older logs.
+(dropping the song folder together with the log works too — the songs load first). Matching prefers the chart-file
+hash (`chart.sha256` — stable across sessions and file moves), then the recorded `play.native.chartPath`, then a
+title + artist fallback for older logs.
 
 Replay re-drives the recorded input stream deterministically inside the shared engine
 (`PlayerOptions.replayInputs`): every event fires at its exact chart-relative microsecond timestamp, live lane

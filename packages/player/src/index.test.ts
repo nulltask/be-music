@@ -95,7 +95,7 @@ import {
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import { resolveChartVolWavGain, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './utils.ts';
-import { simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
+import { parsePlaylog, serializePlaylog, simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -1081,6 +1081,57 @@ describe('player', () => {
     ).toEqual(
       recorded!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
     );
+  });
+
+  test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / IIDX)', async () => {
+    // BPM 240 → one note at 1.0 s; the replayed press lands 35 ms LATE. Under the default (LR2, RANK 2 → GREAT
+    // ±40 ms) and beatoraja (judgerank 75 % → GREAT ±45 ms) windows that is a GREAT; under IIDX (GREAT ±33.33 ms,
+    // GOOD ±116.67 ms) it is a GOOD.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+    const replayInputs = [{ seq: 0, timeUs: 1_035_000, action: 'down' as const, channels: ['11'] }];
+    const base = { speed: 8, leadInMs: 0, audio: false, tui: false, replayInputs } as const;
+
+    const lr2 = await manualPlay(json, { ...base });
+    const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
+    const iidx = await manualPlay(json, { ...base, judgeRuleset: 'iidx' });
+
+    expect(lr2.great).toBe(1);
+    expect(lr2.good).toBe(0);
+    expect(beatoraja.great).toBe(1);
+    expect(beatoraja.good).toBe(0);
+    expect(iidx.great).toBe(0);
+    expect(iidx.good).toBe(1);
+  });
+
+  test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    let playlog: BeMusicPlaylog | undefined;
+    await manualPlay(json, {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'iidx',
+      recordPlaylog: { chartSha256: 'ABCDEF0123456789' },
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 50, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(playlog!.chart.sha256).toBe('abcdef0123456789');
+    expect(playlog!.play.judgeRuleset).toBe('iidx');
+    const parsed = parsePlaylog(serializePlaylog(playlog!));
+    expect(parsed.chart.sha256).toBe('abcdef0123456789');
+    expect(parsed.play.judgeRuleset).toBe('iidx');
   });
 
   test('player: ESC-interrupted play records an aborted playlog', async () => {
