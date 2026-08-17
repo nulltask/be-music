@@ -22,7 +22,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 
 ## 必要環境
 
-- Node.js `>= 25`
+- Node.js `>= 26`
 - pnpm workspaces
 
 ## セットアップ
@@ -401,7 +401,7 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 
 補足:
 
-- Node.js 25.5+ が必要です。
+- Node.js 26+ が必要です。
 - SEA 生成は built-in の `--build-sea` を使用します。
 
 ## Exports ベンチマーク

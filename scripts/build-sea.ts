@@ -146,7 +146,7 @@ function printUsage() {
       '  -h, --help                Show this help',
       '',
       'Requirements:',
-      '  Node.js 25.5+ with built-in `--build-sea` support',
+      '  Node.js 26+ with built-in `--build-sea` support',
     ].join('\n') + '\n',
   );
 }
@@ -282,7 +282,7 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
       mainFields: [...defaultServerMainFields],
     },
     build: {
-      target: 'node25',
+      target: 'node26',
       outDir: seaDir,
       emptyOutDir: true,
       codeSplitting: false,
@@ -497,7 +497,7 @@ async function runSeaBuild(nodeBinaryPath: string, cwd: string, configFilePath: 
     if (output.includes('--build-sea') && output.toLowerCase().includes('unknown')) {
       throw new Error(
         `The selected Node executable does not support --build-sea: ${nodeBinaryPath}. ` +
-          'Use Node.js 25.5+ with built-in SEA support.',
+          'Use Node.js 26+ with built-in SEA support.',
       );
     }
 
@@ -573,7 +573,7 @@ async function main(): Promise<void> {
   if (!hasBuildSea) {
     throw new Error(
       `The selected Node executable does not support --build-sea: ${nodeBinaryPath}. ` +
-        'Use Node.js 25.5+ with built-in SEA support.',
+        'Use Node.js 26+ with built-in SEA support.',
     );
   }
 

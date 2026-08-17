@@ -22,7 +22,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 
 ## Required environment
 
-- Node.js `>= 25`
+- Node.js `>= 26`
 - pnpm workspaces
 
 ## Setup
@@ -401,7 +401,7 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 
 supplement:
 
-- Requires Node.js 25.5+.
+- Requires Node.js 26+.
 - SEA generation uses built-in `--build-sea`.
 
 ## Exports Benchmark
