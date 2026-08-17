@@ -341,6 +341,7 @@ jobs:
       - name: Post benchmark comment
         uses: actions/github-script@v9
         with:
+          retries: 3
           script: |
             const fs = require('node:fs');
             const marker = '<!-- be-music-exports-benchmark -->';
@@ -609,6 +610,7 @@ jobs:
       - name: Post benchmark comment
         uses: actions/github-script@v9
         with:
+          retries: 3
           script: |
             const fs = require('node:fs');
             const marker = '<!-- be-music-exports-benchmark -->';
