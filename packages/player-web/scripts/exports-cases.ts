@@ -18,6 +18,8 @@ const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE
 const BENCH_WAV_FILE = makeBenchFile('Songs/Bench/kick.wav', 'RIFF');
 const BENCH_SOURCE = makeBenchSource();
 const BENCH_SONG = makeBenchSong();
+const BENCH_PLAYLOG = makeBenchPlaylog();
+const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
 const BENCH_PMS_SONG = makeBenchPmsSong();
 const BENCH_COLLECTION = {
   sources: [BENCH_SOURCE],
@@ -225,6 +227,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.computeResultOps(makeResultData(), makeLr2Skin());
     },
   });
+  define('player-web.computeChartFileSha256', {
+    run: async () => {
+      await playerWebCoreApi.computeChartFileSha256(BENCH_SOURCE, 'Songs/Bench/main.bms');
+    },
+  });
+  define('player-web.computeSha256Hex', {
+    run: async () => {
+      await playerWebCoreApi.computeSha256Hex(BENCH_BYTES);
+    },
+  });
   define('player-web.createSkinFamilyRegistry', {
     run: () => {
       const registry = playerWebCoreApi.createSkinFamilyRegistry([
@@ -421,6 +433,21 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.parseCompressorMode', {
     run: () => {
       playerWebCoreApi.parseCompressorMode('split');
+    },
+  });
+  define('player-web.parsePlaylog', {
+    run: () => {
+      playerWebCoreApi.parsePlaylog(BENCH_PLAYLOG_JSON);
+    },
+  });
+  define('player-web.resolvePlaylogFilename', {
+    run: () => {
+      playerWebCoreApi.resolvePlaylogFilename(BENCH_PLAYLOG);
+    },
+  });
+  define('player-web.serializePlaylog', {
+    run: () => {
+      playerWebCoreApi.serializePlaylog(BENCH_PLAYLOG);
     },
   });
   define('player-web.pickRecorderMimeType', {
@@ -687,6 +714,37 @@ function makeBenchSong(): playerWebCoreApi.BrowserSongEntry {
     title: 'Bench Song',
     totalNotes: 2,
     chart,
+  };
+}
+
+function makeBenchPlaylog(): playerWebCoreApi.BeMusicPlaylog {
+  return {
+    format: 'be-music-playlog',
+    version: 1,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    clock: { unit: 'us', origin: 'chart-zero' },
+    chart: {
+      title: 'Bench Song',
+      sourceFormat: 'bms',
+      laneMode: '7keys',
+      total: 300,
+      lnMode: 1,
+      judgeRank: { percent: 75, sourceRank: 2 },
+      noteCount: 32,
+      notes: Array.from({ length: 32 }, (_, index) => ({
+        id: index,
+        channel: `1${(index % 7) + 1}`,
+        type: 'normal' as const,
+        timeUs: 250_000 * (index + 1),
+      })),
+    },
+    inputs: Array.from({ length: 64 }, (_, index) => ({
+      seq: index,
+      timeUs: 125_000 * (index + 1),
+      action: index % 2 === 0 ? ('down' as const) : ('up' as const),
+      channels: [`1${((index >> 1) % 7) + 1}`],
+    })),
+    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
   };
 }
 
