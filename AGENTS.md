@@ -18,7 +18,7 @@
 - One changeset per package. Putting several packages in a single markdown makes Changesets duplicate the same note into every package's CHANGELOG. For a commit that spans multiple packages, split it into one changeset per package and write each note from that package's own perspective.
 - Only write entries that are worth landing in a CHANGELOG:
   - Include: `fix` / `feat` / `perf`, and bumps of public (runtime `dependencies`) packages (e.g. `fflate`, `node-web-audio-api`).
-  - Exclude: `devDependencies` dependabot bumps (e.g. `typescript`, `oxlint`, `wrangler`, `@typescript/native-preview`), tooling-only config changes that do not affect consumers (tsconfig paths, build scripts, bench cases), and WIP / in-progress features.
+  - Exclude: `devDependencies` dependabot bumps (e.g. `typescript`, `oxlint`, `wrangler`, `tsdown`), tooling-only config changes that do not affect consumers (tsconfig paths, build scripts, bench cases), and WIP / in-progress features.
 - Bump level: new export / new subpath / new public API → `minor`; bug fix / internal refactor / dependency bump → `patch`.
 - Writing style:
   - Keep each body paragraph on a single unwrapped line.
