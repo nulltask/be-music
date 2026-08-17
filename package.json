@@ -33,15 +33,15 @@
     "stringify": "pnpm --filter @be-music/stringifier run dev"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.31.0",
+    "@changesets/cli": "^2.31.1",
     "@types/node": "^26.2.0",
     "@vitest/coverage-v8": "^4.1.10",
     "oxfmt": "^0.57.0",
-    "oxlint": "^1.73.0",
+    "oxlint": "^1.77.0",
     "rimraf": "^6.0.1",
-    "tinybench": "^6.0.2",
-    "tsdown": "^0.22.3",
-    "tsx": "^4.23.0",
+    "tinybench": "^6.1.3",
+    "tsdown": "^0.22.14",
+    "tsx": "^4.23.12",
     "typescript": "7.0.1-rc",
     "vite": "^8.1.3",
     "vitest": "^4.1.10"
