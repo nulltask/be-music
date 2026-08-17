@@ -21,6 +21,7 @@
     "bench:aggregate": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/aggregate-results.ts",
     "bench:compare": "tsx --tsconfig tsconfig.typecheck.json scripts/bench/compare-results.ts",
     "player": "pnpm --filter @be-music/player-tui run dev",
+    "playlog": "pnpm --filter @be-music/player-tui run playlog",
     "player:web": "pnpm --filter @be-music/player-web-demo run dev",
     "player:diag:keyboard": "pnpm --filter @be-music/player-tui run diag:keyboard",
     "player:diag:gameplay-input": "pnpm --filter @be-music/player-tui run diag:gameplay-input",

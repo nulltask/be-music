@@ -54,6 +54,7 @@ import type { BgaCue } from '../lr2/gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
+import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
@@ -247,6 +248,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private enginePromise?: Promise<EngineDriverResult>;
   private engineSettled = false;
   private exitRequested = false;
+  /**
+   * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`).
+   * Hosts read it back through {@link getPlaylog} after `onComplete` fires.
+   */
+  private playlog: BeMusicPlaylog | undefined;
   private disposed = false;
   /**
    * Active canvas + audio recorder when the host has called {@link startRecording}. Tied to
@@ -483,7 +489,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // "9 KEY lane 6+ doesn't accept input, AUTO doesn't paint laser/keybeam/judge popup".
       // Host-provided `engineOptions.laneModeExtension` (if any) wins so callers explicitly
       // overriding the inference (rare) still take precedence.
-      engineOptions: composeBeatorajaEngineOptions(this.options),
+      engineOptions: {
+        ...composeBeatorajaEngineOptions(this.options),
+        // Play-log recording — the beatoraja path has no gauge picker yet, so the declared gauge stays the
+        // engine's GROOVE default. DP flip is a chart transform the host already applied; record the intent.
+        recordPlaylog: this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {},
+        onPlaylogRecorded: (playlog) => {
+          this.playlog = playlog;
+        },
+      },
       onInputSignalsReady: ({ inputSignals }) => {
         this.inputSignals = inputSignals;
         // The engine input bus is up — stamp the `startinput` timer so chrome gated on it (input-active
@@ -611,6 +625,15 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   /** Promise that resolves once the engine driver finishes (chart end / interrupt / error). */
   awaitCompletion(): Promise<EngineDriverResult> | undefined {
     return this.enginePromise;
+  }
+
+  /**
+   * Play-log the shared engine recorded for this run (resolved chart + raw input replay + play settings), or
+   * `undefined` while the run is still in flight. Populated right before `onComplete` fires; survives `dispose()`
+   * so the host can read it after tearing the scene down. See `@be-music/player/playlog`.
+   */
+  getPlaylog(): BeMusicPlaylog | undefined {
+    return this.playlog;
   }
 
   /**
@@ -997,7 +1020,6 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       });
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }
-
   }
 
   private renderContextWithSkinAudio(ctx: BeatorajaRenderContext): BeatorajaRenderContext {

@@ -95,6 +95,7 @@ import {
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import { resolveChartVolWavGain, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './utils.ts';
+import { simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -967,6 +968,82 @@ describe('player', () => {
     expect(summary.poor).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
     expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
+  });
+
+  test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
+    // BPM 240 → measure 1 starts at chart 1.0 s. One press near the note, then natural chart end.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.title = 'Playlog Test';
+    json.metadata.total = 300;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    let playlog: BeMusicPlaylog | undefined;
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      recordPlaylog: { gauge: 'GROOVE', randomLane: { p1: 'MIRROR' } },
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1000, command: { kind: 'lane-input', tokens: ['z'] } },
+      ]),
+    });
+
+    expect(playlog).toBeDefined();
+    expect(playlog!.format).toBe('be-music-playlog');
+    expect(playlog!.version).toBe(1);
+    expect(playlog!.clock).toEqual({ unit: 'us', origin: 'chart-zero' });
+    expect(playlog!.chart.title).toBe('Playlog Test');
+    expect(playlog!.chart.total).toBe(300);
+    expect(playlog!.chart.noteCount).toBe(1);
+    expect(playlog!.chart.notes).toHaveLength(1);
+    expect(playlog!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
+    expect(playlog!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
+    expect(playlog!.play.randomLane).toEqual({ p1: 'MIRROR' });
+    expect(playlog!.play.aborted).toBeUndefined();
+    // The single scheduled press resolves against lane channel 11 with a chart-relative µs timestamp near the note.
+    expect(playlog!.inputs).toHaveLength(1);
+    expect(playlog!.inputs[0]).toMatchObject({ seq: 0, action: 'down', channels: ['11'] });
+    expect(Math.abs(playlog!.inputs[0]!.timeUs - 1_000_000)).toBeLessThan(250_000);
+    // The native cache mirrors the engine's own summary.
+    const native = playlog!.results?.native;
+    expect(native).toBeDefined();
+    expect(native!.exScore).toBe(summary.exScore);
+    expect(native!.judge.pgreat).toBe(summary.perfect);
+    expect(native!.judge.poor).toBe(summary.poor);
+    expect(native!.gauge.final).toBeCloseTo(summary.gauge?.current ?? -1, 6);
+    // The recorded log feeds the ruleset simulators without further conversion.
+    const lr2 = simulatePlaylog(playlog!, { ruleset: 'lr2' });
+    expect(lr2.noteCount).toBe(1);
+    expect(lr2.judge.pgreat + lr2.judge.great + lr2.judge.good + lr2.judge.bad + lr2.judge.poor).toBe(1);
+  });
+
+  test('player: ESC-interrupted play records an aborted playlog', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    let playlog: BeMusicPlaylog | undefined;
+    await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 100, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(playlog).toBeDefined();
+    expect(playlog!.play.aborted).toBe(true);
+    expect(playlog!.inputs).toHaveLength(0);
   });
 
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {

@@ -27,7 +27,11 @@ import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import { createGrooveGaugeState, isGrooveGaugeCleared, type GrooveGaugeState } from '@be-music/player/core/groove-gauge';
+import {
+  createGrooveGaugeState,
+  isGrooveGaugeCleared,
+  type GrooveGaugeState,
+} from '@be-music/player/core/groove-gauge';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
@@ -36,6 +40,7 @@ import {
 } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
+import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
@@ -299,6 +304,11 @@ export interface PixiGameplayResultData {
   gaugeHistory: GaugeHistorySample[];
   /** Per-judge samples of `(progress, exScore)`. Drives `#SRC_SCORECHART`. */
   scoreHistory: ScoreHistorySample[];
+  /**
+   * Play-log recorded by the shared engine (resolved chart + raw input replay + play settings). `undefined` for
+   * legacy paths that finished without the shared engine having produced one. See `@be-music/player/playlog`.
+   */
+  playlog?: BeMusicPlaylog;
 }
 
 export interface PixiGameplayViewOptions {
@@ -841,6 +851,11 @@ export class PixiGameplayView {
    * hit count rather than the longest unbroken streak.
    */
   private maxCombo = 0;
+  /**
+   * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`). Snapshotted
+   * into {@link getResultData} so the result host can offer it as a download.
+   */
+  private playlog: BeMusicPlaylog | undefined;
   /**
    * Per-play sampled history of `(progress, gauge%)` pairs. Recorded inside `publishJudge` (the single chokepoint for
    * every judge event) and seeded with a `(0, initialGauge)` entry on `prepareSong` so the polyline starts from the LR2
@@ -3473,6 +3488,7 @@ export class PixiGameplayView {
       song: this.song,
       gaugeHistory,
       scoreHistory,
+      ...(this.playlog !== undefined ? { playlog: this.playlog } : {}),
     };
   }
 
@@ -5572,6 +5588,24 @@ export class PixiGameplayView {
         // structurally impossible because there is only one extract.
         preparedChart: this.preparedChart,
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
+        // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input replay,
+        // then hands the assembled log here right before the play promise settles. The host reads it back through
+        // `getResultData().playlog` for the result screen's auto-save.
+        recordPlaylog: {
+          gauge: this.options.gauge,
+          ...(this.options.random1P !== undefined || this.options.random2P !== undefined
+            ? {
+                randomLane: {
+                  ...(this.options.random1P !== undefined ? { p1: this.options.random1P } : {}),
+                  ...(this.options.random2P !== undefined ? { p2: this.options.random2P } : {}),
+                },
+              }
+            : {}),
+          ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
+        },
+        onPlaylogRecorded: (playlog) => {
+          this.playlog = playlog;
+        },
       },
     })
       .then((summary) => {
@@ -5836,13 +5870,16 @@ export class PixiGameplayView {
         this.applyFinalComboSummary(finalSummary);
       }
       const result = this.getResultData();
-      this.beginExitSequence(() => {
-        if (this.options.onChartFinished && result) {
-          this.options.onChartFinished(result);
-          return;
-        }
-        this.options.onExit?.();
-      }, { fadeAudio: false });
+      this.beginExitSequence(
+        () => {
+          if (this.options.onChartFinished && result) {
+            this.options.onChartFinished(result);
+            return;
+          }
+          this.options.onExit?.();
+        },
+        { fadeAudio: false },
+      );
     }, delayMs);
   }
 }

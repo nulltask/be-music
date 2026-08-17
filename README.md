@@ -70,6 +70,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Player implementation specification](./docs/player-spec.md)
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
+- [Play log (play history) specification](./docs/playlog.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)

@@ -102,6 +102,12 @@ export interface DemoGuiState {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
+   * When true (the default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
+   * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
+   */
+  autoSavePlaylog: boolean;
+  /**
    * Explicit skin-family override picked from the Debug Menu dropdown. `'auto'` (default) keeps the legacy
    * priority — beatoraja if a beatoraja theme is loaded and covers the chart, otherwise LR2 (which itself falls
    * back to the default family per-scene when the corresponding LR2 skin isn't loaded). Any other value forces

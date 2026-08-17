@@ -20,6 +20,11 @@
       "source": "./src/playable-notes.ts",
       "default": "./dist/playable-notes.js"
     },
+    "./playlog": {
+      "types": "./dist/playlog.d.ts",
+      "source": "./src/playlog/index.ts",
+      "default": "./dist/playlog.js"
+    },
     "./audio-sink": {
       "types": "./dist/audio-sink.d.ts",
       "source": "./src/audio-sink.ts",

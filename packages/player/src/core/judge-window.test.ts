@@ -4,6 +4,7 @@ import {
   bmsExRankValueToJudgeRankPercent,
   resolveBmsJudgeWindowsMsForExRankValue,
   resolveBmsJudgeWindowsMsForPercent,
+  resolveJudgeRankPercent,
   resolveJudgeWindowsMs,
 } from './judge-window.ts';
 
@@ -84,6 +85,42 @@ describe('judge-window', () => {
     expect(bmsExRankValueToJudgeRankPercent(100)).toBeCloseTo(75, 6);
     expect(bmsExRankValueToJudgeRankPercent(120)).toBeCloseTo(90, 6);
     expect(bmsExRankValueToJudgeRankPercent(0)).toBe(0);
+  });
+
+  test('resolveJudgeRankPercent maps #RANK onto the internal percent axis', () => {
+    const expectations: Array<[number, number]> = [
+      [0, 25], // VERY HARD
+      [1, 50], // HARD
+      [2, 75], // NORMAL
+      [3, 100], // EASY
+      [4, 75], // VERY EASY — LR2 treats #RANK 4 as NORMAL
+    ];
+    for (const [rank, percent] of expectations) {
+      const json = createEmptyJson('bms');
+      json.metadata.rank = rank;
+      expect(resolveJudgeRankPercent(json), `rank ${rank}`).toBe(percent);
+    }
+  });
+
+  test('resolveJudgeRankPercent: #DEFEXRANK wins over #RANK, and NORMAL is the default', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.rank = 0;
+    json.bms.defExRank = 120; // 120 × 75 / 100
+    expect(resolveJudgeRankPercent(json)).toBeCloseTo(90, 9);
+
+    expect(resolveJudgeRankPercent(createEmptyJson('bms'))).toBe(75);
+  });
+
+  test('resolveJudgeRankPercent: bmson prefers info.judge_rank, then metadata, then the spec default', () => {
+    const json = createEmptyJson('bmson');
+    json.bmson.info.judgeRank = 140;
+    json.metadata.rank = 60;
+    expect(resolveJudgeRankPercent(json)).toBeCloseTo(105, 9); // 140 × 75 / 100
+
+    json.bmson.info.judgeRank = 0; // invalid → metadata rank 60 → 45
+    expect(resolveJudgeRankPercent(json)).toBeCloseTo(45, 9);
+
+    expect(resolveJudgeRankPercent(createEmptyJson('bmson'))).toBe(75); // judge_rank 100 default
   });
 
   test('resolveBmsJudgeWindowsMsForExRankValue shares the RANK 2 = 100 unit with #DEFEXRANK', () => {

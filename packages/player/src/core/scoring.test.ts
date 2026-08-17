@@ -66,4 +66,35 @@ describe('scoring', () => {
     applyJudgeToSummary(summary, 'GREAT', tracker);
     expect(summary.score).toBeLessThan(IIDX_SCORE_MAX);
   });
+
+  test('latches maxCombo across combo breaks', () => {
+    const summary = createSummary(20);
+    const tracker = createScoreTracker();
+
+    applyJudgeToSummary(summary, 'PERFECT', tracker);
+    applyJudgeToSummary(summary, 'GREAT', tracker);
+    applyJudgeToSummary(summary, 'GOOD', tracker);
+    expect(tracker.combo).toBe(3);
+    expect(tracker.maxCombo).toBe(3);
+
+    applyJudgeToSummary(summary, 'BAD', tracker);
+    expect(tracker.combo).toBe(0);
+    expect(tracker.maxCombo).toBe(3); // BAD breaks the combo but never the latch
+
+    applyJudgeToSummary(summary, 'PERFECT', tracker);
+    applyJudgeToSummary(summary, 'PERFECT', tracker);
+    expect(tracker.combo).toBe(2);
+    expect(tracker.maxCombo).toBe(3); // a shorter rebuild does not move the latch
+
+    applyJudgeToSummary(summary, 'POOR', tracker);
+    expect(tracker.combo).toBe(0);
+    expect(tracker.maxCombo).toBe(3);
+
+    applyJudgeToSummary(summary, 'PERFECT', tracker);
+    applyJudgeToSummary(summary, 'GREAT', tracker);
+    applyJudgeToSummary(summary, 'GOOD', tracker);
+    applyJudgeToSummary(summary, 'PERFECT', tracker);
+    expect(tracker.combo).toBe(4);
+    expect(tracker.maxCombo).toBe(4); // only a longer streak advances it
+  });
 });

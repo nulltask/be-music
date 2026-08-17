@@ -48,7 +48,14 @@ import {
   type BrowserSongCollection,
   type BrowserSongEntry,
 } from '@be-music/player-web/collection';
-import { parseCompressorMode, type CompressorMode } from '@be-music/player-web/runtime';
+import {
+  downloadBlob,
+  parseCompressorMode,
+  resolvePlaylogFilename,
+  serializePlaylog,
+  type BeMusicPlaylog,
+  type CompressorMode,
+} from '@be-music/player-web/runtime';
 import { logger } from '@be-music/player-web';
 import {
   discoverLr2Themes,
@@ -415,6 +422,10 @@ class PlayerWebDemoApp {
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
+      // Play-history auto-save defaults ON: every finished play downloads its play-log (`*.bmplay.json`) when the
+      // result scene mounts, so the input replay is preserved without the user having to remember anything. The
+      // Debug Menu checkbox turns the download off for users who don't want per-play files piling up.
+      autoSavePlaylog: true,
       // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
@@ -736,6 +747,15 @@ class PlayerWebDemoApp {
       .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {
         this.guiState.judgedNoteDisplay = value;
         this.gameplayView?.setJudgedNoteDisplay(value);
+      });
+    // Play-history auto-save — ON by default. When enabled, every finished play downloads its play-log
+    // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
+    // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
+    gui
+      .add(this.guiState, 'autoSavePlaylog')
+      .name('Auto-save play history')
+      .onChange((value: boolean) => {
+        this.guiState.autoSavePlaylog = value;
       });
     this.recordController = gui.add(this.guiState, 'record').name('● Record');
     // Screenshot button — captures the Pixi stage at its native size (= the renderer's
@@ -1513,9 +1533,15 @@ class PlayerWebDemoApp {
         // `finishBeatorajaGameplayThen` drops the gameplay scene first so the result scene gets a
         // clean stage; the result scene mounts in the `then` branch. `history` carries the
         // per-judge score / gauge polyline samples for the result skin's graph elements.
+        // The play-log is captured HERE (while the gameplay view is guaranteed alive) — the finish
+        // transition below disposes the scene before the result mounts.
+        const playlog = this.beatorajaGameplayView?.getPlaylog();
         void this.finishBeatorajaGameplayThen(async () => {
           const mounted = await this.showBeatorajaResult(song, summary, maxCombo, history);
           if (!mounted) await this.showSelect();
+          // Auto-save fires even when the theme ships no result skin — falling back to select
+          // shouldn't cost the user their replay file.
+          this.maybeAutoSavePlaylog(playlog);
         });
       },
       onError: (error) => {
@@ -2954,6 +2980,24 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
+    this.maybeAutoSavePlaylog(data.playlog);
+  }
+
+  /**
+   * Downloads the play-log (`*.bmplay.json` input replay) when the "Auto-save play history" toggle is on. Called
+   * from both result paths (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is
+   * up. Failures are non-fatal — the result screen must never be blocked by a download hiccup.
+   */
+  private maybeAutoSavePlaylog(playlog: BeMusicPlaylog | undefined): void {
+    if (!this.guiState.autoSavePlaylog || playlog === undefined) {
+      return;
+    }
+    try {
+      const blob = new Blob([serializePlaylog(playlog)], { type: 'application/json' });
+      downloadBlob(blob, resolvePlaylogFilename(playlog));
+    } catch (error) {
+      gameplayLog.warn('play-log auto-save failed', error);
+    }
   }
 }
 

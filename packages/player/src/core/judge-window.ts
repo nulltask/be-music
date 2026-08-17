@@ -98,9 +98,18 @@ export function resolveBmsJudgeWindowsMsForExRankValue(exRankValue: number, debu
   return resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs);
 }
 
+/**
+ * Resolves the chart's initial judgerank on the internal percent axis (VERY HARD = 25 / HARD = 50 / NORMAL = 75 /
+ * EASY = 100) — the same value {@link resolveJudgeWindowsMs} scales its windows from. Exposed so consumers that
+ * persist the resolved rank (e.g. the play-log recorder) share the exact resolution chain (`#DEFEXRANK` →
+ * `metadata.rank` → default for BMS; `info.judge_rank` → `metadata.rank` → default for bmson).
+ */
+export function resolveJudgeRankPercent(json: BeMusicJson): number {
+  return json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
+}
+
 export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
-  const judgeRank = json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
-  return scaleJudgeWindowsMs(judgeRank, debugBadWindowMs);
+  return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
 }
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {

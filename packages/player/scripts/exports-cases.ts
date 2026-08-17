@@ -1,6 +1,8 @@
 import * as playerApi from '@be-music/player';
 import * as judgingApi from '@be-music/player/judging';
+import * as playlogApi from '@be-music/player/playlog';
 import type { PlayerOptions } from '@be-music/player';
+import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_PLAYER_OPTIONS: PlayerOptions = {
@@ -127,7 +129,56 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       new playerApi.PlayerInterruptedError('escape');
     },
   });
+  define('player.playlog.serializePlaylog', {
+    run: () => {
+      playlogApi.serializePlaylog(BENCH_PLAYLOG);
+    },
+  });
+  define('player.playlog.parsePlaylog', {
+    run: () => {
+      playlogApi.parsePlaylog(BENCH_PLAYLOG_JSON);
+    },
+  });
+  define('player.playlog.simulatePlaylog', {
+    run: () => {
+      playlogApi.simulatePlaylog(BENCH_PLAYLOG, { ruleset: 'lr2' });
+    },
+  });
+  define('player.playlog.simulatePlaylogRulesets', {
+    run: () => {
+      playlogApi.simulatePlaylogRulesets(BENCH_PLAYLOG);
+    },
+  });
 }
+
+const BENCH_PLAYLOG: BeMusicPlaylog = {
+  format: 'be-music-playlog',
+  version: 1,
+  clock: { unit: 'us', origin: 'chart-zero' },
+  chart: {
+    title: 'bench',
+    sourceFormat: 'bms',
+    laneMode: '7keys',
+    total: 300,
+    lnMode: 1,
+    judgeRank: { percent: 75, sourceRank: 2 },
+    noteCount: 64,
+    notes: Array.from({ length: 64 }, (_, index) => ({
+      id: index,
+      channel: `1${(index % 7) + 1}`,
+      type: 'normal' as const,
+      timeUs: 250_000 * (index + 1),
+    })),
+  },
+  inputs: Array.from({ length: 128 }, (_, index) => ({
+    seq: index,
+    timeUs: 125_000 * (index + 1) + (index % 2 === 0 ? 5_000 : 0),
+    action: index % 2 === 0 ? ('down' as const) : ('up' as const),
+    channels: [`1${((index >> 1) % 7) + 1}`],
+  })),
+  play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+};
+const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
 
 async function runSilently<T>(task: () => Promise<T>): Promise<T> {
   const stdout = process.stdout as NodeJS.WriteStream & { write: typeof process.stdout.write };
