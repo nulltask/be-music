@@ -303,20 +303,29 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # The snapshot travels as a base64 job output. It MUST reach the decoder through the environment and stdin,
+      # never as a command-line argument: Linux caps a single argv entry at `MAX_ARG_STRLEN` (128 KiB), and the
+      # snapshot passed that once the benchmarked export count grew — the step died with
+      # `node: Argument list too long` (exit 126). `printf` is a bash builtin, so piping the env var into
+      # `base64 -d` never execs with the payload attached.
       - name: Restore head benchmark snapshot
         shell: bash
+        env:
+          HEAD_SNAPSHOT_B64: ${{ needs.benchmark-pr-head.outputs.snapshot_b64 }}
         run: |
           set -euo pipefail
           mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/head.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-pr-head.outputs.snapshot_b64 }}'
+          printf '%s' "$HEAD_SNAPSHOT_B64" | base64 -d > tmp/bench/head.json
 
       - name: Restore base benchmark snapshot
         if: needs.benchmark-pr-base.outputs.available == 'true'
         shell: bash
+        env:
+          BASE_SNAPSHOT_B64: ${{ needs.benchmark-pr-base.outputs.snapshot_b64 }}
         run: |
           set -euo pipefail
           mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/base.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-pr-base.outputs.snapshot_b64 }}'
+          printf '%s' "$BASE_SNAPSHOT_B64" | base64 -d > tmp/bench/base.json
 
       - name: Generate benchmark report
         shell: bash
@@ -569,20 +578,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # Env + stdin, never argv — see the matching note on the PR-side restore steps (`MAX_ARG_STRLEN`).
       - name: Restore head benchmark snapshot
         shell: bash
+        env:
+          HEAD_SNAPSHOT_B64: ${{ needs.benchmark-push-head.outputs.snapshot_b64 }}
         run: |
           set -euo pipefail
           mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/head.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-push-head.outputs.snapshot_b64 }}'
+          printf '%s' "$HEAD_SNAPSHOT_B64" | base64 -d > tmp/bench/head.json
 
       - name: Restore base benchmark snapshot
         if: needs.benchmark-push-base.outputs.available == 'true'
         shell: bash
+        env:
+          BASE_SNAPSHOT_B64: ${{ needs.benchmark-push-base.outputs.snapshot_b64 }}
         run: |
           set -euo pipefail
           mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/base.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-push-base.outputs.snapshot_b64 }}'
+          printf '%s' "$BASE_SNAPSHOT_B64" | base64 -d > tmp/bench/base.json
 
       - name: Generate benchmark report
         shell: bash
