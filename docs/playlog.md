@@ -45,7 +45,24 @@ In the browser player:
 - The LR2 / default gameplay scene exposes the recorded log through `PixiGameplayResultData.playlog`.
 - The beatoraja gameplay scene exposes it through `PixiBeatorajaGameplayView.getPlaylog()`.
 - The demo auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the Debug Menu's **Auto-save play history** checkbox (ON by default).
+  the Debug Menu's **Auto-save play history** checkbox (ON by default). Play-log options are latched at song start
+  and cannot change mid-play — the checkbox is disabled while a song is playing, and the value in effect when the
+  song started governs that play.
+
+## Replay playback
+
+Dropping a `*.bmplay.json` file onto the browser player starts replay playback when the matching song is loaded
+(dropping the song folder together with the log works too — the songs load first). Matching prefers the exact
+`chartPath` recorded in `play.native.chartPath`, with a title + artist fallback for older logs.
+
+Replay re-drives the recorded input stream deterministically inside the shared engine
+(`PlayerOptions.replayInputs`): every event fires at its exact chart-relative microsecond timestamp, live lane
+input is ignored (ESC / pause / hi-speed keep working), and no new play-log is recorded for the run. Because the
+log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
+loaded chart (`applyPlaylogArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
+A chart whose `#RANDOM` control flow rolls differently from the recorded run cannot be re-aligned; the replay
+fails with a status message instead of playing a mismatched chart. Replay always runs on the LR2 / default
+gameplay path regardless of which skin family recorded the log.
 
 ## Re-deriving LR2 / beatoraja / IIDX results
 

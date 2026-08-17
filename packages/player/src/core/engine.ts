@@ -79,7 +79,7 @@ import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.
 import { resolveLandmineGaugeEffect } from './landmine.ts';
 import { resolveBmsJudgeWindowsMsForExRankValue, resolveJudgeWindowsMs } from './judge-window.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
-import type { BeMusicPlaylog } from '../playlog/format.ts';
+import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createBpmTimeline,
@@ -263,6 +263,15 @@ export interface PlayerOptions {
    * tools.
    */
   onPlaylogRecorded?: (playlog: BeMusicPlaylog) => void;
+  /**
+   * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
+   * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
+   * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
+   * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
+   * commands keep working. The caller is responsible for mounting the SAME resolved chart the log was recorded
+   * against (`preparedChart`, or a chart remapped to the log's note arrangement).
+   */
+  replayInputs?: readonly PlaylogInputEvent[];
 }
 
 export interface PlayerSummary {
@@ -3082,7 +3091,18 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (candidateChannels.size === 0) {
       return;
     }
+    handleLaneInputChannels(candidateChannels, tokens, nowMs, nowSec);
+  };
 
+  // Channel-direct core of the lane press handling. Live input goes through `handleMappedInputTokens` (token →
+  // channel resolution); replay playback calls this directly with the recorded channel set and the recorded
+  // chart-relative timestamp.
+  const handleLaneInputChannels = (
+    candidateChannels: ReadonlySet<string>,
+    tokens: readonly string[],
+    nowMs: number,
+    nowSec: number,
+  ): void => {
     // Play-log press event — recorded BEFORE any judging so the log stays a raw input replay (recordInput copies
     // the shared channel-buffer synchronously).
     playlogRecorder?.recordInput('down', nowSec, tokens, candidateChannels);
@@ -3292,6 +3312,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         });
       },
       onUnhandledCommand: (command) => {
+        // Replay playback drives the lanes from the recorded input stream — live lane / key-state input must not
+        // interleave with it (pause / high-speed / interrupt still arrive through the standard command path).
+        if (options.replayInputs !== undefined && (command.kind === 'kitty-state' || command.kind === 'lane-input')) {
+          return;
+        }
         if (command.kind === 'kitty-state') {
           if (!uiEnabled) {
             if (command.pressTokens.length > 0) {
@@ -3387,6 +3412,57 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     });
   };
 
+  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps. Events are
+  // processed at each tick boundary but judged with THEIR OWN chart seconds, so the replayed judgments are
+  // deterministic and independent of tick timing. Presses maintain `activeKittyPressedChannels` so long-note holds
+  // work exactly like the recorded run's key-state stream did.
+  const replayEvents =
+    options.replayInputs !== undefined && options.replayInputs.length > 0
+      ? [...options.replayInputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq)
+      : undefined;
+  let replayCursor = 0;
+  const processReplayEventsUntil = (untilSec: number): void => {
+    if (!replayEvents) return;
+    while (replayCursor < replayEvents.length) {
+      const event = replayEvents[replayCursor]!;
+      const eventSec = event.timeUs / 1_000_000;
+      if (eventSec > untilSec) break;
+      replayCursor += 1;
+      const channels = new Set(event.channels);
+      if (autoScratchEnabled) {
+        for (const channel of channels) {
+          if (scratchPlayableChannels.has(channel)) {
+            channels.delete(channel);
+          }
+        }
+      }
+      if (channels.size === 0) continue;
+      const eventMs = (eventSec * 1000) / speed;
+      if (event.action === 'down') {
+        for (const channel of channels) {
+          activeKittyPressedChannels.add(channel);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'press-lane', channel });
+          }
+        }
+        playbackEventTracer.flushUntil(eventSec);
+        handleLaneInputChannels(channels, event.tokens ?? [], eventMs, eventSec);
+      } else {
+        // Mirror the live kitty-release recording so a replayed run re-records an equivalent playlog.
+        playlogRecorder?.recordInput('up', eventSec, event.tokens ?? [], channels);
+        for (const channel of channels) {
+          activeKittyPressedChannels.delete(channel);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'release-lane', channel });
+          }
+          if (activeLongNotesByChannel.has(channel)) {
+            longHoldUntilMsByChannel.set(channel, eventMs);
+          }
+        }
+      }
+    }
+  };
+
   try {
     while (playbackClock.nowMs() < horizon) {
       consumeInputCommands();
@@ -3406,6 +3482,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
+      processReplayEventsUntil(nowSec);
       advanceDynamicJudgeRankChanges(nowSec);
       playbackEventTracer.flushUntil(nowSec);
 

@@ -41,6 +41,7 @@ import {
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
@@ -415,6 +416,14 @@ export interface PixiGameplayViewOptions {
   random1P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
   /** 2P side note arrangement (`#SRC_BUTTON,type=43`). */
   random2P?: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  /**
+   * Replay playback: a recorded play-log to re-drive instead of live keyboard input. The chart prepare skips the
+   * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyPlaylogArrangement`), the
+   * engine consumes `playlog.inputs` deterministically (`PlayerOptions.replayInputs`), live lane input is ignored,
+   * and no new play-log is recorded for the run. `prepare` rejects when the loaded chart does not match the log
+   * (different `#RANDOM` roll / different chart file).
+   */
+  replay?: BeMusicPlaylog;
   /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Drives both the gauge formula (`createGrooveGaugeState`) and the
    * gauge-on- red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — `createGrooveGaugeState`
@@ -1857,41 +1866,52 @@ export class PixiGameplayView {
     this.notes = prepared.notes;
     this.mineNotes = prepared.landmineNotes;
     this.invisibleNotes = prepared.invisibleNotes;
-    // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
-    // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
-    // same visual lane after the flip.
-    if (this.options.dpFlip) {
-      for (const note of this.notes) {
-        note.channel = flipDpChannel(note.channel);
+    if (this.options.replay !== undefined) {
+      // Replay playback — the recorded play-log carries the FINAL note arrangement (post-flip, post-shuffle), so
+      // instead of re-rolling the lane transforms we re-apply the recorded channels onto the freshly prepared
+      // notes. A mismatch means the loaded chart is not the one the log was recorded against (different `#RANDOM`
+      // roll or a different file) — surface it as a prepare failure rather than replaying garbage.
+      const arranged = applyPlaylogArrangement(this.options.replay.chart.notes, prepared);
+      if (!arranged.ok) {
+        throw new Error(`play-log replay chart mismatch: ${arranged.reason}`);
       }
-      for (const mine of this.mineNotes) {
-        mine.channel = flipDpChannel(mine.channel);
+    } else {
+      // DP FLIP — swap 1P / 2P channels in place. Cheap O(n) walk because we already iterate `notes` for sorting; SP
+      // charts skip every entry (no `2x` channels exist). Mine notes are flipped together so they stay anchored to the
+      // same visual lane after the flip.
+      if (this.options.dpFlip) {
+        for (const note of this.notes) {
+          note.channel = flipDpChannel(note.channel);
+        }
+        for (const mine of this.mineNotes) {
+          mine.channel = flipDpChannel(mine.channel);
+        }
+        for (const invisible of this.invisibleNotes) {
+          invisible.channel = flipDpChannel(invisible.channel);
+        }
       }
-      for (const invisible of this.invisibleNotes) {
-        invisible.channel = flipDpChannel(invisible.channel);
-      }
+      // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
+      // 26) never moves. Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
+      // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
+      // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
+      // intact.
+      applyRandomMode(
+        this.notes as Array<{ channel: string }>,
+        '1',
+        this.options.random1P ?? 'OFF',
+        Math.random,
+        this.mineNotes as Array<{ channel: string }>,
+        this.invisibleNotes as Array<{ channel: string }>,
+      );
+      applyRandomMode(
+        this.notes as Array<{ channel: string }>,
+        '2',
+        this.options.random2P ?? 'OFF',
+        Math.random,
+        this.mineNotes as Array<{ channel: string }>,
+        this.invisibleNotes as Array<{ channel: string }>,
+      );
     }
-    // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
-    // 26) never moves. Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
-    // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
-    // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
-    // intact.
-    applyRandomMode(
-      this.notes as Array<{ channel: string }>,
-      '1',
-      this.options.random1P ?? 'OFF',
-      Math.random,
-      this.mineNotes as Array<{ channel: string }>,
-      this.invisibleNotes as Array<{ channel: string }>,
-    );
-    applyRandomMode(
-      this.notes as Array<{ channel: string }>,
-      '2',
-      this.options.random2P ?? 'OFF',
-      Math.random,
-      this.mineNotes as Array<{ channel: string }>,
-      this.invisibleNotes as Array<{ channel: string }>,
-    );
     this.maxLongNoteBeatSpan = this.notes.reduce((max, note) => {
       if (note.endBeat === undefined) {
         return max;
@@ -5588,24 +5608,38 @@ export class PixiGameplayView {
         // structurally impossible because there is only one extract.
         preparedChart: this.preparedChart,
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
-        // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input replay,
-        // then hands the assembled log here right before the play promise settles. The host reads it back through
-        // `getResultData().playlog` for the result screen's auto-save.
-        recordPlaylog: {
-          gauge: this.options.gauge,
-          ...(this.options.random1P !== undefined || this.options.random2P !== undefined
-            ? {
-                randomLane: {
-                  ...(this.options.random1P !== undefined ? { p1: this.options.random1P } : {}),
-                  ...(this.options.random2P !== undefined ? { p2: this.options.random2P } : {}),
-                },
-              }
-            : {}),
-          ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
-        },
-        onPlaylogRecorded: (playlog) => {
-          this.playlog = playlog;
-        },
+        ...(this.options.replay !== undefined
+          ? {
+              // Replay playback — feed the recorded input stream; the engine ignores live lane input, and the run
+              // records no new play-log (replaying a replay would only duplicate the file). Auto scratch and the
+              // debug judge-window override are restored from the log so the judging setup matches the recording.
+              replayInputs: this.options.replay.inputs,
+              autoScratch: this.options.replay.play.autoScratch,
+              ...(this.options.replay.play.judgeWindowOverrideMs !== undefined
+                ? { judgeWindowMs: this.options.replay.play.judgeWindowOverrideMs }
+                : {}),
+            }
+          : {
+              // Play-log recording: the engine snapshots the resolved (post-shuffle) chart and the raw input
+              // replay, then hands the assembled log here right before the play promise settles. The host reads it
+              // back through `getResultData().playlog` for the result screen's auto-save.
+              recordPlaylog: {
+                gauge: this.options.gauge,
+                ...(this.options.random1P !== undefined || this.options.random2P !== undefined
+                  ? {
+                      randomLane: {
+                        ...(this.options.random1P !== undefined ? { p1: this.options.random1P } : {}),
+                        ...(this.options.random2P !== undefined ? { p2: this.options.random2P } : {}),
+                      },
+                    }
+                  : {}),
+                ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
+                ...(this.song?.chartPath !== undefined ? { native: { chartPath: this.song.chartPath } } : {}),
+              },
+              onPlaylogRecorded: (playlog) => {
+                this.playlog = playlog;
+              },
+            }),
       },
     })
       .then((summary) => {

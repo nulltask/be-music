@@ -51,8 +51,10 @@ import {
 import {
   downloadBlob,
   parseCompressorMode,
+  parsePlaylog,
   resolvePlaylogFilename,
   serializePlaylog,
+  PLAYLOG_FILE_SUFFIX,
   type BeMusicPlaylog,
   type CompressorMode,
 } from '@be-music/player-web/runtime';
@@ -364,6 +366,18 @@ class PlayerWebDemoApp {
   private gui: GUI | undefined;
   private compressorStageFolder: GUI | undefined;
   private recordController: Controller | undefined;
+  /**
+   * "Auto-save play history" checkbox controller. Held so the play-start path can `disable()` it for the duration
+   * of a play — the playlog options are latched when a song starts and cannot change mid-song — and the result /
+   * select paths can `enable()` it again.
+   */
+  private playlogSaveController: Controller | undefined;
+  /**
+   * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
+   * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
+   * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
+   */
+  private activePlayAutoSavePlaylog = true;
   /**
    * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
    * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
@@ -751,7 +765,9 @@ class PlayerWebDemoApp {
     // Play-history auto-save — ON by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
     // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
-    gui
+    // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song
+    // is playing — playlog options cannot change mid-play.
+    this.playlogSaveController = gui
       .add(this.guiState, 'autoSavePlaylog')
       .name('Auto-save play history')
       .onChange((value: boolean) => {
@@ -850,6 +866,16 @@ class PlayerWebDemoApp {
     if (files.length === 0) {
       return;
     }
+    // Play-log files ride their own path: they are replay inputs, not chart / theme assets. They are peeled off
+    // BEFORE the song/theme split so a stray `.bmplay.json` never classifies as a theme candidate — and handled
+    // AFTER the split's loaders ran, so dropping a song folder together with its play-log loads the song first and
+    // then starts the replay in one gesture.
+    const playlogFiles = files.filter((file) => file.name.toLowerCase().endsWith(PLAYLOG_FILE_SUFFIX));
+    files = files.filter((file) => !file.name.toLowerCase().endsWith(PLAYLOG_FILE_SUFFIX));
+    if (files.length === 0 && playlogFiles.length > 0) {
+      await this.startPlaylogReplayFromFile(playlogFiles[0]!);
+      return;
+    }
     const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
     // `splitDroppedSongAndThemeFiles` routes any non-chart files outside a chart directory into `themeFiles`. That
     // includes stray `readme.txt` / `info.json` / album-art images sitting at the root of a BMS pack that isn't a real
@@ -906,6 +932,62 @@ class PlayerWebDemoApp {
       this.setStatus('Theme loaded');
     }
     await this.showSelect();
+    if (playlogFiles.length > 0) {
+      await this.startPlaylogReplayFromFile(playlogFiles[0]!);
+    }
+  }
+
+  /**
+   * Parses a dropped play-log file and starts replay playback when the matching song is loaded. Matching prefers
+   * the exact `chartPath` the log recorded (`play.native.chartPath`); older logs without it fall back to a
+   * title + artist match. When no match (or the chart's `#RANDOM` roll differs so the resolved notes can't be
+   * re-aligned), the failure lands in the status row instead of throwing — a bad drop must never wedge the UI.
+   */
+  private async startPlaylogReplayFromFile(file: File): Promise<void> {
+    let playlog: BeMusicPlaylog;
+    try {
+      playlog = parsePlaylog(await file.text());
+    } catch (error) {
+      dropLog.warn('play-log parse failed', error);
+      this.setStatus(`Replay: invalid play-log (${(error as Error).message})`);
+      return;
+    }
+    const song = this.findSongForPlaylog(playlog);
+    if (!song) {
+      this.setStatus(`Replay: song not loaded (${playlog.chart.title ?? 'untitled'})`);
+      return;
+    }
+    this.setStatus(`Replaying: ${song.title}`);
+    try {
+      // Replay always drives the LR2/default gameplay path — the shared engine owns the playback either way, so
+      // the recorded run reproduces regardless of which skin family recorded it.
+      await this.playSong(song, { autoPlay: playlog.play.mode === 'auto', replay: playlog });
+    } catch (error) {
+      gameplayLog.warn('play-log replay failed', error);
+      this.setStatus(`Replay failed: ${(error as Error).message}`);
+      await this.showSelect();
+    }
+  }
+
+  /**
+   * Finds the loaded song a play-log belongs to. Exact `chartPath` match first (recorded since the replay feature
+   * landed), then a title + artist heuristic for logs recorded before the path rode along.
+   */
+  private findSongForPlaylog(playlog: BeMusicPlaylog): BrowserSongEntry | undefined {
+    const nativeChartPath = playlog.play.native?.chartPath;
+    if (typeof nativeChartPath === 'string' && nativeChartPath.length > 0) {
+      const exact = this.collection.songs.find((entry) => entry.chartPath === nativeChartPath);
+      if (exact) {
+        return exact;
+      }
+    }
+    const title = playlog.chart.title;
+    if (title === undefined || title.length === 0) {
+      return undefined;
+    }
+    return this.collection.songs.find(
+      (entry) => entry.title === title && (playlog.chart.artist === undefined || entry.artist === playlog.chart.artist),
+    );
   }
 
   /**
@@ -1542,6 +1624,7 @@ class PlayerWebDemoApp {
           // Auto-save fires even when the theme ships no result skin — falling back to select
           // shouldn't cost the user their replay file.
           this.maybeAutoSavePlaylog(playlog);
+          this.unlockPlaylogOptions();
         });
       },
       onError: (error) => {
@@ -1557,6 +1640,7 @@ class PlayerWebDemoApp {
     this.currentBeatorajaPlayVariant = variant;
     await this.sceneHost.setScene(this.beatorajaGameplayView);
     this.setStatus(`Playing (beatoraja): ${song.title}`);
+    this.lockPlaylogOptionsForPlay();
 
     // Consume the "user pressed Record on the select screen" flag. Same flow as the LR2
     // gameplay path — `autoRecordArmed` is set when the user clicks the Record button
@@ -2598,6 +2682,7 @@ class PlayerWebDemoApp {
 
   private async showSelect(): Promise<void> {
     this.elements.shell.classList.remove('playing');
+    this.unlockPlaylogOptions();
     // The `.empty` class drives the centered "Drop BMS folder…" hint. Toggle it off the moment we have charts to show,
     // and back on after a wipe / failed drop so the hint comes back instead of leaving the user staring at a blank
     // canvas.
@@ -2791,9 +2876,10 @@ class PlayerWebDemoApp {
   private buildLr2GameplayView(
     song: BrowserSongEntry,
     playSkin: Lr2Skin | undefined,
-    overrides: { autoPlay?: boolean },
+    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog },
   ): PixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
+    const replay = overrides.replay;
     const sharedOptions = {
       autoPlay: overrides.autoPlay ?? playOptions?.autoPlay ?? this.guiState.autoPlay,
       autoPauseOnBlur: this.guiState.autoPauseOnBlur,
@@ -2806,12 +2892,16 @@ class PlayerWebDemoApp {
       hiddenSudden2P: playOptions?.hiddenSudden2P,
       shutter: playOptions?.shutter,
       laneCover: playOptions?.laneCover,
-      autoScratch1P: playOptions?.autoScratch1P,
-      autoScratch2P: playOptions?.autoScratch2P,
-      dpFlip: playOptions?.dpFlip,
-      random1P: playOptions?.random1P,
-      random2P: playOptions?.random2P,
-      gauge: playOptions?.gauge1P,
+      // Replay playback restores the RECORDED play setup: the log's auto-scratch / gauge govern judging and the
+      // gauge readout, and the lane transforms stay off because the view re-applies the recorded arrangement
+      // directly (see `PixiGameplayViewOptions.replay`).
+      autoScratch1P: replay !== undefined ? replay.play.autoScratch : playOptions?.autoScratch1P,
+      autoScratch2P: replay !== undefined ? false : playOptions?.autoScratch2P,
+      dpFlip: replay !== undefined ? false : playOptions?.dpFlip,
+      random1P: replay !== undefined ? ('OFF' as const) : playOptions?.random1P,
+      random2P: replay !== undefined ? ('OFF' as const) : playOptions?.random2P,
+      gauge: replay !== undefined ? replay.play.gauge : playOptions?.gauge1P,
+      replay,
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
@@ -2874,6 +2964,7 @@ class PlayerWebDemoApp {
     this.decideView?.dispose();
     this.decideView = undefined;
     this.setStatus(`Playing: ${song.title}`);
+    this.lockPlaylogOptionsForPlay();
     this.gameplayView.start();
     if (this.autoRecordArmed) {
       this.autoRecordArmed = false;
@@ -2891,12 +2982,16 @@ class PlayerWebDemoApp {
     }
   }
 
-  private async playSong(song: BrowserSongEntry, overrides: { autoPlay?: boolean } = {}): Promise<void> {
+  private async playSong(
+    song: BrowserSongEntry,
+    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog } = {},
+  ): Promise<void> {
     // Family dispatch for the gameplay scene. The Debug Menu's "Skin family" pick funnels through here so a user
     // override of `'lr2'` / `'default'` forces that family even when beatoraja is technically available, while
-    // `'auto'` keeps the legacy preference (beatoraja → LR2 → default).
+    // `'auto'` keeps the legacy preference (beatoraja → LR2 → default). Replay playback always stays on the
+    // LR2/default path — that's where the play-log arrangement remap and `replayInputs` are wired.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
-    if (gameplayFamily === 'beatoraja') {
+    if (gameplayFamily === 'beatoraja' && overrides.replay === undefined) {
       await this.playSongBeatoraja(song, overrides);
       return;
     }
@@ -2920,6 +3015,7 @@ class PlayerWebDemoApp {
     const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
     this.gameplayView = this.buildLr2GameplayView(song, playSkin, overrides);
     this.setStatus(`Playing: ${song.title}`);
+    this.lockPlaylogOptionsForPlay();
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));
     // Consume the "user pressed Record on the select screen" flag now that gameplay is mounted — `startRecording`
     // requires the gameplay AudioContext to exist, which only happens after `mount`. Failing here is non-fatal: the
@@ -2981,15 +3077,33 @@ class PlayerWebDemoApp {
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
     this.maybeAutoSavePlaylog(data.playlog);
+    this.unlockPlaylogOptions();
   }
 
   /**
-   * Downloads the play-log (`*.bmplay.json` input replay) when the "Auto-save play history" toggle is on. Called
-   * from both result paths (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is
-   * up. Failures are non-fatal — the result screen must never be blocked by a download hiccup.
+   * Latches the playlog-related GUI options for the play that is about to start and disables their controllers.
+   * Playlog options are per-play: the value in effect at song start governs the whole play, and mid-song changes
+   * are rejected by keeping the controls disabled until {@link unlockPlaylogOptions} runs (result mounted or back
+   * at select).
+   */
+  private lockPlaylogOptionsForPlay(): void {
+    this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
+    this.playlogSaveController?.disable();
+  }
+
+  /** Re-enables the playlog option controllers once no play is in flight. */
+  private unlockPlaylogOptions(): void {
+    this.playlogSaveController?.enable();
+  }
+
+  /**
+   * Downloads the play-log (`*.bmplay.json` input replay) when the "Auto-save play history" toggle was on at song
+   * start (the latched value — the checkbox itself is disabled during a play). Called from both result paths
+   * (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is up. Failures are
+   * non-fatal — the result screen must never be blocked by a download hiccup.
    */
   private maybeAutoSavePlaylog(playlog: BeMusicPlaylog | undefined): void {
-    if (!this.guiState.autoSavePlaylog || playlog === undefined) {
+    if (!this.activePlayAutoSavePlaylog || playlog === undefined) {
       return;
     }
     try {

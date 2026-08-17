@@ -1022,6 +1022,67 @@ describe('player', () => {
     expect(lr2.judge.pgreat + lr2.judge.great + lr2.judge.good + lr2.judge.bad + lr2.judge.poor).toBe(1);
   });
 
+  test('player: replayInputs re-drives a recorded playlog deterministically', async () => {
+    // BPM 240 → notes at 1.0 s ('11') and 1.5 s ('12'). Record a play with two slightly-off presses, then replay
+    // the recorded input stream — the judgments must reproduce exactly, even at a different engine speed.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.total = 300;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 2], value: '01' },
+      { measure: 1, channel: '12', position: [1, 2], value: '01' },
+    ];
+
+    let recorded: BeMusicPlaylog | undefined;
+    const original = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      onPlaylogRecorded: (playlog) => {
+        recorded = playlog;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 990, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1540, command: { kind: 'lane-input', tokens: ['s'] } },
+      ]),
+    });
+    expect(recorded).toBeDefined();
+    expect(recorded!.inputs).toHaveLength(2);
+    const originalJudged = original.perfect + original.great + original.good + original.bad;
+    expect(originalJudged).toBeGreaterThan(0);
+
+    let replayed: BeMusicPlaylog | undefined;
+    const replaySummary = await manualPlay(json, {
+      // Chart-relative replay timestamps are speed-independent — run the replay fast to keep the test quick.
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: recorded!.inputs,
+      onPlaylogRecorded: (playlog) => {
+        replayed = playlog;
+      },
+    });
+
+    expect(replaySummary.perfect).toBe(original.perfect);
+    expect(replaySummary.great).toBe(original.great);
+    expect(replaySummary.good).toBe(original.good);
+    expect(replaySummary.bad).toBe(original.bad);
+    expect(replaySummary.poor).toBe(original.poor);
+    expect(replaySummary.exScore).toBe(original.exScore);
+    expect(replaySummary.score).toBe(original.score);
+    expect(replaySummary.fast).toBe(original.fast);
+    expect(replaySummary.slow).toBe(original.slow);
+    expect(replaySummary.gauge?.current).toBeCloseTo(original.gauge?.current ?? -1, 6);
+    // The replayed run re-records an equivalent input stream (same actions, channels, and µs timestamps).
+    expect(
+      replayed!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
+    ).toEqual(
+      recorded!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
+    );
+  });
+
   test('player: ESC-interrupted play records an aborted playlog', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 240;

@@ -493,7 +493,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         ...composeBeatorajaEngineOptions(this.options),
         // Play-log recording — the beatoraja path has no gauge picker yet, so the declared gauge stays the
         // engine's GROOVE default. DP flip is a chart transform the host already applied; record the intent.
-        recordPlaylog: this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {},
+        // The chart path rides along in `native` so a dropped play-log can be matched back to its song.
+        recordPlaylog: {
+          ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
+          ...(this.options.chartPath !== undefined ? { native: { chartPath: this.options.chartPath } } : {}),
+        },
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
