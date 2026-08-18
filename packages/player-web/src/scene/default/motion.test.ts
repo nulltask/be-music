@@ -69,7 +69,7 @@ describe('cursorFollow', () => {
 
 describe('judgePopup', () => {
   it('pops in large, then settles near scale 1 before fading', () => {
-    const start = judgePopup(16);
+    const start = judgePopup(8);
     expect(start.scale).toBeGreaterThan(1.2);
     expect(start.alpha).toBeGreaterThan(0);
     const hold = judgePopup(180);

@@ -2695,7 +2695,6 @@ export class PixiSongSelectView {
     // Default-family chrome paints only live library / focused-chart data, so the legacy `this.title` / `this.hint`
     // overlays are hidden; the host-level drop overlay remains responsible for the empty-library callout.
     const fallbackEntries = this.currentEntries();
-    const now = performance.now();
     const sceneElapsedMs = now - this.sceneStartedAt;
     const { start, visibleRows } = resolveDefaultSelectVisibleWindow(
       this.selectedIndex,
