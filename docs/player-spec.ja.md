@@ -17,8 +17,9 @@
 `@be-music/player-tui` の CLI 引数、設定ファイル永続化、Node ワーカー間通信などの呼び出し方法は対象外です。
 terminal player と browser player は timing、note、BGA cue、score、result に同じ譜面意味論を再利用します。Terminal UI の挙動は [Terminal player 実装メモ](./player-tui.ja.md) に分けて記述し、PixiJS scene、LR2 / beatoraja skin 描画、browser file loading、WebAudio lifecycle は [Browser player 実装メモ](./player-web.ja.md) に分けて記述します。
 
-core engine の既定ゲージは LR2 の `NORMAL` gauge に相当する `GROOVE` gauge です。
-export している gauge helper は `HARD`、`DEATH`、`EASY` も扱いますが、`autoPlay()` と `manualPlay()` は現時点で gauge-type option を公開していません。そのため現在の result path で engine が所有する `PlayerSummary.gauge.type` は `GROOVE` であり、bundled terminal player にも gauge type switch はありません。
+core engine の既定は `lr2` 互換ルールセットと、その `GROOVE` gauge（LR2 の `NORMAL` gauge 相当）です。
+どちらもオプションで、`PlayerOptions.judgeRuleset` がルールセットを、`PlayerOptions.gauge` がゲージを選びます。
+`bms-player` では `--ruleset` / `--gauge` で指定できます。
 
 ## BMS 対応範囲
 
@@ -171,7 +172,27 @@ reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS 
 left/right `Ctrl` と left/right `Option` の識別は kitty keyboard protocol で行います。
 kitty 非対応端末へフォールバックした場合、reverse scratch の side-specific 入力は保証しません。
 
+## 互換ルールセット
+
+**このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 3 つの互換ルールセット
+`lr2`（デフォルト）/ `beatoraja` / `iidx` のいずれかで動作します（`PlayerOptions.judgeRuleset`）。
+判定幅、押下がどのノートを取るか、ロングノートの扱い、空 POOR の規則、ゲージの種類とカーブ、スコア計算式は
+すべてルールセットが所有します。定数と出典は
+[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあり、
+3 つの比較表は [`docs/playlog.ja.md`](./playlog.ja.md) にあります。
+
+同じテーブルがライブエンジンとプレイログシミュレータの両方を駆動し、等価性テストが同一の記録入力列に対して
+両者の判定が 1 つずつ一致することを要求します。
+
+以降の章は既定の **`lr2` ルールセット**についての記述です。
+
 ## 判定幅
+
+### 窓の形
+
+判定窓はマイクロ秒の符号付き `[遅れ側の境界, 早い側の境界]` の組で、レーン種別（鍵盤 / スクラッチ）と文脈
+（通常ノート / ロングノート終端）ごとに解決します。LR2 は 4 つの文脈すべてで同じテーブルを使いますが、
+beatoraja はスクラッチを判定ごとに 10 ms 広げ、ロングノート終端に専用テーブルを持ちます。
 
 ### 基準幅
 
@@ -186,8 +207,9 @@ player は LR2 の実測判定幅を基準にします（hitkey 日記 2015-01-1
 | `4` `VERY EASY` | `NORMAL` と同一（LR2 は `#RANK 4` を `NORMAL` として扱う） | | | |
 
 `BAD` 幅は rank・拡張命令に関わらず `±200ms` で固定です。スクラッチも鍵盤と同じ幅を使います。
-`PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の境界は、この 4 本の幅から決まります。
-`POOR` は `BAD` 幅を超えた入力、またはノートの取り逃しで発生します。
+`PERFECT` / `GREAT` / `GOOD` / `BAD` の境界は、この 4 本の幅を内側から順に走査して決まります。
+どの窓にも入らない入力はノートに届きません — レーンのキー音だけが鳴り、押下は空 POOR の経路へ抜けます。
+`POOR` は取り逃したノートです。
 
 ### BMS の初期判定幅
 
@@ -311,13 +333,13 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 
 空POOR は LR2 における phantom press の扱いに合わせ、次の挙動とします。
 
-- 発生条件は **同レーンのノートが押下時刻から 1 秒以内の未来にあること** です（lr2oraja の LR2 ミス窓 `{0, 1000000}`µs。rank / EXRANK に依存しない固定窓）。ノート通過後（遅い側）に空POOR は発生せず、1 秒以内に次のノートが無いレーンの空打鍵は keysound 再生のみで無害です。
+- 発生条件は **同レーンのノートが「そのルールセットの miss 窓」の中にあること** です。LR2 の miss 窓は `{0, 1 s}`（lr2oraja の `JudgeProperty` LR2 ミス窓。rank / EXRANK に依存しない固定窓）なので、`lr2` ではノート通過後（遅い側）に空POOR は発生せず、1 秒以内に次のノートが無いレーンの空打鍵は keysound 再生のみで無害です。beatoraja の窓は早側 500 ms・遅側 150 ms です。
 - 同一ノートの手前であれば連打で **何度でも** 発生します（LR2 の `MissCondition.ALWAYS`。判定済みノートの手前でも発生）。
 
-- `summary` のジャッジカウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。 LR2 では「見逃しPOOR」(NOWJUDGE index 1) のみが POOR としてカウントされ、「空POOR」(index 0) はカウント外となるため。
-- EX-SCORE / IIDX score は **変化させない**。
-- combo は **切らない**。
-- groove gauge には `EMPTY_POOR` を適用する。デルタは [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) の `applyGrooveGaugeJudge('EMPTY_POOR')` 経由で算出され、 GROOVE で `-2`、 HARD で `-2`（TOTAL 補正対象）、 EASY で `-1.6`、 DEATH では `-10`。 NORMAL / EASY ではほぼ無害だが、 HARD / DEATH では実害が出る。
+- `summary.emptyPoor` を加算し、ノート判定カウンタ (`perfect`/`great`/`good`/`bad`/`poor`) は **更新しない**。ノートを消費していないため。POOR カウンタに両者の合計を表示するかは提示側の選択で、LR2 は合算します（OpenLR2 `ApplyJudgeNote` が空POOR 分岐でも `playerstat.poor` を加算）。
+- EX-SCORE とスコアは **変化させない**。
+- combo はルールセットが指示する場合のみ切る（`comboBreaksOnEmptyPoor`）。beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
+- ゲージには `EMPTY_POOR` を適用する。デルタはルールセットのゲージ表（[`definitions.ts`](../packages/player/src/ruleset/definitions.ts)）にあり、`lr2` では GROOVE `-2`、HARD `-2`（TOTAL 補正対象）、EASY `-1.6`、DEATH `-10`。GROOVE / EASY ではほぼ無害だが、HARD / DEATH では実害が出る。
 - **POOR BGA を発火する** (`trigger-poor-bga`)。
 - **judge 表示を `POOR` で 0.6 秒フラッシュ** する (`publishJudgeCombo('POOR', combo)`)。 LR2 spec 上は op 246 (1P 空POOR) / 266 (2P 空POOR) と op 245 / 265 (見逃しPOOR) が分岐するが、本実装では NOWJUDGE index 0 / 1 を同じ `'poor'` skin slot に解決しているため、視覚上は同一の POOR 表示になる。
 
@@ -342,7 +364,8 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 ### `summary.total`
 
-`summary.total` は演奏対象ノート数です。
+`summary.total` はアクティブなルールセットの**判定数**（EX-SCORE の分母）であり、画面上のノート数ではありません。
+チャージ系のスタイルはロングノートの始点と終点を別々に数えるため、1 本のロングノートが 2 判定になります。
 次の要素は含みません。
 
 - FREE ZONE
@@ -365,51 +388,56 @@ EX-SCORE は IIDX 互換です。
 
 ### SCORE
 
-表示用 `score` は `0-200000` の整数です。
-内部では次の 2 系統を合算してから `200000` へ正規化します。
+`score` はアクティブなルールセットが定義する値です。
 
-- 判定基本点: 最大 `150000`
-- combo bonus: 最大 `50000`
+- `lr2` は LR2 のマネースコア `floor((4 × PGREAT + 2 × GREAT + GOOD) × 50000 / notes)`（上限 `200000`）を返します。
+  判定内訳だけで決まり、コンボ項はありません。
+- `beatoraja` と `iidx` は EX-SCORE を返します。これが実機の表示です（IIDX は BISTROVER でマネースコアを廃止）。
 
-判定基本点の倍率は次のとおりです。
+### 空 POOR
 
-- `PERFECT`: `1.5`
-- `GREAT`: `1.0`
-- `GOOD`: `0.2`
-- `BAD` / `POOR`: `0`
+空 POOR は「届く範囲にノートは無いが、ルールセットの miss 窓の中にノートがある」押下です。ゲージを削り POOR
+演出を出しますが、ノートを消費しないため EX-SCORE には影響せず、`summary.poor` ではなく
+`summary.emptyPoor` に計上されます。LR2 の miss 窓は早側のみ（`{0, 1 s}`）で、ノートの 1 秒前までの押下は
+空 POOR になりますが、通過後の押下は決してなりません。beatoraja は早側 500 ms・遅側 150 ms です。
+コンボを切るかどうかもルールセット次第で、beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
 
-combo bonus は 1 ノートごとに最大 10 段階まで加算します。
-全ノート `PERFECT` で必ず `200000` になるよう、ノート数ごとに bonus 単価を計算します。
+POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示側の選択です。LR2 は合算します
+（OpenLR2 `ApplyJudgeNote` が `playerstat.poor` を加算）。そのため両者を合算せず分けて公開しています。
 
 ## Groove Gauge
 
 ### 基本方針
 
-- 既定の `GROOVE` gauge は Lunatic Rave 2 の `NORMAL` gauge に合わせます。
-- `GROOVE` / `EASY` は soft floor を持ち、`HARD` / `DEATH` は `0%` まで落ちます。
-- クリア判定は gauge type ごとの threshold を演奏終了時に判定します。
+- ゲージは `PlayerOptions.gauge` で選び、LR2 の名前（`GROOVE` / `EASY` / `HARD` / `DEATH`）で指定します。
+  各ルールセットが自分のラインナップへ対応付けます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は `HAZARD`。
+  IIDX に HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
+- カーブはルールセットが所有します: 判定ごとの増減、TOTAL スケーリング、guts 緩和、死亡ボーダー、
+  クリア判定（回復系は閾値、サバイバル系は「一度も 0 にならなかったか」）。
+- 選択したゲージは実際にプレイを支配します。色だけの飾りではありません — HARD は本当に削れ、
+  底を打った HARD は `failedMidPlay` を報告し、以後クリアできません。
+- テーブルは [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあり、
+  `RulesetGauge` を通して適用されます。最終スコアと summary の authority は共有エンジンで、
+  browser scene は `summary.gauge` をミラーします。
 
-variant rule は `@be-music/player/core/groove-gauge` にあります。
-core engine の summary path は現在、既定の `GROOVE` state を構築します。
-browser scene は skin-side gauge UI state 用にこの helper を使えますが、最終 score と summary value の authority は共有 engine です。
+### 初期値と既定値（`lr2`）
 
-### 初期値と既定値
-
-- 既定 `GROOVE` の初期ゲージは `20%`
-- 既定 `GROOVE` の演奏中下限は `2%`
+- `GROOVE` は `20%` 開始 / `2%` floor / `80%` クリア
+- `EASY` は `20%` 開始 / `2%` floor / `80%` クリア（増減が緩やか）
+- `HARD` / `EX-HARD` / `DEATH` は `100%` 開始で、`2%` を下回った時点で失敗
 - 上限は `100%`
-- 既定 `GROOVE` のクリアラインは `80%`
-- `#TOTAL` 未指定時の既定値は `160`
 - `#TOTAL` 指定時はその値をそのまま使います
-
-`HARD` と `DEATH` は `100%` から始まり `0%` まで落ちます。`EASY` は `20%` から始まり、`2%` floor を持ち、`60%` で clear です。
+- `#TOTAL` 未指定時は LR2 のノート数式（`LR2_bmsload.cpp`）で求めます:
+  400 ノート未満は `(n / 5 + 200) × 0.8`、600 未満は `((n - 400) / 2.5 + 280) × 0.8`、
+  それ以上は `((n - 600) / 5 + 360) × 0.8`。beatoraja と IIDX はそれぞれ独自の既定値を使います。
 
 ### 増減量
 
 `noteCount` は TOTAL / EX-SCORE / SCORE の対象になる演奏ノート数です。
 FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めません。
 
-次の delta は既定の `GROOVE` gauge 向けです。`HARD`、`DEATH`、`EASY` は [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) にある variant-specific delta を使います。
+次の delta は `lr2` ルールセットの `GROOVE` gauge 向けです。`HARD`、`DEATH`、`EASY` と他ルールセットの値は
+[`definitions.ts`](../packages/player/src/ruleset/definitions.ts) にあります。
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -424,7 +452,8 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 `HARD` / `EASY` / `DEATH` の variant は LR2 の値（beatoraja `GaugeProperty` の `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`）に合わせます。
 
-- `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には `#TOTAL` 補正表（`TOTAL ≥240` で `×1.0` から `<120` で `×10` まで）を掛け、ゲージが `30%` 未満のときはさらに `×0.6` に緩和します。
+- `HARD`: 回復 `PGREAT/GREAT +0.1` / `GOOD +0.05`（TOTAL 非依存）、減少 `BAD -6` / `見逃しPOOR -10` / `空POOR -2`。減少には `#TOTAL` 補正表（`TOTAL ≥240` で `×1.0` から `<120` で `×10` まで）を掛け、ゲージが `32%` 未満のときはさらに `×0.6` に緩和します（lr2oraja は比較前にゲージを偶数パーセントへ切り捨てるため、
+  「表示 30 %」は内部 32 % に相当します）。
 - `EASY`: 増加は GROOVE の `1.2` 倍、減少は `0.8` 倍（`BAD -3.2` / `POOR -4.8` / `空POOR -1.6`）。クリア閾値は GROOVE と同じ `80%` です。
 - `DEATH`（LR2 HAZARD 相当）: `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`、`BAD` / `見逃しPOOR` は `-100`（即死）、`空POOR -10`。
 - `HARD` / `DEATH` は `2%` 未満になった時点で `0%` に落ちて FAILED 確定（以後回復しません）。地雷ダメージなどの生デルタは guts・TOTAL 補正の対象外です。
@@ -433,11 +462,19 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 
 ### NOTES の数え方
 
-player はロングノートを 1 本につき 1 ノートとして扱います。
-`#LNOBJ` の終端オブジェクト自体は演奏ノート数に含めません。
-`#mmm51-69` 由来のロングノートも、始点 1 件の演奏ノートとして数えます。
+ロングノート 1 本が何判定に相当するかはルールセットが決めます。LR2 はすべて LN として 1 判定、
+チャージ系のスタイルは始点と終点を別々に判定するため 2 判定です。
 
-### `#LNMODE`
+`#LNOBJ` の終端オブジェクト自体は決して数えません。
+`#mmm51-69` 由来のロングノートも `#LNOBJ` 由来と同じ数え方です。
+
+### ロングノートのスタイル
+
+譜面の `#LNMODE` は要求であって決定ではありません。ルールセットが実際に演奏する形へ写像します。
+
+- `lr2`（`ln`）: `#LNMODE` に関わらずすべて LN。判定は 1 回だけ遅延確定し、途中離しは `BAD`。
+- `beatoraja`（`per-note`）: 譜面に従う — `1` が LN、`2` が CN、`3` が HCN。
+- `iidx`（`charge`）: すべてチャージノート（譜面が `3` なら HCN）。始点が `BAD` / `POOR` だと終点判定は取り消されます。
 
 BMS の `#LNMODE` 未指定時は `1` として扱います。
 bmson は beatoraja 拡張の `info.ln_type` と note 単位の `t`（1: LN / 2: CN / 3: HCN、`t` が `ln_type` より優先）でモードを決め、どちらも未指定の場合は LR2 準拠の既定として `1`（LN）を使います。
@@ -446,16 +483,22 @@ FREE ZONE は `#LNMODE` の対象外で、終端を持つノートとして扱�
 ### Manual Play
 
 手動演奏では、ロングノートの始点入力時に始点側の判定を計算します。
-ただし最終的な判定確定タイミングは `#LNMODE` に依存します。
+以下のモードは譜面の `#LNMODE` そのものではなく、ルールセットが解決した**実効モード**です。
 
-- `LNMODE=1`: 終点まで押し続けた場合のみ、終点到達時に始点側の判定を 1 回だけ確定します。途中で離した場合はその時点で `BAD` とし、レーン音も停止します。
-- `LNMODE=2`: 終点到達時、または途中離し時に終点側の判定を計算し、始点側と終点側のうち悪い方を最終判定として 1 回だけ確定します。途中離し時はレーン音も停止します。
-- `LNMODE=3`: 基本の最終判定は `LNMODE=2` と同じです。加えて、保持が切れている間は groove gauge を継続的に減少させます。保持が切れたまま終点へ到達した場合、終点側は `POOR` として扱います。途中離し時はレーン音も停止します。
+- モード `1`（LN）: 始点判定を保持し、終点到達時に 1 回だけ確定します。途中で離した場合はその時点で `BAD` とし、レーン音も停止します。
+- モード `2`（CN）: 始点は押下時に即座に加点されます。終点は**離した瞬間**の時刻で判定し（フレーム時刻ではなく
+  実際の解放時刻を使います）、2 つ目の判定として加算します。終点を過ぎても押し続けている間はまだ判定になりません —
+  終点の遅れ側の窓が閉じるまで離す猶予があります。途中離し時はレーン音も停止します。
+- モード `3`（HCN）: モード `2` に加え、保持が切れている間は継続的にゲージを減少させます。
+  保持が切れたまま終点へ到達した場合、終点側は `POOR` になります。
+
+一度も触れなかったロングノートは始点分の `POOR` 1 つに加え、チャージ系ではさらに終点分の `POOR` を負います。
+ただし IIDX は終点判定が取り消されるため、負いません。
 
 ### Auto Play
 
-自動演奏は現時点で `#LNMODE` を分岐しません。
-ロングノートは始点で keysound 再生とレーン保持表示を開始し、`PGREAT` / combo / score / gauge の確定は終点で 1 回だけ行います。
+ロングノートは始点で keysound 再生とレーン保持表示を開始し、終点で確定します。
+LN 系スタイルは `PGREAT` を 1 回、チャージ系は始点・終点の 2 回です。
 
 ### AUTO SCRATCH
 
@@ -644,16 +687,17 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 - `good`
 - `bad`
 - `poor`
+- `emptyPoor`
 - `exScore`
 - `score`
 - `gauge`
 
-`gauge` には `current` / `max` / `clearThreshold` / `initial` / `effectiveTotal` / `cleared` を含みます。
+`gauge` には `current` / `max` / `clearThreshold` / `initial` / `effectiveTotal` / `cleared` に加え、
+`type`（ルールセット固有のゲージ ID）/ `survival` / `failedMidPlay` を含みます。
 
 ## 既知の未対応
 
-- `PlayerOptions` と core `autoPlay()` / `manualPlay()` result path での gauge type switching
-- bundled terminal player での gauge type switching
 - browser gameplay での 2P 独立 gauge variant
 - ゲージ推移タイムライン表示
-- `AUTO` での `#LNMODE` 分岐
+- beatoraja の非デフォルトのノート選択アルゴリズム（`duration` / `lowest` / `score`）は実装済みですが
+  オプションとしては公開していません

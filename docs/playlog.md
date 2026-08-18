@@ -54,15 +54,31 @@ In the browser player:
   (LR2 / beatoraja / IIDX), gauge, Random 1P/2P, DP flip, and auto scratch. Where the LR2 select scene's
   PLAY OPTION panel has a counterpart, the two surfaces two-way sync.
 
-## Live judge-window rulesets
+## Compat rulesets
 
-The shared engine can judge a live play under `'lr2'` (default), `'beatoraja'`, or `'iidx'` windows
-(`PlayerOptions.judgeRuleset`). Only the WINDOW WIDTHS switch: LR2 uses the rank-interpolated LR2 windows,
-beatoraja scales its SEVENKEYS windows linearly by beatoraja's judgerank (the asymmetric BAD gate is symmetrized
-to ±250 ms × judgerank), and IIDX uses the fixed ±16.67/±33.33/±116.67/±250 ms widths. Note selection, empty-POOR
-behavior, long-note mechanics, and the groove gauge stay on the engine's LR2-aligned semantics — the playlog
-simulators remain the full per-ruleset reproduction. Dynamic `#EXRANKxx` only applies under `'lr2'`. The selected
-ruleset is recorded as `play.judgeRuleset` and replays re-apply it automatically.
+**The player has no judge logic of its own.** Every live play runs under one of three compat rulesets —
+`'lr2'` (the default), `'beatoraja'`, or `'iidx'` — selected with `PlayerOptions.judgeRuleset`, and the ruleset
+owns the whole decision surface:
+
+- judge windows, signed and per context (key vs scratch, note vs long-note end), including LR2's `#EXRANKxx`
+  timeline
+- which note a press resolves against (`lowest` / `combo` / `duration` / `score`) and LR2's multi-BAD collector
+- long-note style: LR2 plays every long note as an LN, beatoraja honours the chart's `#LNMODE`, IIDX charges
+  everything — charge modes judge the head and the tail separately
+- the empty-POOR window and whether it breaks the combo
+- the gauge line-up and its curve, TOTAL default, guts softening, and clear rule
+- the score formula and the EX-SCORE denominator
+
+The same tables drive the live engine and the play-log simulator, and an equivalence suite
+([`equivalence.test.ts`](../packages/player/src/playlog/equivalence.test.ts)) replays one recorded input stream
+through both and requires them to agree judge for judge. The selected ruleset is recorded as `play.judgeRuleset`
+and replays re-apply it automatically.
+
+Gauge selection is separate (`PlayerOptions.gauge`) and spelled in LR2's names — `GROOVE` / `EASY` / `HARD` /
+`DEATH` — which each ruleset maps onto its own line-up (`GROOVE` is beatoraja's `NORMAL`, `DEATH` its `HAZARD`,
+and IIDX has no HAZARD so `DEATH` folds onto `EX-HARD`).
+
+`bms-player` exposes both as `--ruleset <lr2|beatoraja|iidx>` and `--gauge <GROOVE|EASY|HARD|DEATH>`.
 
 ## Replay playback
 
@@ -85,7 +101,7 @@ gameplay path regardless of which skin family recorded the log.
 `simulatePlaylog(playlog, { ruleset })` (from `@be-music/player/playlog`) replays the input stream through one
 ruleset; `simulatePlaylogRulesets(playlog)` runs all three. Each ruleset differs in judge windows, note selection,
 long-note semantics, empty-POOR behavior, and gauge tables — the constants are documented per source in
-[`packages/player/src/playlog/rulesets.ts`](../packages/player/src/playlog/rulesets.ts):
+[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts):
 
 | aspect | LR2 (`lr2/1`) | beatoraja (`beatoraja/1`) | IIDX (`iidx/1`) |
 | --- | --- | --- | --- |
@@ -95,6 +111,7 @@ long-note semantics, empty-POOR behavior, and gauge tables — the constants are
 | note selection | Lowest + multi-BAD chain | Combo (default; duration / lowest / score selectable) | Lowest |
 | long notes | all LN (deferred single judgment) | per-note LN / CN / HCN | all CN (HCN gauge when mode 3) |
 | empty POOR window | early-only 1000 ms | late 150 / early 500 ms (7K) | unmeasured — beatoraja window used |
+| empty POOR breaks combo | no | 5K / PMS only | no |
 | money score | `(4·PG + 2·GR + GD) × 50000 / notes` | — | — (abolished in BISTROVER) |
 | gauges | lr2oraja LR2 tables (death 2 %, guts < 32 % ×0.6) | beatoraja native tables | iidx.org tables (a-value recovery, ≤ 30 % half damage on HARD) |
 

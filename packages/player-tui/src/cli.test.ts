@@ -104,6 +104,18 @@ describe('player cli', () => {
 
   test('cli: keeps BMS LN type auto-detection enabled by default and lets the user disable it', () => {
     expect(parseArgs(['chart.bms']).inferBmsLnTypeWhenMissing).toBe(true);
+  });
+
+  test('parses --ruleset and --gauge, and rejects unknown values', () => {
+    expect(parseArgs(['chart.bms']).judgeRuleset).toBeUndefined(); // LR2 is the engine default
+    expect(parseArgs(['chart.bms']).gauge).toBeUndefined();
+
+    expect(parseArgs(['chart.bms', '--ruleset', 'beatoraja']).judgeRuleset).toBe('beatoraja');
+    expect(parseArgs(['chart.bms', '--ruleset', 'IIDX']).judgeRuleset).toBe('iidx');
+    expect(parseArgs(['chart.bms', '--gauge', 'hard']).gauge).toBe('HARD');
+
+    expect(() => parseArgs(['chart.bms', '--ruleset', 'lr2oraja'])).toThrow(/Unknown --ruleset/);
+    expect(() => parseArgs(['chart.bms', '--gauge', 'ASSIST'])).toThrow(/Unknown --gauge/);
     const parsed = parseArgs(['chart.bms', '--no-ln-type-auto']);
     expect(parsed.inferBmsLnTypeWhenMissing).toBe(false);
     expect(parseArgs(['chart.bms', '--no-ln-type-auto', '--ln-type-auto']).inferBmsLnTypeWhenMissing).toBe(true);

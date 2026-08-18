@@ -17,8 +17,9 @@ This document covers the results returned by `autoPlay()` and `manualPlay()`, as
 Invocation methods such as `@be-music/player-tui` CLI arguments, configuration file persistence, and Node worker communication are not covered.
 The terminal player and browser player reuse the same chart semantics for timing, notes, BGA cues, score, and results. Terminal UI behavior is documented separately in [Terminal player implementation notes](./player-tui.md), while PixiJS scenes, LR2/beatoraja skin rendering, browser file loading, and WebAudio lifecycle are documented in [Browser player implementation notes](./player-web.md).
 
-The core engine defaults to the LR2-compatible `GROOVE` gauge, which corresponds to LR2's `NORMAL` gauge.
-The exported gauge helper also supports `HARD`, `DEATH`, and `EASY`, but `autoPlay()` and `manualPlay()` do not currently expose a gauge-type option. Engine-owned `PlayerSummary.gauge.type` is therefore `GROOVE` in the current result path, and the bundled terminal player has no gauge-type switch.
+The core engine defaults to the `lr2` compat ruleset and its `GROOVE` gauge, which corresponds to LR2's `NORMAL`
+gauge. Both are options: `PlayerOptions.judgeRuleset` picks the ruleset and `PlayerOptions.gauge` the gauge, and
+`bms-player` exposes them as `--ruleset` and `--gauge`.
 
 ## BMS compatible range
 
@@ -175,20 +176,31 @@ For reverse scratch, 1P uses left `Ctrl` and 2P uses right `Ctrl`. On macOS, use
 Distinguishing between left/right `Ctrl` and left/right `Option` is done using the kitty keyboard protocol.
 If you fall back to a terminal that does not support kitty, side-specific input of reverse scratch is not guaranteed.
 
+## Compat rulesets
+
+**The player has no judge logic of its own.** Every play runs under one of three compat rulesets — `lr2` (the
+default), `beatoraja`, or `iidx` — chosen with `PlayerOptions.judgeRuleset`. The ruleset owns the judge windows,
+which note a press resolves against, the long-note style, the empty-POOR rule, the gauge line-up and its curve,
+and the score formula. The tables and their primary sources live in
+[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) and are compared
+side by side in [`docs/playlog.md`](./playlog.md).
+
+The same tables drive the live engine and the play-log simulator, and an equivalence suite requires the two to
+agree judge for judge on the same recorded input stream.
+
+The rest of this chapter describes the **`lr2` ruleset**, which is the default.
+
 ## Judgment width
 
-### Standard width
+### Window shape
 
-The player first has an IIDX-based reference judgment width.
-Subsequent rank resolution and expansion instructions will apply this reference value by scaling it.
+A window is a signed `[late bound, early bound]` pair in microseconds, resolved per lane kind (key vs scratch) and
+per context (note vs long-note end). LR2 uses one table for all four contexts; beatoraja widens scratch by 10 ms
+per judge and gives long-note ends their own table.
 
-- `PGREAT`: `16.67ms`
-- `GREAT`: `33.33ms`
-- `GOOD`: `116.67ms`
-- `BAD`: `250ms`
-
-The boundaries of `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` are determined by the width of these four lines.
-`POOR` occurs when an input exceeds the `BAD` width or a note is missed.
+The boundaries of `PERFECT` / `GREAT` / `GOOD` / `BAD` are determined by these four windows, walked inner to outer.
+An input outside every window reaches no note: the lane keysound plays and the press falls through to the
+empty-POOR path. `POOR` is a note that was missed outright.
 
 ### BMS initial judgment width
 
@@ -310,15 +322,15 @@ When `POOR` occurs, do the following:
 
 If there is an input but no undecided notes inside the `BAD` window for that lane set, fire an LR2-compatible "empty POOR" (空POOR).
 
-- The trigger condition is that **a note on the same lane lies within the next 1 second** of the press (lr2oraja's LR2 miss window `{0, 1000000}`µs — fixed, independent of rank / EXRANK). Empty POORs never fire after a note passes (late side), and a press on a lane with no note within a second is harmless: only the keysound plays.
+- The trigger condition is that a note on the same lane falls inside the **ruleset's miss window**. LR2's is `{0, 1 s}` (lr2oraja's `JudgeProperty` LR2 miss window — fixed, independent of rank / EXRANK), so under `lr2` an empty POOR never fires after a note passes and a press with no note within the next second is harmless: only the keysound plays. beatoraja's window reaches 500 ms early and 150 ms late.
 - It fires **repeatedly** for the same note while mashing in front of it (LR2's `MissCondition.ALWAYS`, including in front of already-judged notes).
 
 Empty POOR mirrors LR2's phantom-press behaviour:
 
-- Do NOT update `summary` judge counters (`perfect` / `great` / `good` / `bad` / `poor`). LR2 only counts the "missed POOR" branch (NOWJUDGE index 1) into the POOR tally; the "empty POOR" branch (index 0) is excluded.
-- Do NOT change EX-SCORE / IIDX score.
-- Do NOT cut the combo.
-- Apply `EMPTY_POOR` to the groove gauge — the delta lives in [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts) (`applyGrooveGaugeJudge('EMPTY_POOR')`): GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on NORMAL / EASY; meaningful drain on HARD / DEATH.
+- Increment `summary.emptyPoor`, and do NOT touch the note-judge counters (`perfect` / `great` / `good` / `bad` / `poor`) — no note was consumed. Whether a player's POOR counter displays the two summed is a presentation choice; LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch).
+- Do NOT change EX-SCORE or the score.
+- Cut the combo only where the ruleset says to (`comboBreaksOnEmptyPoor`): beatoraja's five-key and PMS rules do, LR2 and IIDX do not.
+- Apply `EMPTY_POOR` to the gauge — the delta lives in the ruleset's gauge table ([`definitions.ts`](../packages/player/src/ruleset/definitions.ts)). Under `lr2`: GROOVE `-2`, HARD `-2` (subject to the TOTAL multiplier), EASY `-1.6`, DEATH `-10`. Nearly harmless on GROOVE / EASY; meaningful drain on HARD / DEATH.
 - Trigger POOR BGA (`trigger-poor-bga`).
 - Flash the judge display as `POOR` for 0.6 s (`publishJudgeCombo('POOR', combo)`). The LR2 spec separates op 246 (1P empty POOR) / 266 (2P empty POOR) from op 245 / 265 (missed POOR), but both NOWJUDGE indices currently resolve to the same `'poor'` skin slot in this implementation, so the rendered sprite is identical.
 
@@ -342,7 +354,9 @@ The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md): the `va
 
 ### `summary.total`
 
-`summary.total` is the number of notes played.
+`summary.total` is the active ruleset's **judgment count** — its EX-SCORE denominator, not the number of notes on
+screen. Charge-note styles count a long note's head and tail separately, so one long note contributes two.
+
 It does not contain the following elements:
 
 - FREE ZONE
@@ -365,51 +379,57 @@ EX-SCORE is IIDX compatible.
 
 ### SCORE
 
-The display `score` is an integer between `0-200000`.
-Internally, the following two systems are added together and then normalized to `200000`.
+`score` is whatever the active ruleset defines.
 
-- Judgment basic points: maximum `150000`
-- combo bonus: up to `50000`
+- `lr2` reports LR2's money score, `floor((4 × PGREAT + 2 × GREAT + GOOD) × 50000 / notes)`, capped at `200000`.
+  It is purely a function of the judge tally — there is no combo term.
+- `beatoraja` and `iidx` report EX-SCORE, which is what they display. IIDX retired its own money score in
+  BISTROVER.
 
-The magnification of the judgment basic points is as follows.
+### Empty POOR
 
-- `PERFECT`: `1.5`
-- `GREAT`: `1.0`
-- `GOOD`: `0.2`
-- `BAD` / `POOR`: `0`
+An empty POOR (空POOR) is a press with no note in reach but one inside the ruleset's miss window. It costs gauge
+and fires the POOR cue without consuming a note, so it never reaches EX-SCORE and is counted in
+`summary.emptyPoor` rather than `summary.poor`. LR2's miss window is early-only (`{0, 1 s}`) — a press up to a
+second before a note charges one, a press after never does; beatoraja's reaches 500 ms early and 150 ms late.
+Whether it breaks the combo is the ruleset's call: beatoraja's five-key and PMS rules say yes, LR2 and IIDX say no.
 
-Combo bonuses are added up to 10 steps per note.
-Calculate the bonus unit price for each number of notes so that it is always `200000` for all notes `PERFECT`.
+Whether a player's POOR counter displays `poor` and `emptyPoor` summed is a presentation choice. LR2's does
+(OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it), which is why the split is exposed rather than
+folded.
 
 ## Groove Gauge
 
 ### Basic policy
 
-- The default `GROOVE` gauge matches the Lunatic Rave 2 `NORMAL` gauge.
-- `GROOVE` / `EASY` use a soft floor, while `HARD` / `DEATH` can fall to `0%`.
-- Clear judgment is resolved from each gauge type's threshold at the end of the performance.
+- The gauge is picked with `PlayerOptions.gauge`, spelled in LR2's names (`GROOVE` / `EASY` / `HARD` / `DEATH`),
+  and each ruleset maps that pick onto its own line-up: `GROOVE` is beatoraja's `NORMAL`, `DEATH` its `HAZARD`,
+  and IIDX — which has no HAZARD equivalent — folds `DEATH` onto `EX-HARD`.
+- The ruleset owns the curve: per-judge deltas, TOTAL scaling, guts softening, the death border, and the clear
+  rule (a threshold for the recovery gauges, "never bottomed out" for the survival gauges).
+- The selected gauge governs the run. It is not a colour: HARD really drains, and a HARD run that bottoms out
+  reports `failedMidPlay` and can no longer clear.
+- The tables live in [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts)
+  and are applied through `RulesetGauge`. The shared engine is the authority for final score and summary values;
+  browser scenes mirror `summary.gauge`.
 
-The variant rules live in `@be-music/player/core/groove-gauge`.
-The core engine's summary path constructs the default `GROOVE` state today.
-Browser scenes may use the helper for skin-side gauge UI state, but the shared engine remains the authority for final score and summary values.
+### Initial and default values (`lr2`)
 
-### Initial and default values
-
-- Default `GROOVE` initial gauge is `20%`
-- Default `GROOVE` lower limit during play is `2%`
+- `GROOVE` starts at `20%`, floors at `2%`, and clears at `80%`
+- `EASY` starts at `20%`, floors at `2%`, and clears at `80%` with gentler numbers
+- `HARD` / `EX-HARD` / `DEATH` start at `100%` and fail the moment they drop below `2%`
 - Upper limit is `100%`
-- Default `GROOVE` clear line is `80%`
-- If `#TOTAL` is not specified, the default value is `160`
 - When `#TOTAL` is specified, use that value as is
-
-`HARD` and `DEATH` start at `100%` and bottom out at `0%`; `EASY` starts at `20%`, has a `2%` floor, and clears at `60%`.
+- When `#TOTAL` is absent, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
+  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja and IIDX
+  use their own defaults.
 
 ### Increase/Decrease
 
 `noteCount` is the number of notes played for TOTAL / EX-SCORE / SCORE.
 FREE ZONE, mines, and invisible objects are not included in `noteCount`.
 
-The following deltas describe the default `GROOVE` gauge. `HARD`, `DEATH`, and `EASY` use the variant-specific deltas in [`groove-gauge.ts`](../packages/player/src/core/groove-gauge.ts).
+The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH`, `EASY`, and the other rulesets' values live in [`definitions.ts`](../packages/player/src/ruleset/definitions.ts).
 
 `baseGain = effectiveTotal / noteCount`
 
@@ -424,7 +444,8 @@ The value after gauge update is clamped to the current gauge type's min/max rang
 
 The `HARD` / `EASY` / `DEATH` variants follow the LR2 values (beatoraja `GaugeProperty`'s `HARD_LR2` / `EASY_LR2` / `HAZARD_LR2`).
 
-- `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by the `#TOTAL` table (`×1.0` at `TOTAL ≥ 240` up to `×10` below `120`) and softened by `×0.6` while the gauge is under `30%`.
+- `HARD`: recovery `PGREAT/GREAT +0.1` / `GOOD +0.05` (TOTAL-independent); damage `BAD -6` / `missed POOR -10` / `empty POOR -2`. Damage is multiplied by the `#TOTAL` table (`×1.0` at `TOTAL ≥ 240` up to `×10` below `120`) and softened by `×0.6` while the gauge is under `32%` (lr2oraja rounds the gauge down to an even percent before
+  the comparison, so "display 30 %" is internal 32 %).
 - `EASY`: gains are `1.2×` GROOVE, damage is `0.8×` GROOVE (`BAD -3.2` / `POOR -4.8` / `empty POOR -1.6`). The clear threshold stays at `80%`, same as GROOVE.
 - `DEATH` (LR2 HAZARD equivalent): `PGREAT +0.15` / `GREAT +0.06` / `GOOD 0`; `BAD` / missed `POOR` are `-100` (instant death); `empty POOR -10`.
 - `HARD` / `DEATH` collapse to `0%` (FAILED, no recovery) the moment they drop below `2%`. Raw deltas such as mine damage bypass the guts softening and the TOTAL multiplier.
@@ -433,11 +454,20 @@ The `HARD` / `EASY` / `DEATH` variants follow the LR2 values (beatoraja `GaugePr
 
 ### How to count NOTES
 
-The player treats each long note as one note.
-The terminal object of `#LNOBJ` itself is not included in the number of notes played.
-Long notes derived from `#mmm51-69` are also counted as one starting note.
+How many judgments a long note is worth is the ruleset's call. LR2 plays every long note as an LN and counts one;
+charge-note styles judge the head and the tail separately and count two.
 
-### `#LNMODE`
+The terminal object of `#LNOBJ` itself is never counted.
+Long notes derived from `#mmm51-69` are counted the same way as `#LNOBJ` ones.
+
+### Long-note style
+
+The chart's `#LNMODE` is a request, not a decision — the ruleset maps it to what it actually plays:
+
+- `lr2` (`ln`): every long note is an LN, whatever `#LNMODE` says. One deferred judgment, early release is a `BAD`.
+- `beatoraja` (`per-note`): honours the chart — `1` is an LN, `2` a CN, `3` an HCN.
+- `iidx` (`charge`): every long note is a charge note, an HCN where the chart says `3`. A `BAD` or `POOR` on the
+  head cancels the tail judgment entirely.
 
 If `#LNMODE` of BMS is not specified, it is treated as `1`.
 bmson resolves the mode via the beatoraja extensions `info.ln_type` and the per-note `t` (1: LN / 2: CN / 3: HCN, `t` takes precedence over `ln_type`); when neither is specified the LR2-aligned default `1` (LN) is used.
@@ -448,14 +478,24 @@ FREE ZONE is not subject to `#LNMODE` and is treated as a note with a terminal.
 In manual performance, the start point side judgment is calculated when inputting the long note start point.
 However, the final decision timing depends on `#LNMODE`.
 
-- `LNMODE=1`: Only if you keep pressing until the end point, the judgment on the start point side will be confirmed only once when the end point is reached. If you release it midway, it will become `BAD` at that point and the lane sound will also stop.
-- `LNMODE=2`: Calculate the judgment on the end point side when reaching the end point or leaving halfway, and confirm the worse one of the starting point side and the ending point side as the final judgment only once. The lane sound will also stop when you leave midway.
-- `LNMODE=3`: The basic final judgment is the same as `LNMODE=2`. In addition, the groove gauge will continue to decrease while the hold expires. If the end point is reached while the hold is broken, the end point side is treated as `POOR`. The lane sound will also stop when you leave midway.
+The modes below are the EFFECTIVE modes the ruleset resolved to, not the chart's raw `#LNMODE`.
+
+- Mode `1` (LN): the head judgment is held and confirmed once, at the end point. Releasing midway makes it a `BAD`
+  at that point and stops the lane sound.
+- Mode `2` (CN): the head scores immediately on the press. The tail is judged on the RELEASE — against the exact
+  release instant, not the frame that noticed it — and contributes a second judgment. Holding past the end point
+  is not yet a judgment: the player has until the tail's late window closes to let go. The lane sound stops on
+  release.
+- Mode `3` (HCN): as mode `2`, plus the gauge keeps draining while the hold is broken. Reaching the end point with
+  the hold broken makes the tail a `POOR`.
+
+A long note the player never touched owes one `POOR` for the head, plus a second for the tail under charge modes —
+except under IIDX, where the cancelled tail owes nothing.
 
 ### Auto Play
 
-Autoplay does not currently branch to `#LNMODE`.
-A long note starts keysound playback and lane holding display at the start point, and `PGREAT` / combo / score / gauge is confirmed only once at the end point.
+A long note starts keysound playback and lane holding display at the start point, and is cleared at the end point:
+one `PGREAT` under LN styles, two (head and tail) under charge styles.
 
 ### AUTO SCRATCH
 
@@ -644,16 +684,17 @@ The main items are:
 - `good`
 - `bad`
 - `poor`
+- `emptyPoor`
 - `exScore`
 - `score`
 - `gauge`
 
-`gauge` includes `current` / `max` / `clearThreshold` / `initial` / `effectiveTotal` / `cleared`.
+`gauge` includes `current` / `max` / `clearThreshold` / `initial` / `effectiveTotal` / `cleared`, plus `type` (the
+ruleset-scoped gauge id), `survival`, and `failedMidPlay`.
 
 ## Known unsupported
 
-- Gauge type switching in `PlayerOptions` and the core `autoPlay()` / `manualPlay()` result path
-- Gauge type switching in the bundled terminal player
 - Independent 2P gauge variant in browser gameplay
 - Gauge timeline display
-- `#LNMODE` branch on `AUTO`
+- beatoraja's non-default note-selection algorithms (`duration` / `lowest` / `score`) are implemented but not
+  exposed as an option

@@ -54,15 +54,30 @@ TypeScript 型・シリアライザ・防御的パーサは
   LR2 / beatoraja / IIDX、ゲージ、Random 1P/2P、DP FLIP、オートスクラッチ）を持ちます。LR2 セレクトシーンの
   PLAY OPTION パネルに対応項目がある設定は双方向に同期します。
 
-## ライブ判定幅ルールセット
+## 互換ルールセット
 
-共有エンジンはライブプレイを `'lr2'`（デフォルト）/ `'beatoraja'` / `'iidx'` の判定幅で判定できます
-（`PlayerOptions.judgeRuleset`）。切り替わるのは**判定幅のみ**です: LR2 はランク補間済みの LR2 幅、
-beatoraja は SEVENKEYS 幅を beatoraja の judgerank で線形スケール（非対称な BAD 窓は ±250 ms × judgerank に
-対称化）、IIDX は固定 ±16.67/±33.33/±116.67/±250 ms。ノート選択・空 POOR・ロングノート仕様・ゲージは
-エンジンの LR2 準拠のままです — ルールセットの完全再現はプレイログシミュレータが担います。動的 `#EXRANKxx`
-は `'lr2'` のときだけ適用されます。選択値は `play.judgeRuleset` として記録され、リプレイは自動的に同じ
-判定幅を再適用します。
+**このプレイヤーは独自の判定ロジックを持ちません。** すべてのライブプレイは 3 つの互換ルールセット
+`'lr2'`（デフォルト）/ `'beatoraja'` / `'iidx'` のいずれかで動作し（`PlayerOptions.judgeRuleset`）、
+判定に関わる決定はすべてルールセットが所有します。
+
+- 判定幅（符号付き・文脈別: 鍵盤 / スクラッチ、通常ノート / ロングノート終端）。LR2 の `#EXRANKxx` タイムラインを含む
+- 押下がどのノートを取るか（`lowest` / `combo` / `duration` / `score`）と LR2 のマルチ BAD 収集
+- ロングノートの扱い: LR2 はすべて LN、beatoraja は譜面の `#LNMODE` に従う、IIDX はすべて CN。
+  チャージ系は始点と終点を別々に判定します
+- 空 POOR の窓と、コンボが切れるかどうか
+- ゲージの種類とカーブ、TOTAL のデフォルト、guts 緩和、クリア判定
+- スコア計算式と EX-SCORE の分母
+
+同じテーブルがライブエンジンとプレイログシミュレータの両方を駆動し、等価性テスト
+（[`equivalence.test.ts`](../packages/player/src/playlog/equivalence.test.ts)）が同一の記録入力列を両者に流して
+判定が 1 つずつ一致することを要求します。選択値は `play.judgeRuleset` として記録され、リプレイは自動的に同じ
+ルールセットを再適用します。
+
+ゲージ選択は独立したオプション（`PlayerOptions.gauge`）で、LR2 の名前（`GROOVE` / `EASY` / `HARD` / `DEATH`）
+で指定します。各ルールセットが自分のラインナップへ対応付けます（`GROOVE` は beatoraja の `NORMAL`、`DEATH` は
+`HAZARD`。IIDX に HAZARD 相当は無いため `DEATH` は `EX-HARD` に丸められます）。
+
+`bms-player` では `--ruleset <lr2|beatoraja|iidx>` と `--gauge <GROOVE|EASY|HARD|DEATH>` で指定できます。
 
 ## リプレイ再生
 
@@ -84,7 +99,7 @@ beatoraja は SEVENKEYS 幅を beatoraja の judgerank で線形スケール（�
 `@be-music/player/playlog` の `simulatePlaylog(playlog, { ruleset })` が 1 ルールセットで入力列を再生し、
 `simulatePlaylogRulesets(playlog)` が 3 つ全てを実行します。判定幅・ノート選択・ロングノート仕様・
 空 POOR・ゲージ表がルールセットごとに異なります。定数の出典は
-[`packages/player/src/playlog/rulesets.ts`](../packages/player/src/playlog/rulesets.ts) に記載しています。
+[`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) に記載しています。
 
 | 項目 | LR2 (`lr2/1`) | beatoraja (`beatoraja/1`) | IIDX (`iidx/1`) |
 | --- | --- | --- | --- |
@@ -94,6 +109,7 @@ beatoraja は SEVENKEYS 幅を beatoraja の judgerank で線形スケール（�
 | ノート選択 | Lowest + multi-BAD 連鎖 | Combo（デフォルト。duration / lowest / score 選択可） | Lowest |
 | ロングノート | 全て LN（終端確定の 1 判定） | ノートごとの LN / CN / HCN | 全て CN（mode 3 は HCN ゲージ） |
 | 空 POOR 窓 | 早側のみ 1000 ms | late 150 / early 500 ms（7K） | 未測定 — beatoraja の窓を代用 |
+| 空 POOR でコンボ切断 | しない | 5K / PMS のみ | しない |
 | マネースコア | `(4·PG + 2·GR + GD) × 50000 / notes` | — | —（BISTROVER で廃止） |
 | ゲージ | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表 | iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減） |
 

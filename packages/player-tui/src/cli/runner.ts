@@ -25,6 +25,8 @@ import {
   isImageResizeAlgorithm,
   type ImageResizeAlgorithm,
 } from '@be-music/player/image-resize-algorithm';
+import { JUDGE_WINDOW_RULESETS, type JudgeWindowRuleset } from '@be-music/player/core/judge-window';
+import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
 import { runNodeGameplayRuntime } from '../node/node-gameplay-runtime.ts';
 import { ensureSeaEmbeddedNodeModules } from '../node/sea-embedded-modules.ts';
 import {
@@ -139,6 +141,10 @@ interface CliArgs {
   imageResizeAlgorithm: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
+  /** Compat ruleset the engine judges under (`PlayerOptions.judgeRuleset`). Defaults to LR2. */
+  judgeRuleset?: JudgeWindowRuleset;
+  /** Gauge pick, in LR2's names; each ruleset maps it onto its own line-up. Defaults to `GROOVE`. */
+  gauge?: GrooveGaugeType;
   debugActiveAudio: boolean;
   renderAudioPath?: string;
   audio: boolean;
@@ -1011,6 +1017,8 @@ function createPlayOptionsFromCliArgs(args: CliArgs, chartPath: string) {
     imageResizeAlgorithm: args.imageResizeAlgorithm,
     highSpeed: args.highSpeed,
     judgeWindowMs: args.judgeWindowMs,
+    judgeRuleset: args.judgeRuleset,
+    gauge: args.gauge,
     debugActiveAudio: args.debugActiveAudio,
     audio: args.audio,
     volume: args.volume,
@@ -1421,6 +1429,26 @@ export function parseArgs(rawArgs: string[]): CliArgs {
   return args;
 }
 
+const CLI_GAUGES: readonly GrooveGaugeType[] = ['GROOVE', 'EASY', 'HARD', 'DEATH'];
+
+function parseCliRuleset(rawValue: string): JudgeWindowRuleset {
+  const value = rawValue.trim().toLowerCase();
+  const match = JUDGE_WINDOW_RULESETS.find((ruleset) => ruleset === value);
+  if (!match) {
+    throw new Error(`Unknown --ruleset "${rawValue}". Expected one of: ${JUDGE_WINDOW_RULESETS.join(', ')}.`);
+  }
+  return match;
+}
+
+function parseCliGauge(rawValue: string): GrooveGaugeType {
+  const value = rawValue.trim().toUpperCase();
+  const match = CLI_GAUGES.find((gauge) => gauge === value);
+  if (!match) {
+    throw new Error(`Unknown --gauge "${rawValue}". Expected one of: ${CLI_GAUGES.join(', ')}.`);
+  }
+  return match;
+}
+
 function createDefaultCliArgs(): CliArgs {
   return {
     auto: false,
@@ -1557,6 +1585,12 @@ function consumeCliValueArg(args: CliArgs, rawArgs: string[], index: number): nu
       return index + 1;
     case '--debug-judge-window':
       args.judgeWindowMs = Number.parseInt(rawValue, 10);
+      return index + 1;
+    case '--ruleset':
+      args.judgeRuleset = parseCliRuleset(rawValue);
+      return index + 1;
+    case '--gauge':
+      args.gauge = parseCliGauge(rawValue);
       return index + 1;
     case '--render-audio':
       args.renderAudioPath = rawValue;
@@ -1764,6 +1798,8 @@ function printUsage(): void {
       '',
       'Developer/debug:',
       '  --debug-active-audio      Show currently sounding key-sound filenames on play screen (default: off)',
+      '  --ruleset <name>       Compat ruleset: lr2 (default) | beatoraja | iidx',
+      '  --gauge <name>         Gauge: GROOVE (default) | EASY | HARD | DEATH',
       '  --debug-judge-window <ms> Override BAD window for debugging',
     ].join('\n') + '\n',
   );

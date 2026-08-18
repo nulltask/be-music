@@ -121,5 +121,8 @@ structured log の既定 path は `~/.be-music/logs/player.ndjson` です。
 terminal player は LR2 skin file や beatoraja skin file を読み込みません。
 独自の TUI を描画し、note、scoring、gauge、input、timing、BGA cue、result summary は共有 engine semantics を使います。
 
-terminal result path は現在、共有 engine の既定 `GROOVE` gauge を使います。
-gauge-type selection、2P independent gauge variant、LR2 / beatoraja skin option panel は browser 側の関心事です。
+互換ルールセットとゲージは選択できます: `--ruleset <lr2|beatoraja|iidx>`（既定 `lr2`）と
+`--gauge <GROOVE|EASY|HARD|DEATH>`（既定 `GROOVE`）。各ルールセットが何を支配するかは
+[player-spec.ja.md](./player-spec.ja.md) を参照してください。
+
+2P independent gauge variant と LR2 / beatoraja skin option panel は browser 側の関心事です。

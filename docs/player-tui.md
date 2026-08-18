@@ -121,5 +121,8 @@ Use `--log-file <path>` to write them elsewhere.
 The terminal player does not load LR2 or beatoraja skin files.
 It renders its own TUI and uses shared engine semantics for notes, scoring, gauge, input, timing, BGA cues, and result summaries.
 
-The terminal result path currently uses the shared engine's default `GROOVE` gauge.
-Gauge-type selection, independent 2P gauge variants, and LR2/beatoraja skin option panels are browser-side concerns.
+The compat ruleset and the gauge are selectable: `--ruleset <lr2|beatoraja|iidx>` (default `lr2`) and
+`--gauge <GROOVE|EASY|HARD|DEATH>` (default `GROOVE`). See [player-spec.md](./player-spec.md) for what each ruleset
+governs.
+
+Independent 2P gauge variants and LR2/beatoraja skin option panels are browser-side concerns.
