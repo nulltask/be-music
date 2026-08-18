@@ -4207,6 +4207,15 @@ export class PixiGameplayView {
         const totalSeconds = this.resolveSongDurationSeconds();
         return totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
       })(),
+      beatPhase: (() => {
+        const beat = this.currentBeat(seconds);
+        return beat - Math.floor(beat);
+      })(),
+      rulesetLabel: this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2',
+      gaugeLabel: this.gaugeState.type ?? 'GROOVE',
+      gaugeSurvival: this.gaugeState.survival === true,
+      fast: this.fastCount,
+      slow: this.slowCount,
     };
   }
 
@@ -4991,7 +5000,7 @@ export class PixiGameplayView {
       // Lane bed — a whisper of the lane's own colour so the column reads as "this key's territory".
       this.laneLayer.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: scratchLane ? 0.05 : 0.03 });
       // Lane separators — cool blue hairlines instead of white, so notes pop against them.
-      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x223048, alpha: 0.55 });
+      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x2a2440, alpha: 0.6 });
 
       // Key beam — a vertical light column that decays towards the top, plus a hot base above the line.
       const laserAlpha = this.resolveFallbackLaneLaserAlpha(channel);
@@ -5009,26 +5018,32 @@ export class PixiGameplayView {
         this.laneLayer.rect(x + 1, bottom - 16, w - 2, 16).fill({ color: 0xffffff, alpha: 0.32 * laserAlpha });
       }
 
-      // Judgement line — red-hot: soft glow above, saturated bar, white scanline at the exact just-timing edge.
-      this.laneLayer.rect(x, bottom - 9, w, 7).fill({ color: 0xff3b55, alpha: 0.16 });
-      this.laneLayer.rect(x, bottom - 2, w, 2).fill({ color: 0xff3b55, alpha: 0.95 });
-      this.laneLayer.rect(x, bottom, w, 1).fill({ color: 0xffffff, alpha: 0.9 });
+      // Judgement line — neon magenta, breathing with the beat: the glow flares on the downbeat and decays into
+      // the bar, so the line itself keeps time even before any note arrives.
+      const beat = this.currentBeat(this.currentSeconds());
+      const beatDecay = 1 - (beat - Math.floor(beat));
+      this.laneLayer.rect(x, bottom - 14, w, 12).fill({ color: 0xff2f6b, alpha: 0.08 + 0.1 * beatDecay });
+      this.laneLayer.rect(x, bottom - 5, w, 3).fill({ color: 0xff2f6b, alpha: 0.35 });
+      this.laneLayer.rect(x, bottom - 2, w, 2).fill({ color: 0xff2f6b, alpha: 0.98 });
+      this.laneLayer.rect(x, bottom, w, 1).fill({ color: 0xffffff, alpha: 0.95 });
 
-      // Key caps under the line — LR2's keyboard: lit caps on press, coloured per lane kind.
+      // Key caps under the line — glassy at rest, blazing on press with an under-glow strip toward the line.
       const pressed = laserAlpha > 0.6;
       const capTop = bottom + 3;
       const capHeight = 14;
       this.laneLayer
         .roundRect(x + 1, capTop, Math.max(2, w - 2), capHeight, 2)
-        .fill({ color: pressed ? tone.capLit : tone.cap, alpha: 1 });
+        .fill({ color: pressed ? tone.capLit : tone.cap, alpha: pressed ? 1 : 0.92 });
       this.laneLayer
         .rect(x + 1, capTop, Math.max(2, w - 2), 2)
-        .fill({ color: 0xffffff, alpha: pressed ? 0.65 : 0.18 });
+        .fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
       this.laneLayer
         .rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2)
         .fill({ color: 0x000000, alpha: 0.35 });
       if (pressed) {
-        this.laneLayer.rect(x + 1, capTop - 1, Math.max(2, w - 2), 1).fill({ color: tone.top, alpha: 0.9 });
+        // Under-glow bridging the cap to the judgement line — the "lit from within" press feedback.
+        this.laneLayer.rect(x + 1, capTop - 2, Math.max(2, w - 2), 2).fill({ color: tone.top, alpha: 0.95 });
+        this.laneLayer.rect(x + 1, capTop + capHeight, Math.max(2, w - 2), 2).fill({ color: tone.body, alpha: 0.45 });
       }
     });
 
@@ -5046,7 +5061,7 @@ export class PixiGameplayView {
       }
       this.laneLayer
         .rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop))
-        .fill({ color: 0x223048, alpha: 0.55 });
+        .fill({ color: 0x2a2440, alpha: 0.6 });
     }
   }
 
@@ -5392,7 +5407,7 @@ export class PixiGameplayView {
       if (y < top - 1 || y > bottom + 1) {
         continue;
       }
-      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x8fa7c8, alpha: 0.3 });
+      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
     }
   }
 
@@ -6278,24 +6293,24 @@ interface FallbackLaneTone {
 
 const FALLBACK_TONE_WHITE: FallbackLaneTone = {
   top: 0xffffff,
-  body: 0xe9eef6,
-  bottom: 0x9aa6b8,
-  cap: 0xb9c2d0,
+  body: 0xf2f4fa,
+  bottom: 0xa3adc2,
+  cap: 0xccd4e4,
   capLit: 0xffffff,
 };
 const FALLBACK_TONE_BLUE: FallbackLaneTone = {
-  top: 0x9fd8ff,
-  body: 0x3d9bff,
-  bottom: 0x1a5fc2,
-  cap: 0x1d3a6e,
-  capLit: 0x63b4ff,
+  top: 0xbef4ff,
+  body: 0x2fd4f6,
+  bottom: 0x0e7fae,
+  cap: 0x0e3c4e,
+  capLit: 0x5fe6ff,
 };
 const FALLBACK_TONE_RED: FallbackLaneTone = {
-  top: 0xffa3ad,
-  body: 0xff4d5e,
-  bottom: 0xb81f31,
-  cap: 0x6e1f2a,
-  capLit: 0xff6f7d,
+  top: 0xffb1c9,
+  body: 0xff3d6e,
+  bottom: 0xb3134a,
+  cap: 0x551228,
+  capLit: 0xff6f9a,
 };
 
 /** Height of a fallback note body in design pixels. */

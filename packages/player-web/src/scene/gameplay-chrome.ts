@@ -47,6 +47,18 @@ export interface SkinlessGameplayChromeRuntime {
   nowMs?: number;
   /** Song progress in [0, 1] — drives the chrome's progress track. */
   progressRatio?: number;
+  /** Fractional beat position in [0, 1) — drives beat-synced pulses (judge-line glow, accent trim). */
+  beatPhase?: number;
+  /** Active compat ruleset id (`lr2` / `beatoraja` / `iidx`) — shown as a chip in the header HUD. */
+  rulesetLabel?: string;
+  /** Ruleset-scoped gauge id (`GROOVE` / `HARD` / `HAZARD` / ...) labelling the gauge housing. */
+  gaugeLabel?: string;
+  /** True for survival gauges — the chrome runs the all-red scheme and drops the clear notch. */
+  gaugeSurvival?: boolean;
+  /** FAST (early GREAT/GOOD) count. */
+  fast?: number;
+  /** SLOW (late GREAT/GOOD) count. */
+  slow?: number;
 }
 
 export interface SkinlessGameplayChromeRenderContext {

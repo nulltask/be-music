@@ -10,34 +10,36 @@ import type { SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
 import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT, DEFAULT_TEXT_FONT } from './fonts.ts';
 import type { ChildPool } from '../pixi-utils.ts';
 
-const SURFACE = 0x070b14;
-const PANEL = 0x0d1322;
-const PANEL_DARK = 0x030711;
-const LINE = 0x243048;
-const LANE = 0x01030a;
-const TEXT = 0xf6f2e8;
-const MUTED = 0xa9a39a;
-const SUBTLE = 0x6e685d;
-const TEAL = 0x4bd7c8;
-const AMBER = 0xffc857;
-const RED = 0xff5c5c;
-const GREEN = 0x6ee07f;
-const BLUE = 0x76a8ff;
-const ORANGE = 0xff9b54;
+// "Night cabinet" palette — near-black violet ground, cyan / magenta neon accents, gold for money values.
+const SURFACE = 0x0a0714;
+const PANEL = 0x100b1e;
+const PANEL_DARK = 0x060410;
+const LINE = 0x2a2342;
+const LANE = 0x030209;
+const TEXT = 0xf4f1fa;
+const MUTED = 0x9a94ac;
+const SUBTLE = 0x655f78;
+const CYAN = 0x3fe0ff;
+const MAGENTA = 0xff3d81;
+const GOLD = 0xffc93d;
+const RED = 0xff4d6a;
+const GREEN = 0x3ef08a;
+const BLUE = 0x4db2ff;
+const ORANGE = 0xff8a3d;
 // Background gradient bands, top to bottom. Drawn as flat rows because pixi FillGradients would allocate a texture
 // per frame under the pooled-Graphics repaint model.
 const BG_BANDS: ReadonlyArray<readonly [number, number]> = [
-  [0x0a1120, 96],
-  [0x080d19, 176],
-  [0x060a13, 260],
-  [0x04070e, 356],
-  [0x03050a, 480],
+  [0x120b22, 90],
+  [0x0d081a, 170],
+  [0x080512, 260],
+  [0x05030c, 360],
+  [0x030208, 480],
 ];
-// Metallic side-rail shades for the playfield frame.
-const RAIL_EDGE = 0x3d4c68;
-const RAIL_BODY = 0x151d2f;
-const RAIL_DARK = 0x0a0f1c;
-const JUDGE_RED = 0xff3b55;
+// Side-rail shades for the playfield frame — dark chrome with neon piping.
+const RAIL_EDGE = 0x4a3f6e;
+const RAIL_BODY = 0x171128;
+const RAIL_DARK = 0x0a0716;
+const JUDGE_RED = 0xff2f6b;
 const FONT = DEFAULT_TEXT_FONT;
 const NUMERIC_FONT = DEFAULT_NUMERIC_FONT;
 const SCORE_PANEL = { x: 384, y: 350, w: 238, h: 112 } as const;
@@ -87,9 +89,9 @@ export function renderDefaultGameplayFrame(
 
   drawPlayfield(frame, playfield, runtime.progressRatio);
   drawBgaFrame(frame, hasBga);
-  drawGauge(frame, runtime.gauge, runtime.clearThreshold, runtime.nowMs);
+  drawGauge(frame, runtime.gauge, runtime.clearThreshold, runtime.gaugeSurvival === true, runtime.nowMs);
   drawSongPlate(frame);
-  drawScorePlate(frame);
+  drawScorePlate(frame, runtime.exScore, runtime.exScoreMax);
   const tallyX = resolveJudgeTallyX(playfield);
   if (tallyX !== undefined) {
     drawJudgeTally(frame, layer, runtime, tallyX, layerPool);
@@ -100,7 +102,7 @@ export function renderDefaultGameplayFrame(
 
   const frontLayer = options.overlayLayer && options.overlayLayerPool ? options.overlayLayer : layer;
   const frontPool = frontLayer === layer ? layerPool : options.overlayLayerPool;
-  drawStatusBar(frontLayer, runtime.autoplay === true, frontPool);
+  drawStatusBar(frontLayer, runtime.autoplay === true, runtime.beatPhase, frontPool);
   addText(
     frontLayer,
     runtime.autoplay ? 'AUTO PLAY' : 'PLAY',
@@ -109,7 +111,7 @@ export function renderDefaultGameplayFrame(
     {
       size: 10,
       weight: '900',
-      fill: runtime.autoplay ? AMBER : TEAL,
+      fill: runtime.autoplay ? GOLD : CYAN,
       letterSpacing: 1.4,
       anchorX: 0.5,
     },
@@ -133,17 +135,34 @@ export function renderDefaultGameplayFrame(
     { size: 15, weight: '900', fill: TEXT, fontFamily: NUMERIC_FONT },
     frontPool,
   );
+  addText(frontLayer, 'RULESET', 404, 17, { size: 7, weight: '700', fill: SUBTLE, letterSpacing: 0.6 }, frontPool);
+  addText(
+    frontLayer,
+    formatRulesetLabel(runtime.rulesetLabel),
+    502,
+    13,
+    { size: 11, weight: '900', fill: MAGENTA, letterSpacing: 1, anchorX: 1, maxWidth: 62 },
+    frontPool,
+  );
 
   const gauge = clampPercent(runtime.gauge ?? 0);
   const clearLine = clampPercent(runtime.clearThreshold ?? 80);
-  const gaugeCleared = clearLine <= 0 ? gauge > 0 : gauge >= clearLine;
-  addText(layer, 'GROOVE GAUGE', GROOVE.x - 2, GROOVE.y - 17, labelStyle(), layerPool);
+  const survivalGauge = runtime.gaugeSurvival === true || clearLine <= 0;
+  const gaugeCleared = survivalGauge ? gauge > 0 : gauge >= clearLine;
+  addText(
+    layer,
+    `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
+    GROOVE.x - 2,
+    GROOVE.y - 17,
+    { ...labelStyle(), maxWidth: 120 },
+    layerPool,
+  );
   addText(
     layer,
     `${Math.round(gauge)}%`,
     GROOVE.x + GROOVE.w + 8,
     GROOVE.y - 23,
-    metricStyle(15, gaugeCleared ? JUDGE_RED : 0xff7a2f, 1),
+    metricStyle(15, survivalGauge ? (gaugeCleared ? JUDGE_RED : MUTED) : gaugeCleared ? JUDGE_RED : 0xff7a2f, 1),
     layerPool,
   );
 
@@ -183,11 +202,11 @@ export function renderDefaultGameplayFrame(
   addText(
     layer,
     formatCount(runtime.score),
-    SCORE_PANEL.x + 96,
-    SCORE_PANEL.y + 22,
+    SCORE_PANEL.x + 128,
+    SCORE_PANEL.y + 20,
     {
-      ...metricStyle(20, AMBER, 1),
-      maxWidth: 126,
+      ...metricStyle(22, GOLD, 1),
+      maxWidth: 112,
     },
     layerPool,
   );
@@ -223,7 +242,7 @@ export function renderDefaultGameplayFrame(
     SCORE_PANEL.x + 226,
     SCORE_PANEL.y + 16,
     {
-      ...metricStyle(14, TEAL, 1),
+      ...metricStyle(14, CYAN, 1),
       fontFamily: DEFAULT_JUDGE_FONT,
       maxWidth: 40,
     },
@@ -243,7 +262,7 @@ export function renderDefaultGameplayFrame(
     layerPool,
   );
   addText(layer, 'RANK', SCORE_PANEL.x + 148, SCORE_PANEL.y + 81, labelStyle(), layerPool);
-  addText(layer, rank, SCORE_PANEL.x + 226, SCORE_PANEL.y + 70, { ...metricStyle(22, AMBER, 1), maxWidth: 42 }, layerPool);
+  addText(layer, rank, SCORE_PANEL.x + 226, SCORE_PANEL.y + 70, { ...metricStyle(22, GOLD, 1), maxWidth: 42 }, layerPool);
 
   for (const display of resolveJudgeDisplays(runtime, playfield)) {
     const combo = resolveVisibleCombo(display.judge, display.combo);
@@ -251,14 +270,15 @@ export function renderDefaultGameplayFrame(
       frontLayer,
       display.judge,
       display.x,
-      232,
+      230,
       {
-        size: 22,
+        size: 24,
         weight: '900',
         fill: judgeColor(display.judge),
         fontFamily: DEFAULT_JUDGE_FONT,
         anchorX: 0.5,
-        stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
+        stroke: { color: 0x0a0410, width: 5, alignment: 0.5, join: 'round' },
+        dropShadow: { color: judgeColor(display.judge), alpha: 0.4, blur: 6, distance: 0 },
         maxWidth: display.maxWidth,
       },
       frontPool,
@@ -270,12 +290,13 @@ export function renderDefaultGameplayFrame(
         display.x,
         258,
         {
-          size: 18,
+          size: 19,
           weight: '900',
-          fill: TEXT,
+          // Combo tiers: white to start, cyan once it means something, gold once it is a run.
+          fill: combo >= 200 ? GOLD : combo >= 50 ? CYAN : TEXT,
           fontFamily: DEFAULT_JUDGE_FONT,
           anchorX: 0.5,
-          stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
+          stroke: { color: 0x0a0410, width: 4, alignment: 0.5, join: 'round' },
           maxWidth: Math.max(72, display.maxWidth - 36),
         },
         frontPool,
@@ -424,8 +445,8 @@ function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout, prog
   const ratio = progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
   if (ratio > 0) {
     const fillHeight = Math.max(2, Math.round(trackHeight * ratio));
-    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, fillHeight).fill({ color: TEAL, alpha: 0.85 });
-    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, 2).fill({ color: 0xffffff, alpha: 0.8 });
+    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, fillHeight).fill({ color: MAGENTA, alpha: 0.85 });
+    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, 2).fill({ color: 0xffffff, alpha: 0.85 });
   }
 
   // Frame footer — a plated bar closing the well under the key caps.
@@ -447,17 +468,26 @@ function drawBgaFrame(frame: Graphics, hasBga: boolean): void {
   frame.roundRect(BGA.x - 10, BGA.y - 12, BGA.w + 20, BGA.h + 24, 4).stroke({ color: LINE, width: 1 });
   if (!hasBga) {
     frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: PANEL_DARK, alpha: 0.95 });
-    // Idle emblem — concentric rings so the empty monitor reads as a screen, not a hole.
+    // Idle reticle — a hex targeting frame with a crosshair, so the empty monitor reads as a powered screen on
+    // standby rather than a hole in the cabinet.
     const cx = BGA.x + BGA.w / 2;
     const cy = BGA.y + BGA.h / 2;
     for (const [radius, alpha] of [
-      [96, 0.05],
-      [70, 0.07],
-      [46, 0.09],
+      [92, 0.06],
+      [64, 0.09],
     ] as const) {
-      frame.circle(cx, cy, radius).stroke({ color: TEAL, width: 1, alpha });
+      const points: number[] = [];
+      for (let corner = 0; corner < 6; corner += 1) {
+        const angle = -Math.PI / 2 + (Math.PI * 2 * corner) / 6;
+        points.push(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      }
+      frame.poly(points).stroke({ color: CYAN, width: 1, alpha });
     }
-    frame.circle(cx, cy, 3).fill({ color: TEAL, alpha: 0.25 });
+    frame.rect(cx - 16, cy, 10, 1).fill({ color: CYAN, alpha: 0.3 });
+    frame.rect(cx + 6, cy, 10, 1).fill({ color: CYAN, alpha: 0.3 });
+    frame.rect(cx, cy - 16, 1, 10).fill({ color: CYAN, alpha: 0.3 });
+    frame.rect(cx, cy + 6, 1, 10).fill({ color: CYAN, alpha: 0.3 });
+    frame.circle(cx, cy, 2).fill({ color: CYAN, alpha: 0.35 });
   }
   // Corner brackets over the monitor edges.
   const bracket = 14;
@@ -469,29 +499,40 @@ function drawBgaFrame(frame: Graphics, hasBga: boolean): void {
   ] as const) {
     const horizontalX = dx > 0 ? bx : bx - bracket;
     const verticalY = dy > 0 ? by : by - bracket;
-    frame.rect(horizontalX, by - (dy < 0 ? 2 : 0), bracket, 2).fill({ color: TEAL, alpha: 0.6 });
-    frame.rect(bx - (dx < 0 ? 2 : 0), verticalY, 2, bracket).fill({ color: TEAL, alpha: 0.6 });
+    frame.rect(horizontalX, by - (dy < 0 ? 2 : 0), bracket, 2).fill({ color: CYAN, alpha: 0.6 });
+    frame.rect(bx - (dx < 0 ? 2 : 0), verticalY, 2, bracket).fill({ color: CYAN, alpha: 0.6 });
   }
 }
 
-function drawStatusBar(layer: Container, autoplay: boolean, pool?: ChildPool): void {
+function drawStatusBar(layer: Container, autoplay: boolean, beatPhase: number | undefined, pool?: ChildPool): void {
   const status = pool?.acquireGraphics() ?? new Graphics();
   status.label = 'default-gameplay/status';
   status.rect(0, 0, DESIGN_WIDTH, 40).fill({ color: SURFACE, alpha: 1 });
   status.rect(0, 0, DESIGN_WIDTH, 12).fill({ color: 0x000000, alpha: 0.3 });
-  // Accent underline — bright at the left, decaying to the right, like a lit cabinet trim.
+  // Accent trim — bright at the left, decaying to the right, and breathing with the beat so the whole cabinet
+  // keeps time with the chart.
   status.rect(0, 39, DESIGN_WIDTH, 1).fill({ color: LINE, alpha: 0.9 });
-  const accent = autoplay ? AMBER : TEAL;
+  const accent = autoplay ? GOLD : CYAN;
+  const pulse = beatPhase !== undefined ? 0.6 + 0.4 * (1 - beatPhase) : 1;
   for (const [x0, w, alpha] of [
     [0, 160, 0.9],
     [160, 160, 0.45],
     [320, 160, 0.2],
     [480, 160, 0.08],
   ] as const) {
-    status.rect(x0, 38, w, 2).fill({ color: accent, alpha });
+    status.rect(x0, 38, w, 2).fill({ color: accent, alpha: alpha * pulse });
   }
   // Mode pill housing.
-  status.roundRect(16, 10, 92, 20, 10).fill({ color: PANEL_DARK, alpha: 0.9 }).stroke({ color: accent, width: 1, alpha: 0.75 });
+  status
+    .roundRect(16, 10, 92, 20, 10)
+    .fill({ color: PANEL_DARK, alpha: 0.9 })
+    .stroke({ color: accent, width: 1, alpha: 0.75 });
+  // Ruleset chip housing — the compat mode is a first-class fact of the run, so it lives in the header.
+  status
+    .roundRect(392, 10, 118, 20, 3)
+    .fill({ color: PANEL_DARK, alpha: 0.9 })
+    .stroke({ color: MAGENTA, width: 1, alpha: 0.6 });
+  status.rect(396, 14, 2, 12).fill({ color: MAGENTA, alpha: 0.9 });
   if (!pool) {
     layer.addChild(status);
   }
@@ -501,10 +542,16 @@ function drawStatusBar(layer: Container, autoplay: boolean, pool?: ChildPool): v
  * LR2-style segmented groove gauge: 50 cells of 2 % each. Cells below the clear line burn orange, cells at/above it
  * burn red-hot, and the newest lit cell flickers. Survival gauges (clear threshold 0) run the all-red scheme.
  */
-function drawGauge(frame: Graphics, value: number | undefined, threshold: number | undefined, nowMs?: number): void {
+function drawGauge(
+  frame: Graphics,
+  value: number | undefined,
+  threshold: number | undefined,
+  survivalGauge: boolean,
+  nowMs?: number,
+): void {
   const gauge = clampPercent(value ?? 0);
   const clear = clampPercent(threshold ?? 80);
-  const survival = clear <= 0;
+  const survival = survivalGauge || clear <= 0;
   const cellCount = 50;
   const cellStride = GROOVE.w / cellCount;
   const cellW = cellStride - 1;
@@ -516,7 +563,10 @@ function drawGauge(frame: Graphics, value: number | undefined, threshold: number
     .roundRect(GROOVE.x - 10, GROOVE.y - 26, GROOVE.w + 20, 50, 4)
     .fill(PANEL)
     .stroke({ color: LINE, width: 1 });
-  frame.rect(GROOVE.x - 10, GROOVE.y - 26, GROOVE.w + 20, 1).fill({ color: RAIL_EDGE, alpha: 0.55 });
+  frame.rect(GROOVE.x - 10, GROOVE.y - 26, GROOVE.w + 20, 1).fill({
+    color: survival ? MAGENTA : CYAN,
+    alpha: 0.35,
+  });
   frame
     .rect(GROOVE.x - 4, GROOVE.y - 3, GROOVE.w + 8, GROOVE.h + 6)
     .fill(0x000000)
@@ -549,21 +599,44 @@ function drawGauge(frame: Graphics, value: number | undefined, threshold: number
 
 function drawSongPlate(frame: Graphics): void {
   frame.roundRect(18, 404, 352, 58, 4).fill(PANEL).stroke({ color: LINE, width: 1 });
-  frame.rect(18, 404, 352, 1).fill({ color: RAIL_EDGE, alpha: 0.55 });
+  frame.rect(18, 404, 352, 1).fill({ color: CYAN, alpha: 0.3 });
   // Accent notch on the leading edge — makes the plate read as a marquee, not a form field.
-  frame.rect(18, 410, 3, 46).fill({ color: TEAL, alpha: 0.9 });
+  frame.rect(18, 410, 3, 46).fill({ color: MAGENTA, alpha: 0.9 });
 }
 
-function drawScorePlate(frame: Graphics): void {
+function drawScorePlate(frame: Graphics, exScore: number | undefined, exScoreMax: number | undefined): void {
   frame.roundRect(SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, SCORE_PANEL.h, 4).fill(PANEL).stroke({
     color: LINE,
     width: 1,
   });
-  frame.rect(SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, 1).fill({ color: RAIL_EDGE, alpha: 0.55 });
+  frame.rect(SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, 1).fill({ color: CYAN, alpha: 0.3 });
   frame.rect(SCORE_PANEL.x, SCORE_PANEL.y + SCORE_PANEL.h - 3, SCORE_PANEL.w, 3).fill({ color: 0x000000, alpha: 0.35 });
   frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 42, 128 - 12, 1).fill({ color: LINE, alpha: 0.45 });
   frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 72, 128 - 12, 1).fill({ color: LINE, alpha: 0.45 });
   frame.rect(SCORE_PANEL.x + 140, SCORE_PANEL.y + 12, 1, SCORE_PANEL.h - 24).fill({ color: LINE, alpha: 0.45 });
+
+  // DJ-level meter under the EX RATE row: the fill is the current rate, the ticks are the IIDX ninths that decide
+  // the rank letter — the player can see exactly how far the next letter is.
+  const meterX = SCORE_PANEL.x + 12;
+  const meterY = SCORE_PANEL.y + 100;
+  const meterW = 116;
+  const rate =
+    exScore !== undefined && exScoreMax !== undefined && exScoreMax > 0
+      ? Math.max(0, Math.min(1, exScore / exScoreMax))
+      : 0;
+  frame.rect(meterX, meterY, meterW, 4).fill({ color: 0x000000, alpha: 0.6 });
+  if (rate > 0) {
+    frame.rect(meterX, meterY, Math.max(1, Math.round(meterW * rate)), 4).fill({
+      color: rate >= 8 / 9 ? GOLD : CYAN,
+      alpha: 0.9,
+    });
+  }
+  for (let ninth = 1; ninth < 9; ninth += 1) {
+    frame.rect(meterX + Math.round((meterW * ninth) / 9), meterY - 1, 1, 6).fill({
+      color: TEXT,
+      alpha: ninth >= 6 ? 0.5 : 0.22,
+    });
+  }
 }
 
 const JUDGE_TALLY_ROWS: ReadonlyArray<readonly [label: string, key: 'perfect' | 'great' | 'good' | 'bad' | 'poor']> = [
@@ -585,9 +658,9 @@ function drawJudgeTally(
   const y = BGA.y - 12;
   const w = DESIGN_WIDTH - x - 12;
   const rowH = 24;
-  const h = 16 + JUDGE_TALLY_ROWS.length * rowH + 8;
+  const h = 16 + JUDGE_TALLY_ROWS.length * rowH + 48;
   frame.roundRect(x, y, w, h, 4).fill({ color: PANEL, alpha: 0.92 }).stroke({ color: LINE, width: 1 });
-  frame.rect(x, y, w, 1).fill({ color: RAIL_EDGE, alpha: 0.55 });
+  frame.rect(x, y, w, 1).fill({ color: CYAN, alpha: 0.3 });
   addText(layer, 'JUDGE', x + 8, y + 6, labelStyle(), pool);
   for (let row = 0; row < JUDGE_TALLY_ROWS.length; row += 1) {
     const [label, key] = JUDGE_TALLY_ROWS[row]!;
@@ -603,6 +676,20 @@ function drawJudgeTally(
       { ...metricStyle(14, TEXT, 1), maxWidth: w - 42 },
       pool,
     );
+  }
+  // FAST / SLOW footer — early presses read cyan, late ones orange. One row each: the column is too narrow to
+  // seat four texts side by side without the counts colliding with their labels.
+  const footerY = y + 20 + JUDGE_TALLY_ROWS.length * rowH + 4;
+  frame.rect(x + 6, footerY - 4, w - 12, 1).fill({ color: LINE, alpha: 0.6 });
+  const footerRows: ReadonlyArray<readonly [label: string, color: number, count: number | undefined]> = [
+    ['FAST', CYAN, runtime.fast],
+    ['SLOW', ORANGE, runtime.slow],
+  ];
+  for (let row = 0; row < footerRows.length; row += 1) {
+    const [label, color, count] = footerRows[row]!;
+    const rowY = footerY + 2 + row * 20;
+    addText(layer, label, x + 14, rowY + 4, { size: 8, weight: '800', fill: color, letterSpacing: 0.5 }, pool);
+    addText(layer, formatCount(count), x + w - 8, rowY + 1, { ...metricStyle(12, TEXT, 1), maxWidth: w - 48 }, pool);
   }
 }
 
@@ -668,6 +755,7 @@ function addText(
     anchorY?: number;
     maxWidth?: number;
     stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
+    dropShadow?: { color: number; alpha: number; blur: number; distance: number };
   } = {},
   pool?: ChildPool,
 ): Text {
@@ -696,8 +784,10 @@ function resolveTextStyle(opts: {
   fontFamily?: string;
   letterSpacing?: number;
   stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
+  dropShadow?: { color: number; alpha: number; blur: number; distance: number };
 }): TextStyle {
   const stroke = opts.stroke;
+  const shadow = opts.dropShadow;
   const key = [
     opts.fill ?? TEXT,
     opts.size ?? 10,
@@ -708,6 +798,10 @@ function resolveTextStyle(opts: {
     stroke?.width ?? '',
     stroke?.alignment ?? '',
     stroke?.join ?? '',
+    shadow?.color ?? '',
+    shadow?.alpha ?? '',
+    shadow?.blur ?? '',
+    shadow?.distance ?? '',
   ].join('|');
   let style = TEXT_STYLE_CACHE.get(key);
   if (!style) {
@@ -718,6 +812,7 @@ function resolveTextStyle(opts: {
       fontFamily: opts.fontFamily ?? FONT,
       letterSpacing: opts.letterSpacing ?? 0,
       stroke: opts.stroke,
+      ...(shadow ? { dropShadow: { color: shadow.color, alpha: shadow.alpha, blur: shadow.blur, distance: shadow.distance, angle: Math.PI / 2 } } : {}),
     });
     TEXT_STYLE_CACHE.set(key, style);
   }
@@ -741,6 +836,17 @@ function metricStyle(
 function formatCount(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return '0';
   return String(Math.max(0, Math.floor(value)));
+}
+
+function formatRulesetLabel(value: string | undefined): string {
+  switch (value) {
+    case 'beatoraja':
+      return 'BEATORAJA';
+    case 'iidx':
+      return 'IIDX';
+    default:
+      return 'LR2';
+  }
 }
 
 function formatBpmValue(value: number | undefined): string {
@@ -768,7 +874,7 @@ function clampPercent(value: number): number {
 function judgeColor(judge: string): number {
   switch (judge) {
     case 'PERFECT':
-      return AMBER;
+      return 0xffd75e;
     case 'GREAT':
       return GREEN;
     case 'GOOD':
