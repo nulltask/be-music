@@ -122,13 +122,8 @@ import {
   LR2_2P_BOMB_TIMER_BASE,
   LR2_2P_KEYON_TIMER_BASE,
   LR2_2P_LN_HOLD_TIMER_BASE,
-  MUTED,
-  PANEL,
   PIXELS_PER_BEAT,
   PLAYFIELD,
-  RED,
-  WHITE,
-  YELLOW,
 } from '../gameplay-constants.ts';
 import {
   buildBgaTimeline,
@@ -3913,38 +3908,46 @@ export class PixiGameplayView {
       graphic.blendMode = 'add';
       graphic.alpha = 1;
 
+      // Light pillar rising off the judgement line — sells the impact within the lane.
       graphic
-        .roundRect(
-          lane.x + lane.w * 0.18,
-          centerY - haloRadius * 0.45,
-          lane.w * 0.64,
-          haloRadius * 0.62,
-          Math.max(2, lane.w * 0.18),
-        )
-        .fill({ color: 0x56b6f7, alpha: 0.12 * fade });
+        .rect(lane.x + lane.w * 0.14, centerY - haloRadius * 1.5, lane.w * 0.72, haloRadius * 1.5)
+        .fill({ color: 0xffb44d, alpha: 0.1 * fade });
+      // Flame ring + white-hot core with a warm mid layer.
       graphic.circle(centerX, centerY, haloRadius).stroke({
-        color: 0x56b6f7,
-        width: Math.max(1, lane.w * 0.08),
-        alpha: 0.3 * fade,
+        color: 0xff7a2f,
+        width: Math.max(1.5, lane.w * 0.1),
+        alpha: 0.4 * fade,
         alignment: 0.5,
       });
-      graphic.circle(centerX, centerY, coreRadius).fill({ color: 0xffffff, alpha: 0.34 * fade });
-      graphic.circle(centerX, centerY, coreRadius * 1.55).fill({ color: 0xffd166, alpha: 0.14 * fade });
+      graphic.circle(centerX, centerY, coreRadius * 1.7).fill({ color: 0xff9b3d, alpha: 0.2 * fade });
+      graphic.circle(centerX, centerY, coreRadius * 1.2).fill({ color: 0xffd166, alpha: 0.3 * fade });
+      graphic.circle(centerX, centerY, coreRadius * 0.7).fill({ color: 0xffffff, alpha: 0.75 * fade });
+      // Starburst: long cross spokes + short diagonals, rotating slightly as the burst expands.
+      const spin = eased * 0.5;
       for (let index = 0; index < rayCount; index += 1) {
-        const angle = -Math.PI / 2 + (Math.PI * 2 * index) / rayCount;
-        const innerX = centerX + Math.cos(angle) * rayInner;
-        const innerY = centerY + Math.sin(angle) * rayInner;
-        const outerX = centerX + Math.cos(angle) * rayOuter;
-        const outerY = centerY + Math.sin(angle) * rayOuter;
-        graphic.moveTo(innerX, innerY).lineTo(outerX, outerY);
+        const angle = spin + -Math.PI / 2 + (Math.PI * 2 * index) / rayCount;
+        const longRay = index % 2 === 0;
+        const outer = longRay ? rayOuter * 1.35 : rayOuter * 0.9;
+        graphic
+          .moveTo(centerX + Math.cos(angle) * rayInner, centerY + Math.sin(angle) * rayInner)
+          .lineTo(centerX + Math.cos(angle) * outer, centerY + Math.sin(angle) * outer);
       }
       graphic.stroke({
-        color: 0xffd166,
+        color: 0xffe08a,
         width: lineWidth,
-        alpha: 0.62 * fade,
+        alpha: 0.75 * fade,
         cap: 'round',
         alignment: 0.5,
       });
+      // Ember dots at the spoke tips for the tail end of the burst.
+      if (progress > 0.35) {
+        for (let index = 0; index < 4; index += 1) {
+          const angle = spin + Math.PI / 4 + (Math.PI * 2 * index) / 4;
+          graphic
+            .circle(centerX + Math.cos(angle) * rayOuter * 1.15, centerY + Math.sin(angle) * rayOuter * 1.15, 1.4)
+            .fill({ color: 0xffd166, alpha: 0.8 * fade });
+        }
+      }
     }
   }
 
@@ -4199,6 +4202,11 @@ export class PixiGameplayView {
       rank: total <= 0 ? undefined : resolveIidxRankLabel(this.score.exScore, total),
       autoplay: this.options.autoPlay === true,
       hasBga: this.hasBga,
+      nowMs: this.playClock(),
+      progressRatio: (() => {
+        const totalSeconds = this.resolveSongDurationSeconds();
+        return totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
+      })(),
     };
   }
 
@@ -4976,20 +4984,70 @@ export class PixiGameplayView {
       }
 
       const scratchLane = fallbackLane?.isScratch ?? isScratchLaneForVariant(channel, this.chartPlayVariant);
-      this.laneLayer
-        .rect(x, top, w, Math.max(1, bottom - top))
-        .fill({ color: scratchLane ? 0x07080a : PANEL, alpha: scratchLane ? 0.54 : 0.5 });
+      const fallbackLaneIndex = resolveLr2LaneIndex(channel, this.chartPlayVariant);
+      const tone = noteFallbackColor(channel, fallbackLaneIndex, this.chartPlayVariant);
+      const laneHeight = Math.max(1, bottom - top);
+
+      // Lane bed — a whisper of the lane's own colour so the column reads as "this key's territory".
+      this.laneLayer.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: scratchLane ? 0.05 : 0.03 });
+      // Lane separators — cool blue hairlines instead of white, so notes pop against them.
+      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x223048, alpha: 0.55 });
+
+      // Key beam — a vertical light column that decays towards the top, plus a hot base above the line.
       const laserAlpha = this.resolveFallbackLaneLaserAlpha(channel);
       if (laserAlpha > 0) {
-        this.laneLayer
-          .rect(x, top, w, Math.max(1, bottom - top))
-          .fill({ color: scratchLane ? RED : WHITE, alpha: (scratchLane ? 0.36 : 0.42) * laserAlpha });
+        const beamHeight = Math.min(laneHeight, 170);
+        const slices = 6;
+        for (let slice = 0; slice < slices; slice += 1) {
+          const sliceRatio = slice / slices;
+          const sliceH = beamHeight / slices;
+          const sliceY = bottom - beamHeight + sliceRatio * beamHeight;
+          this.laneLayer
+            .rect(x + 1, sliceY, w - 2, sliceH + 1)
+            .fill({ color: tone.body, alpha: (0.05 + 0.4 * sliceRatio * sliceRatio) * laserAlpha });
+        }
+        this.laneLayer.rect(x + 1, bottom - 16, w - 2, 16).fill({ color: 0xffffff, alpha: 0.32 * laserAlpha });
+      }
+
+      // Judgement line — red-hot: soft glow above, saturated bar, white scanline at the exact just-timing edge.
+      this.laneLayer.rect(x, bottom - 9, w, 7).fill({ color: 0xff3b55, alpha: 0.16 });
+      this.laneLayer.rect(x, bottom - 2, w, 2).fill({ color: 0xff3b55, alpha: 0.95 });
+      this.laneLayer.rect(x, bottom, w, 1).fill({ color: 0xffffff, alpha: 0.9 });
+
+      // Key caps under the line — LR2's keyboard: lit caps on press, coloured per lane kind.
+      const pressed = laserAlpha > 0.6;
+      const capTop = bottom + 3;
+      const capHeight = 14;
+      this.laneLayer
+        .roundRect(x + 1, capTop, Math.max(2, w - 2), capHeight, 2)
+        .fill({ color: pressed ? tone.capLit : tone.cap, alpha: 1 });
+      this.laneLayer
+        .rect(x + 1, capTop, Math.max(2, w - 2), 2)
+        .fill({ color: 0xffffff, alpha: pressed ? 0.65 : 0.18 });
+      this.laneLayer
+        .rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2)
+        .fill({ color: 0x000000, alpha: 0.35 });
+      if (pressed) {
+        this.laneLayer.rect(x + 1, capTop - 1, Math.max(2, w - 2), 1).fill({ color: tone.top, alpha: 0.9 });
+      }
+    });
+
+    if (!skin && this.laneX.size > 0) {
+      // Close the grid on the display-order right-most lane — each lane draws only its LEFT hairline, which would
+      // leave the final column visually unbounded. `laneChannels` is chart order, not display order, so resolve the
+      // right edge from the computed geometry instead of the iteration index.
+      let gridTop = Number.POSITIVE_INFINITY;
+      let gridBottom = 0;
+      let gridRight = 0;
+      for (const lane of this.laneX.values()) {
+        gridTop = Math.min(gridTop, lane.top);
+        gridBottom = Math.max(gridBottom, lane.bottom);
+        gridRight = Math.max(gridRight, lane.x + lane.w);
       }
       this.laneLayer
-        .rect(x, bottom - 4, w, 6)
-        .fill({ color: scratchLane ? MUTED : WHITE, alpha: scratchLane ? 0.74 : 1 });
-      this.laneLayer.rect(x, bottom + 2, w, 4).fill({ color: YELLOW, alpha: 0.78 });
-    });
+        .rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop))
+        .fill({ color: 0x223048, alpha: 0.55 });
+    }
   }
 
   private resolveFallbackLaneLaserAlpha(channel: string): number {
@@ -5185,10 +5243,20 @@ export class PixiGameplayView {
     }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
+    const mineX = lane.x + 2;
+    const mineW = Math.max(4, lane.w - 4);
     graphic
-      .roundRect(lane.x + 2, y - 12, Math.max(4, lane.w - 4), 12, 3)
-      .fill(0x8a1a1a)
-      .stroke({ color: 0xffd166, width: 2 });
+      .roundRect(mineX, y - 12, mineW, 12, 3)
+      .fill(0x6e1414)
+      .stroke({ color: 0xffd166, width: 1, alignment: 1 });
+    // Diagonal caution stripes.
+    const stripeStep = 8;
+    for (let sx = mineX - 12; sx < mineX + mineW; sx += stripeStep) {
+      graphic
+        .poly([sx, y - 1, sx + 4, y - 1, sx + 4 + 8, y - 11, sx + 8, y - 11])
+        .fill({ color: 0xffd166, alpha: 0.55 });
+    }
+    graphic.rect(mineX, y - 12, mineW, 1).fill({ color: 0xff8a8a, alpha: 0.8 });
   }
 
   /**
@@ -5324,7 +5392,7 @@ export class PixiGameplayView {
       if (y < top - 1 || y > bottom + 1) {
         continue;
       }
-      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0xffffff, alpha: 0.65 });
+      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x8fa7c8, alpha: 0.3 });
     }
   }
 
@@ -5403,9 +5471,13 @@ export class PixiGameplayView {
     }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    graphic
-      .roundRect(lane.x + 2, y - 10, Math.max(4, lane.w - 4), 10, 2)
-      .fill(noteFallbackColor(channel, laneIndex, this.chartPlayVariant));
+    drawFallbackNoteBody(
+      graphic,
+      lane.x + 1,
+      y,
+      Math.max(4, lane.w - 2),
+      noteFallbackColor(channel, laneIndex, this.chartPlayVariant),
+    );
   }
 
   /**
@@ -5450,9 +5522,18 @@ export class PixiGameplayView {
     } else {
       const graphic = this.noteLayerPool.acquireGraphics();
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      graphic
-        .rect(lane.x + 2, top - 10, Math.max(4, lane.w - 4), Math.max(1, bottom - top))
-        .fill({ color: noteFallbackColor(channel, laneIndex, this.chartPlayVariant), alpha: 0.6 });
+      const tone = noteFallbackColor(channel, laneIndex, this.chartPlayVariant);
+      const bodyX = lane.x + 1;
+      const bodyW = Math.max(4, lane.w - 2);
+      const bodyTop = top - FALLBACK_NOTE_HEIGHT;
+      const bodyH = Math.max(1, bottom - top);
+      // Translucent core with bright side rails — reads as "hold the lane", not a solid wall of colour.
+      graphic.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.28 });
+      graphic.rect(bodyX, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.85 });
+      graphic.rect(bodyX + bodyW - 2, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.85 });
+      // Head and tail caps as real notes so the hold's judgment edges stay legible.
+      drawFallbackNoteBody(graphic, bodyX, bottom, bodyW, tone);
+      drawFallbackNoteBody(graphic, bodyX, top, bodyW, tone);
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     if (endSrc) {
@@ -6182,15 +6263,67 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
  * `laneIndex` is the LR2 lane id (`resolveLr2LaneIndex`-style): 0 / 10 = scratch, 1..9 = 1P-side keys, 11..19 = 2P-side
  * keys. `playVariant` matters because 9 KEY charts use channel 16 as a normal keyboard lane, not scratch.
  */
+interface FallbackLaneTone {
+  /** Top-edge highlight of a note body. */
+  top: number;
+  /** Note body / beam / LN colour. */
+  body: number;
+  /** Bottom-edge shade of a note body. */
+  bottom: number;
+  /** Key cap at rest. */
+  cap: number;
+  /** Key cap while pressed. */
+  capLit: number;
+}
+
+const FALLBACK_TONE_WHITE: FallbackLaneTone = {
+  top: 0xffffff,
+  body: 0xe9eef6,
+  bottom: 0x9aa6b8,
+  cap: 0xb9c2d0,
+  capLit: 0xffffff,
+};
+const FALLBACK_TONE_BLUE: FallbackLaneTone = {
+  top: 0x9fd8ff,
+  body: 0x3d9bff,
+  bottom: 0x1a5fc2,
+  cap: 0x1d3a6e,
+  capLit: 0x63b4ff,
+};
+const FALLBACK_TONE_RED: FallbackLaneTone = {
+  top: 0xffa3ad,
+  body: 0xff4d5e,
+  bottom: 0xb81f31,
+  cap: 0x6e1f2a,
+  capLit: 0xff6f7d,
+};
+
+/** Height of a fallback note body in design pixels. */
+const FALLBACK_NOTE_HEIGHT = 12;
+
+/**
+ * One skinless note: rounded body with a bright top edge and a shaded bottom edge, so the sprite reads as a lit
+ * plastic key instead of a flat rectangle. `y` is the just-timing line — the body's BOTTOM edge sits on it.
+ */
+function drawFallbackNoteBody(graphic: Graphics, x: number, y: number, w: number, tone: FallbackLaneTone): void {
+  const h = FALLBACK_NOTE_HEIGHT;
+  graphic
+    .roundRect(x, y - h, w, h, 2)
+    .fill(tone.body)
+    .stroke({ color: 0x05070d, width: 1, alignment: 1 });
+  graphic.rect(x + 1, y - h + 1, w - 2, 2).fill({ color: tone.top, alpha: 0.9 });
+  graphic.rect(x + 1, y - 3, w - 2, 2).fill({ color: tone.bottom, alpha: 0.9 });
+}
+
 function noteFallbackColor(
   channel: string,
   laneIndex: number,
   playVariant: ChartPlayVariant | undefined,
-): typeof WHITE {
-  if (isScratchLaneForVariant(channel, playVariant)) return RED;
+): FallbackLaneTone {
+  if (isScratchLaneForVariant(channel, playVariant)) return FALLBACK_TONE_RED;
   const keyIndex = laneIndex % 10;
-  if (keyIndex % 2 === 0) return BLUE;
-  return WHITE;
+  if (keyIndex % 2 === 0) return FALLBACK_TONE_BLUE;
+  return FALLBACK_TONE_WHITE;
 }
 
 // `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its

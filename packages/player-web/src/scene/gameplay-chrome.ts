@@ -43,6 +43,10 @@ export interface SkinlessGameplayChromeRuntime {
   rank?: string;
   autoplay?: boolean;
   hasBga?: boolean;
+  /** Monotonic play clock (ms) for chrome-side animation (gauge hot-tip flicker, subtle pulses). */
+  nowMs?: number;
+  /** Song progress in [0, 1] — drives the chrome's progress track. */
+  progressRatio?: number;
 }
 
 export interface SkinlessGameplayChromeRenderContext {
