@@ -1,6 +1,13 @@
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
-import { RulesetGauge, type GaugeJudgeIndex } from '../ruleset/index.ts';
+import {
+  classifyRulesetJudge,
+  judgeWindowLateReachUs,
+  RULESET_JUDGE_NONE,
+  RulesetGauge,
+  selectJudgeWindowSet,
+  type GaugeJudgeIndex,
+} from '../ruleset/index.ts';
 import {
   resolveRulesetConfig,
   type JudgeWindowSetUs,
@@ -204,14 +211,14 @@ class PlaylogSimulation {
         note.type === 'long' && typeof note.endTimeUs === 'number' && note.endTimeUs > note.timeUs ? true : false;
       const longStyle = isLong ? this.resolveLongStyle(note.lnMode ?? this.playlog.chart.lnMode) : undefined;
       const windows = this.config.windowsAt(note.timeUs);
-      const noteWindows = lane.scratch ? windows.scratch : windows.note;
+      const noteWindows = selectJudgeWindowSet(windows, { scratch: lane.scratch });
       const simNote: SimNote = {
         timeUs: note.timeUs,
         scratch: lane.scratch,
         isLong,
         judged: false,
         holding: false,
-        missDeadlineUs: note.timeUs - noteWindows.judges[JUDGE_BAD]![0],
+        missDeadlineUs: note.timeUs + judgeWindowLateReachUs(noteWindows),
       };
       if (isLong) {
         simNote.endTimeUs = note.endTimeUs;
@@ -437,9 +444,10 @@ class PlaylogSimulation {
       if (!hold) continue;
       this.integrateHcn(lane, timeUs);
       const note = hold.note;
-      const endWindows = note.scratch
-        ? this.config.windowsAt(timeUs).longScratchEnd
-        : this.config.windowsAt(timeUs).longNoteEnd;
+      const endWindows = selectJudgeWindowSet(this.config.windowsAt(timeUs), {
+        scratch: note.scratch,
+        longNoteEnd: true,
+      });
       const dmUs = note.endTimeUs! - timeUs;
       const endJudge = classifyJudge(dmUs, endWindows);
       lane.hold = undefined;
@@ -495,10 +503,10 @@ class PlaylogSimulation {
       return;
     }
     note.holding = true;
-    const endWindows = note.scratch ? this.config.windows.longScratchEnd : this.config.windows.longNoteEnd;
+    const endWindows = selectJudgeWindowSet(this.config.windows, { scratch: note.scratch, longNoteEnd: true });
     lane.hold = {
       note,
-      tailMissDeadlineUs: note.endTimeUs! - endWindows.judges[JUDGE_BAD]![0],
+      tailMissDeadlineUs: note.endTimeUs! + judgeWindowLateReachUs(endWindows),
       hcnCounterUs: 0,
     };
   }
@@ -510,7 +518,7 @@ class PlaylogSimulation {
   ): SelectionCandidate | undefined {
     const candidates: SelectionCandidate[] = [];
     for (const lane of lanes) {
-      const set = lane.scratch ? windows.scratch : windows.note;
+      const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
       const scanLate = Math.min(set.judges[JUDGE_BAD]![0], set.ms?.[0] ?? 0);
       const scanEarly = Math.max(set.judges[JUDGE_BAD]![1], set.ms?.[1] ?? 0);
       for (const note of lane.notes) {
@@ -608,7 +616,7 @@ class PlaylogSimulation {
   ): void {
     const extras: Array<{ note: SimNote }> = [];
     for (const lane of lanes) {
-      const set = lane.scratch ? windows.scratch : windows.note;
+      const set = selectJudgeWindowSet(windows, { scratch: lane.scratch });
       const badWindow = set.judges[JUDGE_BAD]!;
       const goodWindow = set.judges[JUDGE_GOOD]!;
       for (const note of lane.notes) {
@@ -666,14 +674,8 @@ class PlaylogSimulation {
 }
 
 function classifyJudge(dmUs: number, set: JudgeWindowSetUs): JudgeClassification {
-  for (let index = 0; index < set.judges.length; index += 1) {
-    const window = set.judges[index]!;
-    if (dmUs >= window[0] && dmUs <= window[1]) {
-      // The loop only walks the four scoreable windows, so the index is a valid gauge judge.
-      return index as GaugeJudgeIndex;
-    }
-  }
-  return JUDGE_NONE;
+  const judge = classifyRulesetJudge(dmUs, set);
+  return judge === RULESET_JUDGE_NONE ? JUDGE_NONE : judge;
 }
 
 /** The worse (numerically larger) of two judgments — the judge indices are ordered best-to-worst. */
@@ -682,5 +684,5 @@ function worseJudge(left: GaugeJudgeIndex, right: GaugeJudgeIndex): GaugeJudgeIn
 }
 
 function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTables): JudgeWindowSetUs {
-  return candidate.lane.scratch ? windows.scratch : windows.note;
+  return selectJudgeWindowSet(windows, { scratch: candidate.lane.scratch });
 }

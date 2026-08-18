@@ -1190,6 +1190,61 @@ describe('player', () => {
     expect(iidx.good).toBe(1);
   });
 
+  test("player: beatoraja's asymmetric BAD window reaches further late than early", async () => {
+    // beatoraja SEVENKEYS BAD reaches 280 ms LATE but only 220 ms early at judgerank 100 (`#RANK 3`). A press
+    // 250 ms late is inside it; the same press 250 ms early is out of reach entirely, so the note survives and
+    // misses on its own deadline. The `19` note is only there to put the chart in 7-key mode — beatoraja's
+    // five-key BAD window is symmetric.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 3;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '19', position: [0, 1], value: '01' },
+    ];
+    const base = { speed: 8, leadInMs: 0, audio: false, tui: false, judgeRuleset: 'beatoraja' } as const;
+
+    const late = await manualPlay(json, {
+      ...base,
+      replayInputs: [{ seq: 0, timeUs: 1_250_000, action: 'down' as const, channels: ['11'] }],
+    });
+    const early = await manualPlay(json, {
+      ...base,
+      replayInputs: [{ seq: 0, timeUs: 750_000, action: 'down' as const, channels: ['11'] }],
+    });
+
+    expect(late.bad).toBe(1);
+    expect(late.poor).toBe(1); // the untouched `19` note
+    expect(early.bad).toBe(0);
+    expect(early.poor).toBe(2); // the press never reached its note, so both miss
+  });
+
+  test("player: scratch lanes judge on the ruleset's own scratch window", async () => {
+    // beatoraja widens the turntable: GREAT is ±60 ms on a key lane but ±70 ms on scratch, so the same 65 ms late
+    // press is a GOOD on `11` and a GREAT on `16`.
+    const chart = (): ReturnType<typeof createEmptyJson> => {
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 240;
+      json.metadata.rank = 3;
+      json.events = [
+        { measure: 1, channel: '11', position: [0, 1], value: '01' },
+        { measure: 1, channel: '16', position: [0, 1], value: '01' },
+        { measure: 1, channel: '19', position: [0, 1], value: '01' },
+      ];
+      return json;
+    };
+    const base = { speed: 8, leadInMs: 0, audio: false, tui: false, judgeRuleset: 'beatoraja' } as const;
+    const pressAt = (channel: string) => [{ seq: 0, timeUs: 1_065_000, action: 'down' as const, channels: [channel] }];
+
+    const key = await manualPlay(chart(), { ...base, replayInputs: pressAt('11') });
+    const scratch = await manualPlay(chart(), { ...base, replayInputs: pressAt('16') });
+
+    expect(key.good).toBe(1);
+    expect(key.great).toBe(0);
+    expect(scratch.great).toBe(1);
+    expect(scratch.good).toBe(0);
+  });
+
   test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 240;

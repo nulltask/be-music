@@ -41,7 +41,7 @@ import {
   renderSingleSample,
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
-import { findBestCandidate, findLaneSoundCandidate } from '../judging.ts';
+import { findClosestCandidateInWindow, findLaneSoundCandidate } from '../judging.ts';
 import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
@@ -80,10 +80,20 @@ import { resolveLandmineGaugeEffect } from './landmine.ts';
 import {
   resolveBmsJudgeWindowsMsForExRankValue,
   resolveJudgeWindowsMs,
-  resolveJudgeWindowsMsForRuleset,
   type JudgeWindowRuleset,
 } from './judge-window.ts';
-import { resolveRuleset, rulesetChartFactsFromChart } from '../ruleset/index.ts';
+import {
+  classifyRulesetJudge,
+  goodWindowReachUs,
+  judgeWindowEarlyReachUs,
+  judgeWindowLateReachUs,
+  resolveRuleset,
+  rulesetChartFactsFromChart,
+  RULESET_JUDGE_NONE,
+  selectJudgeWindowSet,
+  type JudgeWindowSetUs,
+  type RulesetWindowTables,
+} from '../ruleset/index.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import {
@@ -524,7 +534,6 @@ const HELL_CHARGE_GAUGE_DRAIN_PER_SECOND = 2.5;
  * gain disabled, breaking a hold for any duration was permanently destructive.
  */
 const HELL_CHARGE_GAUGE_GAIN_PER_SECOND = 2.5;
-const IIDX_BAD_WINDOW_MS = 250;
 const PAUSE_POLL_INTERVAL_MS = 16;
 const AUDIO_TARGET_LEAD_MAX_MS = 32;
 const AUDIO_TARGET_LEAD_STEP_UP_MS = 1.5;
@@ -569,34 +578,42 @@ export function applyFastSlowForJudge(
   }
 }
 
-function resolveManualJudgeKind(
-  signedDeltaMs: number,
-  judgeWindows: ReturnType<typeof resolveJudgeWindowsMs>,
-  badWindowMs: number,
-): JudgeKind {
-  const deltaMs = Math.abs(signedDeltaMs);
-  if (deltaMs <= judgeWindows.pgreat) {
-    return 'PERFECT';
-  }
-  if (deltaMs <= judgeWindows.great) {
-    return 'GREAT';
-  }
-  if (deltaMs <= judgeWindows.good) {
-    return 'GOOD';
-  }
-  if (deltaMs <= badWindowMs) {
-    return 'BAD';
-  }
-  return 'POOR';
+/** Renders one window set as `PGREAT -8.0/+8.0ms ...` (early / late reach) for the TUI's start banner. */
+function formatJudgeWindowSet(windows: JudgeWindowSetUs): string {
+  return RULESET_JUDGE_KINDS.map((kind, index) => {
+    const [lateBoundUs, earlyBoundUs] = windows.judges[index]!;
+    return `${kind} -${(earlyBoundUs / 1000).toFixed(1)}/+${(-lateBoundUs / 1000).toFixed(1)}ms`;
+  }).join(' ');
 }
 
-function resolveManualTimedJudge(
-  signedDeltaMs: number,
-  judgeWindows: ReturnType<typeof resolveJudgeWindowsMs>,
-  badWindowMs: number,
-): TimedManualJudge {
+/** Judge indices, best to worst, in the order the ruleset window sets use. */
+const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = [
+  'PERFECT',
+  'GREAT',
+  'GOOD',
+  'BAD',
+];
+
+/**
+ * Classify a signed timing delta against one ruleset window set, or `undefined` when the press cannot reach the
+ * note at all. Both legs of every window matter: beatoraja's seven-key BAD window reaches 280 ms late but only
+ * 220 ms early, so "within the BAD width" is not a question that can be asked of an absolute delta.
+ *
+ * `signedDeltaMs` is the engine's convention (positive = the press was LATE); the window tables use beatoraja's
+ * (`noteTime - inputTime`, positive = EARLY), hence the negation.
+ */
+function resolveManualJudgeKind(signedDeltaMs: number, windows: JudgeWindowSetUs): JudgeKind | undefined {
+  const judge = classifyRulesetJudge(-signedDeltaMs * 1000, windows);
+  return judge === RULESET_JUDGE_NONE ? undefined : RULESET_JUDGE_KINDS[judge];
+}
+
+/**
+ * Same classification, for contexts where "out of reach" is itself a miss — a long-note end that the player never
+ * released inside its window is a POOR, not a non-event.
+ */
+function resolveManualTimedJudge(signedDeltaMs: number, windows: JudgeWindowSetUs): TimedManualJudge {
   return {
-    kind: resolveManualJudgeKind(signedDeltaMs, judgeWindows, badWindowMs),
+    kind: resolveManualJudgeKind(signedDeltaMs, windows) ?? 'POOR',
     signedDeltaMs,
   };
 }
@@ -2153,7 +2170,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       );
       playbackClock = chartClock;
       playbackEventTracer.flushUntil(0);
-      const badWindowSeconds = IIDX_BAD_WINDOW_MS / 1000;
+      // Autoplay never misses, so this is purely the horizon after which un-detonated mines and invisible notes
+      // are retired. The active ruleset's widest note reach is the right bound: nothing can act on them past it.
+      const badWindowSeconds = judgeWindowLateReachUs(autoRuleset.windows.note) / 1e6;
       let landmineExpireCursor = 0;
       let invisibleExpireCursor = 0;
       let autoPlayableAudioIndex = 0;
@@ -2381,29 +2400,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
   const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
-  let judgeWindows = resolveJudgeWindowsMsForRuleset(resolvedJson, judgeRuleset, options.judgeWindowMs);
-  let badWindowMs = judgeWindows.bad;
-  let badWindowSeconds = badWindowMs / 1000;
-  /**
-   * The BAD window in force at chart start, before any `#EXRANKxx` change. The miss sweep resolves each note's
-   * deadline from the rank active at THAT NOTE's time, so it needs the initial value even after `badWindowSeconds`
-   * has been mutated by a later change.
-   */
-  const initialBadWindowSeconds = badWindowSeconds;
   const timingResolver = createTimingResolver(resolvedJson);
   // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
   // non-LR2 rulesets keep their initial windows for the whole chart.
   const dynamicJudgeRankChanges =
     judgeRuleset === 'lr2' ? collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver) : [];
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
-  let dynamicJudgeRankCursor = 0;
-  let maxBadWindowMs = badWindowMs;
-  for (const change of dynamicJudgeRankChanges) {
-    const dynamicBadWindowMs = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs).bad;
-    if (dynamicBadWindowMs > maxBadWindowMs) {
-      maxBadWindowMs = dynamicBadWindowMs;
-    }
-  }
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
@@ -2458,6 +2460,42 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },
   );
+  /**
+   * Signed judge windows in force at a given chart time. The ruleset owns the whole table set — key vs scratch,
+   * note vs long-note end, and (LR2 only) the `#EXRANKxx` timeline — so the engine never derives a window itself.
+   */
+  const windowTablesAt = (seconds: number): RulesetWindowTables => ruleset.windowsAt(Math.round(seconds * 1e6));
+  const judgeWindowsFor = (channel: string, seconds: number, longNoteEnd = false): JudgeWindowSetUs =>
+    selectJudgeWindowSet(windowTablesAt(seconds), {
+      scratch: scratchPlayableChannels.has(channel),
+      longNoteEnd,
+    });
+  /**
+   * Widest reach (seconds) any lane can have at `seconds`, used as the candidate search radius and as the horizon
+   * for retiring notes the player can no longer reach. Only a coarse bound: the asymmetric legs are settled by
+   * `resolveManualJudgeKind` against the note's own window set.
+   */
+  const maxJudgeReachSeconds = (seconds: number): number => {
+    const tables = windowTablesAt(seconds);
+    let reachUs = 0;
+    for (const set of [tables.note, tables.scratch, tables.longNoteEnd, tables.longScratchEnd]) {
+      reachUs = Math.max(reachUs, judgeWindowLateReachUs(set), judgeWindowEarlyReachUs(set));
+    }
+    return reachUs / 1e6;
+  };
+  /** How far ahead of a note its judgable window opens — when the lane's fallback keysound becomes that note's. */
+  const maxJudgeEarlyReachSeconds = (seconds: number): number => {
+    const tables = windowTablesAt(seconds);
+    let reachUs = 0;
+    for (const set of [tables.note, tables.scratch]) {
+      reachUs = Math.max(reachUs, judgeWindowEarlyReachUs(set));
+    }
+    return reachUs / 1e6;
+  };
+  /** The BAD gate as a single width, for the log line and the host's judge-window readout. */
+  const badWindowMs = judgeWindowLateReachUs(ruleset.windows.note) / 1000;
+  const badWindowSeconds = badWindowMs / 1000;
+
   const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
   const scoreTracker = createScoreTracker();
   const playlogRecorder = options.onPlaylogRecorded
@@ -2596,7 +2634,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       writeOutput('Mode: AUTO SCRATCH (16ch/26ch only)\n');
     }
     writeOutput(
-      `Judge window: PGREAT<=${judgeWindows.pgreat.toFixed(2)}ms GREAT<=${judgeWindows.great.toFixed(2)}ms GOOD<=${judgeWindows.good.toFixed(2)}ms BAD<=${Math.round(badWindowMs)}ms\n`,
+      `Judge window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`,
     );
     writeOutput('Press Space to pause/resume.\n');
     writeOutput('Press Shift+R to restart.\n');
@@ -2642,6 +2680,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     audioOffsetMs + (audioSession?.chartStartDelayMs ?? 0),
   );
   playbackEventTracer.flushUntil(0);
+  // Widest reach across the whole chart — a mid-chart `#EXRANKxx` can widen the windows past the opening rank's.
+  const maxBadWindowMs =
+    1000 *
+    Math.max(
+      maxJudgeReachSeconds(0),
+      ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(change.seconds)),
+    );
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
@@ -2767,14 +2812,18 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
    * un-pressed mine is harmless). Runs on every frame tick and on every press dispatch.
    */
   const processLandminePassage = (nowSec: number, nowMs: number): void => {
-    const goodWindowSeconds = judgeWindows.good / 1000;
+    // Mines sit on lanes, so they read the lane's own GOOD window; the legs are asymmetric under beatoraja, hence
+    // the separate early / late reach rather than one radius.
+    const [goodLateUs, goodEarlyUs] = goodWindowReachUs(windowTablesAt(nowSec).note);
+    const goodLateSeconds = goodLateUs / 1e6;
+    const goodEarlySeconds = goodEarlyUs / 1e6;
     while (landmineExpireCursor < landmineNotes.length) {
       const landmine = landmineNotes[landmineExpireCursor]!;
       if (landmine.judged) {
         landmineExpireCursor += 1;
         continue;
       }
-      if (nowSec - landmine.seconds <= goodWindowSeconds) {
+      if (nowSec - landmine.seconds <= goodLateSeconds) {
         break;
       }
       markLandmineJudged(landmine);
@@ -2782,7 +2831,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     for (let index = landmineExpireCursor; index < landmineNotes.length; index += 1) {
       const landmine = landmineNotes[index]!;
-      if (landmine.seconds - nowSec > goodWindowSeconds) {
+      if (landmine.seconds - nowSec > goodEarlySeconds) {
         break;
       }
       if (landmine.judged) {
@@ -2807,20 +2856,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       markInvisibleJudged(invisible);
       invisibleExpireCursor += 1;
-    }
-  };
-
-  const advanceDynamicJudgeRankChanges = (referenceSeconds: number): void => {
-    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
-    while (dynamicJudgeRankCursor < dynamicJudgeRankChanges.length) {
-      const change = dynamicJudgeRankChanges[dynamicJudgeRankCursor]!;
-      if (change.seconds > safeReferenceSeconds) {
-        break;
-      }
-      judgeWindows = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs);
-      badWindowMs = judgeWindows.bad;
-      badWindowSeconds = badWindowMs / 1000;
-      dynamicJudgeRankCursor += 1;
     }
   };
 
@@ -2932,31 +2967,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   };
 
   /**
-   * BAD window (seconds) that was in force at `noteSeconds`, walking the `#EXRANKxx` timeline with its own cursor.
-   *
-   * The miss sweep must not read the LIVE `badWindowSeconds`: a rank change part-way through the chart would then
-   * retroactively move the deadline of notes that had already scrolled past under the old window — widening the
-   * rank would resurrect notes that should already have been missed, narrowing it would miss notes early. Each
-   * note's deadline belongs to the rank active at its own time, which is also what the playlog simulator freezes
-   * per note (`playlog/simulate.ts`, `missDeadlineUs`).
-   *
-   * `scorableNotes` is sorted by `seconds` and the sweep walks it monotonically, so a single forward-only cursor
-   * is enough; re-asking for the same note is idempotent.
+   * How long past its own time a note stays reachable, in seconds. Resolved from the window set active at THAT
+   * NOTE's time and on THAT NOTE's lane, never from a live "current window" variable: a mid-chart `#EXRANKxx`
+   * would otherwise retroactively move the deadline of notes that had already scrolled past under the old rank —
+   * widening the rank would resurrect notes that should already have been missed, narrowing it would miss notes
+   * early. The play-log simulator freezes the same per-note deadline (`playlog/simulate.ts`, `missDeadlineUs`).
    */
-  let missSweepRankCursor = 0;
-  let missSweepBadWindowSeconds = initialBadWindowSeconds;
-  const resolveMissBadWindowSeconds = (noteSeconds: number): number => {
-    while (missSweepRankCursor < dynamicJudgeRankChanges.length) {
-      const change = dynamicJudgeRankChanges[missSweepRankCursor]!;
-      if (change.seconds > noteSeconds) {
-        break;
-      }
-      missSweepBadWindowSeconds =
-        resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs).bad / 1000;
-      missSweepRankCursor += 1;
-    }
-    return missSweepBadWindowSeconds;
-  };
+  const resolveMissDeadlineSeconds = (note: TimedPlayableNote): number =>
+    judgeWindowLateReachUs(judgeWindowsFor(note.channel, note.seconds)) / 1e6;
 
   const applyExpiredScorableJudgements = (referenceSeconds: number): void => {
     while (scorableMissCursor < scorableNotes.length) {
@@ -2965,7 +2983,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         scorableMissCursor += 1;
         continue;
       }
-      if (referenceSeconds - note.seconds <= resolveMissBadWindowSeconds(note.seconds)) {
+      if (referenceSeconds - note.seconds <= resolveMissDeadlineSeconds(note)) {
         break;
       }
       scorableMissCursor += 1;
@@ -3056,7 +3074,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   };
 
   const applyManualTimingJudge = (channel: string, signedDeltaMs: number, atSeconds: number): void => {
-    applyResolvedManualJudge(channel, resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs), atSeconds);
+    applyResolvedManualJudge(
+      channel,
+      resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, atSeconds)),
+      atSeconds,
+    );
   };
 
   const finalizeActiveLongNote = (
@@ -3181,7 +3203,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
     }
 
-    advanceDynamicJudgeRankChanges(nowSec);
 
     let refreshedHold = false;
     for (const channel of candidateChannels) {
@@ -3201,7 +3222,20 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     processLandminePassage(nowSec, nowMs);
 
-    const candidate = findBestCandidate(scorableNotes, candidateChannels, nowSec, badWindowSeconds);
+    // Reachability is per note, not per press: the note's own lane (key vs scratch) and its own chart time (the
+    // `#EXRANKxx` rank in force there) pick the window set, and both legs are checked separately. The radius below
+    // is only the coarse scan bound — a note inside it but outside its own windows is left unjudged, so the press
+    // falls through to the lane keysound / empty-POOR path instead of consuming the note as a POOR.
+    const candidate = findClosestCandidateInWindow(scorableNotes, {
+      candidateChannels,
+      nowSec,
+      judgeWindowSec: maxJudgeReachSeconds(nowSec),
+      sortedBySeconds: true,
+      isConsumed: (note) =>
+        note.judged ||
+        resolveManualJudgeKind((nowSec - note.seconds) * 1000, judgeWindowsFor(note.channel, note.seconds)) ===
+          undefined,
+    });
 
     if (!candidate) {
       if (refreshedHold) {
@@ -3212,7 +3246,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side. Treat as benign.
         return;
       }
-      const fallback = findLaneSoundCandidate(laneSoundNotes, candidateChannels, nowSec, badWindowSeconds);
+      const fallback = findLaneSoundCandidate(laneSoundNotes, candidateChannels, nowSec, maxJudgeEarlyReachSeconds(nowSec));
       if (fallback) {
         if (!uiEnabled) {
           writePlayableSampleTriggerEventLog(
@@ -3308,7 +3342,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           endSeconds,
           note: candidate,
           mode: longNoteMode,
-          headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs),
+          headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, nowSec)),
           gaugeDrainCursorSeconds: nowSec,
           audioStopped: false,
         });
@@ -3320,7 +3354,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           endSeconds,
           note: candidate,
           mode: 1,
-          headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindows, badWindowMs),
+          headJudge: resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, nowSec)),
           gaugeDrainCursorSeconds: nowSec,
           audioStopped: false,
         });
@@ -3551,8 +3585,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
       processReplayEventsUntil(nowSec);
-      advanceDynamicJudgeRankChanges(nowSec);
-      playbackEventTracer.flushUntil(nowSec);
+        playbackEventTracer.flushUntil(nowSec);
 
       triggerRealtimeAudioVolumeEvents(scheduledSec);
       triggerNonPlayableRealtimeAudioEvents(scheduledSec);
@@ -3692,7 +3725,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                 } satisfies TimedManualJudge)
               : combineLongNoteJudges(
                   hold.headJudge,
-                  resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+                  resolveManualTimedJudge(
+                    (nowSec - hold.endSeconds) * 1000,
+                    judgeWindowsFor(channel, hold.endSeconds, true),
+                  ),
                 );
           finalizeActiveLongNote(channel, hold, finalJudge, nowSec);
           continue;
@@ -3727,7 +3763,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             hold,
             combineLongNoteJudges(
               hold.headJudge,
-              resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindows, badWindowMs),
+              resolveManualTimedJudge((nowSec - hold.endSeconds) * 1000, judgeWindowsFor(channel, hold.endSeconds, true)),
             ),
             nowSec,
           );
