@@ -44,3 +44,11 @@
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).
+
+## Cursor Cloud specific instructions
+
+- Node.js: this repo requires Node `>=26` (`.node-version` pins `26.7.0`). The VM's default `node` on `PATH` (`/exec-daemon/node`) is v22 and would take precedence, so Node 26 is installed via `nvm` and prepended to `PATH` in `~/.bashrc`. Interactive shells get Node 26 automatically; a non-interactive script must prepend `"$HOME/.nvm/versions/node/v26.7.0/bin"` to `PATH` first. Node 26 dropped `corepack`, so the pinned pnpm (`10.30.3`) is installed globally under Node 26 rather than via corepack.
+- Standard commands live in the root `package.json` and `README.md`: `pnpm run lint`, `pnpm run typecheck`, `pnpm run build`, `pnpm test` (Vitest, run only from the workspace root — there is no per-package `test` script). CI (`.github/workflows/ci.yml`) runs exactly `lint`, `typecheck`, `build`, `test`.
+- `pnpm install` prints `Failed to create bin ...` warnings for `bms-parse`/`bms-audio-render`/`bms-stringify` and reports `Ignored build scripts: sharp, workerd`. Both are expected: the CLI bins only exist after `pnpm run build`, and only `esbuild` is allowed in `pnpm.onlyBuiltDependencies`. Neither blocks dev, tests, or the web demo.
+- CLI toolchain (parser/stringifier/audio-renderer/editor) runs through `tsx` via root aliases (e.g. `pnpm run parse in.bms out.json`, `pnpm run audio-render in.bms out.wav`), so a prior `pnpm run build` is not required for these.
+- Browser demo: `pnpm run player:web` starts Vite on `http://localhost:5173` (`--host 0.0.0.0`). To load a chart without native-folder drag-drop, use the URL auto-load param `?music=<zip-url>`; a same-origin zip works by placing it in `packages/player-web-demo/public/` (served at `/`), then visiting `http://localhost:5173/?music=/<file>.zip`. The song-select screen exposes an `AUTO PLAY` button that plays a chart end-to-end (falling notes → results screen) with no keyboard input.
