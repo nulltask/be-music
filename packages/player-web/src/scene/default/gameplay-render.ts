@@ -7,20 +7,29 @@ import {
   type FallbackLaneLayoutRect,
 } from '../gameplay-lanes.ts';
 import type { SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
-import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT } from './fonts.ts';
+import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT, DEFAULT_TEXT_FONT } from './fonts.ts';
 import type { ChildPool } from '../pixi-utils.ts';
 import { addChromeText } from './chrome-text.ts';
 import type { DefaultHudMotion } from './hud-motion.ts';
-import { beatPulse, enterT, idleGlow, introFill, judgePopup, scanlineY, slideOffset } from './motion.ts';
-import { coverAmount, fallbackSceneElapsed, GAMEPLAY_TIMELINE, pieceT, readyAlpha } from './transition.ts';
+import {
+  beatImpulse,
+  impactOffset,
+  introFill,
+  judgePopup,
+  slamAlpha,
+  slamOffset,
+  slamScale,
+  staggerProgress,
+} from './motion.ts';
+import { coverAmount, fallbackSceneElapsed, GAMEPLAY_TIMELINE, pieceRawT, readyAlpha } from './transition.ts';
 import {
   DEFAULT_THEME as T,
   DEFAULT_BG_BANDS,
   defaultJudgeColor,
-  fillTriangle,
+  fillParallelogram,
+  fillSlash,
   paintSceneCover,
-  strokeClockRing,
-  strokeCornerBrackets,
+  strokeParallelogram,
 } from './theme.ts';
 
 const SCORE_PANEL = { x: 384, y: 350, w: 238, h: 112 } as const;
@@ -59,23 +68,24 @@ export function renderDefaultGameplayFrame(
   const nowMs = runtime.nowMs ?? 10_000;
   const elapsed = fallbackSceneElapsed(runtime.sceneElapsedMs);
   if (elapsed <= 0) options.motion?.reset();
+  const pulse = beatImpulse(runtime.beatPhase);
   frame.label = 'default-gameplay/chrome';
-  drawBackground(frame, hasBga, nowMs);
-  drawPlayfield(frame, playfield, runtime.progressRatio, nowMs, pieceT(elapsed, GAMEPLAY_TIMELINE.playfield));
-  drawBgaFrame(frame, hasBga, pieceT(elapsed, GAMEPLAY_TIMELINE.bga), nowMs);
-  drawGauge(frame, runtime, pieceT(elapsed, GAMEPLAY_TIMELINE.gauge), nowMs);
-  drawSongPlate(frame, pieceT(elapsed, GAMEPLAY_TIMELINE.song));
-  drawScorePlate(frame, runtime.exScore, runtime.exScoreMax, pieceT(elapsed, GAMEPLAY_TIMELINE.score));
+  drawBackground(frame, hasBga);
+  drawPlayfield(frame, playfield, runtime.progressRatio, pulse, pieceRawT(elapsed, GAMEPLAY_TIMELINE.playfield));
+  drawBgaFrame(frame, hasBga, pulse, pieceRawT(elapsed, GAMEPLAY_TIMELINE.bga));
+  drawGauge(frame, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.gauge), nowMs, pulse);
+  drawSongPlate(frame, pieceRawT(elapsed, GAMEPLAY_TIMELINE.song));
+  drawScorePlate(frame, runtime.exScore, runtime.exScoreMax, pieceRawT(elapsed, GAMEPLAY_TIMELINE.score));
   const tallyX = resolveJudgeTallyX(playfield);
   if (tallyX !== undefined) {
-    drawJudgeTally(frame, layer, runtime, tallyX, pieceT(elapsed, GAMEPLAY_TIMELINE.tally), layerPool);
+    drawJudgeTally(frame, layer, runtime, tallyX, pieceRawT(elapsed, GAMEPLAY_TIMELINE.tally), layerPool);
   }
   if (!layerPool) layer.addChildAt(frame, 0);
 
   const frontLayer = options.overlayLayer && options.overlayLayerPool ? options.overlayLayer : layer;
   const frontPool = frontLayer === layer ? layerPool : options.overlayLayerPool;
-  const headerT = pieceT(elapsed, GAMEPLAY_TIMELINE.header);
-  drawStatusBar(frontLayer, runtime.autoplay === true, runtime.beatPhase, headerT, nowMs, frontPool);
+  const headerT = pieceRawT(elapsed, GAMEPLAY_TIMELINE.header);
+  drawStatusBar(frontLayer, runtime.autoplay === true, pulse, headerT, frontPool);
   paintHeaderTexts(frontLayer, runtime, headerT, frontPool);
   const punches = options.motion?.sample({
     judge: runtime.lastJudge,
@@ -83,11 +93,12 @@ export function renderDefaultGameplayFrame(
     score: runtime.score,
     nowMs,
   });
-  paintSongTexts(layer, runtime, pieceT(elapsed, GAMEPLAY_TIMELINE.song), layerPool);
-  paintGaugeTexts(layer, runtime, pieceT(elapsed, GAMEPLAY_TIMELINE.gauge), layerPool);
-  paintScoreTexts(layer, runtime, pieceT(elapsed, GAMEPLAY_TIMELINE.score), punches, layerPool);
+  paintSongTexts(layer, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.song), layerPool);
+  paintGaugeTexts(layer, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.gauge), pulse, layerPool);
+  paintScoreTexts(layer, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.score), punches, pulse, layerPool);
   paintJudge(frontLayer, runtime, playfield, punches, frontPool);
-  paintReady(frontLayer, elapsed, nowMs, frontPool);
+  paintReady(frontLayer, elapsed, frontPool);
+  drawBeatSlashes(frontLayer, pulse, frontPool);
 
   paintSceneCover(
     frontLayer,
@@ -99,16 +110,16 @@ export function renderDefaultGameplayFrame(
 
 export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
 
-function drawBackground(frame: Graphics, hasBga: boolean, nowMs: number): void {
+function drawBackground(frame: Graphics, hasBga: boolean): void {
   let bandTop = 0;
   for (const [color, bandBottom] of DEFAULT_BG_BANDS) {
     fillBandAroundHole(frame, bandTop, bandBottom, color, hasBga);
     bandTop = bandBottom;
   }
-  const scanY = scanlineY(nowMs, DESIGN_HEIGHT, 2800);
-  frame.rect(0, scanY, DESIGN_WIDTH, 1).fill({ color: T.cyan, alpha: 0.06 });
-  frame.rect(0, 0, DESIGN_WIDTH, 4).fill({ color: 0x000000, alpha: 0.45 });
-  frame.rect(0, DESIGN_HEIGHT - 10, DESIGN_WIDTH, 10).fill({ color: 0x000000, alpha: 0.28 });
+  fillSlash(frame, -40, 8, 220, 18, 14, T.accent, 0.22);
+  fillSlash(frame, 420, 430, 280, 22, 16, T.accent, 0.16);
+  frame.rect(0, 0, DESIGN_WIDTH, 6).fill({ color: 0x000000, alpha: 0.45 });
+  frame.rect(0, DESIGN_HEIGHT - 14, DESIGN_WIDTH, 14).fill({ color: 0x000000, alpha: 0.35 });
 }
 
 function fillBandAroundHole(frame: Graphics, top: number, bottom: number, color: number, hasBga: boolean): void {
@@ -178,7 +189,7 @@ function drawPlayfield(
   frame: Graphics,
   playfield: FallbackPlayfieldLayout,
   progressRatio: number | undefined,
-  nowMs: number,
+  pulse: number,
   t: number,
 ): void {
   if (t <= 0) return;
@@ -188,29 +199,47 @@ function drawPlayfield(
   const railW = 8;
   const leftRailX = playfield.x - railW - 2;
   const rightRailX = playfield.right + 2;
-  frame.rect(playfield.x - 2, wellTop, playfield.w + 4, wellHeight).fill({ color: 0x02060a, alpha: t });
-  frame.rect(playfield.x - 2, wellTop, playfield.w + 4, 80).fill({ color: 0x000000, alpha: 0.4 * t });
+  const throwX = slamOffset(t, -28);
+  frame.rect(playfield.x - 2 + throwX, wellTop, playfield.w + 4, wellHeight).fill({ color: T.lane, alpha: slamAlpha(t) });
+  frame.rect(playfield.x - 2 + throwX, wellTop, playfield.w + 4, 90).fill({ color: 0x000000, alpha: 0.5 * slamAlpha(t) });
   if (playfield.sideGap) {
-    frame.rect(playfield.sideGap.x, wellTop, playfield.sideGap.w, wellHeight).fill({ color: T.panelDeep, alpha: 0.96 * t });
+    frame.rect(playfield.sideGap.x + throwX, wellTop, playfield.sideGap.w, wellHeight).fill({
+      color: T.inkDeep,
+      alpha: 0.96 * slamAlpha(t),
+    });
   }
   for (const railX of [leftRailX, rightRailX]) {
-    frame.rect(railX, wellTop, railW, wellBottom).fill({ color: 0x0a1822, alpha: t });
-    frame.rect(railX, wellTop, 1, wellBottom).fill({ color: T.cyan, alpha: 0.55 * t });
-    frame.rect(railX + railW - 1, wellTop, 1, wellBottom).fill({ color: T.cyanDim, alpha: 0.7 * t });
+    frame.rect(railX + throwX, wellTop, railW, wellBottom).fill({ color: T.rail, alpha: slamAlpha(t) });
+    frame.rect(railX + throwX, wellTop, 1, wellBottom).fill({ color: T.railEdge, alpha: 0.95 * slamAlpha(t) });
+    frame.rect(railX + railW - 1 + throwX, wellTop, 1, wellBottom).fill({
+      color: T.accent,
+      alpha: (0.55 + 0.4 * pulse) * slamAlpha(t),
+    });
   }
-  const trackX = leftRailX + 2;
+  const trackX = leftRailX + 2 + throwX;
   const trackTop = wellTop + 6;
   const trackHeight = wellBottom - 12 - trackTop;
-  frame.rect(trackX, trackTop, railW - 4, trackHeight).fill({ color: 0x000000, alpha: 0.55 * t });
+  frame.rect(trackX, trackTop, railW - 4, trackHeight).fill({ color: 0x000000, alpha: 0.55 * slamAlpha(t) });
   const ratio = progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
   if (ratio > 0) {
     const fillHeight = Math.max(2, Math.round(trackHeight * ratio));
-    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, fillHeight).fill({ color: T.cyan, alpha: 0.85 * t });
-    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, 2).fill({ color: T.ice, alpha: 0.9 * t });
+    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, fillHeight).fill({
+      color: T.accent,
+      alpha: 0.9 * slamAlpha(t),
+    });
+    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, 2).fill({ color: T.paper, alpha: 0.95 * slamAlpha(t) });
   }
-  frame.rect(leftRailX, wellBottom, rightRailX + railW - leftRailX, 5).fill({ color: 0x0a1822, alpha: t });
-  frame.rect(leftRailX, wellBottom, rightRailX + railW - leftRailX, 1).fill({ color: T.cyan, alpha: 0.55 * t });
-  fillTriangle(frame, playfield.x - 10, wellTop + 16 + Math.sin(nowMs / 900) * 4, 7, T.cyan, 0.35 * t);
+  fillParallelogram(frame, leftRailX + throwX, wellBottom, rightRailX + railW - leftRailX, 6, 8, T.rail, slamAlpha(t));
+  fillSlash(
+    frame,
+    leftRailX - 4 + throwX,
+    wellBottom - 2,
+    rightRailX + railW - leftRailX + 10,
+    4,
+    3,
+    T.accent,
+    0.85 * slamAlpha(t),
+  );
 }
 
 function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefined {
@@ -218,46 +247,50 @@ function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefi
   return playfield.right + 14 <= x && x + 76 <= DESIGN_WIDTH ? x : undefined;
 }
 
-function drawBgaFrame(frame: Graphics, hasBga: boolean, t: number, nowMs: number): void {
+function drawBgaFrame(frame: Graphics, hasBga: boolean, pulse: number, t: number): void {
   if (t <= 0) return;
-  const glow = idleGlow(nowMs);
+  const pad = 10;
+  const a = slamAlpha(t);
+  fillParallelogram(frame, BGA.x - pad, BGA.y - 12, BGA.w + pad * 2, BGA.h + 24, 10, T.panel, hasBga ? 0 : 0.88 * a);
+  strokeParallelogram(
+    frame,
+    BGA.x - pad,
+    BGA.y - 12,
+    BGA.w + pad * 2,
+    BGA.h + 24,
+    10,
+    T.accent,
+    2,
+    (0.7 + 0.3 * pulse) * a,
+  );
   if (!hasBga) {
-    frame.rect(BGA.x - 10, BGA.y - 12, BGA.w + 20, BGA.h + 24).fill({ color: T.panel, alpha: 0.7 * t });
-  }
-  strokeCornerBrackets(frame, BGA.x, BGA.y, BGA.w, BGA.h, 16 * t, T.cyan, (0.45 + 0.25 * glow) * t);
-  if (!hasBga) {
-    frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: T.panelDeep, alpha: 0.95 * t });
+    frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: T.inkDeep, alpha: 0.96 * a });
     const cx = BGA.x + BGA.w / 2;
     const cy = BGA.y + BGA.h / 2;
-    strokeClockRing(frame, cx, cy, 72 * t, t, T.cyan, 0.18 * t, 1);
-    strokeClockRing(frame, cx, cy, 48 * t, t, T.cyan, 0.28 * t, 1, nowMs / 1800);
-    fillTriangle(frame, cx, cy, 14, T.cyan, 0.2 * t, true);
+    fillSlash(frame, cx - 90, cy - 10, 180, 8, 18, T.accent, 0.55 * a);
+    fillSlash(frame, cx - 80, cy + 8, 160, 5, -14, T.paper, 0.35 * a);
+  }
+  for (const [bx, by, dx, dy] of [
+    [BGA.x, BGA.y, 1, 1],
+    [BGA.x + BGA.w, BGA.y, -1, 1],
+    [BGA.x, BGA.y + BGA.h, 1, -1],
+    [BGA.x + BGA.w, BGA.y + BGA.h, -1, -1],
+  ] as const) {
+    frame.rect(dx > 0 ? bx : bx - 16, by - (dy < 0 ? 2 : 0), 16, 3).fill({ color: T.paper, alpha: 0.8 * a });
+    frame.rect(bx - (dx < 0 ? 2 : 0), dy > 0 ? by : by - 16, 3, 16).fill({ color: T.paper, alpha: 0.8 * a });
   }
 }
 
-function drawStatusBar(
-  layer: Container,
-  autoplay: boolean,
-  beatPhase: number | undefined,
-  t: number,
-  nowMs: number,
-  pool?: ChildPool,
-): void {
+function drawStatusBar(layer: Container, autoplay: boolean, pulse: number, t: number, pool?: ChildPool): void {
   const status = pool?.acquireGraphics() ?? new Graphics();
   status.label = 'default-gameplay/status';
-  status.position.set(0, slideOffset(t, -40));
-  status.alpha = t;
-  status.rect(0, 0, DESIGN_WIDTH, 40).fill({ color: T.void, alpha: 0.96 });
-  const accent = autoplay ? T.gold : T.cyan;
-  const pulse = beatPulse(beatPhase, 0.45);
-  status.rect(0, 38, DESIGN_WIDTH, 2).fill({ color: accent, alpha: 0.25 + 0.55 * pulse });
-  status.poly([8, 10, 108, 10, 100, 30, 8, 30]).fill({ color: T.panelDeep, alpha: 0.95 }).stroke({
-    color: accent,
-    width: 1,
-    alpha: 0.8,
-  });
-  status.rect(392, 10, 118, 20).fill({ color: T.panelDeep, alpha: 0.9 }).stroke({ color: T.gold, width: 1, alpha: 0.45 });
-  fillTriangle(status, 18, 20, 8, accent, 0.9 + 0.1 * idleGlow(nowMs), true);
+  status.alpha = slamAlpha(t);
+  status.position.set(0, slamOffset(t, -36));
+  fillParallelogram(status, -12, 0, DESIGN_WIDTH + 24, 40, 18, T.ink, 1);
+  fillSlash(status, -20, 32, DESIGN_WIDTH + 40, 6, 4, autoplay ? T.gold : T.accent, 0.55 + 0.45 * pulse);
+  fillParallelogram(status, 12, 8, 92, 22, 10, T.accent, 0.95);
+  fillParallelogram(status, 392, 8, 118, 22, 8, T.panel, 0.95);
+  strokeParallelogram(status, 392, 8, 118, 22, 8, T.accent, 1.5, 0.85);
   if (!pool) layer.addChild(status);
 }
 
@@ -267,32 +300,77 @@ function paintHeaderTexts(
   t: number,
   pool?: ChildPool,
 ): void {
-  const y = 12 + slideOffset(t, -18);
+  const headerSlam = slamScale(t, 1.8);
+  const headerThrow = slamOffset(t, -36);
+  const a = slamAlpha(t);
   addChromeText(
     layer,
     runtime.autoplay ? 'AUTO' : 'PLAY',
-    62,
-    y,
-    { size: 11, weight: '700', fill: runtime.autoplay ? T.gold : T.cyan, letterSpacing: 1.6, anchorX: 0.5, fontFamily: DEFAULT_NUMERIC_FONT, alpha: t },
+    58,
+    10,
+    {
+      size: 18,
+      fill: runtime.autoplay ? T.gold : T.paper,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      letterSpacing: 1.6,
+      anchorX: 0.5,
+      rotation: -0.12,
+      slam: headerSlam,
+      offsetX: headerThrow,
+      alpha: a,
+      stroke: { color: T.ink, width: 4, alignment: 0.5, join: 'round' },
+    },
     pool,
   );
-  addChromeText(layer, 'BPM', 128, y + 6, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, formatBpmValue(runtime.bpm), 156, y, { size: 16, weight: '700', fill: T.ice, fontFamily: DEFAULT_NUMERIC_FONT, alpha: t }, pool);
-  addChromeText(layer, 'HI-SPEED', 216, y + 6, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 268, y, { size: 16, weight: '700', fill: T.ice, fontFamily: DEFAULT_NUMERIC_FONT, alpha: t }, pool);
-  addChromeText(layer, 'RULESET', 404, y + 5, { size: 7, weight: '700', fill: T.subtle, letterSpacing: 0.8, alpha: t }, pool);
+  addChromeText(layer, 'BPM', 118, 8, { ...stampLabel(), offsetX: slamOffset(t, -18), alpha: a }, pool);
+  addChromeText(
+    layer,
+    formatBpmValue(runtime.bpm),
+    148,
+    6,
+    {
+      size: 22,
+      fill: T.paper,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      slam: slamScale(t, 1.7),
+      offsetX: slamOffset(t, -24),
+      alpha: a,
+    },
+    pool,
+  );
+  addChromeText(layer, 'HI-SPEED', 210, 8, { ...stampLabel(), alpha: a }, pool);
+  addChromeText(
+    layer,
+    `x${formatHiSpeed(runtime.hiSpeed)}`,
+    268,
+    6,
+    { size: 22, fill: T.paper, fontFamily: DEFAULT_NUMERIC_FONT, slam: slamScale(t, 1.7), alpha: a },
+    pool,
+  );
+  addChromeText(layer, 'RULESET', 400, 8, { ...stampLabel(), fill: T.mute, alpha: a }, pool);
   addChromeText(
     layer,
     formatRulesetLabel(runtime.rulesetLabel),
     502,
-    y + 1,
-    { size: 12, weight: '700', fill: T.gold, letterSpacing: 1, anchorX: 1, maxWidth: 62, fontFamily: DEFAULT_NUMERIC_FONT, alpha: t },
+    6,
+    {
+      size: 16,
+      fill: T.accent,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      letterSpacing: 1.2,
+      anchorX: 1,
+      maxWidth: 72,
+      rotation: -0.06,
+      slam: slamScale(t, 2.1),
+      alpha: a,
+    },
     pool,
   );
 }
 
-function drawGauge(frame: Graphics, runtime: FallbackGameplayRuntime, t: number, nowMs: number): void {
+function drawGauge(frame: Graphics, runtime: FallbackGameplayRuntime, t: number, nowMs: number, pulse: number): void {
   if (t <= 0) return;
+  const a = slamAlpha(t);
   const gaugeActual = clampPercent(runtime.gauge ?? 0) / 100;
   const gauge = introFill(gaugeActual, t) * 100;
   const clear = clampPercent(runtime.clearThreshold ?? 80);
@@ -302,51 +380,48 @@ function drawGauge(frame: Graphics, runtime: FallbackGameplayRuntime, t: number,
   const cellW = cellStride - 1;
   const litCells = Math.round((gauge / 100) * cellCount);
   const clearCell = Math.round((clear / 100) * cellCount);
-  frame.rect(GROOVE.x - 10, GROOVE.y - 26, GROOVE.w + 20, 50).fill({ color: T.panel, alpha: t }).stroke({
-    color: T.line,
-    width: 1,
-    alpha: t,
-  });
-  frame.rect(GROOVE.x - 10, GROOVE.y - 26, GROOVE.w + 20, 1).fill({ color: survival ? T.danger : T.cyan, alpha: 0.45 * t });
-  frame.rect(GROOVE.x - 4, GROOVE.y - 3, GROOVE.w + 8, GROOVE.h + 6).fill({ color: 0x000000, alpha: t });
-  const flicker = 0.72 + 0.28 * Math.abs(Math.sin(nowMs / 90));
+  fillParallelogram(frame, GROOVE.x - 12, GROOVE.y - 26, GROOVE.w + 24, 50, 10, T.panel, a);
+  strokeParallelogram(frame, GROOVE.x - 12, GROOVE.y - 26, GROOVE.w + 24, 50, 10, T.accent, 1, 0.7 * a);
+  frame.rect(GROOVE.x - 4, GROOVE.y - 3, GROOVE.w + 8, GROOVE.h + 6).fill({ color: T.inkDeep, alpha: a });
+  const flicker = 0.72 + 0.28 * Math.abs(Math.sin(nowMs / 70));
   for (let cell = 0; cell < litCells; cell += 1) {
     const hot = survival || cell >= clearCell;
     const isTip = cell === litCells - 1;
-    const color = hot ? T.danger : T.goldDeep;
+    const color = survival ? T.danger : hot ? T.accent : T.gold;
     frame.rect(GROOVE.x + cell * cellStride, GROOVE.y, cellW, GROOVE.h).fill({
-      color: isTip ? T.ice : color,
-      alpha: (isTip ? flicker : hot ? 0.95 : 0.88) * t,
+      color: isTip ? T.paper : color,
+      alpha: (isTip ? flicker : hot ? 0.96 : 0.9) * a,
     });
   }
   for (let cell = litCells; cell < cellCount; cell += 1) {
-    frame.rect(GROOVE.x + cell * cellStride, GROOVE.y, cellW, GROOVE.h).fill({ color: 0x102028, alpha: 0.9 * t });
+    frame.rect(GROOVE.x + cell * cellStride, GROOVE.y, cellW, GROOVE.h).fill({ color: 0x0a1628, alpha: 0.92 * a });
   }
   if (!survival) {
     const clearX = GROOVE.x + Math.round(clearCell * cellStride) - 1;
-    frame.rect(clearX, GROOVE.y - 5, 2, GROOVE.h + 10).fill({ color: T.ice, alpha: 0.95 * t });
-    fillTriangle(frame, clearX + 1, GROOVE.y - 9, 8, T.ice, 0.95 * t, true);
+    frame.rect(clearX, GROOVE.y - 6, 2, GROOVE.h + 12).fill({ color: T.paper, alpha: 0.95 * a });
+  }
+  if (pulse > 0.4 && litCells > 0) {
+    fillSlash(frame, GROOVE.x - 6, GROOVE.y - 4, GROOVE.w + 16, 3, 2, T.paper, 0.18 * pulse * a);
   }
 }
 
 function drawSongPlate(frame: Graphics, t: number): void {
   if (t <= 0) return;
-  frame.rect(18, 404, 352, 58).fill({ color: T.panel, alpha: t }).stroke({ color: T.line, width: 1, alpha: t });
-  frame.rect(18, 404, 3, 58).fill({ color: T.cyan, alpha: 0.85 * t });
-  frame.rect(18, 404, 352 * t, 1).fill({ color: T.cyan, alpha: 0.55 * t });
+  const a = slamAlpha(t);
+  fillParallelogram(frame, 14, 402, 356, 62, 14, T.panel, a);
+  strokeParallelogram(frame, 14, 402, 356, 62, 14, T.line, 1, 0.9 * a);
+  fillSlash(frame, 10, 408, 28, 50, 8, T.accent, 0.95 * a);
 }
 
 function drawScorePlate(frame: Graphics, exScore: number | undefined, exScoreMax: number | undefined, t: number): void {
   if (t <= 0) return;
-  frame.rect(SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, SCORE_PANEL.h).fill({ color: T.panel, alpha: t }).stroke({
-    color: T.line,
-    width: 1,
-    alpha: t,
-  });
-  frame.rect(SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w * t, 1).fill({ color: T.cyan, alpha: 0.5 * t });
-  frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 42, 116, 1).fill({ color: T.line, alpha: 0.45 * t });
-  frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 72, 116, 1).fill({ color: T.line, alpha: 0.45 * t });
-  frame.rect(SCORE_PANEL.x + 140, SCORE_PANEL.y + 12, 1, SCORE_PANEL.h - 24).fill({ color: T.line, alpha: 0.45 * t });
+  const a = slamAlpha(t);
+  fillParallelogram(frame, SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, SCORE_PANEL.h, 12, T.panel, a);
+  strokeParallelogram(frame, SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, SCORE_PANEL.h, 12, T.line, 1, 0.9 * a);
+  fillSlash(frame, SCORE_PANEL.x - 4, SCORE_PANEL.y, SCORE_PANEL.w + 8, 5, 3, T.accent, 0.85 * a);
+  frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 40, 116, 1).fill({ color: T.line, alpha: 0.6 * a });
+  frame.rect(SCORE_PANEL.x + 12, SCORE_PANEL.y + 70, 116, 1).fill({ color: T.line, alpha: 0.6 * a });
+  frame.rect(SCORE_PANEL.x + 140, SCORE_PANEL.y + 12, 1, SCORE_PANEL.h - 24).fill({ color: T.line, alpha: 0.5 * a });
   const meterX = SCORE_PANEL.x + 12;
   const meterY = SCORE_PANEL.y + 100;
   const meterW = 116;
@@ -354,17 +429,17 @@ function drawScorePlate(frame: Graphics, exScore: number | undefined, exScoreMax
     exScore !== undefined && exScoreMax !== undefined && exScoreMax > 0
       ? Math.max(0, Math.min(1, exScore / exScoreMax))
       : 0;
-  frame.rect(meterX, meterY, meterW, 4).fill({ color: 0x000000, alpha: 0.6 * t });
+  frame.rect(meterX, meterY, meterW, 4).fill({ color: 0x000000, alpha: 0.6 * a });
   if (rate > 0) {
     frame.rect(meterX, meterY, Math.max(1, Math.round(meterW * rate * t)), 4).fill({
-      color: rate >= 8 / 9 ? T.gold : T.cyan,
-      alpha: 0.9 * t,
+      color: rate >= 8 / 9 ? T.gold : T.accent,
+      alpha: 0.95 * a,
     });
   }
   for (let ninth = 1; ninth < 9; ninth += 1) {
     frame.rect(meterX + Math.round((meterW * ninth) / 9), meterY - 1, 1, 6).fill({
-      color: T.ice,
-      alpha: (ninth >= 6 ? 0.5 : 0.2) * t,
+      color: T.paper,
+      alpha: (ninth >= 6 ? 0.55 : 0.22) * a,
     });
   }
 }
@@ -386,32 +461,55 @@ function drawJudgeTally(
   pool?: ChildPool,
 ): void {
   if (t <= 0) return;
+  const a = slamAlpha(t);
   const y = BGA.y - 12;
   const w = DESIGN_WIDTH - x - 12;
   const rowH = 24;
   const h = 16 + JUDGE_TALLY_ROWS.length * rowH + 48;
-  frame.rect(x, y, w, h).fill({ color: T.panel, alpha: 0.92 * t }).stroke({ color: T.line, width: 1, alpha: t });
-  addChromeText(layer, 'JUDGE', x + 8, y + 6, { ...labelStyle(), alpha: t }, pool);
+  fillParallelogram(frame, x, y, w, h, 8, T.panel, 0.94 * a);
+  strokeParallelogram(frame, x, y, w, h, 8, T.line, 1, 0.9 * a);
+  addChromeText(layer, 'JUDGE', x + 8, y + 4, { ...stampLabel(), slam: slamScale(t, 1.6), alpha: a }, pool);
   for (let row = 0; row < JUDGE_TALLY_ROWS.length; row += 1) {
     const [label, key] = JUDGE_TALLY_ROWS[row]!;
-    const rowT = enterT(t * 800, row * 40, 220);
+    const rowT = staggerProgress(t * GAMEPLAY_TIMELINE.tally.duration, row * 40, 220);
     const rowY = y + 20 + row * rowH;
     const color = defaultJudgeColor(TALLY_JUDGE_NAMES[key]);
-    frame.rect(x + 6, rowY + 3, 2, 12).fill({ color, alpha: 0.9 * rowT });
-    addChromeText(layer, label, x + 14, rowY + 5, { size: 9, weight: '700', fill: color, letterSpacing: 0.5, alpha: rowT }, pool);
-    addChromeText(layer, formatCount(runtime[key]), x + w - 8, rowY + 1, { ...metricStyle(14, T.ice, 1), maxWidth: w - 42, alpha: rowT }, pool);
+    fillSlash(frame, x + 4, rowY + 4, 10, 12, 3, color, 0.95 * a);
+    addChromeText(
+      layer,
+      label,
+      x + 16,
+      rowY + 4,
+      { size: 11, fill: color, fontFamily: DEFAULT_NUMERIC_FONT, letterSpacing: 0.6, alpha: slamAlpha(rowT) * a },
+      pool,
+    );
+    addChromeText(
+      layer,
+      formatCount(runtime[key]),
+      x + w - 8,
+      rowY,
+      {
+        size: 16,
+        fill: T.paper,
+        fontFamily: DEFAULT_NUMERIC_FONT,
+        maxWidth: w - 42,
+        slam: slamScale(rowT, 1.8),
+        alpha: slamAlpha(rowT) * a,
+      },
+      pool,
+    );
   }
   const footerY = y + 20 + JUDGE_TALLY_ROWS.length * rowH + 4;
-  frame.rect(x + 6, footerY - 4, w - 12, 1).fill({ color: T.line, alpha: 0.6 * t });
+  frame.rect(x + 6, footerY - 4, w - 12, 1).fill({ color: T.line, alpha: 0.6 * a });
   const footerRows: ReadonlyArray<readonly [label: string, color: number, count: number | undefined]> = [
-    ['FAST', T.cyan, runtime.fast],
-    ['SLOW', T.bad, runtime.slow],
+    ['FAST', T.paper, runtime.fast],
+    ['SLOW', T.gold, runtime.slow],
   ];
   for (let row = 0; row < footerRows.length; row += 1) {
     const [label, color, count] = footerRows[row]!;
     const rowY = footerY + 2 + row * 20;
-    addChromeText(layer, label, x + 14, rowY + 4, { size: 8, weight: '700', fill: color, letterSpacing: 0.5, alpha: t }, pool);
-    addChromeText(layer, formatCount(count), x + w - 8, rowY + 1, { ...metricStyle(12, T.ice, 1), maxWidth: w - 48, alpha: t }, pool);
+    addChromeText(layer, label, x + 14, rowY + 2, { size: 10, fill: color, fontFamily: DEFAULT_NUMERIC_FONT, letterSpacing: 0.8, alpha: a }, pool);
+    addChromeText(layer, formatCount(count), x + w - 8, rowY, { size: 14, fill: T.paper, fontFamily: DEFAULT_NUMERIC_FONT, maxWidth: w - 48, alpha: a }, pool);
   }
 }
 
@@ -424,26 +522,63 @@ const TALLY_JUDGE_NAMES = {
 } as const;
 
 function paintSongTexts(layer: Container, runtime: FallbackGameplayRuntime, t: number, pool?: ChildPool): void {
+  const a = slamAlpha(t);
   const title = runtime.songTitle?.trim() || 'Untitled chart';
-  addChromeText(layer, title, 28, 416 + slideOffset(t, 16), { size: 16, weight: '700', fill: T.ice, maxWidth: 324, alpha: t }, pool);
+  addChromeText(
+    layer,
+    title,
+    30,
+    414,
+    {
+      size: 15,
+      fill: T.paper,
+      fontFamily: DEFAULT_TEXT_FONT,
+      maxWidth: 318,
+      slam: slamScale(t, 1.35),
+      offsetX: slamOffset(t, -28),
+      rotation: -0.02,
+      alpha: a,
+    },
+    pool,
+  );
   const artist = runtime.songArtist?.trim();
   if (artist) {
-    addChromeText(layer, artist, 28, 438 + slideOffset(t, 12), { size: 10, weight: '500', fill: T.mute, maxWidth: 324, alpha: t }, pool);
+    addChromeText(layer, artist, 30, 438, { size: 10, fill: T.mute, fontFamily: DEFAULT_TEXT_FONT, maxWidth: 318, alpha: a }, pool);
   }
 }
 
-function paintGaugeTexts(layer: Container, runtime: FallbackGameplayRuntime, t: number, pool?: ChildPool): void {
+function paintGaugeTexts(
+  layer: Container,
+  runtime: FallbackGameplayRuntime,
+  t: number,
+  pulse: number,
+  pool?: ChildPool,
+): void {
+  const a = slamAlpha(t);
   const gauge = clampPercent(runtime.gauge ?? 0);
   const clearLine = clampPercent(runtime.clearThreshold ?? 80);
   const survivalGauge = runtime.gaugeSurvival === true || clearLine <= 0;
   const gaugeCleared = survivalGauge ? gauge > 0 : gauge >= clearLine;
-  addChromeText(layer, `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`, GROOVE.x - 2, GROOVE.y - 17, { ...labelStyle(), maxWidth: 120, alpha: t }, pool);
+  addChromeText(
+    layer,
+    `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
+    GROOVE.x - 2,
+    GROOVE.y - 18,
+    { ...stampLabel(), maxWidth: 120, alpha: a },
+    pool,
+  );
   addChromeText(
     layer,
     `${Math.round(gauge)}%`,
     GROOVE.x + GROOVE.w + 8,
-    GROOVE.y - 23,
-    metricStyle(15, survivalGauge ? (gaugeCleared ? T.danger : T.mute) : gaugeCleared ? T.danger : T.goldDeep, 1, t),
+    GROOVE.y - 26,
+    {
+      size: 22,
+      fill: survivalGauge ? (gaugeCleared ? T.danger : T.mute) : gaugeCleared ? T.accent : T.gold,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      slam: 1 + pulse * 0.08,
+      alpha: a,
+    },
     pool,
   );
 }
@@ -453,44 +588,79 @@ function paintScoreTexts(
   runtime: FallbackGameplayRuntime,
   t: number,
   punches: { comboPunch: number; scorePunch: number } | undefined,
+  pulse: number,
   pool?: ChildPool,
 ): void {
+  const a = slamAlpha(t);
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
-  addChromeText(layer, 'SCORE', SCORE_PANEL.x + 12, SCORE_PANEL.y + 16, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, formatCount(runtime.score), SCORE_PANEL.x + 128, SCORE_PANEL.y + 20, {
-    ...metricStyle(22, T.gold, 1, t),
-    maxWidth: 112,
-    scale: punches?.scorePunch ?? 1,
-  }, pool);
-  addChromeText(layer, 'EX SCORE', SCORE_PANEL.x + 12, SCORE_PANEL.y + 46, { ...labelStyle(), alpha: t }, pool);
+  addChromeText(layer, 'SCORE', SCORE_PANEL.x + 14, SCORE_PANEL.y + 12, { ...stampLabel(), alpha: a }, pool);
+  addChromeText(
+    layer,
+    formatCount(runtime.score),
+    SCORE_PANEL.x + 128,
+    SCORE_PANEL.y + 14,
+    {
+      size: 24,
+      fill: T.gold,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      maxWidth: 112,
+      slam: slamScale(t, 1.5) * (punches?.scorePunch ?? 1),
+      alpha: a,
+    },
+    pool,
+  );
+  addChromeText(layer, 'EX SCORE', SCORE_PANEL.x + 14, SCORE_PANEL.y + 44, { ...stampLabel(), alpha: a }, pool);
   addChromeText(
     layer,
     `${formatCount(runtime.exScore)} / ${formatCount(runtime.exScoreMax)}`,
     SCORE_PANEL.x + 128,
-    SCORE_PANEL.y + 54,
-    { ...metricStyle(12, T.ice, 1, t), maxWidth: 112 },
+    SCORE_PANEL.y + 48,
+    { size: 14, fill: T.paper, fontFamily: DEFAULT_NUMERIC_FONT, maxWidth: 112, alpha: a },
     pool,
   );
-  addChromeText(layer, 'EX RATE', SCORE_PANEL.x + 12, SCORE_PANEL.y + 76, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, formatExRate(runtime.exScore, runtime.exScoreMax), SCORE_PANEL.x + 128, SCORE_PANEL.y + 84, {
-    ...metricStyle(12, T.ice, 1, t),
-    maxWidth: 112,
-  }, pool);
-  addChromeText(layer, 'COMBO', SCORE_PANEL.x + 148, SCORE_PANEL.y + 21, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, formatCount(runtime.combo), SCORE_PANEL.x + 226, SCORE_PANEL.y + 16, {
-    ...metricStyle(14, T.cyan, 1, t),
-    fontFamily: DEFAULT_JUDGE_FONT,
-    maxWidth: 40,
-    scale: punches?.comboPunch ?? 1,
-  }, pool);
-  addChromeText(layer, 'MAX', SCORE_PANEL.x + 148, SCORE_PANEL.y + 52, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, formatCount(runtime.maxCombo), SCORE_PANEL.x + 226, SCORE_PANEL.y + 48, {
-    ...metricStyle(13, T.ice, 1, t),
-    fontFamily: DEFAULT_JUDGE_FONT,
-    maxWidth: 40,
-  }, pool);
-  addChromeText(layer, 'RANK', SCORE_PANEL.x + 148, SCORE_PANEL.y + 81, { ...labelStyle(), alpha: t }, pool);
-  addChromeText(layer, rank, SCORE_PANEL.x + 226, SCORE_PANEL.y + 70, { ...metricStyle(22, T.gold, 1, t), maxWidth: 42 }, pool);
+  addChromeText(layer, 'EX RATE', SCORE_PANEL.x + 14, SCORE_PANEL.y + 74, { ...stampLabel(), alpha: a }, pool);
+  addChromeText(
+    layer,
+    formatExRate(runtime.exScore, runtime.exScoreMax),
+    SCORE_PANEL.x + 128,
+    SCORE_PANEL.y + 78,
+    { size: 14, fill: T.paper, fontFamily: DEFAULT_NUMERIC_FONT, maxWidth: 112, alpha: a },
+    pool,
+  );
+  addChromeText(layer, 'COMBO', SCORE_PANEL.x + 148, SCORE_PANEL.y + 16, { ...stampLabel(), alpha: a }, pool);
+  addChromeText(
+    layer,
+    formatCount(runtime.combo),
+    SCORE_PANEL.x + 226,
+    SCORE_PANEL.y + 10,
+    {
+      size: 18,
+      fill: T.accent,
+      fontFamily: DEFAULT_JUDGE_FONT,
+      maxWidth: 40,
+      slam: (punches?.comboPunch ?? 1) * (1 + pulse * 0.06),
+      alpha: a,
+    },
+    pool,
+  );
+  addChromeText(layer, 'MAX', SCORE_PANEL.x + 148, SCORE_PANEL.y + 48, { ...stampLabel(), alpha: a }, pool);
+  addChromeText(
+    layer,
+    formatCount(runtime.maxCombo),
+    SCORE_PANEL.x + 226,
+    SCORE_PANEL.y + 42,
+    { size: 16, fill: T.paper, fontFamily: DEFAULT_JUDGE_FONT, maxWidth: 40, alpha: a },
+    pool,
+  );
+  addChromeText(layer, 'RANK', SCORE_PANEL.x + 148, SCORE_PANEL.y + 78, { ...stampLabel(), alpha: a }, pool);
+  addChromeText(
+    layer,
+    rank,
+    SCORE_PANEL.x + 226,
+    SCORE_PANEL.y + 64,
+    { size: 26, fill: T.gold, fontFamily: DEFAULT_NUMERIC_FONT, maxWidth: 42, rotation: -0.08, slam: slamScale(t, 1.9), alpha: a },
+    pool,
+  );
 }
 
 function paintJudge(
@@ -502,37 +672,100 @@ function paintJudge(
 ): void {
   for (const display of resolveJudgeDisplays(runtime, playfield)) {
     const popup = judgePopup(punches?.judgeElapsed ?? 10_000);
+    if (popup.alpha <= 0) continue;
     const combo = resolveVisibleCombo(display.judge, display.combo);
     const color = defaultJudgeColor(display.judge);
-    addChromeText(layer, display.judge, display.x, 230 + popup.y, {
-      size: 26,
-      weight: '700',
-      fill: color,
-      fontFamily: DEFAULT_JUDGE_FONT,
-      anchorX: 0.5,
-      stroke: { color: 0x031018, width: 5, alignment: 0.5, join: 'round' },
-      dropShadow: { color, alpha: 0.45 * popup.glow, blur: 8, distance: 0 },
-      maxWidth: display.maxWidth,
-      scale: popup.scale,
-      alpha: popup.alpha,
-    }, pool);
-    if (combo > 0 && popup.alpha > 0) {
-      addChromeText(layer, formatCount(combo), display.x, 258 + popup.y * 0.4, {
-        size: 18,
-        weight: '700',
-        fill: combo >= 200 ? T.gold : combo >= 50 ? T.cyan : T.ice,
+    const slamT = Math.min(1, (punches?.judgeElapsed ?? 10_000) / 180);
+    const jitter = impactOffset(slamT, 8);
+    const throwX = slamOffset(slamT, -28);
+    if (slamT < 1) {
+      addChromeText(
+        layer,
+        display.judge,
+        display.x,
+        228 + popup.offsetY,
+        {
+          size: 28,
+          fill: T.accent,
+          fontFamily: DEFAULT_JUDGE_FONT,
+          anchorX: 0.5,
+          rotation: -0.1,
+          slam: popup.scale,
+          offsetX: throwX - jitter,
+          alpha: popup.alpha * 0.45,
+          maxWidth: display.maxWidth,
+        },
+        pool,
+      );
+      addChromeText(
+        layer,
+        display.judge,
+        display.x,
+        228 + popup.offsetY,
+        {
+          size: 28,
+          fill: T.cyanGhost,
+          fontFamily: DEFAULT_JUDGE_FONT,
+          anchorX: 0.5,
+          rotation: -0.1,
+          slam: popup.scale,
+          offsetX: throwX + jitter,
+          alpha: popup.alpha * 0.35,
+          maxWidth: display.maxWidth,
+        },
+        pool,
+      );
+      const flash = pool?.acquireGraphics() ?? new Graphics();
+      flash.label = 'default-gameplay/judge-flash';
+      fillSlash(flash, display.x - 90, 210, 180, 18, 12, T.paper, (1 - slamT) * 0.4 * popup.alpha);
+      fillSlash(flash, display.x - 70, 248, 140, 8, -8, T.accent, (1 - slamT) * 0.32 * popup.alpha);
+      if (!pool) layer.addChild(flash);
+    }
+    addChromeText(
+      layer,
+      display.judge,
+      display.x,
+      230 + popup.offsetY,
+      {
+        size: 28,
+        fill: color,
         fontFamily: DEFAULT_JUDGE_FONT,
         anchorX: 0.5,
-        stroke: { color: 0x031018, width: 4, alignment: 0.5, join: 'round' },
-        maxWidth: Math.max(72, display.maxWidth - 36),
-        scale: (punches?.comboPunch ?? 1) * 0.92 + 0.08,
+        rotation: -0.08,
+        slam: popup.scale,
+        offsetX: throwX,
         alpha: popup.alpha,
-      }, pool);
+        stroke: { color: T.ink, width: 5, alignment: 0.5, join: 'round' },
+        dropShadow: { color, alpha: 0.45 * popup.alpha, blur: 6, distance: 0 },
+        maxWidth: display.maxWidth,
+      },
+      pool,
+    );
+    if (combo > 0) {
+      addChromeText(
+        layer,
+        formatCount(combo),
+        display.x,
+        258 + popup.offsetY * 0.4,
+        {
+          size: 22,
+          fill: combo >= 200 ? T.gold : combo >= 50 ? T.accent : T.paper,
+          fontFamily: DEFAULT_JUDGE_FONT,
+          anchorX: 0.5,
+          rotation: -0.05,
+          slam: popup.scale * 0.85 * (punches?.comboPunch ?? 1),
+          offsetX: throwX,
+          alpha: popup.alpha,
+          stroke: { color: T.ink, width: 4, alignment: 0.5, join: 'round' },
+          maxWidth: Math.max(72, display.maxWidth - 36),
+        },
+        pool,
+      );
     }
   }
 }
 
-function paintReady(layer: Container, elapsed: number, nowMs: number, pool?: ChildPool): void {
+function paintReady(layer: Container, elapsed: number, pool?: ChildPool): void {
   const alpha = readyAlpha(elapsed);
   if (alpha <= 0) return;
   const gfx = pool?.acquireGraphics() ?? new Graphics();
@@ -540,19 +773,39 @@ function paintReady(layer: Container, elapsed: number, nowMs: number, pool?: Chi
   gfx.alpha = alpha;
   const cx = PLAYFIELD.x + PLAYFIELD.w / 2;
   const cy = 168;
-  strokeClockRing(gfx, cx, cy, 36, 1, T.cyan, 0.45, 2, nowMs / 900);
-  fillTriangle(gfx, cx, cy, 18, T.gold, 0.85, true);
+  const readyT = pieceRawT(elapsed, GAMEPLAY_TIMELINE.ready);
+  fillSlash(gfx, cx - 110, cy - 18, 220, 36, 14, T.accent, 0.92);
+  fillSlash(gfx, cx - 90, cy + 10, 180, 8, -8, T.paper, 0.35);
   if (!pool) layer.addChild(gfx);
-  addChromeText(layer, 'READY', cx, cy + 28, {
-    size: 18,
-    weight: '700',
-    fill: T.ice,
-    fontFamily: DEFAULT_NUMERIC_FONT,
-    letterSpacing: 6,
-    anchorX: 0.5,
-    alpha,
-    stroke: { color: 0x031018, width: 4, alignment: 0.5, join: 'round' },
-  }, pool);
+  addChromeText(
+    layer,
+    'READY',
+    cx,
+    cy - 8,
+    {
+      size: 28,
+      fill: T.paper,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      letterSpacing: 8,
+      anchorX: 0.5,
+      rotation: -0.1,
+      slam: slamScale(readyT, 2.6),
+      offsetX: slamOffset(readyT, -64),
+      alpha,
+      stroke: { color: T.ink, width: 6, alignment: 0.5, join: 'round' },
+    },
+    pool,
+  );
+}
+
+function drawBeatSlashes(layer: Container, pulse: number, pool?: ChildPool): void {
+  if (pulse <= 0.02) return;
+  const slashes = pool?.acquireGraphics() ?? new Graphics();
+  slashes.label = 'default-gameplay/beat-slash';
+  fillSlash(slashes, -30, 60, 180, 7, 22, T.accent, 0.28 * pulse);
+  fillSlash(slashes, 480, 300, 200, 6, -18, T.paper, 0.16 * pulse);
+  fillSlash(slashes, 250, 8, 140, 4, 8, T.gold, 0.22 * pulse);
+  if (!pool) layer.addChild(slashes);
 }
 
 interface ResolvedJudgeDisplay {
@@ -586,17 +839,8 @@ function resolveVisibleCombo(judge: string, combo: number | undefined): number {
   return combo !== undefined && Number.isFinite(combo) ? Math.max(0, Math.floor(combo)) : 0;
 }
 
-function labelStyle(): { size: number; weight: '700'; fill: number; letterSpacing: number } {
-  return { size: 8, weight: '700', fill: T.subtle, letterSpacing: 0.9 };
-}
-
-function metricStyle(
-  size: number,
-  fill: number,
-  anchorX = 0,
-  alpha = 1,
-): { size: number; weight: '700'; fill: number; fontFamily: string; anchorX: number; alpha: number } {
-  return { size, weight: '700', fill, fontFamily: DEFAULT_NUMERIC_FONT, anchorX, alpha };
+function stampLabel(): { size: number; fill: number; fontFamily: string; letterSpacing: number } {
+  return { size: 9, fill: T.mute, fontFamily: DEFAULT_NUMERIC_FONT, letterSpacing: 1.1 };
 }
 
 function formatCount(value: number | undefined): string {
@@ -636,4 +880,3 @@ function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
 }
-

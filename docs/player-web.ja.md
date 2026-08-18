@@ -89,7 +89,7 @@ scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/
 ## Default skin family
 
 built-in default family は、LR2 / beatoraja theme がない場合、または host が default family を明示的に選んだ場合に使う skinless path です。
-theme file なしで select、decide、gameplay、result の表示を提供します。見た目は独自の ice-clock chrome で、void navy、ice cyan の配管、gold の lock-on、逆三角形、clock ring を使います。ラベルは generic (`MUSIC SELECT` / `READY` / `CLEARED`) のままにし、第三者 UI asset は使いません。
+theme file なしで select、decide、gameplay、result の表示を提供します。見た目は独自の cut-in chrome で、navy の void、cyan の slash、gold の lock-on、斜め parallelogram の plate を使います。モーションは要素ごとに slam し、配色は crimson ではなく navy / ice / cyan です。ラベルは generic (`MUSIC SELECT` / `READY` / `CLEARED`) のままにし、第三者 UI asset は使いません。
 
 gameplay は `PixiGameplayView` と共通の engine、note renderer、BGA renderer、audio bus、input handling を共有します。
 ただし default chrome は `scene/default/gameplay.ts` から `skinlessChromeRenderer` option 経由で注入します。
@@ -98,9 +98,9 @@ LR2 gameplay scene は default renderer を import せず、共有 gameplay runt
 
 default gameplay chrome は `scene/gameplay-lanes.ts` の共通 lane geometry helper を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
-canvas chrome の本文は Zen Kaku Gothic New、数値 / 判定は Rajdhani です。demo host の CSS は playfield 外の overlay 向けに LINE Seed JP を維持します。
+canvas chrome の本文スタンプは Dela Gothic One、数値 / 判定は Staatliches です。demo host の CSS は playfield 外の overlay 向けに LINE Seed JP を維持します。
 
-HUD の各要素は独自の enter delay を持ち、scene 間は diamond / 三角形の iris でつなぎます。incoming scene は全面カバーから開き、短い decide splash は最後の拍で iris を閉じて、gameplay が READY の上に HUD を載せるのではなく void から開けるようにします。`SkinlessGameplayChromeRuntime` の `sceneElapsedMs` は intro を壁時計の `nowMs` ではなく `PixiGameplayView.start()` に合わせます。
+HUD の各要素は独自の enter delay と slam を持ち、scene 間は斜めの cut-in wipe でつなぎます。incoming scene は全面カバーから開き、短い decide splash は最後の拍で wipe を閉じて、gameplay が READY の上に HUD を載せるのではなく void から開けるようにします。`SkinlessGameplayChromeRuntime` の `sceneElapsedMs` は intro を壁時計の `nowMs` ではなく `PixiGameplayView.start()` に合わせます。
 
 ## beatoraja skin と theme support
 

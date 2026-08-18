@@ -14,13 +14,18 @@ export interface ChromeTextOpts {
   maxWidth?: number;
   alpha?: number;
   rotation?: number;
+  /** Comic slam scale. Multiplies with `scale`. Always written so ChildPool reuse cannot leak a previous slam. */
+  slam?: number;
   scale?: number;
+  offsetX?: number;
+  offsetY?: number;
   stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
   dropShadow?: { color: number; alpha: number; blur: number; distance: number };
 }
 
 /**
- * Pooled/unpooled text. Always writes scale / rotation / alpha so ChildPool reuse cannot leak a previous slam.
+ * Pooled/unpooled stamp text. Always writes scale / rotation / alpha so ChildPool reuse cannot leak a previous slam.
+ * Dela Gothic One is a display face — default weight stays 400 to avoid faux-bold.
  */
 export function addChromeText(
   layer: Container,
@@ -35,14 +40,16 @@ export function addChromeText(
   node.text = text;
   if (node.style !== style) node.style = style;
   node.anchor.set(opts.anchorX ?? 0, opts.anchorY ?? 0);
-  node.position.set(x, y);
+  node.position.set(x + (opts.offsetX ?? 0), y + (opts.offsetY ?? 0));
   node.rotation = opts.rotation ?? 0;
   node.alpha = opts.alpha ?? 1;
-  const punch = opts.scale ?? 1;
-  node.scale.set(punch, punch);
+  node.scale.set(1, 1);
+  let widthScale = 1;
   if (opts.maxWidth !== undefined && node.width > opts.maxWidth) {
-    node.scale.x = (opts.maxWidth / node.width) * punch;
+    widthScale = opts.maxWidth / node.width;
   }
+  const punch = (opts.slam ?? 1) * (opts.scale ?? 1);
+  node.scale.set(widthScale * punch, punch);
   if (!pool) layer.addChild(node);
   return node;
 }
@@ -51,9 +58,9 @@ function resolveTextStyle(opts: ChromeTextOpts): TextStyle {
   const stroke = opts.stroke;
   const shadow = opts.dropShadow;
   const key = [
-    opts.fill ?? DEFAULT_THEME.white,
+    opts.fill ?? DEFAULT_THEME.paper,
     opts.size ?? 10,
-    opts.weight ?? '500',
+    opts.weight ?? '400',
     opts.fontFamily ?? DEFAULT_TEXT_FONT,
     opts.letterSpacing ?? 0,
     stroke?.color ?? '',
@@ -68,14 +75,22 @@ function resolveTextStyle(opts: ChromeTextOpts): TextStyle {
   let style = TEXT_STYLE_CACHE.get(key);
   if (!style) {
     style = new TextStyle({
-      fill: opts.fill ?? DEFAULT_THEME.white,
+      fill: opts.fill ?? DEFAULT_THEME.paper,
       fontSize: opts.size ?? 10,
-      fontWeight: opts.weight ?? '500',
+      fontWeight: opts.weight ?? '400',
       fontFamily: opts.fontFamily ?? DEFAULT_TEXT_FONT,
       letterSpacing: opts.letterSpacing ?? 0,
       stroke: opts.stroke,
       ...(shadow
-        ? { dropShadow: { color: shadow.color, alpha: shadow.alpha, blur: shadow.blur, distance: shadow.distance, angle: Math.PI / 2 } }
+        ? {
+            dropShadow: {
+              color: shadow.color,
+              alpha: shadow.alpha,
+              blur: shadow.blur,
+              distance: shadow.distance,
+              angle: Math.PI / 2,
+            },
+          }
         : {}),
     });
     TEXT_STYLE_CACHE.set(key, style);

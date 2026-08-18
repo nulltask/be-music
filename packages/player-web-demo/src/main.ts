@@ -126,8 +126,8 @@ app.innerHTML = DEMO_APP_HTML;
 const DEFAULT_UI_FONT_LOADS = [
   '400 22px "LINE Seed JP"',
   '700 18px "LINE Seed JP"',
-  '700 22px "Zen Kaku Gothic New"',
-  '700 32px Rajdhani',
+  '400 22px "Dela Gothic One"',
+  '400 32px Staatliches',
   '900 32px "Azeret Mono"',
 ] as const;
 
@@ -2935,7 +2935,7 @@ class PlayerWebDemoApp {
   /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, LR2 falls straight through to `playSong`. The built-in default family mounts
-   * a short skinless READY interstitial so select → gameplay is an iris close / iris open instead of a hard cut.
+   * a short skinless READY interstitial so select → gameplay is a diagonal wipe-close / wipe-open instead of a hard cut.
    *
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.

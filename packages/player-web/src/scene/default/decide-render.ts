@@ -2,9 +2,15 @@ import { Container, Graphics } from 'pixi.js';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import { addChromeText } from './chrome-text.ts';
 import { DEFAULT_NUMERIC_FONT, DEFAULT_TEXT_FONT } from './fonts.ts';
-import { idleGlow, slideOffset } from './motion.ts';
-import { decideCover, DECIDE_TIMELINE, pieceT } from './transition.ts';
-import { DEFAULT_THEME as T, fillBgBands, fillTriangle, paintSceneCover, strokeClockRing } from './theme.ts';
+import { idlePulse, slamAlpha, slamOffset, slamScale } from './motion.ts';
+import { decideCover, DECIDE_TIMELINE, pieceRawT } from './transition.ts';
+import {
+  DEFAULT_THEME as T,
+  fillBgBands,
+  fillParallelogram,
+  fillSlash,
+  paintSceneCover,
+} from './theme.ts';
 
 export interface DefaultDecideModel {
   designWidth: number;
@@ -36,67 +42,64 @@ export function renderDefaultDecideChrome(layer: Container, model: DefaultDecide
 
   const cx = designWidth / 2;
   const cy = designHeight / 2;
-  const lineT = pieceT(elapsed, DECIDE_TIMELINE.line);
-  chrome.rect(0, cy - 1, designWidth * lineT, 2).fill({ color: T.cyan, alpha: 0.85 * lineT });
+  const lineT = pieceRawT(elapsed, DECIDE_TIMELINE.line);
+  chrome.rect(0, cy - 1, designWidth * lineT, 2).fill({ color: T.accent, alpha: 0.85 * lineT });
 
-  const clockT = pieceT(elapsed, DECIDE_TIMELINE.clock);
-  strokeClockRing(chrome, cx, cy - 24, 78, clockT, T.cyan, 0.55 * clockT, 2, model.nowMs / 1400);
-  strokeClockRing(chrome, cx, cy - 24, 54, clockT, T.gold, 0.35 * clockT, 1.5, -model.nowMs / 900);
-  fillTriangle(chrome, cx, cy - 24, 22 * clockT, T.gold, 0.8 * clockT, true);
+  const slashT = pieceRawT(elapsed, DECIDE_TIMELINE.slash);
+  fillSlash(chrome, -80, cy - 64, 360, 52, 28, T.accent, 0.95 * slashT);
+  fillSlash(chrome, 280, cy - 48, 420, 18, 12, T.paper, 0.18 * slashT);
+  fillParallelogram(chrome, cx - 210, cy - 28, 420, 56, 22, T.inkDeep, 0.92 * slashT);
+  fillSlash(chrome, cx - 200, cy - 22, 400, 44, 16, T.accent, 0.88 * slashT);
 
-  const shardT = pieceT(elapsed, DECIDE_TIMELINE.shards);
-  for (let i = 0; i < 8; i += 1) {
-    const angle = (Math.PI * 2 * i) / 8 + model.nowMs / 2000;
-    const dist = 110 + (1 - shardT) * 40;
-    fillTriangle(
-      chrome,
-      cx + Math.cos(angle) * dist,
-      cy - 24 + Math.sin(angle) * dist,
-      10,
-      i % 2 === 0 ? T.cyan : T.ice,
-      0.45 * shardT,
-      i % 2 === 1,
-    );
-  }
-
-  const titleT = pieceT(elapsed, DECIDE_TIMELINE.title);
-  addChromeText(layer, song.title, cx, 78 + slideOffset(titleT, -20), {
-    size: 26,
-    weight: '700',
-    fill: T.ice,
+  const titleT = pieceRawT(elapsed, DECIDE_TIMELINE.title);
+  addChromeText(layer, song.title, cx, 78, {
+    size: 28,
+    fill: T.paper,
     fontFamily: DEFAULT_TEXT_FONT,
     anchorX: 0.5,
     maxWidth: 560,
-    alpha: titleT,
     letterSpacing: 1.2,
+    rotation: -0.04,
+    slam: slamScale(titleT, 2.2),
+    offsetX: slamOffset(titleT, -72),
+    alpha: slamAlpha(titleT),
+    stroke: { color: T.ink, width: 6, alignment: 0.5, join: 'round' },
   });
-  const artistT = pieceT(elapsed, DECIDE_TIMELINE.artist);
-  addChromeText(layer, song.artist || song.subtitle || '', cx, 112 + slideOffset(artistT, 12), {
+  const artistT = pieceRawT(elapsed, DECIDE_TIMELINE.artist);
+  addChromeText(layer, song.artist || song.subtitle || '', cx, 118, {
     size: 13,
-    weight: '500',
     fill: T.mute,
+    fontFamily: DEFAULT_TEXT_FONT,
     anchorX: 0.5,
     maxWidth: 520,
-    alpha: artistT,
+    slam: slamScale(artistT, 1.4),
+    offsetY: slamOffset(artistT, 18),
+    alpha: slamAlpha(artistT),
   });
-  const metaT = pieceT(elapsed, DECIDE_TIMELINE.meta);
-  addChromeText(layer, model.difficultyLabel, cx, 318 + slideOffset(metaT, 16), {
-    size: 14,
-    weight: '700',
+  const metaT = pieceRawT(elapsed, DECIDE_TIMELINE.meta);
+  addChromeText(layer, model.difficultyLabel, cx, 318, {
+    size: 16,
     fill: T.gold,
     fontFamily: DEFAULT_NUMERIC_FONT,
     letterSpacing: 4,
     anchorX: 0.5,
-    alpha: metaT,
+    rotation: -0.05,
+    slam: slamScale(metaT, 1.8),
+    offsetX: slamOffset(metaT, 48),
+    alpha: slamAlpha(metaT),
   });
-  addChromeText(layer, 'READY', cx, 348, {
-    size: 11,
-    weight: '700',
-    fill: T.cyan,
+  const readyT = pieceRawT(elapsed, DECIDE_TIMELINE.ready);
+  addChromeText(layer, 'READY', cx, cy - 10, {
+    size: 42,
+    fill: T.paper,
     fontFamily: DEFAULT_NUMERIC_FONT,
-    letterSpacing: 8,
+    letterSpacing: 10,
     anchorX: 0.5,
-    alpha: metaT * idleGlow(model.nowMs, 900),
+    rotation: -0.1,
+    slam: slamScale(readyT, 2.8),
+    offsetX: slamOffset(readyT, -90),
+    alpha: slamAlpha(readyT) * idlePulse(model.nowMs, 720),
+    stroke: { color: T.ink, width: 7, alignment: 0.5, join: 'round' },
   });
 
   paintSceneCover(layer, decideCover(elapsed), model.nowMs, { width: designWidth, height: designHeight });

@@ -35,7 +35,7 @@ const log = logger('decide');
  * - `mount(host, target)` builds the scene graph, primes the per-song texture cache, and starts the rAF loop.
  * - The scene auto-dismisses after the skin's `#STARTINPUT` ms plus a fixed window
  *   (`AUTO_ADVANCE_AFTER_STARTINPUT_MS`). Skinless default-family decide uses `DECIDE_TIMELINE` instead (~500 ms
- *   input unlock, auto-advance at 1500 ms so the closing iris finishes before gameplay opens). Pressing Enter /
+ *   input unlock, auto-advance at 1500 ms so the closing wipe finishes before gameplay opens). Pressing Enter /
  *   Space dismisses immediately as long as `#STARTINPUT` has elapsed (LR2 spec — input is gated on that directive).
  *   Escape dismisses unconditionally.
  * - `onContinue` runs once when the scene dismisses. The demo wires it to `playSong` so dismissal kicks off the actual
@@ -206,7 +206,7 @@ export class PixiDecideView {
     this.timerStartedAt.set(0, now);
     // Schedule timer 1 (#STARTINPUT) and the auto-advance so the user sees the splash for a consistent window before
     // gameplay. Pressing Enter / Space before the start-input window elapses does nothing, matching LR2's input-gating.
-    // Skinless default-family decide is shorter so the iris-close can hand off to gameplay without a dead black hold.
+    // Skinless default-family decide is shorter so the wipe-close can hand off to gameplay without a dead black hold.
     const { startInputMs, autoAdvanceAtMs } = resolveDecideTiming(this.options.skin);
     this.inputUnlockHandle = setTimeout(() => {
       this.inputUnlockHandle = undefined;
@@ -318,7 +318,7 @@ export class PixiDecideView {
     // fullscreen sprite behind whatever decide-skin chrome overlays it, so themes (with or without a `*STAGEFILE` skin
     // reference) consistently get the artwork treatment. No-op when the chart didn't author `#STAGEFILE` / bmson
     // `info.back_image`; the solid background underneath shows through unchanged in that case.
-    // Skinless ice-clock decide keeps the geometric chrome opaque, so skip the stagefile (it would never show).
+    // Skinless default-family decide keeps the geometric chrome opaque, so skip the stagefile (it would never show).
     if (useSkin) {
       this.renderStageFileBackdrop(designWidth, designHeight);
     }
@@ -379,7 +379,7 @@ export class PixiDecideView {
     }
   }
 
-  /** Ice-clock READY interstitial for the default skin family. */
+  /** Skinless READY interstitial for the default skin family. */
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
     const target = this.target;
     if (!target) return;

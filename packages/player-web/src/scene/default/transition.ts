@@ -3,8 +3,8 @@ import { clamp01, easeInOutCubic, easeOutCubic, staggerProgress } from './motion
 /**
  * Cover amount: 1 = fully hidden, 0 = fully revealed.
  *
- * Incoming scenes open (1→0). Decide's last beat closes (0→1) so the next scene can open from a black iris
- * instead of popping the new HUD on an empty frame.
+ * Incoming scenes open (1→0). Decide's last beat closes (0→1) so the next scene can open from a black cut-in
+ * wipe instead of popping the new HUD on an empty frame.
  */
 export type CoverDirection = 'open' | 'close';
 
@@ -32,15 +32,15 @@ export const DECIDE_TIMELINE = {
   coverDelay: 0,
   coverDuration: 420,
   line: { delay: 0, duration: 280 },
-  clock: { delay: 60, duration: 480 },
-  shards: { delay: 100, duration: 420 },
-  title: { delay: 240, duration: 400 },
-  artist: { delay: 340, duration: 360 },
-  meta: { delay: 420, duration: 320 },
+  slash: { delay: 40, duration: 320 },
+  title: { delay: 180, duration: 400 },
+  artist: { delay: 280, duration: 360 },
+  meta: { delay: 380, duration: 320 },
+  ready: { delay: 440, duration: 280 },
   closeDelay: 1180,
   closeDuration: 320,
   total: 1500,
-  /** Skinless `#STARTINPUT` — skip is allowed once the iris has opened and the title is readable. */
+  /** Skinless `#STARTINPUT` — skip is allowed once the wipe has opened and the title is readable. */
   startInput: 500,
 } as const;
 
@@ -80,10 +80,22 @@ export function pieceT(
   return easeOutCubic(staggerProgress(elapsedMs, piece.delay, piece.duration));
 }
 
+/** Raw 0→1 stagger for slam helpers — do not ease, or easeOutBack overshoot disappears. */
+export function pieceRawT(
+  elapsedMs: number,
+  piece: { readonly delay: number; readonly duration: number },
+): number {
+  return staggerProgress(elapsedMs, piece.delay, piece.duration);
+}
+
 export function selectRowT(elapsedMs: number, visibleIndex: number): number {
   return easeOutCubic(
     staggerProgress(elapsedMs, SELECT_TIMELINE.list.delay + visibleIndex * SELECT_TIMELINE.rowStagger, 280),
   );
+}
+
+export function selectRowRawT(elapsedMs: number, visibleIndex: number): number {
+  return staggerProgress(elapsedMs, SELECT_TIMELINE.list.delay + visibleIndex * SELECT_TIMELINE.rowStagger, 280);
 }
 
 export function resultMetricT(elapsedMs: number, index: number): number {
@@ -92,10 +104,18 @@ export function resultMetricT(elapsedMs: number, index: number): number {
   );
 }
 
+export function resultMetricRawT(elapsedMs: number, index: number): number {
+  return staggerProgress(elapsedMs, RESULT_TIMELINE.metrics.delay + index * RESULT_TIMELINE.metricStagger, RESULT_TIMELINE.metrics.duration);
+}
+
 export function resultJudgeT(elapsedMs: number, index: number): number {
   return easeOutCubic(
     staggerProgress(elapsedMs, RESULT_TIMELINE.judges.delay + index * RESULT_TIMELINE.judgeStagger, RESULT_TIMELINE.judges.duration),
   );
+}
+
+export function resultJudgeRawT(elapsedMs: number, index: number): number {
+  return staggerProgress(elapsedMs, RESULT_TIMELINE.judges.delay + index * RESULT_TIMELINE.judgeStagger, RESULT_TIMELINE.judges.duration);
 }
 
 export function readyAlpha(elapsedMs: number): number {
@@ -109,8 +129,8 @@ export function decideCloseCover(elapsedMs: number): number {
 }
 
 /**
- * Decide is the hinge between select and gameplay: iris-open on enter (same language as the other default scenes),
- * iris-close on the last beat so gameplay can iris-open from a fully covered frame instead of popping HUD onto the
+ * Decide is the hinge between select and gameplay: wipe-open on enter (same language as the other default scenes),
+ * wipe-close on the last beat so gameplay can open from a fully covered frame instead of popping HUD onto the
  * READY splash.
  */
 export function decideCover(elapsedMs: number): number {

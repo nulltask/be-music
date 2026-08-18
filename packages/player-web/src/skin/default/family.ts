@@ -10,7 +10,7 @@ import type { SkinFamily } from '../family.ts';
  *
  * Scene classes for this family live under `scene/default/` (`DefaultPixiGameplayView` /
  * `DefaultPixiSongSelectView` / `DefaultPixiResultView`). Decide reuses `PixiDecideView` without a skin so the
- * default family can iris-close into gameplay; hosts that mix default decide with an LR2 play skin still skip the
+ * default family can wipe-close into gameplay; hosts that mix default decide with an LR2 play skin still skip the
  * splash.
  */
 export const defaultSkinFamily: SkinFamily = {

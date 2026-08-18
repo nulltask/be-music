@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  beatPulse,
+  beatImpulse,
   clamp01,
   countUp,
   cursorFollow,
@@ -9,7 +9,8 @@ import {
   introFill,
   judgePopup,
   shardFlight,
-  slideOffset,
+  slamOffset,
+  slamScale,
   staggerProgress,
   valuePunch,
 } from './motion.ts';
@@ -35,21 +36,24 @@ describe('clamp01 / easing', () => {
   });
 });
 
-describe('staggerProgress / slideOffset', () => {
+describe('staggerProgress / slam', () => {
   it('stays at 0 through the delay, then fills the duration', () => {
     expect(staggerProgress(40, 80, 200)).toBe(0);
     expect(staggerProgress(180, 80, 200)).toBeCloseTo(0.5, 5);
     expect(staggerProgress(300, 80, 200)).toBe(1);
   });
 
-  it('treats a zero duration as already complete', () => {
+  it('treats a zero duration as already complete once the delay has elapsed', () => {
     expect(staggerProgress(0, 0, 0)).toBe(1);
+    expect(staggerProgress(10, 40, 0)).toBe(0);
   });
 
-  it('slides from fromPx to 0', () => {
-    expect(slideOffset(0, 24)).toBe(24);
-    expect(slideOffset(1, 24)).toBe(0);
-    expect(slideOffset(0.5, 24)).toBe(12);
+  it('slams from an oversized scale and a left-hand throw', () => {
+    expect(slamScale(0, 2.4)).toBeCloseTo(2.4, 5);
+    expect(slamScale(1, 2.4)).toBeCloseTo(1, 5);
+    expect(slamScale(0.12, 2.4)).toBeGreaterThan(1.2);
+    expect(slamOffset(0, -56)).toBeCloseTo(-56, 5);
+    expect(slamOffset(1, -56)).toBeCloseTo(0, 5);
   });
 });
 
@@ -75,15 +79,14 @@ describe('judgePopup', () => {
     const hold = judgePopup(180);
     expect(hold.scale).toBeCloseTo(1, 1);
     expect(hold.alpha).toBe(1);
-    const end = judgePopup(400);
-    expect(end.alpha).toBeLessThan(0.3);
-    expect(judgePopup(500).alpha).toBe(0);
+    expect(judgePopup(500).alpha).toBeLessThan(0.5);
+    expect(judgePopup(700).alpha).toBe(0);
   });
 });
 
 describe('valuePunch / introFill / countUp', () => {
   it('punches above 1 then returns to 1', () => {
-    expect(valuePunch(0)).toBeCloseTo(1.18, 5);
+    expect(valuePunch(0)).toBeGreaterThan(1.2);
     expect(valuePunch(200)).toBe(1);
     expect(valuePunch(40)).toBeGreaterThan(1);
   });
@@ -101,11 +104,11 @@ describe('valuePunch / introFill / countUp', () => {
   });
 });
 
-describe('beatPulse / shardFlight', () => {
+describe('beatImpulse / shardFlight', () => {
   it('peaks on the downbeat', () => {
-    expect(beatPulse(0, 0.4)).toBe(1);
-    expect(beatPulse(0.99, 0.4)).toBeCloseTo(0.6, 2);
-    expect(beatPulse(undefined, 0.4)).toBe(1);
+    expect(beatImpulse(0)).toBe(1);
+    expect(beatImpulse(0.5)).toBe(0);
+    expect(beatImpulse(undefined)).toBe(0);
   });
 
   it('sends shards outward while fading', () => {

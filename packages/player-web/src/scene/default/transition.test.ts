@@ -48,7 +48,7 @@ describe('decide / ready handoff', () => {
     expect(decideCloseCover(DECIDE_TIMELINE.total)).toBe(1);
   });
 
-  it('covers the first and last frames so neighbouring scenes can iris through void', () => {
+  it('covers the first and last frames so neighbouring scenes can wipe through void', () => {
     expect(decideCover(0)).toBe(1);
     expect(decideCover(700)).toBeLessThan(0.05);
     expect(decideCover(DECIDE_TIMELINE.total)).toBe(1);

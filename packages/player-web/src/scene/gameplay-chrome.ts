@@ -46,7 +46,7 @@ export interface SkinlessGameplayChromeRuntime {
   /** Monotonic play clock (ms) for chrome-side animation (gauge hot-tip flicker, subtle pulses). */
   nowMs?: number;
   /**
-   * Milliseconds since `PixiGameplayView.start()`. Drives the default family's per-piece intro and iris-open.
+   * Milliseconds since `PixiGameplayView.start()`. Drives the default family's per-piece intro and wipe-open.
    * Omit (or leave undefined) for a settled HUD — benches and still frames use that path.
    */
   sceneElapsedMs?: number;

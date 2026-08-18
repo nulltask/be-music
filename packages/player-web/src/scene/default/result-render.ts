@@ -1,9 +1,16 @@
 import { Container, Graphics } from 'pixi.js';
 import { addChromeText } from './chrome-text.ts';
-import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT } from './fonts.ts';
-import { countUp, slideOffset } from './motion.ts';
-import { coverAmount, pieceT, RESULT_TIMELINE, resultJudgeT, resultMetricT } from './transition.ts';
-import { DEFAULT_THEME as T, fillBgBands, fillTriangle, paintSceneCover, strokeCornerBrackets } from './theme.ts';
+import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT, DEFAULT_TEXT_FONT } from './fonts.ts';
+import { clamp01, countUp, slamAlpha, slamOffset, slamScale } from './motion.ts';
+import { coverAmount, pieceRawT, RESULT_TIMELINE, resultJudgeRawT, resultMetricRawT } from './transition.ts';
+import {
+  DEFAULT_THEME as T,
+  fillBgBands,
+  fillParallelogram,
+  fillSlash,
+  paintSceneCover,
+  strokeParallelogram,
+} from './theme.ts';
 
 export interface DefaultResultViewModel {
   designWidth: number;
@@ -33,17 +40,12 @@ export interface DefaultResultViewModel {
   nowMs: number;
 }
 
-export function resultRankPunch(elapsedMs: number): { scale: number; alpha: number } {
-  if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return { scale: 1, alpha: 0 };
-  if (elapsedMs < 80) {
-    const t = elapsedMs / 80;
-    return { scale: 1.65 - 0.5 * t, alpha: t };
-  }
-  if (elapsedMs < 220) {
-    const t = (elapsedMs - 80) / 140;
-    return { scale: 1.15 - 0.15 * t, alpha: 1 };
-  }
-  return { scale: 1, alpha: 1 };
+const RANK_SLAM_MS = 420;
+
+export function resultRankPunch(elapsedMs: number): { scale: number; alpha: number; offsetX: number } {
+  if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) return { scale: 1, alpha: 0, offsetX: 0 };
+  const t = clamp01(elapsedMs / RANK_SLAM_MS);
+  return { scale: slamScale(t, 3.2), alpha: slamAlpha(t), offsetX: slamOffset(t, -88) };
 }
 
 export function renderDefaultResultChrome(layer: Container, model: DefaultResultViewModel): void {
@@ -53,112 +55,181 @@ export function renderDefaultResultChrome(layer: Container, model: DefaultResult
   const elapsed = model.sceneElapsedMs;
   fillBgBands(chrome);
 
-  const bannerT = pieceT(elapsed, RESULT_TIMELINE.banner);
-  const statusColor = model.cleared ? T.cyan : T.danger;
-  chrome.rect(0, 0, designWidth, 48).fill({ color: T.void, alpha: 0.96 });
-  chrome.rect(0, 46, designWidth * bannerT, 2).fill({ color: statusColor, alpha: 0.85 * bannerT });
-  fillTriangle(chrome, 22, 24, 12, statusColor, 0.9 * bannerT, !model.cleared);
-  addChromeText(layer, model.cleared ? 'CLEARED' : 'FAILED', 36, 14 + slideOffset(bannerT, -18), {
-    size: 16,
-    weight: '700',
+  const bannerT = pieceRawT(elapsed, RESULT_TIMELINE.banner);
+  const statusColor = model.cleared ? T.paper : T.danger;
+  const statusFill = model.cleared ? T.accent : T.accentDeep;
+  fillSlash(chrome, -100, -20, 420, 70, 36, statusFill, 0.95 * Math.max(0.2, bannerT));
+  fillSlash(chrome, 240, 8, 480, 16, 12, T.paper, 0.12 * bannerT);
+  fillParallelogram(chrome, -20, 0, designWidth + 40, 50, 24, T.inkDeep, 0.9);
+
+  addChromeText(layer, model.cleared ? 'CLEARED' : 'FAILED', 20, 6, {
+    size: 28,
     fill: statusColor,
-    letterSpacing: 3,
     fontFamily: DEFAULT_NUMERIC_FONT,
-    alpha: bannerT,
+    letterSpacing: 2.2,
+    rotation: -0.1,
+    slam: slamScale(bannerT, 2.8),
+    offsetX: slamOffset(bannerT, -90),
+    alpha: slamAlpha(bannerT),
+    stroke: { color: T.ink, width: 6, alignment: 0.5, join: 'round' },
   });
-  addChromeText(layer, `${model.title}${model.artist ? ` / ${model.artist}` : ''}`, designWidth - 18, 16, {
+  addChromeText(layer, `${model.title}${model.artist ? ` / ${model.artist}` : ''}`, designWidth - 18, 14, {
     size: 11,
-    weight: '700',
-    fill: T.mute,
+    fill: T.paper,
+    fontFamily: DEFAULT_TEXT_FONT,
     anchorX: 1,
-    maxWidth: 400,
-    alpha: bannerT,
+    maxWidth: 360,
+    slam: slamScale(bannerT, 1.4),
+    alpha: slamAlpha(bannerT),
   });
 
-  chrome.rect(18, 72, 172, 148).fill({ color: T.panel, alpha: bannerT }).stroke({ color: T.line, width: 1, alpha: bannerT });
-  chrome.rect(210, 72, 194, 148).fill({ color: T.panel, alpha: bannerT }).stroke({ color: T.line, width: 1, alpha: bannerT });
-  chrome.rect(424, 72, 198, 148).fill({ color: T.panel, alpha: bannerT }).stroke({ color: T.line, width: 1, alpha: bannerT });
-  chrome.rect(18, 246, 286, 180).fill({ color: T.panel, alpha: bannerT }).stroke({ color: T.line, width: 1, alpha: bannerT });
-  chrome.rect(324, 246, 298, 180).fill({ color: T.panel, alpha: bannerT }).stroke({ color: T.line, width: 1, alpha: bannerT });
-  chrome.rect(0, designHeight - 34, designWidth, 34).fill({ color: T.void, alpha: 0.96 });
+  fillParallelogram(chrome, 14, 68, 180, 156, 14, T.panel, bannerT);
+  strokeParallelogram(chrome, 14, 68, 180, 156, 14, T.accent, 2, 0.85 * bannerT);
+  fillParallelogram(chrome, 206, 68, 198, 156, 12, T.panel, bannerT);
+  strokeParallelogram(chrome, 206, 68, 198, 156, 12, T.line, 1, 0.85 * bannerT);
+  fillParallelogram(chrome, 416, 68, 206, 156, 12, T.panel, bannerT);
+  strokeParallelogram(chrome, 416, 68, 206, 156, 12, T.line, 1, 0.85 * bannerT);
+  fillParallelogram(chrome, 14, 240, 292, 188, 14, T.panel, bannerT);
+  strokeParallelogram(chrome, 14, 240, 292, 188, 14, T.line, 1, 0.85 * bannerT);
+  fillParallelogram(chrome, 318, 240, 306, 188, 12, T.panel, bannerT);
+  strokeParallelogram(chrome, 318, 240, 306, 188, 12, T.line, 1, 0.85 * bannerT);
+  fillParallelogram(chrome, -16, designHeight - 36, designWidth + 32, 40, 16, T.inkDeep, 1);
 
-  addChromeText(layer, 'RANK', 38, 92, { size: 9, weight: '700', fill: T.mute, letterSpacing: 1.2, alpha: bannerT });
-  const punch = model.rankRevealed ? resultRankPunch(model.rankElapsedMs) : { scale: 1, alpha: 0 };
-  if (model.rankRevealed) {
-    strokeCornerBrackets(chrome, 36, 118, 136, 72, 12, T.gold, punch.alpha);
-    fillTriangle(chrome, 104, 154, 28, T.gold, 0.12 * punch.alpha, true);
+  addChromeText(layer, 'RANK', 36, 84, { ...stampLabel(), alpha: slamAlpha(bannerT) });
+  const punch = model.rankRevealed ? resultRankPunch(model.rankElapsedMs) : { scale: 1, alpha: 0, offsetX: 0 };
+  if (model.rankRevealed && punch.alpha > 0) {
+    for (let line = 0; line < 6; line += 1) {
+      fillSlash(
+        chrome,
+        28 + line * 18,
+        118 + line * 4,
+        140 - line * 8,
+        3,
+        6,
+        T.paper,
+        (1 - clamp01(model.rankElapsedMs / 280)) * 0.35,
+      );
+    }
+    addChromeText(layer, model.rank, 104, 140, {
+      size: model.rank.length >= 3 ? 44 : 64,
+      fill: T.gold,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      rotation: -0.12,
+      slam: punch.scale,
+      offsetX: punch.offsetX,
+      alpha: punch.alpha,
+      stroke: { color: T.ink, width: 6, alignment: 0.5, join: 'round' },
+      maxWidth: 128,
+    });
+  } else if (!model.rankRevealed) {
+    fillSlash(chrome, 36, 136, 140, 18, 8, T.inkDeep, 0.95);
+    addChromeText(layer, '???', 104, 140, {
+      size: 36,
+      fill: T.mute,
+      fontFamily: DEFAULT_NUMERIC_FONT,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      rotation: -0.08,
+    });
   }
-  addChromeText(layer, model.rankRevealed ? model.rank : '—', 104, 144, {
-    size: model.rank.length >= 3 ? 40 : 54,
-    weight: '700',
-    fill: T.gold,
-    anchorX: 0.5,
-    anchorY: 0.5,
-    stroke: { color: 0x031018, width: 4, alignment: 0.5, join: 'round' },
-    maxWidth: 128,
+  addChromeText(layer, `${model.rate.toFixed(1)}%`, 104, 188, {
+    size: 18,
+    fill: T.paper,
     fontFamily: DEFAULT_NUMERIC_FONT,
-    scale: punch.scale,
-    alpha: punch.alpha,
-  });
-  addChromeText(layer, `${model.rate.toFixed(1)}%`, 104, 190, {
-    size: 16,
-    weight: '700',
-    fill: T.ice,
     anchorX: 0.5,
-    fontFamily: DEFAULT_NUMERIC_FONT,
-    alpha: bannerT,
+    slam: slamScale(bannerT, 1.6),
+    alpha: slamAlpha(bannerT),
   });
 
-  paintMetric(layer, chrome, 228, 92, 'SCORE', String(countUp(model.score, elapsed, RESULT_TIMELINE.countDuration)), T.gold, resultMetricT(elapsed, 0));
-  paintMetric(layer, chrome, 228, 138, 'EX SCORE', `${countUp(model.exScore, elapsed, RESULT_TIMELINE.countDuration)} / ${model.exMax}`, T.ice, resultMetricT(elapsed, 1));
-  paintMetric(layer, chrome, 228, 184, 'MAX COMBO', String(countUp(model.maxCombo, elapsed, RESULT_TIMELINE.countDuration)), T.cyan, resultMetricT(elapsed, 2), DEFAULT_JUDGE_FONT);
-  paintMetric(layer, chrome, 442, 92, 'GAUGE', `${Math.round(model.gauge)}%`, statusColor, resultMetricT(elapsed, 3));
-  paintMetric(layer, chrome, 442, 138, 'PLAY TIME', `${model.playSeconds.toFixed(1)}s`, T.ice, resultMetricT(elapsed, 4));
-  paintMetric(layer, chrome, 442, 184, 'NOTES', String(model.notes), T.ice, resultMetricT(elapsed, 5));
+  paintMetric(layer, chrome, 224, 86, 'SCORE', String(countUp(model.score, elapsed, RESULT_TIMELINE.countDuration)), T.gold, resultMetricRawT(elapsed, 0));
+  paintMetric(
+    layer,
+    chrome,
+    224,
+    132,
+    'EX SCORE',
+    `${countUp(model.exScore, elapsed, RESULT_TIMELINE.countDuration)} / ${model.exMax}`,
+    T.paper,
+    resultMetricRawT(elapsed, 1),
+  );
+  paintMetric(
+    layer,
+    chrome,
+    224,
+    178,
+    'MAX COMBO',
+    String(countUp(model.maxCombo, elapsed, RESULT_TIMELINE.countDuration)),
+    T.accent,
+    resultMetricRawT(elapsed, 2),
+    DEFAULT_JUDGE_FONT,
+  );
+  paintMetric(layer, chrome, 434, 86, 'GAUGE', `${Math.round(model.gauge)}%`, statusColor, resultMetricRawT(elapsed, 3));
+  paintMetric(
+    layer,
+    chrome,
+    434,
+    132,
+    'PLAY TIME',
+    `${model.playSeconds.toFixed(1)}s`,
+    T.paper,
+    resultMetricRawT(elapsed, 4),
+  );
+  paintMetric(layer, chrome, 434, 178, 'NOTES', String(model.notes), T.paper, resultMetricRawT(elapsed, 5));
 
-  addChromeText(layer, 'JUDGEMENT', 36, 266, { size: 9, weight: '700', fill: T.mute, letterSpacing: 1.2, alpha: bannerT });
+  addChromeText(layer, 'JUDGEMENT', 32, 254, { ...stampLabel(), alpha: slamAlpha(bannerT) });
   const judges: Array<readonly [string, number, number]> = [
     ['PGREAT', model.perfect, T.gold],
-    ['GREAT', model.great, T.great],
-    ['GOOD', model.good, T.good],
+    ['GREAT', model.great, T.paper],
+    ['GOOD', model.good, T.paperDim],
     ['BAD', model.bad, T.bad],
     ['POOR', model.poor, T.danger],
   ];
   const maxJudge = Math.max(1, ...judges.map((row) => row[1]));
   for (let i = 0; i < judges.length; i += 1) {
-    const rowT = resultJudgeT(elapsed, i);
-    const jy = 292 + i * 24;
+    const rowT = resultJudgeRawT(elapsed, i);
+    const jy = 280 + i * 24;
     const [label, value, fill] = judges[i]!;
-    chrome.rect(36, jy, 246, 18).fill({ color: T.panelDeep, alpha: rowT }).stroke({ color: T.line, width: 1, alpha: rowT });
-    chrome.rect(38, jy, Math.round(242 * rowT * (value / maxJudge)), 18).fill({ color: fill, alpha: 0.28 * rowT });
-    addChromeText(layer, label, 48, jy + 3, { size: 9, weight: '700', fill, fontFamily: DEFAULT_JUDGE_FONT, alpha: rowT });
-    addChromeText(layer, String(countUp(value, elapsed - i * RESULT_TIMELINE.judgeStagger, RESULT_TIMELINE.countDuration)), 264, jy + 1, {
-      size: 13,
-      weight: '700',
-      fill: T.ice,
+    fillParallelogram(chrome, 32, jy, 254, 20, 6, T.inkDeep, rowT);
+    const barW = Math.round(248 * (value / maxJudge) * rowT);
+    if (barW > 0) fillSlash(chrome, 34, jy + 2, barW, 16, 3, fill, 0.28 * rowT);
+    addChromeText(layer, label, 44, jy + 3, {
+      size: 11,
+      fill,
+      fontFamily: DEFAULT_JUDGE_FONT,
+      slam: slamScale(rowT, 1.5),
+      offsetX: slamOffset(rowT, -20),
+      alpha: slamAlpha(rowT),
+    });
+    addChromeText(layer, String(countUp(value, elapsed - i * RESULT_TIMELINE.judgeStagger, RESULT_TIMELINE.countDuration)), 270, jy + 1, {
+      size: 15,
+      fill: T.paper,
       fontFamily: DEFAULT_JUDGE_FONT,
       anchorX: 1,
-      alpha: rowT,
+      slam: slamScale(rowT, 1.7),
+      alpha: slamAlpha(rowT),
     });
   }
 
-  const graphT = pieceT(elapsed, RESULT_TIMELINE.graphs);
-  addChromeText(layer, 'RUN', 342, 266, { size: 9, weight: '700', fill: T.mute, letterSpacing: 1.2, alpha: graphT });
-  chrome.rect(342, 292, 256, 46).fill({ color: T.panelDeep, alpha: graphT }).stroke({ color: T.line, width: 1, alpha: graphT });
-  chrome.rect(342, 362, 256, 46).fill({ color: T.panelDeep, alpha: graphT }).stroke({ color: T.line, width: 1, alpha: graphT });
-  addChromeText(layer, 'Gauge', 354, 304, { size: 9, weight: '700', fill: T.mute, alpha: graphT });
-  addChromeText(layer, 'EX score', 354, 374, { size: 9, weight: '700', fill: T.mute, alpha: graphT });
-  drawSeries(chrome, 424, 300, 160, 30, model.gaugeHistory, statusColor, graphT);
-  drawSeries(chrome, 424, 370, 160, 30, model.scoreHistory, T.gold, graphT);
+  const graphT = pieceRawT(elapsed, RESULT_TIMELINE.graphs);
+  addChromeText(layer, 'RUN', 336, 254, { ...stampLabel(), alpha: slamAlpha(graphT) });
+  chrome.rect(336, 286, 268, 48).fill({ color: T.inkDeep, alpha: graphT });
+  chrome.rect(336, 356, 268, 48).fill({ color: T.inkDeep, alpha: graphT });
+  addChromeText(layer, 'Gauge', 348, 298, { size: 9, fill: T.mute, fontFamily: DEFAULT_NUMERIC_FONT, alpha: slamAlpha(graphT) });
+  addChromeText(layer, 'EX score', 348, 368, { size: 9, fill: T.mute, fontFamily: DEFAULT_NUMERIC_FONT, alpha: slamAlpha(graphT) });
+  drawSeries(chrome, 420, 294, 168, 32, model.gaugeHistory, statusColor, graphT);
+  drawSeries(chrome, 420, 364, 168, 32, model.scoreHistory, T.gold, graphT);
 
-  const footerT = pieceT(elapsed, RESULT_TIMELINE.footer);
-  addChromeText(layer, 'TOTAL SCORE', 18, designHeight - 22, { size: 9, weight: '700', fill: T.mute, letterSpacing: 1.1, alpha: footerT });
-  addChromeText(layer, String(countUp(model.score, elapsed, RESULT_TIMELINE.countDuration)), 150, designHeight - 27, {
-    size: 18,
-    weight: '700',
-    fill: T.ice,
+  const footerT = pieceRawT(elapsed, RESULT_TIMELINE.footer);
+  addChromeText(layer, 'TOTAL SCORE', 18, designHeight - 24, { ...stampLabel(), alpha: slamAlpha(footerT) });
+  addChromeText(layer, String(countUp(model.score, elapsed, RESULT_TIMELINE.countDuration)), 150, designHeight - 30, {
+    size: 22,
+    fill: T.paper,
     fontFamily: DEFAULT_NUMERIC_FONT,
-    alpha: footerT,
+    slam: slamScale(footerT, 1.8),
+    offsetX: slamOffset(footerT, -24),
+    alpha: slamAlpha(footerT),
   });
 
   paintSceneCover(
@@ -181,16 +252,17 @@ function paintMetric(
   t: number,
   valueFontFamily = DEFAULT_NUMERIC_FONT,
 ): void {
-  chrome.rect(x, y, 156, 30).fill({ color: T.panelDeep, alpha: t }).stroke({ color: T.line, width: 1, alpha: t });
-  addChromeText(layer, label, x + 10, y + 4, { size: 8, weight: '700', fill: T.mute, letterSpacing: 0.7, alpha: t });
-  addChromeText(layer, value, x + 146, y + 12, {
-    size: 14,
-    weight: '700',
+  fillParallelogram(chrome, x, y, 160, 32, 8, T.inkDeep, t);
+  addChromeText(layer, label, x + 10, y + 4, { ...stampLabel(), alpha: slamAlpha(t) });
+  addChromeText(layer, value, x + 148, y + 12, {
+    size: 15,
     fill,
     fontFamily: valueFontFamily,
     anchorX: 1,
     maxWidth: 92,
-    alpha: t,
+    slam: slamScale(t, 1.7),
+    offsetX: slamOffset(t, -16),
+    alpha: slamAlpha(t),
   });
 }
 
@@ -205,7 +277,7 @@ function drawSeries(
   t: number,
 ): void {
   if (points.length === 0 || t <= 0) return;
-  chrome.rect(x, y + h, w, 1).fill({ color: T.ice, alpha: 0.12 * t });
+  chrome.rect(x, y + h, w, 1).fill({ color: T.paper, alpha: 0.16 * t });
   const cutoff = t;
   const first = points[0]!;
   chrome.moveTo(x + clamp01(first.x) * w * cutoff, y + (1 - clamp01(first.y)) * h);
@@ -217,7 +289,6 @@ function drawSeries(
   chrome.stroke({ color, width: 2, alpha: 0.95 * t, alignment: 0.5 });
 }
 
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
+function stampLabel(): { size: number; fill: number; fontFamily: string; letterSpacing: number } {
+  return { size: 9, fill: T.mute, fontFamily: DEFAULT_NUMERIC_FONT, letterSpacing: 1.2 };
 }

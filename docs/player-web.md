@@ -93,9 +93,9 @@ state-specific value resolution, timers, and input behavior.
 
 The built-in default family is the skinless path used when no LR2 or beatoraja theme is available, or when the host
 explicitly chooses the default family. It provides select, decide, gameplay, and result presentation without requiring
-theme files. The visual language is an original "ice-clock" chrome: void navy, ice-cyan piping, gold lock-on marks,
-inverted triangles, and clock rings. Labels stay generic (`MUSIC SELECT`, `READY`, `CLEARED`) and do not copy third-party
-UI assets.
+theme files. The visual language is original cut-in chrome: navy void, cyan slashes, gold lock-on, and skewed
+parallelogram plates. Motion slams per piece; colouring is navy / ice / cyan rather than crimson. Labels stay generic
+(`MUSIC SELECT`, `READY`, `CLEARED`) and do not copy third-party UI assets.
 
 Gameplay still shares the common engine, note renderer, BGA renderer, audio bus, and input handling with
 `PixiGameplayView`, but the default chrome is injected from `scene/default/gameplay.ts` through the
@@ -105,12 +105,12 @@ skin rendering remains tied to parsed `.lr2skin` data.
 
 Default gameplay chrome uses the shared lane geometry helpers in `scene/gameplay-lanes.ts`. Scratch lanes are wider
 than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width instead
-of shrinking every lane to fit both sides into the original SP footprint. Canvas chrome uses Zen Kaku Gothic New for
-body text and Rajdhani for numeric / judge readouts. The demo host CSS keeps LINE Seed JP for overlay chrome outside
+of shrinking every lane to fit both sides into the original SP footprint. Canvas chrome uses Dela Gothic One for
+body stamps and Staatliches for numeric / judge readouts. The demo host CSS keeps LINE Seed JP for overlay chrome outside
 the playfield.
 
-Each HUD piece has its own enter delay, and scenes are joined by a diamond / triangular iris: incoming scenes open
-from a fully covered frame, and the short decide splash closes the iris on its last beat so gameplay can open from
+Each HUD piece has its own enter delay and slam, and scenes are joined by a diagonal cut-in wipe: incoming scenes open
+from a fully covered frame, and the short decide splash closes the wipe on its last beat so gameplay can open from
 void instead of popping onto the READY plate. `SkinlessGameplayChromeRuntime` includes `sceneElapsedMs` so that intro
 is keyed off `PixiGameplayView.start()`, not the wall-clock `nowMs` used for idle pulses.
 
