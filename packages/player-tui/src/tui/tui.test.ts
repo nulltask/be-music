@@ -67,6 +67,7 @@ function renderOutputRaw(
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -186,6 +187,7 @@ function createSummary(score = 0) {
     good: 0,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 0,
     score,
   };

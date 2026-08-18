@@ -190,6 +190,37 @@ describe('engine / simulator equivalence', () => {
     });
   });
 
+  test.each(RULESETS)('%s: empty POORs agree on both sides', async (ruleset) => {
+    const json = chart([
+      { measure: 2, channel: '11', position: [0, 1], value: '01' }, // 2.000
+      { measure: 4, channel: '19', position: [0, 1], value: '01' }, // 4.000 — never pressed
+    ]);
+    // 1.600 is 400 ms before the note: outside every judge window but inside every ruleset's miss window, so it
+    // charges an empty POOR without consuming the note. 1.995 then hits the note itself.
+    const inputs = [down(0, 1_600_000, '11'), down(1, 1_995_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect(summary.emptyPoor).toBe(1);
+    expect(summary.emptyPoor).toBe(simulated.judge.emptyPoor);
+    // The empty POOR left the note alone, so the second press still scores it.
+    expect(summary.perfect).toBe(1);
+    expect(summary.perfect).toBe(simulated.judge.pgreat);
+    expect(summary.poor).toBe(simulated.judge.poor);
+  });
+
+  test("lr2: the empty POOR window is early-only", async () => {
+    // LR2's miss window is `{0, 1 s}` — a press up to a second BEFORE a note charges one, a press after never does.
+    const json = chart([{ measure: 2, channel: '11', position: [0, 1], value: '01' }]);
+
+    const before = await replay(json, [down(0, 1_600_000, '11')], 'lr2');
+    const after = await replay(json, [down(0, 2_400_000, '11')], 'lr2');
+
+    expect(before.summary.emptyPoor).toBe(1);
+    expect(after.summary.emptyPoor).toBe(0);
+  });
+
   test.each(RULESETS)('%s: an untouched chart misses every note on both sides', async (ruleset) => {
     const json = chart([
       { measure: 1, channel: '11', position: [0, 1], value: '01' },

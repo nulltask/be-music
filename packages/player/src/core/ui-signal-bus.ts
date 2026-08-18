@@ -14,6 +14,8 @@ export interface PlayerUiFrameSummary {
   good: number;
   bad: number;
   poor: number;
+  /** Empty POOR (空POOR) count — see `PlayerSummary.emptyPoor`. */
+  emptyPoor: number;
   exScore: number;
   score: number;
   gauge?: PlayerGaugeSummary;

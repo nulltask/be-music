@@ -310,6 +310,10 @@ export interface PlayerOptions {
 }
 
 export interface PlayerSummary {
+  /**
+   * The active ruleset's judgment count — its EX-SCORE denominator. Charge-note styles count a long note's head
+   * and tail separately, so this is NOT always the number of notes on screen.
+   */
   total: number;
   perfect: number;
   fast: number;
@@ -317,7 +321,15 @@ export interface PlayerSummary {
   great: number;
   good: number;
   bad: number;
+  /** Notes that were missed or hit outside every scoring window. Empty POORs are counted separately. */
   poor: number;
+  /**
+   * Empty POOR (空POOR) — a press with no note in reach but one inside the ruleset's miss window. It costs gauge
+   * and fires the POOR cue without consuming a note, so it never reaches EX-SCORE and is tracked apart from
+   * `poor`. Whether a player's POOR counter displays the two summed is a per-ruleset presentation choice: LR2 does
+   * (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it), which is why the split is exposed here.
+   */
+  emptyPoor: number;
   exScore: number;
   score: number;
   gauge?: PlayerGrooveGaugeSummary;
@@ -551,12 +563,6 @@ const DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS = 0.18;
 const DEBUG_ACTIVE_AUDIO_SAMPLE_RATE = 44_100;
 const RUNTIME_AUDIO_SAMPLE_RATE = 44_100;
 const REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS = 1e-6;
-/**
- * LR2 empty-POOR (空POOR) early window — a phantom press only charges while a note on the lane lies within the next
- * second; presses after a note never charge (lr2oraja `JudgeProperty` LR2 miss window `{0, 1000000}`µs, fixed
- * regardless of rank / EXRANK).
- */
-const LR2_EMPTY_POOR_EARLY_WINDOW_SECONDS = 1;
 const DEFAULT_COMPRESSOR_THRESHOLD_DB = -12;
 const DEFAULT_COMPRESSOR_RATIO = 2.5;
 const DEFAULT_COMPRESSOR_ATTACK_MS = 8;
@@ -2766,15 +2772,34 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       scorableNoteSecondsByChannel.set(note.channel, [note.seconds]);
     }
   }
+  /**
+   * Is there a note near enough on any pressed lane for a note-less press to charge an empty POOR?
+   *
+   * The reach is the ruleset's own miss (`ms`) window, which is not symmetric and not the same shape everywhere:
+   * LR2's is early-only (a press up to 1 s BEFORE a note charges, one after never does), while beatoraja's reaches
+   * 500 ms early and 150 ms late. Both neighbours of the press are tested, since the late side matters where the
+   * ruleset has one.
+   */
   const hasEmptyPoorReferenceNote = (channels: ReadonlySet<string>, nowSec: number): boolean => {
     for (const channel of channels) {
       const noteTimes = scorableNoteSecondsByChannel.get(channel);
       if (!noteTimes) {
         continue;
       }
+      const missWindow = judgeWindowsFor(channel, nowSec).ms;
+      if (!missWindow) {
+        continue;
+      }
       const index = findFirstIndexNumberAtOrAfter(noteTimes, nowSec);
-      if (index < noteTimes.length && noteTimes[index]! - nowSec <= LR2_EMPTY_POOR_EARLY_WINDOW_SECONDS) {
-        return true;
+      for (const neighbour of [index - 1, index]) {
+        const noteSeconds = noteTimes[neighbour];
+        if (noteSeconds === undefined) {
+          continue;
+        }
+        const dmUs = (noteSeconds - nowSec) * 1e6;
+        if (dmUs >= missWindow[0] && dmUs <= missWindow[1]) {
+          return true;
+        }
       }
     }
     return false;
@@ -3471,16 +3496,19 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
       if (!hasEmptyPoorReferenceNote(candidateChannels, nowSec)) {
-        // LR2 — a press with no note on the lane within the next second is harmless: the keysound (fallback above)
-        // plays and nothing else happens. 空POOR only ever fires on the EARLY side of a note; presses after a note
-        // never charge.
+        // No note in the ruleset's miss window — the press is harmless: the lane keysound (fallback above) plays
+        // and nothing else happens.
         return;
       }
-      // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press in front of an upcoming note (within 1 s,
-      // outside its judgable window). Apply the gauge delta (GROOVE -2, HARD -2 × TOTAL modifier, EASY -1.6,
-      // DEATH -10 — see the ruleset's `EMPTY_POOR` gauge delta) and fire the POOR BGA, but DO NOT break combo or
-      // increment `summary.poor`. Repeatable per note (LR2's MissCondition.ALWAYS).
+      // Empty POOR (kara-poor / 空POOR): a phantom press near a note but outside every judgable window. It costs
+      // gauge and fires the POOR cue without consuming the note, so it never reaches EX-SCORE. Repeatable per note
+      // (LR2's `MissCondition.ALWAYS`). Whether it breaks the combo is the ruleset's call — beatoraja's five-key
+      // and PMS rules say yes, LR2 and IIDX say no.
+      summary.emptyPoor += 1;
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
+      if (ruleset.comboBreaksOnEmptyPoor) {
+        setLoggedCombo(nowSec, 0, 'judge', 'POOR');
+      }
       playlogRecorder?.recordEmptyPoor();
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });
       if (!uiEnabled) {

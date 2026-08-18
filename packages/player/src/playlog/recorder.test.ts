@@ -60,6 +60,7 @@ function makeSummary(overrides: Partial<PlayerSummary> = {}): PlayerSummary {
     good: 1,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 5,
     score: 123456,
     ...overrides,
