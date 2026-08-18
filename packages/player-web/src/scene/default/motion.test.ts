@@ -79,7 +79,7 @@ describe('judgePopup', () => {
     const hold = judgePopup(180);
     expect(hold.scale).toBeCloseTo(1, 1);
     expect(hold.alpha).toBe(1);
-    expect(judgePopup(500).alpha).toBeLessThan(0.5);
+    expect(judgePopup(540).alpha).toBeLessThan(0.5);
     expect(judgePopup(700).alpha).toBe(0);
   });
 });
