@@ -16,16 +16,30 @@ export interface PlayerUiFrameSummary {
   poor: number;
   exScore: number;
   score: number;
-  gauge?: {
-    current: number;
-    max: number;
-    clearThreshold: number;
-    initial: number;
-    effectiveTotal: number;
-    cleared: boolean;
-    /** Gauge variant — `'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`. */
-    type?: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH';
-  };
+  gauge?: PlayerGaugeSummary;
+}
+
+/**
+ * Gauge state carried on every summary. Shared by the UI frame payload and the engine's own
+ * `PlayerSummary` so the two can never drift; the engine re-exports it as `PlayerGrooveGaugeSummary`.
+ */
+export interface PlayerGaugeSummary {
+  current: number;
+  max: number;
+  clearThreshold: number;
+  initial: number;
+  effectiveTotal: number;
+  cleared: boolean;
+  /**
+   * Ruleset-scoped gauge id — `'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'` under LR2, `'NORMAL'` /
+   * `'ASSIST-EASY'` / `'EX-HARD'` / `'HAZARD'` under beatoraja, `'ASSISTED-EASY'` / `'EX-HARD'` under IIDX.
+   * Free-form because each ruleset has its own line-up.
+   */
+  type?: string;
+  /** True for gauges that fail at 0 % instead of clearing on a threshold (HARD / EX-HARD / HAZARD families). */
+  survival?: boolean;
+  /** True once a survival gauge bottomed out mid-play; the run keeps judging but can no longer clear. */
+  failedMidPlay?: boolean;
 }
 
 export interface PlayerUiFrameNote {

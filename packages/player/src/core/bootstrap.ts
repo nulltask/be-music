@@ -1,12 +1,17 @@
 import { throwIfAborted } from '@be-music/utils/core';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
+import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import {
-  createGrooveGaugeState,
-  applyGrooveGaugeJudge,
-  applyGrooveGaugeRawDelta,
-  isGrooveGaugeCleared,
-  type GrooveGaugeJudgeKind,
-} from './groove-gauge.ts';
+  GAUGE_JUDGE_BAD,
+  GAUGE_JUDGE_EMPTY_POOR,
+  GAUGE_JUDGE_GOOD,
+  GAUGE_JUDGE_GREAT,
+  GAUGE_JUDGE_MISS_POOR,
+  GAUGE_JUDGE_PGREAT,
+  RulesetGauge,
+  type GaugeJudgeIndex,
+  type RulesetConfig,
+} from '../ruleset/index.ts';
 import { type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import type {
   CreatePlayerUiRuntimeContext,
@@ -62,38 +67,36 @@ export interface InitializedPlayerUiRuntime {
 }
 
 export function createInitialPlayerSummary(
+  ruleset: RulesetConfig,
   totalNotes: number,
-  totalValue: number | undefined,
 ): {
   summary: PlayerSummary;
   applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
   applyGaugeDelta: (delta: number) => void;
 } {
-  const grooveGauge = createGrooveGaugeState(totalNotes, totalValue);
+  const gauge = new RulesetGauge(ruleset.gauge);
   const gaugeSummary: PlayerGrooveGaugeSummary = {
-    current: grooveGauge.current,
-    max: grooveGauge.max,
-    clearThreshold: grooveGauge.clearThreshold,
-    initial: grooveGauge.initial,
-    effectiveTotal: grooveGauge.effectiveTotal,
-    cleared: isGrooveGaugeCleared(grooveGauge),
-    // The gauge state's `type` is fixed at construction; mirror it onto the summary so consumers
-    // can label the run's clear lamp without inferring from the threshold (which collides
-    // between EASY's 60 and DEATH's 0+ε).
-    type: grooveGauge.type,
+    current: gauge.value,
+    max: ruleset.gauge.max,
+    clearThreshold: ruleset.gauge.border,
+    initial: ruleset.gauge.initial,
+    effectiveTotal: ruleset.effectiveTotal,
+    cleared: gauge.cleared(),
+    // Ruleset-scoped gauge id (`GROOVE` / `NORMAL` / `HARD` / `EX-HARD` / …) so consumers can label the run's
+    // clear lamp without inferring from the threshold, which collides between line-ups.
+    type: ruleset.gauge.id,
+    survival: ruleset.gauge.survival,
+    failedMidPlay: false,
   };
-  const syncGrooveGaugeSummary = (): void => {
-    gaugeSummary.current = grooveGauge.current;
-    gaugeSummary.max = grooveGauge.max;
-    gaugeSummary.clearThreshold = grooveGauge.clearThreshold;
-    gaugeSummary.initial = grooveGauge.initial;
-    gaugeSummary.effectiveTotal = grooveGauge.effectiveTotal;
-    gaugeSummary.cleared = isGrooveGaugeCleared(grooveGauge);
+  const syncGaugeSummary = (): void => {
+    gaugeSummary.current = gauge.value;
+    gaugeSummary.cleared = gauge.cleared();
+    gaugeSummary.failedMidPlay = gauge.failedMidPlay;
   };
 
   return {
     summary: {
-      total: grooveGauge.noteCount,
+      total: totalNotes,
       perfect: 0,
       fast: 0,
       slow: 0,
@@ -106,17 +109,27 @@ export function createInitialPlayerSummary(
       gauge: gaugeSummary,
     },
     applyGaugeJudge: (judge: GrooveGaugeJudgeKind): void => {
-      applyGrooveGaugeJudge(grooveGauge, judge);
-      syncGrooveGaugeSummary();
+      gauge.applyJudge(GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX[judge]);
+      syncGaugeSummary();
     },
     applyGaugeDelta: (delta: number): void => {
-      // Raw deltas (mine damage, HCN drain) go through the gauge module's survival rules — LR2 mine damage bypasses
-      // the per-judge tables / guts / #TOTAL scaling but still kills a survival gauge that bottoms out.
-      applyGrooveGaugeRawDelta(grooveGauge, delta);
-      syncGrooveGaugeSummary();
+      // Raw deltas (mine damage) bypass the per-judge table, the guts softening, and the TOTAL modifier — every
+      // ruleset specifies mine damage directly as a gauge percentage — but still kill a survival gauge that bottoms out.
+      gauge.applyRawDelta(delta);
+      syncGaugeSummary();
     },
   };
 }
+
+/** Engine judge kinds mapped onto the ruleset gauge tables' beatoraja-ordered indices. */
+const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgeKind, GaugeJudgeIndex> = {
+  PERFECT: GAUGE_JUDGE_PGREAT,
+  GREAT: GAUGE_JUDGE_GREAT,
+  GOOD: GAUGE_JUDGE_GOOD,
+  BAD: GAUGE_JUDGE_BAD,
+  POOR: GAUGE_JUDGE_MISS_POOR,
+  EMPTY_POOR: GAUGE_JUDGE_EMPTY_POOR,
+};
 
 export function preparePlaybackChartData(
   resolvedJson: BeMusicJson,

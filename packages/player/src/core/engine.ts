@@ -54,7 +54,7 @@ import {
   resolveHighSpeedMultiplier,
   type HighSpeedControlAction,
 } from './high-speed-control.ts';
-import { createPlayerUiSignalBus, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import { createPlayerUiSignalBus, type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import { createInputWakeUp } from './input-wakeup.ts';
 import {
@@ -83,6 +83,7 @@ import {
   resolveJudgeWindowsMsForRuleset,
   type JudgeWindowRuleset,
 } from './judge-window.ts';
+import { resolveRuleset, rulesetChartFactsFromChart } from '../ruleset/index.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import {
@@ -278,6 +279,12 @@ export interface PlayerOptions {
    */
   judgeRuleset?: JudgeWindowRuleset;
   /**
+   * Gauge the player selected, as an LR2-family id (`'GROOVE'` / `'EASY'` / `'HARD'` / `'DEATH'`). Mapped onto the
+   * active ruleset's own line-up — `'GROOVE'` is beatoraja's `NORMAL`, `'DEATH'` is its `HAZARD`, and so on.
+   * Defaults to `'GROOVE'`.
+   */
+  gauge?: GrooveGaugeType;
+  /**
    * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
    * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
    * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
@@ -302,21 +309,8 @@ export interface PlayerSummary {
   gauge?: PlayerGrooveGaugeSummary;
 }
 
-export interface PlayerGrooveGaugeSummary {
-  current: number;
-  max: number;
-  clearThreshold: number;
-  initial: number;
-  effectiveTotal: number;
-  cleared: boolean;
-  /**
-   * Gauge variant the engine ran with — `'GROOVE'` (cumulative gain, default), `'EASY'` (gentler
-   * GROOVE, lower clear threshold), `'HARD'` (drains on miss, fails at 0), or `'DEATH'` (any miss
-   * ends the chart). Optional for backward compatibility with consumers that built summary
-   * payloads before this field existed; `'GROOVE'` is the documented default when absent.
-   */
-  type?: GrooveGaugeType;
-}
+/** @see {@link PlayerGaugeSummary} — the canonical declaration lives beside the UI frame payload. */
+export type PlayerGrooveGaugeSummary = PlayerGaugeSummary;
 
 export interface PlayerLoadProgress {
   ratio: number;
@@ -1807,7 +1801,15 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const idBase = resolveBmsBase(resolvedJson);
   const wavResources = resolvedJson.resources.wav;
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
-  const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
+  const autoRuleset = resolveRuleset(
+    rulesetChartFactsFromChart(resolvedJson, playbackChart),
+    options.judgeRuleset ?? 'lr2',
+    {
+      ...(options.gauge !== undefined ? { selectedGauge: options.gauge } : {}),
+      ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+    },
+  );
+  const { summary, applyGaugeJudge } = createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount);
   const scoreTracker = createScoreTracker();
   // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
   // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
@@ -2448,10 +2450,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel),
   );
 
-  const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(
-    scorableNotes.length,
-    resolvedJson.metadata.total,
+  const ruleset = resolveRuleset(
+    rulesetChartFactsFromChart(resolvedJson, playbackChart, dynamicJudgeRankChanges),
+    judgeRuleset,
+    {
+      ...(options.gauge !== undefined ? { selectedGauge: options.gauge } : {}),
+      ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
+    },
   );
+  const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
   const scoreTracker = createScoreTracker();
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
@@ -3232,7 +3239,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       // LR2-compatible empty POOR (kara-poor / 空POOR): phantom press in front of an upcoming note (within 1 s,
       // outside its judgable window). Apply the gauge delta (GROOVE -2, HARD -2 × TOTAL modifier, EASY -1.6,
-      // DEATH -10 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR BGA, but DO NOT break combo or
+      // DEATH -10 — see the ruleset's `EMPTY_POOR` gauge delta) and fire the POOR BGA, but DO NOT break combo or
       // increment `summary.poor`. Repeatable per note (LR2's MissCondition.ALWAYS).
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
       playlogRecorder?.recordEmptyPoor();

@@ -3,7 +3,6 @@ import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './
 import { RulesetGauge, type GaugeJudgeIndex } from '../ruleset/index.ts';
 import {
   resolveRulesetConfig,
-  type GaugeSpec,
   type JudgeWindowSetUs,
   type PlaylogRulesetId,
   type ResolveRulesetOptions,

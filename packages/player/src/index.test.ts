@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
   writes: [] as Uint8Array[],
@@ -635,7 +636,7 @@ describe('player', () => {
     }
   });
 
-  test('player: defaults groove gauge TOTAL to LR2 160 when #TOTAL is omitted', async () => {
+  test("player: derives the groove gauge TOTAL from LR2's note-count formula when #TOTAL is omitted", async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
@@ -648,9 +649,92 @@ describe('player', () => {
       tui: false,
     });
 
-    expect(summary.gauge?.effectiveTotal).toBe(160);
+    // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, not the flat 160 the
+    // engine used to assume. See `resolveLr2DefaultTotal`.
+    expect(summary.gauge?.effectiveTotal).toBeCloseTo(resolveLr2DefaultTotal(1), 9);
     expect(summary.gauge?.current).toBe(100);
     expect(summary.gauge?.cleared).toBe(true);
+  });
+
+  test('player: the selected gauge governs the run, not just its label', async () => {
+    // Regression guard for the era when the gauge picker was cosmetic: HARD rendered red but ran GROOVE's numbers
+    // and reported CLEARED at 2 %. Every gauge now comes straight out of the active ruleset.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    const groove = await autoPlay(json, { auto: true, speed: 48, leadInMs: 0, audio: false, tui: false });
+    expect(groove.gauge?.type).toBe('GROOVE');
+    expect(groove.gauge?.initial).toBe(20);
+    expect(groove.gauge?.clearThreshold).toBe(80);
+    expect(groove.gauge?.survival).toBe(false);
+
+    const hard = await autoPlay(json, {
+      auto: true,
+      speed: 48,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      gauge: 'HARD',
+    });
+    // LR2 HARD starts full and clears by surviving rather than by crossing a threshold.
+    expect(hard.gauge?.type).toBe('HARD');
+    expect(hard.gauge?.initial).toBe(100);
+    expect(hard.gauge?.survival).toBe(true);
+    expect(hard.gauge?.failedMidPlay).toBe(false);
+    expect(hard.gauge?.cleared).toBe(true);
+  });
+
+  test('player: the judge ruleset picks the gauge line-up as well as the windows', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    // Each ruleset names its default recovery gauge differently, and beatoraja / IIDX derive TOTAL from their own
+    // formulas rather than LR2's.
+    const beatoraja = await autoPlay(json, {
+      auto: true,
+      speed: 48,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'beatoraja',
+    });
+    expect(beatoraja.gauge?.type).toBe('NORMAL');
+    expect(beatoraja.gauge?.effectiveTotal).toBeCloseTo(resolveBeatorajaDefaultTotal(1), 9);
+
+    const iidx = await autoPlay(json, {
+      auto: true,
+      speed: 48,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'iidx',
+      gauge: 'DEATH',
+    });
+    // IIDX has no HAZARD-style gauge; `'DEATH'` folds onto its hardest survival gauge.
+    expect(iidx.gauge?.type).toBe('EX-HARD');
+    expect(iidx.gauge?.survival).toBe(true);
+  });
+
+  test('player: a survival gauge that bottoms out fails the run and stays failed', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = Array.from({ length: 16 }, (_, index) => ({
+      measure: 0,
+      channel: '11',
+      position: [index, 16] as [number, number],
+      value: '01',
+    }));
+
+    // No input at all — every note misses. Under LR2 HARD each POOR drains a TOTAL- and note-count-scaled chunk,
+    // so the gauge reaches the death border well before the chart ends.
+    const summary = await manualPlay(json, { speed: 64, leadInMs: 0, audio: false, tui: false, gauge: 'HARD' });
+
+    expect(summary.poor).toBe(16);
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.failedMidPlay).toBe(true);
+    expect(summary.gauge?.cleared).toBe(false);
   });
 
   test('player: resolves control-flow branches at playback time', async () => {
@@ -934,7 +1018,7 @@ describe('player', () => {
     // Empty POOR (kara-poor / 空POOR) is NOT counted in `summary.poor` — that slot is reserved for miss POOR
     // (minogashi-poor / 見逃しPOOR, i.e. notes that passed without input). Matches LR2.
     expect(summary.poor).toBe(0);
-    // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see `applyGrooveGaugeJudge`), giving 18. Matches LR2:
+    // GROOVE gauge starts at 20 and LR2's EMPTY_POOR delta is -2, giving 18. Matches LR2:
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);

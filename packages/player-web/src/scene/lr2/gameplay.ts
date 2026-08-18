@@ -23,15 +23,16 @@ import {
   type PreparedPlaybackChartData,
   type PlayerSummary,
 } from '@be-music/player/core/engine';
+import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
-import type { PlayerUiCommand, PlayerUiFramePayload, PlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
-import {
-  createGrooveGaugeState,
-  isGrooveGaugeCleared,
-  type GrooveGaugeState,
-} from '@be-music/player/core/groove-gauge';
+import type {
+  PlayerGaugeSummary,
+  PlayerUiCommand,
+  PlayerUiFramePayload,
+  PlayerUiSignalBus,
+} from '@be-music/player/core/ui-signal-bus';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
@@ -435,8 +436,8 @@ export interface PixiGameplayViewOptions {
    */
   chartSha256?: string;
   /**
-   * 1P gauge variant (`#SRC_BUTTON,type=40`). Drives both the gauge formula (`createGrooveGaugeState`) and the
-   * gauge-on- red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — `createGrooveGaugeState`
+   * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
+   * the gauge-on-red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — the engine
    * consumes the 1P value and applies it to the single shared gauge.
    */
   gauge?: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
@@ -531,6 +532,25 @@ interface PixiGameplayDisposeOptions {
    * graph alive briefly in that path instead of closing the AudioContext as part of visual teardown.
    */
   preserveAudioTail?: boolean;
+}
+
+/**
+ * Placeholder gauge state for the frames before the engine reports one. Values match the LR2 groove defaults so the
+ * bar does not visibly jump when the first real frame lands; everything real arrives via `summary.gauge`.
+ */
+function createPlaceholderGaugeState(type: GrooveGaugeType = 'GROOVE'): PlayerGaugeSummary {
+  const survival = type === 'HARD' || type === 'DEATH';
+  return {
+    current: survival ? 100 : 20,
+    max: 100,
+    clearThreshold: survival ? 0 : 80,
+    initial: survival ? 100 : 20,
+    effectiveTotal: 0,
+    cleared: survival,
+    type,
+    survival,
+    failedMidPlay: false,
+  };
 }
 
 export class PixiGameplayView {
@@ -975,16 +995,12 @@ export class PixiGameplayView {
   private readonly visibleBgasScratch: Lr2BgaElement[] = [];
   private readonly runtimeOps = new Set<number>();
   /**
-   * LR2 groove-gauge state. Replaces the simpler hard-coded +1/+0.5/-2/-6 deltas with the proper LR2 formula:
-   *
-   * gain = effectiveTotal / playableNoteCount
-   *
-   * where `effectiveTotal` comes from the chart's `#TOTAL` directive (or 160 if absent) and `playableNoteCount` is the
-   * number of judgeable notes after `#RANDOM` resolution. PERFECT / GREAT each grant `gain`, GOOD grants `gain / 2`,
-   * BAD = -4, POOR (chart-side miss) = -6, EMPTY_POOR (input on empty lane) = -2. Min/max clamped at 2 / 100, initial
-   * value 20.
+   * Mirror of the engine's gauge state, refreshed from every `summary.gauge` frame. The gauge model itself
+   * (per-judge deltas, TOTAL scaling, guts softening, clear rule) lives entirely in the active ruleset — this view
+   * only renders what the engine reports, so LR2 / beatoraja / IIDX differences need no change here. The placeholder
+   * below is what renders between scene construction and the first frame.
    */
-  private gaugeState: GrooveGaugeState = createGrooveGaugeState(0, undefined);
+  private gaugeState: PlayerGaugeSummary = createPlaceholderGaugeState();
   /**
    * FAST / SLOW counts. Incremented on every GREAT or GOOD judgement — PERFECT is "on time" so it doesn't count,
    * BAD/POOR break combo and aren't tracked here. Mirrors `applyFastSlowForJudge` in `packages/player`'s engine. Reset
@@ -2026,12 +2042,7 @@ export class PixiGameplayView {
     // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
     // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
     // per PG/GR.
-    const playableNoteCount = this.notes.filter((note) => isPlayableInputChannel(note.channel)).length;
-    this.gaugeState = createGrooveGaugeState(
-      playableNoteCount,
-      resolved.metadata.total,
-      this.options.gauge ?? 'GROOVE',
-    );
+    this.gaugeState = createPlaceholderGaugeState(this.resolveSelectedGauge());
     // Now that the gauge has its starting value (LR2 default 20 %), seed the polyline history so the result-screen
     // graph starts at the correct origin instead of the first judge's value.
     this.gaugeHistory.push({ progress: 0, value: this.gaugeState.current });
@@ -2052,6 +2063,14 @@ export class PixiGameplayView {
     this.hasBga =
       this.bgaTimeline.base.length > 0 || this.bgaTimeline.layer.length > 0 || this.bgaTimeline.poor.length > 0;
     this.initializeRuntimeOps();
+  }
+
+  /**
+   * The gauge this run actually plays on. A replay restores the recorded pick so the played-back run judges, drains,
+   * and clears exactly as the original did; otherwise it is the host's selection, defaulting to LR2 GROOVE.
+   */
+  private resolveSelectedGauge(): GrooveGaugeType {
+    return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
   }
 
   /**
@@ -2121,7 +2140,8 @@ export class PixiGameplayView {
     this.runtimeOps.add(this.options.autoScratch2P ? 57 : 56);
     // Gauge type — HARD / DEATH map to the LR2 "red" gauge ops (43 / 45); GROOVE / EASY share the normal branch (42 /
     // 44).
-    const isRedGaugeOp = this.options.gauge === 'HARD' || this.options.gauge === 'DEATH';
+    const selectedGauge = this.resolveSelectedGauge();
+    const isRedGaugeOp = selectedGauge === 'HARD' || selectedGauge === 'DEATH';
     this.runtimeOps.add(isRedGaugeOp ? 43 : 42);
     this.runtimeOps.add(isRedGaugeOp ? 45 : 44);
     // Score graph (38 / 39).
@@ -3511,9 +3531,9 @@ export class PixiGameplayView {
       score: { ...this.score },
       maxCombo: this.maxCombo,
       gauge: this.gaugeState.current,
-      // Clear threshold is owned by the core gauge model (`clearThreshold` per gauge variant) — keep the comparison
-      // in `isGrooveGaugeCleared` so core-side threshold changes propagate here without a second edit.
-      cleared: isGrooveGaugeCleared(this.gaugeState),
+      // The clear rule belongs to the ruleset — a threshold comparison for GROOVE/EASY, "never bottomed out" for
+      // the survival gauges — so take the engine's verdict rather than re-deriving it from the percentage.
+      cleared: this.gaugeState.cleared,
       playSeconds: this.currentSeconds(),
       song: this.song,
       gaugeHistory,
@@ -4277,7 +4297,7 @@ export class PixiGameplayView {
         {
           // Survival gauges (HARD / DEATH) have no 80 % clear border in LR2 — the whole bar renders in the red cell,
           // so suppress the green clear-zone split for them. GROOVE / EASY keep the green ≥ 80 % zone.
-          survivalGauge: this.gaugeState.type === 'HARD' || this.gaugeState.type === 'DEATH',
+          survivalGauge: this.gaugeState.survival === true,
           // Drives the LR2 4-cell × N-frame animation cycle (lit-tip highlight scan). Anchored to the SRC's timer per
           // spec — `0` is "scene start" which is what most skins use for the gauge.
           elapsedMs: this.elapsedSinceTimer(gauge.source.timer),
@@ -5617,6 +5637,10 @@ export class PixiGameplayView {
         // `random1P: 'OFF'` truthy-check to fix. Every "view extracted differently than engine" bug is
         // structurally impossible because there is only one extract.
         preparedChart: this.preparedChart,
+        // The gauge is part of the judging setup, not just a skin colour: the engine resolves it against the active
+        // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
+        // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.
+        gauge: this.resolveSelectedGauge(),
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
         ...(this.options.replay !== undefined
           ? {
@@ -5749,11 +5773,7 @@ export class PixiGameplayView {
     this.slowCount = summary.slow;
     if (summary.gauge) {
       const previous = this.gaugeState.current;
-      this.gaugeState.current = summary.gauge.current;
-      this.gaugeState.max = summary.gauge.max;
-      this.gaugeState.clearThreshold = summary.gauge.clearThreshold;
-      this.gaugeState.initial = summary.gauge.initial;
-      this.gaugeState.effectiveTotal = summary.gauge.effectiveTotal;
+      this.gaugeState = { ...summary.gauge };
       // LR2 gauge-rise (timer 42) / gauge-max (timer 44) visual feedback. Mirrors what the legacy
       // `applyGaugeDelta` did — stamp on every transition so authored skin elements (rise sparkle, max-glow
       // overlay) animate. We compare against the previous frame's value rather than against an "EMPTY_POOR-

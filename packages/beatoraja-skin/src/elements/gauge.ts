@@ -81,20 +81,27 @@ export function gaugeExBase(mode: number): number {
 }
 
 /**
- * Map our `GrooveGaugeType` string union (engine-side) to beatoraja's int constant. Returns
- * `NORMAL` (= 2) for the default gauge variant, matching beatoraja's groove gauge default.
+ * Map the engine's ruleset-scoped gauge id to beatoraja's int constant. The id space spans all three compat
+ * rulesets — LR2 names its recovery gauge `GROOVE` and its instant-death gauge `DEATH`, beatoraja calls the same
+ * two `NORMAL` and `HAZARD`, and IIDX spells assisted easy with the `-ED-` suffix — so every spelling maps onto the
+ * one beatoraja slab that renders it. Unknown ids and `undefined` fall back to `NORMAL` (= 2), beatoraja's default.
  */
-export function beatorajaGaugeModeFromString(
-  type: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH' | undefined,
-): BeatorajaGaugeMode {
+export function beatorajaGaugeModeFromString(type: string | undefined): BeatorajaGaugeMode {
   switch (type) {
+    case 'ASSIST-EASY':
+    case 'ASSISTED-EASY':
+      return BEATORAJA_GAUGE_MODE.ASSISTEASY;
     case 'EASY':
       return BEATORAJA_GAUGE_MODE.EASY;
     case 'HARD':
       return BEATORAJA_GAUGE_MODE.HARD;
+    case 'EX-HARD':
+      return BEATORAJA_GAUGE_MODE.EXHARD;
     case 'DEATH':
+    case 'HAZARD':
       return BEATORAJA_GAUGE_MODE.HAZARD;
     case 'GROOVE':
+    case 'NORMAL':
     default:
       return BEATORAJA_GAUGE_MODE.NORMAL;
   }

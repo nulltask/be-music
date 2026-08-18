@@ -1,5 +1,14 @@
+import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vitest';
-import { countBaseNotes, createEmptyRulesetNoteCounts, resolveRuleset, type RulesetChartFacts } from './index.ts';
+import type { BeMusicPlaylog } from '../playlog/format.ts';
+import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
+import {
+  countBaseNotes,
+  createEmptyRulesetNoteCounts,
+  resolveRuleset,
+  rulesetChartFactsFromChart,
+  type RulesetChartFacts,
+} from './index.ts';
 
 function facts(overrides: Partial<RulesetChartFacts> = {}): RulesetChartFacts {
   return {
@@ -57,5 +66,49 @@ describe('ruleset/facts', () => {
 
     const beatoraja = resolveRuleset(chart, 'beatoraja');
     expect(beatoraja.windowsAt(6_000_000)).toEqual(beatoraja.windows);
+  });
+});
+
+describe('ruleset chart-facts adapters agree', () => {
+  test('the engine adapter and the play-log adapter derive the same facts from one chart', () => {
+    // A live play and a replay of that same play must resolve the SAME ruleset, so the two adapters have to agree.
+    const json = createEmptyJson('bms');
+    json.metadata.rank = 2;
+    json.metadata.total = 300;
+    json.bms.lnMode = 2;
+
+    const scorableNotes = [
+      { channel: '11', seconds: 1, beat: 0, judged: false, event: {} as never },
+      { channel: '12', seconds: 2, endSeconds: 3, beat: 0, judged: false, event: {} as never },
+    ] as never;
+    const fromChart = rulesetChartFactsFromChart(json, { scorableNotes, laneDisplayMode: '7keys' });
+
+    const playlog: BeMusicPlaylog = {
+      format: 'be-music-playlog',
+      version: 1,
+      clock: { unit: 'us', origin: 'chart-zero' },
+      chart: {
+        sourceFormat: 'bms',
+        laneMode: '7keys',
+        total: 300,
+        lnMode: 2,
+        judgeRank: { percent: 75, sourceRank: 2 },
+        noteCount: 2,
+        notes: [
+          { id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 },
+          { id: 1, channel: '12', type: 'long', timeUs: 2_000_000, endTimeUs: 3_000_000, lnMode: 2 },
+        ],
+      },
+      inputs: [],
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+    };
+    const fromPlaylog = rulesetChartFactsFromPlaylog(playlog);
+
+    expect(fromChart).toEqual(fromPlaylog);
+    // …and therefore resolve identical rulesets.
+    for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+      expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromPlaylog, id).noteCount);
+      expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromPlaylog, id).effectiveTotal);
+    }
   });
 });

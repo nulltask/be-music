@@ -2,9 +2,9 @@ import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
 import { resolveJudgeRankPercent } from '../core/judge-window.ts';
+import { resolveChartLongNoteMode } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
-import type { LongNoteMode } from '../playable-notes.ts';
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
   BE_MUSIC_PLAYLOG_VERSION,
@@ -261,14 +261,6 @@ function buildNativeResult(
     },
   };
   return result;
-}
-
-function resolveChartLongNoteMode(json: BeMusicJson): LongNoteMode {
-  if (json.sourceFormat === 'bms') {
-    return json.bms.lnMode === 2 || json.bms.lnMode === 3 ? json.bms.lnMode : 1;
-  }
-  const lnType = json.bmson.info.lnType;
-  return lnType === 2 || lnType === 3 ? lnType : 1;
 }
 
 function comparePlaylogNotes(left: PlaylogNote, right: PlaylogNote): number {

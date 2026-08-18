@@ -17,10 +17,7 @@ export interface FindClosestCandidateOptions<T extends JudgeCandidate> {
   isConsumed?: (candidate: T) => boolean;
 }
 
-function lowerBoundBySeconds<T extends JudgeCandidate>(
-  notes: ReadonlyArray<T>,
-  target: number,
-): number {
+function lowerBoundBySeconds<T extends JudgeCandidate>(notes: ReadonlyArray<T>, target: number): number {
   let low = 0;
   let high = notes.length;
   while (low < high) {

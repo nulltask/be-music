@@ -757,8 +757,12 @@ export function computeClearLampOp(args: {
   bad: number;
   poor: number;
   total: number;
-  /** Gauge variant the run used. Defaults to `'GROOVE'` when unspecified. */
-  gaugeType?: 'GROOVE' | 'EASY' | 'HARD' | 'DEATH';
+  /**
+   * Ruleset-scoped gauge id the run used, across all three compat rulesets (`'GROOVE'` / `'NORMAL'`,
+   * `'ASSIST-EASY'` / `'ASSISTED-EASY'`, `'EASY'`, `'HARD'`, `'EX-HARD'`, `'DEATH'` / `'HAZARD'`).
+   * Unknown ids and `undefined` fall back to the NORMAL lamp.
+   */
+  gaugeType?: string;
 }): number {
   if (!args.cleared) return BEATORAJA_OP.CLEAR_LAMP_FAILED;
   // FULLCOMBO / PERFECT — these don't depend on gauge type. A no-break run with all PERFECTs is
@@ -772,11 +776,18 @@ export function computeClearLampOp(args: {
   // Cleared with breaks — gauge type decides the lamp tier. A clear under HARD gauge survived a
   // chunk-loss-on-miss curve, which is harder than a GROOVE clear; the lamp surfaces that.
   switch (args.gaugeType) {
+    case 'ASSIST-EASY':
+    case 'ASSISTED-EASY':
+      return BEATORAJA_OP.CLEAR_LAMP_ASSIST_EASY;
     case 'EASY':
       return BEATORAJA_OP.CLEAR_LAMP_EASY;
     case 'HARD':
       return BEATORAJA_OP.CLEAR_LAMP_HARD;
+    // EX-HARD and the instant-death gauges share the EXHARD lamp — beatoraja's `ClearType` has no HAZARD entry,
+    // and a HAZARD clear can never reach this branch anyway since it requires a break-free run.
+    case 'EX-HARD':
     case 'DEATH':
+    case 'HAZARD':
       return BEATORAJA_OP.CLEAR_LAMP_EXHARD;
     default:
       return BEATORAJA_OP.CLEAR_LAMP_NORMAL;
