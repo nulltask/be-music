@@ -9,4 +9,5 @@ export * from './facts.ts';
 export * from './definitions.ts';
 export * from './gauge.ts';
 export * from './judge.ts';
+export * from './selection.ts';
 export * from './chart-facts.ts';

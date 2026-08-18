@@ -1245,6 +1245,64 @@ describe('player', () => {
     expect(scratch.good).toBe(0);
   });
 
+  test('player: note selection follows the ruleset — LR2 takes the oldest note, beatoraja keeps the combo', async () => {
+    // Two notes 160 ms apart on one lane, pressed 130 ms after the first. Under `#RANK 2` that press is a BAD on
+    // the first note and a GREAT on the second under both rulesets' windows, so only the SELECTION differs:
+    // LR2 (`lowest`) always clears the oldest note in reach, while beatoraja (`combo`) hands the press to the
+    // second note once the first has fallen out of the late side of its GOOD window. The `19` note only puts the
+    // chart in 7-key mode.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240; // one measure = 1 s
+    json.metadata.rank = 2;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [4, 25], value: '01' }, // +160 ms
+      { measure: 3, channel: '19', position: [0, 1], value: '01' },
+    ];
+    const base = {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: [{ seq: 0, timeUs: 1_130_000, action: 'down' as const, channels: ['11'] }],
+    };
+
+    const lr2 = await manualPlay(json, { ...base });
+    const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
+
+    expect(lr2.bad).toBe(1);
+    expect(lr2.great).toBe(0);
+    expect(beatoraja.great).toBe(1);
+    expect(beatoraja.bad).toBe(0);
+  });
+
+  test("player: LR2's multi-BAD collector takes down every other note the press mistimed", async () => {
+    // lr2oraja `MultiBadCollector`: one press at 1.15 s sits 150 ms after the `11` note and 150 ms before the `12`
+    // note — inside BAD (±200 ms at `#RANK 2`) but outside GOOD (±100 ms) for both. LR2 BADs both; beatoraja has
+    // no collector, so its press consumes one note and the other misses on its own deadline.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '12', position: [3, 10], value: '01' }, // +300 ms
+      { measure: 3, channel: '19', position: [0, 1], value: '01' },
+    ];
+    const base = {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: [{ seq: 0, timeUs: 1_150_000, action: 'down' as const, channels: ['11', '12'] }],
+    };
+
+    const lr2 = await manualPlay(json, { ...base });
+    const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
+
+    expect(lr2.bad).toBe(2);
+    expect(beatoraja.bad).toBe(1);
+  });
+
   test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 240;

@@ -41,7 +41,7 @@ import {
   renderSingleSample,
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
-import { findClosestCandidateInWindow, findLaneSoundCandidate } from '../judging.ts';
+import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
 import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
@@ -85,13 +85,16 @@ import {
 import {
   classifyRulesetJudge,
   goodWindowReachUs,
+  preferJudgeCandidate,
   judgeWindowEarlyReachUs,
   judgeWindowLateReachUs,
   resolveRuleset,
   rulesetChartFactsFromChart,
   RULESET_JUDGE_NONE,
   selectJudgeWindowSet,
+  type JudgeSelectionCandidate,
   type JudgeWindowSetUs,
+  type RulesetJudgeIndex,
   type RulesetWindowTables,
 } from '../ruleset/index.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
@@ -584,6 +587,11 @@ function formatJudgeWindowSet(windows: JudgeWindowSetUs): string {
     const [lateBoundUs, earlyBoundUs] = windows.judges[index]!;
     return `${kind} -${(earlyBoundUs / 1000).toFixed(1)}/+${(-lateBoundUs / 1000).toFixed(1)}ms`;
   }).join(' ');
+}
+
+/** True when a playable note carries a tail — a long / charge note rather than a single hit. */
+function isLongPlayableNote(note: TimedPlayableNote): boolean {
+  return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
 }
 
 /** Judge indices, best to worst, in the order the ruleset window sets use. */
@@ -3073,6 +3081,117 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
+  /**
+   * The note a press resolves against, chosen by the ruleset's own selection algorithm.
+   *
+   * Reachability is per note, not per press: the note's own lane (key vs scratch) and its own chart time (the
+   * `#EXRANKxx` rank in force there) pick its window set, and both legs are checked separately. A note inside the
+   * coarse scan radius but outside its own windows is not a candidate at all, so the press falls through to the
+   * lane keysound / empty-POOR path instead of consuming the note as a POOR.
+   */
+  const selectPressCandidate = (
+    nowSec: number,
+    candidateChannels: ReadonlySet<string>,
+  ): { note: TimedPlayableNote; judge: RulesetJudgeIndex } | undefined => {
+    const reachSeconds = maxJudgeReachSeconds(nowSec);
+    const inputTimeUs = nowSec * 1e6;
+    let best: TimedPlayableNote | undefined;
+    let bestSelection: JudgeSelectionCandidate | undefined;
+    // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection
+    // algorithms assume (`lowest` keeps the first, the others may displace it).
+    for (let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds); index < scorableNotes.length; index += 1) {
+      const note = scorableNotes[index]!;
+      if (note.seconds - nowSec > reachSeconds) {
+        break;
+      }
+      if (note.judged || !candidateChannels.has(note.channel)) {
+        continue;
+      }
+      const windows = judgeWindowsFor(note.channel, note.seconds);
+      const judge = classifyRulesetJudge((note.seconds - nowSec) * 1e6, windows);
+      if (judge === RULESET_JUDGE_NONE) {
+        continue;
+      }
+      if (
+        ruleset.ignoreLateBadOnLnHead &&
+        judge === 3 &&
+        note.seconds < nowSec &&
+        typeof note.endSeconds === 'number' &&
+        note.endSeconds > note.seconds &&
+        resolvePlayableLongNoteMode(note) === 1
+      ) {
+        // LR2: a long-note head has no LATE bad — the press falls through to whatever else is in reach.
+        continue;
+      }
+      const selection: JudgeSelectionCandidate = {
+        noteTimeUs: note.seconds * 1e6,
+        dmUs: (note.seconds - nowSec) * 1e6,
+        judge,
+        windows,
+      };
+      if (bestSelection === undefined || preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)) {
+        best = note;
+        bestSelection = selection;
+      }
+    }
+    return best === undefined || bestSelection === undefined ? undefined : { note: best, judge: bestSelection.judge };
+  };
+
+  /**
+   * lr2oraja `MultiBadCollector`: once a press has consumed its note, every OTHER unjudged note on the pressed
+   * lanes that sits inside the BAD window but outside the GOOD window also resolves as a BAD. This is what makes
+   * LR2 punish a mistimed press across a dense cluster instead of quietly eating one note.
+   *
+   * The collector's own pruning: notes AFTER the consumed one only fall when the consumed note was itself a BAD
+   * and was not a long note, and long notes BEFORE the consumed one are always spared.
+   */
+  const applyMultiBadCollector = (
+    nowSec: number,
+    candidateChannels: ReadonlySet<string>,
+    consumed: TimedPlayableNote,
+    consumedJudge: RulesetJudgeIndex,
+  ): void => {
+    const reachSeconds = maxJudgeReachSeconds(nowSec);
+    const consumedIsLong = isLongPlayableNote(consumed);
+    const consumedWasBad = consumedJudge === 3;
+    const extras: TimedPlayableNote[] = [];
+    for (let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds); index < scorableNotes.length; index += 1) {
+      const note = scorableNotes[index]!;
+      if (note.seconds - nowSec > reachSeconds) {
+        break;
+      }
+      if (note === consumed || note.judged || !candidateChannels.has(note.channel)) {
+        continue;
+      }
+      if (activeLongNotesByChannel.get(note.channel)?.note === note) {
+        continue;
+      }
+      const windows = judgeWindowsFor(note.channel, note.seconds);
+      const dmUs = (note.seconds - nowSec) * 1e6;
+      const bad = windows.judges[3];
+      const good = windows.judges[2];
+      if (dmUs < bad[0] || dmUs > bad[1]) {
+        continue;
+      }
+      if (dmUs >= good[0] && dmUs <= good[1]) {
+        continue;
+      }
+      if ((!consumedWasBad || consumedIsLong) && note.seconds > consumed.seconds) {
+        continue;
+      }
+      if (isLongPlayableNote(note) && note.seconds < consumed.seconds) {
+        continue;
+      }
+      extras.push(note);
+    }
+    for (const note of extras) {
+      if (!markScorableJudged(note)) {
+        continue;
+      }
+      applyResolvedManualJudge(note.channel, { kind: 'BAD', signedDeltaMs: (nowSec - note.seconds) * 1000 }, nowSec);
+    }
+  };
+
   const applyManualTimingJudge = (channel: string, signedDeltaMs: number, atSeconds: number): void => {
     applyResolvedManualJudge(
       channel,
@@ -3222,22 +3341,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     processLandminePassage(nowSec, nowMs);
 
-    // Reachability is per note, not per press: the note's own lane (key vs scratch) and its own chart time (the
-    // `#EXRANKxx` rank in force there) pick the window set, and both legs are checked separately. The radius below
-    // is only the coarse scan bound — a note inside it but outside its own windows is left unjudged, so the press
-    // falls through to the lane keysound / empty-POOR path instead of consuming the note as a POOR.
-    const candidate = findClosestCandidateInWindow(scorableNotes, {
-      candidateChannels,
-      nowSec,
-      judgeWindowSec: maxJudgeReachSeconds(nowSec),
-      sortedBySeconds: true,
-      isConsumed: (note) =>
-        note.judged ||
-        resolveManualJudgeKind((nowSec - note.seconds) * 1000, judgeWindowsFor(note.channel, note.seconds)) ===
-          undefined,
-    });
+    const selected = selectPressCandidate(nowSec, candidateChannels);
 
-    if (!candidate) {
+    if (!selected) {
       if (refreshedHold) {
         // Active LN re-tap inside the hold-grace window — input is part of the sustain, not a phantom press.
         return;
@@ -3292,11 +3398,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
 
+    const candidate = selected.note;
     if (!markScorableJudged(candidate)) {
       return;
     }
     const channel = candidate.channel;
     const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
+    const collectMultiBad = ruleset.multiBad
+      ? () => applyMultiBadCollector(nowSec, candidateChannels, candidate, selected.judge)
+      : () => {};
     if (uiEnabled) {
       uiSignals.pushCommand({ kind: 'flash-lane', channel });
     }
@@ -3347,6 +3457,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           audioStopped: false,
         });
         longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+        collectMultiBad();
         return;
       }
       if (longNoteMode === 1) {
@@ -3359,10 +3470,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           audioStopped: false,
         });
         longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
+        collectMultiBad();
         return;
       }
       activeLongNotesByChannel.delete(channel);
       longHoldUntilMsByChannel.delete(channel);
+      collectMultiBad();
       return;
     } else {
       activeLongNotesByChannel.delete(channel);
@@ -3370,6 +3483,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     applyManualTimingJudge(channel, signedDeltaMs, nowSec);
+    collectMultiBad();
   };
 
   const togglePause = (): void => {

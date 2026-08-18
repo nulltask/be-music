@@ -3,10 +3,13 @@ import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './
 import {
   classifyRulesetJudge,
   judgeWindowLateReachUs,
+  preferJudgeCandidate,
   RULESET_JUDGE_NONE,
   RulesetGauge,
   selectJudgeWindowSet,
   type GaugeJudgeIndex,
+  type JudgeSelectionCandidate,
+  type RulesetJudgeIndex,
 } from '../ruleset/index.ts';
 import {
   resolveRulesetConfig,
@@ -586,21 +589,14 @@ class PlaylogSimulation {
     timeUs: number,
     windows: RulesetWindowTables,
   ): boolean {
-    const algorithm = this.config.selection;
-    if (algorithm === 'lowest') {
-      return false;
-    }
-    if (algorithm === 'duration') {
-      return Math.abs(candidate.dmUs) < Math.abs(best.dmUs);
-    }
-    // combo (GOOD reach) / score (GREAT reach) — beatoraja JudgeAlgorithm semantics.
-    const judgeIndex = algorithm === 'combo' ? JUDGE_GOOD : JUDGE_GREAT;
-    const bestSet = windowSetFor(best, windows);
-    const candidateSet = windowSetFor(candidate, windows);
-    return (
-      best.note.timeUs < timeUs + bestSet.judges[judgeIndex]![0] &&
-      candidate.note.timeUs <= timeUs + candidateSet.judges[judgeIndex]![1]
-    );
+    const toSelection = (entry: SelectionCandidate): JudgeSelectionCandidate => ({
+      noteTimeUs: entry.note.timeUs,
+      dmUs: entry.dmUs,
+      // Only scoreable candidates reach this comparison, so the classification is a real judge index.
+      judge: entry.judge as RulesetJudgeIndex,
+      windows: windowSetFor(entry, windows),
+    });
+    return preferJudgeCandidate(this.config.selection, toSelection(best), toSelection(candidate), timeUs);
   }
 
   /**
