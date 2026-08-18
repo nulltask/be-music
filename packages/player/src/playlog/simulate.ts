@@ -1,5 +1,6 @@
 import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
+import { RulesetGauge, type GaugeJudgeIndex } from '../ruleset/index.ts';
 import {
   resolveRulesetConfig,
   type GaugeSpec,
@@ -59,8 +60,14 @@ const JUDGE_GOOD = 2;
 const JUDGE_BAD = 3;
 const JUDGE_MISS_POOR = 4;
 const JUDGE_EMPTY_POOR = 5;
-/** Selection-time marker: no window matched. */
+/** Selection-time marker: no window matched. Never reaches the gauge. */
 const JUDGE_NONE = 6;
+
+/**
+ * A classification result: a {@link GaugeJudgeIndex} or {@link JUDGE_NONE}. Selection works in this wider space
+ * because "no window matched" is a real outcome there; only scored judgments reach the gauge.
+ */
+type JudgeClassification = GaugeJudgeIndex | typeof JUDGE_NONE;
 
 type SimLongStyle = 1 | 2 | 3;
 
@@ -86,7 +93,7 @@ interface SimMine {
 interface ActiveHold {
   note: SimNote;
   /** Deferred LN head judge (style 1). */
-  headJudge?: number;
+  headJudge?: GaugeJudgeIndex;
   headDmUs?: number;
   /** IIDX charge heads that BAD/POOR'd skip the tail — such notes never become holds. */
   /** Held-past-end deadline for charge tails. */
@@ -109,67 +116,18 @@ interface SimLane {
   autoCursor: number;
 }
 
-class SimGauge {
-  value: number;
-  failedMidPlay = false;
-  private dead = false;
-
-  constructor(private readonly spec: GaugeSpec) {
-    this.value = spec.initial;
-  }
-
-  update(judgeIndex: number, rate = 1): void {
-    if (this.dead) return;
-    let delta = this.spec.values[judgeIndex]! * rate;
-    if (delta < 0) {
-      for (const step of this.spec.guts) {
-        if (step.inclusive === true ? this.value <= step.threshold : this.value < step.threshold) {
-          delta *= step.multiplier;
-          break;
-        }
-      }
-    }
-    this.set(this.value + delta);
-  }
-
-  addRaw(delta: number): void {
-    if (this.dead) return;
-    this.set(this.value + delta);
-  }
-
-  cleared(): boolean {
-    if (this.spec.survival) {
-      return !this.failedMidPlay && this.value > 0;
-    }
-    return this.value >= this.spec.border;
-  }
-
-  private set(next: number): void {
-    let value = Math.min(this.spec.max, Math.max(this.spec.min, next));
-    if (this.spec.death !== undefined && value < this.spec.death) {
-      value = 0;
-    }
-    if (this.spec.survival && value <= 0) {
-      value = 0;
-      this.dead = true;
-      this.failedMidPlay = true;
-    }
-    this.value = value;
-  }
-}
-
 interface SelectionCandidate {
   lane: SimLane;
   note: SimNote;
   dmUs: number;
   /** 0..3 scoreable, 4 pending-in-MS-window, 5 judged-in-MS-window. */
-  judge: number;
+  judge: GaugeJudgeIndex;
 }
 
 class PlaylogSimulation {
   private readonly lanes = new Map<string, SimLane>();
   private readonly counts = [0, 0, 0, 0, 0, 0];
-  private readonly gauge: SimGauge;
+  private readonly gauge: RulesetGauge;
   private combo = 0;
   private maxCombo = 0;
   private fast = 0;
@@ -181,7 +139,7 @@ class PlaylogSimulation {
     private readonly playlog: BeMusicPlaylog,
     private readonly config: RulesetConfig,
   ) {
-    this.gauge = new SimGauge(config.gauge);
+    this.gauge = new RulesetGauge(config.gauge);
     this.buildLanes();
   }
 
@@ -365,7 +323,7 @@ class PlaylogSimulation {
         if (mine.applied) continue;
         mine.applied = true;
         if (event.lane.held && mine.damage > 0) {
-          this.gauge.addRaw(-mine.damage);
+          this.gauge.applyRawDelta(-mine.damage);
         }
       } else {
         // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
@@ -425,13 +383,13 @@ class PlaylogSimulation {
     if (lane.held) {
       hold.hcnCounterUs += dt;
       while (hold.hcnCounterUs > tick) {
-        this.gauge.update(this.config.hcnTick.heldJudge, this.config.hcnTick.heldRate);
+        this.gauge.applyJudge(this.config.hcnTick.heldJudge as GaugeJudgeIndex, this.config.hcnTick.heldRate);
         hold.hcnCounterUs -= tick;
       }
     } else {
       hold.hcnCounterUs -= dt;
       while (hold.hcnCounterUs < -tick) {
-        this.gauge.update(this.config.hcnTick.releasedJudge, this.config.hcnTick.releasedRate);
+        this.gauge.applyJudge(this.config.hcnTick.releasedJudge as GaugeJudgeIndex, this.config.hcnTick.releasedRate);
         hold.hcnCounterUs += tick;
       }
     }
@@ -490,12 +448,14 @@ class PlaylogSimulation {
       note.judged = true;
       if (note.longStyle === 1) {
         // LN: worse of head and tail; an early release outside the GOOD reach is a BAD.
-        let judge = Math.max(endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge, hold.headJudge ?? JUDGE_BAD);
+        const tailJudge: GaugeJudgeIndex = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
+        const headJudge: GaugeJudgeIndex = hold.headJudge ?? JUDGE_BAD;
+        let judge: GaugeJudgeIndex = worseJudge(tailJudge, headJudge);
         if (judge >= JUDGE_BAD && dmUs > 0) {
           judge = JUDGE_BAD;
         }
         const worseDm = hold.headDmUs !== undefined && Math.abs(hold.headDmUs) > Math.abs(dmUs) ? hold.headDmUs : dmUs;
-        this.applyJudge(Math.min(judge, JUDGE_MISS_POOR), worseDm);
+        this.applyJudge(judge > JUDGE_MISS_POOR ? JUDGE_MISS_POOR : judge, worseDm);
       } else {
         // CN / HCN tail: judged by the release timing; early releases beyond the windows are POOR.
         const judge = endJudge === JUDGE_NONE ? JUDGE_MISS_POOR : endJudge;
@@ -515,7 +475,7 @@ class PlaylogSimulation {
     return lanes;
   }
 
-  private startLongNote(lane: SimLane, note: SimNote, judge: number, dmUs: number): void {
+  private startLongNote(lane: SimLane, note: SimNote, judge: GaugeJudgeIndex, dmUs: number): void {
     const style = note.longStyle ?? 1;
     if (style === 1) {
       note.holding = true;
@@ -559,7 +519,7 @@ class PlaylogSimulation {
         if (dmUs < scanLate) continue;
         if (dmUs > scanEarly) break;
         if (note.holding) continue;
-        let judge: number;
+        let judge: JudgeClassification;
         if (note.judged) {
           judge = set.ms && dmUs >= set.ms[0] && dmUs <= set.ms[1] ? JUDGE_EMPTY_POOR : JUDGE_NONE;
         } else {
@@ -678,7 +638,7 @@ class PlaylogSimulation {
     }
   }
 
-  private applyJudge(judgeIndex: number, dmUs: number | undefined): void {
+  private applyJudge(judgeIndex: GaugeJudgeIndex, dmUs: number | undefined): void {
     this.counts[judgeIndex]! += 1;
     if (judgeIndex === JUDGE_PGREAT) {
       this.exScore += 2;
@@ -702,18 +662,24 @@ class PlaylogSimulation {
         this.slow += 1;
       }
     }
-    this.gauge.update(judgeIndex);
+    this.gauge.applyJudge(judgeIndex);
   }
 }
 
-function classifyJudge(dmUs: number, set: JudgeWindowSetUs): number {
+function classifyJudge(dmUs: number, set: JudgeWindowSetUs): JudgeClassification {
   for (let index = 0; index < set.judges.length; index += 1) {
     const window = set.judges[index]!;
     if (dmUs >= window[0] && dmUs <= window[1]) {
-      return index;
+      // The loop only walks the four scoreable windows, so the index is a valid gauge judge.
+      return index as GaugeJudgeIndex;
     }
   }
   return JUDGE_NONE;
+}
+
+/** The worse (numerically larger) of two judgments — the judge indices are ordered best-to-worst. */
+function worseJudge(left: GaugeJudgeIndex, right: GaugeJudgeIndex): GaugeJudgeIndex {
+  return left >= right ? left : right;
 }
 
 function windowSetFor(candidate: SelectionCandidate, windows: RulesetWindowTables): JudgeWindowSetUs {

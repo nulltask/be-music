@@ -7,3 +7,4 @@
  */
 export * from './facts.ts';
 export * from './definitions.ts';
+export * from './gauge.ts';
