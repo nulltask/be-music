@@ -148,3 +148,46 @@ export function shardFlight(
 export function slamAlpha(t: number): number {
   return t <= 0 ? 0 : Math.min(1, t * 8);
 }
+
+export interface DiamondPose {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  nowMs: number;
+  phase?: number;
+  wobble?: number;
+}
+
+/**
+ * Rhombus vertices whose tips breathe independently (radial + slight tangent). `wobble` 0 is a rest-pose diamond.
+ */
+export function diamondPoints(pose: DiamondPose): number[] {
+  const rx = Number.isFinite(pose.rx) ? pose.rx : 0;
+  const ry = Number.isFinite(pose.ry) ? pose.ry : 0;
+  const cx = Number.isFinite(pose.cx) ? pose.cx : 0;
+  const cy = Number.isFinite(pose.cy) ? pose.cy : 0;
+  const wobble = Number.isFinite(pose.wobble) ? (pose.wobble ?? 0) : 0;
+  const t = ((Number.isFinite(pose.nowMs) ? pose.nowMs : 0) / 1000) + (pose.phase ?? 0);
+  const verts: ReadonlyArray<readonly [number, number]> = [
+    [0, -ry],
+    [rx, 0],
+    [0, ry],
+    [-rx, 0],
+  ];
+  const out: number[] = [];
+  for (let i = 0; i < 4; i += 1) {
+    const [vx, vy] = verts[i]!;
+    if (wobble === 0) {
+      out.push(cx + vx, cy + vy);
+      continue;
+    }
+    const len = Math.hypot(vx, vy) || 1;
+    const nx = vx / len;
+    const ny = vy / len;
+    const radial = Math.sin((t * (2.05 + i * 0.37) + i * 0.9) * Math.PI * 2) * wobble;
+    const tangent = Math.cos((t * (1.61 + i * 0.29) + i * 1.3) * Math.PI * 2) * wobble * 0.55;
+    out.push(cx + vx + nx * radial - ny * tangent, cy + vy + ny * radial + nx * tangent);
+  }
+  return out;
+}

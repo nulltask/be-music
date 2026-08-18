@@ -4,6 +4,7 @@ import {
   clamp01,
   countUp,
   cursorFollow,
+  diamondPoints,
   easeOutBack,
   easeOutCubic,
   introFill,
@@ -116,5 +117,27 @@ describe('beatImpulse / shardFlight', () => {
     const late = shardFlight(180, 200, 0, 8);
     expect(Math.hypot(late.x, late.y)).toBeGreaterThan(Math.hypot(early.x, early.y));
     expect(late.alpha).toBeLessThan(early.alpha);
+  });
+});
+
+describe('diamondPoints', () => {
+  it('keeps a rest-pose rhombus when wobble is 0', () => {
+    expect(diamondPoints({ cx: 100, cy: 80, rx: 40, ry: 24, nowMs: 1234, wobble: 0 })).toEqual([
+      100, 56, 140, 80, 100, 104, 60, 80,
+    ]);
+  });
+
+  it('moves each vertex independently when wobbling', () => {
+    const rest = diamondPoints({ cx: 100, cy: 80, rx: 40, ry: 24, nowMs: 250, wobble: 0 });
+    const wob = diamondPoints({ cx: 100, cy: 80, rx: 40, ry: 24, nowMs: 250, wobble: 6 });
+    const later = diamondPoints({ cx: 100, cy: 80, rx: 40, ry: 24, nowMs: 680, wobble: 6 });
+    expect(wob).not.toEqual(rest);
+    expect(later).not.toEqual(wob);
+    const topDy = wob[1]! - rest[1]!;
+    const bottomDy = wob[5]! - rest[5]!;
+    const rightDx = wob[2]! - rest[2]!;
+    const leftDx = wob[6]! - rest[6]!;
+    expect(topDy).not.toBeCloseTo(bottomDy, 5);
+    expect(rightDx).not.toBeCloseTo(leftDx, 5);
   });
 });

@@ -11,6 +11,7 @@ import { DEFAULT_JUDGE_FONT, DEFAULT_NUMERIC_FONT, DEFAULT_TEXT_FONT } from './f
 import type { ChildPool } from '../pixi-utils.ts';
 import { addChromeText } from './chrome-text.ts';
 import type { DefaultHudMotion } from './hud-motion.ts';
+import { resolveJudgeHudDisplays } from './judge-hud.ts';
 import {
   beatImpulse,
   impactOffset,
@@ -26,9 +27,13 @@ import {
   DEFAULT_THEME as T,
   DEFAULT_BG_BANDS,
   defaultJudgeColor,
+  fillDiamond,
+  fillDiamondCluster,
   fillParallelogram,
   fillSlash,
   paintSceneCover,
+  playfieldComboFill,
+  strokeDiamond,
   strokeParallelogram,
 } from './theme.ts';
 
@@ -70,12 +75,12 @@ export function renderDefaultGameplayFrame(
   if (elapsed <= 0) options.motion?.reset();
   const pulse = beatImpulse(runtime.beatPhase);
   frame.label = 'default-gameplay/chrome';
-  drawBackground(frame, hasBga);
-  drawPlayfield(frame, playfield, runtime.progressRatio, pulse, pieceRawT(elapsed, GAMEPLAY_TIMELINE.playfield));
-  drawBgaFrame(frame, hasBga, pulse, pieceRawT(elapsed, GAMEPLAY_TIMELINE.bga));
+  drawBackground(frame, hasBga, nowMs);
+  drawPlayfield(frame, playfield, runtime.progressRatio, pulse, pieceRawT(elapsed, GAMEPLAY_TIMELINE.playfield), nowMs);
+  drawBgaFrame(frame, hasBga, pulse, pieceRawT(elapsed, GAMEPLAY_TIMELINE.bga), nowMs);
   drawGauge(frame, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.gauge), nowMs, pulse);
-  drawSongPlate(frame, pieceRawT(elapsed, GAMEPLAY_TIMELINE.song));
-  drawScorePlate(frame, runtime.exScore, runtime.exScoreMax, pieceRawT(elapsed, GAMEPLAY_TIMELINE.score));
+  drawSongPlate(frame, pieceRawT(elapsed, GAMEPLAY_TIMELINE.song), nowMs);
+  drawScorePlate(frame, runtime.exScore, runtime.exScoreMax, pieceRawT(elapsed, GAMEPLAY_TIMELINE.score), nowMs);
   const tallyX = resolveJudgeTallyX(playfield);
   if (tallyX !== undefined) {
     drawJudgeTally(frame, layer, runtime, tallyX, pieceRawT(elapsed, GAMEPLAY_TIMELINE.tally), layerPool);
@@ -85,7 +90,7 @@ export function renderDefaultGameplayFrame(
   const frontLayer = options.overlayLayer && options.overlayLayerPool ? options.overlayLayer : layer;
   const frontPool = frontLayer === layer ? layerPool : options.overlayLayerPool;
   const headerT = pieceRawT(elapsed, GAMEPLAY_TIMELINE.header);
-  drawStatusBar(frontLayer, runtime.autoplay === true, pulse, headerT, frontPool);
+  drawStatusBar(frontLayer, runtime.autoplay === true, pulse, headerT, nowMs, frontPool);
   paintHeaderTexts(frontLayer, runtime, headerT, frontPool);
   const punches = options.motion?.sample({
     judge: runtime.lastJudge,
@@ -96,9 +101,9 @@ export function renderDefaultGameplayFrame(
   paintSongTexts(layer, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.song), layerPool);
   paintGaugeTexts(layer, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.gauge), pulse, layerPool);
   paintScoreTexts(layer, runtime, pieceRawT(elapsed, GAMEPLAY_TIMELINE.score), punches, pulse, layerPool);
-  paintJudge(frontLayer, runtime, playfield, punches, frontPool);
-  paintReady(frontLayer, elapsed, frontPool);
-  drawBeatSlashes(frontLayer, pulse, frontPool);
+  paintJudge(frontLayer, runtime, playfield, punches, nowMs, frontPool);
+  paintReady(frontLayer, elapsed, nowMs, frontPool);
+  drawBeatSlashes(frontLayer, pulse, nowMs, frontPool);
 
   paintSceneCover(
     frontLayer,
@@ -110,7 +115,7 @@ export function renderDefaultGameplayFrame(
 
 export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
 
-function drawBackground(frame: Graphics, hasBga: boolean): void {
+function drawBackground(frame: Graphics, hasBga: boolean, nowMs: number): void {
   let bandTop = 0;
   for (const [color, bandBottom] of DEFAULT_BG_BANDS) {
     fillBandAroundHole(frame, bandTop, bandBottom, color, hasBga);
@@ -118,6 +123,8 @@ function drawBackground(frame: Graphics, hasBga: boolean): void {
   }
   fillSlash(frame, -40, 8, 220, 18, 14, T.accent, 0.22);
   fillSlash(frame, 420, 430, 280, 22, 16, T.accent, 0.16);
+  fillDiamond(frame, { cx: 580, cy: 28, rx: 11, ry: 15, nowMs, wobble: 3.2 }, T.accent, 0.32);
+  fillDiamond(frame, { cx: 18, cy: 458, rx: 10, ry: 13, nowMs, phase: 0.8, wobble: 2.8 }, T.accent, 0.24);
   frame.rect(0, 0, DESIGN_WIDTH, 6).fill({ color: 0x000000, alpha: 0.45 });
   frame.rect(0, DESIGN_HEIGHT - 14, DESIGN_WIDTH, 14).fill({ color: 0x000000, alpha: 0.35 });
 }
@@ -191,6 +198,7 @@ function drawPlayfield(
   progressRatio: number | undefined,
   pulse: number,
   t: number,
+  nowMs: number,
 ): void {
   if (t <= 0) return;
   const wellTop = PLAYFIELD.y;
@@ -240,6 +248,10 @@ function drawPlayfield(
     T.accent,
     0.85 * slamAlpha(t),
   );
+  fillDiamond(frame, { cx: leftRailX + throwX + 4, cy: wellTop + 18, rx: 6, ry: 8, nowMs, wobble: 2.6 }, T.accent, 0.7 * slamAlpha(t));
+  fillDiamond(frame, { cx: rightRailX + throwX + 4, cy: wellTop + 18, rx: 6, ry: 8, nowMs, phase: 0.5, wobble: 2.6 }, T.accent, 0.7 * slamAlpha(t));
+  fillDiamond(frame, { cx: leftRailX + throwX + 4, cy: wellBottom - 10, rx: 7, ry: 9, nowMs, phase: 1.1, wobble: 3 }, T.paper, 0.55 * slamAlpha(t));
+  fillDiamond(frame, { cx: rightRailX + throwX + 4, cy: wellBottom - 10, rx: 7, ry: 9, nowMs, phase: 1.6, wobble: 3 }, T.paper, 0.55 * slamAlpha(t));
 }
 
 function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefined {
@@ -247,7 +259,7 @@ function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefi
   return playfield.right + 14 <= x && x + 76 <= DESIGN_WIDTH ? x : undefined;
 }
 
-function drawBgaFrame(frame: Graphics, hasBga: boolean, pulse: number, t: number): void {
+function drawBgaFrame(frame: Graphics, hasBga: boolean, pulse: number, t: number, nowMs: number): void {
   if (t <= 0) return;
   const pad = 10;
   const a = slamAlpha(t);
@@ -267,9 +279,13 @@ function drawBgaFrame(frame: Graphics, hasBga: boolean, pulse: number, t: number
     frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: T.inkDeep, alpha: 0.96 * a });
     const cx = BGA.x + BGA.w / 2;
     const cy = BGA.y + BGA.h / 2;
-    fillSlash(frame, cx - 90, cy - 10, 180, 8, 18, T.accent, 0.55 * a);
-    fillSlash(frame, cx - 80, cy + 8, 160, 5, -14, T.paper, 0.35 * a);
+    fillDiamondCluster(frame, cx, cy, 54, 68, nowMs, T.accent, 0.45 * a, 6);
+    strokeDiamond(frame, { cx, cy, rx: 72, ry: 90, nowMs, wobble: 7 }, T.paper, 1.5, 0.35 * a);
   }
+  fillDiamond(frame, { cx: BGA.x - 2, cy: BGA.y - 2, rx: 8, ry: 10, nowMs, wobble: 3 }, T.accent, 0.55 * a);
+  fillDiamond(frame, { cx: BGA.x + BGA.w + 2, cy: BGA.y - 2, rx: 8, ry: 10, nowMs, phase: 0.4, wobble: 3 }, T.paper, 0.4 * a);
+  fillDiamond(frame, { cx: BGA.x - 2, cy: BGA.y + BGA.h + 2, rx: 8, ry: 10, nowMs, phase: 0.8, wobble: 3 }, T.paper, 0.4 * a);
+  fillDiamond(frame, { cx: BGA.x + BGA.w + 2, cy: BGA.y + BGA.h + 2, rx: 8, ry: 10, nowMs, phase: 1.2, wobble: 3 }, T.accent, 0.55 * a);
   for (const [bx, by, dx, dy] of [
     [BGA.x, BGA.y, 1, 1],
     [BGA.x + BGA.w, BGA.y, -1, 1],
@@ -281,14 +297,16 @@ function drawBgaFrame(frame: Graphics, hasBga: boolean, pulse: number, t: number
   }
 }
 
-function drawStatusBar(layer: Container, autoplay: boolean, pulse: number, t: number, pool?: ChildPool): void {
+function drawStatusBar(layer: Container, autoplay: boolean, pulse: number, t: number, nowMs: number, pool?: ChildPool): void {
   const status = pool?.acquireGraphics() ?? new Graphics();
   status.label = 'default-gameplay/status';
+  status.blendMode = 'normal';
   status.alpha = slamAlpha(t);
   status.position.set(0, slamOffset(t, -36));
   fillParallelogram(status, -12, 0, DESIGN_WIDTH + 24, 40, 18, T.ink, 1);
   fillSlash(status, -20, 32, DESIGN_WIDTH + 40, 6, 4, autoplay ? T.gold : T.accent, 0.55 + 0.45 * pulse);
   fillParallelogram(status, 12, 8, 92, 22, 10, T.accent, 0.95);
+  fillDiamond(status, { cx: 24, cy: 19, rx: 7, ry: 9, nowMs, wobble: 2.4 }, T.paper, 0.95);
   fillParallelogram(status, 392, 8, 118, 22, 8, T.panel, 0.95);
   strokeParallelogram(status, 392, 8, 118, 22, 8, T.accent, 1.5, 0.85);
   if (!pool) layer.addChild(status);
@@ -403,17 +421,20 @@ function drawGauge(frame: Graphics, runtime: FallbackGameplayRuntime, t: number,
   if (pulse > 0.4 && litCells > 0) {
     fillSlash(frame, GROOVE.x - 6, GROOVE.y - 4, GROOVE.w + 16, 3, 2, T.paper, 0.18 * pulse * a);
   }
+  fillDiamond(frame, { cx: GROOVE.x - 6, cy: GROOVE.y + GROOVE.h / 2, rx: 7, ry: 9, nowMs, wobble: 2.8 }, T.accent, 0.8 * a);
+  fillDiamond(frame, { cx: GROOVE.x + GROOVE.w + 6, cy: GROOVE.y + GROOVE.h / 2, rx: 7, ry: 9, nowMs, phase: 0.7, wobble: 2.8 }, T.gold, 0.7 * a);
 }
 
-function drawSongPlate(frame: Graphics, t: number): void {
+function drawSongPlate(frame: Graphics, t: number, nowMs: number): void {
   if (t <= 0) return;
   const a = slamAlpha(t);
   fillParallelogram(frame, 14, 402, 356, 62, 14, T.panel, a);
   strokeParallelogram(frame, 14, 402, 356, 62, 14, T.line, 1, 0.9 * a);
   fillSlash(frame, 10, 408, 28, 50, 8, T.accent, 0.95 * a);
+  fillDiamond(frame, { cx: 24, cy: 433, rx: 8, ry: 11, nowMs, wobble: 3 }, T.paper, 0.9 * a);
 }
 
-function drawScorePlate(frame: Graphics, exScore: number | undefined, exScoreMax: number | undefined, t: number): void {
+function drawScorePlate(frame: Graphics, exScore: number | undefined, exScoreMax: number | undefined, t: number, nowMs: number): void {
   if (t <= 0) return;
   const a = slamAlpha(t);
   fillParallelogram(frame, SCORE_PANEL.x, SCORE_PANEL.y, SCORE_PANEL.w, SCORE_PANEL.h, 12, T.panel, a);
@@ -442,6 +463,7 @@ function drawScorePlate(frame: Graphics, exScore: number | undefined, exScoreMax
       alpha: (ninth >= 6 ? 0.55 : 0.22) * a,
     });
   }
+  fillDiamond(frame, { cx: SCORE_PANEL.x + SCORE_PANEL.w - 18, cy: SCORE_PANEL.y + 22, rx: 8, ry: 11, nowMs, wobble: 3.2 }, T.gold, 0.75 * a);
 }
 
 const JUDGE_TALLY_ROWS: ReadonlyArray<readonly [label: string, key: 'perfect' | 'great' | 'good' | 'bad' | 'poor']> = [
@@ -668,96 +690,120 @@ function paintJudge(
   runtime: FallbackGameplayRuntime,
   playfield: FallbackPlayfieldLayout,
   punches: { judgeElapsed: number; comboPunch: number } | undefined,
+  nowMs: number,
   pool?: ChildPool,
 ): void {
-  for (const display of resolveJudgeDisplays(runtime, playfield)) {
+  const displays = resolveJudgeHudDisplays(runtime, playfield);
+  for (const display of displays) {
     const popup = judgePopup(punches?.judgeElapsed ?? 10_000);
-    if (popup.alpha <= 0) continue;
-    const combo = resolveVisibleCombo(display.judge, display.combo);
-    const color = defaultJudgeColor(display.judge);
-    const slamT = Math.min(1, (punches?.judgeElapsed ?? 10_000) / 180);
-    const jitter = impactOffset(slamT, 8);
-    const throwX = slamOffset(slamT, -28);
-    if (slamT < 1) {
+    const combo = display.combo;
+    const showCombo = combo > 0;
+    const showJudge = popup.alpha > 0 && display.judge.length > 0;
+    if (!showCombo && !showJudge) continue;
+
+    const comboY = PLAYFIELD.judgementY - 36;
+    const judgeY = PLAYFIELD.judgementY - 70;
+    const plateY = showJudge ? (comboY + judgeY) / 2 : comboY;
+    const digits = String(combo).length;
+    const plateRx = showJudge ? 54 : 28 + digits * 8;
+    const plateRy = showJudge ? 36 : 22;
+    const plateAlpha = showJudge ? Math.max(0.78, popup.alpha) : 0.88;
+    const plate = pool?.acquireGraphics() ?? new Graphics();
+    plate.label = 'default-gameplay/combo-plate';
+    plate.blendMode = 'normal';
+    fillDiamond(plate, { cx: display.x, cy: plateY, rx: plateRx, ry: plateRy, nowMs, wobble: 5.5 }, T.ink, 0.88 * plateAlpha);
+    fillDiamond(plate, { cx: display.x, cy: plateY, rx: plateRx * 0.72, ry: plateRy * 0.72, nowMs, phase: 0.35, wobble: 4.2 }, T.inkDeep, 0.9 * plateAlpha);
+    strokeDiamond(plate, { cx: display.x, cy: plateY, rx: plateRx + 4, ry: plateRy + 4, nowMs, wobble: 6 }, T.paper, 2, 0.7 * plateAlpha);
+    if (!pool) layer.addChild(plate);
+
+    const glow = pool?.acquireGraphics() ?? new Graphics();
+    glow.label = 'default-gameplay/combo-glow';
+    glow.blendMode = 'add';
+    fillDiamond(glow, { cx: display.x, cy: plateY, rx: plateRx + 10, ry: plateRy + 8, nowMs, wobble: 7 }, T.accent, 0.22 * plateAlpha);
+    strokeDiamond(glow, { cx: display.x, cy: plateY, rx: plateRx * 0.78, ry: plateRy * 0.78, nowMs, phase: 0.5, wobble: 5 }, T.cyanGhost, 1.8, 0.45 * plateAlpha);
+    if (!pool) layer.addChild(glow);
+
+    if (showJudge) {
+      const color = defaultJudgeColor(display.judge);
+      const slamT = Math.min(1, (punches?.judgeElapsed ?? 10_000) / 180);
+      const jitter = impactOffset(slamT, 8);
+      const throwX = slamOffset(slamT, -28);
+      if (slamT < 1) {
+        addChromeText(
+          layer,
+          display.judge,
+          display.x,
+          judgeY + popup.offsetY,
+          {
+            size: 26,
+            fill: T.accent,
+            fontFamily: DEFAULT_JUDGE_FONT,
+            anchorX: 0.5,
+            rotation: -0.1,
+            slam: popup.scale,
+            offsetX: throwX - jitter,
+            alpha: popup.alpha * 0.45,
+            maxWidth: display.maxWidth,
+          },
+          pool,
+        );
+        addChromeText(
+          layer,
+          display.judge,
+          display.x,
+          judgeY + popup.offsetY,
+          {
+            size: 26,
+            fill: T.cyanGhost,
+            fontFamily: DEFAULT_JUDGE_FONT,
+            anchorX: 0.5,
+            rotation: -0.1,
+            slam: popup.scale,
+            offsetX: throwX + jitter,
+            alpha: popup.alpha * 0.35,
+            maxWidth: display.maxWidth,
+          },
+          pool,
+        );
+      }
       addChromeText(
         layer,
         display.judge,
         display.x,
-        228 + popup.offsetY,
+        judgeY + popup.offsetY,
         {
-          size: 28,
-          fill: T.accent,
+          size: 26,
+          fill: color,
           fontFamily: DEFAULT_JUDGE_FONT,
           anchorX: 0.5,
-          rotation: -0.1,
+          rotation: -0.08,
           slam: popup.scale,
-          offsetX: throwX - jitter,
-          alpha: popup.alpha * 0.45,
+          offsetX: throwX,
+          alpha: popup.alpha,
+          stroke: { color: T.ink, width: 7, alignment: 0.5, join: 'round' },
           maxWidth: display.maxWidth,
         },
         pool,
       );
-      addChromeText(
-        layer,
-        display.judge,
-        display.x,
-        228 + popup.offsetY,
-        {
-          size: 28,
-          fill: T.cyanGhost,
-          fontFamily: DEFAULT_JUDGE_FONT,
-          anchorX: 0.5,
-          rotation: -0.1,
-          slam: popup.scale,
-          offsetX: throwX + jitter,
-          alpha: popup.alpha * 0.35,
-          maxWidth: display.maxWidth,
-        },
-        pool,
-      );
-      const flash = pool?.acquireGraphics() ?? new Graphics();
-      flash.label = 'default-gameplay/judge-flash';
-      fillSlash(flash, display.x - 90, 210, 180, 18, 12, T.paper, (1 - slamT) * 0.4 * popup.alpha);
-      fillSlash(flash, display.x - 70, 248, 140, 8, -8, T.accent, (1 - slamT) * 0.32 * popup.alpha);
-      if (!pool) layer.addChild(flash);
     }
-    addChromeText(
-      layer,
-      display.judge,
-      display.x,
-      230 + popup.offsetY,
-      {
-        size: 28,
-        fill: color,
-        fontFamily: DEFAULT_JUDGE_FONT,
-        anchorX: 0.5,
-        rotation: -0.08,
-        slam: popup.scale,
-        offsetX: throwX,
-        alpha: popup.alpha,
-        stroke: { color: T.ink, width: 5, alignment: 0.5, join: 'round' },
-        dropShadow: { color, alpha: 0.45 * popup.alpha, blur: 6, distance: 0 },
-        maxWidth: display.maxWidth,
-      },
-      pool,
-    );
-    if (combo > 0) {
+
+    if (showCombo) {
+      const comboAlpha = showJudge ? Math.max(popup.alpha, 0.95) : 0.96;
       addChromeText(
         layer,
         formatCount(combo),
         display.x,
-        258 + popup.offsetY * 0.4,
+        comboY,
         {
-          size: 22,
-          fill: combo >= 200 ? T.gold : combo >= 50 ? T.accent : T.paper,
+          size: 28,
+          fill: playfieldComboFill(combo),
           fontFamily: DEFAULT_JUDGE_FONT,
           anchorX: 0.5,
-          rotation: -0.05,
-          slam: popup.scale * 0.85 * (punches?.comboPunch ?? 1),
-          offsetX: throwX,
-          alpha: popup.alpha,
-          stroke: { color: T.ink, width: 4, alignment: 0.5, join: 'round' },
-          maxWidth: Math.max(72, display.maxWidth - 36),
+          rotation: -0.04,
+          slam: showJudge ? popup.scale * 0.85 * (punches?.comboPunch ?? 1) : punches?.comboPunch ?? 1,
+          alpha: comboAlpha,
+          stroke: { color: T.ink, width: 8, alignment: 0.5, join: 'round' },
+          maxWidth: Math.max(72, display.maxWidth - 24),
         },
         pool,
       );
@@ -765,18 +811,26 @@ function paintJudge(
   }
 }
 
-function paintReady(layer: Container, elapsed: number, pool?: ChildPool): void {
+function paintReady(layer: Container, elapsed: number, nowMs: number, pool?: ChildPool): void {
   const alpha = readyAlpha(elapsed);
   if (alpha <= 0) return;
   const gfx = pool?.acquireGraphics() ?? new Graphics();
   gfx.label = 'default-gameplay/ready';
+  gfx.blendMode = 'normal';
   gfx.alpha = alpha;
   const cx = PLAYFIELD.x + PLAYFIELD.w / 2;
   const cy = 168;
   const readyT = pieceRawT(elapsed, GAMEPLAY_TIMELINE.ready);
   fillSlash(gfx, cx - 110, cy - 18, 220, 36, 14, T.accent, 0.92);
-  fillSlash(gfx, cx - 90, cy + 10, 180, 8, -8, T.paper, 0.35);
+  fillDiamondCluster(gfx, cx, cy - 4, 42, 52, nowMs, T.inkDeep, 0.7, 5);
+  strokeDiamond(gfx, { cx, cy: cy - 4, rx: 50, ry: 62, nowMs, wobble: 6 }, T.paper, 2, 0.8);
   if (!pool) layer.addChild(gfx);
+  const glow = pool?.acquireGraphics() ?? new Graphics();
+  glow.label = 'default-gameplay/ready-glow';
+  glow.blendMode = 'add';
+  glow.alpha = alpha;
+  fillDiamond(glow, { cx, cy: cy - 4, rx: 58, ry: 72, nowMs, wobble: 7 }, T.accent, 0.28);
+  if (!pool) layer.addChild(glow);
   addChromeText(
     layer,
     'READY',
@@ -798,45 +852,18 @@ function paintReady(layer: Container, elapsed: number, pool?: ChildPool): void {
   );
 }
 
-function drawBeatSlashes(layer: Container, pulse: number, pool?: ChildPool): void {
+function drawBeatSlashes(layer: Container, pulse: number, nowMs: number, pool?: ChildPool): void {
   if (pulse <= 0.02) return;
   const slashes = pool?.acquireGraphics() ?? new Graphics();
   slashes.label = 'default-gameplay/beat-slash';
-  fillSlash(slashes, -30, 60, 180, 7, 22, T.accent, 0.28 * pulse);
-  fillSlash(slashes, 480, 300, 200, 6, -18, T.paper, 0.16 * pulse);
-  fillSlash(slashes, 250, 8, 140, 4, 8, T.gold, 0.22 * pulse);
+  slashes.blendMode = 'add';
+  fillSlash(slashes, -30, 60, 180, 7, 22, T.accent, 0.32 * pulse);
+  fillSlash(slashes, 480, 300, 200, 6, -18, T.paper, 0.18 * pulse);
+  fillSlash(slashes, 250, 8, 140, 4, 8, T.gold, 0.24 * pulse);
+  fillDiamond(slashes, { cx: 120, cy: 72, rx: 16, ry: 22, nowMs, wobble: 4 }, T.accent, 0.35 * pulse);
+  fillDiamond(slashes, { cx: 520, cy: 310, rx: 14, ry: 18, nowMs, phase: 0.6, wobble: 3.5 }, T.gold, 0.28 * pulse);
+  fillDiamond(slashes, { cx: 310, cy: 24, rx: 11, ry: 14, nowMs, phase: 1.2, wobble: 3.2 }, T.paper, 0.2 * pulse);
   if (!pool) layer.addChild(slashes);
-}
-
-interface ResolvedJudgeDisplay {
-  judge: string;
-  combo: number | undefined;
-  x: number;
-  maxWidth: number;
-}
-
-function resolveJudgeDisplays(
-  runtime: FallbackGameplayRuntime,
-  playfield: FallbackPlayfieldLayout,
-): ResolvedJudgeDisplay[] {
-  const isDoublePlay = playfield.sideCenters['2P'] !== undefined;
-  const maxWidth = isDoublePlay ? 122 : 160;
-  const sideStates = runtime.judgeSides?.filter((state) => typeof state.judge === 'string' && state.judge.length > 0);
-  if (sideStates?.length) {
-    return sideStates.map((state) => ({
-      judge: state.judge!,
-      combo: state.combo,
-      x: playfield.sideCenters[state.side] ?? playfield.centerX,
-      maxWidth,
-    }));
-  }
-  if (!runtime.lastJudge) return [];
-  return [{ judge: runtime.lastJudge, combo: runtime.combo, x: playfield.sideCenters['1P'] ?? playfield.centerX, maxWidth }];
-}
-
-function resolveVisibleCombo(judge: string, combo: number | undefined): number {
-  if (judge !== 'PERFECT' && judge !== 'GREAT' && judge !== 'GOOD') return 0;
-  return combo !== undefined && Number.isFinite(combo) ? Math.max(0, Math.floor(combo)) : 0;
 }
 
 function stampLabel(): { size: number; fill: number; fontFamily: string; letterSpacing: number } {

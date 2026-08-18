@@ -1,6 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { DESIGN_HEIGHT, DESIGN_WIDTH } from '../gameplay-constants.ts';
 import type { ChildPool } from '../pixi-utils.ts';
+import { diamondPoints, type DiamondPose } from './motion.ts';
 
 /**
  * Built-in default-family palette. Layout and slam language follow a cut-in comic (skewed plates, diagonal
@@ -45,6 +46,11 @@ export const DEFAULT_BG_BANDS: ReadonlyArray<readonly [number, number]> = [
   [0x040a16, 360],
   [0x02050c, 480],
 ];
+
+/** Playfield combo fill — never cyan, which vanishes on even-key notes. */
+export function playfieldComboFill(combo: number): number {
+  return combo >= 200 ? DEFAULT_THEME.gold : DEFAULT_THEME.paper;
+}
 
 export function defaultJudgeColor(judge: string): number {
   switch (judge) {
@@ -120,6 +126,42 @@ export function fillSlash(
     .fill({ color, alpha });
 }
 
+export function fillDiamond(
+  graphic: Graphics,
+  pose: DiamondPose,
+  color: number,
+  alpha = 1,
+): void {
+  graphic.poly(diamondPoints(pose)).fill({ color, alpha });
+}
+
+export function strokeDiamond(
+  graphic: Graphics,
+  pose: DiamondPose,
+  color: number,
+  width = 1.5,
+  alpha = 1,
+): void {
+  graphic.poly(diamondPoints(pose)).stroke({ color, width, alpha, alignment: 0.5, join: 'round' });
+}
+
+/** Nested wobbling diamonds — the usual cut-in lock-on. */
+export function fillDiamondCluster(
+  graphic: Graphics,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  nowMs: number,
+  color: number,
+  alpha: number,
+  wobble = 4,
+): void {
+  fillDiamond(graphic, { cx, cy, rx, ry, nowMs, wobble }, color, alpha);
+  strokeDiamond(graphic, { cx, cy, rx: rx * 0.62, ry: ry * 0.62, nowMs, phase: 0.35, wobble: wobble * 0.7 }, color, 1.5, alpha * 0.85);
+  fillDiamond(graphic, { cx, cy, rx: rx * 0.28, ry: ry * 0.28, nowMs, phase: 0.7, wobble: wobble * 0.45 }, DEFAULT_THEME.paper, alpha * 0.55);
+}
+
 export function fillTriangle(
   g: Graphics,
   x: number,
@@ -141,7 +183,7 @@ export function fillTriangle(
  * Diagonal cut-in wipe. `cover` 1 paints the full canvas; 0 paints nothing.
  * Drawn from primitives (no gradients) so pooled Graphics never allocate FillGradient textures.
  */
-export function fillSceneCover(g: Graphics, cover: number, _nowMs: number, w = DESIGN_WIDTH, h = DESIGN_HEIGHT): void {
+export function fillSceneCover(g: Graphics, cover: number, nowMs: number, w = DESIGN_WIDTH, h = DESIGN_HEIGHT): void {
   const amount = Math.max(0, Math.min(1, cover));
   if (amount <= 0.001) return;
   if (amount >= 0.97) {
@@ -151,6 +193,10 @@ export function fillSceneCover(g: Graphics, cover: number, _nowMs: number, w = D
   fillParallelogram(g, -80, -20, w * amount + 140, h + 40, 70, DEFAULT_THEME.ink, 0.98);
   fillSlash(g, w * amount - 36, -12, 88, h + 24, 40, DEFAULT_THEME.accent, 0.92);
   fillSlash(g, w * amount + 18, 16, 36, h, 28, DEFAULT_THEME.paper, 0.5);
+  const edgeX = w * amount + 28;
+  fillDiamondCluster(g, edgeX, h * 0.28, 22, 30, nowMs, DEFAULT_THEME.accent, 0.9, 5);
+  fillDiamond(g, { cx: edgeX + 12, cy: h * 0.52, rx: 16, ry: 22, nowMs, phase: 0.8, wobble: 4 }, DEFAULT_THEME.paper, 0.45);
+  fillDiamondCluster(g, edgeX + 6, h * 0.76, 18, 24, nowMs + 180, DEFAULT_THEME.accent, 0.7, 4.5);
 }
 
 /**
@@ -174,7 +220,11 @@ export function paintSceneCover(
   layer.addChild(g);
 }
 
-export function fillBgBands(g: Graphics, bands: ReadonlyArray<readonly [number, number]> = DEFAULT_BG_BANDS): void {
+export function fillBgBands(
+  g: Graphics,
+  nowMs = 0,
+  bands: ReadonlyArray<readonly [number, number]> = DEFAULT_BG_BANDS,
+): void {
   let top = 0;
   for (const [color, bottom] of bands) {
     g.rect(0, top, DESIGN_WIDTH, bottom - top).fill(color);
@@ -182,4 +232,8 @@ export function fillBgBands(g: Graphics, bands: ReadonlyArray<readonly [number, 
   }
   fillSlash(g, -60, 6, 280, 16, 18, DEFAULT_THEME.accent, 0.22);
   fillSlash(g, 360, 428, 320, 20, 14, DEFAULT_THEME.accent, 0.14);
+  fillDiamond(g, { cx: 600, cy: 36, rx: 10, ry: 14, nowMs, phase: 0.2, wobble: 3 }, DEFAULT_THEME.accent, 0.35);
+  fillDiamond(g, { cx: 52, cy: 454, rx: 12, ry: 16, nowMs, phase: 1.1, wobble: 3.5 }, DEFAULT_THEME.accent, 0.28);
+  fillDiamond(g, { cx: 318, cy: 18, rx: 8, ry: 11, nowMs, phase: 0.7, wobble: 2.6 }, DEFAULT_THEME.paper, 0.18);
+  fillDiamond(g, { cx: 168, cy: 468, rx: 9, ry: 12, nowMs, phase: 1.5, wobble: 3 }, DEFAULT_THEME.gold, 0.16);
 }

@@ -58,7 +58,7 @@
 - **terminal player**: `@be-music/player-tui` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
 - **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。browser drop、LR2 / beatoraja skin rendering、browser gameplay、result scene、recording を扱います。
 - **skin family**: browser player が読み込み済み theme 状態から選ぶ scene family です。現在は LR2、beatoraja、built-in default family があります。
-- **default skin family**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う browser player 組み込みの skin family です。skinless の select、decide、gameplay、result chrome を提供します（navy / ice / cyan / gold の cut-in plate、要素ごとの slam、scene 間の斜め wipe）。gameplay では LR2 が default renderer を import しない形で共有 gameplay runtime へ chrome を注入します。
+- **default skin family**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う browser player 組み込みの skin family です。skinless の select、decide、gameplay、result chrome を提供します（navy / ice / cyan / gold の cut-in plate、頂点が揺れる菱形、加算 flash、要素ごとの slam、scene 間の斜め wipe）。gameplay では LR2 が default renderer を import しない形で共有 gameplay runtime へ chrome を注入します。
 - **LR2 skin**: `@be-music/lr2-skin` が扱う Lunatic Rave 2 CSV skin format です。この package は PixiJS に依存せず、skin file の parse と theme asset 解決を行います。
 - **beatoraja skin**: `@be-music/beatoraja-skin` が扱う beatoraja JSON / Lua skin format です。この package は PixiJS に依存せず、header / full skin の parse、option / asset 解決、element normalization を行います。
 

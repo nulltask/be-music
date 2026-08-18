@@ -6,9 +6,12 @@ import { coverAmount, pieceRawT, RESULT_TIMELINE, resultJudgeRawT, resultMetricR
 import {
   DEFAULT_THEME as T,
   fillBgBands,
+  fillDiamond,
+  fillDiamondCluster,
   fillParallelogram,
   fillSlash,
   paintSceneCover,
+  strokeDiamond,
   strokeParallelogram,
 } from './theme.ts';
 
@@ -53,7 +56,7 @@ export function renderDefaultResultChrome(layer: Container, model: DefaultResult
   chrome.label = 'default-result/chrome';
   const { designWidth, designHeight } = model;
   const elapsed = model.sceneElapsedMs;
-  fillBgBands(chrome);
+  fillBgBands(chrome, model.nowMs);
 
   const bannerT = pieceRawT(elapsed, RESULT_TIMELINE.banner);
   const statusColor = model.cleared ? T.paper : T.danger;
@@ -61,6 +64,8 @@ export function renderDefaultResultChrome(layer: Container, model: DefaultResult
   fillSlash(chrome, -100, -20, 420, 70, 36, statusFill, 0.95 * Math.max(0.2, bannerT));
   fillSlash(chrome, 240, 8, 480, 16, 12, T.paper, 0.12 * bannerT);
   fillParallelogram(chrome, -20, 0, designWidth + 40, 50, 24, T.inkDeep, 0.9);
+  fillDiamond(chrome, { cx: 10, cy: 38, rx: 8, ry: 10, nowMs: model.nowMs, wobble: 3.2 }, T.paper, 0.85 * bannerT);
+  fillDiamond(chrome, { cx: designWidth - 18, cy: 10, rx: 7, ry: 9, nowMs: model.nowMs, phase: 0.6, wobble: 2.8 }, T.accent, 0.5 * bannerT);
 
   addChromeText(layer, model.cleared ? 'CLEARED' : 'FAILED', 20, 6, {
     size: 28,
@@ -98,6 +103,8 @@ export function renderDefaultResultChrome(layer: Container, model: DefaultResult
   addChromeText(layer, 'RANK', 36, 84, { ...stampLabel(), alpha: slamAlpha(bannerT) });
   const punch = model.rankRevealed ? resultRankPunch(model.rankElapsedMs) : { scale: 1, alpha: 0, offsetX: 0 };
   if (model.rankRevealed && punch.alpha > 0) {
+    fillDiamondCluster(chrome, 104, 148, 62, 54, model.nowMs, T.inkDeep, 0.55 * punch.alpha, 6);
+    strokeDiamond(chrome, { cx: 104, cy: 148, rx: 70, ry: 62, nowMs: model.nowMs, wobble: 6.5 }, T.gold, 2, 0.8 * punch.alpha);
     for (let line = 0; line < 6; line += 1) {
       fillSlash(
         chrome,
@@ -238,7 +245,15 @@ export function renderDefaultResultChrome(layer: Container, model: DefaultResult
     model.nowMs,
     { width: designWidth, height: designHeight },
   );
+  const glow = new Graphics();
+  glow.label = 'default-result/glow';
+  glow.blendMode = 'add';
+  fillDiamond(glow, { cx: 104, cy: 148, rx: 78, ry: 68, nowMs: model.nowMs, wobble: 7 }, T.gold, 0.16 * punch.alpha);
+  fillDiamond(glow, { cx: 36, cy: 28, rx: 16, ry: 20, nowMs: model.nowMs, phase: 0.9, wobble: 3.5 }, T.accent, 0.18 * bannerT);
+  fillDiamond(glow, { cx: 224, cy: 102, rx: 12, ry: 16, nowMs: model.nowMs, phase: 0.3, wobble: 3 }, T.gold, 0.12 * bannerT);
+  fillDiamond(glow, { cx: 434, cy: 102, rx: 12, ry: 16, nowMs: model.nowMs, phase: 1.1, wobble: 3 }, T.accent, 0.12 * bannerT);
   layer.addChildAt(chrome, 0);
+  layer.addChildAt(glow, 1);
 }
 
 function paintMetric(

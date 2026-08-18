@@ -2,7 +2,7 @@ import type { Graphics } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { isScratchLaneForVariant } from '../gameplay-lanes.ts';
 import { beatImpulse, shardFlight } from './motion.ts';
-import { DEFAULT_THEME, fillParallelogram, fillSlash, fillTriangle } from './theme.ts';
+import { DEFAULT_THEME, fillDiamond, fillParallelogram, fillSlash, fillTriangle } from './theme.ts';
 
 export const DEFAULT_NOTE_HEIGHT = 12;
 const NOTE_SKEW = 4;
@@ -183,8 +183,20 @@ export function drawDefaultBomb(
   graphic.blendMode = 'add';
   fillSlash(graphic, lane.x - 6, centerY - 36 * (0.4 + progress), lane.w + 12, 10, 8, DEFAULT_THEME.accent, 0.16 * fade);
   const core = Math.max(3, lane.w * (0.22 + 0.18 * progress));
-  fillTriangle(graphic, centerX, centerY, core * 2.4, DEFAULT_THEME.accent, 0.35 * fade);
-  fillTriangle(graphic, centerX, centerY, core * 1.6, 0xffffff, 0.7 * fade, true);
+  fillDiamond(
+    graphic,
+    { cx: centerX, cy: centerY, rx: core * 1.15, ry: core * 1.45, nowMs: elapsed * 12, wobble: 4 + 6 * progress },
+    DEFAULT_THEME.accent,
+    0.42 * fade,
+  );
+  fillDiamond(
+    graphic,
+    { cx: centerX, cy: centerY, rx: core * 0.55, ry: core * 0.7, nowMs: elapsed * 12, phase: 0.5, wobble: 2.5 },
+    0xffffff,
+    0.55 * fade,
+  );
+  fillTriangle(graphic, centerX, centerY, core * 2.4, DEFAULT_THEME.accent, 0.22 * fade);
+  fillTriangle(graphic, centerX, centerY, core * 1.6, 0xffffff, 0.45 * fade, true);
   const count = 6;
   for (let index = 0; index < count; index += 1) {
     const shard = shardFlight(elapsed, duration, index, count);

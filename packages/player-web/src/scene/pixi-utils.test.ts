@@ -227,6 +227,18 @@ describe('ChildPool', () => {
     expect(b).toBe(a);
   });
 
+  test('resets blendMode so additive HUD graphics cannot leak onto the next acquire', () => {
+    const layer = new Container();
+    const pool = new ChildPool(layer);
+    pool.begin();
+    const graphics = pool.acquireGraphics();
+    graphics.blendMode = 'add';
+    pool.end();
+    pool.begin();
+    expect(pool.acquireGraphics().blendMode).toBe('normal');
+    pool.end();
+  });
+
   test('keeps every Sprite under the sprite host even when sprite/graphics acquires alternate', () => {
     const layer = new Container();
     const pool = new ChildPool(layer);

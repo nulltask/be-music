@@ -9,9 +9,12 @@ import { coverAmount, pieceRawT, SELECT_TIMELINE, selectRowRawT } from './transi
 import {
   DEFAULT_THEME as T,
   fillBgBands,
+  fillDiamond,
+  fillDiamondCluster,
   fillParallelogram,
   fillSlash,
   paintSceneCover,
+  strokeDiamond,
   strokeParallelogram,
 } from './theme.ts';
 
@@ -47,11 +50,13 @@ export function renderDefaultSelectChrome(layer: Container, model: DefaultSelect
   chrome.label = 'default-select/chrome';
   const { designWidth, designHeight } = model;
   const elapsed = model.sceneElapsedMs;
-  fillBgBands(chrome);
+  fillBgBands(chrome, model.nowMs);
   fillParallelogram(chrome, -16, 0, designWidth + 32, 42, 22, T.inkDeep, 0.94);
   fillSlash(chrome, -80, -8, 340, 46, 26, T.accent, 0.92);
 
   const headerT = pieceRawT(elapsed, SELECT_TIMELINE.header);
+  fillDiamondCluster(chrome, 26, 22, 14, 18, model.nowMs, T.paper, 0.95 * headerT, 3.5);
+  fillDiamond(chrome, { cx: 54, cy: 18, rx: 7, ry: 9, nowMs: model.nowMs, phase: 0.6, wobble: 2.4 }, T.accent, 0.7 * headerT);
   addChromeText(layer, 'MUSIC SELECT', 18, 6, {
     size: 22,
     fill: T.paper,
@@ -77,6 +82,9 @@ export function renderDefaultSelectChrome(layer: Container, model: DefaultSelect
   fillParallelogram(chrome, 8, 50, 300, 314, 16, T.panel, detailT);
   strokeParallelogram(chrome, 8, 50, 300, 314, 16, T.accent, 2, 0.85 * detailT);
   fillSlash(chrome, 4, 52, 40, 48, 10, T.accent, detailT);
+  fillDiamond(chrome, { cx: 20, cy: 62, rx: 7, ry: 9, nowMs: model.nowMs, wobble: 2.8 }, T.paper, 0.9 * detailT);
+  fillDiamond(chrome, { cx: 292, cy: 62, rx: 6, ry: 8, nowMs: model.nowMs, phase: 0.5, wobble: 2.4 }, T.accent, 0.55 * detailT);
+  fillDiamond(chrome, { cx: 20, cy: 348, rx: 6, ry: 8, nowMs: model.nowMs, phase: 1.1, wobble: 2.4 }, T.accent, 0.4 * detailT);
   chrome.rect(22, 96, 268 * Math.max(0.08, detailT), 2).fill({ color: T.accent, alpha: 0.7 * detailT });
 
   fillParallelogram(chrome, 20, 148, 80, 50, 8, T.inkDeep, detailT);
@@ -154,7 +162,9 @@ export function renderDefaultSelectChrome(layer: Container, model: DefaultSelect
   const auto = DEFAULT_SELECT_LAYOUT.auto;
   fillParallelogram(chrome, play.x, play.y, play.w, play.h, 8, T.panelLift, actionT);
   strokeParallelogram(chrome, play.x, play.y, play.w, play.h, 8, T.paper, 1, 0.7 * actionT);
+  fillDiamond(chrome, { cx: play.x + 16, cy: play.y + play.h / 2, rx: 8, ry: 11, nowMs: model.nowMs, wobble: 2.8 }, T.accent, 0.9 * actionT);
   fillParallelogram(chrome, auto.x, auto.y, auto.w, auto.h, 10, T.accent, actionT);
+  fillDiamond(chrome, { cx: auto.x + 16, cy: auto.y + auto.h / 2, rx: 7, ry: 9, nowMs: model.nowMs, phase: 0.45, wobble: 2.6 }, T.ink, 0.85 * actionT);
   addChromeText(layer, 'PLAY', play.x + play.w / 2, play.y + 6, {
     size: 14,
     fill: T.paper,
@@ -179,6 +189,7 @@ export function renderDefaultSelectChrome(layer: Container, model: DefaultSelect
   const search = DEFAULT_SELECT_LAYOUT.search;
   fillParallelogram(chrome, search.x, search.y, search.w, search.h, 8, T.inkDeep, searchT);
   strokeParallelogram(chrome, search.x, search.y, search.w, search.h, 8, T.line, 1, 0.8 * searchT);
+  fillDiamond(chrome, { cx: search.x + search.w - 16, cy: search.y + search.h / 2, rx: 6, ry: 8, nowMs: model.nowMs, wobble: 2.2 }, T.accent, 0.7 * searchT);
   addChromeText(layer, 'SEARCH', 24, 382, { ...stampLabel(), alpha: slamAlpha(searchT) });
   addChromeText(layer, model.searchQuery || 'Title / artist / genre', 82, 380, {
     size: 10,
@@ -229,7 +240,16 @@ export function renderDefaultSelectChrome(layer: Container, model: DefaultSelect
     alpha: slamAlpha(listT),
   });
 
+  const glow = new Graphics();
+  glow.label = 'default-select/glow';
+  glow.blendMode = 'add';
+  fillDiamond(glow, { cx: 26, cy: 22, rx: 18, ry: 24, nowMs: model.nowMs, wobble: 4.5 }, T.accent, 0.22 * headerT);
+  fillDiamond(glow, { cx: play.x + 16, cy: play.y + play.h / 2, rx: 14, ry: 18, nowMs: model.nowMs, phase: 0.4, wobble: 3.5 }, T.accent, 0.28 * actionT);
+  fillDiamond(glow, { cx: auto.x + 16, cy: auto.y + auto.h / 2, rx: 12, ry: 16, nowMs: model.nowMs, phase: 0.9, wobble: 3.2 }, T.paper, 0.16 * actionT);
+  fillDiamond(glow, { cx: 292, cy: 62, rx: 10, ry: 13, nowMs: model.nowMs, phase: 1.3, wobble: 3 }, T.accent, 0.14 * detailT);
+  fillSlash(glow, -40, 8, 220, 8, 14, T.accent, 0.12);
   layer.addChildAt(chrome, 0);
+  layer.addChildAt(glow, 1);
   return chrome;
 }
 
@@ -269,7 +289,8 @@ export function renderDefaultSelectRow(
   if (row.active) {
     fillParallelogram(gfx, listX - 8 + throwX, y - 2, listWidth + 16, rowHeight + 2, 10, T.accent, 0.96);
     strokeParallelogram(gfx, listX - 8 + throwX, y - 2, listWidth + 16, rowHeight + 2, 10, T.paper, 1.5, 0.8);
-    fillSlash(gfx, listX - 18 + throwX, cursorY + 4, 22, rowHeight - 8, 4, T.paper, 0.9);
+    fillDiamond(gfx, { cx: listX - 14 + throwX, cy: cursorY + rowHeight / 2, rx: 8, ry: 11, nowMs: sceneElapsedMs, wobble: 3.2 }, T.paper, 0.95);
+    strokeDiamond(gfx, { cx: listX - 14 + throwX, cy: cursorY + rowHeight / 2, rx: 11, ry: 14, nowMs: sceneElapsedMs, phase: 0.4, wobble: 2.4 }, T.paper, 1.2, 0.55);
   } else {
     fillParallelogram(gfx, listX + throwX, y, listWidth, rowHeight - 3, 6, T.panel, 0.82);
     strokeParallelogram(gfx, listX + throwX, y, listWidth, rowHeight - 3, 6, T.line, 1, 0.7);

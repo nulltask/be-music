@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultJudgeColor, DEFAULT_THEME, parallelogramPoints } from './theme.ts';
+import { defaultJudgeColor, DEFAULT_THEME, parallelogramPoints, playfieldComboFill } from './theme.ts';
 
 describe('default theme primitives', () => {
   it('skews the top edge of a parallelogram to the right', () => {
@@ -10,5 +10,12 @@ describe('default theme primitives', () => {
     expect(defaultJudgeColor('PERFECT')).toBe(DEFAULT_THEME.gold);
     expect(defaultJudgeColor('POOR')).toBe(DEFAULT_THEME.danger);
     expect(defaultJudgeColor('GREAT')).toBe(DEFAULT_THEME.great);
+  });
+
+  it('keeps playfield combo off the cyan note body colour', () => {
+    expect(playfieldComboFill(12)).toBe(DEFAULT_THEME.paper);
+    expect(playfieldComboFill(50)).toBe(DEFAULT_THEME.paper);
+    expect(playfieldComboFill(50)).not.toBe(DEFAULT_THEME.accent);
+    expect(playfieldComboFill(200)).toBe(DEFAULT_THEME.gold);
   });
 });

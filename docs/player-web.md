@@ -93,8 +93,9 @@ state-specific value resolution, timers, and input behavior.
 
 The built-in default family is the skinless path used when no LR2 or beatoraja theme is available, or when the host
 explicitly chooses the default family. It provides select, decide, gameplay, and result presentation without requiring
-theme files. The visual language is original cut-in chrome: navy void, cyan slashes, gold lock-on, and skewed
-parallelogram plates. Motion slams per piece; colouring is navy / ice / cyan rather than crimson. Labels stay generic
+theme files. The visual language is original cut-in chrome: navy void, cyan slashes, gold lock-on, skewed
+parallelogram plates, and rhombuses whose vertices wobble independently. Additive cyan/gold flashes sit on top of the
+navy plates. Motion slams per piece; colouring is navy / ice / cyan rather than crimson. Labels stay generic
 (`MUSIC SELECT`, `READY`, `CLEARED`) and do not copy third-party UI assets.
 
 Gameplay still shares the common engine, note renderer, BGA renderer, audio bus, and input handling with
@@ -111,8 +112,9 @@ the playfield.
 
 Each HUD piece has its own enter delay and slam, and scenes are joined by a diagonal cut-in wipe: incoming scenes open
 from a fully covered frame, and the short decide splash closes the wipe on its last beat so gameplay can open from
-void instead of popping onto the READY plate. `SkinlessGameplayChromeRuntime` includes `sceneElapsedMs` so that intro
-is keyed off `PixiGameplayView.start()`, not the wall-clock `nowMs` used for idle pulses.
+void instead of popping onto the READY plate. Playfield combo is painted on the overlay above notes, on a dark diamond
+plate in paper/gold (never cyan) so a dense chart cannot wash it out. `SkinlessGameplayChromeRuntime` includes
+`sceneElapsedMs` so that intro is keyed off `PixiGameplayView.start()`, not the wall-clock `nowMs` used for idle pulses.
 
 ## beatoraja skin and theme support
 
