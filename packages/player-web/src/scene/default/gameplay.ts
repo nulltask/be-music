@@ -1,6 +1,9 @@
 import { PixiGameplayView, type PixiGameplayViewOptions } from '../lr2/gameplay.ts';
 import type { SkinlessGameplayChromeRenderer } from '../gameplay-chrome.ts';
 import { renderDefaultGameplayFrame } from './gameplay-render.ts';
+import { DefaultHudMotion } from './hud-motion.ts';
+
+const hudMotion = new DefaultHudMotion();
 
 const renderDefaultChrome: SkinlessGameplayChromeRenderer = ({
   layer,
@@ -9,7 +12,7 @@ const renderDefaultChrome: SkinlessGameplayChromeRenderer = ({
   overlayLayerPool,
   runtime,
 }) => {
-  renderDefaultGameplayFrame(layer, runtime, { overlayLayer, layerPool, overlayLayerPool });
+  renderDefaultGameplayFrame(layer, runtime, { overlayLayer, layerPool, overlayLayerPool, motion: hudMotion });
 };
 
 /**

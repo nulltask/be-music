@@ -123,7 +123,13 @@ if (!app) {
 
 app.innerHTML = DEMO_APP_HTML;
 
-const DEFAULT_UI_FONT_LOADS = ['400 22px "LINE Seed JP"', '700 18px "LINE Seed JP"', '900 32px "Azeret Mono"'] as const;
+const DEFAULT_UI_FONT_LOADS = [
+  '400 22px "LINE Seed JP"',
+  '700 18px "LINE Seed JP"',
+  '700 22px "Zen Kaku Gothic New"',
+  '700 32px Rajdhani',
+  '900 32px "Azeret Mono"',
+] as const;
 
 async function waitForDefaultUiFonts(): Promise<void> {
   if (!('fonts' in document)) return;
@@ -168,8 +174,8 @@ class PlayerWebDemoApp {
   private resultSkin: Lr2Skin | undefined;
   /**
    * LR2 Decide-screen skin (the brief splash between song select and gameplay). Loaded from
-   * `Theme/<name>/Decide/decide.lr2skin` by `loadLr2ThemeSkinsFromFiles`. When undefined, the host skips the splash and
-   * transitions directly to gameplay.
+   * `Theme/<name>/Decide/decide.lr2skin` by `loadLr2ThemeSkinsFromFiles`. When undefined, the LR2 path skips the splash
+   * unless the active family is the built-in default (which mounts a short skinless READY interstitial).
    */
   private decideSkin: Lr2Skin | undefined;
   /**
@@ -2928,8 +2934,8 @@ class PlayerWebDemoApp {
 
   /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
-   * / Escape input). Without a decide skin, falls straight through to `playSong` so themes that don't ship a Decide
-   * directory still play the chart immediately.
+   * / Escape input). Without a decide skin, LR2 falls straight through to `playSong`. The built-in default family mounts
+   * a short skinless READY interstitial so select → gameplay is an iris close / iris open instead of a hard cut.
    *
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
@@ -2944,8 +2950,38 @@ class PlayerWebDemoApp {
       if (!mounted) await this.playSong(song, overrides);
       return;
     }
+    const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
+    if (decideFamily === 'default' && gameplayFamily === 'default') {
+      await this.ensureHostMounted();
+      this.lastSelectNavigation = this.selectView?.getNavigation();
+      this.selectView?.setVisible(false);
+      this.decideView?.dispose();
+      this.gameplayView?.dispose();
+      this.gameplayView = undefined;
+      const preloaded = this.preloadGameplay(song, overrides);
+      let advanced = false;
+      const advance = (then: () => void): void => {
+        if (advanced) return;
+        advanced = true;
+        then();
+      };
+      this.decideView = new PixiDecideView({
+        onContinue: () =>
+          advance(() => {
+            void this.startGameplayAfterDecide(song, preloaded);
+          }),
+        onCancel: () =>
+          advance(() => {
+            this.gameplayView?.dispose();
+            this.gameplayView = undefined;
+            void this.showSelect();
+          }),
+      });
+      await this.decideView.mount(this.sceneHost, { song, collection: this.collection });
+      return;
+    }
     if (decideFamily === 'default' || !this.decideSkin) {
-      // Default family has no decide splash by design — same for an LR2-only setup that didn't ship a decide skin.
+      // Mixed default/LR2 or an LR2 theme that didn't ship a decide skin: skip the splash.
       // The select view's `playDecideSound` already fired so the audio cue still plays.
       await this.playSong(song, overrides);
       return;
