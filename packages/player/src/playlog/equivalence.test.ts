@@ -46,6 +46,27 @@ function down(seq: number, timeUs: number, ...channels: string[]): PlaylogInputE
   return { seq, timeUs, action: 'down', channels };
 }
 
+function up(seq: number, timeUs: number, ...channels: string[]): PlaylogInputEvent {
+  return { seq, timeUs, action: 'up', channels };
+}
+
+/** BPM 240, a long note on `11` from 1.0 s to 2.0 s via `#LNOBJ`, plus a plain note that is never pressed. */
+function longNoteChart(lnMode?: 1 | 2 | 3): BeMusicJson {
+  const json = createEmptyJson('bms');
+  json.metadata.bpm = 240;
+  json.metadata.rank = 2;
+  json.bms.lnObjs = ['AA'];
+  if (lnMode !== undefined) {
+    json.bms.lnMode = lnMode;
+  }
+  json.events = [
+    { measure: 1, channel: '11', position: [0, 1], value: '01' },
+    { measure: 2, channel: '11', position: [0, 1], value: 'AA' },
+    { measure: 4, channel: '19', position: [0, 1], value: '01' },
+  ];
+  return json;
+}
+
 /** BPM 240 → one measure per second, so `measure` + `position` read directly as seconds. */
 function chart(events: BeMusicJson['events'], rank = 2): BeMusicJson {
   const json = createEmptyJson('bms');
@@ -117,6 +138,56 @@ describe('engine / simulator equivalence', () => {
       simulated.judge.poor,
     ]);
     expect(summary.exScore).toBe(simulated.exScore);
+  });
+
+  test.each(RULESETS)('%s: a long note held cleanly to its tail agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(2);
+    const inputs = [down(0, 1_000_000, '11'), up(1, 2_000_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.great,
+      simulated.judge.good,
+      simulated.judge.bad,
+      simulated.judge.poor,
+    ]);
+    expect(summary.exScore).toBe(simulated.exScore);
+    // The ruleset decides how many judgments one long note is worth: LR2 plays it as an LN (one), beatoraja
+    // honours `#LNMODE 2` as a CN and IIDX charges everything (head and tail, so two).
+    expect(summary.total).toBe(simulated.noteCount);
+    expect(summary.total).toBe(ruleset === 'lr2' ? 2 : 3);
+  });
+
+  test.each(RULESETS)('%s: releasing a long note early agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(2);
+    const inputs = [down(0, 1_000_000, '11'), up(1, 1_400_000, '11')];
+
+    const { summary, playlog } = await replay(json, inputs, ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.great,
+      simulated.judge.good,
+      simulated.judge.bad,
+      simulated.judge.poor,
+    ]);
+    expect(summary.exScore).toBe(simulated.exScore);
+  });
+
+  test.each(RULESETS)('%s: never touching a long note agrees on both sides', async (ruleset) => {
+    const json = longNoteChart(2);
+
+    const { summary, playlog } = await replay(json, [], ruleset);
+    const simulated = simulatePlaylog(playlog, { ruleset });
+
+    expect({ poor: summary.poor, total: summary.total }).toEqual({
+      poor: simulated.judge.poor,
+      total: simulated.noteCount,
+    });
   });
 
   test.each(RULESETS)('%s: an untouched chart misses every note on both sides', async (ruleset) => {

@@ -2240,11 +2240,14 @@ describe('player', () => {
 
   test('player: LNMODE=3 drains groove gauge while the hold is broken', async () => {
     expect(extractPlayableNotes(createLnobjLongNoteChart(3))[0]?.longNoteMode).toBe(3);
+    // HCN is a beatoraja mechanic — the chart's `#LNMODE` only reaches the engine under the rulesets that honour
+    // it. LR2 plays every long note as a plain LN (asserted below).
     const mode2Summary = await manualPlay(createLnobjLongNoteChart(2), {
       speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
+      judgeRuleset: 'beatoraja',
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
         { delayMs: 1100, command: { kind: 'interrupt', reason: 'escape' } },
@@ -2255,15 +2258,35 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
+      judgeRuleset: 'beatoraja',
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
         { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
       ]),
     });
 
-    expect(mode3Summary.total).toBe(1);
+    // A charge note is two judgments: the head on the press, the tail on the release.
+    expect(mode3Summary.total).toBe(2);
     expect(mode3Summary.bad + mode3Summary.poor).toBe(1);
     expect(mode3Summary.gauge?.current ?? 0).toBeLessThan(mode2Summary.gauge?.current ?? Number.POSITIVE_INFINITY);
+  });
+
+  test('player: LR2 plays every long note as an LN, whatever #LNMODE says', async () => {
+    // `longNoteStyle: 'ln'` — LR2 has neither CN nor HCN, so a `#LNMODE 3` chart is one deferred judgment with no
+    // hold-drain, exactly like a `#LNMODE 1` chart.
+    const summary = await manualPlay(createLnobjLongNoteChart(3), {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.total).toBe(1);
+    expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
   });
 
   test('player: no-TUI logs long-note, gauge, combo, sample-stop, and result events', async () => {
@@ -2274,6 +2297,8 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
+      // The hold-drain / break events this asserts on are HCN mechanics, which only beatoraja runs.
+      judgeRuleset: 'beatoraja',
       writeOutput: (text) => {
         output.push(text);
       },
@@ -2316,15 +2341,12 @@ describe('player', () => {
         (line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'),
       ),
     ).toBe(true);
-    expect(
-      output.some(
-        (line) =>
-          line.includes('kind:result') &&
-          line.includes('reason:complete') &&
-          line.includes('poor:1') &&
-          line.includes('gaugeCleared:false'),
-      ),
-    ).toBe(true);
+    const resultLine = output.find((line) => line.includes('kind:result') && line.includes('reason:complete'));
+    expect(resultLine).toBeDefined();
+    // One HCN is two judgments under beatoraja: the head scored on the press, the tail POORed by the broken hold.
+    expect(resultLine).toContain('total:2');
+    expect(resultLine).toContain('great:1');
+    expect(resultLine).toContain('poor:1');
   });
 
   test('player: uses baseline judge windows for bms RANK=2', () => {
