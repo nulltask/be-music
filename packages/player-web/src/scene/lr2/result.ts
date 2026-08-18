@@ -1,4 +1,4 @@
-import { Application, Color, Container, Graphics, Text, TextStyle, Texture } from 'pixi.js';
+import { Application, Color, Container, Graphics, Texture } from 'pixi.js';
 import { computeScoreRate, resolveIidxRankIndexFromScore, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 import type {
   Lr2DestinationRect,
@@ -31,13 +31,9 @@ import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './gameplay.ts';
-import { LR2_JUDGE_FALLBACK_FONT, LR2_NUMERIC_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
+import { renderDefaultResultChrome } from '../default/result-render.ts';
 
 const log = logger('result');
-const FALLBACK_SURFACE = 0x080d16;
-const FALLBACK_PANEL = 0x101827;
-const FALLBACK_PANEL_DARK = 0x030711;
-const FALLBACK_LINE = 0x2a3548;
 
 /**
  * Result scene. Shows the per-chart score breakdown (judge counts, EX score, rate, max combo, clear lamp / rank) and
@@ -69,8 +65,6 @@ const FALLBACK_LINE = 0x2a3548;
 const FALLBACK_DESIGN_WIDTH = 640;
 const FALLBACK_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
-const TEXT = new Color('#f8fafc');
-const MUTED = new Color('#9aa6b2');
 
 /**
  * Approximate duration of the chart-draw animation when no skin-side `#SRC_SCORECHART` / `#SRC_GAUGECHART` is wired up.
@@ -848,221 +842,36 @@ export class PixiResultView {
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
     const result = this.result;
     if (!result) return;
-    const chrome = new Graphics();
-    chrome.label = 'default-result/chrome';
-    const addText = (
-      text: string,
-      x: number,
-      y: number,
-      options: {
-        size?: number;
-        weight?: '400' | '500' | '600' | '700' | '800' | '900';
-        fill?: number | Color;
-        fontFamily?: string;
-        letterSpacing?: number;
-        anchorX?: number;
-        anchorY?: number;
-        maxWidth?: number;
-        stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
-      } = {},
-    ): Text => {
-      const node = new Text({
-        text,
-        style: new TextStyle({
-          fill: options.fill ?? TEXT,
-          fontSize: options.size ?? 10,
-          fontWeight: options.weight ?? '500',
-          fontFamily: options.fontFamily ?? LR2_TEXT_FALLBACK_FONT,
-          letterSpacing: options.letterSpacing ?? 0,
-          stroke: options.stroke,
-        }),
-      });
-      node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
-      node.position.set(x, y);
-      if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-        node.scale.x = options.maxWidth / node.width;
-      }
-      this.fallbackLayer.addChild(node);
-      return node;
-    };
-
-    const cleared = result.cleared;
     const rate = computeScoreRate(result.score) * 100;
-    const rankLabel = resolveRankLabel(result.score.exScore, result.score.total);
-    const statusColor = cleared ? 0x4bd7c8 : 0xff5c5c;
-    const exMax = Math.max(0, result.score.total * 2);
-
-    chrome.rect(0, 0, designWidth, designHeight).fill(BG);
-    chrome.rect(0, 0, designWidth, 48).fill(FALLBACK_SURFACE);
-    chrome.rect(0, 47, designWidth, 1).fill({ color: FALLBACK_LINE, alpha: 0.9 });
-    chrome.roundRect(18, 72, 172, 148, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(210, 72, 194, 148, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(424, 72, 198, 148, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(18, 246, 286, 180, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(324, 246, 298, 180, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome
-      .rect(0, designHeight - 34, designWidth, 34)
-      .fill(FALLBACK_SURFACE)
-      .stroke({ color: FALLBACK_LINE, width: 1 });
-
-    addText(cleared ? 'CLEARED' : 'FAILED', 18, 14, {
-      size: 14,
-      weight: '900',
-      fill: statusColor,
-      letterSpacing: 1.4,
+    const rankLabel = result.score.total <= 0 ? 'AAA' : resolveIidxRankLabel(result.score.exScore, result.score.total);
+    renderDefaultResultChrome(this.fallbackLayer, {
+      designWidth,
+      designHeight,
+      sceneElapsedMs: Math.max(0, performance.now() - this.sceneStartedAt),
+      rankRevealed: this.timerStartedAt.has(151),
+      rankElapsedMs: this.elapsedSinceTimer(151),
+      result: {
+        cleared: result.cleared,
+        title: result.song.title,
+        artist: result.song.artist,
+        rank: rankLabel,
+        rate,
+        score: result.score.score,
+        exScore: result.score.exScore,
+        exMax: Math.max(0, result.score.total * 2),
+        maxCombo: result.maxCombo,
+        gauge: result.gauge,
+        playSeconds: result.playSeconds,
+        notes: result.score.total,
+        perfect: result.score.perfect,
+        great: result.score.great,
+        good: result.score.good,
+        bad: result.score.bad,
+        poor: result.score.poor,
+        gaugeHistory: result.gaugeHistory,
+        scoreHistory: result.scoreHistory,
+      },
     });
-    addText(`${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`, designWidth - 18, 14, {
-      size: 11,
-      weight: '700',
-      fill: MUTED,
-      anchorX: 1,
-      maxWidth: 430,
-    });
-
-    addText('RANK', 38, 92, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    addText(rankLabel, 104, 144, {
-      size: rankLabel.length >= 3 ? 40 : 54,
-      weight: '900',
-      fill: 0xffc857,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
-      maxWidth: 128,
-    });
-    addText(`${rate.toFixed(1)}%`, 104, 190, {
-      size: 16,
-      weight: '900',
-      fill: TEXT,
-      anchorX: 0.5,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-
-    this.renderResultMetric(chrome, 228, 92, 'SCORE', String(result.score.score), 0xffc857);
-    this.renderResultMetric(chrome, 228, 138, 'EX SCORE', `${result.score.exScore} / ${exMax}`, 0xf6f2e8);
-    this.renderResultMetric(chrome, 228, 184, 'MAX COMBO', String(result.maxCombo), 0x4bd7c8, LR2_JUDGE_FALLBACK_FONT);
-    this.renderResultMetric(chrome, 442, 92, 'GAUGE', `${Math.round(result.gauge)}%`, statusColor);
-    this.renderResultMetric(chrome, 442, 138, 'PLAY TIME', `${result.playSeconds.toFixed(1)}s`, 0xf6f2e8);
-    this.renderResultMetric(chrome, 442, 184, 'NOTES', String(result.score.total), 0xf6f2e8);
-
-    addText('JUDGEMENT', 36, 266, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    const judges: Array<readonly [string, string, number]> = [
-      ['PGREAT', String(result.score.perfect), 0xffc857],
-      ['GREAT', String(result.score.great), 0x6ee07f],
-      ['GOOD', String(result.score.good), 0x76a8ff],
-      ['BAD', String(result.score.bad), 0xff9b54],
-      ['POOR', String(result.score.poor), 0xff5c5c],
-    ];
-    for (let i = 0; i < judges.length; i += 1) {
-      const jy = 292 + i * 24;
-      const [label, value, fill] = judges[i]!;
-      chrome.roundRect(36, jy, 246, 18, 4).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-      chrome.rect(38, jy, Math.min(242, Number(value) * 2), 18).fill({ color: fill, alpha: 0.16 });
-      addText(label, 48, jy + 4, { size: 9, weight: '800', fill, fontFamily: LR2_JUDGE_FALLBACK_FONT });
-      addText(value, 264, jy + 1, {
-        size: 13,
-        weight: '900',
-        fill: TEXT,
-        fontFamily: LR2_JUDGE_FALLBACK_FONT,
-        anchorX: 1,
-      });
-    }
-
-    addText('RUN', 342, 266, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    chrome.rect(342, 292, 256, 46).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.rect(342, 362, 256, 46).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-    addText('Gauge', 354, 304, { size: 9, weight: '700', fill: MUTED });
-    addText('EX score', 354, 374, { size: 9, weight: '700', fill: MUTED });
-    this.drawFallbackSeries(
-      chrome,
-      424,
-      300,
-      160,
-      30,
-      result.gaugeHistory.map((sample) => ({ x: sample.progress, y: sample.value / 100 })),
-      statusColor,
-    );
-    this.drawFallbackSeries(
-      chrome,
-      424,
-      370,
-      160,
-      30,
-      result.scoreHistory.map((sample) => ({ x: sample.progress, y: exMax > 0 ? sample.exScore / exMax : 0 })),
-      0xffc857,
-    );
-
-    addText('TOTAL SCORE', 18, designHeight - 22, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    addText(String(result.score.score), 150, designHeight - 27, {
-      size: 18,
-      weight: '900',
-      fill: TEXT,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-
-    this.fallbackLayer.addChildAt(chrome, 0);
-  }
-
-  private renderResultMetric(
-    chrome: Graphics,
-    x: number,
-    y: number,
-    label: string,
-    value: string,
-    fill: number,
-    valueFontFamily = LR2_NUMERIC_FALLBACK_FONT,
-  ): void {
-    chrome.rect(x, y, 156, 30).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-    const labelText = new Text({
-      text: label,
-      style: new TextStyle({
-        fill: MUTED,
-        fontSize: 8,
-        fontWeight: '800',
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-        letterSpacing: 0.7,
-      }),
-    });
-    labelText.position.set(x + 10, y + 5);
-    this.fallbackLayer.addChild(labelText);
-
-    const valueText = new Text({
-      text: value,
-      style: new TextStyle({
-        fill,
-        fontSize: 14,
-        fontWeight: '900',
-        fontFamily: valueFontFamily,
-      }),
-    });
-    valueText.anchor.set(1, 0);
-    valueText.position.set(x + 146, y + 13);
-    if (valueText.width > 92) {
-      valueText.scale.x = 92 / valueText.width;
-    }
-    this.fallbackLayer.addChild(valueText);
-  }
-
-  private drawFallbackSeries(
-    chrome: Graphics,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    points: Array<{ x: number; y: number }>,
-    color: number,
-  ): void {
-    if (points.length === 0) return;
-    chrome.rect(x, y + h, w, 1).fill({ color: 0xffffff, alpha: 0.12 });
-    const first = points[0]!;
-    chrome.moveTo(x + clamp01(first.x) * w, y + (1 - clamp01(first.y)) * h);
-    for (let i = 1; i < points.length; i += 1) {
-      const point = points[i]!;
-      chrome.lineTo(x + clamp01(point.x) * w, y + (1 - clamp01(point.y)) * h);
-    }
-    if (points.length === 1) {
-      chrome.lineTo(x + clamp01(first.x) * w + 0.5, y + (1 - clamp01(first.y)) * h);
-    }
-    chrome.stroke({ color, width: 2, alpha: 0.95, alignment: 0.5 });
   }
 
   private evaluateElementDst(element: {
@@ -1555,15 +1364,6 @@ function resolveResultSliderValue(type: number, data: PixiGameplayResultData): n
   // (type 1) and "rate" (type 6). Reuse the bargraph resolver so any new slot landing in either gets one shared
   // implementation.
   return resolveResultBargraphValue(type, data);
-}
-
-function resolveRankLabel(exScore: number, total: number): string {
-  return total <= 0 ? 'AAA' : resolveIidxRankLabel(exScore, total);
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
 }
 
 // Re-export this small LR2 geometry type so result-scene consumers do not have to import from `skin.ts` directly.

@@ -34,12 +34,7 @@ import {
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
-import {
-  groupSongsByFolder,
-  loadAssetBytes,
-  resolveChartPlayVariant,
-  resolveSongSource,
-} from '../../collection/collection.ts';
+import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
@@ -64,20 +59,24 @@ import type {
   BrowserSongCollection,
   BrowserSongEntry,
 } from '../../collection/types.ts';
-import { LR2_NUMERIC_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
+import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
+import {
+  DEFAULT_SELECT_LAYOUT,
+  defaultSelectEntryIndexAt,
+  defaultSelectListWidth,
+  isInsideDefaultSelectList,
+  resolveDefaultSelectVisibleWindow,
+} from '../default/select-layout.ts';
+import {
+  beginDefaultSelectMotion,
+  renderDefaultSelectChrome,
+  renderDefaultSelectEntryRow,
+} from '../default/select-render.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
-const PANEL = new Color('#101827');
-const ACTIVE = new Color('#4bd7c8');
 const TEXT = new Color('#f6f2e8');
 const MUTED = new Color('#a9a39a');
-const SURFACE = 0x080d16;
-const PANEL_DARK = 0x030711;
-const PANEL_SOFT = 0x0b1320;
-const PANEL_ACTION = 0x121a28;
-const PANEL_ACTION_ACTIVE = 0x162238;
-const LINE = 0x2a3548;
 /**
  * Design canvas the no-skin select scene renders into. 640×480 matches the LR2 default `select.lr2skin` (no
  * `#RESOLUTION` declared, so the loader's seed at width=640 / height=480 wins).
@@ -2421,25 +2420,16 @@ export class PixiSongSelectView {
     // Geometry must mirror the `render()` layout above: rows begin at `listTop` with `rowHeight` pitch, and the visible
     // window centers on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
     // no-op.
-    const listX = 320;
-    const listTop = 54;
-    const listBottom = designHeight - 26;
-    const rowHeight = 28;
-    if (virtualX < listX || virtualY < listTop || virtualY > listBottom) {
+    if (!isInsideDefaultSelectList(virtualX, virtualY, designHeight)) {
       return;
     }
     const fallbackEntries = this.currentEntries();
     if (fallbackEntries.length === 0) {
       return;
     }
-    const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowHeight));
-    const start = Math.max(
-      0,
-      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackEntries.length - visibleRows)),
-    );
-    const visibleRow = Math.floor((virtualY - listTop) / rowHeight);
-    const entryIndex = start + visibleRow;
-    if (entryIndex < 0 || entryIndex >= fallbackEntries.length) {
+    const { start } = resolveDefaultSelectVisibleWindow(this.selectedIndex, fallbackEntries.length, designHeight);
+    const entryIndex = defaultSelectEntryIndexAt(virtualY, start, fallbackEntries.length);
+    if (entryIndex === undefined) {
       return;
     }
     const entry = fallbackEntries[entryIndex];
@@ -2707,15 +2697,16 @@ export class PixiSongSelectView {
 
     // Right-column song bar list. Keep the selected entry near the vertical center so keyboard / wheel navigation feels
     // stable with or without a loaded external skin.
-    const listX = 320;
-    const listWidth = designWidth - listX - 16;
-    const rowHeight = 28;
-    const listTop = 54;
-    const listBottom = designHeight - 26;
-    const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowHeight));
-    const start = Math.max(
-      0,
-      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackEntries.length - visibleRows)),
+    const listX = DEFAULT_SELECT_LAYOUT.listX;
+    const listWidth = defaultSelectListWidth(designWidth);
+    const rowHeight = DEFAULT_SELECT_LAYOUT.rowHeight;
+    const listTop = DEFAULT_SELECT_LAYOUT.listTop;
+    const elapsedMs = Math.max(0, performance.now() - this.sceneStartedAt);
+    const { selectedSlamT } = beginDefaultSelectMotion(this.selectedIndex, elapsedMs);
+    const { start, visibleRows } = resolveDefaultSelectVisibleWindow(
+      this.selectedIndex,
+      fallbackEntries.length,
+      designHeight,
     );
     for (let visibleIndex = 0; visibleIndex < visibleRows; visibleIndex += 1) {
       const entryIndex = start + visibleIndex;
@@ -2723,7 +2714,17 @@ export class PixiSongSelectView {
       if (!entry) {
         break;
       }
-      this.drawFallbackEntryRow(entry, entryIndex, visibleIndex, listX, listTop, listWidth, rowHeight);
+      this.drawFallbackEntryRow(
+        entry,
+        entryIndex,
+        visibleIndex,
+        listX,
+        listTop,
+        listWidth,
+        rowHeight,
+        elapsedMs,
+        selectedSlamT,
+      );
     }
     this.renderReadTextOverlay(designWidth, designHeight);
   }
@@ -2737,162 +2738,8 @@ export class PixiSongSelectView {
     designHeight: number,
     entries: readonly BrowserBrowseEntry[],
   ): void {
-    const chrome = new Graphics();
-    chrome.label = 'default-select/chrome';
-    const addText = (
-      text: string,
-      x: number,
-      y: number,
-      options: {
-        size?: number;
-        weight?: '400' | '500' | '600' | '700' | '800' | '900';
-        fill?: number | Color;
-        fontFamily?: string;
-        letterSpacing?: number;
-        anchorX?: number;
-        anchorY?: number;
-        maxWidth?: number;
-      } = {},
-    ): Text => {
-      const node = new Text({
-        text,
-        style: new TextStyle({
-          fill: options.fill ?? TEXT,
-          fontSize: options.size ?? 10,
-          fontWeight: options.weight ?? '500',
-          fontFamily: options.fontFamily ?? LR2_TEXT_FALLBACK_FONT,
-          letterSpacing: options.letterSpacing ?? 0,
-        }),
-      });
-      node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
-      node.position.set(x, y);
-      if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-        node.scale.x = options.maxWidth / node.width;
-      }
-      this.listLayer.addChild(node);
-      return node;
-    };
-
-    chrome.rect(0, 0, designWidth, designHeight).fill(BG);
-    chrome.rect(0, 0, designWidth, 40).fill(SURFACE);
-    chrome.rect(0, 39, designWidth, 1).fill({ color: LINE, alpha: 0.9 });
-
-    const song = this.focusedSong();
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
-    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
-    const playLevelNumber =
-      song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
-    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
-    const fileLabel = song?.fileLabel ?? '';
-    const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
     const currentFolder = this.browseStack[this.browseStack.length - 1];
     const categoryName = this.searchQuery ? `Search: ${this.searchQuery}` : (currentFolder?.label ?? 'Library');
-    const selectedPosition =
-      entries.length > 0 ? `${Math.min(this.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
-
-    addText('MUSIC SELECT', 16, 12, { size: 12, weight: '900', fill: TEXT, letterSpacing: 1.4 });
-    addText(categoryName, designWidth - 16, 12, {
-      size: 10,
-      weight: '700',
-      fill: MUTED,
-      anchorX: 1,
-      maxWidth: 260,
-    });
-
-    chrome.roundRect(12, 54, 292, 306, 6).fill(PANEL).stroke({ color: LINE, width: 1 });
-    chrome.rect(24, 94, 268, 1).fill({ color: LINE, alpha: 0.7 });
-    chrome.roundRect(24, 150, 76, 48, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
-    chrome.roundRect(112, 150, 76, 48, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
-    chrome.roundRect(200, 150, 92, 48, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
-    chrome.rect(24, 226, 268, 12).fill(PANEL_DARK);
-    if (Number.isFinite(playLevelNumber)) {
-      const levelRatio = Math.max(0.04, Math.min(1, playLevelNumber / 12));
-      chrome.rect(24, 226, Math.round(268 * levelRatio), 12).fill(0x4bd7c8);
-    }
-    chrome.roundRect(24, 312, 82, 28, 5).fill(PANEL_ACTION).stroke({ color: LINE, width: 1 });
-    chrome.roundRect(112, 312, 180, 28, 5).fill(PANEL_ACTION_ACTIVE).stroke({ color: 0xffc857, width: 1 });
-
-    addText('SELECTED', 24, 70, { size: 8, weight: '800', fill: 0x6e685d, letterSpacing: 1 });
-    addText(songTitle, 24, 104, { size: 18, weight: '900', fill: TEXT, maxWidth: 268 });
-    if (songArtist) {
-      addText(songArtist, 24, 128, { size: 10, weight: '600', fill: MUTED, maxWidth: 268 });
-    }
-    addText('MODE', 34, 160, { size: 8, weight: '800', fill: 0x6e685d });
-    addText(modeLabel, 34, 174, {
-      size: 12,
-      weight: '900',
-      fill: TEXT,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-      maxWidth: 56,
-    });
-    addText('BPM', 122, 160, { size: 8, weight: '800', fill: 0x6e685d });
-    addText(songBpm, 122, 173, {
-      size: 15,
-      weight: '900',
-      fill: ACTIVE,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-    addText('LEVEL', 210, 160, { size: 8, weight: '800', fill: 0x6e685d });
-    addText(playLevel, 210, 171, {
-      size: 18,
-      weight: '900',
-      fill: 0xffc857,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-    if (fileLabel) {
-      addText(fileLabel, 24, 250, {
-        size: 8,
-        weight: '600',
-        fill: MUTED,
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-        maxWidth: 268,
-      });
-    }
-    addText('PLAY', 65, 321, {
-      size: 9,
-      weight: '900',
-      fill: TEXT,
-      anchorX: 0.5,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-    addText('AUTO PLAY', 202, 321, {
-      size: 9,
-      weight: '900',
-      fill: 0xffc857,
-      anchorX: 0.5,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-      maxWidth: 158,
-    });
-    addText(selectedPosition, 24, 348, { size: 10, weight: '700', fill: MUTED, fontFamily: LR2_NUMERIC_FALLBACK_FONT });
-
-    chrome
-      .roundRect(316, 50, designWidth - 332, designHeight - 76, 6)
-      .fill({ color: PANEL_DARK, alpha: 0.85 })
-      .stroke({ color: LINE, width: 1 });
-    addText(this.searchQuery ? 'SEARCH RESULTS' : currentFolder ? 'CHARTS' : 'FOLDERS', 328, 28, {
-      size: 8,
-      weight: '800',
-      fill: 0x6e685d,
-      letterSpacing: 1,
-    });
-
-    chrome.roundRect(12, 376, 292, 28, 5).fill(PANEL_DARK).stroke({ color: LINE, width: 1 });
-    addText('SEARCH', 24, 386, { size: 8, weight: '800', fill: 0x6e685d, letterSpacing: 1 });
-    addText(this.searchQuery || 'Title / artist / genre', 82, 384, {
-      size: 10,
-      weight: '600',
-      fill: this.searchQuery ? TEXT : 0x6e685d,
-      maxWidth: 210,
-    });
-
-    const searchHit = new Graphics();
-    searchHit.rect(12, 376, 292, 28).fill({ color: 0xffffff, alpha: 0.001 });
-    searchHit.eventMode = 'static';
-    searchHit.cursor = 'text';
-    searchHit.on('pointerdown', () => this.options.onSearchActivate?.());
-    this.listLayer.addChild(searchHit);
-
     const launchFocused = (autoPlay: boolean): void => {
       const focused = this.focusedSong();
       if (!focused) return;
@@ -2906,29 +2753,21 @@ export class PixiSongSelectView {
       }
       this.options.onSongSelected?.(focused);
     };
-    const playHit = new Graphics();
-    playHit.rect(24, 312, 82, 28).fill({ color: 0xffffff, alpha: 0.001 });
-    playHit.eventMode = 'static';
-    playHit.cursor = 'pointer';
-    playHit.on('pointerdown', () => launchFocused(false));
-    this.listLayer.addChild(playHit);
-
-    const autoPlayHit = new Graphics();
-    autoPlayHit.rect(112, 312, 180, 28).fill({ color: 0xffffff, alpha: 0.001 });
-    autoPlayHit.eventMode = 'static';
-    autoPlayHit.cursor = 'pointer';
-    autoPlayHit.on('pointerdown', () => launchFocused(true));
-    this.listLayer.addChild(autoPlayHit);
-
-    chrome.roundRect(12, 420, 292, 42, 5).fill(PANEL).stroke({ color: LINE, width: 1 });
-    addText('LIBRARY', 24, 432, { size: 8, weight: '800', fill: 0x6e685d, letterSpacing: 1 });
-    addText(`${entries.length} shown / ${this.collection.songs.length} charts`, 24, 446, {
-      size: 11,
-      weight: '700',
-      fill: MUTED,
+    renderDefaultSelectChrome(this.listLayer, {
+      designWidth,
+      designHeight,
+      elapsedMs: Math.max(0, performance.now() - this.sceneStartedAt),
+      selectedIndex: this.selectedIndex,
+      entries,
+      searchQuery: this.searchQuery,
+      categoryName,
+      libraryShown: entries.length,
+      libraryTotal: this.collection.songs.length,
+      song: this.focusedSong(),
+      onSearchActivate: () => this.options.onSearchActivate?.(),
+      onPlay: () => launchFocused(false),
+      onAutoPlay: () => launchFocused(true),
     });
-
-    this.listLayer.addChildAt(chrome, 0);
   }
 
   /**
@@ -3625,126 +3464,27 @@ export class PixiSongSelectView {
     listY: number,
     listWidth: number,
     rowHeight: number,
+    elapsedMs: number,
+    selectedSlamT: number,
   ): void {
-    const y = listY + visibleIndex * rowHeight;
-    const row = new Graphics();
-    const active = entryIndex === this.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
-    const folder = entry.kind === 'folder' ? entry.folder : undefined;
-    const titleText = song?.title ?? folder?.label ?? '';
-    const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
-    const metaText = song
-      ? [song.playLevel !== undefined ? `Lv ${song.playLevel}` : undefined, song.bpm ? `${song.bpm}BPM` : undefined]
-          .filter(Boolean)
-          .join('  ·  ')
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
-    const playLevelText =
-      song?.playLevel !== undefined ? String(song.playLevel) : folder ? String(folder.songs.length) : '-';
-    const keyPillX = listX + 6;
-    const keyPillW = 28;
-    const levelPillX = keyPillX + keyPillW + 4;
-    const levelPillW = 28;
-    const titleX = levelPillX + levelPillW + 8;
-    const textMaxWidth = Math.max(24, listWidth - (titleX - listX) - 8);
-    row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
-    if (active) {
-      row
-        .roundRect(listX - 4, y - 1, listWidth + 8, rowHeight, 5)
-        .fill({ color: ACTIVE, alpha: 0.95 })
-        .stroke({ color: 0xffffff, width: 1, alpha: 0.55 });
-    } else {
-      row
-        .roundRect(listX, y, listWidth, rowHeight - 3, 4)
-        .fill({ color: PANEL, alpha: 0.78 })
-        .stroke({ color: LINE, width: 1, alpha: 0.75 });
-    }
-    this.listLayer.addChild(row);
-
-    row.roundRect(keyPillX, y + 5, keyPillW, rowHeight - 12, 3).fill(active ? SURFACE : PANEL_SOFT);
-
-    row
-      .roundRect(levelPillX, y + 5, levelPillW, rowHeight - 12, 3)
-      .fill(active ? SURFACE : PANEL_DARK)
-      .stroke({ color: active ? 0xffffff : LINE, width: 1, alpha: active ? 0.35 : 0.8 });
-
-    const keyLabel = new Text({
-      text: keyText,
-      style: new TextStyle({
-        fill: active ? 0xffffff : MUTED,
-        fontSize: 8,
-        fontWeight: '900',
-        fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-      }),
+    renderDefaultSelectEntryRow(this.listLayer, {
+      entry,
+      entryIndex,
+      visibleIndex,
+      selectedIndex: this.selectedIndex,
+      elapsedMs,
+      listX,
+      listY,
+      listWidth,
+      rowHeight,
+      selectedSlamT,
     });
-    keyLabel.anchor.set(0.5, 0.5);
-    keyLabel.position.set(keyPillX + keyPillW / 2, y + rowHeight / 2 - 1);
-    if (keyLabel.width > keyPillW - 4) {
-      keyLabel.scale.x = (keyPillW - 4) / keyLabel.width;
-    }
-    this.listLayer.addChild(keyLabel);
-
-    const playLevel = new Text({
-      text: playLevelText,
-      style: new TextStyle({
-        fill: active ? 0xffffff : 0xffc857,
-        fontSize: 10,
-        fontWeight: '900',
-        fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-      }),
-    });
-    playLevel.anchor.set(0.5, 0.5);
-    playLevel.position.set(levelPillX + levelPillW / 2, y + rowHeight / 2 - 1);
-    if (playLevel.width > levelPillW - 4) {
-      playLevel.scale.x = (levelPillW - 4) / playLevel.width;
-    }
-    this.listLayer.addChild(playLevel);
-
-    const title = new Text({
-      text: titleText,
-      style: new TextStyle({
-        fill: active ? 0x06101c : TEXT,
-        fontSize: 11,
-        fontWeight: '800',
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-      }),
-    });
-    title.label = `fallback-title[idx=${entryIndex}]`;
-    title.position.set(titleX, y + 4);
-    if (title.width > textMaxWidth) {
-      title.scale.x = textMaxWidth / title.width;
-    }
-    this.listLayer.addChild(title);
-
-    const meta = new Text({
-      text: metaText,
-      style: new TextStyle({
-        fill: active ? 0x24403d : MUTED,
-        fontSize: 8,
-        fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-      }),
-    });
-    meta.label = `fallback-meta[idx=${entryIndex}]`;
-    meta.position.set(titleX, y + 17);
-    if (meta.width > textMaxWidth) {
-      meta.scale.x = textMaxWidth / meta.width;
-    }
-    this.listLayer.addChild(meta);
   }
 }
 
 function clampSlot(value: number, slotCount: number): number {
   if (slotCount <= 0) return 0;
   return Math.min(slotCount - 1, Math.max(0, Math.trunc(value)));
-}
-
-/**
- * Human-readable mode label for the focused song's play variant (`'5K' | '7K' | '9K' | '10K' | '14K' KEYS`). Used to
- * populate the `MODE` pill on the no-skin select banner so the user sees the same kind of badge the LR2 default skin
- * paints with its mode bitmap.
- */
-function formatPlayVariantLabel(song: BrowserSongEntry): string {
-  const variant = resolveChartPlayVariant(song);
-  return `${variant} KEYS`;
 }
 
 /**
