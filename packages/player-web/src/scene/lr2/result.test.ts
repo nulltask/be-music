@@ -25,6 +25,7 @@ interface ResultOverrides extends SongOverrides {
   total?: number;
   bad?: number;
   poor?: number;
+  emptyPoor?: number;
 }
 
 /**
@@ -59,6 +60,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
       good: 0,
       bad: overrides.bad ?? 0,
       poor: overrides.poor ?? 0,
+      emptyPoor: overrides.emptyPoor ?? 0,
       exScore: overrides.exScore ?? 0,
       score: 0,
     },

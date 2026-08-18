@@ -394,9 +394,12 @@ and fires the POOR cue without consuming a note, so it never reaches EX-SCORE an
 second before a note charges one, a press after never does; beatoraja's reaches 500 ms early and 150 ms late.
 Whether it breaks the combo is the ruleset's call: beatoraja's five-key and PMS rules say yes, LR2 and IIDX say no.
 
-Whether a player's POOR counter displays `poor` and `emptyPoor` summed is a presentation choice. LR2's does
-(OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it), which is why the split is exposed rather than
-folded.
+Whether a player's POOR counter displays `poor` and `emptyPoor` summed is a presentation choice, carried by the
+ruleset as `emptyPoorCountsInPoorDisplay`. LR2's counter does sum them (OpenLR2 `ApplyJudgeNote` increments
+`playerstat.poor` for the empty-POOR branch, and LR2 exposes no separate stat), so the LR2 gameplay scene folds
+them into its display copy — the POOR row, BP, and the per-judge rates all follow. beatoraja shows an empty-POOR
+figure of its own and IIDX's counter is unmeasured, so both keep them apart. `PlayerSummary` always reports the
+split.
 
 ## Groove Gauge
 

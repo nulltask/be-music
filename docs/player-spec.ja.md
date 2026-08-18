@@ -402,8 +402,11 @@ EX-SCORE は IIDX 互換です。
 空 POOR になりますが、通過後の押下は決してなりません。beatoraja は早側 500 ms・遅側 150 ms です。
 コンボを切るかどうかもルールセット次第で、beatoraja の 5 鍵 / PMS のみ切れ、LR2 と IIDX は切れません。
 
-POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示側の選択です。LR2 は合算します
-（OpenLR2 `ApplyJudgeNote` が `playerstat.poor` を加算）。そのため両者を合算せず分けて公開しています。
+POOR カウンタに `poor` と `emptyPoor` の合計を表示するかは提示側の選択で、ルールセットが
+`emptyPoorCountsInPoorDisplay` として持ちます。LR2 のカウンタは合算します（OpenLR2 `ApplyJudgeNote` が
+空POOR 分岐でも `playerstat.poor` を加算し、LR2 に独立した統計は無いため）。そのため LR2 のゲームプレイシーンは
+表示用コピーで合算し、POOR 行・BP・判定別レートがすべて追従します。beatoraja は独自の空POOR 表示を持ち、
+IIDX は未測定のため、どちらも分けたままです。`PlayerSummary` は常に分けて報告します。
 
 ## Groove Gauge
 

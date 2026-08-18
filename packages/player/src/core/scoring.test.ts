@@ -4,6 +4,7 @@ import {
   computeScoreRate,
   createEmptyScore,
   createScoreTracker,
+  resolveDisplayedPoor,
   LR2_MONEY_SCORE_MAX,
   resolveIidxRankLabel,
   resolveIidxSelectRankOp,
@@ -18,6 +19,7 @@ function createSummary(total: number): ScoreSummary {
     good: 0,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 0,
     score: 0,
   };
@@ -32,6 +34,7 @@ describe('scoring', () => {
       good: 0,
       bad: 0,
       poor: 0,
+      emptyPoor: 0,
       exScore: 0,
       score: 0,
     });
@@ -65,6 +68,13 @@ describe('scoring', () => {
     // (4x99 + 2x1) x 50000 / 100 — no combo term, unlike the invented curve this replaced.
     expect(mixed.score).toBe(Math.floor(((4 * 99 + 2) * 50000) / 100));
     expect(mixed.score).toBeLessThan(LR2_MONEY_SCORE_MAX);
+  });
+
+  test("resolveDisplayedPoor folds empty POORs in only where the ruleset's counter does", () => {
+    const score = { poor: 3, emptyPoor: 2 };
+
+    expect(resolveDisplayedPoor(score, true)).toBe(5); // LR2's counter shows the sum
+    expect(resolveDisplayedPoor(score, false)).toBe(3);
   });
 
   test('rulesets without a money score report EX-SCORE instead', () => {

@@ -102,6 +102,16 @@ export interface RulesetConfig {
   effectiveTotal: number;
   /** LR2 money score (`(4PG + 2GR + GD) × 50000 / notes`, floored). */
   moneyScore: boolean;
+  /**
+   * Whether the ruleset's own result screen folds empty POORs into its POOR counter. LR2 does — OpenLR2's
+   * `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat —
+   * so a run judged under LR2 must display the sum to match the real thing. Purely a PRESENTATION rule: the
+   * counts stay separate in `PlayerSummary`, and EX-SCORE and combo are never affected either way.
+   *
+   * beatoraja and IIDX are left `false`: beatoraja shows an empty-POOR figure of its own, and no first-party
+   * measurement of IIDX's counter was found. Flip either one when a source turns up.
+   */
+  emptyPoorCountsInPoorDisplay: boolean;
 }
 
 export interface ResolveRulesetOptions {
@@ -670,6 +680,7 @@ export function resolveRuleset(
       noteCount,
       effectiveTotal,
       moneyScore: true,
+      emptyPoorCountsInPoorDisplay: true,
     };
   }
 
@@ -697,6 +708,7 @@ export function resolveRuleset(
       noteCount,
       effectiveTotal,
       moneyScore: false,
+      emptyPoorCountsInPoorDisplay: false,
     };
   }
 
@@ -719,5 +731,6 @@ export function resolveRuleset(
     noteCount,
     effectiveTotal,
     moneyScore: false,
+    emptyPoorCountsInPoorDisplay: false,
   };
 }

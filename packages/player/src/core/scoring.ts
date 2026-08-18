@@ -7,6 +7,9 @@ export interface ScoreSummary {
   good: number;
   bad: number;
   poor: number;
+  /** Empty POOR (空POOR) count — see `PlayerSummary.emptyPoor`. Never a note judgment, so `applyJudgeToSummary`
+   * does not touch it; the engine increments it on the empty-POOR path. */
+  emptyPoor: number;
   exScore: number;
   score: number;
 }
@@ -38,7 +41,19 @@ export function createScoreTracker(options: { moneyScore?: boolean } = {}): Scor
 }
 
 export function createEmptyScore(total: number): ScoreSummary {
-  return { total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, exScore: 0, score: 0 };
+  return { total, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 0, score: 0 };
+}
+
+/**
+ * The POOR figure a ruleset's own result screen shows. LR2 folds empty POORs into it (OpenLR2 `ApplyJudgeNote`
+ * increments `playerstat.poor` for the empty-POOR branch, and LR2 exposes no separate stat), so a run judged under
+ * LR2 must display the sum to match the real thing. Rulesets that report them apart pass `false`.
+ */
+export function resolveDisplayedPoor(
+  score: Pick<ScoreSummary, 'poor' | 'emptyPoor'>,
+  emptyPoorCountsInPoor: boolean,
+): number {
+  return emptyPoorCountsInPoor ? score.poor + score.emptyPoor : score.poor;
 }
 
 export function computeScoreRate(score: Pick<ScoreSummary, 'total' | 'exScore'>): number {

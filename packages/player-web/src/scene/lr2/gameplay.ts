@@ -12,6 +12,7 @@ import {
 } from '@be-music/audio-renderer/triggers';
 import {
   createScoreTracker,
+  resolveDisplayedPoor,
   computeScoreRate,
   resolveIidxRankLabel,
   type JudgeKind,
@@ -2071,6 +2072,15 @@ export class PixiGameplayView {
    */
   private resolveSelectedGauge(): GrooveGaugeType {
     return this.options.replay?.play.gauge ?? this.options.gauge ?? 'GROOVE';
+  }
+
+  /**
+   * Does the ruleset this run judges under show empty POORs inside its POOR counter? LR2 does; beatoraja shows a
+   * figure of its own, and IIDX's counter is unmeasured, so both keep them apart.
+   */
+  private resolveEmptyPoorCountsInPoorDisplay(): boolean {
+    const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+    return ruleset === 'lr2';
   }
 
   /**
@@ -5766,7 +5776,12 @@ export class PixiGameplayView {
     this.score.great = summary.great;
     this.score.good = summary.good;
     this.score.bad = summary.bad;
-    this.score.poor = summary.poor;
+    this.score.emptyPoor = summary.emptyPoor;
+    // `this.score` is the DISPLAY copy: under LR2 the POOR counter folds empty POORs in, matching the real thing
+    // (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch, and LR2 exposes no
+    // separate stat). Every LR2 read-out — the POOR row, BP, the per-judge rates, the skin's num 84 / 89 / 114 —
+    // goes through this object, so folding here keeps them all consistent. `summary.poor` itself stays split.
+    this.score.poor = resolveDisplayedPoor(summary, this.resolveEmptyPoorCountsInPoorDisplay());
     this.score.exScore = summary.exScore;
     this.score.score = summary.score;
     this.fastCount = summary.fast;
