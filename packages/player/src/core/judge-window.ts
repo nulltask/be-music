@@ -172,7 +172,7 @@ export function resolveJudgeWindowsMsForRuleset(
   debugBadWindowMs?: number,
 ): JudgeWindowsMs {
   if (ruleset === 'iidx') {
-    return overrideBadWindow(IIDX_JUDGE_WINDOWS_MS, debugBadWindowMs);
+    return clampToBadGate(overrideBadWindow(IIDX_JUDGE_WINDOWS_MS, debugBadWindowMs));
   }
   if (ruleset === 'beatoraja') {
     const scale = Math.max(0, resolveBeatorajaJudgeRankPercent(json)) / 100;
@@ -182,13 +182,7 @@ export function resolveJudgeWindowsMsForRuleset(
       good: BEATORAJA_BASE_WINDOWS_MS.good * scale,
       bad: BEATORAJA_BASE_WINDOWS_MS.bad * scale,
     };
-    const result = overrideBadWindow(windows, debugBadWindowMs);
-    return {
-      pgreat: clampWindow(result.pgreat, result.bad),
-      great: clampWindow(result.great, result.bad),
-      good: clampWindow(result.good, result.bad),
-      bad: result.bad,
-    };
+    return clampToBadGate(overrideBadWindow(windows, debugBadWindowMs));
   }
   return resolveJudgeWindowsMs(json, debugBadWindowMs);
 }
@@ -198,6 +192,23 @@ function overrideBadWindow(windows: JudgeWindowsMs, debugBadWindowMs?: number): 
     return { ...windows, bad: debugBadWindowMs };
   }
   return windows;
+}
+
+/**
+ * Caps every inner window at the BAD gate, the same way {@link scaleJudgeWindowsMs} does for LR2.
+ *
+ * Without this the `judgeWindowMs` debug override could leave an inner window WIDER than BAD — classification
+ * walks PGREAT → GREAT → GOOD → BAD in order, so a GOOD window of 116 ms under a 50 ms BAD gate would swallow
+ * every press up to 116 ms and make the override meaningless. The IIDX branch skipped the cap and produced
+ * exactly that; LR2 and beatoraja already capped.
+ */
+function clampToBadGate(windows: JudgeWindowsMs): JudgeWindowsMs {
+  return {
+    pgreat: clampWindow(windows.pgreat, windows.bad),
+    great: clampWindow(windows.great, windows.bad),
+    good: clampWindow(windows.good, windows.bad),
+    bad: windows.bad,
+  };
 }
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {

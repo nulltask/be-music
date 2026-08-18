@@ -175,6 +175,23 @@ describe('judge-window', () => {
     expect(resolveBeatorajaJudgeRankPercent(bmson)).toBe(100);
   });
 
+  test('resolveJudgeWindowsMsForRuleset: the debug BAD override caps every inner window in all three rulesets', () => {
+    // Classification walks PGREAT -> GREAT -> GOOD -> BAD in order, so an inner window wider than the BAD gate
+    // would swallow presses the gate was supposed to reject and make the override meaningless. IIDX used to skip
+    // this cap and returned good=116.67 under bad=50.
+    const json = createEmptyJson('bms');
+    json.metadata.rank = 2;
+    for (const ruleset of ['lr2', 'beatoraja', 'iidx'] as const) {
+      const windows = resolveJudgeWindowsMsForRuleset(json, ruleset, 50);
+      expect(windows.bad).toBe(50);
+      expect(windows.good).toBeLessThanOrEqual(windows.bad);
+      expect(windows.great).toBeLessThanOrEqual(windows.bad);
+      expect(windows.pgreat).toBeLessThanOrEqual(windows.bad);
+    }
+    // A cap only ever narrows: the un-overridden widths stay untouched.
+    expect(resolveJudgeWindowsMsForRuleset(json, 'iidx').good).toBeCloseTo(116.67, 6);
+  });
+
   test("resolveJudgeWindowsMsForRuleset: 'lr2' matches resolveJudgeWindowsMs", () => {
     const json = createEmptyJson('bms');
     json.metadata.rank = 3;

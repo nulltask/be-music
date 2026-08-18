@@ -2382,6 +2382,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let judgeWindows = resolveJudgeWindowsMsForRuleset(resolvedJson, judgeRuleset, options.judgeWindowMs);
   let badWindowMs = judgeWindows.bad;
   let badWindowSeconds = badWindowMs / 1000;
+  /**
+   * The BAD window in force at chart start, before any `#EXRANKxx` change. The miss sweep resolves each note's
+   * deadline from the rank active at THAT NOTE's time, so it needs the initial value even after `badWindowSeconds`
+   * has been mutated by a later change.
+   */
+  const initialBadWindowSeconds = badWindowSeconds;
   const timingResolver = createTimingResolver(resolvedJson);
   // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
   // non-LR2 rulesets keep their initial windows for the whole chart.
@@ -2918,6 +2924,33 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
+  /**
+   * BAD window (seconds) that was in force at `noteSeconds`, walking the `#EXRANKxx` timeline with its own cursor.
+   *
+   * The miss sweep must not read the LIVE `badWindowSeconds`: a rank change part-way through the chart would then
+   * retroactively move the deadline of notes that had already scrolled past under the old window — widening the
+   * rank would resurrect notes that should already have been missed, narrowing it would miss notes early. Each
+   * note's deadline belongs to the rank active at its own time, which is also what the playlog simulator freezes
+   * per note (`playlog/simulate.ts`, `missDeadlineUs`).
+   *
+   * `scorableNotes` is sorted by `seconds` and the sweep walks it monotonically, so a single forward-only cursor
+   * is enough; re-asking for the same note is idempotent.
+   */
+  let missSweepRankCursor = 0;
+  let missSweepBadWindowSeconds = initialBadWindowSeconds;
+  const resolveMissBadWindowSeconds = (noteSeconds: number): number => {
+    while (missSweepRankCursor < dynamicJudgeRankChanges.length) {
+      const change = dynamicJudgeRankChanges[missSweepRankCursor]!;
+      if (change.seconds > noteSeconds) {
+        break;
+      }
+      missSweepBadWindowSeconds =
+        resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, options.judgeWindowMs).bad / 1000;
+      missSweepRankCursor += 1;
+    }
+    return missSweepBadWindowSeconds;
+  };
+
   const applyExpiredScorableJudgements = (referenceSeconds: number): void => {
     while (scorableMissCursor < scorableNotes.length) {
       const note = scorableNotes[scorableMissCursor]!;
@@ -2925,7 +2958,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         scorableMissCursor += 1;
         continue;
       }
-      if (referenceSeconds - note.seconds <= badWindowSeconds) {
+      if (referenceSeconds - note.seconds <= resolveMissBadWindowSeconds(note.seconds)) {
         break;
       }
       scorableMissCursor += 1;
