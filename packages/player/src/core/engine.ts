@@ -70,7 +70,7 @@ import {
 } from './playback-support.ts';
 import {
   IIDX_EX_SCORE_PER_PGREAT,
-  IIDX_SCORE_MAX,
+  LR2_MONEY_SCORE_MAX,
   applyJudgeToSummary,
   createScoreTracker,
   type JudgeKind,
@@ -1872,7 +1872,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     },
   );
   const { summary, applyGaugeJudge } = createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount);
-  const scoreTracker = createScoreTracker();
+  const scoreTracker = createScoreTracker({ moneyScore: autoRuleset.moneyScore });
   // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
   // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
   // cached native result carries the actual AUTO outcome).
@@ -2441,7 +2441,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       }),
     );
   }
-  writeOutput(renderSummary(summary));
+  writeOutput(renderSummary(summary, autoRuleset.moneyScore));
   return summary;
 }
 
@@ -2554,7 +2554,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const badWindowSeconds = badWindowMs / 1000;
 
   const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
-  const scoreTracker = createScoreTracker();
+  const scoreTracker = createScoreTracker({ moneyScore: ruleset.moneyScore });
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
         const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
@@ -4159,7 +4159,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           playlogRecorder.finalize({ summary, maxCombo: scoreTracker.maxCombo, aborted: true }),
         );
       }
-      writeOutput(renderSummary(summary));
+      writeOutput(renderSummary(summary, ruleset.moneyScore));
       return summary;
     }
     throw new PlayerInterruptedError(interruptedReason);
@@ -4178,7 +4178,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   if (playlogRecorder) {
     options.onPlaylogRecorded?.(playlogRecorder.finalize({ summary, maxCombo: scoreTracker.maxCombo }));
   }
-  writeOutput(renderSummary(summary));
+  writeOutput(renderSummary(summary, ruleset.moneyScore));
   return summary;
 }
 
@@ -5376,10 +5376,10 @@ function formatGrooveGaugeStatus(summary: PlayerSummary): string {
   return summary.gauge?.cleared === true ? 'CLEAR' : 'FAILED';
 }
 
-function renderSummary(summary: PlayerSummary): string {
+function renderSummary(summary: PlayerSummary, moneyScore: boolean): string {
   const maxExScore = Math.max(0, summary.total * IIDX_EX_SCORE_PER_PGREAT);
   const exScoreRate = maxExScore > 0 ? summary.exScore / maxExScore : 0;
-  const scoreRate = summary.score / IIDX_SCORE_MAX;
+  const scoreRate = summary.score / LR2_MONEY_SCORE_MAX;
   const gauge = summary.gauge;
   return (
     [
@@ -5395,10 +5395,13 @@ function renderSummary(summary: PlayerSummary): string {
       `GOOD   : ${summary.good}`,
       `BAD    : ${summary.bad}`,
       `POOR   : ${summary.poor}`,
+      `EMPTY  : ${summary.emptyPoor}`,
       `FAST   : ${summary.fast}`,
       `SLOW   : ${summary.slow}`,
       `EX-SCORE: ${summary.exScore} / ${maxExScore} (${(exScoreRate * 100).toFixed(2)}%)`,
-      `SCORE   : ${summary.score} / ${IIDX_SCORE_MAX} (${(scoreRate * 100).toFixed(2)}%)`,
+      // Only LR2 defines a money score; the other rulesets report EX-SCORE in this field, so printing a
+      // percentage of 200000 there would be meaningless.
+      ...(moneyScore ? [`SCORE   : ${summary.score} / ${LR2_MONEY_SCORE_MAX} (${(scoreRate * 100).toFixed(2)}%)`] : []),
     ].join('\n') + '\n'
   );
 }

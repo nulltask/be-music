@@ -113,6 +113,8 @@ describe('engine / simulator equivalence', () => {
     expect(summary.exScore).toBe(simulated.exScore);
     expect(summary.fast).toBe(simulated.fast);
     expect(summary.slow).toBe(simulated.slow);
+    // Only LR2 defines a money score; the others report EX-SCORE in the same field.
+    expect(summary.score).toBe(simulated.score ?? simulated.exScore);
     // Guard against a vacuous pass: the timings above are chosen to span several judges, so a run that resolved
     // to all-POOR (or all-PGREAT) on both sides would agree without proving anything.
     expect(summary.perfect + summary.great + summary.good).toBeGreaterThan(0);

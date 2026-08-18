@@ -4,7 +4,7 @@ import {
   computeScoreRate,
   createEmptyScore,
   createScoreTracker,
-  IIDX_SCORE_MAX,
+  LR2_MONEY_SCORE_MAX,
   resolveIidxRankLabel,
   resolveIidxSelectRankOp,
   type ScoreSummary,
@@ -48,23 +48,34 @@ describe('scoring', () => {
     expect(resolveIidxSelectRankOp({ total: 0, exScore: 0 })).toBeUndefined();
   });
 
-  test('reaches max score only for all PERFECT', () => {
+  test("LR2's money score is (4PG + 2GR + GD) x 50000 / notes, capped at 200000", () => {
     const summary = createSummary(100);
-    const tracker = createScoreTracker();
+    const tracker = createScoreTracker({ moneyScore: true });
     for (let index = 0; index < summary.total; index += 1) {
       applyJudgeToSummary(summary, 'PERFECT', tracker);
     }
-    expect(summary.score).toBe(IIDX_SCORE_MAX);
+    expect(summary.score).toBe(LR2_MONEY_SCORE_MAX);
+
+    const mixed = createSummary(100);
+    const mixedTracker = createScoreTracker({ moneyScore: true });
+    for (let index = 0; index < 99; index += 1) {
+      applyJudgeToSummary(mixed, 'PERFECT', mixedTracker);
+    }
+    applyJudgeToSummary(mixed, 'GREAT', mixedTracker);
+    // (4x99 + 2x1) x 50000 / 100 — no combo term, unlike the invented curve this replaced.
+    expect(mixed.score).toBe(Math.floor(((4 * 99 + 2) * 50000) / 100));
+    expect(mixed.score).toBeLessThan(LR2_MONEY_SCORE_MAX);
   });
 
-  test('drops score when at least one non-PERFECT exists', () => {
+  test('rulesets without a money score report EX-SCORE instead', () => {
     const summary = createSummary(100);
-    const tracker = createScoreTracker();
-    for (let index = 0; index < summary.total - 1; index += 1) {
-      applyJudgeToSummary(summary, 'PERFECT', tracker);
-    }
+    const tracker = createScoreTracker({ moneyScore: false });
+    applyJudgeToSummary(summary, 'PERFECT', tracker);
     applyJudgeToSummary(summary, 'GREAT', tracker);
-    expect(summary.score).toBeLessThan(IIDX_SCORE_MAX);
+    applyJudgeToSummary(summary, 'GOOD', tracker);
+
+    expect(summary.exScore).toBe(3);
+    expect(summary.score).toBe(3);
   });
 
   test('latches maxCombo across combo breaks', () => {
