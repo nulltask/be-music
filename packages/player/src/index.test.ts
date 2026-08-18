@@ -95,6 +95,7 @@ import {
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import { resolveChartVolWavGain, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './utils.ts';
+import { parsePlaylog, serializePlaylog, simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -967,6 +968,194 @@ describe('player', () => {
     expect(summary.poor).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
     expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
+  });
+
+  test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
+    // BPM 240 → measure 1 starts at chart 1.0 s. One press near the note, then natural chart end.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.title = 'Playlog Test';
+    json.metadata.total = 300;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    let playlog: BeMusicPlaylog | undefined;
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      recordPlaylog: { gauge: 'GROOVE', randomLane: { p1: 'MIRROR' } },
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1000, command: { kind: 'lane-input', tokens: ['z'] } },
+      ]),
+    });
+
+    expect(playlog).toBeDefined();
+    expect(playlog!.format).toBe('be-music-playlog');
+    expect(playlog!.version).toBe(1);
+    expect(playlog!.clock).toEqual({ unit: 'us', origin: 'chart-zero' });
+    expect(playlog!.chart.title).toBe('Playlog Test');
+    expect(playlog!.chart.total).toBe(300);
+    expect(playlog!.chart.noteCount).toBe(1);
+    expect(playlog!.chart.notes).toHaveLength(1);
+    expect(playlog!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
+    expect(playlog!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
+    expect(playlog!.play.randomLane).toEqual({ p1: 'MIRROR' });
+    expect(playlog!.play.aborted).toBeUndefined();
+    // The single scheduled press resolves against lane channel 11 with a chart-relative µs timestamp near the note.
+    expect(playlog!.inputs).toHaveLength(1);
+    expect(playlog!.inputs[0]).toMatchObject({ seq: 0, action: 'down', channels: ['11'] });
+    expect(Math.abs(playlog!.inputs[0]!.timeUs - 1_000_000)).toBeLessThan(250_000);
+    // The native cache mirrors the engine's own summary.
+    const native = playlog!.results?.native;
+    expect(native).toBeDefined();
+    expect(native!.exScore).toBe(summary.exScore);
+    expect(native!.judge.pgreat).toBe(summary.perfect);
+    expect(native!.judge.poor).toBe(summary.poor);
+    expect(native!.gauge.final).toBeCloseTo(summary.gauge?.current ?? -1, 6);
+    // The recorded log feeds the ruleset simulators without further conversion.
+    const lr2 = simulatePlaylog(playlog!, { ruleset: 'lr2' });
+    expect(lr2.noteCount).toBe(1);
+    expect(lr2.judge.pgreat + lr2.judge.great + lr2.judge.good + lr2.judge.bad + lr2.judge.poor).toBe(1);
+  });
+
+  test('player: replayInputs re-drives a recorded playlog deterministically', async () => {
+    // BPM 240 → notes at 1.0 s ('11') and 1.5 s ('12'). Record a play with two slightly-off presses, then replay
+    // the recorded input stream — the judgments must reproduce exactly, even at a different engine speed.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.total = 300;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 2], value: '01' },
+      { measure: 1, channel: '12', position: [1, 2], value: '01' },
+    ];
+
+    let recorded: BeMusicPlaylog | undefined;
+    const original = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      onPlaylogRecorded: (playlog) => {
+        recorded = playlog;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 990, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1540, command: { kind: 'lane-input', tokens: ['s'] } },
+      ]),
+    });
+    expect(recorded).toBeDefined();
+    expect(recorded!.inputs).toHaveLength(2);
+    const originalJudged = original.perfect + original.great + original.good + original.bad;
+    expect(originalJudged).toBeGreaterThan(0);
+
+    let replayed: BeMusicPlaylog | undefined;
+    const replaySummary = await manualPlay(json, {
+      // Chart-relative replay timestamps are speed-independent — run the replay fast to keep the test quick.
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: recorded!.inputs,
+      onPlaylogRecorded: (playlog) => {
+        replayed = playlog;
+      },
+    });
+
+    expect(replaySummary.perfect).toBe(original.perfect);
+    expect(replaySummary.great).toBe(original.great);
+    expect(replaySummary.good).toBe(original.good);
+    expect(replaySummary.bad).toBe(original.bad);
+    expect(replaySummary.poor).toBe(original.poor);
+    expect(replaySummary.exScore).toBe(original.exScore);
+    expect(replaySummary.score).toBe(original.score);
+    expect(replaySummary.fast).toBe(original.fast);
+    expect(replaySummary.slow).toBe(original.slow);
+    expect(replaySummary.gauge?.current).toBeCloseTo(original.gauge?.current ?? -1, 6);
+    // The replayed run re-records an equivalent input stream (same actions, channels, and µs timestamps).
+    expect(
+      replayed!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
+    ).toEqual(
+      recorded!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
+    );
+  });
+
+  test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / IIDX)', async () => {
+    // BPM 240 → one note at 1.0 s; the replayed press lands 35 ms LATE. Under the default (LR2, RANK 2 → GREAT
+    // ±40 ms) and beatoraja (judgerank 75 % → GREAT ±45 ms) windows that is a GREAT; under IIDX (GREAT ±33.33 ms,
+    // GOOD ±116.67 ms) it is a GOOD.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+    const replayInputs = [{ seq: 0, timeUs: 1_035_000, action: 'down' as const, channels: ['11'] }];
+    const base = { speed: 8, leadInMs: 0, audio: false, tui: false, replayInputs } as const;
+
+    const lr2 = await manualPlay(json, { ...base });
+    const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
+    const iidx = await manualPlay(json, { ...base, judgeRuleset: 'iidx' });
+
+    expect(lr2.great).toBe(1);
+    expect(lr2.good).toBe(0);
+    expect(beatoraja.great).toBe(1);
+    expect(beatoraja.good).toBe(0);
+    expect(iidx.great).toBe(0);
+    expect(iidx.good).toBe(1);
+  });
+
+  test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    let playlog: BeMusicPlaylog | undefined;
+    await manualPlay(json, {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'iidx',
+      recordPlaylog: { chartSha256: 'ABCDEF0123456789' },
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 50, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(playlog!.chart.sha256).toBe('abcdef0123456789');
+    expect(playlog!.play.judgeRuleset).toBe('iidx');
+    const parsed = parsePlaylog(serializePlaylog(playlog!));
+    expect(parsed.chart.sha256).toBe('abcdef0123456789');
+    expect(parsed.play.judgeRuleset).toBe('iidx');
+  });
+
+  test('player: ESC-interrupted play records an aborted playlog', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+
+    let playlog: BeMusicPlaylog | undefined;
+    await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 100, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(playlog).toBeDefined();
+    expect(playlog!.play.aborted).toBe(true);
+    expect(playlog!.inputs).toHaveLength(0);
   });
 
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {

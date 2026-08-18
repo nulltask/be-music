@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -84,7 +84,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -92,7 +92,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -111,8 +111,6 @@ jobs:
       needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
-    outputs:
-      snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -122,7 +120,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -132,7 +130,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -156,12 +154,18 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/head.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      # The snapshot moves between jobs as an artifact, never as a job output. It outgrew both limits a job
+      # output would impose: a single argv/envp string caps at `MAX_ARG_STRLEN` (128 KiB) so the compare job
+      # could neither pass it to `node` nor even start `bash` with it in the environment, and job outputs
+      # themselves cap at 1 MiB. Artifacts have no such ceiling and keep the payload off the process image.
+      - name: Upload head benchmark snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-pr-head-snapshot
+          path: tmp/bench/head.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-pr-base:
     name: Benchmark Base (PR)
@@ -173,7 +177,6 @@ jobs:
     outputs:
       available: ${{ steps.detect-bench.outputs.available == 'true' &&
         steps.run-base-benchmark.outcome == 'success' }}
-      snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -183,7 +186,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -194,7 +197,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -259,12 +262,16 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/base.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload base benchmark snapshot
+        if: steps.detect-bench.outputs.available == 'true' &&
+          steps.run-base-benchmark.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-pr-base-snapshot
+          path: tmp/bench/base.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-pr:
     name: Benchmark (PR)
@@ -284,7 +291,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -294,7 +301,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -303,20 +310,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # The snapshot travels as a base64 job output. It MUST reach the decoder through the environment and stdin,
+      # never as a command-line argument: Linux caps a single argv entry at `MAX_ARG_STRLEN` (128 KiB), and the
+      # snapshot passed that once the benchmarked export count grew — the step died with
+      # `node: Argument list too long` (exit 126). `printf` is a bash builtin, so piping the env var into
+      # `base64 -d` never execs with the payload attached.
       - name: Restore head benchmark snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/head.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-pr-head.outputs.snapshot_b64 }}'
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-pr-head-snapshot
+          path: tmp/bench
 
       - name: Restore base benchmark snapshot
         if: needs.benchmark-pr-base.outputs.available == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/base.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-pr-base.outputs.snapshot_b64 }}'
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-pr-base-snapshot
+          path: tmp/bench
 
       - name: Generate benchmark report
         shell: bash
@@ -331,6 +341,7 @@ jobs:
       - name: Post benchmark comment
         uses: actions/github-script@v9
         with:
+          retries: 3
           script: |
             const fs = require('node:fs');
             const marker = '<!-- be-music-exports-benchmark -->';
@@ -375,8 +386,6 @@ jobs:
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
-    outputs:
-      snapshot_b64: ${{ steps.aggregate-head.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -386,7 +395,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -396,7 +405,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -420,12 +429,14 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/head.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload head benchmark snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-push-head-snapshot
+          path: tmp/bench/head.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-push-base:
     name: Benchmark Base (Push)
@@ -436,7 +447,6 @@ jobs:
     outputs:
       available: ${{ steps.detect-bench.outputs.available == 'true' &&
         steps.run-base-benchmark.outcome == 'success' }}
-      snapshot_b64: ${{ steps.aggregate-base.outputs.snapshot_b64 }}
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
@@ -446,7 +456,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
@@ -457,7 +467,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -527,12 +537,16 @@ jobs:
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
-          {
-            echo "snapshot_b64<<__SNAPSHOT__"
-            node -e "const fs=require('node:fs'); process.stdout.write(fs.readFileSync('tmp/bench/base.json').toString('base64'));"
-            echo
-            echo "__SNAPSHOT__"
-          } >> "$GITHUB_OUTPUT"
+
+      - name: Upload base benchmark snapshot
+        if: steps.detect-bench.outputs.available == 'true' &&
+          steps.run-base-benchmark.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-push-base-snapshot
+          path: tmp/bench/base.json
+          retention-days: 1
+          if-no-files-found: error
 
   benchmark-push:
     name: Benchmark (Push)
@@ -550,7 +564,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
 
@@ -560,7 +574,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm
@@ -569,20 +583,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --prefer-offline
 
+      # Env + stdin, never argv — see the matching note on the PR-side restore steps (`MAX_ARG_STRLEN`).
       - name: Restore head benchmark snapshot
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/head.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-push-head.outputs.snapshot_b64 }}'
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-push-head-snapshot
+          path: tmp/bench
 
       - name: Restore base benchmark snapshot
         if: needs.benchmark-push-base.outputs.available == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench
-          node -e "const fs=require('node:fs'); fs.writeFileSync('tmp/bench/base.json', Buffer.from(process.argv[1], 'base64'));" '${{ needs.benchmark-push-base.outputs.snapshot_b64 }}'
+        uses: actions/download-artifact@v8
+        with:
+          name: bench-push-base-snapshot
+          path: tmp/bench
 
       - name: Generate benchmark report
         shell: bash
@@ -597,6 +610,7 @@ jobs:
       - name: Post benchmark comment
         uses: actions/github-script@v9
         with:
+          retries: 3
           script: |
             const fs = require('node:fs');
             const marker = '<!-- be-music-exports-benchmark -->';
@@ -652,7 +666,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -660,7 +674,7 @@ jobs:
           run_install: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version-file: .node-version
           cache: pnpm

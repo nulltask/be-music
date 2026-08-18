@@ -98,9 +98,106 @@ export function resolveBmsJudgeWindowsMsForExRankValue(exRankValue: number, debu
   return resolveBmsJudgeWindowsMsForPercent(bmsExRankValueToJudgeRankPercent(exRankValue), debugBadWindowMs);
 }
 
+/**
+ * Resolves the chart's initial judgerank on the internal percent axis (VERY HARD = 25 / HARD = 50 / NORMAL = 75 /
+ * EASY = 100) — the same value {@link resolveJudgeWindowsMs} scales its windows from. Exposed so consumers that
+ * persist the resolved rank (e.g. the play-log recorder) share the exact resolution chain (`#DEFEXRANK` →
+ * `metadata.rank` → default for BMS; `info.judge_rank` → `metadata.rank` → default for bmson).
+ */
+export function resolveJudgeRankPercent(json: BeMusicJson): number {
+  return json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
+}
+
 export function resolveJudgeWindowsMs(json: BeMusicJson, debugBadWindowMs?: number): JudgeWindowsMs {
-  const judgeRank = json.sourceFormat === 'bmson' ? resolveBmsonJudgeRankPercent(json) : resolveBmsJudgeRankPercent(json);
-  return scaleJudgeWindowsMs(judgeRank, debugBadWindowMs);
+  return scaleJudgeWindowsMs(resolveJudgeRankPercent(json), debugBadWindowMs);
+}
+
+/**
+ * Which player's judge WINDOW model the live engine applies. Only the window widths switch — note selection,
+ * empty-POOR behavior, long-note mechanics, and the groove gauge stay on the engine's LR2-aligned semantics
+ * regardless (the playlog simulators in `@be-music/player/playlog` are the full per-ruleset reproduction).
+ */
+export type JudgeWindowRuleset = 'lr2' | 'beatoraja' | 'iidx';
+
+export const JUDGE_WINDOW_RULESETS: readonly JudgeWindowRuleset[] = ['lr2', 'beatoraja', 'iidx'];
+
+/**
+ * IIDX judge windows (current AC, community measurement — iidx.org): ±1F / ±2F / ±7F / ±15F at 60 fps. Rank
+ * independent — IIDX ignores the BMS `#RANK` axis.
+ */
+const IIDX_JUDGE_WINDOWS_MS: JudgeWindowsMs = { pgreat: 16.67, great: 33.33, good: 116.67, bad: 250 };
+
+/** beatoraja `#RANK 0..4` → judgerank percent (`JudgeWindowRule.NORMAL`; VERY EASY = 125, unlike LR2's 75). */
+const BEATORAJA_BMS_RANK_JUDGERANK_PERCENTS = [25, 50, 75, 100, 125] as const;
+const BEATORAJA_NORMAL_JUDGERANK_PERCENT = BEATORAJA_BMS_RANK_JUDGERANK_PERCENTS[2];
+/**
+ * beatoraja SEVENKEYS base note windows at judgerank 100 (`JudgeProperty.java`). The real BAD window is asymmetric
+ * (late 280 ms / early 220 ms); the engine's judge pipeline is symmetric, so the midpoint ±250 ms stands in.
+ */
+const BEATORAJA_BASE_WINDOWS_MS = { pgreat: 20, great: 60, good: 150, bad: 250 } as const;
+
+/**
+ * beatoraja judgerank percent for a chart (`BMSPlayerRule.validate`, NORMAL window rule): BMS `#DEFEXRANK` is
+ * `value × 75 / 100`, bmson `judge_rank` is used as-is, and `#RANK 0..4` maps through
+ * {@link BEATORAJA_BMS_RANK_JUDGERANK_PERCENTS} (default NORMAL = 75).
+ */
+export function resolveBeatorajaJudgeRankPercent(json: BeMusicJson): number {
+  if (json.sourceFormat === 'bmson') {
+    const judgeRank = json.bmson.info.judgeRank;
+    if (Number.isFinite(judgeRank) && (judgeRank ?? 0) > 0) {
+      return judgeRank!;
+    }
+    return 100;
+  }
+  const defExRank = json.bms.defExRank;
+  if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
+    return (defExRank * BEATORAJA_NORMAL_JUDGERANK_PERCENT) / 100;
+  }
+  const rankValue = Number.isFinite(json.metadata.rank) ? Math.trunc(json.metadata.rank!) : Number.NaN;
+  if (Number.isFinite(rankValue) && rankValue >= 0 && rankValue < BEATORAJA_BMS_RANK_JUDGERANK_PERCENTS.length) {
+    return BEATORAJA_BMS_RANK_JUDGERANK_PERCENTS[rankValue as 0 | 1 | 2 | 3 | 4];
+  }
+  return BEATORAJA_NORMAL_JUDGERANK_PERCENT;
+}
+
+/**
+ * Resolves the live engine's judge windows under the selected ruleset. `'lr2'` is the engine default
+ * ({@link resolveJudgeWindowsMs}); `'beatoraja'` scales the SEVENKEYS windows linearly by beatoraja's judgerank;
+ * `'iidx'` uses the fixed IIDX widths. The `debugBadWindowMs` override replaces the BAD width in every ruleset,
+ * mirroring {@link resolveJudgeWindowsMs}'s debug semantics.
+ */
+export function resolveJudgeWindowsMsForRuleset(
+  json: BeMusicJson,
+  ruleset: JudgeWindowRuleset,
+  debugBadWindowMs?: number,
+): JudgeWindowsMs {
+  if (ruleset === 'iidx') {
+    return overrideBadWindow(IIDX_JUDGE_WINDOWS_MS, debugBadWindowMs);
+  }
+  if (ruleset === 'beatoraja') {
+    const scale = Math.max(0, resolveBeatorajaJudgeRankPercent(json)) / 100;
+    const windows: JudgeWindowsMs = {
+      pgreat: BEATORAJA_BASE_WINDOWS_MS.pgreat * scale,
+      great: BEATORAJA_BASE_WINDOWS_MS.great * scale,
+      good: BEATORAJA_BASE_WINDOWS_MS.good * scale,
+      bad: BEATORAJA_BASE_WINDOWS_MS.bad * scale,
+    };
+    const result = overrideBadWindow(windows, debugBadWindowMs);
+    return {
+      pgreat: clampWindow(result.pgreat, result.bad),
+      great: clampWindow(result.great, result.bad),
+      good: clampWindow(result.good, result.bad),
+      bad: result.bad,
+    };
+  }
+  return resolveJudgeWindowsMs(json, debugBadWindowMs);
+}
+
+function overrideBadWindow(windows: JudgeWindowsMs, debugBadWindowMs?: number): JudgeWindowsMs {
+  if (typeof debugBadWindowMs === 'number' && Number.isFinite(debugBadWindowMs) && debugBadWindowMs > 0) {
+    return { ...windows, bad: debugBadWindowMs };
+  }
+  return windows;
 }
 
 function scaleJudgeWindowsMs(judgeRankPercent: number, debugBadWindowMs?: number): JudgeWindowsMs {

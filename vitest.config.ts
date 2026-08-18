@@ -33,6 +33,7 @@ const workspaceAliases = [
     replacement: resolve(rootDir, 'packages/player/src/image-resize-algorithm.ts'),
   },
   { find: '@be-music/player/judging', replacement: resolve(rootDir, 'packages/player/src/judging.ts') },
+  { find: '@be-music/player/playlog', replacement: resolve(rootDir, 'packages/player/src/playlog/index.ts') },
   { find: '@be-music/player/state-signals', replacement: resolve(rootDir, 'packages/player/src/state-signals.ts') },
   { find: '@be-music/player/utils', replacement: resolve(rootDir, 'packages/player/src/utils.ts') },
   { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },

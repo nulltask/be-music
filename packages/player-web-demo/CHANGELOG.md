@@ -1,5 +1,15 @@
 # @be-music/player-web-demo
 
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies [ab210cb]
+  - @be-music/lr2-skin@0.1.5
+  - @be-music/player-web@0.7.0
+
 ## 0.3.1
 
 ### Patch Changes

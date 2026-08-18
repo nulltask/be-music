@@ -22,7 +22,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 
 ## 必要環境
 
-- Node.js `>= 25`
+- Node.js `>= 26`
 - pnpm workspaces
 
 ## セットアップ
@@ -70,6 +70,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 - [Player 実装仕様](docs/player-spec.ja.md)
 - [Terminal player 実装メモ](docs/player-tui.ja.md)
 - [Browser player 実装メモ](docs/player-web.ja.md)
+- [プレイログ（プレイ履歴）仕様](docs/playlog.ja.md)
 - [LR2 skin 実装メモ](docs/lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](docs/beatoraja-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](docs/json-spec.ja.md)
@@ -400,7 +401,7 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 
 補足:
 
-- Node.js 25.5+ が必要です。
+- Node.js 26+ が必要です。
 - SEA 生成は built-in の `--build-sea` を使用します。
 
 ## Exports ベンチマーク

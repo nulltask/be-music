@@ -36,7 +36,7 @@ export const LR2_SKIN_INFORMATION_TYPE = {
   RESULT: 7,
   KEY_CONFIG: 8,
   SKIN_SELECT: 9,
-} as const satisfies Record<string, number>;
+} as const;
 
 export type Lr2SkinInformationType = (typeof LR2_SKIN_INFORMATION_TYPE)[keyof typeof LR2_SKIN_INFORMATION_TYPE];
 

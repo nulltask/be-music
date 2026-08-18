@@ -102,6 +102,30 @@ export interface DemoGuiState {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
+   * When true (the default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
+   * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
+   */
+  autoSavePlaylog: boolean;
+  /**
+   * Judge-window ruleset for the shared engine (`PlayerOptions.judgeRuleset`): LR2 (default) / beatoraja / IIDX.
+   * Only the window widths switch — note selection, empty POOR, LN mechanics, and the gauge stay LR2-aligned.
+   * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
+   */
+  judgeRuleset: 'lr2' | 'beatoraja' | 'iidx';
+  /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
+  gauge: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+  /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
+  random1P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  /** 2P lane arrangement for the next play. Two-way synced with the LR2 select panel. */
+  random2P: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
+  /** DP FLIP for the next play. Two-way synced with the LR2 select panel. */
+  dpFlip: boolean;
+  /** 1P auto scratch for the next play. Two-way synced with the LR2 select panel. */
+  autoScratch1P: boolean;
+  /** 2P auto scratch for the next play. Two-way synced with the LR2 select panel. */
+  autoScratch2P: boolean;
+  /**
    * Explicit skin-family override picked from the Debug Menu dropdown. `'auto'` (default) keeps the legacy
    * priority — beatoraja if a beatoraja theme is loaded and covers the chart, otherwise LR2 (which itself falls
    * back to the default family per-scene when the corresponding LR2 skin isn't loaded). Any other value forces

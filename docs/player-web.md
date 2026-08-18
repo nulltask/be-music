@@ -172,6 +172,7 @@ pnpm bench -- --packages player-web
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
+- Every play records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the Debug Menu's "Auto-save play history" checkbox (ON by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
 
 ## Compatibility boundary
 

@@ -22,7 +22,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 
 ## Required environment
 
-- Node.js `>= 25`
+- Node.js `>= 26`
 - pnpm workspaces
 
 ## Setup
@@ -70,6 +70,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Player implementation specification](./docs/player-spec.md)
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
+- [Play log (play history) specification](./docs/playlog.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
@@ -400,7 +401,7 @@ pnpm run audio-renderer:sea --node-binary /path/to/node
 
 supplement:
 
-- Requires Node.js 25.5+.
+- Requires Node.js 26+.
 - SEA generation uses built-in `--build-sea`.
 
 ## Exports Benchmark

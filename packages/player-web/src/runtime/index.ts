@@ -10,3 +10,13 @@ export * from './audio-bus.ts';
 // Gameplay recorder lives in its own directory but is conceptually a runtime output channel — same scope as the
 // audio bus that feeds it.
 export * from '../recording/gameplay-recorder.ts';
+
+// Play-log format helpers re-exported for hosts (the demo has no direct `@be-music/player` dependency). The
+// gameplay scenes populate a `BeMusicPlaylog` per run; these helpers serialize it for the auto-save download.
+export {
+  serializePlaylog,
+  parsePlaylog,
+  resolvePlaylogFilename,
+  PLAYLOG_FILE_SUFFIX,
+  type BeMusicPlaylog,
+} from '@be-music/player/playlog';

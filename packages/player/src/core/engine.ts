@@ -76,7 +76,15 @@ import {
   type JudgeKind,
 } from './scoring.ts';
 import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
-import { resolveBmsJudgeWindowsMsForExRankValue, resolveJudgeWindowsMs } from './judge-window.ts';
+import { resolveLandmineGaugeEffect } from './landmine.ts';
+import {
+  resolveBmsJudgeWindowsMsForExRankValue,
+  resolveJudgeWindowsMs,
+  resolveJudgeWindowsMsForRuleset,
+  type JudgeWindowRuleset,
+} from './judge-window.ts';
+import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
+import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import {
   createBeatAtSecondsResolverFromTimingResolver,
   createBpmTimeline,
@@ -244,6 +252,40 @@ export interface PlayerOptions {
   onResolvedChart?: (json: BeMusicJson) => void;
   onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
+  /**
+   * Host-declared play settings merged into the recorded play-log (`gauge`, `randomLane`, `dpFlip`, `native`).
+   * The engine itself knows mode / auto-scratch / judge-window override; everything host-side (which gauge the
+   * player picked, which lane shuffle produced `preparedChart`, ...) arrives through this bag. Only meaningful
+   * together with {@link onPlaylogRecorded}.
+   */
+  recordPlaylog?: PlaylogRecordingOptions;
+  /**
+   * Enables play-log recording: when set, the engine snapshots the resolved chart it actually played
+   * (post-`#RANDOM`, post lane-shuffle via `preparedChart`), records every judged key press / release with
+   * chart-relative timestamps, and hands the assembled {@link BeMusicPlaylog} here right before `autoPlay` /
+   * `manualPlay` resolves — including the ESC (aborted) exit. The playlog's `results.native` caches this run's
+   * engine summary; see `@be-music/player/playlog` for the format and the LR2 / beatoraja / IIDX re-simulation
+   * tools.
+   */
+  onPlaylogRecorded?: (playlog: BeMusicPlaylog) => void;
+  /**
+   * Judge-window ruleset for manual play: `'lr2'` (default — the engine's LR2-aligned windows), `'beatoraja'`
+   * (SEVENKEYS windows scaled by beatoraja's judgerank), or `'iidx'` (fixed ±16.67/±33.33/±116.67/±250 ms).
+   * Only the WINDOW WIDTHS switch — note selection, empty-POOR, long-note mechanics, and the gauge stay on the
+   * engine's LR2-aligned semantics (the playlog simulators are the full per-ruleset reproduction). Dynamic
+   * `#EXRANKxx` changes are an LR2 concept and only apply under `'lr2'`. Recorded into the playlog
+   * (`play.judgeRuleset`) so replays re-apply the same windows.
+   */
+  judgeRuleset?: JudgeWindowRuleset;
+  /**
+   * Replay playback: a recorded play-log input stream (`playlog.inputs`) `manualPlay` re-drives DETERMINISTICALLY.
+   * Each event fires at its exact chart-relative microsecond timestamp (no wall-clock jitter — the judge timestamp
+   * is the recorded one), so replaying a log against the same resolved chart reproduces the original judgments.
+   * While a replay is active, live lane / kitty input commands are ignored; pause, high-speed, and interrupt
+   * commands keep working. The caller is responsible for mounting the SAME resolved chart the log was recorded
+   * against (`preparedChart`, or a chart remapped to the log's note arrangement).
+   */
+  replayInputs?: readonly PlaylogInputEvent[];
 }
 
 export interface PlayerSummary {
@@ -378,8 +420,6 @@ interface OutputDynamicsConfig {
 }
 
 const LANDMINE_EXPLOSION_SAMPLE_KEY = '00';
-const DEFAULT_LANDMINE_GAUGE_DAMAGE = 4;
-const BASE36_OBJECT_KEY_PATTERN = /^[0-9A-Z]{2}$/;
 
 interface PlaybackClock {
   nowMs: () => number;
@@ -868,54 +908,8 @@ function resolveLandmineExplosionEvent(
   };
 }
 
-function resolveLandmineGaugeEffect(
-  landmineEvent: Pick<BeMusicEvent, 'value' | 'bmson'>,
-  base: 36 | 62 = 36,
-): {
-  objectValue: string;
-  damage: number;
-  gaugeDelta: number;
-} {
-  // Mine damage encodes the value in base-36 regardless of the chart's `#BASE` setting (the damage encoding is a
-  // chart-format constant, not an indexed-resource lookup), so the ID is normalized under the chart's base only to
-  // keep the returned `objectValue` in sync with the rest of the resource-key reporting. LR2 and beatoraja both
-  // interpret the value DIRECTLY as the gauge-damage percentage (losak's LR2 mine writeup; jbms-parser passes the raw
-  // base-36 value into `MineNote`) — the nanasi-era `value / 2` rule in hitkey's memo is a different lineage and is
-  // NOT what LR2 does. `ZZ` (= 1295) therefore wipes any gauge: survival gauges die instantly, GROOVE / EASY hit
-  // their 2 % floor.
-  const objectValue = normalizeObjectKey(landmineEvent.value, base);
-  // bmson `key_channels[].notes[].damage` is an explicit per-mine gauge percentage; when present it wins over the BMS
-  // `value / 2` rule because the event value there is the WAV slot, not a damage encoding. `damage: 0` is a valid
-  // authored value (a no-damage decoration mine), so the guard checks finiteness rather than truthiness.
-  const bmsonDamage = landmineEvent.bmson?.damage;
-  if (typeof bmsonDamage === 'number' && Number.isFinite(bmsonDamage) && bmsonDamage >= 0) {
-    return {
-      objectValue,
-      damage: bmsonDamage,
-      gaugeDelta: -bmsonDamage,
-    };
-  }
-  if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
-    return {
-      objectValue,
-      damage: DEFAULT_LANDMINE_GAUGE_DAMAGE,
-      gaugeDelta: -DEFAULT_LANDMINE_GAUGE_DAMAGE,
-    };
-  }
-  const parsedDamage = Number.parseInt(objectValue, 36);
-  if (!Number.isFinite(parsedDamage) || parsedDamage <= 0) {
-    return {
-      objectValue,
-      damage: DEFAULT_LANDMINE_GAUGE_DAMAGE,
-      gaugeDelta: -DEFAULT_LANDMINE_GAUGE_DAMAGE,
-    };
-  }
-  return {
-    objectValue,
-    damage: parsedDamage,
-    gaugeDelta: -parsedDamage,
-  };
-}
+// Mine gauge-damage resolution lives in `core/landmine.ts` so the play-log recorder / simulators share the
+// exact same value interpretation. Re-imported here for the manual landmine hit path.
 
 function writeSampleStopEventLog(
   writeOutput: (text: string) => void,
@@ -1815,6 +1809,27 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const keyMap = new Map(laneBindings.map((binding) => [binding.channel, binding.keyLabel]));
   const { summary, applyGaugeJudge } = createInitialPlayerSummary(scorableNotes.length, resolvedJson.metadata.total);
   const scoreTracker = createScoreTracker();
+  // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
+  // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
+  // cached native result carries the actual AUTO outcome).
+  const playlogRecorder = options.onPlaylogRecorded
+    ? (() => {
+        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        return createPlaylogRecorder({
+          json: resolvedJson,
+          chart: playbackChart,
+          chartSha256,
+          dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
+          play: {
+            mode: 'auto',
+            autoScratch: false,
+            judgeWindowOverrideMs: options.judgeWindowMs,
+            judgeRuleset: options.judgeRuleset,
+            ...hostPlaySettings,
+          },
+        });
+      })()
+    : undefined;
   let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
@@ -2339,6 +2354,15 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       summary,
     });
   }
+  if (playlogRecorder) {
+    options.onPlaylogRecorded?.(
+      playlogRecorder.finalize({
+        summary,
+        maxCombo: scoreTracker.maxCombo,
+        aborted: interruptedReason === 'escape',
+      }),
+    );
+  }
   writeOutput(renderSummary(summary));
   return summary;
 }
@@ -2354,11 +2378,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
-  let judgeWindows = resolveJudgeWindowsMs(resolvedJson, options.judgeWindowMs);
+  const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
+  let judgeWindows = resolveJudgeWindowsMsForRuleset(resolvedJson, judgeRuleset, options.judgeWindowMs);
   let badWindowMs = judgeWindows.bad;
   let badWindowSeconds = badWindowMs / 1000;
   const timingResolver = createTimingResolver(resolvedJson);
-  const dynamicJudgeRankChanges = collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver);
+  // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
+  // non-LR2 rulesets keep their initial windows for the whole chart.
+  const dynamicJudgeRankChanges =
+    judgeRuleset === 'lr2' ? collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver) : [];
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
   let dynamicJudgeRankCursor = 0;
   let maxBadWindowMs = badWindowMs;
@@ -2419,6 +2447,24 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     resolvedJson.metadata.total,
   );
   const scoreTracker = createScoreTracker();
+  const playlogRecorder = options.onPlaylogRecorded
+    ? (() => {
+        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        return createPlaylogRecorder({
+          json: resolvedJson,
+          chart: playbackChart,
+          chartSha256,
+          dynamicJudgeRankChanges,
+          play: {
+            mode: 'manual',
+            autoScratch: autoScratchEnabled,
+            judgeWindowOverrideMs: options.judgeWindowMs,
+            judgeRuleset: options.judgeRuleset,
+            ...hostPlaySettings,
+          },
+        });
+      })()
+    : undefined;
   let combo = 0;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const stateSignals = createPlayerStateSignals(highSpeed);
@@ -3073,6 +3119,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (candidateChannels.size === 0) {
       return;
     }
+    handleLaneInputChannels(candidateChannels, tokens, nowMs, nowSec);
+  };
+
+  // Channel-direct core of the lane press handling. Live input goes through `handleMappedInputTokens` (token →
+  // channel resolution); replay playback calls this directly with the recorded channel set and the recorded
+  // chart-relative timestamp.
+  const handleLaneInputChannels = (
+    candidateChannels: ReadonlySet<string>,
+    tokens: readonly string[],
+    nowMs: number,
+    nowSec: number,
+  ): void => {
+    // Play-log press event — recorded BEFORE any judging so the log stays a raw input replay (recordInput copies
+    // the shared channel-buffer synchronously).
+    playlogRecorder?.recordInput('down', nowSec, tokens, candidateChannels);
 
     if (uiEnabled) {
       for (const mappedChannel of candidateChannels) {
@@ -3141,6 +3202,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // DEATH -10 — see `applyGrooveGaugeJudge('EMPTY_POOR')`) and fire the POOR BGA, but DO NOT break combo or
       // increment `summary.poor`. Repeatable per note (LR2's MissCondition.ALWAYS).
       applyLoggedGaugeJudge(nowSec, 'EMPTY_POOR', 'empty-poor');
+      playlogRecorder?.recordEmptyPoor();
       uiSignals.pushCommand({ kind: 'trigger-poor-bga', seconds: nowSec });
       if (!uiEnabled) {
         writeRuntimeEventLog(writeOutput, 'judge', [
@@ -3278,6 +3340,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         });
       },
       onUnhandledCommand: (command) => {
+        // Replay playback drives the lanes from the recorded input stream — live lane / key-state input must not
+        // interleave with it (pause / high-speed / interrupt still arrive through the standard command path).
+        if (options.replayInputs !== undefined && (command.kind === 'kitty-state' || command.kind === 'lane-input')) {
+          return;
+        }
         if (command.kind === 'kitty-state') {
           if (!uiEnabled) {
             if (command.pressTokens.length > 0) {
@@ -3310,6 +3377,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
             }
           }
           const releasedChannels = resolveMappedInputChannels(command.releaseTokens);
+          if (playlogRecorder && releasedChannels.size > 0) {
+            const releaseNowMs = resolveJudgeNowMsFromPressedAt(playbackClock.nowMs(), command.pressedAt);
+            playlogRecorder.recordInput(
+              'up',
+              elapsedMsToGameSeconds(releaseNowMs, speed),
+              command.releaseTokens,
+              releasedChannels,
+            );
+          }
           for (const channel of releasedChannels) {
             activeKittyPressedChannels.delete(channel);
             if (uiEnabled) {
@@ -3364,6 +3440,57 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     });
   };
 
+  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps. Events are
+  // processed at each tick boundary but judged with THEIR OWN chart seconds, so the replayed judgments are
+  // deterministic and independent of tick timing. Presses maintain `activeKittyPressedChannels` so long-note holds
+  // work exactly like the recorded run's key-state stream did.
+  const replayEvents =
+    options.replayInputs !== undefined && options.replayInputs.length > 0
+      ? [...options.replayInputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq)
+      : undefined;
+  let replayCursor = 0;
+  const processReplayEventsUntil = (untilSec: number): void => {
+    if (!replayEvents) return;
+    while (replayCursor < replayEvents.length) {
+      const event = replayEvents[replayCursor]!;
+      const eventSec = event.timeUs / 1_000_000;
+      if (eventSec > untilSec) break;
+      replayCursor += 1;
+      const channels = new Set(event.channels);
+      if (autoScratchEnabled) {
+        for (const channel of channels) {
+          if (scratchPlayableChannels.has(channel)) {
+            channels.delete(channel);
+          }
+        }
+      }
+      if (channels.size === 0) continue;
+      const eventMs = (eventSec * 1000) / speed;
+      if (event.action === 'down') {
+        for (const channel of channels) {
+          activeKittyPressedChannels.add(channel);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'press-lane', channel });
+          }
+        }
+        playbackEventTracer.flushUntil(eventSec);
+        handleLaneInputChannels(channels, event.tokens ?? [], eventMs, eventSec);
+      } else {
+        // Mirror the live kitty-release recording so a replayed run re-records an equivalent playlog.
+        playlogRecorder?.recordInput('up', eventSec, event.tokens ?? [], channels);
+        for (const channel of channels) {
+          activeKittyPressedChannels.delete(channel);
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'release-lane', channel });
+          }
+          if (activeLongNotesByChannel.has(channel)) {
+            longHoldUntilMsByChannel.set(channel, eventMs);
+          }
+        }
+      }
+    }
+  };
+
   try {
     while (playbackClock.nowMs() < horizon) {
       consumeInputCommands();
@@ -3383,6 +3510,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
+      processReplayEventsUntil(nowSec);
       advanceDynamicJudgeRankChanges(nowSec);
       playbackEventTracer.flushUntil(nowSec);
 
@@ -3442,19 +3570,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               // over the same elapsed duration. Without this branch HCNs were one-shot
               // gauge sinks — once a player broke a hold, the only recovery path was
               // through subsequent normal-note PERFECTs.
-              applyLoggedGaugeDelta(
-                nowSec,
-                elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND,
-                'hold-gain',
-              );
+              applyLoggedGaugeDelta(nowSec, elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND, 'hold-gain');
             } else {
               // HCN DRAIN — hold broken during this frame. Mirrors upstream
               // `JudgeManager.java:341-344`'s `gauge.update(3, 0.5f)` per 200 ms tick.
-              applyLoggedGaugeDelta(
-                nowSec,
-                -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-                'hold-drain',
-              );
+              applyLoggedGaugeDelta(nowSec, -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND, 'hold-drain');
             }
           }
           hold.gaugeDrainCursorSeconds = accumulateUntilSeconds;
@@ -3658,6 +3778,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           summary,
         });
       }
+      if (playlogRecorder) {
+        options.onPlaylogRecorded?.(
+          playlogRecorder.finalize({ summary, maxCombo: scoreTracker.maxCombo, aborted: true }),
+        );
+      }
       writeOutput(renderSummary(summary));
       return summary;
     }
@@ -3673,6 +3798,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       reason: 'complete',
       summary,
     });
+  }
+  if (playlogRecorder) {
+    options.onPlaylogRecorded?.(playlogRecorder.finalize({ summary, maxCombo: scoreTracker.maxCombo }));
   }
   writeOutput(renderSummary(summary));
   return summary;

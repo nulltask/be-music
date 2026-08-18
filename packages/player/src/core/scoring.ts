@@ -13,6 +13,8 @@ export interface ScoreSummary {
 
 export interface ScoreTracker {
   combo: number;
+  /** Highest combo reached so far — latched by {@link applyJudgeToSummary}, never reset by BAD / POOR. */
+  maxCombo: number;
   scoreAccumulator: number;
   scoreMaxAccumulator: number;
 }
@@ -25,6 +27,7 @@ const IIDX_SCORE_COMBO_BONUS_MAX = 50000;
 export function createScoreTracker(): ScoreTracker {
   return {
     combo: 0,
+    maxCombo: 0,
     scoreAccumulator: 0,
     scoreMaxAccumulator: Number.NaN,
   };
@@ -91,6 +94,9 @@ export function applyJudgeToSummary(summary: ScoreSummary, judge: JudgeKind, tra
 
   if (judge === 'PERFECT' || judge === 'GREAT' || judge === 'GOOD') {
     tracker.combo += 1;
+    if (tracker.combo > tracker.maxCombo) {
+      tracker.maxCombo = tracker.combo;
+    }
   } else {
     tracker.combo = 0;
   }
