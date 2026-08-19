@@ -3,7 +3,7 @@ import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts
 import { resolveRuleset } from './definitions.ts';
 import {
   classifyRulesetJudge,
-  goodWindowReachUs,
+  pgreatWindowReachUs,
   judgeWindowEarlyReachUs,
   judgeWindowLateReachUs,
   RULESET_JUDGE_NONE,
@@ -54,7 +54,7 @@ describe('ruleset judge windows', () => {
 
     expect(judgeWindowLateReachUs(set)).toBe(280_000);
     expect(judgeWindowEarlyReachUs(set)).toBe(220_000);
-    expect(goodWindowReachUs(set)).toEqual([150_000, 150_000]);
+    expect(pgreatWindowReachUs(set)).toEqual([20_000, 20_000]);
   });
 
   test('IIDX windows are symmetric and rank independent', () => {
