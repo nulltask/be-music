@@ -315,7 +315,7 @@ When `POOR` occurs, do the following:
 - Add `summary.poor`.
 - Set combo back to 0.
 - Set groove gauge to `-6`.
-- Fire POOR BGA.
+- Fire POOR BGA. The miss layer stays visible for 500 ms — LR2's shipped default (`<poorbga>500</poorbga>` in its `config.xml`).
 - Update judge/combo display to `POOR`.
 
 ### Blank keystroke (no candidate) — LR2-compatible empty POOR

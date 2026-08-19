@@ -3955,7 +3955,7 @@ export class PixiGameplayView {
    * Composites the chart's BGA into the active skin's `#DST_BGA` rectangles, or the default-family BGA rectangle when
    * no external skin is loaded. Three layers stack from back to front: base (channel 04 / bmson `bga.events`), layer
    * (channel 07 / 0A / bmson `layerEvents`), and a POOR override (channel 06 / `poorEvents`) that briefly replaces the
-   * base while the player is in a 2-second POOR-judgement window.
+   * base while the player is inside the POOR-judgement window (`DEFAULT_POOR_BGA_DISPLAY_SECONDS`).
    *
    * The renderer is idempotent per frame — it tears down any existing sprites and rebuilds from the active cues, so cue
    * switches show up the next frame without explicit dirty tracking.

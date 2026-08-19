@@ -995,6 +995,41 @@ describe('player bga', () => {
     }
   });
 
+  test('player bga: POOR overlay expires exactly at the 500 ms LR2 default window', async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-window-'));
+    try {
+      await writePng(join(baseDir, 'base.png'), 256, 256, () => ({ r: 255, g: 0, b: 0, a: 255 }));
+      await writePng(join(baseDir, 'poor.png'), 256, 256, () => ({ r: 0, g: 255, b: 0, a: 255 }));
+
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.resources.bmp['01'] = 'base.png';
+      json.resources.bmp['02'] = 'poor.png';
+      json.events = [
+        { measure: 0, channel: '04', position: [0, 1], value: '01' },
+        { measure: 0, channel: '06', position: [0, 1], value: '02' },
+      ];
+
+      const renderer = await createBgaAnsiRenderer(json, {
+        baseDir,
+        width: 40,
+        height: 20,
+      });
+      expect(renderer).toBeDefined();
+
+      renderer?.triggerPoor(0);
+      // The window is DEFAULT_POOR_BGA_DISPLAY_SECONDS (0.5 s, LR2's `<poorbga>` default) with a strict `<`
+      // expiry: the overlay is still visible just before the boundary and gone exactly at it.
+      const justBefore = parseAnsiPixels(renderer?.getAnsiLines(0.49) ?? []);
+      expect(justBefore[10]?.[20]).toEqual({ r: 0, g: 255, b: 0 });
+
+      const atBoundary = parseAnsiPixels(renderer?.getAnsiLines(0.5) ?? []);
+      expect(atBoundary[10]?.[20]).toEqual({ r: 255, g: 0, b: 0 });
+    } finally {
+      await rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
   test('player bga: prioritizes POOR over 04/07/0A while active', async () => {
     const baseDir = await mkdtemp(join(tmpdir(), 'be-music-bga-poor-priority-'));
     try {
@@ -1027,7 +1062,7 @@ describe('player bga', () => {
       expect(beforePoor[10]?.[20]).toEqual({ r: 0, g: 0, b: 255 });
 
       renderer?.triggerPoor(0);
-      const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0.5) ?? []);
+      const duringPoor = parseAnsiPixels(renderer?.getAnsiLines(0.3) ?? []);
       expect(duringPoor[10]?.[20]).toEqual({ r: 255, g: 255, b: 0 });
 
       const afterPoor = parseAnsiPixels(renderer?.getAnsiLines(2.1) ?? []);
