@@ -94,7 +94,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Detonate mines in MANUAL mode while "the key is ON and the mine is within the `GOOD` window" (both press and hold-through, LR2 behavior)
+- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior)
 - [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
@@ -103,7 +103,8 @@ However, the exact specification of control syntax compatibility for files conta
 
 The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references and LR2-compatible implementations.
 
-- The detonation condition ("key ON and the mine within the `GOOD` window of the judge line, including hold-through") and "damage = the value itself (as a decimal percentage)" follow losak's LR2 mine writeup ("地雷オブジェに関するアレコレ"), verified against the real LR2. beatoraja (jbms-parser `Section.java` / `JudgeManager`) applies the raw value directly as damage, matching this.
+- The detonation window follows LR2's own changelog (`history.txt`, the 080114 mine-implementation entry): a mine explodes on hold-through passage or on a press within the **`PGREAT` (ピカグレ) range**, and no later entry revises this. losak's LR2 mine writeup ("地雷オブジェに関するアレコレ") claims the `GOOD` window instead, but the primary source wins, so `GOOD` is not adopted.
+- "Damage = the value itself (as a decimal percentage)" follows losak's writeup, verified against the real LR2. beatoraja (jbms-parser `Section.java` / `JudgeManager`) applies the raw value directly as damage, matching this.
 - Hitkey command memo's `value / 2` is the nanasi-lineage rule and differs from LR2's actual behavior, so it is not adopted.
 - `#WAV00` as the dedicated landmine reaction sound is corroborated by Hitkey's memo and Obj Tech Lovers chapter3-2 / chapter4-7.
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); on the `2-100%` GROOVE / EASY gauges it clamps to the `2%` floor (matching losak's "EASY / GROOVE just drop to 2%").
