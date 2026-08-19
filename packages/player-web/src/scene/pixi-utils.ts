@@ -121,8 +121,9 @@ export class ChildPool {
 
   /**
    * Returns a parented, *cleared* `Graphics` ready for the caller's draw commands. Same recycle rules as
-   * `acquireSprite`; the only auto-reset is `clear()` (so the previous pass's geometry is gone) plus
-   * `tint / alpha / position / scale` so a moved / coloured graphic from a prior pass doesn't carry over.
+   * `acquireSprite`; the auto-reset is `clear()` (so the previous pass's geometry is gone) plus
+   * `tint / alpha / blendMode / position / scale / rotation` so a moved, additive, or coloured graphic from a
+   * prior pass doesn't carry over.
    */
   public acquireGraphics(): Graphics {
     let graphics = this.graphics[this.graphicsCursor];
@@ -135,6 +136,7 @@ export class ChildPool {
     graphics.visible = true;
     graphics.tint = 0xffffff;
     graphics.alpha = 1;
+    graphics.blendMode = 'normal';
     graphics.position.set(0, 0);
     graphics.scale.set(1, 1);
     graphics.rotation = 0;

@@ -45,6 +45,11 @@ export interface SkinlessGameplayChromeRuntime {
   hasBga?: boolean;
   /** Monotonic play clock (ms) for chrome-side animation (gauge hot-tip flicker, subtle pulses). */
   nowMs?: number;
+  /**
+   * Milliseconds since `PixiGameplayView.start()`. Drives the default family's per-piece intro and wipe-open.
+   * Omit (or leave undefined) for a settled HUD — benches and still frames use that path.
+   */
+  sceneElapsedMs?: number;
   /** Song progress in [0, 1] — drives the chrome's progress track. */
   progressRatio?: number;
   /** Fractional beat position in [0, 1) — drives beat-synced pulses (judge-line glow, accent trim). */

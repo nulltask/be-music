@@ -89,7 +89,7 @@ scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/
 ## Default skin family
 
 built-in default family は、LR2 / beatoraja theme がない場合、または host が default family を明示的に選んだ場合に使う skinless path です。
-theme file なしで select、gameplay、result の表示を提供します。
+theme file なしで select、decide、gameplay、result の表示を提供します。見た目は独自の cut-in chrome で、navy の void、cyan の slash、gold の lock-on、斜め parallelogram の plate、頂点が独立して揺れる菱形を使います。加算合成の cyan / gold flash を navy plate の上に重ねます。モーションは要素ごとに slam し、配色は crimson ではなく navy / ice / cyan です。ラベルは generic (`MUSIC SELECT` / `READY` / `CLEARED`) のままにし、第三者 UI asset は使いません。
 
 gameplay は `PixiGameplayView` と共通の engine、note renderer、BGA renderer、audio bus、input handling を共有します。
 ただし default chrome は `scene/default/gameplay.ts` から `skinlessChromeRenderer` option 経由で注入します。
@@ -98,7 +98,9 @@ LR2 gameplay scene は default renderer を import せず、共有 gameplay runt
 
 default gameplay chrome は `scene/gameplay-lanes.ts` の共通 lane geometry helper を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
-default family は通常テキストに LINE Seed JP、判定と combo 表示に Azeret Mono を使います。
+canvas chrome の本文スタンプは Dela Gothic One、数値 / 判定は Staatliches です。demo host の CSS は playfield 外の overlay 向けに LINE Seed JP を維持します。
+
+HUD の各要素は独自の enter delay と slam を持ち、scene 間は斜めの cut-in wipe でつなぎます。incoming scene は全面カバーから開き、短い decide splash は最後の拍で wipe を閉じて、gameplay が READY の上に HUD を載せるのではなく void から開けるようにします。playfield のコンボは note より手前の overlay に、暗い菱形 plate の上へ paper / gold（cyan は使わない）で描き、譜面が詰まっても埋もれないようにします。`SkinlessGameplayChromeRuntime` の `sceneElapsedMs` は intro を壁時計の `nowMs` ではなく `PixiGameplayView.start()` に合わせます。
 
 ## beatoraja skin と theme support
 
@@ -123,7 +125,7 @@ beatoraja default skin を primary compatibility target とし、community theme
 browser player は session 全体で 1 つの `PixiSceneHost` を使います。
 host は 1 つの PixiJS `Application` を所有し、同時に 1 つの scene root だけを attach し、scene transition を直列化し、host dispose 時だけ renderer を破棄します。
 
-LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。default family は decide scene を持たず、同じ select、gameplay、result の形を skinless に提供します。
+LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。default family も同じ 4 scene を提供し、`.lr2skin` なしの短い decide interstitial を含みます。
 
 - chart browsing、preview playback、skin-side interaction を扱う select scene
 - active family が提供する場合、gameplay 前の短い transition を扱う decide scene

@@ -147,6 +147,16 @@ import type {
   SkinlessGameplayChromeRuntime,
   SkinlessGameplayJudgeState,
 } from '../gameplay-chrome.ts';
+import {
+  defaultNoteTone,
+  drawDefaultBomb,
+  drawDefaultLaneColumn,
+  drawDefaultLaneGridRight,
+  drawDefaultLnBody,
+  drawDefaultMeasureLine,
+  drawDefaultMine,
+  drawDefaultNoteBody,
+} from '../default/playfield.ts';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import {
   computeBombDurationsMs,
@@ -3890,64 +3900,11 @@ export class PixiGameplayView {
     for (const [channel, startedAt] of this.bombStartedAt) {
       const lane = this.laneX.get(channel);
       if (!lane) continue;
-
       const elapsed = Math.max(0, now - startedAt);
-      const progress = Math.max(0, Math.min(1, elapsed / BOMB_CLEANUP_FALLBACK_MS));
-      const fade = 1 - progress;
-      const eased = 1 - (1 - progress) * (1 - progress);
-      const centerX = lane.x + lane.w / 2;
-      const centerY = lane.bottom - Math.max(5, lane.w * 0.18);
-      const coreRadius = Math.max(3, lane.w * (0.28 + 0.12 * eased));
-      const haloRadius = Math.max(7, lane.w * (0.58 + 1.05 * eased));
-      const rayCount = 8;
-      const rayInner = coreRadius * (0.74 + eased * 0.14);
-      const rayOuter = haloRadius * (0.62 + eased * 0.08);
-      const lineWidth = Math.max(1, lane.w * (0.09 - progress * 0.04));
       const graphic = this.bombLayerPool.acquireGraphics();
       graphic.label = `default-bomb[ch=${channel}]`;
-      graphic.blendMode = 'add';
       graphic.alpha = 1;
-
-      // Light pillar rising off the judgement line — sells the impact within the lane.
-      graphic
-        .rect(lane.x + lane.w * 0.14, centerY - haloRadius * 1.5, lane.w * 0.72, haloRadius * 1.5)
-        .fill({ color: 0xffb44d, alpha: 0.1 * fade });
-      // Flame ring + white-hot core with a warm mid layer.
-      graphic.circle(centerX, centerY, haloRadius).stroke({
-        color: 0xff7a2f,
-        width: Math.max(1.5, lane.w * 0.1),
-        alpha: 0.4 * fade,
-        alignment: 0.5,
-      });
-      graphic.circle(centerX, centerY, coreRadius * 1.7).fill({ color: 0xff9b3d, alpha: 0.2 * fade });
-      graphic.circle(centerX, centerY, coreRadius * 1.2).fill({ color: 0xffd166, alpha: 0.3 * fade });
-      graphic.circle(centerX, centerY, coreRadius * 0.7).fill({ color: 0xffffff, alpha: 0.75 * fade });
-      // Starburst: long cross spokes + short diagonals, rotating slightly as the burst expands.
-      const spin = eased * 0.5;
-      for (let index = 0; index < rayCount; index += 1) {
-        const angle = spin + -Math.PI / 2 + (Math.PI * 2 * index) / rayCount;
-        const longRay = index % 2 === 0;
-        const outer = longRay ? rayOuter * 1.35 : rayOuter * 0.9;
-        graphic
-          .moveTo(centerX + Math.cos(angle) * rayInner, centerY + Math.sin(angle) * rayInner)
-          .lineTo(centerX + Math.cos(angle) * outer, centerY + Math.sin(angle) * outer);
-      }
-      graphic.stroke({
-        color: 0xffe08a,
-        width: lineWidth,
-        alpha: 0.75 * fade,
-        cap: 'round',
-        alignment: 0.5,
-      });
-      // Ember dots at the spoke tips for the tail end of the burst.
-      if (progress > 0.35) {
-        for (let index = 0; index < 4; index += 1) {
-          const angle = spin + Math.PI / 4 + (Math.PI * 2 * index) / 4;
-          graphic
-            .circle(centerX + Math.cos(angle) * rayOuter * 1.15, centerY + Math.sin(angle) * rayOuter * 1.15, 1.4)
-            .fill({ color: 0xffd166, alpha: 0.8 * fade });
-        }
-      }
+      drawDefaultBomb(graphic, lane, elapsed, BOMB_CLEANUP_FALLBACK_MS);
     }
   }
 
@@ -4203,6 +4160,7 @@ export class PixiGameplayView {
       autoplay: this.options.autoPlay === true,
       hasBga: this.hasBga,
       nowMs: this.playClock(),
+      sceneElapsedMs: this.sceneStartTime === 0 ? 0 : Math.max(0, this.playClock() - this.sceneStartTime),
       progressRatio: (() => {
         const totalSeconds = this.resolveSongDurationSeconds();
         return totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
@@ -4994,57 +4952,18 @@ export class PixiGameplayView {
 
       const scratchLane = fallbackLane?.isScratch ?? isScratchLaneForVariant(channel, this.chartPlayVariant);
       const fallbackLaneIndex = resolveLr2LaneIndex(channel, this.chartPlayVariant);
-      const tone = noteFallbackColor(channel, fallbackLaneIndex, this.chartPlayVariant);
-      const laneHeight = Math.max(1, bottom - top);
-
-      // Lane bed — a whisper of the lane's own colour so the column reads as "this key's territory".
-      this.laneLayer.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: scratchLane ? 0.05 : 0.03 });
-      // Lane separators — cool blue hairlines instead of white, so notes pop against them.
-      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x2a2440, alpha: 0.6 });
-
-      // Key beam — a vertical light column that decays towards the top, plus a hot base above the line.
-      const laserAlpha = this.resolveFallbackLaneLaserAlpha(channel);
-      if (laserAlpha > 0) {
-        const beamHeight = Math.min(laneHeight, 170);
-        const slices = 6;
-        for (let slice = 0; slice < slices; slice += 1) {
-          const sliceRatio = slice / slices;
-          const sliceH = beamHeight / slices;
-          const sliceY = bottom - beamHeight + sliceRatio * beamHeight;
-          this.laneLayer
-            .rect(x + 1, sliceY, w - 2, sliceH + 1)
-            .fill({ color: tone.body, alpha: (0.05 + 0.4 * sliceRatio * sliceRatio) * laserAlpha });
-        }
-        this.laneLayer.rect(x + 1, bottom - 16, w - 2, 16).fill({ color: 0xffffff, alpha: 0.32 * laserAlpha });
-      }
-
-      // Judgement line — neon magenta, breathing with the beat: the glow flares on the downbeat and decays into
-      // the bar, so the line itself keeps time even before any note arrives.
+      const tone = defaultNoteTone(channel, fallbackLaneIndex, this.chartPlayVariant);
       const beat = this.currentBeat(this.currentSeconds());
-      const beatDecay = 1 - (beat - Math.floor(beat));
-      this.laneLayer.rect(x, bottom - 14, w, 12).fill({ color: 0xff2f6b, alpha: 0.08 + 0.1 * beatDecay });
-      this.laneLayer.rect(x, bottom - 5, w, 3).fill({ color: 0xff2f6b, alpha: 0.35 });
-      this.laneLayer.rect(x, bottom - 2, w, 2).fill({ color: 0xff2f6b, alpha: 0.98 });
-      this.laneLayer.rect(x, bottom, w, 1).fill({ color: 0xffffff, alpha: 0.95 });
-
-      // Key caps under the line — glassy at rest, blazing on press with an under-glow strip toward the line.
-      const pressed = laserAlpha > 0.6;
-      const capTop = bottom + 3;
-      const capHeight = 14;
-      this.laneLayer
-        .roundRect(x + 1, capTop, Math.max(2, w - 2), capHeight, 2)
-        .fill({ color: pressed ? tone.capLit : tone.cap, alpha: pressed ? 1 : 0.92 });
-      this.laneLayer
-        .rect(x + 1, capTop, Math.max(2, w - 2), 2)
-        .fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
-      this.laneLayer
-        .rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2)
-        .fill({ color: 0x000000, alpha: 0.35 });
-      if (pressed) {
-        // Under-glow bridging the cap to the judgement line — the "lit from within" press feedback.
-        this.laneLayer.rect(x + 1, capTop - 2, Math.max(2, w - 2), 2).fill({ color: tone.top, alpha: 0.95 });
-        this.laneLayer.rect(x + 1, capTop + capHeight, Math.max(2, w - 2), 2).fill({ color: tone.body, alpha: 0.45 });
-      }
+      drawDefaultLaneColumn(
+        this.laneLayer,
+        { x, w, top, bottom },
+        tone,
+        {
+          scratch: scratchLane,
+          laserAlpha: this.resolveFallbackLaneLaserAlpha(channel),
+          beatPhase: beat - Math.floor(beat),
+        },
+      );
     });
 
     if (!skin && this.laneX.size > 0) {
@@ -5059,9 +4978,7 @@ export class PixiGameplayView {
         gridBottom = Math.max(gridBottom, lane.bottom);
         gridRight = Math.max(gridRight, lane.x + lane.w);
       }
-      this.laneLayer
-        .rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop))
-        .fill({ color: 0x2a2440, alpha: 0.6 });
+      drawDefaultLaneGridRight(this.laneLayer, gridRight, gridTop, gridBottom);
     }
   }
 
@@ -5258,20 +5175,7 @@ export class PixiGameplayView {
     }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
-    const mineX = lane.x + 2;
-    const mineW = Math.max(4, lane.w - 4);
-    graphic
-      .roundRect(mineX, y - 12, mineW, 12, 3)
-      .fill(0x6e1414)
-      .stroke({ color: 0xffd166, width: 1, alignment: 1 });
-    // Diagonal caution stripes.
-    const stripeStep = 8;
-    for (let sx = mineX - 12; sx < mineX + mineW; sx += stripeStep) {
-      graphic
-        .poly([sx, y - 1, sx + 4, y - 1, sx + 4 + 8, y - 11, sx + 8, y - 11])
-        .fill({ color: 0xffd166, alpha: 0.55 });
-    }
-    graphic.rect(mineX, y - 12, mineW, 1).fill({ color: 0xff8a8a, alpha: 0.8 });
+    drawDefaultMine(graphic, lane.x + 2, y, Math.max(4, lane.w - 4));
   }
 
   /**
@@ -5407,7 +5311,7 @@ export class PixiGameplayView {
       if (y < top - 1 || y > bottom + 1) {
         continue;
       }
-      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
+      drawDefaultMeasureLine(graphic, x0, x1, y);
     }
   }
 
@@ -5486,12 +5390,12 @@ export class PixiGameplayView {
     }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    drawFallbackNoteBody(
+    drawDefaultNoteBody(
       graphic,
       lane.x + 1,
       y,
       Math.max(4, lane.w - 2),
-      noteFallbackColor(channel, laneIndex, this.chartPlayVariant),
+      defaultNoteTone(channel, laneIndex, this.chartPlayVariant),
     );
   }
 
@@ -5537,18 +5441,14 @@ export class PixiGameplayView {
     } else {
       const graphic = this.noteLayerPool.acquireGraphics();
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      const tone = noteFallbackColor(channel, laneIndex, this.chartPlayVariant);
-      const bodyX = lane.x + 1;
-      const bodyW = Math.max(4, lane.w - 2);
-      const bodyTop = top - FALLBACK_NOTE_HEIGHT;
-      const bodyH = Math.max(1, bottom - top);
-      // Translucent core with bright side rails — reads as "hold the lane", not a solid wall of colour.
-      graphic.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.28 });
-      graphic.rect(bodyX, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.85 });
-      graphic.rect(bodyX + bodyW - 2, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.85 });
-      // Head and tail caps as real notes so the hold's judgment edges stay legible.
-      drawFallbackNoteBody(graphic, bodyX, bottom, bodyW, tone);
-      drawFallbackNoteBody(graphic, bodyX, top, bodyW, tone);
+      drawDefaultLnBody(
+        graphic,
+        lane.x + 1,
+        top,
+        bottom,
+        Math.max(4, lane.w - 2),
+        defaultNoteTone(channel, laneIndex, this.chartPlayVariant),
+      );
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     if (endSrc) {
@@ -6267,78 +6167,6 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
     array[index] = swap;
   }
   return array;
-}
-
-/**
- * Note color for the no-skin fallback path, mirroring the IIDX / LR2 default convention:
- *
- * - - Scratch (`16` / `26`) — red. - Odd-numbered keys (1 / 3 / 5 / 7) — white. - Even-numbered keys (2 / 4 / 6) —
- *   blue.
- *
- * `laneIndex` is the LR2 lane id (`resolveLr2LaneIndex`-style): 0 / 10 = scratch, 1..9 = 1P-side keys, 11..19 = 2P-side
- * keys. `playVariant` matters because 9 KEY charts use channel 16 as a normal keyboard lane, not scratch.
- */
-interface FallbackLaneTone {
-  /** Top-edge highlight of a note body. */
-  top: number;
-  /** Note body / beam / LN colour. */
-  body: number;
-  /** Bottom-edge shade of a note body. */
-  bottom: number;
-  /** Key cap at rest. */
-  cap: number;
-  /** Key cap while pressed. */
-  capLit: number;
-}
-
-const FALLBACK_TONE_WHITE: FallbackLaneTone = {
-  top: 0xffffff,
-  body: 0xf2f4fa,
-  bottom: 0xa3adc2,
-  cap: 0xccd4e4,
-  capLit: 0xffffff,
-};
-const FALLBACK_TONE_BLUE: FallbackLaneTone = {
-  top: 0xbef4ff,
-  body: 0x2fd4f6,
-  bottom: 0x0e7fae,
-  cap: 0x0e3c4e,
-  capLit: 0x5fe6ff,
-};
-const FALLBACK_TONE_RED: FallbackLaneTone = {
-  top: 0xffb1c9,
-  body: 0xff3d6e,
-  bottom: 0xb3134a,
-  cap: 0x551228,
-  capLit: 0xff6f9a,
-};
-
-/** Height of a fallback note body in design pixels. */
-const FALLBACK_NOTE_HEIGHT = 12;
-
-/**
- * One skinless note: rounded body with a bright top edge and a shaded bottom edge, so the sprite reads as a lit
- * plastic key instead of a flat rectangle. `y` is the just-timing line — the body's BOTTOM edge sits on it.
- */
-function drawFallbackNoteBody(graphic: Graphics, x: number, y: number, w: number, tone: FallbackLaneTone): void {
-  const h = FALLBACK_NOTE_HEIGHT;
-  graphic
-    .roundRect(x, y - h, w, h, 2)
-    .fill(tone.body)
-    .stroke({ color: 0x05070d, width: 1, alignment: 1 });
-  graphic.rect(x + 1, y - h + 1, w - 2, 2).fill({ color: tone.top, alpha: 0.9 });
-  graphic.rect(x + 1, y - 3, w - 2, 2).fill({ color: tone.bottom, alpha: 0.9 });
-}
-
-function noteFallbackColor(
-  channel: string,
-  laneIndex: number,
-  playVariant: ChartPlayVariant | undefined,
-): FallbackLaneTone {
-  if (isScratchLaneForVariant(channel, playVariant)) return FALLBACK_TONE_RED;
-  const keyIndex = laneIndex % 10;
-  if (keyIndex % 2 === 0) return FALLBACK_TONE_BLUE;
-  return FALLBACK_TONE_WHITE;
 }
 
 // `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its

@@ -1,4 +1,4 @@
-import { Application, Color, Container, Graphics, Sprite, Text, TextStyle, Texture } from 'pixi.js';
+import { Application, Color, Container, Graphics, Sprite, Texture } from 'pixi.js';
 import { evaluateElementDestination, makeLr2StaticImageSprite } from '../../skin/lr2/render.ts';
 import {
   type Lr2DestinationRect,
@@ -20,7 +20,8 @@ import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
-import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
+import { formatDefaultDifficultyLabel, renderDefaultDecideChrome } from '../default/decide-render.ts';
+import { DECIDE_TIMELINE } from '../default/transition.ts';
 
 const log = logger('decide');
 
@@ -33,8 +34,10 @@ const log = logger('decide');
  *
  * - `mount(host, target)` builds the scene graph, primes the per-song texture cache, and starts the rAF loop.
  * - The scene auto-dismisses after the skin's `#STARTINPUT` ms plus a fixed window
- *   (`AUTO_ADVANCE_AFTER_STARTINPUT_MS`). Pressing Enter / Space dismisses immediately as long as `#STARTINPUT` has
- *   elapsed (LR2 spec — input is gated on that directive). Escape dismisses unconditionally.
+ *   (`AUTO_ADVANCE_AFTER_STARTINPUT_MS`). Skinless default-family decide uses `DECIDE_TIMELINE` instead (~500 ms
+ *   input unlock, auto-advance at 1500 ms so the closing wipe finishes before gameplay opens). Pressing Enter /
+ *   Space dismisses immediately as long as `#STARTINPUT` has elapsed (LR2 spec — input is gated on that directive).
+ *   Escape dismisses unconditionally.
  * - `onContinue` runs once when the scene dismisses. The demo wires it to `playSong` so dismissal kicks off the actual
  *   gameplay.
  *
@@ -51,8 +54,6 @@ const log = logger('decide');
 const FALLBACK_DESIGN_WIDTH = 640;
 const FALLBACK_DESIGN_HEIGHT = 480;
 const BG = new Color('#05070b');
-const TEXT_COLOR = new Color('#f8fafc');
-const MUTED = new Color('#9aa6b2');
 
 /**
  * How long to leave the decide splash on screen after `#STARTINPUT` elapses before auto-advancing to play. Picked to
@@ -205,7 +206,8 @@ export class PixiDecideView {
     this.timerStartedAt.set(0, now);
     // Schedule timer 1 (#STARTINPUT) and the auto-advance so the user sees the splash for a consistent window before
     // gameplay. Pressing Enter / Space before the start-input window elapses does nothing, matching LR2's input-gating.
-    const startInputMs = Math.max(0, this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS);
+    // Skinless default-family decide is shorter so the wipe-close can hand off to gameplay without a dead black hold.
+    const { startInputMs, autoAdvanceAtMs } = resolveDecideTiming(this.options.skin);
     this.inputUnlockHandle = setTimeout(() => {
       this.inputUnlockHandle = undefined;
       if (this.disposed) return;
@@ -216,7 +218,7 @@ export class PixiDecideView {
       this.autoAdvanceHandle = undefined;
       if (this.disposed) return;
       this.fireContinue();
-    }, startInputMs + AUTO_ADVANCE_AFTER_STARTINPUT_MS);
+    }, autoAdvanceAtMs);
     this.render();
     this.startAnimationLoop();
   }
@@ -316,7 +318,10 @@ export class PixiDecideView {
     // fullscreen sprite behind whatever decide-skin chrome overlays it, so themes (with or without a `*STAGEFILE` skin
     // reference) consistently get the artwork treatment. No-op when the chart didn't author `#STAGEFILE` / bmson
     // `info.back_image`; the solid background underneath shows through unchanged in that case.
-    this.renderStageFileBackdrop(designWidth, designHeight);
+    // Skinless default-family decide keeps the geometric chrome opaque, so skip the stagefile (it would never show).
+    if (useSkin) {
+      this.renderStageFileBackdrop(designWidth, designHeight);
+    }
     if (useSkin && skin) {
       const ops = computeDecideOps(this.target, skin);
       this.renderSkin(skin, ops);
@@ -374,115 +379,19 @@ export class PixiDecideView {
     }
   }
 
-  /**
-   * Fallback panel rendered when the theme bundle has no decide skin. Mirrors the result scene's fallback look so
-   * skinless demos still feel cohesive.
-   */
-  /**
-   * Fallback chrome modeled on `Theme/LR2/Decide/ss_decide.png`:
-   *
-   * - - Top-left difficulty stamp: small `DIFFICULTY:` label and a large colored difficulty name (HYPER / NORMAL /
-   *   etc.). - Center horizontal band carrying the chart title (large italic-feeling text), sub-title beneath, artist
-   *   underneath. - Bottom radial vignette evoking the stage-file under-glow.
-   *
-   * Drawn entirely with primitives — a viewer comparing this to the LR2 default decide screenshot should immediately
-   * recognize the same layout silhouette.
-   */
+  /** Skinless READY interstitial for the default skin family. */
   private renderFallbackPanel(designWidth: number, designHeight: number): void {
     const target = this.target;
     if (!target) return;
-    const chrome = new Graphics();
-    chrome.label = 'fallback-decide-chrome';
-    // Backdrop: dark navy with a soft top-down gradient evoking the screenshot's blue tone.
-    chrome.rect(0, 0, designWidth, designHeight).fill(0x040810);
-    for (let i = 0; i < 6; i += 1) {
-      const t = i / 6;
-      chrome
-        .rect(0, t * designHeight, designWidth, designHeight / 6)
-        .fill({ color: 0x10203c, alpha: 0.18 - i * 0.022 });
-    }
-    // Center soft-blue glow — evokes the stagefile lit from below.
-    for (let i = 0; i < 5; i += 1) {
-      const inset = 60 + i * 20;
-      chrome
-        .rect(inset, designHeight / 2 - 80 + i * 8, designWidth - inset * 2, 160 - i * 16)
-        .fill({ color: 0x4a78b5, alpha: 0.08 - i * 0.012 });
-    }
-
-    // ── Top-left difficulty stamp ───────────────────────────
-    chrome.rect(20, 24, 90, 8).fill({ color: 0x2c333d, alpha: 0.85 }); // "DIFFICULTY:" slot
-    // Big difficulty name backdrop — the screenshot shows a chunky violet outlined word.
-    chrome
-      .roundRect(20, 36, 130, 38, 3)
-      .fill({ color: 0x06080c, alpha: 0.7 })
-      .stroke({ color: 0x6a3aa0, width: 2, alpha: 0.85 });
-
-    // ── Center horizontal band (title / sub-title / artist) ─
-    const bandY = 150;
-    const bandH = 156;
-    chrome.rect(0, bandY, designWidth, bandH).fill({ color: 0x040810, alpha: 0.85 });
-    chrome.rect(0, bandY, designWidth, 2).fill({ color: 0x6a3aa0, alpha: 0.6 });
-    chrome.rect(0, bandY + bandH - 2, designWidth, 2).fill({ color: 0x6a3aa0, alpha: 0.6 });
-
-    const titleText = new Text({
-      text: target.song.title,
-      style: new TextStyle({
-        fill: TEXT_COLOR,
-        fontSize: 28,
-        fontWeight: '700',
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-        fontStyle: 'italic',
-        stroke: { color: 0x000000, width: 3, alignment: 0.5, join: 'round' },
-      }),
+    const nowMs = performance.now();
+    renderDefaultDecideChrome(this.fallbackLayer, {
+      designWidth,
+      designHeight,
+      song: target.song,
+      difficultyLabel: formatDefaultDifficultyLabel(target.song.chart.metadata.difficulty, target.song.playLevel),
+      sceneElapsedMs: Math.max(0, nowMs - this.sceneStartedAt),
+      nowMs,
     });
-    titleText.label = 'decide/title';
-    titleText.position.set(40, bandY + 38);
-    this.fallbackLayer.addChild(titleText);
-
-    const subtitleText = new Text({
-      text: target.song.subtitle ?? '',
-      style: new TextStyle({
-        fill: MUTED,
-        fontSize: 10,
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-      }),
-    });
-    subtitleText.label = 'decide/subtitle';
-    subtitleText.position.set(42, bandY + 24);
-    this.fallbackLayer.addChild(subtitleText);
-
-    const artistText = new Text({
-      text: target.song.artist ?? '',
-      style: new TextStyle({
-        fill: MUTED,
-        fontSize: 11,
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-      }),
-    });
-    artistText.label = 'decide/artist';
-    artistText.position.set(42, bandY + 88);
-    this.fallbackLayer.addChild(artistText);
-
-    // Difficulty name overlay — drawn as text on top of the top-left stamp rectangle. Picks a color from the
-    // difficulty index with a violet bias for HYPER (the screenshot's reference).
-    const difficultyText = new Text({
-      text: 'HYPER',
-      style: new TextStyle({
-        fill: 0xb19cd9,
-        fontSize: 24,
-        fontWeight: '900',
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-        stroke: { color: 0x000000, width: 2, alignment: 0.5, join: 'round' },
-      }),
-    });
-    difficultyText.label = 'decide/difficulty';
-    difficultyText.position.set(28, 38);
-    this.fallbackLayer.addChild(difficultyText);
-
-    // No "press Enter" hint — LR2's default decide skin doesn't author one, so the no-skin fallback skips it too.
-
-    // Add the chrome BEFORE text overlays so text paints on top.
-    this.fallbackLayer.addChildAt(chrome, 0);
   }
 
   private evaluateElementDst(element: {
@@ -559,6 +468,14 @@ export class PixiDecideView {
     if (this.disposed || !this.inputUnlocked) return;
     this.fireContinue();
   };
+}
+
+function resolveDecideTiming(skin: Lr2Skin | undefined): { startInputMs: number; autoAdvanceAtMs: number } {
+  if (skin) {
+    const startInputMs = Math.max(0, skin.timing.startInput ?? DEFAULT_STARTINPUT_MS);
+    return { startInputMs, autoAdvanceAtMs: startInputMs + AUTO_ADVANCE_AFTER_STARTINPUT_MS };
+  }
+  return { startInputMs: DECIDE_TIMELINE.startInput, autoAdvanceAtMs: DECIDE_TIMELINE.total };
 }
 
 function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<number> {
