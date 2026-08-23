@@ -1,0 +1,62 @@
+*---------------------- METADATA FIELD
+
+#TITLE 7 KEY Long Note (BML)
+#SUBTITLE The .bml extension - 7 keys plus scratch with #LNOBJ long notes
+#ARTIST be-music
+#GENRE TEST
+#BPM 140
+#PLAYLEVEL 5
+#TOTAL 300
+#DIFFICULTY 3
+
+*---------------------- EXTENDED HEADER FIELD
+* `.bml` is the fourth chart extension the toolchain accepts, alongside `.bms`,
+* `.bme` and `.pms`. It carries no parsing rule of its own - by convention it
+* marks a 7-key chart that uses long notes - so it only shows up in the
+* extension allow-lists (the player-tui chart picker, the player-web drop
+* handler, the CLI usage line) and in lane-mode detection's "not .pms" path.
+*
+* Without a real `.bml` file in this directory those allow-list entries were
+* only ever tested against synthetic paths, so this chart exists to be opened:
+* it has to parse like any other BMS chart and classify as 7 KEY SP.
+
+#PLAYER 1
+#LNTYPE 1
+#LNMODE 1
+#LNOBJ ZZ
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+#WAV03 right.wav
+#WAVZZ sample.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - count-in on the seven keys, scratch on the backbeat.
+#00011:01010101
+#00013:00020002
+#00015:02000200
+#00016:00030003
+
+* Measure 1 - a 2-beat long note per key group, which is what the extension is
+* conventionally used to advertise.
+#00111:0100ZZ00
+#00113:0100ZZ00
+#00115:0100ZZ00
+
+* Measure 2 - the 6th and 7th columns (18 / 19), which are what separate 7 KEY
+* from 5 KEY in lane-mode detection.
+#00218:010000ZZ
+#00219:010000ZZ
+
+* Measure 3 - scratch plus a chord, no long notes.
+#00311:01010101
+#00318:00020002
+#00319:02000200
+#00316:00030003
+
+*---------------------- CONTROL FLOW FIELD

@@ -1,0 +1,68 @@
+*---------------------- METADATA FIELD
+
+#TITLE Non-Positive BPM Changes
+#SUBTITLE Zero, negative and undefined #BPMxx slots referenced from channel 08
+#ARTIST be-music
+#GENRE TEST
+#BPM 130
+#PLAYLEVEL 1
+#RANK 2
+#TOTAL 300
+#DIFFICULTY 1
+
+*---------------------- EXTENDED HEADER FIELD
+* Channel `08` looks up a `#BPMxx` slot, and nothing stops a chart from pointing
+* it at a value the timeline cannot use. The timing resolver skips any BPM point
+* that is not finite and positive, which is the only thing keeping these charts
+* from producing infinite or backwards note times:
+*
+*   #BPM02 0    - 240/0 is infinite seconds per measure; every later event would
+*                 land at t = inf and never fire
+*   #BPM03 -65  - a negative tempo runs the chart backwards
+*   ZZ          - an undefined slot, which has no value at all
+*
+* Real players disagree on what these should do (LR2 stops or reverses the
+* scroll), so the fixture pins the one thing that has to hold regardless: the
+* chart still parses, and the notes before the bad change still play at the
+* declared tempo.
+
+#PLAYER 1
+#LNTYPE 1
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+
+#BPM01 130
+#BPM02 0
+#BPM03 -65
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measures 0-1 - normal play at the declared 130 BPM.
+#00011:01010101
+#00001:02
+#00111:01010101
+#00101:02
+
+* Measure 2 - a valid BPM change, so the chart proves channel 08 works before it
+* is handed anything broken.
+#00208:0100
+#00211:01010101
+
+* Measure 3 - #BPM02 is 0.
+#00308:02
+#00311:01010101
+
+* Measure 4 - #BPM03 is negative.
+#00408:03
+#00411:01010101
+
+* Measure 5 - channel 08 references #BPMZZ, which is never defined.
+#00508:ZZ
+#00511:01010101
+
+*---------------------- CONTROL FLOW FIELD
