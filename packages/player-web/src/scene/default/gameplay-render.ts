@@ -262,7 +262,14 @@ export function renderDefaultGameplayFrame(
     layerPool,
   );
   addText(layer, 'RANK', SCORE_PANEL.x + 148, SCORE_PANEL.y + 81, labelStyle(), layerPool);
-  addText(layer, rank, SCORE_PANEL.x + 226, SCORE_PANEL.y + 70, { ...metricStyle(22, GOLD, 1), maxWidth: 42 }, layerPool);
+  addText(
+    layer,
+    rank,
+    SCORE_PANEL.x + 226,
+    SCORE_PANEL.y + 70,
+    { ...metricStyle(22, GOLD, 1), maxWidth: 42 },
+    layerPool,
+  );
 
   for (const display of resolveJudgeDisplays(runtime, playfield)) {
     const combo = resolveVisibleCombo(display.judge, display.combo);
@@ -442,10 +449,13 @@ function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout, prog
   const trackTop = wellTop + 6;
   const trackHeight = wellBottom - 12 - trackTop;
   frame.rect(trackX, trackTop, railW - 4, trackHeight).fill({ color: 0x000000, alpha: 0.55 });
-  const ratio = progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
+  const ratio =
+    progressRatio !== undefined && Number.isFinite(progressRatio) ? Math.max(0, Math.min(1, progressRatio)) : 0;
   if (ratio > 0) {
     const fillHeight = Math.max(2, Math.round(trackHeight * ratio));
-    frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, fillHeight).fill({ color: MAGENTA, alpha: 0.85 });
+    frame
+      .rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, fillHeight)
+      .fill({ color: MAGENTA, alpha: 0.85 });
     frame.rect(trackX, trackTop + trackHeight - fillHeight, railW - 4, 2).fill({ color: 0xffffff, alpha: 0.85 });
   }
 
@@ -812,7 +822,17 @@ function resolveTextStyle(opts: {
       fontFamily: opts.fontFamily ?? FONT,
       letterSpacing: opts.letterSpacing ?? 0,
       stroke: opts.stroke,
-      ...(shadow ? { dropShadow: { color: shadow.color, alpha: shadow.alpha, blur: shadow.blur, distance: shadow.distance, angle: Math.PI / 2 } } : {}),
+      ...(shadow
+        ? {
+            dropShadow: {
+              color: shadow.color,
+              alpha: shadow.alpha,
+              blur: shadow.blur,
+              distance: shadow.distance,
+              angle: Math.PI / 2,
+            },
+          }
+        : {}),
     });
     TEXT_STYLE_CACHE.set(key, style);
   }

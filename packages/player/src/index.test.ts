@@ -214,7 +214,7 @@ function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; val
   }
   // Mine on measure 1 (chart 2.0 s at BPM 120) so a held key can deterministically detonate it as it crosses the
   // judge line. A mine on measure 0 (chart 0 s) is racy under LR2's passage-based detonation: with playback sped up,
-  // a single poll tick can advance chart time past the mine's GOOD window before the input is processed.
+  // a single poll tick can advance chart time past the mine's PGREAT window before the input is processed.
   json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value }];
   return json;
 }
@@ -1693,9 +1693,9 @@ describe('player', () => {
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
   });
 
-  test('player: a press outside the GOOD window does not detonate an approaching mine (LR2)', async () => {
-    // BPM 120, NORMAL rank → GOOD window ±100 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
-    // outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
+  test('player: a press outside the PGREAT window does not detonate an approaching mine (LR2)', async () => {
+    // BPM 120, NORMAL rank → PGREAT window ±18 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
+    // far outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
@@ -1713,6 +1713,54 @@ describe('player', () => {
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: a press inside GOOD but outside the PGREAT window does not detonate a mine (LR2)', async () => {
+    // LR2's changelog pins the press-detonation range to the PGREAT window (±18 ms at NORMAL rank), not GOOD
+    // (±100 ms). The mine passes at 2.0 s; a tap at ~2.04 s — 40 ms late, still inside GOOD — must not detonate
+    // it: the press missed PGREAT, and the crossing-anchored hold-through leg ignores presses that land after the
+    // crossing, so this holds even when the tap is the first processing past the window.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2040, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: a tap shortly before a passing mine detonates it (LR2 hold-through via the press grace)', async () => {
+    // Non-kitty input has no release events, so a tap counts as "held" for the LN hold-grace window (120 ms).
+    // A tap at ~1.95 s therefore covers the mine's 2.0 s crossing, and the crossing-anchored hold-through leg
+    // detonates it deterministically once the PGREAT window closes — no positive-coverage dependence on a frame
+    // tick sampling the ±18 ms window itself.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1950, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
   });
 
   test('player: routes audio through createAudioSession factory when supplied', async () => {

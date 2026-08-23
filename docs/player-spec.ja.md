@@ -324,7 +324,7 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 - `summary.poor` を加算する。
 - combo を 0 に戻す。
 - groove gauge を `-6` する。
-- POOR BGA を発火する。
+- POOR BGA を発火する。miss レイヤーの表示時間は 500ms（LR2 同梱 `config.xml` の既定値 `<poorbga>500</poorbga>` に一致）。
 - judge/combo 表示を `POOR` に更新する。
 
 ### 空打鍵（candidate なし）— LR2 互換 空POOR
@@ -351,9 +351,9 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 ### 地雷
 
-地雷は LR2 の発動モデルに合わせます（losak「地雷オブジェに関するアレコレ」、beatoraja `JudgeManager` で確認）。
+地雷は LR2 の発動モデルに合わせます（LR2 自身の changelog。ダメージモデルは beatoraja `JudgeManager` で確認）。
 
-- 発動条件は「**レーンのキーが ON かつ 地雷が判定線の `GOOD` 窓以内**」です。押下した瞬間に `GOOD` 圏内の地雷は爆発し、**押しっぱなしで通過した地雷も爆発**します。キーが押されていない地雷の通過は無害です。
+- 発動条件は LR2 の2条件です。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
 - 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
 - ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
 - ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。

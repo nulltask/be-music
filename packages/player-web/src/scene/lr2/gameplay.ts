@@ -3955,7 +3955,7 @@ export class PixiGameplayView {
    * Composites the chart's BGA into the active skin's `#DST_BGA` rectangles, or the default-family BGA rectangle when
    * no external skin is loaded. Three layers stack from back to front: base (channel 04 / bmson `bga.events`), layer
    * (channel 07 / 0A / bmson `layerEvents`), and a POOR override (channel 06 / `poorEvents`) that briefly replaces the
-   * base while the player is in a 2-second POOR-judgement window.
+   * base while the player is inside the POOR-judgement window (`DEFAULT_POOR_BGA_DISPLAY_SECONDS`).
    *
    * The renderer is idempotent per frame — it tears down any existing sprites and rebuilds from the active cues, so cue
    * switches show up the next frame without explicit dirty tracking.
@@ -5034,12 +5034,8 @@ export class PixiGameplayView {
       this.laneLayer
         .roundRect(x + 1, capTop, Math.max(2, w - 2), capHeight, 2)
         .fill({ color: pressed ? tone.capLit : tone.cap, alpha: pressed ? 1 : 0.92 });
-      this.laneLayer
-        .rect(x + 1, capTop, Math.max(2, w - 2), 2)
-        .fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
-      this.laneLayer
-        .rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2)
-        .fill({ color: 0x000000, alpha: 0.35 });
+      this.laneLayer.rect(x + 1, capTop, Math.max(2, w - 2), 2).fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
+      this.laneLayer.rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2).fill({ color: 0x000000, alpha: 0.35 });
       if (pressed) {
         // Under-glow bridging the cap to the judgement line — the "lit from within" press feedback.
         this.laneLayer.rect(x + 1, capTop - 2, Math.max(2, w - 2), 2).fill({ color: tone.top, alpha: 0.95 });

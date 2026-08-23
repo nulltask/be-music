@@ -276,11 +276,14 @@ export class ChartPreviewEngine {
       this.finishSource(handle);
       return;
     }
-    setTimeout(() => {
-      if (handle.stopping) {
-        this.finishSource(handle);
-      }
-    }, CHART_PREVIEW_STOP_FADE_OUT_SECONDS * 1000 + 50);
+    setTimeout(
+      () => {
+        if (handle.stopping) {
+          this.finishSource(handle);
+        }
+      },
+      CHART_PREVIEW_STOP_FADE_OUT_SECONDS * 1000 + 50,
+    );
   }
 
   private stopSourceImmediately(handle: PreviewSourceHandle): void {

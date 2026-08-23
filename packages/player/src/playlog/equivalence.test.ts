@@ -212,7 +212,7 @@ describe('engine / simulator equivalence', () => {
     expect(summary.poor).toBe(simulated.judge.poor);
   });
 
-  test("lr2: the empty POOR window is early-only", async () => {
+  test('lr2: the empty POOR window is early-only', async () => {
     // LR2's miss window is `{0, 1 s}` — a press up to a second BEFORE a note charges one, a press after never does.
     const json = chart([{ measure: 2, channel: '11', position: [0, 1], value: '01' }]);
 

@@ -84,7 +84,7 @@ import {
 } from './judge-window.ts';
 import {
   classifyRulesetJudge,
-  goodWindowReachUs,
+  pgreatWindowReachUs,
   preferJudgeCandidate,
   judgeWindowEarlyReachUs,
   judgeWindowLateReachUs,
@@ -607,12 +607,7 @@ function isLongPlayableNote(note: TimedPlayableNote): boolean {
 }
 
 /** Judge indices, best to worst, in the order the ruleset window sets use. */
-const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = [
-  'PERFECT',
-  'GREAT',
-  'GOOD',
-  'BAD',
-];
+const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = ['PERFECT', 'GREAT', 'GOOD', 'BAD'];
 
 /**
  * Classify a signed timing delta against one ruleset window set, or `undefined` when the press cannot reach the
@@ -2160,7 +2155,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const autoLongNoteScoresTail = (note: TimedPlayableNote): boolean => {
     const chartMode = resolvePlayableLongNoteMode(note);
     return (
-      chartMode !== undefined && isChargeLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, chartMode))
+      chartMode !== undefined &&
+      isChargeLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, chartMode))
     );
   };
 
@@ -2690,9 +2686,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (autoScratchEnabled) {
       writeOutput('Mode: AUTO SCRATCH (16ch/26ch only)\n');
     }
-    writeOutput(
-      `Judge window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`,
-    );
+    writeOutput(`Judge window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`);
     writeOutput('Press Space to pause/resume.\n');
     writeOutput('Press Shift+R to restart.\n');
     writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
@@ -2740,10 +2734,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // Widest reach across the whole chart — a mid-chart `#EXRANKxx` can widen the windows past the opening rank's.
   const maxBadWindowMs =
     1000 *
-    Math.max(
-      maxJudgeReachSeconds(0),
-      ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(change.seconds)),
-    );
+    Math.max(maxJudgeReachSeconds(0), ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(change.seconds)));
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
@@ -2888,32 +2879,48 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   };
 
   /**
-   * LR2 mine model (losak's LR2 writeup, confirmed by otlovers): a mine explodes while its lane's key is ON and the
-   * mine sits within the GOOD window of the judge line — covering both "press while a mine is in range" and "hold
-   * through a passing mine". Mines that leave the window with the key up are retired silently (passing an
-   * un-pressed mine is harmless). Runs on every frame tick and on every press dispatch.
+   * LR2 mine model (LR2's own changelog, 080114 entry): a mine explodes when its lane's key is held as the mine
+   * crosses the judge line ("キー押したまま地雷通過"), or on a press within the PGREAT window of the judge line
+   * ("ピカグレ範囲内でキーを押す"). (losak's writeup claims the GOOD window for the press leg, but the primary
+   * source — LR2's changelog — says the PGREAT range, and no later entry revises it.) Mines that cross with the
+   * key up are retired silently once the PGREAT window closes behind them (passing an un-pressed mine is
+   * harmless). Runs on every frame tick and on every press dispatch.
    */
   const processLandminePassage = (nowSec: number, nowMs: number): void => {
-    // Mines sit on lanes, so they read the lane's own GOOD window; the legs are asymmetric under beatoraja, hence
-    // the separate early / late reach rather than one radius.
-    const [goodLateUs, goodEarlyUs] = goodWindowReachUs(windowTablesAt(nowSec).note);
-    const goodLateSeconds = goodLateUs / 1e6;
-    const goodEarlySeconds = goodEarlyUs / 1e6;
+    // Reach form keeps the early / late legs separate — nothing guarantees a ruleset's window table is symmetric.
+    const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(nowSec).note);
+    const pgreatLateSeconds = pgreatLateUs / 1e6;
+    const pgreatEarlySeconds = pgreatEarlyUs / 1e6;
     while (landmineExpireCursor < landmineNotes.length) {
       const landmine = landmineNotes[landmineExpireCursor]!;
       if (landmine.judged) {
         landmineExpireCursor += 1;
         continue;
       }
-      if (nowSec - landmine.seconds <= goodLateSeconds) {
+      if (nowSec - landmine.seconds <= pgreatLateSeconds) {
         break;
       }
-      markLandmineJudged(landmine);
+      // The PGREAT window can be narrower than a frame tick, so a held-through mine may enter AND leave it between
+      // two passage calls. The hold-through leg therefore anchors to the crossing itself: when the window closes
+      // behind a mine, detonate if the lane was held at the moment the mine crossed the judge line — a kitty key
+      // that is still down counts, as does a non-kitty press within the hold-grace window BEFORE the crossing.
+      // A press AFTER the crossing never detonates here: that is the press leg, and it already missed PGREAT.
+      const crossingMs = nowMs - ((nowSec - landmine.seconds) * 1000) / speed;
+      const lastPressMs = lastLanePressMsByChannel.get(landmine.channel);
+      const pressedBeforeCrossing = lastPressMs !== undefined && lastPressMs <= crossingMs;
+      const heldAtCrossing = pressedBeforeCrossing
+        ? crossingMs - lastPressMs <= LONG_NOTE_REPEAT_HOLD_GRACE_MS || activeKittyPressedChannels.has(landmine.channel)
+        : lastPressMs === undefined && activeKittyPressedChannels.has(landmine.channel);
+      if (heldAtCrossing) {
+        detonateLandmine(landmine, nowSec);
+      } else {
+        markLandmineJudged(landmine);
+      }
       landmineExpireCursor += 1;
     }
     for (let index = landmineExpireCursor; index < landmineNotes.length; index += 1) {
       const landmine = landmineNotes[index]!;
-      if (landmine.seconds - nowSec > goodEarlySeconds) {
+      if (landmine.seconds - nowSec > pgreatEarlySeconds) {
         break;
       }
       if (landmine.judged) {
@@ -3192,7 +3199,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     let bestSelection: JudgeSelectionCandidate | undefined;
     // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection
     // algorithms assume (`lowest` keeps the first, the others may displace it).
-    for (let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds); index < scorableNotes.length; index += 1) {
+    for (
+      let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
+      index < scorableNotes.length;
+      index += 1
+    ) {
       const note = scorableNotes[index]!;
       if (note.seconds - nowSec > reachSeconds) {
         break;
@@ -3222,7 +3233,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         judge,
         windows,
       };
-      if (bestSelection === undefined || preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)) {
+      if (
+        bestSelection === undefined ||
+        preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)
+      ) {
         best = note;
         bestSelection = selection;
       }
@@ -3248,7 +3262,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const consumedIsLong = isLongPlayableNote(consumed);
     const consumedWasBad = consumedJudge === 3;
     const extras: TimedPlayableNote[] = [];
-    for (let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds); index < scorableNotes.length; index += 1) {
+    for (
+      let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
+      index < scorableNotes.length;
+      index += 1
+    ) {
       const note = scorableNotes[index]!;
       if (note.seconds - nowSec > reachSeconds) {
         break;
@@ -3446,7 +3464,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
     }
 
-
     let refreshedHold = false;
     for (const channel of candidateChannels) {
       if (!activeLongNotesByChannel.has(channel)) {
@@ -3457,7 +3474,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     // LR2 mine model — the press itself counts as "key ON": record the press instant for the non-kitty hold
-    // approximation, then let the shared passage processor detonate any mine currently inside the GOOD window on
+    // approximation, then let the shared passage processor detonate any mine currently inside the PGREAT window on
     // these lanes. Detonation never consumes the press: the regular note judgment below still runs, so a mine close
     // to a real note no longer swallows the player's input.
     for (const channel of candidateChannels) {
@@ -3476,7 +3493,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side. Treat as benign.
         return;
       }
-      const fallback = findLaneSoundCandidate(laneSoundNotes, candidateChannels, nowSec, maxJudgeEarlyReachSeconds(nowSec));
+      const fallback = findLaneSoundCandidate(
+        laneSoundNotes,
+        candidateChannels,
+        nowSec,
+        maxJudgeEarlyReachSeconds(nowSec),
+      );
       if (fallback) {
         if (!uiEnabled) {
           writePlayableSampleTriggerEventLog(
@@ -3849,7 +3871,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
       processReplayEventsUntil(nowSec);
-        playbackEventTracer.flushUntil(nowSec);
+      playbackEventTracer.flushUntil(nowSec);
 
       triggerRealtimeAudioVolumeEvents(scheduledSec);
       triggerNonPlayableRealtimeAudioEvents(scheduledSec);

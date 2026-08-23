@@ -30,10 +30,7 @@ function mockBuffer(duration: number): AudioBuffer {
 describe('resolvePostChartResultDelayMs', () => {
   it('waits about two 4/4 measures after the last note before result transition', () => {
     const delay = resolvePostChartResultDelayMs(
-      [
-        note({ beat: 4, seconds: 2 }),
-        note({ beat: 12, seconds: 6 }),
-      ],
+      [note({ beat: 4, seconds: 2 }), note({ beat: 12, seconds: 6 })],
       resolver,
       6,
     );
@@ -65,9 +62,7 @@ describe('resolveGameplayAudioTailCleanupDelayMs', () => {
     const delay = resolveGameplayAudioTailCleanupDelayMs({
       chart,
       notes: [note({ event: mkEvent('11', '01'), seconds: 3 })],
-      autoSampleTriggers: [
-        { event: autoEvent, seconds: 5 } satisfies Pick<TimedSampleTrigger, 'event' | 'seconds'>,
-      ],
+      autoSampleTriggers: [{ event: autoEvent, seconds: 5 } satisfies Pick<TimedSampleTrigger, 'event' | 'seconds'>],
       decodedSamples: new Map([
         ['short.wav', mockBuffer(1)],
         ['tail.wav', mockBuffer(4)],
