@@ -47,6 +47,7 @@ pnpm run player:web
 
 chart file を含む混在 drop では、loader は chart directory を song file、それ以外を theme file として扱います。
 chart file が存在しない場合、drop 全体を theme candidate として扱います。LR2 detection は `.lr2skin` file、beatoraja detection は `.luaskin` file または `skin/` path segment 配下の JSON file を使います。
+プレイフィールドをダブルクリックすると demo をフルスクリーンに切り替えます。`Esc` は通常のシーン操作の前にフルスクリーンを解除します。
 
 ## Browser loading model
 

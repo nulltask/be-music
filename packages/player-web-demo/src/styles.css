@@ -199,6 +199,20 @@ body {
 }
 
 /*
+ * Fullscreen target is `.shell` (not the canvas itself) so Pixi's
+ * `resizeTo: #stage` still sees a 100%-of-viewport container after
+ * the browser chrome disappears, and so the floating debug / help /
+ * search overlays stay reachable. The background fill covers Safari's
+ * brief unstyled flash as the element is promoted.
+ */
+.shell:fullscreen,
+.shell:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  background: #08090d;
+}
+
+/*
  * Drop overlay — three layers stacked over the stage:
  *
  *   1. `.drop`            — full-stage container, hidden by default.

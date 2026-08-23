@@ -107,6 +107,7 @@ import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
+import { exitFullscreen, shouldCaptureFullscreenEscape, toggleFullscreen } from './fullscreen.ts';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
@@ -623,6 +624,30 @@ class PlayerWebDemoApp {
     if (this.hostMounted) return;
     this.hostMounted = true;
     await this.sceneHost.mount(this.elements.stage);
+    this.wireCanvasFullscreen();
+  }
+
+  /**
+   * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
+   * Escape while fullscreen is consumed here so the active scene's Esc handler — quit play,
+   * dismiss result, close a select folder — does not fire on the same keypress that leaves
+   * fullscreen.
+   */
+  private wireCanvasFullscreen(): void {
+    this.sceneHost.app.canvas.addEventListener('dblclick', (event) => {
+      event.preventDefault();
+      void toggleFullscreen(this.elements.shell);
+    });
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (!shouldCaptureFullscreenEscape(event)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        void exitFullscreen();
+      },
+      true,
+    );
   }
 
   /**
