@@ -49,7 +49,9 @@ function createSnapshot(
         key,
         {
           hz,
+          medianHz: hz,
           meanMs: hz === 0 ? 0 : 1000 / hz,
+          p50Ms: hz === 0 ? 0 : 1000 / hz,
           p75Ms: 11,
           p99Ms: 12,
           minMs: 9,
@@ -89,6 +91,37 @@ describe('compareSnapshots', () => {
 
     expect(rows).toHaveLength(1);
     expect(rows[0]?.key).toBe('utils.fast');
+    expect(rows[0]?.baseHz).toBe(100);
+    expect(rows[0]?.headHz).toBe(110);
+    expect(rows[0]?.deltaPercent).toBeCloseTo(10);
+  });
+
+  it('compares median ops/s when mean hz disagrees', () => {
+    const rows = compareSnapshots(
+      createSnapshot({ 'utils.case': 100 }),
+      createSnapshot(
+        { 'utils.case': 100 },
+        {
+          results: {
+            'utils.case': {
+              hz: 50,
+              medianHz: 110,
+              meanMs: 20,
+              p50Ms: 9.091,
+              p75Ms: 11,
+              p99Ms: 12,
+              minMs: 9,
+              maxMs: 40,
+              rmePercent: 1,
+              sampleCount: 100,
+              totalTimeMs: 200,
+            },
+          },
+        },
+      ),
+    );
+
+    expect(rows).toHaveLength(1);
     expect(rows[0]?.baseHz).toBe(100);
     expect(rows[0]?.headHz).toBe(110);
     expect(rows[0]?.deltaPercent).toBeCloseTo(10);
@@ -165,6 +198,73 @@ describe('buildDiffMarkdown', () => {
     expect(markdown).toContain('| Median change | +1.00% |');
     expect(markdown).toContain('| Cases regressed (<= -threshold) | 1 |');
     expect(markdown).toContain('Overall verdict uses the median change');
+    expect(markdown).toContain('Per-case lists compare median ops/s, not mean.');
     expect(markdown).toContain('`utils.noisy`');
+  });
+
+  it('ranks top lists by median ops/s, not mean hz', () => {
+    const markdown = buildDiffMarkdown(
+      createSnapshot({
+        'utils.meanOnly': 100,
+        'utils.medianReal': 100,
+        'utils.stable': 100,
+      }),
+      createSnapshot(
+        {
+          'utils.meanOnly': 100,
+          'utils.medianReal': 100,
+          'utils.stable': 100,
+        },
+        {
+          results: {
+            'utils.meanOnly': {
+              hz: 50,
+              medianHz: 99,
+              meanMs: 20,
+              p50Ms: 10.101,
+              p75Ms: 11,
+              p99Ms: 12,
+              minMs: 9,
+              maxMs: 40,
+              rmePercent: 1,
+              sampleCount: 100,
+              totalTimeMs: 200,
+            },
+            'utils.medianReal': {
+              hz: 99,
+              medianHz: 50,
+              meanMs: 10.101,
+              p50Ms: 20,
+              p75Ms: 21,
+              p99Ms: 22,
+              minMs: 9,
+              maxMs: 40,
+              rmePercent: 1,
+              sampleCount: 100,
+              totalTimeMs: 200,
+            },
+            'utils.stable': {
+              hz: 101,
+              medianHz: 101,
+              meanMs: 9.901,
+              p50Ms: 9.901,
+              p75Ms: 11,
+              p99Ms: 12,
+              minMs: 9,
+              maxMs: 13,
+              rmePercent: 1,
+              sampleCount: 100,
+              totalTimeMs: 200,
+            },
+          },
+        },
+      ),
+      8,
+      12,
+    );
+
+    expect(markdown).toContain('`utils.medianReal`');
+    expect(markdown).toContain('| `utils.medianReal` | 100.00 | 50.00 | -50.00% |');
+    expect(markdown).not.toContain('`utils.meanOnly`');
   });
 });

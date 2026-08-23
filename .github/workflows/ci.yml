@@ -108,6 +108,7 @@ jobs:
   # machines, and that host delta dominates the 8% regression threshold.
   # Per-case time is longer than the local default so tinybench gets enough samples;
   # compare treats the median change as the verdict, not the per-case count.
+  # Per-case lists also compare median ops/s (tinybench p50), not mean throughput.
   benchmark-pr:
     name: Benchmark (PR)
     needs: changes
