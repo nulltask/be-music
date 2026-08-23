@@ -27,14 +27,16 @@ interface CliOptions {
   failOnRegression: boolean;
 }
 
-interface ComparedRow {
+export type BenchmarkOverallVerdict = 'improved' | 'regressed' | 'unchanged';
+
+export interface ComparedRow {
   key: string;
   baseHz: number;
   headHz: number;
   deltaPercent: number;
 }
 
-interface ComparisonSummary {
+export interface ComparisonSummary {
   comparableCaseCount: number;
   improvedCount: number;
   regressedCount: number;
@@ -42,6 +44,7 @@ interface ComparisonSummary {
   medianDeltaPercent: number;
   meanDeltaPercent: number;
   thresholdPercent: number;
+  overallVerdict: BenchmarkOverallVerdict;
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -78,6 +81,7 @@ async function main(): Promise<void> {
           medianDeltaPercent: 0,
           meanDeltaPercent: 0,
           thresholdPercent: options.thresholdPercent,
+          overallVerdict: 'unchanged',
         };
 
   if (options.summaryPath) {
@@ -88,18 +92,18 @@ async function main(): Promise<void> {
   process.stdout.write(`Benchmark comparison markdown: ${options.outputPath}\n`);
   if (baseSnapshot !== undefined) {
     process.stdout.write(
-      `Comparable=${summary.comparableCaseCount} improved=${summary.improvedCount} regressed=${summary.regressedCount} threshold=${summary.thresholdPercent.toFixed(2)}%\n`,
+      `Comparable=${summary.comparableCaseCount} overall=${summary.overallVerdict} median=${formatPercent(summary.medianDeltaPercent)} improved=${summary.improvedCount} regressed=${summary.regressedCount} threshold=${summary.thresholdPercent.toFixed(2)}%\n`,
     );
   } else {
     process.stdout.write('Base snapshot is unavailable. Generated head-only report.\n');
   }
 
-  if (options.failOnRegression && summary.regressedCount > 0) {
+  if (options.failOnRegression && summary.overallVerdict === 'regressed') {
     process.exitCode = 1;
   }
 }
 
-function buildDiffMarkdown(
+export function buildDiffMarkdown(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
   thresholdPercent: number,
@@ -126,17 +130,19 @@ function buildDiffMarkdown(
   lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
   lines.push(`- Comparable cases: \`${summary.comparableCaseCount}\``);
   lines.push(`- Regression threshold: \`${thresholdPercent.toFixed(2)}%\``);
+  lines.push(`- Overall verdict uses the median change. Per-case lists are for inspection.`);
   lines.push(`- Base runs: \`${formatRunCount(baseSnapshot)}\``);
   lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
   lines.push('');
   lines.push('### Summary');
   lines.push('| Metric | Value |');
   lines.push('| --- | ---: |');
-  lines.push(`| Improved (>= threshold) | ${summary.improvedCount} |`);
-  lines.push(`| Regressed (<= -threshold) | ${summary.regressedCount} |`);
-  lines.push(`| Unchanged | ${summary.unchangedCount} |`);
+  lines.push(`| Overall | ${summary.overallVerdict} |`);
   lines.push(`| Median change | ${formatPercent(summary.medianDeltaPercent)} |`);
   lines.push(`| Mean change | ${formatPercent(summary.meanDeltaPercent)} |`);
+  lines.push(`| Cases improved (>= threshold) | ${summary.improvedCount} |`);
+  lines.push(`| Cases regressed (<= -threshold) | ${summary.regressedCount} |`);
+  lines.push(`| Cases unchanged | ${summary.unchangedCount} |`);
   lines.push(`| Head benchmarked cases | ${headSnapshot.totals.benchmarked} |`);
   lines.push(`| Head skipped cases | ${headSnapshot.totals.skipped} |`);
 
@@ -212,7 +218,7 @@ function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount:
   return lines.join('\n');
 }
 
-function compareSnapshots(
+export function compareSnapshots(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
 ): ComparedRow[] {
@@ -234,7 +240,20 @@ function compareSnapshots(
   return rows;
 }
 
-function summarizeRows(rows: ComparedRow[], thresholdPercent: number): ComparisonSummary {
+export function resolveOverallVerdict(
+  medianDeltaPercent: number,
+  thresholdPercent: number,
+): BenchmarkOverallVerdict {
+  if (medianDeltaPercent >= thresholdPercent) {
+    return 'improved';
+  }
+  if (medianDeltaPercent <= -thresholdPercent) {
+    return 'regressed';
+  }
+  return 'unchanged';
+}
+
+export function summarizeRows(rows: ComparedRow[], thresholdPercent: number): ComparisonSummary {
   const improvedCount = rows.filter((row) => row.deltaPercent >= thresholdPercent).length;
   const regressedCount = rows.filter((row) => row.deltaPercent <= -thresholdPercent).length;
   const unchangedCount = rows.length - improvedCount - regressedCount;
@@ -250,10 +269,11 @@ function summarizeRows(rows: ComparedRow[], thresholdPercent: number): Compariso
     medianDeltaPercent,
     meanDeltaPercent,
     thresholdPercent,
+    overallVerdict: resolveOverallVerdict(medianDeltaPercent, thresholdPercent),
   };
 }
 
-function summarizeComparison(
+export function summarizeComparison(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
   thresholdPercent: number,
@@ -375,7 +395,7 @@ function printUsage(defaults: CliDefaults): void {
     `  --threshold <percent>    Improvement/regression threshold percent (default: ${defaults.thresholdPercent})`,
     `  --top <count>            Number of rows for top lists (default: ${defaults.topCount})`,
     '  --summary <path>         Optional JSON summary output path',
-    '  --fail-on-regression     Exit non-zero if regression count is above 0',
+    '  --fail-on-regression     Exit non-zero if the median change is a regression',
     '',
     'Developer options:',
     '  -h, --help               Show this help',

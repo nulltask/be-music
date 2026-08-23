@@ -106,16 +106,18 @@ jobs:
 
   # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
   # machines, and that host delta dominates the 8% regression threshold.
+  # Per-case time is longer than the local default so tinybench gets enough samples;
+  # compare treats the median change as the verdict, not the per-case count.
   benchmark-pr:
     name: Benchmark (PR)
     needs: changes
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
       needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
-      BENCH_TIME_MS: 20
-      BENCH_WARMUP_TIME_MS: 10
+      BENCH_TIME_MS: 50
+      BENCH_WARMUP_TIME_MS: 25
       BENCH_REPEATS: 3
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
@@ -272,10 +274,10 @@ jobs:
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 60
+    timeout-minutes: 75
     env:
-      BENCH_TIME_MS: 20
-      BENCH_WARMUP_TIME_MS: 10
+      BENCH_TIME_MS: 50
+      BENCH_WARMUP_TIME_MS: 25
       BENCH_REPEATS: 3
       BENCH_REGRESSION_THRESHOLD: 8
     permissions:
