@@ -132,5 +132,4 @@ describe('judge-window', () => {
     // `#EXRANK 120` matches the documented `#DEFEXRANK 120` interpolation.
     expect(resolveBmsJudgeWindowsMsForExRankValue(120).great).toBeCloseTo(52, 6);
   });
-
 });

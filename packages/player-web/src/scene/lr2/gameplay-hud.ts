@@ -215,10 +215,7 @@ export interface GrooveGaugeBead {
  *
  * Pure function (no Pixi binding) so the cell-selection logic is unit-tested directly.
  */
-export function resolveGrooveGaugeBeads(
-  percent: number,
-  options: { survivalGauge?: boolean } = {},
-): GrooveGaugeBead[] {
+export function resolveGrooveGaugeBeads(percent: number, options: { survivalGauge?: boolean } = {}): GrooveGaugeBead[] {
   const clampedPercent = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
   const activeUnits = Math.round((clampedPercent / 100) * LR2_GROOVE_GAUGE_UNITS);
   const clearZoneUnit = Math.round((LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT / 100) * LR2_GROOVE_GAUGE_UNITS);

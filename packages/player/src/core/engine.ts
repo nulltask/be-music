@@ -607,12 +607,7 @@ function isLongPlayableNote(note: TimedPlayableNote): boolean {
 }
 
 /** Judge indices, best to worst, in the order the ruleset window sets use. */
-const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = [
-  'PERFECT',
-  'GREAT',
-  'GOOD',
-  'BAD',
-];
+const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = ['PERFECT', 'GREAT', 'GOOD', 'BAD'];
 
 /**
  * Classify a signed timing delta against one ruleset window set, or `undefined` when the press cannot reach the
@@ -2160,7 +2155,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const autoLongNoteScoresTail = (note: TimedPlayableNote): boolean => {
     const chartMode = resolvePlayableLongNoteMode(note);
     return (
-      chartMode !== undefined && isChargeLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, chartMode))
+      chartMode !== undefined &&
+      isChargeLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, chartMode))
     );
   };
 
@@ -2690,9 +2686,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (autoScratchEnabled) {
       writeOutput('Mode: AUTO SCRATCH (16ch/26ch only)\n');
     }
-    writeOutput(
-      `Judge window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`,
-    );
+    writeOutput(`Judge window (${ruleset.id}): ${formatJudgeWindowSet(ruleset.windows.note)}\n`);
     writeOutput('Press Space to pause/resume.\n');
     writeOutput('Press Shift+R to restart.\n');
     writeOutput(`Press ${highSpeedModifierLabel}+odd lane key to decrease HIGH-SPEED.\n`);
@@ -2740,10 +2734,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // Widest reach across the whole chart — a mid-chart `#EXRANKxx` can widen the windows past the opening rank's.
   const maxBadWindowMs =
     1000 *
-    Math.max(
-      maxJudgeReachSeconds(0),
-      ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(change.seconds)),
-    );
+    Math.max(maxJudgeReachSeconds(0), ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(change.seconds)));
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
   const longHoldUntilMsByChannel = new Map<string, number>();
@@ -2918,8 +2909,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const lastPressMs = lastLanePressMsByChannel.get(landmine.channel);
       const pressedBeforeCrossing = lastPressMs !== undefined && lastPressMs <= crossingMs;
       const heldAtCrossing = pressedBeforeCrossing
-        ? crossingMs - lastPressMs <= LONG_NOTE_REPEAT_HOLD_GRACE_MS ||
-          activeKittyPressedChannels.has(landmine.channel)
+        ? crossingMs - lastPressMs <= LONG_NOTE_REPEAT_HOLD_GRACE_MS || activeKittyPressedChannels.has(landmine.channel)
         : lastPressMs === undefined && activeKittyPressedChannels.has(landmine.channel);
       if (heldAtCrossing) {
         detonateLandmine(landmine, nowSec);
@@ -3209,7 +3199,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     let bestSelection: JudgeSelectionCandidate | undefined;
     // `scorableNotes` is sorted by time, so the scan visits candidates in the ascending order the selection
     // algorithms assume (`lowest` keeps the first, the others may displace it).
-    for (let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds); index < scorableNotes.length; index += 1) {
+    for (
+      let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
+      index < scorableNotes.length;
+      index += 1
+    ) {
       const note = scorableNotes[index]!;
       if (note.seconds - nowSec > reachSeconds) {
         break;
@@ -3239,7 +3233,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         judge,
         windows,
       };
-      if (bestSelection === undefined || preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)) {
+      if (
+        bestSelection === undefined ||
+        preferJudgeCandidate(ruleset.selection, bestSelection, selection, inputTimeUs)
+      ) {
         best = note;
         bestSelection = selection;
       }
@@ -3265,7 +3262,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     const consumedIsLong = isLongPlayableNote(consumed);
     const consumedWasBad = consumedJudge === 3;
     const extras: TimedPlayableNote[] = [];
-    for (let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds); index < scorableNotes.length; index += 1) {
+    for (
+      let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
+      index < scorableNotes.length;
+      index += 1
+    ) {
       const note = scorableNotes[index]!;
       if (note.seconds - nowSec > reachSeconds) {
         break;
@@ -3463,7 +3464,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
     }
 
-
     let refreshedHold = false;
     for (const channel of candidateChannels) {
       if (!activeLongNotesByChannel.has(channel)) {
@@ -3493,7 +3493,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         // LN repeat-suppress window — same intent as the hold path above, just on the cooldown side. Treat as benign.
         return;
       }
-      const fallback = findLaneSoundCandidate(laneSoundNotes, candidateChannels, nowSec, maxJudgeEarlyReachSeconds(nowSec));
+      const fallback = findLaneSoundCandidate(
+        laneSoundNotes,
+        candidateChannels,
+        nowSec,
+        maxJudgeEarlyReachSeconds(nowSec),
+      );
       if (fallback) {
         if (!uiEnabled) {
           writePlayableSampleTriggerEventLog(
@@ -3866,7 +3871,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
       processReplayEventsUntil(nowSec);
-        playbackEventTracer.flushUntil(nowSec);
+      playbackEventTracer.flushUntil(nowSec);
 
       triggerRealtimeAudioVolumeEvents(scheduledSec);
       triggerNonPlayableRealtimeAudioEvents(scheduledSec);

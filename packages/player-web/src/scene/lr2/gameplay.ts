@@ -5034,12 +5034,8 @@ export class PixiGameplayView {
       this.laneLayer
         .roundRect(x + 1, capTop, Math.max(2, w - 2), capHeight, 2)
         .fill({ color: pressed ? tone.capLit : tone.cap, alpha: pressed ? 1 : 0.92 });
-      this.laneLayer
-        .rect(x + 1, capTop, Math.max(2, w - 2), 2)
-        .fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
-      this.laneLayer
-        .rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2)
-        .fill({ color: 0x000000, alpha: 0.35 });
+      this.laneLayer.rect(x + 1, capTop, Math.max(2, w - 2), 2).fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
+      this.laneLayer.rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2).fill({ color: 0x000000, alpha: 0.35 });
       if (pressed) {
         // Under-glow bridging the cap to the judgement line — the "lit from within" press feedback.
         this.laneLayer.rect(x + 1, capTop - 2, Math.max(2, w - 2), 2).fill({ color: tone.top, alpha: 0.95 });
