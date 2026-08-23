@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TaskResult } from 'tinybench';
-import {
-  convertTaskResult,
-  createSingleIterationStats,
-  median,
-  resolveComparisonHz,
-} from './task-stats.ts';
+import { convertTaskResult, createSingleIterationStats, median, resolveComparisonHz } from './task-stats.ts';
 
 describe('median', () => {
   it('returns 0 for an empty list', () => {
