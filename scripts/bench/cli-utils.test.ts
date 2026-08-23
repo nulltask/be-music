@@ -57,7 +57,9 @@ function createSnapshot(overrides: Partial<ExportsBenchmarkSnapshot> = {}): Expo
     results: {
       'utils.clamp': {
         hz: 100,
+        medianHz: 100,
         meanMs: 10,
+        p50Ms: 10,
         p75Ms: 11,
         p99Ms: 12,
         minMs: 9,

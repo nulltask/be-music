@@ -10,6 +10,7 @@ import {
   runCliMain,
 } from './cli-utils.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
+import { resolveComparisonHz } from './task-stats.ts';
 
 interface CliDefaults {
   outputPath: string;
@@ -130,7 +131,8 @@ export function buildDiffMarkdown(
   lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
   lines.push(`- Comparable cases: \`${summary.comparableCaseCount}\``);
   lines.push(`- Regression threshold: \`${thresholdPercent.toFixed(2)}%\``);
-  lines.push(`- Overall verdict uses the median change. Per-case lists are for inspection.`);
+  lines.push(`- Overall verdict uses the median change across cases.`);
+  lines.push(`- Per-case lists compare median ops/s, not mean.`);
   lines.push(`- Base runs: \`${formatRunCount(baseSnapshot)}\``);
   lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
   lines.push('');
@@ -151,7 +153,7 @@ export function buildDiffMarkdown(
   if (regressions.length === 0) {
     lines.push('No regression over threshold.');
   } else {
-    lines.push('| API | Base ops/s | Head ops/s | Change |');
+    lines.push('| API | Base median ops/s | Head median ops/s | Change |');
     lines.push('| --- | ---: | ---: | ---: |');
     for (const row of regressions) {
       lines.push(
@@ -165,7 +167,7 @@ export function buildDiffMarkdown(
   if (improvements.length === 0) {
     lines.push('No improvement over threshold.');
   } else {
-    lines.push('| API | Base ops/s | Head ops/s | Change |');
+    lines.push('| API | Base median ops/s | Head median ops/s | Change |');
     lines.push('| --- | ---: | ---: | ---: |');
     for (const row of improvements) {
       lines.push(
@@ -188,7 +190,11 @@ export function buildDiffMarkdown(
 
 function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount: number, basePath?: string): string {
   const slowest = Object.entries(headSnapshot.results)
-    .map(([key, value]) => ({ key, hz: value.hz, meanMs: value.meanMs }))
+    .map(([key, value]) => ({
+      key,
+      hz: resolveComparisonHz(value),
+      meanMs: value.p50Ms ?? value.meanMs,
+    }))
     .sort((left, right) => left.hz - right.hz)
     .slice(0, topCount);
 
@@ -209,7 +215,7 @@ function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount:
   if (slowest.length === 0) {
     lines.push('No benchmark result found.');
   } else {
-    lines.push('| API | ops/s | mean (ms) |');
+    lines.push('| API | median ops/s | median (ms) |');
     lines.push('| --- | ---: | ---: |');
     for (const row of slowest) {
       lines.push(`| \`${row.key}\` | ${formatOps(row.hz)} | ${row.meanMs.toFixed(4)} |`);
@@ -225,14 +231,19 @@ export function compareSnapshots(
   const rows: ComparedRow[] = [];
   for (const [key, headResult] of Object.entries(headSnapshot.results)) {
     const baseResult = baseSnapshot.results[key];
-    if (!baseResult || !Number.isFinite(baseResult.hz) || baseResult.hz <= 0) {
+    if (!baseResult) {
       continue;
     }
-    const deltaPercent = (headResult.hz / baseResult.hz - 1) * 100;
+    const baseHz = resolveComparisonHz(baseResult);
+    const headHz = resolveComparisonHz(headResult);
+    if (baseHz <= 0 || headHz <= 0) {
+      continue;
+    }
+    const deltaPercent = (headHz / baseHz - 1) * 100;
     rows.push({
       key,
-      baseHz: baseResult.hz,
-      headHz: headResult.hz,
+      baseHz,
+      headHz,
       deltaPercent,
     });
   }
@@ -240,10 +251,7 @@ export function compareSnapshots(
   return rows;
 }
 
-export function resolveOverallVerdict(
-  medianDeltaPercent: number,
-  thresholdPercent: number,
-): BenchmarkOverallVerdict {
+export function resolveOverallVerdict(medianDeltaPercent: number, thresholdPercent: number): BenchmarkOverallVerdict {
   if (medianDeltaPercent >= thresholdPercent) {
     return 'improved';
   }

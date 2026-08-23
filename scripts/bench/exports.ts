@@ -3,11 +3,12 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { Bench, type TaskResult } from 'tinybench';
+import { Bench } from 'tinybench';
 import * as jsonApi from '@be-music/json';
 import * as parserApi from '@be-music/parser';
 import type { RenderResult } from '@be-music/audio-renderer';
 import { parseNonNegativeCliNumber, parsePositiveCliNumber, resolveCliValue, runCliMain } from './cli-utils.ts';
+import { convertTaskResult, createSingleIterationStats, resolveComparisonHz } from './task-stats.ts';
 import {
   PACKAGE_NAMES,
   type PackageName,
@@ -257,80 +258,10 @@ async function runBenchmarkCase(
     throw new Error(`Benchmark result is unavailable: ${key}`);
   }
   const converted = convertTaskResult(result);
-  if (converted.hz > 0 && converted.sampleCount > 0 && Number.isFinite(converted.meanMs)) {
+  if (resolveComparisonHz(converted) > 0 && converted.sampleCount > 0 && Number.isFinite(converted.meanMs)) {
     return converted;
   }
   return runSingleIterationFallback(benchmarkCase, fixtures);
-}
-
-function convertTaskResult(result: TaskResult): BenchmarkTaskStats {
-  const typedResult = result as TaskResult & {
-    mean?: number;
-    p75?: number;
-    p99?: number;
-    min?: number;
-    max?: number;
-    hz?: number;
-    rme?: number;
-    samples?: number[];
-    totalTime?: number;
-    period?: number;
-    latency?: {
-      min?: number;
-      max?: number;
-      p75?: number;
-      p99?: number;
-      samplesCount?: number;
-    };
-    throughput?: {
-      mean?: number;
-      rme?: number;
-      samplesCount?: number;
-    };
-  };
-  const isV6 =
-    typeof typedResult.period === 'number' ||
-    typeof typedResult.throughput?.mean === 'number' ||
-    typeof typedResult.latency?.samplesCount === 'number';
-  if (isV6) {
-    const periodSeconds = typedResult.period;
-    const latency = typedResult.latency;
-    const throughput = typedResult.throughput;
-    // tinybench v6 exposes period/latency in milliseconds.
-    const meanMs = Number.isFinite(periodSeconds) ? periodSeconds : Number.NaN;
-    const p75Ms = Number.isFinite(latency?.p75) ? (latency?.p75 ?? meanMs) : meanMs;
-    const p99Ms = Number.isFinite(latency?.p99) ? (latency?.p99 ?? meanMs) : meanMs;
-    const minMs = Number.isFinite(latency?.min) ? (latency?.min ?? meanMs) : meanMs;
-    const maxMs = Number.isFinite(latency?.max) ? (latency?.max ?? meanMs) : meanMs;
-    return {
-      hz: Number.isFinite(throughput?.mean) ? (throughput?.mean ?? 0) : 0,
-      meanMs,
-      p75Ms,
-      p99Ms,
-      minMs,
-      maxMs,
-      rmePercent: Number.isFinite(throughput?.rme) ? (throughput?.rme ?? 0) : 0,
-      sampleCount:
-        Number.isFinite(latency?.samplesCount) && (latency?.samplesCount ?? 0) > 0
-          ? Math.floor(latency?.samplesCount ?? 0)
-          : 0,
-      totalTimeMs: Number.isFinite(typedResult.totalTime) ? (typedResult.totalTime ?? 0) : 0,
-    };
-  }
-
-  const samples = Array.isArray(typedResult.samples) ? typedResult.samples : [];
-  const meanMs = Number.isFinite(typedResult.mean) ? (typedResult.mean ?? Number.NaN) : Number.NaN;
-  return {
-    hz: Number.isFinite(typedResult.hz) ? (typedResult.hz ?? 0) : 0,
-    meanMs,
-    p75Ms: Number.isFinite(typedResult.p75) ? (typedResult.p75 ?? meanMs) : meanMs,
-    p99Ms: Number.isFinite(typedResult.p99) ? (typedResult.p99 ?? meanMs) : meanMs,
-    minMs: Number.isFinite(typedResult.min) ? (typedResult.min ?? meanMs) : meanMs,
-    maxMs: Number.isFinite(typedResult.max) ? (typedResult.max ?? meanMs) : meanMs,
-    rmePercent: Number.isFinite(typedResult.rme) ? (typedResult.rme ?? 0) : 0,
-    sampleCount: samples.length,
-    totalTimeMs: Number.isFinite(typedResult.totalTime) ? (typedResult.totalTime ?? 0) : 0,
-  };
 }
 
 async function runSingleIterationFallback(
@@ -339,18 +270,7 @@ async function runSingleIterationFallback(
 ): Promise<BenchmarkTaskStats> {
   const startedAt = performance.now();
   await benchmarkCase.run(fixtures);
-  const durationMs = Math.max(0.000001, performance.now() - startedAt);
-  return {
-    hz: 1000 / durationMs,
-    meanMs: durationMs,
-    p75Ms: durationMs,
-    p99Ms: durationMs,
-    minMs: durationMs,
-    maxMs: durationMs,
-    rmePercent: 0,
-    sampleCount: 1,
-    totalTimeMs: durationMs,
-  };
+  return createSingleIterationStats(performance.now() - startedAt);
 }
 
 async function createBenchFixtures(): Promise<BenchFixtures> {
@@ -619,11 +539,11 @@ function printSummary(snapshot: ExportsBenchmarkSnapshot, outputPath: string): v
 
   if (benchmarkedKeys.length > 0) {
     const topSlow = benchmarkedKeys
-      .map((key) => ({ key, hz: snapshot.results[key].hz }))
+      .map((key) => ({ key, hz: resolveComparisonHz(snapshot.results[key]) }))
       .sort((left, right) => left.hz - right.hz)
       .slice(0, 5);
 
-    process.stdout.write('\nSlowest 5 (ops/s)\n');
+    process.stdout.write('\nSlowest 5 (median ops/s)\n');
     for (const row of topSlow) {
       process.stdout.write(`  ${row.key.padEnd(48)} ${row.hz.toFixed(2)}\n`);
     }
