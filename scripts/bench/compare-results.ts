@@ -251,10 +251,7 @@ export function compareSnapshots(
   return rows;
 }
 
-export function resolveOverallVerdict(
-  medianDeltaPercent: number,
-  thresholdPercent: number,
-): BenchmarkOverallVerdict {
+export function resolveOverallVerdict(medianDeltaPercent: number, thresholdPercent: number): BenchmarkOverallVerdict {
   if (medianDeltaPercent >= thresholdPercent) {
     return 'improved';
   }
