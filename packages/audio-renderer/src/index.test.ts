@@ -407,6 +407,47 @@ test('audio-renderer: startSeconds trims leading timeline before rendering', asy
   expect(shifted.durationSeconds).toBeLessThan(0.2);
 });
 
+test('audio-renderer: renderJson drops triggers at and behind the LR2 negative-BPM reversal', async () => {
+  // BPM 240 → measure = 1 s. The reversal (#BPM02 -240 via channel 08) sits at 2 s. LR2's event pump freezes
+  // there: a BGM exactly AT the boundary and one behind it must not render, so the mix is identical to a chart
+  // that never had them.
+  const preOnly = createEmptyJson('bms');
+  preOnly.metadata.bpm = 240;
+  preOnly.resources.bpm['02'] = -240;
+  preOnly.resources.wav['01'] = 'not-found.wav';
+  preOnly.events = [
+    { measure: 1, channel: '01', position: [0, 1], value: '01' },
+    { measure: 2, channel: '08', position: [0, 1], value: '02' },
+  ];
+
+  const withFrozenBgm = createEmptyJson('bms');
+  withFrozenBgm.metadata.bpm = 240;
+  withFrozenBgm.resources.bpm['02'] = -240;
+  withFrozenBgm.resources.wav['01'] = 'not-found.wav';
+  withFrozenBgm.events = [
+    { measure: 1, channel: '01', position: [0, 1], value: '01' },
+    { measure: 2, channel: '08', position: [0, 1], value: '02' },
+    { measure: 2, channel: '01', position: [0, 1], value: '01' }, // exactly AT the reversal — frozen too
+    { measure: 3, channel: '01', position: [0, 1], value: '01' }, // strictly behind it
+  ];
+
+  const renderOptions = {
+    sampleRate: 44_100,
+    normalize: false,
+    tailSeconds: 0,
+    fallbackToneSeconds: 0.05,
+  };
+  const [reference, filtered] = await Promise.all([
+    renderJson(preOnly, renderOptions),
+    renderJson(withFrozenBgm, renderOptions),
+  ]);
+
+  // Only the 1 s tone remains in either chart: same length, same content.
+  expect(filtered.left.length).toBe(reference.left.length);
+  expect(filtered.durationSeconds).toBeLessThan(2);
+  expect(maxDeltaBetweenResults(reference, filtered, 0, reference.left.length)).toBe(0);
+});
+
 test('audio-renderer: renderJson throws AbortError when signal is already aborted', async () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
@@ -731,6 +772,40 @@ describe('audio-renderer', () => {
     expect(resolver.stopPoints).toHaveLength(1);
     // 30000 at 100001x BPM is used by LR2 gimmicks to compensate roughly 3/1920 measure.
     expect(resolver.stopPoints[0]?.seconds).toBeCloseTo((3 / 1920) * (240 / baseBpm), 6);
+  });
+
+  test('audio-renderer: integrates negative #BPMxx at |BPM| and exposes the LR2 reversal point', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm['02'] = -60;
+    json.events = [
+      { measure: 1, channel: '08', position: [0, 1], value: '02' },
+      { measure: 2, channel: '01', position: [0, 1], value: '01' },
+    ];
+
+    const resolver = createTimingResolver(json);
+    // LR2 integrates the timeline at |BPM| (LR2_bmsload.cpp:2841-2843): measure 1 opens at 2 s (BPM 120), and the
+    // following measure runs at |−60|, so measure 2 lands at 2 + 4 s.
+    expect(resolver.reversal?.beat).toBeCloseTo(4, 9);
+    expect(resolver.reversal?.seconds).toBeCloseTo(2, 9);
+    expect(resolver.bpmAtBeat(6)).toBeCloseTo(60, 9);
+    expect(resolver.beatToSeconds(8)).toBeCloseTo(6, 9);
+  });
+
+  test('audio-renderer: keeps dropping zero and undefined #BPMxx references (no reversal)', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm['02'] = 0;
+    json.events = [
+      { measure: 1, channel: '08', position: [0, 1], value: '02' },
+      { measure: 2, channel: '08', position: [0, 1], value: 'ZZ' },
+    ];
+
+    const resolver = createTimingResolver(json);
+    expect(resolver.reversal).toBeUndefined();
+    // Both events are ignored: the previous tempo continues (real LR2 degenerates on both — documented deviation).
+    expect(resolver.bpmAtBeat(10)).toBeCloseTo(120, 9);
+    expect(resolver.beatToSeconds(8)).toBeCloseTo(4, 9);
   });
 
   test('audio-renderer: interprets bemaniaDX-style STP as millisecond stops at sub-measure positions', () => {

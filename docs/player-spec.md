@@ -679,6 +679,16 @@ Even on judged notes, drawing will remain until the judge line is crossed or the
 A long note is drawn as a single note with a body and tail lane, and the highlight continues while being held.
 The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the first keyframe's value holds flat (matching the Bemuse reference implementation). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
 
+### Negative BPM — LR2 reverse scroll
+
+A negative `#BPMxx` referenced through channel 08 arms LR2's one-way reverse-scroll gimmick (issue #134; the LR2 basis and the documented deviations live in [`bms-spec.md`](./bms-spec.md)):
+
+- Timing stays monotonic: the resolver integrates |BPM|, so every note keeps a forward `seconds` and audio scheduling is unaffected before the reversal.
+- From the reversal on, the engine publishes a mirrored display clock (`displaySeconds = 2 × reversal − now`, plus the matching `displayBeat`) on the UI frame; the TUI grid and the web scenes scroll from it, so the chart visibly runs backwards at |BPM| (pinning at the chart head if the mirror rewinds past the start) while the status clock and summary stay on the true clock.
+- Judging freezes at the reversal: no press judgments, no empty POORs, no miss sweeps, no mine detonations past it. Holds spanning the reversal resolve silently (no tail judgment, no POOR). Post-reversal notes end the run **unjudged** — they are not swept into POORs — and the gauge holds its value.
+- Realtime audio freezes with it: BGM/keysound triggers at or behind the reversal never fire (presses still replay the latest lane keysound, as LR2 does), and the BGA holds the image it showed at the reversal.
+- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). Playlogs record `chart.reversalTimeUs` so re-simulations apply the same cutoff.
+
 ### Non-TUI output
 
 If TUI is disabled, the mode start message, lane assignment, judgment log, and final result are output as text.

@@ -1770,6 +1770,9 @@ export class BeatorajaRuntimeAdapter {
           const parsed = Number.parseFloat(looked);
           bpm = Number.isFinite(parsed) ? parsed : undefined;
         }
+        // Negative `#BPMxx` (LR2 reverse-scroll gimmick) integrates at |BPM|, and LR2 displays the magnitude
+        // too — only the sign is forgiven here; zero slots still drop out via the `> 0` filter below.
+        if (bpm !== undefined) bpm = Math.abs(bpm);
       }
       if (bpm !== undefined && bpm > 0) {
         if (bpm < min) min = bpm;

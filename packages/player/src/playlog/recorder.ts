@@ -63,6 +63,8 @@ export interface PlaylogRecorderOptions {
   play: PlaylogRecorderPlaySettings;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
+  /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
+  reversalSeconds?: number;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
   now?: () => Date;
 }
@@ -216,6 +218,9 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     noteCount: chart.scorableNotes.length,
     notes,
   };
+  if (typeof options.reversalSeconds === 'number' && Number.isFinite(options.reversalSeconds)) {
+    result.reversalTimeUs = secondsToMicroseconds(options.reversalSeconds);
+  }
   if (typeof options.chartSha256 === 'string' && options.chartSha256.length > 0) {
     result.sha256 = options.chartSha256.toLowerCase();
   }

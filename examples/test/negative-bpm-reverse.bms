@@ -1,0 +1,38 @@
+*---------------------- HEADER FIELD
+
+#PLAYER 1
+#GENRE TEST
+#TITLE negative BPM test 1 (#BPMxx -65 via ch08)
+#ARTIST be-music #134
+#BPM 130
+#PLAYLEVEL 1
+#RANK 2
+#TOTAL 300
+
+#WAV01 negative-bpm-beep1.wav
+#WAV02 negative-bpm-beep2.wav
+#WAV03 negative-bpm-bgm.wav
+
+#BPM01 130
+#BPM02 -65
+
+*---------------------- MAIN DATA FIELD
+
+*-- measures 1-3: normal play at BPM 130 (4 notes/measure + BGM each measure)
+#00111:01010101
+#00101:03
+#00211:01010101
+#00201:03
+#00311:01010101
+#00301:03
+
+*-- measure 4: BPM changes to -65 at the measure boundary (channel 08 -> #BPM02)
+*-- expected in LR2: chart scrolls in REVERSE at |65| from here, judging freezes,
+*-- and NOTHING below this line ever sounds (event pump freezes). Stage never ends; ESC to exit.
+#00408:02
+#00413:00020202
+
+#00511:02020202
+#00501:03
+#00611:02020202
+#00601:03

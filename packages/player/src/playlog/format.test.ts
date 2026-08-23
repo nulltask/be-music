@@ -106,6 +106,21 @@ describe('playlog format', () => {
     expect(parsed.results).toBeUndefined();
   });
 
+  test('chart.reversalTimeUs survives the round-trip and stays absent when the chart has none', () => {
+    // LR2 negative-BPM reversal (#134): the recorder stamps the reversal instant so re-simulations freeze
+    // judging at the same point. It must survive serialize → parse untouched.
+    const playlog = makePlaylog();
+    playlog.chart.reversalTimeUs = 2_000_000;
+    const parsed = parsePlaylog(serializePlaylog(playlog));
+    expect(parsed.chart.reversalTimeUs).toBe(2_000_000);
+    expect(parsed).toEqual(playlog);
+
+    // A chart without a reversal keeps the key ABSENT (deleted), not `undefined`, so `toEqual` comparisons and
+    // JSON output stay canonical.
+    const withoutReversal = parsePlaylog(serializePlaylog(makePlaylog()));
+    expect(withoutReversal.chart).not.toHaveProperty('reversalTimeUs');
+  });
+
   test('rejects invalid JSON and wrong format / version / clock markers', () => {
     expect(() => parsePlaylog('{oops')).toThrow(PlaylogParseError);
     expect(() => parsePlaylog('{oops')).toThrow(/invalid JSON/);

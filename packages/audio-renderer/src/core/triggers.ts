@@ -31,9 +31,22 @@ export interface StopPoint {
   cumulativeSeconds: number;
 }
 
+/**
+ * Position of the first negative `#BPMxx` event (channel 08) — LR2's reverse-scroll gimmick anchor. LR2 integrates
+ * note times at |BPM| (so the timeline stays monotonic) and, from this point on, mirrors the DISPLAY and JUDGE
+ * clocks around it while its event pump freezes: nothing behind the reversal ever sounds or gets judged, and the
+ * chart visually scrolls backwards forever. See docs/bms-spec.md "Negative BPM" and issue #134.
+ */
+export interface TempoReversalPoint {
+  beat: number;
+  seconds: number;
+}
+
 export interface TimingResolver {
   tempoPoints: TempoPoint[];
   stopPoints: StopPoint[];
+  /** Set when the chart contains a negative `#BPMxx` reference — the LR2 reverse-scroll anchor. */
+  reversal?: TempoReversalPoint;
   beatToSeconds: (beat: number) => number;
   eventToSeconds: (event: BeMusicEvent) => number;
   bpmAtBeat: (beat: number) => number;
@@ -75,7 +88,7 @@ export function createTimingResolver(json: BeMusicJson): TimingResolver {
 
 export function createTimingResolverWithContext(json: BeMusicJson, context: TimingBuildContext): TimingResolver {
   const { sortedEvents, beatResolver } = context;
-  const tempoPoints = createTempoPoints(json, sortedEvents, beatResolver);
+  const { points: tempoPoints, reversalBeat } = createTempoPoints(json, sortedEvents, beatResolver);
   const stopPoints = createStopPoints(json, tempoPoints, sortedEvents, beatResolver);
 
   const beatToSecondsWithoutStops = (beat: number): number => {
@@ -111,6 +124,7 @@ export function createTimingResolverWithContext(json: BeMusicJson, context: Timi
   return {
     tempoPoints,
     stopPoints,
+    reversal: reversalBeat === undefined ? undefined : { beat: reversalBeat, seconds: beatToSeconds(reversalBeat) },
     bpmAtBeat,
     beatToSeconds,
     eventToSeconds: (event) => beatToSeconds(beatResolver.eventToBeat(event)),
@@ -255,10 +269,21 @@ export function createBmsonSamplePlaybackMap(
   return playbackMap;
 }
 
-function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beatResolver: BeatResolver): TempoPoint[] {
+interface TempoIntegration {
+  points: TempoPoint[];
+  /** Beat of the first negative `#BPMxx` event, if any — the LR2 reverse-scroll anchor. */
+  reversalBeat?: number;
+}
+
+function createTempoPoints(
+  json: BeMusicJson,
+  sortedEvents: BeMusicEvent[],
+  beatResolver: BeatResolver,
+): TempoIntegration {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
   const idBase = resolveBmsBase(json);
+  let reversalBeat: number | undefined;
 
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
@@ -274,12 +299,21 @@ function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beat
       continue;
     }
     const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
-    if (typeof bpm === 'number' && bpm > 0) {
-      integrateTempoPoint(points, beat, bpm);
+    if (typeof bpm !== 'number' || !Number.isFinite(bpm) || bpm === 0) {
+      // Zero and undefined slot references stay dropped (previous tempo continues). Real LR2 degenerates on both —
+      // a zero slot puts +inf into its precomputed table and an undefined slot hits its -1.0 sentinel (behaving
+      // like `#BPMxx -1`) — so neither is worth reproducing; see docs/bms-spec.md.
+      continue;
     }
+    if (bpm < 0 && reversalBeat === undefined) {
+      reversalBeat = beat;
+    }
+    // LR2 integrates negative exBPM at |BPM| (LR2_bmsload.cpp:2841-2843) — the timeline never runs backwards; the
+    // reversal is a presentation/judging gimmick anchored at the first negative event.
+    integrateTempoPoint(points, beat, Math.abs(bpm));
   }
 
-  return points;
+  return { points, reversalBeat };
 }
 
 function createStopPoints(
