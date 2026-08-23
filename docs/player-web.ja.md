@@ -98,7 +98,8 @@ LR2 gameplay scene は default renderer を import せず、共有 gameplay runt
 
 default gameplay chrome は `scene/gameplay-lanes.ts` の共通 lane geometry helper を使います。
 scratch lane は key lane より幅広く、2P scratch は右側に表示し、DP layout では両 side を SP 幅へ押し込んで全 lane を縮小するのではなく、片側分の lane 幅を保持します。
-default family は通常テキストに LINE Seed JP、判定と combo 表示に Azeret Mono を使います。
+default family はタイトルと日本語ラベルに Dela Gothic One、HUD の stamp / rank / 判定ポップに Staatliches を使います。
+chrome は静止した HUD ではなく、overshoot 付きの slam-in、斜めの cut、拍に同期した slash で入ります。
 
 ## beatoraja skin と theme support
 

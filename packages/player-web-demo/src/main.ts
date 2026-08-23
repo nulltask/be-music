@@ -123,7 +123,12 @@ if (!app) {
 
 app.innerHTML = DEMO_APP_HTML;
 
-const DEFAULT_UI_FONT_LOADS = ['400 22px "LINE Seed JP"', '700 18px "LINE Seed JP"', '900 32px "Azeret Mono"'] as const;
+const DEFAULT_UI_FONT_LOADS = [
+  '400 22px "Dela Gothic One"',
+  '400 48px "Dela Gothic One"',
+  '400 32px "Staatliches"',
+  '400 22px "LINE Seed JP"',
+] as const;
 
 async function waitForDefaultUiFonts(): Promise<void> {
   if (!('fonts' in document)) return;

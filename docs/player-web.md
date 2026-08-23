@@ -103,8 +103,9 @@ skin rendering remains tied to parsed `.lr2skin` data.
 
 Default gameplay chrome uses the shared lane geometry helpers in `scene/gameplay-lanes.ts`. Scratch lanes are wider
 than key lanes, 2P scratch lanes render on the right side, and DP layouts preserve the single-side lane width instead
-of shrinking every lane to fit both sides into the original SP footprint. The default family uses LINE Seed JP for
-general text and Azeret Mono for judgment and combo readouts.
+of shrinking every lane to fit both sides into the original SP footprint. The default family uses Dela Gothic One for
+titles and Japanese labels, and Staatliches for HUD stamps, ranks, and judgement popups. Chrome slams in with overshoot,
+diagonal cuts, and beat-synced slashes rather than sitting as a static HUD.
 
 ## beatoraja skin and theme support
 
