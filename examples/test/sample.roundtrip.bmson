@@ -7,9 +7,23 @@
     "genre": "",
     "level": 0,
     "init_bpm": 120,
-    "mode_hint": "beat-1k"
+    "mode_hint": "beat-1k",
+    "resolution": 240
   },
-  "resolution": 240,
+  "lines": [
+    {
+      "y": 0
+    },
+    {
+      "y": 960
+    },
+    {
+      "y": 1920
+    },
+    {
+      "y": 2880
+    }
+  ],
   "bpm_events": [
     {
       "y": 1920,

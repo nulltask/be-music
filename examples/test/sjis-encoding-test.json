@@ -9,7 +9,7 @@
   },
   "resources": {
     "wav": {
-      "01": "test.wav"
+      "01": "sample.wav"
     },
     "bmp": {},
     "bpm": {},
@@ -21,11 +21,100 @@
     {
       "measure": 0,
       "channel": "11",
-      "value": "01",
       "position": [
         0,
         1
-      ]
+      ],
+      "value": "01"
     }
-  ]
+  ],
+  "bms": {
+    "controlFlow": [],
+    "lnObjs": [],
+    "exRank": {},
+    "argb": {},
+    "stp": [],
+    "wavCmds": [],
+    "changeOption": {},
+    "exWav": {},
+    "exBmp": {},
+    "bga": {},
+    "scroll": {},
+    "speed": {},
+    "swBga": {}
+  },
+  "bmson": {
+    "info": {},
+    "bga": {
+      "header": [],
+      "events": [],
+      "layerEvents": [],
+      "poorEvents": []
+    }
+  },
+  "preservation": {
+    "bms": {
+      "sourceLines": [
+        {
+          "kind": "header",
+          "command": "TITLE",
+          "value": "テスト曲"
+        },
+        {
+          "kind": "header",
+          "command": "ARTIST",
+          "value": "佐藤"
+        },
+        {
+          "kind": "header",
+          "command": "BPM",
+          "value": "120"
+        },
+        {
+          "kind": "header",
+          "command": "WAV01",
+          "value": "sample.wav"
+        },
+        {
+          "kind": "object",
+          "measure": 0,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                0,
+                1
+              ],
+              "value": "01"
+            }
+          ]
+        }
+      ],
+      "objectLines": [
+        {
+          "measure": 0,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                0,
+                1
+              ],
+              "value": "01"
+            }
+          ]
+        }
+      ]
+    },
+    "bmson": {
+      "lines": [],
+      "bpmEvents": [],
+      "stopEvents": [],
+      "soundChannels": []
+    }
+  }
 }
