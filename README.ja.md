@@ -424,3 +424,4 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare 出力: 任意の Markdown と summary JSON
 - GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
 - GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
+- CI は比較前に base と head を同一 runner で計測し、ホスト間ノイズが delta を支配しないようにします

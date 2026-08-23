@@ -104,85 +104,23 @@ jobs:
       - name: Run ${{ matrix.task }}
         run: pnpm run ${{ matrix.task }}
 
-  benchmark-pr-head:
-    name: Benchmark Head (PR)
+  # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
+  # machines, and that host delta dominates the 8% regression threshold.
+  benchmark-pr:
+    name: Benchmark (PR)
     needs: changes
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
       needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
+      BENCH_REGRESSION_THRESHOLD: 8
     permissions:
       contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Run head benchmark
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench/head-runs
-          for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-          done
-
-      - name: Aggregate head benchmark snapshots
-        id: aggregate-head
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-
-      # The snapshot moves between jobs as an artifact, never as a job output. It outgrew both limits a job
-      # output would impose: a single argv/envp string caps at `MAX_ARG_STRLEN` (128 KiB) so the compare job
-      # could neither pass it to `node` nor even start `bash` with it in the environment, and job outputs
-      # themselves cap at 1 MiB. Artifacts have no such ceiling and keep the payload off the process image.
-      - name: Upload head benchmark snapshot
-        uses: actions/upload-artifact@v7
-        with:
-          name: bench-pr-head-snapshot
-          path: tmp/bench/head.json
-          retention-days: 1
-          if-no-files-found: error
-
-  benchmark-pr-base:
-    name: Benchmark Base (PR)
-    needs: changes
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
-      needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    outputs:
-      available: ${{ steps.detect-bench.outputs.available == 'true' &&
-        steps.run-base-benchmark.outcome == 'success' }}
-    env:
-      BENCH_TIME_MS: 20
-      BENCH_WARMUP_TIME_MS: 10
-      BENCH_REPEATS: 3
-    permissions:
-      contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout
@@ -222,8 +160,22 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.detect-bench.outputs.available == 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run head benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench/head-runs
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="${{ github.event.pull_request.head.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+          done
+
+      - name: Aggregate head benchmark snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
 
       - name: Run base benchmark
         id: run-base-benchmark
@@ -257,82 +209,16 @@ jobs:
       - name: Aggregate base benchmark snapshots
         if: steps.detect-bench.outputs.available == 'true' &&
           steps.run-base-benchmark.outcome == 'success'
-        id: aggregate-base
         shell: bash
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
 
-      - name: Upload base benchmark snapshot
-        if: steps.detect-bench.outputs.available == 'true' &&
-          steps.run-base-benchmark.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: bench-pr-base-snapshot
-          path: tmp/bench/base.json
-          retention-days: 1
-          if-no-files-found: error
-
-  benchmark-pr:
-    name: Benchmark (PR)
-    needs:
-      - changes
-      - benchmark-pr-head
-      - benchmark-pr-base
-    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
-      needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    env:
-      BENCH_REGRESSION_THRESHOLD: 8
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      # The snapshot travels as a base64 job output. It MUST reach the decoder through the environment and stdin,
-      # never as a command-line argument: Linux caps a single argv entry at `MAX_ARG_STRLEN` (128 KiB), and the
-      # snapshot passed that once the benchmarked export count grew — the step died with
-      # `node: Argument list too long` (exit 126). `printf` is a bash builtin, so piping the env var into
-      # `base64 -d` never execs with the payload attached.
-      - name: Restore head benchmark snapshot
-        uses: actions/download-artifact@v8
-        with:
-          name: bench-pr-head-snapshot
-          path: tmp/bench
-
-      - name: Restore base benchmark snapshot
-        if: needs.benchmark-pr-base.outputs.available == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: bench-pr-base-snapshot
-          path: tmp/bench
-
       - name: Generate benchmark report
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ needs.benchmark-pr-base.outputs.available }}" = "true" ]; then
+          if [ -f tmp/bench/base.json ]; then
             pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
           else
             pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/pr-benchmark.md --summary tmp/bench/pr-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
@@ -380,79 +266,20 @@ jobs:
               });
             }
 
-  benchmark-push-head:
-    name: Benchmark Head (Push)
+  # Same-VM pairing as benchmark-pr; do not split base/head across jobs.
+  benchmark-push:
+    name: Benchmark (Push)
     needs: changes
     if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       BENCH_TIME_MS: 20
       BENCH_WARMUP_TIME_MS: 10
       BENCH_REPEATS: 3
+      BENCH_REGRESSION_THRESHOLD: 8
     permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      - name: Run head benchmark
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p tmp/bench/head-runs
-          for run_index in $(seq 1 "$BENCH_REPEATS"); do
-            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
-          done
-
-      - name: Aggregate head benchmark snapshots
-        id: aggregate-head
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
-
-      - name: Upload head benchmark snapshot
-        uses: actions/upload-artifact@v7
-        with:
-          name: bench-push-head-snapshot
-          path: tmp/bench/head.json
-          retention-days: 1
-          if-no-files-found: error
-
-  benchmark-push-base:
-    name: Benchmark Base (Push)
-    needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    outputs:
-      available: ${{ steps.detect-bench.outputs.available == 'true' &&
-        steps.run-base-benchmark.outcome == 'success' }}
-    env:
-      BENCH_TIME_MS: 20
-      BENCH_WARMUP_TIME_MS: 10
-      BENCH_REPEATS: 3
-    permissions:
-      contents: read
+      contents: write
 
     steps:
       - name: Checkout
@@ -497,8 +324,22 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.detect-bench.outputs.available == 'true'
         run: pnpm install --frozen-lockfile --prefer-offline
+
+      - name: Run head benchmark
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tmp/bench/head-runs
+          for run_index in $(seq 1 "$BENCH_REPEATS"); do
+            BENCH_GIT_SHA="${{ github.sha }}" pnpm run bench --output "tmp/bench/head-runs/run-${run_index}.json" --time "$BENCH_TIME_MS" --warmup-time "$BENCH_WARMUP_TIME_MS"
+          done
+
+      - name: Aggregate head benchmark snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm run bench:aggregate -- --output tmp/bench/head.json tmp/bench/head-runs/*.json
 
       - name: Run base benchmark
         id: run-base-benchmark
@@ -532,76 +373,16 @@ jobs:
       - name: Aggregate base benchmark snapshots
         if: steps.detect-bench.outputs.available == 'true' &&
           steps.run-base-benchmark.outcome == 'success'
-        id: aggregate-base
         shell: bash
         run: |
           set -euo pipefail
           pnpm run bench:aggregate -- --output tmp/bench/base.json tmp/bench/base-runs/*.json
 
-      - name: Upload base benchmark snapshot
-        if: steps.detect-bench.outputs.available == 'true' &&
-          steps.run-base-benchmark.outcome == 'success'
-        uses: actions/upload-artifact@v7
-        with:
-          name: bench-push-base-snapshot
-          path: tmp/bench/base.json
-          retention-days: 1
-          if-no-files-found: error
-
-  benchmark-push:
-    name: Benchmark (Push)
-    needs:
-      - changes
-      - benchmark-push-head
-      - benchmark-push-base
-    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    env:
-      BENCH_REGRESSION_THRESHOLD: 8
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
-
-      # Env + stdin, never argv — see the matching note on the PR-side restore steps (`MAX_ARG_STRLEN`).
-      - name: Restore head benchmark snapshot
-        uses: actions/download-artifact@v8
-        with:
-          name: bench-push-head-snapshot
-          path: tmp/bench
-
-      - name: Restore base benchmark snapshot
-        if: needs.benchmark-push-base.outputs.available == 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: bench-push-base-snapshot
-          path: tmp/bench
-
       - name: Generate benchmark report
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${{ needs.benchmark-push-base.outputs.available }}" = "true" ]; then
+          if [ -f tmp/bench/base.json ]; then
             pnpm run bench:compare --head tmp/bench/head.json --base tmp/bench/base.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12
           else
             pnpm run bench:compare --head tmp/bench/head.json --output tmp/bench/push-benchmark.md --summary tmp/bench/push-benchmark-summary.json --threshold "$BENCH_REGRESSION_THRESHOLD" --top 12

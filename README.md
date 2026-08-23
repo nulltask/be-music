@@ -424,3 +424,4 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare output: arbitrary Markdown and summary JSON
 - In GitHub Actions, post base/head comparison as PR comment in PR for `devel` / `main`
 - GitHub Actions also performs the previous revision comparison when pushing to `devel` / `main` and posts a commit comment to the target commit.
+- CI measures base and head on the same runner before comparing, so host-to-host noise does not dominate the delta.
