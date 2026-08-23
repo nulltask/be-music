@@ -74,6 +74,33 @@ describe('parser', () => {
     }
   });
 
+  test('BMS: 24-key / 48-key keyboard fixtures author the extended lane channels', async () => {
+    // The keyboard-mode fixtures are the chart-side half of 24 KEY SP / 48 KEY DP support: they exercise the
+    // extended `1A..1O` / `2A..2O` columns end to end (taps, `#LNOBJ` long notes, landmines on `DX` / `EX`).
+    const lanes = [...'123456789ABCDEFGHIJKLMNO'];
+
+    const sp = await parseChartFile(resolve(rootDir, 'examples/test/24key-keyboard-sp.bme'));
+    expect(sp.metadata.title).toBe('24 KEY Keyboard Test (SP)');
+    expect(sp.bms.player).toBe(1);
+    expect(sp.bms.lnObjs).toContain('ZZ');
+    for (const lane of lanes) {
+      expect(sp.events.some((event) => event.channel === `1${lane}`)).toBe(true);
+    }
+    expect(sp.events.some((event) => event.channel.startsWith('2'))).toBe(false);
+    expect(sp.events.some((event) => event.channel.startsWith('D'))).toBe(true);
+
+    // `#PLAYER 3` on the DP fixture doubles as the regression guard for "extended lanes beat the
+    // `#PLAYER 3` + channel `17` POPN-9 rule".
+    const dp = await parseChartFile(resolve(rootDir, 'examples/test/48key-keyboard-dp.bme'));
+    expect(dp.metadata.title).toBe('48 KEY Keyboard Test (DP)');
+    expect(dp.bms.player).toBe(3);
+    for (const lane of lanes) {
+      expect(dp.events.some((event) => event.channel === `1${lane}`)).toBe(true);
+      expect(dp.events.some((event) => event.channel === `2${lane}`)).toBe(true);
+    }
+    expect(dp.events.some((event) => event.channel.startsWith('E'))).toBe(true);
+  });
+
   test('BMS: auto-detects and reads Shift_JIS files', async () => {
     const chartPath = resolve(rootDir, 'examples/test/sjis-encoding-test.bms');
     const json = await parseChartFile(chartPath);

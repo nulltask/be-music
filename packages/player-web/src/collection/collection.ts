@@ -1,5 +1,9 @@
 import { unzipSync } from 'fflate';
-import { isPlayableChannel, resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-music/chart';
+import {
+  type ChartPlayVariant,
+  isPlayableChannel,
+  resolveChartPlayVariant as resolveChartPlayVariantForChart,
+} from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
@@ -546,7 +550,7 @@ function isScoreTargetChannel(channel: string): boolean {
  * here because real DP charts also drop notes there — the CLI treats that signature only as a layout disambiguator
  * (standard vs. compat) AFTER the 9KEY mode has been decided by extension or `#PLAYER=3 + 17`.
  */
-export function resolveChartPlayVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10' | '14' {
+export function resolveChartPlayVariant(song: BrowserSongEntry): ChartPlayVariant {
   return resolveChartPlayVariantForChart({
     chartPath: song.chartPath,
     events: song.chart.events,

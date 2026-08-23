@@ -500,6 +500,8 @@ describe('chart', () => {
 
     expect(isLandmineChannel('D1')).toBe(true);
     expect(isLandmineChannel('E9')).toBe(true);
+    expect(isLandmineChannel('DA')).toBe(true);
+    expect(isLandmineChannel('EO')).toBe(true);
     expect(isLandmineChannel('11')).toBe(false);
     expect(isLandmineChannel('D0')).toBe(false);
 
@@ -518,6 +520,12 @@ describe('chart', () => {
     expect(isPlayableChannel('21')).toBe(true);
     expect(isPlayableChannel('31')).toBe(false);
     expect(isPlayableChannel('01')).toBe(false);
+    // Extended 24-key (Keyboardmania) lane columns — `1A`..`1O` / `2A`..`2O` carry lanes 10..24.
+    expect(isPlayableChannel('1A')).toBe(true);
+    expect(isPlayableChannel('1O')).toBe(true);
+    expect(isPlayableChannel('2A')).toBe(true);
+    expect(isPlayableChannel('1a')).toBe(true);
+    expect(isPlayableChannel('10')).toBe(false);
 
     expect(isPlayLaneSoundChannel('11')).toBe(true);
     expect(isPlayLaneSoundChannel('29')).toBe(true);
@@ -525,18 +533,23 @@ describe('chart', () => {
     expect(isPlayLaneSoundChannel('48')).toBe(true);
     expect(isPlayLaneSoundChannel('51')).toBe(true);
     expect(isPlayLaneSoundChannel('61')).toBe(true);
+    expect(isPlayLaneSoundChannel('1A')).toBe(true);
+    expect(isPlayLaneSoundChannel('4O')).toBe(true);
     expect(isPlayLaneSoundChannel('01')).toBe(false);
     expect(isPlayLaneSoundChannel('A1')).toBe(false);
 
     expect(isBmsLongNoteChannel('51')).toBe(true);
-    expect(isBmsLongNoteChannel('6a')).toBe(false);
+    expect(isBmsLongNoteChannel('6a')).toBe(true);
     expect(isBmsLongNoteChannel('69')).toBe(true);
-    expect(isBmsLongNoteChannel('5A')).toBe(false);
+    expect(isBmsLongNoteChannel('5A')).toBe(true);
+    expect(isBmsLongNoteChannel('50')).toBe(false);
     expect(isBmsLongNoteChannel('11')).toBe(false);
     expect(mapBmsLongNoteChannelToPlayable('51')).toBe('11');
     expect(mapBmsLongNoteChannelToPlayable('61')).toBe('21');
     expect(mapBmsLongNoteChannelToPlayable('69')).toBe('29');
-    expect(mapBmsLongNoteChannelToPlayable('5A')).toBeUndefined();
+    expect(mapBmsLongNoteChannelToPlayable('5A')).toBe('1A');
+    expect(mapBmsLongNoteChannelToPlayable('6o')).toBe('2O');
+    expect(mapBmsLongNoteChannelToPlayable('50')).toBeUndefined();
 
     expect(isBmsBgmVolumeChangeChannel('97')).toBe(true);
     expect(isBmsBgmVolumeChangeChannel('98')).toBe(false);
@@ -603,6 +616,31 @@ describe('chart', () => {
     // Real IIDX 5K DP — has scratch on both sides AND `21`. Stays at `'10'` (presence of `21`/`26..29`
     // beats the PMS-STD signal).
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '16', '21', '22', '25', '26']))).toBe('10');
+  });
+
+  test('resolveChartPlayVariant classifies the 24-key keyboard families from extended lane channels', () => {
+    const chart = (chartPath: string, channels: string[], player?: number) => ({
+      chartPath,
+      events: channels.map((channel) => ({ channel })),
+      bms: { player },
+    });
+
+    // A single extended lane column (`1A` = lane 10) is enough — 1P only → `'24'`.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '18', '1A']))).toBe('24');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '1O']))).toBe('24');
+    // Any 2P channel alongside the extended bank → `'48'`.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '1A', '21', '2A']))).toBe('48');
+    // Extended lanes win over the BME POPN-9 rule: a 24-key chart fills all nine classic 1P columns too,
+    // which rule 3 would otherwise claim for `'9'`.
+    expect(
+      resolveChartPlayVariant(chart('main.bme', ['11', '12', '13', '14', '15', '16', '17', '18', '19', '1A'])),
+    ).toBe('24');
+    // …and over the `#PLAYER 3` + `17` POPN-9 rule, which every 48-key DP chart would otherwise trip.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '17', '1A', '21', '2A'], 3))).toBe('48');
+    // …and over the `.pms` extension, so a mis-named keyboard chart still classifies by its lanes.
+    expect(resolveChartPlayVariant(chart('main.pms', ['11', '1A']))).toBe('24');
+    // Lowercase authoring normalizes to the same columns.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '1a']))).toBe('24');
   });
 
   test('resolve long note helpers return empty results for non-BMS charts and missing LNOBJ markers', () => {

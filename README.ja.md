@@ -148,7 +148,7 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 - beatoraja JSON skin と Lua `.luaskin` entry を PixiJS 非依存で parse
 - beatoraja の 2-phase Lua contract を制限付き Fengari sandbox 上で評価
-- play / select / decide / result / course-result entry を discovery し、play skin を `5` / `7` / `9` / `10` / `14` / `24` / `24d` ごとに group 化
+- play / select / decide / result / course-result entry を discovery し、play skin を `5` / `7` / `9` / `10` / `14` / `24` / `24d` ごとに group 化（いずれも gameplay で mount 可能）
 - `property[]`、`filepath[]`、category group、custom offset、wildcard source path、case-insensitive asset を解決
 - image、imageset、value、float-value、text、slider、note、judge、gauge、graph、BPM graph、timing graph、song-list、custom event、destination、PM character element を normalize
 
@@ -309,6 +309,7 @@ pnpm run editor export chart.json chart.bms
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
 - `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
+- 拡張レーンチャンネル (`1A..1O` / `2A..2O`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。
 
 ### 代表モードのチャンネルと入力
 
@@ -320,14 +321,16 @@ pnpm run editor export chart.json chart.bms
 | `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
 | `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
 | `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 レーン、scratch なし) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                           |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`。2P バンクは印字キーを使い切り、末尾はファンクションキーになります                                          |
 
 ## FREE ZONE (`17` / `27`)
 
-- 9KEY 以外では FREE ZONE として扱います。
+- 9KEY と 24KEY / 48KEY の keyboard mode 以外では FREE ZONE として扱います。
 - 独立レーンは作らず、スクラッチレーン (`16` / `26`) に重ねて描画します。
 - ノート長は 4 分音符固定です。
 - 判定対象外のため、`TOTAL` / `EX-SCORE` / `SCORE` には含めません。
-- 9KEY 判定時は `17` を通常レーンノートとして扱います。
+- 9KEY / 24KEY / 48KEY 判定時は `17` / `27` を通常レーンノートとして扱います。
 
 ## キーボード入力 (kitty keyboard protocol)
 

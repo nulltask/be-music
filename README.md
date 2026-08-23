@@ -148,7 +148,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 - Parses beatoraja JSON skins and Lua `.luaskin` entries independently from PixiJS
 - Evaluates the beatoraja two-phase Lua contract on a restricted Fengari sandbox
-- Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d`
+- Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d` — every one of them mountable for gameplay
 - Resolves `property[]`, `filepath[]`, category groups, custom offsets, wildcard source paths, and case-insensitive assets
 - Normalizes image, imageset, value, float-value, text, slider, note, judge, gauge, graph, BPM graph, timing graph, song-list, custom event, destination, and PM character elements
 
@@ -309,6 +309,7 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
 - A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
+- Any extended lane channel (`1A..1O` / `2A..2O`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule.
 
 ### Representative mode channels and inputs
 
@@ -320,14 +321,16 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 | `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
 | `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
 | `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 lanes, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                              |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`; the 2P bank runs past the printable-key pool and lands on function keys                                   |
 
 ## FREE ZONE (`17` / `27`)
 
-- Other than 9KEY, it is treated as FREE ZONE.
+- Other than 9KEY and the 24KEY / 48KEY keyboard modes, it is treated as FREE ZONE.
 - Do not create an independent lane, but draw on top of the scratch lane (`16` / `26`).
 - The note length is fixed at a quarter note.
 - Since it is not subject to judgment, it is not included in `TOTAL` / `EX-SCORE` / `SCORE`.
-- When determining 9KEY, `17` is treated as the normal lane note.
+- When determining 9KEY or 24KEY / 48KEY, `17` / `27` is treated as the normal lane note.
 
 ## Keyboard input (kitty keyboard protocol)
 

@@ -32,6 +32,7 @@
 //   - Chart-difficulty submenus inside a folder (currently flat song list)
 
 import { Container, FederatedPointerEvent, Graphics, Sprite, Text, Texture, type Ticker } from 'pixi.js';
+import type { ChartPlayVariant } from '@be-music/chart';
 import type { BeatorajaSkin, BeatorajaSkinConfig, BeatorajaSongListLayout } from '@be-music/beatoraja-skin';
 import {
   BEATORAJA_NUM,
@@ -3141,7 +3142,7 @@ function levelTintForDifficulty(level: number): number {
  * malformed entry it can throw; a per-frame op-set computation must never throw, so we wrap
  * with a try/catch and fall back to `undefined` (= no `KEYSONG_*` op set, "modeless" bar).
  */
-function safeResolveChartVariant(song: BrowserSongEntry): '5' | '7' | '9' | '10' | '14' | undefined {
+function safeResolveChartVariant(song: BrowserSongEntry): ChartPlayVariant | undefined {
   try {
     return resolveChartPlayVariant(song);
   } catch {
@@ -3352,10 +3353,9 @@ const STOP_PRESENCE_CACHE = new WeakMap<BrowserSongEntry, boolean>();
 /**
  * Keys-variant string → imageset index for `modeset` (ref 11). Mirrors beatoraja's MainState
  * keymode enum used by the default skin: 0 = ALL_KEYS, 1 = 5K, 2 = 7K, 3 = 10K, 4 = 14K, 5 = 9K,
- * 6 = 24K (not surfaced today), 7 = 24K-DP (not surfaced today). Unknown variants fall back to 0
- * (skins author this slot as "allkeys" / "any").
+ * 6 = 24K, 7 = 24K-DP. Unknown variants fall back to 0 (skins author this slot as "allkeys" / "any").
  */
-function keymodeImagesetIndex(variant: '5' | '7' | '9' | '10' | '14' | undefined): number {
+function keymodeImagesetIndex(variant: ChartPlayVariant | undefined): number {
   switch (variant) {
     case '5':
       return 1;
@@ -3367,6 +3367,10 @@ function keymodeImagesetIndex(variant: '5' | '7' | '9' | '10' | '14' | undefined
       return 4;
     case '9':
       return 5;
+    case '24':
+      return 6;
+    case '48':
+      return 7;
     default:
       return 0;
   }
@@ -3478,7 +3482,7 @@ function difficultyOps(difficulty: number | undefined): ReadonlyArray<number> {
 }
 
 /** Keys-variant string → matching `BEATORAJA_OP.KEYSONG_*` code, or `undefined` for unknown. */
-function keysongOpForVariant(variant: '5' | '7' | '9' | '10' | '14' | undefined): number | undefined {
+function keysongOpForVariant(variant: ChartPlayVariant | undefined): number | undefined {
   switch (variant) {
     case '5':
       return BEATORAJA_OP.KEYSONG_5K;
@@ -3490,6 +3494,10 @@ function keysongOpForVariant(variant: '5' | '7' | '9' | '10' | '14' | undefined)
       return BEATORAJA_OP.KEYSONG_10K;
     case '14':
       return BEATORAJA_OP.KEYSONG_14K;
+    case '24':
+      return BEATORAJA_OP.KEYSONG_24K;
+    case '48':
+      return BEATORAJA_OP.KEYSONG_24K_DP;
     default:
       return undefined;
   }
