@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in: pass `fallbackToneSeconds` to the audio-renderer APIs or `missingSampleToneSeconds` to the player engine when a debugging tone is wanted.
+- 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in via `fallbackToneSeconds`.
 - Updated dependencies [b2c4f9b]
 - Updated dependencies [b9922cf]
 - Updated dependencies [4d5a89e]
@@ -37,26 +37,7 @@
 
 ### Minor Changes
 
-- 632f274: End-to-end support for the beatoraja `#BASE 62` ID extension
-  (case-sensitive 62-character object IDs `0-9A-Za-z`, four
-  times the address space of the original `0-9A-Z` 36-base).
-
-  - **`@be-music/parser`**: detects the `#BASE 62` header and
-    decodes channel-row IDs case-sensitively under it.
-  - **`@be-music/chart`** / **`@be-music/stringifier`**: thread
-    the `base` through every `parseInt` / `toString` site so
-    serialised charts round-trip without dropping casing.
-  - **`@be-music/editor`**: surfaces the `base` flag on edits.
-  - **`@be-music/player`** / **`@be-music/audio-renderer`**:
-    honour the chart's `base` when resolving WAV / BMP slot
-    IDs at playback time, so `#WAVaA` and `#WAVAA` map to
-    distinct samples on a `#BASE 62` chart.
-  - **`@be-music/utils`** / **`@be-music/json`**: shared
-    helpers (`normalizeAsciiBase62Code`, `parseObjectKey`
-    base parameter) the layers above call into.
-
-  Charts that don't declare `#BASE 62` keep the historical
-  36-base behaviour; the flag is opt-in.
+- 632f274: Honour the chart's `#BASE 62` object-ID base when resolving WAV / BMP slot IDs at playback time, so `#WAVaA` and `#WAVAA` map to distinct samples. Charts that don't declare `#BASE 62` keep the historical 36-base behaviour.
 
 ### Patch Changes
 
