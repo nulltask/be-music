@@ -139,6 +139,9 @@ export function preparePlaybackChartData(
   auxiliaryPlaybackEndSeconds: number,
 ): PreparedPlaybackChartData {
   const extractedNotes = extractTimedNotes(resolvedJson, {
+    // Same host classification the lane bindings use — keeps `17` / `27` FREE ZONE on the IIDX families and an
+    // ordinary key column on POPN-9 / the 24-key keyboard modes.
+    playVariant: options.playVariant,
     includeLandmine: true,
     // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
     // Keep extraction independent from the debug overlay option so audio semantics never depend on rendering settings.

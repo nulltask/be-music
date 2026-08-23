@@ -12,7 +12,11 @@ export interface LaneBinding {
   isScratch: boolean;
 }
 
-export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14';
+/**
+ * Mirrors `ChartPlayVariant` from `@be-music/chart`. `'24'` / `'48'` are the Keyboardmania keyboard modes, whose lanes
+ * run onto the extended `1A..1O` / `2A..2O` channels and have no scratch column.
+ */
+export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
 
 export interface KeyboardCodeLike {
   code: string;
@@ -112,6 +116,15 @@ export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArr
 }
 
 export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVariant): number {
+  if (playVariant === '24' || playVariant === '48') {
+    // Keyboard modes have no scratch, so slot `0` is never produced and `isScratchLaneForVariant` stays false for
+    // every channel. Lanes are the plain 1-based column index within the side (`11` → 1, `19` → 9, `1A` → 10, …).
+    if (channel.length !== 2) return -1;
+    if (channel[0] !== '1' && channel[0] !== '2') return -1;
+    const laneIndex = resolveLaneIndex(channel[1]!);
+    if (laneIndex === undefined || laneIndex > KEYBOARD_MODE_SIDE_LANE_COUNT) return -1;
+    return laneIndex;
+  }
   if (playVariant === '9') {
     if (channel.length !== 2) return -1;
     const digit = Number.parseInt(channel[1]!, 10);
@@ -148,6 +161,10 @@ export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVaria
 export function resolveLr2LaneIndex(channel: string, playVariant?: ChartPlayVariant): number {
   const slot = resolveSideKeySlot(channel, playVariant);
   if (slot < 0) return -1;
+  // LR2 skins only define the 20 IIDX lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
+  // `play_24.lr2skin`. Returning `-1` routes keyboard-mode charts through the caller's fallback playfield instead of
+  // squeezing 24 lanes into the 7-key rect table.
+  if (playVariant === '24' || playVariant === '48') return -1;
   if (playVariant === '9') return slot;
   return channel.startsWith('2') ? 10 + slot : slot;
 }
@@ -167,9 +184,11 @@ export function isPlayableInputChannel(channel: string): boolean {
 
 export function resolveLaneChannels(notes: ReadonlyArray<ChannelLike>, playVariant?: ChartPlayVariant): string[] {
   const preferred =
-    playVariant === '9'
-      ? ['11', '12', '13', '14', '15', '16', '17', '18', '19', '22', '23', '24', '25']
-      : ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
+    playVariant === '24' || playVariant === '48'
+      ? KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant]
+      : playVariant === '9'
+        ? ['11', '12', '13', '14', '15', '16', '17', '18', '19', '22', '23', '24', '25']
+        : ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
   const used = new Set(notes.map((note) => note.channel).filter(isPlayableInputChannel));
   return preferred.filter((channel) => used.has(channel));
 }
@@ -236,7 +255,22 @@ const POPN_9KEY_PMS_BINDINGS: FixedLaneDefinition[] = [
 ];
 
 const EXTENDED_LANE_DIGITS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-const KEYBOARDMANIA_SIDE_CHANNELS = EXTENDED_LANE_DIGITS.slice(0, 24);
+/** Lanes per side in the Keyboardmania modes — 24 columns (`11..19` + `1A..1O`), no scratch. */
+const KEYBOARD_MODE_SIDE_LANE_COUNT = 24;
+const KEYBOARDMANIA_SIDE_CHANNELS = EXTENDED_LANE_DIGITS.slice(0, KEYBOARD_MODE_SIDE_LANE_COUNT);
+
+/**
+ * Left-to-right lane ordering for the keyboard modes. Unlike the IIDX families there is no scratch to hoist to the
+ * outside edge, so the order is simply the side's columns in ascending lane index (`11`, `12`, …, `1O`), with the 2P
+ * bank appended for `'48'`.
+ */
+const KEYBOARD_MODE_PREFERRED_CHANNELS: Record<'24' | '48', string[]> = {
+  '24': [...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `1${lane}`),
+  '48': [
+    ...[...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `1${lane}`),
+    ...[...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `2${lane}`),
+  ],
+};
 
 const KBM_24KEY_SP_BINDINGS = createKeyboardModeBindings([['1', '1P']], KEYBOARDMANIA_SIDE_CHANNELS);
 const KBM_48KEY_DP_BINDINGS = createKeyboardModeBindings(
@@ -393,6 +427,10 @@ function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions
         return '5-key-dp';
       case '14':
         return '14-key-dp';
+      case '24':
+        return '24-key-sp';
+      case '48':
+        return '48-key-dp';
     }
   }
 

@@ -2092,6 +2092,58 @@ describe('player', () => {
     expect(invisible[0]?.invisible).toBe(true);
   });
 
+  test('player: extracts extended 24-key lane channels as playable notes, LNs, mines and invisibles', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.bms.lnObjs = ['AA'];
+    json.events = [
+      // Extended playable columns — `1A` is lane 10 of the 1P bank, `2O` lane 24 of the 2P bank.
+      { measure: 0, channel: '1A', position: [0, 1], value: '01' },
+      { measure: 0, channel: '2O', position: [0, 1], value: '01' },
+      // Legacy long note on an extended column (`5X` / `6X` map back onto `1X` / `2X`).
+      { measure: 1, channel: '5B', position: [0, 1], value: '01' },
+      { measure: 1, channel: '5B', position: [2, 4], value: '01' },
+      // `#LNOBJ` long note on another extended column.
+      { measure: 2, channel: '1C', position: [0, 1], value: '01' },
+      { measure: 2, channel: '1C', position: [2, 4], value: 'AA' },
+      // Landmine + invisible object on extended columns.
+      { measure: 3, channel: 'DD', position: [0, 1], value: '10' },
+      { measure: 3, channel: '3E', position: [0, 1], value: '01' },
+    ];
+
+    const timed = extractTimedNotes(json, { includeLandmine: true, includeInvisible: true });
+    expect(timed.playableNotes.map((note) => note.channel)).toEqual(['1A', '2O', '1B', '1C']);
+    // Both long notes survive with a tail; the `#LNOBJ` terminator is consumed rather than counted.
+    expect(timed.playableNotes.filter((note) => note.endBeat !== undefined).map((note) => note.channel)).toEqual([
+      '1B',
+      '1C',
+    ]);
+    expect(timed.landmineNotes.map((note) => note.channel)).toEqual(['1D']);
+    expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['1E']);
+  });
+
+  test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
+    const createChart = (channels: string[]) => {
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.events = channels.map((channel) => ({ measure: 0, channel, position: [0, 1] as const, value: '01' }));
+      return json;
+    };
+
+    // IIDX 7 KEY — `17` keeps the quarter-note FREE ZONE tail.
+    const iidx = extractPlayableNotes(createChart(['11', '17', '18']));
+    expect(iidx.find((note) => note.channel === '17')?.endBeat).toBeCloseTo(1, 6);
+
+    // 24 KEY — `17` is lane 7 of the keyboard bank, so it stays an ordinary tap. Classified from the
+    // chart's own extended lane channel, without the host passing a variant.
+    const keyboard = extractPlayableNotes(createChart(['11', '17', '1A']));
+    expect(keyboard.find((note) => note.channel === '17')?.endBeat).toBeUndefined();
+
+    // Same result when the host supplies the variant instead of letting the chart be classified.
+    const overridden = extractPlayableNotes(createChart(['11', '17', '18']), { playVariant: '9' });
+    expect(overridden.find((note) => note.channel === '17')?.endBeat).toBeUndefined();
+  });
+
   test('player: extractTimedNotes matches the individual extraction helpers', () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;

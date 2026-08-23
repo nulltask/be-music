@@ -37,14 +37,15 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | `#xxx04`, `#xxx07`, `#xxx0A` | BGA base / layer / layer2 として描画します。                                                                                                                                 |
 | `#xxx06`                     | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                                                                         |
 | `#xxx09`                     | STOP として時間解決に反映します。                                                                                                                                            |
-| `#xxx11-19`, `#xxx21-29`     | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY 以外では FREE ZONE、9KEY では通常ノートです。                                                      |
-| `#xxx31-39`, `#xxx41-49`     | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。 |
-| `#xxx51-59`, `#xxx61-69`     | BMS legacy long note として扱います。                                                                                                                                        |
+| `#xxx11-19`, `#xxx21-29`     | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY / 24KEY 以外では FREE ZONE、9KEY / 24KEY では通常ノートです。                                      |
+| `#xxx1A-1O`, `#xxx2A-2O`     | 可視演奏ノートとして扱います。24 key (Keyboardmania) バンクのレーン 10..24 です。これらのチャンネルが 1 つでもあれば `24 KEY SP` / `48 KEY DP` と判定します。                |
+| `#xxx31-39`, `#xxx41-49`（拡張の `#xxx3A-3O` / `#xxx4A-4O` を含む） | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。 |
+| `#xxx51-59`, `#xxx61-69`（拡張の `#xxx5A-5O` / `#xxx6A-6O` を含む） | BMS legacy long note として扱います。                                                                                                                 |
 | `#xxx97`, `#xxx98`           | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                                                                           |
 | `#xxxA0`                     | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                                                                         |
 | `#xxxSC`                     | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。                                                                                                               |
 | `#xxxSP`                     | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。                                                                                                                |
-| `#xxxD1-D9`, `#xxxE1-E9`     | 地雷として扱います。                                                                                                                                                         |
+| `#xxxD1-D9`, `#xxxE1-E9`（拡張の `#xxxDA-DO` / `#xxxEA-EO` を含む） | 地雷として扱います。                                                                                                                                   |
 
 ### 対応コマンド
 
@@ -72,7 +73,6 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 | channel                                                                     | 現在の player 実装                                                                                                                                                                              |
 | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `#xxxA6`                                                                    | `#CHANGEOPTIONxx` の実行時反映チャンネルとしては未対応です。event として保持されても player runtime は参照しません。                                                                            |
-| `#xxx1A-1Z`, `#xxx2A-2Z` など、上の対応一覧に含まれない演奏系拡張チャンネル | 現在の runtime では playable note channel として扱いません。`24 KEY SP` / `48 KEY DP` の表示モード推定と入力割り当てはありますが、これらのチャンネル自体は score/judge 対象ノートになりません。 |
 | 上の対応一覧に含まれないその他の object channel                             | parser が保持しても、player runtime は意味解釈しません。                                                                                                                                        |
 
 ### 未対応コマンド
@@ -148,6 +148,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 
 FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱います。
 通常の score/gauge 対象からは除外し、keysound fallback と描画上の補助対象として扱います。
+これが適用されるのは IIDX 系のみです。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では、これらのチャンネルは通常のキーレーンなので、譜面が書いた長さのまま（単押しは単押しのまま）扱います。
 
 ## レーンモードと入力
 
@@ -164,6 +165,8 @@ FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱いま
 
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
 FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
+
+`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 24 レーンをチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に持ち、scratch 列はなく、チャンネル昇順に左から右へ並べます。判定は内容ベースで、拡張レーンチャンネルが 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選びます。SP の 24 レーンは fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。48 レーンの DP は印字キーの数を超えるため末尾がファンクションキーに落ちますが、48 レーンは AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
 
 IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
 scratch は 1P が左 `Shift`、2P が右 `Shift` です。

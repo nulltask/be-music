@@ -86,7 +86,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channel `01` (background sound)
 - [x] Interpret channel `1x` (play)
 - [x] Interpret channel `2x` (play)
-- [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY)
+- [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY / 24KEY)
 - [x] When judging 9KEY, channel `17` is interpreted as a normal lane note.
 - [x] `#PLAYER=1` is retained as SINGLE meta information, and lane determination prioritizes channel configuration.
 - [x] `#PLAYER=2` (COUPLE) is retained as meta information, and dedicated 1P/2P separation play is not currently implemented.
@@ -332,8 +332,9 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 - Automatically determine lane mode from used channel (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
 - If lane mode cannot be automatically determined, complete with extension (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
+- Extended lane channels (`1A..1O` / `2A..2O`) select `24 KEY SP` / `48 KEY DP` ahead of every other rule, including the extension fallback
 - `.pms` The 9KEY of the musical score is estimated from the standard array (`PMS-STD`) / compatible array (`PMS-COMPAT`) from the channel distribution and reflected in the `LANE` display.
-- FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`)
+- FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`); under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are ordinary lanes instead
 - FREE ZONE Note length is fixed at quarter note
 - FREE ZONE is not subject to judgment (not included in `TOTAL` / `EX-SCORE` / `SCORE`)
 - BGA viewport background uses black (black even when transparent area/BGA is not displayed)

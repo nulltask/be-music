@@ -69,6 +69,72 @@ describe('resolveSideKeySlot', () => {
   });
 });
 
+describe('24 KEY / 48 KEY keyboard modes', () => {
+  const SP_CHANNELS = [...'123456789ABCDEFGHIJKLMNO'].map((lane) => `1${lane}`);
+  const DP_CHANNELS = [...SP_CHANNELS, ...[...'123456789ABCDEFGHIJKLMNO'].map((lane) => `2${lane}`)];
+
+  test('resolveSideKeySlot — the 24 columns are plain 1-based lane indices, with no scratch', () => {
+    expect(resolveSideKeySlot('11', '24')).toBe(1);
+    expect(resolveSideKeySlot('19', '24')).toBe(9);
+    expect(resolveSideKeySlot('1A', '24')).toBe(10);
+    expect(resolveSideKeySlot('1O', '24')).toBe(24);
+    // `16` / `17` are ordinary lanes here — never scratch (slot 0) or FREE ZONE.
+    expect(resolveSideKeySlot('16', '24')).toBe(6);
+    expect(resolveSideKeySlot('17', '24')).toBe(7);
+    // Slot 0 is what `isScratchLaneForVariant` keys off; no keyboard-mode channel may produce it.
+    expect(SP_CHANNELS.map((channel) => resolveSideKeySlot(channel, '24'))).not.toContain(0);
+    // The 2P bank uses the same side-relative slots under `'48'`.
+    expect(resolveSideKeySlot('21', '48')).toBe(1);
+    expect(resolveSideKeySlot('2O', '48')).toBe(24);
+    // Past the 24-column bank (`1P` = lane 25) and non-lane channels are rejected.
+    expect(resolveSideKeySlot('1P', '24')).toBe(-1);
+    expect(resolveSideKeySlot('D1', '24')).toBe(-1);
+  });
+
+  test('resolveLr2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
+    // LR2 only defines the 20 IIDX rects; returning -1 sends these charts to the fallback playfield
+    // instead of squeezing 24 lanes into the 7-key rect table.
+    expect(resolveLr2LaneIndex('11', '24')).toBe(-1);
+    expect(resolveLr2LaneIndex('1O', '24')).toBe(-1);
+    expect(resolveLr2LaneIndex('2A', '48')).toBe(-1);
+  });
+
+  test('resolveLaneChannels — lanes render in ascending column order, 1P bank before 2P', () => {
+    const notes = [{ channel: '1O' }, { channel: '11' }, { channel: '1A' }, { channel: '19' }];
+    expect(resolveLaneChannels(notes, '24')).toEqual(['11', '19', '1A', '1O']);
+    expect(
+      resolveLaneChannels(
+        DP_CHANNELS.map((channel) => ({ channel })),
+        '48',
+      ),
+    ).toEqual(DP_CHANNELS);
+  });
+
+  test('resolveLaneDisplayMode — extended lane channels select the keyboard modes', () => {
+    expect(resolveLaneDisplayMode(SP_CHANNELS)).toBe('24 KEY SP');
+    expect(resolveLaneDisplayMode(DP_CHANNELS)).toBe('48 KEY DP');
+    // A `.bme` extension would otherwise mean 7 KEY SP; one extended column outranks it.
+    expect(resolveLaneDisplayMode(['11', '18', '1A'], { chartExtension: '.bme' })).toBe('24 KEY SP');
+    // Host override reaches the same modes without any extended channel present.
+    expect(resolveLaneDisplayMode(['11', '12'], { playVariant: '24' })).toBe('24 KEY SP');
+    expect(resolveLaneDisplayMode(['11', '21'], { playVariant: '48' })).toBe('48 KEY DP');
+  });
+
+  test('createLaneBindings — every column gets its own key, none of them scratch', () => {
+    const bindings = createLaneBindings(SP_CHANNELS, { playVariant: '24' });
+    expect(bindings.map((binding) => binding.channel)).toEqual(SP_CHANNELS);
+    expect(bindings.every((binding) => binding.side === '1P')).toBe(true);
+    expect(bindings.some((binding) => binding.isScratch)).toBe(false);
+    expect(new Set(bindings.flatMap((binding) => binding.inputTokens)).size).toBe(24);
+
+    const dpBindings = createLaneBindings(DP_CHANNELS, { playVariant: '48' });
+    expect(dpBindings.map((binding) => binding.channel)).toEqual(DP_CHANNELS);
+    expect(dpBindings.filter((binding) => binding.side === '2P')).toHaveLength(24);
+    // 48 lanes outrun the printable-key pool, so the tail falls back to function keys — still unique.
+    expect(new Set(dpBindings.flatMap((binding) => binding.inputTokens)).size).toBe(48);
+  });
+});
+
 describe('resolveLr2LaneIndex', () => {
   test('IIDX-side — 1P stays at 0..7, 2P offsets by 10', () => {
     expect(resolveLr2LaneIndex('11')).toBe(1);

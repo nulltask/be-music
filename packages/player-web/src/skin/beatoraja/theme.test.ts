@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { loadBeatorajaThemeFromFiles, summarizeBeatorajaPlaySkins } from './theme.ts';
+import {
+  chartPlayVariantForBeatorajaVariant,
+  loadBeatorajaThemeFromFiles,
+  pickBeatorajaPlayableSkinVariant,
+  pickBeatorajaPlayableVariant,
+  summarizeBeatorajaPlaySkins,
+} from './theme.ts';
 
 class FakeFile {
   constructor(
@@ -71,5 +77,29 @@ describe('summarizeBeatorajaPlaySkins', () => {
     ];
     const bundle = await loadBeatorajaThemeFromFiles(files);
     expect(summarizeBeatorajaPlaySkins(bundle.theme.playSkins)).toBe('7,14');
+  });
+});
+
+describe('24-key keyboard play variants', () => {
+  it('maps the keyboard chart shapes onto beatorajas play24 / play24d skins', () => {
+    expect(pickBeatorajaPlayableVariant({ keys: 24, isDouble: false, isPms: false })).toBe('24');
+    expect(pickBeatorajaPlayableVariant({ keys: 24, isDouble: true, isPms: false })).toBe('24d');
+    // The IIDX shapes are untouched.
+    expect(pickBeatorajaPlayableVariant({ keys: 7, isDouble: false, isPms: false })).toBe('7');
+    expect(pickBeatorajaPlayableVariant({ keys: 14, isDouble: true, isPms: false })).toBe('14');
+  });
+
+  it('translates the skin variant spelling into the engines ChartPlayVariant', () => {
+    expect(chartPlayVariantForBeatorajaVariant('24')).toBe('24');
+    expect(chartPlayVariantForBeatorajaVariant('24d')).toBe('48');
+    expect(chartPlayVariantForBeatorajaVariant('7')).toBe('7');
+  });
+
+  it('prefers the other keyboard skin before falling back to the IIDX chains', () => {
+    expect(pickBeatorajaPlayableSkinVariant({ '24d': {} as never, '7': {} as never }, '24')).toBe('24d');
+    expect(pickBeatorajaPlayableSkinVariant({ '7': {} as never }, '24')).toBe('7');
+    expect(pickBeatorajaPlayableSkinVariant({}, '24')).toBeUndefined();
+    // A theme that only ships play24 can still render an IIDX chart.
+    expect(pickBeatorajaPlayableSkinVariant({ '24': {} as never }, '7')).toBe('24');
   });
 });

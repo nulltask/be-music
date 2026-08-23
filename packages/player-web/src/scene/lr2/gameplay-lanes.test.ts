@@ -44,6 +44,50 @@ describe('resolveFallbackLaneLayout', () => {
     expect(lanes[5]!.w).toBeCloseTo(lanes[0]!.w);
   });
 
+  it('lays the 24 keyboard-mode lanes out left to right at equal width, with no scratch', () => {
+    const channels = [...'123456789ABCDEFGHIJKLMNO'].map((lane) => `1${lane}`);
+    const lanes = resolveFallbackLaneLayout({ channels, playVariant: '24', x: 33, w: 194 });
+
+    expect(lanes).toHaveLength(24);
+    expect(lanes.some((lane) => lane.isScratch)).toBe(false);
+    expect(lanes.every((lane) => lane.side === '1P')).toBe(true);
+    expect(lanes.every((lane) => lane.w > 0)).toBe(true);
+    // Equal widths, strictly increasing x, no overlap, and the bank ends exactly on the requested right edge.
+    for (let index = 1; index < lanes.length; index += 1) {
+      expect(lanes[index]!.w).toBeCloseTo(lanes[0]!.w);
+      expect(lanes[index]!.x).toBeGreaterThanOrEqual(lanes[index - 1]!.x + lanes[index - 1]!.w);
+    }
+    expect(lanes[0]!.x).toBeCloseTo(33);
+    expect(lanes.at(-1)!.x + lanes.at(-1)!.w).toBeCloseTo(33 + 194);
+  });
+
+  it('splits the 48 keyboard-mode lanes into 1P / 2P banks with a side gap', () => {
+    const lanes = [...'12'].flatMap((side) => [...'123456789ABCDEFGHIJKLMNO'].map((lane) => `${side}${lane}`));
+    const rects = resolveFallbackLaneLayout({
+      channels: lanes,
+      playVariant: '48',
+      x: 33,
+      w: 194,
+      preserveSideWidth: true,
+    });
+
+    expect(rects).toHaveLength(48);
+    expect(rects.filter((rect) => rect.side === '1P')).toHaveLength(24);
+    expect(rects.filter((rect) => rect.side === '2P')).toHaveLength(24);
+    // The 2P bank starts strictly right of the 1P bank's trailing edge — the side gap.
+    const lastOfP1 = rects[23]!;
+    const firstOfP2 = rects[24]!;
+    expect(firstOfP2.x).toBeGreaterThan(lastOfP1.x + lastOfP1.w);
+    // Per-side width is preserved, so a 48-lane chart extends the playfield instead of squashing each lane.
+    const spRects = resolveFallbackLaneLayout({
+      channels: lanes.slice(0, 24),
+      playVariant: '24',
+      x: 33,
+      w: 194,
+    });
+    expect(rects[0]!.w).toBeCloseTo(spRects[0]!.w);
+  });
+
   it('falls back to the requested lane count without scratch weighting', () => {
     const lanes = resolveFallbackLaneLayout({ laneCount: 4, x: 0, w: 100, gap: 0 });
 

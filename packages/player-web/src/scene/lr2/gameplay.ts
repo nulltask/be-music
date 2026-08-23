@@ -122,6 +122,7 @@ import {
   LR2_2P_BOMB_TIMER_BASE,
   LR2_2P_KEYON_TIMER_BASE,
   LR2_2P_LN_HOLD_TIMER_BASE,
+  LR2_LANE_TIMER_BANK_SIZE,
   PIXELS_PER_BEAT,
   PLAYFIELD,
 } from '../gameplay-constants.ts';
@@ -753,7 +754,7 @@ export class PixiGameplayView {
    * are 1P-side lanes) instead of the default IIDX layout. Defaults to `'7'` before any chart is loaded so the existing
    * 7K-flavored fallbacks keep behaving as before for skinless / pre-prepare code paths.
    */
-  private chartPlayVariant: '5' | '7' | '9' | '10' | '14' = '7';
+  private chartPlayVariant: ChartPlayVariant = '7';
   private laneX = new Map<string, { x: number; w: number; top: number; bottom: number }>();
   private textures = new Map<string, Texture>();
   /**
@@ -3042,7 +3043,7 @@ export class PixiGameplayView {
    */
   private resolveLnHoldTimerId(channel: string): number | undefined {
     const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
-    if (laneIndex < 0 || laneIndex > 9) {
+    if (laneIndex < 0 || laneIndex > LR2_LANE_TIMER_BANK_SIZE - 1) {
       return undefined;
     }
     // PMS / 9 KEY collapses onto the 1P-side `70..79` bank.
@@ -3206,6 +3207,12 @@ export class PixiGameplayView {
     // `timer=50..57` (1P), so we mirror that here. The timer auto-clears once `renderBombs` completes the animation.
     // Side-relative lane index is used so 2P SC fires timer 60 (not 60+8).
     const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
+    // Each side's bomb bank is 10 timers wide (50..59 / 60..69). The 24-key keyboard modes address lanes past that, and
+    // an unclamped `base + laneIndex` would spill into the LN-hold bank at 70+ — so those lanes stamp no LR2 timer and
+    // rely on `bombStartedAt` alone, which is what the fallback playfield renders from anyway.
+    if (laneIndex > LR2_LANE_TIMER_BANK_SIZE - 1) {
+      return;
+    }
     // PMS / 9 KEY routes every lane through the 1P-side bank (50..58) regardless of which side the chart sourced it
     // from.
     const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
@@ -3730,16 +3737,23 @@ export class PixiGameplayView {
     for (const [channel, startedAt] of this.bombStartedAt) {
       const laneIndex = resolveSideRelativeLaneIndex(channel, this.chartPlayVariant);
       const isPlayer2 = this.chartPlayVariant !== '9' && channel.startsWith('2');
-      const timerId = (isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
+      // Mirrors `triggerBomb`'s clamp — lanes past the bank never got a timer, so there's nothing to retire.
+      const timerId =
+        laneIndex > LR2_LANE_TIMER_BANK_SIZE - 1
+          ? undefined
+          : (isPlayer2 ? LR2_2P_BOMB_TIMER_BASE : LR2_1P_BOMB_TIMER_BASE) + laneIndex;
       // Per-bomb-timer cleanup duration — derived from the loaded skin's keyframes in `prepareSkin` so each lane's
       // explosion retires at its authored cycle length, with the LR2-default 150 ms fallback for skinless / unauthored
       // slots.
-      const cleanupAtMs = this.bombDurationMs.get(timerId) ?? BOMB_CLEANUP_FALLBACK_MS;
+      const cleanupAtMs =
+        (timerId === undefined ? undefined : this.bombDurationMs.get(timerId)) ?? BOMB_CLEANUP_FALLBACK_MS;
       if (now - startedAt < cleanupAtMs) {
         continue;
       }
       this.bombStartedAt.delete(channel);
-      this.timerStartedAt.delete(timerId);
+      if (timerId !== undefined) {
+        this.timerStartedAt.delete(timerId);
+      }
     }
   }
 
@@ -6332,10 +6346,19 @@ function noteFallbackColor(
   playVariant: ChartPlayVariant | undefined,
 ): FallbackLaneTone {
   if (isScratchLaneForVariant(channel, playVariant)) return FALLBACK_TONE_RED;
+  if (playVariant === '24' || playVariant === '48') {
+    // The keyboard bank is a piano, and `laneIndex` is `-1` here (no LR2 rect exists for these lanes), so colour by
+    // the side-relative column instead: black keys blue, white keys white, repeating every chromatic octave.
+    const semitone = (resolveSideRelativeLaneIndex(channel, playVariant) - 1) % 12;
+    return KEYBOARD_BLACK_KEY_SEMITONES.has(semitone) ? FALLBACK_TONE_BLUE : FALLBACK_TONE_WHITE;
+  }
   const keyIndex = laneIndex % 10;
   if (keyIndex % 2 === 0) return FALLBACK_TONE_BLUE;
   return FALLBACK_TONE_WHITE;
 }
+
+/** Chromatic offsets of the black keys within an octave (C# D# F# G# A#), used to tint the keyboard modes' lanes. */
+const KEYBOARD_BLACK_KEY_SEMITONES = new Set([1, 3, 6, 8, 10]);
 
 // `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its
 // own audio playback. With Phase 4b-i / 4b-ii routing every cue through {@link WebAudioSession}, the canonical

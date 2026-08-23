@@ -37,14 +37,15 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2.                                                                                                                                                                                   |
 | `#xxx06`                     | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                                                                                 |
 | `#xxx09`                     | Reflects in time resolution as STOP.                                                                                                                                                                                   |
-| `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY, and normal note for 9KEY.                                                                                      |
-| `#xxx31-39`, `#xxx41-49`     | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound. |
-| `#xxx51-59`, `#xxx61-69`     | Treated as BMS legacy long note.                                                                                                                                                                                       |
+| `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY / 24KEY, and normal note for 9KEY / 24KEY.                                                                      |
+| `#xxx1A-1O`, `#xxx2A-2O`     | Treated as visible performance notes — lanes 10..24 of the 24-key (Keyboardmania) bank. A single one of these channels classifies the chart as `24 KEY SP` / `48 KEY DP`.                                              |
+| `#xxx31-39`, `#xxx41-49` (and the extended `#xxx3A-3O` / `#xxx4A-4O`) | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound. |
+| `#xxx51-59`, `#xxx61-69` (and the extended `#xxx5A-5O` / `#xxx6A-6O`) | Treated as BMS legacy long note.                                                                                                                    |
 | `#xxx97`, `#xxx98`           | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                      |
 | `#xxxA0`                     | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                                                                                 |
 | `#xxxSC`                     | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                                                                                     |
 | `#xxxSP`                     | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                                                                          |
-| `#xxxD1-D9`, `#xxxE1-E9`     | Treated as a landmine.                                                                                                                                                                                                 |
+| `#xxxD1-D9`, `#xxxE1-E9` (and the extended `#xxxDA-DO` / `#xxxEA-EO`) | Treated as a landmine.                                                                                                                              |
 
 ### Supported commands
 
@@ -72,7 +73,6 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 | channel                                                                                                                      | Current player implementation                                                                                                                                                                                                             |
 | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `#xxxA6`                                                                                                                     | It is not supported as a runtime reflection channel for `#CHANGEOPTIONxx`. Even if it is kept as an event, the player runtime does not refer to it.                                                                                       |
-| Performance-related expansion channels such as `#xxx1A-1Z` and `#xxx2A-2Z` that are not included in the above supported list | are not treated as playable note channels in the current runtime. Although there is display mode estimation and input assignment for `24 KEY SP` / `48 KEY DP`, these channels themselves do not become the target notes for score/judge. |
 | Other object channels that are not included in the above list of correspondence                                              | Even if the parser holds them, the player runtime does not interpret them.                                                                                                                                                                |
 
 ### Unsupported commands
@@ -152,6 +152,8 @@ They are included in the UI drawing target only when `showInvisibleNotes` is ena
 
 FREE ZONE (`17` / `27`) is treated as a note with a 1 beat ending.
 It is excluded from the normal score/gauge target and treated as a keysound fallback and a drawing aid target.
+This only applies to the IIDX families — under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are
+ordinary key columns, so they keep whatever length the chart authored (a plain tap stays a tap).
 
 ## Lane mode and input
 
@@ -168,6 +170,14 @@ The main modes that can be automatically determined with real equipment are as f
 
 Channels that do not exist in a known fixed layout will fallback to unused keys in order.
 FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -> 16`, `27 -> 26`).
+
+`24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Their 24 lanes per side live on channels
+`11..19` + `1A..1O` (and `21..29` + `2A..2O` for the 2P side), they have no scratch column, and lanes are laid out
+left to right in ascending channel order. Detection is content-based: one extended lane channel selects the mode
+ahead of every other rule, including the `.pms` extension and the `#PLAYER 3` + `17` POPN-9 signature. The 24 SP
+lanes take the fallback key layout in order (`a s d f g h j k l ; q w e r u i o p z x c v b n`); a 48-lane DP chart
+runs past the printable-key pool and the tail lands on function keys, which is a deliberate trade — 48 lanes are an
+AUTO PLAY / rendering target, not a hand-playable one.
 
 The default keyboard layout for the IIDX series is 1P as `Z S X D C F V` and 2P as `B H N J M K,`.
 For scratch, 1P is left `Shift`, 2P is right `Shift`.

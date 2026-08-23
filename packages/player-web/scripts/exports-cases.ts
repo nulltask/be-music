@@ -455,6 +455,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');
     },
   });
+  define('player-web.chartPlayVariantForBeatorajaVariant', {
+    run: () => {
+      playerWebCoreApi.chartPlayVariantForBeatorajaVariant('7');
+      playerWebCoreApi.chartPlayVariantForBeatorajaVariant('24d');
+    },
+  });
   define('player-web.pickBeatorajaPlayableSkinVariant', {
     run: () => {
       playerWebCoreApi.pickBeatorajaPlayableSkinVariant(BENCH_BEATORAJA_PLAY_SKINS, '7');
