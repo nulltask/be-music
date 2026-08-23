@@ -35,9 +35,12 @@ function songWithChannels(channels: string[]): Lr2PlaySkinSong {
     chartPath: 'Song/main.bms',
     chart: {
       bms: {},
-      events: channels.map(
-        (channel, index): BeMusicEvent => ({ measure: index, channel, position: [0, 1], value: '01' }),
-      ),
+      events: channels.map((channel, index): BeMusicEvent => ({
+        measure: index,
+        channel,
+        position: [0, 1],
+        value: '01',
+      })),
     },
   };
 }

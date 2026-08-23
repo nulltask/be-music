@@ -98,7 +98,6 @@
   discovery wins ties against community themes that shadow it.
 
   ### `@be-music/player-web` (new beatoraja runtime + scenes)
-
   - Public entry point gains `loadBeatorajaThemeFromFiles()`, `loadBeatorajaTexturesFromBundle()`,
     `destinationToSpriteProps()`, `BeatorajaPlaySkinView`, the `BeatorajaRuntimeAdapter`, Pixi
     scenes for **decide / gameplay / result / select** (with notes / markers / BGA layers), drop
@@ -133,7 +132,6 @@
     (`21` / `26..29`). Real IIDX DP always pairs each side's keyboard with `21` and / or scratch.
 
   ### `@be-music/player` — direct lane-mode override
-
   - New optional `PlayerOptions.playVariant` (`'5' | '7' | '9' | '10' | '14' | '24'`) lets the host
     pin the engine's lane mode directly. Mirrors the renderer-side variant the host has already
     classified the chart as, so BME-format POPN-9 charts mount with the correct `f / v / g / b`
@@ -210,7 +208,6 @@
   ## What changed
 
   ### `@be-music/player`
-
   - New `PlayerOptions.preparedChart` option lets the host hand the engine
     a pre-built `PreparedPlaybackChartData`. When provided,
     `autoPlay` / `manualPlay` use it verbatim and skip their own internal
@@ -231,7 +228,6 @@
     latch.
 
   ### `@be-music/player-web`
-
   - `PixiGameplayView.prepareSong` now calls `preparePlaybackChartData`
     itself, keeps the result on `this.preparedChart`, and forwards it to
     the engine through `engineOptions.preparedChart`. The renderer's

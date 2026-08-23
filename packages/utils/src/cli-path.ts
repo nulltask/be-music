@@ -62,10 +62,8 @@ function isWindowsDrivePath(path: string): boolean {
   const driveLetter = path.charCodeAt(0);
   if (
     !(
-      (
-        (driveLetter >= 0x41 && driveLetter <= 0x5a) || // A..Z
-        (driveLetter >= 0x61 && driveLetter <= 0x7a)
-      ) // a..z
+      (driveLetter >= 0x41 && driveLetter <= 0x5a) || // A..Z
+      (driveLetter >= 0x61 && driveLetter <= 0x7a) // a..z
     )
   ) {
     return false;
