@@ -77,8 +77,10 @@ export class BeatorajaSkinAudioPlayer {
   /** Active looped sources, keyed by the resolved bundle path. `audioStop(path)` consults this. */
   private readonly loopingSources = new Map<string, Set<SkinAudioSourceHandle>>();
   private disposed = false;
+  private readonly options: BeatorajaSkinAudioPlayerOptions;
 
-  public constructor(private readonly options: BeatorajaSkinAudioPlayerOptions) {
+  public constructor(options: BeatorajaSkinAudioPlayerOptions) {
+    this.options = options;
     this.ownsContext = options.audioContext === undefined;
     this.context = options.audioContext;
   }

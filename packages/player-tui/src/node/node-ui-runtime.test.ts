@@ -217,11 +217,9 @@ describe('node ui runtime', () => {
     expect(messagesOfKind(worker, 'dispose')).toHaveLength(1);
   });
 
-  test('passes tsx tsconfig path to the UI worker in source runs', async () => {
+  test('passes the source-conditions exec flag to the UI worker in source runs', async () => {
     const uiSignals = createPlayerUiSignalBus(createFrame());
     const runtime = await createNodeUiRuntime(createContext(uiSignals));
-    const workerEnv = workerState.lastWorkerOptions?.env;
-    const workerEnvObject = typeof workerEnv === 'object' ? (workerEnv as NodeJS.ProcessEnv) : undefined;
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
       | {
@@ -235,8 +233,6 @@ describe('node ui runtime', () => {
         }
       | undefined;
 
-    expect(typeof workerEnv).toBe('object');
-    expect(workerEnvObject?.TSX_TSCONFIG_PATH).toContain('tsconfig.typecheck.json');
     expect(workerExecArgv).toContain('--conditions=source');
     expect(workerData).toMatchObject({
       stdinIsTTY: Boolean(process.stdin.isTTY),

@@ -8,6 +8,39 @@ importers:
 
   .:
     devDependencies:
+      '@be-music/audio-renderer':
+        specifier: workspace:*
+        version: link:packages/audio-renderer
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:packages/chart
+      '@be-music/editor':
+        specifier: workspace:*
+        version: link:packages/editor
+      '@be-music/json':
+        specifier: workspace:*
+        version: link:packages/json
+      '@be-music/lr2-skin':
+        specifier: workspace:*
+        version: link:packages/lr2-skin
+      '@be-music/parser':
+        specifier: workspace:*
+        version: link:packages/parser
+      '@be-music/player':
+        specifier: workspace:*
+        version: link:packages/player
+      '@be-music/player-tui':
+        specifier: workspace:*
+        version: link:packages/player-tui
+      '@be-music/player-web':
+        specifier: workspace:*
+        version: link:packages/player-web
+      '@be-music/stringifier':
+        specifier: workspace:*
+        version: link:packages/stringifier
+      '@be-music/utils':
+        specifier: workspace:*
+        version: link:packages/utils
       '@changesets/cli':
         specifier: ^3.0.1
         version: 3.0.1
@@ -32,9 +65,6 @@ importers:
       tsdown:
         specifier: ^0.22.14
         version: 0.22.14(tsx@4.23.13)(typescript@7.0.2)(unrun@0.2.37)
-      tsx:
-        specifier: ^4.23.13
-        version: 4.23.13
       typescript:
         specifier: ^7.0.2
         version: 7.0.2
@@ -4829,6 +4859,7 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.2
       '@esbuild/win32-ia32': 0.28.2
       '@esbuild/win32-x64': 0.28.2
+    optional: true
 
   estree-walker@2.0.2: {}
 
@@ -5837,6 +5868,7 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   tty-browserify@0.0.1: {}
 

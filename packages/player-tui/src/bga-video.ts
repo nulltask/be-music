@@ -1,6 +1,5 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import { createAbortError, isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { loadOptionalNodeModule } from '@be-music/utils/optional-node-module';
@@ -244,7 +243,6 @@ export async function decodeVideoFramesToSourceFramesInWorker(
     : new Worker(resolveBgaVideoWorkerUrl(), {
         workerData: workerInitData,
         execArgv: resolveBgaVideoWorkerExecArgv(),
-        env: resolveBgaVideoWorkerEnv(),
       });
 
   return await new Promise((resolve, reject) => {
@@ -668,14 +666,3 @@ function resolveBgaVideoWorkerExecArgv(): string[] {
   return [...process.execArgv, '--conditions=source'];
 }
 
-function resolveBgaVideoWorkerEnv(): NodeJS.ProcessEnv {
-  if (!import.meta.url.endsWith('.ts')) {
-    return process.env;
-  }
-
-  return {
-    ...process.env,
-    TSX_TSCONFIG_PATH:
-      process.env.TSX_TSCONFIG_PATH ?? fileURLToPath(new URL('../../../tsconfig.typecheck.json', import.meta.url)),
-  };
-}

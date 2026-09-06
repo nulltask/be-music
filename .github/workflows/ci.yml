@@ -469,8 +469,8 @@ jobs:
 
       - name: Verify player SEA bundle
         if: needs.changes.outputs.sea_player_changed == 'true'
-        run: pnpm exec tsx scripts/build-sea.ts --package player --bundle-only
+        run: node scripts/build-sea.ts --package player --bundle-only
 
       - name: Verify audio-renderer SEA bundle
         if: needs.changes.outputs.sea_audio_renderer_changed == 'true'
-        run: pnpm exec tsx scripts/build-sea.ts --package audio-renderer --bundle-only
+        run: node scripts/build-sea.ts --package audio-renderer --bundle-only
