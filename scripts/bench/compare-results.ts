@@ -9,7 +9,7 @@ import {
   resolveCliValue,
   runCliMain,
 } from './cli-utils.ts';
-import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
+import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
 import { resolveComparisonHz } from './task-stats.ts';
 
 interface CliDefaults {
@@ -46,11 +46,23 @@ export interface ComparisonSummary {
   meanDeltaPercent: number;
   thresholdPercent: number;
   overallVerdict: BenchmarkOverallVerdict;
+  /** Cases whose base or head p50 latency was at/below MIN_RELIABLE_LATENCY_MS — excluded, not just unchanged. */
+  unreliableCaseCount: number;
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '../..');
 const COMMENT_MARKER = '<!-- be-music-exports-benchmark -->';
+
+/**
+ * Below this per-call latency (median, in ms), a case's timing is dominated by measurement noise rather than the
+ * benchmarked function's own cost — a single call is cheap enough that the system timer can't resolve it reliably.
+ * Percent deltas computed from two noise floors can legitimately swing by 10-30x between independent runs of
+ * *identical* code (see issue #202: verified the same ~15-250ns closure-allocation case reproduces this under both
+ * tsx and node, with no change to the benchmarked code). Such cases are excluded from the regression/improvement
+ * lists rather than folded into "unchanged", since a percent computed from noise isn't a real "no change" either.
+ */
+const MIN_RELIABLE_LATENCY_MS = 0.001;
 
 const DEFAULTS: CliDefaults = {
   outputPath: resolve(repositoryDir, 'tmp/bench/exports-pr-comment.md'),
@@ -83,6 +95,7 @@ async function main(): Promise<void> {
           meanDeltaPercent: 0,
           thresholdPercent: options.thresholdPercent,
           overallVerdict: 'unchanged',
+          unreliableCaseCount: 0,
         };
 
   if (options.summaryPath) {
@@ -111,7 +124,7 @@ export function buildDiffMarkdown(
   topCount: number,
 ): string {
   const rows = compareSnapshots(baseSnapshot, headSnapshot);
-  const summary = summarizeRows(rows, thresholdPercent);
+  const summary = { ...summarizeRows(rows, thresholdPercent), unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot) };
 
   const regressions = rows
     .filter((row) => row.deltaPercent <= -thresholdPercent)
@@ -145,6 +158,7 @@ export function buildDiffMarkdown(
   lines.push(`| Cases improved (>= threshold) | ${summary.improvedCount} |`);
   lines.push(`| Cases regressed (<= -threshold) | ${summary.regressedCount} |`);
   lines.push(`| Cases unchanged | ${summary.unchangedCount} |`);
+  lines.push(`| Cases excluded (sub-timer-resolution) | ${summary.unreliableCaseCount} |`);
   lines.push(`| Head benchmarked cases | ${headSnapshot.totals.benchmarked} |`);
   lines.push(`| Head skipped cases | ${headSnapshot.totals.skipped} |`);
 
@@ -173,6 +187,22 @@ export function buildDiffMarkdown(
       lines.push(
         `| \`${row.key}\` | ${formatOps(row.baseHz)} | ${formatOps(row.headHz)} | ${formatPercent(row.deltaPercent)} |`,
       );
+    }
+  }
+
+  const unreliableKeys = resolveUnreliableCaseKeys(baseSnapshot, headSnapshot).slice(0, topCount);
+  if (unreliableKeys.length > 0) {
+    lines.push('');
+    lines.push('### Excluded (sub-timer-resolution)');
+    lines.push(
+      `Per-call latency at or below ${MIN_RELIABLE_LATENCY_MS}ms on at least one side — the reported time is measurement noise, not the case's real cost, so no percent change is shown.`,
+    );
+    lines.push('| API | Base median ops/s | Head median ops/s |');
+    lines.push('| --- | ---: | ---: |');
+    for (const key of unreliableKeys) {
+      const baseResult = baseSnapshot.results[key];
+      const headResult = headSnapshot.results[key];
+      lines.push(`| \`${key}\` | ${formatOps(baseResult?.medianHz ?? 0)} | ${formatOps(headResult?.medianHz ?? 0)} |`);
     }
   }
 
@@ -224,6 +254,20 @@ function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount:
   return lines.join('\n');
 }
 
+/**
+ * True when either side's per-call latency is at/below MIN_RELIABLE_LATENCY_MS — the case's timing is noise, not
+ * signal, so it must not be reported as a regression, an improvement, or "unchanged" (all three imply the percent
+ * means something).
+ */
+function isUnreliableCase(
+  baseResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
+  headResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
+): boolean {
+  return (
+    !(baseResult.p50Ms > MIN_RELIABLE_LATENCY_MS) || !(headResult.p50Ms > MIN_RELIABLE_LATENCY_MS)
+  );
+}
+
 export function compareSnapshots(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
@@ -232,6 +276,9 @@ export function compareSnapshots(
   for (const [key, headResult] of Object.entries(headSnapshot.results)) {
     const baseResult = baseSnapshot.results[key];
     if (!baseResult) {
+      continue;
+    }
+    if (isUnreliableCase(baseResult, headResult)) {
       continue;
     }
     const baseHz = resolveComparisonHz(baseResult);
@@ -249,6 +296,24 @@ export function compareSnapshots(
   }
   rows.sort((left, right) => left.key.localeCompare(right.key));
   return rows;
+}
+
+/** Count of comparable keys (present on both sides) excluded from `compareSnapshots` as sub-timer-resolution noise. */
+export function countUnreliableCases(
+  baseSnapshot: ExportsBenchmarkSnapshot,
+  headSnapshot: ExportsBenchmarkSnapshot,
+): number {
+  let count = 0;
+  for (const [key, headResult] of Object.entries(headSnapshot.results)) {
+    const baseResult = baseSnapshot.results[key];
+    if (!baseResult) {
+      continue;
+    }
+    if (isUnreliableCase(baseResult, headResult)) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 export function resolveOverallVerdict(medianDeltaPercent: number, thresholdPercent: number): BenchmarkOverallVerdict {
@@ -278,6 +343,7 @@ export function summarizeRows(rows: ComparedRow[], thresholdPercent: number): Co
     meanDeltaPercent,
     thresholdPercent,
     overallVerdict: resolveOverallVerdict(medianDeltaPercent, thresholdPercent),
+    unreliableCaseCount: 0,
   };
 }
 
@@ -287,7 +353,25 @@ export function summarizeComparison(
   thresholdPercent: number,
 ): ComparisonSummary {
   const rows = compareSnapshots(baseSnapshot, headSnapshot);
-  return summarizeRows(rows, thresholdPercent);
+  return {
+    ...summarizeRows(rows, thresholdPercent),
+    unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot),
+  };
+}
+
+function resolveUnreliableCaseKeys(
+  baseSnapshot: ExportsBenchmarkSnapshot,
+  headSnapshot: ExportsBenchmarkSnapshot,
+): string[] {
+  const keys: string[] = [];
+  for (const [key, headResult] of Object.entries(headSnapshot.results)) {
+    const baseResult = baseSnapshot.results[key];
+    if (baseResult && isUnreliableCase(baseResult, headResult)) {
+      keys.push(key);
+    }
+  }
+  keys.sort((left, right) => left.localeCompare(right));
+  return keys;
 }
 
 function resolveNewlySkippedKeys(

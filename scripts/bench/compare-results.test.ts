@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDiffMarkdown,
   compareSnapshots,
+  countUnreliableCases,
   resolveOverallVerdict,
   summarizeComparison,
   summarizeRows,
@@ -125,6 +126,42 @@ describe('compareSnapshots', () => {
     expect(rows[0]?.baseHz).toBe(100);
     expect(rows[0]?.headHz).toBe(110);
     expect(rows[0]?.deltaPercent).toBeCloseTo(10);
+  });
+
+  it('excludes a case whose head p50 latency is at/below the reliability floor, however large its hz delta', () => {
+    // A case this cheap (p50 <= 0.001ms) is timer-resolution noise, not a real 10,000% speedup — issue #202.
+    const rows = compareSnapshots(
+      createSnapshot({ 'chart.createBeatResolver': 1_000_000 }),
+      createSnapshot({ 'chart.createBeatResolver': 100_000_000 }),
+    );
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it('excludes a case whose base p50 latency is at/below the reliability floor', () => {
+    const rows = compareSnapshots(
+      createSnapshot({ 'chart.createBeatResolver': 100_000_000 }),
+      createSnapshot({ 'chart.createBeatResolver': 1_000_000 }),
+    );
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it('keeps a case whose p50 latency sits just above the reliability floor', () => {
+    const rows = compareSnapshots(createSnapshot({ 'utils.stable': 1000 }), createSnapshot({ 'utils.stable': 1000 }));
+
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe('countUnreliableCases', () => {
+  it('counts only comparable keys excluded for sub-timer-resolution latency', () => {
+    const count = countUnreliableCases(
+      createSnapshot({ 'chart.createBeatResolver': 1_000_000, 'utils.stable': 1000, 'utils.baseOnly': 500 }),
+      createSnapshot({ 'chart.createBeatResolver': 100_000_000, 'utils.stable': 1000, 'utils.headOnly': 500 }),
+    );
+
+    expect(count).toBe(1);
   });
 });
 
