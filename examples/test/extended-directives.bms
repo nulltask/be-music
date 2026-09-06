@@ -1,0 +1,108 @@
+*---------------------- METADATA FIELD
+
+#TITLE Extended Directive Payloads
+#SUBTITLE Structurally valid #EXWAV / #EXBMP / #ARGB / #BGA / #SWBGA / #WAVCMD / #EXRANK payloads
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 1
+#TOTAL 200
+#DIFFICULTY 1
+
+*---------------------- EXTENDED HEADER FIELD
+* `four-measure-command-combo-test.bms` proves the parser ROUTES every extended
+* header into the right `bms` field, but its payloads are placeholders
+* (`#EXWAV01 ex_sample.wav`, `#BGA01 01`, `#SWBGA01 02`, `#WAVCMD legacy`) that
+* every `@be-music/chart` value parser rejects. This chart carries the same
+* directive family with payloads that actually parse, so the value parsers are
+* exercised against a real file instead of inline strings only.
+*
+* Payload layouts (hitkey BMS Memo):
+*   #EXWAVxx <flags> <params> <filename>  flags drawn from `pvf`, params positional
+*   #EXBMPxx a,r,g,b,filename             ARGB tuple plus the image filename
+*   #ARGBxx AARRGGBB | a,r,g,b            both accepted spellings
+*   #BGAxx YY x1 y1 x2 y2 dx dy           sub-region crop of #BMPYY
+*   #SWBGAxx fr:tot:lp[:ARGB] N1 N2 ...   switching (animated) BGA, fr in 1/100 s
+*   #WAVCMD pp xx vv                      pp = 00 pitch / 01 volume / 02 loop
+*   #EXRANKxx <percent>                   judge-window scale, cued on channel A0
+*   #CHANGEOPTIONxx <option>              runtime option switch, cued on channel A6
+
+#PLAYER 1
+#LNTYPE 1
+#VOLWAV 90
+#DEFEXRANK 100
+#STP 001.500
+#STP 002.250
+
+* Per-slot playback trims. `01` uses the full `pvf` layout, `02` reorders the
+* flags to prove they are matched positionally, `03` authors an explicit 0 cB
+* (unity) so "authored 0" stays distinguishable from "not authored".
+#EXWAV01 pvf 1024,-200,48000 sample.wav
+#EXWAV02 vp -600,-500 branch.wav
+#EXWAV03 v 0 right.wav
+
+* Opaque backdrop keyed to transparent black, plus a half-alpha layer tint.
+#EXBMP01 255,0,0,0,bga-base.bmp
+#EXBMP02 128,255,255,255,bga-layer.bmp
+
+* Both #ARGBxx spellings: AARRGGBB hex and comma-separated decimal.
+#ARGB01 FF000000
+#ARGB02 128,255,0,0
+
+* Sub-region aliases: `05` is the whole of #BMP01, `06` is a 128x128 crop of
+* #BMP02 drawn at (16, 8) inside the 256x256 BMS canvas.
+#BGA05 01 0 0 256 256 0 0
+#BGA06 02 64 32 192 160 16 8
+
+* Animated BGA cues: `01` loops five frames at 100 ms, `02` plays three frames
+* at 50 ms once and holds the last one (lp = 0).
+#SWBGA01 10:5:1:FF000000 01 02 03 04 05
+#SWBGA02 5:3:0 01 02 03
+
+* One line per parameter byte so all three #WAVCMD params are covered.
+#WAVCMD 01 01 64
+#WAVCMD 00 02 12
+#WAVCMD 02 03 1024
+
+* Dynamic judge windows referenced from channel A0: tighter (48 %) then looser
+* (150 %) than the #DEFEXRANK baseline.
+#EXRANK01 48
+#EXRANK02 150
+
+#CHANGEOPTION01 MIRROR
+#CHANGEOPTION02 RANDOM
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+#WAV03 right.wav
+#BMP01 bga-base.bmp
+#BMP02 bga-layer.bmp
+#BMP03 bga-poor.bmp
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - plain quarter taps so the chart stays playable while the header
+* directives above are what is actually under test.
+#00011:01010101
+
+* Measure 1 - #EXRANKxx cued on channel A0 (dynamic judge window) and
+* #CHANGEOPTIONxx cued on channel A6 (runtime option switch). Neither channel
+* triggers a keysound.
+#001A0:0102
+#001A6:0102
+#00111:01010101
+
+* Measure 2 - BGA base (04), layer (07), layer2 (0A) and POOR (06) cues. Base
+* and layer reference the #BGAxx sub-region slots, layer2 references the
+* #SWBGAxx animation slot.
+#00204:05
+#00207:06
+#0020A:01
+#00206:03
+#00211:01010101
+
+*---------------------- CONTROL FLOW FIELD

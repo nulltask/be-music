@@ -1,5 +1,5 @@
 import { mkdtemp, mkdir, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -55,6 +55,16 @@ describe('chart selection', () => {
       title: 'Sample',
       artist: 'Codex',
     });
+  });
+
+  test('listChartFiles: picks up every chart extension the examples/test corpus uses', async () => {
+    // The allow-list has four BMS-family extensions plus `.bmson`. Pointing it at the shared fixture directory keeps
+    // it honest against real files instead of synthetic names — `.bml` in particular had no fixture to open.
+    const files = await listChartFiles(resolve(rootDir, 'examples/test'));
+    const extensions = new Set(files.map((file) => extname(file).toLowerCase()));
+
+    expect(extensions).toEqual(new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']));
+    expect(files.some((file) => file.endsWith('7key-longnote.bml'))).toBe(true);
   });
 
   test('buildChartSelectionEntries: includes music metadata extras used by music-select', async () => {

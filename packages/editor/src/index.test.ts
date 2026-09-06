@@ -207,4 +207,50 @@ describe('editor', () => {
     expect(json.sourceFormat).toBe('bms');
     expect(json.events.length).toBeGreaterThan(0);
   });
+
+  test('editor: the examples/test sample quartet is a live import → edit → export round trip', async () => {
+    // `examples/test` ships four files that only mean anything as a set:
+    //
+    //   sample.bms             the source chart
+    //   sample.json            what `importChart` produces from it
+    //   sample.roundtrip.bmson the same chart exported to bmson
+    //   sample.edit.json       the same chart after one retitle and one added note
+    //   sample.edited.bms      what `exportChart` writes back out from that edit
+    //
+    // Checking them against the live pipeline is what keeps them from silently going stale: before this test they
+    // still carried a pre-`bms`/`bmson`-extension shape that no current code path can produce.
+    const imported = await importChart(resolve(rootDir, 'examples/test/sample.bms'));
+    const expectedImport = await loadJsonFile(resolve(rootDir, 'examples/test/sample.json'));
+    expect(imported).toEqual(expectedImport);
+
+    let edited = setMetadata(imported, 'title', 'Edited Sample');
+    edited = addNote(edited, {
+      measure: 3,
+      channel: '11',
+      positionNumerator: 1,
+      positionDenominator: 2,
+      value: '01',
+    });
+    const expectedEdit = await loadJsonFile(resolve(rootDir, 'examples/test/sample.edit.json'));
+    expect(edited).toEqual(expectedEdit);
+
+    const tempDir = await mkdtemp(resolve(tmpdir(), 'bms-editor-fixture-'));
+    try {
+      const bmsPath = resolve(tempDir, 'sample.edited.bms');
+      const bmsonPath = resolve(tempDir, 'sample.roundtrip.bmson');
+      await exportChart(bmsPath, edited);
+      await exportChart(bmsonPath, imported);
+
+      const [writtenBms, expectedBms, writtenBmson, expectedBmson] = await Promise.all([
+        readFile(bmsPath, 'utf8'),
+        readFile(resolve(rootDir, 'examples/test/sample.edited.bms'), 'utf8'),
+        readFile(bmsonPath, 'utf8'),
+        readFile(resolve(rootDir, 'examples/test/sample.roundtrip.bmson'), 'utf8'),
+      ]);
+      expect(writtenBms).toBe(expectedBms);
+      expect(writtenBmson).toBe(expectedBmson);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
 });

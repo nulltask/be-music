@@ -1,6 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
+import { parseChartFile } from '../../parser/src/index.ts';
 import { describe, expect, test } from 'vitest';
 import {
   type RenderResult,
@@ -854,5 +855,70 @@ describe('audio-renderer', () => {
     const startFrame = Math.round(0.08 * 44_100);
     const endFrame = Math.round(0.2 * 44_100);
     expect(maxDeltaBetweenResults(overlapResult, singleResult, startFrame, endFrame)).toBeGreaterThan(1e-3);
+  });
+});
+
+describe('audio-renderer: examples/test chart fixtures', () => {
+  const SAMPLE_RATE = 44_100;
+
+  async function renderFixture(name: string, dropFirstEvent = false) {
+    const json = await parseChartFile(resolve(fixtureDir, name));
+    if (dropFirstEvent) {
+      json.events = json.events.slice(1);
+    }
+    return renderJson(json, {
+      baseDir: fixtureDir,
+      sampleRate: SAMPLE_RATE,
+      normalize: false,
+      tailSeconds: 0,
+      fallbackToneSeconds: 0,
+    });
+  }
+
+  function peakBetween(result: RenderResult, startSeconds: number, endSeconds: number): number {
+    const start = Math.max(0, Math.round(startSeconds * SAMPLE_RATE));
+    const end = Math.min(result.left.length, Math.round(endSeconds * SAMPLE_RATE));
+    let peak = 0;
+    for (let index = start; index < end; index += 1) {
+      peak = Math.max(peak, Math.abs(result.left[index]), Math.abs(result.right[index]));
+    }
+    return peak;
+  }
+
+  test('retrigger-same-key-cut.bms cuts the previous voice on the same lane', async () => {
+    // `#00011:0101` is the same #WAV01 twice on lane 1, at beat 0 and beat 2 (0 s and 1 s at 120 BPM), and
+    // retrigger_a.wav runs 2.2 s. Under BMS monophonic playback the second trigger has to cut the first, so
+    // everything from 1 s onwards must be indistinguishable from a render of the second note alone.
+    const [full, secondOnly] = await Promise.all([
+      renderFixture('retrigger-same-key-cut.bms'),
+      renderFixture('retrigger-same-key-cut.bms', true),
+    ]);
+
+    expect(peakBetween(full, 0, 1)).toBeGreaterThan(0);
+    expect(
+      maxDeltaBetweenResults(full, secondOnly, Math.round(1 * SAMPLE_RATE), Math.round(2.2 * SAMPLE_RATE)),
+    ).toBeLessThan(1e-6);
+  });
+
+  test('retrigger-different-key-overlap.bms keeps both voices even with the same file', async () => {
+    // Lane 1 fires #WAV01 at 0 s and lane 2 fires #WAV02 at 0.5 s. Both slots point at retrigger_a.wav, but a
+    // different lane must not cut, so the overlap window has to differ from the later-notes-only render.
+    const [full, withoutFirst] = await Promise.all([
+      renderFixture('retrigger-different-key-overlap.bms'),
+      renderFixture('retrigger-different-key-overlap.bms', true),
+    ]);
+
+    expect(
+      maxDeltaBetweenResults(full, withoutFirst, Math.round(0.5 * SAMPLE_RATE), Math.round(2.2 * SAMPLE_RATE)),
+    ).toBeGreaterThan(1e-3);
+  });
+
+  test('ogg-test.bms decodes its #WAV through the Vorbis path', async () => {
+    // `#WAV01 ogg-test.ogg` — the only fixture that names a non-wav codec from the chart itself rather than from a
+    // hand-built IR, so it is what proves the loader reaches the Vorbis decoder off a real chart file.
+    const result = await renderFixture('ogg-test.bms');
+
+    expect(result.durationSeconds).toBeGreaterThan(0);
+    expect(peakBetween(result, 0, result.durationSeconds)).toBeGreaterThan(0);
   });
 });
