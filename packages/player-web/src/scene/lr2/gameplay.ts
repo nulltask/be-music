@@ -1112,8 +1112,10 @@ export class PixiGameplayView {
    * `globalThis.__BE_MUSIC_PERF__ = true`). When disabled the wrapper adds no measurable overhead.
    */
   private readonly perf = new PerfTracker('gameplay');
+  private readonly options: PixiGameplayViewOptions;
 
-  public constructor(private readonly options: PixiGameplayViewOptions = {}) {
+  public constructor(options: PixiGameplayViewOptions = {}) {
+    this.options = options;
     if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
       // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey

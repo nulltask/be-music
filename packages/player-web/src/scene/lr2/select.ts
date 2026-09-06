@@ -886,8 +886,10 @@ export class PixiSongSelectView {
    * multiple times before the first decode resolves.
    */
   private readonly oneShotDecoding = new Set<string>();
+  private options: PixiSongSelectViewOptions;
 
-  public constructor(private options: PixiSongSelectViewOptions = {}) {
+  public constructor(options: PixiSongSelectViewOptions = {}) {
+    this.options = options;
     this.selectBgmBytes = options.selectBgm;
     this.setOneShotBytes('decide', options.decideBgm);
     this.setSystemSounds(options.systemSounds);

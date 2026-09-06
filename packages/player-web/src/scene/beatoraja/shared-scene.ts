@@ -241,11 +241,13 @@ export function isBeatorajaSceneInputReady(startMs: number, inputDelayMs: number
 export class BeatorajaSceneBgmPlayer {
   private audioContext: AudioContext | undefined;
   private bgmSource: AudioBufferSourceNode | undefined;
+  private readonly logLabel: string;
+  private readonly isDisposed: () => boolean;
 
-  constructor(
-    private readonly logLabel: string,
-    private readonly isDisposed: () => boolean,
-  ) {}
+  constructor(logLabel: string, isDisposed: () => boolean) {
+    this.logLabel = logLabel;
+    this.isDisposed = isDisposed;
+  }
 
   async start(bytes: Uint8Array | undefined): Promise<void> {
     if (bytes === undefined) return;

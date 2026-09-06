@@ -132,7 +132,7 @@ const SEA_TARGETS: Record<SeaTargetName, SeaTargetConfig> = {
 function printUsage() {
   process.stdout.write(
     [
-      'Usage: tsx scripts/build-sea.ts --package <player|audio-renderer> [options]',
+      'Usage: node scripts/build-sea.ts --package <player|audio-renderer> [options]',
       '',
       'Essential options:',
       '  -p, --package <name>      Target package to build SEA for',

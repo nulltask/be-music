@@ -18,9 +18,10 @@
 // The reference beatoraja themes only use `base` / `table` / `string` / `math` so the strip is non-disruptive.
 
 import { normalizePath } from '@be-music/utils/core';
-import { lauxlib, lua, lualib, to_luastring } from 'fengari-web';
+import fengariWeb from 'fengari-web';
 import type { lua_State, LuaCFunction } from 'fengari-web';
 
+const { lauxlib, lua, lualib, to_luastring } = fengariWeb;
 const {
   LUA_OK,
   LUA_REGISTRYINDEX,
@@ -262,8 +263,11 @@ class LuaRuntimeOwner {
   private refs = 0;
   private closed = false;
   context: BeatorajaLuaRuntimeContext | undefined;
+  readonly L: lua_State;
 
-  constructor(readonly L: lua_State) {}
+  constructor(L: lua_State) {
+    this.L = L;
+  }
 
   makeFunction(ref: number): BeatorajaLuaFunctionValue {
     this.refs += 1;

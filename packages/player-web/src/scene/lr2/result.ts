@@ -298,8 +298,11 @@ export class PixiResultView {
    * interpolator (`elapsedSinceTimer`) and `isDestinationVisible`'s timer-active gating.
    */
   private readonly timerStartedAt = new Map<number, number>();
+  private options: PixiResultViewOptions;
 
-  public constructor(private options: PixiResultViewOptions = {}) {}
+  public constructor(options: PixiResultViewOptions = {}) {
+    this.options = options;
+  }
 
   private get app(): Application {
     if (!this.host) {

@@ -9,5 +9,6 @@ export default createPackageTsdownConfig({
   entries: {
     index: 'src/index.ts',
     cli: 'src/cli.ts',
+    'core/triggers': 'src/core/triggers.ts',
   },
 });

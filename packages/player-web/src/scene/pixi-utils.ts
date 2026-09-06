@@ -76,8 +76,10 @@ export class ChildPool {
   private idleFramesSprites = 0;
   private idleFramesGraphics = 0;
   private idleFramesTexts = 0;
+  private readonly layer: Container;
 
-  public constructor(private readonly layer: Container) {
+  public constructor(layer: Container) {
+    this.layer = layer;
     this.graphicsHost = new Container();
     this.spriteHost = new Container();
     this.textHost = new Container();

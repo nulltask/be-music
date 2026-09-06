@@ -419,7 +419,9 @@ class PlayerWebDemoApp {
    * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
    */
   private autoRecordArmed = false;
-  public constructor(private readonly elements: PlayerWebDemoElements) {
+  private readonly elements: PlayerWebDemoElements;
+  public constructor(elements: PlayerWebDemoElements) {
+    this.elements = elements;
     this.guiState = {
       autoPlay: false,
       autoPauseOnBlur: false,
