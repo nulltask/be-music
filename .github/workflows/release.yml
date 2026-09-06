@@ -88,7 +88,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/release/resolve-package-releases.ts \
+          node --conditions=source scripts/release/resolve-package-releases.ts \
             --base "${{ steps.release_refs.outputs.release_base }}" \
             --head "${{ steps.release_refs.outputs.release_target }}" \
             --github-output "$GITHUB_OUTPUT" \
@@ -403,7 +403,7 @@ jobs:
           RELEASE_TARGET: ${{ needs.prepare.outputs.release_target }}
         run: |
           set -euo pipefail
-          node scripts/release/create-package-releases.ts \
+          node --conditions=source scripts/release/create-package-releases.ts \
             --repo "$GITHUB_REPOSITORY" \
             --release-target "$RELEASE_TARGET" \
             --releases-json tmp/release-data/releases.json \

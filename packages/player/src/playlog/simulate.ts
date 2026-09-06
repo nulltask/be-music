@@ -143,11 +143,12 @@ class PlaylogSimulation {
   private slow = 0;
   private exScore = 0;
   private lastAdvanceUs = Number.NEGATIVE_INFINITY;
+  private readonly playlog: BeMusicPlaylog;
+  private readonly config: RulesetConfig;
 
-  constructor(
-    private readonly playlog: BeMusicPlaylog,
-    private readonly config: RulesetConfig,
-  ) {
+  constructor(playlog: BeMusicPlaylog, config: RulesetConfig) {
+    this.playlog = playlog;
+    this.config = config;
     this.gauge = new RulesetGauge(config.gauge);
     this.buildLanes();
   }
