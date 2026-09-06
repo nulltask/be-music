@@ -153,8 +153,14 @@ class PlaylogSimulation {
   }
 
   run(): PlaylogRulesetResult {
+    const reversalUs = this.playlog.chart.reversalTimeUs;
     const inputs = [...this.playlog.inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq);
     for (const input of inputs) {
+      if (reversalUs !== undefined && input.timeUs >= reversalUs) {
+        // LR2 negative-BPM reversal (#134): the judge clock died here during the recorded run — later inputs only
+        // replayed keysounds. `advanceTime` is clamped to the same point, so the remaining chart stays unjudged.
+        continue;
+      }
       this.advanceTime(input.timeUs);
       if (input.action === 'down') {
         this.handleDown(input);
@@ -269,6 +275,11 @@ class PlaylogSimulation {
   // ---- time advancement --------------------------------------------------------------------------------------
 
   private advanceTime(untilUs: number): void {
+    const reversalUs = this.playlog.chart.reversalTimeUs;
+    if (reversalUs !== undefined && untilUs > reversalUs) {
+      // Judging froze at the LR2 reversal: misses, mines, holds, and auto judgements past it never happen.
+      untilUs = reversalUs;
+    }
     interface TimedEvent {
       timeUs: number;
       kind: 'miss' | 'mine' | 'hold-deadline' | 'auto';

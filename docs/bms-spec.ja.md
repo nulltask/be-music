@@ -271,7 +271,19 @@ runtime と round-trip の扱い:
 - [ ] `#WAVxx` / `#BMPxx` のインデックス範囲（`01-FF` / `01-ZZ` / `00` を含む運用差）と大文字小文字の扱い
 - [ ] 同一タイムラインでの `#xxx03` と `#xxx08` の競合時優先順位
 - [ ] 同一タイムラインでの `#xxx08` と `#xxx09` の競合時優先順位
-- [ ] `#BPMxx` の不正値（負数/ゼロ/文字列/指数表記など）入力時の互換挙動
+- [x] `#BPMxx` の不正値（負数/ゼロ/文字列/指数表記など）入力時の互換挙動
+
+#### 負の BPM（channel 08 経由の `#BPMxx`）の根拠
+
+LR2 を基準とします（issue #134。LR2body.exe beta3 のデコンパイル OpenLR2、hitkey command memo、LR2 同梱 `history.txt` で検証）。
+
+- LR2 は `#BPMxx` を符号付きのままパースし、ロード時のタイミング事前計算では **|BPM|** で積分します（`LR2_bmsload.cpp:2841-2843`）— 時間軸は決して逆行しません。本実装も同じで、timing resolver は `Math.abs(bpm)` で積分し、最初の負イベント位置を `TimingResolver.reversal` として公開します。
+- その時点で LR2 は片道のミラーを起動します。描画・判定クロックが反転点を中心に鏡映され（譜面は |BPM| 速度で永久に逆スクロール）、イベントポンプが凍結して以後の BGM キー音・BGA・BPM イベントは一切発火せず、ヒットもミスも発生せず、ステージは自力では終わりません（`Scene04_Play.cpp:1267-1269`、`:1375-1382`）。本実装はミラー（レンダラーは鏡映された display クロックでスクロール）と凍結（反転点で判定・リアルタイム音声を停止、BGA は最後の画像を保持）を再現し、反転以降のノートは POOR 掃きせず未判定のまま残します。
+- LR2 からの意図的な逸脱（いずれも退化ケース）: (1) ステージは ESC 待ちでハングせず譜面末尾で自然終了する。(2) 判定は反転点ちょうどで停止する（LR2 の鏡映クロックは厳密には反転直後に判定窓 1 つぶんのヒット余地がある）。(3) `#BPMxx 0` は従来どおりドロップ（直前テンポ継続）— 実機 LR2 はゼロ除算で退化（時刻テーブルに +inf、スクロール停止）。(4) 未定義 `#BPMxx` 参照は従来どおりドロップ — 実機 LR2 はスロットのセンチネル `-1.0` を踏み「`#BPMxx -1`」と同一挙動（1 BPM で逆走）。(5) 負の `#BPM` ヘッダはデフォルト 130 にフォールバック — 実機 LR2 は無ガードでタイミングテーブルが退化。(6) 鏡映表示がチャート先頭まで巻き戻った後は先頭で固定 — 実機 LR2 は負の位置へ後退し続ける。
+- channel 03（inline hex `01`–`FF`）はゼロも負も表現できません。`00` ペアは休符です。
+
+フィクスチャ: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms)、[`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms)、[`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms)
+
 - [x] `#STP` 書式 `xxx[.yyy] zzzz` と省略形 `xxx zzzz` の timing 解釈
 - [x] Browser player: `#BGAxx` の sub-region 切り出し/配置パラメータ解釈
 - [ ] `#@BGAxx` の実行時反映（分岐/条件付き BGA 定義）

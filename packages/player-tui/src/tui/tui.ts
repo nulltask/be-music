@@ -78,6 +78,11 @@ interface TuiNote {
 interface TuiFrame {
   currentBeat: number;
   currentSeconds: number;
+  /** Mirrored display clock past the LR2 negative-BPM reversal (#134) — the lane grid scrolls from it when set. */
+  displayBeat?: number;
+  displaySeconds?: number;
+  /** Chart time of the LR2 reversal, when the chart has one — the BGA and the BPM readout freeze there. */
+  reversalSeconds?: number;
   totalSeconds: number;
   summary: PlayerSummary;
   notes: TuiNote[];
@@ -528,6 +533,10 @@ export class PlayerTui {
       return;
     }
 
+    // LR2 negative-BPM reversal (#134): the lane grid scrolls from the mirrored display beat once the run passes
+    // the reversal, while the status clock / summary keep the true clock. `resolveNoteWindow` already resets its
+    // cursors when the beat moves backwards, so the mirrored beat is safe to feed through the note windows.
+    const scrollBeat = frame.displayBeat ?? frame.currentBeat;
     const terminalRows = this.terminalRows ?? process.stdout.rows;
     const debugLineCount = frame.activeAudioFiles === undefined && frame.activeAudioVoiceCount === undefined ? 0 : 1;
     const showLaneChannels = Boolean(this.options.showLaneChannels);
@@ -551,10 +560,10 @@ export class PlayerTui {
     const laneHighlightRatios = new Map<number, number>();
 
     for (const boundaryBeat of this.options.measureBoundariesBeats ?? []) {
-      if (!isUpcomingBeat(frame.currentBeat, boundaryBeat)) {
+      if (!isUpcomingBeat(scrollBeat, boundaryBeat)) {
         continue;
       }
-      const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, boundaryBeat);
+      const distance = this.scrollDistanceMapper.distanceBetween(scrollBeat, boundaryBeat);
       if (!isDistanceWithinWindow(distance, scrollWindowBeats)) {
         continue;
       }
@@ -576,7 +585,7 @@ export class PlayerTui {
     ): void => {
       const { start: noteStartIndex, end: noteEndIndex } = this.resolveNoteWindow(
         notes,
-        frame.currentBeat,
+        scrollBeat,
         scrollWindowBeats,
         state,
         visibleNotesLimit,
@@ -589,17 +598,21 @@ export class PlayerTui {
         const keepVisible =
           typeof note.visibleUntilBeat === 'number' &&
           Number.isFinite(note.visibleUntilBeat) &&
-          note.visibleUntilBeat > frame.currentBeat;
+          note.visibleUntilBeat > scrollBeat;
         const crossedJudgeLineSinceLastFrame =
           note.judged &&
           Number.isFinite(this.lastRenderedBeat) &&
           note.beat + BEAT_EPSILON >= this.lastRenderedBeat &&
-          note.beat <= frame.currentBeat + BEAT_EPSILON;
+          note.beat <= scrollBeat + BEAT_EPSILON;
+        // "Keep until it crosses the judge line" is a forward-scroll rule: once the LR2 reversal mirrors the
+        // scroll, consumed notes must stay hidden (LR2 removes them from its draw list; the web scenes hide them
+        // too) instead of re-emerging from the judge line and receding.
         const keepJudgedUntilJudgeLine =
           note.judged &&
           !keepVisible &&
+          frame.displayBeat === undefined &&
           Number.isFinite(note.beat) &&
-          (note.beat + BEAT_EPSILON >= frame.currentBeat || crossedJudgeLineSinceLastFrame);
+          (note.beat + BEAT_EPSILON >= scrollBeat || crossedJudgeLineSinceLastFrame);
         if (note.judged && !keepVisible && !keepJudgedUntilJudgeLine) {
           continue;
         }
@@ -609,8 +622,8 @@ export class PlayerTui {
         }
 
         if (note.mine) {
-          const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
-          const visibleDistance = normalizeNoteApproachDistance(distance, frame.currentBeat, note.beat);
+          const distance = this.scrollDistanceMapper.distanceBetween(scrollBeat, note.beat);
+          const visibleDistance = normalizeNoteApproachDistance(distance, scrollBeat, note.beat);
           if (!isDistanceWithinWindow(visibleDistance, scrollWindowBeats)) {
             continue;
           }
@@ -634,16 +647,16 @@ export class PlayerTui {
           headSymbol = note.invisible ? INVISIBLE_LONG_NOTE_HEAD_SYMBOL : LONG_NOTE_HEAD_SYMBOL;
           const longBodySymbol = note.invisible ? INVISIBLE_LONG_NOTE_BODY_SYMBOL : LONG_NOTE_BODY_SYMBOL;
           const longTailSymbol = note.invisible ? INVISIBLE_LONG_NOTE_TAIL_SYMBOL : LONG_NOTE_TAIL_SYMBOL;
-          const bodyStartBeat = Math.max(note.beat, frame.currentBeat);
+          const bodyStartBeat = Math.max(note.beat, scrollBeat);
           const bodyEndBeat = note.endBeat;
-          const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyStartBeat);
-          const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, bodyEndBeat);
+          const bodyStartDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, bodyStartBeat);
+          const bodyEndDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, bodyEndBeat);
           const normalizedBodyStart = normalizeNoteApproachDistance(
             bodyStartDistance,
-            frame.currentBeat,
+            scrollBeat,
             bodyStartBeat,
           );
-          const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, frame.currentBeat, bodyEndBeat);
+          const normalizedBodyEnd = normalizeNoteApproachDistance(bodyEndDistance, scrollBeat, bodyEndBeat);
           const hasBodyStart = Number.isFinite(normalizedBodyStart);
           const hasBodyEnd = Number.isFinite(normalizedBodyEnd);
 
@@ -672,8 +685,8 @@ export class PlayerTui {
             }
           }
 
-          const tailDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.endBeat);
-          const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, frame.currentBeat, note.endBeat);
+          const tailDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, note.endBeat);
+          const tailVisibleDistance = normalizeNoteApproachDistance(tailDistance, scrollBeat, note.endBeat);
           if (isDistanceWithinWindow(tailVisibleDistance, scrollWindowBeats)) {
             const tailRow = distanceToNoteRow(tailVisibleDistance, rowCount, scrollWindowBeats);
             if (tailRow >= 0 && tailRow < rowCount) {
@@ -691,8 +704,8 @@ export class PlayerTui {
           }
         }
 
-        const headDistance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, note.beat);
-        const headVisibleDistance = normalizeNoteApproachDistance(headDistance, frame.currentBeat, note.beat);
+        const headDistance = this.scrollDistanceMapper.distanceBetween(scrollBeat, note.beat);
+        const headVisibleDistance = normalizeNoteApproachDistance(headDistance, scrollBeat, note.beat);
         if (!isDistanceWithinWindow(headVisibleDistance, scrollWindowBeats)) {
           continue;
         }
@@ -740,7 +753,9 @@ export class PlayerTui {
     }
 
     for (const [channel, untilBeat] of this.laneHoldUntilBeat.entries()) {
-      if (untilBeat <= frame.currentBeat) {
+      // Expire against the TRUE beat as well: past the LR2 reversal the mirrored scrollBeat only decreases, and a
+      // hold whose tail lies behind the reversal would otherwise keep the lane lit for the rest of the run.
+      if (untilBeat <= Math.max(scrollBeat, frame.currentBeat)) {
         this.laneHoldUntilBeat.delete(channel);
         const lane = this.laneIndex.get(channel);
         if (lane !== undefined) {
@@ -775,8 +790,11 @@ export class PlayerTui {
     }
 
     const lines: string[] = [];
-    const currentBpm = findCurrentBpm(this.options.bpmTimeline, frame.currentSeconds);
-    const currentScroll = findCurrentScroll(this.options.scrollTimeline, frame.currentBeat);
+    // Tempo events behind the LR2 reversal never fire (the pump is frozen), so the BPM readout holds the value at
+    // the reversal instead of stepping through them on the true clock.
+    const bpmReadoutSeconds = Math.min(frame.currentSeconds, frame.reversalSeconds ?? Number.POSITIVE_INFINITY);
+    const currentBpm = findCurrentBpm(this.options.bpmTimeline, bpmReadoutSeconds);
+    const currentScroll = findCurrentScroll(this.options.scrollTimeline, scrollBeat);
     const remainingStopSeconds = findRemainingStopSeconds(this.options.stopWindows, frame.currentSeconds);
     const stopLabel = remainingStopSeconds > 0 ? `${formatStopSeconds(remainingStopSeconds)}s` : '-';
     const audioBackendLabel = formatAudioBackendLabel(frame.audioBackend);
@@ -995,7 +1013,7 @@ export class PlayerTui {
     }
     this.previousRenderedLines = paddedLines;
     this.needsFullRefresh = false;
-    this.lastRenderedBeat = frame.currentBeat;
+    this.lastRenderedBeat = scrollBeat;
   }
 
   private buildFrameWriteSequence(

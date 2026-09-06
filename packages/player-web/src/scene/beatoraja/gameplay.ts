@@ -39,7 +39,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
-import { BeatorajaNoteLayer, beatorajaPixelsPerBeat } from './notes.ts';
+import { BeatorajaNoteLayer, beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import { flipRectToPixi, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
@@ -1024,13 +1024,21 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // layer.
       const laneHeightPixi = Math.max(0, laneBounds.bottomY - laneBounds.topY);
       this.markerLayer.update({
-        currentBeat: this.currentFrame.currentBeat,
+        // Mirrored display clock past an LR2 negative-BPM reversal — same fallback the note layer applies, so
+        // markers and notes keep scrolling in lock-step. HUD elements (runtime adapter) stay on the true frame.
+        currentBeat: beatorajaDisplayScrollBeat(this.currentFrame),
         judgementY: laneBounds.bottomY,
         laneTopY: laneBounds.topY,
         pixelsPerBeat: beatorajaPixelsPerBeat(laneHeightPixi, this.hiSpeed),
         markers: this.chartMarkers,
       });
-      this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
+      // BGA freezes on whatever was displayed at the reversal (clamp, not mirror) — matches LR2's behavior of
+      // stopping BGA cues at the reversal point.
+      this.bgaLayer?.update(
+        Math.min(this.currentFrame.currentSeconds, this.currentFrame.reversalSeconds ?? Number.POSITIVE_INFINITY),
+        ctx,
+        this.adapter.isPoorBgaActive(),
+      );
     }
   }
 

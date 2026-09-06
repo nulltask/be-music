@@ -2096,22 +2096,32 @@ export class PixiGameplayView {
     // Prefer the proper STOP-aware resolver (built once per song in `prepareSong`). Falls back to a flat-BPM
     // extrapolation when the resolver isn't ready yet (very early frames during mount).
     const resolver = this.timingResolver;
+    // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls
+    // backwards at |BPM| — the display clock mirrors around the reversal point while audio / judging stay on
+    // the true clock (the engine freezes them; see `TimingResolver.reversal`). Every display consumer —
+    // renderNotes, measure lines, beatPhase, NOWBPM — funnels through this method, so mirroring here covers
+    // them all. Note: `beatAtSeconds` keeps a monotonic stop-window cursor that resets on backwards input, so
+    // the shared instance gets reset every frame post-reversal — acceptable (a cheap re-scan per frame), not
+    // worth extra machinery to avoid.
+    const reversalSeconds = resolver?.reversal?.seconds;
+    const displaySeconds =
+      reversalSeconds !== undefined && seconds > reversalSeconds ? 2 * reversalSeconds - seconds : seconds;
     if (this.beatAtSeconds && resolver && resolver.tempoPoints.length > 0) {
-      return this.beatAtSeconds(seconds);
+      return this.beatAtSeconds(displaySeconds);
     }
     if (!resolver || resolver.tempoPoints.length === 0) {
       const bpm = this.song?.bpm ?? 130;
-      return Math.max(0, seconds * (bpm / 60));
+      return Math.max(0, displaySeconds * (bpm / 60));
     }
     let active = resolver.tempoPoints[0]!;
     for (const point of resolver.tempoPoints) {
-      if (point.seconds <= seconds) {
+      if (point.seconds <= displaySeconds) {
         active = point;
       } else {
         break;
       }
     }
-    return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
+    return Math.max(0, active.beat + ((displaySeconds - active.seconds) * active.bpm) / 60);
   }
 
   /** Reset runtime DST-op state to a sensible default for a play session. */
@@ -2981,7 +2991,9 @@ export class PixiGameplayView {
     if (mainBpm === undefined) return;
     const tempoPoints = resolver.tempoPoints;
     if (tempoPoints.length === 0) return;
-    const bpms = tempoPoints.map((point) => point.bpm).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
+    // |BPM| — a negative `#BPMxx` (LR2 reverse-scroll gimmick) integrates at its magnitude, so the HS-fix range
+    // math uses the magnitude too. Zero / non-finite points still drop out via the `> 0` filter.
+    const bpms = tempoPoints.map((point) => Math.abs(point.bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
     if (bpms.length === 0) return;
     const maxBpm = Math.max(...bpms);
     const minBpm = Math.min(...bpms);
@@ -3007,8 +3019,10 @@ export class PixiGameplayView {
           const start = Math.max(0, point.seconds);
           const end = Math.max(start, next ? next.seconds : finalSeconds);
           const duration = end - start;
-          if (duration <= 0 || !Number.isFinite(point.bpm) || point.bpm <= 0) continue;
-          weightedSum += point.bpm * duration;
+          // |BPM| for the same reason as the min / max scan above — only the sign is forgiven, zero still skips.
+          const bpm = Math.abs(point.bpm);
+          if (duration <= 0 || !Number.isFinite(bpm) || bpm === 0) continue;
+          weightedSum += bpm * duration;
           totalDuration += duration;
         }
         const average = totalDuration > 0 ? weightedSum / totalDuration : mainBpm;
@@ -3692,7 +3706,12 @@ export class PixiGameplayView {
     this.root.scale.set(viewport.scale);
     this.applyExitFadeAlpha();
     this.perf.time('renderSkin', () => this.renderSkin(DESIGN_WIDTH, DESIGN_HEIGHT));
-    this.perf.time('renderBga', () => this.renderBga(seconds));
+    // LR2 negative-BPM reversal: BGA cues freeze on whatever was displayed at the reversal — clamp the cue
+    // clock (freeze, not rewind). All other `seconds` readers here (progress ratio, time readouts, judge-until
+    // comparisons) stay on the true clock.
+    const reversalSeconds = this.timingResolver?.reversal?.seconds;
+    const bgaSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
+    this.perf.time('renderBga', () => this.renderBga(bgaSeconds));
     this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderNotes', () => this.renderNotes(seconds, DESIGN_HEIGHT));
     this.perf.time('renderShutter', () => this.renderShutter());
@@ -4308,7 +4327,13 @@ export class PixiGameplayView {
         this.currentSeconds(),
         this.displayedScore,
         this.fps,
-        this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
+        // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) instead of following the
+        // mirrored scroll back through earlier tempo points.
+        this.timingResolver?.bpmAtBeat(
+          this.currentBeat(
+            Math.min(this.currentSeconds(), this.timingResolver?.reversal?.seconds ?? Number.POSITIVE_INFINITY),
+          ),
+        ),
         this.resolveSongDurationSeconds(),
         this.maxCombo,
       );
