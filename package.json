@@ -45,7 +45,7 @@
     "@be-music/player-web": "workspace:*",
     "@be-music/stringifier": "workspace:*",
     "@be-music/utils": "workspace:*",
-    "@changesets/cli": "^3.0.1",
+    "@changesets/cli": "^3.0.2",
     "@types/node": "^26.4.0",
     "@vitest/coverage-v8": "^4.1.10",
     "oxfmt": "^0.65.0",
