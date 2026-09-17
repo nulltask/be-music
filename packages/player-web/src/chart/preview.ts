@@ -514,8 +514,16 @@ export function collectChartPreviewTriggers(
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   const resolver = createTimingResolver(chart);
   const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
+  // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing at or past
+  // it ever sounds — so the select-scene preview drops those triggers too.
+  const reversalSeconds = resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY;
   return all
-    .filter((trigger) => !isInvisiblePlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
+    .filter(
+      (trigger) =>
+        !isInvisiblePlayLaneSoundChannel(trigger.channel) &&
+        trigger.seconds < cutoffSeconds &&
+        trigger.seconds < reversalSeconds,
+    )
     .sort((left, right) => left.seconds - right.seconds);
 }
 

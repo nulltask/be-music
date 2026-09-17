@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatorajaPixelsPerBeat } from './notes.ts';
+import { beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
 
 // Mirrors upstream `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed` divided by
 // `getMeasureBeats(1.0) === 4` to convert "y-delta per measure" into "y-delta per beat".
@@ -36,5 +36,23 @@ describe('beatorajaPixelsPerBeat (upstream `rxhs / 4` for the beatoraja note lay
     expect(beatorajaPixelsPerBeat(Number.NaN, 1)).toBe(0);
     expect(beatorajaPixelsPerBeat(800, Number.NaN)).toBe(0);
     expect(beatorajaPixelsPerBeat(Number.POSITIVE_INFINITY, 1)).not.toBeNaN();
+  });
+});
+
+// The display layers (note + marker) scroll from the engine's mirrored `displayBeat` once an LR2 negative-BPM
+// reversal (issue #134) is past; before that the field is unset and the true `currentBeat` drives the scroll.
+describe('beatorajaDisplayScrollBeat (LR2 negative-BPM reversal display clock)', () => {
+  it('returns currentBeat while no reversal mirror is armed', () => {
+    expect(beatorajaDisplayScrollBeat({ currentBeat: 12.5 })).toBe(12.5);
+    expect(beatorajaDisplayScrollBeat({ currentBeat: 12.5, displayBeat: undefined })).toBe(12.5);
+  });
+
+  it('returns the mirrored displayBeat once the engine publishes it (scrolling backwards past the reversal)', () => {
+    // Past the reversal the engine mirrors the clock — displayBeat runs BEHIND currentBeat and shrinks each
+    // frame while currentBeat keeps advancing; the display consumer must follow the mirror, not the true clock.
+    expect(beatorajaDisplayScrollBeat({ currentBeat: 20, displayBeat: 12 })).toBe(12);
+    expect(beatorajaDisplayScrollBeat({ currentBeat: 21, displayBeat: 11 })).toBe(11);
+    // A mirrored beat of 0 is a valid position (back at the chart head) — `??` must not treat it as unset.
+    expect(beatorajaDisplayScrollBeat({ currentBeat: 32, displayBeat: 0 })).toBe(0);
   });
 });

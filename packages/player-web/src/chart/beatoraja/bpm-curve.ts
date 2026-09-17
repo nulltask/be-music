@@ -48,9 +48,11 @@ export function computeBeatorajaBpmCurve(chart: BeMusicJson): ReadonlyArray<BpmC
     if (event.channel !== '03' && event.channel !== '08') continue;
     const beat = beatorajaEventBeat(event, measureBaseBeat);
     if (beat === undefined) continue;
-    const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, chart.resources.bpm);
-    if (bpm === undefined || bpm <= 0) continue;
-    segments.push({ beat, bpm });
+    const raw = resolveBeatorajaBpmEventValue(event.channel, event.value, chart.resources.bpm);
+    // Negative `#BPMxx` (channel 08, the LR2 reverse-scroll gimmick) integrates at |BPM| — the timeline never
+    // runs backwards — so the graph plots the magnitude. Zero / non-finite slots still drop out.
+    if (raw === undefined || !Number.isFinite(raw) || raw === 0) continue;
+    segments.push({ beat, bpm: Math.abs(raw) });
   }
   segments.sort((a, b) => a.beat - b.beat);
 

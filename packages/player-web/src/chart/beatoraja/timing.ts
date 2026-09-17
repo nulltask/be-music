@@ -122,8 +122,12 @@ export function collectBeatorajaChartTimedEntries<TNote>(
 
     if (isBeatorajaBpmEventChannel(event.channel)) {
       const bpm = resolveBeatorajaBpmEventValue(event.channel, event.value, bpmTable);
-      if (bpm !== undefined && bpm > 0) {
-        entries.push({ beat, kind: 'bpm', bpm });
+      // Negative `#BPMxx` (channel 08) integrates at |BPM|, matching the LR2-aligned `TimingResolver`: the
+      // timeline never runs backwards — the reversal is a presentation / judging gimmick — so the beatoraja
+      // prep pipeline's note seconds agree with the resolver. Zero / non-finite slots stay dropped (previous
+      // tempo continues). Channel 03 parses hex and can never be negative, so `Math.abs` is a no-op there.
+      if (bpm !== undefined && Number.isFinite(bpm) && bpm !== 0) {
+        entries.push({ beat, kind: 'bpm', bpm: Math.abs(bpm) });
       }
       continue;
     }

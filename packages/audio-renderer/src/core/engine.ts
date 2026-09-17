@@ -192,9 +192,16 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const dynamicVolumeChanges = splitDynamicVolumeChangesByBus(
     collectDynamicVolumeChanges(json, resolver, timingContext),
   );
-  const triggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
+  const collectedTriggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
     inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
+  // LR2's event pump freezes at a negative-BPM reversal: nothing at or behind the reversal ever sounds
+  // (Scene04_Play.cpp:1267-1269). Match that audibility in the offline render.
+  const reversalSeconds = resolver.reversal?.seconds;
+  const triggers =
+    reversalSeconds === undefined
+      ? collectedTriggers
+      : collectedTriggers.filter((trigger) => trigger.seconds < reversalSeconds);
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();

@@ -1,0 +1,38 @@
+*---------------------- HEADER FIELD
+
+#PLAYER 1
+#GENRE TEST
+#TITLE negative BPM test 3 (ch08 -> undefined #BPMZZ)
+#ARTIST be-music #134
+#BPM 130
+#PLAYLEVEL 1
+#RANK 2
+#TOTAL 300
+
+#WAV01 negative-bpm-beep1.wav
+#WAV02 negative-bpm-beep2.wav
+#WAV03 negative-bpm-bgm.wav
+
+#BPM01 130
+
+*---------------------- MAIN DATA FIELD
+
+*-- measures 1-3: normal play at BPM 130
+#00111:01010101
+#00101:03
+#00211:01010101
+#00201:03
+#00311:01010101
+#00301:03
+
+*-- measure 4: channel 08 references #BPMZZ, which is NOT defined.
+*-- expected in LR2: the BPMslot[] sentinel -1.0 makes this behave exactly like
+*-- "#BPMZZ -1" (hitkey matrix: LR2 applies -1) -> the mirror arms and the chart
+*-- creeps BACKWARDS at |1| BPM (near-frozen), pump freezes, stage never ends.
+#00408:ZZ
+#00413:00020202
+
+#00511:02020202
+#00501:03
+#00611:02020202
+#00601:03

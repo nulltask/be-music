@@ -223,6 +223,37 @@ describe('engine / simulator equivalence', () => {
     expect(after.summary.emptyPoor).toBe(0);
   });
 
+  test('lr2: a negative-BPM reversal chart records its cutoff and re-simulates to the same judges', async () => {
+    // LR2 negative-BPM reversal (#134). BPM 240 → measure = 1 s; `#BPM02 = -240` fires via channel 08 at 2 s.
+    // The 1 s note misses normally, the 3 s note sits behind the frozen judge clock and ends the run unjudged.
+    // The recorded playlog must carry the reversal instant so the simulator applies the same cutoff instead of
+    // sweeping the post-reversal note into a POOR.
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+      { measure: 3, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    json.resources.bpm['02'] = -240;
+
+    const { summary, playlog } = await replay(json, [], 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(playlog.chart.reversalTimeUs).toBe(2_000_000);
+    // Live run: exactly one POOR (the pre-reversal note) and nothing else.
+    expect(summary.poor).toBe(1);
+    expect(summary.perfect + summary.great + summary.good + summary.bad).toBe(0);
+    expect(summary.total).toBe(2);
+    // The simulator reaches the same verdicts from the recorded log.
+    expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.great,
+      simulated.judge.good,
+      simulated.judge.bad,
+      simulated.judge.poor,
+    ]);
+    expect(summary.exScore).toBe(simulated.exScore);
+  });
+
   test.each(RULESETS)('%s: an untouched chart misses every note on both sides', async (ruleset) => {
     const json = chart([
       { measure: 1, channel: '11', position: [0, 1], value: '01' },

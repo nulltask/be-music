@@ -134,6 +134,13 @@ export function createUiFramePublisher(params: {
   resolveDebugActiveAudioState: (
     seconds: number,
   ) => Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
+  /**
+   * LR2 negative-BPM reversal anchor. Past `seconds`, frames carry a mirrored display clock
+   * (`displaySeconds = 2 * seconds - now`) so renderers scroll backwards while the true clock keeps advancing.
+   * `beatAtSeconds` must be a dedicated resolver instance — the mirrored input decreases every frame, and sharing
+   * the judge path's instance would thrash its monotonic stop-window cursor.
+   */
+  reversal?: { seconds: number; beatAtSeconds: (seconds: number) => number };
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
@@ -145,15 +152,27 @@ export function createUiFramePublisher(params: {
     invisibleNotes,
     audioBackend,
     resolveDebugActiveAudioState,
+    reversal,
   } = params;
   return (seconds: number, beat: number): void => {
     if (!uiEnabled) {
       return;
     }
     const debugState = resolveDebugActiveAudioState(seconds);
+    let displayBeat: number | undefined;
+    let displaySeconds: number | undefined;
+    if (reversal !== undefined && seconds > reversal.seconds) {
+      // Once the mirror rewinds past the chart head the display pins there (a documented deviation — real LR2
+      // keeps receding into negative positions; see docs/bms-spec.md "Negative BPM").
+      displaySeconds = Math.max(0, reversal.seconds * 2 - seconds);
+      displayBeat = reversal.beatAtSeconds(displaySeconds);
+    }
     uiSignals.publishFrame({
       currentBeat: beat,
       currentSeconds: seconds,
+      displayBeat,
+      displaySeconds,
+      reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,
       notes,

@@ -64,6 +64,16 @@ export function beatorajaPixelsPerBeat(laneHeight: number, hispeed: number): num
   return (laneHeight / BEATS_PER_STANDARD_MEASURE) * hispeed;
 }
 
+/**
+ * Beat the display layers scroll from. Past an LR2 negative-BPM reversal (issue #134) the engine publishes a
+ * mirrored `displayBeat` — the chart visually scrolls backwards at |BPM| — while `currentBeat` stays on the
+ * true clock for judging / audio. Display consumers (note layer, marker layer) fall back to `currentBeat`
+ * when no reversal is armed.
+ */
+export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUiFramePayload, 'currentBeat' | 'displayBeat'>): number {
+  return frame.displayBeat ?? frame.currentBeat;
+}
+
 /** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
 const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
   white: 0xf5f5f5,
@@ -227,6 +237,9 @@ export class BeatorajaNoteLayer {
     // changes (lift / `if`-gated alt blocks).
     const laneTopY = this.resolveLaneTopY(rects);
     const pixelsPerBeat = beatorajaPixelsPerBeat(judgementY - laneTopY, hiSpeed);
+    // Scroll from the mirrored display clock once an LR2 negative-BPM reversal is past (see
+    // `beatorajaDisplayScrollBeat`) — judging state (`note.judged`, LN held flags) stays engine-driven.
+    const scrollBeat = beatorajaDisplayScrollBeat(frame);
     let usedG = 0;
     let usedS = 0;
     let usedT = 0;
@@ -264,10 +277,10 @@ export class BeatorajaNoteLayer {
       const rect = rects[lane];
       if (rect === undefined) continue;
 
-      const y = judgementY - (note.beat - frame.currentBeat) * pixelsPerBeat;
+      const y = judgementY - (note.beat - scrollBeat) * pixelsPerBeat;
 
       if (isLongNote) {
-        const yEnd = judgementY - (note.endBeat! - frame.currentBeat) * pixelsPerBeat;
+        const yEnd = judgementY - (note.endBeat! - scrollBeat) * pixelsPerBeat;
         // Cull when the tail hasn't yet reached the judgement line. (LN body extends DOWN
         // from the tail to the head, so this checks if the tail is still scrolling in.)
         if (yEnd > judgementY) continue;
