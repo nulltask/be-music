@@ -147,6 +147,32 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.beatorajaPixelsPerBeat(580, 2.5);
     },
   });
+  define('player-web.beatorajaDisplayScrollBeat', {
+    run: () => {
+      playerWebCoreApi.beatorajaDisplayScrollBeat({
+        currentBeat: 24,
+        currentSeconds: 12,
+        displayBeat: 8,
+        displaySeconds: 4,
+        reversalSeconds: 8,
+        totalSeconds: 120,
+        summary: {
+          total: 0,
+          perfect: 0,
+          fast: 0,
+          slow: 0,
+          great: 0,
+          good: 0,
+          bad: 0,
+          poor: 0,
+          emptyPoor: 0,
+          exScore: 0,
+          score: 0,
+        },
+        notes: [],
+      });
+    },
+  });
   define('player-web.BeatorajaPlaySkinView', {
     run: () => {
       const view = new playerWebCoreApi.BeatorajaPlaySkinView({

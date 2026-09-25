@@ -1763,6 +1763,179 @@ describe('player', () => {
     expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
   });
 
+  test('player: LR2 negative BPM freezes judging and audio at the reversal (manual)', async () => {
+    // BPM 240 → measure = 1 s. A note+BGM at 1 s, the reversal (#BPM02 -240 via channel 08) at 2 s, and a
+    // note+BGM at 3 s (|−240| keeps one measure per second). The pre-reversal note misses normally; everything
+    // behind the reversal must stay silent and unjudged — not swept into POORs at the end of the run.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.bpm['02'] = -240;
+    json.resources.wav = { '01': 'a.wav', '02': 'b.wav', '03': 'bgm.wav' };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel: '01', position: [0, 1] as const, value: '03' },
+      { measure: 2, channel: '08', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '11', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '01', position: [0, 1] as const, value: '03' },
+    ];
+
+    const triggeredEvents: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 4,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([]),
+    });
+
+    // Only the pre-reversal BGM sounded; the 3 s BGM sits behind the frozen pump.
+    expect(triggeredEvents).toEqual(['03']);
+    // The 1 s note missed on time; the 3 s note ends the run unjudged (total still counts it).
+    expect(summary.poor).toBe(1);
+    expect(summary.total).toBe(2);
+    expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
+  });
+
+  test('player: LR2 negative BPM freezes autoplay judging and audio at the reversal', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.bpm['02'] = -240;
+    json.resources.wav = { '01': 'a.wav', '02': 'b.wav', '03': 'bgm.wav' };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel: '01', position: [0, 1] as const, value: '03' },
+      { measure: 2, channel: '08', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '11', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '01', position: [0, 1] as const, value: '03' },
+    ];
+
+    const triggeredEvents: string[] = [];
+    const summary = await autoPlay(json, {
+      speed: 4,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([]),
+    });
+
+    // Pre-reversal note keysound + BGM fired; nothing behind the reversal did (including the epilogue flush).
+    expect(triggeredEvents).toContain('01');
+    expect(triggeredEvents.filter((value) => value === '03')).toHaveLength(1);
+    expect(triggeredEvents).not.toContain('02');
+    // Autoplay PGREATs the pre-reversal note; the post-reversal note stays unjudged.
+    expect(summary.perfect).toBe(1);
+    expect(summary.poor).toBe(0);
+    expect(summary.total).toBe(2);
+  });
+
+  test('player: LR2 negative BPM freezes a note exactly AT the reversal boundary', async () => {
+    // BPM 240 → measure = 1 s. The reversal (#BPM02 -240 via channel 08) AND a note share measure 2 [0,1]
+    // (chart 2 s exactly). The pump freeze is `seconds < reversal` — inclusive of the boundary — so the boundary
+    // note must neither sound nor judge, exactly like a note strictly behind the reversal.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.bpm['02'] = -240;
+    json.resources.wav = { '01': 'a.wav', '02': 'b.wav' };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 2, channel: '08', position: [0, 1] as const, value: '02' },
+      { measure: 2, channel: '11', position: [0, 1] as const, value: '02' },
+    ];
+
+    const triggeredEvents: string[] = [];
+    const summary = await autoPlay(json, {
+      speed: 4,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([]),
+    });
+
+    // Only the 1 s note's keysound fired; the boundary note's never did.
+    expect(triggeredEvents).toContain('01');
+    expect(triggeredEvents).not.toContain('02');
+    // Autoplay PGREATs the pre-reversal note only; the boundary note ends the run unjudged (total still counts it).
+    expect(summary.perfect).toBe(1);
+    expect(summary.total).toBe(2);
+    expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
+  });
+
+  test('player: an LN held across the LR2 reversal resolves silently (no POOR, run completes)', async () => {
+    // BPM 240 → measure = 1 s. A legacy LNOBJ long note spans the reversal: head at 1 s, `#BPM02 -240` via
+    // channel 08 at 2 s, tail at 3 s (|−240| keeps one measure per second). The hold is genuinely open when the
+    // judge clock dies at 2 s, so it must resolve silently — no tail judgment, no POOR — and the run must still
+    // complete with the gauge untouched. Replay input keeps the press deterministic (exact chart microseconds)
+    // and, with no matching `up`, holds the lane's kitty press state through the end of the run.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.bms.lnObjs = ['AA'];
+    json.resources.bpm['02'] = -240;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 2, channel: '08', position: [0, 1] as const, value: '02' },
+      { measure: 3, channel: '11', position: [0, 1] as const, value: 'AA' },
+    ];
+
+    const summary = await manualPlay(json, {
+      speed: 4,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: [{ seq: 0, timeUs: 1_000_000, action: 'down', channels: ['11'] }],
+    });
+
+    // The spanning hold neither POORs nor BADs, and the run completed (manualPlay resolved without interrupt).
+    expect(summary.total).toBe(1);
+    expect(summary.poor).toBe(0);
+    expect(summary.bad).toBe(0);
+    // Silent means SILENT: the hold gets no judgment at all — not even the head's verdict at the tail (that
+    // would be the normal completion path, which must not run for a hold still open at the reversal).
+    expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(0);
+    // ...and it costs nothing: the gauge sits exactly where it started, nowhere near the GROOVE floor.
+    expect(summary.gauge?.current).toBe(summary.gauge?.initial);
+    expect(summary.gauge?.current ?? 0).toBeGreaterThan(2);
+  });
+
   test('player: routes audio through createAudioSession factory when supplied', async () => {
     // Phase 1 of the web-engine integration plan exposes a `createAudioSession` factory option so the browser
     // runtime can plug in a Web Audio backend without forking the engine. The factory's returned `AudioSession`

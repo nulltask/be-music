@@ -271,7 +271,19 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Index range of `#WAVxx` / `#BMPxx` (operational difference including `01-FF` / `01-ZZ` / `00`) and case handling
 - [ ] Conflict priority between `#xxx03` and `#xxx08` on the same timeline
 - [ ] Conflict priority between `#xxx08` and `#xxx09` on the same timeline
-- [ ] Compatibility behavior when inputting invalid values ​​(negative numbers/zero/character strings/exponential notation, etc.) for `#BPMxx`
+- [x] Compatibility behavior when inputting invalid values ​​(negative numbers/zero/character strings/exponential notation, etc.) for `#BPMxx`
+
+#### Negative BPM (`#BPMxx` via channel 08) basis
+
+LR2 is the baseline (issue #134; verified against the OpenLR2 decompilation of LR2body.exe beta3, hitkey's command memo, and LR2's own `history.txt`):
+
+- LR2 parses `#BPMxx` sign-preserving and integrates note times at **|BPM|** when it precomputes timing at load (`LR2_bmsload.cpp:2841-2843`) — the timeline never runs backwards. This implementation does the same: the timing resolver integrates `Math.abs(bpm)` and exposes the first negative event's position as `TimingResolver.reversal`.
+- At that point LR2 arms a one-way mirror: the render and judge clocks reflect around the reversal (the chart visually scrolls backwards at |BPM| forever) and its event pump freezes — no later BGM keysounds, BGA cues, or BPM events ever fire, nothing can be hit or missed anymore, and the stage never ends on its own (`Scene04_Play.cpp:1267-1269`, `:1375-1382`). This implementation reproduces the mirror (renderers scroll from the mirrored display clock), the freeze (judging and realtime audio stop at the reversal; the BGA holds its last image), and leaves post-reversal notes unjudged instead of sweeping them into POORs.
+- Deliberate deviations from LR2, all in the degenerate corners: (1) the run ends at the chart's precomputed end instead of hanging until ESC; (2) judging stops exactly at the reversal, whereas LR2's mirrored clock technically allows hits for one closing judge-window after it; (3) `#BPMxx 0` stays dropped (previous tempo continues) — real LR2 divides by zero and degenerates (+inf times, scroll stops); (4) an undefined `#BPMxx` reference stays dropped — real LR2 hits its `-1.0` slot sentinel and behaves as if `#BPMxx -1` were defined (reverse at 1 BPM); (5) a negative initial `#BPM` header falls back to the 130 default — real LR2 leaves it unguarded and its timing table degenerates; (6) the mirrored display pins at the chart head once it rewinds past the start — real LR2 keeps receding into negative positions.
+- Channel 03 (inline hex `01`–`FF`) can express neither zero nor negative values; a `00` pair is a rest.
+
+Fixtures: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms), [`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms), [`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms).
+
 - [x] Timing interpretation of `#STP` format `xxx[.yyy] zzzz` and abbreviation `xxx zzzz`
 - [x] Browser player: `#BGAxx` interpretation of sub-region cutting and placement parameters
 - [ ] Runtime reflection of `#@BGAxx` (branch/conditional BGA definition)

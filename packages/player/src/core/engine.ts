@@ -1814,12 +1814,31 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const timingResolver = createTimingResolver(resolvedJson);
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
-  const realtimeAudioTriggers = collectRealtimeAudioTriggers(
-    resolvedJson,
-    inferBmsLnTypeWhenMissing,
-    (channel) => !isInvisiblePlayLaneSoundChannel(channel),
-    timingResolver,
+  // LR2 negative-BPM reversal (#134) — see `manualPlay` for the model. Autoplay freezes the same way: no judging,
+  // no audio, mirrored display clock past the reversal.
+  const reversalSeconds = timingResolver.reversal?.seconds;
+  // Clamp a judge/audio pump reference strictly BELOW the reversal: the cursor pumps are inclusive at their
+  // reference (some add the realtime-audio epsilon on top), while every one-shot path — the pre-filtered trigger
+  // streams, the offline render, the web preview, and the playlog simulator — treats the reversal itself as frozen
+  // (`seconds < reversal`). Without the guard a note exactly AT the reversal would sound and judge here only.
+  const clampToReversal = (seconds: number): number =>
+    reversalSeconds === undefined
+      ? seconds
+      : Math.min(seconds, reversalSeconds - 2 * REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS);
+  const displayBeatAtSeconds =
+    reversalSeconds === undefined ? undefined : createBeatAtSecondsResolverFromTimingResolver(timingResolver);
+  const realtimeAudioVolumeEvents = dropEventsAtOrAfterReversal(
+    collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver),
+    reversalSeconds,
+  );
+  const realtimeAudioTriggers = dropEventsAtOrAfterReversal(
+    collectRealtimeAudioTriggers(
+      resolvedJson,
+      inferBmsLnTypeWhenMissing,
+      (channel) => !isInvisiblePlayLaneSoundChannel(channel),
+      timingResolver,
+    ),
+    reversalSeconds,
   );
   const realtimeAudioEndSeconds =
     options.audio === false
@@ -1879,6 +1898,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           chart: playbackChart,
           chartSha256,
           dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
+          reversalSeconds,
           play: {
             mode: 'auto',
             autoScratch: false,
@@ -2004,6 +2024,10 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     invisibleNotes,
     audioBackend: audioBackendLabel,
     resolveDebugActiveAudioState,
+    reversal:
+      reversalSeconds === undefined || displayBeatAtSeconds === undefined
+        ? undefined
+        : { seconds: reversalSeconds, beatAtSeconds: displayBeatAtSeconds },
   });
 
   if (!uiEnabled) {
@@ -2347,13 +2371,14 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         const nowSec = elapsedMsToGameSeconds(nowMs, speed);
         const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
         playbackEventTracer.flushUntil(nowSec);
-        // Queue audio against the write head, then judge and render against what is actually audible.
+        // Queue audio against the write head, then judge and render against what is actually audible. The reversal
+        // clamp freezes note keysounds and judging at the LR2 negative-BPM point (the BGM streams are pre-filtered).
         triggerRealtimeAudioVolumeEvents(scheduledSec);
         triggerRealtimeAudioEvents(scheduledSec);
-        triggerAutoPlayableNoteAudio(scheduledSec);
-        applyDueAutoPlayableJudgements(nowSec);
-        drainPendingAutoLongNotes(nowSec);
-        markExpiredLandmines(nowSec);
+        triggerAutoPlayableNoteAudio(clampToReversal(scheduledSec));
+        applyDueAutoPlayableJudgements(clampToReversal(nowSec));
+        drainPendingAutoLongNotes(clampToReversal(nowSec));
+        markExpiredLandmines(clampToReversal(nowSec));
         markExpiredInvisibleNotes(nowSec);
         publishUiFrame(nowSec, beatAtSeconds(nowSec));
 
@@ -2377,8 +2402,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       if (!interruptedReason) {
         triggerRealtimeAudioVolumeEvents(totalSeconds);
         triggerRealtimeAudioEvents(totalSeconds);
-        triggerAutoPlayableNoteAudio(totalSeconds);
-        applyDueAutoPlayableJudgements(totalSeconds);
+        triggerAutoPlayableNoteAudio(clampToReversal(totalSeconds));
+        applyDueAutoPlayableJudgements(clampToReversal(totalSeconds));
         const totalScheduledMs = (totalSeconds * 1000) / speed;
         const totalWaitMs = Math.max(0, totalScheduledMs - chartClock.nowMs());
         if (totalWaitMs > 0) {
@@ -2387,7 +2412,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           await waitPreciseOrInput(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS), inputWakeUp);
         }
         playbackEventTracer.flushUntil(totalSeconds);
-        drainPendingAutoLongNotes(totalSeconds);
+        drainPendingAutoLongNotes(clampToReversal(totalSeconds));
         markExpiredLandmines(totalSeconds + badWindowSeconds);
         markExpiredInvisibleNotes(totalSeconds + badWindowSeconds);
         for (const landmine of landmineNotes) {
@@ -2454,19 +2479,40 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const speed = options.speed ?? 1;
   const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
   const timingResolver = createTimingResolver(resolvedJson);
+  // LR2 negative-BPM reversal (#134): timing stays monotonic (the resolver integrates |BPM|), but from this chart
+  // time on LR2's event pump freezes — judging and realtime audio stop — and the display clock mirrors around it.
+  const reversalSeconds = timingResolver.reversal?.seconds;
+  // Clamp a judge/audio pump reference strictly BELOW the reversal: the cursor pumps are inclusive at their
+  // reference (some add the realtime-audio epsilon on top), while every one-shot path — the pre-filtered trigger
+  // streams, the offline render, the web preview, and the playlog simulator — treats the reversal itself as frozen
+  // (`seconds < reversal`). Without the guard a note exactly AT the reversal would sound and judge here only.
+  const clampToReversal = (seconds: number): number =>
+    reversalSeconds === undefined
+      ? seconds
+      : Math.min(seconds, reversalSeconds - 2 * REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS);
   // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
   // non-LR2 rulesets keep their initial windows for the whole chart.
   const dynamicJudgeRankChanges =
     judgeRuleset === 'lr2' ? collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver) : [];
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
+  const realtimeAudioVolumeEvents = dropEventsAtOrAfterReversal(
+    collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver),
+    reversalSeconds,
+  );
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
-  const nonPlayableRealtimeAudioTriggers = collectRealtimeAudioTriggers(
-    resolvedJson,
-    inferBmsLnTypeWhenMissing,
-    (channel) => !isPlayLaneSoundChannel(channel),
-    timingResolver,
+  // Dedicated instance for the mirrored display clock — the shared `beatAtSeconds` keeps a monotonic stop-window
+  // cursor that the decreasing mirrored input would thrash.
+  const displayBeatAtSeconds =
+    reversalSeconds === undefined ? undefined : createBeatAtSecondsResolverFromTimingResolver(timingResolver);
+  const nonPlayableRealtimeAudioTriggers = dropEventsAtOrAfterReversal(
+    collectRealtimeAudioTriggers(
+      resolvedJson,
+      inferBmsLnTypeWhenMissing,
+      (channel) => !isPlayLaneSoundChannel(channel),
+      timingResolver,
+    ),
+    reversalSeconds,
   );
   const nonPlayableRealtimeAudioEndSeconds =
     options.audio === false
@@ -2559,6 +2605,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           chart: playbackChart,
           chartSha256,
           dynamicJudgeRankChanges,
+          reversalSeconds,
           play: {
             mode: 'manual',
             autoScratch: autoScratchEnabled,
@@ -2675,6 +2722,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     invisibleNotes,
     audioBackend: audioBackendLabel,
     resolveDebugActiveAudioState: () => resolveDebugActiveAudioState(),
+    reversal:
+      reversalSeconds === undefined || displayBeatAtSeconds === undefined
+        ? undefined
+        : { seconds: reversalSeconds, beatAtSeconds: displayBeatAtSeconds },
   });
 
   if (!uiEnabled) {
@@ -2897,6 +2948,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         landmineExpireCursor += 1;
         continue;
       }
+      if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
+        // Mines at or behind the LR2 reversal are frozen with the pump (#134) — they neither detonate nor retire.
+        break;
+      }
       if (nowSec - landmine.seconds <= pgreatLateSeconds) {
         break;
       }
@@ -2918,9 +2973,18 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       }
       landmineExpireCursor += 1;
     }
+    if (reversalSeconds !== undefined && nowSec >= reversalSeconds) {
+      // The press leg is dead past the reversal (#134). The crossing sweep above still ran so a PRE-reversal
+      // crossing whose PGREAT window closed on the far side of the reversal is not silently dropped.
+      return;
+    }
     for (let index = landmineExpireCursor; index < landmineNotes.length; index += 1) {
       const landmine = landmineNotes[index]!;
       if (landmine.seconds - nowSec > pgreatEarlySeconds) {
+        break;
+      }
+      if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
+        // The early reach must not detonate mines positioned behind the reversal (#134).
         break;
       }
       if (landmine.judged) {
@@ -3482,7 +3546,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     processLandminePassage(nowSec, nowMs);
 
-    const selected = selectPressCandidate(nowSec, candidateChannels);
+    // Past the LR2 negative-BPM reversal the judge clock is dead (#134): a press still replays the latest lane
+    // keysound below (frozen at the reversal, matching LR2's stalled lane-sound assignments), but no note is
+    // consumed and no empty POOR fires.
+    const judgingFrozen = reversalSeconds !== undefined && nowSec >= reversalSeconds;
+    // The lane-sound table freezes with the pump: a frozen-era press must replay the latest PRE-reversal sample,
+    // never a note keysound authored behind the reversal.
+    const laneSoundReferenceSec = clampToReversal(nowSec);
+    const selected = judgingFrozen ? undefined : selectPressCandidate(nowSec, candidateChannels);
 
     if (!selected) {
       if (refreshedHold) {
@@ -3496,8 +3567,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const fallback = findLaneSoundCandidate(
         laneSoundNotes,
         candidateChannels,
-        nowSec,
-        maxJudgeEarlyReachSeconds(nowSec),
+        laneSoundReferenceSec,
+        maxJudgeEarlyReachSeconds(laneSoundReferenceSec),
       );
       if (fallback) {
         if (!uiEnabled) {
@@ -3517,9 +3588,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      if (!hasEmptyPoorReferenceNote(candidateChannels, nowSec)) {
-        // No note in the ruleset's miss window — the press is harmless: the lane keysound (fallback above) plays
-        // and nothing else happens.
+      if (judgingFrozen || !hasEmptyPoorReferenceNote(candidateChannels, nowSec)) {
+        // No note in the ruleset's miss window (or the run is past the reversal) — the press is harmless: the lane
+        // keysound (fallback above) plays and nothing else happens.
         return;
       }
       // Empty POOR (kara-poor / 空POOR): a phantom press near a note but outside every judgable window. It costs
@@ -3883,6 +3954,29 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
       }
 
+      if (reversalSeconds !== undefined && nowSec >= reversalSeconds && activeLongNotesByChannel.size > 0) {
+        // The judge clock dies at the LR2 reversal (#134). Holds whose resolution instant landed strictly BEFORE
+        // it — a release recorded pre-reversal, or a mode-1 LN whose end lies before it — still resolve through
+        // the normal per-hold pass below (their judge instant is the pre-reversal release/end time, so frame
+        // quantization must not swallow them). Holds genuinely still open at the reversal resolve silently: no
+        // tail judgment, no POOR, and their keysounds play out (LR2 lets already-scheduled audio ring).
+        for (const [channel, hold] of [...activeLongNotesByChannel.entries()]) {
+          const releaseSeconds = longHoldReleaseSecondsByChannel.get(channel);
+          const resolvesBeforeReversal =
+            (releaseSeconds !== undefined && releaseSeconds < reversalSeconds) ||
+            (hold.mode === 1 && hold.endSeconds < reversalSeconds);
+          if (resolvesBeforeReversal) {
+            continue;
+          }
+          if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'release-lane', channel });
+          }
+          activeLongNotesByChannel.delete(channel);
+          longHoldUntilMsByChannel.delete(channel);
+          longHoldReleaseSecondsByChannel.delete(channel);
+        }
+      }
+
       for (const [channel, hold] of activeLongNotesByChannel.entries()) {
         const holdUntilMs = longHoldUntilMsByChannel.get(channel);
         const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
@@ -4072,15 +4166,17 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
 
-      drainPendingAutoScratchLongNotes(nowSec);
+      drainPendingAutoScratchLongNotes(clampToReversal(nowSec));
       for (const [channel, suppressUntil] of longNoteSuppressUntilSecondsByChannel.entries()) {
         if (nowSec >= suppressUntil) {
           longNoteSuppressUntilSecondsByChannel.delete(channel);
         }
       }
 
-      applyAutoScratchJudgements(nowSec);
-      applyExpiredScorableJudgements(nowSec);
+      // Clamped to the reversal: notes whose miss deadline falls behind it are still missed on time, while
+      // everything past it stays unjudged forever — matching LR2's frozen judge pump.
+      applyAutoScratchJudgements(clampToReversal(nowSec));
+      applyExpiredScorableJudgements(clampToReversal(nowSec));
       publishUiFrame(nowSec, nowBeat);
 
       processLandminePassage(nowSec, nowMs);
@@ -4118,6 +4214,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           continue;
         }
         note.judged = true;
+        if (reversalSeconds !== undefined && note.seconds + resolveMissDeadlineSeconds(note) >= reversalSeconds) {
+          // Notes whose miss deadline lies behind the LR2 reversal are unreachable by design (#134): the run ends
+          // with them unjudged — LR2 never misses them either (its mirrored judge clock recedes before the
+          // deadline) — instead of sweeping them into POORs.
+          continue;
+        }
         missingCount += 1;
         if (longNoteOwesTailMiss(note)) {
           missingCount += 1;
@@ -5277,6 +5379,20 @@ function createPlaybackClock(source: PlaybackClockSource, startOffsetMs = 0): Pl
 
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
+}
+
+/**
+ * LR2's event pump freezes at the negative-BPM reversal (#134): nothing at or behind the reversal ever sounds.
+ * Realtime trigger/volume streams are pre-filtered with this so no cursor loop can reach past it.
+ */
+function dropEventsAtOrAfterReversal<T extends { seconds: number }>(
+  items: T[],
+  reversalSeconds: number | undefined,
+): T[] {
+  if (reversalSeconds === undefined) {
+    return items;
+  }
+  return items.filter((item) => item.seconds < reversalSeconds);
 }
 
 /**
