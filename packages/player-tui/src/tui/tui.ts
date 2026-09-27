@@ -1946,7 +1946,7 @@ function colorizeText(value: string, foreground: RgbColor, background?: RgbColor
 
 function colorizeRainbow(value: string, bright = true): string {
   const brightness = bright ? 1 : 0.5;
-  const characters = [...value];
+  const characters = Array.from(value);
   return characters
     .map((character, index) =>
       colorizeText(character, dimRgb(RAINBOW_RGB_STEPS[index % RAINBOW_RGB_STEPS.length]!, brightness)),

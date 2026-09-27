@@ -94,7 +94,7 @@ describe('node ui runtime', () => {
       },
     });
 
-    runtime.dispose();
+    await runtime.dispose();
   });
 
   test('posts static landmine and invisible note collections only once', async () => {

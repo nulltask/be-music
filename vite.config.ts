@@ -201,5 +201,15 @@ export default defineConfig({
     rules: {
       'vite-plus/prefer-vite-plus-imports': 'error',
     },
+    overrides: [
+      {
+        // `expect(mock.method).toHaveBeenCalled()` reads a `vi.fn()` that never touches `this`; typescript-eslint pairs
+        // this rule with a test-aware variant that Oxlint does not ship, so it only applies to non-test sources.
+        files: ['**/*.test.ts'],
+        rules: {
+          'typescript/unbound-method': 'off',
+        },
+      },
+    ],
   },
 });

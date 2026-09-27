@@ -310,7 +310,7 @@ describe('buildAudioBus graph topology', () => {
     // with a wrapping AudioContext that captures every compressor it hands out.
     const compressors: FakeNode[] = [];
     const wrapped = {
-      ...context,
+      ...(context as unknown as Record<string, unknown>),
       createDynamicsCompressor: (): FakeNode => {
         const node = (context as unknown as { createDynamicsCompressor: () => FakeNode }).createDynamicsCompressor();
         compressors.push(node);

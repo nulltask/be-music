@@ -77,7 +77,7 @@ describe('parser', () => {
   test('BMS: 24-key / 48-key keyboard fixtures author the extended lane channels', async () => {
     // The keyboard-mode fixtures are the chart-side half of 24 KEY SP / 48 KEY DP support: they exercise the
     // extended `1A..1O` / `2A..2O` columns end to end (taps, `#LNOBJ` long notes, landmines on `DX` / `EX`).
-    const lanes = [...'123456789ABCDEFGHIJKLMNO'];
+    const lanes = '123456789ABCDEFGHIJKLMNO'.split('');
 
     const sp = await parseChartFile(resolve(rootDir, 'examples/test/24key-keyboard-sp.bme'));
     expect(sp.metadata.title).toBe('24 KEY Keyboard Test (SP)');

@@ -3321,7 +3321,7 @@ renderBrowserCompatPanel(checkBrowserCompat());
 wireHelpModal();
 
 void waitForDefaultUiFonts().finally(() => {
-  void new PlayerWebDemoApp({
+  new PlayerWebDemoApp({
     stage: document.querySelector<HTMLDivElement>('#stage')!,
     shell: document.querySelector<HTMLDivElement>('.shell')!,
     songInput: document.querySelector<HTMLInputElement>('#songs')!,

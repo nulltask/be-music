@@ -40,15 +40,15 @@ describe('createWebUiRuntime', () => {
     expect(onPoorCleared).toHaveBeenCalledTimes(1);
   });
 
-  test('stop and dispose fire their respective callbacks', () => {
+  test('stop and dispose fire their respective callbacks', async () => {
     const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
     const onStop = vi.fn();
     const onDispose = vi.fn();
     const runtime = createWebUiRuntime({ uiSignals, onStop, onDispose });
     runtime.start();
-    runtime.stop();
+    await runtime.stop();
     expect(onStop).toHaveBeenCalledTimes(1);
-    runtime.dispose();
+    await runtime.dispose();
     expect(onDispose).toHaveBeenCalledTimes(1);
   });
 

@@ -265,10 +265,10 @@ const KEYBOARDMANIA_SIDE_CHANNELS = EXTENDED_LANE_DIGITS.slice(0, KEYBOARD_MODE_
  * bank appended for `'48'`.
  */
 const KEYBOARD_MODE_PREFERRED_CHANNELS: Record<'24' | '48', string[]> = {
-  '24': [...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `1${lane}`),
+  '24': Array.from(KEYBOARDMANIA_SIDE_CHANNELS, (lane) => `1${lane}`),
   '48': [
-    ...[...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `1${lane}`),
-    ...[...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `2${lane}`),
+    ...Array.from(KEYBOARDMANIA_SIDE_CHANNELS, (lane) => `1${lane}`),
+    ...Array.from(KEYBOARDMANIA_SIDE_CHANNELS, (lane) => `2${lane}`),
   ],
 };
 

@@ -87,7 +87,7 @@ function gitShow(ref: string, filePath: string): string | null {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr ?? '') : '';
+    const stderr = error instanceof Error && 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : '';
     if (
       stderr.includes('exists on disk, but not in') ||
       stderr.includes('does not exist in') ||
