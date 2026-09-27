@@ -4,18 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
-    "build:cf": "vite build && printf 'ffmpeg-core/\\n.DS_Store\\n' > dist/.assetsignore",
+    "dev": "vp dev --host 0.0.0.0",
+    "build": "vp build",
+    "build:cf": "vp build && printf 'ffmpeg-core/\\n.DS_Store\\n' > dist/.assetsignore",
     "deploy:cf": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs && wrangler deploy",
     "cf:r2:create": "wrangler r2 bucket create be-music-ffmpeg-core",
     "cf:r2:push": "pnpm run build:cf && node scripts/sync-ffmpeg-core.mjs --force",
-    "clean": "rimraf dist tsconfig.tsbuildinfo node_modules/.vite",
-    "typecheck": "tsc -p tsconfig.typecheck.json --pretty",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
-    "format": "oxfmt . --write",
-    "format:check": "oxfmt . --check"
+    "clean": "rimraf dist tsconfig.tsbuildinfo node_modules/.vite"
   },
   "dependencies": {
     "@be-music/beatoraja-skin": "workspace:*",
@@ -27,8 +22,9 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260910.1",
     "ts-ebml": "^3.0.2",
-    "vite": "^8.2.2",
+    "vite": "catalog:",
     "vite-plugin-node-polyfills": "^0.28.0",
+    "vite-plus": "catalog:",
     "wrangler": "^4.133.0"
   }
 }

@@ -124,7 +124,10 @@ export function buildDiffMarkdown(
   topCount: number,
 ): string {
   const rows = compareSnapshots(baseSnapshot, headSnapshot);
-  const summary = { ...summarizeRows(rows, thresholdPercent), unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot) };
+  const summary = {
+    ...summarizeRows(rows, thresholdPercent),
+    unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot),
+  };
 
   const regressions = rows
     .filter((row) => row.deltaPercent <= -thresholdPercent)
@@ -263,9 +266,7 @@ function isUnreliableCase(
   baseResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
   headResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
 ): boolean {
-  return (
-    !(baseResult.p50Ms > MIN_RELIABLE_LATENCY_MS) || !(headResult.p50Ms > MIN_RELIABLE_LATENCY_MS)
-  );
+  return !(baseResult.p50Ms > MIN_RELIABLE_LATENCY_MS) || !(headResult.p50Ms > MIN_RELIABLE_LATENCY_MS);
 }
 
 export function compareSnapshots(

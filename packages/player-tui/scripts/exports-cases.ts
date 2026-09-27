@@ -142,7 +142,7 @@ function createNonTtyWriteStream(): NodeJS.WriteStream {
   return {
     isTTY: false,
     write: () => true,
-  } as NodeJS.WriteStream;
+  } as unknown as NodeJS.WriteStream;
 }
 
 function createBenchBgaAnsiRenderer(): playerTuiApi.BgaAnsiRenderer {

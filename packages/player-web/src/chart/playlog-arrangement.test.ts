@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { PlaylogNote } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from './playlog-arrangement.ts';
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   isScratchLaneForVariant,
   resolveFallbackLaneLayout,
@@ -45,7 +45,7 @@ describe('resolveFallbackLaneLayout', () => {
   });
 
   it('lays the 24 keyboard-mode lanes out left to right at equal width, with no scratch', () => {
-    const channels = [...'123456789ABCDEFGHIJKLMNO'].map((lane) => `1${lane}`);
+    const channels = Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `1${lane}`);
     const lanes = resolveFallbackLaneLayout({ channels, playVariant: '24', x: 33, w: 194 });
 
     expect(lanes).toHaveLength(24);
@@ -62,7 +62,7 @@ describe('resolveFallbackLaneLayout', () => {
   });
 
   it('splits the 48 keyboard-mode lanes into 1P / 2P banks with a side gap', () => {
-    const lanes = [...'12'].flatMap((side) => [...'123456789ABCDEFGHIJKLMNO'].map((lane) => `${side}${lane}`));
+    const lanes = ['1', '2'].flatMap((side) => Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `${side}${lane}`));
     const rects = resolveFallbackLaneLayout({
       channels: lanes,
       playVariant: '48',

@@ -1,6 +1,6 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   buildBgaTimeline,
   collectBgaTextureLoadKeys,

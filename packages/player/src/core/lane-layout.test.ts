@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   createLaneBindings,
   resolveLaneChannels,
@@ -70,8 +70,8 @@ describe('resolveSideKeySlot', () => {
 });
 
 describe('24 KEY / 48 KEY keyboard modes', () => {
-  const SP_CHANNELS = [...'123456789ABCDEFGHIJKLMNO'].map((lane) => `1${lane}`);
-  const DP_CHANNELS = [...SP_CHANNELS, ...[...'123456789ABCDEFGHIJKLMNO'].map((lane) => `2${lane}`)];
+  const SP_CHANNELS = Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `1${lane}`);
+  const DP_CHANNELS = [...SP_CHANNELS, ...Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `2${lane}`)];
 
   test('resolveSideKeySlot — the 24 columns are plain 1-based lane indices, with no scratch', () => {
     expect(resolveSideKeySlot('11', '24')).toBe(1);

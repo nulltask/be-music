@@ -6,18 +6,19 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "pnpm -r --sort --workspace-concurrency=Infinity run build",
-    "clean": "pnpm -r run clean && rimraf coverage \"packages/*/node_modules/.vite\"",
+    "build": "vp run -r --cache build",
+    "clean": "vp run -r clean && rimraf coverage \"packages/*/node_modules/.vite\"",
+    "check": "vp check",
     "changeset": "changeset",
     "release:status": "changeset status --verbose",
     "release:version": "changeset version",
-    "typecheck": "pnpm -r --parallel run typecheck",
-    "lint": "pnpm -r --parallel run lint",
-    "lint:fix": "pnpm -r --parallel run lint:fix",
-    "format": "pnpm -r --parallel run format",
-    "format:check": "pnpm -r --parallel run format:check",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
+    "typecheck": "vp check --no-fmt --no-lint",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "format": "vp fmt",
+    "format:check": "vp fmt --check",
+    "test": "vp test run",
+    "test:coverage": "vp test run --coverage",
     "bench": "node --conditions=source scripts/bench/exports.ts",
     "bench:aggregate": "node --conditions=source scripts/bench/aggregate-results.ts",
     "bench:compare": "node --conditions=source scripts/bench/compare-results.ts",
@@ -31,7 +32,8 @@
     "editor": "pnpm --filter @be-music/editor run dev",
     "audio-render": "pnpm --filter @be-music/audio-renderer run dev",
     "parse": "pnpm --filter @be-music/parser run dev",
-    "stringify": "pnpm --filter @be-music/stringifier run dev"
+    "stringify": "pnpm --filter @be-music/stringifier run dev",
+    "prepare": "vp config"
   },
   "devDependencies": {
     "@be-music/audio-renderer": "workspace:*",
@@ -47,23 +49,16 @@
     "@be-music/utils": "workspace:*",
     "@changesets/cli": "^3.0.2",
     "@types/node": "^26.6.1",
-    "@vitest/coverage-v8": "^5.0.1",
-    "oxfmt": "^0.65.0",
-    "oxlint": "^1.83.0",
+    "@vitest/coverage-v8": "catalog:",
     "rimraf": "^6.0.1",
     "tinybench": "^6.2.0",
-    "tsdown": "^0.22.14",
     "typescript": "^7.0.2",
-    "vite": "^8.2.2",
-    "vitest": "^5.0.1"
+    "vite": "catalog:",
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "engines": {
     "node": ">=26"
   },
-  "packageManager": "pnpm@10.30.3",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild"
-    ]
-  }
+  "packageManager": "pnpm@10.30.3"
 }

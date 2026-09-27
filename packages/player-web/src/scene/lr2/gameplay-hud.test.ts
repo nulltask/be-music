@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT,
   LR2_GROOVE_GAUGE_UNITS,

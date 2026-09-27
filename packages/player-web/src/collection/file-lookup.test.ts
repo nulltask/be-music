@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { findCaseInsensitivePath, isMaliciousAssetPath, lookupBytesCaseInsensitive } from './file-lookup.ts';
 
 const BYTES_A = new Uint8Array([1, 2, 3]);

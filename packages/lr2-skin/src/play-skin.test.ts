@@ -1,5 +1,5 @@
 import type { BeMusicEvent } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
 import {
   loadLr2ThemeSkinsFromFiles,
@@ -35,14 +35,12 @@ function songWithChannels(channels: string[]): Lr2PlaySkinSong {
     chartPath: 'Song/main.bms',
     chart: {
       bms: {},
-      events: channels.map(
-        (channel, index): BeMusicEvent => ({
-          measure: index,
-          channel,
-          position: [0, 1],
-          value: '01',
-        }),
-      ),
+      events: channels.map((channel, index): BeMusicEvent => ({
+        measure: index,
+        channel,
+        position: [0, 1],
+        value: '01',
+      })),
     },
   };
 }

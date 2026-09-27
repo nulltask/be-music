@@ -246,7 +246,7 @@ async function runBenchmarkCase(
 
   bench.add(key, () => benchmarkCase.run(fixtures));
   if ((benchmarkCase.warmupTimeMs ?? options.warmupTimeMs) > 0) {
-    const maybeWarmup = (bench as { warmup?: () => Promise<void> }).warmup;
+    const maybeWarmup = (bench as unknown as { warmup?: () => Promise<void> }).warmup;
     if (typeof maybeWarmup === 'function') {
       await maybeWarmup.call(bench);
     }

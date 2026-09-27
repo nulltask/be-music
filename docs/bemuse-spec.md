@@ -38,9 +38,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 
 ```json
 {
-  "files": [
-    { "name": "snare.ogg", "ref": [2, 1415370, 1430427] }
-  ],
+  "files": [{ "name": "snare.ogg", "ref": [2, 1415370, 1430427] }],
   "refs": [
     {
       "path": "ogg.3.8ed2dece.bemuse",
@@ -77,11 +75,11 @@ Extraction formula:
 
 ## Differences between primary sources and adoption rules
 
-| Discussion points | Official docs | Official code | Adoption in this repository |
-| --- | --- | --- | --- |
-| Header 4byte | All `0x00` | Read as `metadataLength` | Interpret as `UInt32LE metadataLength` and do not assume 0 fixation |
-| `refs[].size` | Field included | Unused in type | Accepted as an optional item |
-| Image/video file | Not specified | With fallback pattern (`png/jpg/webm/mp4/m4v`) | keysound prioritizes package, image/video allows fallback |
+| Discussion points | Official docs  | Official code                                  | Adoption in this repository                                         |
+| ----------------- | -------------- | ---------------------------------------------- | ------------------------------------------------------------------- |
+| Header 4byte      | All `0x00`     | Read as `metadataLength`                       | Interpret as `UInt32LE metadataLength` and do not assume 0 fixation |
+| `refs[].size`     | Field included | Unused in type                                 | Accepted as an optional item                                        |
+| Image/video file  | Not specified  | With fallback pattern (`png/jpg/webm/mp4/m4v`) | keysound prioritizes package, image/video allows fallback           |
 
 ## Compatibility checklist
 

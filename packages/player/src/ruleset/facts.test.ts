@@ -1,5 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog } from '../playlog/format.ts';
 import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
 import {

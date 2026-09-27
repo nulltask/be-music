@@ -33,6 +33,7 @@ const BENCH_SCORE = {
   good: 5,
   bad: 3,
   poor: 2,
+  emptyPoor: 0,
   exScore: 150,
   score: 75_000,
 };
@@ -676,7 +677,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
 }
 
-function makeBenchFile(path: string, body: string | Uint8Array): File {
+function makeBenchFile(path: string, body: string | Uint8Array<ArrayBuffer>): File {
   const name = path.split('/').at(-1) ?? path;
   const file = new File([body], name);
   Object.defineProperty(file, 'webkitRelativePath', {
@@ -783,7 +784,7 @@ function makeLr2Skin(): Lr2Skin {
     name: 'bench',
     scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
     files: new Map([['parts.tga', BENCH_BYTES]]),
-  } as Lr2Skin;
+  } as unknown as Lr2Skin;
 }
 
 function makeBenchBeatorajaSkin(): BeatorajaSkin {
@@ -835,7 +836,7 @@ function makeAudioBufferLike(): AudioBuffer {
     sampleRate: 1000,
     length: left.length,
     getChannelData: () => left,
-  } as AudioBuffer;
+  } as unknown as AudioBuffer;
 }
 
 interface FakeAudioParam {

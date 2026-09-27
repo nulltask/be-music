@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { TIMER_FADEOUT } from '@be-music/beatoraja-skin';
 import {
   BeatorajaSceneTransition,

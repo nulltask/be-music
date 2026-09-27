@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { discoverBeatorajaSelectBgmPath, discoverBeatorajaSystemSoundPaths } from './system-sounds.ts';
 
 function fakeFiles(paths: ReadonlyArray<string>): Map<string, Uint8Array> {

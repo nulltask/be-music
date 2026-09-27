@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
-import { defineConfig } from 'tsdown';
+import type { PackUserConfig } from 'vite-plus/pack';
 
-interface CreatePackageTsdownConfigOptions {
+interface CreatePackageConfigOptions {
   packageDir: string;
   entries: Record<string, string>;
 }
@@ -11,7 +11,12 @@ function createCliShebangPlugin() {
     name: 'be-music-cli-shebang',
     generateBundle(_options: unknown, bundle: Record<string, { type?: string; code?: string }>) {
       const cliChunk = bundle['cli.js'];
-      if (!cliChunk || cliChunk.type !== 'chunk' || typeof cliChunk.code !== 'string' || cliChunk.code.startsWith('#!')) {
+      if (
+        !cliChunk ||
+        cliChunk.type !== 'chunk' ||
+        typeof cliChunk.code !== 'string' ||
+        cliChunk.code.startsWith('#!')
+      ) {
         return;
       }
 
@@ -21,13 +26,20 @@ function createCliShebangPlugin() {
   };
 }
 
-export function createPackageTsdownConfig(options: CreatePackageTsdownConfigOptions) {
+/**
+ * Builds the shared `pack` block (tsdown via `vp pack`) for a workspace package. Each package's `vite.config.ts` only
+ * supplies its entry map; entries resolve against the package directory so the config works from any cwd.
+ */
+export function createPackageConfig(options: CreatePackageConfigOptions): PackUserConfig {
   const entry = Object.fromEntries(
     Object.entries(options.entries).map(([name, relativePath]) => [name, resolve(options.packageDir, relativePath)]),
   );
 
-  return defineConfig({
+  return {
     entry,
+    // `tsconfig.json` is the package's type-check project (tests, `paths` into sibling sources); declarations are
+    // emitted from the narrower build project instead.
+    tsconfig: resolve(options.packageDir, 'tsconfig.build.json'),
     clean: true,
     dts: true,
     fixedExtension: false,
@@ -37,5 +49,5 @@ export function createPackageTsdownConfig(options: CreatePackageTsdownConfigOpti
     sourcemap: true,
     target: 'node26',
     plugins: Object.hasOwn(entry, 'cli') ? [createCliShebangPlugin()] : undefined,
-  });
+  };
 }

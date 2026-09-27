@@ -36,12 +36,11 @@ pnpm install
 ```bash
 pnpm run clean
 pnpm run build
-pnpm run typecheck
-pnpm run lint
+pnpm run check
 pnpm run test
 ```
 
-`pnpm run build` は各ワークスペースの `tsdown` build を依存関係を満たしながら並列実行し、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run typecheck` / `pnpm run lint` / `pnpm run format` もワークスペース単位で並列実行します。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。
 
 ## package ごとの release
 
@@ -322,7 +321,7 @@ pnpm run editor export chart.json chart.bms
 | `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
 | `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
 | `24 KEY SP`              | `11..19` + `1A..1O` (24 レーン、scratch なし) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                           |
-| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`。2P バンクは印字キーを使い切り、末尾はファンクションキーになります                                          |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`。2P バンクは印字キーを使い切り、末尾はファンクションキーになります                                         |
 
 ## FREE ZONE (`17` / `27`)
 

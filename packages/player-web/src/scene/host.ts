@@ -331,6 +331,6 @@ function rendererTypeLabel(type: RendererType): string {
     case RendererType.BOTH:
       return 'both';
     default:
-      return `unknown(${type})`;
+      return `unknown(${String(type)})`;
   }
 }

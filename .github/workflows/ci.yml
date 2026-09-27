@@ -77,8 +77,8 @@ jobs:
       fail-fast: false
       matrix:
         task:
-          - lint
-          - typecheck
+          # `check` runs format, lint, and type checks in one pass from the root Vite+ config.
+          - check
           - build
           - test
 
@@ -86,23 +86,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Run ${{ matrix.task }}
-        run: pnpm run ${{ matrix.task }}
+        run: vp run ${{ matrix.task }}
 
   # Base and head share one VM. Split jobs land on different ubuntu-24.04-arm
   # machines, and that host delta dominates the 8% regression threshold.
@@ -132,17 +129,14 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Detect benchmark support
         id: detect-bench
@@ -163,7 +157,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Run head benchmark
         shell: bash
@@ -291,17 +285,14 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Detect benchmark support
         id: detect-bench
@@ -327,7 +318,7 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Run head benchmark
         shell: bash
@@ -452,20 +443,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Verify player SEA bundle
         if: needs.changes.outputs.sea_player_changed == 'true'

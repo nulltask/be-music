@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   BGM_BUS_COMPRESSOR_PARAMS,
   COMPRESSOR_INPUT_TRIM_GAIN_LINEAR,
@@ -310,7 +310,7 @@ describe('buildAudioBus graph topology', () => {
     // with a wrapping AudioContext that captures every compressor it hands out.
     const compressors: FakeNode[] = [];
     const wrapped = {
-      ...context,
+      ...(context as unknown as Record<string, unknown>),
       createDynamicsCompressor: (): FakeNode => {
         const node = (context as unknown as { createDynamicsCompressor: () => FakeNode }).createDynamicsCompressor();
         compressors.push(node);
