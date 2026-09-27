@@ -1,7 +1,7 @@
 import { createTimingResolver } from '@be-music/audio-renderer';
 import { createBeatResolver } from '@be-music/chart';
 import { createEmptyJson, type BeMusicEvent } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   createBeatAtSecondsResolver,
   createBeatAtSecondsResolverFromTimingResolver,

@@ -1,5 +1,5 @@
 import readline from 'node:readline';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { beginSharedRawInputCapture } from './raw-input-capture.ts';
 
 describe('shared raw input capture', () => {

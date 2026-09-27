@@ -31,12 +31,9 @@
       "@be-music/*": ["./packages/*/src/index.ts"]
     }
   },
-  "include": [
-    "packages/*/src/**/*.ts",
-    "packages/*/src/**/*.d.ts",
-    "scripts/**/*.ts",
-    "vite.package.config.ts",
-    "vitest.config.ts"
-  ],
-  "exclude": ["scripts/**/*.test.ts"]
+  "files": [
+    "packages/beatoraja-skin/src/fengari-types.d.ts",
+    "packages/player-tui/src/audio-sink-modules.d.ts",
+    "packages/player-web/src/vite-assets.d.ts"
+  ]
 }

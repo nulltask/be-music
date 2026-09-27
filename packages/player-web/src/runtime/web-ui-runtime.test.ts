@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { createPlayerUiSignalBus } from '../../../player/src/core/ui-signal-bus.ts';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../../../player/src/core/ui-signal-bus.ts';
 import { createWebUiRuntime, drainWebUiSignals } from './web-ui-runtime.ts';

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { aggregateBenchmarkSnapshots } from './aggregate-results.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
@@ -22,11 +22,15 @@ function createSnapshot(
     exports: {
       utils: ['clamp'],
       json: [],
+      chart: [],
       parser: [],
       stringifier: [],
       editor: [],
       'audio-renderer': [],
       player: [],
+      'player-tui': [],
+      'lr2-skin': [],
+      'player-web': [],
     },
     totals: {
       exported: 1,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { isSeaRuntime, resolveSeaWorkerRole, SEA_WORKER_ROLE_FIELD, SEA_WORKER_ROLES } from './sea-worker.ts';
 
 describe('resolveSeaWorkerRole', () => {

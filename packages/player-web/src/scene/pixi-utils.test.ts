@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { ChildPool, destroyUniqueTextures, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
 
 /**

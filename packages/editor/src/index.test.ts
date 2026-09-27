@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson, type BeMusicJson } from '../../json/src/index.ts';
 import { parseChartFile } from '../../parser/src/index.ts';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   addNote,
   createBlankJson,

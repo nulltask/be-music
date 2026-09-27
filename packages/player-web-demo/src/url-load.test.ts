@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { parseUrlMediaParams, resolveUrlLoadFetchUrl, URL_LOAD_PROXY_PATH } from './url-load.ts';
 
 describe('URL media auto-load helpers', () => {

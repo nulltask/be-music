@@ -36,12 +36,11 @@ pnpm install
 ```bash
 pnpm run clean
 pnpm run build
-pnpm run typecheck
-pnpm run lint
+pnpm run check
 pnpm run test
 ```
 
-`pnpm run build` executes `tsdown` build in each workspace in parallel while satisfying the dependencies, and outputs the bundle and type definition (`.d.ts`) together. `pnpm run typecheck` / `pnpm run lint` / `pnpm run format` are also executed in parallel in each workspace.
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files.
 
 ## Package Releases
 

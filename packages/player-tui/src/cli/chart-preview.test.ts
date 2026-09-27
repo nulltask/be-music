@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createEmptyJson } from '../../../json/src/index.ts';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { formatMusicSelectAudioBackendLabel, resolvePreviewContinueKeyFromChart } from './chart-preview.ts';
 
 interface PhraseNote {

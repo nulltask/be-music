@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { normalizeBeatorajaJudgeGraphs } from './judge-graph.ts';
 
 describe('normalizeBeatorajaJudgeGraphs', () => {

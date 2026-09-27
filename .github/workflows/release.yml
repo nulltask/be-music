@@ -50,20 +50,17 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Resolve release refs
         id: release_refs
@@ -114,20 +111,17 @@ jobs:
         with:
           ref: ${{ needs.prepare.outputs.release_target }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Compute asset metadata
         id: meta
@@ -299,20 +293,17 @@ jobs:
         with:
           ref: ${{ github.sha }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
+      # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
+      # `pnpm`, and caches the package store.
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.21.1
         with:
           node-version-file: .node-version
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
+          cache: true
+          run-install: false
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --prefer-offline
+        run: vp install
 
       - name: Prepare release metadata
         shell: bash

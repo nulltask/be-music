@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { clampFontSize, isDestinationVisible, resolveScaledViewport } from './scene-render.ts';
 import type { Lr2DestinationRect } from '@be-music/lr2-skin';
 

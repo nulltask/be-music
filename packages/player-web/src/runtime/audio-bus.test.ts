@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   BGM_BUS_COMPRESSOR_PARAMS,
   COMPRESSOR_INPUT_TRIM_GAIN_LINEAR,

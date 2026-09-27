@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { findBestCandidate, findClosestCandidateInWindow, findLaneSoundCandidate } from './judging.ts';
 
 describe('judging helpers', () => {

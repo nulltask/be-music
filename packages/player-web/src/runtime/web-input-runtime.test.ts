@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from '../../../player/src/core/input-signal-bus.ts';
 import { createWebInputRuntime, keyboardEventToTokens } from './web-input-runtime.ts';
 

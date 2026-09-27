@@ -14,7 +14,7 @@
 // inverted the default (1 was treated as 'right') and added 'left' / 'down' modes that don't
 // exist in upstream `SkinGraph`.
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'vite-plus/test';
 import { normalizeBeatorajaGraphs } from './graph.ts';
 import { normalizeBeatorajaSliders } from './slider.ts';
 

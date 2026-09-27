@@ -1,16 +1,4 @@
 {
-  "files": [],
-  "references": [
-    { "path": "packages/utils" },
-    { "path": "packages/json" },
-    { "path": "packages/chart" },
-    { "path": "packages/parser" },
-    { "path": "packages/stringifier" },
-    { "path": "packages/audio-renderer" },
-    { "path": "packages/player" },
-    { "path": "packages/player-tui" },
-    { "path": "packages/lr2-skin" },
-    { "path": "packages/beatoraja-skin" },
-    { "path": "packages/editor" }
-  ]
+  "extends": "./tsconfig.typecheck.json",
+  "include": ["scripts/**/*.ts", "vite.config.ts", "vite.package.config.ts"]
 }

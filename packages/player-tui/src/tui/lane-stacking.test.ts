@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { findStackableRowIndex } from './lane-stacking.ts';
 
 describe('lane stacking', () => {

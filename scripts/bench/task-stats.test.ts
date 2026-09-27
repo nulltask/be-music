@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { TaskResult } from 'tinybench';
 import { convertTaskResult, createSingleIterationStats, median, resolveComparisonHz } from './task-stats.ts';
 
@@ -82,7 +82,7 @@ describe('convertTaskResult', () => {
       mean: 10,
       samples: [8, 10, 20],
       totalTime: 200,
-    } as TaskResult);
+    } as unknown as TaskResult);
 
     expect(stats.hz).toBe(100);
     expect(stats.p50Ms).toBe(10);

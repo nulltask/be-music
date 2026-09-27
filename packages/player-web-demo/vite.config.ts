@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin } from 'vite-plus';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');

@@ -1,5 +1,5 @@
 import type { BeMusicEvent } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
 import {
   loadLr2ThemeSkinsFromFiles,

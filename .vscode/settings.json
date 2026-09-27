@@ -68,11 +68,15 @@
     "YUVJ"
   ],
   "editor.defaultFormatter": "oxc.oxc-vscode",
+  "[javascript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
+  "[typescript]": { "editor.defaultFormatter": "oxc.oxc-vscode" },
   "editor.formatOnSave": true,
+  "editor.formatOnSaveMode": "file",
   "editor.codeActionsOnSave": {
     "source.fixAll.oxc": "always"
   },
-  "oxc.fmt.configPath": ".oxfmtrc.json",
+  "oxc.disableNestedConfig": true,
+  "oxc.fmt.disableNestedConfig": true,
   "terminal.integrated.enableKittyKeyboardProtocol": true,
   "js/ts.experimental.useTsgo": true
 }

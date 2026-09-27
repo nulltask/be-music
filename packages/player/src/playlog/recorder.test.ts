@@ -1,5 +1,5 @@
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerSummary } from '../core/engine.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';

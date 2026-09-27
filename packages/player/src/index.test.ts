@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { parseChart, parseChartFile } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 

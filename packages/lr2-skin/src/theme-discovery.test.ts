@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { discoverLr2Themes, type Lr2ThemeDiscoveryFile } from './theme-discovery.ts';
 
 function file(path: string): Lr2ThemeDiscoveryFile {

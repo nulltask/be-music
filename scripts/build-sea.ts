@@ -249,7 +249,12 @@ function createWorkspaceAliasPlugin(aliases?: Record<string, string>) {
   // bypasses the rest of the resolution pipeline once a plugin returns a string from `resolveId`.
   return {
     name: 'be-music-sea-workspace-alias',
-    async resolveId(this: { resolve: (id: string, importer?: string, options?: { skipSelf?: boolean }) => Promise<{ id: string } | null> }, source: string): Promise<string | null> {
+    async resolveId(
+      this: {
+        resolve: (id: string, importer?: string, options?: { skipSelf?: boolean }) => Promise<{ id: string } | null>;
+      },
+      source: string,
+    ): Promise<string | null> {
       for (const [find, replacement] of entries) {
         let target: string | undefined;
         if (source === find) {
@@ -285,7 +290,6 @@ async function buildSeaBundle(config: SeaTargetConfig, seaDir: string): Promise<
       target: 'node26',
       outDir: seaDir,
       emptyOutDir: true,
-      codeSplitting: false,
       minify: false,
       sourcemap: false,
       lib: {

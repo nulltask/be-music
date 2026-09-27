@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { discoverBeatorajaTheme, loadBeatorajaPlaySkin, pickBeatorajaPlaySkin } from './play-skin.ts';
 import type { BeatorajaSkinFileEntry } from './file-lookup.ts';
 import type { BeatorajaPlaySkinMap, BeatorajaSkinEntry } from './play-skin.ts';

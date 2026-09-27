@@ -1,5 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { DEFAULT_PLAY_OPTIONS, isInsideLr2DefaultSearchBox, matchesSearchQuery, wrappedCursorDelta } from './select.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_DYNAMIC_OPS } from '../select-ops.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';

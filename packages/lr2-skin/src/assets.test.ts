@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { Lr2SkinFileEntry } from './file-lookup.ts';
 import { normalizeLr2Path, resolveLr2AssetBytes, resolveLr2IncludePath, wildcardToRegExp } from './assets.ts';
 import type { Lr2Skin } from './skin.ts';
