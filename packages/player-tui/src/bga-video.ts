@@ -665,4 +665,3 @@ function resolveBgaVideoWorkerExecArgv(): string[] {
   }
   return [...process.execArgv, '--conditions=source'];
 }
-

@@ -103,17 +103,17 @@ ruleset; `simulatePlaylogRulesets(playlog)` runs all three. Each ruleset differs
 long-note semantics, empty-POOR behavior, and gauge tables — the constants are documented per source in
 [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts):
 
-| aspect | LR2 (`lr2/1`) | beatoraja (`beatoraja/1`) | IIDX (`iidx/1`) |
-| --- | --- | --- | --- |
-| source | lr2oraja / OpenLR2 | beatoraja master | community measurements (iidx.org) |
-| windows (NORMAL-rank) | ±18/±40/±100/±200 ms | ±15/±45/±112.5/late 210 · early 165 ms (7K, judgerank 75 %) | ±16.67/±33.33/±116.67/±250 ms |
-| rank scaling | LR2 anchor interpolation, BAD fixed | linear × judgerank, MS fixed | none |
-| note selection | Lowest + multi-BAD chain | Combo (default; duration / lowest / score selectable) | Lowest |
-| long notes | all LN (deferred single judgment) | per-note LN / CN / HCN | all CN (HCN gauge when mode 3) |
-| empty POOR window | early-only 1000 ms | late 150 / early 500 ms (7K) | unmeasured — beatoraja window used |
-| empty POOR breaks combo | no | 5K / PMS only | no |
-| money score | `(4·PG + 2·GR + GD) × 50000 / notes` | — | — (abolished in BISTROVER) |
-| gauges | lr2oraja LR2 tables (death 2 %, guts < 32 % ×0.6) | beatoraja native tables | iidx.org tables (a-value recovery, ≤ 30 % half damage on HARD) |
+| aspect                  | LR2 (`lr2/1`)                                     | beatoraja (`beatoraja/1`)                                   | IIDX (`iidx/1`)                                                |
+| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| source                  | lr2oraja / OpenLR2                                | beatoraja master                                            | community measurements (iidx.org)                              |
+| windows (NORMAL-rank)   | ±18/±40/±100/±200 ms                              | ±15/±45/±112.5/late 210 · early 165 ms (7K, judgerank 75 %) | ±16.67/±33.33/±116.67/±250 ms                                  |
+| rank scaling            | LR2 anchor interpolation, BAD fixed               | linear × judgerank, MS fixed                                | none                                                           |
+| note selection          | Lowest + multi-BAD chain                          | Combo (default; duration / lowest / score selectable)       | Lowest                                                         |
+| long notes              | all LN (deferred single judgment)                 | per-note LN / CN / HCN                                      | all CN (HCN gauge when mode 3)                                 |
+| empty POOR window       | early-only 1000 ms                                | late 150 / early 500 ms (7K)                                | unmeasured — beatoraja window used                             |
+| empty POOR breaks combo | no                                                | 5K / PMS only                                               | no                                                             |
+| money score             | `(4·PG + 2·GR + GD) × 50000 / notes`              | —                                                           | — (abolished in BISTROVER)                                     |
+| gauges                  | lr2oraja LR2 tables (death 2 %, guts < 32 % ×0.6) | beatoraja native tables                                     | iidx.org tables (a-value recovery, ≤ 30 % half damage on HARD) |
 
 EX-SCORE is PGREAT × 2 + GREAT × 1 everywhere; DJ LEVEL uses the IIDX ninths table. Charge-note rulesets count a
 long note's head and tail as two judgment notes (`result.noteCount` reports each ruleset's denominator).
