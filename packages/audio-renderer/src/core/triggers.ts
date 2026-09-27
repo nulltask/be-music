@@ -212,7 +212,7 @@ export function createBmsonSamplePlaybackMap(
     let hasAnchor = false;
     let sliceIndex = 0;
 
-    for (let index = 0; index < entries.length; ) {
+    for (let index = 0; index < entries.length;) {
       const firstEntry = entries[index]!;
       const currentBeat = firstEntry.beat;
       let end = index + 1;
