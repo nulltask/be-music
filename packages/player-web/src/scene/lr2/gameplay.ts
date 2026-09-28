@@ -1,4 +1,15 @@
-import { Application, Container, Graphics, Rectangle, Text, TextStyle, Texture, VideoSource } from 'pixi.js';
+import {
+  Application,
+  Color,
+  Container,
+  FillGradient,
+  Graphics,
+  Rectangle,
+  Text,
+  TextStyle,
+  Texture,
+  VideoSource,
+} from 'pixi.js';
 // Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link PixiGameplayView.preparePixiUpload}
 // can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
@@ -3912,58 +3923,18 @@ export class PixiGameplayView {
       const fade = 1 - progress;
       const eased = 1 - (1 - progress) * (1 - progress);
       const centerX = lane.x + lane.w / 2;
-      const centerY = lane.bottom - Math.max(5, lane.w * 0.18);
-      const coreRadius = Math.max(3, lane.w * (0.28 + 0.12 * eased));
-      const haloRadius = Math.max(7, lane.w * (0.58 + 1.05 * eased));
-      const rayCount = 8;
-      const rayInner = coreRadius * (0.74 + eased * 0.14);
-      const rayOuter = haloRadius * (0.62 + eased * 0.08);
-      const lineWidth = Math.max(1, lane.w * (0.09 - progress * 0.04));
+      const centerY = lane.bottom - Math.max(4, lane.w * 0.16);
+      const outer = Math.max(8, lane.w * (0.55 + 0.6 * eased));
+      const inner = outer * 0.52;
       const graphic = this.bombLayerPool.acquireGraphics();
       graphic.label = `default-bomb[ch=${channel}]`;
       graphic.blendMode = 'add';
-      graphic.alpha = 1;
+      graphic.alpha = fade;
 
-      // Light pillar rising off the judgement line — sells the impact within the lane.
-      graphic
-        .rect(lane.x + lane.w * 0.14, centerY - haloRadius * 1.5, lane.w * 0.72, haloRadius * 1.5)
-        .fill({ color: 0xffb44d, alpha: 0.1 * fade });
-      // Flame ring + white-hot core with a warm mid layer.
-      graphic.circle(centerX, centerY, haloRadius).stroke({
-        color: 0xff7a2f,
-        width: Math.max(1.5, lane.w * 0.1),
-        alpha: 0.4 * fade,
-        alignment: 0.5,
-      });
-      graphic.circle(centerX, centerY, coreRadius * 1.7).fill({ color: 0xff9b3d, alpha: 0.2 * fade });
-      graphic.circle(centerX, centerY, coreRadius * 1.2).fill({ color: 0xffd166, alpha: 0.3 * fade });
-      graphic.circle(centerX, centerY, coreRadius * 0.7).fill({ color: 0xffffff, alpha: 0.75 * fade });
-      // Starburst: long cross spokes + short diagonals, rotating slightly as the burst expands.
-      const spin = eased * 0.5;
-      for (let index = 0; index < rayCount; index += 1) {
-        const angle = spin + -Math.PI / 2 + (Math.PI * 2 * index) / rayCount;
-        const longRay = index % 2 === 0;
-        const outer = longRay ? rayOuter * 1.35 : rayOuter * 0.9;
-        graphic
-          .moveTo(centerX + Math.cos(angle) * rayInner, centerY + Math.sin(angle) * rayInner)
-          .lineTo(centerX + Math.cos(angle) * outer, centerY + Math.sin(angle) * outer);
-      }
-      graphic.stroke({
-        color: 0xffe08a,
-        width: lineWidth,
-        alpha: 0.75 * fade,
-        cap: 'round',
-        alignment: 0.5,
-      });
-      // Ember dots at the spoke tips for the tail end of the burst.
-      if (progress > 0.35) {
-        for (let index = 0; index < 4; index += 1) {
-          const angle = spin + Math.PI / 4 + (Math.PI * 2 * index) / 4;
-          graphic
-            .circle(centerX + Math.cos(angle) * rayOuter * 1.15, centerY + Math.sin(angle) * rayOuter * 1.15, 1.4)
-            .fill({ color: 0xffd166, alpha: 0.8 * fade });
-        }
-      }
+      // Plain IIDX-style hit flash: an expanding ring over a white core, no decorative spokes.
+      graphic.circle(centerX, centerY, outer).stroke({ color: 0xff6a3d, width: Math.max(1.5, lane.w * 0.1) });
+      graphic.circle(centerX, centerY, inner).fill({ color: 0xffb070, alpha: 0.35 });
+      graphic.circle(centerX, centerY, inner * 0.5).fill({ color: 0xffffff, alpha: 0.85 });
     }
   }
 
@@ -5013,49 +4984,46 @@ export class PixiGameplayView {
       const tone = noteFallbackColor(channel, fallbackLaneIndex, this.chartPlayVariant);
       const laneHeight = Math.max(1, bottom - top);
 
-      // Lane bed — a whisper of the lane's own colour so the column reads as "this key's territory".
-      this.laneLayer.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: scratchLane ? 0.05 : 0.03 });
-      // Lane separators — cool blue hairlines instead of white, so notes pop against them.
-      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x2a2440, alpha: 0.6 });
+      // Lane bed — red-key lanes carry a faint red wash so the column reads as "this key's territory".
+      this.laneLayer.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: scratchLane ? 0.06 : 0.035 });
+      // Lane separators — charcoal hairlines, so white / red notes pop against the ink well.
+      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x2c2c31, alpha: 0.9 });
 
-      // Key beam — a vertical light column that decays towards the top, plus a hot base above the line.
+      // Key beam — a smooth vertical gradient in the lane's colour that fades out toward the top, plus a soft white
+      // hot base above the line. The gradients are cached per colour in local texture space, so one texture serves every
+      // lane and frame.
       const laserAlpha = this.resolveFallbackLaneLaserAlpha(channel);
       if (laserAlpha > 0) {
-        const beamHeight = Math.min(laneHeight, 170);
-        const slices = 6;
-        for (let slice = 0; slice < slices; slice += 1) {
-          const sliceRatio = slice / slices;
-          const sliceH = beamHeight / slices;
-          const sliceY = bottom - beamHeight + sliceRatio * beamHeight;
-          this.laneLayer
-            .rect(x + 1, sliceY, w - 2, sliceH + 1)
-            .fill({ color: tone.body, alpha: (0.05 + 0.4 * sliceRatio * sliceRatio) * laserAlpha });
-        }
-        this.laneLayer.rect(x + 1, bottom - 16, w - 2, 16).fill({ color: 0xffffff, alpha: 0.32 * laserAlpha });
+        const beamHeight = Math.min(laneHeight, 190);
+        // Ease the release so the beam dims quickly at first and lingers softly instead of fading linearly.
+        const beamAlpha = laserAlpha * laserAlpha * (3 - 2 * laserAlpha);
+        this.laneLayer
+          .rect(x + 1, bottom - beamHeight, w - 2, beamHeight)
+          .fill({ fill: resolveLaneBeamGradient(tone.body), alpha: beamAlpha });
+        this.laneLayer
+          .rect(x + 1, bottom - 22, w - 2, 22)
+          .fill({ fill: resolveLaneBeamGradient(0xffffff), alpha: beamAlpha * 0.7 });
       }
 
-      // Judgement line — neon magenta, breathing with the beat: the glow flares on the downbeat and decays into
-      // the bar, so the line itself keeps time even before any note arrives.
+      // Judgement line — a blood-red bar with a paper-white edge, breathing with the beat: the glow flares on the
+      // downbeat and decays into the bar, so the line itself keeps time even before any note arrives.
       const beat = this.currentBeat(this.currentSeconds());
       const beatDecay = 1 - (beat - Math.floor(beat));
-      this.laneLayer.rect(x, bottom - 14, w, 12).fill({ color: 0xff2f6b, alpha: 0.08 + 0.1 * beatDecay });
-      this.laneLayer.rect(x, bottom - 5, w, 3).fill({ color: 0xff2f6b, alpha: 0.35 });
-      this.laneLayer.rect(x, bottom - 2, w, 2).fill({ color: 0xff2f6b, alpha: 0.98 });
-      this.laneLayer.rect(x, bottom, w, 1).fill({ color: 0xffffff, alpha: 0.95 });
+      this.laneLayer.rect(x, bottom - 16, w, 14).fill({ color: 0xe60019, alpha: 0.1 + 0.16 * beatDecay });
+      this.laneLayer.rect(x, bottom - 4, w, 4).fill(0xe60019);
+      this.laneLayer.rect(x, bottom - 5, w, 1).fill({ color: 0xffffff, alpha: 0.9 });
+      this.laneLayer.rect(x, bottom, w, 1).fill(0x000000);
 
-      // Key caps under the line — glassy at rest, blazing on press with an under-glow strip toward the line.
+      // Key caps under the line — dark blocks with a white rim at rest, lit in the lane's colour on press.
       const pressed = laserAlpha > 0.6;
       const capTop = bottom + 3;
       const capHeight = 14;
-      this.laneLayer
-        .roundRect(x + 1, capTop, Math.max(2, w - 2), capHeight, 2)
-        .fill({ color: pressed ? tone.capLit : tone.cap, alpha: pressed ? 1 : 0.92 });
-      this.laneLayer.rect(x + 1, capTop, Math.max(2, w - 2), 2).fill({ color: 0xffffff, alpha: pressed ? 0.7 : 0.14 });
-      this.laneLayer.rect(x + 1, capTop + capHeight - 2, Math.max(2, w - 2), 2).fill({ color: 0x000000, alpha: 0.35 });
+      const capW = Math.max(2, w - 2);
+      this.laneLayer.rect(x + 1, capTop, capW, capHeight).fill(pressed ? tone.capLit : tone.cap);
+      this.laneLayer.rect(x + 1, capTop, capW, 2).fill({ color: 0xffffff, alpha: pressed ? 0.9 : 0.55 });
       if (pressed) {
         // Under-glow bridging the cap to the judgement line — the "lit from within" press feedback.
-        this.laneLayer.rect(x + 1, capTop - 2, Math.max(2, w - 2), 2).fill({ color: tone.top, alpha: 0.95 });
-        this.laneLayer.rect(x + 1, capTop + capHeight, Math.max(2, w - 2), 2).fill({ color: tone.body, alpha: 0.45 });
+        this.laneLayer.rect(x + 1, capTop - 2, capW, 2).fill({ color: 0xffffff, alpha: 0.95 });
       }
     });
 
@@ -5073,7 +5041,7 @@ export class PixiGameplayView {
       }
       this.laneLayer
         .rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop))
-        .fill({ color: 0x2a2440, alpha: 0.6 });
+        .fill({ color: 0x2c2c31, alpha: 0.9 });
     }
   }
 
@@ -5554,10 +5522,10 @@ export class PixiGameplayView {
       const bodyW = Math.max(4, lane.w - 2);
       const bodyTop = top - FALLBACK_NOTE_HEIGHT;
       const bodyH = Math.max(1, bottom - top);
-      // Translucent core with bright side rails — reads as "hold the lane", not a solid wall of colour.
-      graphic.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.28 });
-      graphic.rect(bodyX, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.85 });
-      graphic.rect(bodyX + bodyW - 2, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.85 });
+      // Translucent core with solid side rails — reads as "hold the lane", not a solid wall of colour.
+      graphic.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.35 });
+      graphic.rect(bodyX, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.9 });
+      graphic.rect(bodyX + bodyW - 2, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.9 });
       // Head and tail caps as real notes so the hold's judgment edges stay legible.
       drawFallbackNoteBody(graphic, bodyX, bottom, bodyW, tone);
       drawFallbackNoteBody(graphic, bodyX, top, bodyW, tone);
@@ -6303,43 +6271,69 @@ interface FallbackLaneTone {
   capLit: number;
 }
 
+// IIDX-convention tones: white keys white, black keys blue, scratch red. Notes stay plain so reading is never
+// traded for style; the default skin's poster styling lives in the surrounding chrome.
 const FALLBACK_TONE_WHITE: FallbackLaneTone = {
   top: 0xffffff,
-  body: 0xf2f4fa,
-  bottom: 0xa3adc2,
-  cap: 0xccd4e4,
-  capLit: 0xffffff,
+  body: 0xecebf0,
+  bottom: 0xa9a7b0,
+  cap: 0x1a1a1d,
+  capLit: 0xf4f1ea,
 };
 const FALLBACK_TONE_BLUE: FallbackLaneTone = {
-  top: 0xbef4ff,
-  body: 0x2fd4f6,
-  bottom: 0x0e7fae,
-  cap: 0x0e3c4e,
-  capLit: 0x5fe6ff,
+  top: 0xa8d8ff,
+  body: 0x3d8bff,
+  bottom: 0x1a4fa8,
+  cap: 0x0e1626,
+  capLit: 0x6fa8ff,
 };
 const FALLBACK_TONE_RED: FallbackLaneTone = {
-  top: 0xffb1c9,
-  body: 0xff3d6e,
-  bottom: 0xb3134a,
-  cap: 0x551228,
-  capLit: 0xff6f9a,
+  top: 0xff9aa6,
+  body: 0xe60019,
+  bottom: 0x7a0010,
+  cap: 0x24090d,
+  capLit: 0xff2b45,
 };
 
-/** Height of a fallback note body in design pixels. */
-const FALLBACK_NOTE_HEIGHT = 12;
+const LANE_BEAM_GRADIENTS = new Map<number, FillGradient>();
 
 /**
- * One skinless note: rounded body with a bright top edge and a shaded bottom edge, so the sprite reads as a lit
- * plastic key instead of a flat rectangle. `y` is the just-timing line — the body's BOTTOM edge sits on it.
+ * Vertical beam gradient for `color`: transparent at the top, easing into a translucent base at the bottom. Built in
+ * `'local'` texture space so the same gradient stretches to any lane rect.
+ */
+function resolveLaneBeamGradient(color: number): FillGradient {
+  let gradient = LANE_BEAM_GRADIENTS.get(color);
+  if (!gradient) {
+    const rgb = new Color(color);
+    gradient = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: 'local',
+      colorStops: [
+        { offset: 0, color: rgb.setAlpha(0).toRgbaString() },
+        { offset: 0.45, color: rgb.setAlpha(0.08).toRgbaString() },
+        { offset: 0.8, color: rgb.setAlpha(0.28).toRgbaString() },
+        { offset: 1, color: rgb.setAlpha(0.55).toRgbaString() },
+      ],
+    });
+    LANE_BEAM_GRADIENTS.set(color, gradient);
+  }
+  return gradient;
+}
+
+/** Height of a fallback note body in design pixels. */
+const FALLBACK_NOTE_HEIGHT = 10;
+
+/**
+ * One skinless note: a flat IIDX-style bar with a thin highlight on top and shade at the bottom. `y` is the
+ * just-timing line — the body's BOTTOM edge sits on it.
  */
 function drawFallbackNoteBody(graphic: Graphics, x: number, y: number, w: number, tone: FallbackLaneTone): void {
   const h = FALLBACK_NOTE_HEIGHT;
-  graphic
-    .roundRect(x, y - h, w, h, 2)
-    .fill(tone.body)
-    .stroke({ color: 0x05070d, width: 1, alignment: 1 });
-  graphic.rect(x + 1, y - h + 1, w - 2, 2).fill({ color: tone.top, alpha: 0.9 });
-  graphic.rect(x + 1, y - 3, w - 2, 2).fill({ color: tone.bottom, alpha: 0.9 });
+  graphic.rect(x, y - h, w, h).fill(tone.body);
+  graphic.rect(x, y - h, w, 1).fill({ color: tone.top, alpha: 0.9 });
+  graphic.rect(x, y - 2, w, 2).fill({ color: tone.bottom, alpha: 0.9 });
 }
 
 function noteFallbackColor(

@@ -1079,8 +1079,9 @@ body {
  */
 .help-button {
   position: absolute;
-  right: 14px;
+  left: 50%;
   bottom: 14px;
+  transform: translateX(-50%);
   z-index: 8;
   display: inline-flex;
   align-items: center;
@@ -1111,7 +1112,7 @@ body {
   color: #ffd166;
   border-color: rgb(255 209 102 / 0.4);
   background: rgb(20 24 34 / 0.85);
-  transform: translateY(-1px);
+  transform: translate(-50%, -1px);
   outline: none;
 }
 

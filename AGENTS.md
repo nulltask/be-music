@@ -7,6 +7,20 @@
 - Keep one logical change per commit when possible.
 - For documentation-only updates, append `[ci skip]` at the end of the commit message.
 
+# Branch Naming Rules
+
+- Follow the Conventional Branch format (https://conventional-branch.github.io/): `<type>/<description>`.
+- Use one of these types:
+  - `feature/` (or `feat/`) for new features.
+  - `bugfix/` (or `fix/`) for bug fixes.
+  - `hotfix/` for urgent fixes.
+  - `release/` for release preparation (e.g. `release/v1.2.0`).
+  - `chore/` for non-code tasks such as dependency, docs, or tooling updates.
+- Write the description in lowercase alphanumerics and hyphens (e.g. `feature/default-skin-redesign`). Dots are allowed only for version numbers in `release/` branches.
+- Do not use consecutive, leading, or trailing hyphens or dots, and no spaces or other special characters.
+- Include an issue number when one exists (e.g. `fix/issue-123-gauge-flicker`).
+- Long-lived branches `main` and `devel` are exempt.
+
 # Pull Request Rules
 
 - Do not prefix pull request titles with `[codex]`.

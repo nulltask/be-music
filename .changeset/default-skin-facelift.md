@@ -2,28 +2,13 @@
 '@be-music/player-web': minor
 ---
 
-Redesign the default (skinless) gameplay chrome as a "night cabinet": near-black violet ground with cyan / magenta
-neon accents and gold money values.
+Redesign the default (skinless) skin family in a "Phantom" poster style: ink-black ground, blood-red slabs and halftone fields, slanted paper plates, jagged starbursts, and condensed italic type. Gameplay, song select, and result all share the new look while keeping the same geometry contract (LR2 default 7-keys lane positions, 640x480 design canvas, unchanged select hit areas).
 
-The built-in chrome was a set of flat panels: single-colour bars, flat note rectangles, a star-sparkle bomb, and an
-amber judgement strip. The redesign keeps the same geometry contract (LR2 default 7-keys lane positions, 640x480
-design canvas) and repaints everything on top of it:
+- Gameplay chrome: sawtooth header kicker that swells on the beat, slanted mode / ruleset tags, a halftone floor wedge under a slanted score plate with a starburst rank badge, a segmented slanted-cell groove gauge, a paper "track card" song plate, ransom-note judge tally chips, and a BGA monitor that idles on a turning starburst "STAND BY" screen.
+- The playfield stays deliberately plain and IIDX-like: flat white / blue / red notes, solid-rail long notes, a red judgement line, and a simple ring-and-core hit flash, so reading is never traded for style.
+- Judgement words and all live numerals (score, EX score, combo, gauge, tally, BPM / HI-SPEED) use Anton with tabular figures, laid out per glyph in fixed-width cells so changing values never jitter sideways.
+- Song select: red halftone slab with a drifting dot field, a starburst that pulses at the focused chart's BPM, speed streaks, a scrolling header kicker, a beat-kicking row pointer, a glint sweeping the focused card, a staggered fly-in of the song list on entry, and a slide-in of the focused card and title on every cursor move. PLAY is now the primary (larger) action and AUTO PLAY secondary.
+- Result: an entrance timeline — the red halftone slash sweeps in, the STAGE CLEAR / FAILED tag slams down, metric plates and judgement rows slide in one after another while every counter rolls up, count bars grow, run graphs draw left to right, and the rank burst pops before its letter stamps down. Afterwards the burst keeps turning and pulsing, the halftone drifts, the header kicker scrolls, speed streaks rake across, and a glint sweeps the verdict tag; a skip jumps straight to the settled layout.
+- Type stack: Anton for Latin display text, Dela Gothic One for song titles, and M PLUS 1p for small UI and Japanese text, with LINE Seed JP as the fallback. Hosts should load these faces (the demo does via Google Fonts).
 
-- Notes are three-tone plastic keys (highlight / body / shade with an outline) in white / neon cyan / hot pink; long
-  notes render as a translucent core with bright side rails and real head/tail caps.
-- The judgement line is neon magenta and breathes with the beat; an LR2-style keyboard of glassy key caps sits under
-  it, blazing on press with an under-glow strip and a gradient key beam.
-- The groove gauge is LR2's 50-cell segmented bar — orange below the clear line, red-hot above it, flickering tip,
-  threshold notch — labelled with the active ruleset's own gauge id, and survival gauges run the all-red scheme.
-- The header HUD carries a mode pill, LED-style BPM / HI-SPEED readouts, a beat-pulsed accent trim, and a ruleset
-  chip (LR2 / BEATORAJA / IIDX) so the compat mode is visible at a glance.
-- The score panel shows a gold score headline and a DJ-level meter under EX RATE with the IIDX ninth-boundary ticks,
-  so the distance to the next rank letter is legible mid-play.
-- A live judge tally column (PG/GR/GD/BD/PR plus FAST / SLOW) sits beside the BGA monitor, which idles as a hex
-  reticle with a crosshair instead of a black hole.
-- The playfield gets dark-chrome side rails with a magenta song-progress pipe, and bombs are a two-stage burst:
-  white-hot core, flame ring, rotating starburst spokes, ember dots, and a light pillar in the lane.
-- Combo readouts tier their colour (white → cyan at 50 → gold at 200) and judge text carries a same-hue glow.
-
-`SkinlessGameplayChromeRuntime` gains `nowMs`, `progressRatio`, `beatPhase`, `rulesetLabel`, `gaugeLabel`,
-`gaugeSurvival`, `fast`, and `slow`.
+`SkinlessGameplayChromeRuntime` gains `nowMs`, `progressRatio`, `beatPhase`, `rulesetLabel`, `gaugeLabel`, `gaugeSurvival`, `fast`, and `slow`.
