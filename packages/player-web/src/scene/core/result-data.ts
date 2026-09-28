@@ -6,7 +6,7 @@ import type { BrowserSongEntry } from '../../collection/types.ts';
  * One sample of the gauge polyline. `progress` is the chart-time fraction (0 = first note, 1 = last playable / sample
  * trigger); `value` is the gauge percentage at that moment (0..100).
  *
- * Used by the result scene's `Lr2GaugeChartElement` renderer — see `scene/lr2/result.ts`. The series always contains at
+ * Used by the LR2 result scene's `#SRC_GAUGECHART` renderer (`PixiResultView`). The series always contains at
  * least one entry (the chart-start origin seeded in `prepareSong`).
  */
 export interface GaugeHistorySample {

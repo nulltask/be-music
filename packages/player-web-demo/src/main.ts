@@ -369,7 +369,7 @@ class PlayerWebDemoApp {
    * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
-  private resultView: PixiResultView | undefined;
+  private resultView: PixiResultView | DefaultPixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
   /**
