@@ -693,6 +693,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * moment the gameplay view appears, not from the moment notes begin scrolling.
    */
   protected sceneStartTime = 0;
+  /** Intro length scheduled by `start()` (theme `#PLAYSTART` or the fallback), for chrome count-ins. */
+  private scheduledIntroMs = 0;
   private startTime = 0;
   /**
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
@@ -1300,6 +1302,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
     const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    this.scheduledIntroMs = introMs;
     // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
     // in the background — see `prepare()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
     // true and the rAF loop in the intro (LR2 LOADING) phase.
@@ -3164,7 +3167,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         seed: Math.floor(startedAt * 7.31) % 100_003,
       });
     }
-    this.playfieldSkin.gameplay.renderBombs({ pool: this.bombLayerPool, bombs, nowMs: now });
+    this.playfieldSkin.gameplay.renderBombs({ pool: this.bombLayerPool, bombs, nowMs: now, combo: this.tracker.combo });
   }
 
   /** Active be-music skin for scene-painted playfield parts; the built-in Phantom skin unless the host picked one. */
@@ -3365,6 +3368,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     });
   }
 
+  /**
+   * Milliseconds since the chart's first beat for chrome count-ins. Before the play-start gate opens (`startTime` is
+   * still +Infinity) it counts toward the scheduled intro end and holds just below zero if the BGA preload runs long.
+   */
+  private resolveChartMs(): number | undefined {
+    if (this.startTime === 0) return undefined;
+    if (Number.isFinite(this.startTime)) return performance.now() - this.startTime;
+    return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
+  }
+
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
     const seconds = this.currentSeconds();
@@ -3418,6 +3431,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeSurvival: this.gaugeState.survival === true,
       fast: this.fastCount,
       slow: this.slowCount,
+      totalNotes: total,
+      chartMs: this.resolveChartMs(),
     };
   }
 
@@ -3511,6 +3526,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         lanes: skinlessLanes,
         beatPhase: beat - Math.floor(beat),
         nowMs: this.playClock(),
+        combo: this.tracker.combo,
       });
     }
   }

@@ -27,6 +27,7 @@ import {
   starburstPoints,
 } from './phantom-style.ts';
 import type { ChildPool } from '../pixi-utils.ts';
+import { drawPhantomMoments } from './phantom/moments.ts';
 import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions as TextOptions } from './hud-text.ts';
 
 const DISPLAY_FONT = DEFAULT_DISPLAY_FONT;
@@ -104,6 +105,8 @@ export function renderDefaultGameplayFrame(
   }
   drawStatusBar(front, frontLayer, runtime, frontPool);
   drawJudgements(frontLayer, runtime, playfield, frontPool);
+  // Showpieces (count-in, combo milestones, clear line, full combo) sit above everything else.
+  drawPhantomMoments(layer, frontLayer, runtime, frontPool);
 }
 
 /**

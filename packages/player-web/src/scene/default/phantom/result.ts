@@ -360,6 +360,26 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
     anchorY: 0.5,
   });
   slideIn(footer.root, 420, 0, 50);
+
+  // Entrance wipe: the screen opens behind an ink slab carrying a giant RESULT slug that tears away to the right with a
+  // red leading edge, uncovering the panels as they fly in.
+  const wipeT = stageProgress(elapsed, 0, 760);
+  if (wipeT < 1) {
+    const wipe = group('wipe');
+    const eased = wipeT * wipeT * (3 - 2 * wipeT);
+    const edge = -120 + eased * (designWidth + 360);
+    wipe.g
+      .poly([edge + 120, 0, designWidth + 200, 0, designWidth + 200, designHeight, edge, designHeight])
+      .fill(PHANTOM_INK);
+    wipe.g.poly([edge + 80, 0, edge + 128, 0, edge + 8, designHeight, edge - 40, designHeight]).fill(PHANTOM_RED);
+    wipe.g.poly([edge + 136, 0, edge + 142, 0, edge + 22, designHeight, edge + 16, designHeight]).fill(PHANTOM_WHITE);
+    addText(wipe.root, 'RESULT', edge + 150 + designWidth / 2, designHeight / 2, {
+      ...display(120, PHANTOM_WHITE),
+      letterSpacing: 8,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+  }
 }
 
 function renderMetric(

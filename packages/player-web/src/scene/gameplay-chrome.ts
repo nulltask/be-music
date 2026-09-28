@@ -59,6 +59,13 @@ export interface SkinlessGameplayChromeRuntime {
   fast?: number;
   /** SLOW (late GREAT/GOOD) count. */
   slow?: number;
+  /** Playable notes in the chart (0 while unknown). */
+  totalNotes?: number;
+  /**
+   * Milliseconds since the chart's first beat: negative during the intro count-in, `undefined` before the play has
+   * been scheduled. Lets chrome stage entrance cut-ins against the real start.
+   */
+  chartMs?: number;
 }
 
 export interface SkinlessGameplayChromeRenderContext {

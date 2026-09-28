@@ -4,6 +4,8 @@ import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime
 import { resolveFallbackLaneLayout, shouldPreserveFallbackSideWidth } from '../../gameplay-lanes.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudNumber, addHudText, type HudTextOptions } from '../hud-text.ts';
+import { comboTier } from '../moments.ts';
+import { drawSynesthesiaMoments } from './moments.ts';
 import { hsvToHex, icosahedron, projectPoint, rotateX, rotateY, starfieldPoint } from './space.ts';
 import {
   SYN_AMBER,
@@ -54,8 +56,11 @@ export function renderSynesthesiaChrome({
 
   const space = layerPool.acquireGraphics();
   space.label = 'synesthesia-gameplay/space';
-  drawSpace(space, seconds, pulse, hue, hasBga);
-  drawFloorGrid(space, seconds, pulse, hue);
+  // Zone: the space intensifies with the combo (faster, denser stars, hotter grid, aurora, beat rings).
+  const tier = comboTier(runtime.combo ?? 0);
+  drawSpace(space, seconds, pulse, hue, hasBga, tier);
+  drawFloorGrid(space, seconds, pulse, hue, tier, beatPhase);
+  if (tier >= 2) drawAurora(space, seconds, hue, tier, hasBga);
 
   const panels = layerPool.acquireGraphics();
   panels.label = 'synesthesia-gameplay/panels';
@@ -73,6 +78,7 @@ export function renderSynesthesiaChrome({
   front.label = 'synesthesia-gameplay/header';
   drawHeader(front, overlayLayer, runtime, accent, pulse, overlayLayerPool);
   drawJudgements(overlayLayer, runtime, playfieldRight, seconds, overlayLayerPool);
+  drawSynesthesiaMoments(layer, overlayLayer, runtime, (PLAYFIELD.x + playfieldRight) / 2, hue, overlayLayerPool);
 }
 
 function resolvePlayfieldRight(runtime: Runtime): number {
@@ -95,7 +101,14 @@ function insideBga(x: number, y: number, margin = 0): boolean {
  * Deep-space ground (indigo at the top falling into void), a pair of soft nebulae, and 3D stars flying out of the
  * vanishing point. With a live BGA the ground leaves the BGA rect open and stars skip it.
  */
-function drawSpace(graphics: Graphics, seconds: number, pulse: number, hue: number, hasBga: boolean): void {
+function drawSpace(
+  graphics: Graphics,
+  seconds: number,
+  pulse: number,
+  hue: number,
+  hasBga: boolean,
+  tier: number,
+): void {
   const bands: ReadonlyArray<readonly [number, number]> = [
     [SYN_DEEP, 120],
     [0x080620, 220],
@@ -114,38 +127,59 @@ function drawSpace(graphics: Graphics, seconds: number, pulse: number, hue: numb
     [600, 420, 120, hsvToHex(hue, 0.7, 1)],
   ] as const) {
     for (let ring = 3; ring >= 1; ring -= 1) {
-      graphics.circle(x, y, (radius * ring) / 3).fill({ color, alpha: 0.025 + 0.012 * pulse });
+      graphics.circle(x, y, (radius * ring) / 3).fill({ color, alpha: (0.025 + 0.012 * pulse) * (1 + 0.5 * tier) });
     }
   }
   // Starfield streaming toward the camera from the horizon.
   const cx = 320;
   const cy = FLOOR.horizon - 90;
-  for (let index = 0; index < 120; index += 1) {
-    const point = starfieldPoint(index, seconds, { spread: 520, near: 20, far: 900, speed: 110 + 40 * pulse });
+  const starCount = 100 + 25 * tier;
+  const starSpeed = (110 + 40 * pulse) * (1 + 0.45 * tier);
+  for (let index = 0; index < starCount; index += 1) {
+    const point = starfieldPoint(index, seconds, { spread: 520, near: 20, far: 900, speed: starSpeed });
     const projected = projectPoint(point, cx, cy, 180);
     if (!projected.visible) continue;
     if (projected.x < 0 || projected.x > DESIGN_WIDTH || projected.y < 0 || projected.y > DESIGN_HEIGHT) continue;
     if (hasBga && insideBga(projected.x, projected.y, 4)) continue;
     const nearness = Math.min(1, projected.scale);
     const radius = 0.4 + 1.8 * nearness;
-    const color = hsvToHex(hue + (index % 5) * 0.06, 0.35 + 0.3 * (index % 2), 1);
+    const color = hsvToHex(hue + (index % 5) * (0.06 + 0.03 * tier), 0.35 + 0.3 * (index % 2) + 0.06 * tier, 1);
+    if (tier >= 4) {
+      // Hyperspace: stars smear into streaks along their flight line.
+      const tail = projectPoint({ ...point, z: point.z + 90 }, cx, cy, 180);
+      graphics
+        .moveTo(tail.x, tail.y)
+        .lineTo(projected.x, projected.y)
+        .stroke({ color, width: radius, alpha: 0.35 * nearness });
+    }
     graphics.circle(projected.x, projected.y, radius * 3).fill({ color, alpha: 0.06 * nearness });
     graphics.circle(projected.x, projected.y, radius).fill({ color: SYN_WHITE, alpha: 0.25 + 0.6 * nearness });
   }
 }
 
 /** Rez-style floor: radial lines into the horizon and cross lines scrolling toward the player on the beat. */
-function drawFloorGrid(graphics: Graphics, seconds: number, pulse: number, hue: number): void {
+function drawFloorGrid(
+  graphics: Graphics,
+  seconds: number,
+  pulse: number,
+  hue: number,
+  tier: number,
+  beatPhase: number,
+): void {
   const { horizon, height, focal } = FLOOR;
-  const color = hsvToHex(hue + 0.08, 0.7, 1);
+  const color = hsvToHex(hue + 0.08 + (tier >= 3 ? Math.sin(seconds * 0.7) * 0.12 : 0), 0.7, 1);
+  const glow = 1 + 0.35 * tier;
   const project = (x: number, z: number) => projectPoint({ x, y: height, z }, 320, horizon, focal);
   for (let x = -1200; x <= 1200; x += 80) {
     const near = project(x, 0);
     const far = project(x, 2400);
-    graphics.moveTo(near.x, near.y).lineTo(far.x, far.y).stroke({ color, width: 1, alpha: 0.16 });
+    graphics
+      .moveTo(near.x, near.y)
+      .lineTo(far.x, far.y)
+      .stroke({ color, width: 1, alpha: 0.16 * glow });
   }
   const spacing = 90;
-  const offset = (seconds * 150) % spacing;
+  const offset = (seconds * 150 * (1 + 0.3 * tier)) % spacing;
   for (let z = spacing - offset; z < 2400; z += spacing) {
     const left = project(-1200, z);
     const right = project(1200, z);
@@ -153,10 +187,50 @@ function drawFloorGrid(graphics: Graphics, seconds: number, pulse: number, hue: 
     graphics
       .moveTo(left.x, left.y)
       .lineTo(right.x, right.y)
-      .stroke({ color, width: 1, alpha: (0.08 + 0.22 * nearness) * (0.7 + 0.3 * pulse) });
+      .stroke({ color, width: 1, alpha: Math.min(0.9, (0.08 + 0.22 * nearness) * (0.7 + 0.3 * pulse) * glow) });
   }
   // Horizon glow.
-  graphics.rect(0, horizon - 1, DESIGN_WIDTH, 2).fill({ color, alpha: 0.18 + 0.2 * pulse });
+  graphics.rect(0, horizon - 1, DESIGN_WIDTH, 2).fill({ color, alpha: (0.18 + 0.2 * pulse) * glow });
+  if (tier >= 3) {
+    // Beat rings rolling out of the vanishing point across the floor.
+    for (const phase of [beatPhase, (beatPhase + 0.5) % 1]) {
+      const rx = 30 + phase * 520;
+      graphics
+        .ellipse(320, horizon + 4 + phase * 60, rx, rx * 0.16)
+        .stroke({ color, width: 1 + (1 - phase) * 2, alpha: 0.45 * (1 - phase) });
+    }
+  }
+}
+
+/**
+ * Aurora ribbons flowing across the sky once the run is in the zone (combo tier 2+): layered sine curves in the scene
+ * hue, broken around the BGA rect so a live video stays clean.
+ */
+function drawAurora(graphics: Graphics, seconds: number, hue: number, tier: number, hasBga: boolean): void {
+  const ribbons = tier >= 4 ? 4 : tier >= 3 ? 3 : 2;
+  for (let ribbon = 0; ribbon < ribbons; ribbon += 1) {
+    const color = hsvToHex(hue + ribbon * 0.09 + Math.sin(seconds * 0.3 + ribbon) * 0.05, 0.75, 1);
+    const baseY = 70 + ribbon * 34;
+    let previous: { x: number; y: number } | undefined;
+    for (let x = -10; x <= DESIGN_WIDTH + 10; x += 16) {
+      const y =
+        baseY +
+        Math.sin(x * 0.012 + seconds * (0.9 + ribbon * 0.25) + ribbon) * 18 +
+        Math.sin(x * 0.031 - seconds * 1.3) * 6;
+      const point = { x, y };
+      if (previous && !(hasBga && (insideBga(previous.x, previous.y, 12) || insideBga(x, y, 12)))) {
+        graphics
+          .moveTo(previous.x, previous.y)
+          .lineTo(x, y)
+          .stroke({ color, width: 16, alpha: 0.04 * tier });
+        graphics
+          .moveTo(previous.x, previous.y)
+          .lineTo(x, y)
+          .stroke({ color, width: 2, alpha: 0.12 * tier });
+      }
+      previous = point;
+    }
+  }
 }
 
 function fillAroundBga(
@@ -443,7 +517,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     `${formatCount(runtime.exScore)}/${formatCount(runtime.exScoreMax)}`,
     x + 136,
     y + 52,
-    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 56 },
+    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 50 },
     pool,
   );
   addHudText(layer, 'EX RATE', x + 14, y + 76, labelStyle(), pool);
@@ -452,7 +526,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     formatExRate(runtime.exScore, runtime.exScoreMax),
     x + 136,
     y + 74,
-    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 56 },
+    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 50 },
     pool,
   );
   // Rate meter as a light filament with the IIDX ninth ticks.
@@ -531,7 +605,7 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
       formatCount(runtime[key]),
       x + w - 7,
       rowY - 1,
-      { ...displayStyle(10, SYN_WHITE), anchorX: 1, maxWidth: w - 36 },
+      { ...displayStyle(9, SYN_WHITE), anchorX: 1, maxWidth: w - 42 },
       pool,
     );
   }

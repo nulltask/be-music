@@ -18,6 +18,7 @@ import {
   type Vec3,
 } from './space.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
+import { comboTier } from '../moments.ts';
 
 /** Per-lane-class light: note body, glow hue (0..1), and the colour the lane beam / key cap light up in. */
 interface LaneLight {
@@ -36,8 +37,12 @@ const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
 const NOTE_HEIGHT = 8;
 export const SYNESTHESIA_BOMB_DURATION_MS = 620;
 
-export function renderSynesthesiaLanes({ graphics, lanes, beatPhase }: BeMusicLanesContext): void {
+export function renderSynesthesiaLanes({ graphics, lanes, beatPhase, nowMs, combo }: BeMusicLanesContext): void {
   const pulse = (1 - beatPhase) ** 2;
+  // The judgement line burns brighter as the run builds, and cycles the spectrum once it is in the zone.
+  const tier = comboTier(combo ?? 0);
+  const heat = 1 + 0.3 * tier;
+  const lineColor = tier >= 3 ? hsvToHex(0.52 + Math.sin(nowMs / 900) * 0.2, 0.45, 1) : 0x5ff4ff;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
   let gridLeft = Number.POSITIVE_INFINITY;
@@ -79,8 +84,10 @@ export function renderSynesthesiaLanes({ graphics, lanes, beatPhase }: BeMusicLa
   // Judgement line: a white filament wrapped in stacked cyan bloom that swells on each beat.
   const lineW = gridRight - gridLeft;
   const y = gridBottom;
-  graphics.rect(gridLeft, y - 14, lineW, 22).fill({ color: 0x5ff4ff, alpha: 0.05 + 0.08 * pulse });
-  graphics.rect(gridLeft, y - 6, lineW, 8).fill({ color: 0x5ff4ff, alpha: 0.16 + 0.14 * pulse });
+  graphics.rect(gridLeft, y - 14, lineW, 22).fill({ color: lineColor, alpha: (0.05 + 0.08 * pulse) * heat });
+  graphics
+    .rect(gridLeft, y - 6, lineW, 8)
+    .fill({ color: lineColor, alpha: Math.min(0.8, (0.16 + 0.14 * pulse) * heat) });
   graphics.rect(gridLeft, y - 3, lineW, 3).fill({ color: 0x9ff8ff, alpha: 0.85 });
   graphics.rect(gridLeft, y - 2, lineW, 1).fill(0xffffff);
 }
@@ -110,14 +117,17 @@ function drawNote(graphics: Graphics, x: number, y: number, w: number, light: La
   graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.95 });
 }
 
-const BURST_PARTICLES = 52;
+/** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
+const BURST_PARTICLES = 44;
+const BURST_PARTICLES_PER_TIER = 6;
+const BURST_PARTICLES_MAX = BURST_PARTICLES + BURST_PARTICLES_PER_TIER * 4;
 const BURST_FOCAL = 260;
 const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
 
 function cachedBurst(seed: number): BurstParticle[] {
   let particles = PARTICLE_CACHE.get(seed);
   if (!particles) {
-    particles = burstParticles(seed, BURST_PARTICLES);
+    particles = burstParticles(seed, BURST_PARTICLES_MAX);
     PARTICLE_CACHE.set(seed, particles);
     // Live bombs never exceed a few dozen; keep the cache bounded.
     if (PARTICLE_CACHE.size > 64) {
@@ -139,13 +149,17 @@ function cachedBurst(seed: number): BurstParticle[] {
  *
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
-export function renderSynesthesiaBombs({ pool, bombs }: BeMusicBombsContext): void {
+export function renderSynesthesiaBombs({ pool, bombs, combo }: BeMusicBombsContext): void {
+  const tier = comboTier(combo ?? 0);
+  // Keep colour the hero: when many hits overlap, dim the white parts (flash, pillar, streak) so additive stacking
+  // doesn't burn the line to white, while sparks keep most of their colour.
+  const crowd = 1 / Math.sqrt(Math.max(1, bombs.length / 2));
   for (const bomb of bombs) {
-    renderBomb(pool, bomb);
+    renderBomb(pool, bomb, tier, crowd);
   }
 }
 
-function renderBomb(pool: ChildPool, bomb: BeMusicBomb): void {
+function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: number): void {
   const t = Math.max(0, Math.min(1, bomb.elapsedMs / SYNESTHESIA_BOMB_DURATION_MS));
   if (t >= 1) return;
   const light = LIGHTS[bomb.kind];
@@ -165,7 +179,7 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb): void {
   const pillarH = unit * 5.5 * (0.6 + 0.4 * fade);
   effects
     .rect(bomb.x + 1, cy - pillarH, bomb.w - 2, pillarH)
-    .fill({ fill: resolveColumnGradient(light.glow), alpha: 0.55 * fade * fade });
+    .fill({ fill: resolveColumnGradient(light.glow), alpha: 0.55 * fade * fade * crowd });
 
   // 2. Shockwave rings in the XZ plane — the second one trails slightly and tilts the other way.
   for (const [delay, tilt, strength] of [
@@ -188,13 +202,13 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb): void {
     effects.poly(ring, false).stroke({
       color: hsvToHex(light.hue + 0.04 * delay, 0.55, 1),
       width: 0.6 + 2.2 * (1 - ringT),
-      alpha: 0.75 * strength * (1 - ringT),
+      alpha: 0.75 * strength * (1 - ringT) * (0.5 + 0.5 * crowd),
     });
   }
 
   // 3 + 4. Sparks: compute every projected position once, draw trails, then depth-sorted glow sprites.
-  const particles = cachedBurst(bomb.seed);
-  const radius = unit * 4.6;
+  const particles = cachedBurst(bomb.seed).slice(0, BURST_PARTICLES + BURST_PARTICLES_PER_TIER * tier);
+  const radius = unit * 4.6 * (1 + 0.1 * tier);
   const gravity = unit * 3.2;
   const sparks: Array<{ x: number; y: number; z: number; scale: number; life: number; particle: BurstParticle }> = [];
   // Fountain shaping: narrow the lateral spread so neighbouring lanes don't merge into one white band, and add an
@@ -240,7 +254,7 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb): void {
     sprite.position.set(spark.x, spark.y);
     // White-hot at launch, cooling into the lane's hue.
     sprite.tint = hsvToHex(light.hue + spark.particle.hueShift, Math.min(0.9, 0.45 + spark.life * 1.8), 1);
-    sprite.alpha = (1 - spark.life) ** 0.8;
+    sprite.alpha = (1 - spark.life) ** 0.8 * (0.65 + 0.35 * crowd);
   }
 
   // 5. Core flash + anamorphic streak.
@@ -255,7 +269,7 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb): void {
     core.height = coreSize;
     core.position.set(cx, cy);
     core.tint = hsvToHex(light.hue, t * 2, 1);
-    core.alpha = flash * 0.7;
+    core.alpha = flash * 0.7 * crowd;
   }
   const streakAlpha = fade ** 2.5;
   if (streakAlpha > 0.02) {
@@ -267,7 +281,7 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb): void {
     streak.height = Math.max(2, unit * 0.32 * fade);
     streak.position.set(cx, cy);
     streak.tint = hsvToHex(light.hue, 0.35, 1);
-    streak.alpha = streakAlpha * 0.6;
+    streak.alpha = streakAlpha * 0.6 * crowd;
   }
 }
 

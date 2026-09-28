@@ -64,6 +64,8 @@ export interface BeMusicLanesContext {
   /** Fractional beat position in [0, 1). */
   beatPhase: number;
   nowMs: number;
+  /** Current combo — lets skins escalate the playfield as a run builds. */
+  combo?: number;
 }
 
 export interface BeMusicNoteContext {
@@ -106,6 +108,8 @@ export interface BeMusicBombsContext {
   pool: ChildPool;
   bombs: readonly BeMusicBomb[];
   nowMs: number;
+  /** Current combo — lets skins escalate hit effects as a run builds. */
+  combo?: number;
 }
 
 /** Song-list geometry shared by the select renderer (drawing) and the scene (row hit-testing). */
