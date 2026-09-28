@@ -100,7 +100,7 @@ export class CoreResultView {
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /** Layer the theme hook paints into; cleared (and its children destroyed) every frame. */
-  protected readonly skinLayer = new Container();
+  protected readonly skinLayer: Container = new Container();
   private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no theme paints the frame). */
   private readonly fallbackLayer = new Container();
@@ -138,7 +138,7 @@ export class CoreResultView {
    * Per-timer fire timestamps. Empty until each respective timer fires; entries here drive both the keyframe
    * interpolator (`elapsedSinceTimer`) and the timer-active gating (`timerActive`).
    */
-  protected readonly timerStartedAt = new Map<number, number>();
+  protected readonly timerStartedAt: Map<number, number> = new Map<number, number>();
   protected options: CoreResultViewOptions;
 
   public constructor(options: CoreResultViewOptions = {}) {

@@ -526,13 +526,13 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   private readonly viewportBackground = new Graphics();
   private readonly background = new Graphics();
   /** Theme chrome drawn behind the song list (LR2 static images, empty-state hint, …). Cleared every render. */
-  protected readonly skinLayer = new Container();
+  protected readonly skinLayer: Container = new Container();
   /**
    * Theme chrome drawn on top of the song list. The LR2 scene routes elements its CSV declared AFTER the bar list
    * (`#SRC_BAR_BODY`) here — the canonical use case is the song-list scroll-position slider that lives to the right of
    * the bars. Cleared every render.
    */
-  protected readonly skinForegroundLayer = new Container();
+  protected readonly skinForegroundLayer: Container = new Container();
   /**
    * Top-most overlay used by the LR2 READTEXT button (#SRC_BUTTON type 17). Hidden until the user clicks the button on
    * a song whose folder ships a `.txt` file. The skin's own readtext UI lives on its own panel timer (15 / 16) and we
@@ -598,9 +598,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * Per-frame section timing tracker. Logs every second when enabled via `?perf` URL flag or
    * `globalThis.__BE_MUSIC_PERF__ = true`.
    */
-  protected readonly perf = new PerfTracker('select');
+  protected readonly perf: PerfTracker = new PerfTracker('select');
   /** Song-bar slots — one sprite per visible bar plus its overlay text. */
-  protected readonly listLayer = new Container();
+  protected readonly listLayer: Container = new Container();
   /**
    * Persistent mount points for the be-music select renderer's back / front layers (skinless path only). The renderer
    * owns what's inside; the scene only toggles visibility and keeps them around `listLayer`.
@@ -650,7 +650,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * Multiple panels can be open simultaneously per spec (the FX panel and the play-options panel coexist on real LR2
    * setups); `togglePanel` flips one slot at a time so the user explicitly controls which panels are stacked.
    */
-  protected readonly panelStates = new Set<number>();
+  protected readonly panelStates: Set<number> = new Set<number>();
   /**
    * Parallel stack of the parent's `selectedIndex` at the moment each folder on `browseStack` was entered. Used by
    * {@link leaveFolder} to land the cursor back on the folder bar the user just exited rather than jumping to the top
@@ -690,7 +690,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * an existing key is the LR2 "timer reset" operation — DST keyframes anchored to that timer will play again from
    * time=0.
    */
-  protected readonly timerStartedAt = new Map<number, number>();
+  protected readonly timerStartedAt: Map<number, number> = new Map<number, number>();
   /**
    * Pixel offset applied to `listLayer` during a skinned bar-list scroll transition. Right after a cursor move, the
    * entry-to-slot mapping shifts instantly; we counter that by pushing `listLayer.y` so the bars appear to stay where they
