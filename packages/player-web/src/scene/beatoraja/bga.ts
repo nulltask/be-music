@@ -26,7 +26,7 @@ import {
   type BeatorajaDestinationGroup,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { pickActiveBgaKey, type BgaCue } from '../lr2/gameplay-bga.ts';
+import { pickActiveBgaKey, type BgaCue } from '../core/gameplay-bga.ts';
 
 export interface BeatorajaBgaLayerOptions {
   skin: BeatorajaSkin;
@@ -36,7 +36,7 @@ export interface BeatorajaBgaLayerOptions {
    */
   textures: ReadonlyMap<string, Texture>;
   /**
-   * Chart-time BGA cue lists. Built via `buildBgaTimeline(chart, resolver)` in `scene/lr2/gameplay-bga.ts`.
+   * Chart-time BGA cue lists. Built via `buildBgaTimeline(chart, resolver)` in `scene/core/gameplay-bga.ts`.
    * Pass an empty `{ base: [], layer: [], poor: [] }` if the chart has no BGA — the layer hides itself.
    */
   cues: { base: ReadonlyArray<BgaCue>; layer: ReadonlyArray<BgaCue>; poor: ReadonlyArray<BgaCue> };

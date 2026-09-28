@@ -250,6 +250,25 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       registry.detectThemeFamilies(['Theme/play_7.lr2skin', 'Skin/play7.luaskin']);
     },
   });
+  define('player-web.createBeMusicSkinRegistry', {
+    run: () => {
+      const registry = playerWebCoreApi.createBeMusicSkinRegistry([playerWebCoreApi.phantomSkin]);
+      registry.resolve('phantom');
+      registry.resolve('missing');
+    },
+  });
+  define('player-web.resolveBeMusicLaneKind', {
+    run: () => {
+      playerWebCoreApi.resolveBeMusicLaneKind('16', 0, '7');
+      playerWebCoreApi.resolveBeMusicLaneKind('12', 2, '7');
+      playerWebCoreApi.resolveBeMusicLaneKind('1D', -1, '24');
+    },
+  });
+  define('player-web.resolveSelectListWindow', {
+    run: () => {
+      playerWebCoreApi.resolveSelectListWindow(playerWebCoreApi.phantomSkin.select.layout, 480, 50, 100);
+    },
+  });
   define('player-web.createCroppedBeatorajaTexture', {
     run: () => {
       playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });

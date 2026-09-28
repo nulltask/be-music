@@ -10,7 +10,7 @@ import {
 } from '@be-music/lr2-skin';
 import type { Lr2LoadedFont } from './bitmap-text.ts';
 import { normalizePath } from '../../collection/collection.ts';
-import { attachBlobUrlToTexture } from './textures.ts';
+import { attachBlobUrlToTexture } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 
 const log = logger('lr2-font');

@@ -50,7 +50,7 @@ import {
 } from '../../chart/beatoraja/note-distribution.ts';
 import { flipDpChart } from '../../chart/beatoraja/dp-flip.ts';
 import { BeatorajaBgaLayer } from './bga.ts';
-import type { BgaCue } from '../lr2/gameplay-bga.ts';
+import type { BgaCue } from '../core/gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';

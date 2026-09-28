@@ -122,11 +122,10 @@ export class PixiSceneHost {
       // pixel-art-style render.
       antialias: false,
       autoDensity: true,
-      // Cap the render-buffer multiplier at 2× the CSS resolution. LR2 / BMS art is pixel-art rendered through
-      // `roundPixels: true` + nearest sampling — a 3× DPR Retina display brings no perceptual benefit but multiplies
-      // the GPU's fillrate cost by ~9× compared to the 1× CSS pixel grid. The cap drops a 3× DPR display to 56 % of
-      // the previous fragment count; 1× / 2× displays (the common case) are unaffected.
-      resolution: Math.min(2, globalThis.devicePixelRatio || 1),
+      // Render at the display's full devicePixelRatio so vector chrome and text land on real device pixels. (This
+      // used to be capped at 2× to save fill-rate on 3× displays, but the built-in skins' vector shapes and text then
+      // rendered visibly soft there.)
+      resolution: globalThis.devicePixelRatio || 1,
       roundPixels: true,
       // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
       // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
