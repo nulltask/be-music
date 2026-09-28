@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
-import { attachBlobUrlToTexture } from './textures.ts';
+import { attachBlobUrlToTexture, loadTextureFromBytes, registerImageDecoder } from './textures.ts';
 
 describe('attachBlobUrlToTexture', () => {
   it('records the blob URL on a real texture object', () => {
@@ -29,5 +29,25 @@ describe('attachBlobUrlToTexture', () => {
     attachBlobUrlToTexture(null, 'blob:no');
     expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe('registerImageDecoder', () => {
+  it('routes matching extensions (case-insensitively) through the registered decoder', async () => {
+    const decoder = vi.fn(() => undefined);
+    registerImageDecoder('.TESTFMT', decoder);
+    const bytes = new Uint8Array([1, 2, 3]);
+    // The decoder declines (returns `undefined`), so the loader falls through to the blob path, which has no
+    // `createImageBitmap` under Node and resolves `undefined` — the point here is only that the decoder saw the bytes.
+    await expect(loadTextureFromBytes('Skin/Sheet.TestFmt', bytes)).resolves.toBeUndefined();
+    expect(decoder).toHaveBeenCalledTimes(1);
+    expect(decoder).toHaveBeenCalledWith(bytes);
+  });
+
+  it('leaves other extensions alone', async () => {
+    const decoder = vi.fn(() => undefined);
+    registerImageDecoder('.otherfmt', decoder);
+    await loadTextureFromBytes('Skin/Sheet.png', new Uint8Array([1]));
+    expect(decoder).not.toHaveBeenCalled();
   });
 });

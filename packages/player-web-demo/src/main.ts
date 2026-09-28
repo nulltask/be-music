@@ -2,6 +2,7 @@
 // explicit at the file top. The main `@be-music/player-web` entry is reserved for symbols that don't belong to any
 // single area (`logger`, `Rectangle`).
 import {
+  BUILT_IN_BE_MUSIC_SKINS,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
   DefaultPixiSongSelectView,
@@ -21,6 +22,7 @@ import {
 } from '@be-music/player-web/scenes';
 import {
   BeatorajaSkinAudioPlayer,
+  createBeMusicSkinRegistry,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   findBeatorajaThemeBgm,
@@ -124,15 +126,33 @@ if (!app) {
 
 app.innerHTML = DEMO_APP_HTML;
 
-const DEFAULT_UI_FONT_LOADS = [
+/** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
+const BE_MUSIC_SKINS = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
+const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
+
+function readStoredBuiltInSkinId(): string | undefined {
+  try {
+    return window.localStorage.getItem(BUILT_IN_SKIN_STORAGE_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function storeBuiltInSkinId(id: string): void {
+  try {
+    window.localStorage.setItem(BUILT_IN_SKIN_STORAGE_KEY, id);
+  } catch {
+    // Private windows / blocked storage: the pick still applies for this session.
+  }
+}
+
+const DEFAULT_UI_FONT_LOADS: readonly string[] = [
   '400 22px "LINE Seed JP"',
   '700 18px "LINE Seed JP"',
   '900 32px "Azeret Mono"',
-  '400 24px "Anton"',
-  '400 18px "Dela Gothic One"',
-  '700 12px "M PLUS 1p"',
-  '800 12px "M PLUS 1p"',
-] as const;
+  // Every built-in skin's faces, so switching skins never rasterizes a first frame with a fallback font.
+  ...new Set(BUILT_IN_BE_MUSIC_SKINS.flatMap((skin) => skin.fontLoads)),
+];
 
 async function waitForDefaultUiFonts(): Promise<void> {
   if (!('fonts' in document)) return;
@@ -255,8 +275,9 @@ class PlayerWebDemoApp {
     optionClose?: Uint8Array;
     optionChange?: Uint8Array;
   } = {};
-  private selectView: PixiSongSelectView | undefined;
-  private gameplayView: PixiGameplayView | undefined;
+  private selectView: PixiSongSelectView | DefaultPixiSongSelectView | undefined;
+  /** LR2-family or default-family gameplay view (both share the core gameplay API). */
+  private gameplayView: PixiGameplayView | DefaultPixiGameplayView | undefined;
   /**
    * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
    * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
@@ -349,7 +370,7 @@ class PlayerWebDemoApp {
    * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
-  private resultView: PixiResultView | undefined;
+  private resultView: PixiResultView | DefaultPixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
   /**
@@ -475,6 +496,7 @@ class PlayerWebDemoApp {
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
       skinFamilyOverride: 'auto',
+      builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -699,6 +721,14 @@ class PlayerWebDemoApp {
     // in place once a theme drop adds LR2 / beatoraja to the pool. Parked here (right after Open Folder) so the
     // family pick reads as a top-level navigation control, above per-family detail folders.
     this.rebuildSkinFamilyPicker();
+    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
+    // scene. Persisted so a reload keeps the pick.
+    gui
+      .add(this.guiState, 'builtInSkin', Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id])))
+      .name('Built-in skin')
+      .onChange((id: string) => {
+        this.handleBuiltInSkinChange(id);
+      });
     // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
     // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
     // 1-option dropdown.
@@ -1523,6 +1553,21 @@ class PlayerWebDemoApp {
    * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
    * even reach the GUI).
    */
+  /** The be-music skin the default-family scenes render with. */
+  private get beMusicSkin() {
+    return BE_MUSIC_SKINS.resolve(this.guiState.builtInSkin);
+  }
+
+  /**
+   * Apply a Debug Menu built-in skin change: persist it and rebuild the persistent select scene (the same dispose-and-
+   * rebuild the skin-family override uses). Gameplay / result pick the skin up on their next mount.
+   */
+  private handleBuiltInSkinChange(id: string): void {
+    this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
+    storeBuiltInSkinId(this.guiState.builtInSkin);
+    this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+  }
+
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
@@ -2888,12 +2933,23 @@ class PlayerWebDemoApp {
     // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
     // earlier, so we only have these two cases here.
     const lr2SelectSkin = activeFamily === 'lr2' ? this.selectSkin : undefined;
+    let carriedPlayOptions: PixiPlayOptions | undefined;
+    if (this.selectView && lr2SelectSkin !== undefined && !(this.selectView instanceof PixiSongSelectView)) {
+      // A theme dropped while the default-family scene is up: only the LR2 scene can adopt an LR2 skin, so rebuild it
+      // below as the LR2 scene, carrying the cursor and the live play options across.
+      this.lastSelectNavigation ??= this.selectView.getNavigation();
+      carriedPlayOptions = this.selectView.getPlayOptions();
+      this.selectView.dispose();
+      this.selectView = undefined;
+    }
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
       // the bytes, and (because we're still hidden) defers the actual `start()` until `setVisible(true)` lands a moment
       // later. Doing it the other way round would briefly start the prior theme's BGM during the visibility flip.
-      this.selectView.setSkin(lr2SelectSkin);
+      if (this.selectView instanceof PixiSongSelectView) {
+        this.selectView.setSkin(lr2SelectSkin);
+      }
       this.selectView.setSelectBgm(this.selectBgmBytes);
       this.selectView.setDecideBgm(this.decideBgmBytes);
       this.selectView.setSystemSounds(this.systemSoundBundle);
@@ -2917,6 +2973,7 @@ class PlayerWebDemoApp {
       // Seed the in-scene panel from the Debug Menu's "Play options" state (two-way sync: the panel's own edits
       // come back through `onPlayOptionsChange` below; lil-gui edits push through `setPlayOptions`).
       initialPlayOptions: {
+        ...carriedPlayOptions,
         autoPlay: this.guiState.autoPlay,
         gauge1P: this.guiState.gauge,
         random1P: this.guiState.random1P,
@@ -2956,7 +3013,7 @@ class PlayerWebDemoApp {
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
-      : new DefaultPixiSongSelectView(selectSceneOptions);
+      : new DefaultPixiSongSelectView({ ...selectSceneOptions, beMusicSkin: this.beMusicSkin });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
   }
@@ -3058,7 +3115,7 @@ class PlayerWebDemoApp {
     song: BrowserSongEntry,
     playSkin: Lr2Skin | undefined,
     overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; chartSha256?: string },
-  ): PixiGameplayView {
+  ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const sharedOptions = {
@@ -3112,7 +3169,7 @@ class PlayerWebDemoApp {
     if (playSkin === undefined) {
       // Default-family path: no LR2 skin loaded for this chart. `DefaultPixiGameplayView` strips the skin / invisible-
       // note-skin slots from its option shape, so neither value flows in here.
-      return new DefaultPixiGameplayView(sharedOptions);
+      return new DefaultPixiGameplayView({ ...sharedOptions, beMusicSkin: this.beMusicSkin });
     }
     return new PixiGameplayView({
       ...sharedOptions,
@@ -3262,7 +3319,7 @@ class PlayerWebDemoApp {
     };
     this.resultView = lr2ResultSkin
       ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
-      : new DefaultPixiResultView(sharedResultOptions);
+      : new DefaultPixiResultView({ ...sharedResultOptions, beMusicSkin: this.beMusicSkin });
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;

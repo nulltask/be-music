@@ -51,6 +51,8 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  */
 export interface DemoGuiState {
   autoPlay: boolean;
+  /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
+  builtInSkin: string;
   /**
    * When true, gameplay auto-pauses on tab visibility change / window blur and auto-resumes on focus. False (the
    * default) keeps the play scene running in the background — convenient for capturing recordings while another window

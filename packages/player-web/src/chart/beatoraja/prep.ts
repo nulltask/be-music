@@ -52,10 +52,10 @@ import { buildBgaTimelines, type BgaTimelines } from '@be-music/player/core/bga-
 import { buildAudioBus, type AudioBusHandle, type CompressorMode } from '../../runtime/audio-bus.ts';
 import type { EngineDriverAudioContext } from '../../runtime/engine-driver.ts';
 import { loadAssetBytes, resolveChartAudioAsset } from '../../collection/collection.ts';
-import { loadVideoTextureFromBytes } from '../../skin/lr2/textures.ts';
+import { loadVideoTextureFromBytes } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
-import type { BgaCue } from '../../scene/lr2/gameplay-bga.ts';
-import { isVideoExtension } from '../../scene/lr2/gameplay-bga.ts';
+import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
+import { isVideoExtension } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 
