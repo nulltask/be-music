@@ -98,7 +98,7 @@ export function digitTransitions(previous: number, next: number): DigitTransitio
   const before = String(Math.max(0, Math.floor(previous)));
   const after = String(Math.max(0, Math.floor(next)));
   const pad = after.length - before.length;
-  return [...after].map((char, index) => {
+  return Array.from(after).map((char, index) => {
     const prior = index - pad >= 0 ? (before[index - pad] ?? '') : '';
     return { char, previous: prior, changed: prior !== char };
   });
@@ -142,7 +142,7 @@ const SCRAMBLE_WIDE = 'アイウエオカキクケコサシスセソタチツテ
  * are blank. Spaces stay spaces, and wide (CJK) characters scramble through katakana so the line keeps its width.
  */
 export function scrambleText(target: string, progress: number, tick: number, seed = 0): string {
-  const chars = [...target];
+  const chars = Array.from(target);
   if (!(progress < 1)) return target;
   const count = chars.length;
   if (count === 0) return target;

@@ -50,7 +50,6 @@ const FLOOR = { horizon: 326, height: 154, focal: 200 } as const;
 /** How far the gameplay camera roams: eye offset (floor frame, floor 154 below) and turn / tilt. */
 const CAMERA_RANGE = { x: 230, y: 110, yaw: 0.34, pitch: 0.18 } as const;
 const CAMERA_CYCLE_S = 7;
-const SHOT_HOLD_S = 9;
 const SCHOOL_SIZE = 70;
 /**
  * Three schools, each with its own swimming box (floor frame, floor at y 154), light, and seed — their leaders wander
@@ -83,7 +82,6 @@ function advanceSchools(
   state.lastMs = nowMs;
   return state.flocks;
 }
-const SHOT_MOVE_S = 3.5;
 const FIGURE = pointCloudHumanoid(11, 1400);
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
 

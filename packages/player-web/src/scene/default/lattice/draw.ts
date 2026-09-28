@@ -125,7 +125,7 @@ export function addStaggeredHudText(
   pool: ChildPool,
   motion: LetterMotion,
 ): void {
-  const chars = [...text];
+  const chars = Array.from(text);
   const nodes = chars.map((char) =>
     addHudText(layer, char, 0, y, { ...options, anchorX: 0, maxWidth: undefined, scale: undefined }, pool),
   );
@@ -204,7 +204,7 @@ export function addStaggeredSkinText(
   options: SkinTextOptions,
   motion: LetterMotion,
 ): void {
-  const chars = [...text];
+  const chars = Array.from(text);
   const nodes = chars.map((char) => addSkinText(layer, char, 0, y, { ...options, anchorX: 0, maxWidth: undefined }));
   const widths = nodes.map((node) => node.width);
   const total = widths.reduce((sum, width) => sum + width, 0);
