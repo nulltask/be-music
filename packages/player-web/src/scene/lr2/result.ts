@@ -30,10 +30,11 @@ import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
-import type { PixiGameplayResultData } from './gameplay.ts';
+import type { PixiGameplayResultData } from '../core/result-data.ts';
 import type { BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 
+import { resolveDesignTextResolution, setDesignTextResolution } from '../core/viewport.ts';
 const log = logger('result');
 
 /**
@@ -514,6 +515,7 @@ export class PixiResultView {
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
     const designHeight = useSkin ? skin!.height : FALLBACK_DESIGN_HEIGHT;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
+    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
       this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
       this.cachedScreenWidth = screenWidth;

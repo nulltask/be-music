@@ -1,5 +1,6 @@
 import { CanvasTextMetrics, type Container, Text, TextStyle } from 'pixi.js';
 import type { ChildPool } from '../pixi-utils.ts';
+import { getDesignTextResolution } from '../core/viewport.ts';
 import { DEFAULT_TEXT_FONT } from './fonts.ts';
 import { layoutTabularRun } from './phantom-style.ts';
 
@@ -36,6 +37,11 @@ export function addHudText(
   pool?: ChildPool,
 ): Text {
   const node = pool?.acquireText() ?? new Text();
+  // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
+  const resolution = getDesignTextResolution();
+  if (node.resolution !== resolution) {
+    node.resolution = resolution;
+  }
   const style = resolveTextStyle(opts);
   node.text = text;
   if (node.style !== style) {
@@ -131,6 +137,8 @@ function resolveTextStyle(opts: HudTextOptions): TextStyle {
       fontFamily: opts.fontFamily ?? DEFAULT_TEXT_FONT,
       letterSpacing: opts.letterSpacing ?? 0,
       stroke: opts.stroke,
+      // Room for the blurred glow; without it the shadow is clipped to the glyph box and shows as a hard rectangle.
+      padding: shadow ? Math.ceil(shadow.blur * 2 + shadow.distance) : 0,
       ...(shadow
         ? {
             dropShadow: {

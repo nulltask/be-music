@@ -1,6 +1,7 @@
 import { type Color, type Container, Graphics, Text, TextStyle } from 'pixi.js';
 import { resolveChartPlayVariant } from '../../collection/collection.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
+import { getDesignTextResolution } from '../core/viewport.ts';
 import { DEFAULT_TEXT_FONT } from './fonts.ts';
 
 export interface SkinTextOptions {
@@ -27,6 +28,8 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
   const shadow = options.dropShadow;
   const node = new Text({
     text,
+    // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
+    resolution: getDesignTextResolution(),
     style: new TextStyle({
       fill: options.fill ?? 0xffffff,
       fontSize: options.size ?? 10,
@@ -34,6 +37,8 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
       fontFamily: options.fontFamily ?? DEFAULT_TEXT_FONT,
       letterSpacing: options.letterSpacing ?? 0,
       stroke: options.stroke,
+      // Room for the blurred glow; without it the shadow is clipped to the glyph box and shows as a hard rectangle.
+      padding: shadow ? Math.ceil((shadow.blur ?? 0) * 2 + shadow.distance) : 0,
       ...(shadow
         ? {
             dropShadow: {

@@ -1,7 +1,7 @@
 import type { Container, Graphics } from 'pixi.js';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';
 import type { SkinlessGameplayChromeRenderer } from '../../scene/gameplay-chrome.ts';
-import type { PixiGameplayResultData } from '../../scene/lr2/gameplay.ts';
+import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
 
 /**

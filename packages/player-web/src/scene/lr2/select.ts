@@ -64,6 +64,7 @@ import type { BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/typ
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 
+import { resolveDesignTextResolution, setDesignTextResolution } from '../core/viewport.ts';
 const log = logger('select');
 const BG = new Color('#050912');
 const TEXT = new Color('#f6f2e8');
@@ -2658,6 +2659,7 @@ export class PixiSongSelectView {
     const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
     const designHeight = useSkin ? skin!.height : FALLBACK_DESIGN_HEIGHT;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
+    setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
     // Only rebuild the static rect graphics when the dimensions they depend on actually change. The previous
     // unconditional `.clear().rect().fill()` chain ran on every rAF tick and was a measurable contributor to the select
     // scene's frame budget under LR2 default skin (~hundreds of skin elements already redraw per frame).
