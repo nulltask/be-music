@@ -304,28 +304,6 @@ export interface CameraPose {
 
 export const REST_CAMERA: CameraPose = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 };
 
-/**
- * The camera at `seconds` for a looping sequence of `shots`: each shot holds for `holdSeconds`, then the camera flies
- * to the next one over `moveSeconds` with a smoothstep ease, wrapping back to the first shot at the end.
- */
-export function cameraShot(
-  seconds: number,
-  shots: readonly CameraPose[],
-  holdSeconds: number,
-  moveSeconds: number,
-): CameraPose {
-  if (shots.length === 0) return REST_CAMERA;
-  const time = Number.isFinite(seconds) ? seconds : 0;
-  const cycle = holdSeconds + moveSeconds;
-  const step = Math.floor(time / cycle);
-  const local = time - step * cycle;
-  const index = ((step % shots.length) + shots.length) % shots.length;
-  const from = shots[index]!;
-  const to = shots[(index + 1) % shots.length]!;
-  const raw = local <= holdSeconds || moveSeconds <= 0 ? 0 : (local - holdSeconds) / moveSeconds;
-  return mixCamera(from, to, raw * raw * (3 - 2 * raw));
-}
-
 /** Blend between two poses (`t` = 0 → `from`, 1 → `to`); `mixCamera(REST_CAMERA, pose, 0.5)` halves a move. */
 export function mixCamera(from: CameraPose, to: CameraPose, t: number): CameraPose {
   const mix = (a: number, b: number) => a + (b - a) * t;
@@ -353,4 +331,53 @@ export function vanishingPoint(camera: CameraPose, cx: number, cy: number, focal
   const direction = rotateX(rotateY({ x: 0, y: 0, z: 1 }, -camera.yaw), camera.pitch);
   if (direction.z <= 1e-6) return { x: cx, y: cy };
   return { x: cx + (direction.x / direction.z) * focal, y: cy + (direction.y / direction.z) * focal };
+}
+
+/** Per-axis extents a roaming camera may wander within (each axis spans `[-range, range]`). */
+export interface CameraRange {
+  x: number;
+  y: number;
+  yaw: number;
+  pitch: number;
+}
+
+/** Shot `index` of a seeded random sequence: a pose inside `range`, deterministic for (`index`, `seed`). */
+export function randomShot(index: number, seed: number, range: CameraRange): CameraPose {
+  const roll = (offset: number) => hash01(seed * 977 + index * 31 + offset) * 2 - 1;
+  // Shot 0 opens at rest so every scene starts on the composed default view.
+  if (index === 0) return REST_CAMERA;
+  return { x: roll(1) * range.x, y: roll(2) * range.y, z: 0, yaw: roll(3) * range.yaw, pitch: roll(4) * range.pitch };
+}
+
+/**
+ * A roaming camera: every `cycleSeconds` a new random shot (see {@link randomShot}). Within each cycle the camera holds,
+ * then flies to the next shot over a random 1–3.5 s — or, one cycle in five, hard-cuts to it — and a slow handheld
+ * drift (incommensurate sines, `drift` × the range) keeps it breathing between moves.
+ */
+export function roamingCamera(
+  seconds: number,
+  seed: number,
+  range: CameraRange,
+  cycleSeconds: number,
+  drift = 0.08,
+): CameraPose {
+  const time = Number.isFinite(seconds) ? seconds : 0;
+  const step = Math.floor(time / cycleSeconds);
+  const local = time - step * cycleSeconds;
+  const from = randomShot(step, seed, range);
+  const to = randomShot(step + 1, seed, range);
+  const cut = hash01(seed * 53 + step * 7) < 0.2;
+  const move = cut ? 0.18 : 1 + 2.5 * hash01(seed * 61 + step * 11);
+  const hold = cycleSeconds - move;
+  const raw = local <= hold ? 0 : Math.min(1, (local - hold) / move);
+  const pose = mixCamera(from, to, raw * raw * (3 - 2 * raw));
+  const wobble = (a: number, b: number, c: number) =>
+    (Math.sin(time * a) + Math.sin(time * b + 1.3) * 0.6 + Math.sin(time * c + 2.1) * 0.3) / 1.9;
+  return {
+    x: pose.x + wobble(0.31, 0.53, 1.07) * range.x * drift,
+    y: pose.y + wobble(0.27, 0.61, 0.97) * range.y * drift,
+    z: pose.z,
+    yaw: pose.yaw + wobble(0.23, 0.47, 1.13) * range.yaw * drift,
+    pitch: pose.pitch + wobble(0.29, 0.43, 0.89) * range.pitch * drift,
+  };
 }

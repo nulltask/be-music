@@ -1,6 +1,18 @@
 import type { Graphics } from 'pixi.js';
-import { projectPoint, rotateX, rotateY, viewPoint, type CameraPose, type CloudPoint } from './space.ts';
-import { SYN_GLASS, SYN_WHITE } from './style.ts';
+import { hash01 } from '../phantom-style.ts';
+import type { Flock } from './boids.ts';
+import {
+  emberColor,
+  projectPoint,
+  rotateX,
+  rotateY,
+  viewPoint,
+  type CameraPose,
+  type CloudPoint,
+  type Projected,
+  type Vec3,
+} from './space.ts';
+import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE } from './style.ts';
 
 /**
  * Shared Synesthesia drawing: hairline frames with lock-on corners (Rez's targeting reticle) and projected point
@@ -139,5 +151,63 @@ export function drawPointCloud(
     graphics
       .rect(projected.x - size / 2, projected.y - size / 2, size, size)
       .fill({ color, alpha: Math.min(1, alpha) });
+  }
+}
+
+/**
+ * Draws a school of boids as fish of light: a tapering streak trailing each boid along its heading with a hot head,
+ * nearer fish larger and brighter. `project` maps a world point to screen (camera + perspective); `skip` drops fish
+ * (e.g. over a live BGA). `palette` picks the school's light: ember (with the odd blue fish), electric blue, or magenta.
+ */
+export function drawSchool(
+  graphics: Graphics,
+  flock: Flock,
+  project: (point: Vec3) => Projected,
+  style: { alpha: number; palette?: 'ember' | 'blue' | 'magenta'; skip?: (x: number, y: number) => boolean },
+): void {
+  const palette = style.palette ?? 'ember';
+  const { position: p, velocity: v } = flock;
+  for (let index = 0; index < flock.count; index += 1) {
+    const x = p[index * 3]!;
+    const y = p[index * 3 + 1]!;
+    const z = p[index * 3 + 2]!;
+    const head = project({ x, y, z });
+    if (!head.visible) continue;
+    if (style.skip?.(head.x, head.y)) continue;
+    // Tail length follows speed, so a darting fish stretches.
+    const tail = project({
+      x: x - v[index * 3]! * 0.16,
+      y: y - v[index * 3 + 1]! * 0.16,
+      z: z - v[index * 3 + 2]! * 0.16,
+    });
+    if (!tail.visible) continue;
+    const nearness = Math.min(1, head.scale * 2.4);
+    const heat = hash01(index * 5 + 3);
+    const color =
+      palette === 'blue'
+        ? heat > 0.75
+          ? SYN_WHITE
+          : SYN_CYAN
+        : palette === 'magenta'
+          ? heat > 0.8
+            ? 0xffb3d9
+            : SYN_MAGENTA
+          : index % 7 === 0
+            ? SYN_CYAN
+            : emberColor(0.55 + 0.4 * heat);
+    const alpha = style.alpha * (0.35 + 0.65 * nearness);
+    const mx = (head.x + tail.x) / 2;
+    const my = (head.y + tail.y) / 2;
+    graphics
+      .moveTo(tail.x, tail.y)
+      .lineTo(mx, my)
+      .stroke({ color, width: 0.6 + 1 * nearness, alpha: alpha * 0.55 })
+      .moveTo(mx, my)
+      .lineTo(head.x, head.y)
+      .stroke({ color, width: 1 + 2 * nearness, alpha });
+    const size = 1.2 + 2.2 * nearness;
+    graphics
+      .rect(head.x - size / 2, head.y - size / 2, size, size)
+      .fill({ color: heat > 0.8 ? SYN_WHITE : color, alpha: Math.min(1, alpha * 1.3) });
   }
 }

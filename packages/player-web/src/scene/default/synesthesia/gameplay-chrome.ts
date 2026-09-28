@@ -7,9 +7,9 @@ import { addHudNumber, addHudText, type HudTextOptions } from '../hud-text.ts';
 import { comboTier, effectProfile, impulse, punchScale } from '../moments.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { hash01 } from '../phantom-style.ts';
-import { drawFrame, drawPointCloud, drawReticle } from './draw.ts';
+import { createFlock, stepFlock, type Flock } from './boids.ts';
+import { drawFrame, drawPointCloud, drawReticle, drawSchool } from './draw.ts';
 import {
-  cameraShot,
   emberColor,
   hsvToHex,
   mixCamera,
@@ -18,6 +18,7 @@ import {
   pointCloudPyramid,
   projectPoint,
   REST_CAMERA,
+  roamingCamera,
   starfieldPoint,
   vanishingPoint,
   viewPoint,
@@ -46,19 +47,42 @@ const SONG_PLATE = { x: 16, y: 420, w: 344, h: 46 } as const;
 const PLAYFIELD_FRAME_BOTTOM = 344;
 /** Floor grid: horizon y, camera height above the floor, focal length. */
 const FLOOR = { horizon: 326, height: 154, focal: 200 } as const;
-/**
- * Camera shots the background flies between (floor frame: eye at the origin, floor 154 below): a low glide banking
- * right, a high sweep looking down from the left, a skim just over the floor, and a high centre shot. Each holds for
- * {@link SHOT_HOLD_S} then flies to the next over {@link SHOT_MOVE_S}.
- */
-const GAMEPLAY_SHOTS: readonly CameraPose[] = [
-  REST_CAMERA,
-  { x: 170, y: 64, z: 0, yaw: 0.28, pitch: -0.05 },
-  { x: -210, y: -110, z: 0, yaw: -0.32, pitch: 0.15 },
-  { x: 30, y: 92, z: 0, yaw: 0.12, pitch: -0.09 },
-  { x: 80, y: -150, z: 0, yaw: -0.14, pitch: 0.21 },
-];
+/** How far the gameplay camera roams: eye offset (floor frame, floor 154 below) and turn / tilt. */
+const CAMERA_RANGE = { x: 230, y: 110, yaw: 0.34, pitch: 0.18 } as const;
+const CAMERA_CYCLE_S = 7;
 const SHOT_HOLD_S = 9;
+const SCHOOL_SIZE = 70;
+/**
+ * Three schools, each with its own swimming box (floor frame, floor at y 154), light, and seed — their leaders wander
+ * independently, so the flocks cross, part, and pass in front of one another.
+ */
+const SCHOOL_SPECS = [
+  { seed: 17, palette: 'ember', bounds: { minX: -650, maxX: 450, minY: -200, maxY: 110, minZ: 160, maxZ: 900 } },
+  { seed: 41, palette: 'blue', bounds: { minX: -300, maxX: 800, minY: -260, maxY: 40, minZ: 300, maxZ: 1200 } },
+  { seed: 73, palette: 'magenta', bounds: { minX: -800, maxX: 800, minY: -240, maxY: 80, minZ: 700, maxZ: 1700 } },
+] as const;
+const SCHOOLS = new WeakMap<object, { flocks: Flock[]; lastMs: number }>();
+
+/** The chrome layer's schools, created on first use (or when their size changes) and stepped to `nowMs`. */
+function advanceSchools(
+  key: object,
+  nowMs: number,
+  size: number,
+  forces: { gather: number; scatter: number },
+): Flock[] {
+  let state = SCHOOLS.get(key);
+  if (!state || state.flocks[0]!.count !== size || nowMs < state.lastMs) {
+    state = { flocks: SCHOOL_SPECS.map((spec) => createFlock(spec.seed, size, spec.bounds)), lastMs: nowMs };
+    SCHOOLS.set(key, state);
+  }
+  const dt = (nowMs - state.lastMs) / 1000;
+  state.flocks.forEach((flock, index) => {
+    // Offset each leader's clock so the schools never shadow one another.
+    stepFlock(flock, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
+  });
+  state.lastMs = nowMs;
+  return state.flocks;
+}
 const SHOT_MOVE_S = 3.5;
 const FIGURE = pointCloudHumanoid(11, 1400);
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
@@ -94,9 +118,9 @@ export function renderSynesthesiaChrome({
   // Input reaction: every press surges the dust and streaks and tints the sky with the pressed lane's light.
   const hit = impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 280) * effects.amount;
   const hitColor = IMPULSE_COLORS[runtime.impulseKind ?? 'white'];
-  // Camera: the background periodically flies to a new shot, reframing floor, rivers and warp. Reduced effects halve
-  // the moves; effects off keep the camera at rest.
-  const camera = mixCamera(REST_CAMERA, cameraShot(seconds, GAMEPLAY_SHOTS, SHOT_HOLD_S, SHOT_MOVE_S), effects.amount);
+  // Camera: the background roams between random shots (flying, sometimes hard-cutting) with a handheld drift,
+  // reframing floor, rivers, schools and warp. Reduced effects halve the moves; effects off keep the camera at rest.
+  const camera = mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount);
   const horizon = vanishingPoint(camera, 320, FLOOR.horizon, FLOOR.focal).y;
   drawGround(space, pulse, hasBga, tier, hit, hitColor, horizon);
 
@@ -108,6 +132,27 @@ export function renderSynesthesiaChrome({
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
     drawRiver(light, seconds, river, hasBga, tier, camera);
+  }
+  if (effects.enabled) {
+    // Schools of light fish swimming through the space: tighter on the beat, scattering on every key press.
+    const schools = advanceSchools(layer, runtime.nowMs ?? 0, effects.screenWide ? SCHOOL_SIZE : SCHOOL_SIZE / 2, {
+      gather: pulse * 0.6,
+      scatter: impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount,
+    });
+    const shown = effects.screenWide ? schools.length : 1;
+    for (let school = 0; school < shown; school += 1) {
+      drawSchool(
+        light,
+        schools[school]!,
+        (point) => projectPoint(viewPoint(point, camera), 320, FLOOR.horizon, FLOOR.focal),
+        {
+          alpha: 0.95,
+          palette: SCHOOL_SPECS[school]!.palette,
+          skip: (x, y) =>
+            x < -10 || x > DESIGN_WIDTH + 10 || y < 0 || y > DESIGN_HEIGHT || (hasBga && insideBga(x, y, 4)),
+        },
+      );
+    }
   }
 
   const panels = layerPool.acquireGraphics();
