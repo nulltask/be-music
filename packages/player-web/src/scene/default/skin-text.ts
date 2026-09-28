@@ -3,6 +3,7 @@ import { resolveChartPlayVariant } from '../../collection/collection.ts';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import { getDesignTextResolution } from '../core/viewport.ts';
 import { DEFAULT_TEXT_FONT } from './fonts.ts';
+import { alignCapCenter } from './text-metrics.ts';
 
 export interface SkinTextOptions {
   size?: number;
@@ -53,6 +54,7 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
     }),
   });
   node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+  alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '400', options.size ?? 10);
   node.position.set(x, y);
   node.skew.set(options.skewX ?? 0, 0);
   node.alpha = options.alpha ?? 1;

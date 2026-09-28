@@ -25,6 +25,7 @@ import {
   starburstPoints,
   tornEdgePoints,
 } from '../phantom-style.ts';
+import { alignCapCenter } from '../text-metrics.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
 
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */
@@ -85,6 +86,7 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
       }),
     });
     node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+    alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '500', options.size ?? 10);
     node.position.set(x, y);
     node.skew.set(options.skew ?? 0, 0);
     if (options.maxWidth !== undefined && node.width > options.maxWidth) {
@@ -425,6 +427,7 @@ function renderMetric(
     }),
   });
   labelText.skew.set(-0.18, 0);
+  alignCapCenter(labelText, DEFAULT_DISPLAY_FONT, '400', 10);
   labelText.position.set(x + 12, y + 5);
   target.addChild(labelText);
 
@@ -438,6 +441,7 @@ function renderMetric(
   });
   valueText.skew.set(-0.18, 0);
   valueText.anchor.set(1, 0.5);
+  alignCapCenter(valueText, DEFAULT_DISPLAY_FONT, '400', 22);
   valueText.position.set(x + 166, y + 19);
   if (valueText.width > 100) {
     valueText.scale.x = 100 / valueText.width;
