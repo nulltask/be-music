@@ -25,8 +25,9 @@ describe('resolveDesignTextResolution', () => {
     expect(resolveDesignTextResolution(1, 1)).toBe(1);
   });
 
-  test('clamps to [1, 4] and rejects unusable input', () => {
-    expect(resolveDesignTextResolution(3, 2)).toBe(4);
+  test('clamps to [1, 8] and rejects unusable input', () => {
+    expect(resolveDesignTextResolution(2.5, 3)).toBe(7.5);
+    expect(resolveDesignTextResolution(4, 3)).toBe(8);
     expect(resolveDesignTextResolution(0.4, 1)).toBe(1);
     expect(resolveDesignTextResolution(Number.NaN, 2)).toBe(1);
   });

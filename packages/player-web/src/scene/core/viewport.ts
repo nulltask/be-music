@@ -24,8 +24,11 @@ export function resolveScaledViewport(
   };
 }
 
-/** Upper bound for text rasterization density — beyond 4x the glyph textures cost memory without visible gain. */
-const MAX_TEXT_RESOLUTION = 4;
+/**
+ * Upper bound for text rasterization density. High enough for a 3x-DPR display magnified 2.5x; beyond that the glyph
+ * textures cost memory without visible gain.
+ */
+const MAX_TEXT_RESOLUTION = 8;
 
 /**
  * Resolution design-canvas text should rasterize at so it stays crisp after the viewport scale: Pixi rasterizes `Text`
