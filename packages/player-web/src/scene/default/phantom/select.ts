@@ -26,12 +26,14 @@ import {
   parallelogramPoints,
   stageProgress,
   starburstPoints,
+  tornEdgePoints,
 } from '../phantom-style.ts';
 import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions } from '../skin-text.ts';
+import { addRansomText, type GlyphFactory } from './tear.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 54, listBottomInset: 26, rowHeight: 28 };
 const SLIDE_MS = 240;
-const OUTRO_MS = 620;
+const OUTRO_MS = 860;
 const INTRO_STAGGER_MS = 40;
 const KICKER_PITCH = 20;
 const GLINT_W = 14;
@@ -111,50 +113,103 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
   }
 
   /**
-   * Launch outro: an ink slab and a red slab slash in from the right to cover the screen, the chosen title slams onto
-   * the ink, and LET'S GO! punches in beneath it — the handoff into the gameplay count-in.
+   * Launch outro — the split screen: a blood-red half full of out-of-focus bokeh slides in from the left while a
+   * black-and-white starburst half slams in from the right; they meet on a torn diagonal seam, the chosen title lands on
+   * a tilted ink label, LET'S GO! is cut out of magazines letter by letter, and the page falls to ink for the count-in.
    */
   private renderOutro(frame: BeMusicSelectFrame): void {
     const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
-    const { designWidth, designHeight, layer } = frame;
+    const { designWidth: w, designHeight: h, layer, nowMs } = frame;
     const g = new Graphics();
     g.label = 'default-select/outro';
-    const cover = easeOutCubic(Math.min(1, t / 0.45));
-    const redEdge = designWidth + 80 - cover * (designWidth + 260);
-    g.poly([redEdge, 0, designWidth + 200, 0, designWidth + 200, designHeight, redEdge - 140, designHeight]).fill(
-      PHANTOM_RED,
-    );
-    const inkEdge = redEdge + 70;
-    g.poly([inkEdge, 0, designWidth + 200, 0, designWidth + 200, designHeight, inkEdge - 140, designHeight]).fill(
-      PHANTOM_INK,
-    );
-    g.poly([inkEdge - 6, 0, inkEdge, 0, inkEdge - 140, designHeight, inkEdge - 146, designHeight]).fill(PHANTOM_WHITE);
     layer.addChild(g);
-    const slam = easeOutBack(stageProgress(t, 0.35, 0.3));
-    if (slam > 0) {
-      const title = addSkinText(layer, frame.focusedSong?.title ?? '', designWidth / 2 + 30, designHeight / 2 - 26, {
-        size: 30,
+    const meet = easeOutCubic(Math.min(1, t / 0.32));
+    // The seam: a torn line leaning right, from (seamTop, 0) to (seamBottom, h).
+    const seamTop = w * 0.6;
+    const seamBottom = w * 0.44;
+    const seam = tornEdgePoints(seamTop, -10, seamBottom, h + 10, 9, 13, 12);
+    // Red half, entering from the left.
+    const redShift = (1 - meet) * -(w * 0.7);
+    const red: number[] = [-20 + redShift, -10];
+    for (let index = 0; index < seam.length; index += 2) red.push(seam[index]! + redShift, seam[index + 1]!);
+    red.push(-20 + redShift, h + 10);
+    // Starburst half, slamming in from the right.
+    const burstShift = (1 - meet) * (w * 0.7);
+    const paper: number[] = [w + 20 + burstShift, -10, w + 20 + burstShift, h + 10];
+    for (let index = seam.length - 2; index >= 0; index -= 2) paper.push(seam[index]! + burstShift, seam[index + 1]!);
+    g.poly(paper).fill(PHANTOM_PAPER);
+    const rayX = w * 0.84 + burstShift;
+    const rayY = h * 0.42;
+    const spin = t * 0.5;
+    for (let ray = 0; ray < 18; ray += 1) {
+      const a0 = (ray / 18) * Math.PI * 2 + spin;
+      const a1 = a0 + Math.PI / 18;
+      const reach = w * 0.9;
+      const poly = [
+        rayX,
+        rayY,
+        rayX + Math.cos(a0) * reach,
+        rayY + Math.sin(a0) * reach,
+        rayX + Math.cos(a1) * reach,
+        rayY + Math.sin(a1) * reach,
+      ];
+      g.poly(poly).fill(PHANTOM_INK);
+    }
+    // The red half is laid over the fan (so the rays stop at the seam), full of out-of-focus bokeh.
+    g.poly(red).fill(PHANTOM_RED);
+    for (let bokeh = 0; bokeh < 16; bokeh += 1) {
+      const bx = hash01(bokeh * 3 + 1) * seamBottom * 1.05 + redShift + Math.sin(nowMs / 900 + bokeh) * 6;
+      const by = hash01(bokeh * 3 + 2) * h;
+      const radius = 12 + 40 * hash01(bokeh * 3 + 3);
+      const color = bokeh % 4 === 0 ? PHANTOM_WHITE : PHANTOM_RED_HOT;
+      // Stacked translucent discs read as a soft, out-of-focus light.
+      for (let ring = 3; ring >= 1; ring -= 1) {
+        g.circle(bx, by, (radius * ring) / 3).fill({ color, alpha: bokeh % 4 === 0 ? 0.08 : 0.12 });
+      }
+    }
+    const rip: number[] = [];
+    for (let index = 0; index < seam.length; index += 2)
+      rip.push(seam[index]! + (redShift + burstShift) / 2, seam[index + 1]!);
+    g.poly(rip, false).stroke({ color: PHANTOM_WHITE, width: 6, join: 'miter' });
+    g.poly(rip, false).stroke({ color: PHANTOM_INK, width: 2, join: 'miter' });
+
+    // Title on a tilted ink label, and LET'S GO! cut from magazines, on the starburst half.
+    const land = stageProgress(t, 0.3, 0.2);
+    if (land > 0) {
+      const labelX = w * 0.72;
+      const labelY = h * 0.3;
+      const pop = 1.5 - 0.5 * easeOutBack(land, 2);
+      const title = frame.focusedSong?.title ?? '';
+      g.poly(parallelogramPoints(labelX - 150 * pop, labelY - 22 * pop, 300 * pop, 44 * pop, 12)).fill(PHANTOM_INK);
+      addSkinText(layer, title, labelX, labelY, {
+        size: 20,
         fill: PHANTOM_WHITE,
         fontFamily: DEFAULT_HEADLINE_FONT,
         anchorX: 0.5,
         anchorY: 0.5,
-        maxWidth: designWidth - 120,
-        alpha: Math.min(1, slam * 2),
-      });
-      title.scale.set(title.scale.x * (1.6 - 0.6 * slam), 1.6 - 0.6 * slam);
-      const go = addSkinText(layer, "LET'S GO!", designWidth / 2 + 30, designHeight / 2 + 32, {
+        maxWidth: 270,
+        alpha: Math.min(1, land * 3),
+      }).scale.y *= pop;
+      const glyph: GlyphFactory = (char, options) =>
+        addSkinText(layer, char, 0, 0, {
+          size: options.size,
+          weight: options.weight,
+          fill: options.fill,
+          fontFamily: options.fontFamily,
+        });
+      addRansomText(g, glyph, "LET'S GO!", w * 0.7, h * 0.56, {
         size: 44,
-        fill: PHANTOM_GOLD,
-        fontFamily: DEFAULT_DISPLAY_FONT,
-        letterSpacing: 3,
-        skewX: -0.18,
-        anchorX: 0.5,
-        anchorY: 0.5,
-        stroke: { color: PHANTOM_INK, width: 6, alignment: 0.5, join: 'miter' },
-        dropShadow: { color: PHANTOM_RED, distance: 5 },
-        alpha: Math.min(1, slam * 2),
+        seed: 17,
+        angle: -0.1,
+        appear: (index) => stageProgress(t, 0.38 + index * 0.035, 0.12),
       });
-      go.scale.set(2 - slam);
+    }
+    // Fall to ink for the handoff.
+    const dark = Math.max(0, (t - 0.86) / 0.14);
+    if (dark > 0) {
+      const cover = new Graphics();
+      cover.rect(0, 0, w, h).fill({ color: PHANTOM_INK, alpha: dark });
+      layer.addChild(cover);
     }
   }
 

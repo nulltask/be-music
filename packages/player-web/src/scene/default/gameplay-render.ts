@@ -116,9 +116,10 @@ export function renderDefaultGameplayFrame(
     frontLayer.addChild(front);
   }
   drawStatusBar(front, frontLayer, runtime, frontPool);
-  drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
-  // Showpieces (count-in, combo milestones, clear line, full combo) sit above everything else.
-  drawPhantomMoments(layer, frontLayer, runtime, frontPool);
+  // Showpieces (count-in, combo milestones, clear line, full combo) sit above the HUD. They draw before the judgements
+  // because a screen-wide full combo covers the page and the judgement type would print through its strip.
+  const covered = drawPhantomMoments(layer, frontLayer, runtime, frontPool);
+  if (!covered) drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
 }
 
 /**

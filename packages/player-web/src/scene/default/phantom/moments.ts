@@ -5,6 +5,7 @@ import type { ChildPool } from '../../pixi-utils.ts';
 import { DEFAULT_DISPLAY_FONT } from '../fonts.ts';
 import { addHudText } from '../hud-text.ts';
 import { effectProfile, impulse, momentProgress, trackMoments } from '../moments.ts';
+import { addRansomText, drawTearStrip, stripPoint, type GlyphFactory, type TearStrip } from './tear.ts';
 import {
   PHANTOM_GOLD,
   PHANTOM_INK,
@@ -28,19 +29,21 @@ const SKEW = -0.18;
 /**
  * Phantom showpieces, painted on the front layer above the HUD:
  *
- * - the count-in: an ink slab slashes across the screen with "READY?", flips red and slams "GO!!", then tears away
- *   to the right as the first beat lands;
- * - every 100 combo: a red banner with a gold burst cuts in over the BGA side (never over the lanes);
+ * - the count-in: a torn-paper strip rips across the screen with READY? in ransom-note letters, then a second rip
+ *   tears the other way and slams GO!! as the first beat lands;
+ * - every 100 combo: a torn strip rips in over the BGA side (never over the lanes) with the count in a gold burst and
+ *   COMBO!! cut from magazines;
  * - the gauge crossing the clear line: a gold CLEAR! tag pops off the gauge with a flash;
- * - a full combo: a white flash, a giant turning burst, confetti, and FULL COMBO stamped across the screen (the chart
- *   is over, so it may cover the playfield).
+ * - a full combo: a white flash, a giant turning burst, confetti, and a screen-wide rip carrying FULL COMBO in
+ *   ransom-note letters (the chart is over, so it may cover the playfield).
  */
+/** Returns true while a moment covers the playfield (the full combo), so the caller can hold back judgement type. */
 export function drawPhantomMoments(
   chromeLayer: Container,
   layer: Container,
   runtime: SkinlessGameplayChromeRuntime,
   pool: ChildPool | undefined,
-): void {
+): boolean {
   const nowMs = runtime.nowMs ?? 0;
   const moments = trackMoments(chromeLayer, {
     nowMs,
@@ -55,7 +58,7 @@ export function drawPhantomMoments(
     poor: runtime.poor ?? 0,
   });
   const effects = effectProfile(runtime.effects);
-  if (!effects.enabled) return;
+  if (!effects.enabled) return false;
   const graphics = pool?.acquireGraphics() ?? new Graphics();
   graphics.label = 'phantom/moments';
   if (!pool) layer.addChild(graphics);
@@ -80,7 +83,7 @@ export function drawPhantomMoments(
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   if (milestone !== undefined && moments.milestone) {
-    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBga === true, pool);
+    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBga === true, pool, nowMs);
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
@@ -90,6 +93,7 @@ export function drawPhantomMoments(
   if (fullCombo !== undefined) {
     drawFullCombo(graphics, layer, fullCombo, nowMs, effects.screenWide, pool);
   }
+  return fullCombo !== undefined && fullCombo > 0.04 && fullCombo < 0.9;
 }
 
 const BREAK_MS = 700;
@@ -153,55 +157,38 @@ function drawComboBreak(
 function drawCountIn(graphics: Graphics, layer: Container, chartMs: number, pool: ChildPool | undefined): void {
   if (chartMs < -2800 || chartMs > 450) return;
   const cy = 236;
-  const enter = easeOutCubic(stageProgress(chartMs, -2800, 320));
-  const exit = easeOutCubic(stageProgress(chartMs, 0, 420));
-  const go = chartMs >= -650;
-  const shift = (1 - enter) * -DESIGN_WIDTH * 1.2 + exit * DESIGN_WIDTH * 1.3;
-  const alpha = 1 - exit;
-  // Shadow slab, main slab, and paper cut lines.
-  graphics
-    .poly(parallelogramPoints(shift - 60, cy - 62, DESIGN_WIDTH + 120, 124, 40))
-    .fill({ color: go ? PHANTOM_INK : PHANTOM_RED, alpha: 0.9 * alpha });
-  graphics
-    .poly(parallelogramPoints(shift - 60, cy - 52, DESIGN_WIDTH + 120, 104, 40))
-    .fill({ color: go ? PHANTOM_RED : PHANTOM_INK, alpha: alpha });
-  graphics
-    .poly(parallelogramPoints(shift - 60, cy - 56, DESIGN_WIDTH + 120, 3, 40))
-    .fill({ color: PHANTOM_WHITE, alpha });
-  graphics
-    .poly(parallelogramPoints(shift - 60, cy + 50, DESIGN_WIDTH + 120, 3, 40))
-    .fill({ color: PHANTOM_WHITE, alpha });
-  if (!go) {
+  const glyph = hudGlyphs(layer, pool);
+  // READY?: the rip opens and holds until GO, then snaps shut.
+  const readyT =
+    chartMs < -650 ? ((chartMs + 2800) / 2150) * 0.8 : 0.85 + Math.min(0.15, ((chartMs + 650) / 150) * 0.15);
+  const ready: TearStrip = { cx: DESIGN_WIDTH / 2, cy, angle: -0.12, length: 900, thickness: 112, seed: 5 };
+  const readyOpen = drawTearStrip(graphics, ready, readyT, chartMs);
+  if (readyOpen > 0.05 && chartMs < -650) {
     // A nervous little shake while waiting.
-    const shake = Math.sin(chartMs / 28) * 1.6;
-    addHudText(
-      layer,
-      'READY?',
-      DESIGN_WIDTH / 2 + shift + shake,
-      cy,
-      {
-        size: 64,
-        fill: PHANTOM_WHITE,
-        fontFamily: DEFAULT_DISPLAY_FONT,
-        letterSpacing: 6,
-        anchorX: 0.5,
-        anchorY: 0.5,
-        skewX: SKEW,
-        dropShadow: { color: PHANTOM_RED, alpha: 1, blur: 0, distance: 6, angle: Math.PI / 4 },
-      },
-      pool,
-    );
-    return;
+    const shake = Math.sin(chartMs / 28) * 1.4;
+    const at = stripPoint(ready, shake, 0);
+    addRansomText(graphics, glyph, 'READY?', at.x, at.y, {
+      size: 54 * Math.min(1, readyOpen),
+      seed: 11,
+      angle: ready.angle,
+      appear: (index) => stageProgress(chartMs, -2700 + index * 70, 180),
+    });
   }
+  if (chartMs < -650) return;
+  // GO!!: a second rip tears the other way with a gold slam on a turning burst.
+  const go: TearStrip = { cx: DESIGN_WIDTH / 2, cy, angle: 0.1, length: 900, thickness: 128, seed: 9 };
+  const goT = (chartMs + 650) / 1100;
+  const goOpen = drawTearStrip(graphics, go, goT, chartMs);
+  if (goOpen <= 0.02) return;
   const slam = easeOutBack(stageProgress(chartMs, -650, 280));
-  const scale = 2.2 - 1.2 * slam;
+  const scale = (2.2 - 1.2 * slam) * Math.min(1, goOpen);
   graphics
-    .poly(starburstPoints(DESIGN_WIDTH / 2 + shift, cy, 150 * scale, 96 * scale, 16, chartMs / 900, 0.18, 7))
-    .fill({ color: PHANTOM_INK, alpha: 0.55 * alpha });
+    .poly(starburstPoints(DESIGN_WIDTH / 2, cy, 150 * scale, 96 * scale, 16, chartMs / 900, 0.18, 7))
+    .fill({ color: PHANTOM_RED, alpha: 0.9 });
   const text = addHudText(
     layer,
     'GO!!',
-    DESIGN_WIDTH / 2 + shift,
+    DESIGN_WIDTH / 2,
     cy,
     {
       size: 88,
@@ -211,16 +198,29 @@ function drawCountIn(graphics: Graphics, layer: Container, chartMs: number, pool
       anchorX: 0.5,
       anchorY: 0.5,
       skewX: SKEW,
+      rotation: go.angle,
       stroke: { color: PHANTOM_INK, width: 8, alignment: 0.5, join: 'miter' },
       dropShadow: { color: PHANTOM_WHITE, alpha: 1, blur: 0, distance: 6, angle: Math.PI / 4 },
     },
     pool,
   );
   text.scale.set(scale);
-  text.alpha = alpha;
 }
 
-/** "100 COMBO!!" banner cutting in over the BGA side. */
+/** Pooled (or fresh) HUD glyphs for ransom-note lettering. */
+function hudGlyphs(layer: Container, pool: ChildPool | undefined): GlyphFactory {
+  return (char, options) =>
+    addHudText(
+      layer,
+      char,
+      0,
+      0,
+      { size: options.size, weight: options.weight, fill: options.fill, fontFamily: options.fontFamily },
+      pool,
+    );
+}
+
+/** 100 COMBO!! — a torn strip rips in over the BGA side with the count in a gold burst. */
 function drawMilestone(
   graphics: Graphics,
   layer: Container,
@@ -228,54 +228,55 @@ function drawMilestone(
   t: number,
   hasBga: boolean,
   pool: ChildPool | undefined,
+  nowMs: number,
 ): void {
-  const inT = easeOutCubic(Math.min(1, t / 0.14));
-  const outT = easeOutCubic(Math.max(0, (t - 0.8) / 0.2));
-  const x = 300 + (1 - inT) * 380 + outT * 380;
-  // Over a live BGA the banner rides the monitor's bottom edge instead of covering the middle of the video.
-  const y = hasBga ? BGA.y + BGA.h - 22 : 196;
-  graphics.poly(parallelogramPoints(x + 8, y + 8, 360, 58, 18)).fill(PHANTOM_INK);
+  // Over a live BGA the strip rides the monitor's bottom edge instead of covering the middle of the video.
+  const strip: TearStrip = hasBga
+    ? { cx: BGA.x + BGA.w / 2 + 40, cy: BGA.y + BGA.h - 14, angle: -0.07, length: 440, thickness: 54, seed: value }
+    : { cx: 462, cy: 200, angle: -0.12, length: 440, thickness: 86, seed: value };
+  const open = drawTearStrip(graphics, strip, t, nowMs);
+  if (open <= 0.05) return;
+  const size = Math.min(1, open);
+  const burst = stripPoint(strip, -128, 0);
   graphics
-    .poly(parallelogramPoints(x, y, 360, 58, 18))
-    .fill(PHANTOM_RED)
-    .stroke({ color: PHANTOM_WHITE, width: 3 });
-  const burstX = x + 58;
-  graphics
-    .poly(starburstPoints(burstX, y + 29, 50, 32, 12, t * 3, 0.22, value))
+    .poly(
+      starburstPoints(
+        burst.x,
+        burst.y,
+        50 * size * (hasBga ? 0.8 : 1),
+        32 * size * (hasBga ? 0.8 : 1),
+        12,
+        t * 3,
+        0.22,
+        value,
+      ),
+    )
     .fill(PHANTOM_GOLD)
     .stroke({ color: PHANTOM_INK, width: 3 });
   addHudText(
     layer,
     String(value),
-    burstX + 2,
-    y + 29,
+    burst.x + 2,
+    burst.y,
     {
-      size: 34,
+      size: hasBga ? 28 : 34,
       fill: PHANTOM_INK,
       fontFamily: DEFAULT_DISPLAY_FONT,
       anchorX: 0.5,
       anchorY: 0.5,
       skewX: SKEW,
+      rotation: strip.angle,
       maxWidth: 70,
     },
     pool,
-  );
-  addHudText(
-    layer,
-    'COMBO!!',
-    x + 118,
-    y + 29,
-    {
-      size: 40,
-      fill: PHANTOM_WHITE,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      letterSpacing: 3,
-      anchorY: 0.5,
-      skewX: SKEW,
-      dropShadow: { color: PHANTOM_INK, alpha: 1, blur: 0, distance: 4, angle: Math.PI / 4 },
-    },
-    pool,
-  );
+  ).scale.y *= size;
+  const word = stripPoint(strip, 48, 0);
+  addRansomText(graphics, hudGlyphs(layer, pool), 'COMBO!!', word.x, word.y, {
+    size: (hasBga ? 30 : 40) * size,
+    seed: value + 3,
+    angle: strip.angle,
+    appear: (index) => Math.max(0, (t - 0.04 - index * 0.025) / 0.08),
+  });
 }
 
 /** Gauge crossing the clear line: a flash over the gauge and a CLEAR! tag popping off it. */
@@ -349,31 +350,17 @@ function drawFullCombo(
     const color = [PHANTOM_PAPER, PHANTOM_RED_HOT, PHANTOM_GOLD][index % 3]!;
     graphics.poly(rotatedRect(x, y, size, size * 0.55, spin)).fill({ color, alpha: fadeOut });
   }
-  const slam = easeOutBack(stageProgress(t, 0.06, 0.12));
-  graphics
-    .poly(parallelogramPoints(-40, cy - 46, DESIGN_WIDTH + 80, 92, 30))
-    .fill({ color: PHANTOM_INK, alpha: 0.8 * fadeOut * Math.min(1, slam) });
-  const text = addHudText(
-    layer,
-    'FULL COMBO',
-    cx,
-    cy,
-    {
-      size: 72,
-      fill: PHANTOM_GOLD,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      letterSpacing: 4,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      skewX: SKEW,
-      stroke: { color: PHANTOM_INK, width: 8, alignment: 0.5, join: 'miter' },
-      dropShadow: { color: PHANTOM_RED, alpha: 1, blur: 0, distance: 7, angle: Math.PI / 4 },
-      maxWidth: DESIGN_WIDTH - 60,
-    },
-    pool,
-  );
-  text.scale.set(Math.max(0.01, 2.4 - 1.4 * slam));
-  text.alpha = fadeOut * Math.min(1, slam * 1.5);
+  // The rip: a screen-wide torn strip carrying FULL COMBO cut from magazines.
+  const strip: TearStrip = { cx, cy, angle: -0.1, length: 980, thickness: 132, seed: 21 };
+  const open = drawTearStrip(graphics, strip, Math.max(0, (t - 0.05) / 0.95), nowMs);
+  if (open > 0.05) {
+    addRansomText(graphics, hudGlyphs(layer, pool), 'FULL COMBO', cx, cy, {
+      size: 60 * Math.min(1, open),
+      seed: 31,
+      angle: strip.angle,
+      appear: (index) => Math.max(0, (t - 0.1 - index * 0.022) / 0.06),
+    });
+  }
 }
 
 function rotatedRect(cx: number, cy: number, w: number, h: number, angle: number): number[] {

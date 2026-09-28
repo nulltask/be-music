@@ -246,3 +246,108 @@ export function drawStaves(
     if (start < x1) graphics.rect(start, lineY, x1 - start, 1).fill({ color, alpha });
   }
 }
+
+/**
+ * Torn-paper edge: points every ~`step` px from `(x0, y0)` to `(x1, y1)`, each pushed off the line along its normal
+ * by up to `amplitude` — sharp alternating teeth with the odd long shard (up to 2.5 × `amplitude`), like the rip in a
+ * Phantom cut-in. Deterministic for `seed`. Returns a flat `[x, y, ...]` list.
+ */
+export function tornEdgePoints(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  amplitude: number,
+  seed: number,
+  step = 10,
+): number[] {
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const count = Math.max(2, Math.ceil(length / step));
+  const nx = length > 0 ? -(y1 - y0) / length : 0;
+  const ny = length > 0 ? (x1 - x0) / length : 1;
+  const points: number[] = [];
+  for (let index = 0; index <= count; index += 1) {
+    const base = seed * 211 + index * 7;
+    // Jitter each tooth along the edge a little so the rip never looks regular.
+    const along = Math.min(
+      1,
+      Math.max(0, (index + (index > 0 && index < count ? (hash01(base + 1) - 0.5) * 0.6 : 0)) / count),
+    );
+    const shard = hash01(base + 2) > 0.86 ? 2.5 : 1;
+    const side = index % 2 === 0 ? 1 : -0.45;
+    const offset = index === 0 || index === count ? 0 : amplitude * shard * side * (0.35 + 0.65 * hash01(base + 3));
+    points.push(x0 + (x1 - x0) * along + nx * offset, y0 + (y1 - y0) * along + ny * offset);
+  }
+  return points;
+}
+
+/**
+ * A torn band: a strip `thickness` thick along the line `(x0, y0) → (x1, y1)` whose two long edges are both
+ * {@link tornEdgePoints} rips (with different seeds). A closed polygon ready for `Graphics.poly()`.
+ */
+export function tornBandPoints(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  thickness: number,
+  amplitude: number,
+  seed: number,
+  step = 10,
+): number[] {
+  const length = Math.hypot(x1 - x0, y1 - y0) || 1;
+  const nx = (-(y1 - y0) / length) * (thickness / 2);
+  const ny = ((x1 - x0) / length) * (thickness / 2);
+  const top = tornEdgePoints(x0 - nx, y0 - ny, x1 - nx, y1 - ny, amplitude, seed, step);
+  const bottom = tornEdgePoints(x1 + nx, y1 + ny, x0 + nx, y0 + ny, amplitude, seed + 97, step);
+  return [...top, ...bottom];
+}
+
+export type RansomPaper = 'ink' | 'paper' | 'red';
+
+export interface RansomGlyph {
+  char: string;
+  /** True for spaces: advance only, no card. */
+  space: boolean;
+  /** Index into the caller's font list (0..3). */
+  font: number;
+  /** Size multiplier in [0.82, 1.2]. */
+  scale: number;
+  /** Card tilt in radians, [-0.14, 0.14]. */
+  rotation: number;
+  /** Baseline shift as a fraction of the size, [-0.12, 0.12]. */
+  dy: number;
+  /** The card behind the letter; neighbours never share one. */
+  paper: RansomPaper;
+}
+
+/**
+ * Ransom-note lettering: every character cut from a different magazine — its own face, size, tilt, baseline, and card
+ * (ink, paper, or red, never the same as the letter before). Deterministic for `seed`.
+ */
+export function ransomLayout(text: string, seed: number): RansomGlyph[] {
+  const papers: RansomPaper[] = ['ink', 'paper', 'red'];
+  const glyphs: RansomGlyph[] = [];
+  let previous: RansomPaper | undefined;
+  Array.from(text).forEach((char, index) => {
+    const base = seed * 389 + index * 13;
+    if (char === ' ') {
+      glyphs.push({ char, space: true, font: 0, scale: 1, rotation: 0, dy: 0, paper: 'ink' });
+      previous = undefined;
+      return;
+    }
+    let paper = papers[Math.floor(hash01(base + 1) * papers.length) % papers.length]!;
+    if (paper === previous) paper = papers[(papers.indexOf(paper) + 1) % papers.length]!;
+    previous = paper;
+    glyphs.push({
+      char,
+      space: false,
+      font: Math.floor(hash01(base + 2) * 4) % 4,
+      scale: 0.82 + 0.38 * hash01(base + 3),
+      rotation: (hash01(base + 4) - 0.5) * 0.28,
+      dy: (hash01(base + 5) - 0.5) * 0.24,
+      paper,
+    });
+  });
+  return glyphs;
+}
