@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   burstParticlePosition,
   burstParticles,
-  cameraShot,
   emberColor,
   hsvToHex,
   mixCamera,
@@ -10,7 +9,9 @@ import {
   pointCloudHumanoid,
   pointCloudPyramid,
   projectPoint,
+  randomShot,
   REST_CAMERA,
+  roamingCamera,
   rotateX,
   rotateY,
   starfieldPoint,
@@ -184,35 +185,6 @@ describe('particleRiverPoint', () => {
   });
 });
 
-describe('cameraShot', () => {
-  const shots = [
-    { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 },
-    { x: 100, y: -40, z: 0, yaw: 0.3, pitch: 0.1 },
-  ];
-
-  it('holds each shot, then eases to the next and wraps around', () => {
-    expect(cameraShot(5, shots, 10, 2)).toEqual(shots[0]);
-    expect(cameraShot(11, shots, 10, 2).x).toBeCloseTo(50, 9);
-    expect(cameraShot(12, shots, 10, 2).x).toBeCloseTo(100, 9);
-    expect(cameraShot(20, shots, 10, 2)).toEqual(shots[1]);
-    // Shot 1 flies back to shot 0.
-    expect(cameraShot(24, shots, 10, 2).x).toBeCloseTo(0, 9);
-  });
-
-  it('eases in and out of each move', () => {
-    const early = cameraShot(10.2, shots, 10, 2).x;
-    const late = cameraShot(11.8, shots, 10, 2).x;
-    expect(early).toBeLessThan(10);
-    expect(late).toBeGreaterThan(90);
-  });
-
-  it('falls back to the rest pose for empty sequences and bad time', () => {
-    expect(cameraShot(3, [], 10, 2)).toEqual(REST_CAMERA);
-    expect(cameraShot(Number.NaN, shots, 10, 2)).toEqual(shots[0]);
-    expect(cameraShot(-1, shots, 10, 2).x).toBeCloseTo(cameraShot(23, shots, 10, 2).x, 9);
-  });
-});
-
 describe('mixCamera', () => {
   it('scales a pose toward rest', () => {
     const half = mixCamera(REST_CAMERA, { x: 10, y: 20, z: 30, yaw: 0.4, pitch: -0.2 }, 0.5);
@@ -261,5 +233,53 @@ describe('vanishingPoint', () => {
     const vanish = vanishingPoint(camera, 320, 240, 200);
     expect(far.x).toBeCloseTo(vanish.x, 2);
     expect(far.y).toBeCloseTo(vanish.y, 2);
+  });
+});
+
+describe('randomShot', () => {
+  const range = { x: 200, y: 100, yaw: 0.3, pitch: 0.15 };
+
+  it('opens at rest and stays within range', () => {
+    expect(randomShot(0, 4, range)).toEqual(REST_CAMERA);
+    for (let index = 1; index < 50; index += 1) {
+      const shot = randomShot(index, 4, range);
+      expect(Math.abs(shot.x)).toBeLessThanOrEqual(200);
+      expect(Math.abs(shot.y)).toBeLessThanOrEqual(100);
+      expect(Math.abs(shot.yaw)).toBeLessThanOrEqual(0.3);
+      expect(Math.abs(shot.pitch)).toBeLessThanOrEqual(0.15);
+    }
+  });
+
+  it('varies with index and seed but is deterministic', () => {
+    expect(randomShot(3, 4, range)).toEqual(randomShot(3, 4, range));
+    expect(randomShot(3, 4, range)).not.toEqual(randomShot(4, 4, range));
+    expect(randomShot(3, 4, range)).not.toEqual(randomShot(3, 5, range));
+  });
+});
+
+describe('roamingCamera', () => {
+  const range = { x: 200, y: 100, yaw: 0.3, pitch: 0.15 };
+
+  it('starts near rest and never strays far outside the range', () => {
+    const start = roamingCamera(0, 9, range, 8);
+    expect(Math.abs(start.x)).toBeLessThan(range.x * 0.1);
+    for (let t = 0; t < 200; t += 0.37) {
+      const pose = roamingCamera(t, 9, range, 8);
+      expect(Math.abs(pose.x)).toBeLessThanOrEqual(range.x * 1.09);
+      expect(Math.abs(pose.yaw)).toBeLessThanOrEqual(range.yaw * 1.09);
+    }
+  });
+
+  it('moves continuously within a cycle (no jumps outside a cut)', () => {
+    const dt = 1 / 60;
+    let largest = 0;
+    for (let t = 0; t < 8; t += dt) {
+      largest = Math.max(
+        largest,
+        Math.abs(roamingCamera(t + dt, 2, range, 8, 0).x - roamingCamera(t, 2, range, 8, 0).x),
+      );
+    }
+    // Fastest legal fly: the whole range in a one-second smoothstep ≈ 1.5 × span / s.
+    expect(largest).toBeLessThan(range.x * 2 * 1.5 * dt * 12);
   });
 });

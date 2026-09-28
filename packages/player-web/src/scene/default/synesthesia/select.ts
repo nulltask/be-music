@@ -9,9 +9,9 @@ import type {
 import { easeOutCubic, stageProgress } from '../phantom-style.ts';
 import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions } from '../skin-text.ts';
 import { hash01 } from '../phantom-style.ts';
-import { drawPointCloud, drawReticle } from './draw.ts';
+import { createFlock, stepFlock } from './boids.ts';
+import { drawPointCloud, drawReticle, drawSchool } from './draw.ts';
 import {
-  cameraShot,
   emberColor,
   hsvToHex,
   mixCamera,
@@ -20,10 +20,10 @@ import {
   pointCloudPyramid,
   projectPoint,
   REST_CAMERA,
+  roamingCamera,
   starfieldPoint,
   vanishingPoint,
   viewPoint,
-  type CameraPose,
 } from './space.ts';
 import {
   SYN_AMBER,
@@ -51,18 +51,16 @@ const STAR_COUNT = 320;
 const STREAK_COUNT = 26;
 const RIVER_PARTICLES = 340;
 const FIGURE = pointCloudHumanoid(23, 1600);
-/**
- * Camera shots the select backdrop flies between, circling the pyramids: rest, a low pass banking right, a high
- * sweep from the right looking down, and a skim just over the floor.
- */
-const SELECT_SHOTS: readonly CameraPose[] = [
-  REST_CAMERA,
-  { x: -190, y: 40, z: 0, yaw: 0.34, pitch: -0.04 },
-  { x: 230, y: -120, z: 0, yaw: -0.3, pitch: 0.15 },
-  { x: 0, y: 70, z: 0, yaw: -0.12, pitch: -0.08 },
-];
-const SHOT_HOLD_S = 7;
-const SHOT_MOVE_S = 3;
+/** How far the select camera roams around the pyramid field. */
+const CAMERA_RANGE = { x: 240, y: 110, yaw: 0.38, pitch: 0.16 } as const;
+const CAMERA_CYCLE_S = 6;
+const SCHOOL_SIZE = 80;
+/** Three schools in the floor frame (floor at y 150), each with its own box, light, and seed. */
+const SCHOOL_SPECS = [
+  { seed: 29, palette: 'ember', bounds: { minX: -700, maxX: 500, minY: -240, maxY: 90, minZ: 140, maxZ: 900 } },
+  { seed: 57, palette: 'blue', bounds: { minX: -300, maxX: 900, minY: -300, maxY: 40, minZ: 300, maxZ: 1300 } },
+  { seed: 91, palette: 'magenta', bounds: { minX: -900, maxX: 900, minY: -280, maxY: 60, minZ: 800, maxZ: 1900 } },
+] as const;
 /** Depth the world shots pivot around — the pyramid field. */
 const WORLD_ORBIT = 900;
 const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCloudPyramid(9, 520)];
@@ -98,6 +96,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   private readonly lock = new Graphics();
   private readonly cursorGlow = new Sprite();
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
+  private readonly flocks = SCHOOL_SPECS.map((spec) => createFlock(spec.seed, SCHOOL_SIZE, spec.bounds));
   private built = false;
   private designWidth = 640;
   private designHeight = 480;
@@ -186,10 +185,11 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     const hue = sceneHue(seconds, beatPhase);
     const accent = hsvToHex(hue, 0.6, 1);
 
-    // Camera: the backdrop periodically flies to a new shot. Reduced effects halve the moves; off keeps it at rest.
+    // Camera: the backdrop roams between random shots (flying, sometimes hard-cutting) with a handheld drift.
+    // Reduced effects halve the moves; off keeps it at rest.
     const camera = mixCamera(
       REST_CAMERA,
-      cameraShot(seconds, SELECT_SHOTS, SHOT_HOLD_S, SHOT_MOVE_S),
+      roamingCamera(seconds, 13, CAMERA_RANGE, CAMERA_CYCLE_S),
       this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1,
     );
     // Data dust pouring out of the vanishing point — speed follows the focused chart's tempo.
@@ -297,6 +297,20 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
           width: 0.8 + progress * 1.6,
           alpha: Math.sin(progress * Math.PI) * (0.35 + 0.4 * warp),
         });
+    }
+    // Schools of light fish sweeping through the pyramids: tight on the beat, scattering when the cursor moves.
+    if (rate > 0) {
+      const scatter = Math.max(0, 1 - (nowMs - this.cursorChangedAt) / 600) ** 2 + warp;
+      const shown = this.effects === 'reduced' ? 1 : this.flocks.length;
+      for (let school = 0; school < shown; school += 1) {
+        stepFlock(this.flocks[school]!, dt * rate, { seconds: seconds + school * 41.7, gather: pulse * 0.6, scatter });
+        drawSchool(
+          world,
+          this.flocks[school]!,
+          (point) => projectPoint(viewPoint(point, camera, WORLD_ORBIT), cx, floorY, 200),
+          { alpha: 0.95 * (1 - warp), palette: SCHOOL_SPECS[school]!.palette },
+        );
+      }
     }
     // The figure, drifting behind the list — it turns to face you and breathes on the beat.
     const bob = Math.sin(seconds * 0.8) * 8;
