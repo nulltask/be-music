@@ -25,7 +25,6 @@ import {
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 const CURSOR_MS = 360;
-const TITLE_MS = 420;
 const OUTRO_MS = 650;
 const INTRO_STAGGER_MS = 40;
 const OUTRO_COLUMNS = 16;

@@ -7,7 +7,6 @@ import type {
   BeMusicLongNoteContext,
   BeMusicNoteContext,
 } from '../../../skin/be-music/types.ts';
-import type { ChildPool } from '../../pixi-utils.ts';
 import { comboTier, effectProfile } from '../moments.ts';
 import { easeOutCubic, hash01 } from '../phantom-style.ts';
 import { springEase } from './field.ts';

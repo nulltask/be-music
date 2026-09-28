@@ -252,7 +252,7 @@ function drawFullCombo(graphics: Graphics, layer: Container, t: number, screenWi
 
 /** The broken combo's digits fall off under gravity, each with its own spin and drift. */
 function drawComboBreak(layer: Container, combo: number, t: number, cx: number, pool: ChildPool): void {
-  const digits = [...String(combo)];
+  const digits = Array.from(String(combo));
   const cell = 18;
   const left = cx - (digits.length * cell) / 2;
   const seconds = t * (BREAK_MS / 1000);

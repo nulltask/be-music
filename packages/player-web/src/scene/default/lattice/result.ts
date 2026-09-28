@@ -113,14 +113,13 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
   g.rect(rankBox.x, rankBox.y, rankBox.w, rankBox.h).fill({ color: LAT_PAPER, alpha: fadeIn(200) });
   rule(rankBox.x, rankBox.y, rankBox.w, 200);
   text(decode('01 DJ LEVEL', 250, 3), rankBox.x, rankBox.y + 8, { ...mono(), alpha: fadeIn(250) });
-  const letters = [...rankLabel];
   addStaggeredSkinText(
     layer,
     rankLabel,
     rankCx,
     rankCy,
     {
-      ...display(letters.length >= 3 ? 64 : 92, rankLabel.startsWith('AA') ? LAT_ACCENT : LAT_INK, '200'),
+      ...display(rankLabel.length >= 3 ? 64 : 92, rankLabel.startsWith('AA') ? LAT_ACCENT : LAT_INK, '200'),
       anchorX: 0.5,
       anchorY: 0.5,
       maxWidth: 170,

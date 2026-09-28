@@ -135,7 +135,7 @@ describe('scrambleText', () => {
   it('is blank before, noisy during, and exact after', () => {
     expect(scrambleText('LATTICE', 0, 1)).toMatch(/^.\s{6}$/u);
     const middle = scrambleText('LATTICE', 0.5, 1);
-    expect([...middle]).toHaveLength(7);
+    expect(Array.from(middle)).toHaveLength(7);
     expect(middle).not.toBe('LATTICE');
     expect(scrambleText('LATTICE', 1, 1)).toBe('LATTICE');
     expect(scrambleText('LATTICE', 2, 1)).toBe('LATTICE');
@@ -149,9 +149,9 @@ describe('scrambleText', () => {
 
   it('keeps spaces and line length, scrambling wide characters through katakana', () => {
     const scrambled = scrambleText('曲 名です', 0.5, 2);
-    expect([...scrambled]).toHaveLength(5);
-    expect([...scrambled][1]).toBe(' ');
-    for (const char of [...scrambled]) {
+    expect(Array.from(scrambled)).toHaveLength(5);
+    expect(Array.from(scrambled)[1]).toBe(' ');
+    for (const char of scrambled) {
       if (char !== ' ') expect(char.codePointAt(0)!).toBeGreaterThan(0x2e7f);
     }
   });
