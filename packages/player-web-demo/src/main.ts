@@ -276,7 +276,8 @@ class PlayerWebDemoApp {
     optionChange?: Uint8Array;
   } = {};
   private selectView: PixiSongSelectView | DefaultPixiSongSelectView | undefined;
-  private gameplayView: PixiGameplayView | undefined;
+  /** LR2-family or default-family gameplay view (both share the core gameplay API). */
+  private gameplayView: PixiGameplayView | DefaultPixiGameplayView | undefined;
   /**
    * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
    * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
@@ -3114,7 +3115,7 @@ class PlayerWebDemoApp {
     song: BrowserSongEntry,
     playSkin: Lr2Skin | undefined,
     overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; chartSha256?: string },
-  ): PixiGameplayView {
+  ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const sharedOptions = {

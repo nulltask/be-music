@@ -1,5 +1,5 @@
 import { Container, Graphics, Sprite, Text, type Texture } from 'pixi.js';
-import { destroyTextureAndRevokeBlobUrl } from '../skin/lr2/textures.ts';
+import { destroyTextureAndRevokeBlobUrl } from '../media/textures.ts';
 
 /**
  * Removes every child of `container` AND destroys each removed child so its renderer-side state is released.
