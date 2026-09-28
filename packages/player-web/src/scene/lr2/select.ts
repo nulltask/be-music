@@ -3925,7 +3925,7 @@ function FALLBACK_SLAB(designHeight: number): number[] {
 }
 
 /** Ease-out-cubic progress of the focused-card slide-in, 0 at the cursor move → 1 once settled. */
-export function fallbackSlideProgress(elapsedMs: number): number {
+function fallbackSlideProgress(elapsedMs: number): number {
   const t = Math.max(0, Math.min(1, elapsedMs / FALLBACK_SLIDE_MS));
   return 1 - (1 - t) ** 3;
 }
