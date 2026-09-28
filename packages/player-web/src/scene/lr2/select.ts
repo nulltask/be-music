@@ -34,12 +34,7 @@ import {
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
-import {
-  groupSongsByFolder,
-  loadAssetBytes,
-  resolveChartPlayVariant,
-  resolveSongSource,
-} from '../../collection/collection.ts';
+import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { computeSelectOps, resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
@@ -65,24 +60,9 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
-// The skinless branch below paints the default family's select chrome, so it shares that family's style tokens.
-import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT, DEFAULT_TEXT_FONT } from '../default/fonts.ts';
-import {
-  PHANTOM_ASH,
-  PHANTOM_BLACK,
-  PHANTOM_CHARCOAL,
-  PHANTOM_GOLD,
-  PHANTOM_INK,
-  PHANTOM_PAPER,
-  PHANTOM_RED,
-  PHANTOM_RED_HOT,
-  PHANTOM_SLATE,
-  PHANTOM_WHITE,
-  halftoneField,
-  hash01,
-  parallelogramPoints,
-  starburstPoints,
-} from '../default/phantom-style.ts';
+import type { BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/types.ts';
+import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
+import { phantomSkin } from '../default/phantom/index.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -472,6 +452,8 @@ export interface PixiSongSelectSystemSounds {
 }
 
 export interface PixiSongSelectViewOptions {
+  /** be-music skin for the skinless path (no LR2 select skin). Defaults to the built-in Phantom skin. */
+  beMusicSkin?: BeMusicSkin;
   onSongSelected?: (song: BrowserSongEntry) => void;
   /**
    * AUTOPLAY-mode launch hook. Fired when the user clicks the skin's AUTOPLAY button (#SRC_BUTTON `type = 16`) or
@@ -679,28 +661,16 @@ export class PixiSongSelectView {
   /** Song-bar slots — one sprite per visible bar plus its overlay text. */
   private readonly listLayer = new Container();
   /**
-   * Default-family (skinless) ambient motion: halftone drift on the red slab, a slow-turning starburst, and speed
-   * streaks. Built once and animated by transform only from {@link tickFallbackMotion}, so the per-frame cost stays
-   * independent of the chrome's text nodes (which are rebuilt only on input).
+   * Persistent mount points for the be-music select renderer's back / front layers (skinless path only). The renderer
+   * owns what's inside; the scene only toggles visibility and keeps them around `listLayer`.
    */
-  private readonly fallbackMotionLayer = new Container();
-  /** Front motion (above `listLayer`): the focused-row pointer, the scrolling header kicker, and the card glint. */
-  private readonly fallbackFrontLayer = new Container();
-  private readonly fallbackPointer = new Graphics();
-  private readonly fallbackKicker = new Graphics();
-  private readonly fallbackGlint = new Graphics();
-  private fallbackMotionBuilt = false;
-  private fallbackMotionDots: Graphics | undefined;
-  private fallbackMotionBurst: Graphics | undefined;
-  private fallbackMotionStreaks: Graphics[] = [];
-  /** Set by the skinless render when any slide-in / fly-in hasn't settled yet, so the next tick renders again. */
-  private fallbackNeedsFrame = false;
-  /** `performance.now()` of the last cursor move — drives the focused card / title slide-in. */
-  private fallbackCursorChangedAt = 0;
-  /** Design-space y of the focused fallback row, or undefined when it is off-screen. */
-  private fallbackActiveRowY: number | undefined;
-  /** Focused card rect (design space) for the glint sweep. */
-  private fallbackActiveCard: { x: number; y: number; w: number; h: number } | undefined;
+  private readonly beMusicBackHolder = new Container();
+  private readonly beMusicFrontHolder = new Container();
+  private beMusicRenderer: BeMusicSelectRenderer | undefined;
+  /** Set when the last skinless render reported an unfinished transition, so the next tick renders again. */
+  private beMusicNeedsFrame = false;
+  /** `performance.now()` of the last cursor move — drives the skin's focus transitions. */
+  private cursorChangedAt = 0;
   private readonly title = new Text({
     text: 'Drop a BMS folder or ZIP',
     style: new TextStyle({
@@ -1133,18 +1103,16 @@ export class PixiSongSelectView {
     // fallback chrome). LR2 panels (op 1..9) live inside skinLayer / skinForegroundLayer — they're regular `#SRC_*`
     // elements gated by their `panel` field, so no separate overlay layer is needed.
     this.designClipMask.label = 'select/design-clip';
-    this.fallbackMotionLayer.label = 'default-select/motion';
-    this.fallbackFrontLayer.label = 'default-select/front-motion';
-    this.fallbackPointer.label = 'default-select/pointer';
-    this.fallbackFrontLayer.addChild(this.fallbackKicker, this.fallbackGlint, this.fallbackPointer);
-    this.fallbackMotionLayer.visible = false;
-    this.fallbackFrontLayer.visible = false;
+    this.beMusicBackHolder.label = 'select/be-music-back';
+    this.beMusicFrontHolder.label = 'select/be-music-front';
+    this.beMusicBackHolder.visible = false;
+    this.beMusicFrontHolder.visible = false;
     this.root.addChild(
       this.background,
       this.skinLayer,
-      this.fallbackMotionLayer,
+      this.beMusicBackHolder,
       this.listLayer,
-      this.fallbackFrontLayer,
+      this.beMusicFrontHolder,
       this.skinForegroundLayer,
       this.title,
       this.hint,
@@ -1251,7 +1219,7 @@ export class PixiSongSelectView {
       this.readTextLayer.visible = false;
     }
     const now = performance.now();
-    this.fallbackCursorChangedAt = now;
+    this.cursorChangedAt = now;
     this.timerStartedAt.set(10, now);
     this.timerStartedAt.set(11, now);
     this.timerStartedAt.set(delta < 0 ? 12 : 13, now);
@@ -1446,10 +1414,12 @@ export class PixiSongSelectView {
       const now = performance.now();
       // The skinless chrome is rebuilt only on input; keep re-rendering while a slide-in is still in flight. Driven by
       // the last render's own state (not a time window) so a long frame hitch can't strand a half-finished slide.
-      if (this.fallbackNeedsFrame) {
+      if (this.beMusicNeedsFrame) {
         this.perf.time('render', () => this.render());
       }
-      this.tickFallbackMotion(now);
+      if (this.beMusicBackHolder.visible) {
+        this.beMusicRenderer?.tick(now, this.focusedSong());
+      }
     }
     const report = this.perf.endFrame(() => ({
       skin: this.skinLayer.children.length,
@@ -1469,6 +1439,8 @@ export class PixiSongSelectView {
     }
     this.disposed = true;
     this.stopAnimationLoop();
+    this.beMusicRenderer?.dispose();
+    this.beMusicRenderer = undefined;
     window.removeEventListener('keydown', this.handleKeyDown);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
@@ -2473,10 +2445,9 @@ export class PixiSongSelectView {
     // Geometry must mirror the `render()` layout above: rows begin at `listTop` with `rowHeight` pitch, and the visible
     // window centers on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
     // no-op.
-    const listX = 320;
-    const listTop = 54;
-    const listBottom = designHeight - 26;
-    const rowHeight = 28;
+    const layout = this.beMusicSkin.select.layout;
+    const { listX, listTop, rowHeight } = layout;
+    const listBottom = designHeight - layout.listBottomInset;
     if (virtualX < listX || virtualY < listTop || virtualY > listBottom) {
       return;
     }
@@ -2484,11 +2455,12 @@ export class PixiSongSelectView {
     if (fallbackEntries.length === 0) {
       return;
     }
-    const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowHeight));
-    const start = Math.max(
-      0,
-      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackEntries.length - visibleRows)),
-    );
+    const start = resolveSelectListWindow(
+      layout,
+      designHeight,
+      this.selectedIndex,
+      fallbackEntries.length,
+    ).firstVisibleIndex;
     const visibleRow = Math.floor((virtualY - listTop) / rowHeight);
     const entryIndex = start + visibleRow;
     if (entryIndex < 0 || entryIndex >= fallbackEntries.length) {
@@ -2739,8 +2711,8 @@ export class PixiSongSelectView {
       const ops = this.perf.time('computeOps', () =>
         computeSelectOps(this.focusedSong(), this.panelStates, this.playOptions, skin.customOptions, this.collection),
       );
-      this.fallbackMotionLayer.visible = false;
-      this.fallbackFrontLayer.visible = false;
+      this.beMusicBackHolder.visible = false;
+      this.beMusicFrontHolder.visible = false;
       this.perf.time('renderSkinFrame', () => this.renderSkinFrame(skin, ops));
       this.perf.time('renderSkinBars', () => this.renderSkinBars(skin, ops));
       // Empty-state hint — shown over the skin when nothing was loaded, so the user understands they need to drop
@@ -2754,371 +2726,68 @@ export class PixiSongSelectView {
 
     // Default-family chrome paints only live library / focused-chart data, so the legacy `this.title` / `this.hint`
     // overlays are hidden; the host-level drop overlay remains responsible for the empty-library callout.
-    const fallbackEntries = this.currentEntries();
-    this.ensureFallbackMotion(designWidth, designHeight);
-    this.fallbackMotionLayer.visible = true;
-    this.fallbackActiveRowY = undefined;
-    this.fallbackActiveCard = undefined;
-    this.fallbackNeedsFrame = false;
-    this.renderFallbackSelectChrome(designWidth, designHeight, fallbackEntries);
+    const entries = this.currentEntries();
     this.title.visible = false;
     this.hint.visible = false;
-
-    // Right-column song bar list. Keep the selected entry near the vertical center so keyboard / wheel navigation feels
-    // stable with or without a loaded external skin.
-    const listX = 320;
-    const listWidth = designWidth - listX - 16;
-    const rowHeight = 28;
-    const listTop = 54;
-    const listBottom = designHeight - 26;
-    const visibleRows = Math.max(1, Math.floor((listBottom - listTop) / rowHeight));
-    const start = Math.max(
-      0,
-      Math.min(this.selectedIndex - Math.floor(visibleRows / 2), Math.max(0, fallbackEntries.length - visibleRows)),
+    const renderer = this.ensureBeMusicRenderer();
+    const selectWindow = resolveSelectListWindow(
+      this.beMusicSkin.select.layout,
+      designHeight,
+      this.selectedIndex,
+      entries.length,
     );
-    for (let visibleIndex = 0; visibleIndex < visibleRows; visibleIndex += 1) {
-      const entryIndex = start + visibleIndex;
-      const entry = fallbackEntries[entryIndex];
-      if (!entry) {
-        break;
-      }
-      this.drawFallbackEntryRow(entry, entryIndex, visibleIndex, listX, listTop, listWidth, rowHeight);
-    }
-    this.fallbackFrontLayer.visible = true;
-    this.fallbackPointer.visible = this.fallbackActiveRowY !== undefined;
-    this.fallbackGlint.visible = this.fallbackActiveCard !== undefined;
+    const currentFolder = this.browseStack[this.browseStack.length - 1];
+    this.beMusicBackHolder.visible = true;
+    this.beMusicFrontHolder.visible = true;
+    this.beMusicNeedsFrame = renderer.render({
+      layer: this.listLayer,
+      designWidth,
+      designHeight,
+      nowMs: performance.now(),
+      sceneStartedAt: this.sceneStartedAt,
+      cursorChangedAt: this.cursorChangedAt,
+      entries,
+      selectedIndex: this.selectedIndex,
+      firstVisibleIndex: selectWindow.firstVisibleIndex,
+      visibleRows: selectWindow.visibleRows,
+      focusedSong: this.focusedSong(),
+      folderLabel: currentFolder?.label,
+      searchQuery: this.searchQuery,
+      totalCharts: this.collection.songs.length,
+      actions: this.beMusicActions,
+    });
     this.renderReadTextOverlay(designWidth, designHeight);
   }
 
-  /**
-   * Builds the skinless ambient-motion layer once: the ink ground and red slab (moved out of the per-input chrome so
-   * the motion can sit between them and the panels), a masked halftone field that drifts down the slab, a starburst
-   * that turns behind the lower-left corner, and a handful of speed streaks.
-   */
-  private ensureFallbackMotion(designWidth: number, designHeight: number): void {
-    if (this.fallbackMotionBuilt) return;
-    this.fallbackMotionBuilt = true;
-    const ground = new Graphics();
-    ground.rect(0, 0, designWidth, designHeight).fill(PHANTOM_BLACK);
-    ground.poly(FALLBACK_SLAB(designHeight)).fill(PHANTOM_RED);
-
-    const slabMask = new Graphics().poly(FALLBACK_SLAB(designHeight)).fill(0xffffff);
-    const dots = new Graphics();
-    for (const dot of halftoneField({
-      x: 0,
-      y: 40 - FALLBACK_DOT_PERIOD,
-      w: 236,
-      h: designHeight - 40 + FALLBACK_DOT_PERIOD,
-      pitch: FALLBACK_DOT_PITCH,
-      maxRadius: 4.4,
-      direction: { x: -0.4, y: 1 },
-    })) {
-      dots.circle(dot.x, dot.y, dot.r).fill({ color: PHANTOM_INK, alpha: 0.5 });
-    }
-    dots.mask = slabMask;
-
-    const burst = new Graphics();
-    burst.poly(starburstPoints(0, 0, 190, 120, 16, 0, 0.18, 9)).fill({ color: PHANTOM_INK, alpha: 0.28 });
-    burst.poly(starburstPoints(0, 0, 118, 74, 16, 0.1, 0.2, 4)).fill({ color: PHANTOM_RED_HOT, alpha: 0.55 });
-    burst.position.set(36, designHeight - 30);
-    burst.mask = new Graphics().poly(FALLBACK_SLAB(designHeight)).fill(0xffffff);
-
-    const edge = new Graphics().poly([244, 40, 250, 40, 132, designHeight, 126, designHeight]).fill(PHANTOM_WHITE);
-
-    this.fallbackMotionStreaks = [];
-    const streakLayer = new Container();
-    for (let index = 0; index < 7; index += 1) {
-      const streak = new Graphics();
-      const length = 60 + hash01(index + 11) * 110;
-      streak.poly(parallelogramPoints(0, 0, length, 2 + Math.round(hash01(index + 3) * 2), 3)).fill(PHANTOM_WHITE);
-      streak.alpha = 0.12 + hash01(index + 5) * 0.2;
-      streakLayer.addChild(streak);
-      this.fallbackMotionStreaks.push(streak);
-    }
-
-    this.fallbackMotionDots = dots;
-    this.fallbackMotionBurst = burst;
-    this.fallbackMotionLayer.addChild(ground, burst, burst.mask as Graphics, dots, slabMask, edge, streakLayer);
-
-    // Header kicker, one tooth wider than the canvas so scrolling by a tooth pitch loops seamlessly.
-    const teeth: number[] = [-FALLBACK_KICKER_PITCH, 38];
-    for (let x = -FALLBACK_KICKER_PITCH; x <= designWidth + FALLBACK_KICKER_PITCH; x += FALLBACK_KICKER_PITCH) {
-      teeth.push(x, 38, x + FALLBACK_KICKER_PITCH / 2, 44);
-    }
-    teeth.push(designWidth + FALLBACK_KICKER_PITCH, 38);
-    this.fallbackKicker.clear().poly(teeth).fill(PHANTOM_RED);
-    this.fallbackKicker
-      .rect(-FALLBACK_KICKER_PITCH, 37, designWidth + FALLBACK_KICKER_PITCH * 2, 1)
-      .fill(PHANTOM_WHITE);
-    this.fallbackGlint
-      .clear()
-      .poly(parallelogramPoints(0, 0, FALLBACK_GLINT_W, FALLBACK_GLINT_H, 6))
-      .fill({ color: PHANTOM_RED_HOT, alpha: 0.45 });
-
-    this.fallbackPointer.clear();
-    this.fallbackPointer
-      .poly([-14, -9, 2, 0, -14, 9, -10, 0])
-      .fill(PHANTOM_RED)
-      .stroke({ color: PHANTOM_WHITE, width: 1 });
+  /** Active be-music skin for the skinless path — the built-in Phantom skin unless the host picked one. */
+  private get beMusicSkin(): BeMusicSkin {
+    return this.options.beMusicSkin ?? phantomSkin;
   }
 
-  /** Per-frame transform-only animation for the skinless select chrome. */
-  private tickFallbackMotion(now: number): void {
-    if (!this.fallbackMotionLayer.visible) return;
-    const seconds = now / 1000;
-    if (this.fallbackMotionDots) {
-      this.fallbackMotionDots.y = (seconds * 14) % FALLBACK_DOT_PERIOD;
+  private ensureBeMusicRenderer(): BeMusicSelectRenderer {
+    if (!this.beMusicRenderer) {
+      this.beMusicRenderer = this.beMusicSkin.select.createRenderer();
+      this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
+      this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
     }
-    // Beat clock from the focused chart's BPM, so the whole screen previews the song's tempo.
-    const bpm = this.focusedSong()?.bpm;
-    const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
-    const beatPhase = (seconds * beatsPerSecond) % 1;
-    const beatPulse = (1 - beatPhase) ** 3;
-    if (this.fallbackMotionBurst) {
-      this.fallbackMotionBurst.rotation = seconds * 0.12;
-      this.fallbackMotionBurst.scale.set(1 + 0.06 * beatPulse);
-    }
-    this.fallbackKicker.x = -((seconds * 36) % FALLBACK_KICKER_PITCH);
-    const card = this.fallbackActiveCard;
-    if (card) {
-      // One sweep across the focused card every couple of seconds.
-      const sweep = (seconds % 2.2) / 0.5;
-      this.fallbackGlint.visible = sweep <= 1;
-      this.fallbackGlint.position.set(card.x + sweep * (card.w - FALLBACK_GLINT_W), card.y);
-      this.fallbackGlint.scale.set(1, card.h / FALLBACK_GLINT_H);
-    }
-    const width = FALLBACK_DESIGN_WIDTH;
-    for (let index = 0; index < this.fallbackMotionStreaks.length; index += 1) {
-      const streak = this.fallbackMotionStreaks[index]!;
-      const speed = 120 + hash01(index + 21) * 160;
-      const span = width + 260;
-      streak.x = ((seconds * speed + hash01(index + 31) * span) % span) - 200;
-      streak.y = 60 + hash01(index + 41) * (FALLBACK_DESIGN_HEIGHT - 100);
-    }
-    if (this.fallbackActiveRowY !== undefined) {
-      // Pointer kicks toward the card on every beat.
-      this.fallbackPointer.position.set(FALLBACK_LIST_X - 12 + 5 * beatPulse, this.fallbackActiveRowY);
-      this.fallbackPointer.scale.set(1 + 0.18 * beatPulse);
-    }
+    return this.beMusicRenderer;
   }
 
-  /**
-   * Background chrome for the no-skin select scene. Unlike LR2 skin rendering, this path only displays live library and
-   * focused-chart data; it does not paint fake score history or decorative buttons that are not wired in skinless mode.
-   */
-  private renderFallbackSelectChrome(
-    designWidth: number,
-    designHeight: number,
-    entries: readonly BrowserBrowseEntry[],
-  ): void {
-    const chrome = new Graphics();
-    chrome.label = 'default-select/chrome';
-    const addText = (text: string, x: number, y: number, options: FallbackTextOptions = {}): Text =>
-      addFallbackText(this.listLayer, text, x, y, options);
+  /** PLAY / AUTO PLAY / search callbacks handed to the skin's hit areas. */
+  private readonly beMusicActions = {
+    play: (): void => this.launchFocusedSong(false),
+    autoPlay: (): void => this.launchFocusedSong(true),
+    activateSearch: (): void => this.options.onSearchActivate?.(),
+  };
 
-    const song = this.focusedSong();
-    const songTitle = song?.title ?? 'No chart selected';
-    const songArtist = song?.artist || song?.subtitle || '';
-    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
-    const playLevelNumber =
-      song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
-    const songBpm = song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-';
-    const fileLabel = song?.fileLabel ?? '';
-    const modeLabel = song ? formatPlayVariantLabel(song) : '- KEYS';
-    const currentFolder = this.browseStack[this.browseStack.length - 1];
-    const categoryName = this.searchQuery ? `Search: ${this.searchQuery}` : (currentFolder?.label ?? 'Library');
-    const selectedPosition =
-      entries.length > 0 ? `${Math.min(this.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
-
-    // Header: ink bar, sawtooth red kicker, poster title with a hard red shadow, and the folder tag on the right.
-    chrome.rect(0, 0, designWidth, 38).fill(PHANTOM_INK);
-    addText('MUSIC SELECT', 16, 3, {
-      size: 24,
-      fill: PHANTOM_WHITE,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      letterSpacing: 1.5,
-      skewX: -0.18,
-      dropShadow: { color: PHANTOM_RED, distance: 3 },
-    });
-    chrome.poly(parallelogramPoints(designWidth - 196, 9, 180, 20, -8)).fill(PHANTOM_WHITE);
-    addText(categoryName, designWidth - 28, 19, {
-      size: 11,
-      weight: '800',
-      fill: PHANTOM_INK,
-      anchorX: 1,
-      anchorY: 0.5,
-      maxWidth: 160,
-    });
-
-    // Info panel — ink card with a white rim over a red-shifted shadow card.
-    chrome.poly(parallelogramPoints(18, 60, 286, 300, -6)).fill(PHANTOM_INK);
-    chrome
-      .poly(parallelogramPoints(12, 54, 286, 300, -6))
-      .fill(PHANTOM_BLACK)
-      .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
-    chrome.poly(parallelogramPoints(20, 62, 74, 16, 6)).fill(PHANTOM_RED);
-    addText('SELECTED', 28, 70, { ...fallbackTagStyle(PHANTOM_WHITE), anchorY: 0.5 });
-    // Title / artist slide in from the right after each cursor move.
-    const slide = 1 - fallbackSlideProgress(performance.now() - this.fallbackCursorChangedAt);
-    if (slide > 0) this.fallbackNeedsFrame = true;
-    const titleNode = addText(songTitle, 24 + slide * 28, 90, {
-      size: 18,
-      fontFamily: DEFAULT_HEADLINE_FONT,
-      fill: PHANTOM_WHITE,
-      maxWidth: 268,
-    });
-    titleNode.alpha = 1 - slide;
-    if (songArtist) {
-      const artistNode = addText(songArtist, 24 + slide * 44, 116, {
-        size: 10,
-        weight: '700',
-        fill: PHANTOM_RED_HOT,
-        maxWidth: 268,
-      });
-      artistNode.alpha = 1 - slide;
+  private launchFocusedSong(autoPlay: boolean): void {
+    const focused = this.focusedSong();
+    if (!focused) return;
+    if (autoPlay && this.options.onSongAutoPlay) {
+      this.options.onSongAutoPlay(focused);
+      return;
     }
-    chrome.rect(24, 136, 268, 1).fill(PHANTOM_SLATE);
-
-    // MODE / BPM / LEVEL chips.
-    const chips: ReadonlyArray<
-      readonly [x: number, w: number, label: string, value: string, fill: number, size: number]
-    > = [
-      [24, 76, 'MODE', modeLabel, PHANTOM_WHITE, 16],
-      [112, 76, 'BPM', songBpm, PHANTOM_WHITE, 22],
-      [200, 92, 'LEVEL', playLevel, PHANTOM_GOLD, 24],
-    ];
-    for (const [x, w, label, value, fill, size] of chips) {
-      chrome
-        .poly(parallelogramPoints(x, 150, w - 6, 48, 6))
-        .fill(PHANTOM_CHARCOAL)
-        .stroke({ color: PHANTOM_SLATE, width: 1 });
-      addText(label, x + 12, 156, fallbackTagStyle(PHANTOM_RED));
-      addText(value, x + 10, 168, {
-        size,
-        fill,
-        fontFamily: DEFAULT_DISPLAY_FONT,
-        skewX: -0.18,
-        maxWidth: w - 20,
-      });
-    }
-
-    // Level meter as twelve slanted segments.
-    const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
-    const segments = 12;
-    const segmentW = 268 / segments;
-    for (let segment = 0; segment < segments; segment += 1) {
-      const lit = segment < Math.round(levelRatio * segments);
-      chrome
-        .poly(parallelogramPoints(24 + segment * segmentW, 226, segmentW - 3, 12, 4))
-        .fill(lit ? (segment >= 9 ? PHANTOM_GOLD : PHANTOM_RED_HOT) : PHANTOM_SLATE);
-    }
-    if (fileLabel) {
-      addText(fileLabel, 24, 250, { size: 8, weight: '600', fill: PHANTOM_ASH, maxWidth: 268 });
-    }
-
-    // PLAY is the primary action (big red card); AUTO PLAY is a secondary paper tag. Hit areas below mirror these.
-    chrome.poly(parallelogramPoints(29, 309, 168, 36, 8)).fill(PHANTOM_INK);
-    chrome
-      .poly(parallelogramPoints(24, 304, 168, 36, 8))
-      .fill(PHANTOM_RED)
-      .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
-    chrome.poly(parallelogramPoints(208, 310, 82, 26, 6)).fill(PHANTOM_PAPER);
-    addText('PLAY', 112, 322, {
-      size: 24,
-      fill: PHANTOM_WHITE,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      letterSpacing: 3,
-      skewX: -0.18,
-      anchorX: 0.5,
-      anchorY: 0.5,
-    });
-    addText('AUTO PLAY', 252, 323, {
-      size: 12,
-      fill: PHANTOM_INK,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      letterSpacing: 1,
-      skewX: -0.18,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      maxWidth: 70,
-    });
-    addText(selectedPosition, 292, 284, {
-      size: 14,
-      fill: PHANTOM_ASH,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      skewX: -0.18,
-      anchorX: 1,
-    });
-
-    // Song list well.
-    chrome.rect(316, 50, designWidth - 332, designHeight - 76).fill({ color: PHANTOM_INK, alpha: 0.9 });
-    chrome.rect(316, 50, 3, designHeight - 76).fill(PHANTOM_RED);
-    addText(
-      this.searchQuery ? 'SEARCH RESULTS' : currentFolder ? 'CHARTS' : 'FOLDERS',
-      designWidth - 20,
-      designHeight - 22,
-      {
-        ...fallbackTagStyle(PHANTOM_ASH),
-        anchorX: 1,
-      },
-    );
-
-    chrome
-      .poly(parallelogramPoints(12, 376, 286, 28, -6))
-      .fill(PHANTOM_INK)
-      .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
-    addText('SEARCH', 24, 385, fallbackTagStyle(PHANTOM_RED));
-    addText(this.searchQuery || 'Title / artist / genre', 82, 384, {
-      size: 10,
-      weight: '600',
-      fill: this.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
-      maxWidth: 210,
-    });
-
-    const searchHit = new Graphics();
-    searchHit.rect(12, 376, 292, 28).fill({ color: 0xffffff, alpha: 0.001 });
-    searchHit.eventMode = 'static';
-    searchHit.cursor = 'text';
-    searchHit.on('pointerdown', () => this.options.onSearchActivate?.());
-    this.listLayer.addChild(searchHit);
-
-    const launchFocused = (autoPlay: boolean): void => {
-      const focused = this.focusedSong();
-      if (!focused) return;
-      if (autoPlay) {
-        if (this.options.onSongAutoPlay) {
-          this.options.onSongAutoPlay(focused);
-        } else {
-          this.options.onSongSelected?.(focused);
-        }
-        return;
-      }
-      this.options.onSongSelected?.(focused);
-    };
-    const playHit = new Graphics();
-    playHit.rect(24, 304, 176, 36).fill({ color: 0xffffff, alpha: 0.001 });
-    playHit.eventMode = 'static';
-    playHit.cursor = 'pointer';
-    playHit.on('pointerdown', () => launchFocused(false));
-    this.listLayer.addChild(playHit);
-
-    const autoPlayHit = new Graphics();
-    autoPlayHit.rect(206, 308, 90, 30).fill({ color: 0xffffff, alpha: 0.001 });
-    autoPlayHit.eventMode = 'static';
-    autoPlayHit.cursor = 'pointer';
-    autoPlayHit.on('pointerdown', () => launchFocused(true));
-    this.listLayer.addChild(autoPlayHit);
-
-    chrome.poly(parallelogramPoints(12, 420, 286, 42, -6)).fill(PHANTOM_INK);
-    chrome.poly(parallelogramPoints(18, 428, 6, 26, -3)).fill(PHANTOM_RED);
-    addText('LIBRARY', 32, 430, fallbackTagStyle(PHANTOM_ASH));
-    addText(`${entries.length} shown / ${this.collection.songs.length} charts`, 32, 443, {
-      size: 11,
-      weight: '700',
-      fill: PHANTOM_WHITE,
-    });
-
-    this.listLayer.addChildAt(chrome, 0);
+    this.options.onSongSelected?.(focused);
   }
 
   /**
@@ -3806,193 +3475,11 @@ export class PixiSongSelectView {
     }
     this.listLayer.addChild(titleText);
   }
-
-  private drawFallbackEntryRow(
-    entry: BrowserBrowseEntry,
-    entryIndex: number,
-    visibleIndex: number,
-    listX: number,
-    listY: number,
-    listWidth: number,
-    rowHeight: number,
-  ): void {
-    const y = listY + visibleIndex * rowHeight;
-    const row = new Graphics();
-    const active = entryIndex === this.selectedIndex;
-    const song = entry.kind === 'song' ? entry.song : undefined;
-    const folder = entry.kind === 'folder' ? entry.folder : undefined;
-    const titleText = song?.title ?? folder?.label ?? '';
-    const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
-    // One line per row: the title centred vertically, with the BPM (or folder size) right-aligned beside it.
-    const metaText = song
-      ? song.bpm
-        ? `${Math.round(song.bpm)} BPM`
-        : ''
-      : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
-    const playLevelText =
-      song?.playLevel !== undefined ? String(song.playLevel) : folder ? String(folder.songs.length) : '-';
-    // The focused row slides out to the left like a pulled card; the rest stay racked against the well.
-    const slide = active ? 1 - fallbackSlideProgress(performance.now() - this.fallbackCursorChangedAt) : 0;
-    // Scene intro: rows fly in from the right one after another.
-    const intro =
-      1 - fallbackSlideProgress(performance.now() - this.sceneStartedAt - visibleIndex * FALLBACK_INTRO_STAGGER_MS);
-    if (slide > 0 || intro > 0) this.fallbackNeedsFrame = true;
-    const rowX = (active ? listX - 6 : listX + 4) + slide * 30 + intro * 260;
-    const rowW = active ? listWidth + 2 : listWidth - 8;
-    const keyPillX = rowX + 8;
-    const keyPillW = 26;
-    const levelPillX = keyPillX + keyPillW + 4;
-    const levelPillW = 26;
-    const titleX = levelPillX + levelPillW + 10;
-    const textMaxWidth = Math.max(24, rowX + rowW - titleX - 10);
-    row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
-    if (active) {
-      row.poly(parallelogramPoints(rowX + 5, y + 3, rowW, rowHeight - 3, 6)).fill(PHANTOM_RED);
-      row
-        .poly(parallelogramPoints(rowX, y - 1, rowW, rowHeight - 3, 6))
-        .fill(PHANTOM_PAPER)
-        .stroke({ color: PHANTOM_INK, width: 2, join: 'miter' });
-      this.fallbackActiveRowY = y + rowHeight / 2 - 2;
-      this.fallbackActiveCard = { x: rowX, y: y - 1, w: rowW, h: rowHeight - 3 };
-    } else {
-      row
-        .poly(parallelogramPoints(rowX, y, rowW, rowHeight - 4, 6))
-        .fill(visibleIndex % 2 === 0 ? PHANTOM_CHARCOAL : PHANTOM_BLACK)
-        .stroke({ color: PHANTOM_SLATE, width: 1 });
-    }
-    row
-      .poly(parallelogramPoints(keyPillX, y + 5, keyPillW, rowHeight - 13, 3))
-      .fill(active ? PHANTOM_INK : PHANTOM_SLATE);
-    row.poly(parallelogramPoints(levelPillX, y + 5, levelPillW, rowHeight - 13, 3)).fill(PHANTOM_RED);
-    this.listLayer.addChild(row);
-
-    const pillY = y + rowHeight / 2 - 1.5;
-    addFallbackText(this.listLayer, keyText, keyPillX + keyPillW / 2 + 1, pillY, {
-      size: 11,
-      fill: PHANTOM_WHITE,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      maxWidth: keyPillW - 4,
-    });
-    addFallbackText(this.listLayer, playLevelText, levelPillX + levelPillW / 2 + 1, pillY, {
-      size: 12,
-      fill: PHANTOM_WHITE,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      maxWidth: levelPillW - 4,
-    });
-    const rowMidY = y + (active ? -1 : 0) + (rowHeight - 3) / 2;
-    const metaRight = rowX + rowW - 12;
-    const meta = addFallbackText(this.listLayer, metaText, metaRight, rowMidY, {
-      size: 12,
-      fill: active ? PHANTOM_RED : PHANTOM_ASH,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      letterSpacing: 0.5,
-      skewX: -0.18,
-      anchorX: 1,
-      anchorY: 0.5,
-      maxWidth: 64,
-    });
-    const metaWidth = metaText ? Math.min(64, meta.width) + 10 : 0;
-    const title = addFallbackText(this.listLayer, titleText, titleX, rowMidY, {
-      size: 11,
-      weight: '800',
-      fill: active ? PHANTOM_INK : PHANTOM_WHITE,
-      anchorY: 0.5,
-      maxWidth: Math.max(24, textMaxWidth - metaWidth),
-    });
-    title.label = `fallback-title[idx=${entryIndex}]`;
-    meta.label = `fallback-meta[idx=${entryIndex}]`;
-  }
-}
-
-const FALLBACK_SLIDE_MS = 240;
-const FALLBACK_INTRO_STAGGER_MS = 40;
-const FALLBACK_KICKER_PITCH = 20;
-const FALLBACK_GLINT_W = 14;
-/** Authored glint height; scaled to the focused card's height at tick time. */
-const FALLBACK_GLINT_H = 25;
-const FALLBACK_DOT_PITCH = 10;
-/** Vertical repeat of the staggered halftone grid (two rows), so the drift loops seamlessly. */
-const FALLBACK_DOT_PERIOD = FALLBACK_DOT_PITCH * 2;
-/** Left edge of the skinless song list — mirrors `listX` in `render()` / the pointer hit-test. */
-const FALLBACK_LIST_X = 320;
-
-function FALLBACK_SLAB(designHeight: number): number[] {
-  return [0, 40, 236, 40, 118, designHeight, 0, designHeight];
-}
-
-/** Ease-out-cubic progress of the focused-card slide-in, 0 at the cursor move → 1 once settled. */
-function fallbackSlideProgress(elapsedMs: number): number {
-  const t = Math.max(0, Math.min(1, elapsedMs / FALLBACK_SLIDE_MS));
-  return 1 - (1 - t) ** 3;
-}
-
-interface FallbackTextOptions {
-  size?: number;
-  weight?: '400' | '500' | '600' | '700' | '800' | '900';
-  fill?: number | Color;
-  fontFamily?: string;
-  letterSpacing?: number;
-  anchorX?: number;
-  anchorY?: number;
-  maxWidth?: number;
-  skewX?: number;
-  dropShadow?: { color: number; distance: number };
-}
-
-/** One text node for the default-family select chrome (the skinless branch), squeezed to `maxWidth` when needed. */
-function addFallbackText(layer: Container, text: string, x: number, y: number, options: FallbackTextOptions): Text {
-  const node = new Text({
-    text,
-    style: new TextStyle({
-      fill: options.fill ?? PHANTOM_WHITE,
-      fontSize: options.size ?? 10,
-      fontWeight: options.weight ?? '400',
-      fontFamily: options.fontFamily ?? DEFAULT_TEXT_FONT,
-      letterSpacing: options.letterSpacing ?? 0,
-      ...(options.dropShadow
-        ? {
-            dropShadow: {
-              color: options.dropShadow.color,
-              alpha: 1,
-              blur: 0,
-              distance: options.dropShadow.distance,
-              angle: Math.PI / 4,
-            },
-          }
-        : {}),
-    }),
-  });
-  node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
-  node.position.set(x, y);
-  node.skew.set(options.skewX ?? 0, 0);
-  if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-    node.scale.x = options.maxWidth / node.width;
-  }
-  layer.addChild(node);
-  return node;
-}
-
-function fallbackTagStyle(fill: number): FallbackTextOptions {
-  return { size: 9, fill, fontFamily: DEFAULT_DISPLAY_FONT, letterSpacing: 1.2, skewX: -0.18 };
 }
 
 function clampSlot(value: number, slotCount: number): number {
   if (slotCount <= 0) return 0;
   return Math.min(slotCount - 1, Math.max(0, Math.trunc(value)));
-}
-
-/**
- * Human-readable mode label for the focused song's play variant (`'5K' | '7K' | '9K' | '10K' | '14K' KEYS`). Used to
- * populate the `MODE` pill on the no-skin select banner so the user sees the same kind of badge the LR2 default skin
- * paints with its mode bitmap.
- */
-function formatPlayVariantLabel(song: BrowserSongEntry): string {
-  const variant = resolveChartPlayVariant(song);
-  return `${variant} KEYS`;
 }
 
 /**

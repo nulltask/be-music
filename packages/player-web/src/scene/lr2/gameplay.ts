@@ -1,15 +1,4 @@
-import {
-  Application,
-  Color,
-  Container,
-  FillGradient,
-  Graphics,
-  Rectangle,
-  Text,
-  TextStyle,
-  Texture,
-  VideoSource,
-} from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Text, TextStyle, Texture, VideoSource } from 'pixi.js';
 // Side-effect import: registers Pixi's `PrepareSystem` on the renderer so {@link PixiGameplayView.preparePixiUpload}
 // can drive eager GPU uploads. Pixi v8 deliberately ships the prepare module out of the default bundle (it's a
 // large optional system that not every app needs); the import has to land before any `Application.init` runs that
@@ -147,7 +136,6 @@ import {
 } from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
-  isScratchLaneForVariant,
   resolveFallbackLaneLayout,
   resolveLaneChannels,
   resolveLr2LaneIndex,
@@ -177,6 +165,9 @@ import {
   resolveNumberValue,
 } from './gameplay-hud.ts';
 import { LR2_JUDGE_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
+import type { BeMusicBomb, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
+import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
+import { phantomSkin } from '../default/phantom/index.ts';
 import { resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
@@ -328,6 +319,12 @@ export interface PixiGameplayViewOptions {
    * not import or own that renderer; it only provides the shared gameplay runtime and layers.
    */
   skinlessChromeRenderer?: SkinlessGameplayChromeRenderer;
+  /**
+   * be-music skin for everything the scene paints itself: lanes / notes / long notes / bombs whenever no LR2 skin
+   * supplies them, and (when `skinlessChromeRenderer` is omitted) the skinless HUD chrome. Defaults to the built-in
+   * Phantom skin.
+   */
+  beMusicSkin?: BeMusicSkin;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -3759,7 +3756,7 @@ export class PixiGameplayView {
       // explosion retires at its authored cycle length, with the LR2-default 150 ms fallback for skinless / unauthored
       // slots.
       const cleanupAtMs =
-        (timerId === undefined ? undefined : this.bombDurationMs.get(timerId)) ?? BOMB_CLEANUP_FALLBACK_MS;
+        (timerId === undefined ? undefined : this.bombDurationMs.get(timerId)) ?? this.skinlessBombDurationMs();
       if (now - startedAt < cleanupAtMs) {
         continue;
       }
@@ -3914,28 +3911,36 @@ export class PixiGameplayView {
 
   private renderDefaultBombs(): void {
     const now = this.playClock();
+    const bombs: BeMusicBomb[] = [];
     for (const [channel, startedAt] of this.bombStartedAt) {
       const lane = this.laneX.get(channel);
       if (!lane) continue;
-
-      const elapsed = Math.max(0, now - startedAt);
-      const progress = Math.max(0, Math.min(1, elapsed / BOMB_CLEANUP_FALLBACK_MS));
-      const fade = 1 - progress;
-      const eased = 1 - (1 - progress) * (1 - progress);
-      const centerX = lane.x + lane.w / 2;
-      const centerY = lane.bottom - Math.max(4, lane.w * 0.16);
-      const outer = Math.max(8, lane.w * (0.55 + 0.6 * eased));
-      const inner = outer * 0.52;
-      const graphic = this.bombLayerPool.acquireGraphics();
-      graphic.label = `default-bomb[ch=${channel}]`;
-      graphic.blendMode = 'add';
-      graphic.alpha = fade;
-
-      // Plain IIDX-style hit flash: an expanding ring over a white core, no decorative spokes.
-      graphic.circle(centerX, centerY, outer).stroke({ color: 0xff6a3d, width: Math.max(1.5, lane.w * 0.1) });
-      graphic.circle(centerX, centerY, inner).fill({ color: 0xffb070, alpha: 0.35 });
-      graphic.circle(centerX, centerY, inner * 0.5).fill({ color: 0xffffff, alpha: 0.85 });
+      bombs.push({
+        channel,
+        kind: resolveBeMusicLaneKind(
+          channel,
+          resolveLr2LaneIndex(channel, this.chartPlayVariant),
+          this.chartPlayVariant,
+        ),
+        x: lane.x,
+        w: lane.w,
+        y: lane.bottom,
+        elapsedMs: Math.max(0, now - startedAt),
+        // Stable per hit: the start time changes on every re-trigger, so a new hit gets a new scatter.
+        seed: Math.floor(startedAt * 7.31) % 100_003,
+      });
     }
+    this.playfieldSkin.gameplay.renderBombs({ pool: this.bombLayerPool, bombs, nowMs: now });
+  }
+
+  /** Active be-music skin for scene-painted playfield parts; the built-in Phantom skin unless the host picked one. */
+  private get playfieldSkin(): BeMusicSkin {
+    return this.options.beMusicSkin ?? phantomSkin;
+  }
+
+  /** Bomb lifetime for slots no LR2 skin authored: the be-music skin's own effect length. */
+  private skinlessBombDurationMs(): number {
+    return this.options.skin ? BOMB_CLEANUP_FALLBACK_MS : this.playfieldSkin.gameplay.bombDurationMs;
   }
 
   /**
@@ -4218,7 +4223,7 @@ export class PixiGameplayView {
         this.overlayLayer.position.set(0, 0);
         this.bgaLayer.scale.set(1);
         this.bgaLayer.position.set(0, 0);
-        this.options.skinlessChromeRenderer?.({
+        (this.options.skinlessChromeRenderer ?? this.options.beMusicSkin?.gameplay.renderChrome)?.({
           layer: this.skinLayer,
           overlayLayer: this.overlayLayer,
           layerPool: this.skinLayerPool,
@@ -4955,6 +4960,7 @@ export class PixiGameplayView {
       preserveSideWidth: shouldPreserveFallbackSideWidth(this.laneChannels, this.chartPlayVariant),
     });
 
+    const skinlessLanes: BeMusicLaneFrame[] = [];
     this.laneChannels.forEach((channel, index) => {
       // Skin's `#DST_NOTE,index,...` puts 1P-side rects at 0..9 and 2P-side rects at 10..19. We index with the LR2-spec
       // lane id (channel-derived) so a DP chart's 2P notes land on the 2P-side rects the skin actually authored — not
@@ -4978,70 +4984,29 @@ export class PixiGameplayView {
         // problem we want to avoid. Skip the fallback overlays here.
         return;
       }
-
-      const scratchLane = fallbackLane?.isScratch ?? isScratchLaneForVariant(channel, this.chartPlayVariant);
-      const fallbackLaneIndex = resolveLr2LaneIndex(channel, this.chartPlayVariant);
-      const tone = noteFallbackColor(channel, fallbackLaneIndex, this.chartPlayVariant);
-      const laneHeight = Math.max(1, bottom - top);
-
-      // Lane bed — red-key lanes carry a faint red wash so the column reads as "this key's territory".
-      this.laneLayer.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: scratchLane ? 0.06 : 0.035 });
-      // Lane separators — charcoal hairlines, so white / red notes pop against the ink well.
-      this.laneLayer.rect(x, top, 1, laneHeight).fill({ color: 0x2c2c31, alpha: 0.9 });
-
-      // Key beam — a smooth vertical gradient in the lane's colour that fades out toward the top, plus a soft white
-      // hot base above the line. The gradients are cached per colour in local texture space, so one texture serves every
-      // lane and frame.
-      const laserAlpha = this.resolveFallbackLaneLaserAlpha(channel);
-      if (laserAlpha > 0) {
-        const beamHeight = Math.min(laneHeight, 190);
-        // Ease the release so the beam dims quickly at first and lingers softly instead of fading linearly.
-        const beamAlpha = laserAlpha * laserAlpha * (3 - 2 * laserAlpha);
-        this.laneLayer
-          .rect(x + 1, bottom - beamHeight, w - 2, beamHeight)
-          .fill({ fill: resolveLaneBeamGradient(tone.body), alpha: beamAlpha });
-        this.laneLayer
-          .rect(x + 1, bottom - 22, w - 2, 22)
-          .fill({ fill: resolveLaneBeamGradient(0xffffff), alpha: beamAlpha * 0.7 });
-      }
-
-      // Judgement line — a blood-red bar with a paper-white edge, breathing with the beat: the glow flares on the
-      // downbeat and decays into the bar, so the line itself keeps time even before any note arrives.
-      const beat = this.currentBeat(this.currentSeconds());
-      const beatDecay = 1 - (beat - Math.floor(beat));
-      this.laneLayer.rect(x, bottom - 16, w, 14).fill({ color: 0xe60019, alpha: 0.1 + 0.16 * beatDecay });
-      this.laneLayer.rect(x, bottom - 4, w, 4).fill(0xe60019);
-      this.laneLayer.rect(x, bottom - 5, w, 1).fill({ color: 0xffffff, alpha: 0.9 });
-      this.laneLayer.rect(x, bottom, w, 1).fill(0x000000);
-
-      // Key caps under the line — dark blocks with a white rim at rest, lit in the lane's colour on press.
-      const pressed = laserAlpha > 0.6;
-      const capTop = bottom + 3;
-      const capHeight = 14;
-      const capW = Math.max(2, w - 2);
-      this.laneLayer.rect(x + 1, capTop, capW, capHeight).fill(pressed ? tone.capLit : tone.cap);
-      this.laneLayer.rect(x + 1, capTop, capW, 2).fill({ color: 0xffffff, alpha: pressed ? 0.9 : 0.55 });
-      if (pressed) {
-        // Under-glow bridging the cap to the judgement line — the "lit from within" press feedback.
-        this.laneLayer.rect(x + 1, capTop - 2, capW, 2).fill({ color: 0xffffff, alpha: 0.95 });
-      }
+      skinlessLanes.push({
+        channel,
+        kind: resolveBeMusicLaneKind(
+          channel,
+          resolveLr2LaneIndex(channel, this.chartPlayVariant),
+          this.chartPlayVariant,
+        ),
+        x,
+        w,
+        top,
+        bottom,
+        beam: this.resolveFallbackLaneLaserAlpha(channel),
+      });
     });
 
-    if (!skin && this.laneX.size > 0) {
-      // Close the grid on the display-order right-most lane — each lane draws only its LEFT hairline, which would
-      // leave the final column visually unbounded. `laneChannels` is chart order, not display order, so resolve the
-      // right edge from the computed geometry instead of the iteration index.
-      let gridTop = Number.POSITIVE_INFINITY;
-      let gridBottom = 0;
-      let gridRight = 0;
-      for (const lane of this.laneX.values()) {
-        gridTop = Math.min(gridTop, lane.top);
-        gridBottom = Math.max(gridBottom, lane.bottom);
-        gridRight = Math.max(gridRight, lane.x + lane.w);
-      }
-      this.laneLayer
-        .rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop))
-        .fill({ color: 0x2c2c31, alpha: 0.9 });
+    if (!skin && skinlessLanes.length > 0) {
+      const beat = this.currentBeat(this.currentSeconds());
+      this.playfieldSkin.gameplay.renderLanes({
+        graphics: this.laneLayer,
+        lanes: skinlessLanes,
+        beatPhase: beat - Math.floor(beat),
+        nowMs: this.playClock(),
+      });
     }
   }
 
@@ -5466,13 +5431,14 @@ export class PixiGameplayView {
     }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    drawFallbackNoteBody(
-      graphic,
-      lane.x + 1,
+    this.playfieldSkin.gameplay.renderNote({
+      graphics: graphic,
+      kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
+      x: lane.x,
+      w: lane.w,
       y,
-      Math.max(4, lane.w - 2),
-      noteFallbackColor(channel, laneIndex, this.chartPlayVariant),
-    );
+      nowMs: this.playClock(),
+    });
   }
 
   /**
@@ -5517,18 +5483,15 @@ export class PixiGameplayView {
     } else {
       const graphic = this.noteLayerPool.acquireGraphics();
       graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      const tone = noteFallbackColor(channel, laneIndex, this.chartPlayVariant);
-      const bodyX = lane.x + 1;
-      const bodyW = Math.max(4, lane.w - 2);
-      const bodyTop = top - FALLBACK_NOTE_HEIGHT;
-      const bodyH = Math.max(1, bottom - top);
-      // Translucent core with solid side rails — reads as "hold the lane", not a solid wall of colour.
-      graphic.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.35 });
-      graphic.rect(bodyX, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.9 });
-      graphic.rect(bodyX + bodyW - 2, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.9 });
-      // Head and tail caps as real notes so the hold's judgment edges stay legible.
-      drawFallbackNoteBody(graphic, bodyX, bottom, bodyW, tone);
-      drawFallbackNoteBody(graphic, bodyX, top, bodyW, tone);
+      this.playfieldSkin.gameplay.renderLongNote({
+        graphics: graphic,
+        kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
+        x: lane.x,
+        w: lane.w,
+        top,
+        bottom,
+        nowMs: this.playClock(),
+      });
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     if (endSrc) {
@@ -6248,113 +6211,6 @@ function shuffleArray<T>(array: T[], rng: () => number): T[] {
   }
   return array;
 }
-
-/**
- * Note color for the no-skin fallback path, mirroring the IIDX / LR2 default convention:
- *
- * - - Scratch (`16` / `26`) — red. - Odd-numbered keys (1 / 3 / 5 / 7) — white. - Even-numbered keys (2 / 4 / 6) —
- *   blue.
- *
- * `laneIndex` is the LR2 lane id (`resolveLr2LaneIndex`-style): 0 / 10 = scratch, 1..9 = 1P-side keys, 11..19 = 2P-side
- * keys. `playVariant` matters because 9 KEY charts use channel 16 as a normal keyboard lane, not scratch.
- */
-interface FallbackLaneTone {
-  /** Top-edge highlight of a note body. */
-  top: number;
-  /** Note body / beam / LN colour. */
-  body: number;
-  /** Bottom-edge shade of a note body. */
-  bottom: number;
-  /** Key cap at rest. */
-  cap: number;
-  /** Key cap while pressed. */
-  capLit: number;
-}
-
-// IIDX-convention tones: white keys white, black keys blue, scratch red. Notes stay plain so reading is never
-// traded for style; the default skin's poster styling lives in the surrounding chrome.
-const FALLBACK_TONE_WHITE: FallbackLaneTone = {
-  top: 0xffffff,
-  body: 0xecebf0,
-  bottom: 0xa9a7b0,
-  cap: 0x1a1a1d,
-  capLit: 0xf4f1ea,
-};
-const FALLBACK_TONE_BLUE: FallbackLaneTone = {
-  top: 0xa8d8ff,
-  body: 0x3d8bff,
-  bottom: 0x1a4fa8,
-  cap: 0x0e1626,
-  capLit: 0x6fa8ff,
-};
-const FALLBACK_TONE_RED: FallbackLaneTone = {
-  top: 0xff9aa6,
-  body: 0xe60019,
-  bottom: 0x7a0010,
-  cap: 0x24090d,
-  capLit: 0xff2b45,
-};
-
-const LANE_BEAM_GRADIENTS = new Map<number, FillGradient>();
-
-/**
- * Vertical beam gradient for `color`: transparent at the top, easing into a translucent base at the bottom. Built in
- * `'local'` texture space so the same gradient stretches to any lane rect.
- */
-function resolveLaneBeamGradient(color: number): FillGradient {
-  let gradient = LANE_BEAM_GRADIENTS.get(color);
-  if (!gradient) {
-    const rgb = new Color(color);
-    gradient = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      textureSpace: 'local',
-      colorStops: [
-        { offset: 0, color: rgb.setAlpha(0).toRgbaString() },
-        { offset: 0.45, color: rgb.setAlpha(0.08).toRgbaString() },
-        { offset: 0.8, color: rgb.setAlpha(0.28).toRgbaString() },
-        { offset: 1, color: rgb.setAlpha(0.55).toRgbaString() },
-      ],
-    });
-    LANE_BEAM_GRADIENTS.set(color, gradient);
-  }
-  return gradient;
-}
-
-/** Height of a fallback note body in design pixels. */
-const FALLBACK_NOTE_HEIGHT = 10;
-
-/**
- * One skinless note: a flat IIDX-style bar with a thin highlight on top and shade at the bottom. `y` is the
- * just-timing line — the body's BOTTOM edge sits on it.
- */
-function drawFallbackNoteBody(graphic: Graphics, x: number, y: number, w: number, tone: FallbackLaneTone): void {
-  const h = FALLBACK_NOTE_HEIGHT;
-  graphic.rect(x, y - h, w, h).fill(tone.body);
-  graphic.rect(x, y - h, w, 1).fill({ color: tone.top, alpha: 0.9 });
-  graphic.rect(x, y - 2, w, 2).fill({ color: tone.bottom, alpha: 0.9 });
-}
-
-function noteFallbackColor(
-  channel: string,
-  laneIndex: number,
-  playVariant: ChartPlayVariant | undefined,
-): FallbackLaneTone {
-  if (isScratchLaneForVariant(channel, playVariant)) return FALLBACK_TONE_RED;
-  if (playVariant === '24' || playVariant === '48') {
-    // The keyboard bank is a piano, and `laneIndex` is `-1` here (no LR2 rect exists for these lanes), so colour by
-    // the side-relative column instead: black keys blue, white keys white, repeating every chromatic octave.
-    const semitone = (resolveSideRelativeLaneIndex(channel, playVariant) - 1) % 12;
-    return KEYBOARD_BLACK_KEY_SEMITONES.has(semitone) ? FALLBACK_TONE_BLUE : FALLBACK_TONE_WHITE;
-  }
-  const keyIndex = laneIndex % 10;
-  if (keyIndex % 2 === 0) return FALLBACK_TONE_BLUE;
-  return FALLBACK_TONE_WHITE;
-}
-
-/** Chromatic offsets of the black keys within an octave (C# D# F# G# A#), used to tint the keyboard modes' lanes. */
-const KEYBOARD_BLACK_KEY_SEMITONES = new Set([1, 3, 6, 8, 10]);
 
 // `clampSampleOffset` / `clampSampleDuration` / `startSampleNode` lived here while the gameplay view managed its
 // own audio playback. With Phase 4b-i / 4b-ii routing every cue through {@link WebAudioSession}, the canonical

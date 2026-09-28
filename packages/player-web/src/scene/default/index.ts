@@ -13,3 +13,4 @@ export * from './gameplay-render.ts';
 export * from './gameplay.ts';
 export * from './result.ts';
 export * from './select.ts';
+export { phantomSkin } from './phantom/index.ts';
