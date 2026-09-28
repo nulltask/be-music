@@ -2,7 +2,7 @@ import { resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-
 import { dirname } from '@be-music/utils/core';
 import { resolveSongSource } from '../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../collection/types.ts';
-import type { PixiGaugeType, PixiPlayOptions } from './lr2/select.ts';
+import type { PixiGaugeType, PixiPlayOptions } from './core/select.ts';
 
 /**
  * Globally-true ops that hold regardless of which song is focused: filter / mode toggles, gauge defaults, "no rival"

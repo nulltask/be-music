@@ -275,7 +275,7 @@ class PlayerWebDemoApp {
     optionClose?: Uint8Array;
     optionChange?: Uint8Array;
   } = {};
-  private selectView: PixiSongSelectView | undefined;
+  private selectView: PixiSongSelectView | DefaultPixiSongSelectView | undefined;
   private gameplayView: PixiGameplayView | undefined;
   /**
    * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
@@ -2932,12 +2932,23 @@ class PlayerWebDemoApp {
     // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
     // earlier, so we only have these two cases here.
     const lr2SelectSkin = activeFamily === 'lr2' ? this.selectSkin : undefined;
+    let carriedPlayOptions: PixiPlayOptions | undefined;
+    if (this.selectView && lr2SelectSkin !== undefined && !(this.selectView instanceof PixiSongSelectView)) {
+      // A theme dropped while the default-family scene is up: only the LR2 scene can adopt an LR2 skin, so rebuild it
+      // below as the LR2 scene, carrying the cursor and the live play options across.
+      this.lastSelectNavigation ??= this.selectView.getNavigation();
+      carriedPlayOptions = this.selectView.getPlayOptions();
+      this.selectView.dispose();
+      this.selectView = undefined;
+    }
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
       // the bytes, and (because we're still hidden) defers the actual `start()` until `setVisible(true)` lands a moment
       // later. Doing it the other way round would briefly start the prior theme's BGM during the visibility flip.
-      this.selectView.setSkin(lr2SelectSkin);
+      if (this.selectView instanceof PixiSongSelectView) {
+        this.selectView.setSkin(lr2SelectSkin);
+      }
       this.selectView.setSelectBgm(this.selectBgmBytes);
       this.selectView.setDecideBgm(this.decideBgmBytes);
       this.selectView.setSystemSounds(this.systemSoundBundle);
@@ -2961,6 +2972,7 @@ class PlayerWebDemoApp {
       // Seed the in-scene panel from the Debug Menu's "Play options" state (two-way sync: the panel's own edits
       // come back through `onPlayOptionsChange` below; lil-gui edits push through `setPlayOptions`).
       initialPlayOptions: {
+        ...carriedPlayOptions,
         autoPlay: this.guiState.autoPlay,
         gauge1P: this.guiState.gauge,
         random1P: this.guiState.random1P,
