@@ -14,3 +14,5 @@ export * from './gameplay.ts';
 export * from './result.ts';
 export * from './select.ts';
 export { phantomSkin } from './phantom/index.ts';
+export { synesthesiaSkin } from './synesthesia/index.ts';
+export { BUILT_IN_BE_MUSIC_SKINS } from './built-in-skins.ts';
