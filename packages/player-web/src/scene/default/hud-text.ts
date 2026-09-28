@@ -10,7 +10,7 @@ import { layoutTabularRun } from './phantom-style.ts';
  * figures.
  */
 
-type TextWeight = '300' | '400' | '500' | '600' | '700' | '800' | '900';
+type TextWeight = '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
 
 export interface HudTextOptions {
   size?: number;

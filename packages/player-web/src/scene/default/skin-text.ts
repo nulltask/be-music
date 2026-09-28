@@ -6,7 +6,7 @@ import { DEFAULT_TEXT_FONT } from './fonts.ts';
 
 export interface SkinTextOptions {
   size?: number;
-  weight?: '300' | '400' | '500' | '600' | '700' | '800' | '900';
+  weight?: '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
   fill?: number | Color;
   fontFamily?: string;
   letterSpacing?: number;
