@@ -26,6 +26,8 @@ export interface HudTextOptions {
   rotation?: number;
   stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
   dropShadow?: { color: number; alpha: number; blur: number; distance: number; angle?: number };
+  /** Uniform scale around the anchor, applied after the `maxWidth` squeeze (judge / combo "punch"). */
+  scale?: number;
 }
 
 export function addHudText(
@@ -56,6 +58,10 @@ export function addHudText(
   if (opts.maxWidth !== undefined && node.width > opts.maxWidth) {
     node.scale.x = opts.maxWidth / node.width;
   }
+  if (opts.scale !== undefined && opts.scale !== 1) {
+    node.scale.x *= opts.scale;
+    node.scale.y = opts.scale;
+  }
   if (!pool) {
     layer.addChild(node);
   }
@@ -77,18 +83,19 @@ export function addHudNumber(
   const style = resolveTextStyle(opts);
   const run = layoutTabularRun(text, (char) => measureGlyph(char, style));
   const squeeze = opts.maxWidth !== undefined && run.width > opts.maxWidth ? opts.maxWidth / run.width : 1;
-  const left = x - run.width * squeeze * (opts.anchorX ?? 0);
+  const scale = opts.scale ?? 1;
+  const left = x - run.width * squeeze * scale * (opts.anchorX ?? 0);
   for (const glyph of run.glyphs) {
     if (glyph.char === ' ') continue;
     const node = addHudText(
       layer,
       glyph.char,
-      left + (glyph.x + glyph.w / 2) * squeeze,
+      left + (glyph.x + glyph.w / 2) * squeeze * scale,
       y,
-      { ...opts, anchorX: 0.5, maxWidth: undefined },
+      { ...opts, anchorX: 0.5, maxWidth: undefined, scale: undefined },
       pool,
     );
-    node.scale.x = squeeze;
+    node.scale.set(squeeze * scale, scale);
   }
 }
 

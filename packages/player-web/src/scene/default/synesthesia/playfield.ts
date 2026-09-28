@@ -18,7 +18,7 @@ import {
   type Vec3,
 } from './space.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
-import { comboTier } from '../moments.ts';
+import { comboTier, effectProfile } from '../moments.ts';
 
 /** Per-lane-class light: note body, glow hue (0..1), and the colour the lane beam / key cap light up in. */
 interface LaneLight {
@@ -37,10 +37,17 @@ const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
 const NOTE_HEIGHT = 8;
 export const SYNESTHESIA_BOMB_DURATION_MS = 620;
 
-export function renderSynesthesiaLanes({ graphics, lanes, beatPhase, nowMs, combo }: BeMusicLanesContext): void {
+export function renderSynesthesiaLanes({
+  graphics,
+  lanes,
+  beatPhase,
+  nowMs,
+  combo,
+  effects,
+}: BeMusicLanesContext): void {
   const pulse = (1 - beatPhase) ** 2;
   // The judgement line burns brighter as the run builds, and cycles the spectrum once it is in the zone.
-  const tier = comboTier(combo ?? 0);
+  const tier = effectProfile(effects).enabled ? comboTier(combo ?? 0) : 0;
   const heat = 1 + 0.3 * tier;
   const lineColor = tier >= 3 ? hsvToHex(0.52 + Math.sin(nowMs / 900) * 0.2, 0.45, 1) : 0x5ff4ff;
   let gridTop = Number.POSITIVE_INFINITY;
@@ -149,17 +156,41 @@ function cachedBurst(seed: number): BurstParticle[] {
  *
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
-export function renderSynesthesiaBombs({ pool, bombs, combo }: BeMusicBombsContext): void {
-  const tier = comboTier(combo ?? 0);
+export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: BeMusicBombsContext): void {
+  const profile = effectProfile(effects);
+  if (!profile.enabled) {
+    // Effects off: a small, plain core flash per hit.
+    renderPlainFlashes(pool, bombs);
+    return;
+  }
+  const tier = Math.min(comboTier(combo ?? 0), profile.screenWide ? 4 : 2);
   // Keep colour the hero: when many hits overlap, dim the white parts (flash, pillar, streak) so additive stacking
   // doesn't burn the line to white, while sparks keep most of their colour.
   const crowd = 1 / Math.sqrt(Math.max(1, bombs.length / 2));
   for (const bomb of bombs) {
-    renderBomb(pool, bomb, tier, crowd);
+    renderBomb(pool, bomb, tier, crowd, profile.amount);
   }
 }
 
-function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: number): void {
+function renderPlainFlashes(pool: ChildPool, bombs: readonly BeMusicBomb[]): void {
+  const glow = synGlowTexture();
+  for (const bomb of bombs) {
+    const t = Math.min(1, bomb.elapsedMs / 180);
+    if (t >= 1) continue;
+    const sprite = pool.acquireSprite();
+    sprite.texture = glow;
+    sprite.anchor.set(0.5);
+    sprite.blendMode = 'add';
+    const size = Math.max(10, bomb.w) * (1.2 + t);
+    sprite.width = size;
+    sprite.height = size;
+    sprite.position.set(bomb.x + bomb.w / 2, bomb.y - 3);
+    sprite.tint = LIGHTS[bomb.kind].glow;
+    sprite.alpha = 0.7 * (1 - t);
+  }
+}
+
+function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: number, amount: number): void {
   const t = Math.max(0, Math.min(1, bomb.elapsedMs / SYNESTHESIA_BOMB_DURATION_MS));
   if (t >= 1) return;
   const light = LIGHTS[bomb.kind];
@@ -207,7 +238,10 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
   }
 
   // 3 + 4. Sparks: compute every projected position once, draw trails, then depth-sorted glow sprites.
-  const particles = cachedBurst(bomb.seed).slice(0, BURST_PARTICLES + BURST_PARTICLES_PER_TIER * tier);
+  const particles = cachedBurst(bomb.seed).slice(
+    0,
+    Math.round((BURST_PARTICLES + BURST_PARTICLES_PER_TIER * tier) * amount),
+  );
   const radius = unit * 4.6 * (1 + 0.1 * tier);
   const gravity = unit * 3.2;
   const sparks: Array<{ x: number; y: number; z: number; scale: number; life: number; particle: BurstParticle }> = [];
@@ -271,7 +305,7 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
     core.tint = hsvToHex(light.hue, t * 2, 1);
     core.alpha = flash * 0.7 * crowd;
   }
-  const streakAlpha = fade ** 2.5;
+  const streakAlpha = amount < 1 ? 0 : fade ** 2.5;
   if (streakAlpha > 0.02) {
     const streak = pool.acquireSprite();
     streak.texture = glow;

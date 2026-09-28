@@ -22,12 +22,15 @@ import {
   PHANTOM_RED_HOT,
   PHANTOM_SLATE,
   PHANTOM_WHITE,
+  drawNoteEmblem,
+  drawStaves,
   halftoneField,
   parallelogramPoints,
   starburstPoints,
 } from './phantom-style.ts';
 import type { ChildPool } from '../pixi-utils.ts';
 import { drawPhantomMoments } from './phantom/moments.ts';
+import { effectProfile, impulse, punchScale } from './moments.ts';
 import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions as TextOptions } from './hud-text.ts';
 
 const DISPLAY_FONT = DEFAULT_DISPLAY_FONT;
@@ -83,8 +86,17 @@ export function renderDefaultGameplayFrame(
   frame.label = 'default-gameplay/chrome';
   drawBackground(frame, hasBga);
 
-  drawPlayfield(frame, playfield, runtime.progressRatio);
-  drawBgaFrame(frame, layer, hasBga, runtime.nowMs, layerPool);
+  const effects = effectProfile(runtime.effects);
+  drawPlayfield(
+    frame,
+    playfield,
+    runtime.progressRatio,
+    impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 140) * effects.amount,
+  );
+  // A double-play field reaches into the monitor's column; the frame and its idle screen would sit on the 2P lanes.
+  if (playfield.right + 24 <= BGA.x) {
+    drawBgaFrame(frame, layer, hasBga, runtime.nowMs, layerPool);
+  }
   drawGauge(frame, layer, runtime, layerPool);
   drawSongPlate(frame, layer, runtime, layerPool);
   drawScorePlate(frame, layer, runtime, layerPool);
@@ -104,7 +116,7 @@ export function renderDefaultGameplayFrame(
     frontLayer.addChild(front);
   }
   drawStatusBar(front, frontLayer, runtime, frontPool);
-  drawJudgements(frontLayer, runtime, playfield, frontPool);
+  drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
   // Showpieces (count-in, combo milestones, clear line, full combo) sit above everything else.
   drawPhantomMoments(layer, frontLayer, runtime, frontPool);
 }
@@ -152,6 +164,13 @@ function drawBackground(frame: Graphics, hasBga: boolean): void {
       frame.circle(dot.x, dot.y, dot.r).fill({ color: PHANTOM_INK, alpha: 0.55 });
     }
   }
+  // Sheet music on the floor: two ink staves ruled across the wedge, following its slanted top edge.
+  const wedgeLeftAt = (lineY: number): number =>
+    FLOOR_WEDGE[0]! +
+    ((DESIGN_HEIGHT - lineY) * (DESIGN_WIDTH - FLOOR_WEDGE[0]!)) / (DESIGN_HEIGHT - FLOOR_WEDGE[3]!) +
+    6;
+  drawStaves(frame, 0, DESIGN_WIDTH, 404, 5, PHANTOM_INK, 0.55, wedgeLeftAt);
+  drawStaves(frame, 0, DESIGN_WIDTH, 446, 5, PHANTOM_INK, 0.55, wedgeLeftAt);
   // Paper-white cut line tracing the wedge's leading edge.
   frame
     .poly([FLOOR_WEDGE[0]! + 26, DESIGN_HEIGHT, DESIGN_WIDTH, 334, DESIGN_WIDTH, 337, FLOOR_WEDGE[0]! + 32, 480])
@@ -245,7 +264,12 @@ function resolveSideBounds(
 /** Bottom edge of the playfield frame — leaves room for the key-cap strip renderLanes paints below the judge line. */
 const PLAYFIELD_FRAME_BOTTOM = 344;
 
-function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout, progressRatio: number | undefined): void {
+function drawPlayfield(
+  frame: Graphics,
+  playfield: FallbackPlayfieldLayout,
+  progressRatio: number | undefined,
+  hit: number,
+): void {
   const wellTop = PLAYFIELD.y;
   const wellBottom = PLAYFIELD_FRAME_BOTTOM;
   const wellHeight = wellBottom - wellTop;
@@ -267,6 +291,10 @@ function drawPlayfield(frame: Graphics, playfield: FallbackPlayfieldLayout, prog
     frame.rect(railX, wellTop, railW, wellHeight).fill(PHANTOM_RED);
     frame.rect(railX, wellTop, 1, wellHeight).fill(PHANTOM_WHITE);
     frame.rect(railX + railW - 1, wellTop, 1, wellHeight).fill(PHANTOM_WHITE);
+    // Every press flashes the rails white, bottom-heavy, so the cabinet answers the player's hands.
+    if (hit > 0) {
+      frame.rect(railX, wellHeight * 0.45, railW, wellHeight * 0.55).fill({ color: PHANTOM_WHITE, alpha: 0.75 * hit });
+    }
   }
 
   // Song-progress track inside the left rail, filling bottom-up in paper white.
@@ -396,6 +424,8 @@ function drawStatusBar(
   addText(layer, 'HI-SPEED', 214, 14, tagLabelStyle(PHANTOM_RED), pool);
   addNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 262, 5, displayStyle(22, PHANTOM_WHITE), pool);
 
+  // The skin's mark, between the tempo readouts and the ruleset tag.
+  drawNoteEmblem(status, 350, 25, 22, PHANTOM_WHITE, PHANTOM_RED);
   status.poly(parallelogramPoints(392, 8, 118, 22, -8)).fill(PHANTOM_RED);
   status.rect(397, 13, 3, 12).fill(PHANTOM_WHITE);
   addText(layer, 'RULESET', 410, 15, tagLabelStyle(PHANTOM_INK), pool);
@@ -682,7 +712,7 @@ function drawJudgeTally(
   for (let row = 0; row < footerRows.length; row += 1) {
     const [label, color, count] = footerRows[row]!;
     const rowY = footerY + 2 + row * 20;
-    addText(layer, label, x + 7, rowY + 4, { ...tagLabelStyle(color), size: 8 }, pool);
+    addText(layer, label, x + 7, rowY + 3, tagLabelStyle(color), pool);
     addNumber(
       layer,
       formatCount(count),
@@ -718,16 +748,23 @@ function drawJudgements(
   runtime: FallbackGameplayRuntime,
   playfield: FallbackPlayfieldLayout,
   pool: ChildPool | undefined,
+  amount: number,
 ): void {
+  const nowMs = runtime.nowMs ?? 0;
   for (const display of resolveJudgeDisplays(runtime, playfield)) {
     const combo = resolveVisibleCombo(display.judge, display.combo);
     const style = judgeStyle(display.judge);
+    // Punch: every judgement lands with a quick overshoot; misses also rattle sideways.
+    const judgeScale = punchScale(runtime.judgeAtMs, nowMs, 120, 0.24 * amount);
+    const miss = display.judge === 'POOR' || display.judge === 'BAD';
+    const rattle = miss ? Math.sin(nowMs / 14) * 4 * impulse(runtime.judgeAtMs, nowMs, 220) * amount : 0;
     addText(
       layer,
       display.judge,
-      display.x,
+      display.x + rattle,
       238,
       {
+        scale: judgeScale,
         size: 30,
         fill: style.fill,
         fontFamily: DISPLAY_FONT,
@@ -748,6 +785,7 @@ function drawJudgements(
         display.x,
         270,
         {
+          scale: punchScale(runtime.judgeAtMs, nowMs, 150, (combo % 100 === 0 ? 0.5 : 0.16) * amount),
           ...displayStyle(24, combo >= 200 ? PHANTOM_GOLD : PHANTOM_WHITE),
           anchorX: 0.5,
           anchorY: 0.5,

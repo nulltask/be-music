@@ -14,7 +14,7 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type { BeMusicEffectLevel, BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
@@ -415,6 +415,8 @@ export interface PixiSongSelectSystemSounds {
 export interface CoreSongSelectViewOptions {
   /** be-music skin for the skinless path (no LR2 select skin). Defaults to the built-in Phantom skin. */
   beMusicSkin?: BeMusicSkin;
+  /** Showmanship level for the be-music skin (entrance, outro, ambient motion). Defaults to `'full'`. */
+  beMusicEffects?: BeMusicEffectLevel;
   onSongSelected?: (song: BrowserSongEntry) => void;
   /**
    * AUTOPLAY-mode launch hook. Fired when the user clicks the skin's AUTOPLAY button (#SRC_BUTTON `type = 16`) or
@@ -1311,7 +1313,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         this.perf.time('render', () => this.render());
       }
       if (this.beMusicBackHolder.visible) {
-        this.beMusicRenderer?.tick(now, this.focusedSong());
+        this.beMusicRenderer?.tick(now, this.focusedSong(), this.launchAt);
       }
     }
     const report = this.perf.endFrame(() => ({
@@ -1332,6 +1334,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     this.disposed = true;
     this.stopAnimationLoop();
+    if (this.launchTimer !== undefined) window.clearTimeout(this.launchTimer);
     this.beMusicRenderer?.dispose();
     this.beMusicRenderer = undefined;
     window.removeEventListener('keydown', this.handleKeyDown);
@@ -1998,7 +2001,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   };
 
   private readonly handlePointerDown = (event: PointerEvent): void => {
-    if (!this.visible) return;
+    if (!this.visible || this.launchAt !== undefined) return;
     // Retry BGM start on the first user gesture — browsers gate `AudioContext.resume()` behind a user-input event, so
     // the mount-time / setVisible-time start may have left the context suspended. Cheap to call repeatedly
     // (early-returns when a source is already playing).
@@ -2065,11 +2068,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (entry.kind === 'folder') {
       this.enterFolder(entry.folder);
     } else {
-      this.options.onSongSelected?.(entry.song);
+      this.launchSong(entry.song);
     }
   };
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
+    // A launch outro is playing — the chart is already chosen.
+    if (this.launchAt !== undefined) {
+      return;
+    }
     // Same gesture-retry as `handlePointerDown` — most users will arrive at the select view via the keyboard rather
     // than a mouse on macOS / touchpad-only devices, so we hook here too.
     void this.startSelectBgm();
@@ -2224,7 +2231,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       if (entry.kind === 'folder') {
         this.enterFolder(entry.folder);
       } else {
-        this.options.onSongSelected?.(entry.song);
+        this.launchSong(entry.song);
       }
     } else if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'ArrowLeft') {
       // Pop one level up — Esc / Backspace / ← all back out of the current folder. No-op at the root so the user
@@ -2310,23 +2317,26 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const currentFolder = this.browseStack[this.browseStack.length - 1];
     this.beMusicBackHolder.visible = true;
     this.beMusicFrontHolder.visible = true;
-    this.beMusicNeedsFrame = renderer.render({
-      layer: this.listLayer,
-      designWidth,
-      designHeight,
-      nowMs: performance.now(),
-      sceneStartedAt: this.sceneStartedAt,
-      cursorChangedAt: this.cursorChangedAt,
-      entries,
-      selectedIndex: this.selectedIndex,
-      firstVisibleIndex: selectWindow.firstVisibleIndex,
-      visibleRows: selectWindow.visibleRows,
-      focusedSong: this.focusedSong(),
-      folderLabel: currentFolder?.label,
-      searchQuery: this.searchQuery,
-      totalCharts: this.collection.songs.length,
-      actions: this.beMusicActions,
-    });
+    this.beMusicNeedsFrame =
+      renderer.render({
+        layer: this.listLayer,
+        designWidth,
+        designHeight,
+        nowMs: performance.now(),
+        sceneStartedAt: this.sceneStartedAt,
+        cursorChangedAt: this.cursorChangedAt,
+        entries,
+        selectedIndex: this.selectedIndex,
+        firstVisibleIndex: selectWindow.firstVisibleIndex,
+        visibleRows: selectWindow.visibleRows,
+        focusedSong: this.focusedSong(),
+        folderLabel: currentFolder?.label,
+        searchQuery: this.searchQuery,
+        totalCharts: this.collection.songs.length,
+        actions: this.beMusicActions,
+        effects: this.options.beMusicEffects ?? 'full',
+        launchAt: this.launchAt,
+      }) || this.launchAt !== undefined;
     this.renderReadTextOverlay(designWidth, designHeight);
   }
 
@@ -2354,11 +2364,45 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   private launchFocusedSong(autoPlay: boolean): void {
     const focused = this.focusedSong();
     if (!focused) return;
-    if (autoPlay && this.options.onSongAutoPlay) {
-      this.options.onSongAutoPlay(focused);
+    this.launchSong(focused, autoPlay);
+  }
+
+  /** `performance.now()` of a launch whose be-music outro is still playing, else `undefined`. */
+  protected launchAt: number | undefined;
+  private launchTimer: number | undefined;
+
+  /**
+   * Hands `song` to the host. On the be-music path the skin may first play an outro (`BeMusicSelectRenderer.outroMs`);
+   * input is ignored until it finishes. Themes (LR2) and `effects: 'off'` launch immediately.
+   */
+  protected launchSong(song: BrowserSongEntry, autoPlay = false): void {
+    if (this.launchAt !== undefined) return;
+    const fire = (): void => {
+      if (autoPlay && this.options.onSongAutoPlay) {
+        this.options.onSongAutoPlay(song);
+        return;
+      }
+      this.options.onSongSelected?.(song);
+    };
+    const outroMs =
+      this.themeDesignSize === undefined && (this.options.beMusicEffects ?? 'full') !== 'off'
+        ? (this.beMusicRenderer?.outroMs ?? 0)
+        : 0;
+    if (outroMs <= 0) {
+      fire();
       return;
     }
-    this.options.onSongSelected?.(focused);
+    this.launchAt = performance.now();
+    this.beMusicNeedsFrame = true;
+    this.render();
+    this.launchTimer = window.setTimeout(() => {
+      this.launchTimer = undefined;
+      this.launchAt = undefined;
+      if (this.disposed) return;
+      fire();
+      // Settle the screen behind the gameplay handoff so a return to select doesn't flash the outro's last frame.
+      this.render();
+    }, outroMs);
   }
 
   /** Design canvas for the current frame: the active theme's, or the 640×480 be-music fallback. */

@@ -3,8 +3,8 @@ import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gamep
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText } from '../hud-text.ts';
-import { momentProgress, trackMoments } from '../moments.ts';
-import { easeOutCubic, stageProgress } from '../phantom-style.ts';
+import { effectProfile, impulse, momentProgress, trackMoments } from '../moments.ts';
+import { easeOutCubic, hash01, stageProgress } from '../phantom-style.ts';
 import { burstParticlePosition, burstParticles, hsvToHex, projectPoint, rotateX, rotateY } from './space.ts';
 import { SYN_DISPLAY_FONT, SYN_WHITE } from './style.ts';
 
@@ -25,7 +25,7 @@ const JUDGE_Y = PLAYFIELD.judgementY;
  *   cycling through the spectrum.
  */
 export function drawSynesthesiaMoments(
-  key: object,
+  chromeLayer: Container,
   layer: Container,
   runtime: SkinlessGameplayChromeRuntime,
   playfieldCenterX: number,
@@ -33,7 +33,7 @@ export function drawSynesthesiaMoments(
   pool: ChildPool,
 ): void {
   const nowMs = runtime.nowMs ?? 0;
-  const moments = trackMoments(key, {
+  const moments = trackMoments(chromeLayer, {
     nowMs,
     combo: runtime.combo ?? 0,
     gauge: runtime.gauge ?? 0,
@@ -45,16 +45,42 @@ export function drawSynesthesiaMoments(
     bad: runtime.bad ?? 0,
     poor: runtime.poor ?? 0,
   });
+  const effects = effectProfile(runtime.effects);
+  if (!effects.enabled) return;
   const graphics = pool.acquireGraphics();
   graphics.label = 'synesthesia/moments';
   graphics.blendMode = 'add';
+
+  // Misses glitch the signal: red scanline tears and edge bleed, plus (full effects) a jolt of the whole HUD.
+  const miss = runtime.lastJudge === 'POOR' || runtime.lastJudge === 'BAD' ? impulse(runtime.judgeAtMs, nowMs, 240) : 0;
+  if (miss > 0) {
+    drawGlitch(graphics, miss, nowMs, runtime.hasBga === true);
+    if (effects.screenWide) {
+      const jolt = Math.sin(nowMs / 9) * 4 * miss;
+      chromeLayer.position.set(jolt, 0);
+      layer.position.set(jolt, 0);
+    }
+  }
+  const comboBreak = momentProgress(moments.comboBreak?.atMs, nowMs, BREAK_MS);
+  if (comboBreak !== undefined && moments.comboBreak) {
+    drawComboBreak(graphics, moments.comboBreak.combo, comboBreak, playfieldCenterX);
+  }
 
   if (runtime.chartMs !== undefined) {
     drawCountIn(graphics, layer, runtime.chartMs, playfieldCenterX, hue, pool);
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   if (milestone !== undefined && moments.milestone) {
-    drawMilestone(graphics, layer, moments.milestone.value, milestone, playfieldCenterX, hue, pool);
+    drawMilestone(
+      graphics,
+      layer,
+      moments.milestone.value,
+      milestone,
+      playfieldCenterX,
+      hue,
+      runtime.hasBga === true,
+      pool,
+    );
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
@@ -62,7 +88,7 @@ export function drawSynesthesiaMoments(
   }
   const fullCombo = momentProgress(moments.fullComboAtMs, nowMs, FULL_COMBO_MS);
   if (fullCombo !== undefined) {
-    drawFullCombo(graphics, layer, fullCombo, nowMs, hue, pool);
+    drawFullCombo(graphics, layer, fullCombo, nowMs, hue, effects.screenWide, effects.amount, pool);
   }
 }
 
@@ -142,6 +168,7 @@ function drawMilestone(
   t: number,
   playfieldCenterX: number,
   hue: number,
+  hasBga: boolean,
   pool: ChildPool,
 ): void {
   const color = hsvToHex(hue + value / 1000, 0.6, 1);
@@ -154,15 +181,16 @@ function drawMilestone(
     .ellipse(playfieldCenterX, JUDGE_Y, radius * 0.8, radius * 0.34)
     .stroke({ color: SYN_WHITE, width: 1.5, alpha: 0.5 * (1 - wave) });
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
+  // Over a live BGA the count sits small on the monitor's top edge instead of the middle of the video.
   const cx = BGA.x + BGA.w / 2;
-  const cy = BGA.y + BGA.h / 2 - 10;
+  const cy = hasBga ? BGA.y + 30 : BGA.y + BGA.h / 2 - 10;
   const count = addHudText(
     layer,
     String(value),
     cx,
     cy,
     {
-      size: 52,
+      size: hasBga ? 30 : 52,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
       letterSpacing: 4,
@@ -178,7 +206,7 @@ function drawMilestone(
     layer,
     'COMBO',
     cx,
-    cy + 44,
+    cy + (hasBga ? 28 : 44),
     {
       size: 11,
       fill: SYN_WHITE,
@@ -225,19 +253,22 @@ function drawFullCombo(
   t: number,
   nowMs: number,
   hue: number,
+  screenWide: boolean,
+  amount: number,
   pool: ChildPool,
 ): void {
   const cx = DESIGN_WIDTH / 2;
   const cy = DESIGN_HEIGHT / 2 - 10;
   const fadeOut = 1 - Math.max(0, (t - 0.8) / 0.2);
-  const bloom = Math.max(0, 1 - t * 5);
+  const bloom = screenWide ? Math.max(0, 1 - t * 5) : 0;
   if (bloom > 0) {
     graphics.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill({ color: SYN_WHITE, alpha: 0.55 * bloom });
   }
   // A sphere of sparks bursting out of the centre, turning slowly in 3D.
   const burstT = Math.min(1, t / 0.85);
   const spin = nowMs / 2200;
-  for (const particle of FULL_COMBO_BURST) {
+  const sparkCount = Math.round(FULL_COMBO_BURST.length * amount);
+  for (const particle of FULL_COMBO_BURST.slice(0, sparkCount)) {
     const life = burstT / particle.life;
     if (life >= 1) continue;
     const position = burstParticlePosition(particle, life, 360, 60);
@@ -278,4 +309,43 @@ function drawFullCombo(
     pool,
   );
   text.alpha = form * fadeOut;
+}
+
+const BREAK_MS = 800;
+
+/** Red scanline tears across the screen and a bleed at the edges; tears skip a live BGA rect. */
+function drawGlitch(graphics: Graphics, strength: number, nowMs: number, hasBga: boolean): void {
+  const frame = Math.floor(nowMs / 40);
+  for (let tear = 0; tear < 7; tear += 1) {
+    const y = hash01(frame * 7 + tear) * DESIGN_HEIGHT;
+    const h = 2 + hash01(frame * 13 + tear) * 6;
+    const offset = (hash01(frame * 3 + tear) - 0.5) * 60;
+    if (hasBga && y > BGA.y - 4 && y < BGA.y + BGA.h + 4) {
+      graphics.rect(offset, y, BGA.x - 8, h).fill({ color: 0xff3a6a, alpha: 0.35 * strength });
+      graphics.rect(BGA.x + BGA.w + 8, y, DESIGN_WIDTH, h).fill({ color: 0xff3a6a, alpha: 0.35 * strength });
+    } else {
+      graphics.rect(offset, y, DESIGN_WIDTH, h).fill({ color: 0xff3a6a, alpha: 0.35 * strength });
+    }
+  }
+  for (let band = 0; band < 3; band += 1) {
+    const w = 10;
+    const alpha = 0.18 * strength * (1 - band / 3);
+    graphics.rect(band * w, 0, w, DESIGN_HEIGHT).fill({ color: 0xff3a6a, alpha });
+    graphics.rect(DESIGN_WIDTH - (band + 1) * w, 0, w, DESIGN_HEIGHT).fill({ color: 0xff3a6a, alpha });
+  }
+}
+
+/** A broken combo disperses into red sparks that drift up and fade from the combo readout. */
+function drawComboBreak(graphics: Graphics, combo: number, t: number, cx: number): void {
+  const cy = 264;
+  for (let spark = 0; spark < 36; spark += 1) {
+    const angle = hash01(spark + combo * 3) * Math.PI * 2;
+    const speed = 30 + hash01(spark * 5 + 1) * 90;
+    const eased = easeOutCubic(t);
+    const x = cx + Math.cos(angle) * speed * eased;
+    const y = cy + Math.sin(angle) * speed * eased * 0.6 - 40 * eased;
+    const size = 1 + hash01(spark + 11) * 2;
+    graphics.circle(x, y, size * 3).fill({ color: 0xff3a6a, alpha: 0.12 * (1 - t) });
+    graphics.circle(x, y, size).fill({ color: 0xffd0dc, alpha: 1 - t });
+  }
 }

@@ -27,6 +27,7 @@ import {
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 const SLIDE_MS = 320;
+const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
 const STAR_COUNT = 150;
 const ORBIT_COUNT = 14;
@@ -38,7 +39,7 @@ export const synesthesiaSelectSkin: BeMusicSelectSkin = {
 };
 
 function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
-  return { size: 7, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2.5 };
+  return { size: 9, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2 };
 }
 
 function glassPanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number, radius = 8): void {
@@ -66,6 +67,11 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   private built = false;
   private designWidth = 640;
   private designHeight = 480;
+  /** Accumulated star / grid travel (speed-weighted seconds), so a speed change never makes the field jump. */
+  private travel = 0;
+  private lastTickMs: number | undefined;
+  private effects: BeMusicSelectFrame['effects'] = 'full';
+  public readonly outroMs = OUTRO_MS;
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
 
   public constructor() {
@@ -73,7 +79,12 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.label = 'synesthesia-select/front';
   }
 
-  public render(frame: BeMusicSelectFrame): boolean {
+  public render(input: BeMusicSelectFrame): boolean {
+    this.effects = input.effects;
+    const frame =
+      input.effects === 'off'
+        ? { ...input, sceneStartedAt: Number.NEGATIVE_INFINITY, cursorChangedAt: Number.NEGATIVE_INFINITY }
+        : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeCard = undefined;
     let needsFrame = this.renderChrome(frame);
@@ -87,11 +98,52 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     const visible = this.activeCard !== undefined;
     this.cursorGlow.visible = visible;
     for (const sprite of this.orbit) sprite.visible = visible;
+    if (frame.launchAt !== undefined) {
+      this.renderOutro(frame);
+      return true;
+    }
     return needsFrame;
   }
 
-  public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined): void {
-    const seconds = nowMs / 1000;
+  /**
+   * Launch outro — the warp: the star tunnel accelerates into streaks (in `tick`), a white bloom opens from the
+   * vanishing point with the chosen title in it, and the screen falls to black for the gameplay count-in.
+   */
+  private renderOutro(frame: BeMusicSelectFrame): void {
+    const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
+    const { designWidth, designHeight, layer } = frame;
+    const g = new Graphics();
+    g.label = 'synesthesia-select/outro';
+    const cx = designWidth * 0.58;
+    const cy = designHeight * 0.44;
+    const bloom = easeOutCubic(Math.min(1, t / 0.7));
+    for (let ring = 5; ring >= 1; ring -= 1) {
+      g.circle(cx, cy, (40 + 520 * bloom) * (ring / 5)).fill({ color: SYN_WHITE, alpha: 0.1 * bloom });
+    }
+    const dark = Math.max(0, (t - 0.72) / 0.28);
+    if (dark > 0) g.rect(0, 0, designWidth, designHeight).fill({ color: SYN_VOID, alpha: dark });
+    layer.addChild(g);
+    addSkinText(layer, frame.focusedSong?.title ?? '', cx, cy, {
+      size: 22,
+      weight: '500',
+      fill: SYN_WHITE,
+      fontFamily: SYN_TEXT_FONT,
+      letterSpacing: 2 + 10 * bloom,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      maxWidth: designWidth - 80,
+      alpha: Math.min(1, t * 3) * (1 - dark),
+      dropShadow: { color: SYN_CYAN, distance: 0, blur: 16, alpha: 1 },
+    });
+  }
+
+  public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number): void {
+    // Ambient motion: frozen with effects off, half speed when reduced.
+    const rate = this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1;
+    const seconds = (nowMs / 1000) * rate;
+    const dt = this.lastTickMs === undefined ? 0 : Math.min(0.1, (nowMs - this.lastTickMs) / 1000);
+    this.lastTickMs = nowMs;
+    const warp = launchAt !== undefined ? Math.min(1, (nowMs - launchAt) / OUTRO_MS) : 0;
     const bpm = focusedSong?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const beatPhase = (seconds * beatsPerSecond) % 1;
@@ -102,17 +154,20 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     // Star tunnel — speed follows the focused chart's tempo.
     const cx = this.designWidth * 0.58;
     const cy = this.designHeight * 0.44;
-    const speed = 80 + beatsPerSecond * 55;
+    const speed = (80 + beatsPerSecond * 55) * (1 + 16 * warp * warp);
+    this.travel += dt * speed * (warp > 0 ? 1 : rate);
     for (let index = 0; index < this.stars.length; index += 1) {
       const star = this.stars[index]!;
-      const point = starfieldPoint(index, seconds, { spread: 560, near: 10, far: 1000, speed });
+      const point = starfieldPoint(index, this.travel, { spread: 560, near: 10, far: 1000, speed: 1 });
       const projected = projectPoint(point, cx, cy, 200);
       star.visible = projected.visible;
       if (!projected.visible) continue;
       const nearness = Math.min(1, projected.scale);
       const size = 2 + 16 * nearness * nearness;
       star.position.set(projected.x, projected.y);
-      star.width = size;
+      // During the warp stars stretch into streaks pointing out of the vanishing point.
+      star.rotation = Math.atan2(projected.y - cy, projected.x - cx);
+      star.width = size * (1 + 9 * warp);
       star.height = size;
       star.alpha = 0.15 + 0.85 * nearness;
       star.tint = hsvToHex(hue + (index % 6) * 0.05, 0.25 + 0.35 * (index % 3 === 0 ? 1 : 0), 1);
@@ -159,7 +214,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       this.floor.moveTo(near.x, near.y).lineTo(far.x, far.y).stroke({ color: accent, width: 1, alpha: 0.12 });
     }
     const spacing = 100;
-    const offset = (seconds * speed) % spacing;
+    const offset = this.travel % spacing;
     for (let z = spacing - offset; z < 2600; z += spacing) {
       const left = project(-1400, z);
       const right = project(1400, z);
@@ -348,8 +403,8 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       }
     }
     if (song?.fileLabel) {
-      addText(song.fileLabel, 30, 246, {
-        size: 8,
+      addText(song.fileLabel, 30, 245, {
+        size: 9,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
@@ -385,7 +440,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     // Search and library.
     glassPanel(chrome, 14, 372, 290, 30, accent, 15);
     addText('SEARCH', 30, 384, labelStyle(accent));
-    addText(frame.searchQuery || 'Title / artist / genre', 90, 380, {
+    addText(frame.searchQuery || 'Title / artist / genre', 100, 380, {
       size: 10,
       weight: '300',
       fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
@@ -449,7 +504,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     frame.layer.addChild(row);
     const midY = y + (rowHeight - 4) / 2;
     addSkinText(frame.layer, level, rowX + 16, midY, {
-      size: level.length > 2 ? 6 : 8,
+      size: level.length > 2 ? 7 : 9,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
       anchorX: 0.5,
@@ -461,7 +516,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       ? `${song.bpm ? `${Math.round(song.bpm)} BPM` : ''}`
       : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
     const metaNode = addSkinText(frame.layer, meta, rowX + rowW - 14, midY, {
-      size: 8,
+      size: 9,
       fill: active ? SYN_WHITE : SYN_DIM,
       fontFamily: SYN_DISPLAY_FONT,
       letterSpacing: 1,

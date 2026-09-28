@@ -128,7 +128,7 @@ import type {
 } from '../gameplay-chrome.ts';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicBomb, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type { BeMusicBomb, BeMusicEffectLevel, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
@@ -306,6 +306,8 @@ export interface CoreGameplayViewOptions {
    * Phantom skin.
    */
   beMusicSkin?: BeMusicSkin;
+  /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
+  beMusicEffects?: BeMusicEffectLevel;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -695,6 +697,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   protected sceneStartTime = 0;
   /** Intro length scheduled by `start()` (theme `#PLAYSTART` or the fallback), for chrome count-ins. */
   private scheduledIntroMs = 0;
+  /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
+  private lastJudgeAt: number | undefined;
+  private lastImpulseAt: number | undefined;
+  private lastImpulseKind: 'white' | 'black' | 'scratch' | undefined;
   private startTime = 0;
   /**
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
@@ -2943,6 +2949,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const until = seconds + 0.6;
     this.lastJudge = judge;
     this.lastJudgeUntil = until;
+    this.lastJudgeAt = this.playClock();
     // Themes restart their per-side judge animation on every judgement (LR2 timer 46 / 47 drives the attached
     // `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains from time=0 per hit). When `channel` isn't supplied (legacy callers) we
     // default to the 1P side. PMS / 9 KEY is single-side so every judgement collapses onto 1P regardless of the
@@ -3167,7 +3174,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         seed: Math.floor(startedAt * 7.31) % 100_003,
       });
     }
-    this.playfieldSkin.gameplay.renderBombs({ pool: this.bombLayerPool, bombs, nowMs: now, combo: this.tracker.combo });
+    this.playfieldSkin.gameplay.renderBombs({
+      pool: this.bombLayerPool,
+      bombs,
+      nowMs: now,
+      combo: this.tracker.combo,
+      effects: this.options.beMusicEffects ?? 'full',
+    });
   }
 
   /** Active be-music skin for scene-painted playfield parts; the built-in Phantom skin unless the host picked one. */
@@ -3378,6 +3391,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
   }
 
+  /** Records the latest key press / autoplay hit for input-reactive skin visuals. */
+  private noteImpulse(channel: string): void {
+    this.lastImpulseAt = this.playClock();
+    this.lastImpulseKind = resolveBeMusicLaneKind(
+      channel,
+      resolveLr2LaneIndex(channel, this.chartPlayVariant),
+      this.chartPlayVariant,
+    );
+  }
+
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
     const seconds = this.currentSeconds();
@@ -3433,6 +3456,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       slow: this.slowCount,
       totalNotes: total,
       chartMs: this.resolveChartMs(),
+      judgeAtMs: this.lastJudgeAt,
+      impulseAtMs: this.lastImpulseAt,
+      impulseKind: this.lastImpulseKind,
+      effects: this.options.beMusicEffects ?? 'full',
     };
   }
 
@@ -3527,6 +3554,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         beatPhase: beat - Math.floor(beat),
         nowMs: this.playClock(),
         combo: this.tracker.combo,
+        effects: this.options.beMusicEffects ?? 'full',
       });
     }
   }
@@ -4229,9 +4257,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private applyEngineCommand(command: PlayerUiCommand): void {
     switch (command.kind) {
       case 'flash-lane':
+        this.noteImpulse(command.channel);
         this.flashKeyOnTimer(command.channel);
         break;
       case 'press-lane':
+        this.noteImpulse(command.channel);
         this.pressedChannels.add(command.channel);
         this.startKeyOnTimer(command.channel);
         break;

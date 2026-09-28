@@ -42,7 +42,9 @@ export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => ren
  * ignites inside a spinning 3D ring of particles that bursts outward the moment it lands.
  */
 export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
-  const { result, designWidth, designHeight, elapsedMs: elapsed, nowMs, rankLabel, layer } = frame;
+  const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
+  // Effects off: skip the entrance and render the settled result.
+  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
   const seconds = nowMs / 1000;
   const hue = sceneHue(seconds);
   const accent = hsvToHex(hue, 0.6, 1);
@@ -74,7 +76,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     ...extra,
   });
   const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM) =>
-    text(target, value, x, y, display(7, fill, { letterSpacing: 2.5 }));
+    text(target, value, x, y, display(9, fill, { letterSpacing: 2 }));
 
   // Space.
   const space = group('space');

@@ -4,7 +4,7 @@ import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime
 import { resolveFallbackLaneLayout, shouldPreserveFallbackSideWidth } from '../../gameplay-lanes.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudNumber, addHudText, type HudTextOptions } from '../hud-text.ts';
-import { comboTier } from '../moments.ts';
+import { comboTier, effectProfile, impulse, punchScale } from '../moments.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { hsvToHex, icosahedron, projectPoint, rotateX, rotateY, starfieldPoint } from './space.ts';
 import {
@@ -56,20 +56,29 @@ export function renderSynesthesiaChrome({
 
   const space = layerPool.acquireGraphics();
   space.label = 'synesthesia-gameplay/space';
-  // Zone: the space intensifies with the combo (faster, denser stars, hotter grid, aurora, beat rings).
-  const tier = comboTier(runtime.combo ?? 0);
-  drawSpace(space, seconds, pulse, hue, hasBga, tier);
-  drawFloorGrid(space, seconds, pulse, hue, tier, beatPhase);
+  // Zone: the space intensifies with the combo (faster, denser stars, hotter grid, aurora, beat rings). Reduced effects
+  // cap the escalation; effects off keep the calm tier-0 space.
+  const effects = effectProfile(runtime.effects);
+  const tier = effects.enabled ? Math.min(comboTier(runtime.combo ?? 0), effects.screenWide ? 4 : 2) : 0;
+  // Input reaction: every press surges the starfield and tints the sky with the pressed lane's light.
+  const hit = impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 280) * effects.amount;
+  const hitColor = IMPULSE_COLORS[runtime.impulseKind ?? 'white'];
+  drawSpace(space, seconds, pulse, hue, hasBga, tier, hit, hitColor);
+  drawFloorGrid(space, seconds, pulse, hue, tier, beatPhase, hit);
   if (tier >= 2) drawAurora(space, seconds, hue, tier, hasBga);
 
   const panels = layerPool.acquireGraphics();
   panels.label = 'synesthesia-gameplay/panels';
   drawPlayfieldWell(panels, playfieldRight, runtime.progressRatio, accent);
-  drawBgaFrame(panels, layer, hasBga, seconds, pulse, hue, layerPool);
+  // A double-play field reaches into the monitor's column; the frame and its idle screen would sit on the 2P lanes.
+  if (playfieldRight + 14 <= BGA.x) {
+    drawBgaFrame(panels, layer, hasBga, seconds, pulse, hue, layerPool);
+  }
   drawGauge(panels, layer, runtime, accent, layerPool);
   drawSongPlate(panels, layer, runtime, accent, layerPool);
   drawScorePanel(panels, layer, runtime, accent, layerPool);
-  const tallyX = BGA.x + BGA.w + 22;
+  // Tucked close to the monitor frame so the counts get room for four digits.
+  const tallyX = BGA.x + BGA.w + 14;
   if (playfieldRight + 14 <= tallyX) {
     drawJudgeTally(panels, layer, runtime, tallyX, layerPool);
   }
@@ -101,6 +110,12 @@ function insideBga(x: number, y: number, margin = 0): boolean {
  * Deep-space ground (indigo at the top falling into void), a pair of soft nebulae, and 3D stars flying out of the
  * vanishing point. With a live BGA the ground leaves the BGA rect open and stars skip it.
  */
+const IMPULSE_COLORS: Record<'white' | 'black' | 'scratch', number> = {
+  white: 0x5ff4ff,
+  black: 0x8f74ff,
+  scratch: 0xff4fd8,
+};
+
 function drawSpace(
   graphics: Graphics,
   seconds: number,
@@ -108,6 +123,8 @@ function drawSpace(
   hue: number,
   hasBga: boolean,
   tier: number,
+  hit: number,
+  hitColor: number,
 ): void {
   const bands: ReadonlyArray<readonly [number, number]> = [
     [SYN_DEEP, 120],
@@ -120,6 +137,9 @@ function drawSpace(
   for (const [color, bottom] of bands) {
     fillAroundBga(graphics, 0, top, DESIGN_WIDTH, bottom - top, color, hasBga);
     top = bottom;
+  }
+  if (hit > 0) {
+    fillAroundBga(graphics, 0, 0, DESIGN_WIDTH, FLOOR.horizon, hitColor, hasBga, 0.07 * hit);
   }
   // Nebulae: stacked translucent discs, placed clear of the BGA rect.
   for (const [x, y, radius, color] of [
@@ -134,7 +154,7 @@ function drawSpace(
   const cx = 320;
   const cy = FLOOR.horizon - 90;
   const starCount = 100 + 25 * tier;
-  const starSpeed = (110 + 40 * pulse) * (1 + 0.45 * tier);
+  const starSpeed = (110 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit);
   for (let index = 0; index < starCount; index += 1) {
     const point = starfieldPoint(index, seconds, { spread: 520, near: 20, far: 900, speed: starSpeed });
     const projected = projectPoint(point, cx, cy, 180);
@@ -165,19 +185,19 @@ function drawFloorGrid(
   hue: number,
   tier: number,
   beatPhase: number,
+  hit: number,
 ): void {
   const { horizon, height, focal } = FLOOR;
   const color = hsvToHex(hue + 0.08 + (tier >= 3 ? Math.sin(seconds * 0.7) * 0.12 : 0), 0.7, 1);
-  const glow = 1 + 0.35 * tier;
+  const glow = 1 + 0.35 * tier + 0.9 * hit;
   const project = (x: number, z: number) => projectPoint({ x, y: height, z }, 320, horizon, focal);
+  // Radial lines share one style, so they go out as a single stroked path.
   for (let x = -1200; x <= 1200; x += 80) {
     const near = project(x, 0);
     const far = project(x, 2400);
-    graphics
-      .moveTo(near.x, near.y)
-      .lineTo(far.x, far.y)
-      .stroke({ color, width: 1, alpha: 0.16 * glow });
+    graphics.moveTo(near.x, near.y).lineTo(far.x, far.y);
   }
+  graphics.stroke({ color, width: 1, alpha: Math.min(0.9, 0.16 * glow) });
   const spacing = 90;
   const offset = (seconds * 150 * (1 + 0.3 * tier)) % spacing;
   for (let z = spacing - offset; z < 2400; z += spacing) {
@@ -211,25 +231,27 @@ function drawAurora(graphics: Graphics, seconds: number, hue: number, tier: numb
   for (let ribbon = 0; ribbon < ribbons; ribbon += 1) {
     const color = hsvToHex(hue + ribbon * 0.09 + Math.sin(seconds * 0.3 + ribbon) * 0.05, 0.75, 1);
     const baseY = 70 + ribbon * 34;
-    let previous: { x: number; y: number } | undefined;
+    // One polyline per unbroken run (runs split around the BGA rect) — two strokes per run instead of per segment.
+    let run: number[] = [];
+    const flush = (): void => {
+      if (run.length >= 4) {
+        graphics.poly(run, false).stroke({ color, width: 16, alpha: 0.04 * tier });
+        graphics.poly(run, false).stroke({ color, width: 2, alpha: 0.12 * tier });
+      }
+      run = [];
+    };
     for (let x = -10; x <= DESIGN_WIDTH + 10; x += 16) {
       const y =
         baseY +
         Math.sin(x * 0.012 + seconds * (0.9 + ribbon * 0.25) + ribbon) * 18 +
         Math.sin(x * 0.031 - seconds * 1.3) * 6;
-      const point = { x, y };
-      if (previous && !(hasBga && (insideBga(previous.x, previous.y, 12) || insideBga(x, y, 12)))) {
-        graphics
-          .moveTo(previous.x, previous.y)
-          .lineTo(x, y)
-          .stroke({ color, width: 16, alpha: 0.04 * tier });
-        graphics
-          .moveTo(previous.x, previous.y)
-          .lineTo(x, y)
-          .stroke({ color, width: 2, alpha: 0.12 * tier });
+      if (hasBga && insideBga(x, y, 12)) {
+        flush();
+        continue;
       }
-      previous = point;
+      run.push(x, y);
     }
+    flush();
   }
 }
 
@@ -241,21 +263,23 @@ function fillAroundBga(
   h: number,
   color: number,
   hasBga: boolean,
+  alpha = 1,
 ): void {
+  const fill = { color, alpha };
   const right = x + w;
   const bottom = y + h;
   const holeRight = BGA.x + BGA.w;
   const holeBottom = BGA.y + BGA.h;
   if (!hasBga || right <= BGA.x || x >= holeRight || bottom <= BGA.y || y >= holeBottom) {
-    graphics.rect(x, y, w, h).fill(color);
+    graphics.rect(x, y, w, h).fill(fill);
     return;
   }
-  if (y < BGA.y) graphics.rect(x, y, w, BGA.y - y).fill(color);
+  if (y < BGA.y) graphics.rect(x, y, w, BGA.y - y).fill(fill);
   const bandTop = Math.max(y, BGA.y);
   const bandBottom = Math.min(bottom, holeBottom);
-  if (x < BGA.x) graphics.rect(x, bandTop, BGA.x - x, bandBottom - bandTop).fill(color);
-  if (right > holeRight) graphics.rect(holeRight, bandTop, right - holeRight, bandBottom - bandTop).fill(color);
-  if (bottom > holeBottom) graphics.rect(x, holeBottom, w, bottom - holeBottom).fill(color);
+  if (x < BGA.x) graphics.rect(x, bandTop, BGA.x - x, bandBottom - bandTop).fill(fill);
+  if (right > holeRight) graphics.rect(holeRight, bandTop, right - holeRight, bandBottom - bandTop).fill(fill);
+  if (bottom > holeBottom) graphics.rect(x, holeBottom, w, bottom - holeBottom).fill(fill);
 }
 
 function glassPanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
@@ -397,7 +421,7 @@ function drawHeader(
     pool,
   );
   addHudText(layer, 'BPM', 150, 14, labelStyle(), pool);
-  addHudNumber(layer, formatBpm(runtime.bpm), 186, 9, displayStyle(14, SYN_WHITE), pool);
+  addHudNumber(layer, formatBpm(runtime.bpm), 190, 9, displayStyle(14, SYN_WHITE), pool);
   addHudText(layer, 'SPEED', 236, 14, labelStyle(), pool);
   addHudNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 296, 9, displayStyle(14, SYN_WHITE), pool);
   addHudText(
@@ -517,7 +541,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     `${formatCount(runtime.exScore)}/${formatCount(runtime.exScoreMax)}`,
     x + 136,
     y + 52,
-    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 50 },
+    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 46 },
     pool,
   );
   addHudText(layer, 'EX RATE', x + 14, y + 76, labelStyle(), pool);
@@ -526,7 +550,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     formatExRate(runtime.exScore, runtime.exScoreMax),
     x + 136,
     y + 74,
-    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 50 },
+    { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 46 },
     pool,
   );
   // Rate meter as a light filament with the IIDX ninth ticks.
@@ -605,7 +629,7 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
       formatCount(runtime[key]),
       x + w - 7,
       rowY - 1,
-      { ...displayStyle(9, SYN_WHITE), anchorX: 1, maxWidth: w - 42 },
+      { ...displayStyle(9, SYN_WHITE), anchorX: 1, maxWidth: w - 46 },
       pool,
     );
   }
@@ -622,7 +646,7 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
       formatCount(count),
       x + w - 7,
       rowY,
-      { ...displayStyle(9, SYN_WHITE), anchorX: 1, maxWidth: w - 40 },
+      { ...displayStyle(9, SYN_WHITE), anchorX: 1, maxWidth: w - 52 },
       pool,
     );
   }
@@ -649,7 +673,10 @@ function drawJudgements(
   pool: ChildPool,
 ): void {
   const displays = resolveJudgeDisplays(runtime, playfieldRight);
+  const nowMs = runtime.nowMs ?? 0;
+  const amount = effectProfile(runtime.effects).amount;
   for (const display of displays) {
+    const judgeScale = punchScale(runtime.judgeAtMs, nowMs, 120, 0.22 * amount);
     const color =
       display.judge === 'PERFECT'
         ? hsvToHex(seconds * 1.4 + display.x / 400, 0.35, 1)
@@ -660,6 +687,7 @@ function drawJudgements(
       display.x,
       236,
       {
+        scale: judgeScale,
         ...displayStyle(16, color),
         letterSpacing: 4,
         anchorX: 0.5,
@@ -677,6 +705,7 @@ function drawJudgements(
         display.x,
         264,
         {
+          scale: punchScale(runtime.judgeAtMs, nowMs, 150, (combo % 100 === 0 ? 0.45 : 0.14) * amount),
           ...displayStyle(22, combo >= 200 ? SYN_AMBER : SYN_WHITE),
           anchorX: 0.5,
           anchorY: 0.5,
@@ -728,7 +757,7 @@ function resolveVisibleCombo(judge: string, combo: number | undefined): number {
 }
 
 function labelStyle(): HudTextOptions {
-  return { size: 7, fill: SYN_DIM, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2 };
+  return { size: 9, fill: SYN_DIM, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 0.8 };
 }
 
 function displayStyle(size: number, fill: number): HudTextOptions {

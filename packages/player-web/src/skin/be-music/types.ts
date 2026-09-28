@@ -28,6 +28,13 @@ export interface BeMusicSkin {
   readonly result: BeMusicResultSkin;
 }
 
+/**
+ * How much showmanship a skin should put on: `'full'` (everything), `'reduced'` (no screen shake / full-screen flashes,
+ * lighter particle counts — also the sensible default for `prefers-reduced-motion`), or `'off'` (static chrome and a
+ * plain hit flash only).
+ */
+export type BeMusicEffectLevel = 'full' | 'reduced' | 'off';
+
 /** Visual class of a lane, resolved from its channel — skins pick colours per class. */
 export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
 
@@ -66,6 +73,7 @@ export interface BeMusicLanesContext {
   nowMs: number;
   /** Current combo — lets skins escalate the playfield as a run builds. */
   combo?: number;
+  effects?: BeMusicEffectLevel;
 }
 
 export interface BeMusicNoteContext {
@@ -110,6 +118,7 @@ export interface BeMusicBombsContext {
   nowMs: number;
   /** Current combo — lets skins escalate hit effects as a run builds. */
   combo?: number;
+  effects?: BeMusicEffectLevel;
 }
 
 /** Song-list geometry shared by the select renderer (drawing) and the scene (row hit-testing). */
@@ -154,9 +163,17 @@ export interface BeMusicSelectFrame {
   searchQuery: string;
   totalCharts: number;
   actions: BeMusicSelectActions;
+  effects: BeMusicEffectLevel;
+  /** `performance.now()` when a chart was launched and the skin's outro is playing, otherwise `undefined`. */
+  launchAt: number | undefined;
 }
 
 export interface BeMusicSelectRenderer {
+  /**
+   * Length (ms) of the outro the renderer plays after a chart is launched, before the scene hands off to gameplay.
+   * `0` / omitted launches immediately. The scene keeps rendering frames (with `frame.launchAt` set) until it elapses.
+   */
+  readonly outroMs?: number;
   /** Persistent layer mounted behind the rebuilt `frame.layer` (ambient backgrounds). */
   readonly backLayer: Container;
   /** Persistent layer mounted in front of `frame.layer` (cursor, glints). */
@@ -167,7 +184,7 @@ export interface BeMusicSelectRenderer {
    */
   render(frame: BeMusicSelectFrame): boolean;
   /** Per-frame, transform-only animation of the persistent layers. */
-  tick(nowMs: number, focusedSong: BrowserSongEntry | undefined): void;
+  tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number): void;
   dispose(): void;
 }
 
@@ -184,6 +201,7 @@ export interface BeMusicResultFrame {
   /** Milliseconds since the scene mounted, or `Infinity` once the player skipped the entrance. */
   elapsedMs: number;
   nowMs: number;
+  effects: BeMusicEffectLevel;
 }
 
 export interface BeMusicResultSkin {

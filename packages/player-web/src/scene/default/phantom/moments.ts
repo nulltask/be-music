@@ -1,10 +1,10 @@
 import { Graphics, type Container } from 'pixi.js';
-import { DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
+import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { DEFAULT_DISPLAY_FONT } from '../fonts.ts';
 import { addHudText } from '../hud-text.ts';
-import { momentProgress, trackMoments } from '../moments.ts';
+import { effectProfile, impulse, momentProgress, trackMoments } from '../moments.ts';
 import {
   PHANTOM_GOLD,
   PHANTOM_INK,
@@ -36,13 +36,13 @@ const SKEW = -0.18;
  *   is over, so it may cover the playfield).
  */
 export function drawPhantomMoments(
-  key: object,
+  chromeLayer: Container,
   layer: Container,
   runtime: SkinlessGameplayChromeRuntime,
   pool: ChildPool | undefined,
 ): void {
   const nowMs = runtime.nowMs ?? 0;
-  const moments = trackMoments(key, {
+  const moments = trackMoments(chromeLayer, {
     nowMs,
     combo: runtime.combo ?? 0,
     gauge: runtime.gauge ?? 0,
@@ -54,16 +54,33 @@ export function drawPhantomMoments(
     bad: runtime.bad ?? 0,
     poor: runtime.poor ?? 0,
   });
+  const effects = effectProfile(runtime.effects);
+  if (!effects.enabled) return;
   const graphics = pool?.acquireGraphics() ?? new Graphics();
   graphics.label = 'phantom/moments';
   if (!pool) layer.addChild(graphics);
+
+  // Misses hit back: a red vignette, and (full effects) a short sideways shake of the whole HUD.
+  const miss = runtime.lastJudge === 'POOR' || runtime.lastJudge === 'BAD' ? impulse(runtime.judgeAtMs, nowMs, 260) : 0;
+  if (miss > 0) {
+    drawMissVignette(graphics, miss);
+    if (effects.screenWide) {
+      const shake = Math.sin(nowMs / 11) * 5 * miss;
+      chromeLayer.position.set(shake, 0);
+      layer.position.set(shake, 0);
+    }
+  }
+  const comboBreak = momentProgress(moments.comboBreak?.atMs, nowMs, BREAK_MS);
+  if (comboBreak !== undefined && moments.comboBreak) {
+    drawComboBreak(graphics, layer, moments.comboBreak.combo, comboBreak, pool);
+  }
 
   if (runtime.chartMs !== undefined) {
     drawCountIn(graphics, layer, runtime.chartMs, pool);
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   if (milestone !== undefined && moments.milestone) {
-    drawMilestone(graphics, layer, moments.milestone.value, milestone, pool);
+    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBga === true, pool);
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
@@ -71,8 +88,65 @@ export function drawPhantomMoments(
   }
   const fullCombo = momentProgress(moments.fullComboAtMs, nowMs, FULL_COMBO_MS);
   if (fullCombo !== undefined) {
-    drawFullCombo(graphics, layer, fullCombo, nowMs, pool);
+    drawFullCombo(graphics, layer, fullCombo, nowMs, effects.screenWide, pool);
   }
+}
+
+const BREAK_MS = 700;
+
+/** Red edges bleeding in from the screen border on a BAD / POOR. */
+function drawMissVignette(graphics: Graphics, strength: number): void {
+  const depth = 34;
+  for (let band = 0; band < 3; band += 1) {
+    const inset = band * (depth / 3);
+    const alpha = 0.22 * strength * (1 - band / 3);
+    const w = depth / 3;
+    graphics.rect(inset, 0, w, DESIGN_HEIGHT).fill({ color: PHANTOM_RED, alpha });
+    graphics.rect(DESIGN_WIDTH - inset - w, 0, w, DESIGN_HEIGHT).fill({ color: PHANTOM_RED, alpha });
+    graphics.rect(0, inset, DESIGN_WIDTH, w).fill({ color: PHANTOM_RED, alpha });
+    graphics.rect(0, DESIGN_HEIGHT - inset - w, DESIGN_WIDTH, w).fill({ color: PHANTOM_RED, alpha });
+  }
+}
+
+/** A broken combo shatters: the old count drops and fades in red while ink / red shards fly off it. */
+function drawComboBreak(
+  graphics: Graphics,
+  layer: Container,
+  combo: number,
+  t: number,
+  pool: ChildPool | undefined,
+): void {
+  const cx = PLAYFIELD.x + PLAYFIELD.w / 2;
+  const cy = 270;
+  const fall = easeOutCubic(t);
+  for (let shard = 0; shard < 10; shard += 1) {
+    const angle = -Math.PI / 2 + (hash01(shard + combo) - 0.5) * 2.6;
+    const speed = 40 + hash01(shard * 3 + 1) * 70;
+    const x = cx + Math.cos(angle) * speed * fall;
+    const y = cy + Math.sin(angle) * speed * fall + 90 * t * t;
+    const size = 5 + hash01(shard + 9) * 7;
+    graphics
+      .poly(rotatedRect(x, y, size, size * 0.6, t * 8 + shard))
+      .fill({ color: shard % 2 === 0 ? PHANTOM_RED_HOT : PHANTOM_INK, alpha: 1 - t });
+  }
+  const text = addHudText(
+    layer,
+    String(combo),
+    cx,
+    cy + 30 * t * t,
+    {
+      size: 24,
+      fill: PHANTOM_RED_HOT,
+      fontFamily: DEFAULT_DISPLAY_FONT,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      skewX: SKEW,
+      stroke: { color: PHANTOM_INK, width: 4, alignment: 0.5, join: 'miter' },
+    },
+    pool,
+  );
+  text.rotation = 0.35 * t;
+  text.alpha = 1 - t;
 }
 
 /** READY? → GO!! count-in over the last ~2.8 s before the first beat. */
@@ -152,12 +226,14 @@ function drawMilestone(
   layer: Container,
   value: number,
   t: number,
+  hasBga: boolean,
   pool: ChildPool | undefined,
 ): void {
   const inT = easeOutCubic(Math.min(1, t / 0.14));
   const outT = easeOutCubic(Math.max(0, (t - 0.8) / 0.2));
   const x = 300 + (1 - inT) * 380 + outT * 380;
-  const y = 196;
+  // Over a live BGA the banner rides the monitor's bottom edge instead of covering the middle of the video.
+  const y = hasBga ? BGA.y + BGA.h - 22 : 196;
   graphics.poly(parallelogramPoints(x + 8, y + 8, 360, 58, 18)).fill(PHANTOM_INK);
   graphics
     .poly(parallelogramPoints(x, y, 360, 58, 18))
@@ -244,12 +320,13 @@ function drawFullCombo(
   layer: Container,
   t: number,
   nowMs: number,
+  screenWide: boolean,
   pool: ChildPool | undefined,
 ): void {
   const cx = DESIGN_WIDTH / 2;
   const cy = DESIGN_HEIGHT / 2;
   const fadeOut = 1 - Math.max(0, (t - 0.82) / 0.18);
-  const flash = Math.max(0, 1 - t * 7);
+  const flash = screenWide ? Math.max(0, 1 - t * 7) : 0;
   if (flash > 0) {
     graphics.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill({ color: PHANTOM_WHITE, alpha: 0.9 * flash });
   }

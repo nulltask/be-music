@@ -18,6 +18,8 @@ import {
   PHANTOM_RED_HOT,
   PHANTOM_SLATE,
   PHANTOM_WHITE,
+  drawNoteEmblem,
+  easeOutBack,
   easeOutCubic,
   halftoneField,
   hash01,
@@ -29,6 +31,7 @@ import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions }
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 54, listBottomInset: 26, rowHeight: 28 };
 const SLIDE_MS = 240;
+const OUTRO_MS = 620;
 const INTRO_STAGGER_MS = 40;
 const KICKER_PITCH = 20;
 const GLINT_W = 14;
@@ -77,7 +80,16 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.addChild(this.kicker, this.glint, this.pointer);
   }
 
-  public render(frame: BeMusicSelectFrame): boolean {
+  public readonly outroMs = OUTRO_MS;
+  private effects: BeMusicSelectFrame['effects'] = 'full';
+
+  public render(input: BeMusicSelectFrame): boolean {
+    this.effects = input.effects;
+    // With effects off every entrance / focus transition renders settled.
+    const frame =
+      input.effects === 'off'
+        ? { ...input, sceneStartedAt: Number.NEGATIVE_INFINITY, cursorChangedAt: Number.NEGATIVE_INFINITY }
+        : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeRowY = undefined;
     this.activeCard = undefined;
@@ -91,11 +103,64 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     }
     this.pointer.visible = this.activeRowY !== undefined;
     this.glint.visible = this.activeCard !== undefined;
+    if (frame.launchAt !== undefined) {
+      this.renderOutro(frame);
+      return true;
+    }
     return needsFrame;
   }
 
+  /**
+   * Launch outro: an ink slab and a red slab slash in from the right to cover the screen, the chosen title slams onto
+   * the ink, and LET'S GO! punches in beneath it — the handoff into the gameplay count-in.
+   */
+  private renderOutro(frame: BeMusicSelectFrame): void {
+    const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
+    const { designWidth, designHeight, layer } = frame;
+    const g = new Graphics();
+    g.label = 'default-select/outro';
+    const cover = easeOutCubic(Math.min(1, t / 0.45));
+    const redEdge = designWidth + 80 - cover * (designWidth + 260);
+    g.poly([redEdge, 0, designWidth + 200, 0, designWidth + 200, designHeight, redEdge - 140, designHeight]).fill(
+      PHANTOM_RED,
+    );
+    const inkEdge = redEdge + 70;
+    g.poly([inkEdge, 0, designWidth + 200, 0, designWidth + 200, designHeight, inkEdge - 140, designHeight]).fill(
+      PHANTOM_INK,
+    );
+    g.poly([inkEdge - 6, 0, inkEdge, 0, inkEdge - 140, designHeight, inkEdge - 146, designHeight]).fill(PHANTOM_WHITE);
+    layer.addChild(g);
+    const slam = easeOutBack(stageProgress(t, 0.35, 0.3));
+    if (slam > 0) {
+      const title = addSkinText(layer, frame.focusedSong?.title ?? '', designWidth / 2 + 30, designHeight / 2 - 26, {
+        size: 30,
+        fill: PHANTOM_WHITE,
+        fontFamily: DEFAULT_HEADLINE_FONT,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        maxWidth: designWidth - 120,
+        alpha: Math.min(1, slam * 2),
+      });
+      title.scale.set(title.scale.x * (1.6 - 0.6 * slam), 1.6 - 0.6 * slam);
+      const go = addSkinText(layer, "LET'S GO!", designWidth / 2 + 30, designHeight / 2 + 32, {
+        size: 44,
+        fill: PHANTOM_GOLD,
+        fontFamily: DEFAULT_DISPLAY_FONT,
+        letterSpacing: 3,
+        skewX: -0.18,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        stroke: { color: PHANTOM_INK, width: 6, alignment: 0.5, join: 'miter' },
+        dropShadow: { color: PHANTOM_RED, distance: 5 },
+        alpha: Math.min(1, slam * 2),
+      });
+      go.scale.set(2 - slam);
+    }
+  }
+
   public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined): void {
-    const seconds = nowMs / 1000;
+    // Ambient motion: frozen with effects off, half speed when reduced.
+    const seconds = this.effects === 'off' ? 0 : (nowMs / 1000) * (this.effects === 'reduced' ? 0.5 : 1);
     if (this.dots) {
       this.dots.y = (seconds * 14) % DOT_PERIOD;
     }
@@ -226,6 +291,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       skewX: -0.18,
       dropShadow: { color: PHANTOM_RED, distance: 3 },
     });
+    drawNoteEmblem(chrome, 214, 27, 22, PHANTOM_WHITE, PHANTOM_RED);
     chrome.poly(parallelogramPoints(designWidth - 196, 9, 180, 20, -8)).fill(PHANTOM_WHITE);
     addText(categoryName, designWidth - 28, 19, {
       size: 11,
@@ -292,7 +358,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
         .fill(lit ? (segment >= 9 ? PHANTOM_GOLD : PHANTOM_RED_HOT) : PHANTOM_SLATE);
     }
     if (fileLabel) {
-      addText(fileLabel, 24, 250, { size: 8, weight: '600', fill: PHANTOM_ASH, maxWidth: 268 });
+      addText(fileLabel, 24, 249, { size: 9, weight: '600', fill: PHANTOM_ASH, maxWidth: 268 });
     }
 
     // PLAY is the primary action (big red card); AUTO PLAY is a secondary paper tag. Hit areas below mirror these.

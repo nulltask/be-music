@@ -13,6 +13,8 @@ import {
   PHANTOM_RED_HOT,
   PHANTOM_SLATE,
   PHANTOM_WHITE,
+  drawNoteEmblem,
+  drawStaves,
   easeOutBack,
   easeOutCubic,
   halftoneField,
@@ -35,7 +37,9 @@ export const phantomResultSkin: BeMusicResultSkin = { render: (frame) => renderP
  * bars, graphs drawing in, rank stamp) over ambient loops (drifting halftone, scrolling kicker, streaks, rank pulse).
  */
 export function renderPhantomResult(frame: BeMusicResultFrame): void {
-  const { result, designWidth, designHeight, elapsedMs: elapsed, nowMs: now, rankLabel } = frame;
+  const { result, designWidth, designHeight, nowMs: now, rankLabel } = frame;
+  // Effects off: skip the entrance and render the settled card.
+  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
   const rate = frame.ratePercent;
   const seconds = now / 1000;
   const layer = frame.layer;
@@ -143,6 +147,10 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
     }
   }
   slash.g.poly([380, 48, 386, 48, 190, designHeight, 184, designHeight]).fill(PHANTOM_WHITE);
+  // Sheet-music staves ruled across the slash, following its slanted left edge.
+  const slashLeftAt = (lineY: number): number => 392 - ((lineY - 48) * (392 - 196)) / (designHeight - 48) + 8;
+  drawStaves(slash.g, 0, designWidth, 226, 6, PHANTOM_INK, 0.5, slashLeftAt);
+  drawStaves(slash.g, 0, designWidth, 432, 6, PHANTOM_INK, 0.5, slashLeftAt);
   slideIn(slash.root, 0, 460, 0, 380);
   slash.root.alpha = 1;
 
@@ -200,6 +208,7 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
       .poly(parallelogramPoints(12 + glint * 136, 7, 12, 28, 10))
       .fill({ color: cleared ? PHANTOM_WHITE : PHANTOM_RED, alpha: 0.55 });
   }
+  drawNoteEmblem(verdict.g, 190, 29, 24, PHANTOM_WHITE, PHANTOM_RED);
   slam(verdict.root, 120, 88, 21, 2.6);
 
   // Rank panel slides in from the left; the burst pops, then the letter stamps down on it.

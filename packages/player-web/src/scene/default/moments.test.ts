@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { comboTier, createMomentState, momentProgress, updateMoments, type MomentInput } from './moments.ts';
+import {
+  comboTier,
+  createMomentState,
+  effectProfile,
+  impulse,
+  momentProgress,
+  punchScale,
+  updateMoments,
+  type MomentInput,
+} from './moments.ts';
 
 const base: MomentInput = {
   nowMs: 0,
@@ -73,5 +82,40 @@ describe('momentProgress', () => {
     expect(momentProgress(100, 150, 100)).toBe(0.5);
     expect(momentProgress(100, 90, 100)).toBeUndefined();
     expect(momentProgress(100, 200, 100)).toBeUndefined();
+  });
+});
+
+describe('combo breaks', () => {
+  it('stamps a break only for combos of at least 20', () => {
+    let state = updateMoments(createMomentState(), { ...base, combo: 19, nowMs: 1 });
+    state = updateMoments(state, { ...base, combo: 0, nowMs: 2 });
+    expect(state.comboBreak).toBeUndefined();
+    state = updateMoments(state, { ...base, combo: 35, nowMs: 3 });
+    state = updateMoments(state, { ...base, combo: 0, nowMs: 4 });
+    expect(state.comboBreak).toEqual({ combo: 35, atMs: 4 });
+  });
+});
+
+describe('impulse / punchScale', () => {
+  it('decays from 1 to 0 over the duration', () => {
+    expect(impulse(100, 100, 200)).toBe(1);
+    expect(impulse(100, 200, 200)).toBe(0.25);
+    expect(impulse(100, 300, 200)).toBe(0);
+    expect(impulse(undefined, 100, 200)).toBe(0);
+    expect(impulse(100, 50, 200)).toBe(0);
+  });
+
+  it('punches above 1 and settles back', () => {
+    expect(punchScale(0, 0, 100, 0.2)).toBe(1.2);
+    expect(punchScale(0, 100, 100, 0.2)).toBe(1);
+  });
+});
+
+describe('effectProfile', () => {
+  it('maps each level to its multipliers', () => {
+    expect(effectProfile('full')).toEqual({ amount: 1, screenWide: true, enabled: true });
+    expect(effectProfile(undefined)).toEqual({ amount: 1, screenWide: true, enabled: true });
+    expect(effectProfile('reduced')).toEqual({ amount: 0.5, screenWide: false, enabled: true });
+    expect(effectProfile('off')).toEqual({ amount: 0, screenWide: false, enabled: false });
   });
 });

@@ -1,3 +1,5 @@
+import type { Graphics } from 'pixi.js';
+
 /**
  * "Phantom" visual language shared by the default skin family's gameplay, select, and result chrome: a three-ink
  * poster palette (blood red / ink black / paper white), slanted parallelogram plates, jagged starbursts, and halftone
@@ -178,4 +180,69 @@ export function easeOutBack(t: number, overshoot = 1.70158): number {
 export function rollUpValue(target: number, progress: number): number {
   if (!Number.isFinite(target)) return 0;
   return Math.round(target * easeOutCubic(progress));
+}
+
+/**
+ * Phantom's own mark: a slanted eighth note (tilted oval head, stem, and a knife-cut flag) — the skin's signature, set
+ * into the header and the result card so the poster language reads as *this* rhythm game rather than a borrowed one.
+ * `size` is the overall height; `(x, y)` is the head's centre.
+ */
+export function drawNoteEmblem(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  size: number,
+  color: number,
+  ink: number,
+): void {
+  const headW = size * 0.36;
+  const headH = size * 0.24;
+  const tilt = -0.42;
+  const head: number[] = [];
+  for (let step = 0; step < 14; step += 1) {
+    const angle = (Math.PI * 2 * step) / 14;
+    const px = Math.cos(angle) * headW;
+    const py = Math.sin(angle) * headH;
+    head.push(x + px * Math.cos(tilt) - py * Math.sin(tilt), y + px * Math.sin(tilt) + py * Math.cos(tilt));
+  }
+  const stemX = x + headW * 0.78;
+  const stemTop = y - size * 0.86;
+  // Ink shadow first, then the mark, for the same offset-print look as the plates.
+  const shadow = size * 0.08;
+  graphics.poly(head.map((value) => value + shadow)).fill(ink);
+  graphics.poly(head).fill(color);
+  graphics.rect(stemX - size * 0.05, stemTop, size * 0.1, y - stemTop).fill(color);
+  graphics
+    .poly([
+      stemX,
+      stemTop,
+      stemX + size * 0.42,
+      stemTop + size * 0.3,
+      stemX + size * 0.3,
+      stemTop + size * 0.44,
+      stemX,
+      stemTop + size * 0.2,
+    ])
+    .fill(color);
+}
+
+/**
+ * Five-line stave rows across `[x0, x1]` at `y`, each line `gap` apart — sheet music woven into the poster ground.
+ * `clipLeftAt(y)` optionally narrows a line's start (to follow a slanted edge).
+ */
+export function drawStaves(
+  graphics: Graphics,
+  x0: number,
+  x1: number,
+  y: number,
+  gap: number,
+  color: number,
+  alpha: number,
+  clipLeftAt?: (lineY: number) => number,
+): void {
+  for (let line = 0; line < 5; line += 1) {
+    const lineY = y + line * gap;
+    const start = Math.max(x0, clipLeftAt ? clipLeftAt(lineY) : x0);
+    if (start < x1) graphics.rect(start, lineY, x1 - start, 1).fill({ color, alpha });
+  }
 }
