@@ -6,9 +6,12 @@ import {
   hash01,
   layoutTabularRun,
   parallelogramPoints,
+  ransomLayout,
   rollUpValue,
   stageProgress,
   starburstPoints,
+  tornBandPoints,
+  tornEdgePoints,
 } from './phantom-style.ts';
 
 describe('parallelogramPoints', () => {
@@ -156,5 +159,66 @@ describe('rollUpValue', () => {
 
   it('returns 0 for a non-finite target', () => {
     expect(rollUpValue(Number.NaN, 1)).toBe(0);
+  });
+});
+
+describe('tornEdgePoints', () => {
+  it('starts and ends exactly on the line', () => {
+    const points = tornEdgePoints(0, 0, 200, 0, 6, 3);
+    expect(points.slice(0, 2)).toEqual([0, 0]);
+    expect(points.slice(-2)).toEqual([200, 0]);
+  });
+
+  it('keeps every tooth within the shard bound of the line', () => {
+    const points = tornEdgePoints(0, 50, 400, 50, 8, 7);
+    for (let index = 1; index < points.length; index += 2) {
+      expect(Math.abs(points[index]! - 50)).toBeLessThanOrEqual(8 * 2.5 + 1e-9);
+    }
+  });
+
+  it('is jagged, deterministic, and seed-dependent', () => {
+    const points = tornEdgePoints(0, 0, 300, 0, 6, 1);
+    const offsets = new Set(points.filter((_, index) => index % 2 === 1).map((y) => Math.round(y * 10)));
+    expect(offsets.size).toBeGreaterThan(5);
+    expect(tornEdgePoints(0, 0, 300, 0, 6, 1)).toEqual(points);
+    expect(tornEdgePoints(0, 0, 300, 0, 6, 2)).not.toEqual(points);
+  });
+});
+
+describe('tornBandPoints', () => {
+  it('wraps a strip of the given thickness around the line', () => {
+    const band = tornBandPoints(0, 100, 400, 100, 40, 5, 4);
+    const ys = band.filter((_, index) => index % 2 === 1);
+    expect(Math.min(...ys)).toBeLessThan(80);
+    expect(Math.max(...ys)).toBeGreaterThan(120);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(80 - 5 * 2.5 - 1e-9);
+    expect(Math.max(...ys)).toBeLessThanOrEqual(120 + 5 * 2.5 + 1e-9);
+  });
+});
+
+describe('ransomLayout', () => {
+  it('cuts every letter differently within its ranges', () => {
+    const glyphs = ransomLayout('SHOW TIME', 4);
+    expect(glyphs).toHaveLength(9);
+    expect(glyphs[4]!.space).toBe(true);
+    for (const glyph of glyphs.filter((entry) => !entry.space)) {
+      expect(glyph.font).toBeGreaterThanOrEqual(0);
+      expect(glyph.font).toBeLessThan(4);
+      expect(glyph.scale).toBeGreaterThanOrEqual(0.82);
+      expect(glyph.scale).toBeLessThanOrEqual(1.2);
+      expect(Math.abs(glyph.rotation)).toBeLessThanOrEqual(0.14);
+      expect(Math.abs(glyph.dy)).toBeLessThanOrEqual(0.12);
+    }
+  });
+
+  it('never gives neighbouring letters the same card', () => {
+    const glyphs = ransomLayout('TAKEYOURHEART', 9);
+    for (let index = 1; index < glyphs.length; index += 1) {
+      expect(glyphs[index]!.paper).not.toBe(glyphs[index - 1]!.paper);
+    }
+  });
+
+  it('is deterministic for a seed', () => {
+    expect(ransomLayout('GO', 1)).toEqual(ransomLayout('GO', 1));
   });
 });

@@ -23,7 +23,9 @@ import {
   rollUpValue,
   stageProgress,
   starburstPoints,
+  tornEdgePoints,
 } from '../phantom-style.ts';
+import { addRansomText, type GlyphFactory } from './tear.ts';
 
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */
 const RESULT_ROLL_DELAY_MS = 760;
@@ -370,23 +372,31 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   });
   slideIn(footer.root, 420, 0, 50);
 
-  // Entrance wipe: the screen opens behind an ink slab carrying a giant RESULT slug that tears away to the right with a
-  // red leading edge, uncovering the panels as they fly in.
+  // Entrance wipe: the screen opens behind an ink slab carrying RESULT in ransom-note letters that tears away to the
+  // right along a ripped red-and-white edge, uncovering the panels as they fly in.
   const wipeT = stageProgress(elapsed, 0, 760);
   if (wipeT < 1) {
     const wipe = group('wipe');
     const eased = wipeT * wipeT * (3 - 2 * wipeT);
     const edge = -120 + eased * (designWidth + 360);
-    wipe.g
-      .poly([edge + 120, 0, designWidth + 200, 0, designWidth + 200, designHeight, edge, designHeight])
-      .fill(PHANTOM_INK);
-    wipe.g.poly([edge + 80, 0, edge + 128, 0, edge + 8, designHeight, edge - 40, designHeight]).fill(PHANTOM_RED);
-    wipe.g.poly([edge + 136, 0, edge + 142, 0, edge + 22, designHeight, edge + 16, designHeight]).fill(PHANTOM_WHITE);
-    addText(wipe.root, 'RESULT', edge + 150 + designWidth / 2, designHeight / 2, {
-      ...display(120, PHANTOM_WHITE),
-      letterSpacing: 8,
-      anchorX: 0.5,
-      anchorY: 0.5,
+    const rip = tornEdgePoints(edge + 120, -10, edge, designHeight + 10, 10, 3, 12);
+    const shifted = (dx: number) => rip.map((value, index) => (index % 2 === 0 ? value + dx : value));
+    const region = (dx: number) => [...shifted(dx), designWidth + 200, designHeight + 10, designWidth + 200, -10];
+    // Red splash, white rim, then the ink slab — each edge ripped.
+    wipe.g.poly(region(-34)).fill(PHANTOM_RED);
+    wipe.g.poly(region(-12)).fill(PHANTOM_WHITE);
+    wipe.g.poly(region(0)).fill(PHANTOM_INK);
+    const glyph: GlyphFactory = (char, options) =>
+      addText(wipe.root, char, 0, 0, {
+        size: options.size,
+        weight: options.weight,
+        fill: options.fill,
+        fontFamily: options.fontFamily,
+      });
+    addRansomText(wipe.g, glyph, 'RESULT', edge + 170 + designWidth / 2, designHeight / 2, {
+      size: 92,
+      seed: 7,
+      angle: -0.08,
     });
   }
 }
