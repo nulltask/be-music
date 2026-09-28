@@ -3,6 +3,7 @@ import type { ChildPool } from '../pixi-utils.ts';
 import { getDesignTextResolution } from '../core/viewport.ts';
 import { DEFAULT_TEXT_FONT } from './fonts.ts';
 import { layoutTabularRun } from './phantom-style.ts';
+import { alignCapCenter } from './text-metrics.ts';
 
 /**
  * Per-frame HUD text for built-in skins. Nodes come from a {@link ChildPool} when one is given (so a 60 fps redraw
@@ -50,6 +51,7 @@ export function addHudText(
     node.style = style;
   }
   node.anchor.set(opts.anchorX ?? 0, opts.anchorY ?? 0);
+  alignCapCenter(node, opts.fontFamily ?? DEFAULT_TEXT_FONT, opts.weight ?? '500', opts.size ?? 10);
   node.position.set(x, y);
   node.scale.set(1, 1);
   // Pooled texts keep their previous skew / rotation, so both are always written.
