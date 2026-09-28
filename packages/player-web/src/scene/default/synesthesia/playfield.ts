@@ -11,12 +11,14 @@ import type { ChildPool } from '../../pixi-utils.ts';
 import {
   burstParticlePosition,
   burstParticles,
+  emberColor,
   hsvToHex,
   projectPoint,
   rotateY,
   type BurstParticle,
   type Vec3,
 } from './space.ts';
+import { drawReticle } from './draw.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
 import { comboTier, effectProfile } from '../moments.ts';
 
@@ -27,11 +29,12 @@ interface LaneLight {
   hue: number;
 }
 
-// Readable first: white keys are icy white, black keys blue-violet, scratch magenta — each with a soft same-hue halo.
+// Readable first, in Rez Infinite's palette: white keys burn warm white-gold with an ember halo, black keys run
+// electric blue, scratch hot magenta.
 const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
-  white: { body: 0xe9fbff, glow: 0x5ff4ff, hue: 0.52 },
-  black: { body: 0x8aa2ff, glow: 0x8f74ff, hue: 0.7 },
-  scratch: { body: 0xff7ae3, glow: 0xff4fd8, hue: 0.88 },
+  white: { body: 0xfff1dc, glow: 0xff7a1e, hue: 0.07 },
+  black: { body: 0xa6dcff, glow: 0x3fb4ff, hue: 0.57 },
+  scratch: { body: 0xff9fd0, glow: 0xff3d9e, hue: 0.92 },
 };
 
 const NOTE_HEIGHT = 8;
@@ -49,7 +52,7 @@ export function renderSynesthesiaLanes({
   // The judgement line burns brighter as the run builds, and cycles the spectrum once it is in the zone.
   const tier = effectProfile(effects).enabled ? comboTier(combo ?? 0) : 0;
   const heat = 1 + 0.3 * tier;
-  const lineColor = tier >= 3 ? hsvToHex(0.52 + Math.sin(nowMs / 900) * 0.2, 0.45, 1) : 0x5ff4ff;
+  const lineColor = tier >= 3 ? emberColor(0.55 + 0.35 * Math.sin(nowMs / 700)) : 0xff8a2a;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
   let gridLeft = Number.POSITIVE_INFINITY;
@@ -63,8 +66,8 @@ export function renderSynesthesiaLanes({
     gridLeft = Math.min(gridLeft, x);
     gridRight = Math.max(gridRight, x + w);
 
-    // Dark glass bed, so the starfield behind the playfield reads only as a faint depth cue.
-    graphics.rect(x, top, w, laneHeight).fill({ color: 0x03040f, alpha: 0.78 });
+    // Near-black bed, so the particle world behind the playfield reads only as a faint depth cue.
+    graphics.rect(x, top, w, laneHeight).fill({ color: 0x050201, alpha: 0.8 });
     graphics.rect(x, top, 1, laneHeight).fill({ fill: resolveColumnGradient(light.glow), alpha: 0.5 });
 
     if (lane.beam > 0) {
@@ -82,20 +85,20 @@ export function renderSynesthesiaLanes({
     const pressed = lane.beam > 0.6;
     graphics
       .rect(x + 1, bottom + 4, Math.max(2, w - 2), 10)
-      .fill({ color: pressed ? light.glow : 0x0c1030, alpha: 0.9 });
+      .fill({ color: pressed ? light.glow : 0x140804, alpha: 0.9 });
     graphics.rect(x + 1, bottom + 13, Math.max(2, w - 2), 1).fill({ color: light.glow, alpha: pressed ? 1 : 0.45 });
   }
   if (lanes.length === 0) return;
-  graphics.rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0x5ff4ff, alpha: 0.25 });
+  graphics.rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0xff7a1e, alpha: 0.25 });
 
-  // Judgement line: a white filament wrapped in stacked cyan bloom that swells on each beat.
+  // Judgement line: a white filament wrapped in stacked ember bloom that swells on each beat.
   const lineW = gridRight - gridLeft;
   const y = gridBottom;
   graphics.rect(gridLeft, y - 14, lineW, 22).fill({ color: lineColor, alpha: (0.05 + 0.08 * pulse) * heat });
   graphics
     .rect(gridLeft, y - 6, lineW, 8)
     .fill({ color: lineColor, alpha: Math.min(0.8, (0.16 + 0.14 * pulse) * heat) });
-  graphics.rect(gridLeft, y - 3, lineW, 3).fill({ color: 0x9ff8ff, alpha: 0.85 });
+  graphics.rect(gridLeft, y - 3, lineW, 3).fill({ color: 0xffd08a, alpha: 0.85 });
   graphics.rect(gridLeft, y - 2, lineW, 1).fill(0xffffff);
 }
 
@@ -125,8 +128,8 @@ function drawNote(graphics: Graphics, x: number, y: number, w: number, light: La
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
-const BURST_PARTICLES = 44;
-const BURST_PARTICLES_PER_TIER = 6;
+const BURST_PARTICLES = 110;
+const BURST_PARTICLES_PER_TIER = 16;
 const BURST_PARTICLES_MAX = BURST_PARTICLES + BURST_PARTICLES_PER_TIER * 4;
 const BURST_FOCAL = 260;
 const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
@@ -152,8 +155,10 @@ function cachedBurst(seed: number): BurstParticle[] {
  * 2. two shockwave rings lying in the XZ plane (so they read as tilted ellipses) expanding out of the line,
  * 3. motion trails for every spark,
  * 4. depth-sorted glow sparks that launch white-hot and cool into the lane's hue,
- * 5. a core flash and an anamorphic streak across the line.
+ * 5. a core flash and an anamorphic streak across the line,
+ * 6. a Rez lock-on reticle that snaps shut on the hit and fades.
  *
+ * The smaller sparks fly as square voxels rather than round glows, like Rez's shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
 export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: BeMusicBombsContext): void {
@@ -278,17 +283,24 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
   sparks.sort((left, right) => right.z - left.z);
   const glow = synGlowTexture();
   for (const spark of sparks) {
+    const tint = hsvToHex(light.hue + spark.particle.hueShift, Math.min(0.9, 0.45 + spark.life * 1.8), 1);
+    const sparkAlpha = (1 - spark.life) ** 0.8 * (0.65 + 0.35 * crowd);
+    if (spark.particle.size < 0.55) {
+      const side = Math.max(1, (1 + 2.2 * spark.particle.size) * spark.scale * (1 - spark.life * 0.6));
+      effects.rect(spark.x - side / 2, spark.y - side / 2, side, side).fill({ color: tint, alpha: sparkAlpha });
+      continue;
+    }
     const sprite = pool.acquireSprite();
     sprite.texture = glow;
     sprite.anchor.set(0.5);
     sprite.blendMode = 'add';
-    const size = (6 + 12 * spark.particle.size) * spark.scale * Math.sqrt(1 - spark.life);
+    const size = (3 + 6 * spark.particle.size) * spark.scale * Math.sqrt(1 - spark.life);
     sprite.width = size;
     sprite.height = size;
     sprite.position.set(spark.x, spark.y);
     // White-hot at launch, cooling into the lane's hue.
-    sprite.tint = hsvToHex(light.hue + spark.particle.hueShift, Math.min(0.9, 0.45 + spark.life * 1.8), 1);
-    sprite.alpha = (1 - spark.life) ** 0.8 * (0.65 + 0.35 * crowd);
+    sprite.tint = tint;
+    sprite.alpha = sparkAlpha;
   }
 
   // 5. Core flash + anamorphic streak.
@@ -304,6 +316,17 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
     core.position.set(cx, cy);
     core.tint = hsvToHex(light.hue, t * 2, 1);
     core.alpha = flash * 0.7 * crowd;
+  }
+  // 6. Lock-on: corner brackets snap in from wide to tight around the hit, then hold and fade.
+  if (t < 0.55) {
+    const snap = Math.min(1, t / 0.16);
+    const size = unit * (1.15 + 1.4 * (1 - snap) ** 3);
+    const lockAlpha = (t < 0.16 ? 0.95 : 0.95 * (1 - (t - 0.16) / 0.39)) * (0.6 + 0.4 * crowd);
+    drawReticle(effects, cx - size / 2, cy - size / 2, size, size, 0xfff2dc, lockAlpha, {
+      arm: size * 0.3,
+      width: 1.25,
+      cross: t < 0.3,
+    });
   }
   const streakAlpha = amount < 1 ? 0 : fade ** 2.5;
   if (streakAlpha > 0.02) {

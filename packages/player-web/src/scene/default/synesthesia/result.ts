@@ -2,9 +2,12 @@ import { Container, Graphics } from 'pixi.js';
 import type { BeMusicResultFrame, BeMusicResultSkin } from '../../../skin/be-music/types.ts';
 import { easeOutBack, easeOutCubic, rollUpValue, stageProgress } from '../phantom-style.ts';
 import { addSkinText, type SkinTextOptions } from '../skin-text.ts';
+import { hash01 } from '../phantom-style.ts';
+import { drawFrame, drawReticle } from './draw.ts';
 import {
   burstParticlePosition,
   burstParticles,
+  emberColor,
   hsvToHex,
   projectPoint,
   rotateX,
@@ -17,13 +20,12 @@ import {
   SYN_DEEP,
   SYN_DIM,
   SYN_DISPLAY_FONT,
-  SYN_GLASS,
-  SYN_GREEN,
+  SYN_EMBER,
+  SYN_FLARE,
   SYN_MAGENTA,
   SYN_MIST,
   SYN_RED,
   SYN_TEXT_FONT,
-  SYN_VIOLET,
   SYN_VOID,
   SYN_WHITE,
   sceneHue,
@@ -32,14 +34,15 @@ import {
 const ROLL_DELAY_MS = 700;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1600;
-const RANK_BURST = burstParticles(29, 90);
+const RANK_BURST = burstParticles(29, 260);
 
 export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
 
 /**
- * Synesthesia result: deep space with streaming stars and a floor grid; the verdict condenses out of wide-tracked
- * light, glass panels fade up in sequence while counters roll, graphs draw as glowing filaments, and the rank letter
- * ignites inside a spinning 3D ring of particles that bursts outward the moment it lands.
+ * Synesthesia result, in Rez Infinite's Area X light: a black void with ember dust, speed streaks and a floor of light
+ * points; the verdict condenses out of wide-tracked light, hairline frames fade up in sequence while counters roll,
+ * graphs draw as glowing filaments, and the rank letter ignites inside a spinning 3D ring of particles that bursts
+ * outward the moment it lands — a lock-on reticle snapping shut on it.
  */
 export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
@@ -49,7 +52,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const hue = sceneHue(seconds);
   const accent = hsvToHex(hue, 0.6, 1);
   const cleared = result.cleared;
-  const verdictColor = cleared ? SYN_CYAN : SYN_RED;
+  const verdictColor = cleared ? SYN_AMBER : SYN_RED;
   const exMax = Math.max(0, result.score.total * 2);
   const roll = stageProgress(elapsed, ROLL_DELAY_MS, ROLL_MS);
 
@@ -78,13 +81,12 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM) =>
     text(target, value, x, y, display(9, fill, { letterSpacing: 2 }));
 
-  // Space.
+  // Space: warm black, an ember horizon, dust and streaks pouring out of the vanishing point, and a floor of points.
   const space = group('space');
   const bands: ReadonlyArray<readonly [number, number]> = [
-    [SYN_DEEP, 0.25],
-    [0x080620, 0.45],
-    [0x05051a, 0.65],
-    [0x030410, 0.82],
+    [SYN_DEEP, 0.3],
+    [0x070201, 0.55],
+    [0x040100, 0.8],
     [SYN_VOID, 1],
   ];
   let top = 0;
@@ -93,33 +95,58 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     space.g.rect(0, top, designWidth, bottom - top).fill(color);
     top = bottom;
   }
-  for (let index = 0; index < 110; index += 1) {
+  const light = new Graphics();
+  light.blendMode = 'add';
+  space.root.addChild(light);
+  const horizon = designHeight * 0.74;
+  const vanishX = designWidth / 2;
+  const vanishY = designHeight * 0.45;
+  for (let band = 0; band < 14; band += 1) {
+    const falloff = (1 - band / 14) ** 2;
+    light.rect(0, horizon - (band + 1) * 7, designWidth, 7).fill({ color: SYN_EMBER, alpha: 0.06 * falloff });
+    light.rect(0, horizon + band * 4, designWidth, 4).fill({ color: SYN_EMBER, alpha: 0.05 * falloff });
+  }
+  for (let index = 0; index < 260; index += 1) {
     const point = starfieldPoint(index, seconds, { spread: 560, near: 20, far: 900, speed: 90 });
-    const projected = projectPoint(point, designWidth / 2, designHeight * 0.45, 180);
+    const projected = projectPoint(point, vanishX, vanishY, 180);
     if (!projected.visible) continue;
     const nearness = Math.min(1, projected.scale);
-    const color = hsvToHex(hue + (index % 5) * 0.06, 0.4, 1);
-    space.g.circle(projected.x, projected.y, (0.5 + 2 * nearness) * 3).fill({ color, alpha: 0.05 * nearness });
-    space.g
-      .circle(projected.x, projected.y, 0.5 + 2 * nearness)
-      .fill({ color: SYN_WHITE, alpha: 0.2 + 0.6 * nearness });
+    const color = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.35 + 0.65 * nearness);
+    const size = 0.5 + 1.3 * nearness;
+    light
+      .rect(projected.x - size / 2, projected.y - size / 2, size, size)
+      .fill({ color, alpha: 0.25 + 0.6 * nearness });
   }
-  const horizon = designHeight * 0.74;
-  const floor = (x: number, z: number) => projectPoint({ x, y: 130, z }, designWidth / 2, horizon, 200);
-  for (let x = -1400; x <= 1400; x += 100) {
-    const near = floor(x, 0);
-    const far = floor(x, 2600);
-    space.g.moveTo(near.x, near.y).lineTo(far.x, far.y).stroke({ color: accent, width: 1, alpha: 0.1 });
+  for (let index = 0; index < 18; index += 1) {
+    const angle = hash01(index * 5 + 1) * Math.PI * 2;
+    const progress = (hash01(index * 5 + 2) + seconds * 0.4 * (0.7 + 0.6 * hash01(index * 5 + 3))) % 1;
+    const inner = 40 + progress * progress * 520;
+    const outer = inner + 12 + 80 * progress;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle) * 0.72;
+    light
+      .moveTo(vanishX + cos * inner, vanishY + sin * inner)
+      .lineTo(vanishX + cos * outer, vanishY + sin * outer)
+      .stroke({
+        color: index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4)),
+        width: 0.8 + progress * 1.4,
+        alpha: Math.sin(progress * Math.PI) * 0.35,
+      });
   }
+  const floor = (x: number, z: number) => projectPoint({ x, y: 130, z }, vanishX, horizon, 200);
   const offset = (seconds * 110) % 100;
   for (let z = 100 - offset; z < 2600; z += 100) {
-    const left = floor(-1400, z);
-    const right = floor(1400, z);
-    space.g
-      .moveTo(left.x, left.y)
-      .lineTo(right.x, right.y)
-      .stroke({ color: accent, width: 1, alpha: 0.05 + 0.16 * (1 - z / 2600) });
+    const nearness = 1 - z / 2600;
+    const size = 0.6 + 1.4 * nearness * nearness;
+    const color = emberColor(0.3 + 0.65 * nearness);
+    const alpha = 0.12 + 0.7 * nearness * nearness;
+    for (let x = -1400; x <= 1400; x += 50) {
+      const point = floor(x, z);
+      if (point.x < -4 || point.x > designWidth + 4) continue;
+      light.rect(point.x - size / 2, point.y - size / 2, size, size).fill({ color, alpha });
+    }
   }
+  light.rect(0, horizon - 1, designWidth, 2).fill({ color: SYN_AMBER, alpha: 0.4 });
 
   // Verdict: tracking condenses from wide to settled while it fades in.
   const verdict = group('verdict');
@@ -168,7 +195,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
       rankCy,
       220,
     );
-    const color = hsvToHex(hue + index / 60 / 2, 0.55, 1);
+    const color = index % 10 === 0 ? SYN_CYAN : emberColor(0.5 + 0.45 * Math.sin(index * 0.7 + seconds * 2) ** 2);
     rank.g.circle(point.x, point.y, 3.5 * point.scale).fill({ color, alpha: 0.12 * ringIn });
     rank.g.circle(point.x, point.y, 1.3 * point.scale).fill({ color: SYN_WHITE, alpha: 0.8 * ringIn * point.scale });
   }
@@ -180,14 +207,26 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
       const position = burstParticlePosition(particle, life, 120, 30);
       const point = projectPoint(rotateY(position, seconds * 0.4), rankCx, rankCy, 240);
       if (!point.visible) continue;
-      const color = hsvToHex(hue + particle.hueShift, Math.min(0.85, life * 1.5), 1);
-      rank.g.circle(point.x, point.y, (2 + 5 * particle.size) * point.scale).fill({ color, alpha: 0.15 * (1 - life) });
+      const color = particle.hueShift > 0.06 ? SYN_CYAN : emberColor(1 - life * 0.7);
       rank.g
-        .circle(point.x, point.y, (0.8 + 1.4 * particle.size) * point.scale)
+        .circle(point.x, point.y, (1 + 2.5 * particle.size) * point.scale)
+        .fill({ color, alpha: 0.12 * (1 - life) });
+      rank.g
+        .circle(point.x, point.y, (0.5 + 0.8 * particle.size) * point.scale)
         .fill({ color: SYN_WHITE, alpha: 1 - life });
     }
   }
   const stamp = stageProgress(elapsed, RANK_DELAY_MS, 420);
+  if (stamp > 0) {
+    // Lock-on: brackets snap shut on the letter as it lands.
+    const snap = easeOutCubic(Math.min(1, stamp * 1.6));
+    const lock = 46 + 60 * (1 - snap);
+    drawReticle(rank.g, rankCx - lock, rankCy - lock, lock * 2, lock * 2, SYN_FLARE, 0.4 + 0.5 * snap, {
+      arm: 12,
+      width: 1.75,
+      cross: stamp < 1,
+    });
+  }
   const letter = new Container();
   rank.root.addChild(letter);
   const heartbeat = (1 - ((seconds * 1.4) % 1)) ** 4;
@@ -216,7 +255,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     [218, 66, 'SCORE', String(rollUpValue(result.score.score, roll)), SYN_WHITE],
     [218, 122, 'EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, SYN_WHITE],
     [218, 178, 'MAX COMBO', String(rollUpValue(result.maxCombo, roll)), SYN_AMBER],
-    [424, 66, 'GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, cleared ? SYN_CYAN : SYN_RED],
+    [424, 66, 'GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, cleared ? SYN_AMBER : SYN_RED],
     [424, 122, 'PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, SYN_WHITE],
     [424, 178, 'NOTES', String(rollUpValue(result.score.total, roll)), SYN_WHITE],
   ];
@@ -236,13 +275,13 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
 
   // Judgement rows.
   const judges = group('judgement');
-  glass(judges.g, 20, 244, 290, 176, SYN_VIOLET);
-  label('JUDGEMENT', 34, 256, judges.root, SYN_VIOLET);
+  glass(judges.g, 20, 244, 290, 176, SYN_EMBER);
+  label('JUDGEMENT', 34, 256, judges.root, SYN_EMBER);
   const rows: ReadonlyArray<readonly [name: string, count: number, color: number]> = [
-    ['PGREAT', result.score.perfect, 0xc8fbff],
+    ['PGREAT', result.score.perfect, SYN_FLARE],
     ['GREAT', result.score.great, SYN_AMBER],
-    ['GOOD', result.score.good, SYN_GREEN],
-    ['BAD', result.score.bad, SYN_VIOLET],
+    ['GOOD', result.score.good, SYN_CYAN],
+    ['BAD', result.score.bad, SYN_MAGENTA],
     ['POOR', result.score.poor, SYN_RED],
   ];
   const judgeTotal = Math.max(1, result.score.total);
@@ -279,7 +318,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     262,
     56,
     result.gaugeHistory.map((s) => ({ x: s.progress, y: s.value / 100 })),
-    cleared ? SYN_CYAN : SYN_RED,
+    cleared ? SYN_AMBER : SYN_RED,
     draw,
   );
   filament(
@@ -289,7 +328,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     262,
     56,
     result.scoreHistory.map((s) => ({ x: s.progress, y: exMax > 0 ? s.exScore / exMax : 0 })),
-    SYN_MAGENTA,
+    SYN_CYAN,
     draw,
   );
   rise(graphs.root, 600);
@@ -298,7 +337,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const total = group('total');
   total.g.rect(0, designHeight - 44, designWidth, 1).fill({ color: accent, alpha: 0.4 });
   label('TOTAL SCORE', 24, designHeight - 26, total.root, accent);
-  text(total.root, String(rollUpValue(result.score.score, roll)), 130, designHeight - 22, {
+  text(total.root, String(rollUpValue(result.score.score, roll)), 150, designHeight - 22, {
     ...display(16, SYN_WHITE),
     anchorY: 0.5,
     letterSpacing: 2,
@@ -308,10 +347,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
 }
 
 function glass(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
-  graphics.roundRect(x, y, w, h, 8).fill({ color: SYN_GLASS, alpha: 0.6 });
-  graphics.roundRect(x - 2, y - 2, w + 4, h + 4, 10).stroke({ color: rim, width: 4, alpha: 0.07 });
-  graphics.roundRect(x, y, w, h, 8).stroke({ color: rim, width: 1, alpha: 0.5 });
-  graphics.rect(x + 12, y, w - 24, 1).fill({ color: SYN_WHITE, alpha: 0.4 });
+  drawFrame(graphics, x, y, w, h, rim, { fill: 0.6, arm: 10 });
 }
 
 /** Polyline drawn up to `progress` of its horizontal span, stroked twice (bloom + filament) with a glowing head. */

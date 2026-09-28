@@ -5,24 +5,36 @@ import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText } from '../hud-text.ts';
 import { effectProfile, impulse, momentProgress, trackMoments } from '../moments.ts';
 import { easeOutCubic, hash01, stageProgress } from '../phantom-style.ts';
-import { burstParticlePosition, burstParticles, hsvToHex, projectPoint, rotateX, rotateY } from './space.ts';
-import { SYN_DISPLAY_FONT, SYN_WHITE } from './style.ts';
+import { drawReticle } from './draw.ts';
+import {
+  burstParticlePosition,
+  burstParticles,
+  emberColor,
+  hsvToHex,
+  projectPoint,
+  rotateX,
+  rotateY,
+} from './space.ts';
+import { SYN_AMBER, SYN_CYAN, SYN_DISPLAY_FONT, SYN_EMBER, SYN_FLARE, SYN_MAGENTA, SYN_WHITE } from './style.ts';
 
 const MILESTONE_MS = 1300;
 const CLEAR_MS = 1100;
 const FULL_COMBO_MS = 3400;
-const FULL_COMBO_BURST = burstParticles(77, 180);
+const FULL_COMBO_BURST = burstParticles(77, 640);
 const JUDGE_Y = PLAYFIELD.judgementY;
+const MILESTONE_COLORS = [SYN_AMBER, SYN_CYAN, SYN_MAGENTA] as const;
+const RING_COLORS = [SYN_AMBER, SYN_EMBER, SYN_CYAN, SYN_FLARE, SYN_MAGENTA] as const;
 
 /**
  * Synesthesia showpieces, painted on the front layer:
  *
  * - the count-in: READY condenses out of wide-tracked light over a widening filament, then the first beat detonates a
  *   ring of light from the judgement line;
- * - every 100 combo: a shockwave of light rolls out from the playfield and the count glows over the BGA monitor;
+ * - every 100 combo: a shockwave of light rolls out from the playfield and the count glows over the BGA monitor,
+ *   caught in a lock-on reticle that snaps shut on it;
  * - the clear line: a light sweep runs the length of the gauge;
- * - a full combo: a bloom, a 3D sphere of sparks bursting from the centre of the screen, prism rings, and FULL COMBO
- *   cycling through the spectrum.
+ * - a full combo: a warm bloom, a 3D sphere of voxel sparks bursting from the centre of the screen, rings of ember /
+ *   blue / magenta light, and FULL COMBO glowing gold.
  */
 export function drawSynesthesiaMoments(
   chromeLayer: Container,
@@ -84,7 +96,7 @@ export function drawSynesthesiaMoments(
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
-    drawClear(graphics, layer, clear, hue, pool);
+    drawClear(graphics, layer, clear, pool);
   }
   const fullCombo = momentProgress(moments.fullComboAtMs, nowMs, FULL_COMBO_MS);
   if (fullCombo !== undefined) {
@@ -171,7 +183,8 @@ function drawMilestone(
   hasBga: boolean,
   pool: ChildPool,
 ): void {
-  const color = hsvToHex(hue + value / 1000, 0.6, 1);
+  // Each hundred takes the next Rez light in turn: gold, electric blue, magenta.
+  const color = MILESTONE_COLORS[Math.max(0, Math.floor(value / 100) - 1) % MILESTONE_COLORS.length]!;
   const wave = easeOutCubic(Math.min(1, t / 0.7));
   const radius = 30 + 700 * wave;
   graphics
@@ -202,6 +215,13 @@ function drawMilestone(
   );
   count.alpha = alpha;
   count.scale.set(1.25 - 0.25 * easeOutCubic(Math.min(1, t / 0.25)));
+  const snap = easeOutCubic(Math.min(1, t / 0.2));
+  const lockW = (hasBga ? 120 : 190) * (1.6 - 0.6 * snap);
+  const lockH = (hasBga ? 74 : 110) * (1.6 - 0.6 * snap);
+  drawReticle(graphics, cx - lockW / 2, cy + (hasBga ? 14 : 22) - lockH / 2, lockW, lockH, color, 0.9 * alpha, {
+    arm: 14,
+    width: 2,
+  });
   const label = addHudText(
     layer,
     'COMBO',
@@ -221,8 +241,8 @@ function drawMilestone(
   label.alpha = alpha;
 }
 
-function drawClear(graphics: Graphics, layer: Container, t: number, hue: number, pool: ChildPool): void {
-  const color = hsvToHex(hue + 0.35, 0.6, 1);
+function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildPool): void {
+  const color = SYN_AMBER;
   const head = GROOVE.x + GROOVE.w * easeOutCubic(Math.min(1, t / 0.5));
   const fade = 1 - Math.max(0, (t - 0.55) / 0.45);
   graphics.rect(GROOVE.x, GROOVE.y - 2, head - GROOVE.x, GROOVE.h + 4).fill({ color, alpha: 0.22 * fade });
@@ -262,7 +282,7 @@ function drawFullCombo(
   const fadeOut = 1 - Math.max(0, (t - 0.8) / 0.2);
   const bloom = screenWide ? Math.max(0, 1 - t * 5) : 0;
   if (bloom > 0) {
-    graphics.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill({ color: SYN_WHITE, alpha: 0.55 * bloom });
+    graphics.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill({ color: SYN_FLARE, alpha: 0.55 * bloom });
   }
   // A sphere of sparks bursting out of the centre, turning slowly in 3D.
   const burstT = Math.min(1, t / 0.85);
@@ -274,23 +294,27 @@ function drawFullCombo(
     const position = burstParticlePosition(particle, life, 360, 60);
     const point = projectPoint(rotateX(rotateY(position, spin), 0.3), cx, cy, 380);
     if (!point.visible) continue;
-    const color = hsvToHex(hue + particle.hueShift * 3 + life * 0.5, 0.35 + 0.5 * life, 1);
-    const size = (1.5 + 3.5 * particle.size) * point.scale * (1 - life * 0.6);
-    graphics.circle(point.x, point.y, size * 3).fill({ color, alpha: 0.12 * (1 - life) * fadeOut });
-    graphics.circle(point.x, point.y, size).fill({ color: SYN_WHITE, alpha: (1 - life) * fadeOut });
+    // Mostly ember cooling from white-hot, with a scatter of blue and magenta voxels.
+    const color =
+      particle.hueShift > 0.055 ? SYN_CYAN : particle.hueShift < -0.065 ? SYN_MAGENTA : emberColor(1 - life * 0.7);
+    const size = (0.5 + 1.1 * particle.size) * point.scale * (1 - life * 0.5);
+    graphics.circle(point.x, point.y, size * 3).fill({ color, alpha: 0.06 * (1 - life) * fadeOut });
+    graphics
+      .rect(point.x - size, point.y - size, size * 2, size * 2)
+      .fill({ color: life < 0.2 ? SYN_WHITE : color, alpha: (1 - life) * fadeOut });
   }
   // Prism rings expanding from the centre.
   for (let ring = 0; ring < 5; ring += 1) {
     const ringT = (t * 2.2 + ring * 0.18) % 1;
     const radius = 40 + ringT * 420;
     graphics.ellipse(cx, cy, radius, radius * 0.55).stroke({
-      color: hsvToHex(hue + ring * 0.12 + t, 0.7, 1),
+      color: RING_COLORS[ring % RING_COLORS.length]!,
       width: 2 + 4 * (1 - ringT),
       alpha: 0.5 * (1 - ringT) * fadeOut,
     });
   }
   const form = easeOutCubic(Math.min(1, t / 0.3));
-  const color = hsvToHex(hue + nowMs / 1800, 0.55, 1);
+  const color = emberColor(0.6 + 0.3 * Math.sin(nowMs / 260));
   const text = addHudText(
     layer,
     'FULL COMBO',

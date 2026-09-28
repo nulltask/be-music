@@ -8,13 +8,31 @@ import type {
 } from '../../../skin/be-music/types.ts';
 import { easeOutCubic, stageProgress } from '../phantom-style.ts';
 import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions } from '../skin-text.ts';
-import { hsvToHex, icosahedron, projectPoint, rotateX, rotateY, starfieldPoint } from './space.ts';
+import { hash01 } from '../phantom-style.ts';
+import { drawPointCloud, drawReticle } from './draw.ts';
+import {
+  cameraShot,
+  emberColor,
+  hsvToHex,
+  mixCamera,
+  particleRiverPoint,
+  pointCloudHumanoid,
+  pointCloudPyramid,
+  projectPoint,
+  REST_CAMERA,
+  starfieldPoint,
+  vanishingPoint,
+  viewPoint,
+  type CameraPose,
+} from './space.ts';
 import {
   SYN_AMBER,
   SYN_CYAN,
   SYN_DEEP,
   SYN_DIM,
   SYN_DISPLAY_FONT,
+  SYN_EMBER,
+  SYN_FLARE,
   SYN_GLASS,
   SYN_MAGENTA,
   SYN_MIST,
@@ -29,9 +47,25 @@ const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 
 const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
-const STAR_COUNT = 150;
-const ORBIT_COUNT = 14;
-const ICOSAHEDRON = icosahedron();
+const STAR_COUNT = 320;
+const STREAK_COUNT = 26;
+const RIVER_PARTICLES = 340;
+const FIGURE = pointCloudHumanoid(23, 1600);
+/**
+ * Camera shots the select backdrop flies between, circling the pyramids: rest, a low pass banking right, a high
+ * sweep from the right looking down, and a skim just over the floor.
+ */
+const SELECT_SHOTS: readonly CameraPose[] = [
+  REST_CAMERA,
+  { x: -190, y: 40, z: 0, yaw: 0.34, pitch: -0.04 },
+  { x: 230, y: -120, z: 0, yaw: -0.3, pitch: 0.15 },
+  { x: 0, y: 70, z: 0, yaw: -0.12, pitch: -0.08 },
+];
+const SHOT_HOLD_S = 7;
+const SHOT_MOVE_S = 3;
+/** Depth the world shots pivot around — the pyramid field. */
+const WORLD_ORBIT = 900;
+const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCloudPyramid(9, 520)];
 
 export const synesthesiaSelectSkin: BeMusicSelectSkin = {
   layout: LAYOUT,
@@ -42,28 +76,28 @@ function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
   return { size: 9, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2 };
 }
 
-function glassPanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number, radius = 8): void {
-  graphics.roundRect(x, y, w, h, radius).fill({ color: SYN_GLASS, alpha: 0.58 });
-  graphics.roundRect(x - 2, y - 2, w + 4, h + 4, radius + 2).stroke({ color: rim, width: 4, alpha: 0.07 });
-  graphics.roundRect(x, y, w, h, radius).stroke({ color: rim, width: 1, alpha: 0.5 });
-  graphics.rect(x + radius + 4, y, w - radius * 2 - 8, 1).fill({ color: SYN_WHITE, alpha: 0.4 });
+function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
+  graphics.rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: 0.5 });
+  graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.28 });
+  drawReticle(graphics, x - 1, y - 1, w + 2, h + 2, SYN_WHITE, 0.85, { arm: 10, width: 1.25 });
 }
 
 /**
- * Synesthesia song select. The persistent back layer is a 3D space — a star tunnel whose speed follows the focused
- * chart's BPM, a large wireframe icosahedron tumbling behind the info panel, and a floor grid scrolling into the
- * horizon — all animated by transform / cheap redraws in `tick`. The front layer orbits a ring of light around the
- * focused card.
+ * Synesthesia song select, after Rez Infinite's Area X. The persistent back layer is a particle world — data dust and
+ * speed streaks pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids on an ember
+ * horizon, a floor of light points, a golden river of particles, and a floating point-cloud figure — redrawn cheaply
+ * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
   private readonly ground = new Graphics();
-  private readonly wireframe = new Graphics();
-  private readonly floor = new Graphics();
+  /** Additive particle world: floor, pyramids, river, streaks, and the figure. */
+  private readonly world = new Graphics();
   private readonly stars: Sprite[] = [];
-  private readonly orbit: Sprite[] = [];
+  private readonly lock = new Graphics();
   private readonly cursorGlow = new Sprite();
+  private cursorChangedAt = Number.NEGATIVE_INFINITY;
   private built = false;
   private designWidth = 640;
   private designHeight = 480;
@@ -97,7 +131,8 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     }
     const visible = this.activeCard !== undefined;
     this.cursorGlow.visible = visible;
-    for (const sprite of this.orbit) sprite.visible = visible;
+    this.lock.visible = visible;
+    this.cursorChangedAt = frame.cursorChangedAt;
     if (frame.launchAt !== undefined) {
       this.renderOutro(frame);
       return true;
@@ -118,7 +153,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     const cy = designHeight * 0.44;
     const bloom = easeOutCubic(Math.min(1, t / 0.7));
     for (let ring = 5; ring >= 1; ring -= 1) {
-      g.circle(cx, cy, (40 + 520 * bloom) * (ring / 5)).fill({ color: SYN_WHITE, alpha: 0.1 * bloom });
+      g.circle(cx, cy, (40 + 520 * bloom) * (ring / 5)).fill({ color: SYN_FLARE, alpha: 0.1 * bloom });
     }
     const dark = Math.max(0, (t - 0.72) / 0.28);
     if (dark > 0) g.rect(0, 0, designWidth, designHeight).fill({ color: SYN_VOID, alpha: dark });
@@ -133,7 +168,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       anchorY: 0.5,
       maxWidth: designWidth - 80,
       alpha: Math.min(1, t * 3) * (1 - dark),
-      dropShadow: { color: SYN_CYAN, distance: 0, blur: 16, alpha: 1 },
+      dropShadow: { color: SYN_EMBER, distance: 0, blur: 16, alpha: 1 },
     });
   }
 
@@ -151,100 +186,169 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     const hue = sceneHue(seconds, beatPhase);
     const accent = hsvToHex(hue, 0.6, 1);
 
-    // Star tunnel — speed follows the focused chart's tempo.
+    // Camera: the backdrop periodically flies to a new shot. Reduced effects halve the moves; off keeps it at rest.
+    const camera = mixCamera(
+      REST_CAMERA,
+      cameraShot(seconds, SELECT_SHOTS, SHOT_HOLD_S, SHOT_MOVE_S),
+      this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1,
+    );
+    // Data dust pouring out of the vanishing point — speed follows the focused chart's tempo.
     const cx = this.designWidth * 0.58;
     const cy = this.designHeight * 0.44;
+    const dustVanish = vanishingPoint(camera, cx, cy, 200);
     const speed = (80 + beatsPerSecond * 55) * (1 + 16 * warp * warp);
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
     for (let index = 0; index < this.stars.length; index += 1) {
       const star = this.stars[index]!;
       const point = starfieldPoint(index, this.travel, { spread: 560, near: 10, far: 1000, speed: 1 });
-      const projected = projectPoint(point, cx, cy, 200);
+      const projected = projectPoint(viewPoint(point, camera), cx, cy, 200);
       star.visible = projected.visible;
       if (!projected.visible) continue;
       const nearness = Math.min(1, projected.scale);
-      const size = 2 + 16 * nearness * nearness;
+      const size = 1 + 3 * nearness * nearness;
       star.position.set(projected.x, projected.y);
-      // During the warp stars stretch into streaks pointing out of the vanishing point.
-      star.rotation = Math.atan2(projected.y - cy, projected.x - cx);
-      star.width = size * (1 + 9 * warp);
+      // During the warp motes stretch into streaks pointing out of the vanishing point.
+      star.rotation = Math.atan2(projected.y - dustVanish.y, projected.x - dustVanish.x);
+      star.width = size * (1 + 14 * warp);
       star.height = size;
-      star.alpha = 0.15 + 0.85 * nearness;
-      star.tint = hsvToHex(hue + (index % 6) * 0.05, 0.25 + 0.35 * (index % 3 === 0 ? 1 : 0), 1);
+      star.alpha = 0.2 + 0.8 * nearness;
+      star.tint = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.4 + 0.6 * nearness);
     }
 
-    // Wireframe icosahedron tumbling behind the info panel, breathing on the beat.
-    const radius = 150 * (1 + 0.04 * pulse);
-    const projected = ICOSAHEDRON.vertices.map((vertex) =>
-      projectPoint(
-        rotateX(
-          rotateY({ x: vertex.x * radius, y: vertex.y * radius, z: vertex.z * radius }, seconds * 0.22),
-          0.5 + seconds * 0.13,
-        ),
-        150,
-        250,
-        420,
-      ),
-    );
-    this.wireframe.clear();
-    for (const [a, b] of ICOSAHEDRON.edges) {
-      const pa = projected[a]!;
-      const pb = projected[b]!;
-      const depth = (pa.scale + pb.scale) / 2;
-      this.wireframe
-        .moveTo(pa.x, pa.y)
-        .lineTo(pb.x, pb.y)
-        .stroke({ color: accent, width: 4, alpha: 0.05 * depth });
-      this.wireframe
-        .moveTo(pa.x, pa.y)
-        .lineTo(pb.x, pb.y)
-        .stroke({ color: accent, width: 1, alpha: 0.2 + 0.25 * (depth - 0.8) });
+    const world = this.world;
+    world.clear();
+    const floorY = this.designHeight * 0.7;
+    const horizon = vanishingPoint(camera, cx, floorY, 200).y;
+    // Point-cloud pyramids on the horizon, far to near.
+    const view = { cx, cy: floorY, focal: 200, camera, orbit: WORLD_ORBIT };
+    for (const [pyramid, x, z, scale, yaw] of [
+      [PYRAMIDS[0]!, -120, 1700, 700, 0.3],
+      [PYRAMIDS[1]!, -760, 1100, 420, 0.7],
+      [PYRAMIDS[2]!, 620, 1250, 440, -0.4],
+    ] as const) {
+      drawPointCloud(world, pyramid, { scale, x, y: 150, z, yaw: yaw + seconds * 0.03 }, view, {
+        colorOf: (point) => emberColor(0.3 + 0.6 * point.weight),
+        alpha: 0.7 * (1 - warp),
+        size: 0.9,
+        seconds,
+        shimmer: 0.3,
+        referenceScale: 200 / (200 + z),
+      });
     }
-    for (const point of projected) {
-      this.wireframe.circle(point.x, point.y, 2 * point.scale).fill({ color: SYN_WHITE, alpha: 0.6 });
+    // Ember haze along the horizon.
+    for (let band = 0; band < 14; band += 1) {
+      const falloff = (1 - band / 14) ** 2;
+      const alpha = (0.05 + 0.04 * pulse) * falloff;
+      world.rect(0, horizon - (band + 1) * 7, this.designWidth, 7).fill({ color: SYN_EMBER, alpha });
+      world.rect(0, horizon + band * 4, this.designWidth, 4).fill({ color: SYN_EMBER, alpha: alpha * 0.8 });
     }
-
-    // Floor grid scrolling toward the viewer.
-    const horizon = this.designHeight * 0.7;
-    const project = (x: number, z: number) => projectPoint({ x, y: 150, z }, cx, horizon, 200);
-    this.floor.clear();
-    for (let x = -1400; x <= 1400; x += 100) {
-      const near = project(x, 0);
-      const far = project(x, 2600);
-      this.floor.moveTo(near.x, near.y).lineTo(far.x, far.y).stroke({ color: accent, width: 1, alpha: 0.12 });
-    }
+    world.rect(0, horizon - 1, this.designWidth, 2).fill({ color: SYN_AMBER, alpha: 0.35 + 0.25 * pulse });
+    // Floor of light points scrolling toward the viewer.
+    const project = (x: number, z: number) =>
+      projectPoint(viewPoint({ x, y: 150, z }, camera, WORLD_ORBIT), cx, floorY, 200);
     const spacing = 100;
     const offset = this.travel % spacing;
     for (let z = spacing - offset; z < 2600; z += spacing) {
-      const left = project(-1400, z);
-      const right = project(1400, z);
-      this.floor
-        .moveTo(left.x, left.y)
-        .lineTo(right.x, right.y)
-        .stroke({ color: accent, width: 1, alpha: (0.06 + 0.2 * (1 - z / 2600)) * (0.7 + 0.3 * pulse) });
-    }
-    this.floor.rect(0, horizon - 1, this.designWidth, 2).fill({ color: accent, alpha: 0.2 + 0.2 * pulse });
-
-    // Ring of light orbiting the focused card, plus a breathing glow under it.
-    const card = this.activeCard;
-    if (card) {
-      const perimeter = 2 * (card.w + card.h);
-      for (let index = 0; index < this.orbit.length; index += 1) {
-        const sprite = this.orbit[index]!;
-        const along = (((seconds * 140 + (index * perimeter) / this.orbit.length) % perimeter) + perimeter) % perimeter;
-        const point = pointOnRect(card, along);
-        sprite.position.set(point.x, point.y);
-        const size = 10 + 8 * pulse;
-        sprite.width = size;
-        sprite.height = size;
-        sprite.tint = hsvToHex(hue + index / this.orbit.length / 2, 0.55, 1);
-        sprite.alpha = 0.65;
+      const nearness = 1 - z / 2600;
+      const size = 0.6 + 1.5 * nearness * nearness;
+      const color = emberColor(0.3 + 0.65 * nearness);
+      const alpha = (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse);
+      for (let x = -1800; x <= 1800; x += 50) {
+        const point = project(x, z);
+        if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
+          continue;
+        }
+        world.rect(point.x - size / 2, point.y - size / 2, size, size).fill({ color, alpha });
       }
+    }
+    // A golden river of particles sweeping across the floor.
+    const riverOptions = { length: 1800, speed: 120 + beatsPerSecond * 60, amplitude: 36, width: 20, seed: 2 };
+    const riverWorld = (local: { x: number; y: number; z: number }) =>
+      viewPoint({ x: local.x, y: 110 + local.y, z: 620 + local.z + local.x * 0.5 }, camera, WORLD_ORBIT);
+    for (let index = 0; index < RIVER_PARTICLES; index += 1) {
+      const local = particleRiverPoint(index, this.travel / 90, riverOptions);
+      const head = projectPoint(riverWorld(local), cx, floorY, 200);
+      const tail = projectPoint(riverWorld({ ...local, x: local.x - 30 }), cx, floorY, 200);
+      if (!head.visible || !tail.visible) continue;
+      const heat = hash01(index * 3 + 7);
+      world
+        .moveTo(tail.x, tail.y)
+        .lineTo(head.x, head.y)
+        .stroke({
+          color: heat > 0.85 ? SYN_WHITE : emberColor(0.5 + 0.5 * heat),
+          width: 0.4 + 1 * Math.min(1, head.scale) * (0.5 + heat),
+          alpha: (0.25 + 0.55 * heat) * (1 - warp),
+        });
+    }
+    // Speed streaks — Rez's warp lines — thicken into a tunnel on launch.
+    const streakSpeed = (0.35 + beatsPerSecond * 0.12) * (1 + 6 * warp);
+    for (let index = 0; index < STREAK_COUNT; index += 1) {
+      const angle = hash01(index * 5 + 1) * Math.PI * 2;
+      const progress = (hash01(index * 5 + 2) + seconds * streakSpeed * (0.7 + 0.6 * hash01(index * 5 + 3))) % 1;
+      const inner = 30 + progress * progress * 560;
+      const outer = inner + (14 + 90 * progress) * (1 + 4 * warp);
+      const cos = Math.cos(angle);
+      const sin = Math.sin(angle) * 0.72;
+      world
+        .moveTo(dustVanish.x + cos * inner, dustVanish.y + sin * inner)
+        .lineTo(dustVanish.x + cos * outer, dustVanish.y + sin * outer)
+        .stroke({
+          color: index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4)),
+          width: 0.8 + progress * 1.6,
+          alpha: Math.sin(progress * Math.PI) * (0.35 + 0.4 * warp),
+        });
+    }
+    // The figure, drifting behind the list — it turns to face you and breathes on the beat.
+    const bob = Math.sin(seconds * 0.8) * 8;
+    drawPointCloud(
+      world,
+      FIGURE,
+      {
+        scale: 120 * (1 + 0.03 * pulse),
+        x: 90,
+        y: -40 + bob,
+        z: 260,
+        yaw: Math.sin(seconds * 0.3) * 0.8,
+        pitch: 0.1,
+      },
+      { cx, cy: floorY - 120, focal: 300, camera: { ...camera, x: camera.x * 0.3, y: camera.y * 0.3 }, orbit: 260 },
+      {
+        colorOf: (point, index) => (index % 17 === 0 ? SYN_CYAN : emberColor(0.45 + 0.55 * point.weight)),
+        alpha: 0.55 * (1 - warp),
+        size: 0.9,
+        seconds,
+        shimmer: 0.35,
+        referenceScale: 300 / 560,
+        bokeh: 2.5,
+      },
+    );
+
+    // Lock-on reticle snapping onto the focused card, plus a breathing glow under it.
+    const card = this.activeCard;
+    this.lock.clear();
+    if (card) {
+      const snap = easeOutCubic(stageProgress(nowMs - this.cursorChangedAt, 0, 220));
+      const grow = 18 * (1 - snap);
+      drawReticle(
+        this.lock,
+        card.x - 5 - grow,
+        card.y - 4 - grow * 0.5,
+        card.w + 10 + grow * 2,
+        card.h + 8 + grow,
+        SYN_FLARE,
+        0.5 + 0.5 * snap,
+        { arm: 9, width: 1.75 },
+      );
+      // Target marker leading the card.
+      const markerX = card.x - 16;
+      const markerY = card.y + card.h / 2;
+      this.lock.circle(markerX, markerY, 3 + 2 * pulse).stroke({ color: accent, width: 1.25, alpha: 0.9 });
+      this.lock.circle(markerX, markerY, 1.2).fill({ color: SYN_WHITE, alpha: 1 });
       this.cursorGlow.position.set(card.x + card.w / 2, card.y + card.h / 2);
       this.cursorGlow.width = card.w * 1.15;
       this.cursorGlow.height = card.h * 3.2;
       this.cursorGlow.tint = accent;
-      this.cursorGlow.alpha = 0.18 + 0.2 * pulse;
+      this.cursorGlow.alpha = 0.16 + 0.18 * pulse;
     }
   }
 
@@ -259,10 +363,9 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     this.designWidth = designWidth;
     this.designHeight = designHeight;
     const bands: ReadonlyArray<readonly [number, number]> = [
-      [SYN_DEEP, 0.25],
-      [0x080620, 0.45],
-      [0x05051a, 0.65],
-      [0x030410, 0.8],
+      [SYN_DEEP, 0.3],
+      [0x070201, 0.55],
+      [0x040100, 0.8],
       [SYN_VOID, 1],
     ];
     let top = 0;
@@ -270,14 +373,6 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       const bottom = designHeight * until;
       this.ground.rect(0, top, designWidth, bottom - top).fill(color);
       top = bottom;
-    }
-    for (const [x, y, radius, color] of [
-      [120, 440, 220, SYN_MAGENTA],
-      [560, 90, 200, SYN_CYAN],
-    ] as const) {
-      for (let ring = 4; ring >= 1; ring -= 1) {
-        this.ground.circle(x, y, (radius * ring) / 4).fill({ color, alpha: 0.03 });
-      }
     }
     const glow = synGlowTexture();
     const starLayer = new Container();
@@ -289,19 +384,13 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       starLayer.addChild(star);
       this.stars.push(star);
     }
-    this.backLayer.addChild(this.ground, this.floor, starLayer, this.wireframe);
+    this.world.blendMode = 'add';
+    this.backLayer.addChild(this.ground, this.world, starLayer);
 
     this.cursorGlow.texture = glow;
     this.cursorGlow.anchor.set(0.5);
     this.cursorGlow.blendMode = 'add';
-    this.frontLayer.addChild(this.cursorGlow);
-    for (let index = 0; index < ORBIT_COUNT; index += 1) {
-      const sprite = new Sprite(glow);
-      sprite.anchor.set(0.5);
-      sprite.blendMode = 'add';
-      this.frontLayer.addChild(sprite);
-      this.orbit.push(sprite);
-    }
+    this.frontLayer.addChild(this.cursorGlow, this.lock);
   }
 
   private renderChrome(frame: BeMusicSelectFrame): boolean {
@@ -346,7 +435,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     });
 
     // Info panel.
-    glassPanel(chrome, 14, 56, 290, 302, accent);
+    framePanel(chrome, 14, 56, 290, 302, accent);
     addText('NOW SELECTING', 30, 70, labelStyle(accent));
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
     addText(songTitle, 30 + slide * 24, 86, {
@@ -376,8 +465,9 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       [202, 86, 'LEVEL', playLevel, SYN_AMBER],
     ];
     for (const [x, w, label, value, fill] of stats) {
-      chrome.roundRect(x, 150, w, 50, 6).fill({ color: SYN_VOID, alpha: 0.5 });
-      chrome.roundRect(x, 150, w, 50, 6).stroke({ color: accent, width: 1, alpha: 0.25 });
+      chrome.rect(x, 150, w, 50).fill({ color: SYN_VOID, alpha: 0.5 });
+      chrome.rect(x, 150, w, 50).stroke({ color: accent, width: 1, alpha: 0.25 });
+      drawReticle(chrome, x, 150, w, 50, SYN_MIST, 0.6, { arm: 5, width: 1 });
       addText(label, x + 10, 158, labelStyle());
       addText(value, x + 10, 174, {
         size: 14,
@@ -388,13 +478,13 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       });
     }
 
-    // Level as a row of lights, cooling cyan → hot magenta.
+    // Level as a row of lights, from cool electric blue through magenta to hot ember.
     const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
     const dots = 12;
     for (let dot = 0; dot < dots; dot += 1) {
       const lit = dot < Math.round(levelRatio * dots);
       const x = 38 + dot * 22;
-      const color = hsvToHex(0.52 + (dot / dots) * 0.38, 0.6, 1);
+      const color = levelColor(dot / dots);
       if (lit) {
         chrome.circle(x, 226, 7).fill({ color, alpha: 0.18 });
         chrome.circle(x, 226, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
@@ -414,9 +504,9 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     addText(position, 288, 268, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
-    chrome.roundRect(26, 296, 170, 40, 20).fill({ color: accent, alpha: 0.18 });
-    chrome.roundRect(30, 300, 162, 32, 16).fill({ color: accent, alpha: 0.85 });
-    chrome.roundRect(30, 300, 162, 32, 16).stroke({ color: SYN_WHITE, width: 1, alpha: 0.8 });
+    chrome.rect(26, 296, 170, 40).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(30, 300, 162, 32).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, 26, 296, 170, 40, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
     addText('PLAY', 111, 316, {
       size: 14,
       fill: SYN_VOID,
@@ -425,7 +515,8 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    chrome.roundRect(204, 303, 86, 26, 13).stroke({ color: SYN_MIST, width: 1, alpha: 0.6 });
+    chrome.rect(204, 303, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
+    drawReticle(chrome, 204, 303, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
     addText('AUTO', 247, 316, {
       size: 9,
       fill: SYN_MIST,
@@ -438,7 +529,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     addHitArea(layer, 202, 300, 92, 32, 'pointer', frame.actions.autoPlay);
 
     // Search and library.
-    glassPanel(chrome, 14, 372, 290, 30, accent, 15);
+    framePanel(chrome, 14, 372, 290, 30, accent);
     addText('SEARCH', 30, 384, labelStyle(accent));
     addText(frame.searchQuery || 'Title / artist / genre', 100, 380, {
       size: 10,
@@ -490,16 +581,16 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     row.alpha = alpha;
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
     if (active) {
-      row.roundRect(rowX, y, rowW, rowHeight - 4, 12).fill({ color: accent, alpha: 0.22 });
-      row.roundRect(rowX, y, rowW, rowHeight - 4, 12).stroke({ color: SYN_WHITE, width: 1, alpha: 0.85 });
+      row.rect(rowX, y, rowW, rowHeight - 4).fill({ color: accent, alpha: 0.24 });
+      row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: SYN_FLARE, width: 1, alpha: 0.6 });
       this.activeCard = { x: rowX, y, w: rowW, h: rowHeight - 4 };
     } else {
-      row.roundRect(rowX, y, rowW, rowHeight - 4, 12).fill({ color: SYN_GLASS, alpha: 0.5 });
-      row.roundRect(rowX, y, rowW, rowHeight - 4, 12).stroke({ color: accent, width: 1, alpha: 0.18 });
+      row.rect(rowX, y, rowW, rowHeight - 4).fill({ color: SYN_GLASS, alpha: 0.55 });
+      row.rect(rowX, y, rowW, rowHeight - 4).stroke({ color: accent, width: 1, alpha: 0.16 });
     }
     // Level as a glowing orb on the leading edge.
     const level = song?.playLevel !== undefined ? String(song.playLevel) : folder ? 'DIR' : '-';
-    const orbColor = song ? hsvToHex(0.52 + Math.min(1, Number.parseFloat(level) / 12 || 0) * 0.38, 0.6, 1) : SYN_MIST;
+    const orbColor = song ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
     row.circle(rowX + 16, y + (rowHeight - 4) / 2, 9).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
     frame.layer.addChild(row);
     const midY = y + (rowHeight - 4) / 2;
@@ -542,10 +633,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   }
 }
 
-/** Point `distance` px along the perimeter of `rect`, clockwise from the top-left corner. */
-function pointOnRect(rect: { x: number; y: number; w: number; h: number }, distance: number): { x: number; y: number } {
-  if (distance < rect.w) return { x: rect.x + distance, y: rect.y };
-  if (distance < rect.w + rect.h) return { x: rect.x + rect.w, y: rect.y + distance - rect.w };
-  if (distance < rect.w * 2 + rect.h) return { x: rect.x + rect.w - (distance - rect.w - rect.h), y: rect.y + rect.h };
-  return { x: rect.x, y: rect.y + rect.h - (distance - rect.w * 2 - rect.h) };
+/** Level light for `ratio` (0..1): electric blue for easy charts through magenta to ember for the hardest. */
+function levelColor(ratio: number): number {
+  return hsvToHex(0.58 + Math.max(0, Math.min(1, ratio)) * 0.5, 0.72, 1);
 }
