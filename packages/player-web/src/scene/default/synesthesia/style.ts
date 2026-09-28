@@ -1,33 +1,37 @@
 import { Texture } from 'pixi.js';
 
 /**
- * Synesthesia skin tokens: a void-to-indigo space, neon cyan / magenta / amber light, and glass panels with glowing
- * rims. Type is wide and light — Michroma for Latin labels and numerals, M PLUS 1p Light for Japanese and titles.
+ * Synesthesia skin tokens, after Rez Infinite's Area X: a true-black void, a world built from ember / gold particles,
+ * electric blue and magenta as the only cool accents, and hairline frames with lock-on corners instead of glass.
+ * Type is wide and light — Michroma for Latin labels and numerals, M PLUS 1p Light for Japanese and titles.
  */
-export const SYN_VOID = 0x020309;
-export const SYN_DEEP = 0x0b0826;
-export const SYN_INDIGO = 0x1a1150;
-export const SYN_GLASS = 0x0a0d26;
-export const SYN_CYAN = 0x5ff4ff;
-export const SYN_MAGENTA = 0xff4fd8;
-export const SYN_AMBER = 0xffc76b;
-export const SYN_VIOLET = 0x8f74ff;
-export const SYN_GREEN = 0x6dffb0;
-export const SYN_RED = 0xff5a7a;
+export const SYN_VOID = 0x010000;
+export const SYN_DEEP = 0x0c0402;
+export const SYN_INDIGO = 0x1a0904;
+export const SYN_GLASS = 0x060302;
+/** Electric blue — the cool accent (black keys, below-clear gauge, FAST). */
+export const SYN_CYAN = 0x46c4ff;
+export const SYN_MAGENTA = 0xff3d9e;
+export const SYN_EMBER = 0xff6a14;
+export const SYN_AMBER = 0xffb23a;
+export const SYN_FLARE = 0xffe7b8;
+export const SYN_VIOLET = 0x9c7cff;
+export const SYN_GREEN = 0x7dffb4;
+export const SYN_RED = 0xff4a4a;
 export const SYN_WHITE = 0xffffff;
-export const SYN_MIST = 0xb9c6ff;
-export const SYN_DIM = 0x6c73a8;
+export const SYN_MIST = 0xf1dcc8;
+export const SYN_DIM = 0x9a7a66;
 
 export const SYN_DISPLAY_FONT = 'Michroma, Exo 2, M PLUS 1p, LINE Seed JP, sans-serif';
 export const SYN_TEXT_FONT = 'M PLUS 1p, LINE Seed JP, ui-sans-serif, system-ui, sans-serif';
 
 /**
- * Base hue of the whole scene at `seconds`: a slow drift through the cyan → violet → magenta band, nudged forward on
- * each beat so colour literally keeps time with the music.
+ * Base hue of the whole scene at `seconds`: a slow drift through the red-orange → amber band (Area X's ember light),
+ * nudged forward on each beat so colour literally keeps time with the music.
  */
 export function sceneHue(seconds: number, beatPhase = 0): number {
-  const drift = 0.5 + 0.12 * Math.sin(seconds * 0.11);
-  return drift + 0.03 * (1 - beatPhase) ** 2;
+  const drift = 0.075 + 0.025 * Math.sin(seconds * 0.11);
+  return drift + 0.015 * (1 - beatPhase) ** 2;
 }
 
 let glowTexture: Texture | undefined;
