@@ -11,9 +11,9 @@ export {
   resolveSideRelativeLaneIndex,
 } from '@be-music/player/core/lane-layout';
 
-/** Lanes on one side sit edge to edge; only the DP side gap separates the 1P and 2P banks. */
+/** Lanes sit edge to edge, and in double play the 2P bank butts straight onto the 1P bank. */
 const FALLBACK_LANE_GAP = 0;
-const FALLBACK_DP_SIDE_GAP = 14;
+const FALLBACK_DP_SIDE_GAP = 0;
 const FALLBACK_SCRATCH_LANE_WEIGHT = 1.55;
 
 export interface FallbackLaneLayoutRect {

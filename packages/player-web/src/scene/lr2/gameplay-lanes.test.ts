@@ -61,7 +61,7 @@ describe('resolveFallbackLaneLayout', () => {
     expect(lanes.at(-1)!.x + lanes.at(-1)!.w).toBeCloseTo(33 + 194);
   });
 
-  it('splits the 48 keyboard-mode lanes into 1P / 2P banks with a side gap', () => {
+  it('splits the 48 keyboard-mode lanes into edge-to-edge 1P / 2P banks', () => {
     const lanes = ['1', '2'].flatMap((side) => Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `${side}${lane}`));
     const rects = resolveFallbackLaneLayout({
       channels: lanes,
@@ -74,10 +74,10 @@ describe('resolveFallbackLaneLayout', () => {
     expect(rects).toHaveLength(48);
     expect(rects.filter((rect) => rect.side === '1P')).toHaveLength(24);
     expect(rects.filter((rect) => rect.side === '2P')).toHaveLength(24);
-    // The 2P bank starts strictly right of the 1P bank's trailing edge — the side gap.
+    // The 2P bank starts exactly on the 1P bank's trailing edge — no side gap.
     const lastOfP1 = rects[23]!;
     const firstOfP2 = rects[24]!;
-    expect(firstOfP2.x).toBeGreaterThan(lastOfP1.x + lastOfP1.w);
+    expect(firstOfP2.x).toBeCloseTo(lastOfP1.x + lastOfP1.w);
     // Per-side width is preserved, so a 48-lane chart extends the playfield instead of squashing each lane.
     const spRects = resolveFallbackLaneLayout({
       channels: lanes.slice(0, 24),
@@ -135,7 +135,7 @@ describe('resolveFallbackLaneLayout', () => {
     expect(twoScratch.x + twoScratch.w).toBeCloseTo(Math.max(...lanes.map((lane) => lane.x + lane.w)));
   });
 
-  it('inserts a visible gap between 1P and 2P fallback lanes', () => {
+  it('butts the 2P fallback lanes straight onto the 1P lanes by default', () => {
     const lanes = resolveFallbackLaneLayout({
       channels: ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'],
       playVariant: '14',
@@ -147,7 +147,7 @@ describe('resolveFallbackLaneLayout', () => {
     const oneRight = Math.max(...lanes.filter((lane) => lane.side === '1P').map((lane) => lane.x + lane.w));
     const twoLeft = Math.min(...lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x));
 
-    expect(twoLeft - oneRight).toBeCloseTo(14);
+    expect(twoLeft - oneRight).toBeCloseTo(0);
   });
 
   it('uses the requested DP side gap when provided', () => {
