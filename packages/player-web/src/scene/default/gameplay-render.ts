@@ -29,6 +29,7 @@ import {
   starburstPoints,
 } from './phantom-style.ts';
 import type { ChildPool } from '../pixi-utils.ts';
+import { audioDrive, bandLevel, type AudioDrive } from './audio-drive.ts';
 import { drawPhantomMoments } from './phantom/moments.ts';
 import { effectProfile, impulse, punchScale } from './moments.ts';
 import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions as TextOptions } from './hud-text.ts';
@@ -84,7 +85,9 @@ export function renderDefaultGameplayFrame(
   const hasBga = runtime.hasBga === true;
   const playfield = resolveFallbackPlayfieldLayout(runtime.laneChannels, runtime.laneCount, runtime.playVariant);
   frame.label = 'default-gameplay/chrome';
-  drawBackground(frame, hasBga);
+  // The poster moves with the music: halftone swells on the bass, the idle burst kicks on onsets, a spectrum strip.
+  const drive = audioDrive(runtime.audio, runtime.effects);
+  drawBackground(frame, hasBga, drive);
 
   const effects = effectProfile(runtime.effects);
   drawPlayfield(
@@ -95,11 +98,12 @@ export function renderDefaultGameplayFrame(
   );
   // A double-play field reaches into the monitor's column; the frame and its idle screen would sit on the 2P lanes.
   if (playfield.right + 24 <= BGA.x) {
-    drawBgaFrame(frame, layer, hasBga, runtime.nowMs, layerPool);
+    drawBgaFrame(frame, layer, hasBga, runtime.nowMs, drive, layerPool);
+    drawSpectrumStrip(frame, drive);
   }
   drawGauge(frame, layer, runtime, layerPool);
   drawSongPlate(frame, layer, runtime, layerPool);
-  drawScorePlate(frame, layer, runtime, layerPool);
+  drawScorePlate(frame, layer, runtime, drive, layerPool);
   const tallyX = resolveJudgeTallyX(playfield);
   if (tallyX !== undefined) {
     drawJudgeTally(frame, layer, runtime, tallyX, layerPool);
@@ -136,7 +140,7 @@ export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderD
  * hole over the BGA rect — the BGA layer renders BEHIND this chrome layer, so anything painted there would cover the
  * video. Every decoration is placed so it never crosses that rect.
  */
-function drawBackground(frame: Graphics, hasBga: boolean): void {
+function drawBackground(frame: Graphics, hasBga: boolean, drive: AudioDrive): void {
   fillRectAroundHole(frame, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, PHANTOM_BLACK, hasBga);
   // Faint diagonal pinstripes over the lower-left quadrant — gives the ink ground a printed texture.
   for (let stripe = 0; stripe < 9; stripe += 1) {
@@ -158,7 +162,7 @@ function drawBackground(frame: Graphics, hasBga: boolean): void {
     w: DESIGN_WIDTH - 300,
     h: DESIGN_HEIGHT - 340,
     pitch: 9,
-    maxRadius: 4.2,
+    maxRadius: 4.2 * (1 + 0.45 * drive.bass),
     direction: { x: 1, y: 1 },
   })) {
     if (isInsideFloorWedge(dot.x, dot.y)) {
@@ -331,6 +335,7 @@ function drawBgaFrame(
   layer: Container,
   hasBga: boolean,
   nowMs: number | undefined,
+  drive: AudioDrive,
   pool: ChildPool | undefined,
 ): void {
   const slant = 6;
@@ -356,17 +361,21 @@ function drawBgaFrame(
     w: BGA.w - 8,
     h: BGA.h - 8,
     pitch: 12,
-    maxRadius: 5,
+    maxRadius: 5 * (1 + 0.5 * drive.level),
     direction: { x: -0.6, y: 1 },
   })) {
     frame.circle(dot.x, dot.y, dot.r).fill({ color: PHANTOM_RED, alpha: 0.75 });
   }
   // Slow-turning starburst behind the slug — the idle screen is alive, not a hole in the cabinet.
-  const spin = nowMs !== undefined ? nowMs / 6000 : 0;
+  // It pumps on the bass and jolts a notch round on every onset.
+  const spin = (nowMs !== undefined ? nowMs / 6000 : 0) + 0.1 * drive.onset;
+  const pump = 1 + 0.2 * drive.bass + 0.1 * drive.onset;
   const cx = BGA.x + BGA.w / 2;
   const cy = BGA.y + BGA.h / 2;
-  frame.poly(starburstPoints(cx, cy, 92, 58, 14, spin, 0.18, 3)).fill({ color: PHANTOM_RED, alpha: 0.95 });
-  frame.poly(starburstPoints(cx, cy, 70, 46, 14, spin + 0.12, 0.2, 5)).fill(PHANTOM_INK);
+  frame
+    .poly(starburstPoints(cx, cy, 92 * pump, 58 * pump, 14, spin, 0.18, 3))
+    .fill({ color: PHANTOM_RED, alpha: 0.95 });
+  frame.poly(starburstPoints(cx, cy, 70 * pump, 46 * pump, 14, spin + 0.12, 0.2, 5)).fill(PHANTOM_INK);
   frame.poly(parallelogramPoints(cx - 70, cy - 15, 132, 30, 8)).fill(PHANTOM_WHITE);
   addText(
     layer,
@@ -376,6 +385,28 @@ function drawBgaFrame(
     { size: 22, fill: PHANTOM_INK, fontFamily: DISPLAY_FONT, anchorX: 0.5, anchorY: 0.5, skewX: TYPE_SKEW },
     pool,
   );
+}
+
+/**
+ * Spectrum strip under the monitor: 16 slanted red bars rising off an ink rule, white-capped, hot bands turning gold —
+ * the poster's equalizer. Silent (or effects off) leaves just the rule.
+ */
+function drawSpectrumStrip(frame: Graphics, drive: AudioDrive): void {
+  const baseY = 348;
+  const maxH = 22;
+  const count = 16;
+  const pitch = BGA.w / count;
+  frame.rect(BGA.x - 6, baseY, BGA.w + 12, 2).fill(PHANTOM_WHITE);
+  for (let bar = 0; bar < count; bar += 1) {
+    const value = bandLevel(drive.bands, bar, count);
+    const h = Math.round(maxH * value);
+    if (h < 2) continue;
+    const x = BGA.x + bar * pitch + 1;
+    const w = pitch - 5;
+    frame.poly(parallelogramPoints(x, baseY - h, w, h, 4)).fill(value > 0.82 ? PHANTOM_GOLD : PHANTOM_RED);
+    // A 3 px paper cap riding the bar's slanted top.
+    frame.poly(parallelogramPoints(x + 4 * (1 - 3 / h), baseY - h, w, 3, (4 * 3) / h)).fill(PHANTOM_WHITE);
+  }
 }
 
 /**
@@ -542,6 +573,7 @@ function drawScorePlate(
   frame: Graphics,
   layer: Container,
   runtime: FallbackGameplayRuntime,
+  drive: AudioDrive,
   pool: ChildPool | undefined,
 ): void {
   const { x, y, w, h } = SCORE_PANEL;
@@ -626,7 +658,9 @@ function drawScorePlate(
   // Anchored on the plate's lower-right corner and allowed to break out of the frame, so it never crowds COMBO / MAX.
   const badgeX = x + w - 10;
   const badgeY = y + h - 14;
-  const badge = starburstPoints(badgeX, badgeY, 27, 17, 12, -0.2, 0.22, rank.length);
+  // The badge pumps with the bass.
+  const pump = 1 + 0.16 * drive.bass;
+  const badge = starburstPoints(badgeX, badgeY, 27 * pump, 17 * pump, 12, -0.2, 0.22, rank.length);
   frame
     .poly(badge)
     .fill(topRank ? PHANTOM_GOLD : PHANTOM_RED)

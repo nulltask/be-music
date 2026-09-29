@@ -11,6 +11,8 @@ import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions }
 import { addStaggeredSkinText, drawNeedleField, drawPaperGrid, type Rect } from './draw.ts';
 import { scrambleText, scrambleTick, springEase, tileFlipPhase } from './field.ts';
 import { bounceHeight } from './physics.ts';
+import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
+import { audioDrive, bandLevel } from '../audio-drive.ts';
 import {
   LAT_ACCENT,
   LAT_DISPLAY_FONT,
@@ -69,6 +71,9 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
   private barY = 0;
   private focusedRow = 0;
   private clockText: Text | undefined;
+  private levelText: Text | undefined;
+  /** Recent onsets of the BGM / preview, each rippling out of the list. */
+  private onsets: number[] = [];
   private cursorText: Text | undefined;
 
   public constructor() {
@@ -97,8 +102,23 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
     return needsFrame;
   }
 
-  public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined): void {
+  public tick(
+    nowMs: number,
+    focusedSong: BrowserSongEntry | undefined,
+    _launchAt?: number,
+    audio?: BeMusicAudioFrame,
+  ): void {
     const rate = this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1;
+    // The BGM / chart preview: needles along the lower page stand up into an equalizer, onsets ripple out of the list,
+    // and the footer reads the level in dB.
+    const drive = audioDrive(audio, this.effects);
+    if (drive.onsetAtMs !== undefined && this.onsets[this.onsets.length - 1] !== drive.onsetAtMs) {
+      this.onsets.push(drive.onsetAtMs);
+      if (this.onsets.length > 4) this.onsets.shift();
+    }
+    if (this.levelText) {
+      this.levelText.text = `dB ${drive.db <= -95 ? '-inf' : drive.db.toFixed(1).padStart(5, ' ')}`;
+    }
     const bpm = focusedSong?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const seconds = (nowMs / 1000) * rate;
@@ -121,9 +141,22 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
         beatPhase: (seconds * beatsPerSecond) % 1,
         flow: 0.3 * rate,
         beatWave: 0.4 * rate,
-        ripples: target && rate > 0 ? [{ x: target.x, y: target.y, ageMs: cursorAge, strength: 0.8 }] : [],
+        ripples:
+          rate > 0
+            ? [
+                ...(target ? [{ x: target.x, y: target.y, ageMs: cursorAge, strength: 0.8 }] : []),
+                ...this.onsets.map((atMs) => ({ x: 470, y: 250, ageMs: nowMs - atMs, strength: 0.7 * rate })),
+              ]
+            : [],
         attractor: target ? { x: target.x, y: target.y, strength: 0.55 } : undefined,
-        tremble: 0.06 * rate,
+        tremble: 0.06 * rate + 0.08 * drive.high,
+        spectrum: {
+          levels: Array.from({ length: 32 }, (_, column) => bandLevel(drive.bands, column, 32)),
+          left: 0,
+          right: this.designWidth,
+          top: this.designHeight - 190,
+          bottom: this.designHeight - 8,
+        },
       },
       {
         alpha: 0.5,
@@ -150,6 +183,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
     // Readouts in the footer, updated in `tick` so they run every frame without rebuilding the page.
     this.cursorText = addSkinText(this.frontLayer, '', 330, designHeight - 20, mono(LAT_GRAPHITE));
     this.clockText = addSkinText(this.frontLayer, '', 470, designHeight - 20, mono(LAT_GRAPHITE));
+    this.levelText = addSkinText(this.frontLayer, '', 226, designHeight - 20, mono(LAT_GRAPHITE));
   }
 
   private renderChrome(frame: BeMusicSelectFrame): boolean {

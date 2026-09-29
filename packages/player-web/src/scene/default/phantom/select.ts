@@ -29,6 +29,8 @@ import {
   tornEdgePoints,
 } from '../phantom-style.ts';
 import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions } from '../skin-text.ts';
+import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
+import { audioDrive, bandLevel } from '../audio-drive.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 54, listBottomInset: 26, rowHeight: 28 };
@@ -71,6 +73,10 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
   private dots: Graphics | undefined;
   private burst: Graphics | undefined;
   private streaks: Graphics[] = [];
+  private streakAlpha: number[] = [];
+  /** Equalizer bars rising off the bottom edge behind the list, redrawn from the BGM / preview spectrum. */
+  private readonly spectrum = new Graphics();
+  private designHeight = 480;
   private activeRowY: number | undefined;
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
   private designWidth = 640;
@@ -213,19 +219,27 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     }
   }
 
-  public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined): void {
+  public tick(
+    nowMs: number,
+    focusedSong: BrowserSongEntry | undefined,
+    _launchAt?: number,
+    audio?: BeMusicAudioFrame,
+  ): void {
     // Ambient motion: frozen with effects off, half speed when reduced.
     const seconds = this.effects === 'off' ? 0 : (nowMs / 1000) * (this.effects === 'reduced' ? 0.5 : 1);
+    // The BGM / chart preview drives the poster: burst and halftone pump with it, streaks flare, an equalizer rises.
+    const drive = audioDrive(audio, this.effects);
     if (this.dots) {
       this.dots.y = (seconds * 14) % DOT_PERIOD;
+      this.dots.alpha = Math.min(1, 0.75 + 0.6 * drive.level);
     }
     // Beat clock from the focused chart's BPM, so the whole screen previews the song's tempo.
     const bpm = focusedSong?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const beatPulse = (1 - ((seconds * beatsPerSecond) % 1)) ** 3;
     if (this.burst) {
-      this.burst.rotation = seconds * 0.12;
-      this.burst.scale.set(1 + 0.06 * beatPulse);
+      this.burst.rotation = seconds * 0.12 + 0.12 * drive.onset;
+      this.burst.scale.set(1 + 0.06 * beatPulse + 0.24 * drive.bass + 0.1 * drive.onset);
     }
     this.kicker.x = -((seconds * 36) % KICKER_PITCH);
     const card = this.activeCard;
@@ -242,11 +256,38 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       const span = this.designWidth + 260;
       streak.x = ((seconds * speed + hash01(index + 31) * span) % span) - 200;
       streak.y = 60 + hash01(index + 41) * 380;
+      streak.alpha = Math.min(1, (this.streakAlpha[index] ?? 0.2) * (1 + 2.2 * drive.high + 1.5 * drive.onset));
     }
+    this.drawSpectrum(drive.bands);
     if (this.activeRowY !== undefined) {
       // Pointer kicks toward the card on every beat.
-      this.pointer.position.set(LAYOUT.listX - 12 + 5 * beatPulse, this.activeRowY);
-      this.pointer.scale.set(1 + 0.18 * beatPulse);
+      const kick = Math.max(beatPulse, drive.onset);
+      this.pointer.position.set(LAYOUT.listX - 12 + 5 * kick, this.activeRowY);
+      this.pointer.scale.set(1 + 0.18 * kick);
+    }
+  }
+
+  /** 24 slanted red bars along the bottom edge under the list, capped in white; hot bands go gold. */
+  private drawSpectrum(bands: readonly number[]): void {
+    const g = this.spectrum;
+    g.clear();
+    const count = 24;
+    const left = LAYOUT.listX;
+    const pitch = (this.designWidth - 10 - left) / count;
+    const base = this.designHeight;
+    for (let bar = 0; bar < count; bar += 1) {
+      const value = bandLevel(bands, bar, count);
+      const h = Math.round(70 * value);
+      if (h < 3) continue;
+      const x = left + bar * pitch;
+      g.poly(parallelogramPoints(x, base - h, pitch - 4, h, 6)).fill({
+        color: value > 0.85 ? PHANTOM_GOLD : PHANTOM_RED,
+        alpha: 0.55,
+      });
+      g.poly(parallelogramPoints(x + 6 * (1 - 3 / h), base - h, pitch - 4, 3, (6 * 3) / h)).fill({
+        color: PHANTOM_WHITE,
+        alpha: 0.8,
+      });
     }
   }
 
@@ -263,6 +304,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     if (this.built) return;
     this.built = true;
     this.designWidth = designWidth;
+    this.designHeight = designHeight;
     const ground = new Graphics();
     ground.rect(0, 0, designWidth, designHeight).fill(PHANTOM_BLACK);
     ground.poly(slabPoints(designHeight)).fill(PHANTOM_RED);
@@ -299,10 +341,11 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       streak.alpha = 0.12 + hash01(index + 5) * 0.2;
       streakLayer.addChild(streak);
       this.streaks.push(streak);
+      this.streakAlpha.push(streak.alpha);
     }
     this.dots = dots;
     this.burst = burst;
-    this.backLayer.addChild(ground, burst, burstMask, dots, slabMask, edge, streakLayer);
+    this.backLayer.addChild(ground, burst, burstMask, dots, slabMask, edge, this.spectrum, streakLayer);
 
     // Header kicker, one tooth wider than the canvas so scrolling by a tooth pitch loops seamlessly.
     const teeth: number[] = [-KICKER_PITCH, 38];

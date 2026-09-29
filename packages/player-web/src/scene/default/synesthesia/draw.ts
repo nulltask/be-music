@@ -1,5 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import { hash01 } from '../phantom-style.ts';
+import type { AudioDrive } from '../audio-drive.ts';
+import { bandLevel } from '../audio-drive.ts';
 import type { Flock } from './boids.ts';
 import {
   emberColor,
@@ -209,5 +211,47 @@ export function drawSchool(
     graphics
       .rect(head.x - size / 2, head.y - size / 2, size, size)
       .fill({ color: heat > 0.8 ? SYN_WHITE : color, alpha: Math.min(1, alpha * 1.3) });
+  }
+}
+
+const HALO_RAYS = 48;
+
+/**
+ * Spectrum halo: {@link HALO_RAYS} light rays radiating from a ring of `radius` around `(cx, cy)`, each as long as its
+ * band (up to `reach`), mirrored left / right so the low end sits at the top and bottom. The ring itself breathes on
+ * the bass. Draws nothing in silence beyond a faint ring. `skip` drops rays (e.g. outside a monitor).
+ */
+export function drawSpectrumHalo(
+  graphics: Graphics,
+  cx: number,
+  cy: number,
+  radius: number,
+  reach: number,
+  drive: AudioDrive,
+  skip?: (x: number, y: number) => boolean,
+): void {
+  const ring = radius * (1 + 0.12 * drive.bass);
+  graphics.circle(cx, cy, ring).stroke({ color: emberColor(0.7), width: 1, alpha: 0.18 + 0.4 * drive.level });
+  const half = HALO_RAYS / 2;
+  for (let ray = 0; ray < HALO_RAYS; ray += 1) {
+    const column = ray < half ? ray : HALO_RAYS - 1 - ray;
+    const value = bandLevel(drive.bands, column, half);
+    if (value < 0.04) continue;
+    const angle = -Math.PI / 2 + (ray / HALO_RAYS) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const x0 = cx + cos * (ring + 2);
+    const y0 = cy + sin * (ring + 2);
+    const x1 = cx + cos * (ring + 2 + reach * value);
+    const y1 = cy + sin * (ring + 2 + reach * value);
+    if (skip && (skip(x0, y0) || skip(x1, y1))) continue;
+    graphics
+      .moveTo(x0, y0)
+      .lineTo(x1, y1)
+      .stroke({
+        color: ray % 8 === 0 ? SYN_CYAN : emberColor(0.45 + 0.55 * value),
+        width: 1.6,
+        alpha: 0.35 + 0.6 * value,
+      });
   }
 }

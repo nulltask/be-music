@@ -54,6 +54,25 @@ describe('needleAngle', () => {
     }
   });
 
+  it('stands needles upright inside a spectrum bar and leaves the rest alone', () => {
+    const spectrum = { levels: [1, 0], left: 0, right: 200, top: 0, bottom: 100 };
+    // Left column is full: every needle in it stands.
+    expect(lineDelta(needleAngle(50, 10, { ...calm, spectrum }), Math.PI / 2)).toBeCloseTo(0, 9);
+    // Right column is silent.
+    expect(needleAngle(150, 90, { ...calm, spectrum })).toBeCloseTo(Math.PI / 4, 12);
+    // Outside the spectrum rect nothing changes.
+    expect(needleAngle(250, 50, { ...calm, spectrum })).toBeCloseTo(Math.PI / 4, 12);
+  });
+
+  it('raises a half-height bar with a feathered top', () => {
+    const spectrum = { levels: [0.5], left: 0, right: 100, top: 0, bottom: 100 };
+    expect(lineDelta(needleAngle(50, 90, { ...calm, spectrum }), Math.PI / 2)).toBeCloseTo(0, 9);
+    expect(needleAngle(50, 20, { ...calm, spectrum })).toBeCloseTo(Math.PI / 4, 12);
+    const edge = needleAngle(50, 44, { ...calm, spectrum });
+    expect(lineDelta(edge, Math.PI / 4)).toBeGreaterThan(0);
+    expect(lineDelta(edge, Math.PI / 2)).toBeGreaterThan(0);
+  });
+
   it('is deterministic under jitter', () => {
     const input = { ...calm, seconds: 1.23, jitter: 1 };
     expect(needleAngle(40, 60, input)).toBe(needleAngle(40, 60, input));

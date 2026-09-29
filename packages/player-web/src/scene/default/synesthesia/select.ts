@@ -9,8 +9,10 @@ import type {
 import { easeOutCubic, stageProgress } from '../phantom-style.ts';
 import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions } from '../skin-text.ts';
 import { hash01 } from '../phantom-style.ts';
+import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
+import { audioDrive } from '../audio-drive.ts';
 import { createFlock, stepFlock } from './boids.ts';
-import { drawPointCloud, drawReticle, drawSchool } from './draw.ts';
+import { drawPointCloud, drawReticle, drawSchool, drawSpectrumHalo } from './draw.ts';
 import {
   emberColor,
   hsvToHex,
@@ -171,9 +173,17 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     });
   }
 
-  public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number): void {
+  public tick(
+    nowMs: number,
+    focusedSong: BrowserSongEntry | undefined,
+    launchAt?: number,
+    audio?: BeMusicAudioFrame,
+  ): void {
     // Ambient motion: frozen with effects off, half speed when reduced.
     const rate = this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1;
+    // The BGM / chart preview drives the space: dust speeds with loudness, the horizon and floor swell on the bass,
+    // the schools pulse, and a spectrum halo rays out of the figure.
+    const drive = audioDrive(audio, this.effects);
     const seconds = (nowMs / 1000) * rate;
     const dt = this.lastTickMs === undefined ? 0 : Math.min(0.1, (nowMs - this.lastTickMs) / 1000);
     this.lastTickMs = nowMs;
@@ -196,7 +206,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     const cx = this.designWidth * 0.58;
     const cy = this.designHeight * 0.44;
     const dustVanish = vanishingPoint(camera, cx, cy, 200);
-    const speed = (80 + beatsPerSecond * 55) * (1 + 16 * warp * warp);
+    const speed = (80 + beatsPerSecond * 55) * (1 + 16 * warp * warp) * (1 + 1.2 * drive.level);
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
     for (let index = 0; index < this.stars.length; index += 1) {
       const star = this.stars[index]!;
@@ -238,7 +248,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     // Ember haze along the horizon.
     for (let band = 0; band < 14; band += 1) {
       const falloff = (1 - band / 14) ** 2;
-      const alpha = (0.05 + 0.04 * pulse) * falloff;
+      const alpha = (0.05 + 0.04 * pulse) * falloff * (1 + 1.4 * drive.bass);
       world.rect(0, horizon - (band + 1) * 7, this.designWidth, 7).fill({ color: SYN_EMBER, alpha });
       world.rect(0, horizon + band * 4, this.designWidth, 4).fill({ color: SYN_EMBER, alpha: alpha * 0.8 });
     }
@@ -252,7 +262,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       const nearness = 1 - z / 2600;
       const size = 0.6 + 1.5 * nearness * nearness;
       const color = emberColor(0.3 + 0.65 * nearness);
-      const alpha = (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse);
+      const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * (1 + drive.bass));
       for (let x = -1800; x <= 1800; x += 50) {
         const point = project(x, z);
         if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
@@ -262,7 +272,13 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       }
     }
     // A golden river of particles sweeping across the floor.
-    const riverOptions = { length: 1800, speed: 120 + beatsPerSecond * 60, amplitude: 36, width: 20, seed: 2 };
+    const riverOptions = {
+      length: 1800,
+      speed: 120 + beatsPerSecond * 60,
+      amplitude: 36 * (1 + 1.3 * drive.mid),
+      width: 20,
+      seed: 2,
+    };
     const riverWorld = (local: { x: number; y: number; z: number }) =>
       viewPoint({ x: local.x, y: 110 + local.y, z: 620 + local.z + local.x * 0.5 }, camera, WORLD_ORBIT);
     for (let index = 0; index < RIVER_PARTICLES; index += 1) {
@@ -300,10 +316,14 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     }
     // Schools of light fish sweeping through the pyramids: tight on the beat, scattering when the cursor moves.
     if (rate > 0) {
-      const scatter = Math.max(0, 1 - (nowMs - this.cursorChangedAt) / 600) ** 2 + warp;
+      const scatter = Math.max(Math.max(0, 1 - (nowMs - this.cursorChangedAt) / 600) ** 2, 0.8 * drive.onset) + warp;
       const shown = this.effects === 'reduced' ? 1 : this.flocks.length;
       for (let school = 0; school < shown; school += 1) {
-        stepFlock(this.flocks[school]!, dt * rate, { seconds: seconds + school * 41.7, gather: pulse * 0.6, scatter });
+        stepFlock(this.flocks[school]!, dt * rate, {
+          seconds: seconds + school * 41.7,
+          gather: Math.max(pulse * 0.6, drive.bass),
+          scatter,
+        });
         drawSchool(
           world,
           this.flocks[school]!,
@@ -318,7 +338,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       world,
       FIGURE,
       {
-        scale: 120 * (1 + 0.03 * pulse),
+        scale: 120 * (1 + 0.03 * pulse + 0.05 * drive.bass),
         x: 90,
         y: -40 + bob,
         z: 260,
@@ -336,6 +356,16 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         bokeh: 2.5,
       },
     );
+
+    // Spectrum halo around the figure's chest.
+    const figureCamera = { ...camera, x: camera.x * 0.3, y: camera.y * 0.3 };
+    const chest = projectPoint(
+      viewPoint({ x: 90, y: -40 + bob - 0.5 * 120, z: 260 }, figureCamera, 260),
+      cx,
+      floorY - 120,
+      300,
+    );
+    if (chest.visible && warp < 1) drawSpectrumHalo(world, chest.x, chest.y, 30, 40, drive);
 
     // Lock-on reticle snapping onto the focused card, plus a breathing glow under it.
     const card = this.activeCard;

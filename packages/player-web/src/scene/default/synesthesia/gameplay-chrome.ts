@@ -7,8 +7,9 @@ import { addHudNumber, addHudText, type HudTextOptions } from '../hud-text.ts';
 import { comboTier, effectProfile, impulse, punchScale } from '../moments.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { hash01 } from '../phantom-style.ts';
+import { audioDrive, type AudioDrive } from '../audio-drive.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
-import { drawFrame, drawPointCloud, drawReticle, drawSchool } from './draw.ts';
+import { drawFrame, drawPointCloud, drawReticle, drawSchool, drawSpectrumHalo } from './draw.ts';
 import {
   emberColor,
   hsvToHex,
@@ -120,22 +121,25 @@ export function renderSynesthesiaChrome({
   // reframing floor, rivers, schools and warp. Reduced effects halve the moves; effects off keep the camera at rest.
   const camera = mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount);
   const horizon = vanishingPoint(camera, 320, FLOOR.horizon, FLOOR.focal).y;
-  drawGround(space, pulse, hasBga, tier, hit, hitColor, horizon);
+  // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, onsets fire
+  // warp streaks, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
+  const drive = audioDrive(runtime.audio, runtime.effects);
+  drawGround(space, pulse, hasBga, tier, hit, hitColor, horizon, drive);
 
   const light = layerPool.acquireGraphics();
   light.label = 'synesthesia-gameplay/light';
   light.blendMode = 'add';
-  drawDust(light, seconds, pulse, hasBga, tier, hit, camera);
-  drawFloor(light, seconds, pulse, tier, beatPhase, hit, camera);
+  drawDust(light, seconds, pulse, hasBga, tier, hit, camera, drive);
+  drawFloor(light, seconds, pulse, tier, beatPhase, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
-    drawRiver(light, seconds, river, hasBga, tier, camera);
+    drawRiver(light, seconds, river, hasBga, tier, camera, drive);
   }
   if (effects.enabled) {
     // Schools of light fish swimming through the space: tighter on the beat, scattering on every key press.
     const schools = advanceSchools(layer, runtime.nowMs ?? 0, effects.screenWide ? SCHOOL_SIZE : SCHOOL_SIZE / 2, {
-      gather: pulse * 0.6,
-      scatter: impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount,
+      gather: Math.max(pulse * 0.6, drive.bass),
+      scatter: Math.max(impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount, 0.8 * drive.onset),
     });
     const shown = effects.screenWide ? schools.length : 1;
     for (let school = 0; school < shown; school += 1) {
@@ -162,7 +166,7 @@ export function renderSynesthesiaChrome({
     const standby = layerPool.acquireGraphics();
     standby.label = 'synesthesia-gameplay/standby';
     standby.blendMode = 'add';
-    drawBgaFrame(panels, standby, layer, hasBga, seconds, pulse, hue, camera, layerPool);
+    drawBgaFrame(panels, standby, layer, hasBga, seconds, pulse, hue, camera, drive, layerPool);
   }
   drawGauge(panels, layer, runtime, accent, layerPool);
   drawSongPlate(panels, layer, runtime, accent, layerPool);
@@ -217,6 +221,7 @@ function drawGround(
   hit: number,
   hitColor: number,
   horizon: number,
+  drive: AudioDrive,
 ): void {
   const bands: ReadonlyArray<readonly [number, number]> = [
     [0x090302, 140],
@@ -232,7 +237,7 @@ function drawGround(
   if (hit > 0) {
     fillAroundBga(graphics, 0, 0, DESIGN_WIDTH, horizon, hitColor, hasBga, 0.06 * hit);
   }
-  const haze = (0.05 + 0.04 * pulse) * (1 + 0.35 * tier);
+  const haze = (0.05 + 0.04 * pulse) * (1 + 0.35 * tier) * (1 + 1.4 * drive.bass);
   for (let band = 0; band < 12; band += 1) {
     const falloff = (1 - band / 12) ** 2;
     const h = 6;
@@ -254,9 +259,10 @@ function drawDust(
   tier: number,
   hit: number,
   camera: CameraPose,
+  drive: AudioDrive,
 ): void {
   const count = 220 + 50 * tier;
-  const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit);
+  const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level);
   for (let index = 0; index < count; index += 1) {
     const point = starfieldPoint(index, seconds, { spread: 520, near: 20, far: 900, speed });
     const projected = projectPoint(viewPoint(point, camera), VANISH.x, VANISH.y, 180);
@@ -278,7 +284,7 @@ function drawDust(
       .fill({ color, alpha: 0.3 + 0.6 * nearness });
   }
   const vanish = vanishingPoint(camera, VANISH.x, VANISH.y, 180);
-  const streaks = Math.round(8 + 12 * tier + 14 * hit);
+  const streaks = Math.round(8 + 12 * tier + 14 * hit + 18 * drive.onset);
   const streakSpeed = (0.45 + 0.3 * tier) * (1 + 1.5 * hit);
   for (let index = 0; index < streaks; index += 1) {
     const angle = hash01(index * 5 + 1) * Math.PI * 2;
@@ -313,9 +319,10 @@ function drawFloor(
   beatPhase: number,
   hit: number,
   camera: CameraPose,
+  drive: AudioDrive,
 ): void {
   const { horizon, height, focal } = FLOOR;
-  const glow = 1 + 0.3 * tier + 0.8 * hit;
+  const glow = 1 + 0.3 * tier + 0.8 * hit + 1.2 * drive.bass;
   const project = (x: number, z: number) => projectPoint(viewPoint({ x, y: height, z }, camera), 320, horizon, focal);
   const vanish = vanishingPoint(camera, 320, horizon, focal);
   for (let x = -1500; x <= 1500; x += 100) {
@@ -362,8 +369,15 @@ function drawRiver(
   hasBga: boolean,
   tier: number,
   camera: CameraPose,
+  drive: AudioDrive,
 ): void {
-  const options = { length: 1500, speed: 260 + 60 * tier, amplitude: 28, width: 16, seed: river + 1 };
+  const options = {
+    length: 1500,
+    speed: 260 + 60 * tier,
+    amplitude: 28 * (1 + 1.4 * drive.mid),
+    width: 16,
+    seed: river + 1,
+  };
   const baseY = [118, 70, 134][river] ?? 118;
   const baseZ = [520, 900, 300][river] ?? 520;
   const slope = [0.55, -0.4, 0.3][river] ?? 0.5;
@@ -449,6 +463,7 @@ function drawBgaFrame(
   pulse: number,
   hue: number,
   camera: CameraPose,
+  drive: AudioDrive,
   pool: ChildPool,
 ): void {
   const color = hsvToHex(hue, 0.6, 1);
@@ -533,7 +548,7 @@ function drawBgaFrame(
   }
   // The figure: drifting, slowly turning, breathing on the beat, a hot core at the chest.
   const bob = Math.sin(seconds * 0.9) * 6;
-  const figureScale = 104 * (1 + 0.03 * pulse);
+  const figureScale = 104 * (1 + 0.03 * pulse + 0.05 * drive.bass);
   drawPointCloud(
     light,
     FIGURE,
@@ -559,6 +574,8 @@ function drawBgaFrame(
   for (let ring = 4; ring >= 1; ring -= 1) {
     light.circle(core.x, core.y, ring * 5 * (1 + 0.3 * pulse)).fill({ color: SYN_AMBER, alpha: 0.06 + 0.02 * pulse });
   }
+  // A halo of spectrum rays around the figure's core, mirrored left / right.
+  drawSpectrumHalo(light, core.x, core.y, 40, 34, drive, (px, py) => inside(px, py));
   // Lock-on reticle on the figure.
   const lock = 34 + 6 * pulse;
   drawReticle(light, core.x - lock, core.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.55, { arm: 8, cross: true });

@@ -20,6 +20,7 @@ import {
 } from './space.ts';
 import { drawReticle } from './draw.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
+import { audioDrive } from '../audio-drive.ts';
 import { comboTier, effectProfile } from '../moments.ts';
 
 /** Per-lane-class light: note body, glow hue (0..1), and the colour the lane beam / key cap light up in. */
@@ -47,11 +48,14 @@ export function renderSynesthesiaLanes({
   nowMs,
   combo,
   effects,
+  audio,
 }: BeMusicLanesContext): void {
   const pulse = (1 - beatPhase) ** 2;
+  const drive = audioDrive(audio, effects);
   // The judgement line burns brighter as the run builds, and cycles the spectrum once it is in the zone.
   const tier = effectProfile(effects).enabled ? comboTier(combo ?? 0) : 0;
-  const heat = 1 + 0.3 * tier;
+  // ...and swells on every bass hit of the mix.
+  const heat = 1 + 0.3 * tier + 0.9 * drive.bass;
   const lineColor = tier >= 3 ? emberColor(0.55 + 0.35 * Math.sin(nowMs / 700)) : 0xff8a2a;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;

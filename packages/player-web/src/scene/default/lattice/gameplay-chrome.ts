@@ -18,6 +18,7 @@ import {
 import { scrambleText, scrambleTick, springEase, tileFlipPhase, type NeedleFieldInput } from './field.ts';
 import { drawLatticeMoments, FULL_COMBO_MS, MILESTONE_MS } from './moments.ts';
 import { createChain, kickChain, stepChain, type Chain } from './physics.ts';
+import { audioDrive, bandLevel, type AudioDrive } from '../audio-drive.ts';
 import {
   LAT_ACCENT,
   LAT_GRAPHITE,
@@ -67,6 +68,9 @@ export function renderLatticeChrome({
   const playfieldRight = resolvePlayfieldRight(runtime);
   const effects = effectProfile(runtime.effects);
   const tier = effects.enabled ? Math.min(comboTier(runtime.combo ?? 0), effects.screenWide ? 4 : 2) : 0;
+  // The paper listens: needles flow harder with loudness and ripple out of the monitor on every onset, the pendulums
+  // are struck by transients, the idle monitor becomes a tile equalizer, and the tally carries a live spectrum + dB.
+  const drive = audioDrive(runtime.audio, runtime.effects);
   const moments = trackMoments(layer, {
     nowMs,
     combo: runtime.combo ?? 0,
@@ -96,14 +100,14 @@ export function renderLatticeChrome({
     { x: GROOVE.x - 18, y: GROOVE.y - 30, w: GROOVE.w + 36, h: 58 },
     { x: SONG_PLATE.x - 4, y: SONG_PLATE.y - 6, w: SONG_PLATE.w + 8, h: SONG_PLATE.h + 12 },
     { x: SCORE_PANEL.x - 8, y: SCORE_PANEL.y - 6, w: SCORE_PANEL.w + 16, h: SCORE_PANEL.h + 14 },
-    { x: BGA.x + BGA.w + 8, y: BGA.y - 12, w: DESIGN_WIDTH, h: 232 },
+    { x: BGA.x + BGA.w + 8, y: BGA.y - 12, w: DESIGN_WIDTH, h: 252 },
   ];
   const pendulums = playfieldRight + 40 <= BGA.x;
   if (pendulums) clean.push({ x: playfieldRight + 6, y: HEADER_H, w: BGA.x - playfieldRight - 18, h: 290 });
   drawNeedleField(
     field,
     { x: 0, y: HEADER_H, w: DESIGN_WIDTH, h: DESIGN_HEIGHT - HEADER_H },
-    resolveFieldInput(layer, runtime, moments, tier, effects.amount, playfieldRight),
+    resolveFieldInput(layer, runtime, moments, tier, effects.amount, playfieldRight, drive),
     {
       alpha: 0.55,
       skip: (x, y) => clean.some((rect) => inside(rect, x, y, 0)),
@@ -115,17 +119,17 @@ export function renderLatticeChrome({
   panels.blendMode = 'normal';
   drawPlayfieldFrame(panels, playfieldRight, runtime.progressRatio);
   if (pendulums) {
-    drawPendulums(panels, layer, runtime, (playfieldRight + BGA.x - 5) / 2, effects.amount, layerPool);
+    drawPendulums(panels, layer, runtime, (playfieldRight + BGA.x - 5) / 2, effects.amount, drive, layerPool);
   }
   if (playfieldRight + 14 <= BGA.x) {
-    drawBgaFrame(panels, layer, hasBga, seconds, beatPhase, effects.amount, layerPool);
+    drawBgaFrame(panels, layer, hasBga, seconds, beatPhase, effects.amount, drive, layerPool);
   }
   drawGauge(panels, layer, runtime, moments, layerPool);
   drawSongPlate(panels, layer, runtime, layerPool);
   drawScorePanel(panels, layer, runtime, layerPool);
   const tallyX = BGA.x + BGA.w + 14;
   if (playfieldRight + 14 <= tallyX) {
-    drawJudgeTally(panels, layer, runtime, tallyX, layerPool);
+    drawJudgeTally(panels, layer, runtime, tallyX, drive, layerPool);
   }
 
   const front = overlayLayerPool.acquireGraphics();
@@ -142,6 +146,7 @@ export function renderLatticeChrome({
 }
 
 const IMPULSE_HISTORY = new WeakMap<object, number[]>();
+const ONSET_HISTORY = new WeakMap<object, number[]>();
 
 interface PendulumState {
   chains: Chain[];
@@ -149,6 +154,7 @@ interface PendulumState {
   lastImpulseAt: number | undefined;
   lastBeat: number;
   beats: number;
+  lastOnsetAt: number | undefined;
 }
 const PENDULUMS = new WeakMap<object, PendulumState>();
 /** Two fine bead chains of different lengths (so they drift out of phase), hanging from the header rule. */
@@ -168,6 +174,7 @@ function drawPendulums(
   runtime: Runtime,
   centerX: number,
   amount: number,
+  drive: AudioDrive,
   pool: ChildPool,
 ): void {
   const nowMs = runtime.nowMs ?? 0;
@@ -180,6 +187,7 @@ function drawPendulums(
       lastImpulseAt: runtime.impulseAtMs,
       lastBeat: runtime.beatPhase ?? 0,
       beats: 0,
+      lastOnsetAt: drive.onsetAtMs,
     };
     PENDULUMS.set(layer, state);
   }
@@ -198,6 +206,14 @@ function drawPendulums(
       state.chains.forEach((chain) => kickChain(chain, Math.floor(chain.count / 2), direction * 40 * amount, 0));
     }
     state.lastBeat = beatPhase;
+    // Transients in the mix strike the strings too, harder on the bass.
+    if (drive.onsetAtMs !== undefined && drive.onsetAtMs !== state.lastOnsetAt) {
+      state.lastOnsetAt = drive.onsetAtMs;
+      const direction = state.beats % 2 === 0 ? -1 : 1;
+      state.chains.forEach((chain, index) => {
+        kickChain(chain, chain.count - 1 - index * 3, direction * (40 + 60 * drive.bass) * amount, 0);
+      });
+    }
     const dt = (nowMs - state.lastMs) / 1000;
     state.chains.forEach((chain, index) => {
       stepChain(chain, dt, { anchorX: centerX + PENDULUM_SPECS[index]!.dx, anchorY, gravity: 1400, damping: 0.992 });
@@ -246,8 +262,18 @@ function resolveFieldInput(
   tier: number,
   amount: number,
   playfieldRight: number,
+  drive: AudioDrive,
 ): NeedleFieldInput {
   const nowMs = runtime.nowMs ?? 0;
+  let onsets = ONSET_HISTORY.get(key);
+  if (!onsets) {
+    onsets = [];
+    ONSET_HISTORY.set(key, onsets);
+  }
+  if (drive.onsetAtMs !== undefined && onsets[onsets.length - 1] !== drive.onsetAtMs) {
+    onsets.push(drive.onsetAtMs);
+    if (onsets.length > 4) onsets.shift();
+  }
   let history = IMPULSE_HISTORY.get(key);
   if (!history) {
     history = [];
@@ -260,7 +286,16 @@ function resolveFieldInput(
   const originX = (PLAYFIELD.x + playfieldRight) / 2;
   const ripples =
     amount > 0
-      ? history.map((atMs) => ({ x: originX, y: PLAYFIELD.judgementY, ageMs: nowMs - atMs, strength: amount }))
+      ? [
+          ...history.map((atMs) => ({ x: originX, y: PLAYFIELD.judgementY, ageMs: nowMs - atMs, strength: amount })),
+          // Onsets ring out of the monitor.
+          ...onsets.map((atMs) => ({
+            x: BGA.x + BGA.w / 2,
+            y: BGA.y + BGA.h / 2,
+            ageMs: nowMs - atMs,
+            strength: 0.8 * amount,
+          })),
+        ]
       : [];
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   const fullCombo = momentProgress(moments.fullComboAtMs, nowMs, FULL_COMBO_MS);
@@ -269,8 +304,8 @@ function resolveFieldInput(
   return {
     seconds: (nowMs / 1000) * (amount > 0 ? 1 : 0),
     beatPhase: runtime.beatPhase ?? 0,
-    flow: (0.35 + 0.12 * tier) * amount,
-    beatWave: (0.45 + 0.12 * tier) * amount,
+    flow: (0.35 + 0.12 * tier) * amount + 0.35 * drive.level,
+    beatWave: (0.45 + 0.12 * tier) * amount + 0.4 * drive.bass,
     ripples,
     attractor: { x: BGA.x + BGA.w / 2, y: BGA.y + BGA.h / 2, strength: envelope(milestone) * amount },
     swirl: { x: DESIGN_WIDTH / 2, y: DESIGN_HEIGHT / 2, strength: envelope(fullCombo) * amount },
@@ -358,6 +393,7 @@ function drawBgaFrame(
   seconds: number,
   beatPhase: number,
   amount: number,
+  drive: AudioDrive,
   pool: ChildPool,
 ): void {
   const margin = 5;
@@ -382,7 +418,27 @@ function drawBgaFrame(
   const tile = pitch - 4;
   const top = BGA.y + (BGA.h - 22 - rows * pitch) / 2;
   const wave = amount > 0 ? beatPhase * 1.6 : 1;
-  for (let row = 0; row < rows; row += 1) {
+  // While music plays the tiles become an equalizer: each column fills from the bottom to its band's level, the top
+  // tile squashed by the fraction and printed in cobalt. In silence they fall back to the beat's flip wave.
+  if (drive.level > 0.02) {
+    for (let column = 0; column < columns; column += 1) {
+      const filled = bandLevel(drive.bands, column, columns) * rows;
+      for (let row = 0; row < rows; row += 1) {
+        const fromBottom = rows - 1 - row;
+        const fill = Math.max(0, Math.min(1, filled - fromBottom));
+        const cx = BGA.x + pitch * (column + 0.5);
+        const cy = top + pitch * (row + 0.5);
+        if (fill <= 0) {
+          graphics.rect(cx - 1, cy - 1, 2, 2).fill({ color: LAT_RULE, alpha: 1 });
+          continue;
+        }
+        const th = Math.max(1, tile * fill);
+        const peak = fill < 1 || fromBottom === Math.ceil(filled) - 1;
+        graphics.rect(cx - tile / 2, cy + tile / 2 - th, tile, th).fill(peak ? LAT_ACCENT : LAT_INK);
+      }
+    }
+  }
+  for (let row = 0; row < rows && drive.level <= 0.02; row += 1) {
     for (let column = 0; column < columns; column += 1) {
       const phase = tileFlipPhase(column, row, columns, rows, wave, 0.6);
       // Each tile flips about its horizontal axis: its height follows |cos|, its face changes at the halfway point.
@@ -654,7 +710,14 @@ const TALLY: ReadonlyArray<readonly [label: string, key: 'perfect' | 'great' | '
 ];
 
 /** Judge tally as a column of type with a proportional hairline bar under each count. */
-function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, x: number, pool: ChildPool): void {
+function drawJudgeTally(
+  graphics: Graphics,
+  layer: Container,
+  runtime: Runtime,
+  x: number,
+  drive: AudioDrive,
+  pool: ChildPool,
+): void {
   const y = BGA.y - 5;
   const w = DESIGN_WIDTH - x - 8;
   const sc = hudScramble(runtime);
@@ -694,6 +757,28 @@ function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, 
       pool,
     );
   }
+  // Live spectrum and level readout under the tally.
+  const specY = footerY + 64;
+  const bars = 16;
+  const barPitch = w / bars;
+  graphics.rect(x, specY, w, 1).fill(LAT_INK);
+  for (let bar = 0; bar < bars; bar += 1) {
+    const value = bandLevel(drive.bands, bar, bars);
+    const h = Math.round(26 * value);
+    if (h < 1) continue;
+    graphics
+      .rect(x + bar * barPitch, specY - h, Math.max(1, barPitch - 1.5), h)
+      .fill(value > 0.8 ? LAT_ACCENT : LAT_INK);
+  }
+  addHudText(layer, sc('dB', 700, 60), x, specY + 5, monoStyle(), pool);
+  addHudNumber(
+    layer,
+    drive.db <= -95 ? '-inf' : drive.db.toFixed(1),
+    x + w,
+    specY + 5,
+    { ...monoStyle(LAT_INK), anchorX: 1 },
+    pool,
+  );
 }
 
 const TALLY_NAMES = { perfect: 'PERFECT', great: 'GREAT', good: 'GOOD', bad: 'BAD', poor: 'POOR' } as const;

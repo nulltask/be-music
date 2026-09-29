@@ -24,7 +24,15 @@ export interface NeedleFieldInput {
   jitter?: number;
   /** Constant nervous tremor (radians of peak shake), re-rolled every 1/30 s. */
   tremble?: number;
+  /**
+   * A spectrum drawn by the needles: `levels` (0..1 each) split `[left, right]` into equal columns, and in each column
+   * the needles from `bottom` up to the column's bar height stand upright — an equalizer of iron filings. The bar's
+   * top edge feathers over {@link SPECTRUM_FEATHER} px.
+   */
+  spectrum?: { levels: readonly number[]; left: number; right: number; top: number; bottom: number };
 }
+
+export const SPECTRUM_FEATHER = 12;
 
 export const RIPPLE_LIFE_MS = 700;
 const REST_ANGLE = Math.PI / 4;
@@ -53,6 +61,18 @@ export function needleAngle(x: number, y: number, input: NeedleFieldInput): numb
   if (input.swirl && input.swirl.strength > 0) {
     const target = Math.atan2(y - input.swirl.y, x - input.swirl.x) + Math.PI / 2;
     angle = mixLineAngle(angle, target, input.swirl.strength);
+  }
+  const spectrum = input.spectrum;
+  if (spectrum && spectrum.levels.length > 0 && x >= spectrum.left && x <= spectrum.right && y <= spectrum.bottom) {
+    const span = Math.max(1e-6, spectrum.right - spectrum.left);
+    const column = Math.min(
+      spectrum.levels.length - 1,
+      Math.floor(((x - spectrum.left) / span) * spectrum.levels.length),
+    );
+    const level = Math.max(0, Math.min(1, spectrum.levels[column] ?? 0));
+    const barTop = spectrum.bottom - level * (spectrum.bottom - spectrum.top);
+    const stand = level > 0 ? Math.max(0, Math.min(1, (y - barTop + SPECTRUM_FEATHER) / SPECTRUM_FEATHER)) : 0;
+    if (stand > 0) angle = mixLineAngle(angle, Math.PI / 2, stand);
   }
   const tremble = input.tremble ?? 0;
   if (tremble > 0) {
