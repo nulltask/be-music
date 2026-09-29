@@ -89,9 +89,9 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
 }
 
 /**
- * Synesthesia song select, after Rez Infinite's Area X. The persistent back layer is a particle world — data dust and
+ * Synesthesia song select, set in a cosmic particle world. The persistent back layer is a particle world — data dust and
  * speed streaks pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids on an ember
- * horizon, a floor of light points, a golden river of particles, and a roaming Magnetosphere-style audio orb — redrawn cheaply
+ * horizon, a floor of light points, a golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply
  * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
@@ -312,7 +312,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         head.y,
       );
     }
-    // Speed streaks — Rez's warp lines — thicken into a tunnel on launch.
+    // Speed streaks — warp lines — thicken into a tunnel on launch.
     const streakSpeed = (0.35 + beatsPerSecond * 0.12) * (1 + 6 * warp);
     for (let index = 0; index < STREAK_COUNT; index += 1) {
       const angle = hash01(index * 5 + 1) * Math.PI * 2;
@@ -351,7 +351,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         );
       }
     }
-    // Two audio orbs roam the space — the big one and its black moon right up by the camera — Magnetosphere-style shells of sparks and fibres, the big one
+    // Two audio orbs roam the space — the big one and its black moon right up by the camera — visualizer-style shells of sparks and fibres, the big one
     // with a black moon circling it. On launch they swell into the warp.
     this.orbSprites.begin();
     this.orbMoon.clear();

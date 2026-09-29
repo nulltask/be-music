@@ -39,7 +39,7 @@ const RANK_BURST = burstParticles(29, 260);
 export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
 
 /**
- * Synesthesia result, in Rez Infinite's Area X light: a black void with ember dust, speed streaks and a floor of light
+ * Synesthesia result, in the light of a cosmic particle world: a black void with ember dust, speed streaks and a floor of light
  * points; the verdict condenses out of wide-tracked light, hairline frames fade up in sequence while counters roll,
  * graphs draw as glowing filaments, and the rank letter ignites inside a spinning 3D ring of particles that bursts
  * outward the moment it lands — a lock-on reticle snapping shut on it.

@@ -21,7 +21,7 @@ import {
 import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
 
 /**
- * Shared Synesthesia drawing: hairline frames with lock-on corners (Rez's targeting reticle) and projected point
+ * Shared Synesthesia drawing: hairline frames with lock-on corners (a rhythm-shooter targeting reticle) and projected point
  * clouds. Callers own the `Graphics`; these only append geometry.
  */
 
@@ -110,7 +110,7 @@ function quantizeColor(color: number): number {
 }
 
 /**
- * Rez lock-on reticle: four rounded corner brackets around `(x, y, w, h)` and an optional centre cross. `arm` is the
+ * Lock-on reticle: four rounded corner brackets around `(x, y, w, h)` and an optional centre cross. `arm` is the
  * bracket length.
  */
 export function drawReticle(
@@ -159,7 +159,7 @@ export function drawReticle(
   }
 }
 
-/** A near-black frame with a warm hairline rim and bright lock-on corners — the Rez take on a HUD panel. */
+/** A near-black frame with a warm hairline rim and bright lock-on corners — a targeting-HUD take on a panel. */
 export function drawFrame(
   graphics: Graphics,
   x: number,
@@ -353,7 +353,7 @@ const SHELL_COLORS = [ORB_VIOLET, ORB_BLUE, ORB_WHITE, ORB_VIOLET, ORB_PINK, ORB
 const TRAIL_STEPS = 12;
 
 /**
- * A Magnetosphere-style orb (after flight404's iTunes visualizer): a hollow shell of countless violet / blue / pink /
+ * A particle-shell orb in the manner of classic music visualizers: a hollow shell of countless violet / blue / pink /
  * white sparks, brightest at its silhouette, bristling with fine fibres that shoot out from the surface, wrapped in a
  * violet haze and a few lights racing round on tilted orbits — and, for contrast, a black moon circling it. The
  * music drives it: each latitude swells and grows longer fibres with its spectrum band (lows south, highs north),

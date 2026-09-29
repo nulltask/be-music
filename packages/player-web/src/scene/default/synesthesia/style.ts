@@ -1,7 +1,7 @@
 import { Texture } from 'pixi.js';
 
 /**
- * Synesthesia skin tokens, after Rez Infinite's Area X: a true-black void, a world built from ember / gold particles,
+ * Synesthesia skin tokens, after a cosmic particle world: a true-black void, a world built from ember / gold particles,
  * electric blue and magenta as the only cool accents, and hairline frames with lock-on corners instead of glass.
  * Type is wide and light — Michroma for Latin labels and numerals, M PLUS 1p Light for Japanese and titles.
  */
@@ -26,7 +26,7 @@ export const SYN_DISPLAY_FONT = 'Michroma, Exo 2, M PLUS 1p, LINE Seed JP, sans-
 export const SYN_TEXT_FONT = 'M PLUS 1p, LINE Seed JP, ui-sans-serif, system-ui, sans-serif';
 
 /**
- * Base hue of the whole scene at `seconds`: a slow drift through the red-orange → amber band (Area X's ember light),
+ * Base hue of the whole scene at `seconds`: a slow drift through the red-orange → amber band (the world's ember light),
  * nudged forward on each beat so colour literally keeps time with the music.
  */
 export function sceneHue(seconds: number, beatPhase = 0): number {

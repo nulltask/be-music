@@ -90,7 +90,7 @@ const ORB = orbitParticles(11, 22);
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
 
 /**
- * Synesthesia gameplay HUD after Rez Infinite's Area X: a black void lit by an ember horizon, data dust and speed
+ * Synesthesia gameplay HUD after a cosmic particle world: a black void lit by an ember horizon, data dust and speed
  * streaks pouring out of the vanishing point, a floor of light points scrolling toward the player, rivers of particles
  * once the run is in the zone, and hairline frames with lock-on corners. With no BGA the monitor idles on a floating
  * audio orb roaming in front of particle pyramids. Colour drifts through the ember band and swells on every beat.
@@ -252,7 +252,7 @@ function drawGround(
 
 /**
  * Data dust (tiny warm squares, the odd blue / magenta mote) flying out of the vanishing point, and speed streaks —
- * Rez's warp lines — that multiply with the combo tier and surge on key presses.
+ * warp lines — that multiply with the combo tier and surge on key presses.
  */
 function drawDust(
   graphics: Graphics,
@@ -311,7 +311,7 @@ function drawDust(
 }
 
 /**
- * Area X floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines, with
+ * Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines, with
  * beat rings rolling out of the vanishing point once the run is deep in the zone.
  */
 function drawFloor(
@@ -362,7 +362,7 @@ function drawFloor(
 const RIVER_PARTICLES = 280;
 
 /**
- * A river of light particles streaming low over the floor, receding diagonally into the distance — Area X's golden
+ * A river of light particles streaming low over the floor, receding diagonally into the distance — golden
  * flows. Each particle is a short streak along the flow; river 1 runs blue-white, the others ember.
  */
 function drawRiver(
@@ -453,8 +453,8 @@ function drawPlayfieldWell(graphics: Graphics, right: number, progressRatio: num
 }
 
 /**
- * Monitor frame: a warm hairline with lock-on corners. With no BGA the screen idles on a miniature Area X — a floating
- * Magnetosphere-style orb roaming in front of particle pyramids on an ember horizon, streaks pouring past — the
+ * Monitor frame: a warm hairline with lock-on corners. With no BGA the screen idles on a miniature particle world — a floating
+ * visualizer-style orb roaming in front of particle pyramids on an ember horizon, streaks pouring past — the
  * "nothing is playing, but the space is alive" state. The idle scene draws into `light` (additive).
  */
 function drawBgaFrame(
@@ -549,7 +549,7 @@ function drawBgaFrame(
       .lineTo(x1, y1)
       .stroke({ color: index % 5 === 0 ? SYN_CYAN : SYN_AMBER, width: 1, alpha: Math.sin(progress * Math.PI) * 0.5 });
   }
-  // The audio orb roams the monitor's little world close to the camera: a Magnetosphere-style shell of sparks and
+  // The audio orb roams the monitor's little world close to the camera: a visualizer-style shell of sparks and
   // fibres with a black moon circling it.
   const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
   const moonLayer = pool.acquireGraphics();

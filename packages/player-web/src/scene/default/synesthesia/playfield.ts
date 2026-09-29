@@ -30,7 +30,7 @@ interface LaneLight {
   hue: number;
 }
 
-// Readable first, in Rez Infinite's palette: white keys burn warm white-gold with an ember halo, black keys run
+// Readable first, in the skin's ember palette: white keys burn warm white-gold with an ember halo, black keys run
 // electric blue, scratch hot magenta.
 const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
   white: { body: 0xfff1dc, glow: 0xff7a1e, hue: 0.07 },
@@ -160,9 +160,9 @@ function cachedBurst(seed: number): BurstParticle[] {
  * 3. motion trails for every spark,
  * 4. depth-sorted glow sparks that launch white-hot and cool into the lane's hue,
  * 5. a core flash and an anamorphic streak across the line,
- * 6. a Rez lock-on reticle that snaps shut on the hit and fades.
+ * 6. a lock-on reticle that snaps shut on the hit and fades.
  *
- * The smaller sparks fly as square voxels rather than round glows, like Rez's shattering wireframes.
+ * The smaller sparks fly as square voxels rather than round glows, like shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
 export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: BeMusicBombsContext): void {

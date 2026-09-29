@@ -183,7 +183,7 @@ function drawMilestone(
   hasBga: boolean,
   pool: ChildPool,
 ): void {
-  // Each hundred takes the next Rez light in turn: gold, electric blue, magenta.
+  // Each hundred takes the next accent light in turn: gold, electric blue, magenta.
   const color = MILESTONE_COLORS[Math.max(0, Math.floor(value / 100) - 1) % MILESTONE_COLORS.length]!;
   const wave = easeOutCubic(Math.min(1, t / 0.7));
   const radius = 30 + 700 * wave;

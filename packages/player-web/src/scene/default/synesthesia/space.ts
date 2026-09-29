@@ -147,7 +147,7 @@ export interface CloudPoint extends Vec3 {
 }
 
 /**
- * Ember → gold → white-hot ramp for `t` in 0..1 (clamped) — the warm light that dominates Rez Infinite's particle
+ * Ember → gold → white-hot ramp for `t` in 0..1 (clamped) — the warm light that dominates a cosmic particle
  * worlds. Low `t` is a deep red-orange ember, high `t` a pale gold flare.
  */
 export function emberColor(t: number): number {
@@ -243,7 +243,7 @@ export function limbGlow(normalZ: number, floor = 0.25): number {
 }
 
 /**
- * One particle of a Magnetosphere-style orb: a light riding a tilted circular orbit around the core, tied to a
+ * One particle of the audio orb: a light riding a tilted circular orbit around the core, tied to a
  * spectrum band.
  */
 export interface OrbitParticle {

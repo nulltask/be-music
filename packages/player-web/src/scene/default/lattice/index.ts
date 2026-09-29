@@ -11,8 +11,8 @@ import { latticeResultSkin } from './result.ts';
 import { latticeSelectSkin } from './select.ts';
 
 /**
- * Lattice — a skin in the manner of precise, typographic interaction design (the Japanese web / broadcast design
- * school of UNIQLOCK and "design ah"): warm paper and graph-paper rules, ink with one cobalt accent, a field of
+ * Lattice — a skin in the manner of precise, typographic interaction design (the Japanese web / broadcast interaction-design
+ * school): warm paper and graph-paper rules, ink with one cobalt accent, a field of
  * needles that turns like iron filings to the beat and to every key press, odometer counters, letters that drop in on
  * springs, and tile-flip transitions.
  */
