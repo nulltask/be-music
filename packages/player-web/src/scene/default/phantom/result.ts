@@ -13,6 +13,8 @@ import {
   PHANTOM_RED_HOT,
   PHANTOM_SLATE,
   PHANTOM_WHITE,
+  drawNoteEmblem,
+  drawStaves,
   easeOutBack,
   easeOutCubic,
   halftoneField,
@@ -21,7 +23,10 @@ import {
   rollUpValue,
   stageProgress,
   starburstPoints,
+  tornEdgePoints,
 } from '../phantom-style.ts';
+import { alignCapCenter } from '../text-metrics.ts';
+import { addRansomText, type GlyphFactory } from './tear.ts';
 
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */
 const RESULT_ROLL_DELAY_MS = 760;
@@ -35,7 +40,9 @@ export const phantomResultSkin: BeMusicResultSkin = { render: (frame) => renderP
  * bars, graphs drawing in, rank stamp) over ambient loops (drifting halftone, scrolling kicker, streaks, rank pulse).
  */
 export function renderPhantomResult(frame: BeMusicResultFrame): void {
-  const { result, designWidth, designHeight, elapsedMs: elapsed, nowMs: now, rankLabel } = frame;
+  const { result, designWidth, designHeight, nowMs: now, rankLabel } = frame;
+  // Effects off: skip the entrance and render the settled card.
+  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
   const rate = frame.ratePercent;
   const seconds = now / 1000;
   const layer = frame.layer;
@@ -79,6 +86,7 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
       }),
     });
     node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+    alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '500', options.size ?? 10);
     node.position.set(x, y);
     node.skew.set(options.skew ?? 0, 0);
     if (options.maxWidth !== undefined && node.width > options.maxWidth) {
@@ -143,6 +151,10 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
     }
   }
   slash.g.poly([380, 48, 386, 48, 190, designHeight, 184, designHeight]).fill(PHANTOM_WHITE);
+  // Sheet-music staves ruled across the slash, following its slanted left edge.
+  const slashLeftAt = (lineY: number): number => 392 - ((lineY - 48) * (392 - 196)) / (designHeight - 48) + 8;
+  drawStaves(slash.g, 0, designWidth, 226, 6, PHANTOM_INK, 0.5, slashLeftAt);
+  drawStaves(slash.g, 0, designWidth, 432, 6, PHANTOM_INK, 0.5, slashLeftAt);
   slideIn(slash.root, 0, 460, 0, 380);
   slash.root.alpha = 1;
 
@@ -200,6 +212,7 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
       .poly(parallelogramPoints(12 + glint * 136, 7, 12, 28, 10))
       .fill({ color: cleared ? PHANTOM_WHITE : PHANTOM_RED, alpha: 0.55 });
   }
+  drawNoteEmblem(verdict.g, 190, 29, 24, PHANTOM_WHITE, PHANTOM_RED);
   slam(verdict.root, 120, 88, 21, 2.6);
 
   // Rank panel slides in from the left; the burst pops, then the letter stamps down on it.
@@ -360,6 +373,34 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
     anchorY: 0.5,
   });
   slideIn(footer.root, 420, 0, 50);
+
+  // Entrance wipe: the screen opens behind an ink slab carrying RESULT in ransom-note letters that tears away to the
+  // right along a ripped red-and-white edge, uncovering the panels as they fly in.
+  const wipeT = stageProgress(elapsed, 0, 760);
+  if (wipeT < 1) {
+    const wipe = group('wipe');
+    const eased = wipeT * wipeT * (3 - 2 * wipeT);
+    const edge = -120 + eased * (designWidth + 360);
+    const rip = tornEdgePoints(edge + 120, -10, edge, designHeight + 10, 10, 3, 12);
+    const shifted = (dx: number) => rip.map((value, index) => (index % 2 === 0 ? value + dx : value));
+    const region = (dx: number) => [...shifted(dx), designWidth + 200, designHeight + 10, designWidth + 200, -10];
+    // Red splash, white rim, then the ink slab — each edge ripped.
+    wipe.g.poly(region(-34)).fill(PHANTOM_RED);
+    wipe.g.poly(region(-12)).fill(PHANTOM_WHITE);
+    wipe.g.poly(region(0)).fill(PHANTOM_INK);
+    const glyph: GlyphFactory = (char, options) =>
+      addText(wipe.root, char, 0, 0, {
+        size: options.size,
+        weight: options.weight,
+        fill: options.fill,
+        fontFamily: options.fontFamily,
+      });
+    addRansomText(wipe.g, glyph, 'RESULT', edge + 170 + designWidth / 2, designHeight / 2, {
+      size: 92,
+      seed: 7,
+      angle: -0.08,
+    });
+  }
 }
 
 function renderMetric(
@@ -386,6 +427,7 @@ function renderMetric(
     }),
   });
   labelText.skew.set(-0.18, 0);
+  alignCapCenter(labelText, DEFAULT_DISPLAY_FONT, '400', 10);
   labelText.position.set(x + 12, y + 5);
   target.addChild(labelText);
 
@@ -399,6 +441,7 @@ function renderMetric(
   });
   valueText.skew.set(-0.18, 0);
   valueText.anchor.set(1, 0.5);
+  alignCapCenter(valueText, DEFAULT_DISPLAY_FONT, '400', 22);
   valueText.position.set(x + 166, y + 19);
   if (valueText.width > 100) {
     valueText.scale.x = 100 / valueText.width;

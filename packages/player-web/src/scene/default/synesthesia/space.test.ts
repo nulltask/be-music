@@ -2,12 +2,26 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   burstParticlePosition,
   burstParticles,
+  emberColor,
+  fibonacciSphere,
+  limbGlow,
   hsvToHex,
-  icosahedron,
+  mixCamera,
+  orbitParticles,
+  orbitPosition,
+  particleRiverPoint,
+  pointCloudPyramid,
   projectPoint,
+  randomShot,
+  reflectedLight,
+  REST_CAMERA,
+  roamingCamera,
   rotateX,
   rotateY,
   starfieldPoint,
+  vanishingPoint,
+  viewPoint,
+  wanderPoint,
 } from './space.ts';
 
 describe('projectPoint', () => {
@@ -83,17 +97,6 @@ describe('starfieldPoint', () => {
   });
 });
 
-describe('icosahedron', () => {
-  it('has 12 unit vertices and 30 edges', () => {
-    const { vertices, edges } = icosahedron();
-    expect(vertices).toHaveLength(12);
-    expect(edges).toHaveLength(30);
-    for (const vertex of vertices) {
-      expect(Math.hypot(vertex.x, vertex.y, vertex.z)).toBeCloseTo(1, 12);
-    }
-  });
-});
-
 describe('hsvToHex', () => {
   it('converts primaries and wraps hue', () => {
     expect(hsvToHex(0, 1, 1)).toBe(0xff0000);
@@ -101,5 +104,268 @@ describe('hsvToHex', () => {
     expect(hsvToHex(2 / 3, 1, 1)).toBe(0x0000ff);
     expect(hsvToHex(1.5, 0, 1)).toBe(0xffffff);
     expect(hsvToHex(-1 / 3, 1, 1)).toBe(0x0000ff);
+  });
+});
+
+describe('emberColor', () => {
+  it('runs from a red ember to a white-hot flare', () => {
+    expect(emberColor(0)).toBe(0xb82c08);
+    expect(emberColor(1)).toBe(0xfff6e2);
+    expect(emberColor(0.65)).toBe(0xffaa30);
+  });
+
+  it('clamps out-of-range and non-finite input', () => {
+    expect(emberColor(-1)).toBe(emberColor(0));
+    expect(emberColor(4)).toBe(emberColor(1));
+    expect(emberColor(Number.NaN)).toBe(emberColor(0));
+  });
+
+  it('warms monotonically in green as it brightens', () => {
+    let previous = -1;
+    for (let step = 0; step <= 20; step += 1) {
+      const green = (emberColor(step / 20) >> 8) & 0xff;
+      expect(green).toBeGreaterThanOrEqual(previous);
+      previous = green;
+    }
+  });
+});
+
+describe('pointCloudPyramid', () => {
+  it('keeps every point inside the pyramid volume', () => {
+    const points = pointCloudPyramid(3, 400);
+    expect(points).toHaveLength(400);
+    for (const point of points) {
+      expect(point.y).toBeLessThanOrEqual(1e-9);
+      expect(point.y).toBeGreaterThanOrEqual(-1.3 - 1e-9);
+      // The cross-section shrinks linearly toward the apex.
+      const halfWidth = 1 + point.y / 1.3;
+      expect(Math.abs(point.x)).toBeLessThanOrEqual(halfWidth + 1e-9);
+      expect(Math.abs(point.z)).toBeLessThanOrEqual(halfWidth + 1e-9);
+      expect(point.weight).toBeGreaterThanOrEqual(0.3);
+      expect(point.weight).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is deterministic for a seed', () => {
+    expect(pointCloudPyramid(9, 20)).toEqual(pointCloudPyramid(9, 20));
+    expect(pointCloudPyramid(9, 20)).not.toEqual(pointCloudPyramid(10, 20));
+  });
+});
+
+describe('fibonacciSphere', () => {
+  it('spreads unit vectors evenly over the sphere', () => {
+    const points = fibonacciSphere(500, 2);
+    expect(points).toHaveLength(500);
+    let mx = 0;
+    let my = 0;
+    let mz = 0;
+    for (const point of points) {
+      expect(Math.hypot(point.x, point.y, point.z)).toBeCloseTo(1, 9);
+      mx += point.x;
+      my += point.y;
+      mz += point.z;
+    }
+    expect(Math.hypot(mx, my, mz) / points.length).toBeLessThan(0.01);
+  });
+});
+
+describe('limbGlow', () => {
+  it('peaks on the silhouette and dims toward the disc centre', () => {
+    expect(limbGlow(0)).toBe(1);
+    expect(limbGlow(-1)).toBeCloseTo(0.25, 12);
+    expect(limbGlow(1, 0.1)).toBeCloseTo(0.1, 12);
+    expect(limbGlow(-0.5)).toBeGreaterThan(limbGlow(-0.9));
+  });
+});
+
+describe('orbitParticles', () => {
+  it('builds particles within their ranges', () => {
+    const particles = orbitParticles(4, 80);
+    expect(particles).toHaveLength(80);
+    for (const particle of particles) {
+      expect(particle.reach).toBeGreaterThanOrEqual(1.3);
+      expect(particle.reach).toBeLessThanOrEqual(2.8);
+      expect(Math.abs(particle.speed)).toBeGreaterThanOrEqual(0.5);
+      expect(particle.band).toBeGreaterThanOrEqual(0);
+      expect(particle.band).toBeLessThan(16);
+    }
+    expect(orbitParticles(4, 5)).toEqual(orbitParticles(4, 5));
+  });
+});
+
+describe('orbitPosition', () => {
+  it('keeps every point of the orbit at its radius', () => {
+    const [particle] = orbitParticles(1, 1);
+    for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
+      const point = orbitPosition(particle!, angle, 50);
+      expect(Math.hypot(point.x, point.y, point.z)).toBeCloseTo(50, 9);
+    }
+  });
+
+  it('lies flat in the xz plane with no tilt', () => {
+    const flat = { reach: 2, tiltX: 0, tiltZ: 0, speed: 1, phase: 0, band: 0, weight: 1 };
+    expect(orbitPosition(flat, Math.PI / 2, 10).y).toBeCloseTo(0, 12);
+    expect(orbitPosition(flat, Math.PI / 2, 10).z).toBeCloseTo(10, 12);
+  });
+});
+
+describe('particleRiverPoint', () => {
+  const options = { length: 800, speed: 100, amplitude: 30, width: 10 };
+
+  it('stays within the river bounds', () => {
+    for (let index = 0; index < 200; index += 1) {
+      const point = particleRiverPoint(index, 3.7, options);
+      expect(Math.abs(point.x)).toBeLessThanOrEqual(400);
+      expect(Math.abs(point.y)).toBeLessThanOrEqual(40);
+      expect(Math.abs(point.z)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('flows forward along x over time', () => {
+    const a = particleRiverPoint(5, 0, options);
+    const b = particleRiverPoint(5, 0.1, options);
+    expect(b.x - a.x).toBeCloseTo(10, 6);
+  });
+});
+
+describe('mixCamera', () => {
+  it('scales a pose toward rest', () => {
+    const half = mixCamera(REST_CAMERA, { x: 10, y: 20, z: 30, yaw: 0.4, pitch: -0.2 }, 0.5);
+    expect(half).toEqual({ x: 5, y: 10, z: 15, yaw: 0.2, pitch: -0.1 });
+  });
+});
+
+describe('viewPoint', () => {
+  it('is the identity at rest', () => {
+    expect(viewPoint({ x: 3, y: 4, z: 5 }, REST_CAMERA)).toEqual({ x: 3, y: 4, z: 5 });
+  });
+
+  it('moves the world opposite to the eye', () => {
+    const point = viewPoint({ x: 0, y: 0, z: 100 }, { ...REST_CAMERA, x: 20, y: -10 });
+    expect(point).toEqual({ x: -20, y: 10, z: 100 });
+  });
+
+  it('turning right swings points ahead to the left', () => {
+    const point = viewPoint({ x: 0, y: 0, z: 100 }, { ...REST_CAMERA, yaw: 0.3 });
+    expect(point.x).toBeLessThan(0);
+  });
+
+  it('keeps the orbit pivot fixed', () => {
+    const pivot = viewPoint({ x: 0, y: 0, z: 200 }, { ...REST_CAMERA, yaw: 0.8, pitch: 0.2 }, 200);
+    expect(pivot.x).toBeCloseTo(0, 9);
+    expect(pivot.y).toBeCloseTo(0, 9);
+    expect(pivot.z).toBeCloseTo(200, 9);
+  });
+});
+
+describe('vanishingPoint', () => {
+  it('sits at the view centre at rest', () => {
+    expect(vanishingPoint(REST_CAMERA, 320, 240, 200)).toEqual({ x: 320, y: 240 });
+  });
+
+  it('shifts against the turn and rises when looking down', () => {
+    const point = vanishingPoint({ ...REST_CAMERA, yaw: 0.3, pitch: 0.1 }, 320, 240, 200);
+    expect(point.x).toBeLessThan(320);
+    expect(point.y).toBeLessThan(240);
+    expect(point.y).toBeCloseTo(240 - 200 * Math.tan(0.1), 6);
+  });
+
+  it('agrees with projecting a far point', () => {
+    const camera = { ...REST_CAMERA, yaw: -0.25, pitch: 0.12 };
+    const far = projectPoint(viewPoint({ x: 0, y: 0, z: 1e7 }, camera), 320, 240, 200);
+    const vanish = vanishingPoint(camera, 320, 240, 200);
+    expect(far.x).toBeCloseTo(vanish.x, 2);
+    expect(far.y).toBeCloseTo(vanish.y, 2);
+  });
+});
+
+describe('randomShot', () => {
+  const range = { x: 200, y: 100, yaw: 0.3, pitch: 0.15 };
+
+  it('opens at rest and stays within range', () => {
+    expect(randomShot(0, 4, range)).toEqual(REST_CAMERA);
+    for (let index = 1; index < 50; index += 1) {
+      const shot = randomShot(index, 4, range);
+      expect(Math.abs(shot.x)).toBeLessThanOrEqual(200);
+      expect(Math.abs(shot.y)).toBeLessThanOrEqual(100);
+      expect(Math.abs(shot.yaw)).toBeLessThanOrEqual(0.3);
+      expect(Math.abs(shot.pitch)).toBeLessThanOrEqual(0.15);
+    }
+  });
+
+  it('varies with index and seed but is deterministic', () => {
+    expect(randomShot(3, 4, range)).toEqual(randomShot(3, 4, range));
+    expect(randomShot(3, 4, range)).not.toEqual(randomShot(4, 4, range));
+    expect(randomShot(3, 4, range)).not.toEqual(randomShot(3, 5, range));
+  });
+});
+
+describe('roamingCamera', () => {
+  const range = { x: 200, y: 100, yaw: 0.3, pitch: 0.15 };
+
+  it('starts near rest and never strays far outside the range', () => {
+    const start = roamingCamera(0, 9, range, 8);
+    expect(Math.abs(start.x)).toBeLessThan(range.x * 0.1);
+    for (let t = 0; t < 200; t += 0.37) {
+      const pose = roamingCamera(t, 9, range, 8);
+      expect(Math.abs(pose.x)).toBeLessThanOrEqual(range.x * 1.09);
+      expect(Math.abs(pose.yaw)).toBeLessThanOrEqual(range.yaw * 1.09);
+    }
+  });
+
+  it('moves continuously within a cycle (no jumps outside a cut)', () => {
+    const dt = 1 / 60;
+    let largest = 0;
+    for (let t = 0; t < 8; t += dt) {
+      largest = Math.max(
+        largest,
+        Math.abs(roamingCamera(t + dt, 2, range, 8, 0).x - roamingCamera(t, 2, range, 8, 0).x),
+      );
+    }
+    // Fastest legal fly: the whole range in a one-second smoothstep ≈ 1.5 × span / s.
+    expect(largest).toBeLessThan(range.x * 2 * 1.5 * dt * 12);
+  });
+});
+
+describe('wanderPoint', () => {
+  const bounds = { minX: -500, maxX: 500, minY: -140, maxY: 60, minZ: 250, maxZ: 1400 };
+
+  it('stays inside its box and moves continuously', () => {
+    let previous = wanderPoint(0, 3, bounds);
+    for (let t = 1 / 60; t < 300; t += 1 / 60) {
+      const point = wanderPoint(t, 3, bounds);
+      expect(point.x).toBeGreaterThanOrEqual(bounds.minX);
+      expect(point.x).toBeLessThanOrEqual(bounds.maxX);
+      expect(point.y).toBeGreaterThanOrEqual(bounds.minY);
+      expect(point.y).toBeLessThanOrEqual(bounds.maxY);
+      expect(point.z).toBeGreaterThanOrEqual(bounds.minZ);
+      expect(point.z).toBeLessThanOrEqual(bounds.maxZ);
+      expect(Math.hypot(point.x - previous.x, point.z - previous.z)).toBeLessThan(10);
+      previous = point;
+    }
+  });
+
+  it('roams across most of the box', () => {
+    const xs: number[] = [];
+    for (let t = 0; t < 600; t += 0.5) xs.push(wanderPoint(t, 3, bounds).x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(700);
+  });
+
+  it('differs by seed', () => {
+    expect(wanderPoint(10, 1, bounds)).not.toEqual(wanderPoint(10, 2, bounds));
+  });
+});
+
+describe('reflectedLight', () => {
+  it('points at the source', () => {
+    expect(reflectedLight(0, -10, 10, 5, 1).angle).toBeCloseTo(-Math.PI / 2, 12);
+  });
+
+  it('is stronger close to the source and when it is loud', () => {
+    const near = reflectedLight(10, 0, 20, 10, 0.5).strength;
+    const far = reflectedLight(10, 0, 200, 10, 0.5).strength;
+    expect(near).toBeGreaterThan(far);
+    expect(reflectedLight(10, 0, 50, 10, 1).strength).toBeGreaterThan(reflectedLight(10, 0, 50, 10, 0).strength);
+    expect(reflectedLight(1, 0, 1, 10, 1).strength).toBe(1);
   });
 });

@@ -1,3 +1,5 @@
+import type { Graphics } from 'pixi.js';
+
 /**
  * "Phantom" visual language shared by the default skin family's gameplay, select, and result chrome: a three-ink
  * poster palette (blood red / ink black / paper white), slanted parallelogram plates, jagged starbursts, and halftone
@@ -178,4 +180,174 @@ export function easeOutBack(t: number, overshoot = 1.70158): number {
 export function rollUpValue(target: number, progress: number): number {
   if (!Number.isFinite(target)) return 0;
   return Math.round(target * easeOutCubic(progress));
+}
+
+/**
+ * Phantom's own mark: a slanted eighth note (tilted oval head, stem, and a knife-cut flag) — the skin's signature, set
+ * into the header and the result card so the poster language reads as *this* rhythm game rather than a borrowed one.
+ * `size` is the overall height; `(x, y)` is the head's centre.
+ */
+export function drawNoteEmblem(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  size: number,
+  color: number,
+  ink: number,
+): void {
+  const headW = size * 0.36;
+  const headH = size * 0.24;
+  const tilt = -0.42;
+  const head: number[] = [];
+  for (let step = 0; step < 14; step += 1) {
+    const angle = (Math.PI * 2 * step) / 14;
+    const px = Math.cos(angle) * headW;
+    const py = Math.sin(angle) * headH;
+    head.push(x + px * Math.cos(tilt) - py * Math.sin(tilt), y + px * Math.sin(tilt) + py * Math.cos(tilt));
+  }
+  const stemX = x + headW * 0.78;
+  const stemTop = y - size * 0.86;
+  // Ink shadow first, then the mark, for the same offset-print look as the plates.
+  const shadow = size * 0.08;
+  graphics.poly(head.map((value) => value + shadow)).fill(ink);
+  graphics.poly(head).fill(color);
+  graphics.rect(stemX - size * 0.05, stemTop, size * 0.1, y - stemTop).fill(color);
+  graphics
+    .poly([
+      stemX,
+      stemTop,
+      stemX + size * 0.42,
+      stemTop + size * 0.3,
+      stemX + size * 0.3,
+      stemTop + size * 0.44,
+      stemX,
+      stemTop + size * 0.2,
+    ])
+    .fill(color);
+}
+
+/**
+ * Five-line stave rows across `[x0, x1]` at `y`, each line `gap` apart — sheet music woven into the poster ground.
+ * `clipLeftAt(y)` optionally narrows a line's start (to follow a slanted edge).
+ */
+export function drawStaves(
+  graphics: Graphics,
+  x0: number,
+  x1: number,
+  y: number,
+  gap: number,
+  color: number,
+  alpha: number,
+  clipLeftAt?: (lineY: number) => number,
+): void {
+  for (let line = 0; line < 5; line += 1) {
+    const lineY = y + line * gap;
+    const start = Math.max(x0, clipLeftAt ? clipLeftAt(lineY) : x0);
+    if (start < x1) graphics.rect(start, lineY, x1 - start, 1).fill({ color, alpha });
+  }
+}
+
+/**
+ * Torn-paper edge: points every ~`step` px from `(x0, y0)` to `(x1, y1)`, each pushed off the line along its normal
+ * by up to `amplitude` — sharp alternating teeth with the odd long shard (up to 2.5 × `amplitude`), like the rip in a
+ * Phantom cut-in. Deterministic for `seed`. Returns a flat `[x, y, ...]` list.
+ */
+export function tornEdgePoints(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  amplitude: number,
+  seed: number,
+  step = 10,
+): number[] {
+  const length = Math.hypot(x1 - x0, y1 - y0);
+  const count = Math.max(2, Math.ceil(length / step));
+  const nx = length > 0 ? -(y1 - y0) / length : 0;
+  const ny = length > 0 ? (x1 - x0) / length : 1;
+  const points: number[] = [];
+  for (let index = 0; index <= count; index += 1) {
+    const base = seed * 211 + index * 7;
+    // Jitter each tooth along the edge a little so the rip never looks regular.
+    const along = Math.min(
+      1,
+      Math.max(0, (index + (index > 0 && index < count ? (hash01(base + 1) - 0.5) * 0.6 : 0)) / count),
+    );
+    const shard = hash01(base + 2) > 0.86 ? 2.5 : 1;
+    const side = index % 2 === 0 ? 1 : -0.45;
+    const offset = index === 0 || index === count ? 0 : amplitude * shard * side * (0.35 + 0.65 * hash01(base + 3));
+    points.push(x0 + (x1 - x0) * along + nx * offset, y0 + (y1 - y0) * along + ny * offset);
+  }
+  return points;
+}
+
+/**
+ * A torn band: a strip `thickness` thick along the line `(x0, y0) → (x1, y1)` whose two long edges are both
+ * {@link tornEdgePoints} rips (with different seeds). A closed polygon ready for `Graphics.poly()`.
+ */
+export function tornBandPoints(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  thickness: number,
+  amplitude: number,
+  seed: number,
+  step = 10,
+): number[] {
+  const length = Math.hypot(x1 - x0, y1 - y0) || 1;
+  const nx = (-(y1 - y0) / length) * (thickness / 2);
+  const ny = ((x1 - x0) / length) * (thickness / 2);
+  const top = tornEdgePoints(x0 - nx, y0 - ny, x1 - nx, y1 - ny, amplitude, seed, step);
+  const bottom = tornEdgePoints(x1 + nx, y1 + ny, x0 + nx, y0 + ny, amplitude, seed + 97, step);
+  return [...top, ...bottom];
+}
+
+export type RansomPaper = 'ink' | 'paper' | 'red';
+
+export interface RansomGlyph {
+  char: string;
+  /** True for spaces: advance only, no card. */
+  space: boolean;
+  /** Index into the caller's font list (0..3). */
+  font: number;
+  /** Size multiplier in [0.82, 1.2]. */
+  scale: number;
+  /** Card tilt in radians, [-0.14, 0.14]. */
+  rotation: number;
+  /** Baseline shift as a fraction of the size, [-0.12, 0.12]. */
+  dy: number;
+  /** The card behind the letter; neighbours never share one. */
+  paper: RansomPaper;
+}
+
+/**
+ * Ransom-note lettering: every character cut from a different magazine — its own face, size, tilt, baseline, and card
+ * (ink, paper, or red, never the same as the letter before). Deterministic for `seed`.
+ */
+export function ransomLayout(text: string, seed: number): RansomGlyph[] {
+  const papers: RansomPaper[] = ['ink', 'paper', 'red'];
+  const glyphs: RansomGlyph[] = [];
+  let previous: RansomPaper | undefined;
+  Array.from(text).forEach((char, index) => {
+    const base = seed * 389 + index * 13;
+    if (char === ' ') {
+      glyphs.push({ char, space: true, font: 0, scale: 1, rotation: 0, dy: 0, paper: 'ink' });
+      previous = undefined;
+      return;
+    }
+    let paper = papers[Math.floor(hash01(base + 1) * papers.length) % papers.length]!;
+    if (paper === previous) paper = papers[(papers.indexOf(paper) + 1) % papers.length]!;
+    previous = paper;
+    glyphs.push({
+      char,
+      space: false,
+      font: Math.floor(hash01(base + 2) * 4) % 4,
+      scale: 0.82 + 0.38 * hash01(base + 3),
+      rotation: (hash01(base + 4) - 0.5) * 0.28,
+      dy: (hash01(base + 5) - 0.5) * 0.24,
+      paper,
+    });
+  });
+  return glyphs;
 }

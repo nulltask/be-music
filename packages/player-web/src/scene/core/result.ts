@@ -5,7 +5,7 @@ import { disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
-import type { BeMusicSkin } from '../../skin/be-music/types.ts';
+import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
 
@@ -57,6 +57,8 @@ const DEFAULT_STARTINPUT_MS = 1500;
 export interface CoreResultViewOptions {
   /** be-music skin for the skinless result panel. Defaults to the built-in Phantom skin. */
   beMusicSkin?: BeMusicSkin;
+  /** Showmanship level for the be-music skin's result entrance. Defaults to `'full'`. */
+  beMusicEffects?: BeMusicEffectLevel;
   /**
    * Loaded song collection — needed to resolve per-song artwork (BANNER / STAGEFILE / BACKBMP) via the same
    * chart-asset loader the select view uses. May be `undefined` for embed scenarios where the result is rendered outside
@@ -393,6 +395,7 @@ export class CoreResultView {
       ratePercent: computeScoreRate(result.score) * 100,
       elapsedMs: skipped ? Number.POSITIVE_INFINITY : now - this.sceneStartedAt,
       nowMs: now,
+      effects: this.options.beMusicEffects ?? 'full',
     });
   }
 

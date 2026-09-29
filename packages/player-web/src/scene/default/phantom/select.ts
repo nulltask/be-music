@@ -18,17 +18,24 @@ import {
   PHANTOM_RED_HOT,
   PHANTOM_SLATE,
   PHANTOM_WHITE,
+  drawNoteEmblem,
+  easeOutBack,
   easeOutCubic,
   halftoneField,
   hash01,
   parallelogramPoints,
   stageProgress,
   starburstPoints,
+  tornEdgePoints,
 } from '../phantom-style.ts';
 import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions } from '../skin-text.ts';
+import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
+import { audioDrive, bandLevel } from '../audio-drive.ts';
+import { addRansomText, type GlyphFactory } from './tear.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 54, listBottomInset: 26, rowHeight: 28 };
 const SLIDE_MS = 240;
+const OUTRO_MS = 860;
 const INTRO_STAGGER_MS = 40;
 const KICKER_PITCH = 20;
 const GLINT_W = 14;
@@ -66,6 +73,10 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
   private dots: Graphics | undefined;
   private burst: Graphics | undefined;
   private streaks: Graphics[] = [];
+  private streakAlpha: number[] = [];
+  /** Equalizer bars rising off the bottom edge behind the list, redrawn from the BGM / preview spectrum. */
+  private readonly spectrum = new Graphics();
+  private designHeight = 480;
   private activeRowY: number | undefined;
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
   private designWidth = 640;
@@ -77,7 +88,16 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.addChild(this.kicker, this.glint, this.pointer);
   }
 
-  public render(frame: BeMusicSelectFrame): boolean {
+  public readonly outroMs = OUTRO_MS;
+  private effects: BeMusicSelectFrame['effects'] = 'full';
+
+  public render(input: BeMusicSelectFrame): boolean {
+    this.effects = input.effects;
+    // With effects off every entrance / focus transition renders settled.
+    const frame =
+      input.effects === 'off'
+        ? { ...input, sceneStartedAt: Number.NEGATIVE_INFINITY, cursorChangedAt: Number.NEGATIVE_INFINITY }
+        : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeRowY = undefined;
     this.activeCard = undefined;
@@ -91,21 +111,135 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     }
     this.pointer.visible = this.activeRowY !== undefined;
     this.glint.visible = this.activeCard !== undefined;
+    if (frame.launchAt !== undefined) {
+      this.renderOutro(frame);
+      return true;
+    }
     return needsFrame;
   }
 
-  public tick(nowMs: number, focusedSong: BrowserSongEntry | undefined): void {
-    const seconds = nowMs / 1000;
+  /**
+   * Launch outro — the split screen: a blood-red half full of out-of-focus bokeh slides in from the left while a
+   * black-and-white starburst half slams in from the right; they meet on a torn diagonal seam, the chosen title lands on
+   * a tilted ink label, LET'S GO! is cut out of magazines letter by letter, and the page falls to ink for the count-in.
+   */
+  private renderOutro(frame: BeMusicSelectFrame): void {
+    const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
+    const { designWidth: w, designHeight: h, layer, nowMs } = frame;
+    const g = new Graphics();
+    g.label = 'default-select/outro';
+    layer.addChild(g);
+    const meet = easeOutCubic(Math.min(1, t / 0.32));
+    // The seam: a torn line leaning right, from (seamTop, 0) to (seamBottom, h).
+    const seamTop = w * 0.6;
+    const seamBottom = w * 0.44;
+    const seam = tornEdgePoints(seamTop, -10, seamBottom, h + 10, 9, 13, 12);
+    // Red half, entering from the left.
+    const redShift = (1 - meet) * -(w * 0.7);
+    const red: number[] = [-20 + redShift, -10];
+    for (let index = 0; index < seam.length; index += 2) red.push(seam[index]! + redShift, seam[index + 1]!);
+    red.push(-20 + redShift, h + 10);
+    // Starburst half, slamming in from the right.
+    const burstShift = (1 - meet) * (w * 0.7);
+    const paper: number[] = [w + 20 + burstShift, -10, w + 20 + burstShift, h + 10];
+    for (let index = seam.length - 2; index >= 0; index -= 2) paper.push(seam[index]! + burstShift, seam[index + 1]!);
+    g.poly(paper).fill(PHANTOM_PAPER);
+    const rayX = w * 0.84 + burstShift;
+    const rayY = h * 0.42;
+    const spin = t * 0.5;
+    for (let ray = 0; ray < 18; ray += 1) {
+      const a0 = (ray / 18) * Math.PI * 2 + spin;
+      const a1 = a0 + Math.PI / 18;
+      const reach = w * 0.9;
+      const poly = [
+        rayX,
+        rayY,
+        rayX + Math.cos(a0) * reach,
+        rayY + Math.sin(a0) * reach,
+        rayX + Math.cos(a1) * reach,
+        rayY + Math.sin(a1) * reach,
+      ];
+      g.poly(poly).fill(PHANTOM_INK);
+    }
+    // The red half is laid over the fan (so the rays stop at the seam), full of out-of-focus bokeh.
+    g.poly(red).fill(PHANTOM_RED);
+    for (let bokeh = 0; bokeh < 16; bokeh += 1) {
+      const bx = hash01(bokeh * 3 + 1) * seamBottom * 1.05 + redShift + Math.sin(nowMs / 900 + bokeh) * 6;
+      const by = hash01(bokeh * 3 + 2) * h;
+      const radius = 12 + 40 * hash01(bokeh * 3 + 3);
+      const color = bokeh % 4 === 0 ? PHANTOM_WHITE : PHANTOM_RED_HOT;
+      // Stacked translucent discs read as a soft, out-of-focus light.
+      for (let ring = 3; ring >= 1; ring -= 1) {
+        g.circle(bx, by, (radius * ring) / 3).fill({ color, alpha: bokeh % 4 === 0 ? 0.08 : 0.12 });
+      }
+    }
+    const rip: number[] = [];
+    for (let index = 0; index < seam.length; index += 2)
+      rip.push(seam[index]! + (redShift + burstShift) / 2, seam[index + 1]!);
+    g.poly(rip, false).stroke({ color: PHANTOM_WHITE, width: 6, join: 'miter' });
+    g.poly(rip, false).stroke({ color: PHANTOM_INK, width: 2, join: 'miter' });
+
+    // Title on a tilted ink label, and LET'S GO! cut from magazines, on the starburst half.
+    const land = stageProgress(t, 0.3, 0.2);
+    if (land > 0) {
+      const labelX = w * 0.72;
+      const labelY = h * 0.3;
+      const pop = 1.5 - 0.5 * easeOutBack(land, 2);
+      const title = frame.focusedSong?.title ?? '';
+      g.poly(parallelogramPoints(labelX - 150 * pop, labelY - 22 * pop, 300 * pop, 44 * pop, 12)).fill(PHANTOM_INK);
+      addSkinText(layer, title, labelX, labelY, {
+        size: 20,
+        fill: PHANTOM_WHITE,
+        fontFamily: DEFAULT_HEADLINE_FONT,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        maxWidth: 270,
+        alpha: Math.min(1, land * 3),
+      }).scale.y *= pop;
+      const glyph: GlyphFactory = (char, options) =>
+        addSkinText(layer, char, 0, 0, {
+          size: options.size,
+          weight: options.weight,
+          fill: options.fill,
+          fontFamily: options.fontFamily,
+        });
+      addRansomText(g, glyph, "LET'S GO!", w * 0.7, h * 0.56, {
+        size: 44,
+        seed: 17,
+        angle: -0.1,
+        appear: (index) => stageProgress(t, 0.38 + index * 0.035, 0.12),
+      });
+    }
+    // Fall to ink for the handoff.
+    const dark = Math.max(0, (t - 0.86) / 0.14);
+    if (dark > 0) {
+      const cover = new Graphics();
+      cover.rect(0, 0, w, h).fill({ color: PHANTOM_INK, alpha: dark });
+      layer.addChild(cover);
+    }
+  }
+
+  public tick(
+    nowMs: number,
+    focusedSong: BrowserSongEntry | undefined,
+    _launchAt?: number,
+    audio?: BeMusicAudioFrame,
+  ): void {
+    // Ambient motion: frozen with effects off, half speed when reduced.
+    const seconds = this.effects === 'off' ? 0 : (nowMs / 1000) * (this.effects === 'reduced' ? 0.5 : 1);
+    // The BGM / chart preview drives the poster: burst and halftone pump with it, streaks flare, an equalizer rises.
+    const drive = audioDrive(audio, this.effects);
     if (this.dots) {
       this.dots.y = (seconds * 14) % DOT_PERIOD;
+      this.dots.alpha = Math.min(1, 0.75 + 0.6 * drive.level);
     }
     // Beat clock from the focused chart's BPM, so the whole screen previews the song's tempo.
     const bpm = focusedSong?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
     const beatPulse = (1 - ((seconds * beatsPerSecond) % 1)) ** 3;
     if (this.burst) {
-      this.burst.rotation = seconds * 0.12;
-      this.burst.scale.set(1 + 0.06 * beatPulse);
+      this.burst.rotation = seconds * 0.12 + 0.12 * drive.onset;
+      this.burst.scale.set(1 + 0.06 * beatPulse + 0.24 * drive.bass + 0.1 * drive.onset);
     }
     this.kicker.x = -((seconds * 36) % KICKER_PITCH);
     const card = this.activeCard;
@@ -122,11 +256,38 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       const span = this.designWidth + 260;
       streak.x = ((seconds * speed + hash01(index + 31) * span) % span) - 200;
       streak.y = 60 + hash01(index + 41) * 380;
+      streak.alpha = Math.min(1, (this.streakAlpha[index] ?? 0.2) * (1 + 2.2 * drive.high + 1.5 * drive.onset));
     }
+    this.drawSpectrum(drive.bands);
     if (this.activeRowY !== undefined) {
       // Pointer kicks toward the card on every beat.
-      this.pointer.position.set(LAYOUT.listX - 12 + 5 * beatPulse, this.activeRowY);
-      this.pointer.scale.set(1 + 0.18 * beatPulse);
+      const kick = Math.max(beatPulse, drive.onset);
+      this.pointer.position.set(LAYOUT.listX - 12 + 5 * kick, this.activeRowY);
+      this.pointer.scale.set(1 + 0.18 * kick);
+    }
+  }
+
+  /** 24 slanted red bars along the bottom edge under the list, capped in white; hot bands go gold. */
+  private drawSpectrum(bands: readonly number[]): void {
+    const g = this.spectrum;
+    g.clear();
+    const count = 24;
+    const left = LAYOUT.listX;
+    const pitch = (this.designWidth - 10 - left) / count;
+    const base = this.designHeight;
+    for (let bar = 0; bar < count; bar += 1) {
+      const value = bandLevel(bands, bar, count);
+      const h = Math.round(70 * value);
+      if (h < 3) continue;
+      const x = left + bar * pitch;
+      g.poly(parallelogramPoints(x, base - h, pitch - 4, h, 6)).fill({
+        color: value > 0.85 ? PHANTOM_GOLD : PHANTOM_RED,
+        alpha: 0.55,
+      });
+      g.poly(parallelogramPoints(x + 6 * (1 - 3 / h), base - h, pitch - 4, 3, (6 * 3) / h)).fill({
+        color: PHANTOM_WHITE,
+        alpha: 0.8,
+      });
     }
   }
 
@@ -143,6 +304,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     if (this.built) return;
     this.built = true;
     this.designWidth = designWidth;
+    this.designHeight = designHeight;
     const ground = new Graphics();
     ground.rect(0, 0, designWidth, designHeight).fill(PHANTOM_BLACK);
     ground.poly(slabPoints(designHeight)).fill(PHANTOM_RED);
@@ -179,10 +341,11 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       streak.alpha = 0.12 + hash01(index + 5) * 0.2;
       streakLayer.addChild(streak);
       this.streaks.push(streak);
+      this.streakAlpha.push(streak.alpha);
     }
     this.dots = dots;
     this.burst = burst;
-    this.backLayer.addChild(ground, burst, burstMask, dots, slabMask, edge, streakLayer);
+    this.backLayer.addChild(ground, burst, burstMask, dots, slabMask, edge, this.spectrum, streakLayer);
 
     // Header kicker, one tooth wider than the canvas so scrolling by a tooth pitch loops seamlessly.
     const teeth: number[] = [-KICKER_PITCH, 38];
@@ -226,6 +389,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       skewX: -0.18,
       dropShadow: { color: PHANTOM_RED, distance: 3 },
     });
+    drawNoteEmblem(chrome, 214, 27, 22, PHANTOM_WHITE, PHANTOM_RED);
     chrome.poly(parallelogramPoints(designWidth - 196, 9, 180, 20, -8)).fill(PHANTOM_WHITE);
     addText(categoryName, designWidth - 28, 19, {
       size: 11,
@@ -292,7 +456,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
         .fill(lit ? (segment >= 9 ? PHANTOM_GOLD : PHANTOM_RED_HOT) : PHANTOM_SLATE);
     }
     if (fileLabel) {
-      addText(fileLabel, 24, 250, { size: 8, weight: '600', fill: PHANTOM_ASH, maxWidth: 268 });
+      addText(fileLabel, 24, 249, { size: 9, weight: '600', fill: PHANTOM_ASH, maxWidth: 268 });
     }
 
     // PLAY is the primary action (big red card); AUTO PLAY is a secondary paper tag. Hit areas below mirror these.

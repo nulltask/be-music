@@ -11,7 +11,7 @@ import { synesthesiaResultSkin } from './result.ts';
 import { synesthesiaSelectSkin } from './select.ts';
 
 /**
- * Synesthesia — a skin after the sound-and-light games of Tetsuya Mizuguchi (Rez Infinite, Tetris Effect): deep space,
+ * Synesthesia — a skin after synaesthetic sound-and-light rhythm games: deep space,
  * streaming 3D stars, a wireframe floor grid, glass panels, colour that keeps time with the music, and hits that
  * detonate as perspective-projected particle bursts.
  */

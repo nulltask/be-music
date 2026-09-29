@@ -138,6 +138,19 @@ function readStoredBuiltInSkinId(): string | undefined {
   }
 }
 
+const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
+
+/** Stored effect level, else `'reduced'` when the OS asks for reduced motion, else `'full'`. */
+function readStoredSkinEffects(): 'full' | 'reduced' | 'off' {
+  try {
+    const stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
+    if (stored === 'full' || stored === 'reduced' || stored === 'off') return stored;
+  } catch {
+    // Storage blocked — fall through to the media query.
+  }
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+}
+
 function storeBuiltInSkinId(id: string): void {
   try {
     window.localStorage.setItem(BUILT_IN_SKIN_STORAGE_KEY, id);
@@ -497,6 +510,7 @@ class PlayerWebDemoApp {
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
       skinFamilyOverride: 'auto',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
+      skinEffects: readStoredSkinEffects(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -728,6 +742,17 @@ class PlayerWebDemoApp {
       .name('Built-in skin')
       .onChange((id: string) => {
         this.handleBuiltInSkinChange(id);
+      });
+    gui
+      .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
+      .name('Skin effects')
+      .onChange((level: 'full' | 'reduced' | 'off') => {
+        try {
+          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
+        } catch {
+          // Private windows / blocked storage: the pick still applies for this session.
+        }
+        this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
     // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
     // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
@@ -3013,7 +3038,11 @@ class PlayerWebDemoApp {
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
-      : new DefaultPixiSongSelectView({ ...selectSceneOptions, beMusicSkin: this.beMusicSkin });
+      : new DefaultPixiSongSelectView({
+          ...selectSceneOptions,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+        });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
   }
@@ -3169,7 +3198,11 @@ class PlayerWebDemoApp {
     if (playSkin === undefined) {
       // Default-family path: no LR2 skin loaded for this chart. `DefaultPixiGameplayView` strips the skin / invisible-
       // note-skin slots from its option shape, so neither value flows in here.
-      return new DefaultPixiGameplayView({ ...sharedOptions, beMusicSkin: this.beMusicSkin });
+      return new DefaultPixiGameplayView({
+        ...sharedOptions,
+        beMusicSkin: this.beMusicSkin,
+        beMusicEffects: this.guiState.skinEffects,
+      });
     }
     return new PixiGameplayView({
       ...sharedOptions,
@@ -3319,7 +3352,11 @@ class PlayerWebDemoApp {
     };
     this.resultView = lr2ResultSkin
       ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
-      : new DefaultPixiResultView({ ...sharedResultOptions, beMusicSkin: this.beMusicSkin });
+      : new DefaultPixiResultView({
+          ...sharedResultOptions,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+        });
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;

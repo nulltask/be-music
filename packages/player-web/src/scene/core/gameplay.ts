@@ -75,6 +75,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/g
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
+import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
@@ -128,7 +129,7 @@ import type {
 } from '../gameplay-chrome.ts';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicBomb, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type { BeMusicBomb, BeMusicEffectLevel, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
@@ -306,6 +307,8 @@ export interface CoreGameplayViewOptions {
    * Phantom skin.
    */
   beMusicSkin?: BeMusicSkin;
+  /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
+  beMusicEffects?: BeMusicEffectLevel;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -693,6 +696,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * moment the gameplay view appears, not from the moment notes begin scrolling.
    */
   protected sceneStartTime = 0;
+  /** Intro length scheduled by `start()` (theme `#PLAYSTART` or the fallback), for chrome count-ins. */
+  private scheduledIntroMs = 0;
+  /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
+  private lastJudgeAt: number | undefined;
+  private lastImpulseAt: number | undefined;
+  private lastImpulseKind: 'white' | 'black' | 'scratch' | undefined;
   private startTime = 0;
   /**
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
@@ -717,6 +726,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * See `audio-bus.ts` for the architecture and per-mode topology.
    */
   private audioBus: AudioBusHandle | undefined;
+  /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
+  private audioAnalyzer: AudioAnalyzer | undefined;
+  /** This frame's audio features (sampled once per render, on the play clock). */
+  private audioFrame: AudioFeatures | undefined;
   /**
    * Most-recently-applied compressor mode. Distinct from the bus's `mode` getter so we can decide what to flip back to
    * when `setAudioCompressor(true)` re-enables compression after a temporary `'off'` (we restore whatever
@@ -1300,6 +1313,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
     const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    this.scheduledIntroMs = introMs;
     // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
     // in the background — see `prepare()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
     // true and the rAF loop in the intro (LR2 LOADING) phase.
@@ -1588,6 +1602,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
+    this.audioAnalyzer?.dispose();
+    this.audioAnalyzer = undefined;
+    this.audioFrame = undefined;
     const audioBus = this.audioBus;
     this.audioBus = undefined;
     const audioContext = this.audioContext;
@@ -2090,6 +2107,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.audioBus = buildAudioBus(this.audioContext, initialMode, {
       initialStages: this.options.audioCompressorStages,
     });
+    // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
+    this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
+    this.audioBus.outputNode.connect(this.audioAnalyzer.input);
     // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
     // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity, 80 = 80 % loud, > 100
@@ -2940,6 +2960,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const until = seconds + 0.6;
     this.lastJudge = judge;
     this.lastJudgeUntil = until;
+    this.lastJudgeAt = this.playClock();
     // Themes restart their per-side judge animation on every judgement (LR2 timer 46 / 47 drives the attached
     // `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains from time=0 per hit). When `channel` isn't supplied (legacy callers) we
     // default to the 1P side. PMS / 9 KEY is single-side so every judgement collapses onto 1P regardless of the
@@ -3015,6 +3036,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
     this.applyExitFadeAlpha();
+    this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
     this.perf.time('renderSkin', () => this.renderThemeLayer(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderBga', () => this.renderBga(seconds));
     this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
@@ -3164,7 +3186,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         seed: Math.floor(startedAt * 7.31) % 100_003,
       });
     }
-    this.playfieldSkin.gameplay.renderBombs({ pool: this.bombLayerPool, bombs, nowMs: now });
+    this.playfieldSkin.gameplay.renderBombs({
+      pool: this.bombLayerPool,
+      bombs,
+      nowMs: now,
+      combo: this.tracker.combo,
+      effects: this.options.beMusicEffects ?? 'full',
+      audio: this.audioFrame,
+    });
   }
 
   /** Active be-music skin for scene-painted playfield parts; the built-in Phantom skin unless the host picked one. */
@@ -3365,6 +3394,26 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     });
   }
 
+  /**
+   * Milliseconds since the chart's first beat for chrome count-ins. Before the play-start gate opens (`startTime` is
+   * still +Infinity) it counts toward the scheduled intro end and holds just below zero if the BGA preload runs long.
+   */
+  private resolveChartMs(): number | undefined {
+    if (this.startTime === 0) return undefined;
+    if (Number.isFinite(this.startTime)) return performance.now() - this.startTime;
+    return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
+  }
+
+  /** Records the latest key press / autoplay hit for input-reactive skin visuals. */
+  private noteImpulse(channel: string): void {
+    this.lastImpulseAt = this.playClock();
+    this.lastImpulseKind = resolveBeMusicLaneKind(
+      channel,
+      resolveLr2LaneIndex(channel, this.chartPlayVariant),
+      this.chartPlayVariant,
+    );
+  }
+
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
     const seconds = this.currentSeconds();
@@ -3418,6 +3467,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeSurvival: this.gaugeState.survival === true,
       fast: this.fastCount,
       slow: this.slowCount,
+      totalNotes: total,
+      chartMs: this.resolveChartMs(),
+      judgeAtMs: this.lastJudgeAt,
+      impulseAtMs: this.lastImpulseAt,
+      impulseKind: this.lastImpulseKind,
+      effects: this.options.beMusicEffects ?? 'full',
+      audio: this.audioFrame,
     };
   }
 
@@ -3511,6 +3567,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         lanes: skinlessLanes,
         beatPhase: beat - Math.floor(beat),
         nowMs: this.playClock(),
+        combo: this.tracker.combo,
+        effects: this.options.beMusicEffects ?? 'full',
+        audio: this.audioFrame,
       });
     }
   }
@@ -4213,9 +4272,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private applyEngineCommand(command: PlayerUiCommand): void {
     switch (command.kind) {
       case 'flash-lane':
+        this.noteImpulse(command.channel);
         this.flashKeyOnTimer(command.channel);
         break;
       case 'press-lane':
+        this.noteImpulse(command.channel);
         this.pressedChannels.add(command.channel);
         this.startKeyOnTimer(command.channel);
         break;

@@ -3,6 +3,7 @@ import type { ChildPool } from '../pixi-utils.ts';
 import { getDesignTextResolution } from '../core/viewport.ts';
 import { DEFAULT_TEXT_FONT } from './fonts.ts';
 import { layoutTabularRun } from './phantom-style.ts';
+import { alignCapCenter } from './text-metrics.ts';
 
 /**
  * Per-frame HUD text for built-in skins. Nodes come from a {@link ChildPool} when one is given (so a 60 fps redraw
@@ -10,7 +11,7 @@ import { layoutTabularRun } from './phantom-style.ts';
  * figures.
  */
 
-type TextWeight = '300' | '400' | '500' | '600' | '700' | '800' | '900';
+type TextWeight = '200' | '300' | '400' | '500' | '600' | '700' | '800' | '900';
 
 export interface HudTextOptions {
   size?: number;
@@ -26,6 +27,8 @@ export interface HudTextOptions {
   rotation?: number;
   stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
   dropShadow?: { color: number; alpha: number; blur: number; distance: number; angle?: number };
+  /** Uniform scale around the anchor, applied after the `maxWidth` squeeze (judge / combo "punch"). */
+  scale?: number;
 }
 
 export function addHudText(
@@ -48,6 +51,7 @@ export function addHudText(
     node.style = style;
   }
   node.anchor.set(opts.anchorX ?? 0, opts.anchorY ?? 0);
+  alignCapCenter(node, opts.fontFamily ?? DEFAULT_TEXT_FONT, opts.weight ?? '500', opts.size ?? 10);
   node.position.set(x, y);
   node.scale.set(1, 1);
   // Pooled texts keep their previous skew / rotation, so both are always written.
@@ -55,6 +59,10 @@ export function addHudText(
   node.rotation = opts.rotation ?? 0;
   if (opts.maxWidth !== undefined && node.width > opts.maxWidth) {
     node.scale.x = opts.maxWidth / node.width;
+  }
+  if (opts.scale !== undefined && opts.scale !== 1) {
+    node.scale.x *= opts.scale;
+    node.scale.y = opts.scale;
   }
   if (!pool) {
     layer.addChild(node);
@@ -77,18 +85,19 @@ export function addHudNumber(
   const style = resolveTextStyle(opts);
   const run = layoutTabularRun(text, (char) => measureGlyph(char, style));
   const squeeze = opts.maxWidth !== undefined && run.width > opts.maxWidth ? opts.maxWidth / run.width : 1;
-  const left = x - run.width * squeeze * (opts.anchorX ?? 0);
+  const scale = opts.scale ?? 1;
+  const left = x - run.width * squeeze * scale * (opts.anchorX ?? 0);
   for (const glyph of run.glyphs) {
     if (glyph.char === ' ') continue;
     const node = addHudText(
       layer,
       glyph.char,
-      left + (glyph.x + glyph.w / 2) * squeeze,
+      left + (glyph.x + glyph.w / 2) * squeeze * scale,
       y,
-      { ...opts, anchorX: 0.5, maxWidth: undefined },
+      { ...opts, anchorX: 0.5, maxWidth: undefined, scale: undefined },
       pool,
     );
-    node.scale.x = squeeze;
+    node.scale.set(squeeze * scale, scale);
   }
 }
 

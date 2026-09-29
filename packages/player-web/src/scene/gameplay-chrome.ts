@@ -1,5 +1,6 @@
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { Container } from 'pixi.js';
+import type { AudioFeatures } from '../runtime/audio-analysis.ts';
 import type { ChildPool } from './pixi-utils.ts';
 
 /**
@@ -59,6 +60,22 @@ export interface SkinlessGameplayChromeRuntime {
   fast?: number;
   /** SLOW (late GREAT/GOOD) count. */
   slow?: number;
+  /** Playable notes in the chart (0 while unknown). */
+  totalNotes?: number;
+  /**
+   * Milliseconds since the chart's first beat: negative during the intro count-in, `undefined` before the play has
+   * been scheduled. Lets chrome stage entrance cut-ins against the real start.
+   */
+  chartMs?: number;
+  /** Play-clock ms of the most recent judgement — drives the judge / combo "punch". */
+  judgeAtMs?: number;
+  /** Play-clock ms and lane class of the most recent key press (or autoplay hit) — drives input-reactive visuals. */
+  impulseAtMs?: number;
+  impulseKind?: 'white' | 'black' | 'scratch';
+  /** Showmanship level the chrome should render at (defaults to `'full'`). */
+  effects?: 'full' | 'reduced' | 'off';
+  /** Live analysis of the mix for audio-reactive chrome (loudness, spectrum, onsets); absent without Web Audio. */
+  audio?: AudioFeatures;
 }
 
 export interface SkinlessGameplayChromeRenderContext {
