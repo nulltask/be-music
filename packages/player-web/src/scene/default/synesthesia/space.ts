@@ -2,7 +2,7 @@ import { hash01 } from '../phantom-style.ts';
 
 /**
  * Pure 3D helpers for the Synesthesia skin: a pinhole projection, deterministic particle bursts, a looping starfield,
- * point-cloud shapes (pyramids, a human figure), particle rivers, and ember / hue-based colour. Everything is a
+ * point-cloud shapes (pyramids), orbiting particles for the audio orb, particle rivers, and ember / hue-based colour. Everything is a
  * function of (seed, time) so the pooled per-frame redraw needs no particle state and never shimmers.
  */
 
@@ -212,59 +212,82 @@ export function pointCloudPyramid(seed: number, count: number): CloudPoint[] {
 }
 
 /**
- * A floating human figure as a point cloud — Rez's particle avatar. Roughly 2 units tall (head top at `y ≈ -1`,
- * feet at `y ≈ 1`), arms spread slightly down and out, legs trailing as if drifting. Points scatter inside capsules
- * along each limb, weighted by limb volume. Deterministic for `seed`.
+ * `count` points spread evenly over the unit sphere (a Fibonacci lattice), each with a per-point size / brightness
+ * weight in [0.3, 1]. Deterministic for `seed` (which only varies the weights).
  */
-export function pointCloudHumanoid(seed: number, count: number): CloudPoint[] {
+export function fibonacciSphere(count: number, seed: number): CloudPoint[] {
   const points: CloudPoint[] = [];
-  const totalWeight = HUMANOID_LIMBS.reduce((sum, limb) => sum + limb.volume, 0);
+  const golden = Math.PI * (3 - Math.sqrt(5));
   for (let index = 0; index < count; index += 1) {
-    const base = seed * 151 + index * 19;
-    let pick = hash01(base + 1) * totalWeight;
-    let limb = HUMANOID_LIMBS[HUMANOID_LIMBS.length - 1]!;
-    for (const candidate of HUMANOID_LIMBS) {
-      pick -= candidate.volume;
-      if (pick <= 0) {
-        limb = candidate;
-        break;
-      }
-    }
-    const centre = lerp3(limb.from, limb.to, hash01(base + 2));
-    // Random direction inside the capsule; sqrt biases toward the surface so the body reads as a shell of light.
-    const cosTheta = 1 - 2 * hash01(base + 3);
-    const sinTheta = Math.sqrt(Math.max(0, 1 - cosTheta * cosTheta));
-    const phi = Math.PI * 2 * hash01(base + 4);
-    const r = limb.radius * Math.sqrt(hash01(base + 5));
+    const y = count > 1 ? 1 - (2 * index) / (count - 1) : 0;
+    const ring = Math.sqrt(Math.max(0, 1 - y * y));
+    const theta = golden * index;
     points.push({
-      x: centre.x + sinTheta * Math.cos(phi) * r,
-      y: centre.y + cosTheta * r,
-      z: centre.z + sinTheta * Math.sin(phi) * r,
-      weight: 0.3 + 0.7 * hash01(base + 6),
+      x: Math.cos(theta) * ring,
+      y,
+      z: Math.sin(theta) * ring,
+      weight: 0.3 + 0.7 * hash01(seed * 173 + index),
     });
   }
   return points;
 }
 
-const HUMANOID_LIMBS: ReadonlyArray<{ from: Vec3; to: Vec3; radius: number; volume: number }> = (
-  [
-    // [from, to, radius]
-    [{ x: 0, y: -0.86, z: 0 }, { x: 0, y: -0.8, z: 0 }, 0.13], // head
-    [{ x: 0, y: -0.66, z: 0 }, { x: 0, y: -0.12, z: 0.02 }, 0.17], // torso
-    [{ x: -0.1, y: -0.12, z: 0 }, { x: 0.1, y: -0.12, z: 0 }, 0.13], // hips
-    [{ x: -0.2, y: -0.62, z: 0 }, { x: -0.46, y: -0.32, z: 0.05 }, 0.06], // left upper arm
-    [{ x: -0.46, y: -0.32, z: 0.05 }, { x: -0.66, y: -0.02, z: 0.12 }, 0.05], // left forearm
-    [{ x: 0.2, y: -0.62, z: 0 }, { x: 0.46, y: -0.34, z: -0.04 }, 0.06], // right upper arm
-    [{ x: 0.46, y: -0.34, z: -0.04 }, { x: 0.7, y: -0.1, z: -0.1 }, 0.05], // right forearm
-    [{ x: -0.1, y: -0.06, z: 0 }, { x: -0.18, y: 0.42, z: 0.1 }, 0.08], // left thigh
-    [{ x: -0.18, y: 0.42, z: 0.1 }, { x: -0.22, y: 0.94, z: 0.24 }, 0.06], // left shin
-    [{ x: 0.1, y: -0.06, z: 0 }, { x: 0.14, y: 0.4, z: -0.08 }, 0.08], // right thigh
-    [{ x: 0.14, y: 0.4, z: -0.08 }, { x: 0.2, y: 0.9, z: 0.06 }, 0.06], // right shin
-  ] as const
-).map(([from, to, radius]) => {
-  const length = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
-  return { from, to, radius, volume: (length + radius) * radius * radius };
-});
+/**
+ * Limb brightening for a shell point whose view-space normal has depth component `normalZ` (−1 facing the camera,
+ * 0 on the silhouette, +1 facing away): 1 on the silhouette falling to `floor` at the centre of the disc, the way a
+ * glowing shell reads brightest at its edge.
+ */
+export function limbGlow(normalZ: number, floor = 0.25): number {
+  const edge = 1 - Math.min(1, Math.abs(Number.isFinite(normalZ) ? normalZ : 0));
+  return floor + (1 - floor) * edge ** 1.5;
+}
+
+/**
+ * One particle of a Magnetosphere-style orb: a light riding a tilted circular orbit around the core, tied to a
+ * spectrum band.
+ */
+export interface OrbitParticle {
+  /** Orbit radius as a multiple of the core radius, [1.3, 2.8]. */
+  reach: number;
+  /** Orbit-plane tilts (radians). */
+  tiltX: number;
+  tiltZ: number;
+  /** Angular speed (rad / s), signed. */
+  speed: number;
+  phase: number;
+  /** Spectrum band (0..15) the orbit breathes with. */
+  band: number;
+  /** Size / brightness weight in [0.4, 1]. */
+  weight: number;
+}
+
+/** `count` orbit particles, deterministic for `seed`. */
+export function orbitParticles(seed: number, count: number): OrbitParticle[] {
+  const particles: OrbitParticle[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const base = seed * 263 + index * 29;
+    particles.push({
+      reach: 1.3 + 1.5 * hash01(base + 1) ** 1.4,
+      tiltX: (hash01(base + 2) - 0.5) * Math.PI,
+      tiltZ: (hash01(base + 3) - 0.5) * Math.PI,
+      speed: (0.5 + 1.4 * hash01(base + 4)) * (hash01(base + 5) > 0.5 ? 1 : -1),
+      phase: hash01(base + 6) * Math.PI * 2,
+      band: Math.floor(hash01(base + 7) * 16) % 16,
+      weight: 0.4 + 0.6 * hash01(base + 8),
+    });
+  }
+  return particles;
+}
+
+/** Position of `particle` at orbit `angle` on a circle of `radius` (in the orb's local frame, centred on the core). */
+export function orbitPosition(particle: OrbitParticle, angle: number, radius: number): Vec3 {
+  const flat: Vec3 = { x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius };
+  const tilted = rotateX(flat, particle.tiltX);
+  // Tilt about z: rotate the (x, y) pair.
+  const cos = Math.cos(particle.tiltZ);
+  const sin = Math.sin(particle.tiltZ);
+  return { x: tilted.x * cos - tilted.y * sin, y: tilted.x * sin + tilted.y * cos, z: tilted.z };
+}
 
 /**
  * Particle `index` of a flowing river of light, in river-local space: it travels along `x` from `-length / 2` to
@@ -380,4 +403,52 @@ export function roamingCamera(
     yaw: pose.yaw + wobble(0.23, 0.47, 1.13) * range.yaw * drift,
     pitch: pose.pitch + wobble(0.29, 0.43, 0.89) * range.pitch * drift,
   };
+}
+
+/** An axis-aligned box in world space. */
+export interface Box3 {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+}
+
+/**
+ * A free-roaming position inside `bounds` at `seconds`: each axis sums two incommensurate sines (phases from `seed`),
+ * so the path wanders smoothly and never visibly repeats. Always inside the box.
+ */
+export function wanderPoint(seconds: number, seed: number, bounds: Box3): Vec3 {
+  const t = Number.isFinite(seconds) ? seconds : 0;
+  const axis = (a: number, b: number, offset: number) =>
+    (Math.sin(t * a + hash01(seed * 31 + offset) * 6.283) * 0.62 +
+      Math.sin(t * b + hash01(seed * 37 + offset) * 6.283) * 0.38) *
+      0.5 +
+    0.5;
+  const mix = (min: number, max: number, u: number) => min + (max - min) * u;
+  return {
+    x: mix(bounds.minX, bounds.maxX, axis(0.137, 0.311, 1)),
+    y: mix(bounds.minY, bounds.maxY, axis(0.193, 0.427, 2)),
+    z: mix(bounds.minZ, bounds.maxZ, axis(0.101, 0.263, 3)),
+  };
+}
+
+/**
+ * How a glossy body at screen offset (`dx`, `dy`) *toward* a light source `distance` px away catches it: `angle` is
+ * the direction of the light on screen, and `strength` (0..1) falls off with distance in units of the source's
+ * radius and rises with its `energy` (0..1, e.g. the music's level).
+ */
+export function reflectedLight(
+  dx: number,
+  dy: number,
+  distance: number,
+  sourceRadius: number,
+  energy: number,
+): { angle: number; strength: number } {
+  const angle = Math.atan2(dy, dx);
+  const reach = Math.max(1e-6, sourceRadius) * 2.2;
+  const falloff = Math.min(1, reach / Math.max(distance, sourceRadius));
+  const strength = Math.max(0, Math.min(1, falloff * (0.45 + 0.55 * Math.max(0, Math.min(1, energy)))));
+  return { angle, strength };
 }

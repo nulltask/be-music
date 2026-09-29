@@ -9,13 +9,14 @@ import { drawSynesthesiaMoments } from './moments.ts';
 import { hash01 } from '../phantom-style.ts';
 import { audioDrive, type AudioDrive } from '../audio-drive.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
-import { drawFrame, drawPointCloud, drawReticle, drawSchool, drawSpectrumHalo } from './draw.ts';
+import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool } from './draw.ts';
 import {
   emberColor,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
-  pointCloudHumanoid,
+  fibonacciSphere,
+  orbitParticles,
   pointCloudPyramid,
   projectPoint,
   REST_CAMERA,
@@ -23,6 +24,7 @@ import {
   starfieldPoint,
   vanishingPoint,
   viewPoint,
+  wanderPoint,
   type CameraPose,
 } from './space.ts';
 import {
@@ -83,14 +85,15 @@ function advanceSchools(
   state.lastMs = nowMs;
   return state.flocks;
 }
-const FIGURE = pointCloudHumanoid(11, 1400);
+const ORB_SHELL = fibonacciSphere(800, 11);
+const ORB = orbitParticles(11, 22);
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
 
 /**
  * Synesthesia gameplay HUD after Rez Infinite's Area X: a black void lit by an ember horizon, data dust and speed
  * streaks pouring out of the vanishing point, a floor of light points scrolling toward the player, rivers of particles
  * once the run is in the zone, and hairline frames with lock-on corners. With no BGA the monitor idles on a floating
- * point-cloud figure in front of particle pyramids. Colour drifts through the ember band and swells on every beat.
+ * audio orb roaming in front of particle pyramids. Colour drifts through the ember band and swells on every beat.
  */
 export function renderSynesthesiaChrome({
   layer,
@@ -451,7 +454,7 @@ function drawPlayfieldWell(graphics: Graphics, right: number, progressRatio: num
 
 /**
  * Monitor frame: a warm hairline with lock-on corners. With no BGA the screen idles on a miniature Area X — a floating
- * point-cloud figure turning slowly in front of particle pyramids on an ember horizon, streaks pouring past — the
+ * Magnetosphere-style orb roaming in front of particle pyramids on an ember horizon, streaks pouring past — the
  * "nothing is playing, but the space is alive" state. The idle scene draws into `light` (additive).
  */
 function drawBgaFrame(
@@ -479,7 +482,7 @@ function drawBgaFrame(
 
   graphics.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill({ color: SYN_VOID, alpha: 0.92 });
   const inside = (x: number, y: number) => !insideBga(x, y, -2);
-  // The monitor's camera circles the figure: the shot's turn is exaggerated into an orbit, its travel damped.
+  // The monitor's camera circles the scene: the shot's turn is exaggerated into an orbit, its travel damped.
   const orbit = 60;
   const orbitCamera: CameraPose = {
     x: camera.x * 0.2,
@@ -546,39 +549,36 @@ function drawBgaFrame(
       .lineTo(x1, y1)
       .stroke({ color: index % 5 === 0 ? SYN_CYAN : SYN_AMBER, width: 1, alpha: Math.sin(progress * Math.PI) * 0.5 });
   }
-  // The figure: drifting, slowly turning, breathing on the beat, a hot core at the chest.
-  const bob = Math.sin(seconds * 0.9) * 6;
-  const figureScale = 104 * (1 + 0.03 * pulse + 0.05 * drive.bass);
-  drawPointCloud(
-    light,
-    FIGURE,
-    { scale: figureScale, x: 0, y: -72 + bob, z: 60, yaw: Math.sin(seconds * 0.35) * 0.9, pitch: 0.12 },
-    view,
+  // The audio orb roams the monitor's little world close to the camera: a Magnetosphere-style shell of sparks and
+  // fibres with a black moon circling it.
+  const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
+  const moonLayer = pool.acquireGraphics();
+  moonLayer.label = 'synesthesia-gameplay/orb-moon';
+  moonLayer.blendMode = 'normal';
+  const frontLayer = pool.acquireGraphics();
+  frontLayer.label = 'synesthesia-gameplay/orb-front';
+  frontLayer.blendMode = 'add';
+  const orb = drawMagnetoOrb(
+    { back: light, moon: moonLayer, front: frontLayer },
+    () => pool.acquireSprite(),
+    ORB_SHELL,
+    ORB,
     {
-      colorOf: (point, index) => (index % 17 === 0 ? SYN_CYAN : emberColor(0.45 + 0.55 * point.weight)),
-      alpha: 0.8,
-      size: 1,
+      ...roam,
+      radius: 24 * (1 + 0.03 * pulse),
+      view,
+      drive,
       seconds,
-      shimmer: 0.35,
-      referenceScale: 220 / 280,
-      bokeh: 3.5,
-      skip: (px, py) => inside(px, py),
+      alpha: 1,
+      moon: { size: 0.45, distance: 2, speed: 0.65, phase: 1.1, tilt: 0.35 },
+      clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
     },
   );
-  const core = projectPoint(
-    viewPoint({ x: 0, y: -72 + bob - 0.5 * figureScale, z: 60 }, orbitCamera, orbit),
-    cx,
-    baseHorizon,
-    220,
-  );
-  for (let ring = 4; ring >= 1; ring -= 1) {
-    light.circle(core.x, core.y, ring * 5 * (1 + 0.3 * pulse)).fill({ color: SYN_AMBER, alpha: 0.06 + 0.02 * pulse });
+  if (orb) {
+    // Lock-on reticle tracking it.
+    const lock = orb.radius * 1.6 + 5 * pulse;
+    drawReticle(light, orb.x - lock, orb.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
   }
-  // A halo of spectrum rays around the figure's core, mirrored left / right.
-  drawSpectrumHalo(light, core.x, core.y, 40, 34, drive, (px, py) => inside(px, py));
-  // Lock-on reticle on the figure.
-  const lock = 34 + 6 * pulse;
-  drawReticle(light, core.x - lock, core.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.55, { arm: 8, cross: true });
   addHudText(
     layer,
     'STANDBY',

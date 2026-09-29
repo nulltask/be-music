@@ -11,14 +11,16 @@ import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions }
 import { hash01 } from '../phantom-style.ts';
 import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
 import { audioDrive } from '../audio-drive.ts';
+import { ChildPool } from '../../pixi-utils.ts';
 import { createFlock, stepFlock } from './boids.ts';
-import { drawPointCloud, drawReticle, drawSchool, drawSpectrumHalo } from './draw.ts';
+import { ShapeBatch, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool } from './draw.ts';
 import {
   emberColor,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
-  pointCloudHumanoid,
+  fibonacciSphere,
+  orbitParticles,
   pointCloudPyramid,
   projectPoint,
   REST_CAMERA,
@@ -26,6 +28,7 @@ import {
   starfieldPoint,
   vanishingPoint,
   viewPoint,
+  wanderPoint,
 } from './space.ts';
 import {
   SYN_AMBER,
@@ -52,7 +55,10 @@ const INTRO_STAGGER_MS = 45;
 const STAR_COUNT = 320;
 const STREAK_COUNT = 26;
 const RIVER_PARTICLES = 340;
-const FIGURE = pointCloudHumanoid(23, 1600);
+const ORB_SHELL = fibonacciSphere(900, 23);
+const ORB = orbitParticles(23, 30);
+const SMALL_SHELL = fibonacciSphere(400, 31);
+const SMALL_ORB = orbitParticles(31, 12);
 /** How far the select camera roams around the pyramid field. */
 const CAMERA_RANGE = { x: 240, y: 110, yaw: 0.38, pitch: 0.16 } as const;
 const CAMERA_CYCLE_S = 6;
@@ -85,19 +91,25 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
 /**
  * Synesthesia song select, after Rez Infinite's Area X. The persistent back layer is a particle world — data dust and
  * speed streaks pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids on an ember
- * horizon, a floor of light points, a golden river of particles, and a floating point-cloud figure — redrawn cheaply
+ * horizon, a floor of light points, a golden river of particles, and a roaming Magnetosphere-style audio orb — redrawn cheaply
  * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
   private readonly ground = new Graphics();
-  /** Additive particle world: floor, pyramids, river, streaks, and the figure. */
+  /** Additive particle world: floor, pyramids, river, streaks, and the orb's tails. */
   private readonly world = new Graphics();
   private readonly stars: Sprite[] = [];
   private readonly lock = new Graphics();
   private readonly cursorGlow = new Sprite();
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
+  /** Glow sprites for the audio orb, drawn over the world graphics. */
+  private readonly orbHost = new Container();
+  /** Normal-blend layer for the orb's black moon, and the additive layer for the camera-facing half of its shell. */
+  private readonly orbMoon = new Graphics();
+  private readonly orbFront = new Graphics();
+  private readonly orbSprites = new ChildPool(this.orbHost);
   private readonly flocks = SCHOOL_SPECS.map((spec) => createFlock(spec.seed, SCHOOL_SIZE, spec.bounds));
   private built = false;
   private designWidth = 640;
@@ -182,7 +194,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     // Ambient motion: frozen with effects off, half speed when reduced.
     const rate = this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1;
     // The BGM / chart preview drives the space: dust speeds with loudness, the horizon and floor swell on the bass,
-    // the schools pulse, and a spectrum halo rays out of the figure.
+    // the schools pulse, and the orb's orbits breathe with the spectrum.
     const drive = audioDrive(audio, this.effects);
     const seconds = (nowMs / 1000) * rate;
     const dt = this.lastTickMs === undefined ? 0 : Math.min(0.1, (nowMs - this.lastTickMs) / 1000);
@@ -258,6 +270,8 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       projectPoint(viewPoint({ x, y: 150, z }, camera, WORLD_ORBIT), cx, floorY, 200);
     const spacing = 100;
     const offset = this.travel % spacing;
+    // Floor points, river, and streaks go out as a few batched instructions.
+    const batch = new ShapeBatch();
     for (let z = spacing - offset; z < 2600; z += spacing) {
       const nearness = 1 - z / 2600;
       const size = 0.6 + 1.5 * nearness * nearness;
@@ -268,7 +282,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
           continue;
         }
-        world.rect(point.x - size / 2, point.y - size / 2, size, size).fill({ color, alpha });
+        batch.rect(world, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
       }
     }
     // A golden river of particles sweeping across the floor.
@@ -287,14 +301,16 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       const tail = projectPoint(riverWorld({ ...local, x: local.x - 30 }), cx, floorY, 200);
       if (!head.visible || !tail.visible) continue;
       const heat = hash01(index * 3 + 7);
-      world
-        .moveTo(tail.x, tail.y)
-        .lineTo(head.x, head.y)
-        .stroke({
-          color: heat > 0.85 ? SYN_WHITE : emberColor(0.5 + 0.5 * heat),
-          width: 0.4 + 1 * Math.min(1, head.scale) * (0.5 + heat),
-          alpha: (0.25 + 0.55 * heat) * (1 - warp),
-        });
+      batch.line(
+        world,
+        heat > 0.85 ? SYN_WHITE : emberColor(0.5 + 0.5 * heat),
+        (0.25 + 0.55 * heat) * (1 - warp),
+        0.4 + 1 * Math.min(1, head.scale) * (0.5 + heat),
+        tail.x,
+        tail.y,
+        head.x,
+        head.y,
+      );
     }
     // Speed streaks — Rez's warp lines — thicken into a tunnel on launch.
     const streakSpeed = (0.35 + beatsPerSecond * 0.12) * (1 + 6 * warp);
@@ -305,15 +321,18 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       const outer = inner + (14 + 90 * progress) * (1 + 4 * warp);
       const cos = Math.cos(angle);
       const sin = Math.sin(angle) * 0.72;
-      world
-        .moveTo(dustVanish.x + cos * inner, dustVanish.y + sin * inner)
-        .lineTo(dustVanish.x + cos * outer, dustVanish.y + sin * outer)
-        .stroke({
-          color: index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4)),
-          width: 0.8 + progress * 1.6,
-          alpha: Math.sin(progress * Math.PI) * (0.35 + 0.4 * warp),
-        });
+      batch.line(
+        world,
+        index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4)),
+        Math.sin(progress * Math.PI) * (0.35 + 0.4 * warp),
+        0.8 + progress * 1.6,
+        dustVanish.x + cos * inner,
+        dustVanish.y + sin * inner,
+        dustVanish.x + cos * outer,
+        dustVanish.y + sin * outer,
+      );
     }
+    batch.flush();
     // Schools of light fish sweeping through the pyramids: tight on the beat, scattering when the cursor moves.
     if (rate > 0) {
       const scatter = Math.max(Math.max(0, 1 - (nowMs - this.cursorChangedAt) / 600) ** 2, 0.8 * drive.onset) + warp;
@@ -332,40 +351,41 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         );
       }
     }
-    // The figure, drifting behind the list — it turns to face you and breathes on the beat.
-    const bob = Math.sin(seconds * 0.8) * 8;
-    drawPointCloud(
-      world,
-      FIGURE,
-      {
-        scale: 120 * (1 + 0.03 * pulse + 0.05 * drive.bass),
-        x: 90,
-        y: -40 + bob,
-        z: 260,
-        yaw: Math.sin(seconds * 0.3) * 0.8,
-        pitch: 0.1,
-      },
-      { cx, cy: floorY - 120, focal: 300, camera: { ...camera, x: camera.x * 0.3, y: camera.y * 0.3 }, orbit: 260 },
-      {
-        colorOf: (point, index) => (index % 17 === 0 ? SYN_CYAN : emberColor(0.45 + 0.55 * point.weight)),
-        alpha: 0.55 * (1 - warp),
-        size: 0.9,
+    // Two audio orbs roam the space — the big one and its black moon right up by the camera — Magnetosphere-style shells of sparks and fibres, the big one
+    // with a black moon circling it. On launch they swell into the warp.
+    this.orbSprites.begin();
+    this.orbMoon.clear();
+    this.orbFront.clear();
+    const layers = { back: world, moon: this.orbMoon, front: this.orbFront };
+    const orbView = { cx, cy: floorY, focal: 200, camera, orbit: WORLD_ORBIT };
+    const big = wanderPoint(seconds * 0.6, 5, { minX: -210, maxX: 230, minY: -140, maxY: -20, minZ: -70, maxZ: 150 });
+    const small = wanderPoint(seconds * 0.75 + 40, 9, {
+      minX: -360,
+      maxX: 360,
+      minY: -190,
+      maxY: 30,
+      minZ: 80,
+      maxZ: 700,
+    });
+    // Draw the farther orb first so the nearer one's shell lands over it.
+    const orbs = [
+      { at: big, shell: ORB_SHELL, particles: ORB, radius: 58, moon: true },
+      { at: small, shell: SMALL_SHELL, particles: SMALL_ORB, radius: 34, moon: false },
+    ].sort((left, right) => right.at.z - left.at.z);
+    for (const orb of orbs) {
+      drawMagnetoOrb(layers, () => this.orbSprites.acquireSprite(), orb.shell, orb.particles, {
+        ...orb.at,
+        radius: orb.radius * (1 + 0.03 * pulse) * (1 + 0.8 * warp),
+        view: orbView,
+        drive,
         seconds,
-        shimmer: 0.35,
-        referenceScale: 300 / 560,
-        bokeh: 2.5,
-      },
-    );
-
-    // Spectrum halo around the figure's chest.
-    const figureCamera = { ...camera, x: camera.x * 0.3, y: camera.y * 0.3 };
-    const chest = projectPoint(
-      viewPoint({ x: 90, y: -40 + bob - 0.5 * 120, z: 260 }, figureCamera, 260),
-      cx,
-      floorY - 120,
-      300,
-    );
-    if (chest.visible && warp < 1) drawSpectrumHalo(world, chest.x, chest.y, 30, 40, drive);
+        alpha: 1 - warp * 0.5,
+        tilt: orb.moon ? 0.35 : -0.5,
+        spin: orb.moon ? 0.22 : -0.35,
+        ...(orb.moon ? { moon: { size: 0.42, distance: 2.1, speed: 0.55, phase: 0.4, tilt: 0.3 } } : {}),
+      });
+    }
+    this.orbSprites.end();
 
     // Lock-on reticle snapping onto the focused card, plus a breathing glow under it.
     const card = this.activeCard;
@@ -429,7 +449,9 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       this.stars.push(star);
     }
     this.world.blendMode = 'add';
-    this.backLayer.addChild(this.ground, this.world, starLayer);
+    this.orbHost.blendMode = 'add';
+    this.orbFront.blendMode = 'add';
+    this.backLayer.addChild(this.ground, this.world, starLayer, this.orbMoon, this.orbFront, this.orbHost);
 
     this.cursorGlow.texture = glow;
     this.cursorGlow.anchor.set(0.5);

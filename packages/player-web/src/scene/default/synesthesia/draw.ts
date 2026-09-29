@@ -1,25 +1,113 @@
-import type { Graphics } from 'pixi.js';
+import type { Graphics, Sprite } from 'pixi.js';
 import { hash01 } from '../phantom-style.ts';
 import type { AudioDrive } from '../audio-drive.ts';
 import { bandLevel } from '../audio-drive.ts';
 import type { Flock } from './boids.ts';
 import {
   emberColor,
+  limbGlow,
+  orbitPosition,
   projectPoint,
+  reflectedLight,
   rotateX,
   rotateY,
   viewPoint,
   type CameraPose,
   type CloudPoint,
+  type OrbitParticle,
   type Projected,
   type Vec3,
 } from './space.ts';
-import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE } from './style.ts';
+import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
 
 /**
  * Shared Synesthesia drawing: hairline frames with lock-on corners (Rez's targeting reticle) and projected point
  * clouds. Callers own the `Graphics`; these only append geometry.
  */
+
+/**
+ * Batches thousands of tiny additive shapes into a handful of draw instructions: rects and line segments are bucketed
+ * by (target graphics, colour quantized to 4 bits per channel, alpha quantized to eighths, stroke width) and emitted as
+ * one `fill` / `stroke` per bucket on {@link flush}. Emission order is bucket order, so only use it where overlap order does not matter
+ * (additive light).
+ */
+export class ShapeBatch {
+  private readonly rects = new Map<string, { graphics: Graphics; color: number; alpha: number; data: number[] }>();
+  private readonly lines = new Map<
+    string,
+    { graphics: Graphics; color: number; alpha: number; width: number; data: number[] }
+  >();
+  private readonly ids = new Map<Graphics, number>();
+
+  private id(graphics: Graphics): number {
+    let id = this.ids.get(graphics);
+    if (id === undefined) {
+      id = this.ids.size;
+      this.ids.set(graphics, id);
+    }
+    return id;
+  }
+
+  public rect(graphics: Graphics, rawColor: number, alpha: number, x: number, y: number, w: number, h: number): void {
+    const a = Math.round(Math.min(1, alpha) * 8) / 8;
+    if (a <= 0) return;
+    const color = quantizeColor(rawColor);
+    const key = `${this.id(graphics)}|${color}|${a}`;
+    let bucket = this.rects.get(key);
+    if (!bucket) {
+      bucket = { graphics, color, alpha: a, data: [] };
+      this.rects.set(key, bucket);
+    }
+    bucket.data.push(x, y, w, h);
+  }
+
+  public line(
+    graphics: Graphics,
+    rawColor: number,
+    alpha: number,
+    width: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    const a = Math.round(Math.min(1, alpha) * 8) / 8;
+    if (a <= 0) return;
+    const w = Math.max(0.5, Math.round(width * 2) / 2);
+    const color = quantizeColor(rawColor);
+    const key = `${this.id(graphics)}|${color}|${a}|${w}`;
+    let bucket = this.lines.get(key);
+    if (!bucket) {
+      bucket = { graphics, color, alpha: a, width: w, data: [] };
+      this.lines.set(key, bucket);
+    }
+    bucket.data.push(x0, y0, x1, y1);
+  }
+
+  public flush(): void {
+    for (const bucket of this.rects.values()) {
+      const { data, graphics } = bucket;
+      for (let index = 0; index < data.length; index += 4) {
+        graphics.rect(data[index]!, data[index + 1]!, data[index + 2]!, data[index + 3]!);
+      }
+      graphics.fill({ color: bucket.color, alpha: bucket.alpha });
+    }
+    for (const bucket of this.lines.values()) {
+      const { data, graphics } = bucket;
+      for (let index = 0; index < data.length; index += 4) {
+        graphics.moveTo(data[index]!, data[index + 1]!).lineTo(data[index + 2]!, data[index + 3]!);
+      }
+      graphics.stroke({ color: bucket.color, width: bucket.width, alpha: bucket.alpha });
+    }
+    this.rects.clear();
+    this.lines.clear();
+  }
+}
+
+/** `color` snapped to 16 levels per channel (bucket-friendly, visually identical for light). */
+function quantizeColor(color: number): number {
+  return (color & 0xf0f0f0) | 0x080808;
+}
 
 /**
  * Rez lock-on reticle: four rounded corner brackets around `(x, y, w, h)` and an optional centre cross. `arm` is the
@@ -124,6 +212,7 @@ export function drawPointCloud(
   const reference = style.referenceScale ?? 1;
   const seconds = style.seconds ?? 0;
   const shimmer = style.shimmer ?? 0;
+  const batch = new ShapeBatch();
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index]!;
     let world = { x: point.x * transform.scale, y: point.y * transform.scale, z: point.z * transform.scale };
@@ -146,14 +235,19 @@ export function drawPointCloud(
     const color = style.colorOf(point, index);
     if (style.bokeh && point.weight > 0.75) {
       const halo = size * style.bokeh;
-      graphics
-        .rect(projected.x - halo / 2, projected.y - halo / 2, halo, halo)
-        .fill({ color, alpha: Math.min(1, alpha) * 0.12 });
+      batch.rect(
+        graphics,
+        color,
+        Math.min(1, alpha) * 0.12,
+        projected.x - halo / 2,
+        projected.y - halo / 2,
+        halo,
+        halo,
+      );
     }
-    graphics
-      .rect(projected.x - size / 2, projected.y - size / 2, size, size)
-      .fill({ color, alpha: Math.min(1, alpha) });
+    batch.rect(graphics, color, Math.min(1, alpha), projected.x - size / 2, projected.y - size / 2, size, size);
   }
+  batch.flush();
 }
 
 /**
@@ -169,6 +263,7 @@ export function drawSchool(
 ): void {
   const palette = style.palette ?? 'ember';
   const { position: p, velocity: v } = flock;
+  const batch = new ShapeBatch();
   for (let index = 0; index < flock.count; index += 1) {
     const x = p[index * 3]!;
     const y = p[index * 3 + 1]!;
@@ -200,58 +295,293 @@ export function drawSchool(
     const alpha = style.alpha * (0.35 + 0.65 * nearness);
     const mx = (head.x + tail.x) / 2;
     const my = (head.y + tail.y) / 2;
-    graphics
-      .moveTo(tail.x, tail.y)
-      .lineTo(mx, my)
-      .stroke({ color, width: 0.6 + 1 * nearness, alpha: alpha * 0.55 })
-      .moveTo(mx, my)
-      .lineTo(head.x, head.y)
-      .stroke({ color, width: 1 + 2 * nearness, alpha });
+    batch.line(graphics, color, alpha * 0.55, 0.6 + 1 * nearness, tail.x, tail.y, mx, my);
+    batch.line(graphics, color, alpha, 1 + 2 * nearness, mx, my, head.x, head.y);
     const size = 1.2 + 2.2 * nearness;
-    graphics
-      .rect(head.x - size / 2, head.y - size / 2, size, size)
-      .fill({ color: heat > 0.8 ? SYN_WHITE : color, alpha: Math.min(1, alpha * 1.3) });
+    batch.rect(
+      graphics,
+      heat > 0.8 ? SYN_WHITE : color,
+      Math.min(1, alpha * 1.3),
+      head.x - size / 2,
+      head.y - size / 2,
+      size,
+      size,
+    );
   }
+  batch.flush();
 }
 
-const HALO_RAYS = 48;
+export interface MagnetoOrbOptions {
+  /** World centre and rest shell radius. */
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  view: { cx: number; cy: number; focal: number; camera?: CameraPose; orbit?: number };
+  drive: AudioDrive;
+  seconds: number;
+  alpha: number;
+  /** Tilt of the shell's spin (radians) and spin speed (rad / s). */
+  tilt?: number;
+  spin?: number;
+  /**
+   * A black moon revolving round the orb like a satellite: `size` and `distance` are fractions of the shell radius,
+   * `speed` in rad / s, `tilt` the orbit plane's inclination. Omit for none.
+   */
+  moon?: { size: number; distance: number; speed: number; phase: number; tilt?: number };
+  /** Screen rect the orb must stay inside (e.g. the idle monitor). */
+  clip?: { x: number; y: number; w: number; h: number };
+}
+
+/** The three layers an orb draws into, back to front: additive light, a normal-blend layer for the black moon, and
+ * additive light again for the half of the shell facing the camera. */
+export interface MagnetoOrbLayers {
+  back: Graphics;
+  moon: Graphics;
+  front: Graphics;
+}
+
+const ORB_HAZE = 0x5a3cff;
+const ORB_VIOLET = 0x8a6bff;
+const ORB_BLUE = 0x5b8bff;
+const ORB_PINK = 0xff7ad9;
+const ORB_WHITE = 0xf2eaff;
+const ORB_FIBER = 0xb9a8ff;
+const ORB_MOON = 0x0b0518;
+const SHELL_COLORS = [ORB_VIOLET, ORB_BLUE, ORB_WHITE, ORB_VIOLET, ORB_PINK, ORB_BLUE] as const;
+/** Samples per orbit tail. */
+const TRAIL_STEPS = 12;
 
 /**
- * Spectrum halo: {@link HALO_RAYS} light rays radiating from a ring of `radius` around `(cx, cy)`, each as long as its
- * band (up to `reach`), mirrored left / right so the low end sits at the top and bottom. The ring itself breathes on
- * the bass. Draws nothing in silence beyond a faint ring. `skip` drops rays (e.g. outside a monitor).
+ * A Magnetosphere-style orb (after flight404's iTunes visualizer): a hollow shell of countless violet / blue / pink /
+ * white sparks, brightest at its silhouette, bristling with fine fibres that shoot out from the surface, wrapped in a
+ * violet haze and a few lights racing round on tilted orbits — and, for contrast, a black moon circling it. The
+ * music drives it: each latitude swells and grows longer fibres with its spectrum band (lows south, highs north),
+ * the shell breathes on the bass, onsets burst the fibres outward, the highs twinkle the sparks. Returns the
+ * projected centre and shell radius.
  */
-export function drawSpectrumHalo(
-  graphics: Graphics,
-  cx: number,
-  cy: number,
-  radius: number,
-  reach: number,
-  drive: AudioDrive,
-  skip?: (x: number, y: number) => boolean,
-): void {
-  const ring = radius * (1 + 0.12 * drive.bass);
-  graphics.circle(cx, cy, ring).stroke({ color: emberColor(0.7), width: 1, alpha: 0.18 + 0.4 * drive.level });
-  const half = HALO_RAYS / 2;
-  for (let ray = 0; ray < HALO_RAYS; ray += 1) {
-    const column = ray < half ? ray : HALO_RAYS - 1 - ray;
-    const value = bandLevel(drive.bands, column, half);
-    if (value < 0.04) continue;
-    const angle = -Math.PI / 2 + (ray / HALO_RAYS) * Math.PI * 2;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle);
-    const x0 = cx + cos * (ring + 2);
-    const y0 = cy + sin * (ring + 2);
-    const x1 = cx + cos * (ring + 2 + reach * value);
-    const y1 = cy + sin * (ring + 2 + reach * value);
-    if (skip && (skip(x0, y0) || skip(x1, y1))) continue;
-    graphics
-      .moveTo(x0, y0)
-      .lineTo(x1, y1)
-      .stroke({
-        color: ray % 8 === 0 ? SYN_CYAN : emberColor(0.45 + 0.55 * value),
-        width: 1.6,
-        alpha: 0.35 + 0.6 * value,
-      });
+export function drawMagnetoOrb(
+  layers: MagnetoOrbLayers,
+  acquireSprite: () => Sprite,
+  shell: readonly CloudPoint[],
+  particles: readonly OrbitParticle[],
+  options: MagnetoOrbOptions,
+): { x: number; y: number; radius: number } | undefined {
+  const { view, drive, clip } = options;
+  const toScreen = (point: Vec3) =>
+    projectPoint(view.camera ? viewPoint(point, view.camera, view.orbit) : point, view.cx, view.cy, view.focal);
+  const centre = toScreen({ x: options.x, y: options.y, z: options.z });
+  if (!centre.visible) return undefined;
+  const outside = (x: number, y: number) =>
+    clip !== undefined && (x < clip.x || x > clip.x + clip.w || y < clip.y || y > clip.y + clip.h);
+  const levels = Array.from({ length: 16 }, (_, column) => bandLevel(drive.bands, column, 16));
+  const glow = synGlowTexture();
+  const sparkle = (x: number, y: number, size: number, tint: number, alpha: number) => {
+    if (alpha < 0.02 || size < 0.8 || outside(x, y)) return;
+    const node = acquireSprite();
+    node.texture = glow;
+    node.anchor.set(0.5);
+    node.blendMode = 'add';
+    node.position.set(x, y);
+    node.width = size;
+    node.height = size;
+    node.tint = tint;
+    node.alpha = Math.min(1, alpha);
+  };
+  const place = (local: Vec3) => toScreen({ x: options.x + local.x, y: options.y + local.y, z: options.z + local.z });
+  const breathe = options.radius * (1 + 0.12 * drive.bass);
+  const screenRadius = breathe * centre.scale;
+  const spin = options.seconds * (options.spin ?? 0.25);
+  const tilt = options.tilt ?? 0.35;
+
+  // Thousands of dots, fibres, and tail segments go out as a handful of batched instructions.
+  const batch = new ShapeBatch();
+  const addDot = (layer: Graphics, color: number, alpha: number, x: number, y: number, size: number) =>
+    batch.rect(layer, color, alpha, x - size / 2, y - size / 2, size, size);
+  const addLine = (
+    layer: Graphics,
+    color: number,
+    alpha: number,
+    width: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ) => batch.line(layer, color, alpha, width, x0, y0, x1, y1);
+
+  // Violet haze behind everything.
+  for (let ring = 4; ring >= 1; ring -= 1) {
+    const r = screenRadius * (0.9 + 0.45 * ring);
+    if (
+      clip &&
+      (centre.x - r < clip.x ||
+        centre.x + r > clip.x + clip.w ||
+        centre.y - r < clip.y ||
+        centre.y + r > clip.y + clip.h)
+    ) {
+      continue;
+    }
+    layers.back
+      .circle(centre.x, centre.y, r)
+      .fill({ color: ORB_HAZE, alpha: (0.05 + 0.05 * drive.level) * options.alpha });
   }
+
+  // The shell and its fibres; each point lands on the back or front layer by which way it faces.
+  for (let index = 0; index < shell.length; index += 1) {
+    const point = shell[index]!;
+    const latitude = (1 - point.y) / 2;
+    const band = levels[Math.min(15, Math.floor(latitude * 16))] ?? 0;
+    const heat = hash01(index * 7 + 3);
+    const radius = breathe * (1 + 0.22 * band);
+    let normal: Vec3 = rotateY(point, spin);
+    normal = rotateX(normal, tilt);
+    const projected = place({ x: normal.x * radius, y: normal.y * radius, z: normal.z * radius });
+    if (!projected.visible || outside(projected.x, projected.y)) continue;
+    const limb = limbGlow(normal.z);
+    const target = normal.z < 0 ? layers.front : layers.back;
+    const depth = projected.scale / Math.max(1e-6, centre.scale);
+    const color = SHELL_COLORS[index % SHELL_COLORS.length]!;
+    const twinkle = 1 - 0.5 * drive.high * (0.5 + 0.5 * Math.sin(options.seconds * 9 + index * 1.7));
+    const alpha = Math.min(1, options.alpha * limb * (0.35 + 0.65 * point.weight) * (0.75 + 0.5 * band) * twinkle);
+    const size = Math.max(0.7, (0.8 + 1.7 * point.weight * limb) * depth * Math.min(1.6, centre.scale * 2.2));
+    addDot(target, color, alpha, projected.x, projected.y, size);
+    // Fibres: every other point bristles outward, longest where its band is loud and on onsets.
+    if (index % 2 === 0 && limb > 0.3) {
+      const length = breathe * (0.25 + 1.1 * band + 0.9 * drive.onset * heat) * (0.55 + 0.45 * point.weight);
+      const mid = place({
+        x: normal.x * (radius + length * 0.5),
+        y: normal.y * (radius + length * 0.5),
+        z: normal.z * (radius + length * 0.5),
+      });
+      const tip = place({
+        x: normal.x * (radius + length),
+        y: normal.y * (radius + length),
+        z: normal.z * (radius + length),
+      });
+      if (mid.visible && tip.visible && !outside(tip.x, tip.y)) {
+        const fibreAlpha = 0.45 * limb * (0.45 + band) * options.alpha;
+        addLine(target, ORB_FIBER, fibreAlpha, 0.7, projected.x, projected.y, mid.x, mid.y);
+        addLine(target, ORB_FIBER, fibreAlpha * 0.4, 0.5, mid.x, mid.y, tip.x, tip.y);
+      }
+    }
+    if (heat > 0.95 && limb > 0.45) {
+      sparkle(
+        projected.x,
+        projected.y,
+        (8 + 14 * band) * Math.min(1.4, centre.scale * 2),
+        heat > 0.975 ? ORB_WHITE : color,
+        alpha * 0.8,
+      );
+    }
+  }
+
+  // A few lights racing round on tilted orbits, dragging tails.
+  const speedUp = 1 + 0.8 * drive.level;
+  const trailStep = 0.07 * (1 + 1.2 * drive.level);
+  for (const particle of particles) {
+    const band = levels[particle.band] ?? 0;
+    const radius = breathe * particle.reach * (1 + 0.35 * band + 0.5 * drive.onset * (particle.weight > 0.7 ? 1 : 0.4));
+    const color = particle.band < 5 ? ORB_PINK : particle.band < 11 ? ORB_VIOLET : ORB_WHITE;
+    const head = particle.phase + options.seconds * particle.speed * speedUp;
+    const direction = particle.speed > 0 ? -1 : 1;
+    let previous: { x: number; y: number } | undefined;
+    for (let step = 0; step <= TRAIL_STEPS; step += 1) {
+      const local = orbitPosition(particle, head + direction * step * trailStep, radius);
+      const point = place(local);
+      if (!point.visible || outside(point.x, point.y)) {
+        previous = undefined;
+        continue;
+      }
+      const target = local.z < 0 ? layers.front : layers.back;
+      if (previous) {
+        const fade = (1 - step / (TRAIL_STEPS + 1)) ** 1.6;
+        addLine(
+          target,
+          color,
+          fade * (0.3 + 0.5 * band) * options.alpha,
+          (0.5 + 1.2 * particle.weight) * Math.min(1.6, point.scale * 1.6),
+          previous.x,
+          previous.y,
+          point.x,
+          point.y,
+        );
+      } else if (step === 0) {
+        sparkle(
+          point.x,
+          point.y,
+          (5 + 6 * particle.weight) * Math.min(1.5, point.scale * 2) * (1 + band),
+          color,
+          (0.4 + 0.5 * band) * options.alpha,
+        );
+      }
+      previous = { x: point.x, y: point.y };
+    }
+  }
+
+  batch.flush();
+
+  // The black moon: an opaque dark satellite revolving round the orb on a tilted orbit (traced faintly), catching a
+  // thin violet rim. On the far side of its orbit the orb's front shell draws over it.
+  if (options.moon) {
+    const moon = options.moon;
+    const path = { reach: 1, tiltX: moon.tilt ?? 0.28, tiltZ: -0.22, speed: moon.speed, phase: 0, band: 0, weight: 1 };
+    const distance = options.radius * moon.distance;
+    let previous: { x: number; y: number } | undefined;
+    for (let step = 0; step <= 64; step += 1) {
+      const point = place(orbitPosition(path, (step / 64) * Math.PI * 2, distance));
+      if (!point.visible || outside(point.x, point.y)) {
+        previous = undefined;
+        continue;
+      }
+      if (previous) {
+        layers.back
+          .moveTo(previous.x, previous.y)
+          .lineTo(point.x, point.y)
+          .stroke({ color: ORB_VIOLET, width: 0.75, alpha: 0.18 * options.alpha });
+      }
+      previous = { x: point.x, y: point.y };
+    }
+    const orbit = orbitPosition(path, moon.phase + options.seconds * moon.speed, distance);
+    const at = place(orbit);
+    const r = breathe * moon.size * at.scale;
+    if (at.visible && !outside(at.x - r, at.y - r) && !outside(at.x + r, at.y + r)) {
+      const g = layers.moon;
+      g.circle(at.x, at.y, r).fill({ color: ORB_MOON, alpha: 0.97 * options.alpha });
+      // It reflects the orb: the side facing it glows violet → blue in soft bands, a specular glint sits toward the
+      // light, and the orb's sparks are mirrored along the lit limb — all brighter when the orb is close and loud.
+      const light = reflectedLight(
+        centre.x - at.x,
+        centre.y - at.y,
+        Math.hypot(centre.x - at.x, centre.y - at.y),
+        screenRadius,
+        Math.max(drive.level, drive.bass),
+      );
+      const lit = light.strength * options.alpha;
+      for (let band = 0; band < 5; band += 1) {
+        const spread = 1.25 - band * 0.2;
+        const radius = r * (0.93 - band * 0.11);
+        g.moveTo(at.x + Math.cos(light.angle - spread) * radius, at.y + Math.sin(light.angle - spread) * radius);
+        g.arc(at.x, at.y, radius, light.angle - spread, light.angle + spread).stroke({
+          color: band < 2 ? ORB_BLUE : ORB_VIOLET,
+          width: r * 0.12,
+          alpha: lit * (0.45 - band * 0.07),
+        });
+      }
+      const glintX = at.x + Math.cos(light.angle - 0.35) * r * 0.55;
+      const glintY = at.y + Math.sin(light.angle - 0.35) * r * 0.55;
+      g.circle(glintX, glintY, r * 0.26).fill({ color: ORB_VIOLET, alpha: 0.3 * lit });
+      g.circle(glintX, glintY, r * 0.1).fill({ color: ORB_WHITE, alpha: Math.min(1, 1.1 * lit) });
+      for (let spark = 0; spark < 7; spark += 1) {
+        const angle = light.angle + (spark - 3) * 0.28 + Math.sin(options.seconds * 1.7 + spark) * 0.05;
+        const twinkle = 0.5 + 0.5 * Math.sin(options.seconds * 6 + spark * 2.1);
+        g.circle(at.x + Math.cos(angle) * r * 0.8, at.y + Math.sin(angle) * r * 0.8, Math.max(0.6, r * 0.045)).fill({
+          color: SHELL_COLORS[spark % SHELL_COLORS.length]!,
+          alpha: lit * (0.35 + 0.5 * twinkle * drive.high + 0.2 * twinkle),
+        });
+      }
+      // A faint fresnel rim all the way round.
+      g.circle(at.x, at.y, r).stroke({ color: ORB_VIOLET, width: 1, alpha: (0.25 + 0.35 * lit) * options.alpha });
+    }
+  }
+  return { x: centre.x, y: centre.y, radius: screenRadius };
 }
