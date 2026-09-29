@@ -1,5 +1,6 @@
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { Container } from 'pixi.js';
+import type { AudioFeatures } from '../runtime/audio-analysis.ts';
 import type { ChildPool } from './pixi-utils.ts';
 
 /**
@@ -73,6 +74,8 @@ export interface SkinlessGameplayChromeRuntime {
   impulseKind?: 'white' | 'black' | 'scratch';
   /** Showmanship level the chrome should render at (defaults to `'full'`). */
   effects?: 'full' | 'reduced' | 'off';
+  /** Live analysis of the mix for audio-reactive chrome (loudness, spectrum, onsets); absent without Web Audio. */
+  audio?: AudioFeatures;
 }
 
 export interface SkinlessGameplayChromeRenderContext {

@@ -75,6 +75,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/g
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
+import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
@@ -725,6 +726,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * See `audio-bus.ts` for the architecture and per-mode topology.
    */
   private audioBus: AudioBusHandle | undefined;
+  /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
+  private audioAnalyzer: AudioAnalyzer | undefined;
+  /** This frame's audio features (sampled once per render, on the play clock). */
+  private audioFrame: AudioFeatures | undefined;
   /**
    * Most-recently-applied compressor mode. Distinct from the bus's `mode` getter so we can decide what to flip back to
    * when `setAudioCompressor(true)` re-enables compression after a temporary `'off'` (we restore whatever
@@ -1597,6 +1602,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
+    this.audioAnalyzer?.dispose();
+    this.audioAnalyzer = undefined;
+    this.audioFrame = undefined;
     const audioBus = this.audioBus;
     this.audioBus = undefined;
     const audioContext = this.audioContext;
@@ -2099,6 +2107,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.audioBus = buildAudioBus(this.audioContext, initialMode, {
       initialStages: this.options.audioCompressorStages,
     });
+    // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
+    this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
+    this.audioBus.outputNode.connect(this.audioAnalyzer.input);
     // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
     // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity, 80 = 80 % loud, > 100
@@ -3025,6 +3036,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
     this.applyExitFadeAlpha();
+    this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
     this.perf.time('renderSkin', () => this.renderThemeLayer(DESIGN_WIDTH, DESIGN_HEIGHT));
     this.perf.time('renderBga', () => this.renderBga(seconds));
     this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
@@ -3180,6 +3192,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       nowMs: now,
       combo: this.tracker.combo,
       effects: this.options.beMusicEffects ?? 'full',
+      audio: this.audioFrame,
     });
   }
 
@@ -3460,6 +3473,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       impulseAtMs: this.lastImpulseAt,
       impulseKind: this.lastImpulseKind,
       effects: this.options.beMusicEffects ?? 'full',
+      audio: this.audioFrame,
     };
   }
 
@@ -3555,6 +3569,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         nowMs: this.playClock(),
         combo: this.tracker.combo,
         effects: this.options.beMusicEffects ?? 'full',
+        audio: this.audioFrame,
       });
     }
   }

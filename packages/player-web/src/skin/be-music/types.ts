@@ -3,6 +3,7 @@ import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/type
 import type { SkinlessGameplayChromeRenderer } from '../../scene/gameplay-chrome.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
+import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
@@ -37,6 +38,14 @@ export type BeMusicEffectLevel = 'full' | 'reduced' | 'off';
 
 /** Visual class of a lane, resolved from its channel — skins pick colours per class. */
 export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
+
+/**
+ * Live analysis of what is playing, sampled once per frame: loudness (`level` / `peak` / `db`), `bass` / `mid` /
+ * `high` energy, a 16-band log-spaced spectrum (`bands`, ≈ 30 Hz → 14 kHz), and an `onset` envelope that jumps to 1
+ * on each detected transient. Gameplay taps the whole mix; select taps the BGM and chart preview. Absent when the
+ * host has no Web Audio.
+ */
+export type BeMusicAudioFrame = AudioFeatures;
 
 export interface BeMusicGameplaySkin {
   /** HUD chrome around the playfield (header, gauge, score, BGA frame, judgement / combo text). */
@@ -74,6 +83,8 @@ export interface BeMusicLanesContext {
   /** Current combo — lets skins escalate the playfield as a run builds. */
   combo?: number;
   effects?: BeMusicEffectLevel;
+  /** What is playing right now (see {@link BeMusicAudioFrame}). */
+  audio?: BeMusicAudioFrame;
 }
 
 export interface BeMusicNoteContext {
@@ -119,6 +130,8 @@ export interface BeMusicBombsContext {
   /** Current combo — lets skins escalate hit effects as a run builds. */
   combo?: number;
   effects?: BeMusicEffectLevel;
+  /** What is playing right now (see {@link BeMusicAudioFrame}). */
+  audio?: BeMusicAudioFrame;
 }
 
 /** Song-list geometry shared by the select renderer (drawing) and the scene (row hit-testing). */
@@ -184,7 +197,7 @@ export interface BeMusicSelectRenderer {
    */
   render(frame: BeMusicSelectFrame): boolean;
   /** Per-frame, transform-only animation of the persistent layers. */
-  tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number): void;
+  tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number, audio?: BeMusicAudioFrame): void;
   dispose(): void;
 }
 

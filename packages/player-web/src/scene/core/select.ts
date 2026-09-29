@@ -5,6 +5,7 @@ import { disposeChildren } from '../pixi-utils.ts';
 import { groupSongsByFolder, loadAssetBytes, resolveSongSource } from '../../collection/collection.ts';
 import { dirname } from '@be-music/utils/core';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
+import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import { resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
 import { logger } from '../../logger.ts';
 import type {
@@ -785,6 +786,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * as a field so we can duck the BGM (zero its gain) for the duration of any active preview playback.
    */
   private chartPreviewGain: GainNode | undefined;
+  /** Analyser tapping the BGM + chart preview for audio-reactive be-music skins (not the one-shot system cues). */
+  private selectAudioAnalyzer: AudioAnalyzer | undefined;
   /**
    * `selectBgmGain.gain.value` captured at the moment the preview engine reported `onPlaybackStart`. Restored when
    * playback stops so the BGM returns to whatever level the host configured (rather than overwriting it with our
@@ -1313,7 +1316,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         this.perf.time('render', () => this.render());
       }
       if (this.beMusicBackHolder.visible) {
-        this.beMusicRenderer?.tick(now, this.focusedSong(), this.launchAt);
+        this.beMusicRenderer?.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
       }
     }
     const report = this.perf.endFrame(() => ({
@@ -1352,6 +1355,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     this.chartPreviewGain = undefined;
     this.bgmGainBeforeDuck = undefined;
     this.pauseSelectBgm();
+    this.selectAudioAnalyzer?.dispose();
+    this.selectAudioAnalyzer = undefined;
     void this.selectBgmContext?.close().catch(() => undefined);
     this.selectBgmContext = undefined;
     this.selectBgmGain = undefined;
@@ -1654,6 +1659,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     gain.connect(audioContext.destination);
     this.selectBgmContext = audioContext;
     this.selectBgmGain = gain;
+    this.selectAudioAnalyzer = new AudioAnalyzer(audioContext);
+    gain.connect(this.selectAudioAnalyzer.input);
     // System-effect bus — sibling of `selectBgmGain`, routed directly to destination so the preview-start BGM duck
     // (which zeros `selectBgmGain.gain`) doesn't also silence cursor / folder / option cues.
     const fxGain = audioContext.createGain();
@@ -1680,6 +1687,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const gain = audioContext.createGain();
     gain.gain.value = 1;
     gain.connect(audioContext.destination);
+    if (this.selectAudioAnalyzer) gain.connect(this.selectAudioAnalyzer.input);
     this.chartPreviewGain = gain;
     this.chartPreviewEngine = new ChartPreviewEngine(audioContext, gain, {
       onPlaybackStart: () => {
