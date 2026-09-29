@@ -17,7 +17,7 @@ describe('isScratchLaneForVariant', () => {
 });
 
 describe('resolveFallbackLaneLayout', () => {
-  it('makes scratch lanes wider than normal key lanes while fitting the requested width', () => {
+  it('makes scratch lanes wider than normal key lanes, edge to edge, while fitting the requested width', () => {
     const lanes = resolveFallbackLaneLayout({
       channels: ['16', '11', '12', '13', '14', '15', '18', '19'],
       playVariant: '7',
@@ -28,7 +28,7 @@ describe('resolveFallbackLaneLayout', () => {
     expect(lanes).toHaveLength(8);
     expect(lanes[0]?.isScratch).toBe(true);
     expect(lanes[0]!.w).toBeGreaterThan(lanes[1]!.w);
-    expect(lanes[1]!.x - (lanes[0]!.x + lanes[0]!.w)).toBeCloseTo(2);
+    expect(lanes[1]!.x - (lanes[0]!.x + lanes[0]!.w)).toBeCloseTo(0);
     expect(lanes.at(-1)!.x + lanes.at(-1)!.w).toBeCloseTo(33 + 194);
   });
 

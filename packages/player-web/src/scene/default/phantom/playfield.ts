@@ -80,13 +80,13 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesC
 }
 
 export function renderPhantomNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {
-  drawNoteBody(graphics, x + 1, y, Math.max(4, w - 2), TONES[kind]);
+  drawNoteBody(graphics, x, y, Math.max(4, w), TONES[kind]);
 }
 
 export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: BeMusicLongNoteContext): void {
   const tone = TONES[kind];
-  const bodyX = x + 1;
-  const bodyW = Math.max(4, w - 2);
+  const bodyX = x;
+  const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
   // Translucent core with solid side rails — reads as "hold the lane", not a solid wall of colour.

@@ -107,13 +107,13 @@ export function renderSynesthesiaLanes({
 }
 
 export function renderSynesthesiaNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {
-  drawNote(graphics, x + 2, y, Math.max(4, w - 4), LIGHTS[kind]);
+  drawNote(graphics, x, y, Math.max(4, w), LIGHTS[kind]);
 }
 
 export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }: BeMusicLongNoteContext): void {
   const light = LIGHTS[kind];
-  const bodyX = x + 2;
-  const bodyW = Math.max(4, w - 4);
+  const bodyX = x;
+  const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
   // A beam of light between head and tail: soft outer glow, translucent core, bright centre filament.

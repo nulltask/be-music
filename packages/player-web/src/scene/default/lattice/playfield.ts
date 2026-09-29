@@ -85,14 +85,14 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
 }
 
 export function renderLatticeNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {
-  graphics.rect(x + 1, y - NOTE_HEIGHT, Math.max(3, w - 2), NOTE_HEIGHT).fill(LANE_COLORS[kind]);
+  graphics.rect(x, y - NOTE_HEIGHT, Math.max(3, w), NOTE_HEIGHT).fill(LANE_COLORS[kind]);
 }
 
 /** Long note: an outlined column ruled with fine horizontal hatching, capped by solid heads. */
 export function renderLatticeLongNote({ graphics, kind, x, w, top, bottom }: BeMusicLongNoteContext): void {
   const color = LANE_COLORS[kind];
-  const bodyX = x + 3;
-  const bodyW = Math.max(3, w - 6);
+  const bodyX = x;
+  const bodyW = Math.max(3, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyBottom = bottom - NOTE_HEIGHT;
   if (bodyBottom > bodyTop) {
