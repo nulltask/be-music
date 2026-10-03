@@ -47,7 +47,7 @@
     "@be-music/player-web": "workspace:*",
     "@be-music/stringifier": "workspace:*",
     "@be-music/utils": "workspace:*",
-    "@changesets/cli": "^3.0.2",
+    "@changesets/cli": "^3.0.3",
     "@types/node": "^26.6.1",
     "@vitest/coverage-v8": "catalog:",
     "rimraf": "^6.0.1",
