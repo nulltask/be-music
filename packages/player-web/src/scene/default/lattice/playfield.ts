@@ -7,6 +7,7 @@ import type {
   BeMusicLongNoteContext,
   BeMusicNoteContext,
 } from '../../../skin/be-music/types.ts';
+import { drawKeyBeamEdges } from '../key-beam.ts';
 import { comboTier, effectProfile } from '../moments.ts';
 import { easeOutCubic, hash01 } from '../phantom-style.ts';
 import { springEase } from './field.ts';
@@ -48,12 +49,15 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
     graphics
       .rect(x, lane.top, w, height)
       .fill({ color: lane.kind === 'white' ? LANE_BED : LANE_BED_DEEP, alpha: 0.94 });
+    // Key beam: a soft wash of the lane colour with crisp ink-coloured rails along both edges — clear at a glance, while
+    // the paper in the middle stays light enough for the notes.
     if (lane.beam > 0) {
-      const beamHeight = Math.min(height, 200);
+      const beamHeight = Math.min(height, 260);
       const strength = lane.beam * lane.beam * (3 - 2 * lane.beam);
       graphics
         .rect(x, lane.bottom - beamHeight, w, beamHeight)
-        .fill({ fill: resolveWash(LANE_COLORS[lane.kind]), alpha: strength * 0.5 });
+        .fill({ fill: resolveWash(LANE_COLORS[lane.kind]), alpha: strength * 0.55 });
+      drawKeyBeamEdges(graphics, x, w, lane.bottom, beamHeight, LANE_COLORS[lane.kind], strength, 1);
     }
     // Key cap: an outlined square that fills with the lane colour while held.
     const cap = Math.min(10, w - 4);
