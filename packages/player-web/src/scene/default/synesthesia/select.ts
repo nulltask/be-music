@@ -403,11 +403,6 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         0.5 + 0.5 * snap,
         { arm: 9, width: 1.75 },
       );
-      // Target marker leading the card.
-      const markerX = card.x - 16;
-      const markerY = card.y + card.h / 2;
-      this.lock.circle(markerX, markerY, 3 + 2 * pulse).stroke({ color: accent, width: 1.25, alpha: 0.9 });
-      this.lock.circle(markerX, markerY, 1.2).fill({ color: SYN_WHITE, alpha: 1 });
       this.cursorGlow.position.set(card.x + card.w / 2, card.y + card.h / 2);
       this.cursorGlow.width = card.w * 1.15;
       this.cursorGlow.height = card.h * 3.2;
@@ -596,13 +591,14 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
 
     // Search and library.
     framePanel(chrome, 14, 372, 290, 30, accent);
-    addText('SEARCH', 30, 384, labelStyle(accent));
-    addText(frame.searchQuery || 'Title / artist / genre', 100, 380, {
+    addText('SEARCH', 30, 387, { ...labelStyle(accent), anchorY: 0.5 });
+    addText(frame.searchQuery || 'Title / artist / genre', 116, 387, {
       size: 10,
+      anchorY: 0.5,
       weight: '300',
       fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
       fontFamily: SYN_TEXT_FONT,
-      maxWidth: 200,
+      maxWidth: 180,
     });
     addHitArea(layer, 14, 372, 290, 30, 'text', frame.actions.activateSearch);
     addText('LIBRARY', 30, 422, labelStyle());

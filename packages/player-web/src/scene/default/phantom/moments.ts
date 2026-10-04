@@ -1,10 +1,10 @@
 import { Graphics, type Container } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { DEFAULT_DISPLAY_FONT } from '../fonts.ts';
 import { addHudText } from '../hud-text.ts';
-import { effectProfile, impulse, momentProgress, trackMoments } from '../moments.ts';
+import { effectProfile, momentProgress, resolveMilestoneArea, trackMoments } from '../moments.ts';
 import { addRansomText, drawTearStrip, stripPoint, type GlyphFactory, type TearStrip } from './tear.ts';
 import {
   PHANTOM_GOLD,
@@ -43,6 +43,7 @@ export function drawPhantomMoments(
   layer: Container,
   runtime: SkinlessGameplayChromeRuntime,
   pool: ChildPool | undefined,
+  playfieldRight: number,
 ): boolean {
   const nowMs = runtime.nowMs ?? 0;
   const moments = trackMoments(chromeLayer, {
@@ -63,27 +64,23 @@ export function drawPhantomMoments(
   graphics.label = 'phantom/moments';
   if (!pool) layer.addChild(graphics);
 
-  // Misses hit back: a red vignette, and (full effects) a short sideways shake of the whole HUD.
-  const miss = runtime.lastJudge === 'POOR' || runtime.lastJudge === 'BAD' ? impulse(runtime.judgeAtMs, nowMs, 260) : 0;
-  if (miss > 0) {
-    drawMissVignette(graphics, miss);
-    if (effects.screenWide) {
-      const shake = Math.sin(nowMs / 11) * 5 * miss;
-      chromeLayer.position.set(shake, 0);
-      layer.position.set(shake, 0);
-    }
-  }
-  const comboBreak = momentProgress(moments.comboBreak?.atMs, nowMs, BREAK_MS);
-  if (comboBreak !== undefined && moments.comboBreak) {
-    drawComboBreak(graphics, layer, moments.comboBreak.combo, comboBreak, pool);
-  }
+  // Misses get no effect at all: the playfield stays still and clear so the next notes read.
 
   if (runtime.chartMs !== undefined) {
     drawCountIn(graphics, layer, runtime.chartMs, pool);
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   if (milestone !== undefined && moments.milestone) {
-    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBga === true, pool, nowMs);
+    drawMilestone(
+      graphics,
+      layer,
+      moments.milestone.value,
+      milestone,
+      runtime.hasBga === true,
+      pool,
+      nowMs,
+      playfieldRight,
+    );
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
@@ -94,63 +91,6 @@ export function drawPhantomMoments(
     drawFullCombo(graphics, layer, fullCombo, nowMs, effects.screenWide, pool);
   }
   return fullCombo !== undefined && fullCombo > 0.04 && fullCombo < 0.9;
-}
-
-const BREAK_MS = 700;
-
-/** Red edges bleeding in from the screen border on a BAD / POOR. */
-function drawMissVignette(graphics: Graphics, strength: number): void {
-  const depth = 34;
-  for (let band = 0; band < 3; band += 1) {
-    const inset = band * (depth / 3);
-    const alpha = 0.22 * strength * (1 - band / 3);
-    const w = depth / 3;
-    graphics.rect(inset, 0, w, DESIGN_HEIGHT).fill({ color: PHANTOM_RED, alpha });
-    graphics.rect(DESIGN_WIDTH - inset - w, 0, w, DESIGN_HEIGHT).fill({ color: PHANTOM_RED, alpha });
-    graphics.rect(0, inset, DESIGN_WIDTH, w).fill({ color: PHANTOM_RED, alpha });
-    graphics.rect(0, DESIGN_HEIGHT - inset - w, DESIGN_WIDTH, w).fill({ color: PHANTOM_RED, alpha });
-  }
-}
-
-/** A broken combo shatters: the old count drops and fades in red while ink / red shards fly off it. */
-function drawComboBreak(
-  graphics: Graphics,
-  layer: Container,
-  combo: number,
-  t: number,
-  pool: ChildPool | undefined,
-): void {
-  const cx = PLAYFIELD.x + PLAYFIELD.w / 2;
-  const cy = 270;
-  const fall = easeOutCubic(t);
-  for (let shard = 0; shard < 10; shard += 1) {
-    const angle = -Math.PI / 2 + (hash01(shard + combo) - 0.5) * 2.6;
-    const speed = 40 + hash01(shard * 3 + 1) * 70;
-    const x = cx + Math.cos(angle) * speed * fall;
-    const y = cy + Math.sin(angle) * speed * fall + 90 * t * t;
-    const size = 5 + hash01(shard + 9) * 7;
-    graphics
-      .poly(rotatedRect(x, y, size, size * 0.6, t * 8 + shard))
-      .fill({ color: shard % 2 === 0 ? PHANTOM_RED_HOT : PHANTOM_INK, alpha: 1 - t });
-  }
-  const text = addHudText(
-    layer,
-    String(combo),
-    cx,
-    cy + 30 * t * t,
-    {
-      size: 24,
-      fill: PHANTOM_RED_HOT,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      skewX: SKEW,
-      stroke: { color: PHANTOM_INK, width: 4, alignment: 0.5, join: 'miter' },
-    },
-    pool,
-  );
-  text.rotation = 0.35 * t;
-  text.alpha = 1 - t;
 }
 
 /** READY? → GO!! count-in over the last ~2.8 s before the first beat. */
@@ -229,22 +169,37 @@ function drawMilestone(
   hasBga: boolean,
   pool: ChildPool | undefined,
   nowMs: number,
+  playfieldRight: number,
 ): void {
-  // Over a live BGA the strip rides the monitor's bottom edge instead of covering the middle of the video.
-  const strip: TearStrip = hasBga
-    ? { cx: BGA.x + BGA.w / 2 + 40, cy: BGA.y + BGA.h - 14, angle: -0.07, length: 440, thickness: 54, seed: value }
-    : { cx: 462, cy: 200, angle: -0.12, length: 440, thickness: 86, seed: value };
-  const open = drawTearStrip(graphics, strip, t, nowMs);
+  // Never over the lanes: the strip lives in the column right of them (riding the monitor's bottom edge over a live
+  // BGA), or in the band under them when double play leaves no room — and it slides in from the right.
+  const area = resolveMilestoneArea(playfieldRight);
+  const compact = hasBga || area.mode === 'below';
+  const strip: TearStrip =
+    area.mode === 'below'
+      ? { cx: area.x + area.w / 2, cy: area.y + area.h / 2, angle: -0.03, length: area.w, thickness: 56, seed: value }
+      : {
+          cx: area.x + area.w / 2,
+          cy: hasBga ? BGA.y + BGA.h - 14 : area.y + 160,
+          angle: hasBga ? -0.07 : -0.1,
+          length: area.w - 6,
+          thickness: hasBga ? 54 : 80,
+          seed: value,
+        };
+  const open = drawTearStrip(graphics, strip, t, nowMs, 'right');
   if (open <= 0.05) return;
   const size = Math.min(1, open);
-  const burst = stripPoint(strip, -128, 0);
+  // Burst and word sit inside the strip whatever its length: the burst near the leading end, the word centred in what
+  // is left, shrunk to fit a short strip.
+  const burstU = Math.max(-128, -strip.length / 2 + 46);
+  const burst = stripPoint(strip, burstU, 0);
   graphics
     .poly(
       starburstPoints(
         burst.x,
         burst.y,
-        50 * size * (hasBga ? 0.8 : 1),
-        32 * size * (hasBga ? 0.8 : 1),
+        50 * size * (compact ? 0.8 : 1),
+        32 * size * (compact ? 0.8 : 1),
         12,
         t * 3,
         0.22,
@@ -259,7 +214,7 @@ function drawMilestone(
     burst.x + 2,
     burst.y,
     {
-      size: hasBga ? 28 : 34,
+      size: compact ? 28 : 34,
       fill: PHANTOM_INK,
       fontFamily: DEFAULT_DISPLAY_FONT,
       anchorX: 0.5,
@@ -270,9 +225,13 @@ function drawMilestone(
     },
     pool,
   ).scale.y *= size;
-  const word = stripPoint(strip, 48, 0);
+  const wordStart = burstU + 50;
+  const wordEnd = Math.min(strip.length / 2 - 8, burstU + 330);
+  const word = stripPoint(strip, (wordStart + wordEnd) / 2, 0);
+  // Seven ransom cards run about 5.2 × the size wide.
+  const wordSize = Math.min(compact ? 30 : 40, (wordEnd - wordStart) / 5.2);
   addRansomText(graphics, hudGlyphs(layer, pool), 'COMBO!!', word.x, word.y, {
-    size: (hasBga ? 30 : 40) * size,
+    size: wordSize * size,
     seed: value + 3,
     angle: strip.angle,
     appear: (index) => Math.max(0, (t - 0.04 - index * 0.025) / 0.08),

@@ -8,6 +8,8 @@ import {
   punchScale,
   updateMoments,
   type MomentInput,
+  MILESTONE_MIN_WIDTH,
+  resolveMilestoneArea,
 } from './moments.ts';
 
 const base: MomentInput = {
@@ -117,5 +119,27 @@ describe('effectProfile', () => {
     expect(effectProfile(undefined)).toEqual({ amount: 1, screenWide: true, enabled: true });
     expect(effectProfile('reduced')).toEqual({ amount: 0.5, screenWide: false, enabled: true });
     expect(effectProfile('off')).toEqual({ amount: 0, screenWide: false, enabled: false });
+  });
+});
+
+describe('resolveMilestoneArea', () => {
+  it('uses the column right of single-play lanes', () => {
+    const area = resolveMilestoneArea(227);
+    expect(area.mode).toBe('beside');
+    expect(area.x).toBeGreaterThan(227);
+    expect(area.x + area.w).toBeLessThanOrEqual(640);
+    expect(area.y + area.h).toBeLessThanOrEqual(346);
+  });
+
+  it('drops below the lanes when they leave too little room (double play)', () => {
+    const area = resolveMilestoneArea(547);
+    expect(area.mode).toBe('below');
+    expect(area.y).toBeGreaterThanOrEqual(346);
+    expect(area.y + area.h).toBeLessThanOrEqual(480);
+  });
+
+  it('switches exactly at the minimum width', () => {
+    expect(resolveMilestoneArea(640 - 16 - MILESTONE_MIN_WIDTH).mode).toBe('beside');
+    expect(resolveMilestoneArea(640 - 16 - MILESTONE_MIN_WIDTH + 1).mode).toBe('below');
   });
 });

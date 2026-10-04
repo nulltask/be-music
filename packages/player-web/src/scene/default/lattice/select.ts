@@ -346,6 +346,8 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
       { x: 6, y: 288, w: 306, h: 56 },
       { x: 6, y: 360, w: 306, h: 36 },
       { x: 6, y: 412, w: 200, h: 36 },
+      // Footer readouts (dB / row / clock / list label).
+      { x: 6, y: designHeight - 28, w: designWidth - 12, h: 26 },
       {
         x: LAYOUT.listX - 18,
         y: LAYOUT.listTop - 6,

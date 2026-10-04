@@ -1,11 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../gameplay-constants.ts';
-import {
-  resolveFallbackLaneLayout,
-  shouldPreserveFallbackSideWidth,
-  type FallbackLaneLayoutRect,
-} from '../gameplay-lanes.ts';
+import { resolveSkinlessLaneLayout, type FallbackLaneLayoutRect } from '../gameplay-lanes.ts';
 import type { SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
 import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT } from './fonts.ts';
 import {
@@ -32,6 +28,7 @@ import type { ChildPool } from '../pixi-utils.ts';
 import { audioDrive, bandLevel, type AudioDrive } from './audio-drive.ts';
 import { drawPhantomMoments } from './phantom/moments.ts';
 import { effectProfile, impulse, punchScale } from './moments.ts';
+import { flashingGreatColor, isFlashingGreat, judgeDisplayWord } from './judge-word.ts';
 import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions as TextOptions } from './hud-text.ts';
 
 const DISPLAY_FONT = DEFAULT_DISPLAY_FONT;
@@ -122,7 +119,7 @@ export function renderDefaultGameplayFrame(
   drawStatusBar(front, frontLayer, runtime, frontPool);
   // Showpieces (count-in, combo milestones, clear line, full combo) sit above the HUD. They draw before the judgements
   // because a screen-wide full combo covers the page and the judgement type would print through its strip.
-  const covered = drawPhantomMoments(layer, frontLayer, runtime, frontPool);
+  const covered = drawPhantomMoments(layer, frontLayer, runtime, frontPool, playfield.right);
   if (!covered) drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
 }
 
@@ -219,16 +216,8 @@ function resolveFallbackPlayfieldLayout(
   laneCount: number | undefined,
   playVariant: ChartPlayVariant | undefined,
 ): FallbackPlayfieldLayout {
-  const lanes = resolveFallbackLaneLayout({
-    channels: laneChannels,
-    laneCount,
-    playVariant,
-    x: PLAYFIELD.x,
-    w: PLAYFIELD.w,
-    preserveSideWidth: shouldPreserveFallbackSideWidth(laneChannels, playVariant),
-  });
-  const right = Math.max(PLAYFIELD.x + PLAYFIELD.w, ...lanes.map((lane) => lane.x + lane.w));
-  const w = Math.max(1, right - PLAYFIELD.x);
+  const { lanes, left, right } = resolveSkinlessLaneLayout(laneChannels, laneCount, playVariant);
+  const w = Math.max(1, right - left);
   const sideBounds = resolveSideBounds(lanes);
   const sideCenters: Partial<Record<PlaySide, number>> = {};
   if (sideBounds['1P']) {
@@ -239,9 +228,9 @@ function resolveFallbackPlayfieldLayout(
   }
   return {
     lanes,
-    x: PLAYFIELD.x,
+    x: left,
     w,
-    centerX: PLAYFIELD.x + w / 2,
+    centerX: left + w / 2,
     right,
     sideCenters,
     sideGap:
@@ -700,7 +689,8 @@ function drawJudgeTally(
   x: number,
   pool?: ChildPool,
 ): void {
-  const y = BGA.y - 12;
+  // Top-aligned with the BGA so the header chip clears the status bar's beat-driven teeth.
+  const y = BGA.y;
   const w = DESIGN_WIDTH - x - 6;
   const rowH = 24;
   const h = 22 + JUDGE_TALLY_ROWS.length * rowH + 46;
@@ -789,19 +779,18 @@ function drawJudgements(
   for (const display of resolveJudgeDisplays(runtime, playfield)) {
     const combo = resolveVisibleCombo(display.judge, display.combo);
     const style = judgeStyle(display.judge);
-    // Punch: every judgement lands with a quick overshoot; misses also rattle sideways.
-    const judgeScale = punchScale(runtime.judgeAtMs, nowMs, 120, 0.24 * amount);
+    // Punch: every judgement lands with a quick overshoot (a miss lands plainly, with no rattle).
     const miss = display.judge === 'POOR' || display.judge === 'BAD';
-    const rattle = miss ? Math.sin(nowMs / 14) * 4 * impulse(runtime.judgeAtMs, nowMs, 220) * amount : 0;
+    const judgeScale = miss ? 1 : punchScale(runtime.judgeAtMs, nowMs, 120, 0.24 * amount);
     addText(
       layer,
-      display.judge,
-      display.x + rattle,
+      judgeDisplayWord(display.judge),
+      display.x,
       238,
       {
         scale: judgeScale,
         size: 30,
-        fill: style.fill,
+        fill: isFlashingGreat(display.judge) ? flashingGreatColor(nowMs, PHANTOM_FLASHING_GREAT) : style.fill,
         fontFamily: DISPLAY_FONT,
         letterSpacing: 1,
         anchorX: 0.5,
@@ -912,6 +901,9 @@ function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(100, value));
 }
+
+/** Colours the PERFECT judgement's flashing GREAT cycles through. */
+const PHANTOM_FLASHING_GREAT = [PHANTOM_WHITE, PHANTOM_CYAN, PHANTOM_GOLD, 0xff7ad9] as const;
 
 /** Fill / hard-shadow pair for each judgement word, plus the tally-count colour. */
 function judgeStyle(judge: string): { fill: number; shadow: number; tally: number } {

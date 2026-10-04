@@ -1,11 +1,12 @@
 import { Graphics, type Container } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
 import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
-import { resolveFallbackLaneLayout, shouldPreserveFallbackSideWidth } from '../../gameplay-lanes.ts';
+import { resolveSkinlessLaneLayout } from '../../gameplay-lanes.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudNumber, addHudText, type HudTextOptions } from '../hud-text.ts';
 import { comboTier, effectProfile, impulse, punchScale } from '../moments.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
+import { flashingGreatColor, isFlashingGreat, judgeDisplayWord } from '../judge-word.ts';
 import { hash01 } from '../phantom-style.ts';
 import { audioDrive, type AudioDrive } from '../audio-drive.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
@@ -30,6 +31,7 @@ import {
 import {
   SYN_AMBER,
   SYN_CYAN,
+  SYN_GREEN,
   SYN_DIM,
   SYN_DISPLAY_FONT,
   SYN_EMBER,
@@ -108,7 +110,11 @@ export function renderSynesthesiaChrome({
   const hue = sceneHue(seconds, beatPhase);
   const accent = hsvToHex(hue, 0.62, 1);
   const hasBga = runtime.hasBga === true;
-  const playfieldRight = resolvePlayfieldRight(runtime);
+  const { left: playfieldLeft, right: playfieldRight } = resolveSkinlessLaneLayout(
+    runtime.laneChannels,
+    runtime.laneCount,
+    runtime.playVariant,
+  );
 
   const space = layerPool.acquireGraphics();
   space.label = 'synesthesia-gameplay/space';
@@ -163,7 +169,7 @@ export function renderSynesthesiaChrome({
   const panels = layerPool.acquireGraphics();
   panels.label = 'synesthesia-gameplay/panels';
   panels.blendMode = 'normal';
-  drawPlayfieldWell(panels, playfieldRight, runtime.progressRatio, accent);
+  drawPlayfieldWell(panels, playfieldLeft, playfieldRight, runtime.progressRatio, accent);
   // A double-play field reaches into the monitor's column; the frame and its idle screen would sit on the 2P lanes.
   if (playfieldRight + 14 <= BGA.x) {
     const standby = layerPool.acquireGraphics();
@@ -184,19 +190,15 @@ export function renderSynesthesiaChrome({
   front.label = 'synesthesia-gameplay/header';
   drawHeader(front, overlayLayer, runtime, accent, pulse, overlayLayerPool);
   drawJudgements(overlayLayer, runtime, playfieldRight, seconds, overlayLayerPool);
-  drawSynesthesiaMoments(layer, overlayLayer, runtime, (PLAYFIELD.x + playfieldRight) / 2, hue, overlayLayerPool);
-}
-
-function resolvePlayfieldRight(runtime: Runtime): number {
-  const lanes = resolveFallbackLaneLayout({
-    channels: runtime.laneChannels,
-    laneCount: runtime.laneCount,
-    playVariant: runtime.playVariant,
-    x: PLAYFIELD.x,
-    w: PLAYFIELD.w,
-    preserveSideWidth: shouldPreserveFallbackSideWidth(runtime.laneChannels, runtime.playVariant),
-  });
-  return Math.max(PLAYFIELD.x + PLAYFIELD.w, ...lanes.map((lane) => lane.x + lane.w));
+  drawSynesthesiaMoments(
+    layer,
+    overlayLayer,
+    runtime,
+    (playfieldLeft + playfieldRight) / 2,
+    hue,
+    overlayLayerPool,
+    playfieldRight,
+  );
 }
 
 function insideBga(x: number, y: number, margin = 0): boolean {
@@ -430,8 +432,14 @@ function fillAroundBga(
   if (bottom > holeBottom) graphics.rect(x, holeBottom, w, bottom - holeBottom).fill(fill);
 }
 
-function drawPlayfieldWell(graphics: Graphics, right: number, progressRatio: number | undefined, accent: number): void {
-  const left = PLAYFIELD.x - 4;
+function drawPlayfieldWell(
+  graphics: Graphics,
+  playfieldLeft: number,
+  right: number,
+  progressRatio: number | undefined,
+  accent: number,
+): void {
+  const left = playfieldLeft - 4;
   const w = right - left + 4;
   graphics.rect(left, 0, w, PLAYFIELD_FRAME_BOTTOM).fill({ color: SYN_VOID, alpha: 0.72 });
   // Glowing side rails.
@@ -579,6 +587,11 @@ function drawBgaFrame(
     const lock = orb.radius * 1.6 + 5 * pulse;
     drawReticle(light, orb.x - lock, orb.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
   }
+  // A dark slip under the label, so the monitor's floor horizon never runs through the type.
+  const slip = pool.acquireGraphics();
+  slip.label = 'synesthesia-gameplay/standby-slip';
+  slip.blendMode = 'normal';
+  slip.rect(cx - 56, BGA.y + BGA.h - 26, 112, 17).fill({ color: SYN_VOID, alpha: 0.9 });
   addHudText(
     layer,
     'STANDBY',
@@ -598,7 +611,8 @@ function drawHeader(
   pool: ChildPool,
 ): void {
   const autoplay = runtime.autoplay === true;
-  graphics.rect(0, 0, DESIGN_WIDTH, 34).fill({ color: SYN_VOID, alpha: 0.55 });
+  // Near-opaque, so the playfield rails and lanes stop under the header instead of running through its type.
+  graphics.rect(0, 0, DESIGN_WIDTH, 34).fill({ color: SYN_VOID, alpha: 0.92 });
   graphics.rect(0, 34, DESIGN_WIDTH, 1).fill({ color: accent, alpha: 0.35 + 0.35 * pulse });
   graphics.circle(20, 17, 3).fill({ color: autoplay ? SYN_AMBER : accent, alpha: 1 });
   graphics.circle(20, 17, 8).fill({ color: autoplay ? SYN_AMBER : accent, alpha: 0.18 + 0.2 * pulse });
@@ -854,9 +868,12 @@ const JUDGE_COLORS: Record<string, number> = {
   POOR: SYN_RED,
 };
 
+/** Colours the PERFECT judgement's flashing GREAT cycles through. */
+const FLASHING_GREAT = [SYN_CYAN, SYN_WHITE, SYN_AMBER, SYN_MAGENTA, SYN_GREEN] as const;
+
 /**
- * Judgement word and combo as light: wide tracked type with a same-colour bloom. PERFECT cycles through the hue wheel
- * like a prism so a clean run literally shimmers.
+ * Judgement word and combo as light: wide tracked type with a same-colour bloom. PERFECT prints as a GREAT that flashes
+ * through the prism colours, so a clean run literally shimmers.
  */
 function drawJudgements(
   layer: Container,
@@ -870,13 +887,12 @@ function drawJudgements(
   const amount = effectProfile(runtime.effects).amount;
   for (const display of displays) {
     const judgeScale = punchScale(runtime.judgeAtMs, nowMs, 120, 0.22 * amount);
-    const color =
-      display.judge === 'PERFECT'
-        ? emberColor(0.82 + 0.18 * Math.sin(seconds * 9 + display.x / 60))
-        : (JUDGE_COLORS[display.judge] ?? SYN_WHITE);
+    const color = isFlashingGreat(display.judge)
+      ? flashingGreatColor(nowMs, FLASHING_GREAT)
+      : (JUDGE_COLORS[display.judge] ?? SYN_WHITE);
     addHudText(
       layer,
-      display.judge,
+      judgeDisplayWord(display.judge),
       display.x,
       236,
       {
@@ -915,14 +931,11 @@ function resolveJudgeDisplays(
   runtime: Runtime,
   playfieldRight: number,
 ): Array<{ judge: string; combo: number | undefined; x: number; maxWidth: number }> {
-  const lanes = resolveFallbackLaneLayout({
-    channels: runtime.laneChannels,
-    laneCount: runtime.laneCount,
-    playVariant: runtime.playVariant,
-    x: PLAYFIELD.x,
-    w: PLAYFIELD.w,
-    preserveSideWidth: shouldPreserveFallbackSideWidth(runtime.laneChannels, runtime.playVariant),
-  });
+  const { lanes, left: playfieldLeft } = resolveSkinlessLaneLayout(
+    runtime.laneChannels,
+    runtime.laneCount,
+    runtime.playVariant,
+  );
   const centerOf = (side: '1P' | '2P'): number | undefined => {
     const own = lanes.filter((lane) => lane.side === side);
     if (own.length === 0) return undefined;
@@ -930,7 +943,7 @@ function resolveJudgeDisplays(
   };
   const doublePlay = centerOf('2P') !== undefined;
   const maxWidth = doublePlay ? 122 : 180;
-  const fallbackX = (PLAYFIELD.x + playfieldRight) / 2;
+  const fallbackX = (playfieldLeft + playfieldRight) / 2;
   const sides = runtime.judgeSides?.filter((state) => typeof state.judge === 'string' && state.judge.length > 0);
   if (sides?.length) {
     return sides.map((state) => ({

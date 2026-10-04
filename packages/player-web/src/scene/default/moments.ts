@@ -131,3 +131,29 @@ export function effectProfile(level: 'full' | 'reduced' | 'off' | undefined): {
       return { amount: 1, screenWide: true, enabled: true };
   }
 }
+
+/** A screen region a combo milestone may play in without covering any lane. */
+export interface MilestoneArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** `beside`: the column right of the lanes; `below`: the band under the judgement line (double play). */
+  mode: 'beside' | 'below';
+}
+
+/** Narrowest column right of the lanes a milestone will use before falling back to the band below them. */
+export const MILESTONE_MIN_WIDTH = 240;
+
+/**
+ * Where a combo milestone may play so notes stay visible: the column right of the playfield when it is at least
+ * {@link MILESTONE_MIN_WIDTH} px wide, otherwise the band under the lanes (`lanesBottom`) — over the HUD for a moment
+ * rather than over the notes. Coordinates are in the 640×480 design space.
+ */
+export function resolveMilestoneArea(playfieldRight: number, lanesBottom = 346): MilestoneArea {
+  const free = 640 - playfieldRight - 16;
+  if (free >= MILESTONE_MIN_WIDTH) {
+    return { x: playfieldRight + 8, y: 40, w: free, h: lanesBottom - 40, mode: 'beside' };
+  }
+  return { x: 8, y: lanesBottom + 4, w: 624, h: 480 - lanesBottom - 8, mode: 'below' };
+}

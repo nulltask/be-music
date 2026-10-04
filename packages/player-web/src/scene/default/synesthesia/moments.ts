@@ -3,8 +3,8 @@ import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gamep
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText } from '../hud-text.ts';
-import { effectProfile, impulse, momentProgress, trackMoments } from '../moments.ts';
-import { easeOutCubic, hash01, stageProgress } from '../phantom-style.ts';
+import { effectProfile, momentProgress, trackMoments, resolveMilestoneArea, type MilestoneArea } from '../moments.ts';
+import { easeOutCubic, stageProgress } from '../phantom-style.ts';
 import { drawReticle } from './draw.ts';
 import {
   burstParticlePosition,
@@ -43,6 +43,7 @@ export function drawSynesthesiaMoments(
   playfieldCenterX: number,
   hue: number,
   pool: ChildPool,
+  playfieldRight: number,
 ): void {
   const nowMs = runtime.nowMs ?? 0;
   const moments = trackMoments(chromeLayer, {
@@ -63,20 +64,7 @@ export function drawSynesthesiaMoments(
   graphics.label = 'synesthesia/moments';
   graphics.blendMode = 'add';
 
-  // Misses glitch the signal: red scanline tears and edge bleed, plus (full effects) a jolt of the whole HUD.
-  const miss = runtime.lastJudge === 'POOR' || runtime.lastJudge === 'BAD' ? impulse(runtime.judgeAtMs, nowMs, 240) : 0;
-  if (miss > 0) {
-    drawGlitch(graphics, miss, nowMs, runtime.hasBga === true);
-    if (effects.screenWide) {
-      const jolt = Math.sin(nowMs / 9) * 4 * miss;
-      chromeLayer.position.set(jolt, 0);
-      layer.position.set(jolt, 0);
-    }
-  }
-  const comboBreak = momentProgress(moments.comboBreak?.atMs, nowMs, BREAK_MS);
-  if (comboBreak !== undefined && moments.comboBreak) {
-    drawComboBreak(graphics, moments.comboBreak.combo, comboBreak, playfieldCenterX);
-  }
+  // Misses get no effect at all: the playfield stays still and clear so the next notes read.
 
   if (runtime.chartMs !== undefined) {
     drawCountIn(graphics, layer, runtime.chartMs, playfieldCenterX, hue, pool);
@@ -88,8 +76,7 @@ export function drawSynesthesiaMoments(
       layer,
       moments.milestone.value,
       milestone,
-      playfieldCenterX,
-      hue,
+      resolveMilestoneArea(playfieldRight),
       runtime.hasBga === true,
       pool,
     );
@@ -178,32 +165,32 @@ function drawMilestone(
   layer: Container,
   value: number,
   t: number,
-  playfieldCenterX: number,
-  hue: number,
+  area: MilestoneArea,
   hasBga: boolean,
   pool: ChildPool,
 ): void {
   // Each hundred takes the next accent light in turn: gold, electric blue, magenta.
   const color = MILESTONE_COLORS[Math.max(0, Math.floor(value / 100) - 1) % MILESTONE_COLORS.length]!;
+  // The count plays in the milestone area — over the monitor beside the lanes, or in the band below them in double
+  // play — never over the notes. Over a live BGA it sits small on the monitor's top edge.
+  const below = area.mode === 'below';
+  const compact = hasBga || below;
+  const cx = below ? area.x + area.w / 2 : BGA.x + BGA.w / 2;
+  const cy = below ? area.y + area.h / 2 - 10 : hasBga ? BGA.y + 30 : BGA.y + BGA.h / 2 - 10;
+  // A shockwave of light rolls out from the count, kept inside the area.
   const wave = easeOutCubic(Math.min(1, t / 0.7));
-  const radius = 30 + 700 * wave;
-  graphics
-    .ellipse(playfieldCenterX, JUDGE_Y, radius, radius * 0.42)
-    .stroke({ color, width: 2 + 8 * (1 - wave), alpha: 0.7 * (1 - wave) });
-  graphics
-    .ellipse(playfieldCenterX, JUDGE_Y, radius * 0.8, radius * 0.34)
-    .stroke({ color: SYN_WHITE, width: 1.5, alpha: 0.5 * (1 - wave) });
+  const rx = 20 + (area.w / 2 - 20) * wave;
+  const ry = Math.min(rx * 0.42, area.h / 2);
+  graphics.ellipse(cx, cy, rx, ry).stroke({ color, width: 2 + 8 * (1 - wave), alpha: 0.7 * (1 - wave) });
+  graphics.ellipse(cx, cy, rx * 0.8, ry * 0.8).stroke({ color: SYN_WHITE, width: 1.5, alpha: 0.5 * (1 - wave) });
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
-  // Over a live BGA the count sits small on the monitor's top edge instead of the middle of the video.
-  const cx = BGA.x + BGA.w / 2;
-  const cy = hasBga ? BGA.y + 30 : BGA.y + BGA.h / 2 - 10;
   const count = addHudText(
     layer,
     String(value),
     cx,
     cy,
     {
-      size: hasBga ? 30 : 52,
+      size: compact ? 30 : 52,
       fill: SYN_WHITE,
       fontFamily: SYN_DISPLAY_FONT,
       letterSpacing: 4,
@@ -216,9 +203,9 @@ function drawMilestone(
   count.alpha = alpha;
   count.scale.set(1.25 - 0.25 * easeOutCubic(Math.min(1, t / 0.25)));
   const snap = easeOutCubic(Math.min(1, t / 0.2));
-  const lockW = (hasBga ? 120 : 190) * (1.6 - 0.6 * snap);
-  const lockH = (hasBga ? 74 : 110) * (1.6 - 0.6 * snap);
-  drawReticle(graphics, cx - lockW / 2, cy + (hasBga ? 14 : 22) - lockH / 2, lockW, lockH, color, 0.9 * alpha, {
+  const lockW = (compact ? 120 : 190) * (1.6 - 0.6 * snap);
+  const lockH = (compact ? 74 : 110) * (1.6 - 0.6 * snap);
+  drawReticle(graphics, cx - lockW / 2, cy + (compact ? 14 : 22) - lockH / 2, lockW, lockH, color, 0.9 * alpha, {
     arm: 14,
     width: 2,
   });
@@ -226,7 +213,7 @@ function drawMilestone(
     layer,
     'COMBO',
     cx,
-    cy + (hasBga ? 28 : 44),
+    cy + (compact ? 28 : 44),
     {
       size: 11,
       fill: SYN_WHITE,
@@ -252,7 +239,8 @@ function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildP
     layer,
     'CLEAR',
     GROOVE.x + GROOVE.w - 8,
-    GROOVE.y - 38,
+    // Between the playfield frame's bottom edge and the gauge panel, touching neither.
+    GROOVE.y - 34,
     {
       size: 12,
       fill: SYN_WHITE,
@@ -333,43 +321,4 @@ function drawFullCombo(
     pool,
   );
   text.alpha = form * fadeOut;
-}
-
-const BREAK_MS = 800;
-
-/** Red scanline tears across the screen and a bleed at the edges; tears skip a live BGA rect. */
-function drawGlitch(graphics: Graphics, strength: number, nowMs: number, hasBga: boolean): void {
-  const frame = Math.floor(nowMs / 40);
-  for (let tear = 0; tear < 7; tear += 1) {
-    const y = hash01(frame * 7 + tear) * DESIGN_HEIGHT;
-    const h = 2 + hash01(frame * 13 + tear) * 6;
-    const offset = (hash01(frame * 3 + tear) - 0.5) * 60;
-    if (hasBga && y > BGA.y - 4 && y < BGA.y + BGA.h + 4) {
-      graphics.rect(offset, y, BGA.x - 8, h).fill({ color: 0xff3a6a, alpha: 0.35 * strength });
-      graphics.rect(BGA.x + BGA.w + 8, y, DESIGN_WIDTH, h).fill({ color: 0xff3a6a, alpha: 0.35 * strength });
-    } else {
-      graphics.rect(offset, y, DESIGN_WIDTH, h).fill({ color: 0xff3a6a, alpha: 0.35 * strength });
-    }
-  }
-  for (let band = 0; band < 3; band += 1) {
-    const w = 10;
-    const alpha = 0.18 * strength * (1 - band / 3);
-    graphics.rect(band * w, 0, w, DESIGN_HEIGHT).fill({ color: 0xff3a6a, alpha });
-    graphics.rect(DESIGN_WIDTH - (band + 1) * w, 0, w, DESIGN_HEIGHT).fill({ color: 0xff3a6a, alpha });
-  }
-}
-
-/** A broken combo disperses into red sparks that drift up and fade from the combo readout. */
-function drawComboBreak(graphics: Graphics, combo: number, t: number, cx: number): void {
-  const cy = 264;
-  for (let spark = 0; spark < 36; spark += 1) {
-    const angle = hash01(spark + combo * 3) * Math.PI * 2;
-    const speed = 30 + hash01(spark * 5 + 1) * 90;
-    const eased = easeOutCubic(t);
-    const x = cx + Math.cos(angle) * speed * eased;
-    const y = cy + Math.sin(angle) * speed * eased * 0.6 - 40 * eased;
-    const size = 1 + hash01(spark + 11) * 2;
-    graphics.circle(x, y, size * 3).fill({ color: 0xff3a6a, alpha: 0.12 * (1 - t) });
-    graphics.circle(x, y, size).fill({ color: 0xffd0dc, alpha: 1 - t });
-  }
 }

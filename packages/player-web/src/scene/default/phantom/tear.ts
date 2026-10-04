@@ -49,12 +49,20 @@ export function stripPoint(strip: TearStrip, u: number, v: number): { x: number;
  * Draws the strip at cut-in progress `t`: the rip slides in along its own axis as it opens, then shuts to a hairline
  * and flies on. Returns the openness (0..1) so content can scale with it.
  */
-export function drawTearStrip(graphics: Graphics, strip: TearStrip, t: number, nowMs: number): number {
+export function drawTearStrip(
+  graphics: Graphics,
+  strip: TearStrip,
+  t: number,
+  nowMs: number,
+  enterFrom: 'left' | 'right' = 'left',
+): number {
   const open = tearOpenness(t);
   if (open <= 0.001) return 0;
   const enter = easeOutCubic(Math.min(1, t / 0.14));
   const exit = t > 0.85 ? easeOutCubic((t - 0.85) / 0.15) : 0;
-  const slide = (1 - enter) * -strip.length * 0.25 + exit * strip.length * 0.3;
+  // It slides in along its axis from `enterFrom` and flies off to the right; a strip entering from the right never
+  // reaches left of its rest position (so it can sit beside the lanes without crossing them).
+  const slide = (1 - enter) * (enterFrom === 'left' ? -1 : 1) * strip.length * 0.25 + exit * strip.length * 0.3;
   const from = stripPoint(strip, -strip.length / 2 + slide, 0);
   const to = stripPoint(strip, strip.length / 2 + slide, 0);
   const thickness = strip.thickness * open;
@@ -77,10 +85,12 @@ export function drawTearStrip(graphics: Graphics, strip: TearStrip, t: number, n
   for (let line = 0; line < 9; line += 1) {
     const lane = (hash01(strip.seed * 31 + line) - 0.5) * thickness * 0.8;
     const speed = 900 + 700 * hash01(strip.seed * 37 + line);
-    const span = strip.length + 200;
+    const span = strip.length;
+    const length = 40 + 60 * hash01(line + 5);
+    // Lines stay inside the band's ends.
     const u = (((nowMs / 1000) * speed + hash01(strip.seed * 41 + line) * span) % span) - span / 2 + slide;
     const a = stripPoint(strip, u, lane);
-    const b = stripPoint(strip, u + 40 + 60 * hash01(line + 5), lane);
+    const b = stripPoint(strip, Math.min(strip.length / 2 + slide, u + length), lane);
     graphics.moveTo(a.x, a.y).lineTo(b.x, b.y);
   }
   graphics.stroke({ color: PHANTOM_WHITE, width: 1.5, alpha: 0.35 * open });

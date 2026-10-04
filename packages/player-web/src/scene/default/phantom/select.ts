@@ -119,8 +119,8 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
   }
 
   /**
-   * Launch outro — the split screen: a blood-red half full of out-of-focus bokeh slides in from the left while a
-   * black-and-white starburst half slams in from the right; they meet on a torn diagonal seam, the chosen title lands on
+   * Launch outro — the split screen: a blood-red quarter full of out-of-focus bokeh slides in from the left while a
+   * black-and-white starburst slams in from the right; they meet on a torn diagonal seam, the chosen title lands on
    * a tilted ink label, LET'S GO! is cut out of magazines letter by letter, and the page falls to ink for the count-in.
    */
   private renderOutro(frame: BeMusicSelectFrame): void {
@@ -130,9 +130,10 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     g.label = 'default-select/outro';
     layer.addChild(g);
     const meet = easeOutCubic(Math.min(1, t / 0.32));
-    // The seam: a torn line leaning right, from (seamTop, 0) to (seamBottom, h).
-    const seamTop = w * 0.6;
-    const seamBottom = w * 0.44;
+    // The seam: a torn line leaning right, from (seamTop, 0) to (seamBottom, h). The red half keeps to the left
+    // quarter so the starburst half carries the title.
+    const seamTop = w * 0.32;
+    const seamBottom = w * 0.18;
     const seam = tornEdgePoints(seamTop, -10, seamBottom, h + 10, 9, 13, 12);
     // Red half, entering from the left.
     const redShift = (1 - meet) * -(w * 0.7);
@@ -144,7 +145,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     const paper: number[] = [w + 20 + burstShift, -10, w + 20 + burstShift, h + 10];
     for (let index = seam.length - 2; index >= 0; index -= 2) paper.push(seam[index]! + burstShift, seam[index + 1]!);
     g.poly(paper).fill(PHANTOM_PAPER);
-    const rayX = w * 0.84 + burstShift;
+    const rayX = w * 0.66 + burstShift;
     const rayY = h * 0.42;
     const spin = t * 0.5;
     for (let ray = 0; ray < 18; ray += 1) {
@@ -182,7 +183,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     // Title on a tilted ink label, and LET'S GO! cut from magazines, on the starburst half.
     const land = stageProgress(t, 0.3, 0.2);
     if (land > 0) {
-      const labelX = w * 0.72;
+      const labelX = w * 0.62;
       const labelY = h * 0.3;
       const pop = 1.5 - 0.5 * easeOutBack(land, 2);
       const title = frame.focusedSong?.title ?? '';
@@ -203,7 +204,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
           fill: options.fill,
           fontFamily: options.fontFamily,
         });
-      addRansomText(g, glyph, "LET'S GO!", w * 0.7, h * 0.56, {
+      addRansomText(g, glyph, "LET'S GO!", w * 0.62, h * 0.56, {
         size: 44,
         seed: 17,
         angle: -0.1,

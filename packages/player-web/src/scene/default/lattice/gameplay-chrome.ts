@@ -1,10 +1,17 @@
 import type { Container, Graphics } from 'pixi.js';
 import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
 import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
-import { resolveFallbackLaneLayout, shouldPreserveFallbackSideWidth } from '../../gameplay-lanes.ts';
+import { resolveSkinlessLaneLayout } from '../../gameplay-lanes.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudNumber, addHudText } from '../hud-text.ts';
-import { comboTier, effectProfile, impulse, momentProgress, trackMoments, type MomentState } from '../moments.ts';
+import {
+  comboTier,
+  effectProfile,
+  momentProgress,
+  resolveMilestoneArea,
+  trackMoments,
+  type MomentState,
+} from '../moments.ts';
 import {
   addOdometer,
   addStaggeredHudText,
@@ -17,6 +24,7 @@ import {
 } from './draw.ts';
 import { scrambleText, scrambleTick, springEase, tileFlipPhase, type NeedleFieldInput } from './field.ts';
 import { drawLatticeMoments, FULL_COMBO_MS, MILESTONE_MS } from './moments.ts';
+import { flashingGreatColor, isFlashingGreat, judgeDisplayWord } from '../judge-word.ts';
 import { createChain, kickChain, stepChain, type Chain } from './physics.ts';
 import { audioDrive, bandLevel, type AudioDrive } from '../audio-drive.ts';
 import {
@@ -65,7 +73,11 @@ export function renderLatticeChrome({
   const seconds = nowMs / 1000;
   const beatPhase = runtime.beatPhase ?? 0;
   const hasBga = runtime.hasBga === true;
-  const playfieldRight = resolvePlayfieldRight(runtime);
+  const { left: playfieldLeft, right: playfieldRight } = resolveSkinlessLaneLayout(
+    runtime.laneChannels,
+    runtime.laneCount,
+    runtime.playVariant,
+  );
   const effects = effectProfile(runtime.effects);
   const tier = effects.enabled ? Math.min(comboTier(runtime.combo ?? 0), effects.screenWide ? 4 : 2) : 0;
   // The paper listens: needles flow harder with loudness and ripple out of the monitor on every onset, the pendulums
@@ -95,7 +107,7 @@ export function renderLatticeChrome({
   field.blendMode = 'normal';
   // The field fills the paper around the type: the playfield and every HUD block stay clean.
   const clean: Rect[] = [
-    { x: PLAYFIELD.x - 20, y: 0, w: playfieldRight - PLAYFIELD.x + 26, h: 346 },
+    { x: playfieldLeft - 20, y: 0, w: playfieldRight - playfieldLeft + 26, h: 346 },
     { x: BGA.x - 13, y: BGA.y - 13, w: BGA.w + 26, h: BGA.h + 26 },
     { x: GROOVE.x - 18, y: GROOVE.y - 30, w: GROOVE.w + 36, h: 58 },
     { x: SONG_PLATE.x - 4, y: SONG_PLATE.y - 6, w: SONG_PLATE.w + 8, h: SONG_PLATE.h + 12 },
@@ -107,7 +119,7 @@ export function renderLatticeChrome({
   drawNeedleField(
     field,
     { x: 0, y: HEADER_H, w: DESIGN_WIDTH, h: DESIGN_HEIGHT - HEADER_H },
-    resolveFieldInput(layer, runtime, moments, tier, effects.amount, playfieldRight, drive),
+    resolveFieldInput(layer, runtime, moments, tier, effects.amount, playfieldLeft, playfieldRight, drive),
     {
       alpha: 0.55,
       skip: (x, y) => clean.some((rect) => inside(rect, x, y, 0)),
@@ -117,7 +129,7 @@ export function renderLatticeChrome({
   const panels = layerPool.acquireGraphics();
   panels.label = 'lattice-gameplay/panels';
   panels.blendMode = 'normal';
-  drawPlayfieldFrame(panels, playfieldRight, runtime.progressRatio);
+  drawPlayfieldFrame(panels, playfieldLeft, playfieldRight, runtime.progressRatio);
   if (pendulums) {
     drawPendulums(panels, layer, runtime, (playfieldRight + BGA.x - 5) / 2, effects.amount, drive, layerPool);
   }
@@ -142,7 +154,14 @@ export function renderLatticeChrome({
     drawHeader(front, overlayLayer, runtime, beatPhase, overlayLayerPool);
     drawJudgements(overlayLayer, runtime, playfieldRight, effects.amount, overlayLayerPool);
   }
-  drawLatticeMoments(layer, overlayLayer, runtime, moments, (PLAYFIELD.x + playfieldRight) / 2, overlayLayerPool);
+  drawLatticeMoments(
+    overlayLayer,
+    runtime,
+    moments,
+    (playfieldLeft + playfieldRight) / 2,
+    overlayLayerPool,
+    playfieldRight,
+  );
 }
 
 const IMPULSE_HISTORY = new WeakMap<object, number[]>();
@@ -252,8 +271,8 @@ function drawPendulums(
 
 /**
  * Field forces for this frame: ambient flow and the beat sweep (stronger in the zone), ripples from the last few key
- * presses rolling out of the judgement line, a pull toward the monitor during a milestone, a swirl on a full combo, and
- * jitter on a miss.
+ * presses rolling out of the judgement line, a pull toward the monitor during a milestone, and a swirl on a full combo.
+ * A miss adds nothing, so the field stays calm around the notes.
  */
 function resolveFieldInput(
   key: object,
@@ -261,6 +280,7 @@ function resolveFieldInput(
   moments: MomentState,
   tier: number,
   amount: number,
+  playfieldLeft: number,
   playfieldRight: number,
   drive: AudioDrive,
 ): NeedleFieldInput {
@@ -283,7 +303,7 @@ function resolveFieldInput(
     history.push(runtime.impulseAtMs);
     if (history.length > 6) history.shift();
   }
-  const originX = (PLAYFIELD.x + playfieldRight) / 2;
+  const originX = (playfieldLeft + playfieldRight) / 2;
   const ripples =
     amount > 0
       ? [
@@ -299,7 +319,6 @@ function resolveFieldInput(
       : [];
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   const fullCombo = momentProgress(moments.fullComboAtMs, nowMs, FULL_COMBO_MS);
-  const miss = runtime.lastJudge === 'POOR' || runtime.lastJudge === 'BAD' ? impulse(runtime.judgeAtMs, nowMs, 260) : 0;
   const envelope = (t: number | undefined) => (t === undefined ? 0 : Math.sin(Math.min(1, t) * Math.PI));
   return {
     seconds: (nowMs / 1000) * (amount > 0 ? 1 : 0),
@@ -307,23 +326,17 @@ function resolveFieldInput(
     flow: (0.35 + 0.12 * tier) * amount + 0.35 * drive.level,
     beatWave: (0.45 + 0.12 * tier) * amount + 0.4 * drive.bass,
     ripples,
-    attractor: { x: BGA.x + BGA.w / 2, y: BGA.y + BGA.h / 2, strength: envelope(milestone) * amount },
+    attractor: (() => {
+      // Needles swing toward wherever the milestone plays (beside or below the lanes).
+      const area = resolveMilestoneArea(playfieldRight);
+      const x = area.mode === 'below' ? area.x + area.w / 2 : BGA.x + BGA.w / 2;
+      const y = area.mode === 'below' ? area.y + area.h / 2 : BGA.y + BGA.h / 2;
+      return { x, y, strength: envelope(milestone) * amount };
+    })(),
     swirl: { x: DESIGN_WIDTH / 2, y: DESIGN_HEIGHT / 2, strength: envelope(fullCombo) * amount },
-    jitter: miss * amount,
+    jitter: 0,
     tremble: 0.07 * amount,
   };
-}
-
-function resolvePlayfieldRight(runtime: Runtime): number {
-  const lanes = resolveFallbackLaneLayout({
-    channels: runtime.laneChannels,
-    laneCount: runtime.laneCount,
-    playVariant: runtime.playVariant,
-    x: PLAYFIELD.x,
-    w: PLAYFIELD.w,
-    preserveSideWidth: shouldPreserveFallbackSideWidth(runtime.laneChannels, runtime.playVariant),
-  });
-  return Math.max(PLAYFIELD.x + PLAYFIELD.w, ...lanes.map((lane) => lane.x + lane.w));
 }
 
 function inside(rect: Rect, x: number, y: number, margin: number): boolean {
@@ -362,8 +375,7 @@ function cropMark(graphics: Graphics, x: number, y: number, dx: 1 | -1, dy: 1 | 
     .lineTo(x, y - dy * 14);
 }
 
-function drawPlayfieldFrame(graphics: Graphics, right: number, progressRatio: number | undefined): void {
-  const left = PLAYFIELD.x;
+function drawPlayfieldFrame(graphics: Graphics, left: number, right: number, progressRatio: number | undefined): void {
   graphics.rect(left - 1, HEADER_H, right - left + 2, 340 - HEADER_H).stroke({ color: LAT_INK, width: 1, alpha: 0.9 });
   cropMark(graphics, left - 1, 340, 1, -1);
   cropMark(graphics, right + 1, 340, -1, -1);
@@ -790,9 +802,12 @@ const JUDGE_COLORS: Record<string, number> = {
   POOR: LAT_SIGNAL,
 };
 
+/** Colours the PERFECT judgement's flashing GREAT cycles through — inks that hold up on the paper. */
+const FLASHING_GREAT = [LAT_ACCENT, LAT_SIGNAL, 0x00a37a, 0xb02cff, 0xe0a100] as const;
+
 /**
  * Judgement word dropping in letter by letter on a spring, with the combo as an odometer whose changed wheels roll up.
- * Misses knock the word sideways.
+ * PERFECT prints as a GREAT flashing through the inks; a miss lands still.
  */
 function drawJudgements(
   layer: Container,
@@ -804,13 +819,14 @@ function drawJudgements(
   const nowMs = runtime.nowMs ?? 0;
   const age = runtime.judgeAtMs !== undefined ? nowMs - runtime.judgeAtMs : Number.POSITIVE_INFINITY;
   for (const display of resolveJudgeDisplays(runtime, playfieldRight)) {
-    const color = JUDGE_COLORS[display.judge] ?? LAT_INK;
-    const miss = display.judge === 'POOR' || display.judge === 'BAD';
-    const knock = miss ? Math.sin(age / 18) * 6 * impulse(runtime.judgeAtMs, nowMs, 220) * amount : 0;
+    const word = judgeDisplayWord(display.judge);
+    const color = isFlashingGreat(display.judge)
+      ? flashingGreatColor(nowMs, FLASHING_GREAT)
+      : (JUDGE_COLORS[display.judge] ?? LAT_INK);
     addStaggeredHudText(
       layer,
-      amount > 0 ? scrambleText(display.judge, age / 90, scrambleTick(nowMs, 25), display.judge.length) : display.judge,
-      display.x + knock,
+      amount > 0 ? scrambleText(word, age / 90, scrambleTick(nowMs, 25), word.length) : word,
+      display.x,
       228,
       { ...displayStyle(14, color, '600'), letterSpacing: 4, anchorX: 0.5, anchorY: 0.5 },
       pool,
@@ -847,20 +863,17 @@ function resolveJudgeDisplays(
   runtime: Runtime,
   playfieldRight: number,
 ): Array<{ judge: string; combo: number | undefined; x: number }> {
-  const lanes = resolveFallbackLaneLayout({
-    channels: runtime.laneChannels,
-    laneCount: runtime.laneCount,
-    playVariant: runtime.playVariant,
-    x: PLAYFIELD.x,
-    w: PLAYFIELD.w,
-    preserveSideWidth: shouldPreserveFallbackSideWidth(runtime.laneChannels, runtime.playVariant),
-  });
+  const { lanes, left: playfieldLeft } = resolveSkinlessLaneLayout(
+    runtime.laneChannels,
+    runtime.laneCount,
+    runtime.playVariant,
+  );
   const centerOf = (side: '1P' | '2P'): number | undefined => {
     const own = lanes.filter((lane) => lane.side === side);
     if (own.length === 0) return undefined;
     return (Math.min(...own.map((lane) => lane.x)) + Math.max(...own.map((lane) => lane.x + lane.w))) / 2;
   };
-  const fallbackX = (PLAYFIELD.x + playfieldRight) / 2;
+  const fallbackX = (playfieldLeft + playfieldRight) / 2;
   const sides = runtime.judgeSides?.filter((state) => typeof state.judge === 'string' && state.judge.length > 0);
   if (sides?.length) {
     return sides.map((state) => ({ judge: state.judge!, combo: state.combo, x: centerOf(state.side) ?? fallbackX }));

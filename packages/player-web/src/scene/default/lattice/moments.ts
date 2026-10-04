@@ -1,18 +1,23 @@
 import type { Container, Graphics } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText } from '../hud-text.ts';
-import { effectProfile, impulse, momentProgress, type MomentState } from '../moments.ts';
+import {
+  effectProfile,
+  momentProgress,
+  type MomentState,
+  resolveMilestoneArea,
+  type MilestoneArea,
+} from '../moments.ts';
 import { easeOutCubic, hash01 } from '../phantom-style.ts';
 import { addStaggeredHudText, displayStyle, monoStyle } from './draw.ts';
 import { countInStep, scrambleText, scrambleTick, springEase, tileFlipPhase } from './field.ts';
-import { LAT_ACCENT, LAT_INK, LAT_PAPER, LAT_SIGNAL, LAT_WHITE } from './style.ts';
+import { LAT_ACCENT, LAT_INK, LAT_PAPER, LAT_WHITE } from './style.ts';
 
 export const MILESTONE_MS = 1400;
 export const FULL_COMBO_MS = 3200;
 const CLEAR_MS = 1000;
-const BREAK_MS = 900;
 
 /**
  * Lattice showpieces, set as kinetic type on the front layer (the needle field reacts to the same moments in the
@@ -23,15 +28,15 @@ const BREAK_MS = 900;
  * - the clear line: CLEAR slides out of the gauge on a hairline;
  * - a full combo: ink tiles flip across the screen in a diagonal wave, FULL COMBO drops in letter by letter in white,
  *   and the tiles flip back — while the field swirls;
- * - a miss knocks the HUD sideways in hard 2 px steps; a broken combo's digits fall away under gravity.
+ * - a miss or a broken combo draws nothing, so the notes stay readable.
  */
 export function drawLatticeMoments(
-  chromeLayer: Container,
   layer: Container,
   runtime: SkinlessGameplayChromeRuntime,
   moments: MomentState,
   playfieldCenterX: number,
   pool: ChildPool,
+  playfieldRight: number,
 ): void {
   const nowMs = runtime.nowMs ?? 0;
   const effects = effectProfile(runtime.effects);
@@ -40,23 +45,21 @@ export function drawLatticeMoments(
   graphics.label = 'lattice/moments';
   graphics.blendMode = 'normal';
 
-  const miss = runtime.lastJudge === 'POOR' || runtime.lastJudge === 'BAD' ? impulse(runtime.judgeAtMs, nowMs, 220) : 0;
-  if (miss > 0 && effects.screenWide) {
-    // Quantized knock: the HUD jumps in whole 2 px steps, like a mechanism slipping a tooth.
-    const knock = Math.round((Math.sin(nowMs / 14) * 3 * miss) / 2) * 2;
-    chromeLayer.position.set(knock, 0);
-    layer.position.set(knock, 0);
-  }
-  const comboBreak = momentProgress(moments.comboBreak?.atMs, nowMs, BREAK_MS);
-  if (comboBreak !== undefined && moments.comboBreak) {
-    drawComboBreak(layer, moments.comboBreak.combo, comboBreak, playfieldCenterX, pool);
-  }
+  // Misses get no effect at all: the playfield stays still and clear so the next notes read.
   if (runtime.chartMs !== undefined) {
     drawCountIn(graphics, layer, runtime.chartMs, playfieldCenterX, pool);
   }
   const milestone = momentProgress(moments.milestone?.atMs, nowMs, MILESTONE_MS);
   if (milestone !== undefined && moments.milestone) {
-    drawMilestone(graphics, layer, moments.milestone.value, milestone, runtime.hasBga === true, pool);
+    drawMilestone(
+      graphics,
+      layer,
+      moments.milestone.value,
+      milestone,
+      runtime.hasBga === true,
+      resolveMilestoneArea(playfieldRight),
+      pool,
+    );
   }
   const clear = momentProgress(moments.clearAtMs, nowMs, CLEAR_MS);
   if (clear !== undefined) {
@@ -136,17 +139,21 @@ function drawMilestone(
   value: number,
   t: number,
   hasBga: boolean,
+  area: MilestoneArea,
   pool: ChildPool,
 ): void {
-  const cx = BGA.x + BGA.w / 2;
-  const cy = hasBga ? BGA.y + 36 : BGA.y + BGA.h / 2 - 12;
+  // Over the monitor beside the lanes, or in the band below them in double play — never over the notes.
+  const below = area.mode === 'below';
+  const compact = hasBga || below;
+  const cx = below ? area.x + area.w / 2 : BGA.x + BGA.w / 2;
+  const cy = below ? area.y + area.h / 2 - 8 : hasBga ? BGA.y + 36 : BGA.y + BGA.h / 2 - 12;
   const out = Math.max(0, (t - 0.78) / 0.22);
-  const size = hasBga ? 32 : 64;
-  if (hasBga) {
-    // A paper label over the live video.
-    const w = 170 * easeOutCubic(Math.min(1, t / 0.2));
-    graphics.rect(cx - w / 2, cy - 26, w, 62).fill({ color: LAT_PAPER, alpha: 0.95 * (1 - out) });
-  }
+  const size = compact ? 32 : 64;
+  // A paper label under the figures, so neither the live video nor the monitor's EQ tiles run through the type.
+  const plateW = (compact ? 170 : 210) * easeOutCubic(Math.min(1, t / 0.2));
+  const plateTop = cy - (compact ? 26 : 46);
+  const plateH = compact ? 62 : 104;
+  graphics.rect(cx - plateW / 2, plateTop, plateW, plateH).fill({ color: LAT_PAPER, alpha: 0.95 * (1 - out) });
   addStaggeredHudText(
     layer,
     String(value),
@@ -248,29 +255,4 @@ function drawFullCombo(graphics: Graphics, layer: Container, t: number, screenWi
     pool,
   );
   label.alpha = Math.min(1, Math.max(0, (t - 0.45) / 0.1)) * (1 - flipOut);
-}
-
-/** The broken combo's digits fall off under gravity, each with its own spin and drift. */
-function drawComboBreak(layer: Container, combo: number, t: number, cx: number, pool: ChildPool): void {
-  const digits = Array.from(String(combo));
-  const cell = 18;
-  const left = cx - (digits.length * cell) / 2;
-  const seconds = t * (BREAK_MS / 1000);
-  digits.forEach((char, index) => {
-    const drift = (hash01(combo * 13 + index) - 0.5) * 70;
-    const spin = (hash01(combo * 7 + index * 3) - 0.5) * 6;
-    const x = left + cell * (index + 0.5) + drift * seconds;
-    const y = 256 - 60 * seconds + 0.5 * 900 * seconds * seconds;
-    if (y > PLAYFIELD.judgementY + 60) return;
-    const node = addHudText(
-      layer,
-      char,
-      x,
-      y,
-      { ...displayStyle(30, LAT_SIGNAL, '200'), anchorX: 0.5, anchorY: 0.5 },
-      pool,
-    );
-    node.rotation = spin * seconds;
-    node.alpha = 1 - t;
-  });
 }
