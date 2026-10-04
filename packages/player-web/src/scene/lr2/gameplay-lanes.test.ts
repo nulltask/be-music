@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   isScratchLaneForVariant,
   resolveFallbackLaneLayout,
+  resolveFallbackPlayfieldSpan,
+  resolveSkinlessLaneLayout,
   shouldPreserveFallbackSideWidth,
 } from '../gameplay-lanes.ts';
 
@@ -173,5 +175,51 @@ describe('shouldPreserveFallbackSideWidth', () => {
     expect(shouldPreserveFallbackSideWidth(['11', '12', '21'], '7')).toBe(true);
     expect(shouldPreserveFallbackSideWidth(['11', '12', '13'], '7')).toBe(false);
     expect(shouldPreserveFallbackSideWidth(['11', '12', '21'], '9')).toBe(false);
+  });
+});
+
+describe('resolveFallbackPlayfieldSpan', () => {
+  it('keeps the LR2 default 7K span for the IIDX / PMS families', () => {
+    for (const variant of [undefined, '5', '7', '9', '10', '14'] as const) {
+      expect(resolveFallbackPlayfieldSpan(variant)).toEqual({ x: 33, w: 194 });
+    }
+  });
+
+  it('widens the keyboard modes', () => {
+    expect(resolveFallbackPlayfieldSpan('24')).toEqual({ x: 12, w: 252 });
+    expect(resolveFallbackPlayfieldSpan('48')).toEqual({ x: 12, w: 308 });
+  });
+});
+
+/** One side's 24 keyboard-mode channels: `11..19`, `1A..1O` (or the `2x` bank). */
+function keyboardChannels(side: '1' | '2'): string[] {
+  return Array.from('123456789ABCDEFGHIJKLMNO', (digit) => `${side}${digit}`);
+}
+
+describe('resolveSkinlessLaneLayout', () => {
+  it('lays a 7K chart out on the default span', () => {
+    const layout = resolveSkinlessLaneLayout(['16', '11', '12', '13', '14', '15', '18', '19'], 8, '7');
+
+    expect(layout.left).toBe(33);
+    expect(layout.right).toBeCloseTo(227);
+  });
+
+  it('gives 24 KEY lanes the wider column, left of the BGA', () => {
+    const channels = keyboardChannels('1');
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, '24');
+
+    expect(layout.lanes).toHaveLength(24);
+    expect(layout.left).toBe(12);
+    expect(layout.right).toBeCloseTo(264);
+    for (const lane of layout.lanes) expect(lane.w).toBeCloseTo(10.5);
+  });
+
+  it('spreads both 48 KEY banks across the page', () => {
+    const channels = [...keyboardChannels('1'), ...keyboardChannels('2')];
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, '48');
+
+    expect(layout.lanes).toHaveLength(48);
+    expect(layout.right).toBeCloseTo(12 + 308 * 2);
+    for (const lane of layout.lanes) expect(lane.w).toBeCloseTo(308 / 24);
   });
 });

@@ -16,6 +16,18 @@ const FALLBACK_LANE_GAP = 0;
 const FALLBACK_DP_SIDE_GAP = 0;
 const FALLBACK_SCRATCH_LANE_WEIGHT = 1.55;
 
+/** Left edge and per-side width of the skinless playfield, mirroring LR2's default 7K skin. */
+const FALLBACK_PLAYFIELD_SPAN = { x: 33, w: 194 } as const;
+/**
+ * Keyboard modes run 24 lanes per side, which the 7K span squeezes to 8 px each. Like the keyboard cabinet, they take
+ * the screen width instead: 24 KEY fills the column left of the BGA monitor (its frame still clears the rails), and
+ * 48 KEY spreads both banks across the whole page.
+ */
+const KEYBOARD_PLAYFIELD_SPANS: Record<'24' | '48', { x: number; w: number }> = {
+  '24': { x: 12, w: 252 },
+  '48': { x: 12, w: 308 },
+};
+
 export interface FallbackLaneLayoutRect {
   channel: string | undefined;
   x: number;
@@ -36,6 +48,44 @@ export interface ResolveFallbackLaneLayoutOptions {
    * Keep one side at the requested width and let additional DP-side lanes extend the fallback playfield horizontally.
    */
   preserveSideWidth?: boolean;
+}
+
+/**
+ * Left edge and per-side width the skinless playfield uses for a chart's play variant (see
+ * {@link resolveSkinlessLaneLayout}).
+ */
+export function resolveFallbackPlayfieldSpan(playVariant?: ChartPlayVariant): { x: number; w: number } {
+  return playVariant === '24' || playVariant === '48' ? KEYBOARD_PLAYFIELD_SPANS[playVariant] : FALLBACK_PLAYFIELD_SPAN;
+}
+
+export interface SkinlessLaneLayout {
+  lanes: FallbackLaneLayoutRect[];
+  /** Left edge of the leftmost lane. */
+  left: number;
+  /** Right edge of the rightmost lane (never left of one side's span). */
+  right: number;
+}
+
+/**
+ * Lane rects for the skinless / built-in playfield: the variant's span, with double play extending one side's width to
+ * the right. Every built-in skin and the core lane renderer share this, so chrome and notes line up.
+ */
+export function resolveSkinlessLaneLayout(
+  channels: readonly string[] | undefined,
+  laneCount: number | undefined,
+  playVariant?: ChartPlayVariant,
+): SkinlessLaneLayout {
+  const span = resolveFallbackPlayfieldSpan(playVariant);
+  const lanes = resolveFallbackLaneLayout({
+    channels,
+    laneCount,
+    playVariant,
+    x: span.x,
+    w: span.w,
+    preserveSideWidth: shouldPreserveFallbackSideWidth(channels, playVariant),
+  });
+  const right = Math.max(span.x + span.w, ...lanes.map((lane) => lane.x + lane.w));
+  return { lanes, left: span.x, right };
 }
 
 export function isScratchLaneForVariant(channel: string, playVariant?: ChartPlayVariant): boolean {

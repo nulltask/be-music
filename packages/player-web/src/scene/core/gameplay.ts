@@ -116,11 +116,10 @@ import {
 } from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
-  resolveFallbackLaneLayout,
   resolveLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
-  shouldPreserveFallbackSideWidth,
+  resolveSkinlessLaneLayout,
 } from '../gameplay-lanes.ts';
 import type {
   SkinlessGameplayChromeRenderer,
@@ -3519,21 +3518,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const themeOwnsPlayfield = this.themeOwnsPlayfield;
     const fallbackTop = PLAYFIELD.y;
     const fallbackBottom = PLAYFIELD.judgementY;
-    const fallbackLanes = resolveFallbackLaneLayout({
-      channels: this.laneChannels,
-      laneCount: this.laneChannels.length,
-      playVariant: this.chartPlayVariant,
-      x: PLAYFIELD.x,
-      w: PLAYFIELD.w,
-      preserveSideWidth: shouldPreserveFallbackSideWidth(this.laneChannels, this.chartPlayVariant),
-    });
+    const { lanes: fallbackLanes, left: fallbackLeft } = resolveSkinlessLaneLayout(
+      this.laneChannels,
+      this.laneChannels.length,
+      this.chartPlayVariant,
+    );
 
     const skinlessLanes: BeMusicLaneFrame[] = [];
     this.laneChannels.forEach((channel, index) => {
       // A theme-authored lane rect wins; channels the theme doesn't place use the default-family layout.
       const themeLane = this.resolveThemeLaneRect(channel, width, height);
       const fallbackLane = fallbackLanes[index];
-      const x = themeLane ? themeLane.x : (fallbackLane?.x ?? PLAYFIELD.x);
+      const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft);
       const w = themeLane ? themeLane.w : Math.max(4, fallbackLane?.w ?? PLAYFIELD.w);
       const top = themeLane ? themeLane.top : fallbackTop;
       const bottom = themeLane ? themeLane.bottom : fallbackBottom;
