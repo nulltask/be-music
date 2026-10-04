@@ -7,7 +7,7 @@ import type {
   BeMusicLongNoteContext,
   BeMusicNoteContext,
 } from '../../../skin/be-music/types.ts';
-import { drawKeyBeamEdges } from '../key-beam.ts';
+import { keyBeamGradient } from '../key-beam.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import {
   burstParticlePosition,
@@ -78,15 +78,14 @@ export function renderSynesthesiaLanes({
       .fill(lane.kind === 'white' ? { color: 0x180c06, alpha: 0.88 } : { color: 0x050201, alpha: 0.8 });
     graphics.rect(x, top, 1, laneHeight).fill({ fill: resolveColumnGradient(light.glow), alpha: 0.5 });
 
-    // Key beam: a faint column of the lane's light with bright rails along both edges, so a press reads clearly while
-    // the notes falling down the middle keep their contrast.
+    // Key beam: a column of the lane's light, near solid at the judgement line and easing out up the lane, so a press
+    // reads clearly while the notes still on their way down keep their contrast.
     if (lane.beam > 0) {
-      const beamHeight = Math.min(laneHeight, 280);
+      const beamHeight = Math.min(laneHeight, 250);
       const beamAlpha = lane.beam * lane.beam * (3 - 2 * lane.beam);
       graphics
         .rect(x + 1, bottom - beamHeight, w - 2, beamHeight)
-        .fill({ fill: resolveColumnGradient(light.glow), alpha: beamAlpha * 0.5 });
-      drawKeyBeamEdges(graphics, x, w, bottom, beamHeight, light.glow, beamAlpha);
+        .fill({ fill: keyBeamGradient(light.glow), alpha: beamAlpha * 0.9 });
       graphics
         .rect(x + 1, bottom - 26, w - 2, 26)
         .fill({ fill: resolveColumnGradient(0xffffff), alpha: beamAlpha * 0.25 });

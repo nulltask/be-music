@@ -6,7 +6,7 @@ import type {
   BeMusicLongNoteContext,
   BeMusicNoteContext,
 } from '../../../skin/be-music/types.ts';
-import { drawKeyBeamEdges } from '../key-beam.ts';
+import { keyBeamGradient } from '../key-beam.ts';
 
 /** Colours for one lane class: note highlight / body / shade, and the key cap at rest / pressed. */
 interface LaneTone {
@@ -27,6 +27,9 @@ const TONES: Record<BeMusicLaneKind, LaneTone> = {
 
 const NOTE_HEIGHT = 10;
 export const PHANTOM_BOMB_DURATION_MS = 150;
+
+/** Laser colour per lane: a cool white, an electric blue, and the poster red. */
+const BEAM_COLORS: Record<BeMusicLaneKind, number> = { white: 0xe8ecff, black: 0x2f7bff, scratch: 0xff1430 };
 
 /** Bed of the white-key lanes, a step lighter than the ink well the other lanes show. */
 const WHITE_LANE_BED = 0x18181d;
@@ -50,20 +53,18 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesC
     else graphics.rect(x, top, w, laneHeight).fill({ color: TONES.black.body, alpha: 0.035 });
     graphics.rect(x, top, 1, laneHeight).fill({ color: 0x2c2c31, alpha: 0.9 });
 
-    // Key beam — a tall, soft gradient in the lane's colour with crisp bright rails along both lane edges and a white
-    // base, so a press reads at a glance while the middle of the lane stays dim enough for the notes. Ease the release
-    // so the beam dims quickly at first and lingers softly instead of fading linearly.
+    // Key beam — a laser in the lane's colour, near solid at the judgement line and easing out up the lane, over a short
+    // white-hot base. Ease the release so the beam dims quickly at first and lingers softly instead of fading linearly.
     if (lane.beam > 0) {
-      const beamHeight = Math.min(laneHeight, 280);
+      const beamHeight = Math.min(laneHeight, 250);
       const beamAlpha = lane.beam * lane.beam * (3 - 2 * lane.beam);
       graphics
         .rect(x + 1, bottom - beamHeight, w - 2, beamHeight)
-        // White notes fall through white beams, so that body stays dimmer; the rails carry the press.
-        .fill({ fill: resolveBeamGradient(tone.body), alpha: beamAlpha * (lane.kind === 'white' ? 0.55 : 0.85) });
-      drawKeyBeamEdges(graphics, x, w, bottom, beamHeight, tone.top, beamAlpha);
+        // White notes fall through white beams, so that laser runs a little softer.
+        .fill({ fill: keyBeamGradient(BEAM_COLORS[lane.kind]), alpha: beamAlpha * (lane.kind === 'white' ? 0.7 : 1) });
       graphics
-        .rect(x + 1, bottom - 26, w - 2, 26)
-        .fill({ fill: resolveBeamGradient(0xffffff), alpha: beamAlpha * 0.8 });
+        .rect(x + 1, bottom - 24, w - 2, 24)
+        .fill({ fill: resolveBeamGradient(0xffffff), alpha: beamAlpha * 0.7 });
     }
 
     // Judgement line — blood red with a paper-white edge, its glow flaring on each downbeat.

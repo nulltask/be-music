@@ -1,4 +1,4 @@
-import { Color, FillGradient, type Graphics } from 'pixi.js';
+import type { Graphics } from 'pixi.js';
 import type {
   BeMusicBomb,
   BeMusicBombsContext,
@@ -7,7 +7,7 @@ import type {
   BeMusicLongNoteContext,
   BeMusicNoteContext,
 } from '../../../skin/be-music/types.ts';
-import { drawKeyBeamEdges } from '../key-beam.ts';
+import { keyBeamGradient } from '../key-beam.ts';
 import { comboTier, effectProfile } from '../moments.ts';
 import { easeOutCubic, hash01 } from '../phantom-style.ts';
 import { springEase } from './field.ts';
@@ -19,6 +19,9 @@ const LANE_COLORS: Record<BeMusicLaneKind, number> = {
   black: LAT_ACCENT,
   scratch: LAT_SIGNAL,
 };
+
+/** Beam inks: the note colours, with the white keys' ink lifted to graphite so its beam doesn't swallow the notes. */
+const BEAM_INKS: Record<BeMusicLaneKind, number> = { white: 0x55544f, black: LAT_ACCENT, scratch: LAT_SIGNAL };
 
 const NOTE_HEIGHT = 6;
 const LANE_BED = 0xfbfaf7;
@@ -49,15 +52,14 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
     graphics
       .rect(x, lane.top, w, height)
       .fill({ color: lane.kind === 'white' ? LANE_BED : LANE_BED_DEEP, alpha: 0.94 });
-    // Key beam: a soft wash of the lane colour with crisp ink-coloured rails along both edges — clear at a glance, while
-    // the paper in the middle stays light enough for the notes.
+    // Key beam: the lane colour printed up from the judgement line, dense at the line and thinning out up the paper, so
+    // a press reads at a glance while the notes still on their way down stay crisp.
     if (lane.beam > 0) {
-      const beamHeight = Math.min(height, 260);
+      const beamHeight = Math.min(height, 240);
       const strength = lane.beam * lane.beam * (3 - 2 * lane.beam);
       graphics
         .rect(x, lane.bottom - beamHeight, w, beamHeight)
-        .fill({ fill: resolveWash(LANE_COLORS[lane.kind]), alpha: strength * 0.55 });
-      drawKeyBeamEdges(graphics, x, w, lane.bottom, beamHeight, LANE_COLORS[lane.kind], strength, 1);
+        .fill({ fill: keyBeamGradient(BEAM_INKS[lane.kind]), alpha: strength * 0.7 });
     }
     // Key cap: an outlined square that fills with the lane colour while held.
     const cap = Math.min(10, w - 4);
@@ -188,27 +190,4 @@ function renderBomb(graphics: Graphics, bomb: BeMusicBomb, tier: number, enabled
     }
     graphics.stroke({ color, width: 1, alpha: 0.7 * fade });
   }
-}
-
-const WASHES = new Map<number, FillGradient>();
-
-/** Vertical wash for a key beam: transparent at the top, the lane colour toward the judgement line. */
-function resolveWash(color: number): FillGradient {
-  let gradient = WASHES.get(color);
-  if (!gradient) {
-    const rgb = new Color(color);
-    gradient = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 1 },
-      textureSpace: 'local',
-      colorStops: [
-        { offset: 0, color: rgb.setAlpha(0).toRgbaString() },
-        { offset: 0.7, color: rgb.setAlpha(0.12).toRgbaString() },
-        { offset: 1, color: rgb.setAlpha(0.4).toRgbaString() },
-      ],
-    });
-    WASHES.set(color, gradient);
-  }
-  return gradient;
 }
