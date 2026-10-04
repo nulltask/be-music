@@ -27,6 +27,7 @@ import {
 import type { ChildPool } from '../pixi-utils.ts';
 import { audioDrive, bandLevel, type AudioDrive } from './audio-drive.ts';
 import { drawPhantomMoments } from './phantom/moments.ts';
+import { addRansomText, type GlyphFactory } from './phantom/tear.ts';
 import { effectProfile, impulse, punchScale } from './moments.ts';
 import { flashingGreatColor, isFlashingGreat, judgeDisplayWord } from './judge-word.ts';
 import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions as TextOptions } from './hud-text.ts';
@@ -779,29 +780,24 @@ function drawJudgements(
   for (const display of resolveJudgeDisplays(runtime, playfield)) {
     const combo = resolveVisibleCombo(display.judge, display.combo);
     const style = judgeStyle(display.judge);
-    // Punch: every judgement lands with a quick overshoot (a miss lands plainly, with no rattle).
+    const word = judgeDisplayWord(display.judge);
+    // The judgement is cut out of magazines like the count-in's READY? / GO!!: a fresh ransom note on every hit, each
+    // card popping in a beat after the last (a miss lands plainly). The letters on the dark cards carry the judgement
+    // colour; a PERFECT's GREAT flashes through the palette.
     const miss = display.judge === 'POOR' || display.judge === 'BAD';
-    const judgeScale = miss ? 1 : punchScale(runtime.judgeAtMs, nowMs, 120, 0.24 * amount);
-    addText(
-      layer,
-      judgeDisplayWord(display.judge),
-      display.x,
-      238,
-      {
-        scale: judgeScale,
-        size: 30,
-        fill: isFlashingGreat(display.judge) ? flashingGreatColor(nowMs, PHANTOM_FLASHING_GREAT) : style.fill,
-        fontFamily: DISPLAY_FONT,
-        letterSpacing: 1,
-        anchorX: 0.5,
-        anchorY: 0.5,
-        skewX: TYPE_SKEW,
-        stroke: { color: PHANTOM_INK, width: 6, alignment: 0.5, join: 'miter' },
-        dropShadow: { color: style.shadow, alpha: 1, blur: 0, distance: 4, angle: Math.PI / 4 },
-        maxWidth: display.maxWidth,
-      },
-      pool,
-    );
+    const age = runtime.judgeAtMs !== undefined ? nowMs - runtime.judgeAtMs : Number.POSITIVE_INFINITY;
+    const cards = pool?.acquireGraphics() ?? new Graphics();
+    cards.label = 'default-gameplay/judge-cards';
+    if (!pool) layer.addChild(cards);
+    addRansomText(cards, hudGlyphs(layer, pool), word, display.x, 238, {
+      size: Math.min(30, display.maxWidth / (word.length * 0.95)),
+      seed: (display.combo ?? 0) * 7 + word.length,
+      angle: -0.06,
+      accent: isFlashingGreat(display.judge) ? flashingGreatColor(nowMs, PHANTOM_FLASHING_GREAT) : style.fill,
+      // Fast enough to finish between hits in a dense passage, and only a slight overshoot so it never covers lanes.
+      appear: (index) => (miss || amount <= 0 ? 1 : (age - index * 10) / 60),
+      pop: 0.22,
+    });
     if (combo > 0) {
       addNumber(
         layer,
@@ -820,6 +816,19 @@ function drawJudgements(
       );
     }
   }
+}
+
+/** Ransom-note glyphs from the pooled HUD text (or fresh nodes without a pool). */
+function hudGlyphs(layer: Container, pool: ChildPool | undefined): GlyphFactory {
+  return (char, options) =>
+    addText(
+      layer,
+      char,
+      0,
+      0,
+      { size: options.size, weight: options.weight, fill: options.fill, fontFamily: options.fontFamily },
+      pool,
+    );
 }
 
 function resolveJudgeDisplays(

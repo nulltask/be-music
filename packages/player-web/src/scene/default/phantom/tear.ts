@@ -116,7 +116,8 @@ const LETTER_FILL: Record<RansomPaper, number> = { ink: PHANTOM_WHITE, paper: PH
 /**
  * Ransom-note text centred on `(x, y)` along a baseline tilted by `angle`: each letter on its own tilted card (see
  * {@link ransomLayout}). `appear(index, count)` returns 0..1 per letter so callers can stagger the cards in — each
- * pops from oversized as it lands. Cards go into `graphics`; letters come from `glyph`.
+ * pops from oversized as it lands. Cards go into `graphics`; letters come from `glyph`. `accent` recolours the letters
+ * on the ink and red cards (paper cards keep ink letters), so a word can carry a status colour.
  */
 export function addRansomText(
   graphics: Graphics,
@@ -124,7 +125,15 @@ export function addRansomText(
   text: string,
   x: number,
   y: number,
-  options: { size: number; seed: number; angle?: number; appear?: (index: number, count: number) => number },
+  options: {
+    size: number;
+    seed: number;
+    angle?: number;
+    appear?: (index: number, count: number) => number;
+    accent?: number;
+    /** How oversized a card starts as it pops in (0.9 = 1.9x). Small values keep a quick-fire word in place. */
+    pop?: number;
+  },
 ): void {
   const layout = ransomLayout(text, options.seed);
   const angle = options.angle ?? 0;
@@ -134,7 +143,7 @@ export function addRansomText(
     return glyph(entry.char, {
       size: Math.round(options.size * entry.scale * font.tighten),
       weight: font.weight,
-      fill: LETTER_FILL[entry.paper],
+      fill: options.accent !== undefined && entry.paper !== 'paper' ? options.accent : LETTER_FILL[entry.paper],
       fontFamily: font.family,
     });
   });
@@ -156,7 +165,7 @@ export function addRansomText(
       node.visible = false;
       return;
     }
-    const pop = 1 + 0.9 * (1 - easeOutBack(appear, 2.4));
+    const pop = 1 + (options.pop ?? 0.9) * (1 - easeOutBack(appear, 2.4));
     const lift = entry.dy * options.size;
     const cx = x + along * cos - lift * sin;
     const cy = y + along * sin + lift * cos;
@@ -168,7 +177,7 @@ export function addRansomText(
     const corner = (dx: number, dy: number) => [cx + dx * c - dy * s, cy + dx * s + dy * c];
     graphics
       .poly([...corner(-w / 2, -h / 2), ...corner(w / 2, -h / 2), ...corner(w / 2, h / 2), ...corner(-w / 2, h / 2)])
-      .fill(CARD_FILL[entry.paper]);
+      .fill({ color: CARD_FILL[entry.paper], alpha: Math.min(1, appear * 3) });
     node.anchor.set(0.5, 0.5);
     node.position.set(cx, cy);
     node.rotation = rotation;
