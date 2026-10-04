@@ -16,6 +16,22 @@ const FALLBACK_LANE_GAP = 0;
 const FALLBACK_DP_SIDE_GAP = 0;
 const FALLBACK_SCRATCH_LANE_WEIGHT = 1.55;
 
+/**
+ * Fixed lane widths for the IIDX families (5 / 7 / 10 / 14 KEY), in design px. The proportions follow the arcade
+ * cabinet — the scratch lane about 1.7x a white key, black keys about 0.8x — scaled so a 7K side is exactly the 194 px
+ * span. Every mode uses the same widths, so a 5K or DP chart never stretches its lanes sideways; the playfield just
+ * gets narrower or wider.
+ */
+export const IIDX_LANE_WIDTHS = { scratch: 41, white: 24, black: 19 } as const;
+
+export interface FixedLaneWidths {
+  scratch: number;
+  /** Odd-numbered keys (1 / 3 / 5 / 7). */
+  white: number;
+  /** Even-numbered keys (2 / 4 / 6). */
+  black: number;
+}
+
 /** Left edge and per-side width of the skinless playfield, mirroring LR2's default 7K skin. */
 const FALLBACK_PLAYFIELD_SPAN = { x: 33, w: 194 } as const;
 /**
@@ -48,6 +64,11 @@ export interface ResolveFallbackLaneLayoutOptions {
    * Keep one side at the requested width and let additional DP-side lanes extend the fallback playfield horizontally.
    */
   preserveSideWidth?: boolean;
+  /**
+   * Give every lane a fixed width by kind (scratch / white key / black key) instead of sharing `w` out. `w` and
+   * `preserveSideWidth` are then ignored: the playfield is as wide as its lanes.
+   */
+  fixedWidths?: FixedLaneWidths;
 }
 
 /**
@@ -76,6 +97,7 @@ export function resolveSkinlessLaneLayout(
   playVariant?: ChartPlayVariant,
 ): SkinlessLaneLayout {
   const span = resolveFallbackPlayfieldSpan(playVariant);
+  const fixedWidths = usesIidxLaneWidths(playVariant) ? IIDX_LANE_WIDTHS : undefined;
   const lanes = resolveFallbackLaneLayout({
     channels,
     laneCount,
@@ -83,9 +105,17 @@ export function resolveSkinlessLaneLayout(
     x: span.x,
     w: span.w,
     preserveSideWidth: shouldPreserveFallbackSideWidth(channels, playVariant),
+    fixedWidths,
   });
-  const right = Math.max(span.x + span.w, ...lanes.map((lane) => lane.x + lane.w));
+  const lanesRight = Math.max(span.x, ...lanes.map((lane) => lane.x + lane.w));
+  // Fixed-width lanes define the playfield; shared-out lanes keep at least one side's span.
+  const right = fixedWidths ? lanesRight : Math.max(span.x + span.w, lanesRight);
   return { lanes, left: span.x, right };
+}
+
+/** Whether `playVariant` is an IIDX family (5 / 7 / 10 / 14 KEY), whose lanes use {@link IIDX_LANE_WIDTHS}. */
+export function usesIidxLaneWidths(playVariant?: ChartPlayVariant): boolean {
+  return playVariant === '5' || playVariant === '7' || playVariant === '10' || playVariant === '14';
 }
 
 export function isScratchLaneForVariant(channel: string, playVariant?: ChartPlayVariant): boolean {
@@ -130,17 +160,31 @@ export function resolveFallbackLaneLayout(options: ResolveFallbackLaneLayoutOpti
   let x = options.x;
   let priorSide: '1P' | '2P' | undefined;
 
+  const fixedWidths = options.fixedWidths;
   for (const index of displayOrder) {
     const side = sideFlags[index]!;
     if (priorSide !== undefined) {
       x += priorSide === side ? gap : sideGap;
     }
-    const w = unit * laneWeights[index]!;
+    const w = fixedWidths
+      ? resolveFixedLaneWidth(fixedWidths, channels[index], scratchFlags[index]!, options.playVariant)
+      : unit * laneWeights[index]!;
     rects[index] = { channel: channels[index], x, w, isScratch: scratchFlags[index]!, side };
     x += w;
     priorSide = side;
   }
   return rects;
+}
+
+function resolveFixedLaneWidth(
+  widths: FixedLaneWidths,
+  channel: string | undefined,
+  isScratch: boolean,
+  playVariant: ChartPlayVariant | undefined,
+): number {
+  if (isScratch) return widths.scratch;
+  const slot = channel === undefined ? -1 : resolveCoreSideKeySlot(channel, playVariant);
+  return slot > 0 && slot % 2 === 0 ? widths.black : widths.white;
 }
 
 function resolveFallbackLaneSide(channel: string | undefined, playVariant?: ChartPlayVariant): '1P' | '2P' {

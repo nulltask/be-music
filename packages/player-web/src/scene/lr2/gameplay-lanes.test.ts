@@ -5,6 +5,7 @@ import {
   resolveFallbackPlayfieldSpan,
   resolveSkinlessLaneLayout,
   shouldPreserveFallbackSideWidth,
+  usesIidxLaneWidths,
 } from '../gameplay-lanes.ts';
 
 describe('isScratchLaneForVariant', () => {
@@ -221,5 +222,59 @@ describe('resolveSkinlessLaneLayout', () => {
     expect(layout.lanes).toHaveLength(48);
     expect(layout.right).toBeCloseTo(12 + 308 * 2);
     for (const lane of layout.lanes) expect(lane.w).toBeCloseTo(308 / 24);
+  });
+});
+
+describe('usesIidxLaneWidths', () => {
+  it('covers the 5 / 7 / 10 / 14 KEY families only', () => {
+    for (const variant of ['5', '7', '10', '14'] as const) expect(usesIidxLaneWidths(variant)).toBe(true);
+    for (const variant of [undefined, '9', '24', '48'] as const) expect(usesIidxLaneWidths(variant)).toBe(false);
+  });
+});
+
+describe('resolveSkinlessLaneLayout fixed IIDX widths', () => {
+  const widthsByChannel = (channels: string[], variant: '5' | '7' | '10' | '14') => {
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, variant);
+    return { layout, widths: Object.fromEntries(layout.lanes.map((lane) => [lane.channel, lane.w])) };
+  };
+
+  it('gives 7K a 41 px scratch, 24 px white keys, and 19 px black keys', () => {
+    const { layout, widths } = widthsByChannel(['16', '11', '12', '13', '14', '15', '18', '19'], '7');
+
+    expect(widths).toEqual({ '16': 41, '11': 24, '12': 19, '13': 24, '14': 19, '15': 24, '18': 19, '19': 24 });
+    expect(layout.right).toBe(33 + 194);
+  });
+
+  it('keeps the same widths in 5K, so the playfield narrows instead of stretching', () => {
+    const { layout, widths } = widthsByChannel(['16', '11', '12', '13', '14', '15'], '5');
+
+    expect(widths).toEqual({ '16': 41, '11': 24, '12': 19, '13': 24, '14': 19, '15': 24 });
+    expect(layout.right).toBe(33 + 41 + 24 * 3 + 19 * 2);
+  });
+
+  it('keeps the same widths on both DP sides', () => {
+    const tenKey = widthsByChannel(['16', '11', '12', '13', '14', '15', '21', '22', '23', '24', '25', '26'], '10');
+    const fourteenKey = widthsByChannel(
+      ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'],
+      '14',
+    );
+
+    expect(tenKey.widths['26']).toBe(41);
+    expect(tenKey.widths['21']).toBe(24);
+    expect(tenKey.widths['22']).toBe(19);
+    expect(tenKey.layout.right).toBe(33 + (41 + 24 * 3 + 19 * 2) * 2);
+    expect(fourteenKey.widths['29']).toBe(24);
+    expect(fourteenKey.widths['28']).toBe(19);
+    expect(fourteenKey.layout.right).toBe(33 + 194 * 2);
+  });
+
+  it('packs the lanes edge to edge in display order', () => {
+    const { layout } = widthsByChannel(['16', '11', '12', '13', '14', '15', '18', '19'], '7');
+    const sorted = [...layout.lanes].sort((a, b) => a.x - b.x);
+
+    expect(sorted[0]!.channel).toBe('16');
+    for (let index = 1; index < sorted.length; index += 1) {
+      expect(sorted[index]!.x).toBeCloseTo(sorted[index - 1]!.x + sorted[index - 1]!.w);
+    }
   });
 });
