@@ -27,6 +27,9 @@ const TONES: Record<BeMusicLaneKind, LaneTone> = {
 const NOTE_HEIGHT = 10;
 export const PHANTOM_BOMB_DURATION_MS = 150;
 
+/** Bed of the white-key lanes, a step lighter than the ink well the other lanes show. */
+const WHITE_LANE_BED = 0x18181d;
+
 export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesContext): void {
   const beatDecay = 1 - beatPhase;
   let gridTop = Number.POSITIVE_INFINITY;
@@ -40,8 +43,10 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesC
     gridBottom = Math.max(gridBottom, bottom);
     gridRight = Math.max(gridRight, x + w);
 
-    // Lane bed — a faint wash of the lane's colour, plus a charcoal hairline on the left edge.
-    graphics.rect(x, top, w, laneHeight).fill({ color: tone.body, alpha: lane.kind === 'scratch' ? 0.06 : 0.035 });
+    // Lane bed — white-key lanes sit on a lifted charcoal; black keys and the scratch share the same faint blue wash.
+    // A charcoal hairline marks the left edge.
+    if (lane.kind === 'white') graphics.rect(x, top, w, laneHeight).fill(WHITE_LANE_BED);
+    else graphics.rect(x, top, w, laneHeight).fill({ color: TONES.black.body, alpha: 0.035 });
     graphics.rect(x, top, 1, laneHeight).fill({ color: 0x2c2c31, alpha: 0.9 });
 
     // Key beam — a smooth gradient in the lane's colour fading toward the top, with a soft white base. Ease the release

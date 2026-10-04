@@ -21,6 +21,7 @@ const LANE_COLORS: Record<BeMusicLaneKind, number> = {
 
 const NOTE_HEIGHT = 6;
 const LANE_BED = 0xfbfaf7;
+const LANE_BED_DEEP = 0xe6e3dc;
 export const LATTICE_BOMB_DURATION_MS = 380;
 
 /**
@@ -43,7 +44,10 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
   for (const lane of lanes) {
     const { x, w } = lane;
     const height = Math.max(1, lane.bottom - lane.top);
-    graphics.rect(x, lane.top, w, height).fill({ color: LANE_BED, alpha: 0.94 });
+    // White-key lanes are the bright paper; black keys and the scratch sit on the deeper stock.
+    graphics
+      .rect(x, lane.top, w, height)
+      .fill({ color: lane.kind === 'white' ? LANE_BED : LANE_BED_DEEP, alpha: 0.94 });
     if (lane.beam > 0) {
       const beamHeight = Math.min(height, 200);
       const strength = lane.beam * lane.beam * (3 - 2 * lane.beam);

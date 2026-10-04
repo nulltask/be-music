@@ -70,8 +70,11 @@ export function renderSynesthesiaLanes({
     gridLeft = Math.min(gridLeft, x);
     gridRight = Math.max(gridRight, x + w);
 
-    // Near-black bed, so the particle world behind the playfield reads only as a faint depth cue.
-    graphics.rect(x, top, w, laneHeight).fill({ color: 0x050201, alpha: 0.8 });
+    // Near-black bed, so the particle world behind the playfield reads only as a faint depth cue; white-key lanes take
+    // a warmer, lifted bed so they read apart from the black keys and the scratch.
+    graphics
+      .rect(x, top, w, laneHeight)
+      .fill(lane.kind === 'white' ? { color: 0x180c06, alpha: 0.88 } : { color: 0x050201, alpha: 0.8 });
     graphics.rect(x, top, 1, laneHeight).fill({ fill: resolveColumnGradient(light.glow), alpha: 0.5 });
 
     if (lane.beam > 0) {
