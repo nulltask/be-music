@@ -37,6 +37,7 @@ const workspaceAliases = [
   { find: '@be-music/player/state-signals', replacement: resolve(rootDir, 'packages/player/src/state-signals.ts') },
   { find: '@be-music/player/utils', replacement: resolve(rootDir, 'packages/player/src/utils.ts') },
   { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
+  { find: '@be-music/player-web/runtime', replacement: resolve(rootDir, 'packages/player-web/src/runtime/index.ts') },
   { find: '@be-music/utils/core', replacement: resolve(rootDir, 'packages/utils/src/core.ts') },
   { find: '@be-music/utils/cli-path', replacement: resolve(rootDir, 'packages/utils/src/cli-path.ts') },
   { find: '@be-music/utils/log', replacement: resolve(rootDir, 'packages/utils/src/log.ts') },
