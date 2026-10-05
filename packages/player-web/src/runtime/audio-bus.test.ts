@@ -2,12 +2,18 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   BGM_BUS_COMPRESSOR_PARAMS,
   COMPRESSOR_INPUT_TRIM_GAIN_LINEAR,
+  COMPRESSOR_PARAM_RANGES,
+  DEFAULT_COMPRESSOR_PARAMS,
   KEY_BUS_COMPRESSOR_PARAMS,
   LEGACY_COMPRESSOR_PARAMS,
   MASTER_BUS_COMPRESSOR_PARAMS,
   MASTER_MAKEUP_GAIN_LINEAR,
+  MAX_BUS_VOLUME,
+  MIXER_HEADROOM_GAIN_LINEAR,
   buildAudioBus,
+  mergeCompressorParams,
   parseCompressorMode,
+  sanitizeBusVolume,
   type CompressorMode,
 } from './audio-bus.ts';
 
@@ -539,6 +545,133 @@ describe('buildAudioBus master gain (#VOLWAV)', () => {
       expect(reachesDestination(keyMixer, destination)).toBe(true);
       expect(reachesDestination(bgmMixer, destination)).toBe(true);
     }
+  });
+});
+
+describe('sanitizeBusVolume', () => {
+  it('passes volumes in range through', () => {
+    expect(sanitizeBusVolume(0)).toBe(0);
+    expect(sanitizeBusVolume(0.35)).toBe(0.35);
+    expect(sanitizeBusVolume(1)).toBe(1);
+  });
+
+  it('clamps negatives to silence and caps boosts', () => {
+    expect(sanitizeBusVolume(-0.5)).toBe(0);
+    expect(sanitizeBusVolume(9)).toBe(MAX_BUS_VOLUME);
+  });
+
+  it('treats non-finite input as unity', () => {
+    expect(sanitizeBusVolume(Number.NaN)).toBe(1);
+    expect(sanitizeBusVolume(Number.POSITIVE_INFINITY)).toBe(1);
+  });
+});
+
+describe('buildAudioBus per-bus volume', () => {
+  // The user's key / BGM balance rides on each source mixer's gain, on top of the fixed headroom trim, so it applies
+  // ahead of every compressor stage in every routing mode.
+  const mixerGain = (node: GainNode) => (node as unknown as FakeNode).gain!.value;
+
+  it('starts both buses at unity (the headroom trim alone)', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    expect(bus.getBusVolume('key')).toBe(1);
+    expect(bus.getBusVolume('bgm')).toBe(1);
+    expect(mixerGain(bus.keyMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR);
+    expect(mixerGain(bus.bgmMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR);
+  });
+
+  it('seeds the volumes from initialVolumes', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split', { initialVolumes: { key: 0.5, bgm: 1.5 } });
+    expect(mixerGain(bus.keyMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR * 0.5);
+    expect(mixerGain(bus.bgmMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR * 1.5);
+  });
+
+  it('sets each bus independently and keeps the value across mode changes', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    bus.setBusVolume('key', 0.25);
+    expect(bus.getBusVolume('key')).toBe(0.25);
+    expect(bus.getBusVolume('bgm')).toBe(1);
+    expect(mixerGain(bus.keyMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR * 0.25);
+    expect(mixerGain(bus.bgmMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR);
+    for (const mode of ['legacy', 'off', 'split'] as const) {
+      bus.setMode(mode);
+      expect(mixerGain(bus.keyMixer)).toBeCloseTo(MIXER_HEADROOM_GAIN_LINEAR * 0.25);
+    }
+  });
+
+  it('sanitizes the volume it applies', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    bus.setBusVolume('bgm', -3);
+    expect(bus.getBusVolume('bgm')).toBe(0);
+    expect(mixerGain(bus.bgmMixer)).toBe(0);
+  });
+});
+
+describe('mergeCompressorParams', () => {
+  it('overrides only the given fields', () => {
+    expect(mergeCompressorParams(KEY_BUS_COMPRESSOR_PARAMS, { threshold: -18, ratio: 6 })).toEqual({
+      ...KEY_BUS_COMPRESSOR_PARAMS,
+      threshold: -18,
+      ratio: 6,
+    });
+  });
+
+  it('clamps each field into its Web Audio range', () => {
+    const merged = mergeCompressorParams(KEY_BUS_COMPRESSOR_PARAMS, {
+      threshold: 12,
+      ratio: 0.5,
+      attack: 3,
+      release: -1,
+      knee: 99,
+    });
+    expect(merged).toEqual({
+      threshold: COMPRESSOR_PARAM_RANGES.threshold.max,
+      ratio: COMPRESSOR_PARAM_RANGES.ratio.min,
+      attack: COMPRESSOR_PARAM_RANGES.attack.max,
+      release: COMPRESSOR_PARAM_RANGES.release.min,
+      knee: COMPRESSOR_PARAM_RANGES.knee.max,
+    });
+  });
+
+  it('keeps the base value for non-finite input', () => {
+    expect(mergeCompressorParams(BGM_BUS_COMPRESSOR_PARAMS, { threshold: Number.NaN })).toEqual(
+      BGM_BUS_COMPRESSOR_PARAMS,
+    );
+  });
+});
+
+describe('buildAudioBus compressor tuning', () => {
+  const splitKeyCompressor = (bus: ReturnType<typeof buildAudioBus>) => {
+    const keyTrim = [...(bus.keyMixer as unknown as FakeNode).outgoing][0]!;
+    return [...keyTrim.outgoing][0]!;
+  };
+
+  it('starts every compressor at its factory parameters', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    for (const compressor of ['key', 'bgm', 'master', 'legacy'] as const) {
+      expect(bus.getCompressorParams(compressor)).toEqual(DEFAULT_COMPRESSOR_PARAMS[compressor]);
+    }
+    expect(splitKeyCompressor(bus).threshold!.value).toBe(KEY_BUS_COMPRESSOR_PARAMS.threshold);
+  });
+
+  it('seeds overrides from initialCompressorParams', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split', { initialCompressorParams: { key: { threshold: -20 } } });
+    expect(bus.getCompressorParams('key').threshold).toBe(-20);
+    expect(splitKeyCompressor(bus).threshold!.value).toBe(-20);
+  });
+
+  it('retunes a compressor live, leaving the others alone', () => {
+    const { context } = createFakeAudioContext();
+    const bus = buildAudioBus(context, 'split');
+    bus.setCompressorParams('key', { threshold: -24, knee: 3 });
+    expect(bus.getCompressorParams('key')).toEqual({ ...KEY_BUS_COMPRESSOR_PARAMS, threshold: -24, knee: 3 });
+    expect(splitKeyCompressor(bus).threshold!.value).toBe(-24);
+    expect(bus.getCompressorParams('bgm')).toEqual(BGM_BUS_COMPRESSOR_PARAMS);
   });
 });
 

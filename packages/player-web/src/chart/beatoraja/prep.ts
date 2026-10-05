@@ -49,7 +49,12 @@ import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/j
 import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBmsonSamplePlaybackMap, createTimingResolver } from '@be-music/audio-renderer/triggers';
 import { buildBgaTimelines, type BgaTimelines } from '@be-music/player/core/bga-timeline';
-import { buildAudioBus, type AudioBusHandle, type CompressorMode } from '../../runtime/audio-bus.ts';
+import {
+  buildAudioBus,
+  type AudioBusHandle,
+  type BuildAudioBusOptions,
+  type CompressorMode,
+} from '../../runtime/audio-bus.ts';
 import type { EngineDriverAudioContext } from '../../runtime/engine-driver.ts';
 import { loadAssetBytes, resolveChartAudioAsset } from '../../collection/collection.ts';
 import { loadVideoTextureFromBytes } from '../../media/textures.ts';
@@ -72,6 +77,8 @@ export interface PrepareBeatorajaGameplayChartOptions {
    * with a master compressor fronting both). Pass `'off'` to bypass every compressor stage.
    */
   audioCompressorMode?: CompressorMode;
+  /** Initial audio-bus state (stage toggles, keysound / BGM volumes, compressor tuning) from the host's UI. */
+  audioBusOptions?: BuildAudioBusOptions;
   /**
    * Pre-resolved chart from a prior `resolveBmsControlFlow(song.chart)` call. When set, the prep
    * skips the resolve step and uses this chart verbatim. Required when the host already resolved
@@ -127,7 +134,7 @@ export async function prepareBeatorajaGameplayChart(
   // Pre-warm the context — most browsers ship it in `suspended` state until the first user gesture and
   // the first `node.start()` would otherwise pay a one-time ramp-up tax.
   void audioContext.resume().catch(() => undefined);
-  const audioBus = buildAudioBus(audioContext, options.audioCompressorMode ?? 'split');
+  const audioBus = buildAudioBus(audioContext, options.audioCompressorMode ?? 'split', options.audioBusOptions);
   // `#VOLWAV` master volume scaling; charts that omit the directive stay at unity.
   const volWav = chart.bms.volWav;
   if (typeof volWav === 'number' && Number.isFinite(volWav) && volWav >= 0) {

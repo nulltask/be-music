@@ -160,6 +160,56 @@ export const MIXER_HEADROOM_GAIN_LINEAR = 0.5;
  */
 export type CompressorStage = 'key' | 'bgm' | 'master';
 
+/** Compressor whose parameters can be tuned: the three split-mode stages, or the single `'legacy'` compressor. */
+export type TunableCompressor = CompressorStage | 'legacy';
+
+/** Factory parameters of every tunable compressor. */
+export const DEFAULT_COMPRESSOR_PARAMS: Readonly<Record<TunableCompressor, Readonly<CompressorParams>>> = {
+  key: KEY_BUS_COMPRESSOR_PARAMS,
+  bgm: BGM_BUS_COMPRESSOR_PARAMS,
+  master: MASTER_BUS_COMPRESSOR_PARAMS,
+  legacy: LEGACY_COMPRESSOR_PARAMS,
+};
+
+/** Web Audio `DynamicsCompressorNode` ranges each parameter is clamped to. */
+export const COMPRESSOR_PARAM_RANGES: Readonly<Record<keyof CompressorParams, { min: number; max: number }>> = {
+  threshold: { min: -100, max: 0 },
+  ratio: { min: 1, max: 20 },
+  attack: { min: 0, max: 1 },
+  release: { min: 0, max: 1 },
+  knee: { min: 0, max: 40 },
+};
+
+/**
+ * Merges `patch` over `base`, clamping each value into its {@link COMPRESSOR_PARAM_RANGES} range; non-finite values
+ * keep the base value.
+ */
+export function mergeCompressorParams(base: CompressorParams, patch: Partial<CompressorParams> = {}): CompressorParams {
+  const merged = { ...base };
+  for (const key of Object.keys(COMPRESSOR_PARAM_RANGES) as Array<keyof CompressorParams>) {
+    const value = patch[key];
+    if (value === undefined || !Number.isFinite(value)) continue;
+    const { min, max } = COMPRESSOR_PARAM_RANGES[key];
+    merged[key] = Math.min(max, Math.max(min, value));
+  }
+  return merged;
+}
+
+/** Source bus a user volume applies to: `'key'` (player keysounds) or `'bgm'` (auto-triggered BGM). */
+export type AudioBusChannel = 'key' | 'bgm';
+
+/** Upper bound for a user bus volume (2 = +6 dB). */
+export const MAX_BUS_VOLUME = 2;
+
+/**
+ * Sanitizes a user bus volume (linear, 1 = unity): non-finite → unity, negative → 0, and clamped to
+ * {@link MAX_BUS_VOLUME} so a stray value can't blow the mix past the compressor stack's headroom.
+ */
+export function sanitizeBusVolume(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_BUS_VOLUME, Math.max(0, value));
+}
+
 /** Per-stage on/off state. Defaults to all `true` (every stage engaged). */
 export interface CompressorStages {
   key: boolean;
@@ -208,6 +258,21 @@ export interface AudioBusHandle {
    */
   getStageEnabled(stage: CompressorStage): boolean;
   /**
+   * Sets the user volume of one source bus (linear, 1 = unity; see {@link sanitizeBusVolume}). Applied at the bus's
+   * mixer on top of the headroom trim, ahead of every compressor stage, so it balances keysounds against BGM in every
+   * routing mode and the recording tap captures the balance the user hears.
+   */
+  setBusVolume(channel: AudioBusChannel, value: number): void;
+  /** Returns the current user volume of one source bus (default `1`). */
+  getBusVolume(channel: AudioBusChannel): number;
+  /**
+   * Retunes one compressor live (see {@link mergeCompressorParams}); unspecified fields keep their current value. Works
+   * whether or not the compressor is currently routed, so a later mode / stage switch picks the tuning up.
+   */
+  setCompressorParams(compressor: TunableCompressor, params: Partial<CompressorParams>): void;
+  /** Returns the current parameters of one compressor. */
+  getCompressorParams(compressor: TunableCompressor): CompressorParams;
+  /**
    * Sets the chart-level master gain (BMS `#VOLWAV`). The value is a linear multiplier applied at a dedicated stage
    * that sits BEFORE the recording tap, so a chart authored with `#VOLWAV 80` runs at 80 % through every routing mode
    * and the recorder captures the same attenuated signal the user hears. Passing `1.0` (or omitting the field on the
@@ -244,6 +309,10 @@ export interface BuildAudioBusOptions {
    * surface a UI for per-stage bypass and want the bus's state to come up matching the pre-mount UI selection.
    */
   initialStages?: Partial<CompressorStages>;
+  /** Initial user volume per source bus (linear, 1 = unity). Missing fields default to `1`. */
+  initialVolumes?: Partial<Record<AudioBusChannel, number>>;
+  /** Initial parameter overrides per compressor, merged over {@link DEFAULT_COMPRESSOR_PARAMS}. */
+  initialCompressorParams?: Partial<Record<TunableCompressor, Partial<CompressorParams>>>;
 }
 
 /**
@@ -263,8 +332,13 @@ export function buildAudioBus(
   const bgmMixer = audioContext.createGain();
   // Sub-unity mixer gain so multiple simultaneous samples don't sum past full scale before the compressor stack has a
   // chance to react. See `MIXER_HEADROOM_GAIN_LINEAR` for why ~−6 dB.
-  keyMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
-  bgmMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR;
+  // The user's per-bus volume rides on the same gain, so it sits ahead of every compressor stage.
+  const volumes: Record<AudioBusChannel, number> = {
+    key: sanitizeBusVolume(options.initialVolumes?.key ?? 1),
+    bgm: sanitizeBusVolume(options.initialVolumes?.bgm ?? 1),
+  };
+  keyMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR * volumes.key;
+  bgmMixer.gain.value = MIXER_HEADROOM_GAIN_LINEAR * volumes.bgm;
   const keyCompressorInput = audioContext.createGain();
   const bgmCompressorInput = audioContext.createGain();
   keyCompressorInput.gain.value = COMPRESSOR_INPUT_TRIM_GAIN_LINEAR;
@@ -273,12 +347,24 @@ export function buildAudioBus(
   // doesn't use them so the next `setMode` call can splice them back in without re-creating Web Audio nodes (cheap, but
   // recreating would also reset their internal envelope state which wastes any "warm" gain reduction the mode switch
   // could otherwise preserve).
-  const keyComp = createCompressor(audioContext, KEY_BUS_COMPRESSOR_PARAMS);
-  const bgmComp = createCompressor(audioContext, BGM_BUS_COMPRESSOR_PARAMS);
-  const masterComp = createCompressor(audioContext, MASTER_BUS_COMPRESSOR_PARAMS);
+  const compressorParams: Record<TunableCompressor, CompressorParams> = {
+    key: mergeCompressorParams(KEY_BUS_COMPRESSOR_PARAMS, options.initialCompressorParams?.key),
+    bgm: mergeCompressorParams(BGM_BUS_COMPRESSOR_PARAMS, options.initialCompressorParams?.bgm),
+    master: mergeCompressorParams(MASTER_BUS_COMPRESSOR_PARAMS, options.initialCompressorParams?.master),
+    legacy: mergeCompressorParams(LEGACY_COMPRESSOR_PARAMS, options.initialCompressorParams?.legacy),
+  };
+  const keyComp = createCompressor(audioContext, compressorParams.key);
+  const bgmComp = createCompressor(audioContext, compressorParams.bgm);
+  const masterComp = createCompressor(audioContext, compressorParams.master);
   // Legacy mode reuses a single compressor with the original pre-split params. Distinct node from the master so
   // swapping modes doesn't have to mutate AudioParam values mid-chart.
-  const legacyComp = createCompressor(audioContext, LEGACY_COMPRESSOR_PARAMS);
+  const legacyComp = createCompressor(audioContext, compressorParams.legacy);
+  const compressorNodes: Record<TunableCompressor, DynamicsCompressorNode> = {
+    key: keyComp,
+    bgm: bgmComp,
+    master: masterComp,
+    legacy: legacyComp,
+  };
   const makeup = audioContext.createGain();
   makeup.gain.value = MASTER_MAKEUP_GAIN_LINEAR;
   // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity). Implemented as a dedicated
@@ -400,6 +486,20 @@ export function buildAudioBus(
     getStageEnabled(stage: CompressorStage): boolean {
       return stages[stage];
     },
+    setBusVolume(channel: AudioBusChannel, value: number): void {
+      volumes[channel] = sanitizeBusVolume(value);
+      (channel === 'key' ? keyMixer : bgmMixer).gain.value = MIXER_HEADROOM_GAIN_LINEAR * volumes[channel];
+    },
+    getBusVolume(channel: AudioBusChannel): number {
+      return volumes[channel];
+    },
+    setCompressorParams(compressor: TunableCompressor, params: Partial<CompressorParams>): void {
+      compressorParams[compressor] = mergeCompressorParams(compressorParams[compressor], params);
+      applyCompressorParams(compressorNodes[compressor], compressorParams[compressor]);
+    },
+    getCompressorParams(compressor: TunableCompressor): CompressorParams {
+      return { ...compressorParams[compressor] };
+    },
     setMasterGain(value: number): void {
       // Sanitize pathological inputs — `#VOLWAV` is documented as `0..ZZ` (linear-scale BMS units, 100 = unity, > 100
       // boosts the chart above unity), but a malformed chart could emit NaN / Infinity / negative numbers that would
@@ -468,12 +568,16 @@ export function buildAudioBus(
 
 function createCompressor(audioContext: AudioContext, params: CompressorParams): DynamicsCompressorNode {
   const node = audioContext.createDynamicsCompressor();
+  applyCompressorParams(node, params);
+  return node;
+}
+
+function applyCompressorParams(node: DynamicsCompressorNode, params: CompressorParams): void {
   node.threshold.value = params.threshold;
   node.ratio.value = params.ratio;
   node.attack.value = params.attack;
   node.release.value = params.release;
   node.knee.value = params.knee;
-  return node;
 }
 
 /**
