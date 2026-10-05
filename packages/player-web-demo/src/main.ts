@@ -59,9 +59,20 @@ import {
   resolvePlaylogFilename,
   serializePlaylog,
   PLAYLOG_FILE_SUFFIX,
+  DEFAULT_COMPRESSOR_PARAMS,
   type BeMusicPlaylog,
   type CompressorMode,
+  type CompressorParams,
+  type TunableCompressor,
 } from '@be-music/player-web/runtime';
+import {
+  TUNABLE_COMPRESSORS,
+  defaultCompressorTunings,
+  paramsFromTuning,
+  readStoredCompressorTunings,
+  storeCompressorTunings,
+  type CompressorTuning,
+} from './compressor-tuning.ts';
 import { logger } from '@be-music/player-web';
 import {
   discoverLr2Themes,
@@ -156,6 +167,31 @@ function storeBuiltInSkinId(id: string): void {
     window.localStorage.setItem(BUILT_IN_SKIN_STORAGE_KEY, id);
   } catch {
     // Private windows / blocked storage: the pick still applies for this session.
+  }
+}
+
+const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
+
+/** Keysound / BGM volumes in percent, as last set in the Debug Menu (100 / 100 when nothing is stored). */
+function readStoredVolumes(): { keyVolume: number; bgmVolume: number } {
+  const fallback = { keyVolume: 100, bgmVolume: 100 };
+  try {
+    const raw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<Record<'keyVolume' | 'bgmVolume', unknown>>;
+    const percent = (value: unknown, otherwise: number) =>
+      typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
+    return { keyVolume: percent(parsed.keyVolume, 100), bgmVolume: percent(parsed.bgmVolume, 100) };
+  } catch {
+    return fallback;
+  }
+}
+
+function storeVolumes(volumes: { keyVolume: number; bgmVolume: number }): void {
+  try {
+    window.localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify(volumes));
+  } catch {
+    // Private windows / blocked storage: the volumes still apply for this session.
   }
 }
 
@@ -410,6 +446,8 @@ class PlayerWebDemoApp {
    */
   private gui: GUI | undefined;
   private compressorStageFolder: GUI | undefined;
+  /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
+  private readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
   private recordController: Controller | undefined;
   /**
    * "Auto-save play history" checkbox controller. Held so the play-start path can `disable()` it for the duration
@@ -471,6 +509,7 @@ class PlayerWebDemoApp {
       // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
       // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
       // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
+      ...readStoredVolumes(),
       compressor: true,
       compressorKey: true,
       compressorBgm: true,
@@ -705,9 +744,66 @@ class PlayerWebDemoApp {
    * lil-gui's `show(false)` collapses the folder out of the panel entirely, matching the previous `display: none`
    * behavior.
    */
+  /** Bus `CompressorParams` for every compressor, from the Debug Menu's tuning. */
+  private resolveCompressorParamOverrides(): Record<TunableCompressor, CompressorParams> {
+    return Object.fromEntries(
+      TUNABLE_COMPRESSORS.map((compressor) => [
+        compressor,
+        paramsFromTuning(this.compressorTunings[compressor], DEFAULT_COMPRESSOR_PARAMS[compressor]),
+      ]),
+    ) as Record<TunableCompressor, CompressorParams>;
+  }
+
   private refreshCompressorStageVisibility(): void {
     const visible = this.guiState.compressor && this.compressorMode === 'split';
     this.compressorStageFolder?.show(visible);
+  }
+
+  /**
+   * One folder per compressor (key / BGM / master in split mode; the single legacy compressor only when the
+   * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
+   * Changes retune a running chart live and are remembered for the next visit.
+   */
+  private buildCompressorTuningGui(parent: GUI): void {
+    const labels: Record<TunableCompressor, string> = {
+      key: 'Key compressor',
+      bgm: 'BGM compressor',
+      master: 'Master compressor',
+      legacy: 'Legacy compressor',
+    };
+    const compressors = TUNABLE_COMPRESSORS.filter((compressor) =>
+      this.compressorMode === 'legacy' ? compressor === 'legacy' : compressor !== 'legacy',
+    );
+    for (const compressor of compressors) {
+      const tuning = this.compressorTunings[compressor];
+      const folder = parent.addFolder(labels[compressor]).close();
+      const apply = () => {
+        const params = paramsFromTuning(tuning, DEFAULT_COMPRESSOR_PARAMS[compressor]);
+        this.gameplayView?.setAudioCompressorParams(compressor, params);
+        this.beatorajaGameplayPrep?.audioBus.setCompressorParams(compressor, params);
+        storeCompressorTunings(this.compressorTunings);
+      };
+      const controllers = [
+        folder.add(tuning, 'thresholdDb', -60, 0, 0.5).name('Threshold (dB)'),
+        folder.add(tuning, 'kneeDb', 0, 40, 0.5).name('Knee (dB)'),
+        folder.add(tuning, 'ratio', 1, 20, 0.1).name('Ratio (x:1)'),
+        folder.add(tuning, 'attackMs', 0, 200, 0.5).name('Attack (ms)'),
+        folder.add(tuning, 'releaseMs', 0, 1000, 5).name('Release (ms)'),
+      ];
+      for (const controller of controllers) controller.onChange(apply);
+      folder
+        .add(
+          {
+            reset: () => {
+              Object.assign(tuning, defaultCompressorTunings()[compressor]);
+              for (const controller of controllers) controller.updateDisplay();
+              apply();
+            },
+          },
+          'reset',
+        )
+        .name('Reset to default');
+    }
   }
 
   /**
@@ -779,14 +875,25 @@ class PlayerWebDemoApp {
         // without forcing the user to restart the song.
         this.gameplayView?.setAutoPauseOnBlur(value);
       });
-    gui
+    // Keysound / BGM balance. Both sliders push live into a running chart and are remembered for the next visit.
+    const volume = gui.addFolder('Volume');
+    const onVolumeChange = (channel: 'key' | 'bgm') => (value: number) => {
+      this.gameplayView?.setAudioVolume(channel, value / 100);
+      this.beatorajaGameplayPrep?.audioBus.setBusVolume(channel, value / 100);
+      storeVolumes({ keyVolume: this.guiState.keyVolume, bgmVolume: this.guiState.bgmVolume });
+    };
+    volume.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
+    volume.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
+    // Compressor: the master switch, the split-mode stage toggles, and every compressor's parameters.
+    const compressor = gui.addFolder('Compressor');
+    compressor
       .add(this.guiState, 'compressor')
-      .name('Compressor')
+      .name('Enabled')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressor(value);
         this.refreshCompressorStageVisibility();
       });
-    const stages = gui.addFolder('Compressor stages');
+    const stages = compressor.addFolder('Stages');
     this.compressorStageFolder = stages;
     stages
       .add(this.guiState, 'compressorKey')
@@ -806,6 +913,7 @@ class PlayerWebDemoApp {
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
       });
+    this.buildCompressorTuningGui(compressor);
     // BGA video transcode controls. Both settings are seeded into the next `PixiGameplayView` constructor (see
     // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
     // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
@@ -1780,6 +1888,10 @@ class PlayerWebDemoApp {
         song,
         source,
         audioCompressorMode: this.guiState.compressor === false ? 'off' : this.compressorMode,
+        audioBusOptions: {
+          initialVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
+          initialCompressorParams: this.resolveCompressorParamOverrides(),
+        },
         preResolvedChart,
       });
     } catch (error) {
@@ -3174,6 +3286,8 @@ class PlayerWebDemoApp {
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartSha256 !== undefined ? { chartSha256: overrides.chartSha256 } : {}),
       replay,
+      audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
+      audioCompressorParams: this.resolveCompressorParamOverrides(),
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {

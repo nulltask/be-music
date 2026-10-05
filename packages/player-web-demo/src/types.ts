@@ -61,6 +61,10 @@ export interface DemoGuiState {
    * holds focus.
    */
   autoPauseOnBlur: boolean;
+  /** Keysound bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
+  keyVolume: number;
+  /** BGM bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
+  bgmVolume: number;
   compressor: boolean;
   compressorKey: boolean;
   compressorBgm: boolean;
