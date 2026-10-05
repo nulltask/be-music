@@ -66,10 +66,14 @@ import {
 } from '../../collection/collection.ts';
 import { loadTextureFromBytes, loadVideoTextureFromBytes } from '../../media/textures.ts';
 import {
+  type AudioBusChannel,
   type AudioBusHandle,
   type CompressorMode,
+  type CompressorParams,
+  type TunableCompressor,
   type CompressorStage,
   buildAudioBus,
+  sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
 import { PerfTracker } from '../perf.ts';
@@ -459,6 +463,17 @@ export interface CoreGameplayViewOptions {
    */
   audioCompressorStages?: { key?: boolean; bgm?: boolean; master?: boolean };
   /**
+   * Initial user volume per source bus — `key` (player keysounds) and `bgm` (auto-triggered BGM) — as linear gains
+   * (1 = unity, clamped to `0..2`). Hosts with volume sliders pass the current UI values so a re-mounted gameplay keeps
+   * the user's balance; {@link CoreGameplayView.setAudioVolume} changes them live.
+   */
+  audioVolumes?: { key?: number; bgm?: number };
+  /**
+   * Parameter overrides per compressor (`key` / `bgm` / `master` in split mode, `legacy`), merged over the factory
+   * tuning. {@link CoreGameplayView.setAudioCompressorParams} retunes them live.
+   */
+  audioCompressorParams?: Partial<Record<TunableCompressor, Partial<CompressorParams>>>;
+  /**
    * When set to a positive integer, BGA videos that need the ffmpeg.wasm fallback (legacy `.mpg` / `.wmv` / `.avi` /
    * unsupported codecs) are downscaled during transcode so neither edge exceeds this many pixels. Aspect ratio is
    * preserved.
@@ -735,6 +750,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `audioCompressorMode` the constructor / URL flag selected).
    */
   private audioCompressorMode: CompressorMode = 'split';
+  /** Compressor tuning overrides, seeded from the options and kept across audio-bus rebuilds. */
+  private audioCompressorParams: Partial<Record<TunableCompressor, Partial<CompressorParams>>> = {};
+  /** User keysound / BGM bus volumes, seeded from the options and kept across audio-bus rebuilds. */
+  private audioVolumes: Record<AudioBusChannel, number> = { key: 1, bgm: 1 };
   /**
    * Active recorder (canvas video + audio bus tap → WebM blob) when the host has started a recording session via {@link
    * startRecording}. `undefined` while idle. We hold the instance across the play session so `stopRecording` /
@@ -1023,6 +1042,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
     }
     this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
+    this.audioVolumes = {
+      key: sanitizeBusVolume(options.audioVolumes?.key ?? 1),
+      bgm: sanitizeBusVolume(options.audioVolumes?.bgm ?? 1),
+    };
+    this.audioCompressorParams = { ...options.audioCompressorParams };
   }
 
   /**
@@ -1459,6 +1483,24 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   public setAudioCompressorStageEnabled(stage: CompressorStage, enabled: boolean): void {
     this.audioBus?.setStageEnabled(stage, enabled);
+  }
+
+  /**
+   * Sets the user volume of the keysound (`'key'`) or BGM (`'bgm'`) bus, as a linear gain (1 = unity, clamped to
+   * `0..2`). Applies live to a running chart; before the audio bus exists the value is kept for when it is built.
+   */
+  public setAudioVolume(channel: AudioBusChannel, volume: number): void {
+    this.audioVolumes[channel] = sanitizeBusVolume(volume);
+    this.audioBus?.setBusVolume(channel, volume);
+  }
+
+  /**
+   * Retunes one compressor (`'key'` / `'bgm'` / `'master'` split stages or `'legacy'`); unspecified fields keep their
+   * current value. Applies live to a running chart; before the audio bus exists the tuning is kept for when it is built.
+   */
+  public setAudioCompressorParams(compressor: TunableCompressor, params: Partial<CompressorParams>): void {
+    this.audioCompressorParams[compressor] = { ...this.audioCompressorParams[compressor], ...params };
+    this.audioBus?.setCompressorParams(compressor, params);
   }
 
   /**
@@ -2105,6 +2147,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const initialMode: CompressorMode = this.options.audioCompressor === false ? 'off' : this.audioCompressorMode;
     this.audioBus = buildAudioBus(this.audioContext, initialMode, {
       initialStages: this.options.audioCompressorStages,
+      initialVolumes: this.audioVolumes,
+      initialCompressorParams: this.audioCompressorParams,
     });
     // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
     this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
