@@ -163,6 +163,27 @@ describe('compressor parameter constants', () => {
     expect(MASTER_BUS_COMPRESSOR_PARAMS.threshold).toBeGreaterThan(BGM_BUS_COMPRESSOR_PARAMS.threshold);
   });
 
+  it('lets keysound attack transients through before the key bus compresses', () => {
+    // Punch: the first ~10 ms of a hit (its click / snap) should pass before gain reduction starts, and the bus should
+    // recover faster than the BGM bus so one hit's compression doesn't dull the next hit's transient.
+    expect(KEY_BUS_COMPRESSOR_PARAMS.attack).toBeGreaterThanOrEqual(0.01);
+    expect(KEY_BUS_COMPRESSOR_PARAMS.release).toBeLessThan(BGM_BUS_COMPRESSOR_PARAMS.release);
+    expect(KEY_BUS_COMPRESSOR_PARAMS.ratio).toBeLessThanOrEqual(3);
+  });
+
+  it('keeps the BGM bus as gentle glue under the keysounds', () => {
+    // Glue, not squash: a low ratio, a soft knee, and an attack slow enough for BGM drums to keep their own attack.
+    expect(BGM_BUS_COMPRESSOR_PARAMS.ratio).toBeLessThanOrEqual(2);
+    expect(BGM_BUS_COMPRESSOR_PARAMS.knee).toBeGreaterThanOrEqual(10);
+    expect(BGM_BUS_COMPRESSOR_PARAMS.attack).toBeGreaterThan(KEY_BUS_COMPRESSOR_PARAMS.attack);
+  });
+
+  it('tunes the master as a firm, fast ceiling that releases slower than the key bus', () => {
+    expect(MASTER_BUS_COMPRESSOR_PARAMS.ratio).toBe(20);
+    expect(MASTER_BUS_COMPRESSOR_PARAMS.attack).toBeLessThanOrEqual(0.003);
+    expect(MASTER_BUS_COMPRESSOR_PARAMS.release).toBeGreaterThan(KEY_BUS_COMPRESSOR_PARAMS.release);
+  });
+
   it('balances compressed-mode input trim with restrained makeup gain', () => {
     expect(COMPRESSOR_INPUT_TRIM_GAIN_LINEAR).toBeGreaterThan(0);
     expect(COMPRESSOR_INPUT_TRIM_GAIN_LINEAR).toBeLessThan(1);
