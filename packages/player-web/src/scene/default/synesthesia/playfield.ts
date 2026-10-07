@@ -138,10 +138,13 @@ function drawNote(graphics: Graphics, x: number, y: number, w: number, light: La
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
-const BURST_PARTICLES = 110;
-const BURST_PARTICLES_PER_TIER = 16;
+const BURST_PARTICLES = 170;
+const BURST_PARTICLES_PER_TIER = 24;
 const BURST_PARTICLES_MAX = BURST_PARTICLES + BURST_PARTICLES_PER_TIER * 4;
 const BURST_FOCAL = 260;
+/** Grain size (0.4..1) from which a spark leaves a hairline trail / carries a glow sprite; the rest is fine powder. */
+const POWDER_TRAIL_SIZE = 0.85;
+const POWDER_GLINT_SIZE = 0.94;
 const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
 
 function cachedBurst(seed: number): BurstParticle[] {
@@ -276,15 +279,16 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
     const position = fountain(particle, life);
     const head = project(position);
     if (!head.visible) continue;
-    const tail = project(fountain(particle, Math.max(0, life - 0.14)));
-    const trailAlpha = (1 - life) * 0.6;
+    // Only the coarser grains leave a short, hairline trail; the powder itself just drifts.
+    const trailAlpha = particle.size >= POWDER_TRAIL_SIZE ? (1 - life) * 0.45 : 0;
     if (trailAlpha > 0.02) {
+      const tail = project(fountain(particle, Math.max(0, life - 0.07)));
       effects
         .moveTo(tail.x, tail.y)
         .lineTo(head.x, head.y)
         .stroke({
           color: hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.35 + life * 2), 1),
-          width: Math.max(0.8, 2.2 * head.scale * particle.size),
+          width: Math.max(0.5, 1 * head.scale * particle.size),
           alpha: trailAlpha,
         });
     }
@@ -295,8 +299,9 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
   for (const spark of sparks) {
     const tint = hsvToHex(light.hue + spark.particle.hueShift, Math.min(0.9, 0.45 + spark.life * 1.8), 1);
     const sparkAlpha = (1 - spark.life) ** 0.8 * (0.65 + 0.35 * crowd);
-    if (spark.particle.size < 0.55) {
-      const side = Math.max(1, (1 + 2.2 * spark.particle.size) * spark.scale * (1 - spark.life * 0.6));
+    // Powder: most grains are tiny squares; only the coarsest few carry a soft glint.
+    if (spark.particle.size < POWDER_GLINT_SIZE) {
+      const side = Math.max(0.7, (0.6 + 1 * spark.particle.size) * spark.scale * (1 - spark.life * 0.5));
       effects.rect(spark.x - side / 2, spark.y - side / 2, side, side).fill({ color: tint, alpha: sparkAlpha });
       continue;
     }
@@ -304,7 +309,7 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
     sprite.texture = glow;
     sprite.anchor.set(0.5);
     sprite.blendMode = 'add';
-    const size = (3 + 6 * spark.particle.size) * spark.scale * Math.sqrt(1 - spark.life);
+    const size = (1.6 + 2.4 * spark.particle.size) * spark.scale * Math.sqrt(1 - spark.life);
     sprite.width = size;
     sprite.height = size;
     sprite.position.set(spark.x, spark.y);
