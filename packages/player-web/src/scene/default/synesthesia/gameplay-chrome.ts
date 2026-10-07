@@ -47,8 +47,16 @@ import {
 
 type Runtime = SkinlessGameplayChromeRuntime;
 
-const SCORE_PANEL = { x: 384, y: 352, w: 234, h: 108 } as const;
-const SONG_PLATE = { x: 16, y: 420, w: 344, h: 46 } as const;
+/**
+ * HUD grid (design px): a 16 px page margin and a 12 px gutter. The left column (16..272) stacks the gauge frame and
+ * the song plate; the score panel fills the right column (284..624) from the gauge frame's top to the plate's bottom.
+ */
+const HUD_MARGIN = 16;
+const GAUGE_FRAME = { x: HUD_MARGIN, y: GROOVE.y - 26, w: 256, h: 48 } as const;
+const SONG_PLATE = { x: HUD_MARGIN, y: 420, w: 256, h: 46 } as const;
+const SCORE_PANEL = { x: 284, y: GAUGE_FRAME.y, w: DESIGN_WIDTH - HUD_MARGIN - 284, h: 466 - GAUGE_FRAME.y } as const;
+/** Score panel's column divider, from its left edge. */
+const SCORE_DIVIDER = 200;
 const PLAYFIELD_FRAME_BOTTOM = 344;
 /** Floor grid: horizon y, camera height above the floor, focal length. */
 const FLOOR = { horizon: 326, height: 154, focal: 200 } as const;
@@ -181,7 +189,7 @@ export function renderSynesthesiaChrome({
   drawSongPlate(panels, layer, runtime, accent, layerPool);
   drawScorePanel(panels, layer, runtime, accent, layerPool);
   // Tucked close to the monitor frame so the counts get room for four digits.
-  const tallyX = BGA.x + BGA.w + 14;
+  const tallyX = BGA.x + BGA.w + 12;
   if (playfieldRight + 14 <= tallyX) {
     drawJudgeTally(panels, layer, runtime, tallyX, layerPool);
   }
@@ -614,24 +622,25 @@ function drawHeader(
   // Near-opaque, so the playfield rails and lanes stop under the header instead of running through its type.
   graphics.rect(0, 0, DESIGN_WIDTH, 34).fill({ color: SYN_VOID, alpha: 0.92 });
   graphics.rect(0, 34, DESIGN_WIDTH, 1).fill({ color: accent, alpha: 0.35 + 0.35 * pulse });
-  graphics.circle(20, 17, 3).fill({ color: autoplay ? SYN_AMBER : accent, alpha: 1 });
-  graphics.circle(20, 17, 8).fill({ color: autoplay ? SYN_AMBER : accent, alpha: 0.18 + 0.2 * pulse });
+  graphics.circle(HUD_MARGIN + 8, 17, 3).fill({ color: autoplay ? SYN_AMBER : accent, alpha: 1 });
+  graphics.circle(HUD_MARGIN + 8, 17, 8).fill({ color: autoplay ? SYN_AMBER : accent, alpha: 0.18 + 0.2 * pulse });
   addHudText(
     layer,
     autoplay ? 'AUTO PLAY' : 'PLAY',
-    34,
+    HUD_MARGIN + 22,
     12,
     { ...displayStyle(10, SYN_WHITE), letterSpacing: 3 },
     pool,
   );
-  addHudText(layer, 'BPM', 150, 14, labelStyle(), pool);
-  addHudNumber(layer, formatBpm(runtime.bpm), 190, 9, displayStyle(14, SYN_WHITE), pool);
-  addHudText(layer, 'SPEED', 236, 14, labelStyle(), pool);
-  addHudNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 296, 9, displayStyle(14, SYN_WHITE), pool);
+  // Readouts on a fixed rhythm after the mode: label, then its value 40 px on; groups 96 px apart.
+  addHudText(layer, 'BPM', 172, 14, labelStyle(), pool);
+  addHudNumber(layer, formatBpm(runtime.bpm), 212, 9, displayStyle(14, SYN_WHITE), pool);
+  addHudText(layer, 'SPEED', 268, 14, labelStyle(), pool);
+  addHudNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 328, 9, displayStyle(14, SYN_WHITE), pool);
   addHudText(
     layer,
     formatRuleset(runtime.rulesetLabel),
-    506,
+    DESIGN_WIDTH - HUD_MARGIN,
     12,
     { ...displayStyle(9, accent), letterSpacing: 3, anchorX: 1, maxWidth: 110 },
     pool,
@@ -643,7 +652,7 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
   const clear = clampPercent(runtime.clearThreshold ?? 80);
   const survival = runtime.gaugeSurvival === true || clear <= 0;
   const cleared = survival ? gauge > 0 : gauge >= clear;
-  drawFrame(graphics, GROOVE.x - 14, GROOVE.y - 26, GROOVE.w + 28, 48, accent);
+  drawFrame(graphics, GAUGE_FRAME.x, GAUGE_FRAME.y, GAUGE_FRAME.w, GAUGE_FRAME.h, accent);
   addHudText(
     layer,
     `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
@@ -655,7 +664,7 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
   addHudNumber(
     layer,
     `${Math.round(gauge)}%`,
-    GROOVE.x + GROOVE.w + 4,
+    GAUGE_FRAME.x + GAUGE_FRAME.w - 14,
     GROOVE.y - 22,
     { ...displayStyle(12, cleared ? SYN_AMBER : SYN_WHITE), anchorX: 1 },
     pool,
@@ -727,12 +736,12 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
 function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
   const { x, y, w, h } = SCORE_PANEL;
   drawFrame(graphics, x, y, w, h, accent);
-  graphics.rect(x + 146, y + 14, 1, h - 28).fill({ color: accent, alpha: 0.3 });
+  graphics.rect(x + SCORE_DIVIDER, y + 14, 1, h - 28).fill({ color: accent, alpha: 0.3 });
   addHudText(layer, 'SCORE', x + 14, y + 12, labelStyle(), pool);
   addHudNumber(
     layer,
     formatCount(runtime.score),
-    x + 136,
+    x + SCORE_DIVIDER - 14,
     y + 22,
     {
       ...displayStyle(17, SYN_WHITE),
@@ -746,7 +755,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
   addHudNumber(
     layer,
     `${formatCount(runtime.exScore)}/${formatCount(runtime.exScoreMax)}`,
-    x + 136,
+    x + SCORE_DIVIDER - 14,
     y + 52,
     { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 46 },
     pool,
@@ -755,7 +764,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
   addHudNumber(
     layer,
     formatExRate(runtime.exScore, runtime.exScoreMax),
-    x + 136,
+    x + SCORE_DIVIDER - 14,
     y + 74,
     { ...displayStyle(8, SYN_MIST), anchorX: 1, maxWidth: 46 },
     pool,
@@ -766,7 +775,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
       ? Math.max(0, Math.min(1, runtime.exScore / runtime.exScoreMax))
       : 0;
   const meterX = x + 14;
-  const meterW = 122;
+  const meterW = SCORE_DIVIDER - 28;
   graphics.rect(meterX, y + 94, meterW, 2).fill({ color: SYN_DIM, alpha: 0.3 });
   if (rate > 0) {
     graphics.rect(meterX, y + 92, meterW * rate, 6).fill({ color: accent, alpha: 0.15 });
@@ -777,7 +786,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
       .rect(meterX + (meterW * ninth) / 9, y + 91, 1, 8)
       .fill({ color: SYN_WHITE, alpha: ninth >= 6 ? 0.45 : 0.18 });
   }
-  addHudText(layer, 'COMBO', x + 158, y + 12, labelStyle(), pool);
+  addHudText(layer, 'COMBO', x + SCORE_DIVIDER + 14, y + 12, labelStyle(), pool);
   addHudNumber(
     layer,
     formatCount(runtime.combo),
@@ -786,7 +795,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     { ...displayStyle(14, SYN_WHITE), anchorX: 1, maxWidth: 62 },
     pool,
   );
-  addHudText(layer, 'MAX', x + 158, y + 54, labelStyle(), pool);
+  addHudText(layer, 'MAX', x + SCORE_DIVIDER + 14, y + 54, labelStyle(), pool);
   addHudNumber(
     layer,
     formatCount(runtime.maxCombo),
@@ -796,7 +805,7 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     pool,
   );
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
-  addHudText(layer, 'RANK', x + 158, y + 76, labelStyle(), pool);
+  addHudText(layer, 'RANK', x + SCORE_DIVIDER + 14, y + 76, labelStyle(), pool);
   addHudText(
     layer,
     rank,
@@ -822,7 +831,7 @@ const TALLY: ReadonlyArray<readonly [label: string, key: 'perfect' | 'great' | '
 
 function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, x: number, pool: ChildPool): void {
   const y = BGA.y - 6;
-  const w = DESIGN_WIDTH - x - 6;
+  const w = DESIGN_WIDTH - HUD_MARGIN - x;
   drawFrame(graphics, x, y, w, 186, SYN_EMBER);
   for (let row = 0; row < TALLY.length; row += 1) {
     const [label, key] = TALLY[row]!;

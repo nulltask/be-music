@@ -34,6 +34,24 @@ import {
 const ROLL_DELAY_MS = 700;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1600;
+
+/**
+ * Result grid (design px): a 16 px page margin and 12 px gutters. Top row: the DJ LEVEL panel and two columns of
+ * metric panels (44 px tall, 10 px apart); bottom row: the judgement rows and the two graphs, which share one top and
+ * bottom line.
+ */
+const MARGIN = 16;
+const TOP = 64;
+const TOP_ROW_H = 152;
+const METRIC_X = [204, 420] as const;
+const METRIC_Y = [TOP, TOP + 54, TOP + 108] as const;
+const METRIC_W = 204;
+const METRIC_H = 44;
+const BOTTOM_TOP = 232;
+const BOTTOM_H = 200;
+const GRAPHS_X = MARGIN + 292 + 12;
+const ROWS_TOP = BOTTOM_TOP + 34;
+const ROWS_BOTTOM = ROWS_TOP + 4 * 32 + 12;
 const RANK_BURST = burstParticles(29, 260);
 
 export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
@@ -152,7 +170,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const verdict = group('verdict');
   const verdictT = easeOutCubic(stageProgress(elapsed, 100, 900));
   verdict.g.rect(0, 44, designWidth, 1).fill({ color: verdictColor, alpha: 0.5 * verdictT });
-  text(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', 24, 14, {
+  text(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', MARGIN, 14, {
     ...display(15, SYN_WHITE),
     letterSpacing: 6 + 22 * (1 - verdictT),
     alpha: verdictT,
@@ -161,7 +179,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   text(
     verdict.root,
     `${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`,
-    designWidth - 20,
+    designWidth - MARGIN,
     17,
     {
       size: 12,
@@ -176,12 +194,12 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
 
   // Rank: a spinning 3D particle ring that bursts outward as the letter ignites.
   const rank = group('rank');
-  const rankCx = 110;
-  const rankCy = 150;
+  const rankCx = MARGIN + 88;
+  const rankCy = TOP + 68;
   const topRank = rankLabel === 'AAA' || rankLabel === 'AA';
   const rankColor = topRank ? SYN_AMBER : accent;
-  glass(rank.g, 20, 66, 180, 164, rankColor);
-  label('DJ LEVEL', 34, 78, rank.root, rankColor);
+  glass(rank.g, MARGIN, TOP, 176, TOP_ROW_H, rankColor);
+  label('DJ LEVEL', MARGIN + 14, TOP + 12, rank.root, rankColor);
   const ringIn = easeOutCubic(stageProgress(elapsed, 400, 900));
   for (let index = 0; index < 60; index += 1) {
     const angle = (Math.PI * 2 * index) / 60 + seconds * 0.9;
@@ -242,7 +260,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   letter.position.set(rankCx, rankCy);
   letter.scale.set(stamp >= 1 ? 1 + 0.03 * heartbeat : 1.8 - 0.8 * easeOutBack(stamp));
   const rate = frame.ratePercent * easeOutCubic(roll);
-  text(rank.root, `${rate.toFixed(2)}%`, rankCx, 212, {
+  text(rank.root, `${rate.toFixed(2)}%`, rankCx, TOP + TOP_ROW_H - 14, {
     ...display(10, SYN_MIST),
     anchorX: 0.5,
     anchorY: 0.5,
@@ -252,18 +270,24 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
 
   // Metric panels.
   const metrics: ReadonlyArray<readonly [x: number, y: number, name: string, value: string, fill: number]> = [
-    [218, 66, 'SCORE', String(rollUpValue(result.score.score, roll)), SYN_WHITE],
-    [218, 122, 'EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, SYN_WHITE],
-    [218, 178, 'MAX COMBO', String(rollUpValue(result.maxCombo, roll)), SYN_AMBER],
-    [424, 66, 'GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, cleared ? SYN_AMBER : SYN_RED],
-    [424, 122, 'PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, SYN_WHITE],
-    [424, 178, 'NOTES', String(rollUpValue(result.score.total, roll)), SYN_WHITE],
+    [METRIC_X[0], METRIC_Y[0], 'SCORE', String(rollUpValue(result.score.score, roll)), SYN_WHITE],
+    [METRIC_X[0], METRIC_Y[1], 'EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, SYN_WHITE],
+    [METRIC_X[0], METRIC_Y[2], 'MAX COMBO', String(rollUpValue(result.maxCombo, roll)), SYN_AMBER],
+    [
+      METRIC_X[1],
+      METRIC_Y[0],
+      'GAUGE',
+      `${rollUpValue(Math.round(result.gauge), roll)}%`,
+      cleared ? SYN_AMBER : SYN_RED,
+    ],
+    [METRIC_X[1], METRIC_Y[1], 'PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, SYN_WHITE],
+    [METRIC_X[1], METRIC_Y[2], 'NOTES', String(rollUpValue(result.score.total, roll)), SYN_WHITE],
   ];
   metrics.forEach(([x, y, name, value, fill], index) => {
     const panel = group(`metric-${index}`);
-    glass(panel.g, x, y, 196, 46, accent);
+    glass(panel.g, x, y, METRIC_W, METRIC_H, accent);
     label(name, x + 14, y + 10, panel.root);
-    text(panel.root, value, x + 182, y + 30, {
+    text(panel.root, value, x + METRIC_W - 14, y + 29, {
       ...display(14, fill),
       anchorX: 1,
       anchorY: 0.5,
@@ -275,8 +299,8 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
 
   // Judgement rows.
   const judges = group('judgement');
-  glass(judges.g, 20, 244, 290, 176, SYN_EMBER);
-  label('JUDGEMENT', 34, 256, judges.root, SYN_EMBER);
+  glass(judges.g, MARGIN, BOTTOM_TOP, 292, BOTTOM_H, SYN_EMBER);
+  label('JUDGEMENT', MARGIN + 14, BOTTOM_TOP + 12, judges.root, SYN_EMBER);
   const rows: ReadonlyArray<readonly [name: string, count: number, color: number]> = [
     ['PGREAT', result.score.perfect, SYN_FLARE],
     ['GREAT', result.score.great, SYN_AMBER],
@@ -286,18 +310,18 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   ];
   const judgeTotal = Math.max(1, result.score.total);
   rows.forEach(([name, count, color], index) => {
-    const y = 278 + index * 27;
+    const y = ROWS_TOP + index * 32;
     const grow = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + index * 70, ROLL_MS));
-    judges.g.circle(38, y + 6, 2.5).fill({ color, alpha: 1 });
-    judges.g.circle(38, y + 6, 6).fill({ color, alpha: 0.2 });
-    label(name, 50, y + 2, judges.root, color);
-    judges.g.rect(118, y + 6, 130, 1).fill({ color: SYN_DIM, alpha: 0.35 });
-    const barW = (130 * Math.min(count, judgeTotal) * grow) / judgeTotal;
+    judges.g.circle(MARGIN + 18, y + 6, 2.5).fill({ color, alpha: 1 });
+    judges.g.circle(MARGIN + 18, y + 6, 6).fill({ color, alpha: 0.2 });
+    label(name, MARGIN + 30, y + 2, judges.root, color);
+    judges.g.rect(MARGIN + 98, y + 6, 140, 1).fill({ color: SYN_DIM, alpha: 0.35 });
+    const barW = (140 * Math.min(count, judgeTotal) * grow) / judgeTotal;
     if (barW > 0) {
-      judges.g.rect(118, y + 4, barW, 5).fill({ color, alpha: 0.18 });
-      judges.g.rect(118, y + 6, barW, 1.5).fill({ color, alpha: 0.95 });
+      judges.g.rect(MARGIN + 98, y + 4, barW, 5).fill({ color, alpha: 0.18 });
+      judges.g.rect(MARGIN + 98, y + 6, barW, 1.5).fill({ color, alpha: 0.95 });
     }
-    text(judges.root, String(rollUpValue(count, roll)), 294, y + 6, {
+    text(judges.root, String(rollUpValue(count, roll)), MARGIN + 292 - 14, y + 6, {
       ...display(11, SYN_WHITE),
       anchorX: 1,
       anchorY: 0.5,
@@ -307,26 +331,30 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
 
   // Graphs as glowing filaments drawing in.
   const graphs = group('graphs');
-  glass(graphs.g, 326, 244, 294, 176, accent);
-  label('GROOVE GAUGE', 342, 256, graphs.root);
-  label('EX SCORE', 342, 338, graphs.root);
+  // The two filaments share the judgement rows' top and bottom lines.
+  const graphX = GRAPHS_X + 14;
+  const graphW = designWidth - MARGIN - 14 - graphX;
+  const graphH = (ROWS_BOTTOM - ROWS_TOP - 24) / 2;
+  glass(graphs.g, GRAPHS_X, BOTTOM_TOP, designWidth - MARGIN - GRAPHS_X, BOTTOM_H, accent);
+  label('GROOVE GAUGE', graphX, BOTTOM_TOP + 12, graphs.root);
+  label('EX SCORE', graphX, ROWS_TOP + graphH + 12, graphs.root);
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   filament(
     graphs.g,
-    342,
-    270,
-    262,
-    56,
+    graphX,
+    ROWS_TOP,
+    graphW,
+    graphH,
     result.gaugeHistory.map((s) => ({ x: s.progress, y: s.value / 100 })),
     cleared ? SYN_AMBER : SYN_RED,
     draw,
   );
   filament(
     graphs.g,
-    342,
-    352,
-    262,
-    56,
+    graphX,
+    ROWS_BOTTOM - graphH,
+    graphW,
+    graphH,
     result.scoreHistory.map((s) => ({ x: s.progress, y: exMax > 0 ? s.exScore / exMax : 0 })),
     SYN_CYAN,
     draw,
@@ -336,7 +364,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   // Total score.
   const total = group('total');
   total.g.rect(0, designHeight - 44, designWidth, 1).fill({ color: accent, alpha: 0.4 });
-  label('TOTAL SCORE', 24, designHeight - 26, total.root, accent);
+  label('TOTAL SCORE', MARGIN, designHeight - 26, total.root, accent);
   text(total.root, String(rollUpValue(result.score.score, roll)), 150, designHeight - 22, {
     ...display(16, SYN_WHITE),
     anchorY: 0.5,

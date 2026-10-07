@@ -33,7 +33,7 @@ import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
 import { audioDrive, bandLevel } from '../audio-drive.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
 
-const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 54, listBottomInset: 26, rowHeight: 28 };
+const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
 const SLIDE_MS = 240;
 const OUTRO_MS = 860;
 const INTRO_STAGGER_MS = 40;
@@ -402,9 +402,11 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     });
 
     // Info panel — ink card with a white rim over a red-shifted shadow card.
-    chrome.poly(parallelogramPoints(18, 60, 286, 300, -6)).fill(PHANTOM_INK);
+    // Left column on a 16 px rhythm: info card, search, library — the card's top and the library's bottom line up with
+    // the list well's.
+    chrome.poly(parallelogramPoints(18, 60, 286, 292, -6)).fill(PHANTOM_INK);
     chrome
-      .poly(parallelogramPoints(12, 54, 286, 300, -6))
+      .poly(parallelogramPoints(12, 54, 286, 292, -6))
       .fill(PHANTOM_BLACK)
       .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
     chrome.poly(parallelogramPoints(20, 62, 74, 16, 6)).fill(PHANTOM_RED);
@@ -461,13 +463,13 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     }
 
     // PLAY is the primary action (big red card); AUTO PLAY is a secondary paper tag. Hit areas below mirror these.
-    chrome.poly(parallelogramPoints(29, 309, 168, 36, 8)).fill(PHANTOM_INK);
+    chrome.poly(parallelogramPoints(29, 303, 168, 36, 8)).fill(PHANTOM_INK);
     chrome
-      .poly(parallelogramPoints(24, 304, 168, 36, 8))
+      .poly(parallelogramPoints(24, 298, 168, 36, 8))
       .fill(PHANTOM_RED)
       .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
-    chrome.poly(parallelogramPoints(208, 310, 82, 26, 6)).fill(PHANTOM_PAPER);
-    addText('PLAY', 112, 322, {
+    chrome.poly(parallelogramPoints(206, 303, 80, 26, 6)).fill(PHANTOM_PAPER);
+    addText('PLAY', 112, 316, {
       size: 24,
       fill: PHANTOM_WHITE,
       fontFamily: DEFAULT_DISPLAY_FONT,
@@ -476,7 +478,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    addText('AUTO PLAY', 252, 323, {
+    addText('AUTO PLAY', 249, 316, {
       size: 12,
       fill: PHANTOM_INK,
       fontFamily: DEFAULT_DISPLAY_FONT,
@@ -486,7 +488,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       anchorY: 0.5,
       maxWidth: 70,
     });
-    addText(selectedPosition, 292, 284, {
+    addText(selectedPosition, 292, 276, {
       size: 14,
       fill: PHANTOM_ASH,
       fontFamily: DEFAULT_DISPLAY_FONT,
@@ -495,34 +497,34 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     });
 
     // Song list well.
-    chrome.rect(316, 50, designWidth - 332, designHeight - 76).fill({ color: PHANTOM_INK, alpha: 0.9 });
-    chrome.rect(316, 50, 3, designHeight - 76).fill(PHANTOM_RED);
+    chrome.rect(316, 54, designWidth - 332, designHeight - 80).fill({ color: PHANTOM_INK, alpha: 0.9 });
+    chrome.rect(316, 54, 3, designHeight - 80).fill(PHANTOM_RED);
     addText(
       frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS',
-      designWidth - 20,
-      designHeight - 22,
+      designWidth - 16,
+      designHeight - 20,
       { ...tagStyle(PHANTOM_ASH), anchorX: 1 },
     );
 
     chrome
-      .poly(parallelogramPoints(12, 376, 286, 28, -6))
+      .poly(parallelogramPoints(12, 368, 286, 28, -6))
       .fill(PHANTOM_INK)
       .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
-    addText('SEARCH', 24, 385, tagStyle(PHANTOM_RED));
-    addText(frame.searchQuery || 'Title / artist / genre', 82, 384, {
+    addText('SEARCH', 24, 377, tagStyle(PHANTOM_RED));
+    addText(frame.searchQuery || 'Title / artist / genre', 82, 376, {
       size: 10,
       weight: '600',
       fill: frame.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
       maxWidth: 210,
     });
-    addHitArea(layer, 12, 376, 292, 28, 'text', frame.actions.activateSearch);
-    addHitArea(layer, 24, 304, 176, 36, 'pointer', frame.actions.play);
-    addHitArea(layer, 206, 308, 90, 30, 'pointer', frame.actions.autoPlay);
+    addHitArea(layer, 12, 368, 292, 28, 'text', frame.actions.activateSearch);
+    addHitArea(layer, 24, 298, 176, 36, 'pointer', frame.actions.play);
+    addHitArea(layer, 206, 302, 86, 30, 'pointer', frame.actions.autoPlay);
 
-    chrome.poly(parallelogramPoints(12, 420, 286, 42, -6)).fill(PHANTOM_INK);
-    chrome.poly(parallelogramPoints(18, 428, 6, 26, -3)).fill(PHANTOM_RED);
-    addText('LIBRARY', 32, 430, tagStyle(PHANTOM_ASH));
-    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 32, 443, {
+    chrome.poly(parallelogramPoints(12, 412, 286, 42, -6)).fill(PHANTOM_INK);
+    chrome.poly(parallelogramPoints(18, 420, 6, 26, -3)).fill(PHANTOM_RED);
+    addText('LIBRARY', 32, 422, tagStyle(PHANTOM_ASH));
+    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 32, 435, {
       size: 11,
       weight: '700',
       fill: PHANTOM_WHITE,

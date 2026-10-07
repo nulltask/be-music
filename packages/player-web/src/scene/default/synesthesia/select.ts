@@ -576,9 +576,10 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    chrome.rect(204, 303, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
-    drawReticle(chrome, 204, 303, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
-    addText('AUTO', 247, 316, {
+    // AUTO's right edge sits on the content column's (288), like the LEVEL chip above it.
+    chrome.rect(202, 303, 86, 26).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
+    drawReticle(chrome, 202, 303, 86, 26, SYN_MIST, 0.8, { arm: 5, width: 1 });
+    addText('AUTO', 245, 316, {
       size: 9,
       fill: SYN_MIST,
       fontFamily: SYN_DISPLAY_FONT,
@@ -587,7 +588,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       anchorY: 0.5,
     });
     addHitArea(layer, 26, 296, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(layer, 202, 300, 92, 32, 'pointer', frame.actions.autoPlay);
+    addHitArea(layer, 200, 300, 90, 32, 'pointer', frame.actions.autoPlay);
 
     // Search and library.
     framePanel(chrome, 14, 372, 290, 30, accent);
@@ -610,7 +611,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     });
     addText(
       frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS',
-      designWidth - 18,
+      designWidth - 14,
       designHeight - 20,
       { ...labelStyle(), anchorX: 1 },
     );

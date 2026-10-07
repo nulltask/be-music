@@ -140,18 +140,18 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
 
   // Figures.
   const metrics: ReadonlyArray<readonly [x: number, y: number, name: string, value: string, fill: number]> = [
-    [224, 66, '02 SCORE', String(rollUpValue(result.score.score, roll)), LAT_INK],
-    [224, 122, '03 EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, LAT_INK],
-    [224, 178, '04 MAX COMBO', String(rollUpValue(result.maxCombo, roll)), LAT_ACCENT],
-    [430, 66, '05 GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, cleared ? LAT_ACCENT : LAT_SIGNAL],
-    [430, 122, '06 PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, LAT_INK],
-    [430, 178, '07 NOTES', String(rollUpValue(result.score.total, roll)), LAT_INK],
+    [220, 66, '02 SCORE', String(rollUpValue(result.score.score, roll)), LAT_INK],
+    [220, 122, '03 EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, LAT_INK],
+    [220, 178, '04 MAX COMBO', String(rollUpValue(result.maxCombo, roll)), LAT_ACCENT],
+    [428, 66, '05 GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, cleared ? LAT_ACCENT : LAT_SIGNAL],
+    [428, 122, '06 PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, LAT_INK],
+    [428, 178, '07 NOTES', String(rollUpValue(result.score.total, roll)), LAT_INK],
   ];
   metrics.forEach(([x, y, name, value, fill], index) => {
     const delay = 300 + index * 70;
-    rule(x, y, 190, delay);
+    rule(x, y, 192, delay);
     text(decode(name, delay, 10 + index), x, y + 8, { ...mono(), alpha: fadeIn(delay) });
-    text(value, x + 190, y + 20, { ...display(22, fill, '200'), anchorX: 1, maxWidth: 150, alpha: fadeIn(delay + 60) });
+    text(value, x + 192, y + 20, { ...display(22, fill, '200'), anchorX: 1, maxWidth: 150, alpha: fadeIn(delay + 60) });
   });
 
   // Judgement bars.
@@ -166,7 +166,8 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
   ];
   const judgeTotal = Math.max(1, result.score.total);
   rows.forEach(([name, count, color], index) => {
-    const y = 276 + index * 28;
+    // Rows on a 32 px pitch, so the last one shares the EX SCORE plot's baseline across the gutter.
+    const y = 276 + index * 32;
     const grow = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + index * 70, ROLL_MS));
     text(decode(name, 560 + index * 50, 20 + index), 20, y, { ...mono(color), alpha: fadeIn(560 + index * 50) });
     g.rect(84, y + 5, 170, 1).fill({ color: LAT_RULE, alpha: 1 });
@@ -176,16 +177,16 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
   });
 
   // Graphs as ruled lines.
-  rule(330, 244, 290, 600);
-  text(decode('09 GROOVE GAUGE', 600, 5), 330, 252, { ...mono(), alpha: fadeIn(600) });
-  text(decode('10 EX SCORE', 640, 6), 330, 340, { ...mono(), alpha: fadeIn(640) });
+  rule(326, 244, 294, 600);
+  text(decode('09 GROOVE GAUGE', 600, 5), 326, 252, { ...mono(), alpha: fadeIn(600) });
+  text(decode('10 EX SCORE', 640, 6), 326, 338, { ...mono(), alpha: fadeIn(640) });
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   plot(
     g,
-    330,
+    326,
     266,
-    290,
-    62,
+    294,
+    58,
     result.gaugeHistory.map((s) => ({ x: s.progress, y: s.value / 100 })),
     cleared ? LAT_ACCENT : LAT_SIGNAL,
     draw,
@@ -193,10 +194,10 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
   );
   plot(
     g,
-    330,
-    354,
-    290,
-    62,
+    326,
+    352,
+    294,
+    58,
     result.scoreHistory.map((s) => ({ x: s.progress, y: exMax > 0 ? s.exScore / exMax : 0 })),
     LAT_INK,
     draw,

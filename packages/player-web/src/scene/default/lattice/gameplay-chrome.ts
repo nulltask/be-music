@@ -52,8 +52,15 @@ function hudScramble(runtime: Runtime): (value: string, delayMs: number, seed: n
     scrambleText(value, Math.max(0, Math.min(1, (chartMs + 2700 - delayMs) / 520)), tick, seed);
 }
 
-const SCORE_PANEL = { x: 384, y: 352, w: 234, h: 108 } as const;
-const SONG_PLATE = { x: 16, y: 420, w: 344, h: 46 } as const;
+/**
+ * HUD grid (design px). The playfield frame's left edge (x 32) is the page's left axis — the gauge rule and the song
+ * plate start on it — and the right blocks end on a 16 px margin. The score panel's top rule continues the gauge rule,
+ * its second row lines up with the song plate's rule, and its bottom with the plate's.
+ */
+const HUD_LEFT = 32;
+const HUD_RIGHT = DESIGN_WIDTH - 16;
+const SCORE_PANEL = { x: 384, y: GROOVE.y - 24, w: HUD_RIGHT - 384, h: 466 - (GROOVE.y - 24) } as const;
+const SONG_PLATE = { x: HUD_LEFT, y: 420, w: 360 - HUD_LEFT, h: 46 } as const;
 const HEADER_H = 30;
 
 /**
@@ -496,8 +503,8 @@ function drawHeader(graphics: Graphics, layer: Container, runtime: Runtime, beat
   graphics.rect(0, 0, DESIGN_WIDTH, HEADER_H).fill({ color: LAT_PAPER, alpha: 0.96 });
   graphics.rect(0, HEADER_H - 1, DESIGN_WIDTH, 1).fill(LAT_INK);
   const autoplay = runtime.autoplay === true;
-  // Beat clock.
-  const cx = 20;
+  // Beat clock, its left edge on the 16 px page margin.
+  const cx = 24;
   const cy = 15;
   graphics.circle(cx, cy, 8).stroke({ color: LAT_INK, width: 1 });
   for (let tick = 0; tick < 12; tick += 1) {
@@ -518,7 +525,7 @@ function drawHeader(graphics: Graphics, layer: Container, runtime: Runtime, beat
   addHudText(
     layer,
     sc(autoplay ? 'AUTO PLAY' : 'PLAY', 0, 1),
-    36,
+    40,
     10,
     { ...monoStyle(LAT_INK), letterSpacing: 1.5 },
     pool,
@@ -549,7 +556,7 @@ function drawHeader(graphics: Graphics, layer: Container, runtime: Runtime, beat
   addHudText(
     layer,
     sc(formatRuleset(runtime.rulesetLabel), 180, 4),
-    DESIGN_WIDTH - 12,
+    HUD_RIGHT,
     11,
     { ...monoStyle(LAT_INK), letterSpacing: 1.5, anchorX: 1 },
     pool,
@@ -569,11 +576,11 @@ function drawGauge(
   const survival = runtime.gaugeSurvival === true || clear <= 0;
   const nowMs = runtime.nowMs ?? 0;
   const sc = hudScramble(runtime);
-  graphics.rect(GROOVE.x - 12, GROOVE.y - 24, GROOVE.w + 24, 1).fill(LAT_INK);
+  graphics.rect(HUD_LEFT, GROOVE.y - 24, GROOVE.w + 24, 1).fill(LAT_INK);
   addHudText(
     layer,
     sc(`${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`, 240, 5),
-    GROOVE.x - 12,
+    HUD_LEFT,
     GROOVE.y - 18,
     { ...monoStyle(), maxWidth: 130 },
     pool,
@@ -731,7 +738,7 @@ function drawJudgeTally(
   pool: ChildPool,
 ): void {
   const y = BGA.y - 5;
-  const w = DESIGN_WIDTH - x - 8;
+  const w = HUD_RIGHT - x;
   const sc = hudScramble(runtime);
   graphics.rect(x, y, w, 1).fill(LAT_INK);
   const total = Math.max(1, runtime.totalNotes ?? 0);

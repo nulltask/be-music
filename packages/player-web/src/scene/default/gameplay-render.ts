@@ -35,7 +35,10 @@ import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions a
 const DISPLAY_FONT = DEFAULT_DISPLAY_FONT;
 /** Italic lean applied to every display-face text node — the whole HUD reads as moving forward. */
 const TYPE_SKEW = -0.18;
-const SCORE_PANEL = { x: 384, y: 352, w: 232, h: 108 } as const;
+/** Page margin of the HUD grid: the left and right blocks line up 16 px in from the canvas edges. */
+const HUD_MARGIN = 16;
+/** Score panel: right edge (with its shadow) on the margin, top on the gauge housing's line, bottom on the song plate's. */
+const SCORE_PANEL = { x: 376, y: 365, w: 232, h: 99 } as const;
 const SONG_PLATE = { x: 16, y: 420, w: 340, h: 44 } as const;
 /** Red floor wedge behind the score panel. Its top edge stays below the BGA rect so a live video is never covered. */
 const FLOOR_WEDGE: readonly number[] = [236, DESIGN_HEIGHT, DESIGN_WIDTH, 326, DESIGN_WIDTH, DESIGN_HEIGHT];
@@ -312,8 +315,8 @@ function drawPlayfield(
 
 /** X where the judge tally column can sit, or undefined when the (DP-wide) playfield covers it. */
 function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefined {
-  const x = BGA.x + BGA.w + 22;
-  return playfield.right + 14 <= x && x + 60 <= DESIGN_WIDTH ? x : undefined;
+  const x = BGA.x + BGA.w + 18;
+  return playfield.right + 14 <= x && x + 56 <= DESIGN_WIDTH - HUD_MARGIN ? x : undefined;
 }
 
 /**
@@ -422,12 +425,12 @@ function drawStatusBar(
   status.rect(0, 37, DESIGN_WIDTH, 1).fill(PHANTOM_WHITE);
 
   // Mode tag — paper plate with a red shadow; AUTO PLAY flips it to a red plate so a demo run is unmistakable.
-  status.poly(parallelogramPoints(15, 11, 96, 22, 9)).fill(autoplay ? PHANTOM_WHITE : PHANTOM_RED);
-  status.poly(parallelogramPoints(11, 7, 96, 22, 9)).fill(autoplay ? PHANTOM_RED : PHANTOM_WHITE);
+  status.poly(parallelogramPoints(HUD_MARGIN + 4, 11, 96, 22, 9)).fill(autoplay ? PHANTOM_WHITE : PHANTOM_RED);
+  status.poly(parallelogramPoints(HUD_MARGIN, 7, 96, 22, 9)).fill(autoplay ? PHANTOM_RED : PHANTOM_WHITE);
   addText(
     layer,
     autoplay ? 'AUTO PLAY' : 'PLAY',
-    63,
+    HUD_MARGIN + 52,
     18,
     {
       size: 15,
@@ -441,20 +444,21 @@ function drawStatusBar(
     pool,
   );
 
-  addText(layer, 'BPM', 132, 14, tagLabelStyle(PHANTOM_RED), pool);
-  addNumber(layer, formatBpmValue(runtime.bpm), 156, 5, displayStyle(22, PHANTOM_WHITE), pool);
-  addText(layer, 'HI-SPEED', 214, 14, tagLabelStyle(PHANTOM_RED), pool);
-  addNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 262, 5, displayStyle(22, PHANTOM_WHITE), pool);
+  addText(layer, 'BPM', 136, 14, tagLabelStyle(PHANTOM_RED), pool);
+  addNumber(layer, formatBpmValue(runtime.bpm), 160, 5, displayStyle(22, PHANTOM_WHITE), pool);
+  addText(layer, 'HI-SPEED', 218, 14, tagLabelStyle(PHANTOM_RED), pool);
+  addNumber(layer, `x${formatHiSpeed(runtime.hiSpeed)}`, 266, 5, displayStyle(22, PHANTOM_WHITE), pool);
 
-  // The skin's mark, between the tempo readouts and the ruleset tag.
-  drawNoteEmblem(status, 350, 25, 22, PHANTOM_WHITE, PHANTOM_RED);
-  status.poly(parallelogramPoints(392, 8, 118, 22, -8)).fill(PHANTOM_RED);
-  status.rect(397, 13, 3, 12).fill(PHANTOM_WHITE);
-  addText(layer, 'RULESET', 410, 15, tagLabelStyle(PHANTOM_INK), pool);
+  // The ruleset tag sits on the right margin; the skin's mark sits midway between it and the tempo readouts.
+  const rulesetX = DESIGN_WIDTH - HUD_MARGIN - 126;
+  drawNoteEmblem(status, (310 + rulesetX) / 2, 25, 22, PHANTOM_WHITE, PHANTOM_RED);
+  status.poly(parallelogramPoints(rulesetX, 8, 118, 22, -8)).fill(PHANTOM_RED);
+  status.rect(rulesetX + 5, 13, 3, 12).fill(PHANTOM_WHITE);
+  addText(layer, 'RULESET', rulesetX + 18, 15, tagLabelStyle(PHANTOM_INK), pool);
   addText(
     layer,
     formatRulesetLabel(runtime.rulesetLabel),
-    500,
+    rulesetX + 108,
     19,
     { ...displayStyle(16, PHANTOM_WHITE), anchorX: 1, anchorY: 0.5, maxWidth: 56 },
     pool,
@@ -482,7 +486,7 @@ function drawGauge(
   const clearCell = Math.round((clear / 100) * cellCount);
 
   frame
-    .poly(parallelogramPoints(GROOVE.x - 16, GROOVE.y - 22, GROOVE.w + 30, 46, 8))
+    .poly(parallelogramPoints(GROOVE.x - 24, GROOVE.y - 22, GROOVE.w + 38, 46, 8))
     .fill(PHANTOM_INK)
     .stroke({
       color: PHANTOM_WHITE,
@@ -490,13 +494,11 @@ function drawGauge(
       join: 'miter',
     });
   // Gauge-type tag knifed into the housing's top-left corner.
-  frame
-    .poly(parallelogramPoints(GROOVE.x - 20, GROOVE.y - 30, 106, 16, 6))
-    .fill(survival ? PHANTOM_WHITE : PHANTOM_RED);
+  frame.poly(parallelogramPoints(HUD_MARGIN, GROOVE.y - 30, 106, 16, 6)).fill(survival ? PHANTOM_WHITE : PHANTOM_RED);
   addText(
     layer,
     `${(runtime.gaugeLabel ?? 'GROOVE').toUpperCase()} GAUGE`,
-    GROOVE.x - 10,
+    HUD_MARGIN + 10,
     GROOVE.y - 22,
     { ...tagLabelStyle(survival ? PHANTOM_RED : PHANTOM_WHITE), anchorY: 0.5, maxWidth: 92 },
     pool,
@@ -572,8 +574,9 @@ function drawScorePlate(
     .poly(parallelogramPoints(x, y, w, h, -10))
     .fill(PHANTOM_BLACK)
     .stroke({ color: PHANTOM_WHITE, width: 2 });
-  frame.rect(x + 14, y + 40, 116, 1).fill({ color: PHANTOM_SLATE });
-  frame.rect(x + 14, y + 70, 116, 1).fill({ color: PHANTOM_SLATE });
+  // Three rows on a 28 px pitch shared by both columns: label on the left, value on the right of each row.
+  frame.rect(x + 14, y + 36, 116, 1).fill({ color: PHANTOM_SLATE });
+  frame.rect(x + 14, y + 64, 116, 1).fill({ color: PHANTOM_SLATE });
   frame.poly([x + 146, y + 10, x + 148, y + 10, x + 150, y + h - 10, x + 148, y + h - 10]).fill(PHANTOM_RED);
 
   addText(layer, 'SCORE', x + 14, y + 12, tagLabelStyle(PHANTOM_RED), pool);
@@ -585,21 +588,21 @@ function drawScorePlate(
     { ...displayStyle(26, PHANTOM_WHITE), anchorX: 1, maxWidth: 80 },
     pool,
   );
-  addText(layer, 'EX SCORE', x + 14, y + 49, tagLabelStyle(PHANTOM_ASH), pool);
+  addText(layer, 'EX SCORE', x + 14, y + 44, tagLabelStyle(PHANTOM_ASH), pool);
   addNumber(
     layer,
     `${formatCount(runtime.exScore)} / ${formatCount(runtime.exScoreMax)}`,
     x + 134,
-    y + 44,
+    y + 39,
     { ...displayStyle(14, PHANTOM_PAPER), anchorX: 1, maxWidth: 66 },
     pool,
   );
-  addText(layer, 'EX RATE', x + 14, y + 78, tagLabelStyle(PHANTOM_ASH), pool);
+  addText(layer, 'EX RATE', x + 14, y + 72, tagLabelStyle(PHANTOM_ASH), pool);
   addNumber(
     layer,
     formatExRate(runtime.exScore, runtime.exScoreMax),
     x + 134,
-    y + 73,
+    y + 67,
     { ...displayStyle(14, PHANTOM_PAPER), anchorX: 1, maxWidth: 74 },
     pool,
   );
@@ -614,30 +617,30 @@ function drawScorePlate(
   for (let segment = 0; segment < segments; segment += 1) {
     const fill = Math.max(0, Math.min(1, rate * segments - segment));
     const sx = x + 14 + segment * segmentW;
-    frame.poly(parallelogramPoints(sx, y + 96, segmentW - 2, 5, 2)).fill(PHANTOM_SLATE);
+    frame.poly(parallelogramPoints(sx, y + 88, segmentW - 2, 5, 2)).fill(PHANTOM_SLATE);
     if (fill > 0) {
       frame
-        .poly(parallelogramPoints(sx, y + 96, (segmentW - 2) * fill, 5, 2))
+        .poly(parallelogramPoints(sx, y + 88, (segmentW - 2) * fill, 5, 2))
         .fill(segment >= 7 ? PHANTOM_GOLD : PHANTOM_RED_HOT);
     }
   }
 
-  // Right column: COMBO headline on its own row, MAX inline beneath, rank badge in the lower corner.
-  addText(layer, 'COMBO', x + 160, y + 10, tagLabelStyle(PHANTOM_RED), pool);
+  // Right column on the same rows: COMBO, MAX, then RANK beside the badge in the lower corner.
+  addText(layer, 'COMBO', x + 160, y + 12, tagLabelStyle(PHANTOM_RED), pool);
   addNumber(
     layer,
     formatCount(runtime.combo),
     x + w - 12,
-    y + 20,
+    y + 5,
     { ...displayStyle(22, PHANTOM_WHITE), anchorX: 1, maxWidth: 60 },
     pool,
   );
-  addText(layer, 'MAX', x + 160, y + 55, tagLabelStyle(PHANTOM_ASH), pool);
+  addText(layer, 'MAX', x + 160, y + 44, tagLabelStyle(PHANTOM_ASH), pool);
   addNumber(
     layer,
     formatCount(runtime.maxCombo),
-    x + w - 10,
-    y + 51,
+    x + w - 12,
+    y + 40,
     { ...displayStyle(13, PHANTOM_PAPER), anchorX: 1, maxWidth: 40 },
     pool,
   );
@@ -655,7 +658,7 @@ function drawScorePlate(
     .poly(badge)
     .fill(topRank ? PHANTOM_GOLD : PHANTOM_RED)
     .stroke({ color: PHANTOM_WHITE, width: 1.5 });
-  addText(layer, 'RANK', x + 160, y + 84, tagLabelStyle(PHANTOM_ASH), pool);
+  addText(layer, 'RANK', x + 160, y + 72, tagLabelStyle(PHANTOM_ASH), pool);
   addText(
     layer,
     rank,
@@ -692,7 +695,7 @@ function drawJudgeTally(
 ): void {
   // Top-aligned with the BGA so the header chip clears the status bar's beat-driven teeth.
   const y = BGA.y;
-  const w = DESIGN_WIDTH - x - 6;
+  const w = DESIGN_WIDTH - HUD_MARGIN - x;
   const rowH = 24;
   const h = 22 + JUDGE_TALLY_ROWS.length * rowH + 46;
   frame.rect(x, y, w, h).fill(PHANTOM_INK).stroke({ color: PHANTOM_WHITE, width: 1 });

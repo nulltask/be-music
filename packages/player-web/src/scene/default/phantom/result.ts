@@ -33,6 +33,25 @@ const RESULT_ROLL_DELAY_MS = 760;
 const RESULT_ROLL_MS = 1000;
 const RESULT_RANK_DELAY_MS = 1500;
 
+/**
+ * Result grid (design px): a 16 px page margin and 12 px gutters. The top row holds the rank panel and two columns of
+ * metric plates (40 px each with their shadow, 16 px apart); the bottom row holds the judgement tally and the run
+ * charts, whose rows share one top and bottom line.
+ */
+const RESULT_MARGIN = 16;
+const RESULT_TOP = 64;
+const RESULT_TOP_ROW_H = 152;
+const RESULT_BOTTOM_TOP = 232;
+const RESULT_BOTTOM_H = 200;
+const RESULT_ROWS_TOP = RESULT_BOTTOM_TOP + 26;
+const RESULT_ROWS_BOTTOM = RESULT_ROWS_TOP + 4 * 32 + 20;
+const RANK_CX = RESULT_MARGIN + 86;
+const RANK_CY = RESULT_TOP + 62;
+const METRIC_W = 192;
+const METRIC_H = 36;
+const METRIC_COLUMNS = [204, 420] as const;
+const METRIC_ROWS = [RESULT_TOP, RESULT_TOP + 56, RESULT_TOP + 112] as const;
+
 export const phantomResultSkin: BeMusicResultSkin = { render: (frame) => renderPhantomResult(frame) };
 
 /**
@@ -185,7 +204,7 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   addText(
     title.root,
     `${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`,
-    designWidth - 18,
+    designWidth - RESULT_MARGIN,
     16,
     {
       size: 13,
@@ -197,9 +216,9 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   );
   slideIn(title.root, 260, 120, 0);
   const verdict = group('verdict');
-  verdict.g.poly(parallelogramPoints(18, 12, 150, 28, 10)).fill(cleared ? PHANTOM_WHITE : PHANTOM_RED);
-  verdict.g.poly(parallelogramPoints(12, 7, 150, 28, 10)).fill(cleared ? PHANTOM_RED : PHANTOM_WHITE);
-  addText(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', 92, 21, {
+  verdict.g.poly(parallelogramPoints(22, 12, 150, 28, 10)).fill(cleared ? PHANTOM_WHITE : PHANTOM_RED);
+  verdict.g.poly(parallelogramPoints(RESULT_MARGIN, 7, 150, 28, 10)).fill(cleared ? PHANTOM_RED : PHANTOM_WHITE);
+  addText(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', 96, 21, {
     ...display(20, cleared ? PHANTOM_WHITE : PHANTOM_RED),
     letterSpacing: 1.5,
     anchorX: 0.5,
@@ -209,50 +228,52 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   const glint = (seconds % 3.2) / 0.45;
   if (elapsed > 800 && glint <= 1) {
     verdict.g
-      .poly(parallelogramPoints(12 + glint * 136, 7, 12, 28, 10))
+      .poly(parallelogramPoints(RESULT_MARGIN + glint * 136, 7, 12, 28, 10))
       .fill({ color: cleared ? PHANTOM_WHITE : PHANTOM_RED, alpha: 0.55 });
   }
-  drawNoteEmblem(verdict.g, 190, 29, 24, PHANTOM_WHITE, PHANTOM_RED);
-  slam(verdict.root, 120, 88, 21, 2.6);
+  drawNoteEmblem(verdict.g, 194, 29, 24, PHANTOM_WHITE, PHANTOM_RED);
+  slam(verdict.root, 120, 92, 21, 2.6);
 
   // Rank panel slides in from the left; the burst pops, then the letter stamps down on it.
   const topRank = rankLabel === 'AAA' || rankLabel === 'AA';
   const rankPanel = group('rank-panel');
   rankPanel.g
-    .poly(parallelogramPoints(18, 72, 172, 148, -8))
+    .poly(parallelogramPoints(RESULT_MARGIN, RESULT_TOP, 168, RESULT_TOP_ROW_H, -8))
     .fill(PHANTOM_INK)
     .stroke({ color: PHANTOM_WHITE, width: 2 });
-  rankPanel.g.poly(parallelogramPoints(26, 66, 56, 16, 6)).fill(PHANTOM_RED);
-  addText(rankPanel.root, 'RANK', 38, 74, { ...display(11, PHANTOM_WHITE), anchorY: 0.5 });
+  rankPanel.g.poly(parallelogramPoints(RESULT_MARGIN + 8, RESULT_TOP - 6, 56, 16, 6)).fill(PHANTOM_RED);
+  addText(rankPanel.root, 'RANK', RESULT_MARGIN + 20, RESULT_TOP + 2, { ...display(11, PHANTOM_WHITE), anchorY: 0.5 });
   slideIn(rankPanel.root, 280, -220, 0);
 
   const burst = group('rank-burst');
   // Ambient: a slow wobble plus a heartbeat pulse keeps the badge alive after it lands.
   const heartbeat = (1 - ((seconds * 1.6) % 1)) ** 4;
   burst.g
-    .poly(starburstPoints(106, 134, 60, 44, 18, seconds * 0.35, 0.15, 11))
+    .poly(starburstPoints(RANK_CX, RANK_CY, 60, 44, 18, seconds * 0.35, 0.15, 11))
     .fill({ color: topRank ? PHANTOM_RED : PHANTOM_RED_DEEP, alpha: 0.9 });
   burst.g
-    .poly(starburstPoints(106, 134, 50, 33, 13, -0.15 + Math.sin(seconds * 1.3) * 0.06, 0.2, rankLabel.length + 3))
+    .poly(
+      starburstPoints(RANK_CX, RANK_CY, 50, 33, 13, -0.15 + Math.sin(seconds * 1.3) * 0.06, 0.2, rankLabel.length + 3),
+    )
     .fill(topRank ? PHANTOM_GOLD : PHANTOM_RED)
     .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
-  slam(burst.root, RESULT_RANK_DELAY_MS, 106, 134, 0, 420);
+  slam(burst.root, RESULT_RANK_DELAY_MS, RANK_CX, RANK_CY, 0, 420);
   if (stageProgress(elapsed, RESULT_RANK_DELAY_MS, 420) >= 1) {
     burst.root.scale.set(1 + 0.05 * heartbeat);
   }
   const letter = group('rank-letter');
-  addText(letter.root, rankLabel, 108, 134, {
+  addText(letter.root, rankLabel, RANK_CX + 2, RANK_CY, {
     ...display(rankLabel.length >= 3 ? 34 : 50, topRank ? PHANTOM_INK : PHANTOM_WHITE),
     anchorX: 0.5,
     anchorY: 0.5,
     stroke: { color: topRank ? PHANTOM_WHITE : PHANTOM_INK, width: 4, alignment: 0.5, join: 'miter' },
     maxWidth: 96,
   });
-  slam(letter.root, RESULT_RANK_DELAY_MS + 220, 106, 134, 2.4, 300);
+  slam(letter.root, RESULT_RANK_DELAY_MS + 220, RANK_CX, RANK_CY, 2.4, 300);
   // The rate sits in front of the badge so the pulsing burst never covers it.
   const rateGroup = group('rank-rate');
   const shownRate = rate * easeOutCubic(roll);
-  addText(rateGroup.root, `${shownRate.toFixed(1)}%`, 104, 202, {
+  addText(rateGroup.root, `${shownRate.toFixed(1)}%`, RANK_CX - 2, RESULT_TOP + RESULT_TOP_ROW_H - 18, {
     ...display(18, PHANTOM_WHITE),
     anchorX: 0.5,
     anchorY: 0.5,
@@ -261,12 +282,24 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
 
   // Metric plates fly in from the right one after another; their values roll up.
   const metrics: ReadonlyArray<readonly [x: number, y: number, label: string, value: string, fill: number]> = [
-    [228, 80, 'SCORE', String(rollUpValue(result.score.score, roll)), PHANTOM_WHITE],
-    [228, 126, 'EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, PHANTOM_WHITE],
-    [228, 172, 'MAX COMBO', String(rollUpValue(result.maxCombo, roll)), PHANTOM_GOLD],
-    [434, 80, 'GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, statusColor],
-    [434, 126, 'PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, PHANTOM_WHITE],
-    [434, 172, 'NOTES', String(rollUpValue(result.score.total, roll)), PHANTOM_WHITE],
+    [METRIC_COLUMNS[0], METRIC_ROWS[0], 'SCORE', String(rollUpValue(result.score.score, roll)), PHANTOM_WHITE],
+    [
+      METRIC_COLUMNS[0],
+      METRIC_ROWS[1],
+      'EX SCORE',
+      `${rollUpValue(result.score.exScore, roll)} / ${exMax}`,
+      PHANTOM_WHITE,
+    ],
+    [METRIC_COLUMNS[0], METRIC_ROWS[2], 'MAX COMBO', String(rollUpValue(result.maxCombo, roll)), PHANTOM_GOLD],
+    [METRIC_COLUMNS[1], METRIC_ROWS[0], 'GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, statusColor],
+    [
+      METRIC_COLUMNS[1],
+      METRIC_ROWS[1],
+      'PLAY TIME',
+      `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`,
+      PHANTOM_WHITE,
+    ],
+    [METRIC_COLUMNS[1], METRIC_ROWS[2], 'NOTES', String(rollUpValue(result.score.total, roll)), PHANTOM_WHITE],
   ];
   metrics.forEach(([x, y, label, value, fill], index) => {
     const plate = group(`metric-${index}`);
@@ -277,11 +310,15 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   // Judgement tally — ransom-note chips; each row slides in, then its count bar grows while the number rolls up.
   const judgePanel = group('judgement');
   judgePanel.g
-    .poly(parallelogramPoints(18, 246, 286, 180, -8))
+    .poly(parallelogramPoints(RESULT_MARGIN, RESULT_BOTTOM_TOP, 288, RESULT_BOTTOM_H, -8))
     .fill(PHANTOM_INK)
     .stroke({ color: PHANTOM_WHITE, width: 2 });
-  judgePanel.g.poly(parallelogramPoints(26, 240, 96, 16, 6)).fill(PHANTOM_RED);
-  addText(judgePanel.root, 'JUDGEMENT', 38, 248, { ...display(11, PHANTOM_WHITE), letterSpacing: 1, anchorY: 0.5 });
+  judgePanel.g.poly(parallelogramPoints(RESULT_MARGIN + 8, RESULT_BOTTOM_TOP - 6, 96, 16, 6)).fill(PHANTOM_RED);
+  addText(judgePanel.root, 'JUDGEMENT', RESULT_MARGIN + 20, RESULT_BOTTOM_TOP + 2, {
+    ...display(11, PHANTOM_WHITE),
+    letterSpacing: 1,
+    anchorY: 0.5,
+  });
   slideIn(judgePanel.root, 560, -260, 0);
   const judges: Array<readonly [string, number, number]> = [
     ['PGREAT', result.score.perfect, PHANTOM_WHITE],
@@ -292,65 +329,72 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   ];
   const judgeTotal = Math.max(1, result.score.total);
   for (let i = 0; i < judges.length; i += 1) {
-    const jy = 270 + i * 29;
+    const jy = RESULT_ROWS_TOP + i * 32;
     const [label, count, fill] = judges[i]!;
     const inverted = i % 2 === 1;
     const row = group(`judge-${i}`);
-    row.g.poly(parallelogramPoints(34, jy, 70, 20, inverted ? -5 : 5)).fill(inverted ? PHANTOM_WHITE : PHANTOM_RED);
-    addText(row.root, label, 70, jy + 10, {
+    row.g.poly(parallelogramPoints(32, jy, 70, 20, inverted ? -5 : 5)).fill(inverted ? PHANTOM_WHITE : PHANTOM_RED);
+    addText(row.root, label, 68, jy + 10, {
       ...display(13, inverted ? PHANTOM_INK : PHANTOM_WHITE),
       anchorX: 0.5,
       anchorY: 0.5,
       maxWidth: 60,
     });
-    row.g.poly(parallelogramPoints(112, jy + 14, 140, 4, 3)).fill(PHANTOM_SLATE);
+    row.g.poly(parallelogramPoints(110, jy + 14, 144, 4, 3)).fill(PHANTOM_SLATE);
     const barProgress = easeOutCubic(stageProgress(elapsed, RESULT_ROLL_DELAY_MS + i * 60, RESULT_ROLL_MS));
     if (count > 0 && barProgress > 0) {
       row.g
         .poly(
           parallelogramPoints(
-            112,
+            110,
             jy + 14,
-            Math.max(3, ((140 * Math.min(count, judgeTotal)) / judgeTotal) * barProgress),
+            Math.max(3, ((144 * Math.min(count, judgeTotal)) / judgeTotal) * barProgress),
             4,
             3,
           ),
         )
         .fill(fill);
     }
-    addText(row.root, String(rollUpValue(count, roll)), 282, jy - 2, { ...display(20, fill), anchorX: 1 });
+    addText(row.root, String(rollUpValue(count, roll)), 296, jy - 2, { ...display(20, fill), anchorX: 1 });
     slideIn(row.root, 640 + i * 60, -200, 0, 280);
   }
 
   // Run graphs rise in from below and draw left to right.
   const run = group('run');
   run.g
-    .poly(parallelogramPoints(324, 246, 298, 180, -8))
+    .poly(parallelogramPoints(324, RESULT_BOTTOM_TOP, 292, RESULT_BOTTOM_H, -8))
     .fill(PHANTOM_INK)
     .stroke({ color: PHANTOM_WHITE, width: 2 });
-  run.g.poly(parallelogramPoints(332, 240, 56, 16, 6)).fill(PHANTOM_RED);
-  addText(run.root, 'RUN', 346, 248, { ...display(11, PHANTOM_WHITE), letterSpacing: 1, anchorY: 0.5 });
-  run.g.rect(342, 272, 264, 62).fill(PHANTOM_CHARCOAL);
-  run.g.rect(342, 346, 264, 62).fill(PHANTOM_CHARCOAL);
-  addText(run.root, 'GAUGE', 352, 278, { ...display(10, PHANTOM_RED_HOT), letterSpacing: 1 });
-  addText(run.root, 'EX SCORE', 352, 352, { ...display(10, PHANTOM_RED_HOT), letterSpacing: 1 });
+  run.g.poly(parallelogramPoints(332, RESULT_BOTTOM_TOP - 6, 56, 16, 6)).fill(PHANTOM_RED);
+  addText(run.root, 'RUN', 344, RESULT_BOTTOM_TOP + 2, {
+    ...display(11, PHANTOM_WHITE),
+    letterSpacing: 1,
+    anchorY: 0.5,
+  });
+  // Two charts sharing the judgement rows' top and bottom lines.
+  const chartH = (RESULT_ROWS_BOTTOM - RESULT_ROWS_TOP - 12) / 2;
+  const chartYs = [RESULT_ROWS_TOP, RESULT_ROWS_TOP + chartH + 12] as const;
+  run.g.rect(340, chartYs[0], 268, chartH).fill(PHANTOM_CHARCOAL);
+  run.g.rect(340, chartYs[1], 268, chartH).fill(PHANTOM_CHARCOAL);
+  addText(run.root, 'GAUGE', 350, chartYs[0] + 6, { ...display(10, PHANTOM_RED_HOT), letterSpacing: 1 });
+  addText(run.root, 'EX SCORE', 350, chartYs[1] + 6, { ...display(10, PHANTOM_RED_HOT), letterSpacing: 1 });
   const graphProgress = easeOutCubic(stageProgress(elapsed, RESULT_ROLL_DELAY_MS + 100, RESULT_ROLL_MS + 300));
   drawSeries(
     run.g,
-    420,
-    282,
-    176,
-    44,
+    418,
+    chartYs[0] + 10,
+    180,
+    chartH - 18,
     result.gaugeHistory.map((sample) => ({ x: sample.progress, y: sample.value / 100 })),
     cleared ? PHANTOM_WHITE : PHANTOM_RED_HOT,
     graphProgress,
   );
   drawSeries(
     run.g,
-    420,
-    356,
-    176,
-    44,
+    418,
+    chartYs[1] + 10,
+    180,
+    chartH - 18,
     result.scoreHistory.map((sample) => ({ x: sample.progress, y: exMax > 0 ? sample.exScore / exMax : 0 })),
     PHANTOM_GOLD,
     graphProgress,
@@ -361,14 +405,14 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   const footer = group('footer');
   footer.g.rect(0, designHeight - 36, designWidth, 36).fill(PHANTOM_INK);
   footer.g.rect(0, designHeight - 36, designWidth, 2).fill(PHANTOM_WHITE);
-  footer.g.poly(parallelogramPoints(12, designHeight - 28, 118, 20, 8)).fill(PHANTOM_RED);
-  addText(footer.root, 'TOTAL SCORE', 72, designHeight - 18, {
+  footer.g.poly(parallelogramPoints(RESULT_MARGIN, designHeight - 28, 118, 20, 8)).fill(PHANTOM_RED);
+  addText(footer.root, 'TOTAL SCORE', RESULT_MARGIN + 60, designHeight - 18, {
     ...display(13, PHANTOM_WHITE),
     letterSpacing: 1,
     anchorX: 0.5,
     anchorY: 0.5,
   });
-  addText(footer.root, String(rollUpValue(result.score.score, roll)), 146, designHeight - 18, {
+  addText(footer.root, String(rollUpValue(result.score.score, roll)), RESULT_MARGIN + 138, designHeight - 18, {
     ...display(22, PHANTOM_WHITE),
     anchorY: 0.5,
   });
@@ -412,9 +456,9 @@ function renderMetric(
   value: string,
   fill: number,
 ): void {
-  chrome.poly(parallelogramPoints(x + 4, y + 4, 172, 36, 8)).fill(PHANTOM_INK);
+  chrome.poly(parallelogramPoints(x + 4, y + 4, METRIC_W, METRIC_H, 8)).fill(PHANTOM_INK);
   chrome
-    .poly(parallelogramPoints(x, y, 172, 36, 8))
+    .poly(parallelogramPoints(x, y, METRIC_W, METRIC_H, 8))
     .fill(PHANTOM_BLACK)
     .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
   const labelText = new Text({
@@ -428,7 +472,7 @@ function renderMetric(
   });
   labelText.skew.set(-0.18, 0);
   alignCapCenter(labelText, DEFAULT_DISPLAY_FONT, '400', 10);
-  labelText.position.set(x + 12, y + 5);
+  labelText.position.set(x + 14, y + 5);
   target.addChild(labelText);
 
   const valueText = new Text({
@@ -442,7 +486,7 @@ function renderMetric(
   valueText.skew.set(-0.18, 0);
   valueText.anchor.set(1, 0.5);
   alignCapCenter(valueText, DEFAULT_DISPLAY_FONT, '400', 22);
-  valueText.position.set(x + 166, y + 19);
+  valueText.position.set(x + METRIC_W - 8, y + METRIC_H / 2 + 1);
   if (valueText.width > 100) {
     valueText.scale.x = 100 / valueText.width;
   }
