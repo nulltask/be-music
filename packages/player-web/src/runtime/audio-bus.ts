@@ -51,57 +51,60 @@ export interface CompressorParams {
 }
 
 /**
- * Key-sound bus compressor. Tuned to catch transient peak summing during dense jacks and 16th-note input bursts while
- * leaving normal single-hit source files mostly alone.
+ * Key-sound bus compressor. Tuned for punch: each hit's attack transient passes before the gain comes down, so
+ * keysounds keep their snap, while dense jacks and 16th-note bursts still get their summed body caught.
  *
- * Rationale per parameter: - `threshold = -6`: high enough that hot-but-normal hits are not constantly smashed after
- * the compressor input trim, while dense same-lane bursts still cross it. - `ratio = 4`: controls bursts without
- * flattening attacks as much as the previous more aggressive setting. - `attack = 0.002`: fast, but leaves a tiny bit
- * more transient than the hard limiter-style 1 ms setting. - `release = 0.10`: fast enough to recover between dense
- * hits, long enough to avoid obvious chatter. - `knee = 6`: smoother onset to reduce audible threshold artifacts.
+ * Rationale per parameter: - `threshold = -6`: high enough that hot-but-normal hits are not constantly compressed after
+ * the compressor input trim, while dense same-lane bursts still cross it. - `ratio = 3`: controls bursts gently, so a
+ * hit's body is evened out rather than flattened. - `attack = 0.012`: slow enough that the first ~10 ms of each hit —
+ * the click / snap that reads as attack — passes uncompressed (the master limiter still guards the absolute peak). -
+ * `release = 0.08`: recovers before the next 16th at typical tempos, so one hit's gain reduction doesn't dull the next
+ * hit's transient. - `knee = 3`: a firmer knee keeps the onset defined instead of easing compression in early.
  */
 export const KEY_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
   threshold: -6,
-  ratio: 4,
-  attack: 0.002,
-  release: 0.1,
-  knee: 6,
+  ratio: 3,
+  attack: 0.012,
+  release: 0.08,
+  knee: 3,
 };
 
 /**
- * BGM bus compressor. Tuned to gently glue the auto-triggered background bed without the per-hit pumping of the key bus
- * compressor.
+ * BGM bus compressor. Tuned as gentle glue: it evens out the auto-triggered background bed so it sits under the
+ * keysounds, without the per-hit pumping of the key bus compressor.
  *
- * Rationale per parameter: - `threshold = -8`: avoids constant gain reduction on already-mastered BGM samples after
- * input trim, but still catches overloaded beds. - `ratio = 2.5`: gentle, musical compression. - `attack = 0.01`: lets
- * BGM drum-loop kicks breathe. - `release = 0.25`: long enough to avoid pumping on the beat grid. - `knee = 12`: soft,
- * so the compressor doesn't introduce a detectable threshold artefact.
+ * Rationale per parameter: - `threshold = -10`: works on the bed's body a little more consistently than before, so its
+ * level stays steady under the keysounds, while already-mastered samples see only light reduction after the input trim.
+ * - `ratio = 2`: glue, not squash. - `attack = 0.025`: slow enough that drum-loop kicks and snares in the BGM keep their
+ * own attack. - `release = 0.25`: long enough to avoid pumping on the beat grid. - `knee = 12`: soft, so the compressor
+ * doesn't introduce a detectable threshold artefact.
  */
 export const BGM_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
-  threshold: -8,
-  ratio: 2.5,
-  attack: 0.01,
+  threshold: -10,
+  ratio: 2,
+  attack: 0.025,
   release: 0.25,
   knee: 12,
 };
 
 /**
  * Master bus compressor. Final clip-protection limiter. With the key / BGM compressors already shaping their respective
- * buses, the master only needs to catch the summed peaks, so it's tuned as a hard limiter rather than a musical
- * compressor.
+ * buses, the master only needs to catch the summed peaks, so it's tuned as a ceiling that stays out of the way until a
+ * peak actually threatens to clip.
  *
- * Rationale per parameter: - `threshold = -2`: leaves 2 dB of explicit headroom below 0 dBFS, so even worst-case
- * summing won't clip the destination. - `ratio = 10`: ≈ limiter behavior. The bus inputs are already processed, so we
- * can be aggressive here without "smashing". - `attack = 0.001`, `release = 0.10`: fast capture, moderate release for
- * transparent peak control. - `knee = 2`: hard knee so the limiter activates decisively at the threshold (no slow
- * onset).
+ * Rationale per parameter: - `threshold = -1.5`: leaves explicit headroom below 0 dBFS while touching less of the
+ * keysound transients the key bus now lets through. - `ratio = 20`: the Web Audio maximum — a firm ceiling, so the
+ * limiter does its work in a few dB of peaks instead of compressing the mix. - `attack = 0.002`: still catches peaks
+ * within a couple of milliseconds, but no longer shaves the very front of every hit. - `release = 0.15`: slower than
+ * the key bus so the limiter doesn't pump or distort on sustained bass. - `knee = 1`: hard knee so it activates
+ * decisively at the threshold.
  */
 export const MASTER_BUS_COMPRESSOR_PARAMS: Readonly<CompressorParams> = {
-  threshold: -2,
-  ratio: 10,
-  attack: 0.001,
-  release: 0.1,
-  knee: 2,
+  threshold: -1.5,
+  ratio: 20,
+  attack: 0.002,
+  release: 0.15,
+  knee: 1,
 };
 
 /**
