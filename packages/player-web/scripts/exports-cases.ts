@@ -475,6 +475,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.shouldCaptureFrame(1033.3, 1000, 30);
     },
   });
+  define('player-web.resolveCaptureSize', {
+    run: () => {
+      playerWebCoreApi.resolveCaptureSize(2944, 2108, { width: 1920, height: 1080 });
+    },
+  });
   define('player-web.pickRecorderMimeType', {
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');

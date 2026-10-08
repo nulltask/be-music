@@ -63,6 +63,12 @@ export interface GameplayRecorderOptions {
    * should rely on the built-in negotiation that picks the best supported variant.
    */
   mimeType?: string;
+  /**
+   * Largest video frame to encode, in pixels. Defaults to 1920×1080. A canvas larger than this (a high-DPR display in a
+   * big window easily reaches 3000×2000) is scaled down to fit before encoding — software VP9 cannot keep up with such
+   * frames in real time, so the encoder starts dropping frames and the video stutters out of step with the audio.
+   */
+  maxVideoSize?: { width: number; height: number };
 }
 
 /**
@@ -119,6 +125,24 @@ export function shouldCaptureFrame(nowMs: number, lastMs: number | undefined, fp
   return nowMs - lastMs >= interval - Math.min(4, interval * 0.25);
 }
 
+/**
+ * The encoded frame size for a `width`×`height` canvas: the canvas size itself when it fits inside `max`, otherwise the
+ * largest size of the same aspect ratio that does, rounded down to even dimensions (VP8 / VP9 encoders reject odd
+ * sizes).
+ */
+export function resolveCaptureSize(
+  width: number,
+  height: number,
+  max: { width: number; height: number },
+): { width: number; height: number } {
+  const scale = Math.min(1, max.width / width, max.height / height);
+  if (scale >= 1) return { width, height };
+  return {
+    width: Math.max(2, Math.floor((width * scale) / 2) * 2),
+    height: Math.max(2, Math.floor((height * scale) / 2) * 2),
+  };
+}
+
 export class GameplayRecorder {
   private readonly canvas: HTMLCanvasElement;
   private readonly audioContext: AudioContext;
@@ -127,6 +151,7 @@ export class GameplayRecorder {
   private readonly videoBitsPerSecond: number;
   private readonly audioBitsPerSecond: number;
   private readonly explicitMimeType: string | undefined;
+  private readonly maxVideoSize: { width: number; height: number };
   private mediaRecorder: MediaRecorder | undefined;
   private audioDestination: MediaStreamAudioDestinationNode | undefined;
   /**
@@ -153,6 +178,7 @@ export class GameplayRecorder {
     this.videoBitsPerSecond = options.videoBitsPerSecond ?? 5_000_000;
     this.audioBitsPerSecond = options.audioBitsPerSecond ?? 192_000;
     this.explicitMimeType = options.mimeType;
+    this.maxVideoSize = options.maxVideoSize ?? { width: 1920, height: 1080 };
   }
 
   public isActive(): boolean {
@@ -189,11 +215,13 @@ export class GameplayRecorder {
     // Frame-driven capture: `captureStream(fps)` samples the canvas on its own timer, which drifts against the render
     // loop and drops frames (a 60 fps capture of a 60 fps render measured ~54 fps). Capturing with frame rate 0 and
     // requesting a frame on every animation frame takes exactly the frames the scene painted. Browsers without
-    // `requestFrame` fall back to the timer-driven capture.
-    const videoStream = this.canvas.captureStream(0);
+    // `requestFrame` fall back to the timer-driven capture. An oversized canvas is first copied into a smaller one (see
+    // `maxVideoSize`) so the encoder keeps up.
+    const source = this.createCaptureSource();
+    const videoStream = source.canvas.captureStream(0);
     const track = videoStream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
     if (track && typeof track.requestFrame === 'function') {
-      this.startFrameLoop(track);
+      this.startFrameLoop(track, source.copy);
       this.videoStream = videoStream;
     } else {
       for (const unused of videoStream.getTracks()) unused.stop();
@@ -276,16 +304,33 @@ export class GameplayRecorder {
   }
 
   /**
-   * Stops every track on the captured `videoStream` and drops the reference. The browser keeps the capture pipeline
-   * alive (and burns CPU on every canvas paint) until `track.stop()` lands on each track, even after
-   * `MediaRecorder.stop()` returns. Idempotent — safe to call when the stream wasn't started or has already been
-   * released.
+   * The canvas to capture: the scene canvas itself when it fits {@link maxVideoSize}, otherwise a smaller 2D canvas plus
+   * a `copy` that scales the current scene frame into it.
    */
+  private createCaptureSource(): { canvas: HTMLCanvasElement; copy?: () => void } {
+    const { width, height } = this.canvas;
+    const size = resolveCaptureSize(width, height, this.maxVideoSize);
+    if (size.width === width && size.height === height) return { canvas: this.canvas };
+    const target = document.createElement('canvas');
+    target.width = size.width;
+    target.height = size.height;
+    const context = target.getContext('2d', { alpha: false });
+    if (!context) return { canvas: this.canvas };
+    context.imageSmoothingQuality = 'high';
+    const copy = () => {
+      // The scene canvas can be resized mid-recording (window resize); stretch whatever it holds into the fixed frame.
+      context.drawImage(this.canvas, 0, 0, target.width, target.height);
+    };
+    copy();
+    return { canvas: target, copy };
+  }
+
   /** Requests a capture on every animation frame (thinned to {@link fps}) until {@link stopFrameLoop}. */
-  private startFrameLoop(track: CanvasCaptureMediaStreamTrack): void {
+  private startFrameLoop(track: CanvasCaptureMediaStreamTrack, copy?: () => void): void {
     let lastCapturedMs: number | undefined;
     const pump = (nowMs: number) => {
       if (shouldCaptureFrame(nowMs, lastCapturedMs, this.fps)) {
+        copy?.();
         track.requestFrame();
         lastCapturedMs = nowMs;
       }
@@ -300,6 +345,12 @@ export class GameplayRecorder {
     this.frameLoop = undefined;
   }
 
+  /**
+   * Stops every track on the captured `videoStream` and drops the reference. The browser keeps the capture pipeline
+   * alive (and burns CPU on every canvas paint) until `track.stop()` lands on each track, even after
+   * `MediaRecorder.stop()` returns. Idempotent — safe to call when the stream wasn't started or has already been
+   * released.
+   */
   private releaseVideoStream(): void {
     this.stopFrameLoop();
     const stream = this.videoStream;

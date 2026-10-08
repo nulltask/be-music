@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { pickRecorderMimeType, shouldCaptureFrame } from './gameplay-recorder.ts';
+import { pickRecorderMimeType, resolveCaptureSize, shouldCaptureFrame } from './gameplay-recorder.ts';
 
 describe('pickRecorderMimeType', () => {
   // The picker accepts an injected `isSupported` so the test can exercise every branch without relying on the host
@@ -64,5 +64,26 @@ describe('shouldCaptureFrame', () => {
   it('takes every frame for a non-positive or non-finite rate', () => {
     expect(shouldCaptureFrame(1001, 1000, 0)).toBe(true);
     expect(shouldCaptureFrame(1001, 1000, Number.NaN)).toBe(true);
+  });
+});
+
+describe('resolveCaptureSize', () => {
+  const max = { width: 1920, height: 1080 };
+
+  it('keeps a canvas that already fits', () => {
+    expect(resolveCaptureSize(1280, 960, max)).toEqual({ width: 1280, height: 960 });
+    expect(resolveCaptureSize(1920, 1080, max)).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('scales an oversized high-DPR canvas down to fit, keeping its aspect ratio', () => {
+    expect(resolveCaptureSize(2944, 2108, max)).toEqual({ width: 1508, height: 1080 });
+    expect(resolveCaptureSize(3840, 2160, max)).toEqual({ width: 1920, height: 1080 });
+  });
+
+  it('rounds a scaled size down to even dimensions', () => {
+    const size = resolveCaptureSize(2001, 1999, max);
+    expect(size.width % 2).toBe(0);
+    expect(size.height % 2).toBe(0);
+    expect(size.height).toBeLessThanOrEqual(1080);
   });
 });
