@@ -162,6 +162,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
         alpha: 0.5,
         skip: (x, y) =>
           this.occupied.some((rect) => x > rect.x && x < rect.x + rect.w && y > rect.y && y < rect.y + rect.h),
+        particles: true,
       },
     );
   }

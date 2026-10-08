@@ -1,4 +1,4 @@
-import type { Container, Graphics } from 'pixi.js';
+import { Graphics, type Container } from 'pixi.js';
 import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
 import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import { resolveSkinlessLaneLayout } from '../../gameplay-lanes.ts';
@@ -103,11 +103,7 @@ export function renderLatticeChrome({
     poor: runtime.poor ?? 0,
   });
 
-  const paper = layerPool.acquireGraphics();
-  paper.label = 'lattice-gameplay/paper';
-  paper.blendMode = 'normal';
-  fillAroundBga(paper, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, LAT_PAPER, hasBga);
-  drawPaperGrid(paper, { x: 0, y: 0, w: DESIGN_WIDTH, h: DESIGN_HEIGHT }, 0.45, hasBga ? BGA : undefined);
+  ensureStaticPaper(layer, hasBga);
 
   const field = layerPool.acquireGraphics();
   field.label = 'lattice-gameplay/field';
@@ -130,6 +126,7 @@ export function renderLatticeChrome({
     {
       alpha: 0.55,
       skip: (x, y) => clean.some((rect) => inside(rect, x, y, 0)),
+      particles: true,
     },
   );
 
@@ -344,6 +341,28 @@ function resolveFieldInput(
     jitter: 0,
     tremble: 0.07 * amount,
   };
+}
+
+/**
+ * The paper and its graph-paper rules never move, so they are drawn once into a persistent graphics at the back of the
+ * layer (redrawn only when a BGA appears or goes) instead of being rebuilt with the per-frame pooled graphics.
+ */
+const STATIC_PAPER = new WeakMap<Container, { graphics: Graphics; hasBga: boolean }>();
+
+function ensureStaticPaper(layer: Container, hasBga: boolean): void {
+  let entry = STATIC_PAPER.get(layer);
+  if (!entry) {
+    const graphics = new Graphics();
+    graphics.label = 'lattice-gameplay/paper';
+    layer.addChildAt(graphics, 0);
+    entry = { graphics, hasBga: !hasBga };
+    STATIC_PAPER.set(layer, entry);
+  }
+  if (entry.hasBga === hasBga) return;
+  entry.hasBga = hasBga;
+  entry.graphics.clear();
+  fillAroundBga(entry.graphics, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, LAT_PAPER, hasBga);
+  drawPaperGrid(entry.graphics, { x: 0, y: 0, w: DESIGN_WIDTH, h: DESIGN_HEIGHT }, 0.45, hasBga ? BGA : undefined);
 }
 
 function inside(rect: Rect, x: number, y: number, margin: number): boolean {

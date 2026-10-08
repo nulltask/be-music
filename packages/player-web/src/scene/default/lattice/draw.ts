@@ -1,6 +1,7 @@
 import type { Container, Graphics } from 'pixi.js';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText, type HudTextOptions } from '../hud-text.ts';
+import { pointLayerFor } from '../particle-layer.ts';
 import { addSkinText, type SkinTextOptions } from '../skin-text.ts';
 import { digitTransitions, needleAngle, springEase, type NeedleFieldInput } from './field.ts';
 import { LAT_ACCENT, LAT_DISPLAY_FONT, LAT_GRAPHITE, LAT_GRID, LAT_INK, LAT_MONO_FONT, LAT_RULE } from './style.ts';
@@ -47,21 +48,35 @@ export function drawPaperGrid(graphics: Graphics, area: Rect, alpha: number, hol
 }
 
 /**
- * The needle field: one short stroke per grid point in `area`, oriented by {@link needleAngle}. Needles that the field
- * has turned far from rest grow and switch to the accent colour, so waves read as travelling light. Two strokes total.
+ * The needle field: one short needle per grid point in `area`, oriented by {@link needleAngle}. Needles that the field
+ * has turned far from rest grow and switch to the accent colour, so waves read as travelling light.
+ *
+ * With `particles` the needles are rotated thin quads on `graphics`' {@link pointLayerFor particle layer}, so the field
+ * costs no geometry rebuild per frame — use it when `graphics` is a persistent or pooled node (the same object every
+ * frame). Otherwise they are stroked into `graphics` (two strokes total).
  */
 export function drawNeedleField(
   graphics: Graphics,
   area: Rect,
   input: NeedleFieldInput,
-  options: { pitch?: number; length?: number; alpha?: number; skip?: (x: number, y: number) => boolean } = {},
+  options: {
+    pitch?: number;
+    length?: number;
+    alpha?: number;
+    skip?: (x: number, y: number) => boolean;
+    particles?: boolean;
+  } = {},
 ): void {
   const pitch = options.pitch ?? LAT_GRID / 2;
   const length = options.length ?? 4.5;
+  const alpha = options.alpha ?? 0.5;
+  const inkAlpha = alpha * 0.55;
+  const accentAlpha = Math.min(1, alpha * 1.6);
+  const layer = options.particles ? pointLayerFor(graphics) : undefined;
   const accentPath: number[] = [];
+  let inkCount = 0;
   const x0 = Math.ceil(area.x / pitch) * pitch;
   const y0 = Math.ceil(area.y / pitch) * pitch;
-  let inkCount = 0;
   for (let y = y0; y <= area.y + area.h; y += pitch) {
     for (let x = x0; x <= area.x + area.w; x += pitch) {
       if (options.skip?.(x, y)) continue;
@@ -71,7 +86,10 @@ export function drawNeedleField(
       const half = (length * (1 + 0.7 * turn)) / 2;
       const dx = Math.cos(angle) * half;
       const dy = Math.sin(angle) * half;
-      if (turn > 0.45) {
+      if (layer) {
+        if (turn > 0.45) layer.segment(x - dx, y - dy, x + dx, y + dy, 1, LAT_ACCENT, accentAlpha);
+        else layer.segment(x - dx, y - dy, x + dx, y + dy, 0.75, LAT_INK, inkAlpha);
+      } else if (turn > 0.45) {
         accentPath.push(x - dx, y - dy, x + dx, y + dy);
       } else {
         graphics.moveTo(x - dx, y - dy).lineTo(x + dx, y + dy);
@@ -79,12 +97,11 @@ export function drawNeedleField(
       }
     }
   }
-  const alpha = options.alpha ?? 0.5;
-  if (inkCount > 0) graphics.stroke({ color: LAT_INK, width: 0.75, alpha: alpha * 0.55 });
+  if (inkCount > 0) graphics.stroke({ color: LAT_INK, width: 0.75, alpha: inkAlpha });
   for (let index = 0; index < accentPath.length; index += 4) {
     graphics.moveTo(accentPath[index]!, accentPath[index + 1]!).lineTo(accentPath[index + 2]!, accentPath[index + 3]!);
   }
-  if (accentPath.length > 0) graphics.stroke({ color: LAT_ACCENT, width: 1, alpha: Math.min(1, alpha * 1.6) });
+  if (accentPath.length > 0) graphics.stroke({ color: LAT_ACCENT, width: 1, alpha: accentAlpha });
 }
 
 /** Ruler ticks along a horizontal edge: a long tick every `major` px, short ones every `minor`. */
