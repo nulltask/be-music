@@ -10,7 +10,7 @@ import { flashingGreatColor, isFlashingGreat, judgeDisplayWord } from '../judge-
 import { hash01 } from '../phantom-style.ts';
 import { audioDrive, type AudioDrive } from '../audio-drive.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
-import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool } from './draw.ts';
+import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   emberColor,
   hsvToHex,
@@ -95,7 +95,8 @@ function advanceSchools(
   state.lastMs = nowMs;
   return state.flocks;
 }
-const ORB_SHELL = fibonacciSphere(800, 11);
+/** The idle monitor's orb shell: dense enough to read as a sphere at monitor size, sparse enough to stay cheap. */
+const ORB_SHELL = fibonacciSphere(560, 11);
 const ORB = orbitParticles(11, 22);
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
 
@@ -274,6 +275,7 @@ function drawDust(
   camera: CameraPose,
   drive: AudioDrive,
 ): void {
+  const batch = sharedShapeBatch;
   const count = 220 + 50 * tier;
   const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level);
   for (let index = 0; index < count; index += 1) {
@@ -288,13 +290,9 @@ function drawDust(
     if (nearness > 0.45) {
       // Near motes get a soft bokeh square around them.
       const bokeh = size * 3.2;
-      graphics
-        .rect(projected.x - bokeh / 2, projected.y - bokeh / 2, bokeh, bokeh)
-        .fill({ color, alpha: 0.05 * nearness });
+      batch.rect(graphics, color, 0.05 * nearness, projected.x - bokeh / 2, projected.y - bokeh / 2, bokeh, bokeh);
     }
-    graphics
-      .rect(projected.x - size / 2, projected.y - size / 2, size, size)
-      .fill({ color, alpha: 0.3 + 0.6 * nearness });
+    batch.rect(graphics, color, 0.3 + 0.6 * nearness, projected.x - size / 2, projected.y - size / 2, size, size);
   }
   const vanish = vanishingPoint(camera, VANISH.x, VANISH.y, 180);
   const streaks = Math.round(8 + 12 * tier + 14 * hit + 18 * drive.onset);
@@ -313,11 +311,9 @@ function drawDust(
     if (hasBga && (insideBga(x0, y0, 6) || insideBga(x1, y1, 6))) continue;
     const alpha = Math.sin(progress * Math.PI) * (0.35 + 0.1 * tier);
     const color = index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4));
-    graphics
-      .moveTo(x0, y0)
-      .lineTo(x1, y1)
-      .stroke({ color, width: 0.8 + progress * 1.4, alpha });
+    batch.line(graphics, color, alpha, 0.8 + progress * 1.4, x0, y0, x1, y1);
   }
+  batch.flush();
 }
 
 /**
@@ -355,9 +351,10 @@ function drawFloor(
     for (let x = -1500; x <= 1500; x += 50) {
       const point = project(x, z);
       if (!point.visible || point.x < -4 || point.x > DESIGN_WIDTH + 4 || point.y > DESIGN_HEIGHT + 4) continue;
-      graphics.rect(point.x - size / 2, point.y - size / 2, size, size).fill({ color, alpha });
+      sharedShapeBatch.rect(graphics, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
     }
   }
+  sharedShapeBatch.flush();
   graphics.rect(0, vanish.y - 1, DESIGN_WIDTH, 2).fill({ color: SYN_AMBER, alpha: (0.22 + 0.2 * pulse) * glow });
   if (tier >= 3) {
     for (const phase of [beatPhase, (beatPhase + 0.5) % 1]) {
@@ -406,11 +403,18 @@ function drawRiver(
     const heat = hash01(index * 3 + river * 101);
     const color = river === 1 ? (heat > 0.7 ? SYN_WHITE : SYN_CYAN) : emberColor(0.5 + 0.5 * heat);
     const nearness = Math.min(1, head.scale);
-    graphics
-      .moveTo(tail.x, tail.y)
-      .lineTo(head.x, head.y)
-      .stroke({ color, width: 0.4 + 0.9 * nearness * (0.5 + heat), alpha: 0.25 + 0.55 * heat });
+    sharedShapeBatch.line(
+      graphics,
+      color,
+      0.25 + 0.55 * heat,
+      0.4 + 0.9 * nearness * (0.5 + heat),
+      tail.x,
+      tail.y,
+      head.x,
+      head.y,
+    );
   }
+  sharedShapeBatch.flush();
 }
 
 function fillAroundBga(
@@ -537,18 +541,26 @@ function drawBgaFrame(
     });
   }
   // Floor points scrolling in.
-  const offset = (seconds * 90) % 60;
-  for (let z = 60 - offset; z < 1400; z += 60) {
+  // A coarser lattice than the main floor: the monitor is small, so this keeps the point count down.
+  const offset = (seconds * 90) % 80;
+  for (let z = 80 - offset; z < 1400; z += 80) {
     const nearness = 1 - z / 1400;
-    for (let x = -600; x <= 600; x += 30) {
+    for (let x = -600; x <= 600; x += 40) {
       const point = projectPoint(viewPoint({ x, y: 70, z }, orbitCamera, orbit), cx, baseHorizon, 220);
       if (!point.visible || inside(point.x, point.y)) continue;
       const size = 0.5 + 1.1 * nearness * nearness;
-      light
-        .rect(point.x - size / 2, point.y - size / 2, size, size)
-        .fill({ color: emberColor(0.3 + 0.6 * nearness), alpha: 0.2 + 0.6 * nearness * nearness });
+      sharedShapeBatch.rect(
+        light,
+        emberColor(0.3 + 0.6 * nearness),
+        0.2 + 0.6 * nearness * nearness,
+        point.x - size / 2,
+        point.y - size / 2,
+        size,
+        size,
+      );
     }
   }
+  sharedShapeBatch.flush();
   // Streaks pouring past from the vanishing point.
   for (let index = 0; index < 18; index += 1) {
     const angle = hash01(index * 7 + 1) * Math.PI * 2;

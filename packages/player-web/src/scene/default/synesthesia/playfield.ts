@@ -19,7 +19,8 @@ import {
   type BurstParticle,
   type Vec3,
 } from './space.ts';
-import { drawReticle } from './draw.ts';
+import { burstGrainCount } from './burst-budget.ts';
+import { drawReticle, sharedShapeBatch } from './draw.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
 import { audioDrive } from '../audio-drive.ts';
 import { comboTier, effectProfile } from '../moments.ts';
@@ -186,7 +187,8 @@ export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: BeMusicB
   // doesn't burn the line to white, while sparks keep most of their colour.
   const crowd = 1 / Math.sqrt(Math.max(1, bombs.length / 2));
   for (const bomb of bombs) {
-    renderBomb(pool, bomb, tier, crowd, profile.amount);
+    const grains = burstGrainCount(BURST_PARTICLES, BURST_PARTICLES_PER_TIER, tier, profile.amount, bombs.length);
+    renderBomb(pool, bomb, tier, crowd, profile.amount, grains);
   }
 }
 
@@ -208,7 +210,14 @@ function renderPlainFlashes(pool: ChildPool, bombs: readonly BeMusicBomb[]): voi
   }
 }
 
-function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: number, amount: number): void {
+function renderBomb(
+  pool: ChildPool,
+  bomb: BeMusicBomb,
+  tier: number,
+  crowd: number,
+  amount: number,
+  grains: number,
+): void {
   const t = Math.max(0, Math.min(1, bomb.elapsedMs / SYNESTHESIA_BOMB_DURATION_MS));
   if (t >= 1) return;
   const light = LIGHTS[bomb.kind];
@@ -255,14 +264,13 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
     });
   }
 
-  // 3 + 4. Sparks: compute every projected position once, draw trails, then depth-sorted glow sprites.
-  const particles = cachedBurst(bomb.seed).slice(
-    0,
-    Math.round((BURST_PARTICLES + BURST_PARTICLES_PER_TIER * tier) * amount),
-  );
+  // 3 + 4. Sparks: hairline trails and powder grains go through the shared batch (one fill per colour bucket instead of
+  // one per grain); the few coarse grains get a glow sprite. Everything here is additive, so draw order is free and no
+  // depth sort (or per-frame spark list) is needed.
+  const particles = cachedBurst(bomb.seed);
+  const count = Math.min(particles.length, grains);
   const radius = unit * 4.6 * (1 + 0.1 * tier);
   const gravity = unit * 3.2;
-  const sparks: Array<{ x: number; y: number; z: number; scale: number; life: number; particle: BurstParticle }> = [];
   // Fountain shaping: narrow the lateral spread so neighbouring lanes don't merge into one white band, and add an
   // upward launch so sparks visibly leap off the line before gravity bends them back.
   const fountain = (particle: BurstParticle, life: number): Vec3 => {
@@ -273,50 +281,50 @@ function renderBomb(pool: ChildPool, bomb: BeMusicBomb, tier: number, crowd: num
       z: position.z * 0.8,
     };
   };
-  for (const particle of particles) {
+  const batch = sharedShapeBatch;
+  const glow = synGlowTexture();
+  for (let index = 0; index < count; index += 1) {
+    const particle = particles[index]!;
     const life = t / particle.life;
     if (life >= 1) continue;
-    const position = fountain(particle, life);
-    const head = project(position);
+    const head = project(fountain(particle, life));
     if (!head.visible) continue;
     // Only the coarser grains leave a short, hairline trail; the powder itself just drifts.
     const trailAlpha = particle.size >= POWDER_TRAIL_SIZE ? (1 - life) * 0.45 : 0;
     if (trailAlpha > 0.02) {
       const tail = project(fountain(particle, Math.max(0, life - 0.07)));
-      effects
-        .moveTo(tail.x, tail.y)
-        .lineTo(head.x, head.y)
-        .stroke({
-          color: hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.35 + life * 2), 1),
-          width: Math.max(0.5, 1 * head.scale * particle.size),
-          alpha: trailAlpha,
-        });
+      batch.line(
+        effects,
+        hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.35 + life * 2), 1),
+        trailAlpha,
+        Math.max(0.5, 1 * head.scale * particle.size),
+        tail.x,
+        tail.y,
+        head.x,
+        head.y,
+      );
     }
-    sparks.push({ x: head.x, y: head.y, z: position.z, scale: head.scale, life, particle });
-  }
-  sparks.sort((left, right) => right.z - left.z);
-  const glow = synGlowTexture();
-  for (const spark of sparks) {
-    const tint = hsvToHex(light.hue + spark.particle.hueShift, Math.min(0.9, 0.45 + spark.life * 1.8), 1);
-    const sparkAlpha = (1 - spark.life) ** 0.8 * (0.65 + 0.35 * crowd);
+    const tint = hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.45 + life * 1.8), 1);
+    const sparkAlpha = (1 - life) ** 0.8 * (0.65 + 0.35 * crowd);
     // Powder: most grains are tiny squares; only the coarsest few carry a soft glint.
-    if (spark.particle.size < POWDER_GLINT_SIZE) {
-      const side = Math.max(0.7, (0.6 + 1 * spark.particle.size) * spark.scale * (1 - spark.life * 0.5));
-      effects.rect(spark.x - side / 2, spark.y - side / 2, side, side).fill({ color: tint, alpha: sparkAlpha });
+    if (particle.size < POWDER_GLINT_SIZE) {
+      const side = Math.max(0.7, (0.6 + 1 * particle.size) * head.scale * (1 - life * 0.5));
+      batch.rect(effects, tint, sparkAlpha, head.x - side / 2, head.y - side / 2, side, side);
       continue;
     }
     const sprite = pool.acquireSprite();
     sprite.texture = glow;
     sprite.anchor.set(0.5);
     sprite.blendMode = 'add';
-    const size = (1.6 + 2.4 * spark.particle.size) * spark.scale * Math.sqrt(1 - spark.life);
+    const size = (1.6 + 2.4 * particle.size) * head.scale * Math.sqrt(1 - life);
     sprite.width = size;
     sprite.height = size;
-    sprite.position.set(spark.x, spark.y);
+    sprite.position.set(head.x, head.y);
     // White-hot at launch, cooling into the lane's hue.
     sprite.tint = tint;
     sprite.alpha = sparkAlpha;
   }
+  batch.flush();
 
   // 5. Core flash + anamorphic streak.
   const flash = Math.max(0, 1 - t * 5);

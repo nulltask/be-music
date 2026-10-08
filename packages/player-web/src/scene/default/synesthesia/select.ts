@@ -13,7 +13,7 @@ import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
 import { audioDrive } from '../audio-drive.ts';
 import { ChildPool } from '../../pixi-utils.ts';
 import { createFlock, stepFlock } from './boids.ts';
-import { ShapeBatch, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool } from './draw.ts';
+import { drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   emberColor,
   hsvToHex,
@@ -271,7 +271,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     const spacing = 100;
     const offset = this.travel % spacing;
     // Floor points, river, and streaks go out as a few batched instructions.
-    const batch = new ShapeBatch();
+    const batch = sharedShapeBatch;
     for (let z = spacing - offset; z < 2600; z += spacing) {
       const nearness = 1 - z / 2600;
       const size = 0.6 + 1.5 * nearness * nearness;

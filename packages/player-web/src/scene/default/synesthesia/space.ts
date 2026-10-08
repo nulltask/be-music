@@ -130,15 +130,42 @@ export function hsvToHex(hue: number, saturation: number, value: number): number
   const p = v * (1 - s);
   const q = v * (1 - s * fraction);
   const t = v * (1 - s * (1 - fraction));
-  const [r, g, b] = [
-    [v, t, p],
-    [q, v, p],
-    [p, v, t],
-    [p, q, v],
-    [t, p, v],
-    [v, p, q],
-  ][sector % 6]!;
-  return (Math.round(r! * 255) << 16) | (Math.round(g! * 255) << 8) | Math.round(b! * 255);
+  // Allocation-free sector switch: this runs for thousands of particles per frame.
+  let r: number;
+  let g: number;
+  let b: number;
+  switch (sector % 6) {
+    case 0:
+      r = v;
+      g = t;
+      b = p;
+      break;
+    case 1:
+      r = q;
+      g = v;
+      b = p;
+      break;
+    case 2:
+      r = p;
+      g = v;
+      b = t;
+      break;
+    case 3:
+      r = p;
+      g = q;
+      b = v;
+      break;
+    case 4:
+      r = t;
+      g = p;
+      b = v;
+      break;
+    default:
+      r = v;
+      g = p;
+      b = q;
+  }
+  return (Math.round(r * 255) << 16) | (Math.round(g * 255) << 8) | Math.round(b * 255);
 }
 
 /** One point of a point-cloud shape: a position plus a per-point size / brightness weight in [0.3, 1]. */
@@ -146,26 +173,30 @@ export interface CloudPoint extends Vec3 {
   weight: number;
 }
 
+/** {@link emberColor}'s ramp: `[t, r, g, b]` stops, hoisted so the hot path allocates nothing. */
+const EMBER_STOPS: ReadonlyArray<readonly [number, number, number, number]> = [
+  [0, 0xb8, 0x2c, 0x08],
+  [0.35, 0xff, 0x66, 0x12],
+  [0.65, 0xff, 0xaa, 0x30],
+  [0.85, 0xff, 0xd8, 0x86],
+  [1, 0xff, 0xf6, 0xe2],
+];
+
 /**
  * Ember → gold → white-hot ramp for `t` in 0..1 (clamped) — the warm light that dominates a cosmic particle
  * worlds. Low `t` is a deep red-orange ember, high `t` a pale gold flare.
  */
 export function emberColor(t: number): number {
-  const stops: ReadonlyArray<readonly [number, number, number, number]> = [
-    [0, 0xb8, 0x2c, 0x08],
-    [0.35, 0xff, 0x66, 0x12],
-    [0.65, 0xff, 0xaa, 0x30],
-    [0.85, 0xff, 0xd8, 0x86],
-    [1, 0xff, 0xf6, 0xe2],
-  ];
   const clamped = Math.max(0, Math.min(1, Number.isFinite(t) ? t : 0));
   let index = 1;
-  while (index < stops.length - 1 && clamped > stops[index]![0]) index += 1;
-  const [t0, r0, g0, b0] = stops[index - 1]!;
-  const [t1, r1, g1, b1] = stops[index]!;
-  const f = (clamped - t0) / (t1 - t0);
-  const mix = (a: number, b: number) => Math.round(a + (b - a) * f);
-  return (mix(r0, r1) << 16) | (mix(g0, g1) << 8) | mix(b0, b1);
+  while (index < EMBER_STOPS.length - 1 && clamped > EMBER_STOPS[index]![0]) index += 1;
+  const from = EMBER_STOPS[index - 1]!;
+  const to = EMBER_STOPS[index]!;
+  const f = (clamped - from[0]) / (to[0] - from[0]);
+  const r = Math.round(from[1] + (to[1] - from[1]) * f);
+  const g = Math.round(from[2] + (to[2] - from[2]) * f);
+  const b = Math.round(from[3] + (to[3] - from[3]) * f);
+  return (r << 16) | (g << 8) | b;
 }
 
 /**

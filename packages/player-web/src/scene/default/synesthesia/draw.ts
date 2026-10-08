@@ -1,4 +1,5 @@
 import type { Graphics, Sprite } from 'pixi.js';
+import { pointLayerFor } from '../particle-layer.ts';
 import { hash01 } from '../phantom-style.ts';
 import type { AudioDrive } from '../audio-drive.ts';
 import { bandLevel } from '../audio-drive.ts';
@@ -32,30 +33,41 @@ import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './s
  * (additive light).
  */
 export class ShapeBatch {
-  private readonly rects = new Map<string, { graphics: Graphics; color: number; alpha: number; data: number[] }>();
-  private readonly lines = new Map<
-    string,
-    { graphics: Graphics; color: number; alpha: number; width: number; data: number[] }
-  >();
+  /**
+   * @param points When true, square rects are drawn as particles on the target's {@link pointLayerFor point layer}
+   *   instead of `Graphics` geometry. Off for tests and for targets outside the scene graph.
+   */
+  public constructor(private readonly points = false) {}
+
+  // Buckets are keyed by a packed integer and kept across flushes (only their data is reset), so a steady frame
+  // allocates no keys, buckets, or arrays.
+  private readonly rects = new Map<number, ShapeBucket>();
+  private readonly lines = new Map<number, ShapeBucket>();
   private readonly ids = new Map<Graphics, number>();
+  private readonly targets: Graphics[] = [];
 
   private id(graphics: Graphics): number {
     let id = this.ids.get(graphics);
     if (id === undefined) {
-      id = this.ids.size;
+      id = this.targets.length;
       this.ids.set(graphics, id);
+      this.targets.push(graphics);
     }
     return id;
   }
 
   public rect(graphics: Graphics, rawColor: number, alpha: number, x: number, y: number, w: number, h: number): void {
-    const a = Math.round(Math.min(1, alpha) * 8) / 8;
-    if (a <= 0) return;
-    const color = quantizeColor(rawColor);
-    const key = `${this.id(graphics)}|${color}|${a}`;
+    const eighths = Math.round(Math.min(1, alpha) * 8);
+    if (eighths <= 0) return;
+    if (this.points && w === h) {
+      // Square points become GPU particles (exact colour and alpha, no geometry rebuild).
+      pointLayerFor(graphics).point(x + w / 2, y + h / 2, w, rawColor, Math.min(1, alpha));
+      return;
+    }
+    const key = (this.id(graphics) * 9 + eighths) * 4096 + colorIndex(rawColor);
     let bucket = this.rects.get(key);
     if (!bucket) {
-      bucket = { graphics, color, alpha: a, data: [] };
+      bucket = { target: this.id(graphics), color: quantizeColor(rawColor), alpha: eighths / 8, width: 0, data: [] };
       this.rects.set(key, bucket);
     }
     bucket.data.push(x, y, w, h);
@@ -71,14 +83,19 @@ export class ShapeBatch {
     x1: number,
     y1: number,
   ): void {
-    const a = Math.round(Math.min(1, alpha) * 8) / 8;
-    if (a <= 0) return;
-    const w = Math.max(0.5, Math.round(width * 2) / 2);
-    const color = quantizeColor(rawColor);
-    const key = `${this.id(graphics)}|${color}|${a}|${w}`;
+    const eighths = Math.round(Math.min(1, alpha) * 8);
+    if (eighths <= 0) return;
+    const halfSteps = Math.min(63, Math.max(1, Math.round(width * 2)));
+    const key = ((this.id(graphics) * 9 + eighths) * 64 + halfSteps) * 4096 + colorIndex(rawColor);
     let bucket = this.lines.get(key);
     if (!bucket) {
-      bucket = { graphics, color, alpha: a, width: w, data: [] };
+      bucket = {
+        target: this.id(graphics),
+        color: quantizeColor(rawColor),
+        alpha: eighths / 8,
+        width: halfSteps / 2,
+        data: [],
+      };
       this.lines.set(key, bucket);
     }
     bucket.data.push(x0, y0, x1, y1);
@@ -86,22 +103,52 @@ export class ShapeBatch {
 
   public flush(): void {
     for (const bucket of this.rects.values()) {
-      const { data, graphics } = bucket;
+      const { data } = bucket;
+      if (data.length === 0) continue;
+      const graphics = this.targets[bucket.target]!;
       for (let index = 0; index < data.length; index += 4) {
         graphics.rect(data[index]!, data[index + 1]!, data[index + 2]!, data[index + 3]!);
       }
       graphics.fill({ color: bucket.color, alpha: bucket.alpha });
+      data.length = 0;
     }
     for (const bucket of this.lines.values()) {
-      const { data, graphics } = bucket;
+      const { data } = bucket;
+      if (data.length === 0) continue;
+      const graphics = this.targets[bucket.target]!;
       for (let index = 0; index < data.length; index += 4) {
         graphics.moveTo(data[index]!, data[index + 1]!).lineTo(data[index + 2]!, data[index + 3]!);
       }
       graphics.stroke({ color: bucket.color, width: bucket.width, alpha: bucket.alpha });
+      data.length = 0;
     }
-    this.rects.clear();
-    this.lines.clear();
+    // Pooled graphics can be handed out in a different order next frame; re-learn the targets each flush.
+    this.ids.clear();
+    this.targets.length = 0;
+    if (this.rects.size + this.lines.size > 4096) {
+      this.rects.clear();
+      this.lines.clear();
+    }
   }
+}
+
+/**
+ * One batch shared by every Synesthesia renderer. Renderers draw synchronously and flush before returning, so sharing
+ * is safe and lets steady frames reuse its buckets instead of allocating a batch per call.
+ */
+export const sharedShapeBatch: ShapeBatch = new ShapeBatch(true);
+
+interface ShapeBucket {
+  target: number;
+  color: number;
+  alpha: number;
+  width: number;
+  data: number[];
+}
+
+/** 12-bit index of a colour's {@link quantizeColor} bucket (the top nibble of each channel). */
+function colorIndex(color: number): number {
+  return ((color >> 12) & 0xf00) | ((color >> 8) & 0xf0) | ((color >> 4) & 0xf);
 }
 
 /** `color` snapped to 16 levels per channel (bucket-friendly, visually identical for light). */
@@ -212,7 +259,7 @@ export function drawPointCloud(
   const reference = style.referenceScale ?? 1;
   const seconds = style.seconds ?? 0;
   const shimmer = style.shimmer ?? 0;
-  const batch = new ShapeBatch();
+  const batch = sharedShapeBatch;
   for (let index = 0; index < points.length; index += 1) {
     const point = points[index]!;
     let world = { x: point.x * transform.scale, y: point.y * transform.scale, z: point.z * transform.scale };
@@ -263,7 +310,7 @@ export function drawSchool(
 ): void {
   const palette = style.palette ?? 'ember';
   const { position: p, velocity: v } = flock;
-  const batch = new ShapeBatch();
+  const batch = sharedShapeBatch;
   for (let index = 0; index < flock.count; index += 1) {
     const x = p[index * 3]!;
     const y = p[index * 3 + 1]!;
@@ -395,7 +442,7 @@ export function drawMagnetoOrb(
   const tilt = options.tilt ?? 0.35;
 
   // Thousands of dots, fibres, and tail segments go out as a handful of batched instructions.
-  const batch = new ShapeBatch();
+  const batch = sharedShapeBatch;
   const addDot = (layer: Graphics, color: number, alpha: number, x: number, y: number, size: number) =>
     batch.rect(layer, color, alpha, x - size / 2, y - size / 2, size, size);
   const addLine = (
