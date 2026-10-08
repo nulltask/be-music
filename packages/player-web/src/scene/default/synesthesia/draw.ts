@@ -37,7 +37,11 @@ export class ShapeBatch {
    * @param points When true, square rects are drawn as particles on the target's {@link pointLayerFor point layer}
    *   instead of `Graphics` geometry. Off for tests and for targets outside the scene graph.
    */
-  public constructor(private readonly points = false) {}
+  private readonly points: boolean;
+
+  public constructor(points = false) {
+    this.points = points;
+  }
 
   // Buckets are keyed by a packed integer and kept across flushes (only their data is reset), so a steady frame
   // allocates no keys, buckets, or arrays.

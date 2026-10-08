@@ -20,7 +20,10 @@ export class PointLayer {
   private touched = false;
   private shown = 0;
 
-  public constructor(private readonly anchor: Graphics) {
+  private readonly anchor: Graphics;
+
+  public constructor(anchor: Graphics) {
+    this.anchor = anchor;
     this.container = new ParticleContainer({
       dynamicProperties: { position: true, vertex: true, color: true, rotation: true, uvs: false },
     });
