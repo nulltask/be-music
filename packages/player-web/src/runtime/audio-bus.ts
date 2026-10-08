@@ -180,13 +180,21 @@ export const COMPRESSOR_PARAM_RANGES: Readonly<Record<keyof CompressorParams, { 
   knee: { min: 0, max: 40 },
 };
 
+const COMPRESSOR_PARAM_KEYS: ReadonlyArray<keyof CompressorParams> = [
+  'threshold',
+  'ratio',
+  'attack',
+  'release',
+  'knee',
+];
+
 /**
  * Merges `patch` over `base`, clamping each value into its {@link COMPRESSOR_PARAM_RANGES} range; non-finite values
  * keep the base value.
  */
 export function mergeCompressorParams(base: CompressorParams, patch: Partial<CompressorParams> = {}): CompressorParams {
   const merged = { ...base };
-  for (const key of Object.keys(COMPRESSOR_PARAM_RANGES) as Array<keyof CompressorParams>) {
+  for (const key of COMPRESSOR_PARAM_KEYS) {
     const value = patch[key];
     if (value === undefined || !Number.isFinite(value)) continue;
     const { min, max } = COMPRESSOR_PARAM_RANGES[key];
@@ -347,11 +355,15 @@ export function buildAudioBus(
   // doesn't use them so the next `setMode` call can splice them back in without re-creating Web Audio nodes (cheap, but
   // recreating would also reset their internal envelope state which wastes any "warm" gain reduction the mode switch
   // could otherwise preserve).
+  // Without overrides each compressor just starts from a copy of its factory tuning (no merge pass).
+  const overrides = options.initialCompressorParams;
+  const initialParams = (base: CompressorParams, patch: Partial<CompressorParams> | undefined): CompressorParams =>
+    patch ? mergeCompressorParams(base, patch) : { ...base };
   const compressorParams: Record<TunableCompressor, CompressorParams> = {
-    key: mergeCompressorParams(KEY_BUS_COMPRESSOR_PARAMS, options.initialCompressorParams?.key),
-    bgm: mergeCompressorParams(BGM_BUS_COMPRESSOR_PARAMS, options.initialCompressorParams?.bgm),
-    master: mergeCompressorParams(MASTER_BUS_COMPRESSOR_PARAMS, options.initialCompressorParams?.master),
-    legacy: mergeCompressorParams(LEGACY_COMPRESSOR_PARAMS, options.initialCompressorParams?.legacy),
+    key: initialParams(KEY_BUS_COMPRESSOR_PARAMS, overrides?.key),
+    bgm: initialParams(BGM_BUS_COMPRESSOR_PARAMS, overrides?.bgm),
+    master: initialParams(MASTER_BUS_COMPRESSOR_PARAMS, overrides?.master),
+    legacy: initialParams(LEGACY_COMPRESSOR_PARAMS, overrides?.legacy),
   };
   const keyComp = createCompressor(audioContext, compressorParams.key);
   const bgmComp = createCompressor(audioContext, compressorParams.bgm);
