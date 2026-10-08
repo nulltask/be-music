@@ -455,6 +455,19 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.parseCompressorMode('split');
     },
   });
+  define('player-web.sanitizeBusVolume', {
+    run: () => {
+      playerWebCoreApi.sanitizeBusVolume(0.75);
+    },
+  });
+  define('player-web.mergeCompressorParams', {
+    run: () => {
+      playerWebCoreApi.mergeCompressorParams(playerWebCoreApi.KEY_BUS_COMPRESSOR_PARAMS, {
+        threshold: -12,
+        attack: 0.02,
+      });
+    },
+  });
   define('player-web.parsePlaylog', {
     run: () => {
       playerWebCoreApi.parsePlaylog(BENCH_PLAYLOG_JSON);
