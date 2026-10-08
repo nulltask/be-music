@@ -1,7 +1,7 @@
 import { Application, Color, Container, Graphics } from 'pixi.js';
 import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 import { type PixiSceneHost } from '../host.ts';
-import { disposeChildren } from '../pixi-utils.ts';
+import { LaggedDisposer, disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
@@ -106,6 +106,7 @@ export class CoreResultView {
   private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no theme paints the frame). */
   private readonly fallbackLayer = new Container();
+  private readonly fallbackDisposer = new LaggedDisposer();
   /** Clip mask for the design rect — keeps theme artwork from bleeding into the letterbox bars. */
   private readonly designClipMask = new Graphics();
   /**
@@ -310,6 +311,7 @@ export class CoreResultView {
       log.warn('texture cleanup threw', error);
     }
     try {
+      this.fallbackDisposer.flush();
       this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
@@ -371,7 +373,9 @@ export class CoreResultView {
     // state alive, which the original report described as "browser freezes after the song ends" — accumulated
     // GraphicsContext + glyph atlas slots stalled the next reconcile pass. See `pixi-utils.ts` for the full rationale.
     disposeChildren(this.skinLayer);
-    disposeChildren(this.fallbackLayer);
+    // The built-in result is rebuilt every frame; retiring its nodes one frame late lets unchanged labels keep their
+    // text textures (see `LaggedDisposer`).
+    this.fallbackDisposer.cycle(this.fallbackLayer);
     if (this.renderTheme()) {
       // No empty-state hint here — the theme's own artwork covers the whole canvas.
       return;

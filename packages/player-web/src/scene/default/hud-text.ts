@@ -45,11 +45,15 @@ export function addHudText(
   if (node.resolution !== resolution) {
     node.resolution = resolution;
   }
-  const style = resolveTextStyle(opts);
+  // A plain fill (no stroke or shadow to keep their own colours) rasterizes white and takes its colour from the tint, so
+  // a colour change — a flashing judgement, a combo turning gold — reuses the glyph texture instead of re-rendering it.
+  const tintable = isTintable(opts);
+  const style = resolveTextStyle(opts, tintable);
   node.text = text;
   if (node.style !== style) {
     node.style = style;
   }
+  node.tint = tintable ? (opts.fill ?? 0xffffff) : 0xffffff;
   node.anchor.set(opts.anchorX ?? 0, opts.anchorY ?? 0);
   alignCapCenter(node, opts.fontFamily ?? DEFAULT_TEXT_FONT, opts.weight ?? '500', opts.size ?? 10);
   node.position.set(x, y);
@@ -82,7 +86,7 @@ export function addHudNumber(
   opts: HudTextOptions = {},
   pool?: ChildPool,
 ): void {
-  const style = resolveTextStyle(opts);
+  const style = resolveTextStyle(opts, isTintable(opts));
   const run = layoutTabularRun(text, (char) => measureGlyph(char, style));
   const squeeze = opts.maxWidth !== undefined && run.width > opts.maxWidth ? opts.maxWidth / run.width : 1;
   const scale = opts.scale ?? 1;
@@ -118,11 +122,17 @@ function measureGlyph(char: string, style: TextStyle): number {
   return width;
 }
 
-function resolveTextStyle(opts: HudTextOptions): TextStyle {
+/** Whether `opts` paints a plain fill, which {@link addHudText} applies as a tint over a white raster. */
+function isTintable(opts: HudTextOptions): boolean {
+  return opts.stroke === undefined && opts.dropShadow === undefined;
+}
+
+function resolveTextStyle(opts: HudTextOptions, whiteFill = false): TextStyle {
   const stroke = opts.stroke;
   const shadow = opts.dropShadow;
+  const fill = whiteFill ? 0xffffff : (opts.fill ?? 0xffffff);
   const key = [
-    opts.fill ?? 0xffffff,
+    fill,
     opts.size ?? 10,
     opts.weight ?? '500',
     opts.fontFamily ?? DEFAULT_TEXT_FONT,
@@ -140,7 +150,7 @@ function resolveTextStyle(opts: HudTextOptions): TextStyle {
   let style = TEXT_STYLE_CACHE.get(key);
   if (!style) {
     style = new TextStyle({
-      fill: opts.fill ?? 0xffffff,
+      fill,
       fontSize: opts.size ?? 10,
       fontWeight: opts.weight ?? '500',
       fontFamily: opts.fontFamily ?? DEFAULT_TEXT_FONT,

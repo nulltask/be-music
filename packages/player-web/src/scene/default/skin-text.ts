@@ -26,13 +26,47 @@ export interface SkinTextOptions {
  * `maxWidth` when needed. Per-frame HUD text uses pooled nodes instead (see the gameplay chrome renderers).
  */
 export function addSkinText(layer: Container, text: string, x: number, y: number, options: SkinTextOptions = {}): Text {
-  const shadow = options.dropShadow;
   const node = new Text({
     text,
     // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
     resolution: getDesignTextResolution(),
-    style: new TextStyle({
-      fill: options.fill ?? 0xffffff,
+    style: resolveSkinTextStyle(options),
+  });
+  node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+  alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '400', options.size ?? 10);
+  node.position.set(x, y);
+  node.skew.set(options.skewX ?? 0, 0);
+  node.alpha = options.alpha ?? 1;
+  if (options.maxWidth !== undefined && node.width > options.maxWidth) {
+    node.scale.x = options.maxWidth / node.width;
+  }
+  layer.addChild(node);
+  return node;
+}
+
+const SKIN_TEXT_STYLES = new Map<string, TextStyle>();
+
+/**
+ * The shared `TextStyle` for `options`. Pixi keys a text's texture by its style *instance*, so screens rebuilt every
+ * frame must reuse one instance per look for unchanged labels to keep their texture instead of re-rasterizing.
+ */
+export function resolveSkinTextStyle(options: SkinTextOptions): TextStyle {
+  const shadow = options.dropShadow;
+  const stroke = options.stroke;
+  const fill = options.fill ?? 0xffffff;
+  const key = [
+    typeof fill === 'number' ? fill : fill.toNumber(),
+    options.size ?? 10,
+    options.weight ?? '400',
+    options.fontFamily ?? DEFAULT_TEXT_FONT,
+    options.letterSpacing ?? 0,
+    stroke ? `${stroke.color}/${stroke.width}/${stroke.alignment ?? ''}/${stroke.join ?? ''}` : '',
+    shadow ? `${shadow.color}/${shadow.distance}/${shadow.blur ?? 0}/${shadow.alpha ?? 1}/${shadow.angle ?? ''}` : '',
+  ].join('|');
+  let style = SKIN_TEXT_STYLES.get(key);
+  if (!style) {
+    style = new TextStyle({
+      fill,
       fontSize: options.size ?? 10,
       fontWeight: options.weight ?? '400',
       fontFamily: options.fontFamily ?? DEFAULT_TEXT_FONT,
@@ -51,18 +85,10 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
             },
           }
         : {}),
-    }),
-  });
-  node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
-  alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '400', options.size ?? 10);
-  node.position.set(x, y);
-  node.skew.set(options.skewX ?? 0, 0);
-  node.alpha = options.alpha ?? 1;
-  if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-    node.scale.x = options.maxWidth / node.width;
+    });
+    SKIN_TEXT_STYLES.set(key, style);
   }
-  layer.addChild(node);
-  return node;
+  return style;
 }
 
 /** `'7K KEYS'`-style mode label for a song's play variant. */

@@ -47,7 +47,15 @@ export function fontShorthand(weight: string, sizePx: number, fontFamily: string
 }
 
 const OFFSETS = new Map<string, number>();
+/**
+ * Provisional offsets measured before a face reported loaded, each kept for {@link PROVISIONAL_TTL_MS}. Some faces
+ * (unicode-range subsets) can keep `document.fonts.check` false indefinitely; without this the per-frame HUD would
+ * re-measure them on every text node, every frame.
+ */
+const PROVISIONAL = new Map<string, { offset: number; until: number }>();
+const PROVISIONAL_TTL_MS = 1000;
 let context: CanvasRenderingContext2D | null | undefined;
+let listeningForFonts = false;
 
 /**
  * Cap-centre offset of `fontFamily` at `weight`, as a fraction of the font size. Cached once the face has loaded;
@@ -57,7 +65,15 @@ export function capCenterOffsetEm(fontFamily: string, weight: string): number {
   const key = `${weight}|${fontFamily}`;
   const cached = OFFSETS.get(key);
   if (cached !== undefined) return cached;
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const provisional = PROVISIONAL.get(key);
+  if (provisional && provisional.until > now) return provisional.offset;
   if (typeof document === 'undefined') return 0;
+  if (!listeningForFonts && document.fonts && typeof document.fonts.addEventListener === 'function') {
+    // A face finishing its load invalidates every provisional measurement.
+    document.fonts.addEventListener('loadingdone', () => PROVISIONAL.clear());
+    listeningForFonts = true;
+  }
   if (context === undefined) context = document.createElement('canvas').getContext('2d');
   if (!context) return 0;
   const font = fontShorthand(weight, PROBE_SIZE, fontFamily);
@@ -70,6 +86,7 @@ export function capCenterOffsetEm(fontFamily: string, weight: string): number {
     PROBE_SIZE;
   // Until the web font arrives the browser measures a fallback; keep asking rather than caching the wrong face.
   if (loaded) OFFSETS.set(key, offset);
+  else PROVISIONAL.set(key, { offset, until: now + PROVISIONAL_TTL_MS });
   return offset;
 }
 

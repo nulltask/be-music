@@ -30,6 +30,35 @@ export function disposeChildren(container: Container): void {
 }
 
 /**
+ * Disposes a rebuilt-every-frame layer's children one frame late.
+ *
+ * Pixi shares a text texture between live `Text` nodes with the same text, style, and resolution — but a node gives up
+ * its texture as soon as it leaves the scene. Destroying (or even detaching) last frame's nodes before this frame's are
+ * drawn drops every such texture to zero references, so each identical label is rasterized and uploaded again every
+ * frame. {@link cycle} instead hides last frame's children in place and destroys them on the following cycle — by then
+ * this frame's identical labels have picked up the still-live textures.
+ */
+export class LaggedDisposer {
+  private retired: Container[] = [];
+
+  /** Destroys the children retired on the previous cycle, then hides `container`'s children for the next one. */
+  public cycle(container: Container): void {
+    this.flush();
+    this.retired = container.children.slice();
+    for (const child of this.retired) child.visible = false;
+  }
+
+  /** Destroys everything still waiting (call on teardown). */
+  public flush(): void {
+    for (const child of this.retired) {
+      child.removeFromParent();
+      child.destroy({ children: true, context: true });
+    }
+    this.retired = [];
+  }
+}
+
+/**
  * Per-frame `Sprite` / `Graphics` / `Text` recycler for a single `Container` layer.
  *
  * The render pass calls `begin()` to reset the cursor, then `acquireSprite()` / `acquireGraphics()` /

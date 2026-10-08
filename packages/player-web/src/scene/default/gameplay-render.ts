@@ -166,10 +166,10 @@ function drawBackground(frame: Graphics, hasBga: boolean, drive: AudioDrive): vo
     maxRadius: 4.2 * (1 + 0.45 * drive.bass),
     direction: { x: 1, y: 1 },
   })) {
-    if (isInsideFloorWedge(dot.x, dot.y)) {
-      frame.circle(dot.x, dot.y, dot.r).fill({ color: PHANTOM_INK, alpha: 0.55 });
-    }
+    if (isInsideFloorWedge(dot.x, dot.y)) frame.circle(dot.x, dot.y, dot.r);
   }
+  // One fill for the whole field instead of one per dot.
+  frame.fill({ color: PHANTOM_INK, alpha: 0.55 });
   // Sheet music on the floor: two ink staves ruled across the wedge, following its slanted top edge.
   const wedgeLeftAt = (lineY: number): number =>
     FLOOR_WEDGE[0]! +
@@ -357,8 +357,9 @@ function drawBgaFrame(
     maxRadius: 5 * (1 + 0.5 * drive.level),
     direction: { x: -0.6, y: 1 },
   })) {
-    frame.circle(dot.x, dot.y, dot.r).fill({ color: PHANTOM_RED, alpha: 0.75 });
+    frame.circle(dot.x, dot.y, dot.r);
   }
+  frame.fill({ color: PHANTOM_RED, alpha: 0.75 });
   // Slow-turning starburst behind the slug — the idle screen is alive, not a hole in the cabinet.
   // It pumps on the bass and jolts a notch round on every onset.
   const spin = (nowMs !== undefined ? nowMs / 6000 : 0) + 0.1 * drive.onset;
@@ -626,12 +627,13 @@ function drawScorePlate(
   }
 
   // Right column on the same rows: COMBO, MAX, then RANK beside the badge in the lower corner.
+  // The combo value sits under its label (a 3–4 digit combo would run into the label on one line), still clear of MAX.
   addText(layer, 'COMBO', x + 160, y + 12, tagLabelStyle(PHANTOM_RED), pool);
   addNumber(
     layer,
     formatCount(runtime.combo),
     x + w - 12,
-    y + 5,
+    y + 15,
     { ...displayStyle(22, PHANTOM_WHITE), anchorX: 1, maxWidth: 60 },
     pool,
   );

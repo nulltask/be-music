@@ -1,4 +1,5 @@
-import { Container, Graphics, Text, TextStyle, type Color } from 'pixi.js';
+import { Container, Graphics, Text, type Color } from 'pixi.js';
+import { resolveSkinTextStyle } from '../skin-text.ts';
 import type { BeMusicResultFrame, BeMusicResultSkin } from '../../../skin/be-music/types.ts';
 import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT, DEFAULT_TEXT_FONT } from '../fonts.ts';
 import {
@@ -95,10 +96,10 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   ): Text => {
     const node = new Text({
       text,
-      style: new TextStyle({
+      style: resolveSkinTextStyle({
         fill: options.fill ?? PHANTOM_WHITE,
-        fontSize: options.size ?? 10,
-        fontWeight: options.weight ?? '500',
+        size: options.size ?? 10,
+        weight: options.weight ?? '500',
         fontFamily: options.fontFamily ?? DEFAULT_TEXT_FONT,
         letterSpacing: options.letterSpacing ?? 0,
         stroke: options.stroke,
@@ -463,9 +464,9 @@ function renderMetric(
     .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
   const labelText = new Text({
     text: label,
-    style: new TextStyle({
+    style: resolveSkinTextStyle({
       fill: PHANTOM_RED_HOT,
-      fontSize: 10,
+      size: 10,
       fontFamily: DEFAULT_DISPLAY_FONT,
       letterSpacing: 1,
     }),
@@ -477,11 +478,7 @@ function renderMetric(
 
   const valueText = new Text({
     text: value,
-    style: new TextStyle({
-      fill,
-      fontSize: 22,
-      fontFamily: DEFAULT_DISPLAY_FONT,
-    }),
+    style: resolveSkinTextStyle({ fill, size: 22, fontFamily: DEFAULT_DISPLAY_FONT }),
   });
   valueText.skew.set(-0.18, 0);
   valueText.anchor.set(1, 0.5);
