@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { pickRecorderMimeType } from './gameplay-recorder.ts';
+import { pickRecorderMimeType, shouldCaptureFrame } from './gameplay-recorder.ts';
 
 describe('pickRecorderMimeType', () => {
   // The picker accepts an injected `isSupported` so the test can exercise every branch without relying on the host
@@ -37,5 +37,32 @@ describe('pickRecorderMimeType', () => {
     const isSupported = (type: string): boolean =>
       type === 'video/webm;codecs=vp9,opus' || type === 'video/webm;codecs=vp8,opus';
     expect(pickRecorderMimeType(isSupported)).toBe('video/webm;codecs=vp9,opus');
+  });
+});
+
+describe('shouldCaptureFrame', () => {
+  it('always takes the first frame', () => {
+    expect(shouldCaptureFrame(1000, undefined, 60)).toBe(true);
+  });
+
+  it('takes every frame of a 60 Hz loop at 60 fps, despite rAF jitter', () => {
+    expect(shouldCaptureFrame(1016.7, 1000, 60)).toBe(true);
+    expect(shouldCaptureFrame(1015.5, 1000, 60)).toBe(true);
+  });
+
+  it('takes every other frame of a 60 Hz loop at 30 fps', () => {
+    expect(shouldCaptureFrame(1016.7, 1000, 30)).toBe(false);
+    expect(shouldCaptureFrame(1033.3, 1000, 30)).toBe(true);
+    expect(shouldCaptureFrame(1031.5, 1000, 30)).toBe(true);
+  });
+
+  it('samples a 120 Hz display down to 60 fps', () => {
+    expect(shouldCaptureFrame(1008.3, 1000, 60)).toBe(false);
+    expect(shouldCaptureFrame(1016.7, 1000, 60)).toBe(true);
+  });
+
+  it('takes every frame for a non-positive or non-finite rate', () => {
+    expect(shouldCaptureFrame(1001, 1000, 0)).toBe(true);
+    expect(shouldCaptureFrame(1001, 1000, Number.NaN)).toBe(true);
   });
 });
