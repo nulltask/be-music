@@ -483,6 +483,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.serializePlaylog(BENCH_PLAYLOG);
     },
   });
+  define('player-web.shouldCaptureFrame', {
+    run: () => {
+      playerWebCoreApi.shouldCaptureFrame(1033.3, 1000, 30);
+    },
+  });
   define('player-web.pickRecorderMimeType', {
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');

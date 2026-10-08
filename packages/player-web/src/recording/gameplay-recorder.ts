@@ -43,8 +43,9 @@ export interface GameplayRecorderOptions {
    */
   audioOutput: AudioNode;
   /**
-   * Frames per second to capture. Defaults to 60 to match the gameplay tick. Setting a lower value (e.g. 30) produces a
-   * smaller output at the cost of jerkier scrolling notes.
+   * Maximum frames per second to capture. Defaults to 60 to match the gameplay tick. Frames are taken as the scene
+   * paints them (one per animation frame, thinned to this rate), so a display faster than `fps` is sampled down and a
+   * lower value (e.g. 30) produces a smaller output at the cost of jerkier scrolling notes.
    */
   fps?: number;
   /**
@@ -106,6 +107,18 @@ export function pickRecorderMimeType(
   return undefined;
 }
 
+/**
+ * Whether a frame-driven capture should take the frame painted at `nowMs`, given the last captured frame at `lastMs`
+ * (`undefined` before the first) and the target `fps`. At or above the display rate every painted frame is taken; below
+ * it frames are taken once their interval has (almost) elapsed — the small tolerance keeps a 30 fps target on 60 Hz
+ * from slipping to every third frame through rAF jitter.
+ */
+export function shouldCaptureFrame(nowMs: number, lastMs: number | undefined, fps: number): boolean {
+  if (lastMs === undefined || !Number.isFinite(fps) || fps <= 0) return true;
+  const interval = 1000 / fps;
+  return nowMs - lastMs >= interval - Math.min(4, interval * 0.25);
+}
+
 export class GameplayRecorder {
   private readonly canvas: HTMLCanvasElement;
   private readonly audioContext: AudioContext;
@@ -117,12 +130,17 @@ export class GameplayRecorder {
   private mediaRecorder: MediaRecorder | undefined;
   private audioDestination: MediaStreamAudioDestinationNode | undefined;
   /**
-   * The `MediaStream` returned by `canvas.captureStream(fps)`. Held so {@link stop} / {@link dispose} can release the
+   * The `MediaStream` returned by `canvas.captureStream`. Held so {@link stop} / {@link dispose} can release the
    * stream's video tracks via `track.stop()`. `MediaRecorder.stop()` only ends the recording, not the underlying
    * capture; the canvas' frame producer stays attached and burns CPU on every paint until each video track is
    * explicitly stopped.
    */
   private videoStream: MediaStream | undefined;
+  /**
+   * The pending `requestAnimationFrame` handle of the frame-driven capture loop (see {@link start}), or `undefined`
+   * when capture runs on the browser's own timer.
+   */
+  private frameLoop: number | undefined;
   private chunks: Blob[] = [];
   private startedAtMs = 0;
   private disposed = false;
@@ -168,10 +186,22 @@ export class GameplayRecorder {
     const audioDestination = this.audioContext.createMediaStreamDestination();
     this.audioOutput.connect(audioDestination);
     this.audioDestination = audioDestination;
+    // Frame-driven capture: `captureStream(fps)` samples the canvas on its own timer, which drifts against the render
+    // loop and drops frames (a 60 fps capture of a 60 fps render measured ~54 fps). Capturing with frame rate 0 and
+    // requesting a frame on every animation frame takes exactly the frames the scene painted. Browsers without
+    // `requestFrame` fall back to the timer-driven capture.
+    const videoStream = this.canvas.captureStream(0);
+    const track = videoStream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
+    if (track && typeof track.requestFrame === 'function') {
+      this.startFrameLoop(track);
+      this.videoStream = videoStream;
+    } else {
+      for (const unused of videoStream.getTracks()) unused.stop();
+      this.videoStream = this.canvas.captureStream(this.fps);
+    }
     // Combine canvas video + bus audio into a single stream so the recorder treats them as one timeline.
-    const videoStream = this.canvas.captureStream(this.fps);
-    this.videoStream = videoStream;
-    const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDestination.stream.getAudioTracks()]);
+    const capture = this.videoStream;
+    const combined = new MediaStream([...capture.getVideoTracks(), ...audioDestination.stream.getAudioTracks()]);
     const recorder = new MediaRecorder(combined, {
       mimeType,
       videoBitsPerSecond: this.videoBitsPerSecond,
@@ -251,7 +281,27 @@ export class GameplayRecorder {
    * `MediaRecorder.stop()` returns. Idempotent — safe to call when the stream wasn't started or has already been
    * released.
    */
+  /** Requests a capture on every animation frame (thinned to {@link fps}) until {@link stopFrameLoop}. */
+  private startFrameLoop(track: CanvasCaptureMediaStreamTrack): void {
+    let lastCapturedMs: number | undefined;
+    const pump = (nowMs: number) => {
+      if (shouldCaptureFrame(nowMs, lastCapturedMs, this.fps)) {
+        track.requestFrame();
+        lastCapturedMs = nowMs;
+      }
+      this.frameLoop = requestAnimationFrame(pump);
+    };
+    this.frameLoop = requestAnimationFrame(pump);
+  }
+
+  private stopFrameLoop(): void {
+    if (this.frameLoop === undefined) return;
+    cancelAnimationFrame(this.frameLoop);
+    this.frameLoop = undefined;
+  }
+
   private releaseVideoStream(): void {
+    this.stopFrameLoop();
     const stream = this.videoStream;
     if (!stream) return;
     for (const track of stream.getTracks()) {
