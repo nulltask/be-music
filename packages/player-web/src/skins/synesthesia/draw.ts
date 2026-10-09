@@ -20,6 +20,54 @@ import { pointLayerFor } from '../pixi-kit/index.ts';
  * clouds. Callers own the `Graphics`; these only append geometry.
  */
 
+/** Most grains one square point breaks into. */
+const MAX_GRAINS = 5;
+
+/**
+ * Where the grains of a point sit, as fractions of the point's size: a golden-angle spiral, so a cluster of any count
+ * fills the point's square evenly without lining up into a pattern.
+ */
+const GRAIN_OFFSETS: Float32Array = (() => {
+  const offsets = new Float32Array(MAX_GRAINS * 2);
+  for (let index = 0; index < MAX_GRAINS; index += 1) {
+    const radius = index === 0 ? 0 : 0.42 * Math.sqrt(index / (MAX_GRAINS - 1));
+    const angle = index * 2.39996;
+    offsets[index * 2] = Math.cos(angle) * radius;
+    offsets[index * 2 + 1] = Math.sin(angle) * radius;
+  }
+  return offsets;
+})();
+
+/**
+ * How a square point of `size` px and `alpha` breaks into fine grains: each grain is about half the point's size
+ * (0.6–1.1 px), there are as many as it takes to cover a share of the point (1–5), and their alpha is set so the
+ * cluster gives off about the light the point did. Pure.
+ */
+export function grainsFor(size: number, alpha: number): { count: number; size: number; alpha: number } {
+  const grain = Math.max(0.6, Math.min(1.1, size * 0.5));
+  const count = Math.max(1, Math.min(MAX_GRAINS, Math.round((size / grain) ** 2 * 0.45)));
+  return { count, size: grain, alpha: Math.min(1, (alpha * size * size * 0.8) / (count * grain * grain)) };
+}
+
+/** Most grains one segment breaks into. */
+const MAX_TRAIL_GRAINS = 32;
+
+/**
+ * How a segment `length` px long and `width` px thick breaks into a trail of fine grains: grains about a pixel across,
+ * spaced about 1.6 px apart (up to MAX_TRAIL_GRAINS), with their alpha set so the trail gives off about the light the
+ * stroke did. Pure.
+ */
+export function trailGrainsFor(
+  length: number,
+  width: number,
+  alpha: number,
+): { count: number; size: number; alpha: number } {
+  const grain = Math.max(0.6, Math.min(1.1, width * 0.6));
+  const count = Math.max(1, Math.min(MAX_TRAIL_GRAINS, Math.round(length / 1.6) + 1));
+  const area = Math.max(grain * grain, length * width);
+  return { count, size: grain, alpha: Math.min(1, (alpha * area * 0.8) / (count * grain * grain)) };
+}
+
 /**
  * Batches thousands of tiny additive shapes into a handful of draw instructions: rects and line segments are bucketed
  * by (target graphics, colour quantized to 4 bits per channel, alpha quantized to eighths, stroke width) and emitted as
@@ -58,8 +106,21 @@ export class ShapeBatch {
     const eighths = Math.round(Math.min(1, alpha) * 8);
     if (eighths <= 0) return;
     if (this.points && w === h) {
-      // Square points become GPU particles (exact colour and alpha, no geometry rebuild).
-      pointLayerFor(graphics).point(x + w / 2, y + h / 2, w, rawColor, Math.min(1, alpha));
+      // Square points become GPU particles (exact colour and alpha, no geometry rebuild), broken into fine grains so
+      // every particle in the skin shares the audio orb's fine, dusty texture.
+      const layer = pointLayerFor(graphics);
+      const grains = grainsFor(w, Math.min(1, alpha));
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      for (let index = 0; index < grains.count; index += 1) {
+        layer.point(
+          cx + GRAIN_OFFSETS[index * 2]! * w,
+          cy + GRAIN_OFFSETS[index * 2 + 1]! * w,
+          grains.size,
+          rawColor,
+          grains.alpha,
+        );
+      }
       return;
     }
     const key = (this.id(graphics) * 9 + eighths) * 4096 + colorIndex(rawColor);
@@ -83,6 +144,17 @@ export class ShapeBatch {
   ): void {
     const eighths = Math.round(Math.min(1, alpha) * 8);
     if (eighths <= 0) return;
+    if (this.points) {
+      // Segments break into a trail of fine grains too, so trails, fish and sparks share the dusty texture.
+      const length = Math.hypot(x1 - x0, y1 - y0);
+      const grains = trailGrainsFor(length, width, Math.min(1, alpha));
+      const layer = pointLayerFor(graphics);
+      for (let index = 0; index < grains.count; index += 1) {
+        const t = grains.count === 1 ? 0.5 : index / (grains.count - 1);
+        layer.point(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, grains.size, rawColor, grains.alpha);
+      }
+      return;
+    }
     const halfSteps = Math.min(63, Math.max(1, Math.round(width * 2)));
     const key = ((this.id(graphics) * 9 + eighths) * 64 + halfSteps) * 4096 + colorIndex(rawColor);
     let bucket = this.lines.get(key);
