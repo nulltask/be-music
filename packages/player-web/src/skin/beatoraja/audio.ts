@@ -25,6 +25,7 @@ import {
   lookupBytesCaseInsensitive,
   type BeatorajaSkinFileEntry,
 } from '@be-music/beatoraja-skin';
+import { masterOutput } from '../../runtime/master-volume.ts';
 
 /**
  * Compact bag of audio callbacks scenes pass into their `BeatorajaRenderContext` so Lua
@@ -196,7 +197,7 @@ export class BeatorajaSkinAudioPlayer {
     if (this.gain === undefined) {
       this.gain = this.context.createGain();
       this.gain.gain.value = 1;
-      this.gain.connect(this.context.destination);
+      this.gain.connect(masterOutput(this.context));
     }
     return { context: this.context, gain: this.gain };
   }

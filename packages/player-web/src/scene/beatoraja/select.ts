@@ -71,6 +71,7 @@ import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '
 import { detectChartFeatures } from '../select-ops.ts';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from '../../collection/types.ts';
+import { masterOutput } from '../../runtime/master-volume.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
   skin: BeatorajaSkin;
@@ -2709,7 +2710,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // start" to the console. By the time `ensureChartPreviewEngine` is called the user has
     // already triggered the scene mount through a click / keypress.
     this.previewAudioContext = new AudioContext({ latencyHint: 'interactive' });
-    this.chartPreviewEngine = new ChartPreviewEngine(this.previewAudioContext, this.previewAudioContext.destination);
+    this.chartPreviewEngine = new ChartPreviewEngine(this.previewAudioContext, masterOutput(this.previewAudioContext));
     return this.chartPreviewEngine;
   }
   private previewAudioContext: AudioContext | undefined;

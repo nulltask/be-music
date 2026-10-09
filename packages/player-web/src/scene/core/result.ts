@@ -13,6 +13,7 @@ import {
   setDesignPixelRatio,
   setDesignTextResolution,
 } from './viewport.ts';
+import { masterOutput } from '../../runtime/master-volume.ts';
 
 const log = logger('result');
 
@@ -265,7 +266,7 @@ export class CoreResultView {
       const source = audioContext.createBufferSource();
       source.buffer = buffer;
       source.loop = false;
-      source.connect(audioContext.destination);
+      source.connect(masterOutput(audioContext));
       source.start();
       this.bgmSource = source;
     } catch (error) {

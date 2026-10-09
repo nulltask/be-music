@@ -11,6 +11,7 @@ import type { BrowserSongEntry } from '../../collection/types.ts';
 import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
 import { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { PixiSceneHost } from '../host.ts';
+import { masterOutput } from '../../runtime/master-volume.ts';
 
 export interface BeatorajaChartImages {
   stageFile?: Texture;
@@ -262,7 +263,7 @@ export class BeatorajaSceneBgmPlayer {
       if (this.isDisposed()) return;
       const source = ctx.createBufferSource();
       source.buffer = buffer;
-      source.connect(ctx.destination);
+      source.connect(masterOutput(ctx));
       source.start();
       this.bgmSource = source;
     } catch (error) {

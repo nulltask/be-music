@@ -1,3 +1,4 @@
+import { masterOutput } from './master-volume.ts';
 /**
  * Audio routing for the gameplay scene.
  *
@@ -399,7 +400,7 @@ export function buildAudioBus(
   exitFadeGain.gain.value = 1.0;
   masterGain.connect(tap);
   tap.connect(exitFadeGain);
-  exitFadeGain.connect(audioContext.destination);
+  exitFadeGain.connect(masterOutput(audioContext));
   // `makeup → masterGain → tap` is wired once and never re-disconnected; modes that use makeup (legacy / split) just
   // connect their last compressor to makeup and let the rest of the chain ride.
   makeup.connect(masterGain);

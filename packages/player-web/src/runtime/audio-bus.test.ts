@@ -16,6 +16,7 @@ import {
   sanitizeBusVolume,
   type CompressorMode,
 } from './audio-bus.ts';
+import { masterOutput } from './master-volume.ts';
 
 // -- Tiny `AudioContext` fake ----------------------------------------------- Vitest runs under Node where Web Audio
 // doesn't exist. Rather than pulling in a heavyweight jsdom shim, this fake records the `connect()` / `disconnect()`
@@ -683,17 +684,19 @@ describe('buildAudioBus exit-fade gain', () => {
   // unattenuated mix); 2. the bus's `outputNode` (the tap) is NOT the same node as the post-tap fade — there's exactly
   // one gain hop between `outputNode` and the destination on the audible path.
 
-  it('inserts a unity-gain fade stage between outputNode and the destination', () => {
+  it('inserts a unity-gain fade stage between outputNode and the master output', () => {
     const { context, destination } = createFakeAudioContext();
     const bus = buildAudioBus(context, 'split');
     const tap = bus.outputNode as unknown as FakeNode;
-    // Tap → exitFadeGain → destination (two-hop).
+    // Tap → exitFadeGain → master output → destination.
     const tapDownstream = [...tap.outgoing];
     expect(tapDownstream).toHaveLength(1);
     const fadeStage = tapDownstream[0]!;
     expect(fadeStage.type).toBe('gain');
     expect(fadeStage).not.toBe(tap); // distinct from the tap itself
-    expect(fadeStage.outgoing.has(destination)).toBe(true);
+    const masterStage = [...fadeStage.outgoing][0]!;
+    expect(masterStage).toBe(masterOutput(context) as unknown as FakeNode);
+    expect(masterStage.outgoing.has(destination)).toBe(true);
     // Steady-state value is unity so the fade stage is acoustically transparent until the gameplay scene actually
     // drives it.
     expect(fadeStage.gain?.value).toBe(1);

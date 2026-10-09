@@ -24,6 +24,7 @@ import {
   setDesignPixelRatio,
   setDesignTextResolution,
 } from './viewport.ts';
+import { masterOutput } from '../../runtime/master-volume.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -993,7 +994,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // Route through the dedicated system-FX gain so the duck-on- preview-start (which zeros `selectBgmGain.gain`)
     // doesn't also silence the cue. Falls through to destination if the FX gain hasn't been constructed yet (shouldn't
     // happen in practice — `ensureSelectBgmContext` builds both atomically).
-    source.connect(this.systemSoundGain ?? audioContext.destination);
+    source.connect(this.systemSoundGain ?? masterOutput(audioContext));
     source.start();
     // Auto-disconnect on natural end so the node is GC-eligible.
     source.onended = (): void => {
@@ -1619,7 +1620,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const source = audioContext.createBufferSource();
     source.buffer = this.selectBgmBuffer;
     source.loop = true;
-    source.connect(this.selectBgmGain ?? audioContext.destination);
+    source.connect(this.selectBgmGain ?? masterOutput(audioContext));
     source.start();
     this.selectBgmSource = source;
   }
@@ -1661,7 +1662,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // ~-6 dB so the BGM doesn't drown out future preview-sample playback we might add at the same time. Adjustable via
     // a future runtime knob if the demo wires a slider.
     gain.gain.value = 0.5;
-    gain.connect(audioContext.destination);
+    gain.connect(masterOutput(audioContext));
     this.selectBgmContext = audioContext;
     this.selectBgmGain = gain;
     this.selectAudioAnalyzer = new AudioAnalyzer(audioContext);
@@ -1670,7 +1671,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // (which zeros `selectBgmGain.gain`) doesn't also silence cursor / folder / option cues.
     const fxGain = audioContext.createGain();
     fxGain.gain.value = 1;
-    fxGain.connect(audioContext.destination);
+    fxGain.connect(masterOutput(audioContext));
     this.systemSoundGain = fxGain;
     return audioContext;
   }
@@ -1691,7 +1692,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (!audioContext) return undefined;
     const gain = audioContext.createGain();
     gain.gain.value = 1;
-    gain.connect(audioContext.destination);
+    gain.connect(masterOutput(audioContext));
     if (this.selectAudioAnalyzer) gain.connect(this.selectAudioAnalyzer.input);
     this.chartPreviewGain = gain;
     this.chartPreviewEngine = new ChartPreviewEngine(audioContext, gain, {

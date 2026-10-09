@@ -6,6 +6,7 @@
  * they back `audio-bus.ts` and the scene classes but aren't part of the public contract today.
  */
 export * from './audio-bus.ts';
+export * from './master-volume.ts';
 
 // Gameplay recorder lives in its own directory but is conceptually a runtime output channel — same scope as the
 // audio bus that feeds it.

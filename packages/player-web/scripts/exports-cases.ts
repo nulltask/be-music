@@ -12,6 +12,14 @@ import type { Lr2Skin } from '@be-music/lr2-skin';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+/** Minimal stand-in for an `AudioContext` (Node has none) — enough for `masterOutput` to create and wire its gain. */
+const BENCH_AUDIO_CONTEXT = {
+  state: 'running',
+  destination: {},
+  createGain: () => ({ gain: { value: 1 }, connect: () => undefined }),
+  addEventListener: () => undefined,
+} as unknown as BaseAudioContext;
+
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
@@ -506,6 +514,26 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.supportsWebCodecsRecording', {
     run: () => {
       playerWebCoreApi.supportsWebCodecsRecording({} as BaseAudioContext);
+    },
+  });
+  define('player-web.sanitizeMasterVolume', {
+    run: () => {
+      playerWebCoreApi.sanitizeMasterVolume(1.5);
+    },
+  });
+  define('player-web.setMasterVolume', {
+    run: () => {
+      playerWebCoreApi.setMasterVolume(1);
+    },
+  });
+  define('player-web.getMasterVolume', {
+    run: () => {
+      playerWebCoreApi.getMasterVolume();
+    },
+  });
+  define('player-web.masterOutput', {
+    run: () => {
+      playerWebCoreApi.masterOutput(BENCH_AUDIO_CONTEXT);
     },
   });
   define('player-web.pickRecorderMimeType', {

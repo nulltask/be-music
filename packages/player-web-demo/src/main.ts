@@ -60,6 +60,7 @@ import {
   serializePlaylog,
   PLAYLOG_FILE_SUFFIX,
   DEFAULT_COMPRESSOR_PARAMS,
+  setMasterVolume,
   type BeMusicPlaylog,
   type CompressorMode,
   type CompressorParams,
@@ -172,22 +173,32 @@ function storeBuiltInSkinId(id: string): void {
 
 const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
 
-/** Keysound / BGM volumes in percent, as last set in the Debug Menu (100 / 100 when nothing is stored). */
-function readStoredVolumes(): { keyVolume: number; bgmVolume: number } {
-  const fallback = { keyVolume: 100, bgmVolume: 100 };
+interface StoredVolumes {
+  masterVolume: number;
+  keyVolume: number;
+  bgmVolume: number;
+}
+
+/** Master / keysound / BGM volumes in percent, as last set in the Debug Menu (all 100 when nothing is stored). */
+function readStoredVolumes(): StoredVolumes {
+  const fallback = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
   try {
     const raw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
     if (!raw) return fallback;
-    const parsed = JSON.parse(raw) as Partial<Record<'keyVolume' | 'bgmVolume', unknown>>;
+    const parsed = JSON.parse(raw) as Partial<Record<keyof StoredVolumes, unknown>>;
     const percent = (value: unknown, otherwise: number) =>
       typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
-    return { keyVolume: percent(parsed.keyVolume, 100), bgmVolume: percent(parsed.bgmVolume, 100) };
+    return {
+      masterVolume: percent(parsed.masterVolume, 100),
+      keyVolume: percent(parsed.keyVolume, 100),
+      bgmVolume: percent(parsed.bgmVolume, 100),
+    };
   } catch {
     return fallback;
   }
 }
 
-function storeVolumes(volumes: { keyVolume: number; bgmVolume: number }): void {
+function storeVolumes(volumes: StoredVolumes): void {
   try {
     window.localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify(volumes));
   } catch {
@@ -559,6 +570,8 @@ class PlayerWebDemoApp {
         void captureScreenshot(this.recordingDeps());
       },
     };
+    // Every sound plays through the master volume; start from the remembered level.
+    setMasterVolume(this.guiState.masterVolume / 100);
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
     // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
@@ -875,13 +888,27 @@ class PlayerWebDemoApp {
         // without forcing the user to restart the song.
         this.gameplayView?.setAutoPauseOnBlur(value);
       });
-    // Keysound / BGM balance. Both sliders push live into a running chart and are remembered for the next visit.
+    // Master volume over every sound, then the keysound / BGM balance. All three apply live and are remembered for the
+    // next visit.
     const volume = gui.addFolder('Volume');
+    const rememberVolumes = () =>
+      storeVolumes({
+        masterVolume: this.guiState.masterVolume,
+        keyVolume: this.guiState.keyVolume,
+        bgmVolume: this.guiState.bgmVolume,
+      });
     const onVolumeChange = (channel: 'key' | 'bgm') => (value: number) => {
       this.gameplayView?.setAudioVolume(channel, value / 100);
       this.beatorajaGameplayPrep?.audioBus.setBusVolume(channel, value / 100);
-      storeVolumes({ keyVolume: this.guiState.keyVolume, bgmVolume: this.guiState.bgmVolume });
+      rememberVolumes();
     };
+    volume
+      .add(this.guiState, 'masterVolume', 0, 100, 1)
+      .name('Master (%)')
+      .onChange((value: number) => {
+        setMasterVolume(value / 100);
+        rememberVolumes();
+      });
     volume.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
     volume.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
     // Compressor: the master switch, the split-mode stage toggles, and every compressor's parameters.
