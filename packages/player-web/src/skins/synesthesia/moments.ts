@@ -10,7 +10,7 @@ import {
   rotateX,
   rotateY,
 } from './space.ts';
-import { SYN_AMBER, SYN_CYAN, SYN_DISPLAY_FONT, SYN_EMBER, SYN_FLARE, SYN_MAGENTA, SYN_WHITE } from './style.ts';
+import { SYN_AMBER, SYN_CYAN, SYN_DISPLAY_FONT, SYN_FLARE, SYN_MAGENTA, SYN_WHITE } from './style.ts';
 import {
   easeOutCubic,
   type BeMusicRect,
@@ -35,18 +35,16 @@ const CLEAR_MS = 1100;
 const FULL_COMBO_MS = 3400;
 const FULL_COMBO_BURST = burstParticles(77, 640);
 const MILESTONE_COLORS = [SYN_AMBER, SYN_CYAN, SYN_MAGENTA] as const;
-const RING_COLORS = [SYN_AMBER, SYN_EMBER, SYN_CYAN, SYN_FLARE, SYN_MAGENTA] as const;
 
 /**
  * Synesthesia showpieces, painted on the front layer:
  *
- * - the count-in: READY condenses out of wide-tracked light over a widening filament, then the first beat detonates a
- *   ring of light from the judgement line;
- * - every 100 combo: a shockwave of light rolls out from the playfield and the count glows over the BGA monitor,
- *   caught in a lock-on reticle that snaps shut on it;
+ * - the count-in: READY condenses out of wide-tracked light over a widening filament, then START flares out on the
+ *   first beat;
+ * - every 100 combo: the count glows over the BGA monitor, caught in a lock-on reticle that snaps shut on it;
  * - the clear line: a light sweep runs the length of the gauge;
- * - a full combo: a warm bloom, a 3D sphere of voxel sparks bursting from the centre of the screen, rings of ember /
- *   blue / magenta light, and FULL COMBO glowing gold.
+ * - a full combo: a warm bloom, a 3D sphere of voxel sparks bursting from the centre of the screen, and FULL COMBO
+ *   glowing gold.
  */
 export function drawSynesthesiaMoments(
   chromeLayer: Container,
@@ -140,20 +138,10 @@ function drawCountIn(
     );
     text.alpha = form * fade;
   }
-  // First beat: a ring of light detonates off the judgement line.
+  // First beat: START flares out.
   const start = stageProgress(chartMs, 0, 900);
   if (start > 0 && start < 1) {
     const eased = easeOutCubic(start);
-    for (const [delay, strength] of [
-      [0, 1],
-      [0.12, 0.55],
-    ] as const) {
-      const t = Math.max(0, (start - delay) / (1 - delay));
-      if (t <= 0) continue;
-      graphics
-        .ellipse(playfieldCenterX, judgeY, 20 + 560 * easeOutCubic(t), (20 + 560 * easeOutCubic(t)) * 0.3)
-        .stroke({ color, width: 1 + 5 * (1 - t), alpha: 0.8 * strength * (1 - t) });
-    }
     const text = addHudText(
       layer,
       'START',
@@ -194,12 +182,6 @@ function drawMilestone(
   const compact = hasBga || below;
   const cx = below ? area.x + area.w / 2 : bga.x + bga.w / 2;
   const cy = below ? area.y + area.h / 2 - 10 : hasBga ? bga.y + 30 : bga.y + bga.h / 2 - 10;
-  // A shockwave of light rolls out from the count, kept inside the area.
-  const wave = easeOutCubic(Math.min(1, t / 0.7));
-  const rx = 20 + (area.w / 2 - 20) * wave;
-  const ry = Math.min(rx * 0.42, area.h / 2);
-  graphics.ellipse(cx, cy, rx, ry).stroke({ color, width: 2 + 8 * (1 - wave), alpha: 0.7 * (1 - wave) });
-  graphics.ellipse(cx, cy, rx * 0.8, ry * 0.8).stroke({ color: SYN_WHITE, width: 1.5, alpha: 0.5 * (1 - wave) });
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
   const count = addHudText(
     layer,
@@ -307,16 +289,6 @@ function drawFullCombo(
     graphics
       .rect(point.x - size, point.y - size, size * 2, size * 2)
       .fill({ color: life < 0.2 ? SYN_WHITE : color, alpha: (1 - life) * fadeOut });
-  }
-  // Prism rings expanding from the centre.
-  for (let ring = 0; ring < 5; ring += 1) {
-    const ringT = (t * 2.2 + ring * 0.18) % 1;
-    const radius = 40 + ringT * 420;
-    graphics.ellipse(cx, cy, radius, radius * 0.55).stroke({
-      color: RING_COLORS[ring % RING_COLORS.length]!,
-      width: 2 + 4 * (1 - ringT),
-      alpha: 0.5 * (1 - ringT) * fadeOut,
-    });
   }
   const form = easeOutCubic(Math.min(1, t / 0.3));
   const color = emberColor(0.6 + 0.3 * Math.sin(nowMs / 260));

@@ -13,7 +13,6 @@ import {
   REST_CAMERA,
   roamingCamera,
   starfieldPoint,
-  vanishingPoint,
   viewPoint,
   wanderPoint,
 } from './space.ts';
@@ -102,8 +101,7 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
 
 /**
  * Synesthesia song select, set in a cosmic particle world. The persistent back layer is a particle world — data dust
- * pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids on an ember
- * horizon, a floor of light points, a golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply
+ * pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids, a floor of light points, a golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply
  * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements PixiSelectRenderer {
@@ -204,7 +202,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   ): void {
     // Ambient motion: frozen with effects off, half speed when reduced.
     const rate = this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1;
-    // The BGM / chart preview drives the space: dust speeds with loudness, the horizon and floor swell on the bass,
+    // The BGM / chart preview drives the space: dust speeds with loudness, the floor swells on the bass,
     // the schools pulse, and the orb's orbits breathe with the spectrum.
     const drive = audioDrive(audio, this.effects);
     const seconds = (nowMs / 1000) * rate;
@@ -249,8 +247,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const world = this.world;
     world.clear();
     const floorY = this.designHeight * 0.7;
-    const horizon = vanishingPoint(camera, cx, floorY, 200).y;
-    // Point-cloud pyramids on the horizon, far to near.
+    // Point-cloud pyramids, far to near.
     const view = { cx, cy: floorY, focal: 200, camera, orbit: WORLD_ORBIT };
     for (const [pyramid, x, z, scale, yaw] of [
       [PYRAMIDS[0]!, -120, 1700, 700, 0.3],
@@ -266,14 +263,6 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         referenceScale: 200 / (200 + z),
       });
     }
-    // Ember haze along the horizon.
-    for (let band = 0; band < 14; band += 1) {
-      const falloff = (1 - band / 14) ** 2;
-      const alpha = (0.05 + 0.04 * pulse) * falloff * (1 + 1.4 * drive.bass);
-      world.rect(0, horizon - (band + 1) * 7, this.designWidth, 7).fill({ color: SYN_EMBER, alpha });
-      world.rect(0, horizon + band * 4, this.designWidth, 4).fill({ color: SYN_EMBER, alpha: alpha * 0.8 });
-    }
-    world.rect(0, horizon - 1, this.designWidth, 2).fill({ color: SYN_AMBER, alpha: 0.35 + 0.25 * pulse });
     // Floor of light points scrolling toward the viewer.
     const project = (x: number, z: number) =>
       projectPoint(viewPoint({ x, y: 150, z }, camera, WORLD_ORBIT), cx, floorY, 200);

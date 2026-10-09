@@ -6,7 +6,6 @@ import {
   emberColor,
   hsvToHex,
   projectPoint,
-  rotateX,
   rotateY,
   starfieldPoint,
 } from './space.ts';
@@ -67,8 +66,8 @@ export const synesthesiaResultSkin: PixiResultSkin = { render: (frame) => render
 /**
  * Synesthesia result, in the light of a cosmic particle world: a black void with ember dust and a floor of light
  * points; the verdict condenses out of wide-tracked light, hairline frames fade up in sequence while counters roll,
- * graphs draw as glowing filaments, and the rank letter ignites inside a spinning 3D ring of particles that bursts
- * outward the moment it lands — a lock-on reticle snapping shut on it.
+ * graphs draw as glowing filaments, and the rank letter ignites in a burst of sparks the moment it lands — a lock-on
+ * reticle snapping shut on it.
  */
 export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
@@ -107,7 +106,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM) =>
     text(target, value, x, y, display(9, fill, { letterSpacing: 2 }));
 
-  // Space: warm black, an ember horizon, dust pouring out of the vanishing point, and a floor of points.
+  // Space: warm black, dust pouring out of the vanishing point, and a floor of points.
   const space = group('space');
   const bands: ReadonlyArray<readonly [number, number]> = [
     [SYN_DEEP, 0.3],
@@ -127,11 +126,6 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const horizon = designHeight * 0.74;
   const vanishX = designWidth / 2;
   const vanishY = designHeight * 0.45;
-  for (let band = 0; band < 14; band += 1) {
-    const falloff = (1 - band / 14) ** 2;
-    light.rect(0, horizon - (band + 1) * 7, designWidth, 7).fill({ color: SYN_EMBER, alpha: 0.06 * falloff });
-    light.rect(0, horizon + band * 4, designWidth, 4).fill({ color: SYN_EMBER, alpha: 0.05 * falloff });
-  }
   for (let index = 0; index < 260; index += 1) {
     const point = starfieldPoint(index, seconds, { spread: 560, near: 20, far: 900, speed: 90 });
     const projected = projectPoint(point, vanishX, vanishY, 180);
@@ -169,32 +163,15 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     dropShadow: { color: verdictColor, distance: 0, blur: 12, alpha: 1 },
   });
 
-  // Rank: a spinning 3D particle ring that bursts outward as the letter ignites.
+  // Rank: sparks burst outward as the letter ignites.
   const rank = group('rank');
   const rankCx = MARGIN + 88;
-  // The ring sits between the DJ LEVEL label and the rate, clear of both.
+  // The rank sits between the DJ LEVEL label and the rate, clear of both.
   const rankCy = TOP + 76;
   const topRank = rankLabel === 'AAA' || rankLabel === 'AA';
   const rankColor = topRank ? SYN_AMBER : accent;
   glass(rank.g, MARGIN, TOP, 176, TOP_ROW_H, rankColor);
   label('DJ LEVEL', MARGIN + 14, TOP + 12, rank.root, rankColor);
-  const ringIn = easeOutCubic(stageProgress(elapsed, 400, 900));
-  for (let index = 0; index < 60; index += 1) {
-    const angle = (Math.PI * 2 * index) / 60 + seconds * 0.9;
-    const radius = 50 * ringIn;
-    const point = projectPoint(
-      rotateX(
-        rotateY({ x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius }, 0.2),
-        1.05 + 0.1 * Math.sin(seconds),
-      ),
-      rankCx,
-      rankCy,
-      220,
-    );
-    const color = index % 10 === 0 ? SYN_CYAN : emberColor(0.5 + 0.45 * Math.sin(index * 0.7 + seconds * 2) ** 2);
-    rank.g.circle(point.x, point.y, 3.5 * point.scale).fill({ color, alpha: 0.12 * ringIn });
-    rank.g.circle(point.x, point.y, 1.3 * point.scale).fill({ color: SYN_WHITE, alpha: 0.8 * ringIn * point.scale });
-  }
   const burstT = stageProgress(elapsed, RANK_DELAY_MS, 1100);
   if (burstT > 0 && burstT < 1) {
     for (const particle of RANK_BURST) {

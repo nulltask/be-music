@@ -16,7 +16,6 @@ import {
   PHANTOM_SLATE,
   PHANTOM_WHITE,
   drawNoteEmblem,
-  drawStaves,
   halftoneField,
   parallelogramPoints,
   starburstPoints,
@@ -219,13 +218,6 @@ function drawBackground(frame: Graphics, hole: BeMusicRect | undefined, drive: A
   }
   // One fill for the whole field instead of one per dot.
   frame.fill({ color: PHANTOM_INK, alpha: 0.55 });
-  // Sheet music on the floor: two ink staves ruled across the wedge, following its slanted top edge.
-  const wedgeLeftAt = (lineY: number): number =>
-    FLOOR_WEDGE[0]! +
-    ((DESIGN_HEIGHT - lineY) * (DESIGN_WIDTH - FLOOR_WEDGE[0]!)) / (DESIGN_HEIGHT - FLOOR_WEDGE[3]!) +
-    6;
-  drawStaves(frame, 0, DESIGN_WIDTH, 404, 5, PHANTOM_INK, 0.55, wedgeLeftAt);
-  drawStaves(frame, 0, DESIGN_WIDTH, 446, 5, PHANTOM_INK, 0.55, wedgeLeftAt);
   // Paper-white cut line tracing the wedge's leading edge.
   frame
     .poly([FLOOR_WEDGE[0]! + 26, DESIGN_HEIGHT, DESIGN_WIDTH, 360, DESIGN_WIDTH, 363, FLOOR_WEDGE[0]! + 32, 480])

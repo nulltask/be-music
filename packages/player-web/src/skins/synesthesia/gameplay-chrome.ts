@@ -160,13 +160,13 @@ export function renderSynesthesiaChrome({
   const horizon = vanishingPoint(camera, CENTER_X, FLOOR.horizon, FLOOR.focal).y;
   // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
   const drive = audioDrive(runtime.audio, runtime.effects);
-  drawGround(space, pulse, hasBga, tier, hit, hitColor, horizon, drive);
+  drawGround(space, hasBga, hit, hitColor, horizon);
 
   const light = layerPool.acquireGraphics();
   light.label = 'synesthesia-gameplay/light';
   light.blendMode = 'add';
   drawDust(light, seconds, pulse, hasBga, tier, hit, camera, drive);
-  drawFloor(light, seconds, pulse, hasBga, tier, beatPhase, hit, camera, drive);
+  drawFloor(light, seconds, pulse, hasBga, tier, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
     drawRiver(light, seconds, river, hasBga, tier, camera, drive);
@@ -284,19 +284,10 @@ const IMPULSE_COLORS: Record<'white' | 'black' | 'scratch', number> = {
 const VANISH = { x: CENTER_X, y: FLOOR.horizon - 90 } as const;
 
 /**
- * Warm-black ground with an ember haze hugging the horizon (a stack of thin bands, so a live BGA stays untouched), plus
- * a brief tint of the pressed lane's light on each key press. `horizon` follows the camera's pitch.
+ * Warm-black ground (a stack of bands, so a live BGA stays untouched), plus a brief tint of the pressed lane's light on
+ * each key press above `horizon`, which follows the camera's pitch.
  */
-function drawGround(
-  graphics: Graphics,
-  pulse: number,
-  hasBga: boolean,
-  tier: number,
-  hit: number,
-  hitColor: number,
-  horizon: number,
-  drive: AudioDrive,
-): void {
+function drawGround(graphics: Graphics, hasBga: boolean, hit: number, hitColor: number, horizon: number): void {
   const bands: ReadonlyArray<readonly [number, number]> = [
     [0x090302, 140],
     [0x060201, 260],
@@ -310,14 +301,6 @@ function drawGround(
   }
   if (hit > 0) {
     fillAroundBga(graphics, 0, 0, DESIGN_WIDTH, horizon, hitColor, hasBga, 0.06 * hit);
-  }
-  const haze = (0.05 + 0.04 * pulse) * (1 + 0.35 * tier) * (1 + 1.4 * drive.bass);
-  for (let band = 0; band < 12; band += 1) {
-    const falloff = (1 - band / 12) ** 2;
-    const h = 6;
-    // Above and below the horizon line, fading out with distance.
-    fillAroundBga(graphics, 0, horizon - (band + 1) * h, DESIGN_WIDTH, h, SYN_EMBER, hasBga, haze * falloff);
-    fillAroundBga(graphics, 0, horizon + band * h * 0.7, DESIGN_WIDTH, h * 0.7, SYN_EMBER, hasBga, haze * falloff);
   }
 }
 
@@ -357,17 +340,13 @@ function drawDust(
   batch.flush();
 }
 
-/**
- * Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines, with
- * beat rings rolling out of the vanishing point once the run is deep in the zone.
- */
+/** Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines. */
 function drawFloor(
   graphics: Graphics,
   seconds: number,
   pulse: number,
   hasBga: boolean,
   tier: number,
-  beatPhase: number,
   hit: number,
   camera: CameraPose,
   drive: AudioDrive,
@@ -376,7 +355,6 @@ function drawFloor(
   const glow = 1 + 0.3 * tier + 0.8 * hit + 1.2 * drive.bass;
   const project = (x: number, z: number) =>
     projectPoint(viewPoint({ x, y: height, z }, camera), CENTER_X, horizon, focal);
-  const vanish = vanishingPoint(camera, CENTER_X, horizon, focal);
   // The floor runs up to a live BGA but never over it: lines are clipped around the monitor, points inside it skipped.
   const pieces = FLOOR_PIECES;
   pieces.length = 0;
@@ -406,34 +384,10 @@ function drawFloor(
     }
   }
   sharedShapeBatch.flush();
-  fillAroundBga(graphics, 0, vanish.y - 1, DESIGN_WIDTH, 2, SYN_AMBER, hasBga, (0.22 + 0.2 * pulse) * glow);
-  if (tier >= 3) {
-    for (const phase of [beatPhase, (beatPhase + 0.5) % 1]) {
-      const rx = 30 + phase * 520;
-      const cy = vanish.y + 4 + phase * 60;
-      pieces.length = 0;
-      // The ring as a polyline, so the arcs crossing a live BGA can be dropped.
-      for (let step = 0; step < RING_STEPS; step += 1) {
-        const a0 = (step / RING_STEPS) * Math.PI * 2;
-        const a1 = ((step + 1) / RING_STEPS) * Math.PI * 2;
-        const x0 = vanish.x + Math.cos(a0) * rx;
-        const y0 = cy + Math.sin(a0) * rx * 0.16;
-        const x1 = vanish.x + Math.cos(a1) * rx;
-        const y1 = cy + Math.sin(a1) * rx * 0.16;
-        if (hasBga) clipSegmentOutsideRect(x0, y0, x1, y1, BGA, pieces);
-        else pieces.push(x0, y0, x1, y1);
-      }
-      for (let index = 0; index < pieces.length; index += 4) {
-        graphics.moveTo(pieces[index]!, pieces[index + 1]!).lineTo(pieces[index + 2]!, pieces[index + 3]!);
-      }
-      graphics.stroke({ color: SYN_AMBER, width: 1 + (1 - phase) * 2, alpha: 0.4 * (1 - phase) });
-    }
-  }
 }
 
 /** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
 const FLOOR_PIECES: number[] = [];
-const RING_STEPS = 48;
 
 const RIVER_PARTICLES = 280;
 
@@ -582,16 +536,6 @@ function drawBgaFrame(
   };
   const cx = BGA.x + BGA.w / 2;
   const baseHorizon = BGA.y + BGA.h * 0.66;
-  const vanish = vanishingPoint(orbitCamera, cx, baseHorizon, 220);
-  const horizon = vanish.y;
-  // Ember horizon glow.
-  for (let band = 0; band < 10; band += 1) {
-    const falloff = (1 - band / 10) ** 2;
-    const alpha = (0.07 + 0.05 * pulse) * falloff;
-    light.rect(BGA.x, horizon - (band + 1) * 5, BGA.w, 5).fill({ color: SYN_EMBER, alpha });
-    light.rect(BGA.x, horizon + band * 3, BGA.w, 3).fill({ color: SYN_EMBER, alpha: alpha * 0.8 });
-  }
-  light.rect(BGA.x, horizon - 0.5, BGA.w, 1).fill({ color: SYN_AMBER, alpha: 0.6 });
   const view = { cx, cy: baseHorizon, focal: 220, camera: orbitCamera, orbit };
   // Particle pyramids on the horizon.
   for (const [pyramid, x, z, scale, yaw] of [

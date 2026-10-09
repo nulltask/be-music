@@ -160,27 +160,6 @@ export function drawNoteEmblem(
 }
 
 /**
- * Five-line stave rows across `[x0, x1]` at `y`, each line `gap` apart — sheet music woven into the poster ground.
- * `clipLeftAt(y)` optionally narrows a line's start (to follow a slanted edge).
- */
-export function drawStaves(
-  graphics: Graphics,
-  x0: number,
-  x1: number,
-  y: number,
-  gap: number,
-  color: number,
-  alpha: number,
-  clipLeftAt?: (lineY: number) => number,
-): void {
-  for (let line = 0; line < 5; line += 1) {
-    const lineY = y + line * gap;
-    const start = Math.max(x0, clipLeftAt ? clipLeftAt(lineY) : x0);
-    if (start < x1) graphics.rect(start, lineY, x1 - start, 1).fill({ color, alpha });
-  }
-}
-
-/**
  * Torn-paper edge: points every ~`step` px from `(x0, y0)` to `(x1, y1)`, each pushed off the line along its normal
  * by up to `amplitude` — sharp alternating teeth with the odd long shard (up to 2.5 × `amplitude`), like the rip in a
  * Phantom cut-in. Deterministic for `seed`. Returns a flat `[x, y, ...]` list.

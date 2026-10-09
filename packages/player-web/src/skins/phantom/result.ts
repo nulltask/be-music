@@ -14,7 +14,6 @@ import {
   PHANTOM_SLATE,
   PHANTOM_WHITE,
   drawNoteEmblem,
-  drawStaves,
   halftoneField,
   parallelogramPoints,
   starburstPoints,
@@ -181,10 +180,6 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
     }
   }
   slash.g.poly([380, 48, 386, 48, 190, designHeight, 184, designHeight]).fill(PHANTOM_WHITE);
-  // Sheet-music staves ruled across the slash, following its slanted left edge.
-  const slashLeftAt = (lineY: number): number => 392 - ((lineY - 48) * (392 - 196)) / (designHeight - 48) + 8;
-  drawStaves(slash.g, 0, designWidth, 226, 6, PHANTOM_INK, 0.5, slashLeftAt);
-  drawStaves(slash.g, 0, designWidth, 432, 6, PHANTOM_INK, 0.5, slashLeftAt);
   slideIn(slash.root, 0, 460, 0, 380);
   slash.root.alpha = 1;
 

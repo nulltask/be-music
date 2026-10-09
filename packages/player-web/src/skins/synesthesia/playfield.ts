@@ -178,11 +178,10 @@ function cachedBurst(seed: number): BurstParticle[] {
  * The Synesthesia hit: a 3D particle burst in perspective. Layered back to front —
  *
  * 1. a light pillar rising up the lane,
- * 2. two shockwave rings lying in the XZ plane (so they read as tilted ellipses) expanding out of the line,
- * 3. motion trails for every spark,
- * 4. depth-sorted glow sparks that launch white-hot and cool into the lane's hue,
- * 5. a core flash and an anamorphic streak across the line,
- * 6. a lock-on reticle that snaps shut on the hit and fades.
+ * 2. motion trails for every spark,
+ * 3. depth-sorted glow sparks that launch white-hot and cool into the lane's hue,
+ * 4. a core flash and an anamorphic streak across the line,
+ * 5. a lock-on reticle that snaps shut on the hit and fades.
  *
  * The smaller sparks fly as square voxels rather than round glows, like shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
@@ -251,32 +250,7 @@ function renderBomb(
     .rect(bomb.x + 1, cy - pillarH, bomb.w - 2, pillarH)
     .fill({ fill: resolveColumnGradient(light.glow), alpha: 0.55 * fade * fade * crowd });
 
-  // 2. Shockwave rings in the XZ plane — the second one trails slightly and tilts the other way.
-  for (const [delay, tilt, strength] of [
-    [0, 0.35, 1],
-    [0.12, -0.25, 0.6],
-  ] as const) {
-    const ringT = Math.max(0, (t - delay) / (1 - delay));
-    if (ringT <= 0 || ringT >= 1) continue;
-    const radius = unit * (0.5 + 2.6 * (1 - (1 - ringT) ** 2));
-    const ring: number[] = [];
-    for (let step = 0; step <= 36; step += 1) {
-      const angle = (Math.PI * 2 * step) / 36;
-      const point = project({
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius * tilt,
-        z: Math.sin(angle) * radius,
-      });
-      ring.push(point.x, point.y);
-    }
-    effects.poly(ring, false).stroke({
-      color: hsvToHex(light.hue + 0.04 * delay, 0.55, 1),
-      width: 0.6 + 2.2 * (1 - ringT),
-      alpha: 0.75 * strength * (1 - ringT) * (0.5 + 0.5 * crowd),
-    });
-  }
-
-  // 3 + 4. Sparks: hairline trails and powder grains go through the shared batch (one fill per colour bucket instead of
+  // 2 + 3. Sparks: hairline trails and powder grains go through the shared batch (one fill per colour bucket instead of
   // one per grain); the few coarse grains get a glow sprite. Everything here is additive, so draw order is free and no
   // depth sort (or per-frame spark list) is needed.
   const particles = cachedBurst(bomb.seed);
@@ -338,7 +312,7 @@ function renderBomb(
   }
   batch.flush();
 
-  // 5. Core flash + anamorphic streak.
+  // 4. Core flash + anamorphic streak.
   const flash = Math.max(0, 1 - t * 5);
   if (flash > 0) {
     const core = pool.acquireSprite();
@@ -352,7 +326,7 @@ function renderBomb(
     core.tint = hsvToHex(light.hue, t * 2, 1);
     core.alpha = flash * 0.7 * crowd;
   }
-  // 6. Lock-on: corner brackets snap in from wide to tight around the hit, then hold and fade.
+  // 5. Lock-on: corner brackets snap in from wide to tight around the hit, then hold and fade.
   if (t < 0.55) {
     const snap = Math.min(1, t / 0.16);
     const size = unit * (1.15 + 1.4 * (1 - snap) ** 3);
