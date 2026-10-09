@@ -540,11 +540,11 @@ function drawBgaFrame(
     }
   }
   graphics.rect(BGA.x, BGA.y + BGA.h - 22, BGA.w, 1).fill({ color: LAT_RULE, alpha: 1 });
-  // STANDBY re-decodes every few seconds while the monitor idles.
+  // SOUND ONLY re-decodes every few seconds while the monitor idles.
   const idle = amount > 0 ? (seconds % 5) / 0.7 : 1;
   addHudText(
     layer,
-    scrambleText('STANDBY', idle, scrambleTick(seconds * 1000), 60),
+    scrambleText('SOUND ONLY', idle, scrambleTick(seconds * 1000), 60),
     BGA.x + 8,
     BGA.y + BGA.h - 16,
     monoStyle(LAT_INK),

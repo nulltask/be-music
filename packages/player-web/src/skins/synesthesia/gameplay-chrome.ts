@@ -664,10 +664,10 @@ function drawBgaFrame(
   const slip = pool.acquireGraphics();
   slip.label = 'synesthesia-gameplay/standby-slip';
   slip.blendMode = 'normal';
-  slip.rect(cx - 56, BGA.y + BGA.h - 26, 112, 17).fill({ color: SYN_VOID, alpha: 0.9 });
+  slip.rect(cx - 76, BGA.y + BGA.h - 26, 152, 17).fill({ color: SYN_VOID, alpha: 0.9 });
   addHudText(
     layer,
-    'STANDBY',
+    'SOUND ONLY',
     cx,
     BGA.y + BGA.h - 22,
     { ...displayStyle(9, SYN_MIST), letterSpacing: 6, anchorX: 0.5 },

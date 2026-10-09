@@ -341,7 +341,8 @@ function drawPlayfield(
 
 /**
  * Monitor frame: a red offset parallelogram and a paper-white one, both wide enough to enclose the BGA rect so their
- * strokes never cross the video. With no BGA the screen idles on a red halftone field with a "STAND BY" slug.
+ * strokes never cross the video. With no BGA the screen idles on a red halftone field with SOUND ONLY cut out of
+ * magazines over a turning starburst.
  */
 function drawBgaFrame(
   frame: Graphics,
@@ -391,15 +392,15 @@ function drawBgaFrame(
     .poly(starburstPoints(cx, cy, 92 * pump, 58 * pump, 14, spin, 0.18, 3))
     .fill({ color: PHANTOM_RED, alpha: 0.95 });
   frame.poly(starburstPoints(cx, cy, 70 * pump, 46 * pump, 14, spin + 0.12, 0.2, 5)).fill(PHANTOM_INK);
-  frame.poly(parallelogramPoints(cx - 70, cy - 15, 132, 30, 8)).fill(PHANTOM_WHITE);
-  addText(
-    layer,
-    'STAND BY',
-    cx + 4,
-    cy,
-    { size: 22, fill: PHANTOM_INK, fontFamily: DISPLAY_FONT, anchorX: 0.5, anchorY: 0.5, skewX: TYPE_SKEW },
-    pool,
-  );
+  // The ransom note is re-cut every so often, like NOW LOADING, so the idle monitor never sits still.
+  const cards = pool?.acquireGraphics() ?? new Graphics();
+  cards.label = 'default-gameplay/sound-only';
+  if (!pool) layer.addChild(cards);
+  const glyph = hudGlyphs(layer, pool);
+  const recut = Math.floor((nowMs ?? 0) / 1400);
+  const size = Math.min(26, (bga.w - 48) / (5 * 1.05));
+  addRansomText(cards, glyph, 'SOUND', cx, cy - size * 0.55, { size, seed: recut * 3 + 7, angle: -0.07 });
+  addRansomText(cards, glyph, 'ONLY', cx + size * 0.3, cy + size * 0.65, { size, seed: recut * 3 + 8, angle: 0.05 });
 }
 
 /**

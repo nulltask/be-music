@@ -42,7 +42,7 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
     } else {
       ctx.fillStyle = PANEL;
       ctx.fillRect(bga.x, bga.y, bga.w, bga.h);
-      text(ctx, 'NO BGA', bga.x + bga.w / 2, bga.y + bga.h / 2, { size: 12, color: MUTED, align: 'center' });
+      text(ctx, 'SOUND ONLY', bga.x + bga.w / 2, bga.y + bga.h / 2, { size: 12, color: MUTED, align: 'center' });
     }
     ctx.strokeStyle = LINE;
     ctx.strokeRect(bga.x - 0.5, bga.y - 0.5, bga.w + 1, bga.h + 1);
