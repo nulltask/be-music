@@ -7,7 +7,12 @@ import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
-import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
+import {
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+  setDesignPixelRatio,
+  setDesignTextResolution,
+} from './viewport.ts';
 
 const log = logger('result');
 
@@ -356,6 +361,7 @@ export class CoreResultView {
     const designHeight = themeSize ? themeSize.height : (stage?.height ?? FALLBACK_DESIGN_HEIGHT);
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
+    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
       this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
       this.cachedScreenWidth = screenWidth;

@@ -1,5 +1,5 @@
 import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
-import { getDesignTextResolution } from '../scene/core/viewport.ts';
+import { getDesignPixelRatio } from '../scene/core/viewport.ts';
 import type {
   BeMusicAudioFrame,
   BeMusicBomb,
@@ -131,7 +131,7 @@ export interface CanvasSkinDefinition<K extends CanvasContextKind> extends Omit<
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
 
-/** One canvas + the texture showing it. Sized to the stage at the screen's current density. */
+/** One canvas + the texture showing it, sized to the screen pixels the stage covers (dot by dot). */
 class Surface<K extends CanvasContextKind> {
   private readonly canvas = document.createElement('canvas');
   private readonly source: CanvasSource;
@@ -145,7 +145,8 @@ class Surface<K extends CanvasContextKind> {
   constructor(definition: CanvasSkinDefinition<K>, stage: BeMusicStage) {
     this.definition = definition;
     this.stage = stage;
-    this.source = new CanvasSource({ resource: this.canvas });
+    // Nearest sampling: the canvas is sized to the screen pixels it covers, so it is shown dot by dot, never filtered.
+    this.source = new CanvasSource({ resource: this.canvas, scaleMode: 'nearest' });
     this.texture = new Texture({ source: this.source });
   }
 
@@ -175,9 +176,14 @@ class Surface<K extends CanvasContextKind> {
     this.texture.destroy(true);
   }
 
+  /**
+   * Sizes the canvas to the device pixels the stage covers on screen (viewport scale × devicePixelRatio), so one canvas
+   * pixel is one screen pixel. Capped at {@link MAX_CANVAS_EDGE} on the long side.
+   */
   private resize(): void {
     const { width, height } = this.stage;
-    const ratio = Math.min(Math.max(1, getDesignTextResolution()), MAX_CANVAS_EDGE / Math.max(width, height));
+    const pixelWidth = Math.max(1, Math.min(MAX_CANVAS_EDGE, Math.round(width * getDesignPixelRatio())));
+    const ratio = pixelWidth / width;
     if (ratio === this.pixelRatio && this.canvas.width > 0) return;
     this.pixelRatio = ratio;
     this.source.resize(width, height, ratio);
@@ -284,6 +290,7 @@ export function defineCanvasSkin<K extends CanvasContextKind>(definition: Canvas
         // The texture's size is in design pixels already (its source carries the pixel ratio as its resolution).
         sprite.position.set(0, 0);
         sprite.scale.set(1);
+        sprite.roundPixels = true;
         sprite.onRender = drawGameplay;
       },
       renderLanes: ({ lanes }) => {
@@ -304,7 +311,7 @@ export function defineCanvasSkin<K extends CanvasContextKind>(definition: Canvas
       createRenderer: () => {
         const surface = new Surface(definition, stage);
         const backLayer = new Container();
-        const sprite = new Sprite(surface.texture);
+        const sprite = new Sprite({ texture: surface.texture, roundPixels: true });
         backLayer.addChild(sprite);
         return {
           outroMs: select.outroMs ?? 0,
@@ -332,7 +339,7 @@ export function defineCanvasSkin<K extends CanvasContextKind>(definition: Canvas
         resultSurface ??= new Surface(definition, stage);
         const surface = resultSurface;
         surface.draw((canvas) => result.draw(canvas, resultFrame));
-        resultFrame.layer.addChild(new Sprite(surface.texture));
+        resultFrame.layer.addChild(new Sprite({ texture: surface.texture, roundPixels: true }));
       },
     },
   });

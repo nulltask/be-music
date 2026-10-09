@@ -18,7 +18,12 @@ import { CORE_TEXT_FONT } from './fonts.ts';
 import type { BeMusicEffectLevel, BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
-import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
+import {
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+  setDesignPixelRatio,
+  setDesignTextResolution,
+} from './viewport.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -2257,6 +2262,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const { width: designWidth, height: designHeight } = themeSize ?? this.beMusicDesignSize;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
+    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
     // Only rebuild the static rect graphics when the dimensions they depend on actually change. The previous
     // unconditional `.clear().rect().fill()` chain ran on every rAF tick and was a measurable contributor to the select
     // scene's frame budget under LR2 default skin (~hundreds of skin elements already redraw per frame).

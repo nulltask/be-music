@@ -143,7 +143,12 @@ import type {
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import { resolveGameplayLayout } from '../../skin-sdk/layout.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
-import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
+import {
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+  setDesignPixelRatio,
+  setDesignTextResolution,
+} from './viewport.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
 import { logger } from '../../logger.ts';
 
@@ -3148,6 +3153,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const { width: designWidth, height: designHeight } = this.stageSize;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
+    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
     // Only rebuild the static rect graphics when their backing dimensions actually change. The previous unconditional
     // `.clear().rect().fill()` chain ran on every rAF tick and rebuilt the GraphicsContext for each — Pixi v8 has no
     // change-detection built in.
