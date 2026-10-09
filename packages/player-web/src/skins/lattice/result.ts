@@ -25,6 +25,8 @@ import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOp
 /** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
  * sooner without changing its order or easing. */
 const ENTRANCE_PACE = 1.3;
+/** Stands in for an unbounded edge of a rect the needle field keeps clean. */
+const FAR = 1e6;
 const ROLL_DELAY_MS = 600;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1500;
@@ -86,7 +88,11 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
     },
     {
       alpha: 0.4,
-      skip: (x, y) => (x > 14 && x < designWidth - 14 && y > 56 && y < 430) || y > designHeight - 50,
+      // The report's body, and a band under the footer line (open-ended to the left, right, and bottom).
+      clean: [
+        { x: 14, y: 56, w: designWidth - 28, h: 374 },
+        { x: -FAR, y: designHeight - 50, w: 2 * FAR, h: FAR },
+      ],
       particles: true,
     },
   );

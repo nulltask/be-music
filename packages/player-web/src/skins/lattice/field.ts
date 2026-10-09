@@ -39,18 +39,48 @@ const REST_ANGLE = Math.PI / 4;
 
 /** Orientation (radians) of the needle at `(x, y)`. Needles are undirected strokes, so angles repeat every π. */
 export function needleAngle(x: number, y: number, input: NeedleFieldInput): number {
-  const s = input.seconds;
-  let angle = REST_ANGLE + input.flow * (0.5 * Math.sin(x * 0.017 + s * 0.6) + 0.5 * Math.cos(y * 0.023 - s * 0.45));
+  return bendNeedle(needleColumnAngle(x, input) + needleRowAngle(y, input), x, y, input);
+}
+
+/**
+ * The part of a needle's angle that depends only on its column: the rest angle, the flow's horizontal wave, and the
+ * beat sweep. With {@link needleRowAngle} it splits the field's base angle, so a whole field can work each column and
+ * row out once instead of once per needle.
+ */
+export function needleColumnAngle(x: number, input: NeedleFieldInput): number {
+  let angle = REST_ANGLE + input.flow * 0.5 * Math.sin(x * 0.017 + input.seconds * 0.6);
   const beatWave = input.beatWave ?? 0;
   if (beatWave > 0) {
     let d = x / 640 - input.beatPhase;
     d -= Math.round(d);
     angle += beatWave * (Math.PI / 2) * Math.exp(-(d * d) / 0.004);
   }
+  return angle;
+}
+
+/** The part of a needle's angle that depends only on its row: the flow's vertical wave. */
+export function needleRowAngle(y: number, input: NeedleFieldInput): number {
+  return input.flow * 0.5 * Math.cos(y * 0.023 - input.seconds * 0.45);
+}
+
+/** Distance from a ripple's front beyond which its band would turn a needle by under 1e-6 rad, so it is skipped. */
+const RIPPLE_REACH = 72;
+
+/** Turns a needle at `(x, y)` from its base `angle` by the ripples, attractor, swirl, spectrum, tremble, and jitter. */
+export function bendNeedle(base: number, x: number, y: number, input: NeedleFieldInput): number {
+  let angle = base;
+  const s = input.seconds;
   for (const ripple of input.ripples ?? []) {
     if (ripple.ageMs < 0 || ripple.ageMs >= RIPPLE_LIFE_MS) continue;
-    const r = Math.hypot(x - ripple.x, y - ripple.y);
+    const dx = x - ripple.x;
+    const dy = y - ripple.y;
     const front = ripple.ageMs * 0.5;
+    // Only the ring around the wave front turns needles; skip the square root and exponential everywhere else.
+    const distance2 = dx * dx + dy * dy;
+    const outer = front + RIPPLE_REACH;
+    const inner = front - RIPPLE_REACH;
+    if (distance2 > outer * outer || (inner > 0 && distance2 < inner * inner)) continue;
+    const r = Math.sqrt(distance2);
     const band = Math.exp(-(((r - front) / 18) ** 2)) * (1 - ripple.ageMs / RIPPLE_LIFE_MS);
     angle += band * ripple.strength * (Math.PI / 2);
   }

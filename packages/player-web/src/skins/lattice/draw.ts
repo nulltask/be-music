@@ -1,5 +1,12 @@
 import type { Container, Graphics } from 'pixi.js';
-import { digitTransitions, needleAngle, springEase, type NeedleFieldInput } from './field.ts';
+import {
+  bendNeedle,
+  digitTransitions,
+  needleColumnAngle,
+  needleRowAngle,
+  springEase,
+  type NeedleFieldInput,
+} from './field.ts';
 import { LAT_ACCENT, LAT_DISPLAY_FONT, LAT_GRAPHITE, LAT_GRID, LAT_INK, LAT_MONO_FONT, LAT_RULE } from './style.ts';
 import {
   addHudText,
@@ -68,6 +75,8 @@ export function drawNeedleField(
     length?: number;
     alpha?: number;
     skip?: (x: number, y: number) => boolean;
+    /** Rects the field leaves clean (needles strictly inside are skipped) — cheaper than an equivalent `skip`. */
+    clean?: readonly Rect[];
     particles?: boolean;
   } = {},
 ): void {
@@ -81,10 +90,22 @@ export function drawNeedleField(
   let inkCount = 0;
   const x0 = Math.ceil(area.x / pitch) * pitch;
   const y0 = Math.ceil(area.y / pitch) * pitch;
+  // The base angle splits into a column term and a row term: work each out once instead of once per needle.
+  const columns = Math.max(0, Math.floor((area.x + area.w - x0) / pitch) + 1);
+  if (COLUMN_ANGLES.length < columns) COLUMN_ANGLES = new Float64Array(columns * 2);
+  for (let column = 0; column < columns; column += 1)
+    COLUMN_ANGLES[column] = needleColumnAngle(x0 + column * pitch, input);
+  const clean = options.clean ?? [];
+  const rowClean = ROW_CLEAN;
   for (let y = y0; y <= area.y + area.h; y += pitch) {
-    for (let x = x0; x <= area.x + area.w; x += pitch) {
+    const rowAngle = needleRowAngle(y, input);
+    rowClean.length = 0;
+    for (const rect of clean) if (y > rect.y && y < rect.y + rect.h) rowClean.push(rect);
+    for (let column = 0; column < columns; column += 1) {
+      const x = x0 + column * pitch;
+      if (insideAny(rowClean, x)) continue;
       if (options.skip?.(x, y)) continue;
-      const angle = needleAngle(x, y, input);
+      const angle = bendNeedle(COLUMN_ANGLES[column]! + rowAngle, x, y, input);
       let turn = Math.abs((((angle - Math.PI / 4) % Math.PI) + Math.PI) % Math.PI);
       turn = Math.min(turn, Math.PI - turn) / (Math.PI / 2);
       const half = (length * (1 + 0.7 * turn)) / 2;
@@ -106,6 +127,17 @@ export function drawNeedleField(
     graphics.moveTo(accentPath[index]!, accentPath[index + 1]!).lineTo(accentPath[index + 2]!, accentPath[index + 3]!);
   }
   if (accentPath.length > 0) graphics.stroke({ color: LAT_ACCENT, width: 1, alpha: accentAlpha });
+}
+
+/** Per-column base angles for the needle field being drawn, reused across frames. */
+let COLUMN_ANGLES = new Float64Array(128);
+/** The `clean` rects crossing the row being drawn. */
+const ROW_CLEAN: Rect[] = [];
+
+/** Whether `x` lies strictly inside the horizontal span of any of `rects`. */
+function insideAny(rects: readonly Rect[], x: number): boolean {
+  for (const rect of rects) if (x > rect.x && x < rect.x + rect.w) return true;
+  return false;
 }
 
 /** Ruler ticks along a horizontal edge: a long tick every `major` px, short ones every `minor`. */

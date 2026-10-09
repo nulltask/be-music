@@ -144,7 +144,7 @@ export function renderLatticeChrome({
     resolveFieldInput(layer, runtime, moments, tier, effects.amount, layout, drive),
     {
       alpha: 0.55,
-      skip: (x, y) => clean.some((rect) => inside(rect, x, y, 0)),
+      clean,
       particles: true,
     },
   );
@@ -408,10 +408,6 @@ function ensureStaticPaper(layer: Container, hasBga: boolean): void {
   entry.graphics.clear();
   fillAroundBga(entry.graphics, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, LAT_PAPER, hasBga);
   drawPaperGrid(entry.graphics, { x: 0, y: 0, w: DESIGN_WIDTH, h: DESIGN_HEIGHT }, 0.45, hasBga ? BGA : undefined);
-}
-
-function inside(rect: Rect, x: number, y: number, margin: number): boolean {
-  return x > rect.x - margin && x < rect.x + rect.w + margin && y > rect.y - margin && y < rect.y + rect.h + margin;
 }
 
 function fillAroundBga(

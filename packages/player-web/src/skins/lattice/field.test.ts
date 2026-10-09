@@ -4,7 +4,10 @@ import {
   countInStep,
   digitTransitions,
   mixLineAngle,
+  bendNeedle,
   needleAngle,
+  needleColumnAngle,
+  needleRowAngle,
   scrambleText,
   scrambleTick,
   springEase,
@@ -193,5 +196,27 @@ describe('scrambleTick', () => {
     expect(scrambleTick(44)).toBe(0);
     expect(scrambleTick(45)).toBe(1);
     expect(scrambleTick(Number.NaN)).toBe(0);
+  });
+});
+
+describe('needle angle parts', () => {
+  const input = { seconds: 3.2, beatPhase: 0.4, flow: 0.6, beatWave: 0.5 };
+
+  it('split the base angle into a column term and a row term', () => {
+    for (const [x, y] of [
+      [0, 0],
+      [120, 300],
+      [640, 72],
+    ] as const) {
+      expect(needleColumnAngle(x, input) + needleRowAngle(y, input)).toBeCloseTo(needleAngle(x, y, input), 12);
+    }
+  });
+
+  it('leaves needles far from a ripple front untouched', () => {
+    const ripple = { ...input, ripples: [{ x: 0, y: 0, ageMs: 200, strength: 1 }] };
+    const base = needleColumnAngle(400, input) + needleRowAngle(0, input);
+    // The front sits 100 px out; 400 px away the band is far below a micro-radian.
+    expect(bendNeedle(base, 400, 0, ripple)).toBe(base);
+    expect(bendNeedle(base, 100, 0, ripple)).not.toBe(base);
   });
 });
