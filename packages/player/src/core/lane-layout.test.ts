@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   createLaneBindings,
   resolveLaneChannels,
+  resolvePlayVariantLaneChannels,
   resolveLaneDisplayMode,
   resolveLr2LaneIndex,
   resolveSideKeySlot,
@@ -249,5 +250,80 @@ describe('resolveSideRelativeLaneIndex', () => {
     expect(resolveSideRelativeLaneIndex('17', '9')).toBe(7);
     expect(resolveSideRelativeLaneIndex('22', '9')).toBe(6);
     expect(resolveSideRelativeLaneIndex('25', '9')).toBe(9);
+  });
+});
+
+describe('resolvePlayVariantLaneChannels', () => {
+  const only = (...channels: string[]) => channels.map((channel) => ({ channel }));
+
+  test('lays out every lane of the variant even when the chart uses one', () => {
+    expect(resolvePlayVariantLaneChannels(only('11'), '5')).toEqual(['16', '11', '12', '13', '14', '15']);
+    expect(resolvePlayVariantLaneChannels(only('11'), '7')).toEqual(['16', '11', '12', '13', '14', '15', '18', '19']);
+  });
+
+  test('double play lays out both sides, 2P scratch first in rendering order', () => {
+    expect(resolvePlayVariantLaneChannels(only('11', '21'), '10')).toEqual([
+      '16',
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '26',
+      '21',
+      '22',
+      '23',
+      '24',
+      '25',
+    ]);
+    expect(resolvePlayVariantLaneChannels(only('11'), '14')).toHaveLength(16);
+  });
+
+  test('picks the 9 KEY layout from the channels in use', () => {
+    expect(resolvePlayVariantLaneChannels(only('11', '17'), '9')).toEqual([
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '16',
+      '17',
+      '18',
+      '19',
+    ]);
+    expect(resolvePlayVariantLaneChannels(only('11', '23'), '9')).toEqual([
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '22',
+      '23',
+      '24',
+      '25',
+    ]);
+  });
+
+  test('lays out all 24 / 48 keyboard columns', () => {
+    expect(resolvePlayVariantLaneChannels(only('11'), '24')).toHaveLength(24);
+    expect(resolvePlayVariantLaneChannels(only('11'), '48')).toHaveLength(48);
+  });
+
+  test('keeps a lane in use outside the variant', () => {
+    expect(resolvePlayVariantLaneChannels(only('11', '21'), '7')).toEqual([
+      '16',
+      '11',
+      '12',
+      '13',
+      '14',
+      '15',
+      '18',
+      '19',
+      '21',
+    ]);
+  });
+
+  test('without a variant, lists only the lanes in use', () => {
+    expect(resolvePlayVariantLaneChannels(only('11', '15'))).toEqual(['11', '15']);
   });
 });

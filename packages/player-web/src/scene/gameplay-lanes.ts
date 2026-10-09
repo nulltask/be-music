@@ -7,6 +7,7 @@ export {
   resolveKeyChannel,
   resolveLaneChannels,
   resolveLr2LaneIndex,
+  resolvePlayVariantLaneChannels,
   resolveSideKeySlot,
   resolveSideRelativeLaneIndex,
 } from '@be-music/player/core/lane-layout';

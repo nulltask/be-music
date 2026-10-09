@@ -120,7 +120,7 @@ import {
 } from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
-  resolveLaneChannels,
+  resolvePlayVariantLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
   resolveSkinlessLaneLayout,
@@ -1991,11 +1991,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
     // ends naturally.
 
-    // PMS / 9 KEY (Pop'n) charts route channel `17` (and the PMS-STD `22..25` block) as lane notes —
-    // `resolveLaneChannels` would otherwise filter `17` out as FREE ZONE under the IIDX default ordering. Hand it the
-    // chart variant so the lane set matches what the LR2 default 9-keys play skin expects.
+    // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
+    // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
+    // (a lane in 9 KEY, FREE ZONE in IIDX) and the 9 KEY layout the LR2 default 9-keys play skin expects.
     this.chartPlayVariant = resolveChartPlayVariant(song);
-    this.laneChannels = resolveLaneChannels(this.notes, this.chartPlayVariant);
+    this.laneChannels = resolvePlayVariantLaneChannels(this.notes, this.chartPlayVariant);
     // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
     // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
     // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
