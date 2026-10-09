@@ -1,0 +1,59 @@
+*---------------------- METADATA FIELD
+
+#TITLE 5 KEY SP Lane Mode
+#SUBTITLE IIDX 5-key single play - channels 11..16, no 18 / 19
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 1
+#TOTAL 200
+#DIFFICULTY 1
+
+*---------------------- EXTENDED HEADER FIELD
+* Lane-mode detection falls through to the IIDX family when no POPN or keyboard
+* marker matches, and then splits on two signals only: whether the chart uses
+* the 2P side, and whether it uses the 6th / 7th columns (`18` / `19` / `28` /
+* `29`). This chart is the 1P-side, no-6/7 corner of that table: five keys plus
+* scratch, which must resolve to 5 KEY SP.
+*
+* Keeping it as `.bms` matters - the extension carries no lane information for
+* this family, so the classification has to come from the channels alone.
+*
+* Companion fixtures for the rest of the family:
+*   10key-dp.bms                - 5 keys on both sides            -> 10 KEY DP
+*   ln-mode-1-long-note.bms     - 1P side with 18 / 19            -> 7 KEY SP
+*   lane-order-test.bms         - both sides with 18 / 19 / 28 / 29 -> 14 KEY DP
+*   9key-all-keys-quarter.pms   - PMS-STD                          -> 9 KEY
+*   24key-keyboard-sp.bme       - extended 1A..1O columns          -> 24 KEY SP
+*   48key-keyboard-dp.bme       - extended columns on both sides    -> 48 KEY DP
+
+#PLAYER 1
+#LNTYPE 1
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - one eighth note per lane, left to right, then scratch.
+#00011:0100000000000000
+#00012:0001000000000000
+#00013:0000010000000000
+#00014:0000000100000000
+#00015:0000000001000000
+#00016:0000000000020000
+
+* Measure 1 - all five keys as a chord on every quarter note, scratch on the
+* backbeat.
+#00111:01010101
+#00112:01010101
+#00113:01010101
+#00114:01010101
+#00115:01010101
+#00116:00020002
+
+*---------------------- CONTROL FLOW FIELD

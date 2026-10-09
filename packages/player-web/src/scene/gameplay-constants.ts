@@ -33,6 +33,13 @@ export const HISPEED_STEP = 0.1;
  */
 export const FALLBACK_INTRO_DELAY_MS = 3000;
 
+/**
+ * Lanes each LR2 per-side timer bank covers: scratch (index 0) plus keys 1..9. Lanes past that — the 24-key keyboard
+ * modes' columns 10..24 — have no LR2 timer slot, and stamping `base + laneIndex` for them would spill into the next
+ * bank (e.g. bomb 50 + 24 = 74, which is the 1P LN-hold bank).
+ */
+export const LR2_LANE_TIMER_BANK_SIZE = 10;
+
 export const LR2_1P_KEYON_TIMER_BASE = 100;
 export const LR2_2P_KEYON_TIMER_BASE = 110;
 export const LR2_1P_BOMB_TIMER_BASE = 50;
@@ -43,11 +50,7 @@ export const LR2_2P_BOMB_TIMER_BASE = 60;
 export const LR2_1P_LN_HOLD_TIMER_BASE = 70;
 export const LR2_2P_LN_HOLD_TIMER_BASE = 80;
 
-/**
- * Playfield rectangle for the no-skin lane geometry. Coordinates come from LR2's default 7K skin so LR2 skins and the
- * built-in default family share the same note-position contract while their chrome stays separate.
- */
-export const PLAYFIELD = { x: 33, y: 0, w: 194, judgementY: 321 } as const;
+export { PLAYFIELD } from './gameplay-geometry.ts';
 /**
  * BGA rectangle used by the built-in/default chrome path.
  */

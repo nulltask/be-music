@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { formatMeasureSignature, resolveAnimatedHighSpeedValue, resolveVisibleBeatsForTuiGrid } from './tui.ts';
 import { PlayerTui } from './tui.ts';
 import { createPlayerStateSignals } from '@be-music/player/state-signals';
@@ -132,6 +132,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -189,6 +190,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -245,6 +247,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -304,6 +307,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -335,6 +339,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -389,6 +394,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -471,6 +477,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
         gauge: {
@@ -524,6 +531,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
         gauge: {
@@ -592,6 +600,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -655,6 +664,7 @@ describe('player tui', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },

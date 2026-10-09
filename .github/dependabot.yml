@@ -1,21 +1,31 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
+  - package-ecosystem: 'npm'
     # The root entry covers every pnpm workspace member: Dependabot bumps
     # packages/*/package.json manifests together with the shared root
     # pnpm-lock.yaml. Per-package directory entries must not be added back —
     # they generate manifest-only PRs that leave pnpm-lock.yaml stale and fail
     # CI with ERR_PNPM_OUTDATED_LOCKFILE.
-    directory: "/"
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'
+    groups:
+      # `vite-plus` and the `vite` -> `@voidzero-dev/vite-plus-core` alias must move in lockstep.
+      vite-plus:
+        patterns:
+          - 'vite-plus'
+          - '@voidzero-dev/vite-plus-core'
     ignore:
-      - dependency-name: "@types/node"
+      - dependency-name: '@types/node'
         update-types:
-          - "version-update:semver-major"
-          - "version-update:semver-patch"
+          - 'version-update:semver-major'
+          - 'version-update:semver-patch'
+      # The `vitest` pin and `@vitest/*` must match the Vitest that `vite-plus` bundles; bumping them on their own
+      # splits the runner. After a `vite-plus` bump, run `pnpm exec vp migrate` to re-align them instead.
+      - dependency-name: 'vitest'
+      - dependency-name: '@vitest/*'
 
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: 'github-actions'
+    directory: '/'
     schedule:
-      interval: "weekly"
+      interval: 'weekly'

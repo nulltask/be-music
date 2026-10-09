@@ -1,4 +1,4 @@
-import { resolveChartPlayVariant } from '@be-music/chart';
+import { type ChartPlayVariant, resolveChartPlayVariant } from '@be-music/chart';
 import { normalizePath } from '@be-music/utils/core';
 import { extractDxaArchivesAsFlatFiles } from './dxa.ts';
 import { asLoadedBytes, readFilesIntoBytesMap, type Lr2SkinFileEntry } from './file-lookup.ts';
@@ -98,12 +98,19 @@ export interface Lr2ThemeSystemSounds {
   optionChange?: Lr2ThemeBgm;
 }
 
-const PLAY_SKIN_FALLBACKS: Record<Lr2PlayVariant, readonly Lr2PlayVariant[]> = {
+/**
+ * Play-skin preference order per chart variant. LR2 never shipped a keyboard-mode skin, so `'24'` / `'48'` borrow the
+ * SP / DP IIDX chains — the mounted skin supplies the frame, gauge, and judge graphics while the 24 lanes themselves
+ * fall through to the host's fallback playfield (see `resolveLr2LaneIndex`, which returns `-1` for these variants).
+ */
+const PLAY_SKIN_FALLBACKS: Record<ChartPlayVariant, readonly Lr2PlayVariant[]> = {
   '14': ['14', '10', '7', '5', '9'],
   '10': ['10', '14', '7', '5', '9'],
   '7': ['7', '14', '5', '10', '9'],
   '5': ['5', '7', '14', '10', '9'],
   '9': ['9', '7', '14', '5', '10'],
+  '24': ['7', '14', '5', '10', '9'],
+  '48': ['14', '10', '7', '5', '9'],
 };
 
 export interface LoadLr2ThemeOptions {

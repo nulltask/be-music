@@ -13,6 +13,7 @@ export const PACKAGE_NAMES = [
   'player',
   'player-tui',
   'lr2-skin',
+  'skin-sdk',
   'player-web',
 ] as const;
 
@@ -25,7 +26,9 @@ export interface ExportsBenchmarkCliOverrides {
 
 export interface BenchmarkTaskStats {
   hz: number;
+  medianHz: number;
   meanMs: number;
+  p50Ms: number;
   p75Ms: number;
   p99Ms: number;
   minMs: number;

@@ -1,5 +1,5 @@
-import { Application, Color, Container, Graphics, Text, TextStyle, Texture } from 'pixi.js';
-import { computeScoreRate, resolveIidxRankIndexFromScore, resolveIidxRankLabel } from '@be-music/player/core/scoring';
+import { Graphics, Texture } from 'pixi.js';
+import { resolveIidxRankIndexFromScore } from '@be-music/player/core/scoring';
 import type {
   Lr2DestinationRect,
   Lr2GaugeChartElement,
@@ -17,75 +17,30 @@ import {
   makeLr2StaticImageSprite,
   renderNumberElement,
 } from '../../skin/lr2/render.ts';
-import { type PixiSceneHost } from '../host.ts';
-import { disposeChildren } from '../pixi-utils.ts';
 import {
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
   collectResultSkinTexturePaths,
   resolveSolidSpecialGraphicTexture,
 } from '../../skin/lr2/scene-textures.ts';
-import { isDestinationVisible, makeLr2TextSprite, resolveScaledViewport } from '../../skin/lr2/scene-render.ts';
+import { isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
-import { logger } from '../../logger.ts';
-import type { BrowserSongCollection } from '../../collection/types.ts';
-import type { PixiGameplayResultData } from './gameplay.ts';
-import { LR2_JUDGE_FALLBACK_FONT, LR2_NUMERIC_FALLBACK_FONT, LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
-
-const log = logger('result');
-const FALLBACK_SURFACE = 0x080d16;
-const FALLBACK_PANEL = 0x101827;
-const FALLBACK_PANEL_DARK = 0x030711;
-const FALLBACK_LINE = 0x2a3548;
+import type { PixiGameplayResultData } from '../core/result-data.ts';
+import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
 
 /**
- * Result scene. Shows the per-chart score breakdown (judge counts, EX score, rate, max combo, clear lamp / rank) and
- * animates LR2's result-skin chart-draw timeline.
+ * LR2 result scene. Layers LR2's result-skin rendering on top of {@link CoreResultView}, which owns the mount / ticker /
+ * timer ladder / input / BGM lifecycle and the skinless be-music panel.
  *
  * Why a dedicated module: the result screen has its own LR2 timer sequence (`docs/LR2SkinHelp.md` lines 10198+) that
  * doesn't match either gameplay or select. Stuffing it into one of those views would pollute their state machines with
  * result-only branches; a sibling scene file mirrors the existing `scene/lr2/gameplay.ts` / `scene/lr2/select.ts` split and keeps
  * each scene's lifecycle independent.
  *
- * The LR2 timer ladder we drive:
- *
- * - **timer 0** — scene main, fired at mount.
- * - **timer 1** — input enable, fires `#STARTINPUT` ms after mount. DST keyframes anchored to it animate from `time =
- *   0` once the user is allowed to dismiss the result.
- * - **timer 150** — chart-draw start. We approximate "chart draw" as a fixed window after `#STARTINPUT` since we don't
- *   yet render the EX-score / gauge graph; advancing to 150 is what pulls in the score numbers.
- * - **timer 151** — chart-draw end / rank display. Fires either automatically once the draw window expires or instantly
- *   when the user presses Enter / Space (LR2's "skip" input).
- * - **timer 152** — high-score-update press, fired on the next input after 151. We never persist scores yet, so this is
- *   purely cosmetic: skins use it to swap the high-score panel from "previous" to "now" digits.
- *
- * After timer 152 fires the next input dismisses the scene via the `onContinue` callback the host supplied.
+ * The core timer ladder (0 / 1 / 150 / 151 / 152) maps onto LR2's result timers directly; timer 1 fires `#STARTINPUT`
+ * ms after mount (see {@link PixiResultView.startInputMs}).
  */
-/**
- * 640×480 fallback canvas to match LR2 default `result.lr2skin`'s native dimensions. See `scene/lr2/select` for the
- * rationale (keeps the on-screen aspect ratio constant when an LR2 theme loads / unloads mid-session).
- */
-const FALLBACK_DESIGN_WIDTH = 640;
-const FALLBACK_DESIGN_HEIGHT = 480;
-const BG = new Color('#05070b');
-const TEXT = new Color('#f8fafc');
-const MUTED = new Color('#9aa6b2');
-
-/**
- * Approximate duration of the chart-draw animation when no skin-side `#SRC_SCORECHART` / `#SRC_GAUGECHART` is wired up.
- * Mirrors the LR2 default skin's authored timeline (~3 s) so timer-151 anchored elements (final rank, score totals)
- * don't pop in immediately.
- */
-const CHART_DRAW_DURATION_MS = 3000;
-
-/**
- * Default `#STARTINPUT` when the loaded skin doesn't declare one. The LR2 default skin's `result.lr2skin` uses 1500 ms
- * — long enough for the slide-in chrome animation to play out before the user can dismiss the screen. Picked at the
- * same value so the look matches.
- */
-const DEFAULT_STARTINPUT_MS = 1500;
-
 /**
  * Op set that's always true on the result screen. Mirrors `SELECT_BASE_OPS` in `scene/lr2/select.ts` — the ops that don't
  * depend on the played chart but on global state (filter / mode toggles, IR connectivity, etc.). Numbers follow
@@ -201,56 +156,21 @@ export const RESULT_DYNAMIC_OPS = {
   KEYCONFIG_5_10: 402,
 } as const;
 
-export interface PixiResultViewOptions {
+export interface PixiResultViewOptions extends CoreResultViewOptions {
   /**
    * LR2 result skin to render with. When provided, renders the skin's `#IMAGE` / `#NUMBER` / `#TEXT` / `#SLIDER` /
    * `#BARGRAPH` elements gated on the standard ops table. When absent (or the skin has no result-anchored elements),
    * the fallback panel is drawn instead.
    */
   skin?: Lr2Skin;
-  /**
-   * Loaded song collection — needed to resolve special graphic paths (BANNER / STAGEFILE / BACKBMP) on result-screen
-   * artwork via the same chart-asset loader the select view uses. May be `undefined` for embed scenarios where the
-   * result is rendered outside a library context.
-   */
-  collection?: BrowserSongCollection;
-  /**
-   * Callback fired when the user dismisses the result screen. Hosts typically transition back to the song-select view
-   * here. Triggered by Enter / Space / Escape after timer 152 has fired (or immediately on Escape).
-   */
-  onContinue?: () => void;
-  /**
-   * Encoded result-screen audio bytes used when the chart was cleared (`LR2files/Sound/<theme>/clear.wav` in the LR2
-   * default theme — these jingles live in `Sound/`, not `Bgm/`). Falls back to {@link resultBgm} when unset so
-   * single-loop themes still produce sound.
-   */
-  clearBgm?: Uint8Array;
-  /**
-   * Encoded result-screen audio bytes used when the chart was failed (`LR2files/Sound/<theme>/fail.wav`). Same fallback
-   * chain as {@link clearBgm}.
-   */
-  failBgm?: Uint8Array;
-  /**
-   * Generic result-screen audio (`LR2files/Sound/<theme>/result.wav`). Plays when the theme doesn't ship a clear /
-   * fail-specific track for the current outcome.
-   */
-  resultBgm?: Uint8Array;
 }
 
 /**
- * One-shot result scene. Mounted by the host with a {@link PixiGameplayResultData} payload, drives the LR2 result timer
- * ladder, and dismisses itself via {@link onContinue} when the user advances past timer 152.
- *
- * Lifecycle parallels {@link PixiSongSelectView}: `mount` → `render`-on-rAF until `dispose`. We don't pause the loop on
- * hide because a result scene is short-lived (host swaps it out wholesale rather than keeping it backgrounded).
+ * One-shot LR2 result scene. Mounted by the host with a {@link PixiGameplayResultData} payload; {@link CoreResultView}
+ * drives the result timer ladder and dismissal, this class paints the LR2 result skin through the theme hooks.
  */
-export class PixiResultView {
-  private host: PixiSceneHost | undefined;
-  private readonly sceneRoot = new Container();
-  private readonly root = new Container();
-  private readonly viewportBackground = new Graphics();
-  private readonly background = new Graphics();
-  private readonly skinLayer = new Container();
+export class PixiResultView extends CoreResultView {
+  declare protected options: PixiResultViewOptions;
   /**
    * Decoded textures for the result skin's referenced atlases. Keyed by image path (including LR2 special-graphic
    * sentinels that resolve to per-song chart assets).
@@ -258,77 +178,26 @@ export class PixiResultView {
   private readonly skinTextures = new Lr2SkinTextureStore();
   /** Per-song chart graphic textures (BANNER / STAGEFILE / BACKBMP). */
   private readonly chartGraphicTextures = new Lr2ChartGraphicTextureStore();
-  private readonly timeoutHandles = new Set<number>();
-  /** Fallback summary panel (used when no skin or as overlay). */
-  private readonly fallbackLayer = new Container();
-  /** Clip mask for the design rect — see `scene/lr2/gameplay` for the rationale. */
-  private readonly designClipMask = new Graphics();
-  /**
-   * Last dimensions baked into the static rect graphics. Skips the per-frame `.clear().rect().fill()` rebuild when
-   * nothing changed.
-   */
-  private cachedScreenWidth = -1;
-  private cachedScreenHeight = -1;
-  private cachedDesignWidth = -1;
-  private cachedDesignHeight = -1;
-  private result: PixiGameplayResultData | undefined;
-  /**
-   * `performance.now()` of mount — reference point for timer 0 and the `#STARTINPUT`-derived timer 1 / 150.
-   */
-  private sceneStartedAt = 0;
-  /** Whether the render loop is currently attached to the host's `app.ticker`; replaces the previous standalone rAF. */
-  private tickerAttached = false;
-  /** Tick handler bound once so the host ticker can register / unregister it by reference. */
-  private readonly tickerHandle = (): void => {
-    if (this.disposed) return;
-    this.render();
-  };
-  private disposed = false;
-  /**
-   * Web Audio plumbing for the result-screen BGM. Created lazily the first time `mount` runs and torn down by
-   * `dispose`. The scene is one-shot (host destroys + recreates between charts) so we don't bother caching the decoded
-   * buffer across mounts.
-   */
-  private bgmContext: AudioContext | undefined;
-  private bgmSource: AudioBufferSourceNode | undefined;
   /** Lazy-loaded LR2 bitmap fonts — see `prepareBitmapFonts`. */
   private bitmapFonts: Map<number, Lr2LoadedFont> = new Map();
-  /**
-   * Per-timer fire timestamps. Empty until each respective timer fires; entries here drive both the keyframe
-   * interpolator (`elapsedSinceTimer`) and `isDestinationVisible`'s timer-active gating.
-   */
-  private readonly timerStartedAt = new Map<number, number>();
 
-  public constructor(private options: PixiResultViewOptions = {}) {}
-
-  private get app(): Application {
-    if (!this.host) {
-      throw new Error('PixiResultView: app accessed before mount');
-    }
-    return this.host.app;
+  public constructor(options: PixiResultViewOptions = {}) {
+    super(options);
   }
 
-  /**
-   * Mounts the scene onto the shared host's stage and starts the render loop. The result payload is stored verbatim —
-   * no defensive copy — because the gameplay view that produced it will be disposed shortly after the host calls this
-   * method, so the snapshot won't change underneath us.
-   */
-  public async mount(host: PixiSceneHost, result: PixiGameplayResultData): Promise<void> {
-    this.host = host;
-    this.result = result;
-    this.sceneRoot.label = 'result/scene';
-    this.root.label = 'result/root';
-    this.viewportBackground.label = 'result/viewport-bg';
-    this.background.label = 'result/background';
-    this.skinLayer.label = 'result/skin';
-    this.fallbackLayer.label = 'result/fallback';
-    this.designClipMask.label = 'result/design-clip';
-    this.sceneRoot.addChild(this.viewportBackground, this.root);
-    this.root.addChild(this.background, this.skinLayer, this.fallbackLayer, this.designClipMask);
-    this.root.mask = this.designClipMask;
-    host.app.stage.addChild(this.sceneRoot);
-    window.addEventListener('keydown', this.handleKeyDown);
-    host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
+  /** The LR2 skin's declared canvas size; falls back to the core 640×480 canvas without a skin. */
+  protected override get themeDesignSize(): { width: number; height: number } | undefined {
+    const skin = this.options.skin;
+    return skin ? { width: skin.width, height: skin.height } : super.themeDesignSize;
+  }
+
+  /** The skin's `#STARTINPUT`, or the core default when no skin (or no directive) is loaded. */
+  protected override get startInputMs(): number {
+    return this.options.skin?.timing.startInput ?? super.startInputMs;
+  }
+
+  /** Starts decoding the skin's atlases and bitmap fonts; each re-renders once it lands. */
+  protected override prepareTheme(): void {
     // Trust the loader's path filter: any `Lr2Skin` we receive here was selected from `Result/*.lr2skin` candidates
     // (see `loadLr2SkinFromSourceFiles` for the kind-aware path matcher). Earlier this scene gated on a "has
     // result-anchored timer" heuristic, but the LR2 default `Result/result_normal.csv` anchors almost everything to
@@ -338,130 +207,24 @@ export class PixiResultView {
       void this.prepareSkinTextures(this.options.skin);
       void this.prepareBitmapFonts(this.options.skin);
     }
-    this.sceneStartedAt = performance.now();
-    this.timerStartedAt.clear();
-    this.timerStartedAt.set(0, this.sceneStartedAt);
-    // Schedule timer 1 (#STARTINPUT) and timer 150 (chart-draw) from wall clock so the skin's intro animation plays out
-    // even without user interaction. Timer 151 fires automatically once the chart-draw window elapses; 152 needs an
-    // input.
-    const startInput = this.options.skin?.timing.startInput ?? DEFAULT_STARTINPUT_MS;
-    this.setTimer(
-      () => {
-        if (this.disposed) return;
-        this.timerStartedAt.set(1, performance.now());
-        // The LR2 reference timeline starts the chart draw the moment input becomes available — keep the same anchor so
-        // the numbers panel slide-in lines up with the chrome animation.
-        this.timerStartedAt.set(150, performance.now());
-      },
-      Math.max(0, startInput),
-    );
-    this.setTimer(
-      () => {
-        if (this.disposed) return;
-        if (this.timerStartedAt.has(151)) return;
-        this.timerStartedAt.set(151, performance.now());
-      },
-      Math.max(0, startInput) + CHART_DRAW_DURATION_MS,
-    );
-    this.render();
-    this.startAnimationLoop();
-    void this.startResultBgm(result);
   }
 
-  /**
-   * Decodes and plays the matching result-screen jingle. Picks `clearBgm` / `failBgm` based on `data.cleared` and falls
-   * back to the generic `resultBgm` when the theme doesn't differentiate. Silently no-ops when no slot is populated
-   * (skinless / non-LR2 themes) and when the browser refuses autoplay — neither path is fatal for the result scene.
-   *
-   * Plays once (no loop) because LR2's `clear` / `fail` / `result` are one-shot jingles living under
-   * `LR2files/Sound/<theme>/`, not looping BGM. Looping would keep the fanfare playing indefinitely while the user
-   * reads their score, which isn't how LR2 behaves.
-   */
-  private async startResultBgm(data: PixiGameplayResultData): Promise<void> {
-    const bytes = data.cleared
-      ? (this.options.clearBgm ?? this.options.resultBgm ?? this.options.failBgm)
-      : (this.options.failBgm ?? this.options.resultBgm ?? this.options.clearBgm);
-    if (!bytes || this.disposed) return;
-    let audioContext: AudioContext | undefined;
-    try {
-      audioContext = new AudioContext();
-      this.bgmContext = audioContext;
-      const buffer = await audioContext.decodeAudioData(bytes.slice().buffer);
-      if (this.disposed) {
-        await audioContext.close().catch(() => undefined);
-        this.bgmContext = undefined;
-        return;
-      }
-      const source = audioContext.createBufferSource();
-      source.buffer = buffer;
-      source.loop = false;
-      source.connect(audioContext.destination);
-      source.start();
-      this.bgmSource = source;
-    } catch (error) {
-      if (audioContext !== undefined) {
-        if (this.bgmContext === audioContext) {
-          this.bgmContext = undefined;
-        }
-        await audioContext.close().catch(() => undefined);
-      }
-      this.bgmSource = undefined;
-      log.warn('BGM playback failed', error);
-    }
+  /** Paints the LR2 skin when one is loaded; returns `false` (core fallback panel) otherwise. */
+  protected override renderTheme(): boolean {
+    const skin = this.options.skin;
+    if (!skin || !this.result) return false;
+    const ops = computeResultOps(this.result, skin);
+    this.renderSkin(skin, ops);
+    // No empty-state hint here — the skin's own artwork covers the whole canvas. If a skin author wired a result skin
+    // but no #IMAGE / #TEXT to display, that's their decision.
+    return true;
   }
 
-  public dispose(): void {
-    if (this.disposed) {
-      return;
-    }
-    this.disposed = true;
-    for (const timeout of this.timeoutHandles) {
-      window.clearTimeout(timeout);
-    }
-    this.timeoutHandles.clear();
-    this.stopAnimationLoop();
-    if (this.bgmSource) {
-      try {
-        this.bgmSource.stop();
-        this.bgmSource.disconnect();
-      } catch {
-        // Already stopped / disconnected — ignore.
-      }
-      this.bgmSource = undefined;
-    }
-    if (this.bgmContext) {
-      void this.bgmContext.close().catch(() => undefined);
-      this.bgmContext = undefined;
-    }
-    window.removeEventListener('keydown', this.handleKeyDown);
-    if (this.host) {
-      this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
-    }
-    if (this.sceneRoot.parent) {
-      this.sceneRoot.parent.removeChild(this.sceneRoot);
-    }
-    try {
-      this.skinTextures.dispose();
-      this.chartGraphicTextures.dispose();
-    } catch (error) {
-      log.warn('texture cleanup threw', error);
-    }
-    try {
-      this.sceneRoot.destroy({ children: true, context: true });
-    } catch (error) {
-      log.warn('sceneRoot.destroy threw', error);
-    }
-    this.host = undefined;
+  /** Releases the skin atlas and per-song chart graphic textures. */
+  protected override disposeTheme(): void {
+    this.skinTextures.dispose();
+    this.chartGraphicTextures.dispose();
   }
-
-  private setTimer(callback: () => void, delayMs: number): void {
-    const timeout = window.setTimeout(() => {
-      this.timeoutHandles.delete(timeout);
-      callback();
-    }, delayMs);
-    this.timeoutHandles.add(timeout);
-  }
-
   /**
    * Pre-loads atlas textures referenced by the skin's `#IMAGE` / `#SRC_NUMBER` / `#SRC_BARGRAPH` / `#SRC_SLIDER`
    * declarations. Special graphic sentinels (BANNER / STAGEFILE) are excluded — those bind to per-song chart assets and
@@ -484,63 +247,6 @@ export class PixiResultView {
     if (this.disposed || this.options.skin !== skin) return;
     this.bitmapFonts = loaded;
     this.render();
-  }
-
-  private startAnimationLoop(): void {
-    if (this.tickerAttached || !this.host) return;
-    this.host.app.ticker.add(this.tickerHandle);
-    this.tickerAttached = true;
-  }
-
-  private stopAnimationLoop(): void {
-    if (!this.tickerAttached) return;
-    this.host?.app.ticker.remove(this.tickerHandle);
-    this.tickerAttached = false;
-  }
-
-  /**
-   * Per-frame render. Cheap enough to run unconditionally — most of the cost is sprite churn on the skin layer (one
-   * pass over each element type) and Pixi's auto-batching keeps draw calls low for a static panel. Mirrors
-   * `scene/lr2/select`'s render loop.
-   */
-  private render(): void {
-    if (!this.result) {
-      return;
-    }
-    const screenWidth = this.app.screen.width || FALLBACK_DESIGN_WIDTH;
-    const screenHeight = this.app.screen.height || FALLBACK_DESIGN_HEIGHT;
-    const skin = this.options.skin;
-    const useSkin = skin !== undefined;
-    const designWidth = useSkin ? skin!.width : FALLBACK_DESIGN_WIDTH;
-    const designHeight = useSkin ? skin!.height : FALLBACK_DESIGN_HEIGHT;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
-    if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
-      this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
-      this.cachedScreenWidth = screenWidth;
-      this.cachedScreenHeight = screenHeight;
-    }
-    this.root.position.set(viewport.x, viewport.y);
-    this.root.scale.set(viewport.scale);
-    if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
-      this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
-      this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
-      this.cachedDesignWidth = designWidth;
-      this.cachedDesignHeight = designHeight;
-    }
-    // `disposeChildren` (vs bare `removeChildren`) is essential here: the per-frame skin / fallback rebuild allocates
-    // fresh `Sprite`, `Text` and (for polylines) `Graphics` nodes every tick. Bare detach leaves their renderer-side
-    // state alive, which the original report described as "browser freezes after the song ends" — accumulated
-    // GraphicsContext + glyph atlas slots stalled the next reconcile pass. See `pixi-utils.ts` for the full rationale.
-    disposeChildren(this.skinLayer);
-    disposeChildren(this.fallbackLayer);
-    if (useSkin && skin) {
-      const ops = computeResultOps(this.result, skin);
-      this.renderSkin(skin, ops);
-      // No empty-state hint here — the skin's own artwork covers the whole canvas. If a skin author wired a result skin
-      // but no #IMAGE / #TEXT to display, that's their decision.
-      return;
-    }
-    this.renderFallbackPanel(designWidth, designHeight);
   }
 
   private renderSkin(skin: Lr2Skin, ops: ReadonlySet<number>): void {
@@ -844,311 +550,11 @@ export class PixiResultView {
     return graphic;
   }
 
-  /** Built-in result summary for the default skin family. */
-  private renderFallbackPanel(designWidth: number, designHeight: number): void {
-    const result = this.result;
-    if (!result) return;
-    const chrome = new Graphics();
-    chrome.label = 'default-result/chrome';
-    const addText = (
-      text: string,
-      x: number,
-      y: number,
-      options: {
-        size?: number;
-        weight?: '400' | '500' | '600' | '700' | '800' | '900';
-        fill?: number | Color;
-        fontFamily?: string;
-        letterSpacing?: number;
-        anchorX?: number;
-        anchorY?: number;
-        maxWidth?: number;
-        stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
-      } = {},
-    ): Text => {
-      const node = new Text({
-        text,
-        style: new TextStyle({
-          fill: options.fill ?? TEXT,
-          fontSize: options.size ?? 10,
-          fontWeight: options.weight ?? '500',
-          fontFamily: options.fontFamily ?? LR2_TEXT_FALLBACK_FONT,
-          letterSpacing: options.letterSpacing ?? 0,
-          stroke: options.stroke,
-        }),
-      });
-      node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
-      node.position.set(x, y);
-      if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-        node.scale.x = options.maxWidth / node.width;
-      }
-      this.fallbackLayer.addChild(node);
-      return node;
-    };
-
-    const cleared = result.cleared;
-    const rate = computeScoreRate(result.score) * 100;
-    const rankLabel = resolveRankLabel(result.score.exScore, result.score.total);
-    const statusColor = cleared ? 0x4bd7c8 : 0xff5c5c;
-    const exMax = Math.max(0, result.score.total * 2);
-
-    chrome.rect(0, 0, designWidth, designHeight).fill(BG);
-    chrome.rect(0, 0, designWidth, 48).fill(FALLBACK_SURFACE);
-    chrome.rect(0, 47, designWidth, 1).fill({ color: FALLBACK_LINE, alpha: 0.9 });
-    chrome.roundRect(18, 72, 172, 148, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(210, 72, 194, 148, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(424, 72, 198, 148, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(18, 246, 286, 180, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.roundRect(324, 246, 298, 180, 6).fill(FALLBACK_PANEL).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome
-      .rect(0, designHeight - 34, designWidth, 34)
-      .fill(FALLBACK_SURFACE)
-      .stroke({ color: FALLBACK_LINE, width: 1 });
-
-    addText(cleared ? 'CLEARED' : 'FAILED', 18, 14, {
-      size: 14,
-      weight: '900',
-      fill: statusColor,
-      letterSpacing: 1.4,
-    });
-    addText(`${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`, designWidth - 18, 14, {
-      size: 11,
-      weight: '700',
-      fill: MUTED,
-      anchorX: 1,
-      maxWidth: 430,
-    });
-
-    addText('RANK', 38, 92, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    addText(rankLabel, 104, 144, {
-      size: rankLabel.length >= 3 ? 40 : 54,
-      weight: '900',
-      fill: 0xffc857,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      stroke: { color: 0x000000, width: 4, alignment: 0.5, join: 'round' },
-      maxWidth: 128,
-    });
-    addText(`${rate.toFixed(1)}%`, 104, 190, {
-      size: 16,
-      weight: '900',
-      fill: TEXT,
-      anchorX: 0.5,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-
-    this.renderResultMetric(chrome, 228, 92, 'SCORE', String(result.score.score), 0xffc857);
-    this.renderResultMetric(chrome, 228, 138, 'EX SCORE', `${result.score.exScore} / ${exMax}`, 0xf6f2e8);
-    this.renderResultMetric(chrome, 228, 184, 'MAX COMBO', String(result.maxCombo), 0x4bd7c8, LR2_JUDGE_FALLBACK_FONT);
-    this.renderResultMetric(chrome, 442, 92, 'GAUGE', `${Math.round(result.gauge)}%`, statusColor);
-    this.renderResultMetric(chrome, 442, 138, 'PLAY TIME', `${result.playSeconds.toFixed(1)}s`, 0xf6f2e8);
-    this.renderResultMetric(chrome, 442, 184, 'NOTES', String(result.score.total), 0xf6f2e8);
-
-    addText('JUDGEMENT', 36, 266, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    const judges: Array<readonly [string, string, number]> = [
-      ['PGREAT', String(result.score.perfect), 0xffc857],
-      ['GREAT', String(result.score.great), 0x6ee07f],
-      ['GOOD', String(result.score.good), 0x76a8ff],
-      ['BAD', String(result.score.bad), 0xff9b54],
-      ['POOR', String(result.score.poor), 0xff5c5c],
-    ];
-    for (let i = 0; i < judges.length; i += 1) {
-      const jy = 292 + i * 24;
-      const [label, value, fill] = judges[i]!;
-      chrome.roundRect(36, jy, 246, 18, 4).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-      chrome.rect(38, jy, Math.min(242, Number(value) * 2), 18).fill({ color: fill, alpha: 0.16 });
-      addText(label, 48, jy + 4, { size: 9, weight: '800', fill, fontFamily: LR2_JUDGE_FALLBACK_FONT });
-      addText(value, 264, jy + 1, {
-        size: 13,
-        weight: '900',
-        fill: TEXT,
-        fontFamily: LR2_JUDGE_FALLBACK_FONT,
-        anchorX: 1,
-      });
-    }
-
-    addText('RUN', 342, 266, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    chrome.rect(342, 292, 256, 46).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-    chrome.rect(342, 362, 256, 46).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-    addText('Gauge', 354, 304, { size: 9, weight: '700', fill: MUTED });
-    addText('EX score', 354, 374, { size: 9, weight: '700', fill: MUTED });
-    this.drawFallbackSeries(
-      chrome,
-      424,
-      300,
-      160,
-      30,
-      result.gaugeHistory.map((sample) => ({ x: sample.progress, y: sample.value / 100 })),
-      statusColor,
-    );
-    this.drawFallbackSeries(
-      chrome,
-      424,
-      370,
-      160,
-      30,
-      result.scoreHistory.map((sample) => ({ x: sample.progress, y: exMax > 0 ? sample.exScore / exMax : 0 })),
-      0xffc857,
-    );
-
-    addText('TOTAL SCORE', 18, designHeight - 22, { size: 9, weight: '800', fill: MUTED, letterSpacing: 1 });
-    addText(String(result.score.score), 150, designHeight - 27, {
-      size: 18,
-      weight: '900',
-      fill: TEXT,
-      fontFamily: LR2_NUMERIC_FALLBACK_FONT,
-    });
-
-    this.fallbackLayer.addChildAt(chrome, 0);
-  }
-
-  private renderResultMetric(
-    chrome: Graphics,
-    x: number,
-    y: number,
-    label: string,
-    value: string,
-    fill: number,
-    valueFontFamily = LR2_NUMERIC_FALLBACK_FONT,
-  ): void {
-    chrome.rect(x, y, 156, 30).fill(FALLBACK_PANEL_DARK).stroke({ color: FALLBACK_LINE, width: 1 });
-    const labelText = new Text({
-      text: label,
-      style: new TextStyle({
-        fill: MUTED,
-        fontSize: 8,
-        fontWeight: '800',
-        fontFamily: LR2_TEXT_FALLBACK_FONT,
-        letterSpacing: 0.7,
-      }),
-    });
-    labelText.position.set(x + 10, y + 5);
-    this.fallbackLayer.addChild(labelText);
-
-    const valueText = new Text({
-      text: value,
-      style: new TextStyle({
-        fill,
-        fontSize: 14,
-        fontWeight: '900',
-        fontFamily: valueFontFamily,
-      }),
-    });
-    valueText.anchor.set(1, 0);
-    valueText.position.set(x + 146, y + 13);
-    if (valueText.width > 92) {
-      valueText.scale.x = 92 / valueText.width;
-    }
-    this.fallbackLayer.addChild(valueText);
-  }
-
-  private drawFallbackSeries(
-    chrome: Graphics,
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    points: Array<{ x: number; y: number }>,
-    color: number,
-  ): void {
-    if (points.length === 0) return;
-    chrome.rect(x, y + h, w, 1).fill({ color: 0xffffff, alpha: 0.12 });
-    const first = points[0]!;
-    chrome.moveTo(x + clamp01(first.x) * w, y + (1 - clamp01(first.y)) * h);
-    for (let i = 1; i < points.length; i += 1) {
-      const point = points[i]!;
-      chrome.lineTo(x + clamp01(point.x) * w, y + (1 - clamp01(point.y)) * h);
-    }
-    if (points.length === 1) {
-      chrome.lineTo(x + clamp01(first.x) * w + 0.5, y + (1 - clamp01(first.y)) * h);
-    }
-    chrome.stroke({ color, width: 2, alpha: 0.95, alignment: 0.5 });
-  }
-
   private evaluateElementDst(element: {
     destination: Lr2DestinationRect;
     keyframes: Lr2DestinationRect[];
   }): Lr2DestinationRect {
     return evaluateElementDestination(element, (timer) => this.elapsedSinceTimer(timer));
-  }
-
-  /**
-   * Elapsed milliseconds since `timer` started. 0 when the timer hasn't fired (which keeps `evaluateKeyframes` clamped
-   * at the first keyframe — the LR2-correct "pre-fire" pose).
-   */
-  private elapsedSinceTimer(timer: number): number {
-    const startedAt = this.timerStartedAt.get(timer);
-    if (startedAt === undefined) {
-      return 0;
-    }
-    return Math.max(0, performance.now() - startedAt);
-  }
-
-  /**
-   * Whether `timer` is currently active. Result-screen DSTs that gate on a not-yet-fired timer (the score panel that
-   * should only appear after timer 151 fires) stay hidden until then.
-   *
-   * Defined as an arrow-property so it survives extraction into the free `isDestinationVisible` helper without losing
-   * `this`.
-   */
-  private readonly timerActive = (timer: number): boolean => {
-    if (timer === 0) return true;
-    // Driven timers — active iff fired.
-    if (timer === 1 || timer === 150 || timer === 151 || timer === 152) {
-      return this.timerStartedAt.has(timer);
-    }
-    return false;
-  };
-
-  /**
-   * `keydown` handler. Implements LR2's result-screen input ladder:
-   *
-   * - Before timer 1 fires (`#STARTINPUT` not elapsed) — input is ignored.
-   * - Between 1 and 151 — Enter / Space "skip" the chart draw (advance directly to timer 151).
-   * - Between 151 and 152 — Enter / Space fire timer 152 (the high-score-update press).
-   * - After 152 — any of the three keys (Enter / Space / Escape) dismisses the scene via `onContinue`.
-   * - Escape always dismisses, regardless of where we are in the timeline.
-   */
-  private readonly handleKeyDown = (event: KeyboardEvent): void => {
-    if (this.disposed) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      this.options.onContinue?.();
-      return;
-    }
-    if (event.key !== 'Enter' && event.key !== ' ') {
-      return;
-    }
-    event.preventDefault();
-    this.advance();
-  };
-
-  private readonly handlePointerDown = (): void => {
-    if (this.disposed) return;
-    this.advance();
-  };
-
-  /**
-   * Common "advance one step" path used by both keyboard and pointer input. Splitting this out keeps the input-source-
-   * specific event preventDefault / key-filter logic in the respective handlers.
-   */
-  private advance(): void {
-    if (!this.timerStartedAt.has(1)) {
-      // `#STARTINPUT` hasn't elapsed — ignore the press. LR2 suppresses input here so the player can't accidentally
-      // skip past the slide-in animation before the score panel appears.
-      return;
-    }
-    if (!this.timerStartedAt.has(151)) {
-      // Skip the chart draw — fire timer 151 so the score panel appears immediately. Mirrors LR2's gacha-press
-      // behavior.
-      this.timerStartedAt.set(151, performance.now());
-      return;
-    }
-    if (!this.timerStartedAt.has(152)) {
-      this.timerStartedAt.set(152, performance.now());
-      return;
-    }
-    this.options.onContinue?.();
   }
 
   private makeStaticImageSprite(image: Lr2ImageElement) {
@@ -1555,15 +961,6 @@ function resolveResultSliderValue(type: number, data: PixiGameplayResultData): n
   // (type 1) and "rate" (type 6). Reuse the bargraph resolver so any new slot landing in either gets one shared
   // implementation.
   return resolveResultBargraphValue(type, data);
-}
-
-function resolveRankLabel(exScore: number, total: number): string {
-  return total <= 0 ? 'AAA' : resolveIidxRankLabel(exScore, total);
-}
-
-function clamp01(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(1, value));
 }
 
 // Re-export this small LR2 geometry type so result-scene consumers do not have to import from `skin.ts` directly.

@@ -5,11 +5,7 @@ import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './bitmap-text.ts';
 
 const FALLBACK_TEXT_FONT = 'LINE Seed JP, system-ui, sans-serif';
 
-export interface ScaledViewport {
-  x: number;
-  y: number;
-  scale: number;
-}
+export { resolveScaledViewport, type ScaledViewport } from '../../scene/core/viewport.ts';
 
 export interface Lr2TextSpriteOptions {
   maxFontSize?: number;
@@ -26,21 +22,6 @@ export interface Lr2TextSpriteOptions {
    * OPTION row declares `#FONT,18,...` but the rect height is closer to 30, so the heuristic over-shoots).
    */
   systemFontSizes?: ReadonlyArray<number>;
-}
-
-export function resolveScaledViewport(
-  screenWidth: number,
-  screenHeight: number,
-  designWidth: number,
-  designHeight: number,
-): ScaledViewport {
-  const scale = Math.min(screenWidth / designWidth, screenHeight / designHeight);
-  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
-  return {
-    x: (screenWidth - designWidth * safeScale) / 2,
-    y: (screenHeight - designHeight * safeScale) / 2,
-    scale: safeScale,
-  };
 }
 
 export function isDestinationVisible(

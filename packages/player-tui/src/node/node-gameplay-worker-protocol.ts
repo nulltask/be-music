@@ -8,6 +8,8 @@ import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { ImageResizeAlgorithm } from '@be-music/player/image-resize-algorithm';
 import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
+import type { JudgeWindowRuleset } from '@be-music/player/core/judge-window';
+import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
 
 export interface NodeGameplayWorkerPlayOptions {
   inferBmsLnTypeWhenMissing?: boolean;
@@ -28,6 +30,8 @@ export interface NodeGameplayWorkerPlayOptions {
   imageResizeAlgorithm?: ImageResizeAlgorithm;
   highSpeed?: number;
   judgeWindowMs?: number;
+  judgeRuleset?: JudgeWindowRuleset;
+  gauge?: GrooveGaugeType;
   debugActiveAudio?: boolean;
   leadInMs?: number;
   audio?: boolean;

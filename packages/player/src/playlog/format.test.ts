@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
   BE_MUSIC_PLAYLOG_VERSION,

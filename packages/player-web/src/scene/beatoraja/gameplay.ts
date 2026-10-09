@@ -38,7 +38,7 @@ import {
   normalizeBeatorajaSliders,
 } from '@be-music/beatoraja-skin';
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
-import type { BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
+import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaPixelsPerBeat } from './notes.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import { flipRectToPixi, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
@@ -50,7 +50,7 @@ import {
 } from '../../chart/beatoraja/note-distribution.ts';
 import { flipDpChart } from '../../chart/beatoraja/dp-flip.ts';
 import { BeatorajaBgaLayer } from './bga.ts';
-import type { BgaCue } from '../lr2/gameplay-bga.ts';
+import type { BgaCue } from '../core/gameplay-bga.ts';
 import type { Texture } from 'pixi.js';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
 import type { PlayerOptions, PlayerSummary } from '@be-music/player/core/engine';
@@ -81,9 +81,9 @@ export interface PixiBeatorajaGameplayViewOptions {
   /** Confirmed user picks for the skin's option dialog. Drives `buildBaseOpSet`. */
   skinConfig?: BeatorajaSkinConfig;
   /**
-   * Play variant the chart resolves to. Only the subset {@link BeatorajaPlayableVariant} the engine can
-   * actually drive (no 24-key) is accepted — mirrors {@link ChartPlayVariant} verbatim so the runtime
-   * adapter's lane-resolution stays in sync with the engine's own channel mapping.
+   * Play variant the chart resolves to, in the skin's spelling ({@link BeatorajaPlayableVariant}). Converted to the
+   * engine's {@link ChartPlayVariant} vocabulary via `chartPlayVariantForBeatorajaVariant` (`'24d'` → `'48'`) before
+   * it reaches the runtime adapter / note layer, so lane resolution stays in sync with the engine's channel mapping.
    */
   variant: BeatorajaPlayableVariant;
 
@@ -317,7 +317,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     // `play7main.lua`.
     const judgeComboMetrics = readJudgeComboMetrics(options.skin);
     this.adapter = new BeatorajaRuntimeAdapter({
-      chartPlayVariant: options.variant,
+      chartPlayVariant: chartPlayVariantForBeatorajaVariant(options.variant),
       baseOps: skinConfigOps,
       getNowMs: () => performance.now() - this.startMs,
       autoPlay: options.mode === 'auto',
@@ -397,7 +397,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const noteSection = normalizeBeatorajaNote(options.skin.note);
     this.noteLayer = new BeatorajaNoteLayer({
       noteSection,
-      variant: options.variant,
+      variant: chartPlayVariantForBeatorajaVariant(options.variant),
       images: noteImageMap,
       textures: options.textures,
       canvasHeight: this.view.height,
@@ -669,8 +669,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
     // Build a fresh recorder per session — instances are one-shot by design (chunk
     // buffer + audio tap lifecycle), so the host gets a clean blob on every start.
+    const host = this.host;
     this.recorder = new GameplayRecorder({
-      canvas: this.host.app.canvas,
+      canvas: host.app.canvas,
+      subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.options.audio.audioContext,
       audioOutput: this.options.audio.audioBus.outputNode,
     });
@@ -760,7 +762,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const noteSection = normalizeBeatorajaNote(opts.skin.note);
     this.noteLayer = new BeatorajaNoteLayer({
       noteSection,
-      variant: this.options.variant,
+      variant: chartPlayVariantForBeatorajaVariant(this.options.variant),
       images: noteImageMap,
       textures: opts.textures,
       canvasHeight: this.view.height,
@@ -1354,7 +1356,7 @@ function composeBeatorajaEngineOptions(
     result.laneModeExtension = inferred;
   }
   if (result.playVariant === undefined && options.variant !== undefined) {
-    result.playVariant = options.variant;
+    result.playVariant = chartPlayVariantForBeatorajaVariant(options.variant);
   }
   return result;
 }

@@ -1,5 +1,5 @@
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerSummary } from '../core/engine.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
@@ -60,6 +60,7 @@ function makeSummary(overrides: Partial<PlayerSummary> = {}): PlayerSummary {
     good: 1,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 5,
     score: 123456,
     ...overrides,

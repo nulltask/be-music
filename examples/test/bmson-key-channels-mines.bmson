@@ -1,0 +1,50 @@
+{
+  "version": "1.0.0",
+  "info": {
+    "title": "BMSON Key Channels Mines",
+    "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+    "artist": "be-music",
+    "genre": "TEST",
+    "level": 4,
+    "init_bpm": 150,
+    "resolution": 240,
+    "mode_hint": "beat-7k",
+    "ln_type": 2,
+    "judge_rank": 100,
+    "total": 260
+  },
+  "lines": [{ "y": 0 }, { "y": 960 }, { "y": 1920 }],
+  "bpm_events": [],
+  "stop_events": [],
+  "sound_channels": [
+    {
+      "name": "sample.wav",
+      "notes": [
+        { "x": 1, "y": 0, "l": 0, "c": false },
+        { "x": 2, "y": 240, "l": 0, "c": false },
+        { "x": 1, "y": 480, "l": 480, "c": false, "t": 3 },
+        { "x": 6, "y": 960, "l": 240, "c": false, "t": 1 },
+        { "x": 7, "y": 1200, "l": 0, "c": false },
+        { "x": 8, "y": 1440, "l": 0, "c": false }
+      ]
+    },
+    {
+      "name": "branch.wav",
+      "notes": [
+        { "y": 0, "l": 0, "c": false },
+        { "y": 960, "l": 0, "c": false },
+        { "y": 1920, "l": 0, "c": false }
+      ]
+    }
+  ],
+  "key_channels": [
+    {
+      "name": "wrong.wav",
+      "notes": [
+        { "x": 1, "y": 1680, "damage": 0 },
+        { "x": 6, "y": 1800, "damage": 50 },
+        { "x": 8, "y": 1920, "damage": 100 }
+      ]
+    }
+  ]
+}

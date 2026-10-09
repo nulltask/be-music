@@ -9,7 +9,8 @@ import {
   resolveCliValue,
   runCliMain,
 } from './cli-utils.ts';
-import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
+import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
+import { resolveComparisonHz } from './task-stats.ts';
 
 interface CliDefaults {
   outputPath: string;
@@ -27,14 +28,16 @@ interface CliOptions {
   failOnRegression: boolean;
 }
 
-interface ComparedRow {
+export type BenchmarkOverallVerdict = 'improved' | 'regressed' | 'unchanged';
+
+export interface ComparedRow {
   key: string;
   baseHz: number;
   headHz: number;
   deltaPercent: number;
 }
 
-interface ComparisonSummary {
+export interface ComparisonSummary {
   comparableCaseCount: number;
   improvedCount: number;
   regressedCount: number;
@@ -42,11 +45,24 @@ interface ComparisonSummary {
   medianDeltaPercent: number;
   meanDeltaPercent: number;
   thresholdPercent: number;
+  overallVerdict: BenchmarkOverallVerdict;
+  /** Cases whose base or head p50 latency was at/below MIN_RELIABLE_LATENCY_MS — excluded, not just unchanged. */
+  unreliableCaseCount: number;
 }
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '../..');
 const COMMENT_MARKER = '<!-- be-music-exports-benchmark -->';
+
+/**
+ * Below this per-call latency (median, in ms), a case's timing is dominated by measurement noise rather than the
+ * benchmarked function's own cost — a single call is cheap enough that the system timer can't resolve it reliably.
+ * Percent deltas computed from two noise floors can legitimately swing by 10-30x between independent runs of
+ * *identical* code (see issue #202: verified the same ~15-250ns closure-allocation case reproduces this under both
+ * tsx and node, with no change to the benchmarked code). Such cases are excluded from the regression/improvement
+ * lists rather than folded into "unchanged", since a percent computed from noise isn't a real "no change" either.
+ */
+const MIN_RELIABLE_LATENCY_MS = 0.001;
 
 const DEFAULTS: CliDefaults = {
   outputPath: resolve(repositoryDir, 'tmp/bench/exports-pr-comment.md'),
@@ -78,6 +94,8 @@ async function main(): Promise<void> {
           medianDeltaPercent: 0,
           meanDeltaPercent: 0,
           thresholdPercent: options.thresholdPercent,
+          overallVerdict: 'unchanged',
+          unreliableCaseCount: 0,
         };
 
   if (options.summaryPath) {
@@ -88,25 +106,28 @@ async function main(): Promise<void> {
   process.stdout.write(`Benchmark comparison markdown: ${options.outputPath}\n`);
   if (baseSnapshot !== undefined) {
     process.stdout.write(
-      `Comparable=${summary.comparableCaseCount} improved=${summary.improvedCount} regressed=${summary.regressedCount} threshold=${summary.thresholdPercent.toFixed(2)}%\n`,
+      `Comparable=${summary.comparableCaseCount} overall=${summary.overallVerdict} median=${formatPercent(summary.medianDeltaPercent)} improved=${summary.improvedCount} regressed=${summary.regressedCount} threshold=${summary.thresholdPercent.toFixed(2)}%\n`,
     );
   } else {
     process.stdout.write('Base snapshot is unavailable. Generated head-only report.\n');
   }
 
-  if (options.failOnRegression && summary.regressedCount > 0) {
+  if (options.failOnRegression && summary.overallVerdict === 'regressed') {
     process.exitCode = 1;
   }
 }
 
-function buildDiffMarkdown(
+export function buildDiffMarkdown(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
   thresholdPercent: number,
   topCount: number,
 ): string {
   const rows = compareSnapshots(baseSnapshot, headSnapshot);
-  const summary = summarizeRows(rows, thresholdPercent);
+  const summary = {
+    ...summarizeRows(rows, thresholdPercent),
+    unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot),
+  };
 
   const regressions = rows
     .filter((row) => row.deltaPercent <= -thresholdPercent)
@@ -126,17 +147,21 @@ function buildDiffMarkdown(
   lines.push(`- Head SHA: \`${formatSha(headSnapshot.gitSha)}\``);
   lines.push(`- Comparable cases: \`${summary.comparableCaseCount}\``);
   lines.push(`- Regression threshold: \`${thresholdPercent.toFixed(2)}%\``);
+  lines.push(`- Overall verdict uses the median change across cases.`);
+  lines.push(`- Per-case lists compare median ops/s, not mean.`);
   lines.push(`- Base runs: \`${formatRunCount(baseSnapshot)}\``);
   lines.push(`- Head runs: \`${formatRunCount(headSnapshot)}\``);
   lines.push('');
   lines.push('### Summary');
   lines.push('| Metric | Value |');
   lines.push('| --- | ---: |');
-  lines.push(`| Improved (>= threshold) | ${summary.improvedCount} |`);
-  lines.push(`| Regressed (<= -threshold) | ${summary.regressedCount} |`);
-  lines.push(`| Unchanged | ${summary.unchangedCount} |`);
+  lines.push(`| Overall | ${summary.overallVerdict} |`);
   lines.push(`| Median change | ${formatPercent(summary.medianDeltaPercent)} |`);
   lines.push(`| Mean change | ${formatPercent(summary.meanDeltaPercent)} |`);
+  lines.push(`| Cases improved (>= threshold) | ${summary.improvedCount} |`);
+  lines.push(`| Cases regressed (<= -threshold) | ${summary.regressedCount} |`);
+  lines.push(`| Cases unchanged | ${summary.unchangedCount} |`);
+  lines.push(`| Cases excluded (sub-timer-resolution) | ${summary.unreliableCaseCount} |`);
   lines.push(`| Head benchmarked cases | ${headSnapshot.totals.benchmarked} |`);
   lines.push(`| Head skipped cases | ${headSnapshot.totals.skipped} |`);
 
@@ -145,7 +170,7 @@ function buildDiffMarkdown(
   if (regressions.length === 0) {
     lines.push('No regression over threshold.');
   } else {
-    lines.push('| API | Base ops/s | Head ops/s | Change |');
+    lines.push('| API | Base median ops/s | Head median ops/s | Change |');
     lines.push('| --- | ---: | ---: | ---: |');
     for (const row of regressions) {
       lines.push(
@@ -159,12 +184,28 @@ function buildDiffMarkdown(
   if (improvements.length === 0) {
     lines.push('No improvement over threshold.');
   } else {
-    lines.push('| API | Base ops/s | Head ops/s | Change |');
+    lines.push('| API | Base median ops/s | Head median ops/s | Change |');
     lines.push('| --- | ---: | ---: | ---: |');
     for (const row of improvements) {
       lines.push(
         `| \`${row.key}\` | ${formatOps(row.baseHz)} | ${formatOps(row.headHz)} | ${formatPercent(row.deltaPercent)} |`,
       );
+    }
+  }
+
+  const unreliableKeys = resolveUnreliableCaseKeys(baseSnapshot, headSnapshot).slice(0, topCount);
+  if (unreliableKeys.length > 0) {
+    lines.push('');
+    lines.push('### Excluded (sub-timer-resolution)');
+    lines.push(
+      `Per-call latency at or below ${MIN_RELIABLE_LATENCY_MS}ms on at least one side — the reported time is measurement noise, not the case's real cost, so no percent change is shown.`,
+    );
+    lines.push('| API | Base median ops/s | Head median ops/s |');
+    lines.push('| --- | ---: | ---: |');
+    for (const key of unreliableKeys) {
+      const baseResult = baseSnapshot.results[key];
+      const headResult = headSnapshot.results[key];
+      lines.push(`| \`${key}\` | ${formatOps(baseResult?.medianHz ?? 0)} | ${formatOps(headResult?.medianHz ?? 0)} |`);
     }
   }
 
@@ -182,7 +223,11 @@ function buildDiffMarkdown(
 
 function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount: number, basePath?: string): string {
   const slowest = Object.entries(headSnapshot.results)
-    .map(([key, value]) => ({ key, hz: value.hz, meanMs: value.meanMs }))
+    .map(([key, value]) => ({
+      key,
+      hz: resolveComparisonHz(value),
+      meanMs: value.p50Ms ?? value.meanMs,
+    }))
     .sort((left, right) => left.hz - right.hz)
     .slice(0, topCount);
 
@@ -203,7 +248,7 @@ function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount:
   if (slowest.length === 0) {
     lines.push('No benchmark result found.');
   } else {
-    lines.push('| API | ops/s | mean (ms) |');
+    lines.push('| API | median ops/s | median (ms) |');
     lines.push('| --- | ---: | ---: |');
     for (const row of slowest) {
       lines.push(`| \`${row.key}\` | ${formatOps(row.hz)} | ${row.meanMs.toFixed(4)} |`);
@@ -212,21 +257,41 @@ function buildHeadOnlyMarkdown(headSnapshot: ExportsBenchmarkSnapshot, topCount:
   return lines.join('\n');
 }
 
-function compareSnapshots(
+/**
+ * True when either side's per-call latency is at/below MIN_RELIABLE_LATENCY_MS — the case's timing is noise, not
+ * signal, so it must not be reported as a regression, an improvement, or "unchanged" (all three imply the percent
+ * means something).
+ */
+function isUnreliableCase(
+  baseResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
+  headResult: Pick<BenchmarkTaskStats, 'p50Ms'>,
+): boolean {
+  return !(baseResult.p50Ms > MIN_RELIABLE_LATENCY_MS) || !(headResult.p50Ms > MIN_RELIABLE_LATENCY_MS);
+}
+
+export function compareSnapshots(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
 ): ComparedRow[] {
   const rows: ComparedRow[] = [];
   for (const [key, headResult] of Object.entries(headSnapshot.results)) {
     const baseResult = baseSnapshot.results[key];
-    if (!baseResult || !Number.isFinite(baseResult.hz) || baseResult.hz <= 0) {
+    if (!baseResult) {
       continue;
     }
-    const deltaPercent = (headResult.hz / baseResult.hz - 1) * 100;
+    if (isUnreliableCase(baseResult, headResult)) {
+      continue;
+    }
+    const baseHz = resolveComparisonHz(baseResult);
+    const headHz = resolveComparisonHz(headResult);
+    if (baseHz <= 0 || headHz <= 0) {
+      continue;
+    }
+    const deltaPercent = (headHz / baseHz - 1) * 100;
     rows.push({
       key,
-      baseHz: baseResult.hz,
-      headHz: headResult.hz,
+      baseHz,
+      headHz,
       deltaPercent,
     });
   }
@@ -234,7 +299,35 @@ function compareSnapshots(
   return rows;
 }
 
-function summarizeRows(rows: ComparedRow[], thresholdPercent: number): ComparisonSummary {
+/** Count of comparable keys (present on both sides) excluded from `compareSnapshots` as sub-timer-resolution noise. */
+export function countUnreliableCases(
+  baseSnapshot: ExportsBenchmarkSnapshot,
+  headSnapshot: ExportsBenchmarkSnapshot,
+): number {
+  let count = 0;
+  for (const [key, headResult] of Object.entries(headSnapshot.results)) {
+    const baseResult = baseSnapshot.results[key];
+    if (!baseResult) {
+      continue;
+    }
+    if (isUnreliableCase(baseResult, headResult)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function resolveOverallVerdict(medianDeltaPercent: number, thresholdPercent: number): BenchmarkOverallVerdict {
+  if (medianDeltaPercent >= thresholdPercent) {
+    return 'improved';
+  }
+  if (medianDeltaPercent <= -thresholdPercent) {
+    return 'regressed';
+  }
+  return 'unchanged';
+}
+
+export function summarizeRows(rows: ComparedRow[], thresholdPercent: number): ComparisonSummary {
   const improvedCount = rows.filter((row) => row.deltaPercent >= thresholdPercent).length;
   const regressedCount = rows.filter((row) => row.deltaPercent <= -thresholdPercent).length;
   const unchangedCount = rows.length - improvedCount - regressedCount;
@@ -250,16 +343,36 @@ function summarizeRows(rows: ComparedRow[], thresholdPercent: number): Compariso
     medianDeltaPercent,
     meanDeltaPercent,
     thresholdPercent,
+    overallVerdict: resolveOverallVerdict(medianDeltaPercent, thresholdPercent),
+    unreliableCaseCount: 0,
   };
 }
 
-function summarizeComparison(
+export function summarizeComparison(
   baseSnapshot: ExportsBenchmarkSnapshot,
   headSnapshot: ExportsBenchmarkSnapshot,
   thresholdPercent: number,
 ): ComparisonSummary {
   const rows = compareSnapshots(baseSnapshot, headSnapshot);
-  return summarizeRows(rows, thresholdPercent);
+  return {
+    ...summarizeRows(rows, thresholdPercent),
+    unreliableCaseCount: countUnreliableCases(baseSnapshot, headSnapshot),
+  };
+}
+
+function resolveUnreliableCaseKeys(
+  baseSnapshot: ExportsBenchmarkSnapshot,
+  headSnapshot: ExportsBenchmarkSnapshot,
+): string[] {
+  const keys: string[] = [];
+  for (const [key, headResult] of Object.entries(headSnapshot.results)) {
+    const baseResult = baseSnapshot.results[key];
+    if (baseResult && isUnreliableCase(baseResult, headResult)) {
+      keys.push(key);
+    }
+  }
+  keys.sort((left, right) => left.localeCompare(right));
+  return keys;
 }
 
 function resolveNewlySkippedKeys(
@@ -375,7 +488,7 @@ function printUsage(defaults: CliDefaults): void {
     `  --threshold <percent>    Improvement/regression threshold percent (default: ${defaults.thresholdPercent})`,
     `  --top <count>            Number of rows for top lists (default: ${defaults.topCount})`,
     '  --summary <path>         Optional JSON summary output path',
-    '  --fail-on-regression     Exit non-zero if regression count is above 0',
+    '  --fail-on-regression     Exit non-zero if the median change is a regression',
     '',
     'Developer options:',
     '  -h, --help               Show this help',

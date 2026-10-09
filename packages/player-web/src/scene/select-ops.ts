@@ -2,7 +2,7 @@ import { resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-
 import { dirname } from '@be-music/utils/core';
 import { resolveSongSource } from '../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../collection/types.ts';
-import type { PixiGaugeType, PixiPlayOptions } from './lr2/select.ts';
+import type { PixiGaugeType, PixiPlayOptions } from './core/select.ts';
 
 /**
  * Globally-true ops that hold regardless of which song is focused: filter / mode toggles, gauge defaults, "no rival"
@@ -244,6 +244,13 @@ function computeKeyModeOp(song: BrowserSongEntry): number {
     case '10':
       return SELECT_DYNAMIC_OPS.KEYS_10;
     case '14':
+      return SELECT_DYNAMIC_OPS.KEYS_14;
+    // LR2's `#OP` space stops at 5 / 7 / 9 / 10 / 14 keys — it predates the Keyboardmania modes entirely. Fold them
+    // onto the closest same-shape op (SP → 7 keys, DP → 14 keys) so themes keep lighting a keys badge instead of
+    // rendering none; the same SP / DP pairing drives `pickLr2PlaySkin`'s fallback chain.
+    case '24':
+      return SELECT_DYNAMIC_OPS.KEYS_7;
+    case '48':
       return SELECT_DYNAMIC_OPS.KEYS_14;
   }
 }

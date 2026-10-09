@@ -16,6 +16,7 @@ import type {
   BeatorajaTheme,
   BeatorajaThemeDiscoveryWarning,
 } from '@be-music/beatoraja-skin';
+import type { ChartPlayVariant } from '@be-music/chart';
 import type { LoadProgressCallback } from '../../collection/types.ts';
 
 /** Single discovered skin entry, sized to live alongside its loaded byte map. */
@@ -88,14 +89,15 @@ export function summarizeBeatorajaPlaySkins(playSkins: BeatorajaPlaySkinMap, sep
 }
 
 /**
- * Play variants the renderer is willing to mount. The browser player only supports BMS / BMSON charts (5 / 7 / 9 /
- * 10 / 14 keys), so the 24-key variants beatoraja's reference theme ships are deliberately excluded — there's no
- * 24-key chart format the engine could feed in.
+ * Play variants the renderer is willing to mount — every variant beatoraja themes author, including the 24-key
+ * keyboard modes. Charts reach those through the extended `1A..1O` / `2A..2O` lane channels (`ChartPlayVariant`
+ * `'24'` / `'48'`), and the runtime adapter addresses their lanes via the `1000`-block timer bases upstream's
+ * `play24main.lua` uses.
  *
- * If the dropped theme only ships a 24-key skin, the host should fall back to the LR2 theme for gameplay. This
- * matches how `pickLr2PlaySkin` chains through fallbacks for missing variants.
+ * If the dropped theme doesn't ship the variant a chart needs, {@link pickBeatorajaPlayableSkinVariant} chains
+ * through the closest substitutes — same shape as `pickLr2PlaySkin` on the LR2 side.
  */
-const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14'] as const;
+const BEATORAJA_PLAYABLE_VARIANTS = ['7', '5', '9', '10', '14', '24', '24d'] as const;
 export type BeatorajaPlayableVariant = (typeof BEATORAJA_PLAYABLE_VARIANTS)[number];
 
 /**
@@ -109,10 +111,12 @@ export function pickBeatorajaPlayableVariant(chart: {
 }): BeatorajaPlayableVariant | undefined {
   if (chart.isPms) return '9';
   if (chart.isDouble) {
+    if (chart.keys === 24) return '24d';
     if (chart.keys === 14) return '14';
     if (chart.keys === 10) return '10';
     return undefined;
   }
+  if (chart.keys === 24) return '24';
   if (chart.keys === 7) return '7';
   if (chart.keys === 5) return '5';
   return undefined;
@@ -122,17 +126,29 @@ export function pickBeatorajaPlayableVariant(chart: {
  * Per-variant fallback chain limited to {@link BEATORAJA_PLAYABLE_VARIANTS}. When the user's theme doesn't
  * ship the desired variant (very common — many themes only author the 7-keys variant and let smaller charts
  * re-use it), this picks the closest playable substitute. Mirrors {@link pickBeatorajaPlaySkin}'s fallback
- * ordering but never returns the 24-key variants the engine can't drive.
+ * ordering. The keyboard modes prefer each other before falling back to the IIDX chains, because a 24-lane chart
+ * mounted on a 7-key skin renders its extra lanes through the host's fallback playfield.
  *
  * Returns `undefined` when the theme has no playable variant at all.
  */
 const PLAYABLE_FALLBACKS: Record<BeatorajaPlayableVariant, ReadonlyArray<BeatorajaPlayableVariant>> = {
-  '7': ['7', '14', '5', '10', '9'],
-  '5': ['5', '7', '14', '10', '9'],
-  '14': ['14', '7', '10', '5', '9'],
-  '10': ['10', '14', '7', '5', '9'],
-  '9': ['9', '7', '14', '5', '10'],
+  '7': ['7', '14', '5', '10', '9', '24', '24d'],
+  '5': ['5', '7', '14', '10', '9', '24', '24d'],
+  '14': ['14', '7', '10', '5', '9', '24d', '24'],
+  '10': ['10', '14', '7', '5', '9', '24d', '24'],
+  '9': ['9', '7', '14', '5', '10', '24', '24d'],
+  '24': ['24', '24d', '9', '7', '14', '5', '10'],
+  '24d': ['24d', '24', '9', '14', '7', '10', '5'],
 };
+
+/**
+ * Beatoraja play-skin variant → `ChartPlayVariant` (the engine / lane-layout vocabulary). The two spellings differ
+ * only for the keyboard DP mode: beatoraja names its skin `'24d'` (24 keys, double), while the chart classifier
+ * reports the total lane count as `'48'`.
+ */
+export function chartPlayVariantForBeatorajaVariant(variant: BeatorajaPlayableVariant): ChartPlayVariant {
+  return variant === '24d' ? '48' : variant;
+}
 
 export function pickBeatorajaPlayableSkinVariant(
   playSkins: BeatorajaPlaySkinMap,

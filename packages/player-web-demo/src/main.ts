@@ -2,6 +2,8 @@
 // explicit at the file top. The main `@be-music/player-web` entry is reserved for symbols that don't belong to any
 // single area (`logger`, `Rectangle`).
 import {
+  BUILT_IN_BE_MUSIC_SKINS,
+  latticeSkin,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
   DefaultPixiSongSelectView,
@@ -21,6 +23,8 @@ import {
 } from '@be-music/player-web/scenes';
 import {
   BeatorajaSkinAudioPlayer,
+  createBeMusicSkinRegistry,
+  type BeMusicSkin,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   findBeatorajaThemeBgm,
@@ -57,9 +61,21 @@ import {
   resolvePlaylogFilename,
   serializePlaylog,
   PLAYLOG_FILE_SUFFIX,
+  DEFAULT_COMPRESSOR_PARAMS,
+  setMasterVolume,
   type BeMusicPlaylog,
   type CompressorMode,
+  type CompressorParams,
+  type TunableCompressor,
 } from '@be-music/player-web/runtime';
+import {
+  TUNABLE_COMPRESSORS,
+  defaultCompressorTunings,
+  paramsFromTuning,
+  readStoredCompressorTunings,
+  storeCompressorTunings,
+  type CompressorTuning,
+} from './compressor-tuning.ts';
 import { logger } from '@be-music/player-web';
 import {
   discoverLr2Themes,
@@ -107,6 +123,7 @@ import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
+import { exitFullscreen, shouldCaptureFullscreenEscape, toggleFullscreen } from './fullscreen.ts';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
@@ -123,7 +140,90 @@ if (!app) {
 
 app.innerHTML = DEMO_APP_HTML;
 
-const DEFAULT_UI_FONT_LOADS = ['400 22px "LINE Seed JP"', '700 18px "LINE Seed JP"', '900 32px "Azeret Mono"'] as const;
+/** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
+const BE_MUSIC_SKINS = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
+const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
+// Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
+if (readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
+
+/** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */
+function loadSkinFonts(skin: BeMusicSkin): void {
+  if (!('fonts' in document)) return;
+  for (const font of skin.fontLoads) void document.fonts.load(font).catch(() => {});
+}
+
+function readStoredBuiltInSkinId(): string | undefined {
+  try {
+    return window.localStorage.getItem(BUILT_IN_SKIN_STORAGE_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
+
+/** Stored effect level, else `'reduced'` when the OS asks for reduced motion, else `'full'`. */
+function readStoredSkinEffects(): 'full' | 'reduced' | 'off' {
+  try {
+    const stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
+    if (stored === 'full' || stored === 'reduced' || stored === 'off') return stored;
+  } catch {
+    // Storage blocked — fall through to the media query.
+  }
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+}
+
+function storeBuiltInSkinId(id: string): void {
+  try {
+    window.localStorage.setItem(BUILT_IN_SKIN_STORAGE_KEY, id);
+  } catch {
+    // Private windows / blocked storage: the pick still applies for this session.
+  }
+}
+
+const VOLUME_STORAGE_KEY = 'be-music-demo.volumes';
+
+interface StoredVolumes {
+  masterVolume: number;
+  keyVolume: number;
+  bgmVolume: number;
+}
+
+/** Master / keysound / BGM volumes in percent, as last set in the Debug Menu (all 100 when nothing is stored). */
+function readStoredVolumes(): StoredVolumes {
+  const fallback = { masterVolume: 100, keyVolume: 100, bgmVolume: 100 };
+  try {
+    const raw = window.localStorage.getItem(VOLUME_STORAGE_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<Record<keyof StoredVolumes, unknown>>;
+    const percent = (value: unknown, otherwise: number) =>
+      typeof value === 'number' && Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : otherwise;
+    return {
+      masterVolume: percent(parsed.masterVolume, 100),
+      keyVolume: percent(parsed.keyVolume, 100),
+      bgmVolume: percent(parsed.bgmVolume, 100),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function storeVolumes(volumes: StoredVolumes): void {
+  try {
+    window.localStorage.setItem(VOLUME_STORAGE_KEY, JSON.stringify(volumes));
+  } catch {
+    // Private windows / blocked storage: the volumes still apply for this session.
+  }
+}
+
+const DEFAULT_UI_FONT_LOADS: readonly string[] = [
+  '400 22px "LINE Seed JP"',
+  '700 18px "LINE Seed JP"',
+  '900 32px "Azeret Mono"',
+  // Every registered skin's faces (the built-ins plus any added at startup, such as a remembered Lattice), so switching
+  // skins never rasterizes a first frame with a fallback font.
+  ...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads)),
+];
 
 async function waitForDefaultUiFonts(): Promise<void> {
   if (!('fonts' in document)) return;
@@ -246,8 +346,9 @@ class PlayerWebDemoApp {
     optionClose?: Uint8Array;
     optionChange?: Uint8Array;
   } = {};
-  private selectView: PixiSongSelectView | undefined;
-  private gameplayView: PixiGameplayView | undefined;
+  private selectView: PixiSongSelectView | DefaultPixiSongSelectView | undefined;
+  /** LR2-family or default-family gameplay view (both share the core gameplay API). */
+  private gameplayView: PixiGameplayView | DefaultPixiGameplayView | undefined;
   /**
    * Beatoraja gameplay view. Active in place of `gameplayView` when the user toggles
    * `useBeatorajaGameplay` and the loaded theme has a skin variant matching the chart shape. Held
@@ -340,7 +441,7 @@ class PlayerWebDemoApp {
    * by `onExit` (ESC at root) since that's the user explicitly leaving the select altogether.
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
-  private resultView: PixiResultView | undefined;
+  private resultView: PixiResultView | DefaultPixiResultView | undefined;
   private decideView: PixiDecideView | undefined;
   private hostMounted = false;
   /**
@@ -367,6 +468,8 @@ class PlayerWebDemoApp {
    */
   private gui: GUI | undefined;
   private compressorStageFolder: GUI | undefined;
+  /** Compressor tuning in slider units, restored from the last visit; seeds every gameplay mount. */
+  private readonly compressorTunings: Record<TunableCompressor, CompressorTuning> = readStoredCompressorTunings();
   private recordController: Controller | undefined;
   /**
    * "Auto-save play history" checkbox controller. Held so the play-start path can `disable()` it for the duration
@@ -418,7 +521,9 @@ class PlayerWebDemoApp {
    * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
    */
   private autoRecordArmed = false;
-  public constructor(private readonly elements: PlayerWebDemoElements) {
+  private readonly elements: PlayerWebDemoElements;
+  public constructor(elements: PlayerWebDemoElements) {
+    this.elements = elements;
     this.guiState = {
       autoPlay: false,
       autoPauseOnBlur: false,
@@ -426,6 +531,7 @@ class PlayerWebDemoApp {
       // digital- clip at the destination. The `MIXER_HEADROOM_GAIN_LINEAR` attenuation in `audio-bus.ts` buys a little
       // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
       // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
+      ...readStoredVolumes(),
       compressor: true,
       compressorKey: true,
       compressorBgm: true,
@@ -464,6 +570,8 @@ class PlayerWebDemoApp {
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
       skinFamilyOverride: 'auto',
+      builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
+      skinEffects: readStoredSkinEffects(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -473,6 +581,8 @@ class PlayerWebDemoApp {
         void captureScreenshot(this.recordingDeps());
       },
     };
+    // Every sound plays through the master volume; start from the remembered level.
+    setMasterVolume(this.guiState.masterVolume / 100);
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
     // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
@@ -623,6 +733,30 @@ class PlayerWebDemoApp {
     if (this.hostMounted) return;
     this.hostMounted = true;
     await this.sceneHost.mount(this.elements.stage);
+    this.wireCanvasFullscreen();
+  }
+
+  /**
+   * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
+   * Escape while fullscreen is consumed here so the active scene's Esc handler — quit play,
+   * dismiss result, close a select folder — does not fire on the same keypress that leaves
+   * fullscreen.
+   */
+  private wireCanvasFullscreen(): void {
+    this.sceneHost.app.canvas.addEventListener('dblclick', (event) => {
+      event.preventDefault();
+      void toggleFullscreen(this.elements.shell);
+    });
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (!shouldCaptureFullscreenEscape(event)) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        void exitFullscreen();
+      },
+      true,
+    );
   }
 
   /**
@@ -634,9 +768,66 @@ class PlayerWebDemoApp {
    * lil-gui's `show(false)` collapses the folder out of the panel entirely, matching the previous `display: none`
    * behavior.
    */
+  /** Bus `CompressorParams` for every compressor, from the Debug Menu's tuning. */
+  private resolveCompressorParamOverrides(): Record<TunableCompressor, CompressorParams> {
+    return Object.fromEntries(
+      TUNABLE_COMPRESSORS.map((compressor) => [
+        compressor,
+        paramsFromTuning(this.compressorTunings[compressor], DEFAULT_COMPRESSOR_PARAMS[compressor]),
+      ]),
+    ) as Record<TunableCompressor, CompressorParams>;
+  }
+
   private refreshCompressorStageVisibility(): void {
     const visible = this.guiState.compressor && this.compressorMode === 'split';
     this.compressorStageFolder?.show(visible);
+  }
+
+  /**
+   * One folder per compressor (key / BGM / master in split mode; the single legacy compressor only when the
+   * `?compressor=legacy` architecture is active) with threshold, knee, ratio, attack, and release sliders and a reset.
+   * Changes retune a running chart live and are remembered for the next visit.
+   */
+  private buildCompressorTuningGui(parent: GUI): void {
+    const labels: Record<TunableCompressor, string> = {
+      key: 'Key compressor',
+      bgm: 'BGM compressor',
+      master: 'Master compressor',
+      legacy: 'Legacy compressor',
+    };
+    const compressors = TUNABLE_COMPRESSORS.filter((compressor) =>
+      this.compressorMode === 'legacy' ? compressor === 'legacy' : compressor !== 'legacy',
+    );
+    for (const compressor of compressors) {
+      const tuning = this.compressorTunings[compressor];
+      const folder = parent.addFolder(labels[compressor]).close();
+      const apply = () => {
+        const params = paramsFromTuning(tuning, DEFAULT_COMPRESSOR_PARAMS[compressor]);
+        this.gameplayView?.setAudioCompressorParams(compressor, params);
+        this.beatorajaGameplayPrep?.audioBus.setCompressorParams(compressor, params);
+        storeCompressorTunings(this.compressorTunings);
+      };
+      const controllers = [
+        folder.add(tuning, 'thresholdDb', -60, 0, 0.5).name('Threshold (dB)'),
+        folder.add(tuning, 'kneeDb', 0, 40, 0.5).name('Knee (dB)'),
+        folder.add(tuning, 'ratio', 1, 20, 0.1).name('Ratio (x:1)'),
+        folder.add(tuning, 'attackMs', 0, 200, 0.5).name('Attack (ms)'),
+        folder.add(tuning, 'releaseMs', 0, 1000, 5).name('Release (ms)'),
+      ];
+      for (const controller of controllers) controller.onChange(apply);
+      folder
+        .add(
+          {
+            reset: () => {
+              Object.assign(tuning, defaultCompressorTunings()[compressor]);
+              for (const controller of controllers) controller.updateDisplay();
+              apply();
+            },
+          },
+          'reset',
+        )
+        .name('Reset to default');
+    }
   }
 
   /**
@@ -664,6 +855,39 @@ class PlayerWebDemoApp {
     // in place once a theme drop adds LR2 / beatoraja to the pool. Parked here (right after Open Folder) so the
     // family pick reads as a top-level navigation control, above per-family detail folders.
     this.rebuildSkinFamilyPicker();
+    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
+    // scene. Persisted so a reload keeps the pick.
+    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
+    const skinPicker = gui
+      .add(this.guiState, 'builtInSkin', skinOptions())
+      .name('Built-in skin')
+      .onChange((id: string) => {
+        this.handleBuiltInSkinChange(id);
+      });
+    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
+    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
+    // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
+    const addSkins = gui.addFolder('Add skin');
+    const skinSource = {
+      url: '',
+      addLattice: () => this.addBeMusicSkin(latticeSkin),
+      addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
+    };
+    addSkins.add(skinSource, 'addLattice').name('Add Lattice');
+    addSkins.add(skinSource, 'url').name('Skin module URL');
+    addSkins.add(skinSource, 'addFromUrl').name('Add from URL');
+    addSkins.close();
+    gui
+      .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
+      .name('Skin effects')
+      .onChange((level: 'full' | 'reduced' | 'off') => {
+        try {
+          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
+        } catch {
+          // Private windows / blocked storage: the pick still applies for this session.
+        }
+        this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+      });
     // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
     // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
     // 1-option dropdown.
@@ -689,14 +913,39 @@ class PlayerWebDemoApp {
         // without forcing the user to restart the song.
         this.gameplayView?.setAutoPauseOnBlur(value);
       });
-    gui
+    // Master volume over every sound, then the keysound / BGM balance. All three apply live and are remembered for the
+    // next visit.
+    const volume = gui.addFolder('Volume');
+    const rememberVolumes = () =>
+      storeVolumes({
+        masterVolume: this.guiState.masterVolume,
+        keyVolume: this.guiState.keyVolume,
+        bgmVolume: this.guiState.bgmVolume,
+      });
+    const onVolumeChange = (channel: 'key' | 'bgm') => (value: number) => {
+      this.gameplayView?.setAudioVolume(channel, value / 100);
+      this.beatorajaGameplayPrep?.audioBus.setBusVolume(channel, value / 100);
+      rememberVolumes();
+    };
+    volume
+      .add(this.guiState, 'masterVolume', 0, 100, 1)
+      .name('Master (%)')
+      .onChange((value: number) => {
+        setMasterVolume(value / 100);
+        rememberVolumes();
+      });
+    volume.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
+    volume.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
+    // Compressor: the master switch, the split-mode stage toggles, and every compressor's parameters.
+    const compressor = gui.addFolder('Compressor');
+    compressor
       .add(this.guiState, 'compressor')
-      .name('Compressor')
+      .name('Enabled')
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressor(value);
         this.refreshCompressorStageVisibility();
       });
-    const stages = gui.addFolder('Compressor stages');
+    const stages = compressor.addFolder('Stages');
     this.compressorStageFolder = stages;
     stages
       .add(this.guiState, 'compressorKey')
@@ -716,6 +965,7 @@ class PlayerWebDemoApp {
       .onChange((value: boolean) => {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
       });
+    this.buildCompressorTuningGui(compressor);
     // BGA video transcode controls. Both settings are seeded into the next `PixiGameplayView` constructor (see
     // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
     // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
@@ -1488,6 +1738,62 @@ class PlayerWebDemoApp {
    * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
    * even reach the GUI).
    */
+  /** The be-music skin the default-family scenes render with. */
+  private get beMusicSkin() {
+    return BE_MUSIC_SKINS.resolve(this.guiState.builtInSkin);
+  }
+
+  /** Registers `skin` (validated), loads its fonts, and switches to it; reports why when it is refused. */
+  private addBeMusicSkin(skin: BeMusicSkin): void {
+    const problems = BE_MUSIC_SKINS.add(skin);
+    if (problems.length > 0) {
+      this.setStatus(`Skin "${skin.id}" was not added: ${problems.join('; ')}`);
+      return;
+    }
+    loadSkinFonts(skin);
+    this.handleBuiltInSkinChange(skin.id);
+    this.setStatus(`Added skin ${skin.label} ${skin.version} by ${skin.author.name}`);
+  }
+
+  /**
+   * Imports a skin module from `url` and adds its default export. A skin is code that runs with this page's full
+   * access, so the user confirms the source first.
+   */
+  private async addBeMusicSkinFromUrl(url: string): Promise<void> {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      this.setStatus('Enter the URL of a skin module first');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Load the skin at ${trimmed}?\n\nA skin is code that runs with full access to this page. Only load skins you trust.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const module = (await import(/* @vite-ignore */ trimmed)) as { default?: BeMusicSkin };
+      if (!module.default) {
+        this.setStatus('That module has no default export to use as a skin');
+        return;
+      }
+      this.addBeMusicSkin(module.default);
+    } catch (error) {
+      this.setStatus(`Could not load the skin: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Apply a Debug Menu built-in skin change: persist it and rebuild the persistent select scene (the same dispose-and-
+   * rebuild the skin-family override uses). Gameplay / result pick the skin up on their next mount.
+   */
+  private handleBuiltInSkinChange(id: string): void {
+    this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
+    storeBuiltInSkinId(this.guiState.builtInSkin);
+    this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+  }
+
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
@@ -1675,6 +1981,10 @@ class PlayerWebDemoApp {
         song,
         source,
         audioCompressorMode: this.guiState.compressor === false ? 'off' : this.compressorMode,
+        audioBusOptions: {
+          initialVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
+          initialCompressorParams: this.resolveCompressorParamOverrides(),
+        },
         preResolvedChart,
       });
     } catch (error) {
@@ -2853,12 +3163,23 @@ class PlayerWebDemoApp {
     // it so the underlying scene paints built-in chrome regardless of what's loaded. The beatoraja branch returned
     // earlier, so we only have these two cases here.
     const lr2SelectSkin = activeFamily === 'lr2' ? this.selectSkin : undefined;
+    let carriedPlayOptions: PixiPlayOptions | undefined;
+    if (this.selectView && lr2SelectSkin !== undefined && !(this.selectView instanceof PixiSongSelectView)) {
+      // A theme dropped while the default-family scene is up: only the LR2 scene can adopt an LR2 skin, so rebuild it
+      // below as the LR2 scene, carrying the cursor and the live play options across.
+      this.lastSelectNavigation ??= this.selectView.getNavigation();
+      carriedPlayOptions = this.selectView.getPlayOptions();
+      this.selectView.dispose();
+      this.selectView = undefined;
+    }
     if (this.selectView) {
       // Push the latest theme assets onto the view BEFORE flipping it visible. Order matters — `setSelectBgm` no-ops
       // when the bytes haven't changed, so back-from-play is silent; on a fresh theme drop it stops the old loop, swaps
       // the bytes, and (because we're still hidden) defers the actual `start()` until `setVisible(true)` lands a moment
       // later. Doing it the other way round would briefly start the prior theme's BGM during the visibility flip.
-      this.selectView.setSkin(lr2SelectSkin);
+      if (this.selectView instanceof PixiSongSelectView) {
+        this.selectView.setSkin(lr2SelectSkin);
+      }
       this.selectView.setSelectBgm(this.selectBgmBytes);
       this.selectView.setDecideBgm(this.decideBgmBytes);
       this.selectView.setSystemSounds(this.systemSoundBundle);
@@ -2882,6 +3203,7 @@ class PlayerWebDemoApp {
       // Seed the in-scene panel from the Debug Menu's "Play options" state (two-way sync: the panel's own edits
       // come back through `onPlayOptionsChange` below; lil-gui edits push through `setPlayOptions`).
       initialPlayOptions: {
+        ...carriedPlayOptions,
         autoPlay: this.guiState.autoPlay,
         gauge1P: this.guiState.gauge,
         random1P: this.guiState.random1P,
@@ -2921,7 +3243,11 @@ class PlayerWebDemoApp {
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
-      : new DefaultPixiSongSelectView(selectSceneOptions);
+      : new DefaultPixiSongSelectView({
+          ...selectSceneOptions,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+        });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
   }
@@ -3023,7 +3349,7 @@ class PlayerWebDemoApp {
     song: BrowserSongEntry,
     playSkin: Lr2Skin | undefined,
     overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; chartSha256?: string },
-  ): PixiGameplayView {
+  ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const sharedOptions = {
@@ -3053,6 +3379,8 @@ class PlayerWebDemoApp {
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartSha256 !== undefined ? { chartSha256: overrides.chartSha256 } : {}),
       replay,
+      audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
+      audioCompressorParams: this.resolveCompressorParamOverrides(),
       audioCompressor: this.guiState.compressor,
       audioCompressorMode: this.compressorMode,
       audioCompressorStages: {
@@ -3077,7 +3405,11 @@ class PlayerWebDemoApp {
     if (playSkin === undefined) {
       // Default-family path: no LR2 skin loaded for this chart. `DefaultPixiGameplayView` strips the skin / invisible-
       // note-skin slots from its option shape, so neither value flows in here.
-      return new DefaultPixiGameplayView(sharedOptions);
+      return new DefaultPixiGameplayView({
+        ...sharedOptions,
+        beMusicSkin: this.beMusicSkin,
+        beMusicEffects: this.guiState.skinEffects,
+      });
     }
     return new PixiGameplayView({
       ...sharedOptions,
@@ -3227,7 +3559,11 @@ class PlayerWebDemoApp {
     };
     this.resultView = lr2ResultSkin
       ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
-      : new DefaultPixiResultView(sharedResultOptions);
+      : new DefaultPixiResultView({
+          ...sharedResultOptions,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+        });
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
@@ -3294,7 +3630,7 @@ renderBrowserCompatPanel(checkBrowserCompat());
 wireHelpModal();
 
 void waitForDefaultUiFonts().finally(() => {
-  void new PlayerWebDemoApp({
+  new PlayerWebDemoApp({
     stage: document.querySelector<HTMLDivElement>('#stage')!,
     shell: document.querySelector<HTMLDivElement>('.shell')!,
     songInput: document.querySelector<HTMLInputElement>('#songs')!,

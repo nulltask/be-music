@@ -1,7 +1,6 @@
 import { createAbortError, isAbortError } from '@be-music/utils/core';
 import type { LogEntry } from '@be-music/utils/log';
 import { effect } from 'alien-signals';
-import { fileURLToPath } from 'node:url';
 import { MessageChannel, type MessagePort, Worker } from 'node:worker_threads';
 import type { LaneBinding } from '../manual-input.ts';
 import type { PlayerStateSignals } from '@be-music/player/state-signals';
@@ -62,7 +61,6 @@ export async function createNodeUiRuntime(options: NodeUiRuntimeOptions): Promis
     : new Worker(resolveNodeUiWorkerUrl(), {
         workerData: createWorkerInitData(options),
         execArgv: resolveNodeUiWorkerExecArgv(),
-        env: resolveNodeUiWorkerEnv(),
       });
   const workerReady = await waitForWorkerReady(worker, options.loadSignal, options.onBgaLoadProgress, options.onLog);
   if (!workerReady.enabled) {
@@ -324,18 +322,6 @@ function resolveNodeUiWorkerExecArgv(): string[] {
     return process.execArgv;
   }
   return [...process.execArgv, '--conditions=source'];
-}
-
-function resolveNodeUiWorkerEnv(): NodeJS.ProcessEnv {
-  if (!import.meta.url.endsWith('.ts')) {
-    return process.env;
-  }
-
-  return {
-    ...process.env,
-    TSX_TSCONFIG_PATH:
-      process.env.TSX_TSCONFIG_PATH ?? fileURLToPath(new URL('../../../../tsconfig.typecheck.json', import.meta.url)),
-  };
 }
 
 async function waitForWorkerReady(

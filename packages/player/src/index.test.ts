@@ -1,8 +1,9 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
   writes: [] as Uint8Array[],
@@ -213,7 +214,7 @@ function createLandmineOnlyChart(options: { includeExplosionSound?: boolean; val
   }
   // Mine on measure 1 (chart 2.0 s at BPM 120) so a held key can deterministically detonate it as it crosses the
   // judge line. A mine on measure 0 (chart 0 s) is racy under LR2's passage-based detonation: with playback sped up,
-  // a single poll tick can advance chart time past the mine's GOOD window before the input is processed.
+  // a single poll tick can advance chart time past the mine's PGREAT window before the input is processed.
   json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value }];
   return json;
 }
@@ -635,7 +636,7 @@ describe('player', () => {
     }
   });
 
-  test('player: defaults groove gauge TOTAL to LR2 160 when #TOTAL is omitted', async () => {
+  test("player: derives the groove gauge TOTAL from LR2's note-count formula when #TOTAL is omitted", async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
@@ -648,9 +649,92 @@ describe('player', () => {
       tui: false,
     });
 
-    expect(summary.gauge?.effectiveTotal).toBe(160);
+    // LR2 `LR2_bmsload.cpp`: `(n / 5 + 200) * 0.8` below 400 notes — one note yields 160.16, not the flat 160 the
+    // engine used to assume. See `resolveLr2DefaultTotal`.
+    expect(summary.gauge?.effectiveTotal).toBeCloseTo(resolveLr2DefaultTotal(1), 9);
     expect(summary.gauge?.current).toBe(100);
     expect(summary.gauge?.cleared).toBe(true);
+  });
+
+  test('player: the selected gauge governs the run, not just its label', async () => {
+    // Regression guard for the era when the gauge picker was cosmetic: HARD rendered red but ran GROOVE's numbers
+    // and reported CLEARED at 2 %. Every gauge now comes straight out of the active ruleset.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    const groove = await autoPlay(json, { auto: true, speed: 48, leadInMs: 0, audio: false, tui: false });
+    expect(groove.gauge?.type).toBe('GROOVE');
+    expect(groove.gauge?.initial).toBe(20);
+    expect(groove.gauge?.clearThreshold).toBe(80);
+    expect(groove.gauge?.survival).toBe(false);
+
+    const hard = await autoPlay(json, {
+      auto: true,
+      speed: 48,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      gauge: 'HARD',
+    });
+    // LR2 HARD starts full and clears by surviving rather than by crossing a threshold.
+    expect(hard.gauge?.type).toBe('HARD');
+    expect(hard.gauge?.initial).toBe(100);
+    expect(hard.gauge?.survival).toBe(true);
+    expect(hard.gauge?.failedMidPlay).toBe(false);
+    expect(hard.gauge?.cleared).toBe(true);
+  });
+
+  test('player: the judge ruleset picks the gauge line-up as well as the windows', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 0, channel: '11', position: [0, 1], value: '01' }];
+
+    // Each ruleset names its default recovery gauge differently, and beatoraja / IIDX derive TOTAL from their own
+    // formulas rather than LR2's.
+    const beatoraja = await autoPlay(json, {
+      auto: true,
+      speed: 48,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'beatoraja',
+    });
+    expect(beatoraja.gauge?.type).toBe('NORMAL');
+    expect(beatoraja.gauge?.effectiveTotal).toBeCloseTo(resolveBeatorajaDefaultTotal(1), 9);
+
+    const iidx = await autoPlay(json, {
+      auto: true,
+      speed: 48,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'iidx',
+      gauge: 'DEATH',
+    });
+    // IIDX has no HAZARD-style gauge; `'DEATH'` folds onto its hardest survival gauge.
+    expect(iidx.gauge?.type).toBe('EX-HARD');
+    expect(iidx.gauge?.survival).toBe(true);
+  });
+
+  test('player: a survival gauge that bottoms out fails the run and stays failed', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = Array.from({ length: 16 }, (_, index) => ({
+      measure: 0,
+      channel: '11',
+      position: [index, 16] as [number, number],
+      value: '01',
+    }));
+
+    // No input at all — every note misses. Under LR2 HARD each POOR drains a TOTAL- and note-count-scaled chunk,
+    // so the gauge reaches the death border well before the chart ends.
+    const summary = await manualPlay(json, { speed: 64, leadInMs: 0, audio: false, tui: false, gauge: 'HARD' });
+
+    expect(summary.poor).toBe(16);
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.failedMidPlay).toBe(true);
+    expect(summary.gauge?.cleared).toBe(false);
   });
 
   test('player: resolves control-flow branches at playback time', async () => {
@@ -934,7 +1018,7 @@ describe('player', () => {
     // Empty POOR (kara-poor / 空POOR) is NOT counted in `summary.poor` — that slot is reserved for miss POOR
     // (minogashi-poor / 見逃しPOOR, i.e. notes that passed without input). Matches LR2.
     expect(summary.poor).toBe(0);
-    // GROOVE gauge starts at 20 and the EMPTY_POOR delta is -2 (see `applyGrooveGaugeJudge`), giving 18. Matches LR2:
+    // GROOVE gauge starts at 20 and LR2's EMPTY_POOR delta is -2, giving 18. Matches LR2:
     // phantom presses lightly drain even on the forgiving gauges (HARD/DEATH drain harder).
     expect(summary.gauge?.current).toBeCloseTo(18, 9);
     expect(summary.gauge?.cleared).toBe(false);
@@ -1104,6 +1188,119 @@ describe('player', () => {
     expect(beatoraja.good).toBe(0);
     expect(iidx.great).toBe(0);
     expect(iidx.good).toBe(1);
+  });
+
+  test("player: beatoraja's asymmetric BAD window reaches further late than early", async () => {
+    // beatoraja SEVENKEYS BAD reaches 280 ms LATE but only 220 ms early at judgerank 100 (`#RANK 3`). A press
+    // 250 ms late is inside it; the same press 250 ms early is out of reach entirely, so the note survives and
+    // misses on its own deadline. The `19` note is only there to put the chart in 7-key mode — beatoraja's
+    // five-key BAD window is symmetric.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 3;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '19', position: [0, 1], value: '01' },
+    ];
+    const base = { speed: 8, leadInMs: 0, audio: false, tui: false, judgeRuleset: 'beatoraja' } as const;
+
+    const late = await manualPlay(json, {
+      ...base,
+      replayInputs: [{ seq: 0, timeUs: 1_250_000, action: 'down' as const, channels: ['11'] }],
+    });
+    const early = await manualPlay(json, {
+      ...base,
+      replayInputs: [{ seq: 0, timeUs: 750_000, action: 'down' as const, channels: ['11'] }],
+    });
+
+    expect(late.bad).toBe(1);
+    expect(late.poor).toBe(1); // the untouched `19` note
+    expect(early.bad).toBe(0);
+    expect(early.poor).toBe(2); // the press never reached its note, so both miss
+  });
+
+  test("player: scratch lanes judge on the ruleset's own scratch window", async () => {
+    // beatoraja widens the turntable: GREAT is ±60 ms on a key lane but ±70 ms on scratch, so the same 65 ms late
+    // press is a GOOD on `11` and a GREAT on `16`.
+    const chart = (): ReturnType<typeof createEmptyJson> => {
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 240;
+      json.metadata.rank = 3;
+      json.events = [
+        { measure: 1, channel: '11', position: [0, 1], value: '01' },
+        { measure: 1, channel: '16', position: [0, 1], value: '01' },
+        { measure: 1, channel: '19', position: [0, 1], value: '01' },
+      ];
+      return json;
+    };
+    const base = { speed: 8, leadInMs: 0, audio: false, tui: false, judgeRuleset: 'beatoraja' } as const;
+    const pressAt = (channel: string) => [{ seq: 0, timeUs: 1_065_000, action: 'down' as const, channels: [channel] }];
+
+    const key = await manualPlay(chart(), { ...base, replayInputs: pressAt('11') });
+    const scratch = await manualPlay(chart(), { ...base, replayInputs: pressAt('16') });
+
+    expect(key.good).toBe(1);
+    expect(key.great).toBe(0);
+    expect(scratch.great).toBe(1);
+    expect(scratch.good).toBe(0);
+  });
+
+  test('player: note selection follows the ruleset — LR2 takes the oldest note, beatoraja keeps the combo', async () => {
+    // Two notes 160 ms apart on one lane, pressed 130 ms after the first. Under `#RANK 2` that press is a BAD on
+    // the first note and a GREAT on the second under both rulesets' windows, so only the SELECTION differs:
+    // LR2 (`lowest`) always clears the oldest note in reach, while beatoraja (`combo`) hands the press to the
+    // second note once the first has fallen out of the late side of its GOOD window. The `19` note only puts the
+    // chart in 7-key mode.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240; // one measure = 1 s
+    json.metadata.rank = 2;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '11', position: [4, 25], value: '01' }, // +160 ms
+      { measure: 3, channel: '19', position: [0, 1], value: '01' },
+    ];
+    const base = {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: [{ seq: 0, timeUs: 1_130_000, action: 'down' as const, channels: ['11'] }],
+    };
+
+    const lr2 = await manualPlay(json, { ...base });
+    const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
+
+    expect(lr2.bad).toBe(1);
+    expect(lr2.great).toBe(0);
+    expect(beatoraja.great).toBe(1);
+    expect(beatoraja.bad).toBe(0);
+  });
+
+  test("player: LR2's multi-BAD collector takes down every other note the press mistimed", async () => {
+    // lr2oraja `MultiBadCollector`: one press at 1.15 s sits 150 ms after the `11` note and 150 ms before the `12`
+    // note — inside BAD (±200 ms at `#RANK 2`) but outside GOOD (±100 ms) for both. LR2 BADs both; beatoraja has
+    // no collector, so its press consumes one note and the other misses on its own deadline.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.metadata.rank = 2;
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 1, channel: '12', position: [3, 10], value: '01' }, // +300 ms
+      { measure: 3, channel: '19', position: [0, 1], value: '01' },
+    ];
+    const base = {
+      speed: 8,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      replayInputs: [{ seq: 0, timeUs: 1_150_000, action: 'down' as const, channels: ['11', '12'] }],
+    };
+
+    const lr2 = await manualPlay(json, { ...base });
+    const beatoraja = await manualPlay(json, { ...base, judgeRuleset: 'beatoraja' });
+
+    expect(lr2.bad).toBe(2);
+    expect(beatoraja.bad).toBe(1);
   });
 
   test('player: recordPlaylog stamps the chart hash and judge ruleset into the playlog', async () => {
@@ -1496,9 +1693,9 @@ describe('player', () => {
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
   });
 
-  test('player: a press outside the GOOD window does not detonate an approaching mine (LR2)', async () => {
-    // BPM 120, NORMAL rank → GOOD window ±100 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
-    // outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
+  test('player: a press outside the PGREAT window does not detonate an approaching mine (LR2)', async () => {
+    // BPM 120, NORMAL rank → PGREAT window ±18 ms. The mine sits at 2.0 s; a tap at ~1.7 s is 300 ms early —
+    // far outside the detonation range — and the key is up again (grace expired) by the time the mine crosses.
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
     json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
@@ -1516,6 +1713,54 @@ describe('player', () => {
 
     expect(summary.bad).toBe(0);
     expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: a press inside GOOD but outside the PGREAT window does not detonate a mine (LR2)', async () => {
+    // LR2's changelog pins the press-detonation range to the PGREAT window (±18 ms at NORMAL rank), not GOOD
+    // (±100 ms). The mine passes at 2.0 s; a tap at ~2.04 s — 40 ms late, still inside GOOD — must not detonate
+    // it: the press missed PGREAT, and the crossing-anchored hold-through leg ignores presses that land after the
+    // crossing, so this holds even when the tap is the first processing past the window.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }];
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 2040, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(20, 9);
+  });
+
+  test('player: a tap shortly before a passing mine detonates it (LR2 hold-through via the press grace)', async () => {
+    // Non-kitty input has no release events, so a tap counts as "held" for the LN hold-grace window (120 ms).
+    // A tap at ~1.95 s therefore covers the mine's 2.0 s crossing, and the crossing-anchored hold-through leg
+    // detonates it deterministically once the PGREAT window closes — no positive-coverage dependence on a frame
+    // tick sampling the ±18 ms window itself.
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.events = [{ measure: 1, channel: 'D1', position: [0, 1] as const, value: '0A' }]; // raw 10 %
+
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1950, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 2300, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.bad).toBe(0);
+    expect(summary.gauge?.current).toBeCloseTo(10, 9); // 20 - 10
   });
 
   test('player: routes audio through createAudioSession factory when supplied', async () => {
@@ -1847,6 +2092,58 @@ describe('player', () => {
     expect(invisible[0]?.invisible).toBe(true);
   });
 
+  test('player: extracts extended 24-key lane channels as playable notes, LNs, mines and invisibles', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.bms.lnObjs = ['AA'];
+    json.events = [
+      // Extended playable columns — `1A` is lane 10 of the 1P bank, `2O` lane 24 of the 2P bank.
+      { measure: 0, channel: '1A', position: [0, 1], value: '01' },
+      { measure: 0, channel: '2O', position: [0, 1], value: '01' },
+      // Legacy long note on an extended column (`5X` / `6X` map back onto `1X` / `2X`).
+      { measure: 1, channel: '5B', position: [0, 1], value: '01' },
+      { measure: 1, channel: '5B', position: [2, 4], value: '01' },
+      // `#LNOBJ` long note on another extended column.
+      { measure: 2, channel: '1C', position: [0, 1], value: '01' },
+      { measure: 2, channel: '1C', position: [2, 4], value: 'AA' },
+      // Landmine + invisible object on extended columns.
+      { measure: 3, channel: 'DD', position: [0, 1], value: '10' },
+      { measure: 3, channel: '3E', position: [0, 1], value: '01' },
+    ];
+
+    const timed = extractTimedNotes(json, { includeLandmine: true, includeInvisible: true });
+    expect(timed.playableNotes.map((note) => note.channel)).toEqual(['1A', '2O', '1B', '1C']);
+    // Both long notes survive with a tail; the `#LNOBJ` terminator is consumed rather than counted.
+    expect(timed.playableNotes.filter((note) => note.endBeat !== undefined).map((note) => note.channel)).toEqual([
+      '1B',
+      '1C',
+    ]);
+    expect(timed.landmineNotes.map((note) => note.channel)).toEqual(['1D']);
+    expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['1E']);
+  });
+
+  test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
+    const createChart = (channels: string[]) => {
+      const json = createEmptyJson('bms');
+      json.metadata.bpm = 120;
+      json.events = channels.map((channel) => ({ measure: 0, channel, position: [0, 1] as const, value: '01' }));
+      return json;
+    };
+
+    // IIDX 7 KEY — `17` keeps the quarter-note FREE ZONE tail.
+    const iidx = extractPlayableNotes(createChart(['11', '17', '18']));
+    expect(iidx.find((note) => note.channel === '17')?.endBeat).toBeCloseTo(1, 6);
+
+    // 24 KEY — `17` is lane 7 of the keyboard bank, so it stays an ordinary tap. Classified from the
+    // chart's own extended lane channel, without the host passing a variant.
+    const keyboard = extractPlayableNotes(createChart(['11', '17', '1A']));
+    expect(keyboard.find((note) => note.channel === '17')?.endBeat).toBeUndefined();
+
+    // Same result when the host supplies the variant instead of letting the chart be classified.
+    const overridden = extractPlayableNotes(createChart(['11', '17', '18']), { playVariant: '9' });
+    expect(overridden.find((note) => note.channel === '17')?.endBeat).toBeUndefined();
+  });
+
   test('player: extractTimedNotes matches the individual extraction helpers', () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;
@@ -2043,11 +2340,14 @@ describe('player', () => {
 
   test('player: LNMODE=3 drains groove gauge while the hold is broken', async () => {
     expect(extractPlayableNotes(createLnobjLongNoteChart(3))[0]?.longNoteMode).toBe(3);
+    // HCN is a beatoraja mechanic — the chart's `#LNMODE` only reaches the engine under the rulesets that honour
+    // it. LR2 plays every long note as a plain LN (asserted below).
     const mode2Summary = await manualPlay(createLnobjLongNoteChart(2), {
       speed: 1,
       leadInMs: 0,
       audio: false,
       tui: false,
+      judgeRuleset: 'beatoraja',
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
         { delayMs: 1100, command: { kind: 'interrupt', reason: 'escape' } },
@@ -2058,15 +2358,35 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
+      judgeRuleset: 'beatoraja',
       createInputRuntime: createScheduledInputRuntime([
         { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
         { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
       ]),
     });
 
-    expect(mode3Summary.total).toBe(1);
+    // A charge note is two judgments: the head on the press, the tail on the release.
+    expect(mode3Summary.total).toBe(2);
     expect(mode3Summary.bad + mode3Summary.poor).toBe(1);
     expect(mode3Summary.gauge?.current ?? 0).toBeLessThan(mode2Summary.gauge?.current ?? Number.POSITIVE_INFINITY);
+  });
+
+  test('player: LR2 plays every long note as an LN, whatever #LNMODE says', async () => {
+    // `longNoteStyle: 'ln'` — LR2 has neither CN nor HCN, so a `#LNMODE 3` chart is one deferred judgment with no
+    // hold-drain, exactly like a `#LNMODE 1` chart.
+    const summary = await manualPlay(createLnobjLongNoteChart(3), {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(summary.total).toBe(1);
+    expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
   });
 
   test('player: no-TUI logs long-note, gauge, combo, sample-stop, and result events', async () => {
@@ -2077,6 +2397,8 @@ describe('player', () => {
       leadInMs: 0,
       audio: false,
       tui: false,
+      // The hold-drain / break events this asserts on are HCN mechanics, which only beatoraja runs.
+      judgeRuleset: 'beatoraja',
       writeOutput: (text) => {
         output.push(text);
       },
@@ -2119,15 +2441,12 @@ describe('player', () => {
         (line) => line.includes('kind:combo-change') && line.includes('value:0') && line.includes('judge:POOR'),
       ),
     ).toBe(true);
-    expect(
-      output.some(
-        (line) =>
-          line.includes('kind:result') &&
-          line.includes('reason:complete') &&
-          line.includes('poor:1') &&
-          line.includes('gaugeCleared:false'),
-      ),
-    ).toBe(true);
+    const resultLine = output.find((line) => line.includes('kind:result') && line.includes('reason:complete'));
+    expect(resultLine).toBeDefined();
+    // One HCN is two judgments under beatoraja: the head scored on the press, the tail POORed by the broken hold.
+    expect(resultLine).toContain('total:2');
+    expect(resultLine).toContain('great:1');
+    expect(resultLine).toContain('poor:1');
   });
 
   test('player: uses baseline judge windows for bms RANK=2', () => {

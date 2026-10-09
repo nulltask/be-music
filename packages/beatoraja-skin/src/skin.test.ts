@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { detectBeatorajaSkinFormat, loadBeatorajaSkin } from './skin.ts';
 import {
   BEATORAJA_SKIN_TYPE,

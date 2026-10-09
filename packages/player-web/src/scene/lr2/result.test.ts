@@ -1,5 +1,5 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { computeResultOps, RESULT_DYNAMIC_OPS } from './result.ts';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import type { PixiGameplayResultData } from './gameplay.ts';
@@ -25,6 +25,7 @@ interface ResultOverrides extends SongOverrides {
   total?: number;
   bad?: number;
   poor?: number;
+  emptyPoor?: number;
 }
 
 /**
@@ -59,6 +60,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
       good: 0,
       bad: overrides.bad ?? 0,
       poor: overrides.poor ?? 0,
+      emptyPoor: overrides.emptyPoor ?? 0,
       exScore: overrides.exScore ?? 0,
       score: 0,
     },

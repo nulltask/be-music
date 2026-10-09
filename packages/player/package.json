@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Core playback engine and shared gameplay helpers for be-music",
   "license": "MIT",
   "files": [
@@ -112,15 +112,10 @@
     }
   },
   "scripts": {
-    "build:bundle": "tsdown",
-    "build": "tsdown",
+    "build:bundle": "vp pack",
+    "build": "vp pack",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
-    "typecheck": "tsc -p tsconfig.typecheck.json --pretty",
-    "lint": "oxlint .",
-    "lint:fix": "oxlint . --fix",
-    "format": "oxfmt . --write",
-    "format:check": "oxfmt . --check",
-    "bench": "tsx --tsconfig ../../tsconfig.typecheck.json scripts/bench.ts"
+    "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
     "@be-music/audio-renderer": "workspace:*",

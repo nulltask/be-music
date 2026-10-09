@@ -1,6 +1,12 @@
 import { Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { describe, expect, test, vi } from 'vitest';
-import { ChildPool, destroyUniqueTextures, disposeChildren, staggerDestroyTextures } from './pixi-utils.ts';
+import { describe, expect, test, vi } from 'vite-plus/test';
+import {
+  ChildPool,
+  LaggedDisposer,
+  destroyUniqueTextures,
+  disposeChildren,
+  staggerDestroyTextures,
+} from './pixi-utils.ts';
 
 /**
  * The hot render loops in `scene/lr2/gameplay.ts` / `scene/lr2/result.ts` / `scene/lr2/select.ts` originally cleared their dynamic
@@ -260,5 +266,36 @@ describe('ChildPool', () => {
     // Hosts are also destroyed — pool.destroy() leaves the outer layer empty so the owning view's `dispose()`
     // doesn't have orphaned ChildPool sub-containers hanging around.
     expect(layer.children.length).toBe(0);
+  });
+});
+
+describe('LaggedDisposer', () => {
+  test("hides this cycle's children in place and destroys them on the next cycle", () => {
+    const layer = new Container();
+    const disposer = new LaggedDisposer();
+    const first = new Graphics();
+    layer.addChild(first);
+    disposer.cycle(layer);
+    expect(layer.children).toEqual([first]);
+    expect(first.visible).toBe(false);
+    expect(first.destroyed).toBe(false);
+
+    const second = new Graphics();
+    layer.addChild(second);
+    disposer.cycle(layer);
+    expect(first.destroyed).toBe(true);
+    expect(layer.children).toEqual([second]);
+    expect(second.visible).toBe(false);
+  });
+
+  test('flush destroys whatever is still waiting', () => {
+    const layer = new Container();
+    const disposer = new LaggedDisposer();
+    const child = new Container();
+    layer.addChild(child);
+    disposer.cycle(layer);
+    disposer.flush();
+    expect(child.destroyed).toBe(true);
+    expect(layer.children).toHaveLength(0);
   });
 });

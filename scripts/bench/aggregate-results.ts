@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadExportsBenchmarkSnapshot, resolveCliValue, runCliMain } from './cli-utils.ts';
 import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
+import { median } from './task-stats.ts';
 
 interface CliDefaults {
   outputPath: string;
@@ -22,7 +23,9 @@ const DEFAULTS: CliDefaults = {
 
 const BENCHMARK_RESULT_FIELDS = [
   'hz',
+  'medianHz',
   'meanMs',
+  'p50Ms',
   'p75Ms',
   'p99Ms',
   'minMs',
@@ -118,19 +121,6 @@ function aggregateTaskStats(values: readonly BenchmarkTaskStats[]): BenchmarkTas
     aggregated[field] = field === 'sampleCount' ? Math.round(aggregatedValue) : aggregatedValue;
   }
   return aggregated;
-}
-
-function median(values: readonly number[]): number {
-  if (values.length === 0) {
-    return 0;
-  }
-
-  const sorted = [...values].sort((left, right) => left - right);
-  const middleIndex = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) {
-    return sorted[middleIndex];
-  }
-  return (sorted[middleIndex - 1] + sorted[middleIndex]) / 2;
 }
 
 function parseArgs(args: string[], defaults: CliDefaults): CliOptions {

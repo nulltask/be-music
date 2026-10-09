@@ -12,6 +12,14 @@ import type { Lr2Skin } from '@be-music/lr2-skin';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+/** Minimal stand-in for an `AudioContext` (Node has none) — enough for `masterOutput` to create and wire its gain. */
+const BENCH_AUDIO_CONTEXT = {
+  state: 'running',
+  destination: {},
+  createGain: () => ({ gain: { value: 1 }, connect: () => undefined }),
+  addEventListener: () => undefined,
+} as unknown as BaseAudioContext;
+
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
@@ -33,6 +41,7 @@ const BENCH_SCORE = {
   good: 5,
   bad: 3,
   poor: 2,
+  emptyPoor: 0,
   exScore: 150,
   score: 75_000,
 };
@@ -249,6 +258,25 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       registry.detectThemeFamilies(['Theme/play_7.lr2skin', 'Skin/play7.luaskin']);
     },
   });
+  define('player-web.createBeMusicSkinRegistry', {
+    run: () => {
+      const registry = playerWebCoreApi.createBeMusicSkinRegistry([playerWebCoreApi.phantomSkin]);
+      registry.resolve('phantom');
+      registry.resolve('missing');
+    },
+  });
+  define('player-web.resolveBeMusicLaneKind', {
+    run: () => {
+      playerWebCoreApi.resolveBeMusicLaneKind('16', 0, '7');
+      playerWebCoreApi.resolveBeMusicLaneKind('12', 2, '7');
+      playerWebCoreApi.resolveBeMusicLaneKind('1D', -1, '24');
+    },
+  });
+  define('player-web.resolveSelectListWindow', {
+    run: () => {
+      playerWebCoreApi.resolveSelectListWindow(playerWebCoreApi.phantomSkin.select.layout, 480, 50, 100);
+    },
+  });
   define('player-web.createCroppedBeatorajaTexture', {
     run: () => {
       playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });
@@ -435,6 +463,19 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.parseCompressorMode('split');
     },
   });
+  define('player-web.sanitizeBusVolume', {
+    run: () => {
+      playerWebCoreApi.sanitizeBusVolume(0.75);
+    },
+  });
+  define('player-web.mergeCompressorParams', {
+    run: () => {
+      playerWebCoreApi.mergeCompressorParams(playerWebCoreApi.KEY_BUS_COMPRESSOR_PARAMS, {
+        threshold: -12,
+        attack: 0.02,
+      });
+    },
+  });
   define('player-web.parsePlaylog', {
     run: () => {
       playerWebCoreApi.parsePlaylog(BENCH_PLAYLOG_JSON);
@@ -450,9 +491,60 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.serializePlaylog(BENCH_PLAYLOG);
     },
   });
+  define('player-web.shouldCaptureFrame', {
+    run: () => {
+      playerWebCoreApi.shouldCaptureFrame(1033.3, 1000, 30);
+    },
+  });
+  define('player-web.resolveCaptureSize', {
+    run: () => {
+      playerWebCoreApi.resolveCaptureSize(2944, 2108, { width: 1920, height: 1080 });
+    },
+  });
+  define('player-web.alignAudioChunk', {
+    run: () => {
+      playerWebCoreApi.alignAudioChunk(47_000, 4096, 48_000, 48_000);
+    },
+  });
+  define('player-web.resolveFrameTimestamp', {
+    run: () => {
+      playerWebCoreApi.resolveFrameTimestamp(12.5, 10, 2.48);
+    },
+  });
+  define('player-web.supportsWebCodecsRecording', {
+    run: () => {
+      playerWebCoreApi.supportsWebCodecsRecording({} as BaseAudioContext);
+    },
+  });
+  define('player-web.sanitizeMasterVolume', {
+    run: () => {
+      playerWebCoreApi.sanitizeMasterVolume(1.5);
+    },
+  });
+  define('player-web.setMasterVolume', {
+    run: () => {
+      playerWebCoreApi.setMasterVolume(1);
+    },
+  });
+  define('player-web.getMasterVolume', {
+    run: () => {
+      playerWebCoreApi.getMasterVolume();
+    },
+  });
+  define('player-web.masterOutput', {
+    run: () => {
+      playerWebCoreApi.masterOutput(BENCH_AUDIO_CONTEXT);
+    },
+  });
   define('player-web.pickRecorderMimeType', {
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');
+    },
+  });
+  define('player-web.chartPlayVariantForBeatorajaVariant', {
+    run: () => {
+      playerWebCoreApi.chartPlayVariantForBeatorajaVariant('7');
+      playerWebCoreApi.chartPlayVariantForBeatorajaVariant('24d');
     },
   });
   define('player-web.pickBeatorajaPlayableSkinVariant', {
@@ -670,7 +762,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   });
 }
 
-function makeBenchFile(path: string, body: string | Uint8Array): File {
+function makeBenchFile(path: string, body: string | Uint8Array<ArrayBuffer>): File {
   const name = path.split('/').at(-1) ?? path;
   const file = new File([body], name);
   Object.defineProperty(file, 'webkitRelativePath', {
@@ -777,7 +869,7 @@ function makeLr2Skin(): Lr2Skin {
     name: 'bench',
     scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
     files: new Map([['parts.tga', BENCH_BYTES]]),
-  } as Lr2Skin;
+  } as unknown as Lr2Skin;
 }
 
 function makeBenchBeatorajaSkin(): BeatorajaSkin {
@@ -829,7 +921,7 @@ function makeAudioBufferLike(): AudioBuffer {
     sampleRate: 1000,
     length: left.length,
     getChannelData: () => left,
-  } as AudioBuffer;
+  } as unknown as AudioBuffer;
 }
 
 interface FakeAudioParam {

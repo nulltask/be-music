@@ -2,7 +2,6 @@ import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils/core';
 import type { LogEntry } from '@be-music/utils/log';
 import type { BeMusicJson } from '@be-music/json';
-import { fileURLToPath } from 'node:url';
 import { Worker, type MessagePort } from 'node:worker_threads';
 import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerLoadProgress, PlayerSummary } from '@be-music/player/core/engine';
@@ -42,7 +41,6 @@ export async function runNodeGameplayRuntime(options: NodeGameplayRuntimeOptions
     : new Worker(resolveNodeGameplayWorkerUrl(), {
         workerData: createWorkerInitData(options),
         execArgv: resolveNodeGameplayWorkerExecArgv(),
-        env: resolveNodeGameplayWorkerEnv(),
       });
   const writeOutput = options.writeOutput ?? ((text: string) => process.stdout.write(text));
 
@@ -308,18 +306,6 @@ function resolveNodeGameplayWorkerExecArgv(): string[] {
     return process.execArgv;
   }
   return [...process.execArgv, '--conditions=source'];
-}
-
-function resolveNodeGameplayWorkerEnv(): NodeJS.ProcessEnv {
-  if (!import.meta.url.endsWith('.ts')) {
-    return process.env;
-  }
-
-  return {
-    ...process.env,
-    TSX_TSCONFIG_PATH:
-      process.env.TSX_TSCONFIG_PATH ?? fileURLToPath(new URL('../../../../tsconfig.typecheck.json', import.meta.url)),
-  };
 }
 
 function postWorkerMessage(

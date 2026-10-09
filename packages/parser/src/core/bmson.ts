@@ -476,7 +476,6 @@ export function createBmsonPositionResolver(
   };
 }
 
-
 /**
  * beatoraja bmson extension — long-note type values are `1` (LN), `2` (CN), `3` (HCN). Anything else (including the
  * spec-absent `0`) is treated as "unspecified" so the consumer falls back to the chart-level / player default.

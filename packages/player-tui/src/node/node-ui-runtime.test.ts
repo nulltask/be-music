@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { isAbortError } from '@be-music/utils/core';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import type { WorkerOptions } from 'node:worker_threads';
 import { createEmptyJson } from '../../../json/src/index.ts';
 import { createPlayerUiSignalBus } from '@be-music/player/core/ui-signal-bus';
@@ -94,7 +94,7 @@ describe('node ui runtime', () => {
       },
     });
 
-    runtime.dispose();
+    await runtime.dispose();
   });
 
   test('posts static landmine and invisible note collections only once', async () => {
@@ -217,11 +217,9 @@ describe('node ui runtime', () => {
     expect(messagesOfKind(worker, 'dispose')).toHaveLength(1);
   });
 
-  test('passes tsx tsconfig path to the UI worker in source runs', async () => {
+  test('passes the source-conditions exec flag to the UI worker in source runs', async () => {
     const uiSignals = createPlayerUiSignalBus(createFrame());
     const runtime = await createNodeUiRuntime(createContext(uiSignals));
-    const workerEnv = workerState.lastWorkerOptions?.env;
-    const workerEnvObject = typeof workerEnv === 'object' ? (workerEnv as NodeJS.ProcessEnv) : undefined;
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
     const workerData = workerState.lastWorkerOptions?.workerData as
       | {
@@ -235,8 +233,6 @@ describe('node ui runtime', () => {
         }
       | undefined;
 
-    expect(typeof workerEnv).toBe('object');
-    expect(workerEnvObject?.TSX_TSCONFIG_PATH).toContain('tsconfig.typecheck.json');
     expect(workerExecArgv).toContain('--conditions=source');
     expect(workerData).toMatchObject({
       stdinIsTTY: Boolean(process.stdin.isTTY),
@@ -404,6 +400,7 @@ function createFrame(
       good: 0,
       bad: 0,
       poor: 0,
+      emptyPoor: 0,
       exScore: 0,
       score: 0,
     },

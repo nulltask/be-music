@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerUiSignalBus } from './ui-signal-bus.ts';
 
 describe('player ui signal bus', () => {
@@ -16,6 +16,7 @@ describe('player ui signal bus', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -36,6 +37,7 @@ describe('player ui signal bus', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 2,
         score: 200000,
       },

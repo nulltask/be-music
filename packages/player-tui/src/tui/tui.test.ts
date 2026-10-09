@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { formatJudgeComboDisplay, PlayerTui } from './tui.ts';
 import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
 
@@ -67,6 +67,7 @@ function renderOutputRaw(
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -186,6 +187,7 @@ function createSummary(score = 0) {
     good: 0,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 0,
     score,
   };

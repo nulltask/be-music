@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { createUiWorkerFrameState } from './ui-worker-frame-state.ts';
 
 describe('ui worker frame state', () => {
@@ -48,6 +48,7 @@ describe('ui worker frame state', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -163,6 +164,7 @@ describe('ui worker frame state', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },
@@ -182,6 +184,7 @@ describe('ui worker frame state', () => {
         good: 0,
         bad: 0,
         poor: 0,
+        emptyPoor: 0,
         exScore: 0,
         score: 0,
       },

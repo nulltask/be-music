@@ -658,6 +658,12 @@ export class BeatorajaRuntimeAdapter {
       case '9':
         this.activeOps.add(BEATORAJA_OP.KEYSONG_9K);
         break;
+      case '24':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_24K);
+        break;
+      case '48':
+        this.activeOps.add(BEATORAJA_OP.KEYSONG_24K_DP);
+        break;
     }
   }
 

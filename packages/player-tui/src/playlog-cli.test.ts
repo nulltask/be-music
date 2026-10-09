@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog, PlaylogRulesetResult } from '@be-music/player/playlog';
 import { buildPlaylogReport, parsePlaylogCliArgs } from './playlog-cli.ts';
 

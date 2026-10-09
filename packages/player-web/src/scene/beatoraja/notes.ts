@@ -72,6 +72,30 @@ const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
 };
 const SEVEN_KEY_PALETTE = ['red', 'white', 'blue', 'white', 'blue', 'white', 'blue', 'white'] as const;
 const POP_KEY_PALETTE = ['white', 'yellow', 'green', 'blue', 'red', 'blue', 'green', 'yellow', 'white'] as const;
+/**
+ * 24-key fallback tint, one chromatic octave wide. The Keyboardmania bank is a piano keyboard, so the pattern follows
+ * white / black keys (C C# D D# E F F# G G# A A# B) and repeats every 12 lanes.
+ */
+const KEYBOARD_KEY_PALETTE = [
+  'white',
+  'blue',
+  'white',
+  'blue',
+  'white',
+  'white',
+  'blue',
+  'white',
+  'blue',
+  'white',
+  'blue',
+  'white',
+] as const;
+/**
+ * Lane slots one side occupies in a `play24` / `play24d` skin's `note[]` table: 24 key columns plus the trailing
+ * `note-su` / `note-sd` scratch pair. The engine's keyboard modes don't author those two, but the 2P bank still has to
+ * start after them so DP lanes line up with the skin's rect table.
+ */
+const KEYBOARD_SKIN_SIDE_LANES = 26;
 const PALETTE_COLOR: Record<string, number> = {
   white: FALLBACK_COLOR_BY_KEY.white!,
   blue: FALLBACK_COLOR_BY_KEY.blue!,
@@ -354,6 +378,12 @@ export class BeatorajaNoteLayer {
   private resolveLane(note: PlayerUiFrameNote): number | undefined {
     const slot = resolveSideKeySlot(note.channel, this.variant);
     if (slot < 0) return undefined;
+    if (this.variant === '24' || this.variant === '48') {
+      // Keyboard modes have no scratch, so the 24 columns map straight onto the skin's leading lane slots.
+      const baseLane = slot - 1;
+      const isPlayer2 = this.variant === '48' && note.channel.startsWith('2');
+      return isPlayer2 ? KEYBOARD_SKIN_SIDE_LANES + baseLane : baseLane;
+    }
     if (this.variant === '9') return slot - 1;
     const numKeys = this.variant === '5' || this.variant === '10' ? 5 : 7;
     const baseLane = slot === 0 ? numKeys : slot - 1;
@@ -630,6 +660,10 @@ export class BeatorajaNoteLayer {
   }
 
   private fallbackColorForLane(lane: number): number {
+    if (this.variant === '24' || this.variant === '48') {
+      const key = KEYBOARD_KEY_PALETTE[(lane % KEYBOARD_SKIN_SIDE_LANES) % KEYBOARD_KEY_PALETTE.length] ?? 'white';
+      return PALETTE_COLOR[key] ?? PALETTE_COLOR.white!;
+    }
     const palette = this.variant === '9' ? POP_KEY_PALETTE : SEVEN_KEY_PALETTE;
     const sided = this.variant === '10' || this.variant === '14' ? lane % 8 : lane;
     const key = palette[sided] ?? 'white';

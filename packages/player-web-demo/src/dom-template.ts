@@ -359,6 +359,7 @@ export const DEMO_APP_HTML = `
               <li><kbd>Space</kbd> pauses / resumes.</li>
               <li><kbd>F5</kbd> restarts the current chart.</li>
               <li><kbd>Esc</kbd> exits to the result screen (or back to song select).</li>
+              <li>Double-click the playfield to enter or leave fullscreen. <kbd>Esc</kbd> leaves fullscreen first, then repeats the usual scene action.</li>
             </ul>
 
             <h3 class="help-section-title">Options &amp; recording</h3>
@@ -456,6 +457,7 @@ export const DEMO_APP_HTML = `
               <li><kbd>Space</kbd> でポーズ / 再開。</li>
               <li><kbd>F5</kbd> で現在のチャートをリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
+              <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。</li>
             </ul>
 
             <h3 class="help-section-title">オプションと録画</h3>

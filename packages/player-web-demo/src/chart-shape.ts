@@ -12,9 +12,23 @@ import { resolveChartPlayVariant, type BrowserSongEntry } from '@be-music/player
  */
 export function chartShapeFor(song: BrowserSongEntry): { keys: number; isDouble: boolean; isPms: boolean } {
   const variant = resolveChartPlayVariant(song);
+  // `'48'` is the DP form of the 24-key keyboard mode, so it reports 24 keys per side plus `isDouble` — the same
+  // per-side convention the IIDX `'14'` / `'10'` variants use.
+  const keys =
+    variant === '24' || variant === '48'
+      ? 24
+      : variant === '14'
+        ? 14
+        : variant === '10'
+          ? 10
+          : variant === '7'
+            ? 7
+            : variant === '5'
+              ? 5
+              : 9;
   return {
-    keys: variant === '14' ? 14 : variant === '10' ? 10 : variant === '7' ? 7 : variant === '5' ? 5 : 9,
-    isDouble: variant === '14' || variant === '10',
+    keys,
+    isDouble: variant === '14' || variant === '10' || variant === '48',
     isPms: variant === '9',
   };
 }

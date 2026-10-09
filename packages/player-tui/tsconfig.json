@@ -1,19 +1,4 @@
 {
-  "extends": "../../tsconfig.build.options.json",
-  "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "rootDir": "src",
-    "outDir": "dist",
-    "emitDeclarationOnly": true
-  },
-  "include": ["src"],
-  "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"],
-  "references": [
-    { "path": "../audio-renderer" },
-    { "path": "../chart" },
-    { "path": "../json" },
-    { "path": "../parser" },
-    { "path": "../player" },
-    { "path": "../utils" }
-  ]
+  "extends": "../../tsconfig.typecheck.json",
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
 }

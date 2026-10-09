@@ -233,7 +233,7 @@ export class ChartPreviewEngine {
 
   private stopAllSources(options: { fade: boolean }): void {
     const now = this.audioContext.currentTime;
-    for (const handle of [...this.activeSources]) {
+    for (const handle of Array.from(this.activeSources)) {
       if (options.fade) {
         this.fadeOutSource(handle, now);
       } else {
@@ -276,11 +276,14 @@ export class ChartPreviewEngine {
       this.finishSource(handle);
       return;
     }
-    setTimeout(() => {
-      if (handle.stopping) {
-        this.finishSource(handle);
-      }
-    }, CHART_PREVIEW_STOP_FADE_OUT_SECONDS * 1000 + 50);
+    setTimeout(
+      () => {
+        if (handle.stopping) {
+          this.finishSource(handle);
+        }
+      },
+      CHART_PREVIEW_STOP_FADE_OUT_SECONDS * 1000 + 50,
+    );
   }
 
   private stopSourceImmediately(handle: PreviewSourceHandle): void {

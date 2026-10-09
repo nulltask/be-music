@@ -48,6 +48,7 @@ The command starts the Vite demo. Drop any of the following into the page:
 
 When a mixed drop contains chart files, the loader treats the chart directories as song files and the remaining files as theme files.
 When no chart file is present, the whole drop is treated as a theme candidate. LR2 detection uses `.lr2skin` files, while beatoraja detection uses `.luaskin` files or JSON files under a `skin/` path segment.
+Double-click the playfield to toggle the demo into fullscreen; `Esc` leaves fullscreen before it runs the usual scene action.
 
 ## Browser loading model
 
@@ -94,6 +95,9 @@ state-specific value resolution, timers, and input behavior.
 The built-in default family is the skinless path used when no LR2 or beatoraja theme is available, or when the host
 explicitly chooses the default family. It provides select, gameplay, and result presentation without requiring theme
 files.
+
+The family draws every screen through a be-music skin, a code-defined skin built on the public
+`@be-music/skin-sdk` package. See [Writing a be-music skin](./be-music-skin.md) to make one.
 
 Gameplay still shares the common engine, note renderer, BGA renderer, audio bus, and input handling with
 `PixiGameplayView`, but the default chrome is injected from `scene/default/gameplay.ts` through the

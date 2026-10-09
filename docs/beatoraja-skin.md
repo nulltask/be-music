@@ -130,8 +130,9 @@ graphs, gauges, note layers, BGA layers, system sounds, and result histories. Ga
 `BeatorajaRuntimeAdapter` to translate engine UI signals into beatoraja timers, op codes, judge popups, combo
 digits, key beams, LN hold timers, and timing samples.
 
-The browser gameplay path mounts chart variants `5`, `7`, `9`, `10`, and `14`. The parser still discovers `24` and
-`24d` skins, but the current shared player engine does not drive 24-key chart gameplay.
+The browser gameplay path mounts every chart variant the parser discovers — `5`, `7`, `9`, `10`, `14`, `24`, and
+`24d`. The keyboard modes address their lanes through the `1000`-block timer bases upstream's `play24main.lua` uses
+(`bomb_1p_key10 = 1010`, …), which `runtime-ids.ts` already exposes.
 
 ## Compatibility boundary
 

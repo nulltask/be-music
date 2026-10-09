@@ -40,5 +40,9 @@ export function playSkinTypeForVariant(variant: BeatorajaPlayableVariant): numbe
       return BEATORAJA_SKIN_TYPE.PLAY_10KEYS;
     case '9':
       return BEATORAJA_SKIN_TYPE.PLAY_9KEYS;
+    case '24':
+      return BEATORAJA_SKIN_TYPE.PLAY_24KEYS;
+    case '24d':
+      return BEATORAJA_SKIN_TYPE.PLAY_24KEYS_DOUBLE;
   }
 }

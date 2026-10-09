@@ -1,0 +1,63 @@
+*---------------------- METADATA FIELD
+
+#TITLE Dynamic Bus Volume Channels
+#SUBTITLE Channel 97 (BGM bus) and channel 98 (key bus)
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 1
+#TOTAL 200
+#DIFFICULTY 1
+
+*---------------------- EXTENDED HEADER FIELD
+* Channels `97` and `98` are the two dynamic volume buses:
+*
+*   #xxx97 - BGM-side (autoplay / channel 01) bus volume
+*   #xxx98 - playable-side (key sound) bus volume
+*
+* The token is a base-36 pair read as a 0..FF ratio of the original volume, so
+* `FF` is unity, `80` is roughly half, and `01` is the quietest audible step.
+* `00` is "no event" rather than silence, so it is never authored as a value.
+*
+* Both channels must stay out of the sample-trigger path - authoring a volume
+* change must not itself make a sound - which is what makes a real chart worth
+* having here rather than only the classifier unit tests.
+
+#PLAYER 1
+#LNTYPE 1
+#VOLWAV 100
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - reference bar. BGM on channel 01, key sounds on channel 11, both
+* at the volume the chart declares.
+#00001:02020202
+#00011:01010101
+
+* Measure 1 - duck the BGM bus to half and then to the quietest step while the
+* key bus stays untouched.
+#00197:8001
+#00101:02020202
+#00111:01010101
+
+* Measure 2 - restore the BGM bus and duck the key bus instead.
+#00297:FF00
+#00298:8040
+#00201:02020202
+#00211:01010101
+
+* Measure 3 - both buses move on the same beat, which is where an ordering bug
+* between the two gain stages shows up.
+#00397:40FF
+#00398:FF40
+#00301:02020202
+#00311:01010101
+
+*---------------------- CONTROL FLOW FIELD

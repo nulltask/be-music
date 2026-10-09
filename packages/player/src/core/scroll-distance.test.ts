@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createScrollDistanceMapper } from './scroll-distance.ts';
 
 describe('scroll distance', () => {

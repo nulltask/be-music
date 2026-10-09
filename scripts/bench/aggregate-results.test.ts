@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { aggregateBenchmarkSnapshots } from './aggregate-results.ts';
 import type { ExportsBenchmarkSnapshot } from './exports.types.ts';
 
@@ -22,11 +22,16 @@ function createSnapshot(
     exports: {
       utils: ['clamp'],
       json: [],
+      chart: [],
       parser: [],
       stringifier: [],
       editor: [],
       'audio-renderer': [],
       player: [],
+      'player-tui': [],
+      'lr2-skin': [],
+      'skin-sdk': [],
+      'player-web': [],
     },
     totals: {
       exported: 1,
@@ -38,7 +43,9 @@ function createSnapshot(
     results: {
       'utils.clamp': {
         hz,
+        medianHz: hz,
         meanMs,
+        p50Ms: meanMs,
         p75Ms: meanMs + 1,
         p99Ms: meanMs + 2,
         minMs: meanMs - 1,
@@ -65,8 +72,70 @@ describe('aggregateBenchmarkSnapshots', () => {
       runCount: 3,
     });
     expect(aggregated.results['utils.clamp'].hz).toBe(120);
+    expect(aggregated.results['utils.clamp'].medianHz).toBe(120);
     expect(aggregated.results['utils.clamp'].meanMs).toBe(9);
+    expect(aggregated.results['utils.clamp'].p50Ms).toBe(9);
     expect(aggregated.results['utils.clamp'].p99Ms).toBe(11);
+  });
+
+  it('aggregates medianHz independently from mean hz', () => {
+    const aggregated = aggregateBenchmarkSnapshots([
+      createSnapshot(80, 12, {
+        results: {
+          'utils.clamp': {
+            hz: 80,
+            medianHz: 100,
+            meanMs: 12,
+            p50Ms: 10,
+            p75Ms: 13,
+            p99Ms: 14,
+            minMs: 9,
+            maxMs: 15,
+            rmePercent: 1,
+            sampleCount: 100,
+            totalTimeMs: 200,
+          },
+        },
+      }),
+      createSnapshot(200, 5, {
+        results: {
+          'utils.clamp': {
+            hz: 200,
+            medianHz: 140,
+            meanMs: 5,
+            p50Ms: 8,
+            p75Ms: 6,
+            p99Ms: 7,
+            minMs: 4,
+            maxMs: 8,
+            rmePercent: 1,
+            sampleCount: 100,
+            totalTimeMs: 200,
+          },
+        },
+      }),
+      createSnapshot(90, 11, {
+        results: {
+          'utils.clamp': {
+            hz: 90,
+            medianHz: 120,
+            meanMs: 11,
+            p50Ms: 9,
+            p75Ms: 12,
+            p99Ms: 13,
+            minMs: 8,
+            maxMs: 14,
+            rmePercent: 1,
+            sampleCount: 100,
+            totalTimeMs: 200,
+          },
+        },
+      }),
+    ]);
+
+    expect(aggregated.results['utils.clamp'].hz).toBe(90);
+    expect(aggregated.results['utils.clamp'].medianHz).toBe(120);
+    expect(aggregated.results['utils.clamp'].p50Ms).toBe(9);
   });
 
   it('rejects incompatible snapshots', () => {

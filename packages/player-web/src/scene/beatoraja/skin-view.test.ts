@@ -1,5 +1,5 @@
 import { Texture, TextureSource } from 'pixi.js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { evaluateBeatorajaLuaSkin, isBeatorajaLuaFunctionValue } from '@be-music/beatoraja-skin';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';

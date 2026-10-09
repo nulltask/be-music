@@ -1,5 +1,148 @@
 # @be-music/player
 
+## 0.7.0
+
+### Minor Changes
+
+- d9958ac: Show empty POORs in the LR2 POOR counter, as real LR2 does.
+  
+  `RulesetConfig` gains `emptyPoorCountsInPoorDisplay` — a presentation rule, not a scoring one. LR2 is `true`:
+  OpenLR2's `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat,
+  so a run judged under LR2 now folds `emptyPoor` into the POOR figure its result screen, BP, and per-judge rates
+  read. beatoraja shows an empty-POOR figure of its own and IIDX's counter is unmeasured, so both keep them apart.
+  
+  `ScoreSummary` gains `emptyPoor` and `@be-music/player/core/scoring` exports `resolveDisplayedPoor`.
+  `PlayerSummary` always reports the split; only the display copy folds.
+- 202a28b: Drive 24 KEY SP / 48 KEY DP charts end to end — the extended lane channels are now scorable notes, not just a display-mode guess.
+  
+  `extractTimedNotes` / `extractPlayableNotes` accept objects on the extended lane columns (`1A..1O` / `2A..2O`, plus the matching `3X`/`4X` invisible, `5X`/`6X` long-note, and `DX`/`EX` landmine families), so they land in `summary.total`, get judged, and reach the renderer. `ChartPlayVariant` gains `'24'` / `'48'`, and `resolveSideKeySlot`, `resolveLaneChannels`, and `createLaneBindings` resolve the 24 scratch-less columns per side in ascending channel order. `resolveLr2LaneIndex` returns `-1` for these variants because LR2 skins only define the 20 IIDX lane rects — hosts fall back to their own playfield instead of squeezing 24 lanes into the 7-key table.
+  
+  FREE ZONE is now variant-aware. Channels `17` / `27` only get the quarter-note FREE ZONE tail on the IIDX families; under `9 KEY` and the keyboard modes they are ordinary key columns, so a tap stays a tap and a `#LNOBJ` tail is no longer shadowed by the phantom one-beat tail. The variant is taken from the new `playVariant` extraction option when the host supplies one (`preparePlaybackChartData` forwards `PlayerOptions.playVariant`), and is otherwise classified from the chart the first time a `17` / `27` object appears.
+- 750c47d: Add `resolvePlayVariantLaneChannels` to `@be-music/player/core/lane-layout`: the full lane set of a chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY) in rendering order, whether or not the chart puts notes on every lane. 9 KEY picks the PMS layout when the chart uses `22..25` and the BME layout otherwise, and lanes in use outside the variant are kept.
+- 2d7652c: Charge empty POORs from the ruleset's own miss window, and surface the count.
+  
+  The engine hardcoded LR2's one-second early window for every ruleset and never reported the tally. It now reads the
+  active ruleset's miss (`ms`) window — LR2's is early-only (`{0, 1 s}`), beatoraja's reaches 500 ms early and 150 ms
+  late — and checks both neighbours of the press so the late side is honoured where a ruleset has one. Whether an empty
+  POOR breaks the combo is the ruleset's call too: beatoraja's five-key and PMS rules say yes, LR2 and IIDX say no.
+  
+  `PlayerSummary` and the UI frame summary gain a required `emptyPoor` field. It is tracked apart from `poor` because an
+  empty POOR consumes no note and never reaches EX-SCORE; whether a player's POOR counter displays the two summed is a
+  presentation choice, and LR2's does (OpenLR2 `ApplyJudgeNote` increments `playerstat.poor` for it).
+- 0103435: Run the selected gauge through the active compat ruleset instead of a hardcoded LR2 groove curve.
+  
+  `PlayerOptions.gauge` now picks a gauge out of the ruleset's own line-up (LR2 `GROOVE` / `EASY` / `HARD` / `EX-HARD` /
+  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, IIDX `NORMAL` / `EASY` /
+  `ASSISTED-EASY` / `HARD` / `EX-HARD`) and the engine runs that gauge's real curve — per-judge deltas, TOTAL scaling,
+  guts softening, death border, and the survival-vs-threshold clear rule. Previously the picker was cosmetic: HARD
+  rendered red but ran GROOVE's numbers and reported CLEARED at 2 %.
+  
+  Consequences:
+  
+  - `PlayerSummary.gauge` gains `survival` and `failedMidPlay`, and its `type` widens from the LR2-only union to the
+    ruleset-scoped gauge id.
+  - The LR2 `#TOTAL` default is now LR2's note-count formula (`LR2_bmsload.cpp`) rather than a flat 160.
+  - `@be-music/player/core/groove-gauge` keeps only `GrooveGaugeType` / `GrooveGaugeJudgeKind`; the gauge state helpers
+    (`createGrooveGaugeState`, `applyGrooveGaugeJudge`, `applyGrooveGaugeRawDelta`, `isGrooveGaugeCleared`) are removed
+    in favour of the ruleset's `RulesetGauge`.
+  - `beatorajaGaugeModeFromString` and `computeClearLampOp` accept every ruleset's gauge id, so beatoraja skins show the
+    ASSIST-EASY and EX-HARD lamps instead of collapsing them onto NORMAL.
+- 9505684: Play long notes the way the active ruleset does, and count their judgments accordingly.
+  
+  The engine used to read the chart's `#LNMODE` directly and always resolve a long note into a single combined
+  judgment. It now maps the chart mode through the ruleset's long-note style first:
+  
+  - LR2 (`ln`) plays every long note as an LN — one deferred judgment, no CN or HCN, whatever `#LNMODE` asks for.
+  - beatoraja (`per-note`) honours the chart: mode 1 is an LN, modes 2 and 3 are CN / HCN.
+  - IIDX (`charge`) has no LN — every long note is a charge note (HCN where the chart says 3).
+  
+  Charge modes score the head on the press and the tail on the release, so one long note contributes two judgments,
+  which is what `PlayerSummary.total` (the ruleset's EX-SCORE denominator) has always counted. Under IIDX a broken
+  head cancels the tail (`headBadSkipsTail`).
+  
+  Two timing fixes fall out of this:
+  
+  - The tail is judged against the exact release instant instead of whichever frame noticed it. At high `speed` a frame
+    can span hundreds of chart milliseconds, which quantized a clean release into a GOOD or worse.
+  - Holding a charge note past its tail is no longer an immediate judgment: the player has until the tail's late window
+    closes to let go, matching the play-log simulator and the reference players.
+  
+  The end-of-play backfill now counts unjudged notes instead of topping the tally up to `summary.total`, which was
+  inventing a POOR for every IIDX charge note whose tail was cancelled.
+- 1589105: Select the judged note with the ruleset's own algorithm, and add LR2's multi-BAD collector.
+  
+  The engine always resolved a press against the note closest in time (beatoraja's non-default `duration` behaviour).
+  It now runs the active ruleset's `JudgeAlgorithm`: LR2 and IIDX use `lowest` (the oldest note in reach always wins),
+  beatoraja uses `combo` (the press moves to the next note once the current one has fallen out of the late side of its
+  GOOD window). LR2's `ignoreLateBadOnLnHead` is honoured too — a late BAD on a long-note head falls through instead of
+  consuming the head.
+  
+  Under LR2, a press now also triggers lr2oraja's `MultiBadCollector`: every other unjudged note on the pressed lanes
+  that sits inside the BAD window but outside the GOOD window resolves as a BAD, with the collector's own pruning for
+  notes after the consumed one and for long notes before it.
+  
+  The selection primitives are exported from the ruleset module as `preferJudgeCandidate` and `selectJudgeCandidate`,
+  and `lowerBoundBySeconds` is now exported from `@be-music/player/judging`.
+- 1c6e7aa: Score with the active ruleset's formula instead of an invented 200000-point curve.
+  
+  `summary.score` was computed from a made-up model — a 150000-point judge base plus a 50000-point combo bonus that
+  capped at a combo of 10 — which matches no reference player. It now follows the ruleset:
+  
+  - LR2 reports its money score, `floor((4×PGREAT + 2×GREAT + GOOD) × 50000 / notes)`, capped at 200000. Purely a
+    function of the judge tally: no combo term.
+  - beatoraja and IIDX report EX-SCORE, which is what they display (IIDX retired its own money score in BISTROVER).
+  
+  `createScoreTracker` takes `{ moneyScore }`, `LR2_MONEY_SCORE_MAX` replaces `IIDX_SCORE_MAX`, and the invented
+  combo-bonus helpers are gone. The TUI result block prints the SCORE line only for rulesets that define one, and now
+  also prints the empty-POOR count.
+- 08e62d0: Judge with the active ruleset's signed, per-context judge windows instead of one symmetric width.
+  
+  The engine previously reduced every ruleset to a single `{pgreat, great, good, bad}` set of symmetric millisecond
+  widths. It now reads the ruleset's four window tables — key vs scratch, note vs long-note end — and both legs of every
+  window separately, so:
+  
+  - beatoraja's asymmetric BAD window is honoured: on a seven-key chart a press 250 ms late is a BAD, while the same
+    press 250 ms early cannot reach the note at all and leaves it to miss on its own deadline.
+  - Scratch lanes judge on the turntable tables (beatoraja's are 10 ms wider per judge than its key tables).
+  - Long-note ends judge on the long-note-end tables, including LR2's GOOD-width release tolerance.
+  - Each note's miss deadline comes from its own lane and its own chart time, so a mid-chart `#EXRANKxx` no longer needs
+    a separate frozen-window cursor.
+  - Mine detonation uses the GOOD window's early and late legs separately.
+  
+  A press that lands inside no window no longer consumes the note as a POOR — it falls through to the lane keysound and
+  the empty-POOR path, which is what every reference player does.
+  
+  `resolveJudgeWindowsMsForRuleset` and `resolveBeatorajaJudgeRankPercent` are removed from
+  `@be-music/player/core/judge-window`; the per-ruleset tables live in the ruleset module, which now also exports
+  `classifyRulesetJudge`, `selectJudgeWindowSet`, `judgeWindowLateReachUs`, `judgeWindowEarlyReachUs`, and
+  `goodWindowReachUs`.
+
+### Patch Changes
+
+- f24ed8b: Detonate mines the way real LR2 does: a held crossing of the judge line, or a press within PGREAT.
+  
+  LR2's own changelog (the 080114 mine-implementation entry) gives two detonation conditions — passing
+  a mine with the key held, or pressing within the PGREAT (ピカグレ) range — and no later entry revises
+  it. The previous implementation followed losak's secondary writeup and used the GOOD window
+  (±40-120 ms depending on rank) for both legs. Now the press leg uses the PGREAT window (±8-21 ms)
+  and the hold-through leg anchors to the crossing itself, so a held mine can no longer slip through
+  undetonated between two frame ticks when the window is narrower than the tick interval.
+  `goodWindowReachUs` is renamed to `pgreatWindowReachUs` accordingly.
+- b3fa635: Shorten the default POOR / miss BGA display window from 2000 ms to 500 ms, matching real LR2.
+  
+  LR2 ships `<poorbga>500</poorbga>` in its `config.xml` and its changelog documents 500 ms as the
+  miss-BGA default, so the previous 2-second window held the miss layer four times longer than LR2.
+  `DEFAULT_POOR_BGA_DISPLAY_SECONDS` is shared by the TUI compositor and the web LR2 scene, so both
+  runtimes pick up the corrected timing.
+- 41f5efb: Cap every inner judge window at the BAD gate under the IIDX ruleset. Classification walks PGREAT → GREAT → GOOD → BAD in order, so the uncapped GOOD window (116.67 ms) swallowed every press a `judgeWindowMs` debug override below it was meant to reject — a 50 ms override left the effective window at 116.67 ms. LR2 and beatoraja already capped; all three now share one code path.
+  
+  Resolve each note's miss deadline from the judge rank in force at that note's own time instead of the live window. The LR2 BAD gate is rank-invariant, so this is behaviour-neutral today; it stops a rank change from retroactively moving the deadline of already-passed notes once a ruleset whose BAD width scales with judgerank is wired in.
+- 40f1050: Move the LR2 / beatoraja / IIDX ruleset tables out of the play-log simulator into a shared `src/ruleset/` module so the live engine and the simulator can resolve behaviour from one source of truth. The tables now take a neutral `RulesetChartFacts` record instead of reading a `PlaylogChart` directly, and each caller supplies an adapter — `rulesetChartFactsFromPlaylog` for recorded plays. `@be-music/player/playlog` re-exports the ruleset surface unchanged, so this is behaviour-neutral for consumers.
+- Updated dependencies [202a28b]
+  - @be-music/chart@0.4.0
+  - @be-music/audio-renderer@0.2.4
+  - @be-music/parser@0.2.4
+
 ## 0.6.0
 
 ### Minor Changes
@@ -22,11 +165,11 @@
 
 ### Patch Changes
 
-- b9922cf: Support the beatoraja bmson long-note type extensions: `info.ln_type` and per-note `t` (1: LN, 2: CN, 3: HCN) are preserved in the IR, round-trip through JSON and bmson output, and drive the player's long-note mode (per-note `t` wins over `info.ln_type`). Charts that specify neither now default to LN (no tail release judgment, matching the LR2-aligned BMS default) instead of always being treated as CN.
+- b9922cf: Honour beatoraja bmson long-note type extensions (`info.ln_type` and per-note `t`: 1 LN / 2 CN / 3 HCN; per-note `t` wins). Charts that specify neither now default to LN (no tail release judgment, matching the LR2-aligned BMS default) instead of always being treated as CN.
 - 254e213: Empty POORs (空 POOR) now follow the LR2 trigger condition: a phantom press charges only when a note on the same lane lies within the next 1 second (early side only, fixed window). Presses after a note or on lanes with no upcoming note are harmless keysound presses — previously every phantom press drained the gauge regardless of note proximity.
 - ebfdba7: Bump the `node-web-audio-api` runtime dependency from 1.0.9 to 2.0.0 (semver-major). The Node audio sink now runs on the 2.x WebAudio backend with no change to the player's public API.
 - ca1012c: Load `node-web-audio-api` through the SEA-aware optional-module loader. In a single executable application the bare-specifier import always fails, which permanently disabled audio playback; the player can now pick the module up from a `node_modules` directory next to the executable (or the working directory) before falling back to silent playback.
-- 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in: pass `fallbackToneSeconds` to the audio-renderer APIs or `missingSampleToneSeconds` to the player engine when a debugging tone is wanted.
+- 6ce9173: Missing, undefined, or undecodable `#WAVxx` references are now silent by default, matching LR2 / beatoraja. The synthesized sine fallback tone is opt-in via `PlayerOptions.missingSampleToneSeconds`.
 - 7802f98: Fix four spec-compliance deviations found by the BMS spec audit:
 
   - HARD / DEATH gauges now report FAILED when they bottom out at 0 % (previously `isGrooveGaugeCleared` treated 0 % as cleared).
@@ -70,7 +213,6 @@
   - `core/engine.ts`: hoist `resolveBmsBase(resolvedJson)` and `resolvedJson.resources.wav` out of the autoplay tick into local constants. Both fields are immutable from the autoplay entry point on, but were re-walked dozens of times per second (LN body, every triggered sample, mine resolution).
   - `judging.ts`: `lowerBoundBySeconds` now binary-searches `startIndex` when the caller declares `sortedBySeconds: true` and doesn't supply an explicit `startIndex`. Drops the per-call prefix scan from O(N) to O(log N) once the judge window opens deep into the chart.
 
-- 956fd01: Refactor shared scroll-distance segment integration terms.
 - Updated dependencies [73dff9a]
   - @be-music/utils@0.2.1
   - @be-music/audio-renderer@0.2.2
@@ -82,78 +224,9 @@
 
 ### Minor Changes
 
-- 06a2db9: Add **beatoraja skin** support to `player-web`, alongside the existing LR2 path.
+- 06a2db9: Add optional `PlayerOptions.playVariant` (`'5' | '7' | '9' | '10' | '14' | '24'`) so the host can pin the engine's lane mode. BME-format POPN-9 charts can now mount with the correct `f / v / g / b` bindings instead of falling back to 7-key SP.
 
-  ### `@be-music/beatoraja-skin` (new package)
-
-  Renderer-independent parser and normalizer for beatoraja's JSON and Lua skin formats. Covers the
-  2-phase Lua evaluation contract (`skin_config = nil` → header → populated `main()`) on a Fengari
-  sandbox, `if` / `values` flattening, `*` wildcard / `filepath[]` overrides, case-insensitive asset
-  lookup, and per-scene theme discovery (play / select / decide / result / course-result /
-  grade-result). All scene elements have strict-typed normalizers under `src/elements/` (`image`,
-  `imageset`, `value`, `float-value`, `text`, `slider`, `note`, `judge`, `judge-graph`, `gauge`,
-  `gauge-graph`, `bpm-graph`, `timing-visualizer`, `timing-distribution-graph`, `song-list`,
-  `custom-event`, `direction`, `destination`, `pm-chara`, `graph`) with keyframe carry-forward,
-  linear interpolation, `loop` wrap-around, and `divx` / `divy` cell math. `skin/default/`
-  discovery wins ties against community themes that shadow it.
-
-  ### `@be-music/player-web` (new beatoraja runtime + scenes)
-
-  - Public entry point gains `loadBeatorajaThemeFromFiles()`, `loadBeatorajaTexturesFromBundle()`,
-    `destinationToSpriteProps()`, `BeatorajaPlaySkinView`, the `BeatorajaRuntimeAdapter`, Pixi
-    scenes for **decide / gameplay / result / select** (with notes / markers / BGA layers), drop
-    detection helpers (`isBeatorajaSkinIndicator`, `isBeatorajaLuaSkinFilePath`,
-    `isLr2SkinFilePath`), and the chart-side helpers (`prepareBeatorajaGameplayChart`,
-    `computeBeatorajaChartMarkers`, `pickBeatorajaPlayableVariant`, …).
-  - Beatoraja `TIMER_*` / `OPTION_*` ↔ runtime-id wiring; live `getNowCombo` override; per-plate
-    POPN-9 timers / ops; `replaceSkin` refreshes textures / fonts / options mid-session.
-  - Many engine-rendering fixes uncovered while wiring beatoraja skins also land here:
-    POPN-9 (PMS-STD) routing, LN / CN / HCN cap pairing and orientation, HCN sprite slots, LN
-    body / tail visibility after head judge, LN-hold timer re-stamping at the tail verdict,
-    upstream `rxhs / 4` note scroll formula, BMFont negative-`size=` normalization, beatoraja-
-    select left-info panel via `TIMER_SONGBAR_CHANGE`, song-list `title + " " + subtitle`,
-    per-difficulty `level-*` digit cropping, judge-popup live combo via `getNowCombo`, destination
-    clipping to the authored canvas (LR2 parity), and more.
-
-  **Breaking** — `BrowserSongLibrary` is renamed to `BrowserSongCollectionStore`. The
-  `player-web` / `beatoraja-skin` / `lr2-skin` source trees are also reorganized into
-  purpose-based subdirectories (`browser/`, `chart/{,beatoraja}/`, `collection/`, `recording/`,
-  `runtime/`, `scene/{,beatoraja,lr2}/`, `skin/{beatoraja,lr2}/` and per-element subfolders); the
-  packages' `index.ts` re-exports the same symbols, so consumers that import from the package
-  entry point are unaffected — deep imports into `packages/*/src/*` need to follow the new paths.
-
-  ### `@be-music/chart` — broaden `resolveChartPlayVariant`
-
-  Two new content-based detection rules so PMS-STD authored as `.bme` / `.bms` routes to `'9'`
-  instead of falling through to IIDX heuristics:
-
-  - **BME POPN-9** — `#PLAYER 1` + every one of channels `11..19` populated. IIDX 7K never lights
-    up all nine columns, so a full 1P keyboard is a reliable POPN-9 signal.
-  - **PMS-STD on any extension** — any of channels `22..25` AND no traditional IIDX 2P channels
-    (`21` / `26..29`). Real IIDX DP always pairs each side's keyboard with `21` and / or scratch.
-
-  ### `@be-music/player` — direct lane-mode override
-
-  - New optional `PlayerOptions.playVariant` (`'5' | '7' | '9' | '10' | '14' | '24'`) lets the host
-    pin the engine's lane mode directly. Mirrors the renderer-side variant the host has already
-    classified the chart as, so BME-format POPN-9 charts mount with the correct `f / v / g / b`
-    bindings instead of falling back to 7-key SP.
-  - The player summary's `gauge` block now exposes the gauge `type` so consumers can label the
-    clear lamp without inferring from the threshold (EASY 60 vs DEATH 0+ε collide).
-  - LN engine aligned with upstream beatoraja: silent mid-hold mines, HCN gauge gain, drain rate.
-
-  ### `@be-music/lr2-skin`
-
-  Source tree reorganization only (drops the `lr2[-skin]-` prefix from filenames); entry-point
-  exports unchanged. A few comments were translated from Japanese to English.
-
-  ### `@be-music/player-web-demo`
-
-  Demo gains a beatoraja-theme path in parallel with LR2 themes: a "Beatoraja preview" folder in
-  the debug menu, variant dropdown (`7 / 5 / 14 / 10 / 9`), and an "Open preview" button that
-  mounts `BeatorajaPlaySkinPreviewScene` inside the shared `PixiSceneHost`. Texture caches are
-  memoized per entry path so reopening a variant reuses the GPU upload, and skin-options panel
-  state persists across mid-edit `replaceSkin` round-trips.
+  The player summary's `gauge` block now exposes the gauge `type` so consumers can label the clear lamp without inferring from the threshold (EASY 60 vs DEATH 0+ε collide). Long-note handling is aligned with upstream beatoraja: silent mid-hold mines, HCN gauge gain, and drain rate.
 
 ### Patch Changes
 
@@ -166,304 +239,43 @@
 
 ### Patch Changes
 
-- b9a5f51: Fix two LN-effect regressions on the web runtime:
-
-  1. **AUTO LN lane laser fading out mid-LN.** The renderer's
-     `applyEngineCommand` handler for `hold-lane-until-beat` did not add
-     the lane to `pressedChannels`, so the `flash-lane` command emitted
-     in the same tick on the LN HEAD scheduled a `flashKeyOnTimer`
-     setTimeout that called `releaseKeyOnTimer` ~`KEY_ON_FLASH_HOLD_MS`
-     later (because the auto-release skip path checks
-     `pressedChannels.has(channel)`). The lane laser therefore faded out
-     ~150 ms into the LN even though the LN body kept scrolling. Adding
-     the channel to `pressedChannels` on `hold-lane-until-beat` makes the
-     auto-release skip the same way it does for a real key press, and
-     the laser stays lit for the full LN sustain. The matching
-     `release-lane` (emitted at the LN tail by
-     `drainPendingAutoLongNotes` / `drainPendingAutoScratchLongNotes`)
-     removes the channel and the laser fades out at the tail timing.
-
-  2. **MANUAL LN-hold effect (sustain glow / hold sparkles) not showing.**
-     The engine was emitting `hold-lane-until-beat` only on the autoplay
-     LN-head path (`applyDueAutoPlayableJudgements` and
-     `applyAutoScratchJudgements`); the manual LN-head path inside
-     `handleMappedInputTokens` did not emit it. Without that command the
-     renderer never called `startLnHoldTimer`, the LR2 LN-hold timer
-     (70..89) stayed unset, and skin elements gated on it (the sustain
-     glow and hold-sparkle authored by the LR2 default skin) stayed
-     invisible for the whole hold. The manual LN-head path now emits
-     `hold-lane-until-beat` for every LN start (mode 1 / 2 / 3), and the
-     matching `release-lane` is fired from `finalizeActiveLongNote` so
-     the timer fades out at every manual LN resolution moment (early
-     release through `kitty-state`, mode-1 grace expiry, or end-beat
-     reached).
+- b9a5f51: The manual LN-head path now emits `hold-lane-until-beat` for every LN start (mode 1 / 2 / 3), and `finalizeActiveLongNote` fires the matching `release-lane` at every manual LN resolution (early release, mode-1 grace expiry, or end-beat). Hosts that key LN-hold effects off those commands — previously they only arrived on the autoplay path — can now show sustain glow for a held LN and fade it at the tail.
 
 ## 0.3.0
 
 ### Minor Changes
 
-- 5ea9072: Make the renderer and the shared engine share a single
-  `PreparedPlaybackChartData` instance so view ↔ engine note-array drift is
-  structurally impossible, and fix the cluster of regressions that drift
-  caused on the web runtime.
+- 5ea9072: Add `PlayerOptions.preparedChart` so the host can hand the engine a pre-built `PreparedPlaybackChartData`. When provided, `autoPlay` / `manualPlay` use it verbatim and skip the internal prepare pass; hosts that omit the option keep the prior behavior.
 
-  ## What changed
-
-  ### `@be-music/player`
-
-  - New `PlayerOptions.preparedChart` option lets the host hand the engine
-    a pre-built `PreparedPlaybackChartData`. When provided,
-    `autoPlay` / `manualPlay` use it verbatim and skip their own internal
-    `preparePlaybackChartData` pass. Hosts that omit the option keep the
-    prior behavior — the engine builds its own chart data.
-  - Re-export `preparePlaybackChartData` and the
-    `PreparedPlaybackChartData` type from the package root so hosts can
-    build the bundle themselves before constructing the engine.
-  - `PlayerStateSignals` gains a `drainPendingJudgeCombos()` method that
-    returns every `publishJudgeCombo` event since the previous drain in
-    publish order. The legacy `getJudgeCombo()` latch still returns the
-    most recent state for HUD readout. UI runtimes that need to fan out
-    per-judge effects (lane bombs, NOWJUDGE plate restarts, FC timer
-    evaluations) for simultaneously-judged notes should drain the queue
-    instead of polling the latch — otherwise simultaneous-press chords
-    surface only the right-most lane's judge state to the host because
-    every prior publish in the same engine tick is overwritten on the
-    latch.
-
-  ### `@be-music/player-web`
-
-  - `PixiGameplayView.prepareSong` now calls `preparePlaybackChartData`
-    itself, keeps the result on `this.preparedChart`, and forwards it to
-    the engine through `engineOptions.preparedChart`. The renderer's
-    `this.notes` / `this.mineNotes` / `this.invisibleNotes` are
-    references into that bundle, so the engine and the renderer hold the
-    same `TimedPlayableNote[]` / `TimedLandmineNote[]` instances.
-  - The renderer reads `note.judged` directly off the shared instance
-    instead of mirroring it onto a parallel `note.hit` flag through an
-    index-based sync in `applyEngineFrame`. The sync block is gone.
-  - `drainWebUiSignals` consumes the new `drainPendingJudgeCombos`
-    queue, so simultaneously-judged AUTO PLAY chords now produce one
-    bomb sprite per chord note instead of only the right-most one.
-  - `score.total` is initialized from `prepared.scorableNotes.length`
-    (matching the engine's `summary.total`) so the full-combo predicate
-    is reachable on Free-Zone charts.
-  - `buildSharedEngineChart` is reduced to clearing `bms.controlFlow`
-    before handing the chart to the engine. The previous post-shuffle
-    `events.map` remap (the cause of the `random1P: 'OFF'` truthy-check
-    channel-class drift bug) is no longer needed because the engine
-    consumes the renderer's already-shuffled note array via
-    `preparedChart`.
-
-  ## Regressions fixed (all rooted in the same drift)
-
-  These all surfaced during Phase-4c shared-engine playthroughs and were
-  each caused by the renderer's `extractTimedNotes` call disagreeing with
-  the engine's. Sharing the prepared-chart instance removes the entire
-  class:
-
-  - **HIDE-on-judge dropouts**: notes vanishing partway down the lane
-    before reaching the judgment line, because a `judged=true` flag from
-    a different note crossed over via index mismatch
-    (`#LNTYPE 1` charts, `random1P: 'OFF'` truthy-check).
-  - **Mid-chart full-combo cue**: the engine's `combo` counter advanced
-    faster than the renderer's `score.total` because LNs were counted
-    twice on the engine side (`#LNTYPE` mismatch) or because the
-    Free-Zone count inflated `score.total` past the engine's scorable
-    population.
-  - **AUTO PLAY exScore < 200_000**: some auto judges landed on
-    already-judged duplicates and were dropped by `markScorableJudged`
-    (`bms.controlFlow` re-resolved on the engine side, doubling captured
-    notes). AUTO PLAY now lands on the EX-MAX 200_000 ceiling.
-  - **PMS keys 6-9 mapped to IIDX 2P keys** (`j k l ;`) instead of
-    `f v g b`: the engine's `resolveLaneMode` couldn't see the chart's
-    `.pms` extension and fell through to `'5-key-dp'`. The renderer now
-    forwards the right `laneModeExtension` baked into the prepared
-    bundle.
-  - **AUTO PLAY chord bombs only on the right-most lane**: the
-    state-signals latch was overwriting itself; the queue surfaces every
-    publish.
-  - **AUTO LN sustain glow / lane laser staying lit indefinitely after
-    the LN tail**: `drainPendingAutoLongNotes` (autoplay) and
-    `drainPendingAutoScratchLongNotes` (manual auto-scratch) now emit
-    `release-lane` after the auto judge so the LR2 LN-hold timer (70..89)
-    and the lane laser (100..117) actually fade out at the LN tail.
-  - **MANUAL LN BAD-failing ~380 ms into the sustain even with the key
-    held**, **lane laser collapsing to a brief flash instead of staying
-    lit while the key is held**: the Web input runtime now synthesizes a
-    `kitty-state` press alongside `lane-input` on every keydown so the
-    engine's `activeKittyPressedChannels` set keeps refreshing
-    `longHoldUntilMsByChannel` for the lane.
+  Re-export `preparePlaybackChartData` and the `PreparedPlaybackChartData` type from the package root. `PlayerStateSignals` gains `drainPendingJudgeCombos()` so hosts can fan out per-judge effects for simultaneously-judged notes; the legacy `getJudgeCombo()` latch still returns the most recent state for HUD readout.
 
 ## 0.2.0
 
 ### Minor Changes
 
-- 632f274: End-to-end support for the beatoraja `#BASE 62` ID extension
-  (case-sensitive 62-character object IDs `0-9A-Za-z`, four
-  times the address space of the original `0-9A-Z` 36-base).
-
-  - **`@be-music/parser`**: detects the `#BASE 62` header and
-    decodes channel-row IDs case-sensitively under it.
-  - **`@be-music/chart`** / **`@be-music/stringifier`**: thread
-    the `base` through every `parseInt` / `toString` site so
-    serialised charts round-trip without dropping casing.
-  - **`@be-music/editor`**: surfaces the `base` flag on edits.
-  - **`@be-music/player`** / **`@be-music/audio-renderer`**:
-    honour the chart's `base` when resolving WAV / BMP slot
-    IDs at playback time, so `#WAVaA` and `#WAVAA` map to
-    distinct samples on a `#BASE 62` chart.
-  - **`@be-music/utils`** / **`@be-music/json`**: shared
-    helpers (`normalizeAsciiBase62Code`, `parseObjectKey`
-    base parameter) the layers above call into.
-
-  Charts that don't declare `#BASE 62` keep the historical
-  36-base behaviour; the flag is opt-in.
+- 632f274: Honour the chart's `#BASE 62` object-ID base when resolving WAV / BMP slot IDs at playback time, so `#WAVaA` and `#WAVAA` map to distinct samples. Charts that don't declare `#BASE 62` keep the historical 36-base behaviour.
 
 - 632f274: Engine-side gameplay improvements:
 
-  - **Landmine notes** — apply the chart-encoded damage value
-    (default 4) on a manual mine hit; play `#WAV00` as the
-    explosion sample so users get audible feedback consistent
-    with LR2's mine semantics.
-  - **空 POOR (empty POOR)** — fire the LR2-compatible "phantom
-    press" verdict when the player presses a lane key with no
-    note in window. Drains the gauge per gauge type without
-    breaking combo or scoring, and triggers the POOR BGA
-    swap window — matching real LR2 behaviour.
-  - **Lanczos image resize option** — opt-in resampling for
-    `#STAGEFILE` / `#BANNER` / `#BACKBMP` so high-res chart
-    graphics down-scale cleanly to skin slot sizes instead of
-    using the default nearest-neighbour path.
-  - **Gradual TUI note height option** — render notes that
-    span multiple terminal rows as a vertically-tweened
-    gradient rather than a hard-edged block, so close note
-    pairs read as distinct rather than fused.
+  - Landmine notes apply the chart-encoded damage value (default 4) on a manual mine hit and play `#WAV00` as the explosion sample.
+  - Empty POORs (空 POOR) fire the LR2-compatible phantom-press verdict when the player presses a lane key with no note in window — drain the gauge without breaking combo or scoring, and trigger the POOR BGA swap window.
+  - Opt-in Lanczos resampling for `#STAGEFILE` / `#BANNER` / `#BACKBMP` so high-res chart graphics down-scale cleanly to skin slot sizes.
 
-- 632f274: Split the CLI / TUI frontend out of `@be-music/player` into a
-  new `@be-music/player-tui` package.
+- 632f274: Split the CLI / TUI frontend out of `@be-music/player` into `@be-music/player-tui`.
 
-  `@be-music/player` is now a pure playback-engine library:
-  gameplay loop, scoring, lane layout, BGA timeline, signals,
-  and the audio sink. Its package surface adds new subpath
-  exports under `core/` (`bga-timeline`, `lane-layout`,
-  `ui-options`) plus top-level `audio-sink`,
-  `image-resize-algorithm`, `state-signals`, and `utils`. The
-  `bms-player` bin and the Node-only dependencies (`libav.js`,
-  `fast-bmp`, `fast-png`, `jpeg-js`) move to player-tui.
+  `@be-music/player` is now a pure playback-engine library: gameplay loop, scoring, lane layout, BGA timeline, signals, and the audio sink. New subpath exports land under `core/` (`bga-timeline`, `lane-layout`, `ui-options`) plus top-level `audio-sink`, `image-resize-algorithm`, `state-signals`, and `utils`. The `bms-player` bin and the Node-only dependencies (`libav.js`, `fast-bmp`, `fast-png`, `jpeg-js`) move to `@be-music/player-tui`.
 
-  `@be-music/player-tui` carries the `bms-player` bin, the
-  terminal UI (kitty-graphics renderer, lane-stacking layout,
-  high-speed control), Node worker runtimes, manual input,
-  BGA video decoding, and the `keyboard-diagnostic` /
-  `gameplay-input-diagnostic` entry points. Hosts that want
-  just the engine (web players, custom UIs) depend on
-  `@be-music/player`; the historical TUI experience lives in
-  `@be-music/player-tui`.
+- 135f822: Open the engine to host-supplied runtimes so the browser player can share judging, gauging, scoring, and chart-finish semantics with the TUI.
 
-- 135f822: Migrate the browser player to the shared `@be-music/player` engine and
-  sweep rhythm-game latency end-to-end. The browser player now drives
-  gameplay through `manualPlay` / `autoPlay` directly, sharing every
-  beatoraja-compatible behaviour with the TUI runtime. The migration
-  removed the in-tree self-judge ladder from `pixi-gameplay.ts`
-  (~700 lines) and unified judging, gauging, scoring, fallback keysound
-  routing, long-note handling, mine priority, and chart-finish semantics
-  across both runtimes.
-
-  **Browser parity gains** (carried over from the engine):
-
-  - Look-ahead lane keysound fallback: an empty press plays the next
-    upcoming note's keysound on that lane, like beatoraja / LR2.
-  - Free-Zone `17` / `27`: empty presses on these channels play the
-    authored keysound and don't trigger 空 POOR.
-  - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
-  - LN early-release audio cut via `AudioSession.stopChannel`.
-  - Mine vs note delta-based priority (closest delta wins).
-  - Multi-channel input mapping for scratch / Free-Zone aliases
-    (16↔17 / 26↔27).
-  - EMPTY POOR semantics matching LR2 (no combo break, no
-    `summary.poor` increment, gauge penalty per gauge type, POOR BGA).
-
-  **Engine surface (`@be-music/player`)**:
-
-  - `PlayerOptions.createAudioSession` factory — host-supplied audio
-    backend. Defaults to the bundled Node sink when omitted.
-  - `PlayerOptions.createInputRuntime` / `createUiRuntime` — host-
-    supplied DOM / runtime adapters.
-  - `PlayerInputCommand.pressedAt` — wall-clock-ms timestamp on
-    `lane-input` and `kitty-state` so the engine judges against the
-    physical press time, not its drain time. Removes up to ~16 ms of
-    artificial late-bias on every press, and is `worker_threads`-safe
-    via the wall-clock-ms domain (`performance.timeOrigin +
-performance.now()`).
-  - Event-driven drain (`createInputWakeUp`) — the inter-tick sleep is
-    cut short on input arrival, so a press lands within ~1 ms of the
-    next consume instead of waiting up to a 60 Hz tick.
-  - `setImmediate` is preferred over `queueMicrotask` for the precise-
-    wait tail spin so Node's `poll` / `check` phases run between
-    iterations and `process.stdin` keypress delivery isn't starved.
-  - The engine module no longer imports from `node:path` /
-    `node:timers/promises`; `createNodeAudioSink` is loaded lazily
-    only when no `createAudioSession` factory is supplied. Browser
-    bundles can import the engine as-is.
-
-  **Browser runtime adapters (`@be-music/player-web`)**:
-
-  - `WebAudioSession` — Web Audio API implementation of the engine's
-    `AudioSession` contract: immediate triggers, BGM scheduling,
-    channel stops, pause / resume, key / BGM routing, dynamic volume
-    changes (`#xxx97` / `#xxx98`), bmson `c=true` continuation, and
-    `#WAVCMD` per-slot gain.
-  - `WebInputRuntime` — DOM `keydown` / `keyup` → engine input bus.
-    OS auto-repeat filter, `Escape` / `F5` / `Space` interrupt /
-    pause routing, `pressedAt` populated from
-    `performance.timeOrigin + KeyboardEvent.timeStamp`.
-  - `WebUiRuntime` — drains engine `uiSignals` (frame snapshots +
-    `flash-lane` / `press-lane` / `trigger-poor-bga` / etc.) into
-    Pixi-side host callbacks.
-  - `engine-driver.ts` — single `runEngineDriver({ chart, audio,
-mode, ui })` glue over the three adapters.
-
-  **Browser performance / latency**:
-
-  - Pixi `Application.init({ powerPreference: 'high-performance' })`
-    — pin the renderer to the discrete GPU on hybrid laptops.
-  - `<canvas style="contain: content">` — compositor isolation for
-    the gameplay canvas without breaking Pixi's hit-testing.
-  - Master makeup gain pinned at unity (was `+1 dB`) so the
-    beatoraja-style fallback keysound density doesn't expose
-    audible compressor pumping.
-
-  **TUI fixes that came along**:
-
-  - Absolute-path arguments now resolve correctly under pure-ESM
-    Node runtimes (`tsx`, `node --import tsx/esm`); the previous
-    `resolveCliPath` slow path silently fell back to `cwd` when its
-    lazy `eval('require')` lookup threw, turning every absolute-path
-    CLI invocation into "scan cwd as a directory."
-  - POOR / BAD verdict plates no longer pair with the running combo
-    number (would otherwise display `POOR 5` after EMPTY POOR
-    preserves combo, contradicting the LR2 visual convention).
-  - In-play key input no longer silently swallowed in the TUI
-    worker-thread engine — `pressedAt` is now wall-clock-ms-based
-    so the main-thread input runtime and the worker-thread engine
-    share a comparable clock domain.
-
-  **Demo (`@be-music/player-web-demo`)**:
-
-  - The shared-engine path is the only playback path; the
-    `useSharedEngine` opt-in flag has been removed along with the
-    Debug Menu checkbox.
+  - `PlayerOptions.createAudioSession` — host-supplied audio backend; defaults to the bundled Node sink when omitted.
+  - `PlayerOptions.createInputRuntime` / `createUiRuntime` — host-supplied DOM / runtime adapters.
+  - `PlayerInputCommand.pressedAt` — wall-clock-ms timestamp on `lane-input` and `kitty-state` so the engine judges against the physical press time, not its drain time (removes up to ~16 ms of late-bias; `worker_threads`-safe via `performance.timeOrigin + performance.now()`).
+  - Event-driven drain (`createInputWakeUp`) cuts the inter-tick sleep short on input arrival.
+  - The engine module no longer imports from `node:path` / `node:timers/promises`; `createNodeAudioSink` is loaded lazily only when no `createAudioSession` factory is supplied, so browser bundles can import the engine as-is.
 
 ### Patch Changes
 
-- 632f274: - Carry the BMS `#BANNER` into the chart-selection prompt so
-  the TUI's per-chart banner cell renders the correct image
-  for the highlighted entry instead of falling back to the
-  song-level `#STAGEFILE`.
-  - Resume cleanly after a `Space` pause that overlaps a `#STOP`
-    segment. Previously the playhead would freeze for the rest
-    of the stop's duration on resume because the stop-clock
-    baseline wasn't being rolled forward across the pause.
+- 632f274: Resume cleanly after a `Space` pause that overlaps a `#STOP` segment. Previously the playhead froze for the rest of the stop's duration on resume because the stop-clock baseline wasn't rolled forward across the pause.
 - Updated dependencies [632f274]
 - Updated dependencies [135f822]
 - Updated dependencies [135f822]

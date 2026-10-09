@@ -47,6 +47,7 @@ pnpm run player:web
 
 chart file を含む混在 drop では、loader は chart directory を song file、それ以外を theme file として扱います。
 chart file が存在しない場合、drop 全体を theme candidate として扱います。LR2 detection は `.lr2skin` file、beatoraja detection は `.luaskin` file または `skin/` path segment 配下の JSON file を使います。
+プレイフィールドをダブルクリックすると demo をフルスクリーンに切り替えます。`Esc` は通常のシーン操作の前にフルスクリーンを解除します。
 
 ## Browser loading model
 
@@ -90,6 +91,9 @@ scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/
 
 built-in default family は、LR2 / beatoraja theme がない場合、または host が default family を明示的に選んだ場合に使う skinless path です。
 theme file なしで select、gameplay、result の表示を提供します。
+
+この family はすべての画面を be-music スキン（公開パッケージ `@be-music/skin-sdk` 上に書かれたコード定義のスキン）で描きます。
+スキンの作り方は [be-music スキンの作り方](./be-music-skin.ja.md) を参照してください。
 
 gameplay は `PixiGameplayView` と共通の engine、note renderer、BGA renderer、audio bus、input handling を共有します。
 ただし default chrome は `scene/default/gameplay.ts` から `skinlessChromeRenderer` option 経由で注入します。

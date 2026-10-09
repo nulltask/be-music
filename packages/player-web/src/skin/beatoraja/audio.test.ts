@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { BeatorajaSkinAudioPlayer } from './audio.ts';
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

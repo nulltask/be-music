@@ -11,7 +11,11 @@ export interface BeatResolver {
   eventToBeat: (event: BeMusicEvent) => number;
 }
 
-export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14';
+/**
+ * LR2 / beatoraja play-skin lane family. `'24'` / `'48'` are the Keyboardmania-style keyboard modes whose lanes run
+ * past the classic `11..19` / `21..29` bank onto the extended `1A..1O` / `2A..2O` channels.
+ */
+export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
 
 export interface ChartPlayVariantInput {
   chartPath?: string;
@@ -21,8 +25,14 @@ export interface ChartPlayVariantInput {
   };
 }
 
-const BMS_LONG_NOTE_PLAYABLE_1P = ['11', '12', '13', '14', '15', '16', '17', '18', '19'] as const;
-const BMS_LONG_NOTE_PLAYABLE_2P = ['21', '22', '23', '24', '25', '26', '27', '28', '29'] as const;
+/**
+ * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
+ * of these `A`-`Z` columns, which together give 35 lanes per side — comfortably above the 24 the Keyboardmania modes
+ * use, and the same span `laneIndexToChannel` (bmson `generic-Nkeys`) and `lane-layout.ts`'s `EXTENDED_LANE_DIGITS`
+ * already emit.
+ */
+const EXTENDED_LANE_CODE_MIN = 0x41; // 'A'
+const EXTENDED_LANE_CODE_MAX = 0x5a; // 'Z'
 const PACKED_CHANNEL_03 = 0x3033;
 const PACKED_CHANNEL_08 = 0x3038;
 const PACKED_CHANNEL_09 = 0x3039;
@@ -202,6 +212,10 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *
  * Detection order — first match wins:
  *
+ *   0. **Extended lane channels (`1A..1Z` / `2A..2Z`)** — the 24-key (Keyboardmania) lane bank. Only these modes
+ *      author lanes past the classic nine columns, so one extended channel decides it: `'48'` when the chart also
+ *      uses the 2P side, `'24'` otherwise. Checked first because a 24-key chart fills all nine classic 1P columns
+ *      too, which rule 3 would otherwise claim for `'9'`.
  *   1. **`.pms` extension** — unambiguous POPN-9 marker. Trumps all content heuristics so a `.pms` file authored
  *      with `#PLAYER 1` and an unusual channel layout still routes to `'9'`.
  *   2. **`#PLAYER 3` + channel `17`** — `#PLAYER 3` is "DP or 9-key" and channel `17` is FREE ZONE under IIDX
@@ -227,13 +241,22 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
       channels.add(channel);
     }
   }
+  const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
+
+  // Rule 0 — 24-key (Keyboardmania) family. Lanes past the classic nine columns are only reachable through the
+  // extended `1A..1Z` / `2A..2Z` channels, so a single extended lane is an unambiguous marker. Checked before every
+  // other rule because a 24-key chart also populates all nine classic 1P columns, which rule 3 would claim for `'9'`.
+  const usesExtendedLane = [...channels].some((channel) => channel.charCodeAt(1) >= EXTENDED_LANE_CODE_MIN);
+  if (usesExtendedLane) {
+    return usesPlayer2 ? '48' : '24';
+  }
+
   if (isPmsExtension(chart.chartPath)) {
     return '9';
   }
   if (chart.bms?.player === 3 && channels.has('17')) {
     return '9';
   }
-  const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
 
   // Rule 3 — BME POPN-9: 1P chart that authors every one of `11..19`. The IIDX 7K format never populates all
   // nine, so a full 1P keyboard is a strong POPN-9 signal regardless of `#PLAYER` or filename extension.
@@ -857,8 +880,7 @@ export function isSampleTriggerChannel(channel: string): boolean {
 export function isPlayableChannel(channel: string): boolean {
   if (channel.length === 2) {
     const high = channel.charCodeAt(0);
-    const low = channel.charCodeAt(1);
-    if ((high === 0x31 || high === 0x32) && low >= 0x31 && low <= 0x39) {
+    if ((high === 0x31 || high === 0x32) && isLaneCode(channel.charCodeAt(1))) {
       return true;
     }
   }
@@ -868,8 +890,7 @@ export function isPlayableChannel(channel: string): boolean {
 export function isBmsLongNoteChannel(channel: string): boolean {
   if (channel.length === 2) {
     const high = channel.charCodeAt(0);
-    const low = channel.charCodeAt(1);
-    if ((high === 0x35 || high === 0x36) && low >= 0x31 && low <= 0x39) {
+    if ((high === 0x35 || high === 0x36) && isLaneCode(channel.charCodeAt(1))) {
       return true;
     }
   }
@@ -936,11 +957,8 @@ export function mapBmsLongNoteChannelToPlayable(channel: string): string | undef
     if (!isPackedBmsLongNoteChannel(packed)) {
       return undefined;
     }
-    const low = packed & 0xff;
-    const laneIndex = low - 0x31;
-    return ((packed >> 8) & 0xff) === 0x35
-      ? BMS_LONG_NOTE_PLAYABLE_1P[laneIndex]
-      : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
+    const lane = String.fromCharCode(packed & 0xff);
+    return ((packed >> 8) & 0xff) === 0x35 ? `1${lane}` : `2${lane}`;
   }
   return mapBmsLongNoteNormalizedChannelToPlayable(resolveNormalizedChannelForPredicate(channel));
 }
@@ -1456,7 +1474,7 @@ function isPackedScrollChannel(packed: number): boolean {
 }
 
 function isLandmineNormalizedChannel(normalized: string): boolean {
-  return /^[DE][1-9]$/.test(normalized);
+  return /^[DE][1-9A-Z]$/.test(normalized);
 }
 
 function isSampleTriggerNormalizedChannel(normalized: string): boolean {
@@ -1469,15 +1487,15 @@ function isSampleTriggerNormalizedChannel(normalized: string): boolean {
 }
 
 function isPlayableNormalizedChannel(normalized: string): boolean {
-  return /^[12][1-9]$/.test(normalized);
+  return /^[12][1-9A-Z]$/.test(normalized);
 }
 
 function isBmsLongNoteNormalizedChannel(normalized: string): boolean {
-  return /^[56][1-9]$/.test(normalized);
+  return /^[56][1-9A-Z]$/.test(normalized);
 }
 
 function isPlayLaneSoundNormalizedChannel(normalized: string): boolean {
-  return /^[1-6][1-9]$/.test(normalized);
+  return /^[1-6][1-9A-Z]$/.test(normalized);
 }
 
 function isBmsBgmVolumeChangeNormalizedChannel(normalized: string): boolean {
@@ -1496,16 +1514,22 @@ function mapBmsLongNoteNormalizedChannelToPlayable(normalized: string): string |
   if (!isBmsLongNoteNormalizedChannel(normalized)) {
     return undefined;
   }
-  const laneIndex = normalized.charCodeAt(1) - 0x31;
-  return normalized.charCodeAt(0) === 0x35
-    ? BMS_LONG_NOTE_PLAYABLE_1P[laneIndex]
-    : BMS_LONG_NOTE_PLAYABLE_2P[laneIndex];
+  const lane = normalized[1]!;
+  return normalized.charCodeAt(0) === 0x35 ? `1${lane}` : `2${lane}`;
+}
+
+/**
+ * Lane channels span two code ranges: the classic `1`-`9` columns and the extended `A`-`Z` columns the 24-key
+ * (Keyboardmania) modes author lanes 10..24 on. Both are valid for every `<side><lane>` channel family — playable
+ * (`1X` / `2X`), invisible (`3X` / `4X`), legacy long note (`5X` / `6X`), and landmine (`DX` / `EX`).
+ */
+function isLaneCode(code: number): boolean {
+  return (code >= 0x31 && code <= 0x39) || (code >= EXTENDED_LANE_CODE_MIN && code <= EXTENDED_LANE_CODE_MAX);
 }
 
 function isPackedLaneRange(packed: number, highStart: number, highEnd: number): boolean {
   const high = (packed >> 8) & 0xff;
-  const low = packed & 0xff;
-  return high >= highStart && high <= highEnd && low >= 0x31 && low <= 0x39;
+  return high >= highStart && high <= highEnd && isLaneCode(packed & 0xff);
 }
 
 function isPackedLandmineChannel(packed: number): boolean {

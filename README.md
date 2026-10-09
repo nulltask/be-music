@@ -16,6 +16,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
+- `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
 - `@be-music/player-web`: Browser PixiJS player core for song selection, built-in default / LR2 / beatoraja skin rendering, gameplay, result scenes, and recording
 - `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
@@ -36,12 +37,11 @@ pnpm install
 ```bash
 pnpm run clean
 pnpm run build
-pnpm run typecheck
-pnpm run lint
+pnpm run check
 pnpm run test
 ```
 
-`pnpm run build` executes `tsdown` build in each workspace in parallel while satisfying the dependencies, and outputs the bundle and type definition (`.d.ts`) together. `pnpm run typecheck` / `pnpm run lint` / `pnpm run format` are also executed in parallel in each workspace.
+The toolchain is [Vite+](https://viteplus.dev/) (`vite-plus`), configured from the root `vite.config.ts`. `pnpm run build` runs each workspace's `build` script through the Vite+ task runner (`vp run -r --cache build`) in dependency order, replaying unchanged packages from the task cache; library packages build with `vp pack` (tsdown) from the `pack` block in their `vite.config.ts` and emit the bundle and type definitions (`.d.ts`) together. `pnpm run check` runs formatting, linting, and type checking (Oxfmt, Oxlint, and tsgolint) across the whole workspace in one pass; `pnpm run format` / `pnpm run lint` / `pnpm run typecheck` run the individual steps. Each package's `tsconfig.json` is its type-check project, while `tsconfig.build.json` drives declaration output. Installing dependencies also registers a Vite+ pre-commit hook that runs `vp check --fix` on staged files.
 
 ## Package Releases
 
@@ -148,9 +148,16 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 - Parses beatoraja JSON skins and Lua `.luaskin` entries independently from PixiJS
 - Evaluates the beatoraja two-phase Lua contract on a restricted Fengari sandbox
-- Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d`
+- Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d` — every one of them mountable for gameplay
 - Resolves `property[]`, `filepath[]`, category groups, custom offsets, wildcard source paths, and case-insensitive assets
 - Normalizes image, imageset, value, float-value, text, slider, note, judge, gauge, graph, BPM graph, timing graph, song-list, custom event, destination, and PM character elements
+
+### be-music skin SDK (`@be-music/skin-sdk`)
+
+- Skin contract for the browser player's built-in family: the skin draws each screen onto a canvas from plain per-frame data
+- Imports no rendering framework; a skin brings its own (Canvas 2D, WebGL / WebGPU, PixiJS, three.js, …)
+- Stage, lane layout, moment, judgement word, audio drive, song fact, and motion helpers
+- See [Writing a be-music skin](./docs/be-music-skin.md)
 
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
@@ -309,6 +316,7 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
 - A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
+- Any extended lane channel (`1A..1O` / `2A..2O`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule.
 
 ### Representative mode channels and inputs
 
@@ -320,14 +328,16 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 | `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
 | `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
 | `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 lanes, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                              |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`; the 2P bank runs past the printable-key pool and lands on function keys                                   |
 
 ## FREE ZONE (`17` / `27`)
 
-- Other than 9KEY, it is treated as FREE ZONE.
+- Other than 9KEY and the 24KEY / 48KEY keyboard modes, it is treated as FREE ZONE.
 - Do not create an independent lane, but draw on top of the scratch lane (`16` / `26`).
 - The note length is fixed at a quarter note.
 - Since it is not subject to judgment, it is not included in `TOTAL` / `EX-SCORE` / `SCORE`.
-- When determining 9KEY, `17` is treated as the normal lane note.
+- When determining 9KEY or 24KEY / 48KEY, `17` / `27` is treated as the normal lane note.
 
 ## Keyboard input (kitty keyboard protocol)
 
@@ -424,3 +434,5 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare output: arbitrary Markdown and summary JSON
 - In GitHub Actions, post base/head comparison as PR comment in PR for `devel` / `main`
 - GitHub Actions also performs the previous revision comparison when pushing to `devel` / `main` and posts a commit comment to the target commit.
+- CI measures base and head on the same runner before comparing, so host-to-host noise does not dominate the delta.
+- CI uses a longer per-case time than the local default, and treats the median change as the comparison signal. Per-case lists compare median ops/s, not mean.

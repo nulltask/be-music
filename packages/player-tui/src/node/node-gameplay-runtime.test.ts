@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import { MessageChannel, type MessagePort, type WorkerOptions } from 'node:worker_threads';
 import { createAbortError, isAbortError } from '@be-music/utils/core';
 import { createEmptyJson } from '../../../json/src/index.ts';
@@ -371,6 +371,7 @@ function createSummary() {
     good: 0,
     bad: 0,
     poor: 0,
+    emptyPoor: 0,
     exScore: 0,
     score: 0,
   };

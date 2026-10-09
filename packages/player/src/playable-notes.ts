@@ -1,4 +1,11 @@
-import { createBeatResolver, resolveBmsLongNotes, resolveLnobjLongNotes, sortEvents } from '@be-music/chart';
+import {
+  type ChartPlayVariant,
+  createBeatResolver,
+  resolveBmsLongNotes,
+  resolveChartPlayVariant,
+  resolveLnobjLongNotes,
+  sortEvents,
+} from '@be-music/chart';
 import { type BeMusicEvent, type BeMusicJson, normalizeChannel } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer/triggers';
 const FREE_ZONE_BEAT_LENGTH = 1;
@@ -35,6 +42,12 @@ export interface ExtractTimedNotesOptions {
   includeLandmine?: boolean;
   includeInvisible?: boolean;
   inferBmsLnTypeWhenMissing?: boolean;
+  /**
+   * Host-resolved play variant. Only consulted to decide whether channels `17` / `27` are FREE ZONE — they're real key
+   * columns under POPN-9 and the 24-key keyboard modes. Omit it and the chart is classified on demand, the first time
+   * a `17` / `27` object shows up.
+   */
+  playVariant?: ChartPlayVariant;
 }
 
 export interface ExtractTimedNotesResult {
@@ -45,6 +58,8 @@ export interface ExtractTimedNotesResult {
 
 export interface ExtractPlayableNotesOptions {
   inferBmsLnTypeWhenMissing?: boolean;
+  /** See {@link ExtractTimedNotesOptions.playVariant}. */
+  playVariant?: ChartPlayVariant;
 }
 
 interface TimedExtractionContext {
@@ -54,6 +69,8 @@ interface TimedExtractionContext {
   bmsonResolution?: number;
   /** Chart-level bmson `info.ln_type` (1: LN, 2: CN, 3: HCN), already validated; per-note `t` overrides it. */
   chartLongNoteType?: LongNoteMode;
+  /** `true` when the normalized channel is an active FREE ZONE column for this chart. */
+  isFreeZoneChannel: (normalizedChannel: string) => boolean;
 }
 
 interface TimedEventChannels {
@@ -63,7 +80,7 @@ interface TimedEventChannels {
 }
 
 export function extractTimedNotes(json: BeMusicJson, options: ExtractTimedNotesOptions = {}): ExtractTimedNotesResult {
-  const context = createTimedExtractionContext(json);
+  const context = createTimedExtractionContext(json, options.playVariant);
   const { playableNotes, landmineNotes, invisibleNotes } = collectTimedNotes(context, {
     includePlayable: true,
     includeLandmine: options.includeLandmine !== false,
@@ -82,7 +99,7 @@ export function extractPlayableNotes(
   json: BeMusicJson,
   options: ExtractPlayableNotesOptions = {},
 ): TimedPlayableNote[] {
-  const context = createTimedExtractionContext(json);
+  const context = createTimedExtractionContext(json, options.playVariant);
   const { playableNotes } = collectTimedNotes(context, { includePlayable: true });
   finalizePlayableNotes(json, playableNotes, context.resolver, options);
   return playableNotes;
@@ -102,7 +119,9 @@ export function extractInvisiblePlayableNotes(json: BeMusicJson): TimedPlayableN
   }).invisibleNotes;
 }
 
-function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext {
+function createTimedExtractionContext(json: BeMusicJson, playVariant?: ChartPlayVariant): TimedExtractionContext {
+  // Resolved lazily so charts without a `17` / `27` object never pay for the extra classification pass.
+  let freeZoneActive = playVariant === undefined ? undefined : variantUsesFreeZone(playVariant);
   return {
     resolver: createTimingResolver(json),
     beatResolver: createBeatResolver(json),
@@ -112,7 +131,25 @@ function createTimedExtractionContext(json: BeMusicJson): TimedExtractionContext
       json.bmson.info.lnType === 1 || json.bmson.info.lnType === 2 || json.bmson.info.lnType === 3
         ? json.bmson.info.lnType
         : undefined,
+    isFreeZoneChannel: (normalizedChannel: string): boolean => {
+      if (normalizedChannel !== '17' && normalizedChannel !== '27') {
+        return false;
+      }
+      freeZoneActive ??= variantUsesFreeZone(resolveChartPlayVariant({ events: json.events, bms: json.bms }));
+      return freeZoneActive;
+    },
   };
+}
+
+/**
+ * Are channels `17` / `27` FREE ZONE under this variant?
+ *
+ * They're real key columns in POPN-9 (lane 7 of the nine-column bank) and in the 24-key keyboard modes (lane 7 of the
+ * 24-column bank), where stamping the FREE ZONE quarter-note tail would turn an ordinary tap into a phantom long note
+ * — and would shadow a genuine `#LNOBJ` tail authored on the same channel. Every IIDX family keeps them as FREE ZONE.
+ */
+function variantUsesFreeZone(variant: ChartPlayVariant): boolean {
+  return variant !== '9' && variant !== '24' && variant !== '48';
 }
 
 function collectTimedNotes(
@@ -146,7 +183,7 @@ function collectTimedNotes(
     const seconds = context.resolver.beatToSeconds(beat);
 
     if (playableChannel) {
-      const endBeat = resolveLongNoteEndBeat(event, beat, playableChannel, context.bmsonResolution);
+      const endBeat = resolveLongNoteEndBeat(event, beat, playableChannel, context);
       playableNotes.push({
         event,
         channel: playableChannel,
@@ -199,8 +236,12 @@ function resolveTimedEventChannels(
     return {};
   }
 
+  // Lane codes span the classic `1`-`9` columns plus the extended `A`-`Z` columns the 24-key (Keyboardmania) modes
+  // author lanes 10..24 on — `1A..1O` / `2A..2O` for playable notes, and the matching `3X`/`4X`, `DX`/`EX` families
+  // for invisible objects and landmines.
   const laneCode = normalizedChannel.charCodeAt(1);
-  if (laneCode < 0x31 || laneCode > 0x39) {
+  const isLaneCode = (laneCode >= 0x31 && laneCode <= 0x39) || (laneCode >= 0x41 && laneCode <= 0x5a);
+  if (!isLaneCode) {
     return {};
   }
 
@@ -346,19 +387,16 @@ function resolveBmsonLongNoteMode(event: BeMusicEvent, chartLongNoteType: LongNo
 function resolveLongNoteEndBeat(
   event: BeMusicEvent,
   beat: number,
-  normalizedChannel = normalizeChannel(event.channel),
-  bmsonResolution?: number,
+  normalizedChannel: string,
+  context: TimedExtractionContext,
 ): number | undefined {
-  if (isFreeZoneNormalizedChannel(normalizedChannel)) {
+  if (context.isFreeZoneChannel(normalizedChannel)) {
     return beat + FREE_ZONE_BEAT_LENGTH;
   }
 
+  const { bmsonResolution } = context;
   if (event.bmson?.l && event.bmson.l > 0 && typeof bmsonResolution === 'number') {
     return beat + event.bmson.l / bmsonResolution;
   }
   return undefined;
-}
-
-function isFreeZoneNormalizedChannel(normalized: string): boolean {
-  return normalized === '17' || normalized === '27';
 }

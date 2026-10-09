@@ -1,4 +1,4 @@
-import { Application, type ApplicationOptions, Container, RendererType } from 'pixi.js';
+import { Application, type ApplicationOptions, Container, RendererType, UPDATE_PRIORITY } from 'pixi.js';
 import { logger } from '../logger.ts';
 
 const log = logger('scene-host');
@@ -122,11 +122,10 @@ export class PixiSceneHost {
       // pixel-art-style render.
       antialias: false,
       autoDensity: true,
-      // Cap the render-buffer multiplier at 2× the CSS resolution. LR2 / BMS art is pixel-art rendered through
-      // `roundPixels: true` + nearest sampling — a 3× DPR Retina display brings no perceptual benefit but multiplies
-      // the GPU's fillrate cost by ~9× compared to the 1× CSS pixel grid. The cap drops a 3× DPR display to 56 % of
-      // the previous fragment count; 1× / 2× displays (the common case) are unaffected.
-      resolution: Math.min(2, globalThis.devicePixelRatio || 1),
+      // Render at the display's full devicePixelRatio so vector chrome and text land on real device pixels. (This
+      // used to be capped at 2× to save fill-rate on 3× displays, but the built-in skins' vector shapes and text then
+      // rendered visibly soft there.)
+      resolution: globalThis.devicePixelRatio || 1,
       roundPixels: true,
       // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
       // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
@@ -209,6 +208,19 @@ export class PixiSceneHost {
     })();
     this.transitionLock = next.catch(() => undefined);
     return next;
+  }
+
+  /**
+   * Runs `callback` on every tick after the stage has been rendered (Pixi renders at `UPDATE_PRIORITY.LOW`; this hooks
+   * in at `UTILITY`, below it) and returns the unregister function. Used by the gameplay recorder to read each frame
+   * while it is still in the canvas.
+   */
+  public onAfterRender(callback: () => void): () => void {
+    const ticker = this.app.ticker;
+    ticker.add(callback, undefined, UPDATE_PRIORITY.UTILITY);
+    return () => {
+      ticker.remove(callback);
+    };
   }
 
   public getCurrentScene(): PixiScene | undefined {
@@ -331,6 +343,6 @@ function rendererTypeLabel(type: RendererType): string {
     case RendererType.BOTH:
       return 'both';
     default:
-      return `unknown(${type})`;
+      return `unknown(${String(type)})`;
   }
 }

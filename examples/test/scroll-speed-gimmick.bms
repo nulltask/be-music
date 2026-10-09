@@ -1,0 +1,103 @@
+*---------------------- METADATA FIELD
+
+#TITLE Scroll / Speed / Stop Gimmick
+#SUBTITLE #SCROLLxx on SC, #SPEEDxx on SP, #STOPxx on 09, tempo on 03 and 08
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 4
+#TOTAL 300
+#DIFFICULTY 3
+
+*---------------------- EXTENDED HEADER FIELD
+* Every timing / drawing gimmick channel in one chart, one measure per gimmick,
+* so a change to one of them shows up as a single failing measure:
+*
+*   #xxx02 - measure length multiplier
+*   #xxx03 - direct BPM change, hexadecimal token (`80` = 128 BPM)
+*   #xxx08 - BPM change by #BPMxx reference (the only way to reach non-integers)
+*   #xxx09 - STOP by #STOPxx reference, value in 1/192-measure units
+*   #xxxSC - scroll-speed keyframe by #SCROLLxx reference
+*   #xxxSP - note-spacing keyframe by #SPEEDxx reference (Bemuse extension)
+*
+* `SC` and `SP` are the two channels that carry a slot reference but must never
+* trigger a keysound, and #SCROLL 0 / #SCROLL < 0 are the two values the player
+* has an explicit compatibility policy for (see docs/bms-spec.md), so both are
+* authored here rather than only the well-behaved positive case.
+
+#PLAYER 1
+#LNTYPE 1
+#BASEBPM 120
+
+#SCROLL01 1.0
+#SCROLL02 0.5
+#SCROLL03 0
+#SCROLL04 -1.0
+#SCROLL05 2.0
+
+#SPEED01 1.0
+#SPEED02 0.5
+#SPEED03 2.0
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+#BPM01 60
+#BPM02 240
+#BPM03 90.5
+#STOP01 48
+#STOP02 192
+
+*---------------------- MEASURE LENGTH FIELD
+
+#00302:0.75
+#00402:1.50
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - reference bar at the declared #BPM with no gimmick applied.
+#00011:01010101
+
+* Measure 1 - direct BPM change on channel 03. Tokens are hexadecimal, so `80`
+* is 128 BPM and `3C` is 60 BPM.
+#00103:803C
+#00111:01010101
+
+* Measure 2 - BPM change by reference on channel 08. #BPM03 is fractional,
+* which channel 03 cannot express.
+#00208:010203
+#00211:01010101
+
+* Measure 3 - shortened measure (0.75) combined with a short STOP.
+#00309:0100
+#00311:010101
+
+* Measure 4 - lengthened measure (1.50) combined with a full-measure STOP.
+#00409:0002
+#00411:010101010101
+
+* Measure 5 - scroll-speed keyframes: normal, half, then double.
+#005SC:010205
+#00511:01010101
+
+* Measure 6 - #SCROLL 0 (notes stack away from the judge line) followed by a
+* negative scroll value (drawing distance is taken as an absolute value).
+#006SC:0304
+#00611:01010101
+
+* Measure 7 - note-spacing keyframes on the Bemuse `SP` channel.
+#007SP:010203
+#00711:01010101
+
+* Measure 8 - every gimmick channel in the same measure, which is where
+* ordering bugs between tempo / stop / scroll resolution surface.
+#00803:80
+#00808:0002
+#00809:0100
+#008SC:0205
+#008SP:0203
+#00811:01010101
+#00801:02
+
+*---------------------- CONTROL FLOW FIELD

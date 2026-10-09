@@ -60,14 +60,9 @@ export function resolveCliPath(path: string, cwd: string = resolveDefaultCwd()):
  */
 function isWindowsDrivePath(path: string): boolean {
   const driveLetter = path.charCodeAt(0);
-  if (
-    !(
-      (
-        (driveLetter >= 0x41 && driveLetter <= 0x5a) || // A..Z
-        (driveLetter >= 0x61 && driveLetter <= 0x7a)
-      ) // a..z
-    )
-  ) {
+  const isUpperDriveLetter = driveLetter >= 0x41 && driveLetter <= 0x5a; // A..Z
+  const isLowerDriveLetter = driveLetter >= 0x61 && driveLetter <= 0x7a; // a..z
+  if (!isUpperDriveLetter && !isLowerDriveLetter) {
     return false;
   }
   if (path.charCodeAt(1) !== 0x3a) return false;

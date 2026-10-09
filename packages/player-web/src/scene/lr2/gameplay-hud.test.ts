@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   LR2_GROOVE_GAUGE_CLEAR_ZONE_PERCENT,
   LR2_GROOVE_GAUGE_UNITS,
@@ -59,7 +59,9 @@ describe('resolveGrooveGaugeBeads', () => {
   });
 
   test('clamps out-of-range / non-finite input', () => {
-    expect(resolveGrooveGaugeBeads(200).every((b) => b.cellOffset === LIT_RED || b.cellOffset === LIT_GREEN)).toBe(true);
+    expect(resolveGrooveGaugeBeads(200).every((b) => b.cellOffset === LIT_RED || b.cellOffset === LIT_GREEN)).toBe(
+      true,
+    );
     expect(resolveGrooveGaugeBeads(-10).every((b) => b.cellOffset === UNLIT_RED || b.cellOffset === UNLIT_GREEN)).toBe(
       true,
     );

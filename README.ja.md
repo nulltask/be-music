@@ -16,6 +16,7 @@ TypeScript + pnpm workspaces で構成した BMS/BMSON ツールチェーンで�
 - `@be-music/player-tui`: autoplay、keyboard play、Music Select、BGA、SEA build を扱う terminal UI と `bms-player` CLI frontend
 - `@be-music/lr2-skin`: Lunatic Rave 2 skin parser、asset resolver、theme loader を renderer 非依存で提供する package
 - `@be-music/beatoraja-skin`: beatoraja JSON/Lua skin parser、normalizer、theme loader を renderer 非依存で提供する package
+- `@be-music/skin-sdk`: browser player 向け be-music スキンを書くための描画フレームワーク非依存の SDK
 - `@be-music/player-web`: 選曲、built-in default / LR2 / beatoraja skin 描画、gameplay、result scene、録画を扱う browser PixiJS player core
 - `@be-music/player-web-demo`: folder / ZIP drop、LR2 / beatoraja theme、debug control、browser 再生を接続する private Vite demo
 - `@be-music/editor`: CLI エディタ (インポート・編集・エクスポート)
@@ -36,12 +37,11 @@ pnpm install
 ```bash
 pnpm run clean
 pnpm run build
-pnpm run typecheck
-pnpm run lint
+pnpm run check
 pnpm run test
 ```
 
-`pnpm run build` は各ワークスペースの `tsdown` build を依存関係を満たしながら並列実行し、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run typecheck` / `pnpm run lint` / `pnpm run format` もワークスペース単位で並列実行します。
+ツールチェーンは [Vite+](https://viteplus.dev/) (`vite-plus`) で、ルートの `vite.config.ts` に設定を集約しています。`pnpm run build` は Vite+ のタスクランナー (`vp run -r --cache build`) で各ワークスペースの `build` スクリプトを依存順に実行し、変更のない package はタスクキャッシュから再生します。ライブラリ package は各 `vite.config.ts` の `pack` ブロックから `vp pack` (tsdown) でビルドし、bundle と型定義 (`.d.ts`) をまとめて出力します。`pnpm run check` はフォーマット・lint・型チェック (Oxfmt / Oxlint / tsgolint) をワークスペース全体に対して一度に実行し、`pnpm run format` / `pnpm run lint` / `pnpm run typecheck` で個別に実行できます。各 package の `tsconfig.json` は型チェック用のプロジェクトで、型定義の出力には `tsconfig.build.json` を使います。依存関係をインストールすると、ステージされたファイルに `vp check --fix` を実行する Vite+ の pre-commit フックも登録されます。
 
 ## package ごとの release
 
@@ -148,9 +148,16 @@ tag は `@be-music/package-name@x.y.z` 形式で作成されます。
 
 - beatoraja JSON skin と Lua `.luaskin` entry を PixiJS 非依存で parse
 - beatoraja の 2-phase Lua contract を制限付き Fengari sandbox 上で評価
-- play / select / decide / result / course-result entry を discovery し、play skin を `5` / `7` / `9` / `10` / `14` / `24` / `24d` ごとに group 化
+- play / select / decide / result / course-result entry を discovery し、play skin を `5` / `7` / `9` / `10` / `14` / `24` / `24d` ごとに group 化（いずれも gameplay で mount 可能）
 - `property[]`、`filepath[]`、category group、custom offset、wildcard source path、case-insensitive asset を解決
 - image、imageset、value、float-value、text、slider、note、judge、gauge、graph、BPM graph、timing graph、song-list、custom event、destination、PM character element を normalize
+
+### be-music skin SDK (`@be-music/skin-sdk`)
+
+- browser player の built-in family 向けスキンの契約。スキンは毎フレームのデータからキャンバスに各画面を描く
+- 描画フレームワークを import しない。フレームワークはスキンが持ち込む（Canvas 2D、WebGL / WebGPU、PixiJS、three.js など）
+- stage、lane layout、moment、判定表示、audio drive、曲情報、motion の helper
+- [be-music スキンの作り方](docs/be-music-skin.ja.md) を参照
 
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
@@ -309,6 +316,7 @@ pnpm run editor export chart.json chart.bms
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
 - `11..19` をすべて使う 1P keyboard、または従来 IIDX 2P channel を含まない PMS-STD `22..25` も `9 KEY` として判定します。
+- 拡張レーンチャンネル (`1A..1O` / `2A..2O`) があれば、他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` と判定します。
 
 ### 代表モードのチャンネルと入力
 
@@ -320,14 +328,16 @@ pnpm run editor export chart.json chart.bms
 | `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
 | `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
 | `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 レーン、scratch なし) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                           |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`。2P バンクは印字キーを使い切り、末尾はファンクションキーになります                                         |
 
 ## FREE ZONE (`17` / `27`)
 
-- 9KEY 以外では FREE ZONE として扱います。
+- 9KEY と 24KEY / 48KEY の keyboard mode 以外では FREE ZONE として扱います。
 - 独立レーンは作らず、スクラッチレーン (`16` / `26`) に重ねて描画します。
 - ノート長は 4 分音符固定です。
 - 判定対象外のため、`TOTAL` / `EX-SCORE` / `SCORE` には含めません。
-- 9KEY 判定時は `17` を通常レーンノートとして扱います。
+- 9KEY / 24KEY / 48KEY 判定時は `17` / `27` を通常レーンノートとして扱います。
 
 ## キーボード入力 (kitty keyboard protocol)
 
@@ -424,3 +434,5 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare 出力: 任意の Markdown と summary JSON
 - GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
 - GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
+- CI は比較前に base と head を同一 runner で計測し、ホスト間ノイズが delta を支配しないようにします
+- CI はローカル default より長い per-case time を使い、比較シグナルは median change です。ケース単位の一覧も mean ではなく median ops/s で比較します

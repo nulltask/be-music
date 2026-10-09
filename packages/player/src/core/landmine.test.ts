@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { DEFAULT_LANDMINE_GAUGE_DAMAGE, resolveLandmineGaugeEffect } from './landmine.ts';
 
 describe('landmine', () => {

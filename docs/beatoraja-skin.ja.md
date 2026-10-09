@@ -117,8 +117,8 @@ browser renderer は select、decide、gameplay、result skin の共有 view と
 scene module は `TEXT`、`NUM`、`OPTION`、timer、chart image、graph、gauge、note layer、BGA layer、system sound、result history など runtime 固有の resolver を提供します。
 gameplay は `BeatorajaRuntimeAdapter` で engine UI signal を beatoraja timer、op code、judge popup、combo digit、key beam、LN hold timer、timing sample へ変換します。
 
-browser gameplay path は chart variant `5`、`7`、`9`、`10`、`14` を mount します。
-parser は `24` / `24d` skin も discovery しますが、現在の共有 player engine は 24-key chart gameplay を駆動しません。
+browser gameplay path は parser が discovery する chart variant `5`、`7`、`9`、`10`、`14`、`24`、`24d` をすべて mount します。
+keyboard mode のレーンは、upstream の `play24main.lua` が使う `1000` 番台 timer base (`bomb_1p_key10 = 1010` など) で参照します。これらは `runtime-ids.ts` に実装済みです。
 
 ## 互換性の境界
 

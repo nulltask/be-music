@@ -1,5 +1,149 @@
 # @be-music/player-web
 
+## 0.8.0
+
+### Minor Changes
+
+- cd83c89: Let hosts balance keysounds against BGM and tune each compressor.
+  
+  - The audio bus gains per-bus user volume (`setBusVolume` / `getBusVolume`, `initialVolumes`) applied at each source mixer ahead of the compressor stack, and live compressor tuning (`setCompressorParams` / `getCompressorParams`, `initialCompressorParams`) for the key, BGM, master, and legacy compressors, clamped to the Web Audio ranges.
+  - New `@be-music/player-web/runtime` exports: `AudioBusChannel`, `TunableCompressor`, `MAX_BUS_VOLUME`, `sanitizeBusVolume`, `DEFAULT_COMPRESSOR_PARAMS`, `COMPRESSOR_PARAM_RANGES`, and `mergeCompressorParams`.
+  - Gameplay views take `audioVolumes` and `audioCompressorParams` options and expose `setAudioVolume` / `setAudioCompressorParams` to change them live; the beatoraja gameplay prep accepts `audioBusOptions` for the same initial state.
+- 9534c16: Add the be-music skin format and a second built-in skin, Synesthesia.
+  
+  The default (skinless) family now renders through a `BeMusicSkin`: a skin that draws every screen (gameplay, select, result) onto a canvas the player hands it, from plain per-frame data, over a fixed design canvas (the skin's `stage`, the 16:9 `wideStage` unless it declares another). The shared scenes keep input, timing, judging, and layout and show the skin's canvas, so skins can be swapped by passing `beMusicSkin` to `DefaultPixiGameplayView` / `DefaultPixiSongSelectView` / `DefaultPixiResultView`.
+  
+  - New exports: `BeMusicSkin` and its frame types, `createBeMusicSkinRegistry`, `resolveBeMusicLaneKind`, `resolveSelectListWindow`, `phantomSkin`, `synesthesiaSkin`, `latticeSkin`, `plainSkin`, and `BUILT_IN_BE_MUSIC_SKINS`.
+  - Skins can be made outside the player with any renderer: the skin contract and its helpers now live in the new `@be-music/skin-sdk` package, which imports no rendering framework, and `@be-music/player-web` depends on it. A skin names the canvas context it wants, may create its own renderer in an async `setup` and release it in `teardown`, and brings its framework (PixiJS, three.js, …) as its own dependency. Phantom, Synesthesia, and Lattice run their Pixi scenes on their own renderer this way, and the built-in skins live under `src/skins/` importing only `@be-music/skin-sdk`, their framework, and their own files (a test enforces the boundary). The lane geometry, song entry, result data, and audio frame types the player shares with skins move to the SDK; `@be-music/player-web` keeps re-exporting them.
+  - Hosts extend a skin registry at runtime: `BeMusicSkinRegistry.add` registers another skin (validated; a skin with a known id replaces it) and `subscribe` reports additions so a picker can refresh. `BUILT_IN_BE_MUSIC_SKINS` now loads Synesthesia (the default), Phantom, and Plain; Lattice still ships as `latticeSkin` for hosts to add. The demo's Debug Menu can add Lattice or a skin module from a URL (after a trust prompt).
+  - A skin declares `apiVersion` (`BE_MUSIC_SKIN_API_VERSION`), its own semantic `version`, and an `author` (name and optional URL), with an optional `description`, `homepage`, and `license`. `defineBeMusicSkin` / `validateBeMusicSkin` check the declaration, and `createBeMusicSkinRegistry` leaves out skins written for an unsupported API revision or with a malformed declaration (reporting them through `onRejected`) instead of letting them break the host.
+  - The player collects each gameplay frame's layout, lanes, notes, long notes, hit effects, and HUD values and calls the skin's `draw` once before rendering; select and result draw every frame, select with a `revision` that moves when its state changes and a `hit` callback for clickable areas. `'2d'` canvases come cleared and scaled to design pixels. Each canvas is sized to the device pixels the stage covers on screen (viewport scale × `devicePixelRatio`) and shown dot by dot with nearest sampling. A new built-in example skin, Plain (`plainSkin`), is drawn with the Canvas 2D API only.
+  - Each gameplay frame carries the `layout` (stage, lanes, playfield bounds, judgement line, and BGA rect) resolved by the host through `resolveGameplayLayout`, so skins place their chrome from it instead of computing geometry themselves.
+  - Phantom is the existing poster skin. Its showpieces now cut in on torn-paper strips (a red splash behind a ripped white rim around an ink band, with speed lines racing through it) carrying ransom-note lettering — READY? / GO!!, every 100 combo, and FULL COMBO; launching a chart splits the screen on a torn diagonal seam between a red bokeh strip on the left quarter and a black-and-white starburst carrying the title; and the result wipe tears away along a ripped edge with RESULT cut from magazines.
+  - Synesthesia is inspired by synaesthetic sound-and-light rhythm shooters: a black void, a world built from fine ember / gold particles with electric blue and magenta accents, data dust pouring out of the vanishing point (no speed lines radiating from it), a floor of light points, rivers of particles, point-cloud pyramids, and a roaming audio orb in the manner of classic music visualizers — a hollow shell of violet / blue / pink sparks bristling with fibres, orbited by a black moon that reflects its light. Schools of light fish (3D boids in ember, blue, and magenta) swim through the space, tightening on the beat and scattering on every key press, and the 3D backdrop roams between random camera shots — flying or hard-cutting, with a handheld drift — while the idle BGA monitor follows the orb. Hits detonate as perspective-projected 3D fountains of fine powder — dense, tiny grains with only the coarsest few trailing a hairline or carrying a glint — a light pillar, a core flash, an anamorphic streak, and a lock-on reticle that snaps shut; HUD panels are hairline frames with lock-on corners. Select snaps a lock-on reticle onto the focused chart over the particle world; result has an entrance timeline with sparks bursting as the rank ignites. It draws with Michroma and M PLUS 1p, which hosts should load.
+  - Lattice is a third built-in skin in the manner of precise, typographic interaction design: warm paper with graph-paper rules, ink with one cobalt accent, and a field of fine needles that turns like iron filings to the beat, to every key press, toward a combo milestone, and into a swirl on a full combo. Text decodes in with a text scramble throughout, the combo is an odometer, judgements drop in letter by letter on a spring, bead-chain pendulums swing under Verlet physics when keys strike them, select rows and level squares drop and bounce into place, and launching flips the page to ink tile by tile. It draws with Inter, Azeret Mono, and M PLUS 1p, which hosts should load.
+  - Skins can now react to what is playing: a new `BeMusicAudioFrame` (loudness in 0..1 and dBFS, bass / mid / high energy, a 16-band log spectrum, and an onset envelope from spectral-flux transient detection) reaches every gameplay and select frame (`audio`). Gameplay analyses the whole mix off the audio bus output; select analyses the BGM and chart preview. Each band and the bass / mid / high energies are placed within the range they covered over the last few seconds (an automatic gain), so a loud, compressed mix no longer pins the spectrum at the top: bars drop between hits and reach the top on them, and the skins' audio-driven sizes (Phantom's halftone, bursts, and rank badge, Synesthesia's orb) swing much wider. The built-in skins use it, gated by the effects level: Phantom's halftone and bursts pump on the bass and a slanted spectrum strip sits under the monitor (and along the select list); Synesthesia's dust, haze, floor, rivers, and fish schools follow loudness, bass, mids, and onsets, and the orb's latitudes swell and grow fibres with their spectrum bands, breathe on the bass, and burst on onsets; Lattice's needles stand up into an equalizer on the select page, onsets ripple through the field and strike the pendulums, the idle monitor becomes a tile equalizer, and the tally shows a live spectrum and dB readout.
+  - 24 KEY and 48 KEY charts no longer squeeze 24 lanes per side into the 7K playfield (8 px each): 24 KEY fills the column left of the BGA monitor (about 10.5 px a lane, the monitor stays), and 48 KEY spreads both banks across 616 px (about 12.8 px a lane). The core lane renderer and every built-in skin share the new layout, so chrome, notes, and judgements line up.
+  - Key beams read more clearly in every built-in skin: a pressed lane lights a laser in its colour (cool white, electric blue, and red in Phantom; each lane's light in Synesthesia; graphite, cobalt, and vermilion ink in Lattice) that stands near solid at the judgement line and eases out up the lane, so the upper lane where notes are still falling only carries a faint tint.
+  - 5 / 7 / 10 / 14 KEY lanes now have fixed widths in proportions taken from the arcade cabinet — a 41 px scratch, 24 px white keys, 19 px black keys (a 7K side stays 194 px) — so a 5K or DP chart never stretches its lanes sideways; the playfield narrows or widens instead. White-key lanes also get their own background tone in every built-in skin, while the scratch lane shares the black keys' background.
+  - Skinless lanes now sit edge to edge (the 2 px gaps between lanes are gone) and every built-in skin draws notes and long notes across the full lane width. In IIDX double play (10 / 14 KEY) the 1P and 2P banks stand 60 px apart, about 0.31 of a side as on the arcade cabinet (`IIDX_DP_SIDE_GAP`), and every built-in skin draws the judgement line and lane grid per side (`resolveLaneRuns` in the skin SDK) so nothing crosses the gap; 48 KEY keeps its banks together.
+  - Built-in skin text is now vertically aligned by its capitals: Pixi sizes a line box from accent and descender ink, so faces like Anton and Michroma sat visibly low in every plate and button; each face's offset is measured once and corrected through the text pivot.
+  - Built-in skin text now rasterizes at the final device density (viewport scale x renderer resolution) instead of being magnified from the 640x480 design canvas, so labels and numbers stay crisp at any window size; glow shadows get texture padding so they no longer clip into hard rectangles.
+  - The Pixi renderer now uses the display's full `devicePixelRatio` instead of capping it at 2x, so 3x displays render the scenes at native density.
+  - Showpieces for both built-in skins: a count-in before the first beat (Phantom slashes READY? into GO!!, Synesthesia condenses READY and flares START), a cut-in every 100 combo, a CLEAR LINE flourish when the gauge crosses the clear line (marking the line, not a cleared song), and a full-combo finale (Phantom's turning burst with confetti, Synesthesia's 3D spark sphere). Phantom's result screen opens with an ink wipe carrying a giant RESULT slug.
+  - Synesthesia enters a zone as the combo builds: from 25 / 50 / 100 / 200 combo the dust speeds up and multiplies, the floor burns hotter, more particle rivers appear, and hits throw more sparks further. Overlapping hits now dim their white flash so colour stays the hero.
+  - Judgements and the combo counter punch in on every hit, and lanes, rails, and the Synesthesia sky react to each key press. A BAD / POOR draws no effect at all — no shake, vignette, glitch, needle jitter, or combo-break shatter — so the playfield stays still and the next notes stay readable.
+  - Phantom's judgement and combo count are cut out of magazines like its READY? / GO!! count-in: each hit sets them as fresh ransom notes whose cards pop in one after another, with the judgement colour on the letters of the dark cards (the combo turns gold from 200). Both are set small so the notes falling through them stay readable.
+  - A PERFECT now prints as a colour-cycling GREAT, as on the arcade cabinet, in every built-in skin (each with its own palette); a plain GREAT keeps its steady colour.
+  - Starting a chart from select now plays a short launch outro (Phantom's ink slabs with LET'S GO!, Synesthesia's dash through black space, its particles trailing toward the chosen title at the centre) before gameplay begins; input is ignored while it plays.
+  - Moments and HUD frames make room for a BGA when one is shown, and HUD labels are no smaller than 9 px. The 100-combo cut-in no longer covers the lanes: it sits in the column beside them in single play and in the band below them when a double-play field fills that column.
+  - The built-in skins draw much less per frame. Synesthesia's floor lattice, dust, powder, point clouds, and orb shells and Lattice's needle field are drawn as GPU particles (a shared `particle-layer` that rides along with a pooled graphics) instead of `Graphics` geometry rebuilt every frame; the remaining Synesthesia light shapes are merged into one fill per colour bucket, colour maths no longer allocates, and overlapping bombs share a per-frame spark budget. HUD text takes its fill from a tint so colour changes reuse the glyph texture, the cap-height alignment no longer re-measures fonts every frame while a face is still loading, Lattice's paper grid is drawn once, Phantom's halftone fields fill in one pass, and the rebuilt-every-frame result screens reuse their label textures. On a dense 7K chart this cuts the gameplay frame work by roughly 38 % (Synesthesia), 10 % (Phantom), and the Lattice select screen by about 15 %.
+  - Every built-in skin's select, gameplay, and result screens are set on a layout grid — a fixed page margin and gutter, blocks sharing their top, bottom, and side lines across columns, and rows on one pitch inside each panel (score panels pair SCORE / COMBO, EX SCORE / MAX, EX RATE / RANK on shared rows; result judgement rows end on the graphs' baseline) — so related figures read as groups and the screens feel ordered.
+  - Built-in skin type no longer collides with rules and frames: Phantom's judge tally clears the status bar's teeth, Synesthesia's header backs its type over the playfield rails, CLEAR sits clear of the playfield frame, SOUND ONLY gets a slip over the idle monitor, the select cursor marker no longer sits on the panel frame, and Lattice's needle field leaves the footer readouts and the milestone figures clean.
+  - New `beMusicEffects` option (`'full'` / `'reduced'` / `'off'`) on the default gameplay, select, and result views tones down or disables flashes, particles, and animation for comfort or low-end devices; select renderers can declare an `outroMs` and receive `effects` and `launchAt` in their frame.
+  - The built-in skins are 16:9: they declare a new `BeMusicSkin.stage` (854x480 with a `resolveBgaRect` hook) and the default gameplay, select, and result scenes size their design canvas from it, while LR2 / beatoraja themes keep their own canvas. The playfield keeps its 4:3 pixels — same lane widths, judgement line, and note speed — and the extra width goes to the BGA and HUD: the BGA grows to a 284 px square centred between the lanes and a right-hand judge column (Phantom adds a spectrum under the tally there), shrinks to fit beside a double-play field instead of disappearing, the score panel moves to the right margin, and the track card widens so long titles keep their room.
+  - Select-list rows use the wider list to show what a player checks before picking a chart: the artist after the title, gimmick tags (LN, SOFLAN, STOP, MINE), the note count, the play length, and the tempo range, in fixed columns that line up down the list.
+  - Result screens gain a track column: title, artist, genre, mode, level, BPM, combo breaks, and the clear lamp (PERFECT / FULL COMBO / CLEAR / FAILED), replacing the title line in the header.
+  - While a chart's audio decodes or its BGA video transcodes, the lanes show NOW LOADING in each skin's style (Phantom's ransom note, Synesthesia's breathing light, Lattice's re-decoding caption with a sweeping plotter head) and the count-in waits for it; `mount()` now shows the playfield during this load instead of a blank stage.
+  - `SkinlessGameplayChromeRuntime` gains `totalNotes`, `chartMs`, `judgeAtMs`, `impulseAtMs`, `impulseKind`, `effects`, and `loading`, and the be-music lane and bomb contexts gain `combo` and `effects`.
+  - With no BGA, every built-in skin's monitor now reads SOUND ONLY instead of STAND BY / STANDBY / NO BGA; Phantom cuts it out of magazines as a ransom note, re-cut every so often over its turning starburst.
+  - Long notes share one shape across the built-in skins, taken from Synesthesia: a translucent beam in the lane colour with a centre filament between the head and tail bars (Phantom in poster tones with a paper-white filament, Lattice as a faint ink wash with an ink filament, Plain with a white centre line).
+  - Select-list rows label the note count NOTES instead of a bare N.
+  - Phantom drops the sheet-music staves from its floor wedge and result slash, and Synesthesia drops its ember horizon and every elliptical effect (hit shockwave rings, floor beat rings, the count-in ring, the 100-combo shockwave, and the result rank ring).
+  - The built-in skins do much less work per frame: notes share one Graphics, the select screen keeps unchanged labels' text textures through its transitions, skin canvases no longer preserve their drawing buffer, Phantom's static ground and halftone fields come from cached geometry, result screens stop rebuilding their static backgrounds and per-dot fills, Synesthesia projects its particle fields without allocating, Lattice works its needle field out by row and column, and Plain reuses its gradient and font strings. Phantom gameplay drops from about 430 to 155 ms of main-thread time per second, and Synesthesia gameplay from about 340 to 235.
+  - Screen transitions are smoother: with a be-music skin the play screen fades up from black as it appears and fades to black with the audio before the result or select screen takes over, the full-combo showpieces close within the post-chart hold, and the result entrances settle sooner.
+- 2c368ed: Redesign the default (skinless) skin family in a "Phantom" poster style: ink-black ground, blood-red slabs and halftone fields, slanted paper plates, jagged starbursts, and condensed italic type. Gameplay, song select, and result all share the new look while keeping the same geometry contract (LR2 default 7-keys lane positions, 640x480 design canvas, unchanged select hit areas).
+  
+  - Gameplay chrome: sawtooth header kicker that swells on the beat, slanted mode / ruleset tags, a halftone floor wedge under a slanted score plate with a starburst rank badge, a segmented slanted-cell groove gauge, a paper "track card" song plate, ransom-note judge tally chips, and a BGA monitor that idles on a turning starburst "STAND BY" screen.
+  - The playfield stays deliberately plain and IIDX-like: flat white / blue / red notes, solid-rail long notes, a red judgement line, and a simple ring-and-core hit flash, so reading is never traded for style.
+  - Judgement words and all live numerals (score, EX score, combo, gauge, tally, BPM / HI-SPEED) use Anton with tabular figures, laid out per glyph in fixed-width cells so changing values never jitter sideways.
+  - Song select: red halftone slab with a drifting dot field, a starburst that pulses at the focused chart's BPM, speed streaks, a scrolling header kicker, a beat-kicking row pointer, a glint sweeping the focused card, a staggered fly-in of the song list on entry, and a slide-in of the focused card and title on every cursor move. PLAY is now the primary (larger) action and AUTO PLAY secondary.
+  - Result: an entrance timeline — the red halftone slash sweeps in, the STAGE CLEAR / FAILED tag slams down, metric plates and judgement rows slide in one after another while every counter rolls up, count bars grow, run graphs draw left to right, and the rank burst pops before its letter stamps down. Afterwards the burst keeps turning and pulsing, the halftone drifts, the header kicker scrolls, speed streaks rake across, and a glint sweeps the verdict tag; a skip jumps straight to the settled layout.
+  - Type stack: Anton for Latin display text, Dela Gothic One for song titles, and M PLUS 1p for small UI and Japanese text, with LINE Seed JP as the fallback. Hosts should load these faces (the demo does via Google Fonts).
+  
+  `SkinlessGameplayChromeRuntime` gains `nowMs`, `progressRatio`, `beatPhase`, `rulesetLabel`, `gaugeLabel`, `gaugeSurvival`, `fast`, and `slow`.
+- 0319694: Add a master volume over every sound the player makes — gameplay keysounds and BGM, select BGM, chart previews and system sounds, result BGM, and theme sounds. `setMasterVolume` / `getMasterVolume` set and read it (linear, 0..2), and every audible path now ends in `masterOutput(context)`, a per-context gain at that level. The gameplay recorder taps the mix before it, so recordings keep their level whatever the listening volume.
+- 202a28b: Mount 24 KEY SP / 48 KEY DP charts in both skin families.
+  
+  The beatoraja path accepts the `'24'` / `'24d'` play skins the parser already discovers: `pickBeatorajaPlayableVariant` maps the keyboard chart shapes onto them, the runtime adapter lights `KEYSONG_24K` / `KEYSONG_24K_DP` and addresses lanes through the `1000`-block timer bases, and the note layer places the 24 columns on the skin's leading lane slots (the 2P bank starting after the `note-su` / `note-sd` pair) with a piano white/black fallback tint. The new `chartPlayVariantForBeatorajaVariant` helper translates the skin's `'24d'` spelling into the engine's `'48'`.
+  
+  The song-select scene resolves keymode index 6 / 7 for these charts, so beatoraja's MODE filter and `modeset` badge cover 24K and 24K-DP; the LR2 select / result ops fold them onto the closest same-shape op (SP → 7 keys, DP → 14 keys) since LR2's op space has no keyboard entry. The LR2 gameplay scene renders the lanes through the fallback playfield and no longer stamps out-of-range LR2 lane timers — a lane-24 bomb used to spill from the bomb bank (`50 + 24`) into the LN-hold bank at 70+.
+- d5e558c: Fix gameplay recordings showing the picture ~40-50 ms ahead of the sound. `MediaRecorder` stamps video and audio on arrival and the Web Audio path reaches it later than the canvas, by an amount that varies per machine; the recorder now encodes with WebCodecs and muxes with Mediabunny (new runtime dependency `mediabunny`), stamping frames with the `AudioContext` time they were drawn at and audio from an `AudioWorklet` by sample position, so both tracks share the gameplay clock (measured offset within 4 ms, against 41-47 ms before). Browsers without WebCodecs / `AudioWorklet` or a WebM encoder keep the `MediaRecorder` path.
+  
+  - New `GameplayRecorderOptions.subscribeFrame` captures each frame right after the scene renders (the built-in gameplay views pass `PixiSceneHost.onAfterRender`), and `backend` forces a backend.
+  - `GameplayRecorderResult.seekable` tells whether the file already carries its seek index; `makeWebmSeekable` is only needed when it is `false`.
+  - New exports `alignAudioChunk`, `resolveFrameTimestamp` and `supportsWebCodecsRecording`.
+- 0103435: Run the selected gauge through the active compat ruleset instead of a hardcoded LR2 groove curve.
+  
+  `PlayerOptions.gauge` now picks a gauge out of the ruleset's own line-up (LR2 `GROOVE` / `EASY` / `HARD` / `EX-HARD` /
+  `DEATH`, beatoraja `NORMAL` / `ASSIST-EASY` / `EASY` / `HARD` / `EX-HARD` / `HAZARD`, IIDX `NORMAL` / `EASY` /
+  `ASSISTED-EASY` / `HARD` / `EX-HARD`) and the engine runs that gauge's real curve — per-judge deltas, TOTAL scaling,
+  guts softening, death border, and the survival-vs-threshold clear rule. Previously the picker was cosmetic: HARD
+  rendered red but ran GROOVE's numbers and reported CLEARED at 2 %.
+  
+  Consequences:
+  
+  - `PlayerSummary.gauge` gains `survival` and `failedMidPlay`, and its `type` widens from the LR2-only union to the
+    ruleset-scoped gauge id.
+  - The LR2 `#TOTAL` default is now LR2's note-count formula (`LR2_bmsload.cpp`) rather than a flat 160.
+  - `@be-music/player/core/groove-gauge` keeps only `GrooveGaugeType` / `GrooveGaugeJudgeKind`; the gauge state helpers
+    (`createGrooveGaugeState`, `applyGrooveGaugeJudge`, `applyGrooveGaugeRawDelta`, `isGrooveGaugeCleared`) are removed
+    in favour of the ruleset's `RulesetGauge`.
+  - `beatorajaGaugeModeFromString` and `computeClearLampOp` accept every ruleset's gauge id, so beatoraja skins show the
+    ASSIST-EASY and EX-HARD lamps instead of collapsing them onto NORMAL.
+
+### Patch Changes
+
+- 36bcb71: Retune the default gameplay compressor stack so keysounds keep their attack.
+  
+  - Key bus: a slower attack (12 ms) lets each hit's transient through before compression, with a gentler ratio (3:1), a firmer knee, and a faster release so one hit's gain reduction doesn't dull the next.
+  - BGM bus: lighter glue (2:1 from −10 dB) with a 25 ms attack, so the background bed sits steadily under the keysounds while its drums keep their own attack.
+  - Master: a firmer, less intrusive ceiling (−1.5 dB, 20:1, 2 ms attack, 150 ms release) that catches clipping peaks without shaving the front of every hit or pumping on bass.
+  - The `legacy` single-compressor mode is unchanged.
+- d9958ac: Show empty POORs in the LR2 POOR counter, as real LR2 does.
+  
+  `RulesetConfig` gains `emptyPoorCountsInPoorDisplay` — a presentation rule, not a scoring one. LR2 is `true`:
+  OpenLR2's `ApplyJudgeNote` increments `playerstat.poor` for the empty-POOR branch and LR2 exposes no separate stat,
+  so a run judged under LR2 now folds `emptyPoor` into the POOR figure its result screen, BP, and per-judge rates
+  read. beatoraja shows an empty-POOR figure of its own and IIDX's counter is unmeasured, so both keep them apart.
+  
+  `ScoreSummary` gains `emptyPoor` and `@be-music/player/core/scoring` exports `resolveDisplayedPoor`.
+  `PlayerSummary` always reports the split; only the display copy folds.
+- 750c47d: Fix sparse charts playing on only the lanes they use: a chart with notes on a single lane laid out a single lane. Gameplay now lays out every lane of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), so the playfield, key bindings, and skins always show the whole keyboard.
+- b3fa635: Shorten the default POOR / miss BGA display window from 2000 ms to 500 ms, matching real LR2.
+  
+  LR2 ships `<poorbga>500</poorbga>` in its `config.xml` and its changelog documents 500 ms as the
+  miss-BGA default, so the previous 2-second window held the miss layer four times longer than LR2.
+  `DEFAULT_POOR_BGA_DISPLAY_SECONDS` is shared by the TUI compositor and the web LR2 scene, so both
+  runtimes pick up the corrected timing.
+- 4ab6e91: Fix gameplay recordings drifting out of sync with their audio on high-DPR displays: a canvas larger than 1920×1080 is now scaled down before encoding (configurable via `maxVideoSize`), since software VP9 could not encode ~3000×2000 frames in real time and dropped frames until the video stuttered behind the sound.
+- 8b07494: Fix gameplay recordings dropping below 60 fps.
+  
+  `captureStream(fps)` samples the canvas on its own timer, which drifts against the render loop: a 60 fps capture of a 60 fps scene measured about 54 fps, with regular one-frame gaps. The recorder now captures with frame rate 0 and requests a frame on every animation frame (thinned to the `fps` option), so it takes exactly the frames the scene painted — measured at 60.0 fps with no gaps. Browsers without `requestFrame` keep the timer-driven capture.
+- Updated dependencies [202a28b]
+- Updated dependencies [d9958ac]
+- Updated dependencies [202a28b]
+- Updated dependencies [f24ed8b]
+- Updated dependencies [202a28b]
+- Updated dependencies [750c47d]
+- Updated dependencies [b3fa635]
+- Updated dependencies [2d7652c]
+- Updated dependencies [0103435]
+- Updated dependencies [9505684]
+- Updated dependencies [1589105]
+- Updated dependencies [1c6e7aa]
+- Updated dependencies [08e62d0]
+- Updated dependencies [41f5efb]
+- Updated dependencies [40f1050]
+- Updated dependencies [872c26c]
+  - @be-music/chart@0.4.0
+  - @be-music/player@0.7.0
+  - @be-music/lr2-skin@0.1.6
+  - @be-music/beatoraja-skin@0.2.0
+  - @be-music/skin-sdk@0.1.0
+  - @be-music/audio-renderer@0.2.4
+  - @be-music/parser@0.2.4
+
 ## 0.7.0
 
 ### Minor Changes
@@ -64,11 +208,9 @@
 
 ### Minor Changes
 
-- a36c2b1: Separate default-chrome injection from the LR2 gameplay scene and improve the default skin's layout / rendering:
+- a36c2b1: Separate default-chrome injection from the LR2 gameplay scene so the default gameplay scene can paint its own chrome without dragging the LR2 skin pipeline along.
 
-  - New `scene/gameplay-chrome.ts` and `scene/gameplay-lanes.ts` modules pull the shared chrome / lane drawing out of the LR2 scene so the default gameplay scene can paint its own chrome without dragging the LR2 skin pipeline along. The LR2 gameplay scene now consumes those modules instead of inlining the chrome construction.
-  - The default gameplay scene's font setup, lane sizing, and decide / result transitions land closer to the LR2 skin's authored values, so charts that load without a skin render with a more readable playfield instead of the previous bare placeholder.
-  - Result-delay / autoplay behaviour coverage is extended along the way (new test paths in the LR2 result scene + select scene refactor) so future changes against the same areas surface regressions earlier.
+  New `scene/gameplay-chrome.ts` and `scene/gameplay-lanes.ts` modules hold the shared chrome / lane drawing; the LR2 gameplay scene now consumes those modules. The default scene's font setup, lane sizing, and decide / result transitions land closer to the LR2 skin's authored values, so charts that load without a skin render a more readable playfield.
 
 ## 0.5.1
 
@@ -87,8 +229,6 @@
 
 ### Patch Changes
 
-- 3ee4d90: Refactor shared beatoraja chart timing entry collection.
-- d4b427c: Refactor shared beatoraja decide and result scene lifecycle helpers.
 - 69f77d1: `BeatorajaMarkerLayer.update` previously picked only the first prototype per marker kind (`group` / `bpm` / `stop` / `time`) via `kind.find(...)` and painted it at every beat. DP skins that author one destination per side (1P-side + 2P-side) only saw markers rendered on the 1P side as a result. Iterate every registered prototype per kind, matching beatoraja's upstream `LaneRenderer.java` loop, so both sides paint measure lines / BPM-change lines / STOP markers / time-tick markers.
 - 69f77d1: Bound the zip-archive decode path's working memory so opening a multi-gigabyte chart pack no longer materializes every entry in RAM at once. Entries are now streamed through the song-collection loader and released as soon as their files are handed off.
 - 69f77d1: Destroy beatoraja-scene Pixi `GraphicsContext` instances during scene teardown so the underlying GPU resources are released. Without this the WebGL renderer's context cache grew unbounded as the player moved between scenes.
@@ -103,11 +243,7 @@
 - 4275fef: Call `scheduler.yield()` through the `scheduler` receiver instead of extracting the method into a bare variable. Detached method invocation lost the `this` binding and crashed with `Illegal invocation` on browsers that ship the Scheduler API natively, so `loadSongCollectionFromFiles` froze mid-parse on Chrome's scheduler-yield code path. The `setTimeout(0)` fallback for browsers without the API is unchanged.
 - 69f77d1: Serialize BGA video FFmpeg transcodes through a single-flight queue so charts that reference several `.mpg` / `.avi` BGAs no longer launch parallel `ffmpeg.wasm` workers and exhaust browser memory.
 - 69f77d1: Yield to macrotasks while parsing a large chart so the page stays responsive (loading overlay animation, scrollbar, click handlers) and the browser doesn't flag the tab as unresponsive on multi-MB BMS / BMSON files.
-- cc37f42: Refactor shared LR2 scene texture path collection.
-- 18e4a48: Refactor shared LR2 value sprite rendering setup.
 - 69f77d1: Precompute `sortedChromeEntries` (tagged union over image / number / text / button / onMouse / slider) once per LR2 select-scene skin reference. The previous render path merged six arrays into `work[]` and called `.sort()` every frame; the underlying skin is frozen after parse so the order is static. Per-frame visibility (op gating, panel-open gating, DST keyframe evaluation) still happens during the switch dispatch — only the merge / sort step is hoisted out.
-- a66b7aa: Refactor LR2 and beatoraja Pixi cropped texture caching through a shared helper.
-- 73dff9a: Refactor shared chart timing, skin element field parsing, file lookup, and beatoraja scene helpers.
 - Updated dependencies [69f77d1]
 - Updated dependencies [69f77d1]
 - Updated dependencies [69f77d1]
@@ -127,78 +263,13 @@
 
 ### Minor Changes
 
-- 06a2db9: Add **beatoraja skin** support to `player-web`, alongside the existing LR2 path.
+- 06a2db9: Add beatoraja skin support alongside the existing LR2 path.
 
-  ### `@be-music/beatoraja-skin` (new package)
+  Public entry points include `loadBeatorajaThemeFromFiles()`, `loadBeatorajaTexturesFromBundle()`, `destinationToSpriteProps()`, `BeatorajaPlaySkinView`, the `BeatorajaRuntimeAdapter`, Pixi scenes for decide / gameplay / result / select, drop-detection helpers (`isBeatorajaSkinIndicator`, `isBeatorajaLuaSkinFilePath`, `isLr2SkinFilePath`), and chart helpers (`prepareBeatorajaGameplayChart`, `computeBeatorajaChartMarkers`, `pickBeatorajaPlayableVariant`).
 
-  Renderer-independent parser and normalizer for beatoraja's JSON and Lua skin formats. Covers the
-  2-phase Lua evaluation contract (`skin_config = nil` → header → populated `main()`) on a Fengari
-  sandbox, `if` / `values` flattening, `*` wildcard / `filepath[]` overrides, case-insensitive asset
-  lookup, and per-scene theme discovery (play / select / decide / result / course-result /
-  grade-result). All scene elements have strict-typed normalizers under `src/elements/` (`image`,
-  `imageset`, `value`, `float-value`, `text`, `slider`, `note`, `judge`, `judge-graph`, `gauge`,
-  `gauge-graph`, `bpm-graph`, `timing-visualizer`, `timing-distribution-graph`, `song-list`,
-  `custom-event`, `direction`, `destination`, `pm-chara`, `graph`) with keyframe carry-forward,
-  linear interpolation, `loop` wrap-around, and `divx` / `divy` cell math. `skin/default/`
-  discovery wins ties against community themes that shadow it.
+  Rendering fixes that landed with the beatoraja path: POPN-9 (PMS-STD) routing, LN / CN / HCN cap pairing and orientation, LN body / tail visibility after head judge, upstream `rxhs / 4` note scroll, BMFont negative-`size=` normalization, destination clipping to the authored canvas, and related select / judge-popup wiring.
 
-  ### `@be-music/player-web` (new beatoraja runtime + scenes)
-
-  - Public entry point gains `loadBeatorajaThemeFromFiles()`, `loadBeatorajaTexturesFromBundle()`,
-    `destinationToSpriteProps()`, `BeatorajaPlaySkinView`, the `BeatorajaRuntimeAdapter`, Pixi
-    scenes for **decide / gameplay / result / select** (with notes / markers / BGA layers), drop
-    detection helpers (`isBeatorajaSkinIndicator`, `isBeatorajaLuaSkinFilePath`,
-    `isLr2SkinFilePath`), and the chart-side helpers (`prepareBeatorajaGameplayChart`,
-    `computeBeatorajaChartMarkers`, `pickBeatorajaPlayableVariant`, …).
-  - Beatoraja `TIMER_*` / `OPTION_*` ↔ runtime-id wiring; live `getNowCombo` override; per-plate
-    POPN-9 timers / ops; `replaceSkin` refreshes textures / fonts / options mid-session.
-  - Many engine-rendering fixes uncovered while wiring beatoraja skins also land here:
-    POPN-9 (PMS-STD) routing, LN / CN / HCN cap pairing and orientation, HCN sprite slots, LN
-    body / tail visibility after head judge, LN-hold timer re-stamping at the tail verdict,
-    upstream `rxhs / 4` note scroll formula, BMFont negative-`size=` normalization, beatoraja-
-    select left-info panel via `TIMER_SONGBAR_CHANGE`, song-list `title + " " + subtitle`,
-    per-difficulty `level-*` digit cropping, judge-popup live combo via `getNowCombo`, destination
-    clipping to the authored canvas (LR2 parity), and more.
-
-  **Breaking** — `BrowserSongLibrary` is renamed to `BrowserSongCollectionStore`. The
-  `player-web` / `beatoraja-skin` / `lr2-skin` source trees are also reorganized into
-  purpose-based subdirectories (`browser/`, `chart/{,beatoraja}/`, `collection/`, `recording/`,
-  `runtime/`, `scene/{,beatoraja,lr2}/`, `skin/{beatoraja,lr2}/` and per-element subfolders); the
-  packages' `index.ts` re-exports the same symbols, so consumers that import from the package
-  entry point are unaffected — deep imports into `packages/*/src/*` need to follow the new paths.
-
-  ### `@be-music/chart` — broaden `resolveChartPlayVariant`
-
-  Two new content-based detection rules so PMS-STD authored as `.bme` / `.bms` routes to `'9'`
-  instead of falling through to IIDX heuristics:
-
-  - **BME POPN-9** — `#PLAYER 1` + every one of channels `11..19` populated. IIDX 7K never lights
-    up all nine columns, so a full 1P keyboard is a reliable POPN-9 signal.
-  - **PMS-STD on any extension** — any of channels `22..25` AND no traditional IIDX 2P channels
-    (`21` / `26..29`). Real IIDX DP always pairs each side's keyboard with `21` and / or scratch.
-
-  ### `@be-music/player` — direct lane-mode override
-
-  - New optional `PlayerOptions.playVariant` (`'5' | '7' | '9' | '10' | '14' | '24'`) lets the host
-    pin the engine's lane mode directly. Mirrors the renderer-side variant the host has already
-    classified the chart as, so BME-format POPN-9 charts mount with the correct `f / v / g / b`
-    bindings instead of falling back to 7-key SP.
-  - The player summary's `gauge` block now exposes the gauge `type` so consumers can label the
-    clear lamp without inferring from the threshold (EASY 60 vs DEATH 0+ε collide).
-  - LN engine aligned with upstream beatoraja: silent mid-hold mines, HCN gauge gain, drain rate.
-
-  ### `@be-music/lr2-skin`
-
-  Source tree reorganization only (drops the `lr2[-skin]-` prefix from filenames); entry-point
-  exports unchanged. A few comments were translated from Japanese to English.
-
-  ### `@be-music/player-web-demo`
-
-  Demo gains a beatoraja-theme path in parallel with LR2 themes: a "Beatoraja preview" folder in
-  the debug menu, variant dropdown (`7 / 5 / 14 / 10 / 9`), and an "Open preview" button that
-  mounts `BeatorajaPlaySkinPreviewScene` inside the shared `PixiSceneHost`. Texture caches are
-  memoized per entry path so reopening a variant reuses the GPU upload, and skin-options panel
-  state persists across mid-edit `replaceSkin` round-trips.
+  **Breaking** — `BrowserSongLibrary` is renamed to `BrowserSongCollectionStore`. The package source tree is reorganized into purpose-based subdirectories; the package entry point re-exports the same symbols, so consumers that import from the package root are unaffected.
 
 ### Patch Changes
 
@@ -214,37 +285,10 @@
 
 ### Patch Changes
 
-- b9a5f51: Fix two LN-effect regressions on the web runtime:
+- b9a5f51: Fix two LN-effect regressions.
 
-  1. **AUTO LN lane laser fading out mid-LN.** The renderer's
-     `applyEngineCommand` handler for `hold-lane-until-beat` did not add
-     the lane to `pressedChannels`, so the `flash-lane` command emitted
-     in the same tick on the LN HEAD scheduled a `flashKeyOnTimer`
-     setTimeout that called `releaseKeyOnTimer` ~`KEY_ON_FLASH_HOLD_MS`
-     later (because the auto-release skip path checks
-     `pressedChannels.has(channel)`). The lane laser therefore faded out
-     ~150 ms into the LN even though the LN body kept scrolling. Adding
-     the channel to `pressedChannels` on `hold-lane-until-beat` makes the
-     auto-release skip the same way it does for a real key press, and
-     the laser stays lit for the full LN sustain. The matching
-     `release-lane` (emitted at the LN tail by
-     `drainPendingAutoLongNotes` / `drainPendingAutoScratchLongNotes`)
-     removes the channel and the laser fades out at the tail timing.
-
-  2. **MANUAL LN-hold effect (sustain glow / hold sparkles) not showing.**
-     The engine was emitting `hold-lane-until-beat` only on the autoplay
-     LN-head path (`applyDueAutoPlayableJudgements` and
-     `applyAutoScratchJudgements`); the manual LN-head path inside
-     `handleMappedInputTokens` did not emit it. Without that command the
-     renderer never called `startLnHoldTimer`, the LR2 LN-hold timer
-     (70..89) stayed unset, and skin elements gated on it (the sustain
-     glow and hold-sparkle authored by the LR2 default skin) stayed
-     invisible for the whole hold. The manual LN-head path now emits
-     `hold-lane-until-beat` for every LN start (mode 1 / 2 / 3), and the
-     matching `release-lane` is fired from `finalizeActiveLongNote` so
-     the timer fades out at every manual LN resolution moment (early
-     release through `kitty-state`, mode-1 grace expiry, or end-beat
-     reached).
+  - AUTO LN lane laser no longer fades out ~150 ms into the sustain: `hold-lane-until-beat` now keeps the lane in `pressedChannels` so the same-tick `flash-lane` auto-release is skipped.
+  - MANUAL LN-hold effects (sustain glow / hold sparkles) now show: the renderer starts the LR2 LN-hold timer (70..89) for every LN start and fades it at the tail.
 
 - Updated dependencies [b9a5f51]
   - @be-music/player@0.3.1
@@ -253,97 +297,9 @@
 
 ### Minor Changes
 
-- 5ea9072: Make the renderer and the shared engine share a single
-  `PreparedPlaybackChartData` instance so view ↔ engine note-array drift is
-  structurally impossible, and fix the cluster of regressions that drift
-  caused on the web runtime.
+- 5ea9072: `PixiGameplayView.prepareSong` now builds a `PreparedPlaybackChartData` and forwards it to the engine through `engineOptions.preparedChart`, so the renderer and the engine share the same note instances instead of mirroring `note.hit` through an index-based sync.
 
-  ## What changed
-
-  ### `@be-music/player`
-
-  - New `PlayerOptions.preparedChart` option lets the host hand the engine
-    a pre-built `PreparedPlaybackChartData`. When provided,
-    `autoPlay` / `manualPlay` use it verbatim and skip their own internal
-    `preparePlaybackChartData` pass. Hosts that omit the option keep the
-    prior behavior — the engine builds its own chart data.
-  - Re-export `preparePlaybackChartData` and the
-    `PreparedPlaybackChartData` type from the package root so hosts can
-    build the bundle themselves before constructing the engine.
-  - `PlayerStateSignals` gains a `drainPendingJudgeCombos()` method that
-    returns every `publishJudgeCombo` event since the previous drain in
-    publish order. The legacy `getJudgeCombo()` latch still returns the
-    most recent state for HUD readout. UI runtimes that need to fan out
-    per-judge effects (lane bombs, NOWJUDGE plate restarts, FC timer
-    evaluations) for simultaneously-judged notes should drain the queue
-    instead of polling the latch — otherwise simultaneous-press chords
-    surface only the right-most lane's judge state to the host because
-    every prior publish in the same engine tick is overwritten on the
-    latch.
-
-  ### `@be-music/player-web`
-
-  - `PixiGameplayView.prepareSong` now calls `preparePlaybackChartData`
-    itself, keeps the result on `this.preparedChart`, and forwards it to
-    the engine through `engineOptions.preparedChart`. The renderer's
-    `this.notes` / `this.mineNotes` / `this.invisibleNotes` are
-    references into that bundle, so the engine and the renderer hold the
-    same `TimedPlayableNote[]` / `TimedLandmineNote[]` instances.
-  - The renderer reads `note.judged` directly off the shared instance
-    instead of mirroring it onto a parallel `note.hit` flag through an
-    index-based sync in `applyEngineFrame`. The sync block is gone.
-  - `drainWebUiSignals` consumes the new `drainPendingJudgeCombos`
-    queue, so simultaneously-judged AUTO PLAY chords now produce one
-    bomb sprite per chord note instead of only the right-most one.
-  - `score.total` is initialized from `prepared.scorableNotes.length`
-    (matching the engine's `summary.total`) so the full-combo predicate
-    is reachable on Free-Zone charts.
-  - `buildSharedEngineChart` is reduced to clearing `bms.controlFlow`
-    before handing the chart to the engine. The previous post-shuffle
-    `events.map` remap (the cause of the `random1P: 'OFF'` truthy-check
-    channel-class drift bug) is no longer needed because the engine
-    consumes the renderer's already-shuffled note array via
-    `preparedChart`.
-
-  ## Regressions fixed (all rooted in the same drift)
-
-  These all surfaced during Phase-4c shared-engine playthroughs and were
-  each caused by the renderer's `extractTimedNotes` call disagreeing with
-  the engine's. Sharing the prepared-chart instance removes the entire
-  class:
-
-  - **HIDE-on-judge dropouts**: notes vanishing partway down the lane
-    before reaching the judgment line, because a `judged=true` flag from
-    a different note crossed over via index mismatch
-    (`#LNTYPE 1` charts, `random1P: 'OFF'` truthy-check).
-  - **Mid-chart full-combo cue**: the engine's `combo` counter advanced
-    faster than the renderer's `score.total` because LNs were counted
-    twice on the engine side (`#LNTYPE` mismatch) or because the
-    Free-Zone count inflated `score.total` past the engine's scorable
-    population.
-  - **AUTO PLAY exScore < 200_000**: some auto judges landed on
-    already-judged duplicates and were dropped by `markScorableJudged`
-    (`bms.controlFlow` re-resolved on the engine side, doubling captured
-    notes). AUTO PLAY now lands on the EX-MAX 200_000 ceiling.
-  - **PMS keys 6-9 mapped to IIDX 2P keys** (`j k l ;`) instead of
-    `f v g b`: the engine's `resolveLaneMode` couldn't see the chart's
-    `.pms` extension and fell through to `'5-key-dp'`. The renderer now
-    forwards the right `laneModeExtension` baked into the prepared
-    bundle.
-  - **AUTO PLAY chord bombs only on the right-most lane**: the
-    state-signals latch was overwriting itself; the queue surfaces every
-    publish.
-  - **AUTO LN sustain glow / lane laser staying lit indefinitely after
-    the LN tail**: `drainPendingAutoLongNotes` (autoplay) and
-    `drainPendingAutoScratchLongNotes` (manual auto-scratch) now emit
-    `release-lane` after the auto judge so the LR2 LN-hold timer (70..89)
-    and the lane laser (100..117) actually fade out at the LN tail.
-  - **MANUAL LN BAD-failing ~380 ms into the sustain even with the key
-    held**, **lane laser collapsing to a brief flash instead of staying
-    lit while the key is held**: the Web input runtime now synthesizes a
-    `kitty-state` press alongside `lane-input` on every keydown so the
-    engine's `activeKittyPressedChannels` set keeps refreshing
-    `longHoldUntilMsByChannel` for the lane.
+  That removes the class of view ↔ engine drift bugs: notes vanishing mid-lane (HIDE-on-judge dropouts), mid-chart full-combo cues, AUTO PLAY falling short of EX-MAX, PMS keys 6-9 mapping to IIDX 2P, chord bombs only on the right-most lane, AUTO LN lasers staying lit after the tail, and MANUAL LN BAD-failing mid-sustain while the key is held. Simultaneously-judged AUTO PLAY chords now produce one bomb sprite per chord note via `drainPendingJudgeCombos`.
 
 ### Patch Changes
 
@@ -354,154 +310,21 @@
 
 ### Minor Changes
 
-- 632f274: Initial browser player implementation. Adds two packages:
+- 632f274: Initial browser player: a PixiJS scene host for the LR2 chart-player flow (select / decide / play / result) driven by the parsed LR2 skin (`#IMAGE` / `#SRC_*` / `#DST_*` keyframes, `#LR2FONT` bitmap fonts, op-gated visibility, scene-stage timers). Charts and themes load from drag-drop or file picker.
 
-  - **`@be-music/player-web`** — vanilla PixiJS scene host
-    for the LR2 chart-player flow (select / decide / play /
-    result), with scene-graph rendering driven by the parsed
-    LR2 skin (`#IMAGE` / `#SRC_*` / `#DST_*` keyframes, bitmap
-    fonts via `#LR2FONT`, op-gated visibility, scene-stage
-    timers). Loads charts and themes from drag-drop or file
-    picker via a chunked enumerate / read / parse pipeline that
-    publishes progress events to host UIs.
-  - **`@be-music/player-web-demo`** — Vite-based demo shell
-    that wires the core into a single-page app, with a lil-gui
-    settings panel, a glassmorphism drop overlay, browser-
-    compatibility check panel, and a Help dialog that hosts
-    the usage guide plus the Open-Source attribution list
-    (resolved at build time by a custom Vite plugin that walks
-    the runtime dep tree).
+  Headline capabilities:
 
-  Headline capabilities of the core:
+  - LR2 skin rendering: frame chrome, BGA, lane lasers, scratch turntable, bomb / FC / hold timers, animated bitmap fonts, gauge / combo / score, scroll slider.
+  - PMS / 9 KEY (Pop'n) skin support alongside IIDX 7 / 14-key layouts, with single-side judge / combo plate rendering for PMS-STD charts that source lanes from the `2X` channel block.
+  - BGA pipeline: native `<video>` decode with an ffmpeg.wasm transcode fallback, held until the chart-start gate.
+  - Web Audio bus: split key / BGM / master compressor topology, per-sample latency tuning, and `MediaRecorder` + canvas `captureStream` for WebM gameplay capture.
+  - LR2 button wiring: RANDOM / MIRROR, AUTO-SCRATCH, gauge type, HIDDEN / SUDDEN + shutter, HS-FIX, DP FLIP, BGA / score-graph / filter controls.
 
-  - **LR2 skin rendering**: frame chrome, BGA, lane lasers,
-    scratch turntable with physics-driven streak alternation,
-    bomb / FC / hold timers, animated bitmap fonts, gauge /
-    combo / score numbers, scroll slider.
-  - **PMS / 9 KEY (Pop'n) skin support** alongside default
-    IIDX 7 / 14-key layouts; per-variant skin pickers and
-    channel→lane mappings. Single-side judge / combo plate
-    rendering — PMS-STD charts that source lanes from the
-    `2X` channel block still collapse onto the LR2 9-key
-    skin's 1P-side `#SRC_NOWJUDGE` / `#SRC_NOWCOMBO` slots.
-  - **BGA pipeline** — native `<video>` decode for modern codecs
-    with an ffmpeg.wasm transcode fallback (single-threaded
-    H.264, optional WebCodecs hardware-accelerated encode,
-    optional long-edge pixel cap). Hold playback until the
-    chart-start gate so the video doesn't sneak ahead during
-    the LOADING / DONE intro.
-  - **Web Audio bus** — split key / BGM / master compressor
-    topology with per-stage toggles plus a global bypass; per-
-    sample latency tuning; `MediaRecorder` + canvas
-    `captureStream` for downloadable WebM gameplay capture.
-  - **LR2 button wiring** — RANDOM / MIRROR, AUTO-SCRATCH, gauge
-    type, HIDDEN / SUDDEN + shutter, HS-FIX, DP FLIP, BGA on /
-    off / autoplay-only, BGA size NORMAL / EXTEND, score graph
-    toggle, difficulty / keymode filters, song-list sort.
-  - **Performance** — single shared `Application` (avoids the
-    Pixi v8 batchPool race), per-section frame-timing tracker,
-    cached cropped textures, sprite / text node pooling,
-    static-rect graphics caching, parallel drop pipeline,
-    deferred song-bundle bytes.
-  - **Polish** — keyframe-inheriting LR2 parser fixes (op4 /
-    loop / acc / ops), clip-mask to design rect, auto-shrink
-    text, theme + library persistence across additional drops,
-    scene-stage exit FADEOUT / CLOSE, intro LOADING → DONE
-    flow, freeze on pause / blur, scoped colored logger.
+- 135f822: Drive gameplay through the shared `@be-music/player` engine (`manualPlay` / `autoPlay`) instead of the in-tree self-judge ladder, so the browser player shares judging, gauging, scoring, fallback keysound routing, long-note handling, mine priority, and chart-finish semantics with the TUI.
 
-- 135f822: Migrate the browser player to the shared `@be-music/player` engine and
-  sweep rhythm-game latency end-to-end. The browser player now drives
-  gameplay through `manualPlay` / `autoPlay` directly, sharing every
-  beatoraja-compatible behaviour with the TUI runtime. The migration
-  removed the in-tree self-judge ladder from `pixi-gameplay.ts`
-  (~700 lines) and unified judging, gauging, scoring, fallback keysound
-  routing, long-note handling, mine priority, and chart-finish semantics
-  across both runtimes.
+  New host adapters: `WebAudioSession` (Web Audio API `AudioSession`), `WebInputRuntime` (DOM keydown / keyup with `pressedAt` from `performance.timeOrigin + KeyboardEvent.timeStamp`), `WebUiRuntime` (engine `uiSignals` → Pixi callbacks), and `runEngineDriver` glue.
 
-  **Browser parity gains** (carried over from the engine):
-
-  - Look-ahead lane keysound fallback: an empty press plays the next
-    upcoming note's keysound on that lane, like beatoraja / LR2.
-  - Free-Zone `17` / `27`: empty presses on these channels play the
-    authored keysound and don't trigger 空 POOR.
-  - LN suppress windows + 380 ms initial / 120 ms repeat hold-grace.
-  - LN early-release audio cut via `AudioSession.stopChannel`.
-  - Mine vs note delta-based priority (closest delta wins).
-  - Multi-channel input mapping for scratch / Free-Zone aliases
-    (16↔17 / 26↔27).
-  - EMPTY POOR semantics matching LR2 (no combo break, no
-    `summary.poor` increment, gauge penalty per gauge type, POOR BGA).
-
-  **Engine surface (`@be-music/player`)**:
-
-  - `PlayerOptions.createAudioSession` factory — host-supplied audio
-    backend. Defaults to the bundled Node sink when omitted.
-  - `PlayerOptions.createInputRuntime` / `createUiRuntime` — host-
-    supplied DOM / runtime adapters.
-  - `PlayerInputCommand.pressedAt` — wall-clock-ms timestamp on
-    `lane-input` and `kitty-state` so the engine judges against the
-    physical press time, not its drain time. Removes up to ~16 ms of
-    artificial late-bias on every press, and is `worker_threads`-safe
-    via the wall-clock-ms domain (`performance.timeOrigin +
-performance.now()`).
-  - Event-driven drain (`createInputWakeUp`) — the inter-tick sleep is
-    cut short on input arrival, so a press lands within ~1 ms of the
-    next consume instead of waiting up to a 60 Hz tick.
-  - `setImmediate` is preferred over `queueMicrotask` for the precise-
-    wait tail spin so Node's `poll` / `check` phases run between
-    iterations and `process.stdin` keypress delivery isn't starved.
-  - The engine module no longer imports from `node:path` /
-    `node:timers/promises`; `createNodeAudioSink` is loaded lazily
-    only when no `createAudioSession` factory is supplied. Browser
-    bundles can import the engine as-is.
-
-  **Browser runtime adapters (`@be-music/player-web`)**:
-
-  - `WebAudioSession` — Web Audio API implementation of the engine's
-    `AudioSession` contract: immediate triggers, BGM scheduling,
-    channel stops, pause / resume, key / BGM routing, dynamic volume
-    changes (`#xxx97` / `#xxx98`), bmson `c=true` continuation, and
-    `#WAVCMD` per-slot gain.
-  - `WebInputRuntime` — DOM `keydown` / `keyup` → engine input bus.
-    OS auto-repeat filter, `Escape` / `F5` / `Space` interrupt /
-    pause routing, `pressedAt` populated from
-    `performance.timeOrigin + KeyboardEvent.timeStamp`.
-  - `WebUiRuntime` — drains engine `uiSignals` (frame snapshots +
-    `flash-lane` / `press-lane` / `trigger-poor-bga` / etc.) into
-    Pixi-side host callbacks.
-  - `engine-driver.ts` — single `runEngineDriver({ chart, audio,
-mode, ui })` glue over the three adapters.
-
-  **Browser performance / latency**:
-
-  - Pixi `Application.init({ powerPreference: 'high-performance' })`
-    — pin the renderer to the discrete GPU on hybrid laptops.
-  - `<canvas style="contain: content">` — compositor isolation for
-    the gameplay canvas without breaking Pixi's hit-testing.
-  - Master makeup gain pinned at unity (was `+1 dB`) so the
-    beatoraja-style fallback keysound density doesn't expose
-    audible compressor pumping.
-
-  **TUI fixes that came along**:
-
-  - Absolute-path arguments now resolve correctly under pure-ESM
-    Node runtimes (`tsx`, `node --import tsx/esm`); the previous
-    `resolveCliPath` slow path silently fell back to `cwd` when its
-    lazy `eval('require')` lookup threw, turning every absolute-path
-    CLI invocation into "scan cwd as a directory."
-  - POOR / BAD verdict plates no longer pair with the running combo
-    number (would otherwise display `POOR 5` after EMPTY POOR
-    preserves combo, contradicting the LR2 visual convention).
-  - In-play key input no longer silently swallowed in the TUI
-    worker-thread engine — `pressedAt` is now wall-clock-ms-based
-    so the main-thread input runtime and the worker-thread engine
-    share a comparable clock domain.
-
-  **Demo (`@be-music/player-web-demo`)**:
-
-  - The shared-engine path is the only playback path; the
-    `useSharedEngine` opt-in flag has been removed along with the
-    Debug Menu checkbox.
+  Latency / audio: pin Pixi to `powerPreference: 'high-performance'`, isolate the gameplay canvas with `contain: content`, and pin master makeup gain at unity so fallback-keysound density doesn't pump the compressor.
 
 ### Patch Changes
 

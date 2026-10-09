@@ -86,7 +86,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channel `01` (background sound)
 - [x] Interpret channel `1x` (play)
 - [x] Interpret channel `2x` (play)
-- [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY)
+- [x] Interpret channels `17` / `27` as FREE ZONE (other than 9KEY / 24KEY)
 - [x] When judging 9KEY, channel `17` is interpreted as a normal lane note.
 - [x] `#PLAYER=1` is retained as SINGLE meta information, and lane determination prioritizes channel configuration.
 - [x] `#PLAYER=2` (COUPLE) is retained as meta information, and dedicated 1P/2P separation play is not currently implemented.
@@ -94,7 +94,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Detonate mines in MANUAL mode while "the key is ON and the mine is within the `GOOD` window" (both press and hold-through, LR2 behavior)
+- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior)
 - [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
@@ -103,7 +103,8 @@ However, the exact specification of control syntax compatibility for files conta
 
 The original BM98-era core BMS specifications do not define landmine damage as part of the base format, so this implementation follows later public extension references and LR2-compatible implementations.
 
-- The detonation condition ("key ON and the mine within the `GOOD` window of the judge line, including hold-through") and "damage = the value itself (as a decimal percentage)" follow losak's LR2 mine writeup ("地雷オブジェに関するアレコレ"), verified against the real LR2. beatoraja (jbms-parser `Section.java` / `JudgeManager`) applies the raw value directly as damage, matching this.
+- The detonation window follows LR2's own changelog (`history.txt`, the 080114 mine-implementation entry): a mine explodes on hold-through passage or on a press within the **`PGREAT` (ピカグレ) range**, and no later entry revises this. losak's LR2 mine writeup ("地雷オブジェに関するアレコレ") claims the `GOOD` window instead, but the primary source wins, so `GOOD` is not adopted.
+- "Damage = the value itself (as a decimal percentage)" follows losak's writeup, verified against the real LR2. beatoraja (jbms-parser `Section.java` / `JudgeManager`) applies the raw value directly as damage, matching this.
 - Hitkey command memo's `value / 2` is the nanasi-lineage rule and differs from LR2's actual behavior, so it is not adopted.
 - `#WAV00` as the dedicated landmine reaction sound is corroborated by Hitkey's memo and Obj Tech Lovers chapter3-2 / chapter4-7.
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); on the `2-100%` GROOVE / EASY gauges it clamps to the `2%` floor (matching losak's "EASY / GROOVE just drop to 2%").
@@ -318,21 +319,22 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 ### TODO (SCROLL/BPM/STOP) from reference materials
 
-| TODO                                                                              | current situation | remarks                                                                                                     |
-| --------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------- |
-| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.        | correspondence | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line. |
-| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.  | correspondence | The current implementation policy is "proximity display priority", and the drawing distance is treated as an absolute value (reverse scrolling will not be reproduced)     |
-| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                            | correspondence | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.         |
-| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                 | correspondence | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                              |
-| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)     | correspondence | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                              |
-| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                   |
+| TODO                                                                                                                                       | current situation | remarks                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.                       | correspondence    | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line.      |
+| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.        | correspondence    | The current implementation policy is "proximity display priority", and the drawing distance is treated as an absolute value (reverse scrolling will not be reproduced) |
+| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                                                   | correspondence    | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.                             |
+| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                                                  | correspondence    | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                                   |
+| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)                                | correspondence    | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                                                                      |
+| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence    | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                                        |
 
 ## Player-Specific Behavior
 
 - Automatically determine lane mode from used channel (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
 - If lane mode cannot be automatically determined, complete with extension (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
+- Extended lane channels (`1A..1O` / `2A..2O`) select `24 KEY SP` / `48 KEY DP` ahead of every other rule, including the extension fallback
 - `.pms` The 9KEY of the musical score is estimated from the standard array (`PMS-STD`) / compatible array (`PMS-COMPAT`) from the channel distribution and reflected in the `LANE` display.
-- FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`)
+- FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`); under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are ordinary lanes instead
 - FREE ZONE Note length is fixed at quarter note
 - FREE ZONE is not subject to judgment (not included in `TOTAL` / `EX-SCORE` / `SCORE`)
 - BGA viewport background uses black (black even when transparent area/BGA is not displayed)

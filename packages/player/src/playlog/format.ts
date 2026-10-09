@@ -195,7 +195,7 @@ export class PlaylogParseError extends Error {
  * value. Throws {@link PlaylogParseError} with a field-path message on structural problems; unknown extra fields
  * are preserved-by-ignoring so future minor additions stay readable.
  */
-export function parsePlaylog(source: string | unknown): BeMusicPlaylog {
+export function parsePlaylog(source: unknown): BeMusicPlaylog {
   let value: unknown = source;
   if (typeof source === 'string') {
     try {
