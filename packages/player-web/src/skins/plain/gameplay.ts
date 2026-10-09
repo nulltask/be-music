@@ -61,11 +61,11 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillStyle = LANE_FILL[lane.kind];
     ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
     if (lane.beam > 0) {
-      const beam = ctx.createLinearGradient(0, lane.top, 0, lane.bottom);
-      beam.addColorStop(0, 'rgba(61, 123, 255, 0)');
-      beam.addColorStop(1, `rgba(61, 123, 255, ${0.45 * lane.beam})`);
-      ctx.fillStyle = beam;
+      // One gradient serves every lane; how bright the beam is comes from the alpha.
+      ctx.fillStyle = beamGradient(ctx, lane.top, lane.bottom);
+      ctx.globalAlpha = lane.beam;
       ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
+      ctx.globalAlpha = 1;
     }
   }
   // One judgement line per play side, so it never crosses the gap between the double-play banks.
@@ -73,6 +73,22 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
   for (const run of resolveLaneRuns(frame.lanes)) {
     ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
   }
+}
+
+const BEAM_GRADIENTS = new WeakMap<
+  CanvasRenderingContext2D,
+  { top: number; bottom: number; gradient: CanvasGradient }
+>();
+
+/** The key-beam gradient (clear at the top, blue at the judgement line), made once per context and lane height. */
+function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number): CanvasGradient {
+  const cached = BEAM_GRADIENTS.get(ctx);
+  if (cached && cached.top === top && cached.bottom === bottom) return cached.gradient;
+  const gradient = ctx.createLinearGradient(0, top, 0, bottom);
+  gradient.addColorStop(0, 'rgba(61, 123, 255, 0)');
+  gradient.addColorStop(1, 'rgba(61, 123, 255, 0.45)');
+  BEAM_GRADIENTS.set(ctx, { top, bottom, gradient });
+  return gradient;
 }
 
 /**

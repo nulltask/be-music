@@ -17,10 +17,21 @@ export const FLASHING_GREAT = [0xffffff, 0x5b8cff, 0xffd84d] as const;
 
 export const FONT = '"M PLUS 1p", system-ui, sans-serif';
 
-/** A CSS font for `ctx.font`. */
+const FONTS = new Map<string, string>();
+
+/** A CSS font for `ctx.font` (the same string for the same size and weight). */
 export function font(size: number, weight = 500): string {
-  return `${weight} ${size}px ${FONT}`;
+  const key = `${weight}/${size}`;
+  let value = FONTS.get(key);
+  if (!value) {
+    value = `${weight} ${size}px ${FONT}`;
+    FONTS.set(key, value);
+  }
+  return value;
 }
+
+/** The font last set on each context: the browser re-parses `ctx.font` on every assignment, so skip repeats. */
+const CURRENT_FONTS = new WeakMap<CanvasRenderingContext2D, string>();
 
 /** `0xrrggbb` → `#rrggbb`, for colours the SDK hands out as numbers. */
 export function css(color: number): string {
@@ -35,7 +46,11 @@ export function text(
   y: number,
   options: { size: number; color?: string; weight?: number; align?: CanvasTextAlign; maxWidth?: number },
 ): void {
-  ctx.font = font(options.size, options.weight);
+  const wanted = font(options.size, options.weight);
+  if (CURRENT_FONTS.get(ctx) !== wanted) {
+    ctx.font = wanted;
+    CURRENT_FONTS.set(ctx, wanted);
+  }
   ctx.fillStyle = options.color ?? TEXT;
   ctx.textAlign = options.align ?? 'left';
   ctx.textBaseline = 'middle';
