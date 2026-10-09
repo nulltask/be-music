@@ -32,11 +32,16 @@ import { addHitArea, addSkinText, formatPlayVariantLabel, type SkinTextOptions }
 import type { BeMusicAudioFrame } from '../../../skin/be-music/types.ts';
 import { audioDrive, bandLevel } from '../audio-drive.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
+import { resolveSongRowFacts } from '../song-stats.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
 const SLIDE_MS = 240;
 const OUTRO_MS = 860;
 const INTRO_STAGGER_MS = 40;
+/** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
+const ROW_BPM_W = 78;
+const ROW_LENGTH_W = 30;
+const ROW_NOTES_W = 52;
 const KICKER_PITCH = 20;
 const GLINT_W = 14;
 /** Authored glint height; scaled to the focused card's height at tick time. */
@@ -550,11 +555,12 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     const folder = entry.kind === 'folder' ? entry.folder : undefined;
     const titleText = song?.title ?? folder?.label ?? '';
     const keyText = song ? formatPlayVariantLabel(song).replace(' KEYS', '') : 'DIR';
-    // One line per row: the title centred vertically, with the BPM (or folder size) right-aligned beside it.
-    const metaText = song
-      ? song.bpm
-        ? `${Math.round(song.bpm)} BPM`
-        : ''
+    // One line per row: the title (and artist) on the left; on the right the facts a player checks before picking —
+    // gimmick tags, note count, length and tempo range in fixed columns, so they line up down the list. Folders show
+    // their size instead.
+    const facts = song ? resolveSongRowFacts(song) : undefined;
+    const metaText = facts
+      ? `${facts.bpm} BPM`
       : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
     const playLevelText =
       song?.playLevel !== undefined ? String(song.playLevel) : folder ? String(folder.songs.length) : '-';
@@ -570,7 +576,6 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     const levelPillX = keyPillX + keyPillW + 4;
     const levelPillW = 26;
     const titleX = levelPillX + levelPillW + 10;
-    const textMaxWidth = Math.max(24, rowX + rowW - titleX - 10);
     row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
     if (active) {
       row.poly(parallelogramPoints(rowX + 5, y + 3, rowW, rowHeight - 3, 6)).fill(PHANTOM_RED);
@@ -613,18 +618,69 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       skewX: -0.18,
       anchorX: 1,
       anchorY: 0.5,
-      maxWidth: 64,
+      maxWidth: facts ? ROW_BPM_W : 64,
     });
     meta.label = `fallback-meta[idx=${entryIndex}]`;
-    const metaWidth = metaText ? Math.min(64, meta.width) + 10 : 0;
+    let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(64, meta.width) : 0) - 10;
+    if (facts) {
+      const factStyle = (fill: number): SkinTextOptions => ({
+        size: 11,
+        fill,
+        fontFamily: DEFAULT_DISPLAY_FONT,
+        skewX: -0.18,
+        anchorX: 1,
+        anchorY: 0.5,
+      });
+      const ink = active ? PHANTOM_INK : PHANTOM_PAPER;
+      addSkinText(frame.layer, facts.length, factsLeft, rowMidY, { ...factStyle(ink), maxWidth: ROW_LENGTH_W });
+      factsLeft -= ROW_LENGTH_W + 10;
+      addSkinText(frame.layer, facts.notes, factsLeft - 16, rowMidY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 18 });
+      addSkinText(frame.layer, 'N', factsLeft, rowMidY + 1, {
+        ...factStyle(active ? PHANTOM_RED : PHANTOM_ASH),
+        size: 8,
+      });
+      factsLeft -= ROW_NOTES_W + 8;
+      // Gimmick tags: small slanted chips, red on the focused card.
+      for (let index = facts.tags.length - 1; index >= 0; index -= 1) {
+        const tag = facts.tags[index]!;
+        const chipW = 8 + tag.length * 6;
+        factsLeft -= chipW;
+        row
+          .poly(parallelogramPoints(factsLeft, y + 8, chipW, rowHeight - 17, 3))
+          .fill(active ? PHANTOM_RED : PHANTOM_SLATE);
+        addSkinText(frame.layer, tag, factsLeft + chipW / 2 + 1, rowMidY, {
+          size: 8,
+          fill: PHANTOM_WHITE,
+          fontFamily: DEFAULT_DISPLAY_FONT,
+          anchorX: 0.5,
+          anchorY: 0.5,
+          maxWidth: chipW - 4,
+        });
+        factsLeft -= 4;
+      }
+      factsLeft -= 6;
+    }
+    const titleMax = Math.max(24, factsLeft - titleX);
     const title = addSkinText(frame.layer, titleText, titleX, rowMidY, {
       size: 11,
       weight: '800',
       fill: active ? PHANTOM_INK : PHANTOM_WHITE,
       anchorY: 0.5,
-      maxWidth: Math.max(24, textMaxWidth - metaWidth),
+      maxWidth: titleMax,
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
+    // The artist trails the title in a quieter weight while there is room for it.
+    const artist = song?.artist?.trim();
+    const artistX = titleX + title.width + 10;
+    if (artist && factsLeft - artistX >= 40) {
+      addSkinText(frame.layer, artist, artistX, rowMidY, {
+        size: 9,
+        weight: '700',
+        fill: active ? PHANTOM_RED : PHANTOM_ASH,
+        anchorY: 0.5,
+        maxWidth: factsLeft - artistX,
+      });
+    }
     return slide > 0 || intro > 0;
   }
 }

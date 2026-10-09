@@ -24,8 +24,13 @@ import {
   LAT_TEXT_FONT,
   LAT_WHITE,
 } from './style.ts';
+import { resolveSongRowFacts } from '../song-stats.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
+/** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
+const ROW_BPM_W = 76;
+const ROW_LENGTH_W = 32;
+const ROW_NOTES_W = 52;
 const CURSOR_MS = 360;
 const OUTRO_MS = 650;
 const INTRO_STAGGER_MS = 40;
@@ -448,8 +453,11 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
       alpha,
       maxWidth: 20,
     });
-    const meta = song
-      ? `${song.bpm ? `${Math.round(song.bpm)} BPM` : ''}`
+    // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
+    // fixed columns so they line up down the list. Folders show their size instead.
+    const facts = song ? resolveSongRowFacts(song) : undefined;
+    const meta = facts
+      ? `${facts.bpm} BPM`
       : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
     const metaNode = addSkinText(
       frame.layer,
@@ -461,11 +469,49 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
         anchorX: 1,
         anchorY: 0.5,
         alpha,
-        maxWidth: 70,
+        maxWidth: facts ? ROW_BPM_W : 70,
       },
     );
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    const metaWidth = meta ? Math.min(70, metaNode.width) + 12 : 0;
+    let factsLeft = listX + listWidth - 10 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 14;
+    if (facts) {
+      const mute = active ? LAT_WHITE : LAT_GRAPHITE;
+      addSkinText(frame.layer, scrambleText(facts.length, rowScramble, tick, entryIndex + 600), factsLeft, midY, {
+        ...mono(ink),
+        anchorX: 1,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: ROW_LENGTH_W,
+      });
+      factsLeft -= ROW_LENGTH_W + 14;
+      addSkinText(frame.layer, scrambleText(`${facts.notes} N`, rowScramble, tick, entryIndex + 700), factsLeft, midY, {
+        ...mono(ink),
+        anchorX: 1,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: ROW_NOTES_W,
+      });
+      factsLeft -= ROW_NOTES_W + 10;
+      // Gimmick tags: hairline-boxed mono labels, like the level box on the left.
+      for (let index = facts.tags.length - 1; index >= 0; index -= 1) {
+        const tag = facts.tags[index]!;
+        const chipW = 8 + tag.length * 6;
+        factsLeft -= chipW;
+        rows
+          .rect(factsLeft + 0.5, midY - 6.5, chipW, 13)
+          .stroke({ color: active ? LAT_WHITE : LAT_INK, width: 1, alpha });
+        addSkinText(frame.layer, tag, factsLeft + chipW / 2, midY, {
+          ...mono(mute),
+          size: 8,
+          anchorX: 0.5,
+          anchorY: 0.5,
+          alpha,
+          maxWidth: chipW - 4,
+        });
+        factsLeft -= 5;
+      }
+      factsLeft -= 6;
+    }
     const title = addSkinText(
       frame.layer,
       scrambleText(song?.title ?? folder?.label ?? '', titleScramble, tick, entryIndex + 900),
@@ -478,10 +524,24 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
         fontFamily: LAT_TEXT_FONT,
         anchorY: 0.5,
         alpha,
-        maxWidth: Math.max(24, listX + listWidth - x - 72 - metaWidth),
+        maxWidth: Math.max(24, factsLeft - x - 62),
       },
     );
     title.label = `fallback-title[idx=${entryIndex}]`;
+    // The artist trails the title in graphite while there is room for it.
+    const artist = song?.artist?.trim();
+    const artistX = x + 62 + title.width + 10;
+    if (artist && factsLeft - artistX >= 40) {
+      addSkinText(frame.layer, artist, artistX, midY, {
+        size: 9,
+        weight: '300',
+        fill: active ? LAT_WHITE : LAT_GRAPHITE,
+        fontFamily: LAT_TEXT_FONT,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: factsLeft - artistX,
+      });
+    }
     return introT < 1 || titleScramble < 1;
   }
 

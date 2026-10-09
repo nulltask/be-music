@@ -47,8 +47,13 @@ import {
   sceneHue,
   synGlowTexture,
 } from './style.ts';
+import { resolveSongRowFacts } from '../song-stats.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
+/** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
+const ROW_BPM_W = 76;
+const ROW_LENGTH_W = 30;
+const ROW_NOTES_W = 50;
 const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
@@ -666,8 +671,11 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       alpha,
       maxWidth: 16,
     });
-    const meta = song
-      ? `${song.bpm ? `${Math.round(song.bpm)} BPM` : ''}`
+    // On the right, the facts a player checks before picking — gimmick tags, note count, length and tempo range — in
+    // fixed columns so they line up down the list. Folders show their size instead.
+    const facts = song ? resolveSongRowFacts(song) : undefined;
+    const meta = facts
+      ? `${facts.bpm} BPM`
       : `${folder?.songs.length ?? 0} chart${folder?.songs.length === 1 ? '' : 's'}`;
     const metaNode = addSkinText(frame.layer, meta, rowX + rowW - 14, midY, {
       size: 9,
@@ -677,10 +685,48 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       alpha,
-      maxWidth: 70,
+      maxWidth: facts ? ROW_BPM_W : 70,
     });
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
-    const metaWidth = meta ? Math.min(70, metaNode.width) + 12 : 0;
+    let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 12;
+    if (facts) {
+      const factStyle = (fill: number) => ({
+        size: 9,
+        fill,
+        fontFamily: SYN_DISPLAY_FONT,
+        letterSpacing: 1,
+        anchorX: 1,
+        anchorY: 0.5,
+        alpha,
+      });
+      const ink = active ? SYN_WHITE : SYN_MIST;
+      addSkinText(frame.layer, facts.length, factsLeft, midY, { ...factStyle(ink), maxWidth: ROW_LENGTH_W });
+      factsLeft -= ROW_LENGTH_W + 12;
+      addSkinText(frame.layer, 'N', factsLeft, midY, { ...factStyle(SYN_DIM), size: 7 });
+      addSkinText(frame.layer, facts.notes, factsLeft - 12, midY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 14 });
+      factsLeft -= ROW_NOTES_W + 8;
+      // Gimmick tags glow as small outlined capsules in the accent light.
+      for (let index = facts.tags.length - 1; index >= 0; index -= 1) {
+        const tag = facts.tags[index]!;
+        const chipW = 10 + tag.length * 6.5;
+        factsLeft -= chipW;
+        row
+          .roundRect(factsLeft, midY - 6, chipW, 12, 6)
+          .stroke({ color: active ? SYN_FLARE : accent, width: 1, alpha: 0.7 });
+        addSkinText(frame.layer, tag, factsLeft + chipW / 2, midY, {
+          size: 7,
+          fill: active ? SYN_WHITE : SYN_MIST,
+          fontFamily: SYN_DISPLAY_FONT,
+          letterSpacing: 0.5,
+          anchorX: 0.5,
+          anchorY: 0.5,
+          alpha,
+          maxWidth: chipW - 4,
+        });
+        factsLeft -= 5;
+      }
+      factsLeft -= 6;
+    }
     const title = addSkinText(frame.layer, song?.title ?? folder?.label ?? '', rowX + 34, midY, {
       size: 11,
       weight: active ? '500' : '300',
@@ -688,10 +734,24 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       fontFamily: SYN_TEXT_FONT,
       anchorY: 0.5,
       alpha,
-      maxWidth: Math.max(24, rowW - 48 - metaWidth),
+      maxWidth: Math.max(24, factsLeft - rowX - 34),
       ...(active ? { dropShadow: { color: accent, distance: 0, blur: 8, alpha: 0.9 } } : {}),
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
+    // The artist trails the title in a dimmer light while there is room for it.
+    const artist = song?.artist?.trim();
+    const artistX = rowX + 34 + title.width + 10;
+    if (artist && factsLeft - artistX >= 40) {
+      addSkinText(frame.layer, artist, artistX, midY, {
+        size: 9,
+        weight: '300',
+        fill: active ? SYN_MIST : SYN_DIM,
+        fontFamily: SYN_TEXT_FONT,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: factsLeft - artistX,
+      });
+    }
     return slide > 0 || intro > 0;
   }
 }
