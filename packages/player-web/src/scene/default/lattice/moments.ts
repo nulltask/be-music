@@ -1,5 +1,7 @@
 import type { Container, Graphics } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
+import { GROOVE } from '../../gameplay-constants.ts';
+import type { BeMusicRect } from '../../../skin/be-music/types.ts';
+import { STAGE_HEIGHT as DESIGN_HEIGHT, STAGE_WIDTH as DESIGN_WIDTH, resolveStageBgaRect } from '../stage.ts';
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText } from '../hud-text.ts';
@@ -58,6 +60,7 @@ export function drawLatticeMoments(
       milestone,
       runtime.hasBga === true,
       resolveMilestoneArea(playfieldRight),
+      resolveStageBgaRect(playfieldRight),
       pool,
     );
   }
@@ -140,13 +143,15 @@ function drawMilestone(
   t: number,
   hasBga: boolean,
   area: MilestoneArea,
+  bga: BeMusicRect,
   pool: ChildPool,
 ): void {
-  // Over the monitor beside the lanes, or in the band below them in double play — never over the notes.
-  const below = area.mode === 'below';
+  // Over the monitor beside the lanes, or in the band below them when no monitor fits — never over the notes.
+  const below = area.mode === 'below' || bga.w === 0;
+  hasBga = hasBga && bga.w > 0;
   const compact = hasBga || below;
-  const cx = below ? area.x + area.w / 2 : BGA.x + BGA.w / 2;
-  const cy = below ? area.y + area.h / 2 - 8 : hasBga ? BGA.y + 36 : BGA.y + BGA.h / 2 - 12;
+  const cx = below ? area.x + area.w / 2 : bga.x + bga.w / 2;
+  const cy = below ? area.y + area.h / 2 - 8 : hasBga ? bga.y + 36 : bga.y + bga.h / 2 - 12;
   const out = Math.max(0, (t - 0.78) / 0.22);
   const size = compact ? 32 : 64;
   // A paper label under the figures, so neither the live video nor the monitor's EQ tiles run through the type.

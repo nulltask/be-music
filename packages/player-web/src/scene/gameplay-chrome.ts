@@ -67,6 +67,8 @@ export interface SkinlessGameplayChromeRuntime {
    * been scheduled. Lets chrome stage entrance cut-ins against the real start.
    */
   chartMs?: number;
+  /** True while the chart's audio / BGA are still loading (or a BGA video is transcoding) before the play starts. */
+  loading?: boolean;
   /** Play-clock ms of the most recent judgement — drives the judge / combo "punch". */
   judgeAtMs?: number;
   /** Play-clock ms and lane class of the most recent key press (or autoplay hit) — drives input-reactive visuals. */

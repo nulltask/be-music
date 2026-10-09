@@ -9,6 +9,7 @@ import {
 } from './playfield.ts';
 import { latticeResultSkin } from './result.ts';
 import { latticeSelectSkin } from './select.ts';
+import { wideStage } from '../stage.ts';
 
 /**
  * Lattice — a skin in the manner of precise, typographic interaction design (the Japanese web / broadcast interaction-design
@@ -28,6 +29,7 @@ export const latticeSkin: BeMusicSkin = {
     '300 12px "M PLUS 1p"',
     '500 12px "M PLUS 1p"',
   ],
+  stage: wideStage,
   gameplay: {
     renderChrome: renderLatticeChrome,
     renderLanes: renderLatticeLanes,

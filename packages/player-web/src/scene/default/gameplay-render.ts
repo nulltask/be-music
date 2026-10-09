@@ -1,6 +1,14 @@
 import { Container, Graphics } from 'pixi.js';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../gameplay-constants.ts';
+import { GROOVE, PLAYFIELD } from '../gameplay-constants.ts';
+import type { BeMusicRect } from '../../skin/be-music/types.ts';
+import {
+  STAGE_BGA_BAND,
+  STAGE_HEIGHT as DESIGN_HEIGHT,
+  STAGE_SIDE_COLUMN,
+  STAGE_WIDTH as DESIGN_WIDTH,
+  resolveStageBgaRect,
+} from './stage.ts';
 import { resolveSkinlessLaneLayout, type FallbackLaneLayoutRect } from '../gameplay-lanes.ts';
 import type { SkinlessGameplayChromeRuntime } from '../gameplay-chrome.ts';
 import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT } from './fonts.ts';
@@ -28,6 +36,7 @@ import type { ChildPool } from '../pixi-utils.ts';
 import { audioDrive, bandLevel, type AudioDrive } from './audio-drive.ts';
 import { drawPhantomMoments } from './phantom/moments.ts';
 import { addRansomText, type GlyphFactory } from './phantom/tear.ts';
+import { loadingDots } from './loading.ts';
 import { effectProfile, impulse } from './moments.ts';
 import { flashingGreatColor, isFlashingGreat, judgeDisplayWord } from './judge-word.ts';
 import { addHudNumber as addNumber, addHudText as addText, type HudTextOptions as TextOptions } from './hud-text.ts';
@@ -38,10 +47,15 @@ const TYPE_SKEW = -0.18;
 /** Page margin of the HUD grid: the left and right blocks line up 16 px in from the canvas edges. */
 const HUD_MARGIN = 16;
 /** Score panel: right edge (with its shadow) on the margin, top on the gauge housing's line, bottom on the song plate's. */
-const SCORE_PANEL = { x: 376, y: 365, w: 232, h: 99 } as const;
-const SONG_PLATE = { x: 16, y: 420, w: 340, h: 44 } as const;
+const SCORE_PANEL = { x: DESIGN_WIDTH - HUD_MARGIN - 6 - 272, y: 365, w: 272, h: 99 } as const;
+/** Score panel columns: the left one's values end at {@link SCORE_LEFT_END}, the right one starts after the divider. */
+const SCORE_LEFT_END = 148;
+const SCORE_DIVIDER = 162;
+const SCORE_RIGHT = SCORE_DIVIDER + 14;
+/** The track card runs from the left margin to a gutter before the score panel, so long titles keep their room. */
+const SONG_PLATE = { x: 16, y: 420, w: SCORE_PANEL.x - 16 - 40, h: 44 } as const;
 /** Red floor wedge behind the score panel. Its top edge stays below the BGA rect so a live video is never covered. */
-const FLOOR_WEDGE: readonly number[] = [236, DESIGN_HEIGHT, DESIGN_WIDTH, 326, DESIGN_WIDTH, DESIGN_HEIGHT];
+const FLOOR_WEDGE: readonly number[] = [236, DESIGN_HEIGHT, DESIGN_WIDTH, 352, DESIGN_WIDTH, DESIGN_HEIGHT];
 
 type PlaySide = '1P' | '2P';
 
@@ -85,10 +99,12 @@ export function renderDefaultGameplayFrame(
   const frame = layerPool?.acquireGraphics() ?? new Graphics();
   const hasBga = runtime.hasBga === true;
   const playfield = resolveFallbackPlayfieldLayout(runtime.laneChannels, runtime.laneCount, runtime.playVariant);
+  // The scene composites the BGA into the same rect (the stage's), sized to the room the playfield leaves.
+  const bga = resolveStageBgaRect(playfield.right);
   frame.label = 'default-gameplay/chrome';
   // The poster moves with the music: halftone swells on the bass, the idle burst kicks on onsets, a spectrum strip.
   const drive = audioDrive(runtime.audio, runtime.effects);
-  drawBackground(frame, hasBga, drive);
+  drawBackground(frame, hasBga && bga.w > 0, bga, drive);
 
   const effects = effectProfile(runtime.effects);
   drawPlayfield(
@@ -97,18 +113,16 @@ export function renderDefaultGameplayFrame(
     runtime.progressRatio,
     impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 140) * effects.amount,
   );
-  // A double-play field reaches into the monitor's column; the frame and its idle screen would sit on the 2P lanes.
-  if (playfield.right + 24 <= BGA.x) {
-    drawBgaFrame(frame, layer, hasBga, runtime.nowMs, drive, layerPool);
-    drawSpectrumStrip(frame, drive);
+  // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
+  if (bga.w > 0) {
+    drawBgaFrame(frame, layer, bga, hasBga, runtime.nowMs, drive, layerPool);
   }
   drawGauge(frame, layer, runtime, layerPool);
   drawSongPlate(frame, layer, runtime, layerPool);
   drawScorePlate(frame, layer, runtime, drive, layerPool);
-  const tallyX = resolveJudgeTallyX(playfield);
-  if (tallyX !== undefined) {
-    drawJudgeTally(frame, layer, runtime, tallyX, layerPool);
-  }
+  // The side column on the right edge: the judge tally on top, the spectrum below it.
+  const tallyBottom = drawJudgeTally(frame, layer, runtime, STAGE_SIDE_COLUMN.x, layerPool);
+  drawSpectrumColumn(frame, layer, drive, tallyBottom + 18, layerPool);
   if (!layerPool) {
     layer.addChildAt(frame, 0);
   }
@@ -124,7 +138,8 @@ export function renderDefaultGameplayFrame(
   // Showpieces (count-in, combo milestones, clear line, full combo) sit above the HUD. They draw before the judgements
   // because a screen-wide full combo covers the page and the judgement type would print through its strip.
   const covered = drawPhantomMoments(layer, frontLayer, runtime, frontPool, playfield.right);
-  if (!covered) drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
+  if (runtime.loading) drawLoading(frontLayer, runtime.nowMs ?? 0, playfield, frontPool);
+  else if (!covered) drawJudgements(frontLayer, runtime, playfield, frontPool, effects.amount);
 }
 
 /**
@@ -141,10 +156,10 @@ export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderD
  * hole over the BGA rect — the BGA layer renders BEHIND this chrome layer, so anything painted there would cover the
  * video. Every decoration is placed so it never crosses that rect.
  */
-function drawBackground(frame: Graphics, hasBga: boolean, drive: AudioDrive): void {
-  fillRectAroundHole(frame, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, PHANTOM_BLACK, hasBga);
+function drawBackground(frame: Graphics, hasBga: boolean, bga: BeMusicRect, drive: AudioDrive): void {
+  fillRectAroundHole(frame, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, PHANTOM_BLACK, hasBga ? bga : undefined);
   // Faint diagonal pinstripes over the lower-left quadrant — gives the ink ground a printed texture.
-  for (let stripe = 0; stripe < 9; stripe += 1) {
+  for (let stripe = 0; stripe < 12; stripe += 1) {
     const x0 = -120 + stripe * 44;
     frame.poly([x0, DESIGN_HEIGHT, x0 + 14, DESIGN_HEIGHT, x0 + 134, 352, x0 + 120, 352]).fill({
       color: PHANTOM_CHARCOAL,
@@ -154,14 +169,14 @@ function drawBackground(frame: Graphics, hasBga: boolean, drive: AudioDrive): vo
 
   // Floor wedge: deep red base, hot red face, ink halftone swelling toward the lower-right corner.
   frame
-    .poly([FLOOR_WEDGE[0]! - 18, DESIGN_HEIGHT, DESIGN_WIDTH, 316, DESIGN_WIDTH, DESIGN_HEIGHT])
+    .poly([FLOOR_WEDGE[0]! - 18, DESIGN_HEIGHT, DESIGN_WIDTH, 342, DESIGN_WIDTH, DESIGN_HEIGHT])
     .fill(PHANTOM_RED_DEEP);
   frame.poly([...FLOOR_WEDGE]).fill(PHANTOM_RED);
   for (const dot of halftoneField({
     x: 300,
-    y: 340,
+    y: 352,
     w: DESIGN_WIDTH - 300,
-    h: DESIGN_HEIGHT - 340,
+    h: DESIGN_HEIGHT - 352,
     pitch: 9,
     maxRadius: 4.2 * (1 + 0.45 * drive.bass),
     direction: { x: 1, y: 1 },
@@ -179,7 +194,7 @@ function drawBackground(frame: Graphics, hasBga: boolean, drive: AudioDrive): vo
   drawStaves(frame, 0, DESIGN_WIDTH, 446, 5, PHANTOM_INK, 0.55, wedgeLeftAt);
   // Paper-white cut line tracing the wedge's leading edge.
   frame
-    .poly([FLOOR_WEDGE[0]! + 26, DESIGN_HEIGHT, DESIGN_WIDTH, 334, DESIGN_WIDTH, 337, FLOOR_WEDGE[0]! + 32, 480])
+    .poly([FLOOR_WEDGE[0]! + 26, DESIGN_HEIGHT, DESIGN_WIDTH, 360, DESIGN_WIDTH, 363, FLOOR_WEDGE[0]! + 32, 480])
     .fill({ color: PHANTOM_WHITE, alpha: 0.9 });
 }
 
@@ -189,7 +204,7 @@ function isInsideFloorWedge(x: number, y: number): boolean {
   return (bx - ax) * (y - ay) - (by - ay) * (x - ax) > 0 && x <= DESIGN_WIDTH && y <= DESIGN_HEIGHT;
 }
 
-/** Fills `rect` minus the BGA rect (when `hasBga`) as up to four axis-aligned pieces. */
+/** Fills `rect` minus the `hole` rect (the live BGA) as up to four axis-aligned pieces. */
 function fillRectAroundHole(
   frame: Graphics,
   x: number,
@@ -197,20 +212,20 @@ function fillRectAroundHole(
   w: number,
   h: number,
   color: number,
-  hasBga: boolean,
+  hole: BeMusicRect | undefined,
 ): void {
   const right = x + w;
   const bottom = y + h;
-  const holeRight = BGA.x + BGA.w;
-  const holeBottom = BGA.y + BGA.h;
-  if (!hasBga || right <= BGA.x || x >= holeRight || bottom <= BGA.y || y >= holeBottom) {
+  if (!hole || right <= hole.x || x >= hole.x + hole.w || bottom <= hole.y || y >= hole.y + hole.h) {
     frame.rect(x, y, w, h).fill(color);
     return;
   }
-  if (y < BGA.y) frame.rect(x, y, w, BGA.y - y).fill(color);
-  const bandTop = Math.max(y, BGA.y);
+  const holeRight = hole.x + hole.w;
+  const holeBottom = hole.y + hole.h;
+  if (y < hole.y) frame.rect(x, y, w, hole.y - y).fill(color);
+  const bandTop = Math.max(y, hole.y);
   const bandBottom = Math.min(bottom, holeBottom);
-  if (x < BGA.x) frame.rect(x, bandTop, BGA.x - x, bandBottom - bandTop).fill(color);
+  if (x < hole.x) frame.rect(x, bandTop, hole.x - x, bandBottom - bandTop).fill(color);
   if (right > holeRight) frame.rect(holeRight, bandTop, right - holeRight, bandBottom - bandTop).fill(color);
   if (bottom > holeBottom) frame.rect(x, holeBottom, w, bottom - holeBottom).fill(color);
 }
@@ -313,12 +328,6 @@ function drawPlayfield(
   frame.poly(parallelogramPoints(leftRailX + 6, wellBottom + 5, footerW - 12, 4, -6)).fill(PHANTOM_RED);
 }
 
-/** X where the judge tally column can sit, or undefined when the (DP-wide) playfield covers it. */
-function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefined {
-  const x = BGA.x + BGA.w + 18;
-  return playfield.right + 14 <= x && x + 56 <= DESIGN_WIDTH - HUD_MARGIN ? x : undefined;
-}
-
 /**
  * Monitor frame: a red offset parallelogram and a paper-white one, both wide enough to enclose the BGA rect so their
  * strokes never cross the video. With no BGA the screen idles on a red halftone field with a "STAND BY" slug.
@@ -326,6 +335,7 @@ function resolveJudgeTallyX(playfield: FallbackPlayfieldLayout): number | undefi
 function drawBgaFrame(
   frame: Graphics,
   layer: Container,
+  bga: BeMusicRect,
   hasBga: boolean,
   nowMs: number | undefined,
   drive: AudioDrive,
@@ -333,26 +343,26 @@ function drawBgaFrame(
 ): void {
   const slant = 6;
   const margin = 6;
-  const frameX = BGA.x - margin - slant;
-  const frameW = BGA.w + margin * 2 + slant;
-  frame.poly(parallelogramPoints(frameX + 4, BGA.y - margin + 4, frameW, BGA.h + margin * 2, slant)).stroke({
+  const frameX = bga.x - margin - slant;
+  const frameW = bga.w + margin * 2 + slant;
+  frame.poly(parallelogramPoints(frameX + 4, bga.y - margin + 4, frameW, bga.h + margin * 2, slant)).stroke({
     color: PHANTOM_RED,
     width: 4,
     join: 'miter',
   });
-  frame.poly(parallelogramPoints(frameX, BGA.y - margin, frameW, BGA.h + margin * 2, slant)).stroke({
+  frame.poly(parallelogramPoints(frameX, bga.y - margin, frameW, bga.h + margin * 2, slant)).stroke({
     color: PHANTOM_WHITE,
     width: 3,
     join: 'miter',
   });
   if (hasBga) return;
 
-  frame.rect(BGA.x, BGA.y, BGA.w, BGA.h).fill(PHANTOM_INK);
+  frame.rect(bga.x, bga.y, bga.w, bga.h).fill(PHANTOM_INK);
   for (const dot of halftoneField({
-    x: BGA.x + 4,
-    y: BGA.y + 4,
-    w: BGA.w - 8,
-    h: BGA.h - 8,
+    x: bga.x + 4,
+    y: bga.y + 4,
+    w: bga.w - 8,
+    h: bga.h - 8,
     pitch: 12,
     maxRadius: 5 * (1 + 0.5 * drive.level),
     direction: { x: -0.6, y: 1 },
@@ -361,11 +371,11 @@ function drawBgaFrame(
   }
   frame.fill({ color: PHANTOM_RED, alpha: 0.75 });
   // Slow-turning starburst behind the slug — the idle screen is alive, not a hole in the cabinet.
-  // It pumps on the bass and jolts a notch round on every onset.
+  // It pumps on the bass and jolts a notch round on every onset. Sized off the monitor, which shrinks in double play.
   const spin = (nowMs !== undefined ? nowMs / 6000 : 0) + 0.1 * drive.onset;
-  const pump = 1 + 0.2 * drive.bass + 0.1 * drive.onset;
-  const cx = BGA.x + BGA.w / 2;
-  const cy = BGA.y + BGA.h / 2;
+  const pump = (1 + 0.2 * drive.bass + 0.1 * drive.onset) * (bga.w / 256);
+  const cx = bga.x + bga.w / 2;
+  const cy = bga.y + bga.h / 2;
   frame
     .poly(starburstPoints(cx, cy, 92 * pump, 58 * pump, 14, spin, 0.18, 3))
     .fill({ color: PHANTOM_RED, alpha: 0.95 });
@@ -382,26 +392,39 @@ function drawBgaFrame(
 }
 
 /**
- * Spectrum strip under the monitor: 16 slanted red bars rising off an ink rule, white-capped, hot bands turning gold —
- * the poster's equalizer. Silent (or effects off) leaves just the rule.
+ * Spectrum in the side column under the judge tally: 16 slanted red bars rising off a paper rule, white-capped, hot
+ * bands turning gold — the poster's equalizer. Silent (or effects off) leaves just the rule.
  */
-function drawSpectrumStrip(frame: Graphics, drive: AudioDrive): void {
-  const baseY = 348;
-  const maxH = 22;
+function drawSpectrumColumn(
+  frame: Graphics,
+  layer: Container,
+  drive: AudioDrive,
+  top: number,
+  pool: ChildPool | undefined,
+): void {
+  const x = STAGE_SIDE_COLUMN.x;
+  const w = STAGE_SIDE_COLUMN.w;
+  const baseY = SPECTRUM_BASE_Y;
+  const maxH = baseY - top - 14;
+  if (maxH < 16) return;
+  frame.poly(parallelogramPoints(x - 4, top - 6, 52, 17, 6)).fill(PHANTOM_RED);
+  addText(layer, 'SOUND', x + 22, top + 2, { ...displayStyle(12, PHANTOM_WHITE), anchorX: 0.5, anchorY: 0.5 }, pool);
   const count = 16;
-  const pitch = BGA.w / count;
-  frame.rect(BGA.x - 6, baseY, BGA.w + 12, 2).fill(PHANTOM_WHITE);
+  const pitch = w / count;
+  frame.rect(x, baseY, w, 2).fill(PHANTOM_WHITE);
   for (let bar = 0; bar < count; bar += 1) {
     const value = bandLevel(drive.bands, bar, count);
     const h = Math.round(maxH * value);
     if (h < 2) continue;
-    const x = BGA.x + bar * pitch + 1;
-    const w = pitch - 5;
-    frame.poly(parallelogramPoints(x, baseY - h, w, h, 4)).fill(value > 0.82 ? PHANTOM_GOLD : PHANTOM_RED);
-    // A 3 px paper cap riding the bar's slanted top.
-    frame.poly(parallelogramPoints(x + 4 * (1 - 3 / h), baseY - h, w, 3, (4 * 3) / h)).fill(PHANTOM_WHITE);
+    const bx = x + bar * pitch + 1;
+    const bw = pitch - 2;
+    frame.poly(parallelogramPoints(bx, baseY - h, bw, h, 2)).fill(value > 0.82 ? PHANTOM_GOLD : PHANTOM_RED);
+    frame.rect(bx + 2, baseY - h, bw, 2).fill(PHANTOM_WHITE);
   }
 }
+
+/** The spectrum's rule sits on the BGA band's floor, level with the monitor's bottom edge. */
+const SPECTRUM_BASE_Y = STAGE_BGA_BAND.bottom;
 
 /**
  * Header strip: ink bar, a red jagged kicker that swells on every beat, the paper mode tag, BPM / HI-SPEED readouts,
@@ -576,35 +599,36 @@ function drawScorePlate(
     .fill(PHANTOM_BLACK)
     .stroke({ color: PHANTOM_WHITE, width: 2 });
   // Three rows on a 28 px pitch shared by both columns: label on the left, value on the right of each row.
-  frame.rect(x + 14, y + 36, 116, 1).fill({ color: PHANTOM_SLATE });
-  frame.rect(x + 14, y + 64, 116, 1).fill({ color: PHANTOM_SLATE });
-  frame.poly([x + 146, y + 10, x + 148, y + 10, x + 150, y + h - 10, x + 148, y + h - 10]).fill(PHANTOM_RED);
+  frame.rect(x + 14, y + 36, SCORE_LEFT_END - 18, 1).fill({ color: PHANTOM_SLATE });
+  frame.rect(x + 14, y + 64, SCORE_LEFT_END - 18, 1).fill({ color: PHANTOM_SLATE });
+  const d = x + SCORE_DIVIDER;
+  frame.poly([d - 2, y + 10, d, y + 10, d + 2, y + h - 10, d, y + h - 10]).fill(PHANTOM_RED);
 
   addText(layer, 'SCORE', x + 14, y + 12, tagLabelStyle(PHANTOM_RED), pool);
   addNumber(
     layer,
     formatCount(runtime.score),
-    x + 134,
+    x + SCORE_LEFT_END,
     y + 2,
-    { ...displayStyle(26, PHANTOM_WHITE), anchorX: 1, maxWidth: 80 },
+    { ...displayStyle(26, PHANTOM_WHITE), anchorX: 1, maxWidth: 94 },
     pool,
   );
   addText(layer, 'EX SCORE', x + 14, y + 44, tagLabelStyle(PHANTOM_ASH), pool);
   addNumber(
     layer,
     `${formatCount(runtime.exScore)} / ${formatCount(runtime.exScoreMax)}`,
-    x + 134,
+    x + SCORE_LEFT_END,
     y + 39,
-    { ...displayStyle(14, PHANTOM_PAPER), anchorX: 1, maxWidth: 66 },
+    { ...displayStyle(14, PHANTOM_PAPER), anchorX: 1, maxWidth: 76 },
     pool,
   );
   addText(layer, 'EX RATE', x + 14, y + 72, tagLabelStyle(PHANTOM_ASH), pool);
   addNumber(
     layer,
     formatExRate(runtime.exScore, runtime.exScoreMax),
-    x + 134,
+    x + SCORE_LEFT_END,
     y + 67,
-    { ...displayStyle(14, PHANTOM_PAPER), anchorX: 1, maxWidth: 74 },
+    { ...displayStyle(14, PHANTOM_PAPER), anchorX: 1, maxWidth: 84 },
     pool,
   );
 
@@ -614,7 +638,7 @@ function drawScorePlate(
       ? Math.max(0, Math.min(1, runtime.exScore / runtime.exScoreMax))
       : 0;
   const segments = 9;
-  const segmentW = 116 / segments;
+  const segmentW = (SCORE_LEFT_END - 18) / segments;
   for (let segment = 0; segment < segments; segment += 1) {
     const fill = Math.max(0, Math.min(1, rate * segments - segment));
     const sx = x + 14 + segment * segmentW;
@@ -628,7 +652,7 @@ function drawScorePlate(
 
   // Right column on the same rows: COMBO, MAX, then RANK beside the badge in the lower corner.
   // The combo value sits under its label (a 3–4 digit combo would run into the label on one line), still clear of MAX.
-  addText(layer, 'COMBO', x + 160, y + 12, tagLabelStyle(PHANTOM_RED), pool);
+  addText(layer, 'COMBO', x + SCORE_RIGHT, y + 12, tagLabelStyle(PHANTOM_RED), pool);
   addNumber(
     layer,
     formatCount(runtime.combo),
@@ -637,7 +661,7 @@ function drawScorePlate(
     { ...displayStyle(22, PHANTOM_WHITE), anchorX: 1, maxWidth: 60 },
     pool,
   );
-  addText(layer, 'MAX', x + 160, y + 44, tagLabelStyle(PHANTOM_ASH), pool);
+  addText(layer, 'MAX', x + SCORE_RIGHT, y + 44, tagLabelStyle(PHANTOM_ASH), pool);
   addNumber(
     layer,
     formatCount(runtime.maxCombo),
@@ -660,7 +684,7 @@ function drawScorePlate(
     .poly(badge)
     .fill(topRank ? PHANTOM_GOLD : PHANTOM_RED)
     .stroke({ color: PHANTOM_WHITE, width: 1.5 });
-  addText(layer, 'RANK', x + 160, y + 72, tagLabelStyle(PHANTOM_ASH), pool);
+  addText(layer, 'RANK', x + SCORE_RIGHT, y + 72, tagLabelStyle(PHANTOM_ASH), pool);
   addText(
     layer,
     rank,
@@ -694,9 +718,9 @@ function drawJudgeTally(
   runtime: FallbackGameplayRuntime,
   x: number,
   pool?: ChildPool,
-): void {
-  // Top-aligned with the BGA so the header chip clears the status bar's beat-driven teeth.
-  const y = BGA.y;
+): number {
+  // Top-aligned with the BGA band so the header chip clears the status bar's beat-driven teeth.
+  const y = 56;
   const w = DESIGN_WIDTH - HUD_MARGIN - x;
   const rowH = 24;
   const h = 22 + JUDGE_TALLY_ROWS.length * rowH + 46;
@@ -753,6 +777,7 @@ function drawJudgeTally(
       pool,
     );
   }
+  return y + h;
 }
 
 const TALLY_JUDGE_NAMES = {
@@ -819,6 +844,36 @@ function drawJudgements(
       });
     }
   }
+}
+
+/**
+ * NOW LOADING on the lanes while the chart's assets load: the words cut out of magazines like the count-in, re-cut
+ * every so often so the notice looks alive, with ink dots ticking underneath.
+ */
+function drawLoading(
+  layer: Container,
+  nowMs: number,
+  playfield: FallbackPlayfieldLayout,
+  pool: ChildPool | undefined,
+): void {
+  const cards = pool?.acquireGraphics() ?? new Graphics();
+  cards.label = 'default-gameplay/loading';
+  if (!pool) layer.addChild(cards);
+  const glyph = hudGlyphs(layer, pool);
+  const cx = playfield.centerX;
+  const cy = 170;
+  const recut = Math.floor(nowMs / 700);
+  const size = Math.min(24, (playfield.w - 24) / (7 * 0.95));
+  addRansomText(cards, glyph, 'NOW', cx, cy, { size, seed: recut * 3 + 1, angle: -0.06 });
+  addRansomText(cards, glyph, 'LOADING', cx, cy + size + 6, { size, seed: recut * 3 + 2, angle: 0.04 });
+  addText(
+    layer,
+    loadingDots(nowMs).padEnd(3, ' '),
+    cx,
+    cy + size * 2 + 16,
+    { ...displayStyle(22, PHANTOM_WHITE), anchorX: 0.5, anchorY: 0.5 },
+    pool,
+  );
 }
 
 /** Ransom-note glyphs from the pooled HUD text (or fresh nodes without a pool). */

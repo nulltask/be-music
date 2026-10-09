@@ -132,7 +132,13 @@ import type {
 } from '../gameplay-chrome.ts';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicBomb, BeMusicEffectLevel, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type {
+  BeMusicBomb,
+  BeMusicEffectLevel,
+  BeMusicLaneFrame,
+  BeMusicSkin,
+  BeMusicStage,
+} from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../default/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
@@ -205,20 +211,33 @@ export interface GameplayBgaTarget {
 }
 
 /** Default-family BGA rect: the fixed {@link BGA} square, drawn opaque and untinted. */
-const DEFAULT_BGA_TARGET: GameplayBgaTarget = {
-  x: BGA.x,
-  y: BGA.y,
-  w: BGA.w,
-  h: BGA.h,
-  noBase: false,
-  noLayer: false,
-  noPoor: false,
-  applyToSprite: (sprite) => {
-    sprite.alpha = 1;
-    sprite.tint = 0xffffff;
-    sprite.blendMode = 'normal';
-  },
-};
+const DEFAULT_BGA_TARGET: GameplayBgaTarget = createDefaultBgaTarget(BGA);
+
+function createDefaultBgaTarget(rect: { x: number; y: number; w: number; h: number }): GameplayBgaTarget {
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: rect.h,
+    noBase: false,
+    noLayer: false,
+    noPoor: false,
+    applyToSprite: (sprite) => {
+      sprite.alpha = 1;
+      sprite.tint = 0xffffff;
+      sprite.blendMode = 'normal';
+    },
+  };
+}
+
+/** Design canvas of the scene: its width / height and, for the be-music path, the skin's stage. */
+export interface GameplayStageSize {
+  width: number;
+  height: number;
+}
+
+/** The LR2-compatible 640x480 canvas. */
+const LEGACY_STAGE_SIZE: GameplayStageSize = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
 
 /** Lane rectangle in design pixels. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface GameplayLaneRect {
@@ -577,6 +596,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * with a different aspect ratio.
    */
   private readonly designClipMask = new Graphics();
+  /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBgaTargets}). */
+  private stageBgaTarget: GameplayBgaTarget | undefined;
   /**
    * Cached screen / design dimensions baked into the static graphics (`viewportBackground`, `background`,
    * `designClipMask`). Compared against the per-frame values so we only call `.clear().rect().fill()` when the size
@@ -717,6 +738,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private lastImpulseAt: number | undefined;
   private lastImpulseKind: 'white' | 'black' | 'scratch' | undefined;
   private startTime = 0;
+  /**
+   * True while the chart's assets are still loading: from {@link prepare} until audio is decoded and the BGA preload
+   * (which may be transcoding video) has settled. Skins show it as NOW LOADING on the lanes.
+   */
+  private assetsLoading = false;
+  /** Set by {@link mount}: show the playfield (in its loading state) during {@link prepare} instead of hiding it. */
+  private revealWhilePreparing = false;
   /**
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
    * sample-accurate Web Audio timing.
@@ -1096,7 +1124,34 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * rect. Pushing nothing hides the BGA for the frame.
    */
   protected collectBgaTargets(out: GameplayBgaTarget[]): void {
-    out.push(DEFAULT_BGA_TARGET);
+    const stage = this.beMusicStage;
+    if (!stage) {
+      out.push(DEFAULT_BGA_TARGET);
+      return;
+    }
+    const { right } = resolveSkinlessLaneLayout(this.laneChannels, this.laneChannels.length, this.chartPlayVariant);
+    const rect = stage.resolveBgaRect(right);
+    const cached = this.stageBgaTarget;
+    if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
+      out.push(cached);
+      return;
+    }
+    this.stageBgaTarget = createDefaultBgaTarget(rect);
+    out.push(this.stageBgaTarget);
+  }
+
+  /**
+   * Design canvas the scene renders into. The be-music path uses its skin's {@link BeMusicSkin.stage} (16:9 for the
+   * built-in skins); a host-supplied `skinlessChromeRenderer` and themes keep the LR2-compatible 640x480.
+   */
+  protected get stageSize(): GameplayStageSize {
+    return this.beMusicStage ?? LEGACY_STAGE_SIZE;
+  }
+
+  /** The be-music skin's stage while the scene paints through it, otherwise `undefined`. */
+  private get beMusicStage(): BeMusicStage | undefined {
+    if (this.options.skinlessChromeRenderer) return undefined;
+    return this.options.beMusicSkin?.stage;
   }
 
   /**
@@ -1162,6 +1217,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * call `start()` only when the splash is dismissed. See the `showDecide` flow in `player-web-demo`.
    */
   public async mount(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+    // No splash covers the load window on this path, so the playfield comes up straight away and shows the loading
+    // state (see `revealWhilePreparing`) instead of a blank stage while chart audio decodes.
+    this.revealWhilePreparing = true;
     await this.prepare(host, song, source);
     if (this.disposed) return;
     this.start();
@@ -1195,11 +1253,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.textLayer.label = 'gameplay/text';
     this.overlay.label = 'gameplay/pause-overlay';
     this.designClipMask.label = 'gameplay/design-clip';
-    // DESIGN_WIDTH / DESIGN_HEIGHT are module constants for gameplay (LR2 default 640×480), so the mask and design
-    // background never change shape post-mount. Stamp them once here and skip the per-frame rebuild that was
-    // contributing to the rAF handler's runtime.
-    this.designClipMask.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(0xffffff);
-    this.background.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+    // The stage size is fixed for the scene's lifetime, so the mask and design background never change shape
+    // post-mount. Stamp them once here and skip the per-frame rebuild that was contributing to the rAF handler's
+    // runtime.
+    const stage = this.stageSize;
+    this.designClipMask.rect(0, 0, stage.width, stage.height).fill(0xffffff);
+    this.background.rect(0, 0, stage.width, stage.height).fill(BG);
     // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
     // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
     // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
@@ -1300,7 +1359,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // painting on the shared stage during the load window without z-order contention. `start()` flips this back on the
     // moment the host hands control over to gameplay.
     this.sceneRoot.visible = false;
+    this.assetsLoading = true;
     this.prepareSong(song);
+    if (this.revealWhilePreparing) {
+      // Hold the chart clock before its start (see `start()`) and draw the loading playfield while assets decode.
+      this.startTime = Number.POSITIVE_INFINITY;
+      this.sceneRoot.visible = true;
+      this.startAnimationLoop();
+    }
     await this.prepareTheme();
     if (this.disposed) return;
     await this.prepareAudio();
@@ -1312,6 +1378,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
     this.bgaReadyPromise = this.prepareBga().catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
+    });
+    void this.bgaReadyPromise.then(() => {
+      this.assetsLoading = false;
     });
   }
 
@@ -3066,7 +3135,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private render(seconds: number): void {
     const screenWidth = this.app.screen.width;
     const screenHeight = this.app.screen.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, DESIGN_WIDTH, DESIGN_HEIGHT);
+    const { width: designWidth, height: designHeight } = this.stageSize;
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
     // Only rebuild the static rect graphics when their backing dimensions actually change. The previous unconditional
     // `.clear().rect().fill()` chain ran on every rAF tick and rebuilt the GraphicsContext for each — Pixi v8 has no
@@ -3080,13 +3150,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.root.scale.set(viewport.scale);
     this.applyExitFadeAlpha();
     this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
-    this.perf.time('renderSkin', () => this.renderThemeLayer(DESIGN_WIDTH, DESIGN_HEIGHT));
+    this.perf.time('renderSkin', () => this.renderThemeLayer(designWidth, designHeight));
     this.perf.time('renderBga', () => this.renderBga(seconds));
-    this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
-    this.perf.time('renderNotes', () => this.renderNotes(seconds, DESIGN_HEIGHT));
+    this.perf.time('renderLanes', () => this.renderLanes(designWidth, designHeight));
+    this.perf.time('renderNotes', () => this.renderNotes(seconds, designHeight));
     this.perf.time('renderShutter', () => this.renderShutter());
     this.perf.time('renderBombs', () => this.renderBombs());
-    this.perf.time('renderText', () => this.renderText(DESIGN_WIDTH, DESIGN_HEIGHT, seconds));
+    this.perf.time('renderText', () => this.renderText(designWidth, designHeight, seconds));
   }
 
   /**
@@ -3511,7 +3581,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       fast: this.fastCount,
       slow: this.slowCount,
       totalNotes: total,
-      chartMs: this.resolveChartMs(),
+      // While assets load the count-in waits: the skin shows NOW LOADING instead.
+      chartMs: this.assetsLoading ? undefined : this.resolveChartMs(),
+      loading: this.assetsLoading,
       judgeAtMs: this.lastJudgeAt,
       impulseAtMs: this.lastImpulseAt,
       impulseKind: this.lastImpulseKind,

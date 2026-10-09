@@ -1,5 +1,13 @@
 import { Graphics, type Container } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
+import { GROOVE } from '../../gameplay-constants.ts';
+import { LOADING_WORD, loadingDots } from '../loading.ts';
+import type { BeMusicRect } from '../../../skin/be-music/types.ts';
+import {
+  STAGE_HEIGHT as DESIGN_HEIGHT,
+  STAGE_SIDE_COLUMN,
+  STAGE_WIDTH as DESIGN_WIDTH,
+  resolveStageBgaRect,
+} from '../stage.ts';
 import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import { resolveSkinlessLaneLayout } from '../../gameplay-lanes.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
@@ -12,6 +20,7 @@ import { audioDrive, type AudioDrive } from '../audio-drive.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
 import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
+  clipSegmentOutsideRect,
   emberColor,
   hsvToHex,
   mixCamera,
@@ -53,8 +62,9 @@ type Runtime = SkinlessGameplayChromeRuntime;
  */
 const HUD_MARGIN = 16;
 const GAUGE_FRAME = { x: HUD_MARGIN, y: GROOVE.y - 26, w: 256, h: 48 } as const;
-const SONG_PLATE = { x: HUD_MARGIN, y: 420, w: 256, h: 46 } as const;
-const SCORE_PANEL = { x: 284, y: GAUGE_FRAME.y, w: DESIGN_WIDTH - HUD_MARGIN - 284, h: 466 - GAUGE_FRAME.y } as const;
+const SONG_PLATE = { x: HUD_MARGIN, y: 420, w: DESIGN_WIDTH - HUD_MARGIN * 2 - 340 - 12, h: 46 } as const;
+/** The score panel sits on the right margin; the track card runs from the left margin up to a gutter before it. */
+const SCORE_PANEL = { x: DESIGN_WIDTH - HUD_MARGIN - 340, y: GAUGE_FRAME.y, w: 340, h: 466 - GAUGE_FRAME.y } as const;
 /** Score panel's column divider, from its left edge. */
 const SCORE_DIVIDER = 200;
 const PLAYFIELD_FRAME_BOTTOM = 344;
@@ -118,12 +128,13 @@ export function renderSynesthesiaChrome({
   const pulse = (1 - beatPhase) ** 2;
   const hue = sceneHue(seconds, beatPhase);
   const accent = hsvToHex(hue, 0.62, 1);
-  const hasBga = runtime.hasBga === true;
   const { left: playfieldLeft, right: playfieldRight } = resolveSkinlessLaneLayout(
     runtime.laneChannels,
     runtime.laneCount,
     runtime.playVariant,
   );
+  Object.assign(BGA, resolveStageBgaRect(playfieldRight));
+  const hasBga = runtime.hasBga === true && BGA.w > 0;
 
   const space = layerPool.acquireGraphics();
   space.label = 'synesthesia-gameplay/space';
@@ -138,7 +149,7 @@ export function renderSynesthesiaChrome({
   // Camera: the background roams between random shots (flying, sometimes hard-cutting) with a handheld drift,
   // reframing floor, rivers, schools and warp. Reduced effects halve the moves; effects off keep the camera at rest.
   const camera = mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount);
-  const horizon = vanishingPoint(camera, 320, FLOOR.horizon, FLOOR.focal).y;
+  const horizon = vanishingPoint(camera, CENTER_X, FLOOR.horizon, FLOOR.focal).y;
   // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, onsets fire
   // warp streaks, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
   const drive = audioDrive(runtime.audio, runtime.effects);
@@ -148,7 +159,7 @@ export function renderSynesthesiaChrome({
   light.label = 'synesthesia-gameplay/light';
   light.blendMode = 'add';
   drawDust(light, seconds, pulse, hasBga, tier, hit, camera, drive);
-  drawFloor(light, seconds, pulse, tier, beatPhase, hit, camera, drive);
+  drawFloor(light, seconds, pulse, hasBga, tier, beatPhase, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
     drawRiver(light, seconds, river, hasBga, tier, camera, drive);
@@ -164,7 +175,7 @@ export function renderSynesthesiaChrome({
       drawSchool(
         light,
         schools[school]!,
-        (point) => projectPoint(viewPoint(point, camera), 320, FLOOR.horizon, FLOOR.focal),
+        (point) => projectPoint(viewPoint(point, camera), CENTER_X, FLOOR.horizon, FLOOR.focal),
         {
           alpha: 0.95,
           palette: SCHOOL_SPECS[school]!.palette,
@@ -179,8 +190,8 @@ export function renderSynesthesiaChrome({
   panels.label = 'synesthesia-gameplay/panels';
   panels.blendMode = 'normal';
   drawPlayfieldWell(panels, playfieldLeft, playfieldRight, runtime.progressRatio, accent);
-  // A double-play field reaches into the monitor's column; the frame and its idle screen would sit on the 2P lanes.
-  if (playfieldRight + 14 <= BGA.x) {
+  // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
+  if (BGA.w > 0) {
     const standby = layerPool.acquireGraphics();
     standby.label = 'synesthesia-gameplay/standby';
     standby.blendMode = 'add';
@@ -189,16 +200,17 @@ export function renderSynesthesiaChrome({
   drawGauge(panels, layer, runtime, accent, layerPool);
   drawSongPlate(panels, layer, runtime, accent, layerPool);
   drawScorePanel(panels, layer, runtime, accent, layerPool);
-  // Tucked close to the monitor frame so the counts get room for four digits.
-  const tallyX = BGA.x + BGA.w + 12;
-  if (playfieldRight + 14 <= tallyX) {
-    drawJudgeTally(panels, layer, runtime, tallyX, layerPool);
-  }
+  // The judge tally owns the side column on the right edge.
+  drawJudgeTally(panels, layer, runtime, STAGE_SIDE_COLUMN.x, layerPool);
 
   const front = overlayLayerPool.acquireGraphics();
   front.label = 'synesthesia-gameplay/header';
   drawHeader(front, overlayLayer, runtime, accent, pulse, overlayLayerPool);
-  drawJudgements(overlayLayer, runtime, playfieldRight, seconds, overlayLayerPool);
+  if (runtime.loading) {
+    drawLoading(overlayLayer, runtime.nowMs ?? 0, (playfieldLeft + playfieldRight) / 2, accent, overlayLayerPool);
+  } else {
+    drawJudgements(overlayLayer, runtime, playfieldRight, seconds, overlayLayerPool);
+  }
   drawSynesthesiaMoments(
     layer,
     overlayLayer,
@@ -210,9 +222,48 @@ export function renderSynesthesiaChrome({
   );
 }
 
+/** NOW LOADING on the lanes: wide-tracked light breathing in the accent glow, dots ticking beneath. */
+function drawLoading(layer: Container, nowMs: number, cx: number, accent: number, pool: ChildPool): void {
+  const breath = 0.55 + 0.45 * Math.sin(nowMs / 420) ** 2;
+  addHudText(
+    layer,
+    LOADING_WORD,
+    cx,
+    186,
+    {
+      size: 13,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      letterSpacing: 4,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      maxWidth: 180,
+      dropShadow: { color: accent, alpha: breath, blur: 10, distance: 0 },
+    },
+    pool,
+  );
+  addHudText(
+    layer,
+    loadingDots(nowMs).padEnd(3, ' '),
+    cx,
+    208,
+    { size: 13, fill: accent, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 6, anchorX: 0.5, anchorY: 0.5 },
+    pool,
+  );
+}
+
 function insideBga(x: number, y: number, margin = 0): boolean {
   return x > BGA.x - margin && x < BGA.x + BGA.w + margin && y > BGA.y - margin && y < BGA.y + BGA.h + margin;
 }
+
+/**
+ * The monitor rect of the frame being drawn: the stage's BGA square for the current playfield (it shrinks beside a
+ * double-play field). Updated at the top of {@link renderSynesthesiaChrome} and read by the drawing helpers below.
+ */
+const BGA: BeMusicRect = { ...resolveStageBgaRect(227) };
+
+/** Horizontal centre of the stage — the space's vanishing point. */
+const CENTER_X = DESIGN_WIDTH / 2;
 
 const IMPULSE_COLORS: Record<'white' | 'black' | 'scratch', number> = {
   white: SYN_EMBER,
@@ -221,7 +272,7 @@ const IMPULSE_COLORS: Record<'white' | 'black' | 'scratch', number> = {
 };
 
 /** Vanishing point the dust and streaks pour out of (behind the monitor). */
-const VANISH = { x: 320, y: FLOOR.horizon - 90 } as const;
+const VANISH = { x: CENTER_X, y: FLOOR.horizon - 90 } as const;
 
 /**
  * Warm-black ground with an ember haze hugging the horizon (a stack of thin bands, so a live BGA stays untouched), plus
@@ -279,7 +330,7 @@ function drawDust(
   const count = 220 + 50 * tier;
   const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level);
   for (let index = 0; index < count; index += 1) {
-    const point = starfieldPoint(index, seconds, { spread: 520, near: 20, far: 900, speed });
+    const point = starfieldPoint(index, seconds, { spread: 640, near: 20, far: 900, speed });
     const projected = projectPoint(viewPoint(point, camera), VANISH.x, VANISH.y, 180);
     if (!projected.visible) continue;
     if (projected.x < 0 || projected.x > DESIGN_WIDTH || projected.y < 0 || projected.y > DESIGN_HEIGHT) continue;
@@ -324,6 +375,7 @@ function drawFloor(
   graphics: Graphics,
   seconds: number,
   pulse: number,
+  hasBga: boolean,
   tier: number,
   beatPhase: number,
   hit: number,
@@ -332,13 +384,21 @@ function drawFloor(
 ): void {
   const { horizon, height, focal } = FLOOR;
   const glow = 1 + 0.3 * tier + 0.8 * hit + 1.2 * drive.bass;
-  const project = (x: number, z: number) => projectPoint(viewPoint({ x, y: height, z }, camera), 320, horizon, focal);
-  const vanish = vanishingPoint(camera, 320, horizon, focal);
+  const project = (x: number, z: number) =>
+    projectPoint(viewPoint({ x, y: height, z }, camera), CENTER_X, horizon, focal);
+  const vanish = vanishingPoint(camera, CENTER_X, horizon, focal);
+  // The floor runs up to a live BGA but never over it: lines are clipped around the monitor, points inside it skipped.
+  const pieces = FLOOR_PIECES;
+  pieces.length = 0;
   for (let x = -1500; x <= 1500; x += 100) {
     const near = project(x, 0);
     const far = project(x, 2400);
     if (!near.visible || !far.visible) continue;
-    graphics.moveTo(near.x, near.y).lineTo(far.x, far.y);
+    if (hasBga) clipSegmentOutsideRect(near.x, near.y, far.x, far.y, BGA, pieces);
+    else pieces.push(near.x, near.y, far.x, far.y);
+  }
+  for (let index = 0; index < pieces.length; index += 4) {
+    graphics.moveTo(pieces[index]!, pieces[index + 1]!).lineTo(pieces[index + 2]!, pieces[index + 3]!);
   }
   graphics.stroke({ color: SYN_EMBER, width: 1, alpha: Math.min(0.4, 0.05 * glow) });
   const spacing = 90;
@@ -351,20 +411,39 @@ function drawFloor(
     for (let x = -1500; x <= 1500; x += 50) {
       const point = project(x, z);
       if (!point.visible || point.x < -4 || point.x > DESIGN_WIDTH + 4 || point.y > DESIGN_HEIGHT + 4) continue;
+      if (hasBga && insideBga(point.x, point.y, 2)) continue;
       sharedShapeBatch.rect(graphics, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
     }
   }
   sharedShapeBatch.flush();
-  graphics.rect(0, vanish.y - 1, DESIGN_WIDTH, 2).fill({ color: SYN_AMBER, alpha: (0.22 + 0.2 * pulse) * glow });
+  fillAroundBga(graphics, 0, vanish.y - 1, DESIGN_WIDTH, 2, SYN_AMBER, hasBga, (0.22 + 0.2 * pulse) * glow);
   if (tier >= 3) {
     for (const phase of [beatPhase, (beatPhase + 0.5) % 1]) {
       const rx = 30 + phase * 520;
-      graphics
-        .ellipse(vanish.x, vanish.y + 4 + phase * 60, rx, rx * 0.16)
-        .stroke({ color: SYN_AMBER, width: 1 + (1 - phase) * 2, alpha: 0.4 * (1 - phase) });
+      const cy = vanish.y + 4 + phase * 60;
+      pieces.length = 0;
+      // The ring as a polyline, so the arcs crossing a live BGA can be dropped.
+      for (let step = 0; step < RING_STEPS; step += 1) {
+        const a0 = (step / RING_STEPS) * Math.PI * 2;
+        const a1 = ((step + 1) / RING_STEPS) * Math.PI * 2;
+        const x0 = vanish.x + Math.cos(a0) * rx;
+        const y0 = cy + Math.sin(a0) * rx * 0.16;
+        const x1 = vanish.x + Math.cos(a1) * rx;
+        const y1 = cy + Math.sin(a1) * rx * 0.16;
+        if (hasBga) clipSegmentOutsideRect(x0, y0, x1, y1, BGA, pieces);
+        else pieces.push(x0, y0, x1, y1);
+      }
+      for (let index = 0; index < pieces.length; index += 4) {
+        graphics.moveTo(pieces[index]!, pieces[index + 1]!).lineTo(pieces[index + 2]!, pieces[index + 3]!);
+      }
+      graphics.stroke({ color: SYN_AMBER, width: 1 + (1 - phase) * 2, alpha: 0.4 * (1 - phase) });
     }
   }
 }
+
+/** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
+const FLOOR_PIECES: number[] = [];
+const RING_STEPS = 48;
 
 const RIVER_PARTICLES = 280;
 
@@ -395,8 +474,8 @@ function drawRiver(
     viewPoint({ x: local.x, y: baseY + local.y, z: baseZ + local.z + local.x * slope }, camera);
   for (let index = 0; index < RIVER_PARTICLES; index += 1) {
     const local = particleRiverPoint(index, seconds, options);
-    const head = projectPoint(toWorld(local), 320, FLOOR.horizon, FLOOR.focal);
-    const tail = projectPoint(toWorld({ ...local, x: local.x - 26 }), 320, FLOOR.horizon, FLOOR.focal);
+    const head = projectPoint(toWorld(local), CENTER_X, FLOOR.horizon, FLOOR.focal);
+    const tail = projectPoint(toWorld({ ...local, x: local.x - 26 }), CENTER_X, FLOOR.horizon, FLOOR.focal);
     if (!head.visible || !tail.visible) continue;
     if (head.x < -20 || head.x > DESIGN_WIDTH + 20 || head.y < 0 || head.y > DESIGN_HEIGHT) continue;
     if (hasBga && (insideBga(head.x, head.y, 4) || insideBga(tail.x, tail.y, 4))) continue;

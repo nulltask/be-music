@@ -1,5 +1,7 @@
 import { Graphics, type Container } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import { GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import type { BeMusicRect } from '../../../skin/be-music/types.ts';
+import { STAGE_HEIGHT as DESIGN_HEIGHT, STAGE_WIDTH as DESIGN_WIDTH, resolveStageBgaRect } from '../stage.ts';
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { addHudText } from '../hud-text.ts';
@@ -77,6 +79,7 @@ export function drawSynesthesiaMoments(
       moments.milestone.value,
       milestone,
       resolveMilestoneArea(playfieldRight),
+      resolveStageBgaRect(playfieldRight),
       runtime.hasBga === true,
       pool,
     );
@@ -166,6 +169,7 @@ function drawMilestone(
   value: number,
   t: number,
   area: MilestoneArea,
+  bga: BeMusicRect,
   hasBga: boolean,
   pool: ChildPool,
 ): void {
@@ -173,10 +177,12 @@ function drawMilestone(
   const color = MILESTONE_COLORS[Math.max(0, Math.floor(value / 100) - 1) % MILESTONE_COLORS.length]!;
   // The count plays in the milestone area — over the monitor beside the lanes, or in the band below them in double
   // play — never over the notes. Over a live BGA it sits small on the monitor's top edge.
-  const below = area.mode === 'below';
+  // A keyboard field too wide for a monitor plays the count in the middle of its area instead.
+  const below = area.mode === 'below' || bga.w === 0;
+  hasBga = hasBga && bga.w > 0;
   const compact = hasBga || below;
-  const cx = below ? area.x + area.w / 2 : BGA.x + BGA.w / 2;
-  const cy = below ? area.y + area.h / 2 - 10 : hasBga ? BGA.y + 30 : BGA.y + BGA.h / 2 - 10;
+  const cx = below ? area.x + area.w / 2 : bga.x + bga.w / 2;
+  const cy = below ? area.y + area.h / 2 - 10 : hasBga ? bga.y + 30 : bga.y + bga.h / 2 - 10;
   // A shockwave of light rolls out from the count, kept inside the area.
   const wave = easeOutCubic(Math.min(1, t / 0.7));
   const rx = 20 + (area.w / 2 - 20) * wave;

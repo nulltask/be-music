@@ -2026,7 +2026,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // No `canvas.focus()` — we listen for `keydown` on `window`, so capturing focus here would needlessly pull it away
     // from any form input the user might already be typing into.
     const themeSize = this.themeDesignSize;
-    const { width: designWidth, height: designHeight } = themeSize ?? FALLBACK_DESIGN_SIZE;
+    const { width: designWidth, height: designHeight } = themeSize ?? this.beMusicDesignSize;
     const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
     const virtualX = (event.offsetX - viewport.x) / viewport.scale;
     const virtualY = (event.offsetY - viewport.y) / viewport.scale;
@@ -2254,7 +2254,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const screenHeight = this.app.screen.height || this.mountedContainer?.clientHeight || FALLBACK_DESIGN_HEIGHT;
     const themeSize = this.themeDesignSize;
     const useTheme = themeSize !== undefined;
-    const { width: designWidth, height: designHeight } = themeSize ?? FALLBACK_DESIGN_SIZE;
+    const { width: designWidth, height: designHeight } = themeSize ?? this.beMusicDesignSize;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
     // Only rebuild the static rect graphics when the dimensions they depend on actually change. The previous
@@ -2413,9 +2413,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }, outroMs);
   }
 
-  /** Design canvas for the current frame: the active theme's, or the 640×480 be-music fallback. */
+  /** Design canvas for the current frame: the active theme's, or the be-music skin's stage. */
   private resolveDesignSize(): SelectDesignSize {
-    return this.themeDesignSize ?? FALLBACK_DESIGN_SIZE;
+    return this.themeDesignSize ?? this.beMusicDesignSize;
+  }
+
+  /** The be-music skin's stage (640×480 when the skin declares none). */
+  private get beMusicDesignSize(): SelectDesignSize {
+    const stage = this.beMusicSkin.stage;
+    return stage ? { width: stage.width, height: stage.height } : FALLBACK_DESIGN_SIZE;
   }
 
   /**

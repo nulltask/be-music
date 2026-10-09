@@ -8,7 +8,7 @@ import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
  * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin is a set of
- * renderer functions over a fixed 640x480 design canvas: the shared scenes own input, timing, audio, and layout
+ * renderer functions over a fixed design canvas ({@link BeMusicSkin.stage}, 640x480 unless the skin declares another): the shared scenes own input, timing, audio, and layout
  * contracts (lane geometry, select hit areas), and call into the active skin for every pixel of chrome.
  *
  * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and pass it to the default
@@ -24,9 +24,33 @@ export interface BeMusicSkin {
    * and may `document.fonts.load` these before mounting so the first frame doesn't rasterize with a fallback face.
    */
   readonly fontLoads: readonly string[];
+  /**
+   * Design canvas the skin draws on and where its gameplay BGA sits. Omitted: the LR2-compatible 640x480 canvas with
+   * the fixed 256 px BGA square.
+   */
+  readonly stage?: BeMusicStage;
   readonly gameplay: BeMusicGameplaySkin;
   readonly select: BeMusicSelectSkin;
   readonly result: BeMusicResultSkin;
+}
+
+/** Axis-aligned rectangle in design pixels. */
+export interface BeMusicRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A skin's design canvas (see {@link BeMusicSkin.stage}). */
+export interface BeMusicStage {
+  readonly width: number;
+  readonly height: number;
+  /**
+   * The gameplay BGA rect for a playfield whose rightmost lane ends at `playfieldRight`. The scene composites the BGA
+   * here and the skin frames the same rect, so the BGA can make room for wide (double play / keyboard) playfields.
+   */
+  resolveBgaRect(playfieldRight: number): BeMusicRect;
 }
 
 /**

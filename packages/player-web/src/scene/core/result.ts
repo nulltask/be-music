@@ -351,8 +351,9 @@ export class CoreResultView {
     const screenWidth = this.app.screen.width || FALLBACK_DESIGN_WIDTH;
     const screenHeight = this.app.screen.height || FALLBACK_DESIGN_HEIGHT;
     const themeSize = this.themeDesignSize;
-    const designWidth = themeSize ? themeSize.width : FALLBACK_DESIGN_WIDTH;
-    const designHeight = themeSize ? themeSize.height : FALLBACK_DESIGN_HEIGHT;
+    const stage = (this.options.beMusicSkin ?? phantomSkin).stage;
+    const designWidth = themeSize ? themeSize.width : (stage?.width ?? FALLBACK_DESIGN_WIDTH);
+    const designHeight = themeSize ? themeSize.height : (stage?.height ?? FALLBACK_DESIGN_HEIGHT);
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {

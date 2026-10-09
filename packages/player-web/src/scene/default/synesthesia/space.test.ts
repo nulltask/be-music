@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import {
   burstParticlePosition,
+  clipSegmentOutsideRect,
   burstParticles,
   emberColor,
   fibonacciSphere,
@@ -367,5 +368,39 @@ describe('reflectedLight', () => {
     expect(near).toBeGreaterThan(far);
     expect(reflectedLight(10, 0, 50, 10, 1).strength).toBeGreaterThan(reflectedLight(10, 0, 50, 10, 0).strength);
     expect(reflectedLight(1, 0, 1, 10, 1).strength).toBe(1);
+  });
+});
+
+describe('clipSegmentOutsideRect', () => {
+  const rect = { x: 10, y: 10, w: 20, h: 20 };
+
+  it('keeps a segment that misses the rect whole', () => {
+    const out: number[] = [];
+    expect(clipSegmentOutsideRect(0, 0, 40, 0, rect, out)).toBe(1);
+    expect(out).toEqual([0, 0, 40, 0]);
+  });
+
+  it('splits a segment crossing the rect into the two outside pieces', () => {
+    const out: number[] = [];
+    expect(clipSegmentOutsideRect(0, 20, 40, 20, rect, out)).toBe(2);
+    expect(out).toEqual([0, 20, 10, 20, 30, 20, 40, 20]);
+  });
+
+  it('keeps only the outside part of a segment ending inside', () => {
+    const out: number[] = [];
+    expect(clipSegmentOutsideRect(0, 20, 20, 20, rect, out)).toBe(1);
+    expect(out).toEqual([0, 20, 10, 20]);
+  });
+
+  it('drops a segment lying inside', () => {
+    const out: number[] = [];
+    expect(clipSegmentOutsideRect(12, 12, 28, 28, rect, out)).toBe(0);
+    expect(out).toEqual([]);
+  });
+
+  it('handles diagonal crossings', () => {
+    const out: number[] = [];
+    expect(clipSegmentOutsideRect(0, 0, 40, 40, rect, out)).toBe(2);
+    expect(out).toEqual([0, 0, 10, 10, 30, 30, 40, 40]);
   });
 });

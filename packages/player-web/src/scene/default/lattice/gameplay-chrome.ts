@@ -1,5 +1,14 @@
 import { Graphics, type Container } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import { GROOVE, PLAYFIELD } from '../../gameplay-constants.ts';
+import { LOADING_WORD, loadingDots } from '../loading.ts';
+import type { BeMusicRect } from '../../../skin/be-music/types.ts';
+import {
+  STAGE_BGA_BAND,
+  STAGE_HEIGHT as DESIGN_HEIGHT,
+  STAGE_SIDE_COLUMN,
+  STAGE_WIDTH as DESIGN_WIDTH,
+  resolveStageBgaRect,
+} from '../stage.ts';
 import type { SkinlessGameplayChromeRenderContext, SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import { resolveSkinlessLaneLayout } from '../../gameplay-lanes.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
@@ -59,8 +68,15 @@ function hudScramble(runtime: Runtime): (value: string, delayMs: number, seed: n
  */
 const HUD_LEFT = 32;
 const HUD_RIGHT = DESIGN_WIDTH - 16;
-const SCORE_PANEL = { x: 384, y: GROOVE.y - 24, w: HUD_RIGHT - 384, h: 466 - (GROOVE.y - 24) } as const;
-const SONG_PLATE = { x: HUD_LEFT, y: 420, w: 360 - HUD_LEFT, h: 46 } as const;
+/** The score panel sits on the right margin; the track line runs from the left margin up to a gutter before it. */
+const SCORE_PANEL = { x: HUD_RIGHT - 240, y: GROOVE.y - 24, w: 240, h: 466 - (GROOVE.y - 24) } as const;
+const SONG_PLATE = { x: HUD_LEFT, y: 420, w: HUD_RIGHT - 240 - 24 - HUD_LEFT, h: 46 } as const;
+
+/**
+ * The monitor rect of the frame being drawn: the stage's BGA square for the current playfield (it shrinks beside a
+ * double-play field). Updated at the top of {@link renderLatticeChrome} and read by the drawing helpers below.
+ */
+const BGA: BeMusicRect = { ...resolveStageBgaRect(227) };
 const HEADER_H = 30;
 
 /**
@@ -79,12 +95,14 @@ export function renderLatticeChrome({
   const nowMs = runtime.nowMs ?? 0;
   const seconds = nowMs / 1000;
   const beatPhase = runtime.beatPhase ?? 0;
-  const hasBga = runtime.hasBga === true;
   const { left: playfieldLeft, right: playfieldRight } = resolveSkinlessLaneLayout(
     runtime.laneChannels,
     runtime.laneCount,
     runtime.playVariant,
   );
+  Object.assign(BGA, resolveStageBgaRect(playfieldRight));
+  const hasMonitor = BGA.w > 0;
+  const hasBga = runtime.hasBga === true && hasMonitor;
   const effects = effectProfile(runtime.effects);
   const tier = effects.enabled ? Math.min(comboTier(runtime.combo ?? 0), effects.screenWide ? 4 : 2) : 0;
   // The paper listens: needles flow harder with loudness and ripple out of the monitor on every onset, the pendulums
@@ -111,13 +129,14 @@ export function renderLatticeChrome({
   // The field fills the paper around the type: the playfield and every HUD block stay clean.
   const clean: Rect[] = [
     { x: playfieldLeft - 20, y: 0, w: playfieldRight - playfieldLeft + 26, h: 346 },
-    { x: BGA.x - 13, y: BGA.y - 13, w: BGA.w + 26, h: BGA.h + 26 },
+    ...(hasMonitor ? [{ x: BGA.x - 13, y: BGA.y - 13, w: BGA.w + 26, h: BGA.h + 26 }] : []),
     { x: GROOVE.x - 18, y: GROOVE.y - 30, w: GROOVE.w + 36, h: 58 },
     { x: SONG_PLATE.x - 4, y: SONG_PLATE.y - 6, w: SONG_PLATE.w + 8, h: SONG_PLATE.h + 12 },
     { x: SCORE_PANEL.x - 8, y: SCORE_PANEL.y - 6, w: SCORE_PANEL.w + 16, h: SCORE_PANEL.h + 14 },
-    { x: BGA.x + BGA.w + 8, y: BGA.y - 12, w: DESIGN_WIDTH, h: 252 },
+    { x: STAGE_SIDE_COLUMN.x - 8, y: STAGE_BGA_BAND.top - 12, w: DESIGN_WIDTH, h: 252 },
   ];
-  const pendulums = playfieldRight + 40 <= BGA.x;
+  // The gap between the lanes and the monitor holds the pendulums when it is wide enough (single play).
+  const pendulums = hasMonitor && playfieldRight + 40 <= BGA.x;
   if (pendulums) clean.push({ x: playfieldRight + 6, y: HEADER_H, w: BGA.x - playfieldRight - 18, h: 290 });
   drawNeedleField(
     field,
@@ -137,16 +156,14 @@ export function renderLatticeChrome({
   if (pendulums) {
     drawPendulums(panels, layer, runtime, (playfieldRight + BGA.x - 5) / 2, effects.amount, drive, layerPool);
   }
-  if (playfieldRight + 14 <= BGA.x) {
+  if (hasMonitor) {
     drawBgaFrame(panels, layer, hasBga, seconds, beatPhase, effects.amount, drive, layerPool);
   }
   drawGauge(panels, layer, runtime, moments, layerPool);
   drawSongPlate(panels, layer, runtime, layerPool);
   drawScorePanel(panels, layer, runtime, layerPool);
-  const tallyX = BGA.x + BGA.w + 14;
-  if (playfieldRight + 14 <= tallyX) {
-    drawJudgeTally(panels, layer, runtime, tallyX, drive, layerPool);
-  }
+  // The judge tally owns the side column on the right edge.
+  drawJudgeTally(panels, layer, runtime, STAGE_SIDE_COLUMN.x, drive, layerPool);
 
   const front = overlayLayerPool.acquireGraphics();
   front.label = 'lattice-gameplay/header';
@@ -156,7 +173,11 @@ export function renderLatticeChrome({
   const covered = effects.screenWide && fullCombo !== undefined && fullCombo > 0.25 && fullCombo < 0.8;
   if (!covered) {
     drawHeader(front, overlayLayer, runtime, beatPhase, overlayLayerPool);
-    drawJudgements(overlayLayer, runtime, playfieldRight, effects.amount, overlayLayerPool);
+    if (runtime.loading) {
+      drawLoading(overlayLayer, runtime, (playfieldLeft + playfieldRight) / 2, overlayLayerPool);
+    } else {
+      drawJudgements(overlayLayer, runtime, playfieldRight, effects.amount, overlayLayerPool);
+    }
   }
   drawLatticeMoments(
     overlayLayer,
@@ -344,22 +365,49 @@ function resolveFieldInput(
 }
 
 /**
+ * NOW LOADING on the lanes: the mono caption re-decodes itself every couple of seconds, over a hairline
+ * whose blue segment sweeps back and forth like a plotter head.
+ */
+function drawLoading(layer: Container, runtime: Runtime, cx: number, pool: ChildPool): void {
+  const nowMs = runtime.nowMs ?? 0;
+  // Re-decodes once per cycle (a short scramble, then the plain caption for the rest of it) so it stays readable.
+  const word = scrambleText(LOADING_WORD, Math.min(1, (nowMs % 1800) / 360), scrambleTick(nowMs), 77);
+  addHudText(
+    layer,
+    `${word}${loadingDots(nowMs).padEnd(3, ' ')}`,
+    cx,
+    190,
+    { ...monoStyle(), size: 12, fill: LAT_INK, letterSpacing: 2, anchorX: 0.5, anchorY: 0.5, maxWidth: 180 },
+    pool,
+  );
+  const graphics = pool.acquireGraphics();
+  graphics.label = 'lattice-gameplay/loading';
+  const w = 120;
+  const x = cx - w / 2;
+  graphics.rect(x, 206, w, 1).fill(LAT_INK);
+  const sweep = (Math.sin(nowMs / 380) + 1) / 2;
+  graphics.rect(x + sweep * (w - 24), 204, 24, 4).fill(LAT_ACCENT);
+}
+
+/**
  * The paper and its graph-paper rules never move, so they are drawn once into a persistent graphics at the back of the
  * layer (redrawn only when a BGA appears or goes) instead of being rebuilt with the per-frame pooled graphics.
  */
-const STATIC_PAPER = new WeakMap<Container, { graphics: Graphics; hasBga: boolean }>();
+const STATIC_PAPER = new WeakMap<Container, { graphics: Graphics; hole: string }>();
 
 function ensureStaticPaper(layer: Container, hasBga: boolean): void {
+  // The paper is cut around the live BGA, whose rect depends on the playfield; redraw when either changes.
+  const hole = hasBga ? `${BGA.x},${BGA.y},${BGA.w},${BGA.h}` : '';
   let entry = STATIC_PAPER.get(layer);
   if (!entry) {
     const graphics = new Graphics();
     graphics.label = 'lattice-gameplay/paper';
     layer.addChildAt(graphics, 0);
-    entry = { graphics, hasBga: !hasBga };
+    entry = { graphics, hole: '-' };
     STATIC_PAPER.set(layer, entry);
   }
-  if (entry.hasBga === hasBga) return;
-  entry.hasBga = hasBga;
+  if (entry.hole === hole) return;
+  entry.hole = hole;
   entry.graphics.clear();
   fillAroundBga(entry.graphics, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, LAT_PAPER, hasBga);
   drawPaperGrid(entry.graphics, { x: 0, y: 0, w: DESIGN_WIDTH, h: DESIGN_HEIGHT }, 0.45, hasBga ? BGA : undefined);
@@ -756,7 +804,7 @@ function drawJudgeTally(
   drive: AudioDrive,
   pool: ChildPool,
 ): void {
-  const y = BGA.y - 5;
+  const y = STAGE_BGA_BAND.top - 5;
   const w = HUD_RIGHT - x;
   const sc = hudScramble(runtime);
   graphics.rect(x, y, w, 1).fill(LAT_INK);

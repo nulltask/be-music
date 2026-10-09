@@ -1,5 +1,6 @@
 import { Graphics, type Container } from 'pixi.js';
-import { BGA, DESIGN_HEIGHT, DESIGN_WIDTH, GROOVE } from '../../gameplay-constants.ts';
+import { GROOVE } from '../../gameplay-constants.ts';
+import { STAGE_HEIGHT as DESIGN_HEIGHT, STAGE_WIDTH as DESIGN_WIDTH, resolveStageBgaRect } from '../stage.ts';
 import type { SkinlessGameplayChromeRuntime } from '../../gameplay-chrome.ts';
 import type { ChildPool } from '../../pixi-utils.ts';
 import { DEFAULT_DISPLAY_FONT } from '../fonts.ts';
@@ -174,13 +175,15 @@ function drawMilestone(
   // Never over the lanes: the strip lives in the column right of them (riding the monitor's bottom edge over a live
   // BGA), or in the band under them when double play leaves no room — and it slides in from the right.
   const area = resolveMilestoneArea(playfieldRight);
+  const bga = resolveStageBgaRect(playfieldRight);
+  hasBga = hasBga && bga.w > 0;
   const compact = hasBga || area.mode === 'below';
   const strip: TearStrip =
     area.mode === 'below'
       ? { cx: area.x + area.w / 2, cy: area.y + area.h / 2, angle: -0.03, length: area.w, thickness: 56, seed: value }
       : {
           cx: area.x + area.w / 2,
-          cy: hasBga ? BGA.y + BGA.h - 14 : area.y + 160,
+          cy: hasBga ? bga.y + bga.h - 14 : area.y + 160,
           angle: hasBga ? -0.07 : -0.1,
           length: area.w - 6,
           thickness: hasBga ? 54 : 80,

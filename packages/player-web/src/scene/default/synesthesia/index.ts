@@ -9,6 +9,7 @@ import {
 } from './playfield.ts';
 import { synesthesiaResultSkin } from './result.ts';
 import { synesthesiaSelectSkin } from './select.ts';
+import { wideStage } from '../stage.ts';
 
 /**
  * Synesthesia — a skin after synaesthetic sound-and-light rhythm games: deep space,
@@ -19,6 +20,7 @@ export const synesthesiaSkin: BeMusicSkin = {
   id: 'synesthesia',
   label: 'Synesthesia',
   fontLoads: ['400 16px "Michroma"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
+  stage: wideStage,
   gameplay: {
     renderChrome: renderSynesthesiaChrome,
     renderLanes: renderSynesthesiaLanes,

@@ -483,3 +483,64 @@ export function reflectedLight(
   const strength = Math.max(0, Math.min(1, falloff * (0.45 + 0.55 * Math.max(0, Math.min(1, energy)))));
   return { angle, strength };
 }
+
+/** Axis-aligned rectangle (x / y / w / h) for {@link clipSegmentOutsideRect}. */
+export interface ClipRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The parts of the segment (x0, y0) → (x1, y1) that lie outside `rect`, appended to `out` as `x0, y0, x1, y1` quads:
+ * the whole segment when it misses the rect, one or two pieces when it crosses it, nothing when it lies inside. Lets
+ * the space's floor lines run up to a live BGA without being drawn over it. Returns the number of pieces appended.
+ */
+export function clipSegmentOutsideRect(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  rect: ClipRect,
+  out: number[],
+): number {
+  const dx = x1 - x0;
+  const dy = y1 - y0;
+  // Liang–Barsky: narrow [enter, exit] to the part of the segment inside the rect.
+  let enter = 0;
+  let exit = 1;
+  const edges: ReadonlyArray<readonly [number, number]> = [
+    [-dx, x0 - rect.x],
+    [dx, rect.x + rect.w - x0],
+    [-dy, y0 - rect.y],
+    [dy, rect.y + rect.h - y0],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) {
+        enter = 1;
+        exit = 0;
+        break;
+      }
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) enter = Math.max(enter, t);
+    else exit = Math.min(exit, t);
+  }
+  if (enter >= exit) {
+    out.push(x0, y0, x1, y1);
+    return 1;
+  }
+  let pieces = 0;
+  if (enter > 0) {
+    out.push(x0, y0, x0 + dx * enter, y0 + dy * enter);
+    pieces += 1;
+  }
+  if (exit < 1) {
+    out.push(x0 + dx * exit, y0 + dy * exit, x1, y1);
+    pieces += 1;
+  }
+  return pieces;
+}

@@ -1,3 +1,5 @@
+import { STAGE_WIDTH } from './stage.ts';
+
 /**
  * "Moments" — the showpiece events built-in skins stage during a play: combo milestones, the gauge crossing the clear
  * line, and a full combo. Pure state transitions so chrome renderers (which redraw every frame from a runtime snapshot)
@@ -148,12 +150,17 @@ export const MILESTONE_MIN_WIDTH = 240;
 /**
  * Where a combo milestone may play so notes stay visible: the column right of the playfield when it is at least
  * {@link MILESTONE_MIN_WIDTH} px wide, otherwise the band under the lanes (`lanesBottom`) — over the HUD for a moment
- * rather than over the notes. Coordinates are in the 640×480 design space.
+ * rather than over the notes. Coordinates are in the stage's design space (`stageWidth` × 480; the built-in skins'
+ * 16:9 stage by default).
  */
-export function resolveMilestoneArea(playfieldRight: number, lanesBottom = 346): MilestoneArea {
-  const free = 640 - playfieldRight - 16;
+export function resolveMilestoneArea(
+  playfieldRight: number,
+  lanesBottom = 346,
+  stageWidth: number = STAGE_WIDTH,
+): MilestoneArea {
+  const free = stageWidth - playfieldRight - 16;
   if (free >= MILESTONE_MIN_WIDTH) {
     return { x: playfieldRight + 8, y: 40, w: free, h: lanesBottom - 40, mode: 'beside' };
   }
-  return { x: 8, y: lanesBottom + 4, w: 624, h: 480 - lanesBottom - 8, mode: 'below' };
+  return { x: 8, y: lanesBottom + 4, w: stageWidth - 16, h: 480 - lanesBottom - 8, mode: 'below' };
 }

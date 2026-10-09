@@ -4,6 +4,7 @@ import { easeOutBack, easeOutCubic, rollUpValue, stageProgress } from '../phanto
 import { addSkinText, type SkinTextOptions } from '../skin-text.ts';
 import { hash01 } from '../phantom-style.ts';
 import { drawFrame, drawReticle } from './draw.ts';
+import { resolveResultLamp, resolveResultTrackRows } from '../result-track.ts';
 import {
   burstParticlePosition,
   burstParticles,
@@ -50,6 +51,9 @@ const METRIC_H = 44;
 const BOTTOM_TOP = 232;
 const BOTTOM_H = 200;
 const GRAPHS_X = MARGIN + 292 + 12;
+/** Right edge shared by the metric columns and the graphs; the 16:9 track column starts one gutter after it. */
+const GRID_RIGHT = METRIC_X[1] + METRIC_W;
+const TRACK_X = GRID_RIGHT + 12;
 const ROWS_TOP = BOTTOM_TOP + 34;
 const ROWS_BOTTOM = ROWS_TOP + 4 * 32 + 12;
 const RANK_BURST = burstParticles(29, 260);
@@ -176,21 +180,6 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     alpha: verdictT,
     dropShadow: { color: verdictColor, distance: 0, blur: 12, alpha: 1 },
   });
-  text(
-    verdict.root,
-    `${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`,
-    designWidth - MARGIN,
-    17,
-    {
-      size: 12,
-      weight: '500',
-      fill: SYN_MIST,
-      fontFamily: SYN_TEXT_FONT,
-      anchorX: 1,
-      maxWidth: 360,
-      alpha: easeOutCubic(stageProgress(elapsed, 300, 600)),
-    },
-  );
 
   // Rank: a spinning 3D particle ring that bursts outward as the letter ignites.
   const rank = group('rank');
@@ -333,9 +322,9 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const graphs = group('graphs');
   // The two filaments share the judgement rows' top and bottom lines.
   const graphX = GRAPHS_X + 14;
-  const graphW = designWidth - MARGIN - 14 - graphX;
+  const graphW = GRID_RIGHT - 14 - graphX;
   const graphH = (ROWS_BOTTOM - ROWS_TOP - 24) / 2;
-  glass(graphs.g, GRAPHS_X, BOTTOM_TOP, designWidth - MARGIN - GRAPHS_X, BOTTOM_H, accent);
+  glass(graphs.g, GRAPHS_X, BOTTOM_TOP, GRID_RIGHT - GRAPHS_X, BOTTOM_H, accent);
   label('GROOVE GAUGE', graphX, BOTTOM_TOP + 12, graphs.root);
   label('EX SCORE', graphX, ROWS_TOP + graphH + 12, graphs.root);
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
@@ -360,6 +349,59 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     draw,
   );
   rise(graphs.root, 600);
+
+  // Track column: the chart's card, its facts, and the clear lamp glowing at the foot.
+  const track = group('track');
+  const trackW = designWidth - MARGIN - TRACK_X;
+  const trackH = BOTTOM_TOP + BOTTOM_H - TOP;
+  glass(track.g, TRACK_X, TOP, trackW, trackH, accent);
+  const trackTextX = TRACK_X + 14;
+  const trackTextW = trackW - 28;
+  label('TRACK', trackTextX, TOP + 12, track.root, SYN_EMBER);
+  text(track.root, result.song.title || 'Untitled chart', trackTextX, TOP + 30, {
+    size: 15,
+    weight: '500',
+    fill: SYN_WHITE,
+    fontFamily: SYN_TEXT_FONT,
+    maxWidth: trackTextW,
+    dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
+  });
+  text(track.root, result.song.artist ?? '', trackTextX, TOP + 52, {
+    size: 10,
+    weight: '300',
+    fill: SYN_MIST,
+    fontFamily: SYN_TEXT_FONT,
+    maxWidth: trackTextW,
+  });
+  if (result.song.genre) {
+    label(result.song.genre.toUpperCase(), trackTextX, TOP + 68, track.root);
+  }
+  track.g.rect(trackTextX, TOP + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
+  resolveResultTrackRows(result).forEach((row, index) => {
+    const rowY = TOP + 100 + index * 34;
+    label(row.label, trackTextX, rowY + 4, track.root);
+    text(track.root, row.value, trackTextX + trackTextW, rowY + 9, {
+      ...display(15, SYN_WHITE),
+      anchorX: 1,
+      anchorY: 0.5,
+      maxWidth: trackTextW - 90,
+    });
+    track.g.rect(trackTextX, rowY + 24, trackTextW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
+  });
+  const lamp = resolveResultLamp(result);
+  const lampColor =
+    lamp === 'PERFECT' ? SYN_WHITE : lamp === 'FULL COMBO' ? SYN_CYAN : lamp === 'CLEAR' ? SYN_AMBER : SYN_RED;
+  const lampY = TOP + trackH - 50;
+  drawFrame(track.g, trackTextX, lampY, trackTextW, 34, lampColor, { fill: 0.6, arm: 8 });
+  text(track.root, lamp, trackTextX + trackTextW / 2, lampY + 17, {
+    ...display(14, SYN_WHITE),
+    anchorX: 0.5,
+    anchorY: 0.5,
+    letterSpacing: 4,
+    maxWidth: trackTextW - 16,
+    dropShadow: { color: lampColor, distance: 0, blur: 12, alpha: 1 },
+  });
+  rise(track.root, 680);
 
   // Total score.
   const total = group('total');

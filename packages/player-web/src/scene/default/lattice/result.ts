@@ -5,6 +5,7 @@ import { addSkinText, type SkinTextOptions } from '../skin-text.ts';
 import { addStaggeredSkinText, drawNeedleField, drawPaperGrid, drawRulerTicks } from './draw.ts';
 import { scrambleText, scrambleTick, springEase } from './field.ts';
 import { bounceHeight } from './physics.ts';
+import { resolveResultLamp, resolveResultTrackRows } from '../result-track.ts';
 import {
   LAT_ACCENT,
   LAT_DISPLAY_FONT,
@@ -76,7 +77,7 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
     },
     {
       alpha: 0.4,
-      skip: (x, y) => (x > 14 && x < 626 && y > 56 && y < 430) || y > designHeight - 50,
+      skip: (x, y) => (x > 14 && x < designWidth - 14 && y > 56 && y < 430) || y > designHeight - 50,
     },
   );
 
@@ -91,20 +92,6 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
     (index) => {
       const local = Math.max(0, (elapsed - 80 - index * 40) / 320);
       return { dy: -12 * (1 - springEase(Math.min(1, local))), alpha: Math.min(1, local * 3) };
-    },
-  );
-  text(
-    decode(`${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`, 280, 2, 600),
-    designWidth - 20,
-    16,
-    {
-      size: 12,
-      weight: '500',
-      fill: LAT_INK,
-      fontFamily: LAT_TEXT_FONT,
-      anchorX: 1,
-      maxWidth: 340,
-      alpha: fadeIn(300),
     },
   );
 
@@ -203,6 +190,56 @@ export function renderLatticeResult(frame: BeMusicResultFrame): void {
     draw,
     false,
   );
+
+  // Track column (16:9): the chart's card and facts as numbered entries, the clear lamp ruled off at the foot.
+  const trackX = 636;
+  const trackW = designWidth - 20 - trackX;
+  rule(trackX, 66, trackW, 680);
+  text(decode('11 TRACK', 680, 8), trackX, 74, { ...mono(), alpha: fadeIn(680) });
+  text(decode(result.song.title || 'Untitled chart', 700, 9, 600), trackX, 92, {
+    size: 15,
+    weight: '500',
+    fill: LAT_INK,
+    fontFamily: LAT_TEXT_FONT,
+    maxWidth: trackW,
+    alpha: fadeIn(700),
+  });
+  text(result.song.artist ?? '', trackX, 114, {
+    size: 10,
+    weight: '400',
+    fill: LAT_GRAPHITE,
+    fontFamily: LAT_TEXT_FONT,
+    maxWidth: trackW,
+    alpha: fadeIn(720),
+  });
+  if (result.song.genre) {
+    text(result.song.genre.toUpperCase(), trackX, 130, { ...mono(), maxWidth: trackW, alpha: fadeIn(740) });
+  }
+  resolveResultTrackRows(result).forEach((row, index) => {
+    const y = 178 + index * 44;
+    const delay = 740 + index * 60;
+    rule(trackX, y, trackW, delay, LAT_RULE);
+    text(decode(`${12 + index} ${row.label}`, delay, 30 + index), trackX, y + 8, { ...mono(), alpha: fadeIn(delay) });
+    text(row.value, trackX + trackW, y + 18, {
+      ...display(18, LAT_INK, '300'),
+      anchorX: 1,
+      maxWidth: trackW - 20,
+      alpha: fadeIn(delay + 60),
+    });
+  });
+  const lamp = resolveResultLamp(result);
+  const lampColor = lamp === 'FAILED' ? LAT_SIGNAL : lamp === 'CLEAR' ? LAT_INK : LAT_ACCENT;
+  const lampY = 378;
+  rule(trackX, lampY, trackW, 980, lampColor);
+  g.rect(trackX, lampY + 1, trackW, 31).fill({ color: lampColor, alpha: 0.08 * fadeIn(1000) });
+  text(decode(lamp, 1000, 40), trackX + trackW / 2, lampY + 16, {
+    ...display(16, lampColor, '400'),
+    anchorX: 0.5,
+    anchorY: 0.5,
+    letterSpacing: 4,
+    maxWidth: trackW - 12,
+    alpha: fadeIn(1000),
+  });
 
   // Total score.
   rule(0, designHeight - 44, designWidth, 440);

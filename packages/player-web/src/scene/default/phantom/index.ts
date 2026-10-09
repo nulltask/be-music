@@ -9,6 +9,7 @@ import {
 } from './playfield.ts';
 import { phantomResultSkin } from './result.ts';
 import { phantomSelectSkin } from './select.ts';
+import { wideStage } from '../stage.ts';
 
 /**
  * Phantom — the built-in poster skin: ink black, blood red, and paper white, with slanted plates, starbursts,
@@ -18,6 +19,7 @@ export const phantomSkin: BeMusicSkin = {
   id: 'phantom',
   label: 'Phantom',
   fontLoads: ['400 24px "Anton"', '400 18px "Dela Gothic One"', '700 12px "M PLUS 1p"', '800 12px "M PLUS 1p"'],
+  stage: wideStage,
   gameplay: {
     renderChrome: ({ layer, overlayLayer, layerPool, overlayLayerPool, runtime }) =>
       renderDefaultGameplayFrame(layer, runtime, { overlayLayer, layerPool, overlayLayerPool }),

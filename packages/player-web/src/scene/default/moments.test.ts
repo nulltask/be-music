@@ -127,19 +127,31 @@ describe('resolveMilestoneArea', () => {
     const area = resolveMilestoneArea(227);
     expect(area.mode).toBe('beside');
     expect(area.x).toBeGreaterThan(227);
-    expect(area.x + area.w).toBeLessThanOrEqual(640);
+    expect(area.x + area.w).toBeLessThanOrEqual(854);
     expect(area.y + area.h).toBeLessThanOrEqual(346);
   });
 
-  it('drops below the lanes when they leave too little room (double play)', () => {
-    const area = resolveMilestoneArea(547);
+  it('keeps double play beside the lanes on the 16:9 stage', () => {
+    const area = resolveMilestoneArea(421);
+    expect(area.mode).toBe('beside');
+    expect(area.x).toBeGreaterThan(421);
+  });
+
+  it('drops below the lanes when they leave too little room', () => {
+    const area = resolveMilestoneArea(628);
     expect(area.mode).toBe('below');
     expect(area.y).toBeGreaterThanOrEqual(346);
     expect(area.y + area.h).toBeLessThanOrEqual(480);
+    expect(area.x + area.w).toBeLessThanOrEqual(854);
+  });
+
+  it('follows a narrower stage', () => {
+    expect(resolveMilestoneArea(421, 346, 640).mode).toBe('below');
+    expect(resolveMilestoneArea(421, 346, 640).w).toBe(624);
   });
 
   it('switches exactly at the minimum width', () => {
-    expect(resolveMilestoneArea(640 - 16 - MILESTONE_MIN_WIDTH).mode).toBe('beside');
-    expect(resolveMilestoneArea(640 - 16 - MILESTONE_MIN_WIDTH + 1).mode).toBe('below');
+    expect(resolveMilestoneArea(854 - 16 - MILESTONE_MIN_WIDTH).mode).toBe('beside');
+    expect(resolveMilestoneArea(854 - 16 - MILESTONE_MIN_WIDTH + 1).mode).toBe('below');
   });
 });

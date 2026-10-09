@@ -3,6 +3,7 @@ import { resolveSkinTextStyle } from '../skin-text.ts';
 import type { BeMusicResultFrame, BeMusicResultSkin } from '../../../skin/be-music/types.ts';
 import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT, DEFAULT_TEXT_FONT } from '../fonts.ts';
 import {
+  PHANTOM_ASH,
   PHANTOM_BLACK,
   PHANTOM_CHARCOAL,
   PHANTOM_CYAN,
@@ -28,6 +29,7 @@ import {
 } from '../phantom-style.ts';
 import { alignCapCenter } from '../text-metrics.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
+import { resolveResultLamp, resolveResultTrackRows } from '../result-track.ts';
 
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */
 const RESULT_ROLL_DELAY_MS = 760;
@@ -52,6 +54,12 @@ const METRIC_W = 192;
 const METRIC_H = 36;
 const METRIC_COLUMNS = [204, 420] as const;
 const METRIC_ROWS = [RESULT_TOP, RESULT_TOP + 56, RESULT_TOP + 112] as const;
+/**
+ * Track column on the right of the 16:9 grid: from one gutter after the run panel to the right margin (its slanted
+ * bottom edge included), spanning the top row's top to the bottom row's bottom.
+ */
+const TRACK_X = 324 + 292 + 8 + 16;
+const TRACK_SLANT = 8;
 
 export const phantomResultSkin: BeMusicResultSkin = { render: (frame) => renderPhantomResult(frame) };
 
@@ -201,21 +209,6 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
   teeth.push(designWidth + 20, 46);
   header.g.poly(teeth).fill(PHANTOM_RED);
   header.g.rect(0, 45, designWidth, 1).fill(PHANTOM_WHITE);
-  const title = group('title');
-  addText(
-    title.root,
-    `${result.song.title}${result.song.artist ? ` / ${result.song.artist}` : ''}`,
-    designWidth - RESULT_MARGIN,
-    16,
-    {
-      size: 13,
-      fill: PHANTOM_WHITE,
-      fontFamily: DEFAULT_HEADLINE_FONT,
-      anchorX: 1,
-      maxWidth: 420,
-    },
-  );
-  slideIn(title.root, 260, 120, 0);
   const verdict = group('verdict');
   verdict.g.poly(parallelogramPoints(22, 12, 150, 28, 10)).fill(cleared ? PHANTOM_WHITE : PHANTOM_RED);
   verdict.g.poly(parallelogramPoints(RESULT_MARGIN, 7, 150, 28, 10)).fill(cleared ? PHANTOM_RED : PHANTOM_WHITE);
@@ -401,6 +394,76 @@ export function renderPhantomResult(frame: BeMusicResultFrame): void {
     graphProgress,
   );
   slideIn(run.root, 620, 0, 160);
+
+  // Track column: the chart's card (title, artist, genre), its facts, and the clear lamp, sliding in from the right.
+  const track = group('track');
+  const trackW = designWidth - RESULT_MARGIN - TRACK_SLANT - TRACK_X;
+  const trackTop = RESULT_TOP;
+  const trackBottom = RESULT_BOTTOM_TOP + RESULT_BOTTOM_H;
+  track.g
+    .poly(parallelogramPoints(TRACK_X, trackTop, trackW, trackBottom - trackTop, -TRACK_SLANT))
+    .fill(PHANTOM_INK)
+    .stroke({ color: PHANTOM_WHITE, width: 2 });
+  track.g.poly(parallelogramPoints(TRACK_X + 8, trackTop - 6, 64, 16, 6)).fill(PHANTOM_RED);
+  addText(track.root, 'TRACK', TRACK_X + 20, trackTop + 2, {
+    ...display(11, PHANTOM_WHITE),
+    letterSpacing: 1,
+    anchorY: 0.5,
+  });
+  const textX = TRACK_X + 16;
+  const textW = trackW - 24;
+  addText(track.root, result.song.title || 'Untitled chart', textX, trackTop + 22, {
+    size: 16,
+    fill: PHANTOM_WHITE,
+    fontFamily: DEFAULT_HEADLINE_FONT,
+    maxWidth: textW,
+  });
+  addText(track.root, result.song.artist ?? '', textX, trackTop + 46, {
+    size: 10,
+    weight: '800',
+    fill: PHANTOM_RED_HOT,
+    maxWidth: textW,
+  });
+  if (result.song.genre) {
+    addText(track.root, result.song.genre, textX, trackTop + 62, { size: 9, fill: PHANTOM_ASH, maxWidth: textW });
+  }
+  track.g.rect(textX, trackTop + 84, textW, 1).fill(PHANTOM_SLATE);
+  resolveResultTrackRows(result).forEach((row, index) => {
+    const rowY = trackTop + 96 + index * 36;
+    addText(track.root, row.label, textX, rowY + 2, { ...display(10, PHANTOM_RED_HOT), letterSpacing: 1 });
+    addText(track.root, row.value, textX + textW, rowY + 10, {
+      ...display(20, PHANTOM_WHITE),
+      anchorX: 1,
+      anchorY: 0.5,
+      maxWidth: textW - 80,
+    });
+    track.g.rect(textX, rowY + 26, textW, 1).fill({ color: PHANTOM_SLATE, alpha: 0.6 });
+  });
+  // Clear lamp: a slanted plate on the column's foot — gold for PERFECT, paper for FULL COMBO, red for CLEAR.
+  const lamp = resolveResultLamp(result);
+  const lampFill =
+    lamp === 'PERFECT'
+      ? PHANTOM_GOLD
+      : lamp === 'FULL COMBO'
+        ? PHANTOM_WHITE
+        : lamp === 'CLEAR'
+          ? PHANTOM_RED
+          : PHANTOM_BLACK;
+  const lampInk = lamp === 'CLEAR' ? PHANTOM_WHITE : lamp === 'FAILED' ? PHANTOM_RED_HOT : PHANTOM_INK;
+  const lampY = trackBottom - 52;
+  track.g.poly(parallelogramPoints(textX + 4, lampY + 4, textW, 34, 8)).fill(PHANTOM_RED_DEEP);
+  track.g
+    .poly(parallelogramPoints(textX, lampY, textW, 34, 8))
+    .fill(lampFill)
+    .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
+  addText(track.root, lamp, textX + textW / 2 + 4, lampY + 17, {
+    ...display(20, lampInk),
+    letterSpacing: 1.5,
+    anchorX: 0.5,
+    anchorY: 0.5,
+    maxWidth: textW - 24,
+  });
+  slideIn(track.root, 700, 240, 0);
 
   // Footer rises; the total score rolls up with the rest.
   const footer = group('footer');
