@@ -1,6 +1,5 @@
-import { resolveChartPlayVariant as resolveChartPlayVariantForChart } from '@be-music/chart';
 import { dirname } from '@be-music/utils/core';
-import { resolveSongSource } from '../collection/collection.ts';
+import { resolveChartPlayVariant, resolveSongSource } from '../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../collection/types.ts';
 import type { PixiGaugeType, PixiPlayOptions } from './core/select.ts';
 
@@ -229,11 +228,7 @@ function computeKeyModeOp(song: BrowserSongEntry): number {
   if (modeHint.includes('7k')) return SELECT_DYNAMIC_OPS.KEYS_7;
   if (modeHint.includes('5k')) return SELECT_DYNAMIC_OPS.KEYS_5;
 
-  const variant = resolveChartPlayVariantForChart({
-    chartPath: song.chartPath,
-    events: song.chart.events,
-    bms: song.chart.bms,
-  });
+  const variant = resolveChartPlayVariant(song);
   switch (variant) {
     case '5':
       return SELECT_DYNAMIC_OPS.KEYS_5;

@@ -1,4 +1,5 @@
 import type { BrowserSongEntry, BrowserSongSourceKind } from '@be-music/skin-sdk';
+import type { BrowserDroppedFile } from './dropped-file.ts';
 
 export type {
   BrowserBrowseEntry,
@@ -12,15 +13,15 @@ export type {
  *
  * - **`Uint8Array`** — bytes already in memory. Used for small files that are accessed synchronously by parsers / image
  *   decoders (`.bms`, `.bmson`, `.bmp`, `.png`, `.tga`, `.csv`, `.dxa`, `.lr2skin`, …).
- * - **`File`** — lazy reference. The bytes haven't been materialized yet and will be read on demand via
- *   `loadAssetBytes`. Used for audio (`.wav`, `.ogg`, `.mp3`, `.opus`, `.flac`, `.oga`) where a single drop can carry
+ * - **`File` / `DeferredDroppedFile`** — lazy reference. The bytes haven't been materialized yet and will be read on
+ *   demand via `loadAssetBytes`; a `DeferredDroppedFile` from a folder drop hasn't even been opened yet. Used for audio (`.wav`, `.ogg`, `.mp3`, `.opus`, `.flac`, `.oga`) where a single drop can carry
  *   gigabytes of WAV samples that are only needed for the currently-playing chart.
  *
  * Consumers that always hand a non-audio path call the existing sync helpers and receive the `Uint8Array` branch by
  * construction. Audio consumers go through `loadAssetBytes` / `resolveChartAudioAsset` to handle the lazy branch
  * transparently.
  */
-export type BrowserSongAssetEntry = Uint8Array | File;
+export type BrowserSongAssetEntry = Uint8Array | BrowserDroppedFile;
 
 export interface BrowserSongAssetSource {
   id: string;

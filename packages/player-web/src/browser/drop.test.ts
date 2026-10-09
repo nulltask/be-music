@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import {
+  createEagerDropPathPredicate,
   isBeatorajaLuaSkinFilePath,
   isBeatorajaSkinIndicator,
   isChartFilePath,
@@ -57,6 +58,49 @@ describe('drop helpers', () => {
     const result = splitDroppedSongAndThemeFiles([skin, image]);
     expect(result.songFiles).toEqual([]);
     expect(result.themeFiles).toEqual([skin, image]);
+  });
+
+  test('splitDroppedSongAndThemeFiles keeps sibling folders that share a name prefix apart', () => {
+    const chart = file('Songs/A/main.bms');
+    const wav = file('Songs/A/sub/kick.wav');
+    const neighbour = file('Songs/AB/readme.txt');
+    const result = splitDroppedSongAndThemeFiles([chart, wav, neighbour]);
+    expect(result.songFiles).toEqual([chart, wav]);
+    expect(result.themeFiles).toEqual([neighbour]);
+  });
+
+  test('createEagerDropPathPredicate defers only song-bundle files', () => {
+    const isEager = createEagerDropPathPredicate([
+      'Pack/Song/main.bms',
+      'Pack/Song/kick.wav',
+      'Pack/Song/bga/movie.mp4',
+      'Theme/play_7.lr2skin',
+      'Theme/parts.png',
+    ]);
+    expect(isEager('Pack/Song/main.bms')).toBe(false);
+    expect(isEager('Pack/Song/kick.wav')).toBe(false);
+    expect(isEager('Pack/Song/bga/movie.mp4')).toBe(false);
+    expect(isEager('Theme/play_7.lr2skin')).toBe(true);
+    expect(isEager('Theme/parts.png')).toBe(true);
+  });
+
+  test('createEagerDropPathPredicate always opens play-logs and archives', () => {
+    const isEager = createEagerDropPathPredicate(['Song/main.bms', 'Song/run.bmplay.json', 'Song/extra.ZIP']);
+    expect(isEager('Song/run.bmplay.json')).toBe(true);
+    expect(isEager('Song/extra.ZIP')).toBe(true);
+    expect(isEager('Song/main.bms')).toBe(false);
+  });
+
+  test('createEagerDropPathPredicate opens everything when no chart was dropped', () => {
+    const isEager = createEagerDropPathPredicate(['Theme/play_7.lr2skin', 'Theme/kick.wav']);
+    expect(isEager('Theme/play_7.lr2skin')).toBe(true);
+    expect(isEager('Theme/kick.wav')).toBe(true);
+  });
+
+  test('createEagerDropPathPredicate defers every file when a chart sits at the drop root', () => {
+    const isEager = createEagerDropPathPredicate(['main.bms', 'kick.wav', 'Theme/play_7.lr2skin']);
+    expect(isEager('kick.wav')).toBe(false);
+    expect(isEager('Theme/play_7.lr2skin')).toBe(false);
   });
 
   test('isLr2SkinFilePath only matches `.lr2skin`', () => {

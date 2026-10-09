@@ -48,9 +48,11 @@ import {
   computeChartFileSha256,
   describeSongCollection,
   loadAssetBytes,
+  materializeDroppedFiles,
   readDroppedFiles,
   resolveSongSource,
   splitDroppedSongAndThemeFiles,
+  type BrowserDroppedFile,
   type BrowserSongCollection,
   type BrowserSongEntry,
 } from '@be-music/player-web/collection';
@@ -1204,7 +1206,7 @@ class PlayerWebDemoApp {
    * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
-  private async processIncomingFiles(files: File[]): Promise<void> {
+  private async processIncomingFiles(files: BrowserDroppedFile[]): Promise<void> {
     if (files.length === 0) {
       return;
     }
@@ -1218,7 +1220,13 @@ class PlayerWebDemoApp {
       await this.startPlaylogReplayFromFile(playlogFiles[0]!);
       return;
     }
-    const { themeFiles, songFiles } = splitDroppedSongAndThemeFiles(files);
+    const split = splitDroppedSongAndThemeFiles(files);
+    const songFiles = split.songFiles;
+    // Folder drops leave song-bundle files unopened; the theme side is opened up front by the drop walk, so this is
+    // normally a pass-through that only narrows the type for the theme loaders.
+    const themeFiles = await materializeDroppedFiles(split.themeFiles, {
+      onError: (file, error) => dropLog.warn(`skipped (open failed): ${file.webkitRelativePath}`, error),
+    });
     // `splitDroppedSongAndThemeFiles` routes any non-chart files outside a chart directory into `themeFiles`. That
     // includes stray `readme.txt` / `info.json` / album-art images sitting at the root of a BMS pack that isn't a real
     // theme bundle. Funnel the detection through `skinFamilyRegistry` so each family's `matchesThemeFile` predicate
@@ -1285,7 +1293,7 @@ class PlayerWebDemoApp {
    * title + artist match. When no match (or the chart's `#RANDOM` roll differs so the resolved notes can't be
    * re-aligned), the failure lands in the status row instead of throwing — a bad drop must never wedge the UI.
    */
-  private async startPlaylogReplayFromFile(file: File): Promise<void> {
+  private async startPlaylogReplayFromFile(file: BrowserDroppedFile): Promise<void> {
     let playlog: BeMusicPlaylog;
     try {
       playlog = parsePlaylog(await file.text());
@@ -1396,7 +1404,7 @@ class PlayerWebDemoApp {
     }
   }
 
-  private async loadSongs(files: File[]): Promise<void> {
+  private async loadSongs(files: BrowserDroppedFile[]): Promise<void> {
     this.setStatus('Loading songs...');
     // Append rather than replace so a second / third folder drop adds to the existing collection instead of wiping the
     // previous pack. The store re-prefixes source / song IDs so each drop's entries stay uniquely addressable. The

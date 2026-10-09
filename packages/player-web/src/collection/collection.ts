@@ -5,6 +5,7 @@ import {
   resolveChartPlayVariant as resolveChartPlayVariantForChart,
 } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
+import type { BeMusicJson } from '@be-music/json';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
@@ -16,17 +17,27 @@ import type {
   BrowserSongSourceKind,
   LoadProgressCallback,
 } from './types.ts';
-import { isChartFilePath } from '../browser/drop.ts';
+import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
+import { compactCollectionChart, PackedEventStrings } from './compact-chart.ts';
+import {
+  type BrowserDroppedFile,
+  DeferredDroppedFile,
+  materializeDroppedFiles,
+  withRelativePath,
+} from './dropped-file.ts';
 import { isMaliciousAssetPath, loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
 import { logger } from '../logger.ts';
 
 export { loadAssetBytes, asLoadedBytes } from './file-lookup.ts';
+export { type BrowserDroppedFile, DeferredDroppedFile, materializeDroppedFiles } from './dropped-file.ts';
 
 export { basename, dirname, normalizePath } from '@be-music/utils/core';
 
 const log = logger('drop');
 const MAX_ZIP_ARCHIVE_BYTES = 512 * 1024 * 1024;
 const MAX_ZIP_UNCOMPRESSED_BYTES = 1024 * 1024 * 1024;
+/** How many chart reads the parse loop keeps in flight ahead of the chart it is parsing. */
+const CHART_READ_AHEAD = 8;
 
 /**
  * Optional progress hook for the dropped-folder loaders. When supplied, the loader fires the callback as it walks
@@ -50,7 +61,10 @@ export class BrowserSongCollectionStore {
    * Replace the store's collection with the chart pack parsed from `files`. Used for the explicit "load these and ONLY
    * these" entry point — the file-input picker, the initial drop before any songs have been added, etc.
    */
-  public async loadFromFiles(files: Iterable<File>, options: LoadProgressOptions = {}): Promise<BrowserSongCollection> {
+  public async loadFromFiles(
+    files: Iterable<BrowserDroppedFile>,
+    options: LoadProgressOptions = {},
+  ): Promise<BrowserSongCollection> {
     this.collection = await loadSongCollectionFromFiles(files, options);
     this.dropSeq = 0;
     return this.collection;
@@ -66,7 +80,7 @@ export class BrowserSongCollectionStore {
    * without a prefix a second drop would overwrite the first's lookup keys).
    */
   public async appendFromFiles(
-    files: Iterable<File>,
+    files: Iterable<BrowserDroppedFile>,
     options: LoadProgressOptions = {},
   ): Promise<BrowserSongCollection> {
     const incoming = await loadSongCollectionFromFiles(files, options);
@@ -114,14 +128,23 @@ export async function loadSongCollectionFromDrop(
   return loadSongCollectionFromFiles(files, options);
 }
 
-export async function readDroppedFiles(dataTransfer: DataTransfer, options: LoadProgressOptions = {}): Promise<File[]> {
+/**
+ * Lists a drop's files. Files the host needs straight away (theme candidates outside chart directories, play-logs,
+ * archives) come back as opened `File`s; song-bundle files come back as {@link DeferredDroppedFile} handles that open
+ * on first read. Pass theme-side files through {@link materializeDroppedFiles} before handing them to an API that
+ * needs real `File`s.
+ */
+export async function readDroppedFiles(
+  dataTransfer: DataTransfer,
+  options: LoadProgressOptions = {},
+): Promise<BrowserDroppedFile[]> {
   return collectFilesFromDataTransfer(dataTransfer, options.onProgress);
 }
 
 async function collectFilesFromDataTransfer(
   dataTransfer: DataTransfer,
   onProgress?: LoadProgressCallback,
-): Promise<File[]> {
+): Promise<BrowserDroppedFile[]> {
   const items = dataTransfer.items;
   if (items && items.length > 0) {
     const entries: FileSystemEntry[] = [];
@@ -132,16 +155,17 @@ async function collectFilesFromDataTransfer(
       }
     }
     if (entries.length > 0) {
-      const collected: File[] = [];
+      const listed: ListedDropEntry[] = [];
       // Total is unknown while we're still walking the FileSystem tree (the FileSystemEntry API doesn't expose a
       // directory's file count up-front), so we report `total: -1` and let the host UI show an indeterminate
       // "Collecting…" indicator.
       onProgress?.({ phase: 'enumerating', current: 0, total: -1 });
       for (const entry of entries) {
-        await collectFilesFromEntry(entry, '', collected, onProgress);
+        await listDropEntries(entry, '', listed, onProgress);
       }
-      onProgress?.({ phase: 'enumerating', current: collected.length, total: collected.length });
-      return collected;
+      const files = await openListedDropEntries(listed);
+      onProgress?.({ phase: 'enumerating', current: files.length, total: files.length });
+      return files;
     }
   }
   const fallback = dataTransfer.files ? [...dataTransfer.files] : [];
@@ -159,31 +183,29 @@ async function collectFilesFromDataTransfer(
  */
 const ENTRY_WALK_CONCURRENCY = 16;
 
-async function collectFilesFromEntry(
+interface ListedDropEntry {
+  entry: FileSystemFileEntry;
+  path: string;
+}
+
+/**
+ * Lists every file entry under `entry` without opening any of them. Listing is cheap (one `readEntries` per batch of a
+ * directory); opening is not — `FileSystemFileEntry.file()` is a serialised browser round trip per file — so the
+ * walk defers that choice to {@link openListedDropEntries}, which only opens the files needed right away.
+ */
+async function listDropEntries(
   entry: FileSystemEntry,
   prefix: string,
-  files: File[],
+  listed: ListedDropEntry[],
   onProgress?: LoadProgressCallback,
 ): Promise<void> {
   if (entry.isFile) {
-    let file: File;
-    try {
-      file = await new Promise<File>((resolve, reject) => {
-        (entry as FileSystemFileEntry).file(resolve, reject);
-      });
-    } catch (error) {
-      // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
-      // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
-      // does when an asset is missing.
-      log.warn(`skipped (entry.file failed): ${prefix}${entry.name}`, error);
-      return;
-    }
-    const relativePath = prefix ? `${prefix}${file.name}` : file.name;
-    files.push(withRelativePath(file, relativePath));
+    const path = `${prefix}${entry.name}`;
+    listed.push({ entry: entry as FileSystemFileEntry, path });
     // Throttle the per-file progress emit: a 4000-file walk doesn't need 4000 React-style updates. Keep one in every 32
     // entries plus the very first, which is enough for a visibly-moving counter without thrashing the host UI.
-    if (onProgress && (files.length & 0x1f) === 1) {
-      onProgress({ phase: 'enumerating', current: files.length, total: -1, label: relativePath });
+    if (onProgress && (listed.length & 0x1f) === 1) {
+      onProgress({ phase: 'enumerating', current: listed.length, total: -1, label: path });
     }
     return;
   }
@@ -212,13 +234,44 @@ async function collectFilesFromEntry(
       // without tripping that cap. Children are wrapped in `.catch` so one bad sub-tree doesn't reject the whole pool.
       await runWithConcurrency(batch, ENTRY_WALK_CONCURRENCY, async (child) => {
         try {
-          await collectFilesFromEntry(child, nextPrefix, files, onProgress);
+          await listDropEntries(child, nextPrefix, listed, onProgress);
         } catch (error) {
           log.warn(`skipped (child walk failed): ${nextPrefix}${child.name}`, error);
         }
       });
     }
   }
+}
+
+/**
+ * Opens the listed entries the host needs immediately (see {@link createEagerDropPathPredicate}) and wraps the rest as
+ * {@link DeferredDroppedFile} handles. On a large BMS pack the song audio / BGA make up nearly every file, so this
+ * skips almost all of the per-file `file()` round trips that used to dominate the drop.
+ */
+async function openListedDropEntries(listed: readonly ListedDropEntry[]): Promise<BrowserDroppedFile[]> {
+  const isEager = createEagerDropPathPredicate(listed.map((item) => normalizePath(item.path)));
+  const files: Array<BrowserDroppedFile | undefined> = listed.map((item) =>
+    isEager(normalizePath(item.path)) ? undefined : new DeferredDroppedFile(item.entry, item.path),
+  );
+  const eagerIndices: number[] = [];
+  for (let index = 0; index < files.length; index += 1) {
+    if (files[index] === undefined) eagerIndices.push(index);
+  }
+  await runWithConcurrency(eagerIndices, ENTRY_WALK_CONCURRENCY, async (index) => {
+    const { entry, path } = listed[index]!;
+    try {
+      const file = await new Promise<File>((resolve, reject) => {
+        entry.file(resolve, reject);
+      });
+      files[index] = withRelativePath(file, path);
+    } catch (error) {
+      // A single file failing to materialize (permission denied, stale entry, network drive disconnect, …) shouldn't
+      // kill the entire drop. Log and skip — the resulting collection simply omits that file, matching what real LR2
+      // does when an asset is missing.
+      log.warn(`skipped (entry.file failed): ${path}`, error);
+    }
+  });
+  return files.filter((file): file is BrowserDroppedFile => file !== undefined);
 }
 
 /**
@@ -232,7 +285,7 @@ async function collectFilesFromEntry(
  * don't dwarf the actual read work.
  */
 export async function readFilesIntoBytesMap(
-  files: ReadonlyArray<File>,
+  files: ReadonlyArray<BrowserDroppedFile>,
   options: {
     concurrency?: number;
     onRead?: (path: string, current: number, total: number) => void;
@@ -290,33 +343,8 @@ function createThrottledProgress(
   };
 }
 
-function withRelativePath(file: File, relativePath: string): File {
-  if (file.webkitRelativePath === relativePath) {
-    return file;
-  }
-  try {
-    Object.defineProperty(file, 'webkitRelativePath', {
-      configurable: true,
-      enumerable: true,
-      value: relativePath,
-      writable: false,
-    });
-    return file;
-  } catch {
-    return new Proxy(file, {
-      get(target, property) {
-        if (property === 'webkitRelativePath') {
-          return relativePath;
-        }
-        const value = Reflect.get(target, property, target);
-        return typeof value === 'function' ? value.bind(target) : value;
-      },
-    });
-  }
-}
-
 export async function loadSongCollectionFromFiles(
-  files: Iterable<File>,
+  files: Iterable<BrowserDroppedFile>,
   options: LoadProgressOptions = {},
 ): Promise<BrowserSongCollection> {
   const onProgress = options.onProgress;
@@ -331,8 +359,8 @@ export async function loadSongCollectionFromFiles(
   onProgress?.({ phase: 'reading', current: 0, total: fileList.length });
   // Split ZIPs out before the parallel-read pool so we can keep each archive's expansion tied to its own source label.
   // Everything else lands in the shared `looseFiles` map.
-  const zipFiles: File[] = [];
-  const looseEntries: File[] = [];
+  const zipFiles: BrowserDroppedFile[] = [];
+  const looseEntries: BrowserDroppedFile[] = [];
   for (const file of fileList) {
     if (extensionOf(file.name) === '.zip' && !file.webkitRelativePath) {
       zipFiles.push(file);
@@ -359,8 +387,13 @@ export async function loadSongCollectionFromFiles(
     }
   }
   // ZIPs read after the loose pool — there's typically zero or one of them per drop, so serializing here costs nothing.
-  for (const file of zipFiles) {
-    const sourceId = `zip:${file.name}`;
+  for (const dropped of zipFiles) {
+    const sourceId = `zip:${dropped.name}`;
+    const [file] = await materializeDroppedFiles([dropped]);
+    if (!file) {
+      errors.push({ sourceId, message: 'failed to open ZIP archive' });
+      continue;
+    }
     if (file.size > MAX_ZIP_ARCHIVE_BYTES) {
       errors.push({
         sourceId,
@@ -391,6 +424,7 @@ export async function loadSongCollectionFromFiles(
   }
 
   const songs: BrowserSongEntry[] = [];
+  const eventStrings = new PackedEventStrings();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
@@ -414,19 +448,34 @@ export async function loadSongCollectionFromFiles(
   for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
     const source = sources[sourceIndex]!;
     const paths = chartPathsBySource[sourceIndex]!;
-    for (const path of paths) {
+    // Charts are stored as lazy references in the song-bundle map (everything is deferred). Keep a few reads in flight
+    // ahead of the parser so opening / reading the next charts overlaps with parsing the current one; each slot is
+    // cleared once consumed, so parse-phase memory stays bounded to the look-ahead window rather than the whole bundle.
+    const pendingReads: Array<Promise<Uint8Array | undefined> | undefined> = [];
+    const startRead = (index: number): void => {
+      const entry = index < paths.length ? source.files.get(paths[index]!) : undefined;
+      if (entry === undefined) return;
+      const read = loadAssetBytes(entry);
+      // Rejections are surfaced when the slot is awaited; this only keeps them from reporting as unhandled meanwhile.
+      read.catch(() => undefined);
+      pendingReads[index] = read;
+    };
+    for (let index = 0; index < Math.min(CHART_READ_AHEAD, paths.length); index += 1) {
+      startRead(index);
+    }
+    for (let pathIndex = 0; pathIndex < paths.length; pathIndex += 1) {
+      const path = paths[pathIndex]!;
+      const read = pendingReads[pathIndex];
+      pendingReads[pathIndex] = undefined;
+      startRead(pathIndex + CHART_READ_AHEAD);
       try {
-        // Charts are stored as lazy `File` references in the song-bundle map (everything is deferred). Read the bytes
-        // on demand — the `chartBytes` local goes out of scope at the end of this iteration, so the GC can reclaim them
-        // as soon as the parser is done with them. Net effect: parse-phase memory is one chart at a time rather than
-        // the whole bundle's worth.
-        const chartBytes = await loadAssetBytes(source.files.get(path));
+        const chartBytes = await read;
         if (!chartBytes) {
           throw new Error(`chart bytes missing for ${path}`);
         }
         const chart = parseChart(path, chartBytes);
         const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
-        songs.push({
+        const song: BrowserSongEntry = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
           sourceLabel: source.label,
@@ -442,7 +491,13 @@ export async function loadSongCollectionFromFiles(
           bpm: chart.metadata.bpm,
           totalNotes: notes.filter((note) => isScoreTargetChannel(note.channel)).length,
           chart,
-        });
+        };
+        songs.push(song);
+        // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
+        // it. Work out the play variant first, while the events are still plain objects: select screens filter the
+        // whole list by it, and a cached answer spares them from unpacking every chart's events.
+        resolveChartPlayVariant(song);
+        compactCollectionChart(chart, eventStrings);
       } catch (error) {
         errors.push({
           sourceId: source.id,
@@ -551,12 +606,24 @@ function isScoreTargetChannel(channel: string): boolean {
  * (standard vs. compat) AFTER the 9KEY mode has been decided by extension or `#PLAYER=3 + 17`.
  */
 export function resolveChartPlayVariant(song: BrowserSongEntry): ChartPlayVariant {
-  return resolveChartPlayVariantForChart({
+  const cached = playVariantByChart.get(song.chart);
+  if (cached !== undefined && cached.chartPath === song.chartPath) return cached.variant;
+  const variant = resolveChartPlayVariantForChart({
     chartPath: song.chartPath,
     events: song.chart.events,
     bms: song.chart.bms,
   });
+  playVariantByChart.set(song.chart, { chartPath: song.chartPath, variant });
+  return variant;
 }
+
+/**
+ * Play variant per chart object. Select screens filter the whole song list by key mode, and collection charts keep
+ * their events packed (see `compactCollectionChart`), so recomputing the variant would unpack every chart on each
+ * filter pass. Keyed by chart identity plus the path the answer was computed for, since the variant also depends on
+ * the file extension.
+ */
+const playVariantByChart = new WeakMap<BeMusicJson, { chartPath: string; variant: ChartPlayVariant }>();
 
 function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
   for (const path of files.keys()) {
