@@ -16,9 +16,9 @@ import { queueGpuPass } from '../pixi-kit/index.ts';
  * Charge cloud — a classic music-visualizer idea: a handful of small, dark, charged orbs hang in a dense fluid
  * of particles. Each orb listens to its own slice of the spectrum and is a light: it flares the instant its range
  * hits, flashes for a tenth of a second, then glows down over about a second, throwing light shafts while it flares.
- * The particles are lit by the orbs (pink to white close to a bright orb, deep indigo elsewhere) and moved by charge:
- * drawn to the orbs of opposite sign, driven off by those of their own, spun round each orb's axis, and carried
- * together by a large-scale flow so the cloud folds in sheets rather than scattering. Each particle is tuned to one
+ * The particles are square dots like the rest of the skin's particle world, lit by the orbs (pink to white close to a
+ * bright orb, deep indigo elsewhere), and moved by charge: drawn to the orbs of opposite sign, driven off by
+ * those of their own, spun round each orb's axis, and flocking so the cloud folds in sheets rather than scattering. Each particle is tuned to one
  * spectrum band, which scales how hard the charges pull it.
  *
  * The particles live in float textures and step on the GPU each frame; the orbs are analytic spheres drawn by a
@@ -101,35 +101,60 @@ function normalize3([x, y, z]: readonly [number, number, number]): [number, numb
 export interface OrbLight {
   flash: number;
   glow: number;
-  /** The band energy seen last step, to detect hits. */
-  energy: number;
+  /** Slow running average of the band's energy: what this orb has got used to. */
+  mean: number;
+  /** How far the band stood above that average last step, 0..1, to detect hits. */
+  excess: number;
+  /** Seconds left before the orb may flash again. */
+  cooldown: number;
 }
 
-export const DARK_ORB: OrbLight = Object.freeze({ flash: 0, glow: 0, energy: 0 });
+export const DARK_ORB: OrbLight = Object.freeze({ flash: 0, glow: 0, mean: 0, excess: 0, cooldown: 0 });
 
 /** Time constants (s) of the flash and the glow after it. */
 const FLASH_DECAY_S = 0.08;
 const GLOW_DECAY_S = 0.9;
-/** A rise in band energy this big within one step counts as a hit. */
-const HIT_RISE = 0.12;
+/** How long (s) the orb takes to get used to a new loudness. */
+const ADAPT_S = 2.5;
+/** After a flash the orb stays quiet this long (s), so a dense passage does not fuse into one long blaze. */
+const FLASH_COOLDOWN_S = 0.18;
+/** A rise in excess this big within one step counts as a hit; so does an onset while the excess is above ONSET_EXCESS. */
+const HIT_RISE = 0.15;
+const ONSET_EXCESS = 0.35;
 
 /**
- * Advances one orb's light by `dt` seconds given its band `energy` (0..1) and the global `onset` (0..1). A hit — the
- * band jumping up, or an onset while the band is loud — fires the flash at full strength (attack within one frame);
- * the flash then falls away in about a tenth of a second while the glow, which tracks the band's energy and rises
- * with every hit, decays over about a second. Pure.
+ * How far `energy` stands above what the orb is used to (`mean`), as 0..1: the band at its average reads 0, and the
+ * remaining headroom up to full scale maps onto 0..1, so a quiet passage's peaks and a loud passage's peaks both
+ * register. Pure.
+ */
+export function bandExcess(energy: number, mean: number): number {
+  const floor = mean * 0.97;
+  return Math.max(0, Math.min(1, (energy - floor) / Math.max(0.15, 1 - floor)));
+}
+
+/**
+ * Advances one orb's light by `dt` seconds given its band `energy` (0..1) and the global `onset` (0..1). The orb
+ * reacts to how far its band stands above its own running average rather than to raw loudness, so a sustained loud
+ * passage settles back down and only real jumps light it up. A hit — the excess leaping up, or an onset while the
+ * excess is high — fires the flash (attack within one frame) unless the orb flashed within the last
+ * FLASH_COOLDOWN_S; the flash then falls away in about a tenth of a second while the glow, which follows the excess
+ * and rises with every hit, decays over about a second. Pure.
  */
 export function stepOrbLight(previous: OrbLight, energy: number, onset: number, dt: number): OrbLight {
-  const rise = energy - previous.energy;
-  const hit = rise > HIT_RISE || (onset > 0.6 && energy > 0.55) ? Math.min(1, 0.4 + energy) : 0;
+  const mean = previous.mean + (energy - previous.mean) * (1 - Math.exp(-dt / ADAPT_S));
+  const excess = bandExcess(energy, previous.mean);
+  const rise = excess - previous.excess;
+  const ready = previous.cooldown <= 0;
+  const hit = ready && (rise > HIT_RISE || (onset > 0.6 && excess > ONSET_EXCESS)) ? Math.min(1, 0.3 + excess) : 0;
+  const cooldown = hit > 0 ? FLASH_COOLDOWN_S : Math.max(0, previous.cooldown - dt);
   const flash = Math.max(hit, previous.flash * Math.exp(-dt / FLASH_DECAY_S));
-  const glow = Math.max(energy * 0.6, hit * 0.9, previous.glow * Math.exp(-dt / GLOW_DECAY_S));
-  return { flash, glow, energy };
+  const glow = Math.max(excess * 0.5, hit * 0.8, previous.glow * Math.exp(-dt / GLOW_DECAY_S));
+  return { flash, glow, mean, excess, cooldown };
 }
 
 /** How bright an orb's light is overall (what lights the particles). */
 export function orbBrightness(light: OrbLight): number {
-  return 0.08 + light.glow + 1.6 * light.flash;
+  return 0.05 + 0.8 * light.glow + 1.4 * light.flash;
 }
 
 export interface ChargeCloudFrame {
@@ -448,36 +473,34 @@ void main() {
 `;
 
 /**
- * Particle draw: two vertices per particle make a short stroke back along its velocity, bright at the head and fading
- * at the tail — at this density the strokes read as fur. Particles carry almost no light of their own: they are lit by
- * the orbs, deep indigo far from any bright orb, warming through violet and pink to white as an orb close by flares.
+ * Particle draw, in the same hand as the rest of Synesthesia's particle world: every particle is a crisp square dot
+ * (0.6–2 px, by weight and depth, like the floor and pyramid point clouds) that shimmers with the highs. Particles carry
+ * almost no light of their own: they are lit by the orbs, deep indigo far from any bright orb, warming through violet
+ * and pink to white as an orb close by flares.
  */
 const PARTICLE_VERTEX = /* glsl */ `#version 300 es
-in float aEnd;
+in float aSlot;
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
+uniform vec2 uResolution;
 uniform highp sampler2D uPositions;
 uniform highp sampler2D uVelocities;
 uniform float uSide;
-// Per-stroke opacity, scaled down as the particle count goes up so the cloud's overall brightness stays put.
+// Per-dot opacity, scaled down as the particle count goes up so the cloud's overall brightness stays put.
 uniform float uStroke;
 ${COMMON_GLSL}
 out vec3 vColor;
 out float vAlpha;
 
 void main() {
-  int id = gl_VertexID / 2;
+  int id = gl_VertexID;
   int side = int(uSide);
   ivec2 cell = ivec2(id - (id / side) * side, id / side);
   vec4 position = texelFetch(uPositions, cell, 0);
   vec4 velocity = texelFetch(uVelocities, cell, 0);
-  float speed = length(velocity.xyz);
-  float trail = 0.03 + 0.02 * uSim2.z;
-  // Slow particles still leave a short stroke, so the resting coat reads as fur instead of vanishing.
-  vec3 heading = speed > 1e-4 ? velocity.xyz / speed : vec3(0.0, -1.0, 0.0);
-  vec3 p = position.xyz - heading * max(speed * trail, 0.01) * aEnd;
-  vec3 c = toCamera(p);
+  float seed = velocity.w;
+  vec3 c = toCamera(position.xyz);
   float k = perspective(c.z);
   vec2 screen = c.xy * k * uView.x;
 
@@ -492,22 +515,33 @@ void main() {
     float ok = perspective(oc.z);
     covered = covered || (c.z > oc.z && distance(screen, oc.xy * ok * uView.x) < orb.w * ok * uView.x * 0.98);
   }
+  // Soft ceiling: however many bright orbs pile light on a particle, it saturates gently instead of blowing out.
+  light = 1.0 - exp(-light);
+
+  float weight = 0.3 + 0.7 * fract(seed * 5.31);
   vec3 indigo = vec3(0.2, 0.18, 0.8);
   vec3 violet = vec3(0.55, 0.34, 1.0);
   vec3 pink = vec3(1.0, 0.45, 0.85);
   vec3 white = vec3(1.0, 0.95, 1.0);
-  float warm = clamp(light, 0.0, 1.0);
-  vec3 lit = warm < 0.5 ? mix(violet, pink, warm * 2.0) : mix(pink, white, warm * 2.0 - 1.0);
+  vec3 lit = light < 0.5 ? mix(violet, pink, light * 2.0) : mix(pink, white, light * 2.0 - 1.0);
   vColor = indigo * (0.8 + 0.5 * uSim2.z) + lit * light;
 
-  float life = 3.0 + 6.0 * velocity.w;
+  float life = 3.0 + 6.0 * seed;
   float fade = smoothstep(0.0, 0.5, position.w) * (1.0 - smoothstep(life - 0.8, life, position.w));
   float hidden = covered || clipped(screen) ? 0.0 : 1.0;
   float depth = clamp(1.25 - 0.35 * c.z, 0.4, 1.6);
-  vAlpha = uView.w * hidden * fade * depth * uStroke * (1.0 - aEnd);
+  // The highs make the dots shimmer, as the world's other point clouds do.
+  float shimmer = 1.0 - (0.2 + 0.5 * uSim2.y) * (0.5 + 0.5 * sin(uSim.y * 7.0 + float(id) * 2.39));
+  // Dots keep their pixel size however large the cloud is drawn, so a bigger cloud spreads them thinner: brighten each
+  // with the scale to keep the cloud's look the same at the select screen's size, the monitor's, and anything between.
+  float spread = clamp(pow(uView.x / 170.0, 1.6), 0.5, 3.0);
+  vAlpha = uView.w * hidden * fade * weight * shimmer * min(1.4, depth) * (0.55 + 0.9 * light) * uStroke * spread
+    + aSlot * 0.0;
 
   mat3 matrix = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
   gl_Position = vec4((matrix * vec3(screen, 1.0)).xy, 0.0, 1.0);
+  float pixels = abs(matrix[0][0]) * uResolution.x * 0.5;
+  gl_PointSize = hidden > 0.0 ? max(1.0, max(0.6, 0.9 * (0.5 + weight) * depth) * pixels) : 0.0;
 }
 `;
 
@@ -518,6 +552,7 @@ in float vAlpha;
 uniform vec4 uColor;
 out vec4 finalColor;
 void main() {
+  // Square, like the world's rect dots: no shaping inside the point.
   finalColor = vec4(vColor * vAlpha, 0.0) * uColor.a;
 }
 `;
@@ -637,10 +672,12 @@ function quad(attribute: string): Geometry {
   });
 }
 
-function particleStrokes(count: number): Geometry {
-  const ends = new Float32Array(count * 2);
-  for (let index = 0; index < count; index += 1) ends[index * 2 + 1] = 1;
-  return new Geometry({ attributes: { aEnd: { buffer: ends, format: 'float32' } }, topology: 'line-list' });
+function particleDots(count: number): Geometry {
+  // One vertex per particle; the shader finds its particle from gl_VertexID, the attribute only sets the count.
+  return new Geometry({
+    attributes: { aSlot: { buffer: new Float32Array(count), format: 'float32' } },
+    topology: 'point-list',
+  });
 }
 
 function splatPoints(count: number): Geometry {
@@ -754,14 +791,14 @@ export class ChargeCloud {
     });
     this.splat.blendMode = 'add';
     this.particles = new Mesh({
-      geometry: particleStrokes(side * side),
+      geometry: particleDots(side * side),
       shader: new Shader({
         glProgram: particles,
         resources: {
           cloud: this.uniforms,
           particleUniforms: new UniformGroup({
             uSide: { value: side, type: 'f32' },
-            uStroke: { value: 0.32 * ((384 * 384) / (side * side)) ** 0.7, type: 'f32' },
+            uStroke: { value: 0.11 * ((384 * 384) / (side * side)) ** 0.7, type: 'f32' },
           }),
           uPositions: this.positions[0].source,
           uVelocities: this.velocities[0].source,

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { DARK_ORB, CHARGE_ORB_COUNT, chargeOrbs, orbBrightness, stepOrbLight } from './charge-cloud.ts';
+import {
+  bandExcess,
+  CHARGE_ORB_COUNT,
+  chargeOrbs,
+  DARK_ORB,
+  orbBrightness,
+  stepOrbLight,
+  type OrbLight,
+} from './charge-cloud.ts';
 
 const SILENT = { bands: Array.from({ length: 16 }, () => 0), onset: 0 };
 
@@ -35,8 +43,30 @@ describe('chargeOrbs', () => {
   });
 });
 
+describe('bandExcess', () => {
+  it('reads zero at or below what the orb is used to and one at full scale', () => {
+    expect(bandExcess(0.5, 0.6)).toBe(0);
+    expect(bandExcess(1, 0.6)).toBe(1);
+    expect(bandExcess(0.3, 0)).toBeCloseTo(0.3, 9);
+  });
+
+  it('gives a quiet passage and a loud passage the same headroom', () => {
+    const quiet = bandExcess(0.4, 0.2);
+    const loud = bandExcess(0.9, 0.7);
+    expect(quiet).toBeGreaterThan(0.2);
+    expect(loud).toBeGreaterThan(0.2);
+  });
+});
+
 describe('stepOrbLight', () => {
   const frame = 1 / 60;
+  const run = (light: OrbLight, energy: number, onset: number, seconds: number) => {
+    let current = light;
+    for (let step = 0; step < Math.round(seconds / frame); step += 1) {
+      current = stepOrbLight(current, energy, onset, frame);
+    }
+    return current;
+  };
 
   it('stays dark while its band is silent', () => {
     const light = stepOrbLight(DARK_ORB, 0, 0, frame);
@@ -46,30 +76,44 @@ describe('stepOrbLight', () => {
 
   it('fires the flash within one frame when its band jumps', () => {
     const light = stepOrbLight(DARK_ORB, 0.8, 0, frame);
-    expect(light.flash).toBe(1);
+    expect(light.flash).toBeGreaterThan(0.9);
     expect(light.glow).toBeGreaterThan(0.5);
-  });
-
-  it('fires on an onset while its band is loud, but not while it is quiet', () => {
-    const loud = { flash: 0, glow: 0.4, energy: 0.7 };
-    expect(stepOrbLight(loud, 0.7, 1, frame).flash).toBeGreaterThan(0.9);
-    const quiet = { flash: 0, glow: 0.1, energy: 0.2 };
-    expect(stepOrbLight(quiet, 0.2, 1, frame).flash).toBe(0);
   });
 
   it('drops the flash within about a tenth of a second and lets the glow linger for about a second', () => {
     let light = stepOrbLight(DARK_ORB, 1, 0, frame);
-    for (let step = 0; step < 12; step += 1) light = stepOrbLight(light, 0, 0, frame);
+    light = run(light, 0, 0, 0.2);
     expect(light.flash).toBeLessThan(0.1);
-    expect(light.glow).toBeGreaterThan(0.6);
-    for (let step = 0; step < 120; step += 1) light = stepOrbLight(light, 0, 0, frame);
+    expect(light.glow).toBeGreaterThan(0.5);
+    light = run(light, 0, 0, 2);
     expect(light.glow).toBeLessThan(0.15);
   });
 
+  it('settles back down during a sustained loud passage', () => {
+    const light = run(DARK_ORB, 0.8, 0, 8);
+    expect(light.flash).toBeLessThan(0.05);
+    expect(light.glow).toBeLessThan(0.15);
+    expect(light.mean).toBeGreaterThan(0.7);
+  });
+
+  it('fires on an onset only when its band stands out from what it is used to', () => {
+    const used = run(DARK_ORB, 0.7, 0, 8);
+    expect(stepOrbLight(used, 0.7, 1, frame).flash).toBeLessThan(0.05);
+    expect(stepOrbLight(used, 0.95, 1, frame).flash).toBeGreaterThan(0.5);
+  });
+
+  it('waits out a short cooldown before it can flash again', () => {
+    let light = stepOrbLight(DARK_ORB, 0.9, 0, frame);
+    light = run(light, 0, 0, 0.05);
+    const tooSoon = stepOrbLight(light, 0.9, 1, frame);
+    expect(tooSoon.flash).toBeLessThan(light.flash);
+    light = run(light, 0, 0, 0.3);
+    expect(stepOrbLight(light, 0.9, 1, frame).flash).toBeGreaterThan(0.5);
+  });
+
   it('brightens with the flash and the glow', () => {
-    expect(orbBrightness({ flash: 1, glow: 1, energy: 1 })).toBeGreaterThan(
-      orbBrightness({ flash: 0, glow: 1, energy: 1 }),
-    );
+    const lit = { ...DARK_ORB, glow: 1 };
+    expect(orbBrightness({ ...lit, flash: 1 })).toBeGreaterThan(orbBrightness(lit));
     expect(orbBrightness(DARK_ORB)).toBeGreaterThan(0);
   });
 });
