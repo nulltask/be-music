@@ -30,7 +30,7 @@ import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
 
 const MILESTONE_MS = 1100;
 const CLEAR_MS = 1000;
-const FULL_COMBO_MS = 3000;
+const FULL_COMBO_MS = 2400;
 const SKEW = -0.18;
 
 /**

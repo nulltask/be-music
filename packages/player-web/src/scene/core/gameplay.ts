@@ -313,6 +313,14 @@ const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
 };
 
 /**
+ * Scene transitions for be-music skins: the play screen fades up from black as it appears (every select outro ends
+ * dark) and fades back to black, with the audio, before the result or select screen takes over — instead of cutting
+ * in and out mid-animation.
+ */
+const BE_MUSIC_ENTER_FADE_MS = 400;
+const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fadeOutMs: 450 };
+
+/**
  * Scene moments a theme can react to (the LR2 family stamps its skin timers from these). `at` is the
  * {@link CoreGameplayView.playClock} value the scene recorded for the moment.
  */
@@ -1127,8 +1135,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** Intro gates and exit fade / close lengths the scene should follow. Default: all zero (skinless timing). */
   protected get themeTiming(): GameplayThemeTiming {
-    return DEFAULT_THEME_TIMING;
+    return this.paintsThroughBeMusicSkin ? BE_MUSIC_THEME_TIMING : DEFAULT_THEME_TIMING;
   }
+
+  /** Whether the scene paints through a be-music skin (rather than a theme or a host chrome renderer). */
+  private get paintsThroughBeMusicSkin(): boolean {
+    return this.options.beMusicSkin !== undefined && this.options.skinlessChromeRenderer === undefined;
+  }
+
+  /** `performance.now()` of the first rendered frame, for the be-music entrance fade. */
+  private enteredAt: number | undefined;
 
   /**
    * Notified at scene moments a theme animates against (scene stages, exit phases, judgements, full combo, gauge
@@ -2935,7 +2951,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private applyExitFadeAlpha(): void {
     if (!this.exiting) {
-      if (this.root.alpha !== 1) this.root.alpha = 1;
+      let alpha = 1;
+      if (this.paintsThroughBeMusicSkin) {
+        const now = performance.now();
+        this.enteredAt ??= now;
+        alpha = Math.min(1, (now - this.enteredAt) / BE_MUSIC_ENTER_FADE_MS);
+      }
+      if (this.root.alpha !== alpha) this.root.alpha = alpha;
       return;
     }
     const fadeOutMs = this.themeTiming.fadeOutMs;

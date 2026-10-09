@@ -35,6 +35,9 @@ import {
 } from '@be-music/skin-sdk';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
+/** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
+ * sooner without changing its order or easing. */
+const ENTRANCE_PACE = 1.3;
 const ROLL_DELAY_MS = 700;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1600;
@@ -72,7 +75,7 @@ export const synesthesiaResultSkin: PixiResultSkin = { render: (frame) => render
 export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
   // Effects off: skip the entrance and render the settled result.
-  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
+  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs * ENTRANCE_PACE;
   const seconds = nowMs / 1000;
   const hue = sceneHue(seconds);
   const accent = hsvToHex(hue, 0.6, 1);

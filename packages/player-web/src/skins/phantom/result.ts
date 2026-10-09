@@ -32,6 +32,9 @@ import {
 } from '@be-music/skin-sdk';
 import { alignCapCenter, type PixiResultFrame, type PixiResultSkin, resolveSkinTextStyle } from '../pixi-kit/index.ts';
 
+/** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
+ * sooner without changing its order or easing. */
+const ENTRANCE_PACE = 1.3;
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */
 const RESULT_ROLL_DELAY_MS = 760;
 const RESULT_ROLL_MS = 1000;
@@ -71,7 +74,7 @@ export const phantomResultSkin: PixiResultSkin = { render: (frame) => renderPhan
 export function renderPhantomResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs: now, rankLabel } = frame;
   // Effects off: skip the entrance and render the settled card.
-  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
+  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs * ENTRANCE_PACE;
   const rate = frame.ratePercent;
   const seconds = now / 1000;
   const layer = frame.layer;

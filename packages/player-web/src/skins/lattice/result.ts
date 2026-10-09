@@ -22,6 +22,9 @@ import {
 } from '@be-music/skin-sdk';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
+/** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
+ * sooner without changing its order or easing. */
+const ENTRANCE_PACE = 1.3;
 const ROLL_DELAY_MS = 600;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1500;
@@ -43,7 +46,7 @@ function display(size: number, fill: number, weight: SkinTextOptions['weight'] =
  */
 export function renderLatticeResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer, backdrop } = frame;
-  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
+  const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs * ENTRANCE_PACE;
   const motion = frame.effects === 'off' ? 0 : frame.effects === 'reduced' ? 0.5 : 1;
   const cleared = result.cleared;
   const verdictColor = cleared ? LAT_ACCENT : LAT_SIGNAL;

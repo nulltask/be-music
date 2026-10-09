@@ -23,7 +23,7 @@ import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
 const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
 
 export const MILESTONE_MS = 1400;
-export const FULL_COMBO_MS = 3200;
+export const FULL_COMBO_MS = 2600;
 const CLEAR_MS = 1000;
 
 /**

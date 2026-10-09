@@ -32,7 +32,7 @@ const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
 
 const MILESTONE_MS = 1300;
 const CLEAR_MS = 1100;
-const FULL_COMBO_MS = 3400;
+const FULL_COMBO_MS = 2600;
 const FULL_COMBO_BURST = burstParticles(77, 640);
 const MILESTONE_COLORS = [SYN_AMBER, SYN_CYAN, SYN_MAGENTA] as const;
 
