@@ -1,6 +1,7 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { createFlock, stepFlock } from './boids.ts';
 import { ChargeCloud } from './charge-cloud.ts';
+import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   cameraBasis,
@@ -131,6 +132,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   /** The foreground orb: a charge cloud, and the clock of its last simulation step. */
   private readonly chargeCloud = new ChargeCloud();
   private lastOrbSeconds: number | undefined;
+  /** The low end's kick envelope, which puffs up the fish. */
+  private kick: KickState = KICK_REST;
   private readonly flocks = SCHOOL_SPECS.map((spec) => createFlock(spec.seed, SCHOOL_SIZE, spec.bounds));
   private built = false;
   private designWidth = 640;
@@ -242,6 +245,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const seconds = (nowMs / 1000) * rate;
     const dt = this.lastTickMs === undefined ? 0 : Math.min(0.1, (nowMs - this.lastTickMs) / 1000);
     this.lastTickMs = nowMs;
+    // Kicks puff up the fish.
+    this.kick = stepKick(this.kick, drive.bands, drive.onset, dt);
     const warp = launchAt !== undefined ? Math.min(1, (nowMs - launchAt) / OUTRO_MS) : 0;
     const bpm = focusedSong?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
@@ -396,7 +401,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
           world,
           this.flocks[school]!,
           (point) => projectPoint(viewPoint(point, camera, WORLD_ORBIT), cx, floorY, 200),
-          { alpha: 0.95 * (1 - warp), palette: SCHOOL_SPECS[school]!.palette },
+          { alpha: 0.95 * (1 - warp), palette: SCHOOL_SPECS[school]!.palette, swell: this.kick.swell },
         );
       }
     }

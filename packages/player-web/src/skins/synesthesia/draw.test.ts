@@ -113,6 +113,15 @@ describe('trailGrainsFor', () => {
 
   it('carries about the light the stroke did', () => {
     const grains = trailGrainsFor(10, 1, 0.3);
+    expect(grains.lanes).toBe(1);
     expect(grains.count * grains.size ** 2 * grains.alpha).toBeCloseTo(0.8 * 10 * 1 * 0.3, 6);
+  });
+
+  it('spreads a wide stroke over parallel lanes without adding light', () => {
+    const thin = trailGrainsFor(10, 1.4, 0.2);
+    const wide = trailGrainsFor(10, 4.5, 0.2);
+    expect(wide.lanes).toBe(3);
+    expect(wide.lanes).toBeGreaterThan(thin.lanes);
+    expect(wide.count * wide.lanes * wide.size ** 2 * wide.alpha).toBeCloseTo(0.8 * 10 * 4.5 * 0.2, 6);
   });
 });

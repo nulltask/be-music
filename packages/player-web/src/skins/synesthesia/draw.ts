@@ -52,20 +52,24 @@ export function grainsFor(size: number, alpha: number): { count: number; size: n
 /** Most grains one segment breaks into. */
 const MAX_TRAIL_GRAINS = 32;
 
+/** Most parallel lanes a wide segment's grains spread over. */
+const MAX_TRAIL_LANES = 3;
+
 /**
  * How a segment `length` px long and `width` px thick breaks into a trail of fine grains: grains about a pixel across,
- * spaced about 1.6 px apart (up to MAX_TRAIL_GRAINS), with their alpha set so the trail gives off about the light the
- * stroke did. Pure.
+ * spaced about 1.6 px apart (up to MAX_TRAIL_GRAINS per lane), laid in 1–3 parallel lanes across the stroke's width,
+ * with their alpha set so the trail gives off about the light the stroke did. Pure.
  */
 export function trailGrainsFor(
   length: number,
   width: number,
   alpha: number,
-): { count: number; size: number; alpha: number } {
+): { count: number; lanes: number; size: number; alpha: number } {
   const grain = Math.max(0.6, Math.min(1.1, width * 0.6));
   const count = Math.max(1, Math.min(MAX_TRAIL_GRAINS, Math.round(length / 1.6) + 1));
+  const lanes = Math.max(1, Math.min(MAX_TRAIL_LANES, Math.round(width / 1.5)));
   const area = Math.max(grain * grain, length * width);
-  return { count, size: grain, alpha: Math.min(1, (alpha * area * 0.8) / (count * grain * grain)) };
+  return { count, lanes, size: grain, alpha: Math.min(1, (alpha * area * 0.8) / (count * lanes * grain * grain)) };
 }
 
 /**
@@ -149,9 +153,21 @@ export class ShapeBatch {
       const length = Math.hypot(x1 - x0, y1 - y0);
       const grains = trailGrainsFor(length, width, Math.min(1, alpha));
       const layer = pointLayerFor(graphics);
-      for (let index = 0; index < grains.count; index += 1) {
-        const t = grains.count === 1 ? 0.5 : index / (grains.count - 1);
-        layer.point(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, grains.size, rawColor, grains.alpha);
+      // Wide strokes lay their grains in parallel lanes across the width, so a fatter stroke reads wider, not brighter.
+      const nx = length > 0 ? -(y1 - y0) / length : 0;
+      const ny = length > 0 ? (x1 - x0) / length : 0;
+      for (let lane = 0; lane < grains.lanes; lane += 1) {
+        const across = (lane - (grains.lanes - 1) / 2) * (width / grains.lanes);
+        for (let index = 0; index < grains.count; index += 1) {
+          const t = grains.count === 1 ? 0.5 : index / (grains.count - 1);
+          layer.point(
+            x0 + (x1 - x0) * t + nx * across,
+            y0 + (y1 - y0) * t + ny * across,
+            grains.size,
+            rawColor,
+            grains.alpha,
+          );
+        }
       }
       return;
     }
@@ -376,9 +392,19 @@ export function drawSchool(
   graphics: Graphics,
   flock: Flock,
   project: (point: Vec3) => Projected,
-  style: { alpha: number; palette?: 'ember' | 'blue' | 'magenta'; skip?: (x: number, y: number) => boolean },
+  style: {
+    alpha: number;
+    palette?: 'ember' | 'blue' | 'magenta';
+    skip?: (x: number, y: number) => boolean;
+    /** 0..1: how hard the latest kick is flicking every fish up, swollen and white-hot (see stepKick). */
+    swell?: number;
+  },
 ): void {
   const palette = style.palette ?? 'ember';
+  // On a kick each fish flicks up: a fatter body, a bigger head, a slightly longer stretch, flashing white.
+  const swell = Math.max(0, Math.min(1, style.swell ?? 0));
+  const girth = 1 + 1.6 * swell;
+  const stretch = 0.16 * (1 + 0.5 * swell);
   const { position: p, velocity: v } = flock;
   const batch = sharedShapeBatch;
   for (let index = 0; index < flock.count; index += 1) {
@@ -390,9 +416,9 @@ export function drawSchool(
     if (style.skip?.(head.x, head.y)) continue;
     // Tail length follows speed, so a darting fish stretches.
     const tail = project({
-      x: x - v[index * 3]! * 0.16,
-      y: y - v[index * 3 + 1]! * 0.16,
-      z: z - v[index * 3 + 2]! * 0.16,
+      x: x - v[index * 3]! * stretch,
+      y: y - v[index * 3 + 1]! * stretch,
+      z: z - v[index * 3 + 2]! * stretch,
     });
     if (!tail.visible) continue;
     const nearness = Math.min(1, head.scale * 2.4);
@@ -409,15 +435,16 @@ export function drawSchool(
           : index % 7 === 0
             ? SYN_CYAN
             : emberColor(0.55 + 0.4 * heat);
-    const alpha = style.alpha * (0.35 + 0.65 * nearness);
+    const alpha = style.alpha * (0.35 + 0.65 * nearness) * (1 + 0.8 * swell);
+    const lit = swell > 0.01 ? mixColor(color, SYN_WHITE, Math.min(1, swell * 1.2)) : color;
     const mx = (head.x + tail.x) / 2;
     const my = (head.y + tail.y) / 2;
-    batch.line(graphics, color, alpha * 0.55, 0.6 + 1 * nearness, tail.x, tail.y, mx, my);
-    batch.line(graphics, color, alpha, 1 + 2 * nearness, mx, my, head.x, head.y);
-    const size = 1.2 + 2.2 * nearness;
+    batch.line(graphics, lit, alpha * 0.55, (0.6 + 1 * nearness) * girth, tail.x, tail.y, mx, my);
+    batch.line(graphics, lit, alpha, (1 + 2 * nearness) * girth, mx, my, head.x, head.y);
+    const size = (1.2 + 2.2 * nearness) * (1 + 1.4 * swell);
     batch.rect(
       graphics,
-      heat > 0.8 ? SYN_WHITE : color,
+      heat > 0.8 ? SYN_WHITE : lit,
       Math.min(1, alpha * 1.3),
       head.x - size / 2,
       head.y - size / 2,
@@ -426,4 +453,12 @@ export function drawSchool(
     );
   }
   batch.flush();
+}
+
+/** `from` blended toward `to` by `t` (0..1), per RGB channel. */
+function mixColor(from: number, to: number, t: number): number {
+  const r = Math.round(((from >> 16) & 255) + (((to >> 16) & 255) - ((from >> 16) & 255)) * t);
+  const g = Math.round(((from >> 8) & 255) + (((to >> 8) & 255) - ((from >> 8) & 255)) * t);
+  const b = Math.round((from & 255) + ((to & 255) - (from & 255)) * t);
+  return (r << 16) | (g << 8) | b;
 }
