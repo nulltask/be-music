@@ -7,9 +7,18 @@ import { logger } from '../../logger.ts';
 const log = logger('be-music-skin');
 
 export interface BeMusicSkinRegistry {
+  /** Every registered skin, in registration order (a skin added later with a known id keeps its place). */
   readonly skins: readonly BeMusicSkin[];
   /** The skin with `id`, or the first registered skin when `id` is unknown / undefined. */
   resolve(id: string | undefined): BeMusicSkin;
+  /**
+   * Registers another skin — a third-party one, or an optional built-in such as `latticeSkin`. The skin is validated
+   * like the initial ones (see `validateBeMusicSkin`); a skin with an id already registered replaces that one (handy
+   * when reloading a skin under development). Returns the problems that kept the skin out, empty when it was added.
+   */
+  add(skin: BeMusicSkin): string[];
+  /** Calls `listener` after every successful {@link add}; returns the function that stops it. */
+  subscribe(listener: () => void): () => void;
 }
 
 export interface BeMusicSkinRegistryOptions {
@@ -21,7 +30,7 @@ export interface BeMusicSkinRegistryOptions {
 }
 
 /**
- * Registry over a fixed skin list. Skins whose declaration doesn't validate (an unsupported `apiVersion`, a malformed
+ * Registry over a skin list that hosts can extend with {@link BeMusicSkinRegistry.add}. Skins whose declaration doesn't validate (an unsupported `apiVersion`, a malformed
  * id or version, …) are left out, so a third-party skin built for another player release can't break the host. The
  * first accepted entry is the fallback for unknown ids; at least one must be accepted.
  */
@@ -49,9 +58,25 @@ export function createBeMusicSkinRegistry(
     }
     byId.set(skin.id, skin);
   }
+  const listeners = new Set<() => void>();
   return {
-    skins,
-    resolve: (id) => (id !== undefined ? byId.get(id) : undefined) ?? first,
+    get skins() {
+      return [...byId.values()];
+    },
+    resolve: (id) => (id !== undefined ? byId.get(id) : undefined) ?? byId.values().next().value ?? first,
+    add(skin) {
+      const problems = validateBeMusicSkin(skin);
+      if (problems.length > 0) return problems;
+      byId.set(skin.id, skin);
+      for (const listener of listeners) listener();
+      return [];
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
   };
 }
 
