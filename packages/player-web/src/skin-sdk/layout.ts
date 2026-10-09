@@ -54,3 +54,28 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
     bga: bga.w > 0 && bga.h > 0 ? { ...bga } : undefined,
   };
 }
+
+/** A run of lanes that sit edge to edge (one play side in double play). */
+export interface LaneRun {
+  left: number;
+  right: number;
+}
+
+/**
+ * Groups lanes that touch into runs, left to right — one run in single play, one per side in IIDX double play, where
+ * the 1P and 2P banks stand apart. Draw anything that spans the lanes (the judgement line, a frame) once per run so
+ * it never crosses the gap between the sides.
+ */
+export function resolveLaneRuns(lanes: ReadonlyArray<{ x: number; w: number }>): LaneRun[] {
+  const sorted = [...lanes].sort((a, b) => a.x - b.x);
+  const runs: LaneRun[] = [];
+  for (const lane of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && lane.x <= last.right + 0.5) {
+      last.right = Math.max(last.right, lane.x + lane.w);
+    } else {
+      runs.push({ left: lane.x, right: lane.x + lane.w });
+    }
+  }
+  return runs;
+}

@@ -6,6 +6,7 @@ import {
   type BeMusicLongNoteContext,
   type BeMusicNoteContext,
   keyBeamGradient,
+  resolveLaneRuns,
 } from '../../skin-sdk/index.ts';
 
 /** Colours for one lane class: note highlight / body / shade, and the key cap at rest / pressed. */
@@ -38,14 +39,12 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesC
   const beatDecay = 1 - beatPhase;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
-  let gridRight = 0;
   for (const lane of lanes) {
     const { x, w, top, bottom } = lane;
     const tone = TONES[lane.kind];
     const laneHeight = Math.max(1, bottom - top);
     gridTop = Math.min(gridTop, top);
     gridBottom = Math.max(gridBottom, bottom);
-    gridRight = Math.max(gridRight, x + w);
 
     // Lane bed — white-key lanes sit on a lifted charcoal; black keys and the scratch share the same faint blue wash.
     // A charcoal hairline marks the left edge.
@@ -83,9 +82,9 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesC
       graphics.rect(x + 1, capTop - 2, capW, 2).fill({ color: 0xffffff, alpha: 0.95 });
     }
   }
-  // Close the grid on the right-most lane — each lane only draws its LEFT hairline.
-  if (lanes.length > 0) {
-    graphics.rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0x2c2c31, alpha: 0.9 });
+  // Close each play side's grid on its right edge — each lane only draws its LEFT hairline.
+  for (const run of resolveLaneRuns(lanes)) {
+    graphics.rect(run.right - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0x2c2c31, alpha: 0.9 });
   }
 }
 

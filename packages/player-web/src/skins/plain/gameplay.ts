@@ -3,6 +3,7 @@ import {
   isFlashingGreat,
   judgeDisplayWord,
   loadingDots,
+  resolveLaneRuns,
   type CanvasGameplayFrame,
   type CanvasSurface,
 } from '../../skin-sdk/index.ts';
@@ -65,9 +66,11 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): v
       ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
     }
   }
-  const { left, right, judgementY } = frame.layout.playfield;
+  // One judgement line per play side, so it never crosses the gap between the double-play banks.
   ctx.fillStyle = DANGER;
-  ctx.fillRect(left, judgementY, right - left, 2);
+  for (const run of resolveLaneRuns(frame.lanes)) {
+    ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
+  }
 }
 
 /** Tap notes as flat bars; long notes as a dimmer body between their head and tail. */

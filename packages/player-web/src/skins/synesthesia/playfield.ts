@@ -24,6 +24,7 @@ import {
   comboTier,
   effectProfile,
   keyBeamGradient,
+  resolveLaneRuns,
 } from '../../skin-sdk/index.ts';
 
 /** Per-lane-class light: note body, glow hue (0..1), and the colour the lane beam / key cap light up in. */
@@ -63,7 +64,6 @@ export function renderSynesthesiaLanes({
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
   let gridLeft = Number.POSITIVE_INFINITY;
-  let gridRight = 0;
   for (const lane of lanes) {
     const { x, w, top, bottom } = lane;
     const light = LIGHTS[lane.kind];
@@ -71,7 +71,6 @@ export function renderSynesthesiaLanes({
     gridTop = Math.min(gridTop, top);
     gridBottom = Math.max(gridBottom, bottom);
     gridLeft = Math.min(gridLeft, x);
-    gridRight = Math.max(gridRight, x + w);
 
     // Near-black bed, so the particle world behind the playfield reads only as a faint depth cue; white-key lanes take
     // a warmer, lifted bed so they read apart from the black keys and the scratch.
@@ -101,17 +100,23 @@ export function renderSynesthesiaLanes({
     graphics.rect(x + 1, bottom + 13, Math.max(2, w - 2), 1).fill({ color: light.glow, alpha: pressed ? 1 : 0.45 });
   }
   if (lanes.length === 0) return;
-  graphics.rect(gridRight - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0xff7a1e, alpha: 0.25 });
+  // Close each play side's grid on its right edge (each lane only draws its left hairline).
+  for (const run of resolveLaneRuns(lanes)) {
+    graphics.rect(run.right - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0xff7a1e, alpha: 0.25 });
+  }
 
-  // Judgement line: a white filament wrapped in stacked ember bloom that swells on each beat.
-  const lineW = gridRight - gridLeft;
+  // Judgement line: a white filament wrapped in stacked ember bloom that swells on each beat — one per play side, so
+  // it never crosses the gap between the double-play banks.
   const y = gridBottom;
-  graphics.rect(gridLeft, y - 14, lineW, 22).fill({ color: lineColor, alpha: (0.05 + 0.08 * pulse) * heat });
-  graphics
-    .rect(gridLeft, y - 6, lineW, 8)
-    .fill({ color: lineColor, alpha: Math.min(0.8, (0.16 + 0.14 * pulse) * heat) });
-  graphics.rect(gridLeft, y - 3, lineW, 3).fill({ color: 0xffd08a, alpha: 0.85 });
-  graphics.rect(gridLeft, y - 2, lineW, 1).fill(0xffffff);
+  for (const run of resolveLaneRuns(lanes)) {
+    const lineW = run.right - run.left;
+    graphics.rect(run.left, y - 14, lineW, 22).fill({ color: lineColor, alpha: (0.05 + 0.08 * pulse) * heat });
+    graphics
+      .rect(run.left, y - 6, lineW, 8)
+      .fill({ color: lineColor, alpha: Math.min(0.8, (0.16 + 0.14 * pulse) * heat) });
+    graphics.rect(run.left, y - 3, lineW, 3).fill({ color: 0xffd08a, alpha: 0.85 });
+    graphics.rect(run.left, y - 2, lineW, 1).fill(0xffffff);
+  }
 }
 
 export function renderSynesthesiaNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {

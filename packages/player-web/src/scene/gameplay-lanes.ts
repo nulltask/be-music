@@ -25,6 +25,13 @@ const FALLBACK_SCRATCH_LANE_WEIGHT = 1.55;
  */
 export const IIDX_LANE_WIDTHS = { scratch: 41, white: 24, black: 19 } as const;
 
+/**
+ * Gap between the 1P and 2P banks in IIDX double play (10 / 14 KEY), in design px. The arcade cabinet splits the two
+ * sides by about 0.31 of a side's width (the turntable housings sit between them); on the 194 px 7K side that is 60 px.
+ * Keyboard double play (48 KEY) keeps its banks together.
+ */
+export const IIDX_DP_SIDE_GAP = 60;
+
 export interface FixedLaneWidths {
   scratch: number;
   /** Odd-numbered keys (1 / 3 / 5 / 7). */
@@ -107,6 +114,7 @@ export function resolveSkinlessLaneLayout(
     w: span.w,
     preserveSideWidth: shouldPreserveFallbackSideWidth(channels, playVariant),
     fixedWidths,
+    sideGap: fixedWidths ? IIDX_DP_SIDE_GAP : undefined,
   });
   const lanesRight = Math.max(span.x, ...lanes.map((lane) => lane.x + lane.w));
   // Fixed-width lanes define the playfield; shared-out lanes keep at least one side's span.

@@ -4,6 +4,7 @@ import {
   resolveFallbackLaneLayout,
   resolveFallbackPlayfieldSpan,
   resolveSkinlessLaneLayout,
+  IIDX_DP_SIDE_GAP,
   shouldPreserveFallbackSideWidth,
   usesIidxLaneWidths,
 } from '../gameplay-lanes.ts';
@@ -262,10 +263,33 @@ describe('resolveSkinlessLaneLayout fixed IIDX widths', () => {
     expect(tenKey.widths['26']).toBe(41);
     expect(tenKey.widths['21']).toBe(24);
     expect(tenKey.widths['22']).toBe(19);
-    expect(tenKey.layout.right).toBe(33 + (41 + 24 * 3 + 19 * 2) * 2);
+    expect(tenKey.layout.right).toBe(33 + (41 + 24 * 3 + 19 * 2) * 2 + IIDX_DP_SIDE_GAP);
     expect(fourteenKey.widths['29']).toBe(24);
     expect(fourteenKey.widths['28']).toBe(19);
-    expect(fourteenKey.layout.right).toBe(33 + 194 * 2);
+    expect(fourteenKey.layout.right).toBe(33 + 194 * 2 + IIDX_DP_SIDE_GAP);
+  });
+
+  it('opens the arcade gap between the DP banks', () => {
+    const { layout } = widthsByChannel(
+      ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'],
+      '14',
+    );
+    const oneP = layout.lanes.filter((lane) => lane.side === '1P');
+    const twoP = layout.lanes.filter((lane) => lane.side === '2P');
+    const oneRight = Math.max(...oneP.map((lane) => lane.x + lane.w));
+    const twoLeft = Math.min(...twoP.map((lane) => lane.x));
+    expect(oneRight).toBe(33 + 194);
+    expect(twoLeft - oneRight).toBe(IIDX_DP_SIDE_GAP);
+    // About 0.31 of a side, as on the cabinet.
+    expect(IIDX_DP_SIDE_GAP / 194).toBeCloseTo(0.31, 1);
+  });
+
+  it('keeps the 48 KEY banks together', () => {
+    const channels = [...keyboardChannels('1'), ...keyboardChannels('2')];
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, '48');
+    const oneRight = Math.max(...layout.lanes.filter((lane) => lane.side === '1P').map((lane) => lane.x + lane.w));
+    const twoLeft = Math.min(...layout.lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x));
+    expect(twoLeft).toBeCloseTo(oneRight);
   });
 
   it('packs the lanes edge to edge in display order', () => {

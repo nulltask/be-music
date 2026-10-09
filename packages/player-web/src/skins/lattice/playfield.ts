@@ -13,6 +13,7 @@ import {
   effectProfile,
   hash01,
   keyBeamGradient,
+  resolveLaneRuns,
 } from '../../skin-sdk/index.ts';
 
 /** Lane-class colour: white keys print in ink, black keys in cobalt, the scratch in vermilion. */
@@ -76,24 +77,31 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
   for (const lane of lanes) {
     graphics.moveTo(lane.x + 0.5, lane.top).lineTo(lane.x + 0.5, lane.bottom);
   }
-  graphics.moveTo(right - 0.5, top).lineTo(right - 0.5, bottom);
+  // Close each play side's grid on its right edge (each lane only rules its left hairline).
+  for (const run of resolveLaneRuns(lanes)) graphics.moveTo(run.right - 0.5, top).lineTo(run.right - 0.5, bottom);
   graphics.stroke({ color: LAT_RULE, width: 1, alpha: 0.9 });
 
-  // Judgement line: ink, with ruler ticks hanging under it; it thickens as the run builds.
+  // Judgement line: ink, with ruler ticks hanging under it; it thickens as the run builds. One per play side, so it
+  // never crosses the gap between the double-play banks.
   const lineWidth = 2 + (tier >= 2 ? 1 : 0);
-  graphics.rect(left, bottom - lineWidth, right - left, lineWidth).fill(LAT_INK);
-  for (let x = left; x <= right + 1e-6; x += 4) {
-    const long = Math.round(x - left) % 20 === 0;
-    graphics.moveTo(x, bottom).lineTo(x, bottom + (long ? 5 : 2));
+  for (const run of resolveLaneRuns(lanes)) {
+    graphics.rect(run.left, bottom - lineWidth, run.right - run.left, lineWidth).fill(LAT_INK);
+    for (let x = run.left; x <= run.right + 1e-6; x += 4) {
+      const long = Math.round(x - run.left) % 20 === 0;
+      graphics.moveTo(x, bottom).lineTo(x, bottom + (long ? 5 : 2));
+    }
   }
   graphics.stroke({ color: LAT_INK, width: 1, alpha: 0.5 });
-  // Beat marker: a cobalt block that springs from tick to tick across the line, one lane per beat.
-  const span = right - left;
-  const steps = Math.max(1, lanes.length);
-  const beat = Math.floor(beatPhase * steps);
+  // Beat marker: a cobalt block that springs from lane to lane along the line, one lane per beat.
+  const ordered = [...lanes].sort((a, b) => a.x - b.x);
+  const steps = Math.max(1, ordered.length);
+  const beat = Math.min(steps - 1, Math.floor(beatPhase * steps));
   const within = beatPhase * steps - beat;
-  const markerX = left + ((beat + springEase(Math.min(1, within * 2), 2.4, 0.5)) / steps) * span;
-  graphics.rect(Math.min(right - 6, markerX), bottom - lineWidth - 3, 6, 3).fill(LAT_ACCENT);
+  const lane = ordered[beat];
+  if (lane) {
+    const markerX = lane.x + springEase(Math.min(1, within * 2), 2.4, 0.5) * Math.max(0, lane.w - 6);
+    graphics.rect(markerX, bottom - lineWidth - 3, 6, 3).fill(LAT_ACCENT);
+  }
 }
 
 export function renderLatticeNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { resolveGameplayLayout } from './layout.ts';
+import { resolveGameplayLayout, resolveLaneRuns } from './layout.ts';
 import { wideStage } from './stage.ts';
 
 const SP = ['16', '11', '12', '13', '14', '15', '18', '19'];
@@ -39,5 +39,43 @@ describe('resolveGameplayLayout', () => {
       { width: 640, height: 480, resolveBgaRect: () => ({ x: 0, y: 0, w: 0, h: 0 }) },
     );
     expect(layout.bga).toBeUndefined();
+  });
+});
+
+describe('resolveLaneRuns', () => {
+  it('merges lanes that touch into one run', () => {
+    expect(
+      resolveLaneRuns([
+        { x: 33, w: 41 },
+        { x: 74, w: 24 },
+        { x: 98, w: 19 },
+      ]),
+    ).toEqual([{ left: 33, right: 117 }]);
+  });
+
+  it('splits at a gap, sorting lanes by position', () => {
+    expect(
+      resolveLaneRuns([
+        { x: 300, w: 24 },
+        { x: 33, w: 41 },
+        { x: 74, w: 24 },
+        { x: 324, w: 41 },
+      ]),
+    ).toEqual([
+      { left: 33, right: 98 },
+      { left: 300, right: 365 },
+    ]);
+  });
+
+  it('gives one run per side in IIDX double play', () => {
+    const layout = resolveGameplayLayout({ laneChannels: DP, playVariant: '14' }, wideStage);
+    const runs = resolveLaneRuns(layout.lanes);
+    expect(runs).toHaveLength(2);
+    expect(runs[0]).toEqual(layout.playfield.sides['1P']);
+    expect(runs[1]).toEqual(layout.playfield.sides['2P']);
+  });
+
+  it('is empty without lanes', () => {
+    expect(resolveLaneRuns([])).toEqual([]);
   });
 });
