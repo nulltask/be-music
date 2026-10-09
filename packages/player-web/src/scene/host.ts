@@ -1,4 +1,4 @@
-import { Application, type ApplicationOptions, Container, RendererType } from 'pixi.js';
+import { Application, type ApplicationOptions, Container, RendererType, UPDATE_PRIORITY } from 'pixi.js';
 import { logger } from '../logger.ts';
 
 const log = logger('scene-host');
@@ -208,6 +208,19 @@ export class PixiSceneHost {
     })();
     this.transitionLock = next.catch(() => undefined);
     return next;
+  }
+
+  /**
+   * Runs `callback` on every tick after the stage has been rendered (Pixi renders at `UPDATE_PRIORITY.LOW`; this hooks
+   * in at `UTILITY`, below it) and returns the unregister function. Used by the gameplay recorder to read each frame
+   * while it is still in the canvas.
+   */
+  public onAfterRender(callback: () => void): () => void {
+    const ticker = this.app.ticker;
+    ticker.add(callback, undefined, UPDATE_PRIORITY.UTILITY);
+    return () => {
+      ticker.remove(callback);
+    };
   }
 
   public getCurrentScene(): PixiScene | undefined {

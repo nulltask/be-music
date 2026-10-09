@@ -669,8 +669,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
     // Build a fresh recorder per session — instances are one-shot by design (chunk
     // buffer + audio tap lifecycle), so the host gets a clean blob on every start.
+    const host = this.host;
     this.recorder = new GameplayRecorder({
-      canvas: this.host.app.canvas,
+      canvas: host.app.canvas,
+      subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.options.audio.audioContext,
       audioOutput: this.options.audio.audioBus.outputNode,
     });

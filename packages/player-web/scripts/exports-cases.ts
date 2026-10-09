@@ -488,6 +488,26 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.shouldCaptureFrame(1033.3, 1000, 30);
     },
   });
+  define('player-web.resolveCaptureSize', {
+    run: () => {
+      playerWebCoreApi.resolveCaptureSize(2944, 2108, { width: 1920, height: 1080 });
+    },
+  });
+  define('player-web.alignAudioChunk', {
+    run: () => {
+      playerWebCoreApi.alignAudioChunk(47_000, 4096, 48_000, 48_000);
+    },
+  });
+  define('player-web.resolveFrameTimestamp', {
+    run: () => {
+      playerWebCoreApi.resolveFrameTimestamp(12.5, 10, 2.48);
+    },
+  });
+  define('player-web.supportsWebCodecsRecording', {
+    run: () => {
+      playerWebCoreApi.supportsWebCodecsRecording({} as BaseAudioContext);
+    },
+  });
   define('player-web.pickRecorderMimeType', {
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');

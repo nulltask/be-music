@@ -1596,8 +1596,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     // Recreate the recorder per session — instances are one-shot by design (chunk buffer + audio tap lifecycle), so the
     // host gets a clean blob on every start.
+    const host = this.host;
     this.recorder = new GameplayRecorder({
-      canvas: this.host.app.canvas,
+      canvas: host.app.canvas,
+      subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.audioContext,
       audioOutput: this.audioBus.outputNode,
     });
