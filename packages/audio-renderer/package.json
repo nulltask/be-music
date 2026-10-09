@@ -1,6 +1,6 @@
 {
   "name": "@be-music/audio-renderer",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Renderer for BMS, BMSON, and be-music JSON charts to WAV or AIFF",
   "license": "MIT",
   "bin": {

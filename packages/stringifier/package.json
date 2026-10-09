@@ -1,6 +1,6 @@
 {
   "name": "@be-music/stringifier",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Stringifier from be-music JSON charts to BMS or BMSON",
   "license": "MIT",
   "bin": {

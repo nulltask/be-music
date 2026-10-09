@@ -1,5 +1,35 @@
 # @be-music/player-web-demo
 
+## 0.4.0
+
+### Minor Changes
+
+- The demo's Debug Menu gains controls for the new player features, and the page is easier to use full screen.
+  
+  - A built-in skin picker (Synesthesia by default), a _Skin effects_ level, and an _Add skin_ folder that adds the optional Lattice skin or a skin module from a URL (after a trust prompt); every registered skin's fonts are preloaded so its first frames don't fall back to another face.
+  - Volume and compressor sections: master, keysound, and BGM volume, plus live tuning of the key, BGM, master, and legacy compressors.
+  - Double-clicking the canvas toggles fullscreen, and the help button sits centred along the bottom edge.
+
+### Patch Changes
+
+- Updated dependencies [cd83c89]
+- Updated dependencies [9534c16]
+- Updated dependencies [36bcb71]
+- Updated dependencies [2c368ed]
+- Updated dependencies [d9958ac]
+- Updated dependencies [202a28b]
+- Updated dependencies [0319694]
+- Updated dependencies [202a28b]
+- Updated dependencies [750c47d]
+- Updated dependencies [b3fa635]
+- Updated dependencies [4ab6e91]
+- Updated dependencies [8b07494]
+- Updated dependencies [d5e558c]
+- Updated dependencies [0103435]
+  - @be-music/player-web@0.8.0
+  - @be-music/lr2-skin@0.1.6
+  - @be-music/beatoraja-skin@0.2.0
+
 ## 0.3.2
 
 ### Patch Changes

@@ -1,5 +1,43 @@
 # @be-music/player-tui
 
+## 0.5.0
+
+### Minor Changes
+
+- 3ff2f57: Add `--ruleset` and `--gauge` to `bms-player`.
+  
+  `--ruleset <lr2|beatoraja|iidx>` picks the compat ruleset the engine judges under (default `lr2`) and
+  `--gauge <GROOVE|EASY|HARD|DEATH>` picks the gauge (default `GROOVE`, mapped onto each ruleset's own line-up).
+  Unknown values are rejected with the list of accepted ones rather than silently falling back. The TUI result block
+  prints the SCORE line only for rulesets that define a money score, and now also prints the empty-POOR count.
+
+### Patch Changes
+
+- b3fa635: Shorten the default POOR / miss BGA display window from 2000 ms to 500 ms, matching real LR2.
+  
+  LR2 ships `<poorbga>500</poorbga>` in its `config.xml` and its changelog documents 500 ms as the
+  miss-BGA default, so the previous 2-second window held the miss layer four times longer than LR2.
+  `DEFAULT_POOR_BGA_DISPLAY_SECONDS` is shared by the TUI compositor and the web LR2 scene, so both
+  runtimes pick up the corrected timing.
+- Updated dependencies [202a28b]
+- Updated dependencies [d9958ac]
+- Updated dependencies [f24ed8b]
+- Updated dependencies [202a28b]
+- Updated dependencies [750c47d]
+- Updated dependencies [b3fa635]
+- Updated dependencies [2d7652c]
+- Updated dependencies [0103435]
+- Updated dependencies [9505684]
+- Updated dependencies [1589105]
+- Updated dependencies [1c6e7aa]
+- Updated dependencies [08e62d0]
+- Updated dependencies [41f5efb]
+- Updated dependencies [40f1050]
+  - @be-music/chart@0.4.0
+  - @be-music/player@0.7.0
+  - @be-music/audio-renderer@0.2.4
+  - @be-music/parser@0.2.4
+
 ## 0.4.0
 
 ### Minor Changes
