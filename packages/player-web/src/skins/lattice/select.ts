@@ -38,7 +38,7 @@ const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 32;
-const ROW_NOTES_W = 52;
+const ROW_NOTES_W = 76;
 const CURSOR_MS = 360;
 const OUTRO_MS = 650;
 const INTRO_STAGGER_MS = 40;
@@ -492,13 +492,19 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         maxWidth: ROW_LENGTH_W,
       });
       factsLeft -= ROW_LENGTH_W + 14;
-      addSkinText(frame.layer, scrambleText(`${facts.notes} N`, rowScramble, tick, entryIndex + 700), factsLeft, midY, {
-        ...mono(ink),
-        anchorX: 1,
-        anchorY: 0.5,
-        alpha,
-        maxWidth: ROW_NOTES_W,
-      });
+      addSkinText(
+        frame.layer,
+        scrambleText(`${facts.notes} NOTES`, rowScramble, tick, entryIndex + 700),
+        factsLeft,
+        midY,
+        {
+          ...mono(ink),
+          anchorX: 1,
+          anchorY: 0.5,
+          alpha,
+          maxWidth: ROW_NOTES_W,
+        },
+      );
       factsLeft -= ROW_NOTES_W + 10;
       // Gimmick tags: hairline-boxed mono labels, like the level box on the left.
       for (let index = facts.tags.length - 1; index >= 0; index -= 1) {

@@ -60,7 +60,7 @@ const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
-const ROW_NOTES_W = 50;
+const ROW_NOTES_W = 84;
 const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
@@ -686,8 +686,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const ink = active ? SYN_WHITE : SYN_MIST;
       addSkinText(frame.layer, facts.length, factsLeft, midY, { ...factStyle(ink), maxWidth: ROW_LENGTH_W });
       factsLeft -= ROW_LENGTH_W + 12;
-      addSkinText(frame.layer, 'N', factsLeft, midY, { ...factStyle(SYN_DIM), size: 7 });
-      addSkinText(frame.layer, facts.notes, factsLeft - 12, midY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 14 });
+      addSkinText(frame.layer, 'NOTES', factsLeft, midY, { ...factStyle(SYN_DIM), size: 7 });
+      addSkinText(frame.layer, facts.notes, factsLeft - 46, midY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 48 });
       factsLeft -= ROW_NOTES_W + 8;
       // Gimmick tags glow as small outlined capsules in the accent light.
       for (let index = facts.tags.length - 1; index >= 0; index -= 1) {

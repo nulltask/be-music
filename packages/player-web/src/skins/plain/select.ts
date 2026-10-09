@@ -122,7 +122,7 @@ function drawRow(
   const facts = resolveSongRowFacts(song);
   text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 12, weight: 800, align: 'center' });
   text(ctx, song.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300 });
-  text(ctx, `${facts.notes} N   ${facts.length}   ${facts.bpm} BPM`, x + w - 12, midY, {
+  text(ctx, `${facts.notes} NOTES   ${facts.length}   ${facts.bpm} BPM`, x + w - 12, midY, {
     size: 11,
     color: dim,
     align: 'right',

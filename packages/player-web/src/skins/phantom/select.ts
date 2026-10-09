@@ -48,7 +48,7 @@ const INTRO_STAGGER_MS = 40;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 78;
 const ROW_LENGTH_W = 30;
-const ROW_NOTES_W = 52;
+const ROW_NOTES_W = 74;
 const KICKER_PITCH = 20;
 const GLINT_W = 14;
 /** Authored glint height; scaled to the focused card's height at tick time. */
@@ -641,8 +641,8 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       const ink = active ? PHANTOM_INK : PHANTOM_PAPER;
       addSkinText(frame.layer, facts.length, factsLeft, rowMidY, { ...factStyle(ink), maxWidth: ROW_LENGTH_W });
       factsLeft -= ROW_LENGTH_W + 10;
-      addSkinText(frame.layer, facts.notes, factsLeft - 16, rowMidY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 18 });
-      addSkinText(frame.layer, 'N', factsLeft, rowMidY + 1, {
+      addSkinText(frame.layer, facts.notes, factsLeft - 34, rowMidY, { ...factStyle(ink), maxWidth: ROW_NOTES_W - 36 });
+      addSkinText(frame.layer, 'NOTES', factsLeft, rowMidY + 1, {
         ...factStyle(active ? PHANTOM_RED : PHANTOM_ASH),
         size: 8,
       });
