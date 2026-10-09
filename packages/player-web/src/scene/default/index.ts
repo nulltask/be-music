@@ -21,5 +21,6 @@ export * from './result.ts';
 export * from './select.ts';
 export { latticeSkin } from '../../skins/lattice/index.ts';
 export { phantomSkin } from '../../skins/phantom/index.ts';
+export { plainSkin } from '../../skins/plain/index.ts';
 export { synesthesiaSkin } from '../../skins/synesthesia/index.ts';
 export { BUILT_IN_BE_MUSIC_SKINS } from '../../skins/built-in.ts';

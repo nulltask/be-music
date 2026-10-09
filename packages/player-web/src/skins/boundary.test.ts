@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vite-plus/test';
 
 /**
  * The built-in skins are written like third-party skins: each may import only the public skin SDK barrel, Pixi, and
- * files inside its own folder (tests may also use the test runner and Node built-ins). This keeps the SDK honest — if a
+ * files inside its own folder (tests may also use the test runner and Node built-ins); Plain, the Canvas 2D example,
+ * not even Pixi. This keeps the SDK honest — if a
  * built-in skin needs something, the SDK has to offer it.
  */
 const SKINS_DIR = import.meta.dirname;
@@ -25,7 +26,8 @@ function violations(file: string): string[] {
   const found: string[] = [];
   for (const match of readFileSync(file, 'utf8').matchAll(SPECIFIER)) {
     const specifier = match[1] ?? match[2]!;
-    if (specifier === 'pixi.js') continue;
+    // Plain is the Canvas 2D example: it must not need Pixi at all.
+    if (specifier === 'pixi.js' && !file.startsWith(join(SKINS_DIR, 'plain') + sep)) continue;
     if (isTest && (specifier === 'vite-plus/test' || specifier.startsWith('node:'))) continue;
     if (specifier.startsWith('.')) {
       const target = resolve(dirname(file), specifier);
@@ -40,7 +42,7 @@ describe('built-in skin import boundary', () => {
   const skins = readdirSync(SKINS_DIR, { withFileTypes: true }).filter((entry) => entry.isDirectory());
 
   it('covers every built-in skin', () => {
-    expect(skins.map((entry) => entry.name).sort()).toEqual(['lattice', 'phantom', 'synesthesia']);
+    expect(skins.map((entry) => entry.name).sort()).toEqual(['lattice', 'phantom', 'plain', 'synesthesia']);
   });
 
   it.each(skins.map((entry) => entry.name))('%s imports only the skin SDK, pixi.js, and its own files', (name) => {

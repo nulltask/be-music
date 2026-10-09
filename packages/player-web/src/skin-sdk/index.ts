@@ -42,3 +42,4 @@ export * from './loading.ts';
 export * from './audio-drive.ts';
 export * from './song-stats.ts';
 export * from './result-track.ts';
+export * from './canvas-skin.ts';
