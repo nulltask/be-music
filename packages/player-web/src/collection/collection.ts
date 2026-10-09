@@ -17,6 +17,7 @@ import type {
   LoadProgressCallback,
 } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
+import { compactCollectionChart, createStringInterner } from './compact-chart.ts';
 import {
   type BrowserDroppedFile,
   DeferredDroppedFile,
@@ -422,6 +423,7 @@ export async function loadSongCollectionFromFiles(
   }
 
   const songs: BrowserSongEntry[] = [];
+  const intern = createStringInterner();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
@@ -470,7 +472,8 @@ export async function loadSongCollectionFromFiles(
         if (!chartBytes) {
           throw new Error(`chart bytes missing for ${path}`);
         }
-        const chart = parseChart(path, chartBytes);
+        // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping it.
+        const chart = compactCollectionChart(parseChart(path, chartBytes), intern);
         const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
         songs.push({
           id: `${source.id}:${path}`,
