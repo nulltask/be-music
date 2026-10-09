@@ -104,7 +104,7 @@ export function addHudNumber(
   }
 }
 
-const GLYPH_WIDTH_CACHE = new Map<TextStyle, Map<string, number>>();
+const GLYPH_WIDTH_CACHE = new WeakMap<TextStyle, Map<string, number>>();
 
 function measureGlyph(char: string, style: TextStyle): number {
   let widths = GLYPH_WIDTH_CACHE.get(style);
@@ -169,9 +169,21 @@ function resolveTextStyle(opts: HudTextOptions, whiteFill = false): TextStyle {
           }
         : {}),
     });
-    TEXT_STYLE_CACHE.set(key, style);
+    rememberStyle(TEXT_STYLE_CACHE, key, style);
   }
   return style;
 }
 
 const TEXT_STYLE_CACHE = new Map<string, TextStyle>();
+
+/** Styles kept per cache: plenty for every look on screen, bounded when an effect animates a style every frame. */
+const STYLE_CACHE_LIMIT = 512;
+
+/** Caches `style` under `key`, forgetting the oldest entry once the cache is full (nodes keep the styles they use). */
+export function rememberStyle(cache: Map<string, TextStyle>, key: string, style: TextStyle): void {
+  if (cache.size >= STYLE_CACHE_LIMIT) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
+  cache.set(key, style);
+}

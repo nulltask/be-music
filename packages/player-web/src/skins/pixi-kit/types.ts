@@ -134,6 +134,11 @@ export interface PixiSelectSkin {
 export interface PixiResultFrame extends BeMusicResultFrame {
   /** Rebuilt every frame. */
   layer: Container;
+  /**
+   * Persistent layer behind {@link layer}, kept across frames for what needn't be rebuilt (a static ground, a particle
+   * field updated in place). Its children are destroyed with the screen.
+   */
+  backdrop: Container;
 }
 
 export interface PixiResultSkin {

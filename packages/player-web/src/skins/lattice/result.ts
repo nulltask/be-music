@@ -1,4 +1,4 @@
-import { Graphics } from 'pixi.js';
+import { type Container, Graphics } from 'pixi.js';
 import { addStaggeredSkinText, drawNeedleField, drawPaperGrid, drawRulerTicks } from './draw.ts';
 import { scrambleText, scrambleTick, springEase } from './field.ts';
 import { bounceHeight } from './physics.ts';
@@ -42,7 +42,7 @@ function display(size: number, fill: number, weight: SkinTextOptions['weight'] =
  * as huge thin letters on a spring while the needle field behind swings to point at it.
  */
 export function renderLatticeResult(frame: PixiResultFrame): void {
-  const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
+  const { result, designWidth, designHeight, nowMs, rankLabel, layer, backdrop } = frame;
   const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
   const motion = frame.effects === 'off' ? 0 : frame.effects === 'reduced' ? 0.5 : 1;
   const cleared = result.cleared;
@@ -64,13 +64,15 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
   const decode = (value: string, delayMs: number, seed: number, durationMs = 460) =>
     scrambleText(value, stageProgress(elapsed, delayMs, durationMs), tick, seed);
 
-  g.rect(0, 0, designWidth, designHeight).fill(LAT_PAPER);
-  drawPaperGrid(g, { x: 0, y: 0, w: designWidth, h: designHeight }, 0.45);
+  // The paper and its grid never change: drawn once into the persistent backdrop. The needle field updates in place
+  // there as GPU particles, instead of thousands of stroked needles rebuilt every frame.
+  const ground = resultGround(backdrop, designWidth, designHeight);
   const rankCx = 112;
   const rankCy = 156;
   const rankIn = stageProgress(elapsed, RANK_DELAY_MS, 600);
+  ground.field.clear();
   drawNeedleField(
-    g,
+    ground.field,
     { x: 0, y: 44, w: designWidth, h: designHeight - 44 },
     {
       seconds: (nowMs / 1000) * motion,
@@ -82,6 +84,7 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
     {
       alpha: 0.4,
       skip: (x, y) => (x > 14 && x < designWidth - 14 && y > 56 && y < 430) || y > designHeight - 50,
+      particles: true,
     },
   );
 
@@ -288,4 +291,33 @@ function plot(
   const headX = path[path.length - 2]!;
   const headY = path[path.length - 1]!;
   graphics.rect(headX - 2, headY - 2, 4, 4).fill(color);
+}
+
+/** The result's persistent paper (drawn once per size) and the Graphics its needle field is drawn into. */
+interface ResultGround {
+  width: number;
+  height: number;
+  paper: Graphics;
+  field: Graphics;
+}
+
+const RESULT_GROUNDS = new WeakMap<Container, ResultGround>();
+
+function resultGround(backdrop: Container, width: number, height: number): ResultGround {
+  let ground = RESULT_GROUNDS.get(backdrop);
+  if (!ground) {
+    ground = { width: 0, height: 0, paper: new Graphics(), field: new Graphics() };
+    ground.paper.label = 'lattice-result/paper';
+    ground.field.label = 'lattice-result/needles';
+    backdrop.addChild(ground.paper, ground.field);
+    RESULT_GROUNDS.set(backdrop, ground);
+  }
+  if (ground.width !== width || ground.height !== height) {
+    ground.width = width;
+    ground.height = height;
+    ground.paper.clear();
+    ground.paper.rect(0, 0, width, height).fill(LAT_PAPER);
+    drawPaperGrid(ground.paper, { x: 0, y: 0, w: width, h: height }, 0.45);
+  }
+  return ground;
 }

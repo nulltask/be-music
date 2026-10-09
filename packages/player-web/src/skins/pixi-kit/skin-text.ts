@@ -1,5 +1,6 @@
 import { type Color, type Container, Text, TextStyle } from 'pixi.js';
 import { DEFAULT_TEXT_FONT } from '@be-music/skin-sdk';
+import { rememberStyle } from './hud-text.ts';
 import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
 
@@ -84,7 +85,7 @@ export function resolveSkinTextStyle(options: SkinTextOptions): TextStyle {
           }
         : {}),
     });
-    SKIN_TEXT_STYLES.set(key, style);
+    rememberStyle(SKIN_TEXT_STYLES, key, style);
   }
   return style;
 }

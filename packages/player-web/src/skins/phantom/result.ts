@@ -176,9 +176,11 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
   })) {
     const dx = dot.x + drift;
     if ((dx - 392) * (designHeight - 48) + (dot.y - 48) * (392 - 196) > 0 && dx <= designWidth) {
-      slash.g.circle(dx, dot.y, dot.r).fill({ color: PHANTOM_INK, alpha: 0.5 });
+      slash.g.circle(dx, dot.y, dot.r);
     }
   }
+  // One fill for the whole field: the dots never overlap, so this matches filling them one by one.
+  slash.g.fill({ color: PHANTOM_INK, alpha: 0.5 });
   slash.g.poly([380, 48, 386, 48, 190, designHeight, 184, designHeight]).fill(PHANTOM_WHITE);
   slideIn(slash.root, 0, 460, 0, 380);
   slash.root.alpha = 1;

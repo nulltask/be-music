@@ -255,21 +255,24 @@ class SelectScreen {
 /** Result: one layer rebuilt every frame, its nodes retired a frame late so unchanged labels keep their textures. */
 class ResultScreen {
   private readonly definition: PixiSkinDefinition;
+  private readonly root = new Container();
+  private readonly backdrop = new Container();
   private readonly layer = new Container();
   private readonly disposer = new LaggedDisposer();
 
   constructor(definition: PixiSkinDefinition) {
     this.definition = definition;
+    this.root.addChild(this.backdrop, this.layer);
   }
 
   build(frame: BeMusicResultFrame): Container {
     this.disposer.cycle(this.layer);
-    this.definition.result.render({ ...frame, layer: this.layer });
-    return this.layer;
+    this.definition.result.render({ ...frame, layer: this.layer, backdrop: this.backdrop });
+    return this.root;
   }
 
   destroy(): void {
     this.disposer.flush();
-    this.layer.destroy({ children: true });
+    this.root.destroy({ children: true });
   }
 }

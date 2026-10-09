@@ -147,10 +147,11 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     for (let x = -1400; x <= 1400; x += 50) {
       const point = floor(x, z);
       if (point.x < -4 || point.x > designWidth + 4) continue;
-      light.rect(point.x - size / 2, point.y - size / 2, size, size).fill({ color, alpha });
+      light.rect(point.x - size / 2, point.y - size / 2, size, size);
     }
+    // One fill per row: its points share a colour and alpha and never overlap.
+    light.fill({ color, alpha });
   }
-  light.rect(0, horizon - 1, designWidth, 2).fill({ color: SYN_AMBER, alpha: 0.4 });
 
   // Verdict: tracking condenses from wide to settled while it fades in.
   const verdict = group('verdict');
