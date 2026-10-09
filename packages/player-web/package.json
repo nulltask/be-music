@@ -39,6 +39,11 @@
       "types": "./dist/runtime.d.ts",
       "source": "./src/runtime/index.ts",
       "default": "./dist/runtime.js"
+    },
+    "./skin-sdk": {
+      "types": "./dist/skin-sdk.d.ts",
+      "source": "./src/skin-sdk/index.ts",
+      "default": "./dist/skin-sdk.js"
     }
   },
   "scripts": {

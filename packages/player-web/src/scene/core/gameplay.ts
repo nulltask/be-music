@@ -135,12 +135,14 @@ import { CORE_TEXT_FONT } from './fonts.ts';
 import type {
   BeMusicBomb,
   BeMusicEffectLevel,
+  BeMusicGameplayLayout,
   BeMusicLaneFrame,
   BeMusicSkin,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import { phantomSkin } from '../default/phantom/index.ts';
+import { resolveGameplayLayout } from '../../skin-sdk/layout.ts';
+import { phantomSkin } from '../../skins/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
 import { logger } from '../../logger.ts';
@@ -238,6 +240,8 @@ export interface GameplayStageSize {
 
 /** The LR2-compatible 640x480 canvas. */
 const LEGACY_STAGE_SIZE: GameplayStageSize = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
+/** The 640x480 stage with the fixed default-family BGA square, for skins that declare no stage of their own. */
+const LEGACY_STAGE: BeMusicStage = { ...LEGACY_STAGE_SIZE, resolveBgaRect: () => ({ ...BGA }) };
 
 /** Lane rectangle in design pixels. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface GameplayLaneRect {
@@ -596,6 +600,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * with a different aspect ratio.
    */
   private readonly designClipMask = new Graphics();
+  /** Layout last handed to the be-music chrome, keyed by the lane set it was built for. */
+  private beMusicLayout:
+    | { channels: readonly string[]; variant: ChartPlayVariant | undefined; layout: BeMusicGameplayLayout }
+    | undefined;
   /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBgaTargets}). */
   private stageBgaTarget: GameplayBgaTarget | undefined;
   /**
@@ -3607,17 +3615,39 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.overlayLayer.position.set(0, 0);
       this.bgaLayer.scale.set(1);
       this.bgaLayer.position.set(0, 0);
-      (this.options.skinlessChromeRenderer ?? this.options.beMusicSkin?.gameplay.renderChrome)?.({
+      const context = {
         layer: this.skinLayer,
         overlayLayer: this.overlayLayer,
         layerPool: this.skinLayerPool,
         overlayLayerPool: this.overlayLayerPool,
         runtime: this.resolveSkinlessGameplayChromeRuntime(),
-      });
+      };
+      if (this.options.skinlessChromeRenderer) {
+        this.options.skinlessChromeRenderer(context);
+      } else {
+        this.options.beMusicSkin?.gameplay.renderChrome({ ...context, layout: this.resolveBeMusicLayout() });
+      }
     } finally {
       this.skinLayerPool.end();
       this.overlayLayerPool.end();
     }
+  }
+
+  /**
+   * The gameplay layout handed to the be-music skin's chrome: stage, lanes, playfield bounds, judgement line, and BGA
+   * rect. Lane geometry only changes with the chart, so it is rebuilt when the lane channels or play variant change.
+   */
+  private resolveBeMusicLayout(): BeMusicGameplayLayout {
+    const cached = this.beMusicLayout;
+    if (cached && cached.channels === this.laneChannels && cached.variant === this.chartPlayVariant) {
+      return cached.layout;
+    }
+    const layout = resolveGameplayLayout(
+      { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant },
+      this.beMusicStage ?? LEGACY_STAGE,
+    );
+    this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, layout };
+    return layout;
   }
 
   /** Approximate total duration of the loaded chart in seconds. */

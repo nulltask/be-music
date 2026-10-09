@@ -1,6 +1,10 @@
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { isScratchLaneForVariant, resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
 import type { BeMusicLaneKind, BeMusicSelectLayout, BeMusicSkin } from './types.ts';
+import { validateBeMusicSkin } from '../../skin-sdk/define.ts';
+import { logger } from '../../logger.ts';
+
+const log = logger('be-music-skin');
 
 export interface BeMusicSkinRegistry {
   readonly skins: readonly BeMusicSkin[];
@@ -8,11 +12,35 @@ export interface BeMusicSkinRegistry {
   resolve(id: string | undefined): BeMusicSkin;
 }
 
-/** Registry over a fixed, non-empty skin list. The first entry is the fallback for unknown ids. */
-export function createBeMusicSkinRegistry(skins: readonly BeMusicSkin[]): BeMusicSkinRegistry {
+export interface BeMusicSkinRegistryOptions {
+  /**
+   * Called for each skin left out because its declaration is invalid or written for an unsupported API revision (see
+   * `validateBeMusicSkin`). Defaults to a logged warning.
+   */
+  onRejected?: (skin: BeMusicSkin, problems: readonly string[]) => void;
+}
+
+/**
+ * Registry over a fixed skin list. Skins whose declaration doesn't validate (an unsupported `apiVersion`, a malformed
+ * id or version, …) are left out, so a third-party skin built for another player release can't break the host. The
+ * first accepted entry is the fallback for unknown ids; at least one must be accepted.
+ */
+export function createBeMusicSkinRegistry(
+  candidates: readonly BeMusicSkin[],
+  options: BeMusicSkinRegistryOptions = {},
+): BeMusicSkinRegistry {
+  const onRejected =
+    options.onRejected ??
+    ((skin: BeMusicSkin, problems: readonly string[]) =>
+      log.warn(`skipping skin "${skin.id}": ${problems.join('; ')}`));
+  const skins = candidates.filter((skin) => {
+    const problems = validateBeMusicSkin(skin);
+    if (problems.length > 0) onRejected(skin, problems);
+    return problems.length === 0;
+  });
   const first = skins[0];
   if (!first) {
-    throw new Error('createBeMusicSkinRegistry: at least one skin is required');
+    throw new Error('createBeMusicSkinRegistry: at least one valid skin is required');
   }
   const byId = new Map<string, BeMusicSkin>();
   for (const skin of skins) {

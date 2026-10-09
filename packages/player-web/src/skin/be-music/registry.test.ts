@@ -2,8 +2,14 @@ import { describe, expect, it } from 'vite-plus/test';
 import { createBeMusicSkinRegistry, resolveBeMusicLaneKind, resolveSelectListWindow } from './registry.ts';
 import type { BeMusicSkin } from './types.ts';
 
-function stubSkin(id: string): BeMusicSkin {
-  return { id, label: id.toUpperCase() } as unknown as BeMusicSkin;
+function stubSkin(id: string, apiVersion = 1): BeMusicSkin {
+  return {
+    apiVersion,
+    id,
+    label: id.toUpperCase(),
+    version: '1.0.0',
+    author: { name: 'be-music' },
+  } as unknown as BeMusicSkin;
 }
 
 describe('createBeMusicSkinRegistry', () => {
@@ -17,6 +23,21 @@ describe('createBeMusicSkinRegistry', () => {
   it('rejects an empty list and duplicate ids', () => {
     expect(() => createBeMusicSkinRegistry([])).toThrow();
     expect(() => createBeMusicSkinRegistry([stubSkin('a'), stubSkin('a')])).toThrow(/duplicate/);
+  });
+
+  it('leaves out skins for an unsupported API revision and reports them', () => {
+    const rejected: string[] = [];
+    const registry = createBeMusicSkinRegistry([stubSkin('future', 2), stubSkin('phantom')], {
+      onRejected: (skin, problems) => rejected.push(`${skin.id}: ${problems[0]}`),
+    });
+    expect(registry.skins.map((skin) => skin.id)).toEqual(['phantom']);
+    expect(registry.resolve('future').id).toBe('phantom');
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0]).toMatch(/^future: apiVersion 2/u);
+  });
+
+  it('throws when no skin is valid', () => {
+    expect(() => createBeMusicSkinRegistry([stubSkin('future', 2)], { onRejected: () => {} })).toThrow(/valid/u);
   });
 });
 

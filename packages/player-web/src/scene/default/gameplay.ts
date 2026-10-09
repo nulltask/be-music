@@ -1,5 +1,5 @@
 import { CoreGameplayView, type CoreGameplayViewOptions } from '../core/gameplay.ts';
-import { phantomSkin } from './phantom/index.ts';
+import { phantomSkin } from '../../skins/phantom/index.ts';
 
 /**
  * Constructor options for {@link DefaultPixiGameplayView}. `skinlessChromeRenderer` is stripped because the default

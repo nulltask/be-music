@@ -17,7 +17,7 @@ import type {
 import { CORE_TEXT_FONT } from './fonts.ts';
 import type { BeMusicEffectLevel, BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
-import { phantomSkin } from '../default/phantom/index.ts';
+import { phantomSkin } from '../../skins/phantom/index.ts';
 import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
 
 const log = logger('select');

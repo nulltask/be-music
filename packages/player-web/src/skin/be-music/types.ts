@@ -1,6 +1,6 @@
 import type { Container, Graphics } from 'pixi.js';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';
-import type { SkinlessGameplayChromeRenderer } from '../../scene/gameplay-chrome.ts';
+import type { SkinlessGameplayChromeRenderContext } from '../../scene/gameplay-chrome.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
 import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
@@ -13,12 +13,30 @@ import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
  *
  * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and pass it to the default
  * scene classes via their `beMusicSkin` option. Swapping skins only needs the scenes to be rebuilt.
+ *
+ * Skins are written against the public `@be-music/player-web/skin-sdk` subpath (the built-in skins included) and
+ * declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
  */
 export interface BeMusicSkin {
+  /**
+   * The skin API revision the skin was written against (`BE_MUSIC_SKIN_API_VERSION` when it was built). Hosts refuse a
+   * skin whose revision they don't support and fall back to a built-in one.
+   */
+  readonly apiVersion: number;
   /** Stable identifier (persisted by hosts, e.g. `'phantom'`). */
   readonly id: string;
   /** Human-readable name for pickers. */
   readonly label: string;
+  /** The skin's own release, as a semantic version (`'1.2.0'`). */
+  readonly version: string;
+  /** Who made the skin. */
+  readonly author: BeMusicSkinAuthor;
+  /** One or two sentences for skin pickers. */
+  readonly description?: string;
+  /** Where to find the skin (project page, repository). */
+  readonly homepage?: string;
+  /** SPDX license identifier of the skin's code and assets (`'MIT'`). */
+  readonly license?: string;
   /**
    * CSS font shorthands (`'400 24px "Anton"'`) the skin draws with. Hosts should load the faces (e.g. via Google Fonts)
    * and may `document.fonts.load` these before mounting so the first frame doesn't rasterize with a fallback face.
@@ -32,6 +50,13 @@ export interface BeMusicSkin {
   readonly gameplay: BeMusicGameplaySkin;
   readonly select: BeMusicSelectSkin;
   readonly result: BeMusicResultSkin;
+}
+
+/** A skin's maker, as shown in skin pickers and credits. */
+export interface BeMusicSkinAuthor {
+  readonly name: string;
+  /** Profile, home page, or contact URL. */
+  readonly url?: string;
 }
 
 /** Axis-aligned rectangle in design pixels. */
@@ -71,9 +96,47 @@ export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
  */
 export type BeMusicAudioFrame = AudioFeatures;
 
+/** One lane of the gameplay layout, in design pixels. */
+export interface BeMusicLayoutLane {
+  channel: string | undefined;
+  kind: BeMusicLaneKind;
+  side: '1P' | '2P';
+  x: number;
+  w: number;
+}
+
+/**
+ * Where everything sits on the gameplay stage this frame, as the host resolved it: the stage size, every lane, the
+ * playfield's bounds and judgement line, and the BGA rect (from the skin's {@link BeMusicStage}). Skins place their
+ * chrome from this instead of computing geometry themselves, so host-side layout changes (double play, keyboard
+ * modes, new aspect ratios) reach every skin.
+ */
+export interface BeMusicGameplayLayout {
+  stage: { width: number; height: number };
+  lanes: readonly BeMusicLayoutLane[];
+  playfield: {
+    /** Left edge of the leftmost lane / right edge of the rightmost lane. */
+    left: number;
+    right: number;
+    centerX: number;
+    /** Top of the lanes, and the judgement line notes land on. */
+    top: number;
+    judgementY: number;
+    /** Horizontal extent of each play side present (`2P` only in double play). */
+    sides: Partial<Record<'1P' | '2P', { left: number; right: number }>>;
+  };
+  /** The BGA rect, or `undefined` when the playfield leaves no room for one. */
+  bga: BeMusicRect | undefined;
+}
+
+/** What {@link BeMusicGameplaySkin.renderChrome} receives: the layers and runtime values, plus the frame's layout. */
+export interface BeMusicChromeContext extends SkinlessGameplayChromeRenderContext {
+  layout: BeMusicGameplayLayout;
+}
+
 export interface BeMusicGameplaySkin {
   /** HUD chrome around the playfield (header, gauge, score, BGA frame, judgement / combo text). */
-  readonly renderChrome: SkinlessGameplayChromeRenderer;
+  readonly renderChrome: (context: BeMusicChromeContext) => void;
   /** Lane beds, key beams, judgement line and key caps for every lane, drawn into one cleared `Graphics`. */
   renderLanes(context: BeMusicLanesContext): void;
   /** One tap note; `context.graphics` is a fresh pooled `Graphics` owned by this note. */
