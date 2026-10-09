@@ -3,8 +3,8 @@ import {
   resolveSongRowFacts,
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
-  type CanvasSelectFrame,
-  type CanvasSurface,
+  type BeMusicSelectFrame,
+  type BeMusicSurface,
 } from '../../skin-sdk/index.ts';
 import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, stat, text } from './theme.ts';
 
@@ -18,7 +18,7 @@ const MARGIN = 16;
 const PANEL_W = 290;
 
 /** The select screen: the focused chart's card and buttons on the left, the song list on the right. */
-export function drawSelect({ context: ctx, width, height }: CanvasSurface<'2d'>, frame: CanvasSelectFrame): boolean {
+export function drawSelect({ context: ctx, width, height }: BeMusicSurface<'2d'>, frame: BeMusicSelectFrame): void {
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, width, height);
   text(ctx, 'MUSIC SELECT', MARGIN, 24, { size: 14, weight: 800 });
@@ -35,18 +35,16 @@ export function drawSelect({ context: ctx, width, height }: CanvasSurface<'2d'>,
     text(ctx, `SEARCH: ${frame.searchQuery}`, MARGIN, height - 20, { size: 11, color: MUTED });
   }
 
-  // After a pick, darken the screen over the outro; keep asking for frames until it is black.
+  // After a pick, darken the screen over the outro.
   if (frame.launchAt !== undefined) {
     const t = Math.min(1, (frame.nowMs - frame.launchAt) / SELECT_OUTRO_MS);
     ctx.fillStyle = `rgba(0, 0, 0, ${t})`;
     ctx.fillRect(0, 0, width, height);
-    return t < 1;
   }
-  return false;
 }
 
 /** The left card: title, artist, the chart's key facts, and the PLAY / AUTO buttons. */
-function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: CanvasSelectFrame): void {
+function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame): void {
   const song = frame.focusedSong;
   const x = MARGIN;
   const y = 56;
@@ -73,7 +71,7 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: CanvasSelectFrame
 
 function button(
   ctx: CanvasRenderingContext2D,
-  frame: CanvasSelectFrame,
+  frame: BeMusicSelectFrame,
   label: string,
   x: number,
   y: number,
@@ -91,7 +89,7 @@ function button(
 }
 
 /** The visible window of the list: one row per entry, the selected one highlighted. */
-function drawList(ctx: CanvasRenderingContext2D, frame: CanvasSelectFrame, width: number): void {
+function drawList(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame, width: number): void {
   const { listX, listTop, rowHeight } = SELECT_LAYOUT;
   const rowW = width - listX - MARGIN;
   for (let row = 0; row < frame.visibleRows; row += 1) {

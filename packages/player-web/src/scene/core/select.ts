@@ -15,7 +15,8 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicEffectLevel, BeMusicSelectRenderer, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
+import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import {
@@ -42,8 +43,6 @@ const MUTED = new Color('#a9a39a');
  */
 const FALLBACK_DESIGN_WIDTH = 640;
 const FALLBACK_DESIGN_HEIGHT = 480;
-/** Design canvas the be-music fallback path renders into. */
-const FALLBACK_DESIGN_SIZE: SelectDesignSize = { width: FALLBACK_DESIGN_WIDTH, height: FALLBACK_DESIGN_HEIGHT };
 
 /**
  * Pixel scroll step for the readtext modal's arrow-key nudge — roughly two lines at the body's 14px / 18px line-height.
@@ -616,7 +615,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    */
   private readonly beMusicBackHolder = new Container();
   private readonly beMusicFrontHolder = new Container();
-  private beMusicRenderer: BeMusicSelectRenderer | undefined;
+  private beMusicRenderer: BeMusicSelectBinding | undefined;
   /** Set when the last skinless render reported an unfinished transition, so the next tick renders again. */
   private beMusicNeedsFrame = false;
   /** `performance.now()` of the last cursor move — drives the skin's focus transitions. */
@@ -2332,26 +2331,26 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const currentFolder = this.browseStack[this.browseStack.length - 1];
     this.beMusicBackHolder.visible = true;
     this.beMusicFrontHolder.visible = true;
-    this.beMusicNeedsFrame =
-      renderer.render({
-        layer: this.listLayer,
-        designWidth,
-        designHeight,
-        nowMs: performance.now(),
-        sceneStartedAt: this.sceneStartedAt,
-        cursorChangedAt: this.cursorChangedAt,
-        entries,
-        selectedIndex: this.selectedIndex,
-        firstVisibleIndex: selectWindow.firstVisibleIndex,
-        visibleRows: selectWindow.visibleRows,
-        focusedSong: this.focusedSong(),
-        folderLabel: currentFolder?.label,
-        searchQuery: this.searchQuery,
-        totalCharts: this.collection.songs.length,
-        actions: this.beMusicActions,
-        effects: this.options.beMusicEffects ?? 'full',
-        launchAt: this.launchAt,
-      }) || this.launchAt !== undefined;
+    renderer.render({
+      designWidth,
+      designHeight,
+      nowMs: performance.now(),
+      sceneStartedAt: this.sceneStartedAt,
+      cursorChangedAt: this.cursorChangedAt,
+      entries,
+      selectedIndex: this.selectedIndex,
+      firstVisibleIndex: selectWindow.firstVisibleIndex,
+      visibleRows: selectWindow.visibleRows,
+      focusedSong: this.focusedSong(),
+      folderLabel: currentFolder?.label,
+      searchQuery: this.searchQuery,
+      totalCharts: this.collection.songs.length,
+      actions: this.beMusicActions,
+      effects: this.options.beMusicEffects ?? 'full',
+      launchAt: this.launchAt,
+    });
+    // The binding draws the skin every frame in `tick`; nothing needs a re-render here.
+    this.beMusicNeedsFrame = this.launchAt !== undefined;
     this.renderReadTextOverlay(designWidth, designHeight);
   }
 
@@ -2360,9 +2359,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     return this.options.beMusicSkin ?? phantomSkin;
   }
 
-  private ensureBeMusicRenderer(): BeMusicSelectRenderer {
+  private ensureBeMusicRenderer(): BeMusicSelectBinding {
     if (!this.beMusicRenderer) {
-      this.beMusicRenderer = this.beMusicSkin.select.createRenderer();
+      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin);
       this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
       this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
     }
@@ -2427,8 +2426,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   /** The be-music skin's stage (640×480 when the skin declares none). */
   private get beMusicDesignSize(): SelectDesignSize {
-    const stage = this.beMusicSkin.stage;
-    return stage ? { width: stage.width, height: stage.height } : FALLBACK_DESIGN_SIZE;
+    const stage = resolveBeMusicSkinStage(this.beMusicSkin);
+    return { width: stage.width, height: stage.height };
   }
 
   /**

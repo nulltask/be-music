@@ -24,13 +24,10 @@ import {
   LAT_WHITE,
 } from './style.ts';
 import {
-  addHudNumber,
-  addHudText,
   audioDrive,
   type AudioDrive,
   bandLevel,
   type BeMusicRect,
-  type ChildPool,
   comboTier,
   effectProfile,
   flashingGreatColor,
@@ -42,16 +39,16 @@ import {
   type MomentState,
   trackMoments,
   resolveMilestoneArea,
-  type BeMusicChromeContext,
   type BeMusicGameplayLayout,
-  type SkinlessGameplayChromeRuntime,
+  type BeMusicGameplayRuntime,
   STAGE_BGA_BAND,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
 } from '../../skin-sdk/index.ts';
+import { addHudNumber, addHudText, type ChildPool, type PixiChromeContext } from '../pixi-kit/index.ts';
 
-type Runtime = SkinlessGameplayChromeRuntime;
+type Runtime = BeMusicGameplayRuntime;
 
 /**
  * HUD text scramble: during the count-in every label and the song title decode in, staggered by `delayMs`; once the
@@ -98,7 +95,7 @@ export function renderLatticeChrome({
   overlayLayerPool,
   runtime,
   layout,
-}: BeMusicChromeContext): void {
+}: PixiChromeContext): void {
   const nowMs = runtime.nowMs ?? 0;
   const seconds = nowMs / 1000;
   const beatPhase = runtime.beatPhase ?? 0;

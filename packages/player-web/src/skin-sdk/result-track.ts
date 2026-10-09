@@ -1,5 +1,5 @@
 import type { PixiGameplayResultData } from '../scene/core/result-data.ts';
-import { formatPlayVariantLabel } from './skin-text.ts';
+import { formatPlayVariantLabel } from './song-stats.ts';
 
 /**
  * The play's clear lamp as the result track column labels it: `PERFECT` (every note a PGREAT), `FULL COMBO` (no BAD /

@@ -16,7 +16,8 @@ import {
   type Vec3,
 } from './space.ts';
 import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
-import { type AudioDrive, bandLevel, hash01, pointLayerFor } from '../../skin-sdk/index.ts';
+import { type AudioDrive, bandLevel, hash01 } from '../../skin-sdk/index.ts';
+import { pointLayerFor } from '../pixi-kit/index.ts';
 
 /**
  * Shared Synesthesia drawing: hairline frames with lock-on corners (a rhythm-shooter targeting reticle) and projected point

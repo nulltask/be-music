@@ -15,17 +15,19 @@ import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
 import {
   audioDrive,
   type BeMusicBomb,
-  type BeMusicBombsContext,
   type BeMusicLaneKind,
-  type BeMusicLanesContext,
-  type BeMusicLongNoteContext,
-  type BeMusicNoteContext,
-  type ChildPool,
   comboTier,
   effectProfile,
-  keyBeamGradient,
   resolveLaneRuns,
 } from '../../skin-sdk/index.ts';
+import {
+  type PixiBombsContext,
+  type PixiLanesContext,
+  type PixiLongNoteContext,
+  type PixiNoteContext,
+  type ChildPool,
+  keyBeamGradient,
+} from '../pixi-kit/index.ts';
 
 /** Per-lane-class light: note body, glow hue (0..1), and the colour the lane beam / key cap light up in. */
 interface LaneLight {
@@ -57,7 +59,7 @@ export function renderSynesthesiaLanes({
   combo,
   effects,
   audio,
-}: BeMusicLanesContext): void {
+}: PixiLanesContext): void {
   const pulse = (1 - beatPhase) ** 2;
   const drive = audioDrive(audio, effects);
   // The judgement line burns brighter as the run builds, and cycles the spectrum once it is in the zone.
@@ -123,11 +125,11 @@ export function renderSynesthesiaLanes({
   }
 }
 
-export function renderSynesthesiaNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {
+export function renderSynesthesiaNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
   drawNote(graphics, x, y, Math.max(4, w), LIGHTS[kind]);
 }
 
-export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }: BeMusicLongNoteContext): void {
+export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
@@ -185,7 +187,7 @@ function cachedBurst(seed: number): BurstParticle[] {
  * The smaller sparks fly as square voxels rather than round glows, like shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
-export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: BeMusicBombsContext): void {
+export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: PixiBombsContext): void {
   const profile = effectProfile(effects);
   if (!profile.enabled) {
     // Effects off: a small, plain core flash per hit.

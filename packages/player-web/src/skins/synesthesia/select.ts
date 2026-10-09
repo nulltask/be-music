@@ -35,24 +35,26 @@ import {
   synGlowTexture,
 } from './style.ts';
 import {
-  addHitArea,
-  addSkinText,
   easeOutCubic,
   audioDrive,
   type BeMusicAudioFrame,
-  type BeMusicSelectFrame,
   type BeMusicSelectLayout,
-  type BeMusicSelectRenderer,
-  type BeMusicSelectSkin,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
-  ChildPool,
   formatPlayVariantLabel,
   hash01,
   resolveSongRowFacts,
-  type SkinTextOptions,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import {
+  addHitArea,
+  addSkinText,
+  type PixiSelectFrame,
+  type PixiSelectRenderer,
+  type PixiSelectSkin,
+  ChildPool,
+  type SkinTextOptions,
+} from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
@@ -82,7 +84,8 @@ const SCHOOL_SPECS = [
 const WORLD_ORBIT = 900;
 const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCloudPyramid(9, 520)];
 
-export const synesthesiaSelectSkin: BeMusicSelectSkin = {
+export const synesthesiaSelectSkin: PixiSelectSkin = {
+  outroMs: OUTRO_MS,
   layout: LAYOUT,
   createRenderer: () => new SynesthesiaSelectRenderer(),
 };
@@ -103,7 +106,7 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
  * horizon, a floor of light points, a golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply
  * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
-class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
+class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
   private readonly ground = new Graphics();
@@ -126,8 +129,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   /** Accumulated star / grid travel (speed-weighted seconds), so a speed change never makes the field jump. */
   private travel = 0;
   private lastTickMs: number | undefined;
-  private effects: BeMusicSelectFrame['effects'] = 'full';
-  public readonly outroMs = OUTRO_MS;
+  private effects: PixiSelectFrame['effects'] = 'full';
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
 
   public constructor() {
@@ -135,7 +137,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.label = 'synesthesia-select/front';
   }
 
-  public render(input: BeMusicSelectFrame): boolean {
+  public render(input: PixiSelectFrame): boolean {
     this.effects = input.effects;
     const frame =
       input.effects === 'off'
@@ -166,7 +168,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
    * Launch outro — the warp: the star field rushes forward (in `tick`), a white bloom opens from the
    * vanishing point with the chosen title in it, and the screen falls to black for the gameplay count-in.
    */
-  private renderOutro(frame: BeMusicSelectFrame): void {
+  private renderOutro(frame: PixiSelectFrame): void {
     const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
     const { designWidth, designHeight, layer } = frame;
     const g = new Graphics();
@@ -441,7 +443,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.addChild(this.cursorGlow, this.lock);
   }
 
-  private renderChrome(frame: BeMusicSelectFrame): boolean {
+  private renderChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedSong: song } = frame;
     const chrome = new Graphics();
     chrome.label = 'synesthesia-select/chrome';
@@ -574,8 +576,8 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    addHitArea(layer, 26, 296, 172, 40, 'pointer', frame.actions.play);
-    addHitArea(layer, 200, 300, 90, 32, 'pointer', frame.actions.autoPlay);
+    addHitArea(26, 296, 172, 40, 'pointer', frame.actions.play);
+    addHitArea(200, 300, 90, 32, 'pointer', frame.actions.autoPlay);
 
     // Search and library.
     framePanel(chrome, 14, 372, 290, 30, accent);
@@ -588,7 +590,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       fontFamily: SYN_TEXT_FONT,
       maxWidth: 180,
     });
-    addHitArea(layer, 14, 372, 290, 30, 'text', frame.actions.activateSearch);
+    addHitArea(14, 372, 290, 30, 'text', frame.actions.activateSearch);
     addText('LIBRARY', 30, 422, labelStyle());
     addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 436, {
       size: 11,
@@ -608,7 +610,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   }
 
   private renderRow(
-    frame: BeMusicSelectFrame,
+    frame: PixiSelectFrame,
     entry: BrowserBrowseEntry,
     entryIndex: number,
     visibleIndex: number,

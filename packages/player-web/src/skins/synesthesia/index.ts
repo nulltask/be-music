@@ -8,14 +8,15 @@ import {
 } from './playfield.ts';
 import { synesthesiaResultSkin } from './result.ts';
 import { synesthesiaSelectSkin } from './select.ts';
-import { type BeMusicSkin, wideStage, BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '../../skin-sdk/index.ts';
+import { BE_MUSIC_SKIN_API_VERSION, wideStage, type BeMusicSkin } from '../../skin-sdk/index.ts';
+import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**
  * Synesthesia — a skin after synaesthetic sound-and-light rhythm games: deep space,
  * streaming 3D stars, a wireframe floor grid, glass panels, colour that keeps time with the music, and hits that
  * detonate as perspective-projected particle bursts.
  */
-export const synesthesiaSkin: BeMusicSkin = defineBeMusicSkin({
+export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   id: 'synesthesia',
   label: 'Synesthesia',

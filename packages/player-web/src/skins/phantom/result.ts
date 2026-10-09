@@ -22,19 +22,16 @@ import {
 } from './style.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
 import {
-  alignCapCenter,
   easeOutBack,
   easeOutCubic,
-  type BeMusicResultFrame,
-  type BeMusicResultSkin,
   DEFAULT_TEXT_FONT,
   hash01,
   resolveResultLamp,
   resolveResultTrackRows,
-  resolveSkinTextStyle,
   rollUpValue,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import { alignCapCenter, type PixiResultFrame, type PixiResultSkin, resolveSkinTextStyle } from '../pixi-kit/index.ts';
 
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */
 const RESULT_ROLL_DELAY_MS = 760;
@@ -66,13 +63,13 @@ const METRIC_ROWS = [RESULT_TOP, RESULT_TOP + 56, RESULT_TOP + 112] as const;
 const TRACK_X = 324 + 292 + 8 + 16;
 const TRACK_SLANT = 8;
 
-export const phantomResultSkin: BeMusicResultSkin = { render: (frame) => renderPhantomResult(frame) };
+export const phantomResultSkin: PixiResultSkin = { render: (frame) => renderPhantomResult(frame) };
 
 /**
  * Phantom result: an entrance timeline (red slash sweep, verdict slam, staggered plates, counter roll-up, growing
  * bars, graphs drawing in, rank stamp) over ambient loops (drifting halftone, scrolling kicker, streaks, rank pulse).
  */
-export function renderPhantomResult(frame: BeMusicResultFrame): void {
+export function renderPhantomResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs: now, rankLabel } = frame;
   // Effects off: skip the entrance and render the settled card.
   const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;

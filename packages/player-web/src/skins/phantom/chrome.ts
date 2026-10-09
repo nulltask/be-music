@@ -24,23 +24,18 @@ import {
 import { drawPhantomMoments } from './moments.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
 import {
-  addHudNumber as addNumber,
-  addHudText as addText,
   audioDrive,
   type AudioDrive,
   bandLevel,
   type BeMusicRect,
-  type ChildPool,
   effectProfile,
   flashingGreatColor,
-  type HudTextOptions as TextOptions,
   impulse,
   isFlashingGreat,
   judgeDisplayWord,
   loadingDots,
   resolveGameplayLayout,
-  type SkinlessGameplayChromeRuntime,
-  type BeMusicChromeContext,
+  type BeMusicGameplayRuntime,
   type BeMusicGameplayLayout,
   type BeMusicLayoutLane,
   wideStage,
@@ -49,6 +44,13 @@ import {
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
 } from '../../skin-sdk/index.ts';
+import {
+  addHudNumber as addNumber,
+  addHudText as addText,
+  type HudTextOptions as TextOptions,
+  type ChildPool,
+  type PixiChromeContext,
+} from '../pixi-kit/index.ts';
 
 const DISPLAY_FONT = DEFAULT_DISPLAY_FONT;
 /** Italic lean applied to every display-face text node — the whole HUD reads as moving forward. */
@@ -71,7 +73,7 @@ type PlaySide = '1P' | '2P';
 /**
  * Live runtime values painted into the built-in gameplay chrome.
  */
-export type FallbackGameplayRuntime = SkinlessGameplayChromeRuntime;
+export type FallbackGameplayRuntime = BeMusicGameplayRuntime;
 
 export interface FallbackGameplayRenderOptions {
   /**
@@ -102,7 +104,7 @@ export function renderPhantomChrome({
   overlayLayerPool,
   runtime,
   layout,
-}: BeMusicChromeContext): void {
+}: PixiChromeContext): void {
   renderChromeFrame(layer, runtime, layout, { overlayLayer, layerPool, overlayLayerPool });
 }
 

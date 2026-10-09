@@ -1,23 +1,21 @@
-import type { Container, Graphics } from 'pixi.js';
+import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';
-import type { SkinlessGameplayChromeRenderContext } from '../../scene/gameplay-chrome.ts';
 import type { PixiGameplayResultData } from '../../scene/core/result-data.ts';
-import type { ChildPool } from '../../scene/pixi-utils.ts';
 import type { AudioFeatures } from '../../runtime/audio-analysis.ts';
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
- * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin is a set of
- * renderer functions over a fixed design canvas ({@link BeMusicSkin.stage}, 640x480 unless the skin declares another): the shared scenes own input, timing, audio, and layout
- * contracts (lane geometry, select hit areas), and call into the active skin for every pixel of chrome.
+ * theme is loaded. Unlike LR2 / beatoraja themes (data files interpreted by a scene), a be-music skin draws every
+ * screen itself onto a canvas the player hands it, with whatever it likes: the Canvas 2D API, raw WebGL / WebGPU, or a
+ * framework such as PixiJS or three.js that the skin brings along. The player owns input, timing, audio, judging, and
+ * layout, collects what is on screen each frame as plain data, and shows the skin's canvas.
  *
+ * Nothing here depends on a rendering framework. Skins are written against the public `@be-music/player-web/skin-sdk`
+ * subpath and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
  * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and pass it to the default
- * scene classes via their `beMusicSkin` option. Swapping skins only needs the scenes to be rebuilt.
- *
- * Skins are written against the public `@be-music/player-web/skin-sdk` subpath (the built-in skins included) and
- * declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
+ * scene classes via their `beMusicSkin` option.
  */
-export interface BeMusicSkin {
+export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /**
    * The skin API revision the skin was written against (`BE_MUSIC_SKIN_API_VERSION` when it was built). Hosts refuse a
    * skin whose revision they don't support and fall back to a built-in one.
@@ -42,14 +40,22 @@ export interface BeMusicSkin {
    * and may `document.fonts.load` these before mounting so the first frame doesn't rasterize with a fallback face.
    */
   readonly fontLoads: readonly string[];
-  /**
-   * Design canvas the skin draws on and where its gameplay BGA sits. Omitted: the LR2-compatible 640x480 canvas with
-   * the fixed 256 px BGA square.
-   */
+  /** Design canvas the skin draws on and where its gameplay BGA sits. Defaults to the 16:9 `wideStage`. */
   readonly stage?: BeMusicStage;
-  readonly gameplay: BeMusicGameplaySkin;
-  readonly select: BeMusicSelectSkin;
-  readonly result: BeMusicResultSkin;
+  /** Which canvas context the player creates for each surface. */
+  readonly context: K;
+  /** Attributes passed to `canvas.getContext` (e.g. `{ alpha: true }`, `{ antialias: true, stencil: true }`). */
+  readonly contextAttributes?: CanvasRenderingContext2DSettings | WebGLContextAttributes;
+  /**
+   * Called once for every new surface before its first draw — create a framework renderer on the canvas, compile
+   * shaders, request a GPU device. Drawing waits until a returned promise settles.
+   */
+  setup?(surface: BeMusicSurface<K>): void | Promise<void>;
+  /** Called when the player is done with a surface — release what `setup` created (renderers, GPU resources). */
+  teardown?(surface: BeMusicSurface<K>): void;
+  readonly gameplay: BeMusicGameplaySkin<K>;
+  readonly select: BeMusicSelectSkin<K>;
+  readonly result: BeMusicResultSkin<K>;
 }
 
 /** A skin's maker, as shown in skin pickers and credits. */
@@ -57,6 +63,30 @@ export interface BeMusicSkinAuthor {
   readonly name: string;
   /** Profile, home page, or contact URL. */
   readonly url?: string;
+}
+
+/** Canvas rendering contexts a skin can draw with. */
+export interface BeMusicSurfaceContextMap {
+  '2d': CanvasRenderingContext2D;
+  webgl: WebGLRenderingContext;
+  webgl2: WebGL2RenderingContext;
+  webgpu: GPUCanvasContext;
+}
+
+export type BeMusicSurfaceContextKind = keyof BeMusicSurfaceContextMap;
+
+/**
+ * The canvas a skin draws one screen on. It is sized to the device pixels the stage covers on screen, so drawing at
+ * `pixelRatio` canvas pixels per design pixel shows dot by dot.
+ */
+export interface BeMusicSurface<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  canvas: HTMLCanvasElement;
+  context: BeMusicSurfaceContextMap[K];
+  /** Size in design pixels (the stage size). */
+  width: number;
+  height: number;
+  /** Canvas pixels per design pixel. `'2d'` surfaces come cleared and pre-scaled by it; other contexts apply it. */
+  pixelRatio: number;
 }
 
 /** Axis-aligned rectangle in design pixels. */
@@ -129,24 +159,77 @@ export interface BeMusicGameplayLayout {
   bga: BeMusicRect | undefined;
 }
 
-/** What {@link BeMusicGameplaySkin.renderChrome} receives: the layers and runtime values, plus the frame's layout. */
-export interface BeMusicChromeContext extends SkinlessGameplayChromeRenderContext {
-  layout: BeMusicGameplayLayout;
+/** One side's recent judgement. */
+export interface BeMusicJudgeState {
+  side: '1P' | '2P';
+  /** PERFECT / GREAT / GOOD / BAD / POOR. Empty when no recent judge. */
+  judge?: string;
+  combo?: number;
 }
 
-export interface BeMusicGameplaySkin {
-  /** HUD chrome around the playfield (header, gauge, score, BGA frame, judgement / combo text). */
-  readonly renderChrome: (context: BeMusicChromeContext) => void;
-  /** Lane beds, key beams, judgement line and key caps for every lane, drawn into one cleared `Graphics`. */
-  renderLanes(context: BeMusicLanesContext): void;
-  /** One tap note; `context.graphics` is a fresh pooled `Graphics` owned by this note. */
-  renderNote(context: BeMusicNoteContext): void;
-  /** One long note body plus its head / tail caps; `context.graphics` is a fresh pooled `Graphics`. */
-  renderLongNote(context: BeMusicLongNoteContext): void;
-  /** Every live hit effect for this frame. Acquire children from `context.pool` (Graphics / Sprite / Text). */
-  renderBombs(context: BeMusicBombsContext): void;
-  /** How long a hit effect lives (ms) before the scene retires it. */
-  readonly bombDurationMs: number;
+/** Live gameplay values for the HUD. */
+export interface BeMusicGameplayRuntime {
+  songTitle?: string;
+  songArtist?: string;
+  bpm?: number;
+  hiSpeed?: number;
+  score?: number;
+  exScore?: number;
+  exScoreMax?: number;
+  combo?: number;
+  maxCombo?: number;
+  perfect?: number;
+  great?: number;
+  good?: number;
+  bad?: number;
+  poor?: number;
+  gauge?: number;
+  clearThreshold?: number;
+  laneCount?: number;
+  laneChannels?: readonly string[];
+  playVariant?: ChartPlayVariant;
+  /** PERFECT / GREAT / GOOD / BAD / POOR. Empty when no recent judge. */
+  lastJudge?: string;
+  /** Per-side judgement snapshots. DP renderers can paint 1P / 2P independently from these values. */
+  judgeSides?: readonly BeMusicJudgeState[];
+  /** AAA / AA / A / B / C / D / E / F. */
+  rank?: string;
+  autoplay?: boolean;
+  hasBga?: boolean;
+  /** Monotonic play clock (ms) for animation. */
+  nowMs?: number;
+  /** Song progress in [0, 1] — drives a progress track. */
+  progressRatio?: number;
+  /** Fractional beat position in [0, 1) — drives beat-synced pulses. */
+  beatPhase?: number;
+  /** Active compat ruleset id (`lr2` / `beatoraja` / `iidx`). */
+  rulesetLabel?: string;
+  /** Ruleset-scoped gauge id (`GROOVE` / `HARD` / `HAZARD` / ...) labelling the gauge. */
+  gaugeLabel?: string;
+  /** True for survival gauges — no clear notch. */
+  gaugeSurvival?: boolean;
+  /** FAST (early GREAT/GOOD) count. */
+  fast?: number;
+  /** SLOW (late GREAT/GOOD) count. */
+  slow?: number;
+  /** Playable notes in the chart (0 while unknown). */
+  totalNotes?: number;
+  /**
+   * Milliseconds since the chart's first beat: negative during the intro count-in, `undefined` before the play has
+   * been scheduled. Lets chrome stage entrance cut-ins against the real start.
+   */
+  chartMs?: number;
+  /** True while the chart's audio / BGA are still loading (or a BGA video is transcoding) before the play starts. */
+  loading?: boolean;
+  /** Play-clock ms of the most recent judgement — drives the judge / combo "punch". */
+  judgeAtMs?: number;
+  /** Play-clock ms and lane class of the most recent key press (or autoplay hit) — drives input-reactive visuals. */
+  impulseAtMs?: number;
+  impulseKind?: BeMusicLaneKind;
+  /** Showmanship level to render at (defaults to `'full'`). */
+  effects?: BeMusicEffectLevel;
+  /** Live analysis of the mix for audio-reactive chrome (loudness, spectrum, onsets); absent without Web Audio. */
+  audio?: BeMusicAudioFrame;
 }
 
 export interface BeMusicLaneFrame {
@@ -161,40 +244,21 @@ export interface BeMusicLaneFrame {
   beam: number;
 }
 
-export interface BeMusicLanesContext {
-  graphics: Graphics;
-  lanes: readonly BeMusicLaneFrame[];
-  /** Fractional beat position in [0, 1). */
-  beatPhase: number;
-  nowMs: number;
-  /** Current combo — lets skins escalate the playfield as a run builds. */
-  combo?: number;
-  effects?: BeMusicEffectLevel;
-  /** What is playing right now (see {@link BeMusicAudioFrame}). */
-  audio?: BeMusicAudioFrame;
-}
-
-export interface BeMusicNoteContext {
-  graphics: Graphics;
+/** A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. */
+export interface BeMusicNote {
   kind: BeMusicLaneKind;
-  /** Lane rect x / width. Skins choose their own inset. */
   x: number;
   w: number;
-  /** Just-timing y: the note's bottom edge. */
   y: number;
-  nowMs: number;
 }
 
-export interface BeMusicLongNoteContext {
-  graphics: Graphics;
+/** A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). */
+export interface BeMusicLongNote {
   kind: BeMusicLaneKind;
   x: number;
   w: number;
-  /** Tail just-timing y (upper). */
   top: number;
-  /** Head just-timing y (lower), clamped to the judgement line while held. */
   bottom: number;
-  nowMs: number;
 }
 
 export interface BeMusicBomb {
@@ -210,18 +274,33 @@ export interface BeMusicBomb {
   seed: number;
 }
 
-export interface BeMusicBombsContext {
-  pool: ChildPool;
-  bombs: readonly BeMusicBomb[];
+/** Everything on the gameplay screen this frame. */
+export interface BeMusicGameplayFrame {
   nowMs: number;
-  /** Current combo — lets skins escalate hit effects as a run builds. */
-  combo?: number;
-  effects?: BeMusicEffectLevel;
-  /** What is playing right now (see {@link BeMusicAudioFrame}). */
-  audio?: BeMusicAudioFrame;
+  /** HUD values: score, combo, gauge, judgements, song, loading, … */
+  runtime: BeMusicGameplayRuntime;
+  /** Stage, lanes, playfield bounds, judgement line, and the BGA rect (leave it transparent: the video is behind). */
+  layout: BeMusicGameplayLayout;
+  /** Every lane with its key-beam intensity. */
+  lanes: readonly BeMusicLaneFrame[];
+  notes: readonly BeMusicNote[];
+  longNotes: readonly BeMusicLongNote[];
+  /** Live hit effects with their age. */
+  bombs: readonly BeMusicBomb[];
+  /** Fractional beat position in [0, 1). */
+  beatPhase: number;
+  effects: BeMusicEffectLevel;
+  audio: BeMusicAudioFrame | undefined;
 }
 
-/** Song-list geometry shared by the select renderer (drawing) and the scene (row hit-testing). */
+export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /** Draws one gameplay frame. Called once per frame, right before the player renders. */
+  draw(surface: BeMusicSurface<K>, frame: BeMusicGameplayFrame): void;
+  /** How long a hit effect lives (ms) before the player retires it. Default 300. */
+  readonly bombDurationMs?: number;
+}
+
+/** Song-list geometry shared by the skin (drawing) and the scene (row hit-testing). */
 export interface BeMusicSelectLayout {
   listX: number;
   listTop: number;
@@ -230,24 +309,22 @@ export interface BeMusicSelectLayout {
   rowHeight: number;
 }
 
-export interface BeMusicSelectSkin {
-  readonly layout: BeMusicSelectLayout;
-  /** Creates the per-scene renderer; called once per select scene instance. */
-  createRenderer(): BeMusicSelectRenderer;
-}
-
 export interface BeMusicSelectActions {
   play: () => void;
   autoPlay: () => void;
   activateSearch: () => void;
 }
 
+/** Everything on the select screen this frame. */
 export interface BeMusicSelectFrame {
-  /** Rebuilt every render: the renderer adds its chrome, rows, and hit areas here. */
-  layer: Container;
   designWidth: number;
   designHeight: number;
   nowMs: number;
+  /**
+   * Increases whenever the select state changes (cursor, folder, search, list contents). Skins that keep a scene graph
+   * can rebuild it only when this moves.
+   */
+  revision: number;
   /** `performance.now()` when the scene was (re)shown — drives entrance animations. */
   sceneStartedAt: number;
   /** `performance.now()` of the last cursor move — drives focus transitions. */
@@ -266,34 +343,33 @@ export interface BeMusicSelectFrame {
   effects: BeMusicEffectLevel;
   /** `performance.now()` when a chart was launched and the skin's outro is playing, otherwise `undefined`. */
   launchAt: number | undefined;
+  /** What is playing right now: the BGM or the chart preview (see {@link BeMusicAudioFrame}). */
+  audio: BeMusicAudioFrame | undefined;
+  /**
+   * Makes the rect (design pixels) run `action` when clicked — e.g. `frame.hit(x, y, w, h, frame.actions.play)`. Hit
+   * areas last for the frame they were declared in, so declare them on every draw. `cursor` is the CSS cursor shown
+   * over the rect (`'pointer'` by default).
+   */
+  hit(x: number, y: number, w: number, h: number, action: () => void, cursor?: string): void;
 }
 
-export interface BeMusicSelectRenderer {
-  /**
-   * Length (ms) of the outro the renderer plays after a chart is launched, before the scene hands off to gameplay.
-   * `0` / omitted launches immediately. The scene keeps rendering frames (with `frame.launchAt` set) until it elapses.
-   */
+export interface BeMusicSelectSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /** Where the song list sits (the player hit-tests the rows with it). */
+  readonly layout: BeMusicSelectLayout;
+  /** Length of the launch outro (ms) the select screen keeps drawing after a chart is picked. Default 0. */
   readonly outroMs?: number;
-  /** Persistent layer mounted behind the rebuilt `frame.layer` (ambient backgrounds). */
-  readonly backLayer: Container;
-  /** Persistent layer mounted in front of `frame.layer` (cursor, glints). */
-  readonly frontLayer: Container;
-  /**
-   * Rebuilds the input-driven chrome into `frame.layer`. Returns `true` while a transition is still in flight, asking
-   * the scene to render again next frame.
-   */
-  render(frame: BeMusicSelectFrame): boolean;
-  /** Per-frame, transform-only animation of the persistent layers. */
-  tick(nowMs: number, focusedSong: BrowserSongEntry | undefined, launchAt?: number, audio?: BeMusicAudioFrame): void;
-  dispose(): void;
+  /** Draws one select frame. Called every frame while the select screen is shown. */
+  draw(surface: BeMusicSurface<K>, frame: BeMusicSelectFrame): void;
 }
 
+/** A finished play: song, score, judgement counts, gauge and score history, and the play log. */
+export type BeMusicResultData = PixiGameplayResultData;
+
+/** Everything on the result screen this frame. */
 export interface BeMusicResultFrame {
-  /** Rebuilt every frame. */
-  layer: Container;
   designWidth: number;
   designHeight: number;
-  result: PixiGameplayResultData;
+  result: BeMusicResultData;
   /** IIDX DJ level (`AAA` … `F`). */
   rankLabel: string;
   /** EX-score rate in percent. */
@@ -304,6 +380,7 @@ export interface BeMusicResultFrame {
   effects: BeMusicEffectLevel;
 }
 
-export interface BeMusicResultSkin {
-  render(frame: BeMusicResultFrame): void;
+export interface BeMusicResultSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /** Draws one result frame. Called every frame while the result screen is shown. */
+  draw(surface: BeMusicSurface<K>, frame: BeMusicResultFrame): void;
 }

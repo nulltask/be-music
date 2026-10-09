@@ -9,7 +9,12 @@ function stubSkin(id: string, apiVersion = 1): BeMusicSkin {
     label: id.toUpperCase(),
     version: '1.0.0',
     author: { name: 'be-music' },
-  } as unknown as BeMusicSkin;
+    fontLoads: [],
+    context: '2d',
+    gameplay: { draw: () => {} },
+    select: { layout: { listX: 0, listTop: 0, listBottomInset: 0, rowHeight: 20 }, draw: () => {} },
+    result: { draw: () => {} },
+  };
 }
 
 describe('createBeMusicSkinRegistry', () => {

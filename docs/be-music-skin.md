@@ -2,33 +2,34 @@
 
 # Writing a be-music skin
 
-This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/player-web/skin-sdk` subpath. The built-in skins use exactly this subpath: Synesthesia, Phantom, Plain, and Lattice import nothing else from the player. Anything they do, your skin can do too.
+This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/player-web/skin-sdk` subpath. The built-in skins use exactly this subpath: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
 
-A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin instead supplies a set of drawing functions. The player keeps ownership of everything else:
+A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
 
 - input, timing, audio, and judging;
 - the lane layout and note positions;
 - select-list hit-testing.
 
-Your skin decides how every frame looks.
+Each frame, the player hands your skin a canvas and the frame's content as plain data. Your skin decides how it looks.
 
-## Two ways to draw
+## Bring your own renderer
 
-|                | Canvas skin (`defineCanvasSkin`)                                               | Pixi skin (`defineBeMusicSkin`)                                                              |
-| -------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| Drawing API    | A plain `<canvas>` with a `'2d'`, `'webgl'`, `'webgl2'`, or `'webgpu'` context | PixiJS v8 display objects                                                                    |
-| What you write | One `draw` function per screen                                                 | Separate renderers for the chrome, lanes, notes, long notes, hit effects, select, and result |
-| Pixi knowledge | None                                                                           | Required                                                                                     |
-| Example        | Plain (`packages/player-web/src/skins/plain/`)                                 | Synesthesia, Phantom, Lattice (`packages/player-web/src/skins/`)                             |
+The SDK does not draw and imports no rendering framework. Draw the canvas with whatever suits your skin:
 
-Start with a canvas skin unless you need Pixi features such as filters, blend modes, or GPU particles across many layers. Plain is deliberately small and readable; copy it as a starting point.
+| Renderer                     | `context`                            | How                                                                                       | Example                                                                                     |
+| ---------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Canvas 2D API                | `'2d'`                               | Draw directly; the canvas comes cleared and scaled to design pixels                       | Plain (`packages/player-web/src/skins/plain/`)                                              |
+| PixiJS                       | `'webgl2'`                           | Create a Pixi renderer on the canvas in `setup`, build a scene graph, render it in `draw` | Synesthesia, Phantom, Lattice (`packages/player-web/src/skins/`, through `skins/pixi-kit/`) |
+| three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                                           |
 
-## Quick start: a canvas skin
+Your skin bundles its own framework as a dependency. Plain is deliberately small and readable; copy it as a starting point.
+
+## Quick start: a Canvas 2D skin
 
 ```ts
-import { BE_MUSIC_SKIN_API_VERSION, defineCanvasSkin, resolveLaneRuns } from '@be-music/player-web/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/player-web/skin-sdk';
 
-export default defineCanvasSkin({
+export default defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   id: 'my-skin',
   label: 'My Skin',
@@ -74,48 +75,86 @@ export default defineCanvasSkin({
 });
 ```
 
-### How canvas skins draw
+## Using a framework
 
-- **When `draw` runs:** the player calls it once per frame, right before rendering. With `'2d'`, the canvas is already cleared and scaled, so you draw in design pixels (854×480 on the default stage).
-- **Other contexts:** with `'webgl'`, `'webgl2'`, or `'webgpu'`, you own the whole canvas. `surface.pixelRatio` gives the canvas pixels per design pixel.
-- **`setup(surface)`:** runs once for each new surface before its first draw. Use it to compile shaders or request a GPU device. Drawing waits for a returned promise.
-- **`contextAttributes`:** passed through to `canvas.getContext`.
+Create the framework's renderer on the surface's canvas in `setup`, and release it in `teardown`. The player calls `setup` once per surface, before the first draw, and waits for a returned promise. Each screen gets its own surface: one for gameplay, one per select screen, and one per result screen.
+
+```ts
+import { WebGLRenderer, Container } from 'pixi.js';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/player-web/skin-sdk';
+
+const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
+
+export default defineBeMusicSkin({
+  // …metadata…
+  context: 'webgl2',
+  // Masks need a stencil buffer; the canvas sits over the BGA, so it keeps alpha.
+  contextAttributes: { alpha: true, premultipliedAlpha: true, stencil: true, preserveDrawingBuffer: true },
+  async setup(surface) {
+    const renderer = new WebGLRenderer();
+    await renderer.init({
+      canvas: surface.canvas,
+      context: surface.context,
+      width: surface.width,
+      height: surface.height,
+      resolution: surface.pixelRatio,
+      backgroundAlpha: 0,
+    });
+    renderers.set(surface.canvas, renderer);
+  },
+  teardown(surface) {
+    renderers.get(surface.canvas)?.destroy();
+    renderers.delete(surface.canvas);
+  },
+  gameplay: {
+    draw(surface, frame) {
+      const renderer = renderers.get(surface.canvas)!;
+      const stage = buildGameplayStage(frame); // your scene graph for this frame
+      renderer.render({ container: stage, clear: true });
+    },
+  },
+  // select, result …
+});
+```
+
+The built-in Pixi skins do exactly this through `skins/pixi-kit/define-pixi-skin.ts`. That file is a worked example of replaying the player's frame data into a retained Pixi scene. It also shows how to keep a select scene and rebuild it only when `frame.revision` changes.
+
+## Surfaces
+
+- **When `draw` runs:**
+  - Gameplay draws once per frame, right before the player renders.
+  - Select and result draw every frame while they are shown.
+- **`'2d'` surfaces** come cleared and scaled, so you draw in design pixels (854×480 on the default stage).
+- **WebGL and WebGPU surfaces** are entirely yours. `surface.pixelRatio` gives the canvas pixels per design pixel; resize your renderer when it changes.
 - **Dot by dot:** each canvas is sized to the device pixels the stage covers on screen (viewport scale × `devicePixelRatio`) and shown with nearest sampling. Your pixels map one to one onto the screen.
-- **Gameplay frame (`CanvasGameplayFrame`):**
-  - `layout`
-  - `lanes` (each with a key-beam intensity)
-  - `notes` and `longNotes`
-  - `bombs` (live hit effects with their age)
-  - `runtime` (HUD values)
-  - `beatPhase`, `effects`, and `audio`
-- **Select frame (`CanvasSelectFrame`):** the [select frame](#select-bemusicselectskin) plus `hit(x, y, w, h, action)`, which makes a rect clickable. Return `true` from `select.draw` while something is still animating.
-- **Optional settings:**
-  - `gameplay.bombDurationMs` (default 300)
-  - `select.outroMs` (default 0)
-  - `stage` (default `wideStage`)
+- **Transparency:** the canvas is composited over the BGA video. Leave the BGA rect transparent wherever the video should show.
+- **`contextAttributes`:** passed through to `canvas.getContext`.
 
 ## Skin metadata
 
-Every skin declares these fields. `defineBeMusicSkin` and `defineCanvasSkin` check them and throw when they are malformed, so a broken skin fails where it is defined.
+Every skin declares these fields. `defineBeMusicSkin` checks them and throws when they are malformed, so a broken skin fails where it is defined.
 
-| Field         | Required | Rule                                                                                                                                  |
-| ------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `apiVersion`  | yes      | `BE_MUSIC_SKIN_API_VERSION` from the SDK you build against. The player refuses skins written for an API revision it does not support. |
-| `id`          | yes      | Lowercase letters, digits, and hyphens (`my-skin`). Hosts persist it, so keep it stable across releases.                              |
-| `label`       | yes      | Name shown in pickers.                                                                                                                |
-| `version`     | yes      | Your skin's own release as a semantic version (`1.2.0`).                                                                              |
-| `author`      | yes      | `{ name, url? }`. `url` must be http(s).                                                                                              |
-| `description` | no       | One or two sentences for pickers.                                                                                                     |
-| `homepage`    | no       | http(s) URL of the project page or repository.                                                                                        |
-| `license`     | no       | SPDX identifier of the skin's code and assets (`MIT`).                                                                                |
-| `fontLoads`   | yes      | CSS font shorthands the skin draws with (`'400 24px "Anton"'`). It may be empty.                                                      |
-| `stage`       | no       | Design canvas; see [Stage and layout](#stage-and-layout).                                                                             |
+| Field                                    | Required | Rule                                                                                                                                  |
+| ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`                             | yes      | `BE_MUSIC_SKIN_API_VERSION` from the SDK you build against. The player refuses skins written for an API revision it does not support. |
+| `id`                                     | yes      | Lowercase letters, digits, and hyphens (`my-skin`). Hosts persist it, so keep it stable across releases.                              |
+| `label`                                  | yes      | Name shown in pickers.                                                                                                                |
+| `version`                                | yes      | Your skin's own release as a semantic version (`1.2.0`).                                                                              |
+| `author`                                 | yes      | `{ name, url? }`. `url` must be http(s).                                                                                              |
+| `description`                            | no       | One or two sentences for pickers.                                                                                                     |
+| `homepage`                               | no       | http(s) URL of the project page or repository.                                                                                        |
+| `license`                                | no       | SPDX identifier of the skin's code and assets (`MIT`).                                                                                |
+| `fontLoads`                              | yes      | CSS font shorthands the skin draws with (`'400 24px "Anton"'`). It may be empty.                                                      |
+| `context`                                | yes      | `'2d'`, `'webgl'`, `'webgl2'`, or `'webgpu'`.                                                                                         |
+| `contextAttributes`, `setup`, `teardown` | no       | See [Surfaces](#surfaces) and [Using a framework](#using-a-framework).                                                                |
+| `stage`                                  | no       | Design canvas; defaults to `wideStage`. See [Stage and layout](#stage-and-layout).                                                    |
+| `gameplay`, `select`, `result`           | yes      | Each screen's `draw` function; see [Screens](#screens).                                                                               |
 
 `validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing.
 
 ## Stage and layout
 
-- **Stage:** the stage is the design canvas a skin draws on. `wideStage` is the 16:9 stage the built-in skins use (854×480). A skin that declares no `stage` gets the LR2-compatible 640×480 canvas.
+- **Stage:** the stage is the design canvas a skin draws on. `wideStage` is the 16:9 stage the built-in skins use (854×480), and the default.
 - **BGA placement:** `BeMusicStage.resolveBgaRect(playfieldRight)` decides where the gameplay BGA goes. The player composites the video there, and your skin frames the same rect. `wideStage` grows the BGA beside a single-play field and shrinks it next to wide double-play or keyboard fields.
 - **Layout per frame:** each gameplay frame comes with `layout` (`BeMusicGameplayLayout`), resolved by the host:
   - `stage`: width and height.
@@ -126,26 +165,23 @@ Every skin declares these fields. `defineBeMusicSkin` and `defineCanvasSkin` che
 - **Double-play gap:** the 1P and 2P banks stand 60 px apart. `resolveLaneRuns(lanes)` returns one `{ left, right }` run per contiguous bank. Draw the judgement line and lane grid per run so nothing crosses the gap.
 - **Lane widths:** lane widths are fixed by the player. Skins colour lanes, but never resize or move them.
 
-## Pixi skins
+## Screens
 
-`defineBeMusicSkin` takes the same metadata plus three screens. Draw with `pixi.js`, a peer dependency of the player.
+### Gameplay
 
-### Gameplay (`BeMusicGameplaySkin`)
+`gameplay.draw(surface, frame)` receives a `BeMusicGameplayFrame`:
 
-| Member                    | Called with                                                                        | Draws                                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `renderChrome(context)`   | `layer`, `overlayLayer`, their `ChildPool`s, `runtime`, `layout`                   | Everything around the playfield: header, gauge, score, BGA frame, judgement / combo, moments |
-| `renderLanes(context)`    | one cleared `Graphics`, `lanes`, `beatPhase`, `nowMs`, `combo`, `effects`, `audio` | Lane beds, key beams, the judgement line                                                     |
-| `renderNote(context)`     | a fresh pooled `Graphics`, lane `kind`, `x`, `w`, `y` (the note's bottom edge)     | One tap note                                                                                 |
-| `renderLongNote(context)` | a fresh pooled `Graphics`, `kind`, `x`, `w`, `top` (tail), `bottom` (head)         | One long note                                                                                |
-| `renderBombs(context)`    | a `ChildPool`, `bombs`, `nowMs`, `combo`, `effects`, `audio`                       | Every live hit effect                                                                        |
-| `bombDurationMs`          | —                                                                                  | How long a hit effect lives                                                                  |
+- `layout`: see [Stage and layout](#stage-and-layout).
+- `lanes`: each lane's rect (`x`, `w`, `top`, `bottom` at the judgement line), `kind`, and `beam`, the key-beam intensity (1 while held, then decaying).
+- `notes`: tap notes as `{ kind, x, w, y }`, where `y` is the note's bottom edge.
+- `longNotes`: long notes as `{ kind, x, w, top, bottom }`. `top` is the tail; `bottom` is the head, clamped to the judgement line while held.
+- `bombs`: live hit effects with `elapsedMs` and a stable `seed`.
+- `runtime`: the HUD values (below).
+- `beatPhase`, `nowMs`, `effects`, and `audio`.
 
-Acquire display objects from the pools you are given (`layerPool.acquireGraphics()`, `acquireText()`, …) instead of creating them per frame. The pools reuse last frame's objects, which keeps frame time flat.
+`gameplay.bombDurationMs` (default 300) sets how long a hit effect lives.
 
-### Values in `runtime`
-
-`runtime` (`SkinlessGameplayChromeRuntime`) carries the HUD values:
+`runtime` (`BeMusicGameplayRuntime`) carries:
 
 - **Song and score:**
   - `songTitle`, `songArtist`, `bpm`, `hiSpeed`
@@ -158,49 +194,44 @@ Acquire display objects from the pools you are given (`layerPool.acquireGraphics
 - **Event timestamps:** `judgeAtMs`, `impulseAtMs`, `impulseKind` (the last judgement and key press, for punch and impulse effects)
 - **Comfort and sound:** `effects`, `audio`
 
-### Select (`BeMusicSelectSkin`)
+### Select
 
-- **`layout`:** `listX`, `listTop`, `listBottomInset`, and `rowHeight`. The scene hit-tests rows with these numbers, so the rows you draw must match them.
-- **`createRenderer()`:** called once per select scene. It returns a `BeMusicSelectRenderer` with:
-  - `backLayer` and `frontLayer`: persistent layers behind and in front of the rebuilt frame.
-  - `render(frame)`: rebuilds the input-driven chrome into `frame.layer`. Return `true` while a transition is still running.
-  - `tick(nowMs, focusedSong, launchAt, audio)`: per-frame, transform-only animation of the persistent layers.
-  - `outroMs`: length of the launch outro. The scene keeps rendering with `frame.launchAt` set until it ends, and ignores input meanwhile.
-  - `dispose()`
-- **Frame (`BeMusicSelectFrame`):**
+- **`select.layout`:** `listX`, `listTop`, `listBottomInset`, and `rowHeight`. The scene hit-tests rows with these numbers, so the rows you draw must match them.
+- **`select.outroMs`:** length of the launch outro. After a chart is picked, the screen keeps drawing with `frame.launchAt` set until it ends, and ignores input meanwhile.
+- **`select.draw(surface, frame)`** receives a `BeMusicSelectFrame`:
   - `entries`, `selectedIndex`, `firstVisibleIndex`, `visibleRows`, `focusedSong`
   - `folderLabel`, `searchQuery`, `totalCharts`
   - `actions` (`play`, `autoPlay`, `activateSearch`)
-  - timestamps for entrance and focus transitions
-  - `effects`, `launchAt`
-- **Clickable areas:** use `addHitArea` to make Pixi chrome clickable.
+  - `revision`, which increases whenever the select state changes (cursor, folder, search, list contents). A retained scene graph can be rebuilt only when it moves.
+  - `sceneStartedAt` and `cursorChangedAt` for entrance and focus transitions
+  - `nowMs`, `effects`, `launchAt`, and `audio`
+  - `hit(x, y, w, h, action, cursor?)`: makes a rect clickable for this frame. Declare your hit areas on every draw.
 
-### Result (`BeMusicResultSkin`)
+### Result
 
-- **`render(frame)`:** rebuilds `frame.layer` every frame.
-- **Frame contents:**
-  - `result` (scores, judgement counts, gauge history, …)
-  - `rankLabel` (IIDX DJ level) and `ratePercent`
-  - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance
-  - `effects`
-- **Helpers:** `resolveResultLamp` and `resolveResultTrackRows` give the clear lamp and track rows the built-in skins show.
+`result.draw(surface, frame)` receives a `BeMusicResultFrame`:
+
+- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log.
+- `rankLabel` (IIDX DJ level) and `ratePercent`.
+- `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
+- `nowMs` and `effects`.
+
+`resolveResultLamp` and `resolveResultTrackRows` give the clear lamp and track rows the built-in skins show.
 
 ## SDK helpers
 
-| Area             | Helpers                                                                                                                                                                    |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stage            | `wideStage`, `resolveStageBgaRect`, `STAGE_WIDTH`, `STAGE_HEIGHT`, `STAGE_MARGIN`, `STAGE_SIDE_COLUMN`, `STAGE_BGA_BAND`                                                   |
-| Layout           | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea`                                                                                                         |
-| Text (Pixi)      | `addHudText`, `addHudNumber` (pooled, tinted, cap-height aligned), `addSkinText`, `addHitArea`, `formatPlayVariantLabel`, `DEFAULT_TEXT_FONT`                              |
-| Particles (Pixi) | `pointLayerFor(graphics)`: GPU point particles that ride along with a pooled `Graphics`                                                                                    |
-| Key beams (Pixi) | `keyBeamGradient(color)`, `KEY_BEAM_STOPS`                                                                                                                                 |
-| Judgements       | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`                                                                                    |
-| Moments          | `trackMoments` / `updateMoments` (count-in, every 100 combo, clear line, full combo, combo break), `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile` |
-| Loading          | `LOADING_WORD`, `loadingDots(nowMs)`                                                                                                                                       |
-| Sound            | `audioDrive`, `bandAt`, `bandLevel`; see [Reacting to the music](#reacting-to-the-music)                                                                                   |
-| Result           | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                              |
-| Song facts       | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`                                                                         |
-| Motion           | `easeOutCubic`, `easeOutBack`, `stageProgress`, `rollUpValue`, `hash01` (deterministic jitter)                                                                             |
+| Area       | Helpers                                                                                                                                                                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stage      | `wideStage`, `resolveStageBgaRect`, `STAGE_WIDTH`, `STAGE_HEIGHT`, `STAGE_MARGIN`, `STAGE_SIDE_COLUMN`, `STAGE_BGA_BAND`                                                   |
+| Layout     | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea`                                                                                                         |
+| Judgements | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`                                                                                    |
+| Moments    | `trackMoments` / `updateMoments` (count-in, every 100 combo, clear line, full combo, combo break), `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile` |
+| Loading    | `LOADING_WORD`, `loadingDots(nowMs)`                                                                                                                                       |
+| Sound      | `audioDrive`, `bandAt`, `bandLevel`; see [Reacting to the music](#reacting-to-the-music)                                                                                   |
+| Result     | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                              |
+| Song facts | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`, `formatPlayVariantLabel`                                               |
+| Text       | `DEFAULT_TEXT_FONT`, `layoutTabularRun` (tabular figures)                                                                                                                  |
+| Motion     | `easeOutCubic`, `easeOutBack`, `stageProgress`, `rollUpValue`, `hash01` (deterministic jitter)                                                                             |
 
 ## Reacting to the music
 
@@ -233,7 +264,7 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 
 ## Packaging and loading
 
-- **Imports:** a skin module imports only `@be-music/player-web/skin-sdk`, `pixi.js` (Pixi skins), and its own files. The built-in skins are held to this rule by a test, so anything they use is available to you.
+- **Imports:** a skin module imports `@be-music/player-web/skin-sdk`, the rendering framework it chooses, and its own files. The built-in skins are held to this rule by a test, so anything they use from the player is available to you.
 - **Export:** export the skin as the module's default export.
 - **Hosts:** a host registers skins in a registry:
 
@@ -264,10 +295,11 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 ## Checklist
 
 - [ ] Metadata passes `validateBeMusicSkin`.
+- [ ] Framework resources created in `setup` are released in `teardown`.
 - [ ] Chrome is placed from `layout`, and the judgement line is drawn per lane run.
-- [ ] The BGA rect is left visible (canvas skins: `clearRect` it when `runtime.hasBga`).
+- [ ] The BGA rect is left transparent when `runtime.hasBga`.
 - [ ] NOW LOADING is shown while `runtime.loading`.
-- [ ] Select rows line up with `select.layout`, and buttons are clickable.
+- [ ] Select rows line up with `select.layout`, and buttons are declared with `frame.hit` on every draw.
 - [ ] Audio reactions go through `audioDrive`, and `effects` is respected.
 - [ ] Every face is listed in `fontLoads`.
 - [ ] Checked in single play, double play, 5 / 7 / 9 / 10 / 14 / 24 / 48 KEY, and with and without a BGA.

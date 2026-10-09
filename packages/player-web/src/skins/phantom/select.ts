@@ -19,25 +19,27 @@ import {
 } from './style.ts';
 import { addRansomText, type GlyphFactory } from './tear.ts';
 import {
-  addHitArea,
-  addSkinText,
   easeOutBack,
   easeOutCubic,
   audioDrive,
   bandLevel,
   type BeMusicAudioFrame,
-  type BeMusicSelectFrame,
   type BeMusicSelectLayout,
-  type BeMusicSelectRenderer,
-  type BeMusicSelectSkin,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
   formatPlayVariantLabel,
   hash01,
   resolveSongRowFacts,
-  type SkinTextOptions,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import {
+  addHitArea,
+  addSkinText,
+  type PixiSelectFrame,
+  type PixiSelectRenderer,
+  type PixiSelectSkin,
+  type SkinTextOptions,
+} from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
 const SLIDE_MS = 240;
@@ -63,7 +65,8 @@ function tagStyle(fill: number): SkinTextOptions {
   return { size: 9, fill, fontFamily: DEFAULT_DISPLAY_FONT, letterSpacing: 1.2, skewX: -0.18 };
 }
 
-export const phantomSelectSkin: BeMusicSelectSkin = {
+export const phantomSelectSkin: PixiSelectSkin = {
+  outroMs: OUTRO_MS,
   layout: LAYOUT,
   createRenderer: () => new PhantomSelectRenderer(),
 };
@@ -73,7 +76,7 @@ export const phantomSelectSkin: BeMusicSelectSkin = {
  * starburst, and speed streaks), a slanted info panel, PLAY / AUTO PLAY cards, and a racked song list whose focused
  * card slides out with a pointer and a glint.
  */
-class PhantomSelectRenderer implements BeMusicSelectRenderer {
+class PhantomSelectRenderer implements PixiSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
   private readonly pointer = new Graphics();
@@ -98,10 +101,9 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.addChild(this.kicker, this.glint, this.pointer);
   }
 
-  public readonly outroMs = OUTRO_MS;
-  private effects: BeMusicSelectFrame['effects'] = 'full';
+  private effects: PixiSelectFrame['effects'] = 'full';
 
-  public render(input: BeMusicSelectFrame): boolean {
+  public render(input: PixiSelectFrame): boolean {
     this.effects = input.effects;
     // With effects off every entrance / focus transition renders settled.
     const frame =
@@ -133,7 +135,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
    * black-and-white starburst slams in from the right; they meet on a torn diagonal seam, the chosen title lands on
    * a tilted ink label, LET'S GO! is cut out of magazines letter by letter, and the page falls to ink for the count-in.
    */
-  private renderOutro(frame: BeMusicSelectFrame): void {
+  private renderOutro(frame: PixiSelectFrame): void {
     const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
     const { designWidth: w, designHeight: h, layer, nowMs } = frame;
     const g = new Graphics();
@@ -371,7 +373,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
   }
 
   /** Header, info panel, action cards, search box, and library footer. Returns true while the title slides in. */
-  private renderChrome(frame: BeMusicSelectFrame): boolean {
+  private renderChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedSong: song } = frame;
     const chrome = new Graphics();
     chrome.label = 'default-select/chrome';
@@ -527,9 +529,9 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
       fill: frame.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
       maxWidth: 210,
     });
-    addHitArea(layer, 12, 368, 292, 28, 'text', frame.actions.activateSearch);
-    addHitArea(layer, 24, 298, 176, 36, 'pointer', frame.actions.play);
-    addHitArea(layer, 206, 302, 86, 30, 'pointer', frame.actions.autoPlay);
+    addHitArea(12, 368, 292, 28, 'text', frame.actions.activateSearch);
+    addHitArea(24, 298, 176, 36, 'pointer', frame.actions.play);
+    addHitArea(206, 302, 86, 30, 'pointer', frame.actions.autoPlay);
 
     chrome.poly(parallelogramPoints(12, 412, 286, 42, -6)).fill(PHANTOM_INK);
     chrome.poly(parallelogramPoints(18, 420, 6, 26, -3)).fill(PHANTOM_RED);
@@ -546,7 +548,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
 
   /** One list row; returns true while it is still flying in or sliding out. */
   private renderRow(
-    frame: BeMusicSelectFrame,
+    frame: PixiSelectFrame,
     entry: BrowserBrowseEntry,
     entryIndex: number,
     visibleIndex: number,

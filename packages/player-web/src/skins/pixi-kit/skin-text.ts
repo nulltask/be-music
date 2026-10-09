@@ -1,8 +1,6 @@
-import { type Color, type Container, Graphics, Text, TextStyle } from 'pixi.js';
-import { resolveChartPlayVariant } from '../collection/collection.ts';
-import type { BrowserSongEntry } from '../collection/types.ts';
-import { getDesignTextResolution } from '../scene/core/viewport.ts';
-import { DEFAULT_TEXT_FONT } from './fonts.ts';
+import { type Color, type Container, Text, TextStyle } from 'pixi.js';
+import { DEFAULT_TEXT_FONT } from '../../skin-sdk/index.ts';
+import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
 
 export interface SkinTextOptions {
@@ -29,7 +27,7 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
   const node = new Text({
     text,
     // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
-    resolution: getDesignTextResolution(),
+    resolution: textResolution(),
     style: resolveSkinTextStyle(options),
   });
   node.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
@@ -91,25 +89,35 @@ export function resolveSkinTextStyle(options: SkinTextOptions): TextStyle {
   return style;
 }
 
-/** `'7K KEYS'`-style mode label for a song's play variant. */
-export function formatPlayVariantLabel(song: BrowserSongEntry): string {
-  return `${resolveChartPlayVariant(song)} KEYS`;
+/** A click target declared while a select screen rebuilds (see {@link addHitArea}). */
+export interface PixiHitArea {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  cursor: string;
+  action: () => void;
 }
 
-/** Transparent click target that forwards `pointerdown` to `action`. */
-export function addHitArea(
-  layer: Container,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  cursor: string,
-  action: () => void,
-): void {
-  const hit = new Graphics();
-  hit.rect(x, y, w, h).fill({ color: 0xffffff, alpha: 0.001 });
-  hit.eventMode = 'static';
-  hit.cursor = cursor;
-  hit.on('pointerdown', action);
-  layer.addChild(hit);
+let hitCollector: PixiHitArea[] | undefined;
+
+/** Collects the hit areas `build` declares through {@link addHitArea}. */
+export function collectHitAreas(build: () => void): PixiHitArea[] {
+  const previous = hitCollector;
+  const collected: PixiHitArea[] = [];
+  hitCollector = collected;
+  try {
+    build();
+  } finally {
+    hitCollector = previous;
+  }
+  return collected;
+}
+
+/**
+ * Makes the rect (design pixels) run `action` when clicked. Pixi skins draw onto their own canvas, which never sees the
+ * pointer, so the rect is handed to the player (`frame.hit`) instead of becoming an interactive Pixi node.
+ */
+export function addHitArea(x: number, y: number, w: number, h: number, cursor: string, action: () => void): void {
+  hitCollector?.push({ x, y, w, h, cursor, action });
 }

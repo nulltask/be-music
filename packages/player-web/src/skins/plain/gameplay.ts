@@ -4,8 +4,8 @@ import {
   judgeDisplayWord,
   loadingDots,
   resolveLaneRuns,
-  type CanvasGameplayFrame,
-  type CanvasSurface,
+  type BeMusicGameplayFrame,
+  type BeMusicSurface,
 } from '../../skin-sdk/index.ts';
 import {
   ACCENT,
@@ -29,7 +29,7 @@ const COLUMN_TOP = 66;
 const MARGIN = 16;
 
 /** The play screen: lanes and notes on the left, the BGA beside them, the HUD around them. */
-export function drawGameplay({ context: ctx, width, height }: CanvasSurface<'2d'>, frame: CanvasGameplayFrame): void {
+export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d'>, frame: BeMusicGameplayFrame): void {
   const { layout, runtime } = frame;
 
   // Background. The BGA plays *behind* this canvas, so its rect is cut out rather than painted over.
@@ -56,7 +56,7 @@ export function drawGameplay({ context: ctx, width, height }: CanvasSurface<'2d'
 }
 
 /** Lane backgrounds, a light column for each held key, and the judgement line. */
-function drawLanes(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): void {
+function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const lane of frame.lanes) {
     ctx.fillStyle = LANE_FILL[lane.kind];
     ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
@@ -76,7 +76,7 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): v
 }
 
 /** Tap notes as flat bars; long notes as a dimmer body between their head and tail. */
-function drawNotes(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): void {
+function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
     ctx.globalAlpha = 0.45;
     ctx.fillStyle = NOTE_FILL[note.kind];
@@ -92,7 +92,7 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): v
 }
 
 /** Each hit draws a ring that widens and fades over the effect's lifetime. */
-function drawBombs(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): void {
+function drawBombs(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const bomb of frame.bombs) {
     const t = Math.min(1, bomb.elapsedMs / 300);
     ctx.strokeStyle = `rgba(255, 255, 255, ${1 - t})`;
@@ -104,7 +104,7 @@ function drawBombs(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): v
 }
 
 /** The latest judgement and combo over each play side — or NOW LOADING while the chart loads. */
-function drawJudgement(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame): void {
+function drawJudgement(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   const { runtime, layout, nowMs } = frame;
   const y = 220;
   if (runtime.loading) {
@@ -130,7 +130,7 @@ function judgeColor(judge: string): string {
 }
 
 /** Header (mode, tempo, speed), the gauge under the lanes, the track and the score figures along the bottom. */
-function drawHud(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame, width: number, height: number): void {
+function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
   const { runtime } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });

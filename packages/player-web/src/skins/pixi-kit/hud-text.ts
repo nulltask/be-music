@@ -1,8 +1,7 @@
 import { CanvasTextMetrics, type Container, Text, TextStyle } from 'pixi.js';
-import type { ChildPool } from '../scene/pixi-utils.ts';
-import { getDesignTextResolution } from '../scene/core/viewport.ts';
-import { DEFAULT_TEXT_FONT } from './fonts.ts';
-import { layoutTabularRun } from './tabular.ts';
+import { DEFAULT_TEXT_FONT, layoutTabularRun } from '../../skin-sdk/index.ts';
+import type { ChildPool } from './pools.ts';
+import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
 
 /**
@@ -41,7 +40,7 @@ export function addHudText(
 ): Text {
   const node = pool?.acquireText() ?? new Text();
   // Rasterize at the final device density so text stays crisp after the viewport magnifies the design canvas.
-  const resolution = getDesignTextResolution();
+  const resolution = textResolution();
   if (node.resolution !== resolution) {
     node.resolution = resolution;
   }

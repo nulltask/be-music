@@ -38,32 +38,34 @@ import {
   sceneHue,
 } from './style.ts';
 import {
-  addHudNumber,
-  addHudText,
   audioDrive,
   type AudioDrive,
   type BeMusicRect,
-  type ChildPool,
   comboTier,
   effectProfile,
   flashingGreatColor,
   hash01,
-  type HudTextOptions,
   impulse,
   isFlashingGreat,
   judgeDisplayWord,
   LOADING_WORD,
   loadingDots,
-  type BeMusicChromeContext,
   type BeMusicGameplayLayout,
-  type SkinlessGameplayChromeRuntime,
+  type BeMusicGameplayRuntime,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
   punchScale,
 } from '../../skin-sdk/index.ts';
+import {
+  addHudNumber,
+  addHudText,
+  type ChildPool,
+  type HudTextOptions,
+  type PixiChromeContext,
+} from '../pixi-kit/index.ts';
 
-type Runtime = SkinlessGameplayChromeRuntime;
+type Runtime = BeMusicGameplayRuntime;
 
 /**
  * HUD grid (design px): a 16 px page margin and a 12 px gutter. The left column (16..272) stacks the gauge frame and
@@ -132,7 +134,7 @@ export function renderSynesthesiaChrome({
   overlayLayerPool,
   runtime,
   layout,
-}: BeMusicChromeContext): void {
+}: PixiChromeContext): void {
   const seconds = (runtime.nowMs ?? 0) / 1000;
   const beatPhase = runtime.beatPhase ?? 0;
   const pulse = (1 - beatPhase) ** 2;

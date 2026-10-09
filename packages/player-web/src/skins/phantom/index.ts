@@ -8,13 +8,14 @@ import {
 } from './playfield.ts';
 import { phantomResultSkin } from './result.ts';
 import { phantomSelectSkin } from './select.ts';
-import { type BeMusicSkin, wideStage, BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '../../skin-sdk/index.ts';
+import { BE_MUSIC_SKIN_API_VERSION, wideStage, type BeMusicSkin } from '../../skin-sdk/index.ts';
+import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**
  * Phantom — the built-in poster skin: ink black, blood red, and paper white, with slanted plates, starbursts,
  * halftone fields, and condensed italic type. The playfield itself stays plain and IIDX-like.
  */
-export const phantomSkin: BeMusicSkin = defineBeMusicSkin({
+export const phantomSkin: BeMusicSkin = definePixiSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   id: 'phantom',
   label: 'Phantom',

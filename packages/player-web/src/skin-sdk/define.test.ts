@@ -15,9 +15,10 @@ function skin(overrides: Partial<BeMusicSkin> = {}): BeMusicSkin {
     version: '1.2.0',
     author: { name: 'Jane Doe', url: 'https://example.com/jane' },
     fontLoads: [],
-    gameplay: {} as BeMusicSkin['gameplay'],
-    select: {} as BeMusicSkin['select'],
-    result: {} as BeMusicSkin['result'],
+    context: '2d',
+    gameplay: { draw: () => {} },
+    select: { layout: { listX: 0, listTop: 0, listBottomInset: 0, rowHeight: 20 }, draw: () => {} },
+    result: { draw: () => {} },
     ...overrides,
   };
 }
@@ -34,6 +35,18 @@ describe('validateBeMusicSkin', () => {
   it('passes a well-formed declaration', () => {
     expect(validateBeMusicSkin(skin())).toEqual([]);
     expect(validateBeMusicSkin(skin({ version: '2.0.0-beta.1+build.5', homepage: 'https://example.com' }))).toEqual([]);
+  });
+
+  it('reports an unknown canvas context', () => {
+    expect(validateBeMusicSkin(skin({ context: 'canvas' as BeMusicSkin['context'] }))).toEqual([
+      'context "canvas" must be one of 2d, webgl, webgl2, webgpu',
+    ]);
+  });
+
+  it('reports a screen without a draw function', () => {
+    expect(validateBeMusicSkin(skin({ result: {} as BeMusicSkin['result'] }))).toEqual([
+      'result.draw must be a function',
+    ]);
   });
 
   it('reports an unsupported API revision', () => {

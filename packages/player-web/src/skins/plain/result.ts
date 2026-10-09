@@ -2,14 +2,14 @@ import {
   resolveResultLamp,
   resolveResultTrackRows,
   type BeMusicResultFrame,
-  type CanvasSurface,
+  type BeMusicSurface,
 } from '../../skin-sdk/index.ts';
 import { ACCENT, DANGER, INK, MUTED, PANEL, stat, text } from './theme.ts';
 
 const MARGIN = 16;
 
 /** The result screen: verdict and rank, the score figures, the judgement counts, and the chart's facts. */
-export function drawResult({ context: ctx, width, height }: CanvasSurface<'2d'>, frame: BeMusicResultFrame): void {
+export function drawResult({ context: ctx, width, height }: BeMusicSurface<'2d'>, frame: BeMusicResultFrame): void {
   const { result } = frame;
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, width, height);

@@ -50,11 +50,7 @@ export const LR2_2P_BOMB_TIMER_BASE = 60;
 export const LR2_1P_LN_HOLD_TIMER_BASE = 70;
 export const LR2_2P_LN_HOLD_TIMER_BASE = 80;
 
-/**
- * Playfield rectangle for the no-skin lane geometry. Coordinates come from LR2's default 7K skin so LR2 skins and the
- * built-in default family share the same note-position contract while their chrome stays separate.
- */
-export const PLAYFIELD = { x: 33, y: 0, w: 194, judgementY: 321 } as const;
+export { PLAYFIELD } from './gameplay-geometry.ts';
 /**
  * BGA rectangle used by the built-in/default chrome path.
  */

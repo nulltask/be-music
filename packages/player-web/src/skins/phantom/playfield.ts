@@ -1,13 +1,12 @@
 import { Color, FillGradient, type Graphics } from 'pixi.js';
+import { type BeMusicLaneKind, resolveLaneRuns } from '../../skin-sdk/index.ts';
 import {
-  type BeMusicBombsContext,
-  type BeMusicLaneKind,
-  type BeMusicLanesContext,
-  type BeMusicLongNoteContext,
-  type BeMusicNoteContext,
+  type PixiBombsContext,
+  type PixiLanesContext,
+  type PixiLongNoteContext,
+  type PixiNoteContext,
   keyBeamGradient,
-  resolveLaneRuns,
-} from '../../skin-sdk/index.ts';
+} from '../pixi-kit/index.ts';
 
 /** Colours for one lane class: note highlight / body / shade, and the key cap at rest / pressed. */
 interface LaneTone {
@@ -35,7 +34,7 @@ const BEAM_COLORS: Record<BeMusicLaneKind, number> = { white: 0xe8ecff, black: 0
 /** Bed of the white-key lanes, a step lighter than the ink well the other lanes show. */
 const WHITE_LANE_BED = 0x18181d;
 
-export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesContext): void {
+export function renderPhantomLanes({ graphics, lanes, beatPhase }: PixiLanesContext): void {
   const beatDecay = 1 - beatPhase;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
@@ -88,11 +87,11 @@ export function renderPhantomLanes({ graphics, lanes, beatPhase }: BeMusicLanesC
   }
 }
 
-export function renderPhantomNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {
+export function renderPhantomNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
   drawNoteBody(graphics, x, y, Math.max(4, w), TONES[kind]);
 }
 
-export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: BeMusicLongNoteContext): void {
+export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
   const tone = TONES[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
@@ -107,7 +106,7 @@ export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: BeM
 }
 
 /** Plain IIDX-style hit flash: an expanding ring over a white core. */
-export function renderPhantomBombs({ pool, bombs }: BeMusicBombsContext): void {
+export function renderPhantomBombs({ pool, bombs }: PixiBombsContext): void {
   for (const bomb of bombs) {
     const progress = Math.max(0, Math.min(1, bomb.elapsedMs / PHANTOM_BOMB_DURATION_MS));
     const eased = 1 - (1 - progress) * (1 - progress);

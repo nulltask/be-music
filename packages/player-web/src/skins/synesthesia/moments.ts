@@ -12,21 +12,20 @@ import {
 } from './space.ts';
 import { SYN_AMBER, SYN_CYAN, SYN_DISPLAY_FONT, SYN_EMBER, SYN_FLARE, SYN_MAGENTA, SYN_WHITE } from './style.ts';
 import {
-  addHudText,
   easeOutCubic,
   type BeMusicRect,
-  type ChildPool,
   effectProfile,
   type MilestoneArea,
   momentProgress,
   trackMoments,
   resolveMilestoneArea,
   type BeMusicGameplayLayout,
-  type SkinlessGameplayChromeRuntime,
+  type BeMusicGameplayRuntime,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
 
 /** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */
 const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
@@ -52,7 +51,7 @@ const RING_COLORS = [SYN_AMBER, SYN_EMBER, SYN_CYAN, SYN_FLARE, SYN_MAGENTA] as 
 export function drawSynesthesiaMoments(
   chromeLayer: Container,
   layer: Container,
-  runtime: SkinlessGameplayChromeRuntime,
+  runtime: BeMusicGameplayRuntime,
   playfieldCenterX: number,
   hue: number,
   pool: ChildPool,

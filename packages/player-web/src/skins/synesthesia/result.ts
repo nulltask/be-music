@@ -27,17 +27,14 @@ import {
   sceneHue,
 } from './style.ts';
 import {
-  addSkinText,
   easeOutBack,
   easeOutCubic,
-  type BeMusicResultFrame,
-  type BeMusicResultSkin,
   resolveResultLamp,
   resolveResultTrackRows,
   rollUpValue,
-  type SkinTextOptions,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
 const ROLL_DELAY_MS = 700;
 const ROLL_MS = 1100;
@@ -65,7 +62,7 @@ const ROWS_TOP = BOTTOM_TOP + 34;
 const ROWS_BOTTOM = ROWS_TOP + 4 * 32 + 12;
 const RANK_BURST = burstParticles(29, 260);
 
-export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
+export const synesthesiaResultSkin: PixiResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
 
 /**
  * Synesthesia result, in the light of a cosmic particle world: a black void with ember dust and a floor of light
@@ -73,7 +70,7 @@ export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => ren
  * graphs draw as glowing filaments, and the rank letter ignites inside a spinning 3D ring of particles that bursts
  * outward the moment it lands — a lock-on reticle snapping shut on it.
  */
-export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
+export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
   // Effects off: skip the entrance and render the settled result.
   const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;

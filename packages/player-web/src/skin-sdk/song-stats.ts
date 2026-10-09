@@ -1,5 +1,6 @@
 import type { BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer/triggers';
+import { resolveChartPlayVariant } from '@be-music/chart';
 import { extractLandmineNotes, extractPlayableNotes } from '@be-music/player/playable-notes';
 import type { BrowserSongEntry } from '../collection/types.ts';
 
@@ -103,4 +104,9 @@ export function resolveSongRowFacts(song: Pick<BrowserSongEntry, 'chart' | 'bpm'
     bpm: formatBpmRange(stats.minBpm, stats.maxBpm),
     tags: resolveSongTags(stats),
   };
+}
+
+/** `'7K KEYS'`-style mode label for a song's play variant. */
+export function formatPlayVariantLabel(song: Pick<BrowserSongEntry, 'chartPath' | 'chart'>): string {
+  return `${resolveChartPlayVariant({ chartPath: song.chartPath, events: song.chart.events, bms: song.chart.bms })} KEYS`;
 }

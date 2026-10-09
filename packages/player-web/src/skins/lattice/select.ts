@@ -14,23 +14,25 @@ import {
   LAT_WHITE,
 } from './style.ts';
 import {
-  addHitArea,
-  addSkinText,
   easeOutCubic,
   audioDrive,
   bandLevel,
   type BeMusicAudioFrame,
-  type BeMusicSelectFrame,
   type BeMusicSelectLayout,
-  type BeMusicSelectRenderer,
-  type BeMusicSelectSkin,
   type BrowserBrowseEntry,
   type BrowserSongEntry,
   formatPlayVariantLabel,
   resolveSongRowFacts,
-  type SkinTextOptions,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import {
+  addHitArea,
+  addSkinText,
+  type PixiSelectFrame,
+  type PixiSelectRenderer,
+  type PixiSelectSkin,
+  type SkinTextOptions,
+} from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
@@ -43,7 +45,8 @@ const INTRO_STAGGER_MS = 40;
 const OUTRO_COLUMNS = 16;
 const OUTRO_ROWS = 12;
 
-export const latticeSelectSkin: BeMusicSelectSkin = {
+export const latticeSelectSkin: PixiSelectSkin = {
+  outroMs: OUTRO_MS,
   layout: LAYOUT,
   createRenderer: () => new LatticeSelectRenderer(),
 };
@@ -62,15 +65,14 @@ function display(size: number, fill: number, weight: SkinTextOptions['weight'] =
  * that springs from row to row; the focused title sets itself letter by letter. Launching flips the page to ink tile
  * by tile.
  */
-class LatticeSelectRenderer implements BeMusicSelectRenderer {
+class LatticeSelectRenderer implements PixiSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
-  public readonly outroMs = OUTRO_MS;
   private readonly field = new Graphics();
   private built = false;
   private designWidth = 640;
   private designHeight = 480;
-  private effects: BeMusicSelectFrame['effects'] = 'full';
+  private effects: PixiSelectFrame['effects'] = 'full';
   private selected: number | undefined;
   private previousSelected: number | undefined;
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
@@ -92,7 +94,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
     this.frontLayer.label = 'lattice-select/front';
   }
 
-  public render(input: BeMusicSelectFrame): boolean {
+  public render(input: PixiSelectFrame): boolean {
     this.effects = input.effects;
     const frame =
       input.effects === 'off'
@@ -198,7 +200,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
     this.levelText = addSkinText(this.frontLayer, '', 226, designHeight - 20, mono(LAT_GRAPHITE));
   }
 
-  private renderChrome(frame: BeMusicSelectFrame): boolean {
+  private renderChrome(frame: PixiSelectFrame): boolean {
     const { layer, designWidth, designHeight, entries, focusedSong: song } = frame;
     const chrome = new Graphics();
     chrome.label = 'lattice-select/chrome';
@@ -319,8 +321,8 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
       anchorX: 0.5,
       anchorY: 0.5,
     });
-    addHitArea(layer, 14, 296, 182, 40, 'pointer', frame.actions.play);
-    addHitArea(layer, 206, 296, 98, 40, 'pointer', frame.actions.autoPlay);
+    addHitArea(14, 296, 182, 40, 'pointer', frame.actions.play);
+    addHitArea(206, 296, 98, 40, 'pointer', frame.actions.autoPlay);
 
     // Search and library.
     text(onEntry('SEARCH', 480, 30), 14, 372, mono());
@@ -332,7 +334,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
       maxWidth: 230,
     });
     chrome.rect(14, 388, 290, 1).fill(LAT_INK);
-    addHitArea(layer, 14, 362, 290, 30, 'text', frame.actions.activateSearch);
+    addHitArea(14, 362, 290, 30, 'text', frame.actions.activateSearch);
     text(onEntry('LIBRARY', 560, 32), 14, 420, mono());
     text(onEntry(`${entries.length} shown / ${frame.totalCharts} charts`, 600, 33), 14, 434, {
       size: 11,
@@ -370,7 +372,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
     return intro < 1 || titleAge < 1200 || sceneAge < 1400;
   }
 
-  private renderList(frame: BeMusicSelectFrame): boolean {
+  private renderList(frame: PixiSelectFrame): boolean {
     const { listX, listTop, rowHeight } = LAYOUT;
     const listWidth = frame.designWidth - listX - 14;
     const rows = new Graphics();
@@ -407,7 +409,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
   }
 
   private renderRow(
-    frame: BeMusicSelectFrame,
+    frame: PixiSelectFrame,
     rows: Graphics,
     entry: BrowserBrowseEntry,
     entryIndex: number,
@@ -552,7 +554,7 @@ class LatticeSelectRenderer implements BeMusicSelectRenderer {
   }
 
   /** Launch outro: ink tiles flip over the page in a diagonal wave and the chosen title sets itself in white. */
-  private renderOutro(frame: BeMusicSelectFrame): void {
+  private renderOutro(frame: PixiSelectFrame): void {
     const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
     const { designWidth, designHeight, layer } = frame;
     const g = new Graphics();

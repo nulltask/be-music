@@ -2,33 +2,34 @@
 
 # be-music スキンの作り方
 
-このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/player-web/skin-sdk` サブパスに対して書きます。組み込みスキンもまさにこのサブパスだけを使っており、Synesthesia・Phantom・Plain・Lattice はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
+このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/player-web/skin-sdk` サブパスに対して書きます。組み込みスキンもまさにこのサブパスだけを使っており、Synesthesia・Phantom・Lattice・Plain はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
 
-be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンは描画関数のセットを提供します。それ以外はすべてプレイヤーの担当です。
+be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
 - 入力、タイミング、オーディオ、判定
 - レーンのレイアウトとノーツの位置
 - 選曲リストの当たり判定
 
-各フレームの見た目はスキンが決めます。
+プレイヤーは毎フレーム、キャンバスとそのフレームの内容（プレーンなデータ）をスキンに渡します。見た目はスキンが決めます。
 
-## 2 つの描き方
+## 描画フレームワークはスキンが持ち込む
 
-|             | Canvas スキン（`defineCanvasSkin`）                                        | Pixi スキン（`defineBeMusicSkin`）                                                     |
-| ----------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 描画 API    | `'2d'` / `'webgl'` / `'webgl2'` / `'webgpu'` コンテキストの素の `<canvas>` | PixiJS v8 の表示オブジェクト                                                           |
-| 書くもの    | 画面ごとに `draw` 関数を 1 つ                                              | クローム、レーン、ノーツ、ロングノーツ、ヒットエフェクト、選曲、リザルトの各レンダラー |
-| Pixi の知識 | 不要                                                                       | 必要                                                                                   |
-| 作例        | Plain（`packages/player-web/src/skins/plain/`）                            | Synesthesia、Phantom、Lattice（`packages/player-web/src/skins/`）                      |
+SDK 自体は描画を行わず、描画フレームワークも import しません。キャンバスは、スキンに合ったもので描いてください。
 
-フィルター、ブレンドモード、多数のレイヤーにまたがる GPU パーティクルなど Pixi の機能が必要でなければ、Canvas スキンから始めてください。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。
+| 描画手段                      | `context`                           | 方法                                                                               | 作例                                                                                      |
+| ----------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Canvas 2D API                 | `'2d'`                              | そのまま描く。キャンバスはクリア済みで、デザインピクセルにスケール済み             | Plain（`packages/player-web/src/skins/plain/`）                                           |
+| PixiJS                        | `'webgl2'`                          | `setup` でキャンバス上に Pixi レンダラーを作り、シーングラフを組んで `draw` で描画 | Synesthesia、Phantom、Lattice（`packages/player-web/src/skins/`、`skins/pixi-kit/` 経由） |
+| three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                                         |
 
-## クイックスタート: Canvas スキン
+フレームワークは、スキン自身の依存として同梱します。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。
+
+## クイックスタート: Canvas 2D スキン
 
 ```ts
-import { BE_MUSIC_SKIN_API_VERSION, defineCanvasSkin, resolveLaneRuns } from '@be-music/player-web/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/player-web/skin-sdk';
 
-export default defineCanvasSkin({
+export default defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   id: 'my-skin',
   label: 'My Skin',
@@ -74,48 +75,86 @@ export default defineCanvasSkin({
 });
 ```
 
-### Canvas スキンの描画のしくみ
+## フレームワークを使う
 
-- **`draw` が呼ばれるタイミング:** プレイヤーがレンダリング直前に 1 フレーム 1 回呼びます。`'2d'` ではキャンバスはクリア・スケール済みなので、デザインピクセル（デフォルトステージで 854×480）で描けます。
-- **その他のコンテキスト:** `'webgl'` / `'webgl2'` / `'webgpu'` ではキャンバス全体を自分で扱います。`surface.pixelRatio` がデザインピクセルあたりのキャンバスピクセル数です。
-- **`setup(surface)`:** 新しいサーフェスごとに、最初の描画前に 1 回呼ばれます。シェーダーのコンパイルや GPU デバイスの取得に使います。Promise を返すと、描画はその完了を待ちます。
-- **`contextAttributes`:** `canvas.getContext` にそのまま渡されます。
+`setup` でサーフェスのキャンバス上にフレームワークのレンダラーを作り、`teardown` で解放します。`setup` はサーフェスごとに最初の描画前に 1 回呼ばれ、Promise を返すとプレイヤーはその完了を待ちます。サーフェスは画面ごとにあります（ゲームプレイ 1 つ、選曲画面ごと 1 つ、リザルト画面ごと 1 つ）。
+
+```ts
+import { WebGLRenderer, Container } from 'pixi.js';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/player-web/skin-sdk';
+
+const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
+
+export default defineBeMusicSkin({
+  // …メタデータ…
+  context: 'webgl2',
+  // マスクにはステンシルバッファが必要。キャンバスは BGA の上に重なるのでアルファを保つ。
+  contextAttributes: { alpha: true, premultipliedAlpha: true, stencil: true, preserveDrawingBuffer: true },
+  async setup(surface) {
+    const renderer = new WebGLRenderer();
+    await renderer.init({
+      canvas: surface.canvas,
+      context: surface.context,
+      width: surface.width,
+      height: surface.height,
+      resolution: surface.pixelRatio,
+      backgroundAlpha: 0,
+    });
+    renderers.set(surface.canvas, renderer);
+  },
+  teardown(surface) {
+    renderers.get(surface.canvas)?.destroy();
+    renderers.delete(surface.canvas);
+  },
+  gameplay: {
+    draw(surface, frame) {
+      const renderer = renderers.get(surface.canvas)!;
+      const stage = buildGameplayStage(frame); // このフレームのシーングラフ
+      renderer.render({ container: stage, clear: true });
+    },
+  },
+  // select, result …
+});
+```
+
+組み込みの Pixi スキンは、`skins/pixi-kit/define-pixi-skin.ts` を通してまさにこれを行っています。このファイルは、プレイヤーのフレームデータを保持型の Pixi シーンに流し込む作例として読めます。選曲シーンを保持しておき、`frame.revision` が変わったときだけ作り直す方法も示しています。
+
+## サーフェス
+
+- **`draw` が呼ばれるタイミング:**
+  - ゲームプレイは、レンダリング直前に 1 フレーム 1 回。
+  - 選曲とリザルトは、表示中は毎フレーム。
+- **`'2d'` サーフェス:** クリア・スケール済みなので、デザインピクセル（デフォルトステージで 854×480）で描けます。
+- **WebGL / WebGPU サーフェス:** 全体をスキンが扱います。`surface.pixelRatio` がデザインピクセルあたりのキャンバスピクセル数です。値が変わったらレンダラーをリサイズしてください。
 - **ドットバイドット:** 各キャンバスは画面上でステージが覆うデバイスピクセル数（ビューポート倍率 × `devicePixelRatio`）で確保され、nearest サンプリングで表示されます。描いたピクセルは画面に 1 対 1 で対応します。
-- **ゲームプレイのフレーム（`CanvasGameplayFrame`）:**
-  - `layout`
-  - `lanes`（キービーム強度つき）
-  - `notes`、`longNotes`
-  - `bombs`（経過時間つきのヒットエフェクト）
-  - `runtime`（HUD の値）
-  - `beatPhase`、`effects`、`audio`
-- **選曲のフレーム（`CanvasSelectFrame`）:** [選曲フレーム](#選曲bemusicselectskin)に、矩形をクリック可能にする `hit(x, y, w, h, action)` が加わったものです。アニメーション中は `select.draw` から `true` を返します。
-- **任意の設定:**
-  - `gameplay.bombDurationMs`（既定 300）
-  - `select.outroMs`（既定 0）
-  - `stage`（既定 `wideStage`）
+- **透過:** キャンバスは BGA 動画の上に合成されます。動画を見せたい場所では BGA の矩形を透明のまま残してください。
+- **`contextAttributes`:** `canvas.getContext` にそのまま渡されます。
 
 ## スキンのメタデータ
 
-すべてのスキンが以下を宣言します。`defineBeMusicSkin` と `defineCanvasSkin` は内容を検査し、不正なら例外を投げます。壊れたスキンは定義した場所で失敗します。
+すべてのスキンが以下を宣言します。`defineBeMusicSkin` は内容を検査し、不正なら例外を投げます。壊れたスキンは定義した場所で失敗します。
 
-| フィールド    | 必須 | ルール                                                                                                         |
-| ------------- | ---- | -------------------------------------------------------------------------------------------------------------- |
-| `apiVersion`  | ○    | ビルドに使った SDK の `BE_MUSIC_SKIN_API_VERSION`。プレイヤーは未対応の API リビジョン向けスキンを拒否します。 |
-| `id`          | ○    | 小文字英字・数字・ハイフン（`my-skin`）。ホストが保存するので、リリース間で変えないでください。                |
-| `label`       | ○    | ピッカーに表示する名前。                                                                                       |
-| `version`     | ○    | スキン自体のリリース。セマンティックバージョン（`1.2.0`）。                                                    |
-| `author`      | ○    | `{ name, url? }`。`url` は http(s)。                                                                           |
-| `description` | —    | ピッカー向けの 1〜2 文。                                                                                       |
-| `homepage`    | —    | プロジェクトページやリポジトリの http(s) URL。                                                                 |
-| `license`     | —    | スキンのコードと素材の SPDX 識別子（`MIT`）。                                                                  |
-| `fontLoads`   | ○    | 描画に使う CSS フォント指定（`'400 24px "Anton"'`）。空でも可。                                                |
-| `stage`       | —    | デザインキャンバス。[ステージとレイアウト](#ステージとレイアウト)を参照。                                      |
+| フィールド                               | 必須 | ルール                                                                                                         |
+| ---------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`                             | ○    | ビルドに使った SDK の `BE_MUSIC_SKIN_API_VERSION`。プレイヤーは未対応の API リビジョン向けスキンを拒否します。 |
+| `id`                                     | ○    | 小文字英字・数字・ハイフン（`my-skin`）。ホストが保存するので、リリース間で変えないでください。                |
+| `label`                                  | ○    | ピッカーに表示する名前。                                                                                       |
+| `version`                                | ○    | スキン自体のリリース。セマンティックバージョン（`1.2.0`）。                                                    |
+| `author`                                 | ○    | `{ name, url? }`。`url` は http(s)。                                                                           |
+| `description`                            | —    | ピッカー向けの 1〜2 文。                                                                                       |
+| `homepage`                               | —    | プロジェクトページやリポジトリの http(s) URL。                                                                 |
+| `license`                                | —    | スキンのコードと素材の SPDX 識別子（`MIT`）。                                                                  |
+| `fontLoads`                              | ○    | 描画に使う CSS フォント指定（`'400 24px "Anton"'`）。空でも可。                                                |
+| `context`                                | ○    | `'2d'`、`'webgl'`、`'webgl2'`、`'webgpu'` のいずれか。                                                         |
+| `contextAttributes`、`setup`、`teardown` | —    | [サーフェス](#サーフェス)と[フレームワークを使う](#フレームワークを使う)を参照。                               |
+| `stage`                                  | —    | デザインキャンバス。既定は `wideStage`。[ステージとレイアウト](#ステージとレイアウト)を参照。                  |
+| `gameplay`、`select`、`result`           | ○    | 各画面の `draw` 関数。[画面](#画面)を参照。                                                                    |
 
 `validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。
 
 ## ステージとレイアウト
 
-- **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）です。`stage` を宣言しないスキンは LR2 互換の 640×480 になります。
+- **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）で、既定値でもあります。
 - **BGA の配置:** `BeMusicStage.resolveBgaRect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
   - `stage`: 幅と高さ。
@@ -126,26 +165,23 @@ export default defineCanvasSkin({
 - **DP の隙間:** 1P と 2P のバンクは 60 px 離れています。`resolveLaneRuns(lanes)` は連続したバンクごとに `{ left, right }` を 1 つ返します。判定ラインやレーングリッドはラン単位で描き、隙間をまたがないようにします。
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
 
-## Pixi スキン
+## 画面
 
-`defineBeMusicSkin` は同じメタデータに 3 つの画面を加えて受け取ります。描画には `pixi.js`（プレイヤーの peer dependency）を使います。
+### ゲームプレイ
 
-### ゲームプレイ（`BeMusicGameplaySkin`）
+`gameplay.draw(surface, frame)` は `BeMusicGameplayFrame` を受け取ります。
 
-| メンバー                  | 受け取るもの                                                                             | 描くもの                                                                          |
-| ------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `renderChrome(context)`   | `layer`、`overlayLayer`、それぞれの `ChildPool`、`runtime`、`layout`                     | プレイフィールドの周り全部: ヘッダー、ゲージ、スコア、BGA 枠、判定 / コンボ、演出 |
-| `renderLanes(context)`    | クリア済みの `Graphics` 1 つ、`lanes`、`beatPhase`、`nowMs`、`combo`、`effects`、`audio` | レーン下地、キービーム、判定ライン                                                |
-| `renderNote(context)`     | 新しいプール済み `Graphics`、レーン `kind`、`x`、`w`、`y`（ノーツの下端）                | タップノーツ 1 つ                                                                 |
-| `renderLongNote(context)` | 新しいプール済み `Graphics`、`kind`、`x`、`w`、`top`（終端）、`bottom`（始端）           | ロングノーツ 1 つ                                                                 |
-| `renderBombs(context)`    | `ChildPool`、`bombs`、`nowMs`、`combo`、`effects`、`audio`                               | 生きているヒットエフェクトすべて                                                  |
-| `bombDurationMs`          | —                                                                                        | ヒットエフェクトの寿命                                                            |
+- `layout`: [ステージとレイアウト](#ステージとレイアウト)を参照。
+- `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。
+- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。
+- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。
+- `bombs`: 生きているヒットエフェクト。`elapsedMs` と固定の `seed` を持ちます。
+- `runtime`: HUD の値（下記）。
+- `beatPhase`、`nowMs`、`effects`、`audio`。
 
-表示オブジェクトはフレームごとに生成せず、渡されたプールから取得してください（`layerPool.acquireGraphics()`、`acquireText()` など）。プールは前フレームのオブジェクトを再利用するので、フレーム時間が安定します。
+`gameplay.bombDurationMs`（既定 300）でヒットエフェクトの寿命を指定します。
 
-### `runtime` の値
-
-`runtime`（`SkinlessGameplayChromeRuntime`）は HUD の値を持ちます。
+`runtime`（`BeMusicGameplayRuntime`）の値:
 
 - **曲とスコア:**
   - `songTitle`、`songArtist`、`bpm`、`hiSpeed`
@@ -158,49 +194,44 @@ export default defineCanvasSkin({
 - **イベント時刻:** `judgeAtMs`、`impulseAtMs`、`impulseKind`（直近の判定とキー入力。パンチやインパルスの演出用）
 - **快適性とサウンド:** `effects`、`audio`
 
-### 選曲（`BeMusicSelectSkin`）
+### 選曲
 
-- **`layout`:** `listX`、`listTop`、`listBottomInset`、`rowHeight`。シーンはこの値で行の当たり判定をするので、描く行と一致させてください。
-- **`createRenderer()`:** 選曲シーンごとに 1 回呼ばれ、次のメンバーを持つ `BeMusicSelectRenderer` を返します。
-  - `backLayer` / `frontLayer`: 毎フレーム作り直すレイヤーの背面と前面にある永続レイヤー。
-  - `render(frame)`: 入力に応じたクロームを `frame.layer` に作り直します。トランジション中は `true` を返します。
-  - `tick(nowMs, focusedSong, launchAt, audio)`: 永続レイヤーの毎フレームのアニメーション（変形のみ）。
-  - `outroMs`: 曲決定後のアウトロの長さ。終わるまでシーンは `frame.launchAt` を設定して描画を続け、その間の入力は無視します。
-  - `dispose()`
-- **フレーム（`BeMusicSelectFrame`）:**
+- **`select.layout`:** `listX`、`listTop`、`listBottomInset`、`rowHeight`。シーンはこの値で行の当たり判定をするので、描く行と一致させてください。
+- **`select.outroMs`:** 曲決定後のアウトロの長さ。終わるまで `frame.launchAt` を設定したまま描画が続き、その間の入力は無視されます。
+- **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
   - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
   - `folderLabel`、`searchQuery`、`totalCharts`
   - `actions`（`play`、`autoPlay`、`activateSearch`）
-  - 登場やフォーカス移動のトランジション用のタイムスタンプ
-  - `effects`、`launchAt`
-- **クリック領域:** Pixi のクロームをクリック可能にするには `addHitArea` を使います。
+  - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。
+  - 登場やフォーカス移動のトランジション用の `sceneStartedAt`、`cursorChangedAt`
+  - `nowMs`、`effects`、`launchAt`、`audio`
+  - `hit(x, y, w, h, action, cursor?)`: 矩形をそのフレームの間だけクリック可能にします。クリック領域は描画のたびに宣言してください。
 
-### リザルト（`BeMusicResultSkin`）
+### リザルト
 
-- **`render(frame)`:** 毎フレーム `frame.layer` を作り直します。
-- **フレームの内容:**
-  - `result`（スコア、判定数、ゲージ推移など）
-  - `rankLabel`（IIDX の DJ LEVEL）、`ratePercent`
-  - `elapsedMs`（シーン開始からの経過。登場演出をスキップした後は `Infinity`）
-  - `effects`
-- **ヘルパー:** `resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。
+`result.draw(surface, frame)` は `BeMusicResultFrame` を受け取ります。
+
+- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。
+- `rankLabel`（IIDX の DJ LEVEL）、`ratePercent`。
+- `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
+- `nowMs`、`effects`。
+
+`resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。
 
 ## SDK ヘルパー
 
-| 分野                 | ヘルパー                                                                                                                                                                        |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ステージ             | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`                                                        |
-| レイアウト           | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`                                                                                                              |
-| テキスト（Pixi）     | `addHudText`、`addHudNumber`（プール・tint・キャップハイト揃え）、`addSkinText`、`addHitArea`、`formatPlayVariantLabel`、`DEFAULT_TEXT_FONT`                                    |
-| パーティクル（Pixi） | `pointLayerFor(graphics)`: プール済み `Graphics` に追従する GPU ポイントパーティクル                                                                                            |
-| キービーム（Pixi）   | `keyBeamGradient(color)`、`KEY_BEAM_STOPS`                                                                                                                                      |
-| 判定                 | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`                                                                                          |
-| 演出                 | `trackMoments` / `updateMoments`（カウントイン、100 コンボごと、クリアライン、フルコンボ、コンボ切れ）、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile` |
-| ロード中             | `LOADING_WORD`、`loadingDots(nowMs)`                                                                                                                                            |
-| サウンド             | `audioDrive`、`bandAt`、`bandLevel`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                |
-| リザルト             | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                   |
-| 曲情報               | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`                                                                              |
-| モーション           | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                       |
+| 分野       | ヘルパー                                                                                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ステージ   | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`                                                        |
+| レイアウト | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`                                                                                                              |
+| 判定       | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`                                                                                          |
+| 演出       | `trackMoments` / `updateMoments`（カウントイン、100 コンボごと、クリアライン、フルコンボ、コンボ切れ）、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile` |
+| ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`                                                                                                                                            |
+| サウンド   | `audioDrive`、`bandAt`、`bandLevel`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                |
+| リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                   |
+| 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                    |
+| テキスト   | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                       |
+| モーション | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                       |
 
 ## 音楽に反応させる
 
@@ -233,7 +264,7 @@ export default defineCanvasSkin({
 
 ## パッケージングと読み込み
 
-- **import の範囲:** スキンモジュールが import するのは `@be-music/player-web/skin-sdk`、`pixi.js`（Pixi スキンの場合）、自身のファイルだけです。組み込みスキンもテストでこのルールを守らされているので、組み込みスキンが使うものはすべて使えます。
+- **import の範囲:** スキンモジュールが import するのは `@be-music/player-web/skin-sdk`、選んだ描画フレームワーク、自身のファイルです。組み込みスキンもテストでこのルールを守らされているので、組み込みスキンがプレイヤーから使っているものはすべて使えます。
 - **export:** スキンはモジュールの default export にします。
 - **ホスト側:** ホストはスキンをレジストリに登録します。
 
@@ -264,10 +295,11 @@ export default defineCanvasSkin({
 ## チェックリスト
 
 - [ ] メタデータが `validateBeMusicSkin` を通る。
+- [ ] `setup` で作ったフレームワークのリソースを `teardown` で解放している。
 - [ ] クロームは `layout` から配置し、判定ラインはレーンランごとに描いている。
-- [ ] BGA の矩形が見えている（Canvas スキンは `runtime.hasBga` のとき `clearRect`）。
+- [ ] `runtime.hasBga` のとき BGA の矩形を透明のまま残している。
 - [ ] `runtime.loading` の間は NOW LOADING を表示している。
-- [ ] 選曲の行が `select.layout` と揃い、ボタンがクリックできる。
+- [ ] 選曲の行が `select.layout` と揃い、ボタンは描画のたびに `frame.hit` で宣言している。
 - [ ] 音への反応は `audioDrive` を通し、`effects` を尊重している。
 - [ ] 使うフェイスをすべて `fontLoads` に挙げている。
 - [ ] SP、DP、5 / 7 / 9 / 10 / 14 / 24 / 48 KEY、BGA あり・なしで確認した。

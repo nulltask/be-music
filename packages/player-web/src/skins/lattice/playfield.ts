@@ -4,17 +4,19 @@ import { LAT_ACCENT, LAT_INK, LAT_RULE, LAT_SIGNAL } from './style.ts';
 import {
   easeOutCubic,
   type BeMusicBomb,
-  type BeMusicBombsContext,
   type BeMusicLaneKind,
-  type BeMusicLanesContext,
-  type BeMusicLongNoteContext,
-  type BeMusicNoteContext,
   comboTier,
   effectProfile,
   hash01,
-  keyBeamGradient,
   resolveLaneRuns,
 } from '../../skin-sdk/index.ts';
+import {
+  type PixiBombsContext,
+  type PixiLanesContext,
+  type PixiLongNoteContext,
+  type PixiNoteContext,
+  keyBeamGradient,
+} from '../pixi-kit/index.ts';
 
 /** Lane-class colour: white keys print in ink, black keys in cobalt, the scratch in vermilion. */
 const LANE_COLORS: Record<BeMusicLaneKind, number> = {
@@ -35,7 +37,7 @@ export const LATTICE_BOMB_DURATION_MS = 380;
  * Lattice lanes: bright paper columns split by hairlines, a key beam that prints the lane's colour as a soft wash, an
  * ink judgement line with ruler ticks and a beat marker sliding along it, and square key caps that fill on press.
  */
-export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects }: BeMusicLanesContext): void {
+export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects }: PixiLanesContext): void {
   if (lanes.length === 0) return;
   const tier = effectProfile(effects).enabled ? comboTier(combo ?? 0) : 0;
   let left = Number.POSITIVE_INFINITY;
@@ -104,12 +106,12 @@ export function renderLatticeLanes({ graphics, lanes, beatPhase, combo, effects 
   }
 }
 
-export function renderLatticeNote({ graphics, kind, x, w, y }: BeMusicNoteContext): void {
+export function renderLatticeNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
   graphics.rect(x, y - NOTE_HEIGHT, Math.max(3, w), NOTE_HEIGHT).fill(LANE_COLORS[kind]);
 }
 
 /** Long note: an outlined column ruled with fine horizontal hatching, capped by solid heads. */
-export function renderLatticeLongNote({ graphics, kind, x, w, top, bottom }: BeMusicLongNoteContext): void {
+export function renderLatticeLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
   const color = LANE_COLORS[kind];
   const bodyX = x;
   const bodyW = Math.max(3, w);
@@ -133,7 +135,7 @@ export function renderLatticeLongNote({ graphics, kind, x, w, top, bottom }: BeM
  * quarter turn, small squares shoot out along the diagonals (more sets as the combo tier rises), and a hairline
  * retracts down the lane. At tier 3+ a dashed orbit spins around the hit.
  */
-export function renderLatticeBombs({ pool, bombs, combo, effects }: BeMusicBombsContext): void {
+export function renderLatticeBombs({ pool, bombs, combo, effects }: PixiBombsContext): void {
   const profile = effectProfile(effects);
   const tier = profile.enabled ? Math.min(comboTier(combo ?? 0), profile.screenWide ? 4 : 2) : 0;
   if (bombs.length === 0) return;

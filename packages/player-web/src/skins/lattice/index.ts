@@ -8,7 +8,8 @@ import {
 } from './playfield.ts';
 import { latticeResultSkin } from './result.ts';
 import { latticeSelectSkin } from './select.ts';
-import { type BeMusicSkin, wideStage, BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '../../skin-sdk/index.ts';
+import { BE_MUSIC_SKIN_API_VERSION, wideStage, type BeMusicSkin } from '../../skin-sdk/index.ts';
+import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**
  * Lattice — a skin in the manner of precise, typographic interaction design (the Japanese web / broadcast interaction-design
@@ -16,7 +17,7 @@ import { type BeMusicSkin, wideStage, BE_MUSIC_SKIN_API_VERSION, defineBeMusicSk
  * needles that turns like iron filings to the beat and to every key press, odometer counters, letters that drop in on
  * springs, and tile-flip transitions.
  */
-export const latticeSkin: BeMusicSkin = defineBeMusicSkin({
+export const latticeSkin: BeMusicSkin = definePixiSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   id: 'lattice',
   label: 'Lattice',

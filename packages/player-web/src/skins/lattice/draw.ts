@@ -8,7 +8,7 @@ import {
   type HudTextOptions,
   pointLayerFor,
   type SkinTextOptions,
-} from '../../skin-sdk/index.ts';
+} from '../pixi-kit/index.ts';
 
 /**
  * Shared Lattice drawing: the graph-paper grid, the needle field, ruler ticks, per-letter staggered type, and the

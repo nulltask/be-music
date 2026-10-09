@@ -142,7 +142,14 @@ import type {
 } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import { resolveGameplayLayout } from '../../skin-sdk/layout.ts';
-import { phantomSkin } from '../../skins/phantom/index.ts';
+import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import {
+  PHANTOM_BOMB_DURATION_MS,
+  renderPhantomBombs,
+  renderPhantomLanes,
+  renderPhantomLongNote,
+  renderPhantomNote,
+} from '../../skins/phantom/playfield.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -1164,7 +1171,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** The be-music skin's stage while the scene paints through it, otherwise `undefined`. */
   private get beMusicStage(): BeMusicStage | undefined {
     if (this.options.skinlessChromeRenderer) return undefined;
-    return this.options.beMusicSkin?.stage;
+    const skin = this.options.beMusicSkin;
+    return skin ? resolveBeMusicSkinStage(skin) : undefined;
   }
 
   /**
@@ -1208,7 +1216,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** How long the bomb on `channel` stays alive, in ms. Default: the be-music skin's own effect length. */
   protected resolveBombDurationMs(_channel: string): number {
-    return this.playfieldSkin.gameplay.bombDurationMs;
+    return this.skinBinding?.bombDurationMs ?? PHANTOM_BOMB_DURATION_MS;
   }
 
   /** Release-fade span in ms for key-on timer `timerId` (100..119). Default: {@link KEY_ON_FADE_OUT_MS}. */
@@ -1812,6 +1820,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // own `destroy()` (which clears `GraphicsContext` resources) rather than chained through `destroy({children:true})`
     // which can skip some Pixi v8 cleanup paths.
     try {
+      this.skinBindingInstance?.dispose();
+      this.skinBindingInstance = undefined;
       this.noteLayerPool.destroy();
       this.skinLayerPool.destroy();
       this.overlayLayerPool.destroy();
@@ -3315,7 +3325,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         seed: Math.floor(startedAt * 7.31) % 100_003,
       });
     }
-    this.playfieldSkin.gameplay.renderBombs({
+    const binding = this.skinBinding;
+    if (binding) {
+      binding.addBombs(bombs);
+      return;
+    }
+    renderPhantomBombs({
       pool: this.bombLayerPool,
       bombs,
       nowMs: now,
@@ -3325,9 +3340,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     });
   }
 
-  /** Active be-music skin for scene-painted playfield parts; the built-in Phantom skin unless the host picked one. */
-  private get playfieldSkin(): BeMusicSkin {
-    return this.options.beMusicSkin ?? phantomSkin;
+  private skinBindingInstance: BeMusicGameplayBinding | undefined;
+
+  /**
+   * The be-music skin's gameplay binding while the scene paints through a skin: lanes, notes, and hit effects are handed
+   * to it as data and the skin draws them on its own canvas. `undefined` for themes, whose missing pieces (lanes, notes
+   * without a cell, bombs) are drawn here in the built-in Phantom style instead.
+   */
+  private get skinBinding(): BeMusicGameplayBinding | undefined {
+    const skin = this.options.beMusicSkin;
+    if (!skin || this.options.skinlessChromeRenderer) return undefined;
+    this.skinBindingInstance ??= new BeMusicGameplayBinding(skin);
+    return this.skinBindingInstance;
   }
 
   /**
@@ -3633,7 +3657,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       if (this.options.skinlessChromeRenderer) {
         this.options.skinlessChromeRenderer(context);
       } else {
-        this.options.beMusicSkin?.gameplay.renderChrome({ ...context, layout: this.resolveBeMusicLayout() });
+        this.skinBinding?.renderChrome({ ...context, layout: this.resolveBeMusicLayout() });
       }
     } finally {
       this.skinLayerPool.end();
@@ -3712,7 +3736,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
     if (!themeOwnsPlayfield && skinlessLanes.length > 0) {
       const beat = this.currentBeat(this.currentSeconds());
-      this.playfieldSkin.gameplay.renderLanes({
+      const binding = this.skinBinding;
+      if (binding) {
+        binding.addLanes(skinlessLanes);
+        return;
+      }
+      renderPhantomLanes({
         graphics: this.laneLayer,
         lanes: skinlessLanes,
         beatPhase: beat - Math.floor(beat),
@@ -4035,16 +4064,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       sprite.height = cell.height;
       return;
     }
+    const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
+    const binding = this.skinBinding;
+    if (binding) {
+      binding.addNote({ kind, x: lane.x, w: lane.w, y });
+      return;
+    }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    this.playfieldSkin.gameplay.renderNote({
-      graphics: graphic,
-      kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
-      x: lane.x,
-      w: lane.w,
-      y,
-      nowMs: this.playClock(),
-    });
+    renderPhantomNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: this.playClock() });
   }
 
   /**
@@ -4081,17 +4109,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         sprite.height = Math.max(1, bottom - top);
       }
     } else {
-      const graphic = this.noteLayerPool.acquireGraphics();
-      graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      this.playfieldSkin.gameplay.renderLongNote({
-        graphics: graphic,
-        kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
-        x: lane.x,
-        w: lane.w,
-        top,
-        bottom,
-        nowMs: this.playClock(),
-      });
+      const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
+      const binding = this.skinBinding;
+      if (binding) {
+        binding.addLongNote({ kind, x: lane.x, w: lane.w, top, bottom });
+      } else {
+        const graphic = this.noteLayerPool.acquireGraphics();
+        graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
+        renderPhantomLongNote({ graphics: graphic, kind, x: lane.x, w: lane.w, top, bottom, nowMs: this.playClock() });
+      }
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     const endCell = this.resolveThemeNoteCell('lnend', laneIndex);

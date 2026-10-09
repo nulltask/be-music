@@ -1,4 +1,4 @@
-import { BE_MUSIC_SKIN_API_VERSION, defineCanvasSkin, type BeMusicSkin } from '../../skin-sdk/index.ts';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, type BeMusicSkin } from '../../skin-sdk/index.ts';
 import { drawGameplay } from './gameplay.ts';
 import { drawResult } from './result.ts';
 import { SELECT_LAYOUT, SELECT_OUTRO_MS, drawSelect } from './select.ts';
@@ -7,7 +7,7 @@ import { SELECT_LAYOUT, SELECT_OUTRO_MS, drawSelect } from './select.ts';
  * Plain — the skin SDK's worked example: every screen is drawn with the Canvas 2D API, no Pixi involved. Start here
  * when writing a skin of your own; `gameplay.ts`, `select.ts`, and `result.ts` each draw one screen.
  */
-export const plainSkin: BeMusicSkin = defineCanvasSkin({
+export const plainSkin: BeMusicSkin = defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
   id: 'plain',
   label: 'Plain',

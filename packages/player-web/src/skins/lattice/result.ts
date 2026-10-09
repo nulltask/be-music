@@ -14,22 +14,19 @@ import {
   LAT_TEXT_FONT,
 } from './style.ts';
 import {
-  addSkinText,
   easeOutCubic,
-  type BeMusicResultFrame,
-  type BeMusicResultSkin,
   resolveResultLamp,
   resolveResultTrackRows,
   rollUpValue,
-  type SkinTextOptions,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
 const ROLL_DELAY_MS = 600;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1500;
 
-export const latticeResultSkin: BeMusicResultSkin = { render: (frame) => renderLatticeResult(frame) };
+export const latticeResultSkin: PixiResultSkin = { render: (frame) => renderLatticeResult(frame) };
 
 function mono(fill: number = LAT_GRAPHITE, extra: SkinTextOptions = {}): SkinTextOptions {
   return { size: 9, weight: '500', fill, fontFamily: LAT_MONO_FONT, letterSpacing: 0.6, ...extra };
@@ -44,7 +41,7 @@ function display(size: number, fill: number, weight: SkinTextOptions['weight'] =
  * page, figures roll up on a tabular grid, the judgement bars and graphs draw in as ruled lines, and the rank drops in
  * as huge thin letters on a spring while the needle field behind swings to point at it.
  */
-export function renderLatticeResult(frame: BeMusicResultFrame): void {
+export function renderLatticeResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
   const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs;
   const motion = frame.effects === 'off' ? 0 : frame.effects === 'reduced' ? 0.5 : 1;

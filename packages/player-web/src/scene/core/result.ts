@@ -1,12 +1,13 @@
 import { Application, Color, Container, Graphics } from 'pixi.js';
 import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 import { type PixiSceneHost } from '../host.ts';
-import { LaggedDisposer, disposeChildren } from '../pixi-utils.ts';
+import { disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
+import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -112,7 +113,8 @@ export class CoreResultView {
   private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no theme paints the frame). */
   private readonly fallbackLayer = new Container();
-  private readonly fallbackDisposer = new LaggedDisposer();
+  /** Draws the be-music skin's result on its canvas, shown in `fallbackLayer`; created on first use. */
+  private skinBinding: BeMusicResultBinding | undefined;
   /** Clip mask for the design rect — keeps theme artwork from bleeding into the letterbox bars. */
   private readonly designClipMask = new Graphics();
   /**
@@ -317,7 +319,8 @@ export class CoreResultView {
       log.warn('texture cleanup threw', error);
     }
     try {
-      this.fallbackDisposer.flush();
+      this.skinBinding?.dispose();
+      this.skinBinding = undefined;
       this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
@@ -357,9 +360,9 @@ export class CoreResultView {
     const screenWidth = this.app.screen.width || FALLBACK_DESIGN_WIDTH;
     const screenHeight = this.app.screen.height || FALLBACK_DESIGN_HEIGHT;
     const themeSize = this.themeDesignSize;
-    const stage = (this.options.beMusicSkin ?? phantomSkin).stage;
-    const designWidth = themeSize ? themeSize.width : (stage?.width ?? FALLBACK_DESIGN_WIDTH);
-    const designHeight = themeSize ? themeSize.height : (stage?.height ?? FALLBACK_DESIGN_HEIGHT);
+    const stage = resolveBeMusicSkinStage(this.options.beMusicSkin ?? phantomSkin);
+    const designWidth = themeSize ? themeSize.width : stage.width;
+    const designHeight = themeSize ? themeSize.height : stage.height;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
     setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
@@ -381,13 +384,12 @@ export class CoreResultView {
     // state alive, which the original report described as "browser freezes after the song ends" — accumulated
     // GraphicsContext + glyph atlas slots stalled the next reconcile pass. See `pixi-utils.ts` for the full rationale.
     disposeChildren(this.skinLayer);
-    // The built-in result is rebuilt every frame; retiring its nodes one frame late lets unchanged labels keep their
-    // text textures (see `LaggedDisposer`).
-    this.fallbackDisposer.cycle(this.fallbackLayer);
     if (this.renderTheme()) {
       // No empty-state hint here — the theme's own artwork covers the whole canvas.
+      this.fallbackLayer.visible = false;
       return;
     }
+    this.fallbackLayer.visible = true;
     this.renderFallbackPanel(designWidth, designHeight);
   }
 
@@ -398,8 +400,11 @@ export class CoreResultView {
     const now = performance.now();
     // A skip (Enter before the chart draw finishes → timer 151) jumps the skin's entrance to its settled layout.
     const skipped = this.timerStartedAt.has(151);
-    (this.options.beMusicSkin ?? phantomSkin).result.render({
-      layer: this.fallbackLayer,
+    if (!this.skinBinding) {
+      this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin);
+      this.fallbackLayer.addChild(this.skinBinding.view);
+    }
+    this.skinBinding.render({
       designWidth,
       designHeight,
       result,

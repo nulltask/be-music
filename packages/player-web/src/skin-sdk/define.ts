@@ -1,4 +1,4 @@
-import type { BeMusicSkin } from '../skin/be-music/types.ts';
+import type { BeMusicSkin, BeMusicSurfaceContextKind } from '../skin/be-music/types.ts';
 
 /**
  * The skin API revision this build of the player implements. Skins record the revision they were written against in
@@ -13,6 +13,8 @@ const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([BE_MUSIC_SKIN_API_V
 export function isSupportedBeMusicSkinApiVersion(apiVersion: number): boolean {
   return SUPPORTED_API_VERSIONS.has(apiVersion);
 }
+
+const CONTEXT_KINDS: ReadonlySet<string> = new Set<BeMusicSurfaceContextKind>(['2d', 'webgl', 'webgl2', 'webgpu']);
 
 const SKIN_ID = /^[a-z0-9][a-z0-9-]*$/u;
 // Semantic Versioning 2.0.0: MAJOR.MINOR.PATCH with optional pre-release and build metadata.
@@ -49,6 +51,12 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   if (skin.homepage !== undefined && !isHttpUrl(skin.homepage)) {
     problems.push(`homepage "${skin.homepage}" must be an http(s) URL`);
   }
+  if (!CONTEXT_KINDS.has(skin.context)) {
+    problems.push(`context "${String(skin.context)}" must be one of ${[...CONTEXT_KINDS].join(', ')}`);
+  }
+  for (const screen of ['gameplay', 'select', 'result'] as const) {
+    if (typeof skin[screen]?.draw !== 'function') problems.push(`${screen}.draw must be a function`);
+  }
   return problems;
 }
 
@@ -64,8 +72,10 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
  *   version: '1.0.0',
  *   author: { name: 'Jane Doe', url: 'https://example.com' },
  *   fontLoads: [],
- *   stage: wideStage,
- *   gameplay, select, result,
+ *   context: '2d',
+ *   gameplay: { draw: ({ context: ctx }, frame) => { … } },
+ *   select: { layout, draw: ({ context: ctx }, frame) => { … } },
+ *   result: { draw: ({ context: ctx }, frame) => { … } },
  * });
  * ```
  */

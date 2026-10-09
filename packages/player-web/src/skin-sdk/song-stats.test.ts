@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import { parseChart } from '@be-music/parser';
 import {
   formatBpmRange,
+  formatPlayVariantLabel,
   formatSongLength,
   resolveSongRowFacts,
   resolveSongStats,
@@ -78,5 +79,13 @@ describe('resolveSongRowFacts', () => {
   it('formats the notes, length, tempo and tags of a row', () => {
     const facts = resolveSongRowFacts({ ...song(PLAIN), totalNotes: 5 });
     expect(facts).toEqual({ notes: '5', length: '0:04', bpm: '120', tags: [] });
+  });
+});
+
+describe('formatPlayVariantLabel', () => {
+  it("names the chart's play variant", () => {
+    expect(formatPlayVariantLabel({ chartPath: 'a.bms', chart: parseChart(PLAIN, 'bms') })).toBe('5 KEYS');
+    const sevenKeys = [PLAIN, '#00118:01000000'].join('\n');
+    expect(formatPlayVariantLabel({ chartPath: 'a.bms', chart: parseChart(sevenKeys, 'bms') })).toBe('7 KEYS');
   });
 });

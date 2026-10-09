@@ -13,21 +13,20 @@ import {
   starburstPoints,
 } from './style.ts';
 import {
-  addHudText,
   easeOutBack,
   easeOutCubic,
-  type ChildPool,
   effectProfile,
   hash01,
   momentProgress,
   trackMoments,
   resolveMilestoneArea,
   type BeMusicGameplayLayout,
-  type SkinlessGameplayChromeRuntime,
+  type BeMusicGameplayRuntime,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
 } from '../../skin-sdk/index.ts';
+import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
 
 const MILESTONE_MS = 1100;
 const CLEAR_MS = 1000;
@@ -49,7 +48,7 @@ const SKEW = -0.18;
 export function drawPhantomMoments(
   chromeLayer: Container,
   layer: Container,
-  runtime: SkinlessGameplayChromeRuntime,
+  runtime: BeMusicGameplayRuntime,
   pool: ChildPool | undefined,
   layout: BeMusicGameplayLayout,
 ): boolean {
