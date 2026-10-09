@@ -65,6 +65,12 @@ const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
 /** Stars drifting past while browsing, and the denser field the launch warp dashes through. */
 const STAR_COUNT = 320;
+/** The star field's volume: particles stream from `far` to `near` along z. */
+const STARFIELD = { spread: 560, near: 10, far: 1000, speed: 1 } as const;
+/** How much faster the field streams at the peak of the launch warp, and how long a trail each particle draws. */
+const WARP_SPEEDUP = 7;
+const STAR_TRAIL_SECONDS = 0.07;
+const STAR_TRAIL_MAX = 220;
 const WARP_STAR_COUNT = 900;
 const RIVER_PARTICLES = 340;
 const ORB_SHELL = fibonacciSphere(900, 23);
@@ -115,6 +121,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private readonly stars: Sprite[] = [];
   /** Holds {@link stars}; the one layer that stays lit through the launch warp. */
   private readonly starLayer = new Container();
+  /** Each star's trail during the launch warp, drawn behind the stars. */
+  private readonly trails = new Graphics();
   private readonly lock = new Graphics();
   private readonly cursorGlow = new Sprite();
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
@@ -253,10 +261,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       (this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1) * (1 - settle),
     );
     // Data dust pouring out of the vanishing point — speed follows the focused chart's tempo. Launching steers the
-    // vanishing point to the centre of the screen, where the chosen title appears, and floors the throttle.
+    // vanishing point to the centre of the screen, where the chosen title appears, and opens the throttle — kept to a
+    // speed the eye can follow, with each particle trailing its own path so the dash reads as forward motion.
     const cx = this.designWidth * (0.58 - 0.08 * settle);
     const cy = this.designHeight * (0.44 + 0.06 * settle);
-    const speed = (80 + beatsPerSecond * 55) * (1 + 60 * warp * warp) * (1 + 1.2 * drive.level);
+    const speed = (80 + beatsPerSecond * 55) * (1 + WARP_SPEEDUP * warp * warp) * (1 + 1.2 * drive.level);
+    // World units each particle's trail reaches back along its path: about the last few frames of travel.
+    const trail = warp > 0 ? Math.min(STAR_TRAIL_MAX, speed * STAR_TRAIL_SECONDS) * settle : 0;
+    const trails = this.trails;
+    trails.clear();
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
     const shownStars = Math.round(STAR_COUNT + (WARP_STAR_COUNT - STAR_COUNT) * settle);
     for (let index = 0; index < this.stars.length; index += 1) {
@@ -265,7 +278,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         star.visible = false;
         continue;
       }
-      const point = starfieldPoint(index, this.travel, { spread: 560, near: 10, far: 1000, speed: 1 });
+      const point = starfieldPoint(index, this.travel, STARFIELD);
       const projected = projectPoint(viewPoint(point, camera), cx, cy, 200);
       star.visible = projected.visible;
       if (!projected.visible) continue;
@@ -278,13 +291,31 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       star.height = size;
       star.alpha = Math.min(1, (0.2 + 0.8 * nearness) * (1 + warp));
       star.tint = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.4 + 0.6 * nearness);
+      if (trail > 0) {
+        // The tail sits further down the same path, so every trail points back at the vanishing point.
+        const tailZ = Math.min(STARFIELD.far, point.z + trail);
+        const tail = projectPoint(viewPoint({ x: point.x, y: point.y, z: tailZ }, camera), cx, cy, 200);
+        if (tail.visible) {
+          sharedShapeBatch.line(
+            trails,
+            star.tint,
+            star.alpha * 0.7,
+            Math.max(0.6, size * 0.45),
+            tail.x,
+            tail.y,
+            projected.x,
+            projected.y,
+          );
+        }
+      }
     }
+    sharedShapeBatch.flush();
 
     // The cursor's lock-on lets go as the warp starts, and everything but the rushing particles falls behind.
     this.frontLayer.alpha = 1 - settle;
     const behind = 1 - 0.9 * settle;
     for (const node of this.backLayer.children) {
-      if (node !== this.starLayer && node !== this.ground) node.alpha = behind;
+      if (node !== this.starLayer && node !== this.trails && node !== this.ground) node.alpha = behind;
     }
     const world = this.world;
     world.clear();
@@ -466,7 +497,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     this.world.blendMode = 'add';
     this.orbHost.blendMode = 'add';
     this.orbFront.blendMode = 'add';
-    this.backLayer.addChild(this.ground, this.world, starLayer, this.orbMoon, this.orbFront, this.orbHost);
+    this.trails.blendMode = 'add';
+    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.orbMoon, this.orbFront, this.orbHost);
 
     this.cursorGlow.texture = glow;
     this.cursorGlow.anchor.set(0.5);
