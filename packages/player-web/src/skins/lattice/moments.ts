@@ -200,7 +200,7 @@ function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildP
   graphics.rect(x - reach, y + 14, reach, 1).fill({ color: LAT_ACCENT, alpha: 1 - out });
   addStaggeredHudText(
     layer,
-    scrambleText('CLEAR', t / 0.35, scrambleTick(t * CLEAR_MS, 35), 3),
+    scrambleText('CLEAR LINE', t / 0.35, scrambleTick(t * CLEAR_MS, 35), 3),
     x,
     y,
     { ...monoStyle(LAT_ACCENT), size: 11, letterSpacing: 3, anchorX: 1 },

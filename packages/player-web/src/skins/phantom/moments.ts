@@ -40,7 +40,8 @@ const SKEW = -0.18;
  *   tears the other way and slams GO!! as the first beat lands;
  * - every 100 combo: a torn strip rips in over the BGA side (never over the lanes) with the count in a gold burst and
  *   COMBO!! cut from magazines;
- * - the gauge crossing the clear line: a gold CLEAR! tag pops off the gauge with a flash;
+ * - the gauge crossing the clear line: a gold CLEAR LINE tag pops off the gauge with a flash (it marks the line
+ *   being reached, not the song being cleared);
  * - a full combo: a white flash, a giant turning burst, confetti, and a screen-wide rip carrying FULL COMBO in
  *   ransom-note letters (the chart is over, so it may cover the playfield).
  */
@@ -238,7 +239,7 @@ function drawMilestone(
   });
 }
 
-/** Gauge crossing the clear line: a flash over the gauge and a CLEAR! tag popping off it. */
+/** Gauge crossing the clear line: a flash over the gauge and a CLEAR LINE tag popping off it. */
 function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildPool | undefined): void {
   const flash = Math.max(0, 1 - t * 3);
   graphics
@@ -248,19 +249,19 @@ function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildP
   const lift = easeOutCubic(t) * 10;
   const alpha = 1 - Math.max(0, (t - 0.75) / 0.25);
   // Beside the gauge housing's right end, clear of the playfield frame above it.
-  const cx = GROOVE.x + GROOVE.w + 62;
+  const cx = GROOVE.x + GROOVE.w + 80;
   const cy = GROOVE.y - 6 - lift;
   graphics
-    .poly(parallelogramPoints(cx - 44 * pop, cy - 14 * pop, 88 * pop, 28 * pop, 8 * pop))
+    .poly(parallelogramPoints(cx - 62 * pop, cy - 14 * pop, 124 * pop, 28 * pop, 8 * pop))
     .fill({ color: PHANTOM_GOLD, alpha })
     .stroke({ color: PHANTOM_INK, width: 2, alpha });
   const text = addHudText(
     layer,
-    'CLEAR!',
+    'CLEAR LINE',
     cx + 3,
     cy,
     {
-      size: 18,
+      size: 17,
       fill: PHANTOM_INK,
       fontFamily: DEFAULT_DISPLAY_FONT,
       letterSpacing: 2,

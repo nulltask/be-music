@@ -254,7 +254,7 @@ function drawClear(graphics: Graphics, layer: Container, t: number, pool: ChildP
   graphics.circle(head, GROOVE.y + GROOVE.h / 2, 14).fill({ color, alpha: 0.3 * fade });
   const text = addHudText(
     layer,
-    'CLEAR',
+    'CLEAR LINE',
     GROOVE.x + GROOVE.w - 8,
     // Between the playfield frame's bottom edge and the gauge panel, touching neither.
     GROOVE.y - 34,
