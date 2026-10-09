@@ -5,6 +5,7 @@ import {
   resolveChartPlayVariant as resolveChartPlayVariantForChart,
 } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
+import type { BeMusicJson } from '@be-music/json';
 import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
@@ -17,7 +18,7 @@ import type {
   LoadProgressCallback,
 } from './types.ts';
 import { createEagerDropPathPredicate, isChartFilePath } from '../browser/drop.ts';
-import { compactCollectionChart, createStringInterner } from './compact-chart.ts';
+import { compactCollectionChart, PackedEventStrings } from './compact-chart.ts';
 import {
   type BrowserDroppedFile,
   DeferredDroppedFile,
@@ -423,7 +424,7 @@ export async function loadSongCollectionFromFiles(
   }
 
   const songs: BrowserSongEntry[] = [];
-  const intern = createStringInterner();
+  const eventStrings = new PackedEventStrings();
   // Build the chart-path lists in one pass per source so we don't sort + filter the full path table twice (once for the
   // count, once for the parse loop). Sort the chart paths only — the non-chart paths don't need ordering since they're
   // just asset lookups.
@@ -472,10 +473,9 @@ export async function loadSongCollectionFromFiles(
         if (!chartBytes) {
           throw new Error(`chart bytes missing for ${path}`);
         }
-        // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping it.
-        const chart = compactCollectionChart(parseChart(path, chartBytes), intern);
+        const chart = parseChart(path, chartBytes);
         const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
-        songs.push({
+        const song: BrowserSongEntry = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
           sourceLabel: source.label,
@@ -491,7 +491,13 @@ export async function loadSongCollectionFromFiles(
           bpm: chart.metadata.bpm,
           totalNotes: notes.filter((note) => isScoreTargetChannel(note.channel)).length,
           chart,
-        });
+        };
+        songs.push(song);
+        // Every parsed chart stays resident for as long as the song is in the collection, so trim it before keeping
+        // it. Work out the play variant first, while the events are still plain objects: select screens filter the
+        // whole list by it, and a cached answer spares them from unpacking every chart's events.
+        resolveChartPlayVariant(song);
+        compactCollectionChart(chart, eventStrings);
       } catch (error) {
         errors.push({
           sourceId: source.id,
@@ -600,12 +606,24 @@ function isScoreTargetChannel(channel: string): boolean {
  * (standard vs. compat) AFTER the 9KEY mode has been decided by extension or `#PLAYER=3 + 17`.
  */
 export function resolveChartPlayVariant(song: BrowserSongEntry): ChartPlayVariant {
-  return resolveChartPlayVariantForChart({
+  const cached = playVariantByChart.get(song.chart);
+  if (cached !== undefined && cached.chartPath === song.chartPath) return cached.variant;
+  const variant = resolveChartPlayVariantForChart({
     chartPath: song.chartPath,
     events: song.chart.events,
     bms: song.chart.bms,
   });
+  playVariantByChart.set(song.chart, { chartPath: song.chartPath, variant });
+  return variant;
 }
+
+/**
+ * Play variant per chart object. Select screens filter the whole song list by key mode, and collection charts keep
+ * their events packed (see `compactCollectionChart`), so recomputing the variant would unpack every chart on each
+ * filter pass. Keyed by chart identity plus the path the answer was computed for, since the variant also depends on
+ * the file extension.
+ */
+const playVariantByChart = new WeakMap<BeMusicJson, { chartPath: string; variant: ChartPlayVariant }>();
 
 function inferSourceKind(files: ReadonlyMap<string, BrowserSongAssetEntry>): BrowserSongSourceKind {
   for (const path of files.keys()) {
