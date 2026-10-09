@@ -32,7 +32,6 @@ import {
   easeOutCubic,
   type BeMusicResultFrame,
   type BeMusicResultSkin,
-  hash01,
   resolveResultLamp,
   resolveResultTrackRows,
   rollUpValue,
@@ -69,7 +68,7 @@ const RANK_BURST = burstParticles(29, 260);
 export const synesthesiaResultSkin: BeMusicResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
 
 /**
- * Synesthesia result, in the light of a cosmic particle world: a black void with ember dust, speed streaks and a floor of light
+ * Synesthesia result, in the light of a cosmic particle world: a black void with ember dust and a floor of light
  * points; the verdict condenses out of wide-tracked light, hairline frames fade up in sequence while counters roll,
  * graphs draw as glowing filaments, and the rank letter ignites inside a spinning 3D ring of particles that bursts
  * outward the moment it lands — a lock-on reticle snapping shut on it.
@@ -111,7 +110,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM) =>
     text(target, value, x, y, display(9, fill, { letterSpacing: 2 }));
 
-  // Space: warm black, an ember horizon, dust and streaks pouring out of the vanishing point, and a floor of points.
+  // Space: warm black, an ember horizon, dust pouring out of the vanishing point, and a floor of points.
   const space = group('space');
   const bands: ReadonlyArray<readonly [number, number]> = [
     [SYN_DEEP, 0.3],
@@ -146,22 +145,6 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
     light
       .rect(projected.x - size / 2, projected.y - size / 2, size, size)
       .fill({ color, alpha: 0.25 + 0.6 * nearness });
-  }
-  for (let index = 0; index < 18; index += 1) {
-    const angle = hash01(index * 5 + 1) * Math.PI * 2;
-    const progress = (hash01(index * 5 + 2) + seconds * 0.4 * (0.7 + 0.6 * hash01(index * 5 + 3))) % 1;
-    const inner = 40 + progress * progress * 520;
-    const outer = inner + 12 + 80 * progress;
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle) * 0.72;
-    light
-      .moveTo(vanishX + cos * inner, vanishY + sin * inner)
-      .lineTo(vanishX + cos * outer, vanishY + sin * outer)
-      .stroke({
-        color: index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4)),
-        width: 0.8 + progress * 1.4,
-        alpha: Math.sin(progress * Math.PI) * 0.35,
-      });
   }
   const floor = (x: number, z: number) => projectPoint({ x, y: 130, z }, vanishX, horizon, 200);
   const offset = (seconds * 110) % 100;

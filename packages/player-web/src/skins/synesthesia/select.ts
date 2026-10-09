@@ -63,7 +63,6 @@ const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
 const STAR_COUNT = 320;
-const STREAK_COUNT = 26;
 const RIVER_PARTICLES = 340;
 const ORB_SHELL = fibonacciSphere(900, 23);
 const ORB = orbitParticles(23, 30);
@@ -99,8 +98,8 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
 }
 
 /**
- * Synesthesia song select, set in a cosmic particle world. The persistent back layer is a particle world — data dust and
- * speed streaks pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids on an ember
+ * Synesthesia song select, set in a cosmic particle world. The persistent back layer is a particle world — data dust
+ * pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids on an ember
  * horizon, a floor of light points, a golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply
  * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
@@ -108,7 +107,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   public readonly backLayer = new Container();
   public readonly frontLayer = new Container();
   private readonly ground = new Graphics();
-  /** Additive particle world: floor, pyramids, river, streaks, and the orb's tails. */
+  /** Additive particle world: floor, pyramids, river, and the orb's tails. */
   private readonly world = new Graphics();
   private readonly stars: Sprite[] = [];
   private readonly lock = new Graphics();
@@ -164,7 +163,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
   }
 
   /**
-   * Launch outro — the warp: the star tunnel accelerates into streaks (in `tick`), a white bloom opens from the
+   * Launch outro — the warp: the star field rushes forward (in `tick`), a white bloom opens from the
    * vanishing point with the chosen title in it, and the screen falls to black for the gameplay count-in.
    */
   private renderOutro(frame: BeMusicSelectFrame): void {
@@ -227,7 +226,6 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
     // Data dust pouring out of the vanishing point — speed follows the focused chart's tempo.
     const cx = this.designWidth * 0.58;
     const cy = this.designHeight * 0.44;
-    const dustVanish = vanishingPoint(camera, cx, cy, 200);
     const speed = (80 + beatsPerSecond * 55) * (1 + 16 * warp * warp) * (1 + 1.2 * drive.level);
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
     for (let index = 0; index < this.stars.length; index += 1) {
@@ -239,9 +237,8 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       const nearness = Math.min(1, projected.scale);
       const size = 1 + 3 * nearness * nearness;
       star.position.set(projected.x, projected.y);
-      // During the warp motes stretch into streaks pointing out of the vanishing point.
-      star.rotation = Math.atan2(projected.y - dustVanish.y, projected.x - dustVanish.x);
-      star.width = size * (1 + 14 * warp);
+      star.rotation = 0;
+      star.width = size;
       star.height = size;
       star.alpha = 0.2 + 0.8 * nearness;
       star.tint = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.4 + 0.6 * nearness);
@@ -280,7 +277,7 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
       projectPoint(viewPoint({ x, y: 150, z }, camera, WORLD_ORBIT), cx, floorY, 200);
     const spacing = 100;
     const offset = this.travel % spacing;
-    // Floor points, river, and streaks go out as a few batched instructions.
+    // Floor points and the river go out as a few batched instructions.
     const batch = sharedShapeBatch;
     for (let z = spacing - offset; z < 2600; z += spacing) {
       const nearness = 1 - z / 2600;
@@ -320,26 +317,6 @@ class SynesthesiaSelectRenderer implements BeMusicSelectRenderer {
         tail.y,
         head.x,
         head.y,
-      );
-    }
-    // Speed streaks — warp lines — thicken into a tunnel on launch.
-    const streakSpeed = (0.35 + beatsPerSecond * 0.12) * (1 + 6 * warp);
-    for (let index = 0; index < STREAK_COUNT; index += 1) {
-      const angle = hash01(index * 5 + 1) * Math.PI * 2;
-      const progress = (hash01(index * 5 + 2) + seconds * streakSpeed * (0.7 + 0.6 * hash01(index * 5 + 3))) % 1;
-      const inner = 30 + progress * progress * 560;
-      const outer = inner + (14 + 90 * progress) * (1 + 4 * warp);
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle) * 0.72;
-      batch.line(
-        world,
-        index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4)),
-        Math.sin(progress * Math.PI) * (0.35 + 0.4 * warp),
-        0.8 + progress * 1.6,
-        dustVanish.x + cos * inner,
-        dustVanish.y + sin * inner,
-        dustVanish.x + cos * outer,
-        dustVanish.y + sin * outer,
       );
     }
     batch.flush();

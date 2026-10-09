@@ -121,7 +121,7 @@ const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointClo
 
 /**
  * Synesthesia gameplay HUD after a cosmic particle world: a black void lit by an ember horizon, data dust and speed
- * streaks pouring out of the vanishing point, a floor of light points scrolling toward the player, rivers of particles
+ * dust pouring out of the vanishing point, a floor of light points scrolling toward the player, rivers of particles
  * once the run is in the zone, and hairline frames with lock-on corners. With no BGA the monitor idles on a floating
  * audio orb roaming in front of particle pyramids. Colour drifts through the ember band and swells on every beat.
  */
@@ -145,19 +145,18 @@ export function renderSynesthesiaChrome({
   const space = layerPool.acquireGraphics();
   space.label = 'synesthesia-gameplay/space';
   space.blendMode = 'normal';
-  // Zone: the space intensifies with the combo (faster, denser dust, more streaks, a hotter floor, particle rivers).
+  // Zone: the space intensifies with the combo (faster, denser dust, a hotter floor, particle rivers).
   // Reduced effects cap the escalation; effects off keep the calm tier-0 space.
   const effects = effectProfile(runtime.effects);
   const tier = effects.enabled ? Math.min(comboTier(runtime.combo ?? 0), effects.screenWide ? 4 : 2) : 0;
-  // Input reaction: every press surges the dust and streaks and tints the sky with the pressed lane's light.
+  // Input reaction: every press surges the dust and tints the sky with the pressed lane's light.
   const hit = impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 280) * effects.amount;
   const hitColor = IMPULSE_COLORS[runtime.impulseKind ?? 'white'];
   // Camera: the background roams between random shots (flying, sometimes hard-cutting) with a handheld drift,
-  // reframing floor, rivers, schools and warp. Reduced effects halve the moves; effects off keep the camera at rest.
+  // reframing floor, rivers, and schools. Reduced effects halve the moves; effects off keep the camera at rest.
   const camera = mixCamera(REST_CAMERA, roamingCamera(seconds, 7, CAMERA_RANGE, CAMERA_CYCLE_S), effects.amount);
   const horizon = vanishingPoint(camera, CENTER_X, FLOOR.horizon, FLOOR.focal).y;
-  // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, onsets fire
-  // warp streaks, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
+  // The space listens to the mix: the ember haze and floor swell on the bass, dust speeds with loudness, rivers weave with the mids, the schools tighten on bass hits and scatter on transients.
   const drive = audioDrive(runtime.audio, runtime.effects);
   drawGround(space, pulse, hasBga, tier, hit, hitColor, horizon, drive);
 
@@ -279,7 +278,7 @@ const IMPULSE_COLORS: Record<'white' | 'black' | 'scratch', number> = {
   scratch: SYN_MAGENTA,
 };
 
-/** Vanishing point the dust and streaks pour out of (behind the monitor). */
+/** Vanishing point the dust pours out of (behind the monitor). */
 const VANISH = { x: CENTER_X, y: FLOOR.horizon - 90 } as const;
 
 /**
@@ -321,8 +320,8 @@ function drawGround(
 }
 
 /**
- * Data dust (tiny warm squares, the odd blue / magenta mote) flying out of the vanishing point, and speed streaks —
- * warp lines — that multiply with the combo tier and surge on key presses.
+ * Data dust (tiny warm squares, the odd blue / magenta mote) flying out of the vanishing point, faster with the combo
+ * tier and on key presses.
  */
 function drawDust(
   graphics: Graphics,
@@ -352,25 +351,6 @@ function drawDust(
       batch.rect(graphics, color, 0.05 * nearness, projected.x - bokeh / 2, projected.y - bokeh / 2, bokeh, bokeh);
     }
     batch.rect(graphics, color, 0.3 + 0.6 * nearness, projected.x - size / 2, projected.y - size / 2, size, size);
-  }
-  const vanish = vanishingPoint(camera, VANISH.x, VANISH.y, 180);
-  const streaks = Math.round(8 + 12 * tier + 14 * hit + 18 * drive.onset);
-  const streakSpeed = (0.45 + 0.3 * tier) * (1 + 1.5 * hit);
-  for (let index = 0; index < streaks; index += 1) {
-    const angle = hash01(index * 5 + 1) * Math.PI * 2;
-    const progress = (hash01(index * 5 + 2) + seconds * streakSpeed * (0.7 + 0.6 * hash01(index * 5 + 3))) % 1;
-    const inner = 40 + progress * progress * 520;
-    const outer = inner + (12 + 80 * progress) * (1 + 0.4 * tier);
-    const cos = Math.cos(angle);
-    const sin = Math.sin(angle) * 0.72;
-    const x0 = vanish.x + cos * inner;
-    const y0 = vanish.y + sin * inner;
-    const x1 = vanish.x + cos * outer;
-    const y1 = vanish.y + sin * outer;
-    if (hasBga && (insideBga(x0, y0, 6) || insideBga(x1, y1, 6))) continue;
-    const alpha = Math.sin(progress * Math.PI) * (0.35 + 0.1 * tier);
-    const color = index % 6 === 0 ? SYN_CYAN : emberColor(0.55 + 0.4 * hash01(index * 5 + 4));
-    batch.line(graphics, color, alpha, 0.8 + progress * 1.4, x0, y0, x1, y1);
   }
   batch.flush();
 }
@@ -561,7 +541,7 @@ function drawPlayfieldWell(
 
 /**
  * Monitor frame: a warm hairline with lock-on corners. With no BGA the screen idles on a miniature particle world — a floating
- * visualizer-style orb roaming in front of particle pyramids on an ember horizon, streaks pouring past — the
+ * visualizer-style orb roaming in front of particle pyramids on an ember horizon — the
  * "nothing is playing, but the space is alive" state. The idle scene draws into `light` (additive).
  */
 function drawBgaFrame(
@@ -648,22 +628,6 @@ function drawBgaFrame(
     }
   }
   sharedShapeBatch.flush();
-  // Streaks pouring past from the vanishing point.
-  for (let index = 0; index < 18; index += 1) {
-    const angle = hash01(index * 7 + 1) * Math.PI * 2;
-    const progress = (hash01(index * 7 + 2) + seconds * 0.5) % 1;
-    const inner = 10 + progress * progress * 200;
-    const outer = inner + 6 + 40 * progress;
-    const x0 = vanish.x + Math.cos(angle) * inner;
-    const y0 = horizon - 40 + Math.sin(angle) * inner * 0.7;
-    const x1 = vanish.x + Math.cos(angle) * outer;
-    const y1 = horizon - 40 + Math.sin(angle) * outer * 0.7;
-    if (inside(x0, y0) || inside(x1, y1)) continue;
-    light
-      .moveTo(x0, y0)
-      .lineTo(x1, y1)
-      .stroke({ color: index % 5 === 0 ? SYN_CYAN : SYN_AMBER, width: 1, alpha: Math.sin(progress * Math.PI) * 0.5 });
-  }
   // The audio orb roams the monitor's little world close to the camera: a visualizer-style shell of sparks and
   // fibres with a black moon circling it.
   const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
