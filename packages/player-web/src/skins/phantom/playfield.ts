@@ -97,10 +97,10 @@ export function renderPhantomLongNote({ graphics, kind, x, w, top, bottom }: Pix
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // Translucent core with solid side rails — reads as "hold the lane", not a solid wall of colour.
-  graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.35 });
-  graphics.rect(bodyX, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.9 });
-  graphics.rect(bodyX + bodyW - 2, bodyTop, 2, bodyH).fill({ color: tone.body, alpha: 0.9 });
+  // The shared long-note shape (a translucent beam with a centre filament between the head and tail bars), in poster
+  // tones: a denser ink of the lane colour and a paper-white filament.
+  graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: tone.body, alpha: 0.3 });
+  graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: tone.top, alpha: 0.8 });
   drawNoteBody(graphics, bodyX, bottom, bodyW, tone);
   drawNoteBody(graphics, bodyX, top, bodyW, tone);
 }

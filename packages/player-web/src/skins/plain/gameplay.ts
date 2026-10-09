@@ -75,13 +75,22 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
   }
 }
 
-/** Tap notes as flat bars; long notes as a dimmer body between their head and tail. */
+/**
+ * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars, the
+ * shape every built-in skin uses.
+ */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
-    ctx.globalAlpha = 0.45;
+    const bodyTop = note.top - NOTE_HEIGHT;
+    const bodyHeight = Math.max(1, note.bottom - note.top);
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x + 3, note.top, note.w - 6, note.bottom - note.top);
+    ctx.globalAlpha = 0.25;
+    ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.globalAlpha = 0.6;
+    ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
     ctx.globalAlpha = 1;
+    ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
   }

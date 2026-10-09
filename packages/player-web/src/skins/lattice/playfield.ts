@@ -110,7 +110,10 @@ export function renderLatticeNote({ graphics, kind, x, w, y }: PixiNoteContext):
   graphics.rect(x, y - NOTE_HEIGHT, Math.max(3, w), NOTE_HEIGHT).fill(LANE_COLORS[kind]);
 }
 
-/** Long note: an outlined column ruled with fine horizontal hatching, capped by solid heads. */
+/**
+ * Long note: the shared long-note shape — a translucent beam with a centre filament between the head and tail bars —
+ * printed in ink: a faint wash of the lane colour and a solid ink filament (white would vanish on the paper).
+ */
 export function renderLatticeLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
   const color = LANE_COLORS[kind];
   const bodyX = x;
@@ -118,13 +121,8 @@ export function renderLatticeLongNote({ graphics, kind, x, w, top, bottom }: Pix
   const bodyTop = top - NOTE_HEIGHT;
   const bodyBottom = bottom - NOTE_HEIGHT;
   if (bodyBottom > bodyTop) {
-    graphics.rect(bodyX, bodyTop, bodyW, bodyBottom - bodyTop).fill({ color, alpha: 0.08 });
-    // Hatching on an absolute 3 px pitch, so it reads as a printed pattern rather than scrolling stripes.
-    for (let y = Math.ceil(bodyTop / 3) * 3; y < bodyBottom; y += 3) {
-      graphics.moveTo(bodyX, y + 0.5).lineTo(bodyX + bodyW, y + 0.5);
-    }
-    graphics.stroke({ color, width: 1, alpha: 0.35 });
-    graphics.rect(bodyX + 0.5, bodyTop, bodyW - 1, bodyBottom - bodyTop).stroke({ color, width: 1, alpha: 0.9 });
+    graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyBottom - bodyTop).fill({ color, alpha: 0.16 });
+    graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyBottom - bodyTop).fill({ color, alpha: 0.9 });
   }
   renderLatticeNote({ graphics, kind, x, w, y: bottom, nowMs: 0 });
   renderLatticeNote({ graphics, kind, x, w, y: top, nowMs: 0 });
