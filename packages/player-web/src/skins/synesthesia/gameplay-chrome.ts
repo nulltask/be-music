@@ -6,6 +6,7 @@ import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sha
 import {
   clipSegmentOutsideRect,
   emberColor,
+  cameraBasis,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
@@ -13,9 +14,11 @@ import {
   orbitParticles,
   pointCloudPyramid,
   projectPoint,
+  projectViewInto,
   REST_CAMERA,
   roamingCamera,
-  starfieldPoint,
+  scratchProjected,
+  starfieldInto,
   vanishingPoint,
   viewPoint,
   wanderPoint,
@@ -321,9 +324,11 @@ function drawDust(
   const batch = sharedShapeBatch;
   const count = 220 + 50 * tier;
   const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level);
+  const field = { spread: 640, near: 20, far: 900, speed };
+  const basis = cameraBasis(camera, SCRATCH_BASIS);
   for (let index = 0; index < count; index += 1) {
-    const point = starfieldPoint(index, seconds, { spread: 640, near: 20, far: 900, speed });
-    const projected = projectPoint(viewPoint(point, camera), VANISH.x, VANISH.y, 180);
+    const point = starfieldInto(SCRATCH_POINT, index, seconds, field);
+    const projected = projectViewInto(SCRATCH_A, point.x, point.y, point.z, basis, VANISH.x, VANISH.y, 180);
     if (!projected.visible) continue;
     if (projected.x < 0 || projected.x > DESIGN_WIDTH || projected.y < 0 || projected.y > DESIGN_HEIGHT) continue;
     if (hasBga && insideBga(projected.x, projected.y, 4)) continue;
@@ -353,14 +358,13 @@ function drawFloor(
 ): void {
   const { horizon, height, focal } = FLOOR;
   const glow = 1 + 0.3 * tier + 0.8 * hit + 1.2 * drive.bass;
-  const project = (x: number, z: number) =>
-    projectPoint(viewPoint({ x, y: height, z }, camera), CENTER_X, horizon, focal);
+  const basis = cameraBasis(camera, SCRATCH_BASIS);
   // The floor runs up to a live BGA but never over it: lines are clipped around the monitor, points inside it skipped.
   const pieces = FLOOR_PIECES;
   pieces.length = 0;
   for (let x = -1500; x <= 1500; x += 100) {
-    const near = project(x, 0);
-    const far = project(x, 2400);
+    const near = projectViewInto(SCRATCH_A, x, height, 0, basis, CENTER_X, horizon, focal);
+    const far = projectViewInto(SCRATCH_B, x, height, 2400, basis, CENTER_X, horizon, focal);
     if (!near.visible || !far.visible) continue;
     if (hasBga) clipSegmentOutsideRect(near.x, near.y, far.x, far.y, BGA, pieces);
     else pieces.push(near.x, near.y, far.x, far.y);
@@ -377,7 +381,7 @@ function drawFloor(
     const size = 0.6 + 1.4 * nearness * nearness;
     const color = emberColor(0.3 + 0.65 * nearness);
     for (let x = -1500; x <= 1500; x += 50) {
-      const point = project(x, z);
+      const point = projectViewInto(SCRATCH_A, x, height, z, basis, CENTER_X, horizon, focal);
       if (!point.visible || point.x < -4 || point.x > DESIGN_WIDTH + 4 || point.y > DESIGN_HEIGHT + 4) continue;
       if (hasBga && insideBga(point.x, point.y, 2)) continue;
       sharedShapeBatch.rect(graphics, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
@@ -388,6 +392,11 @@ function drawFloor(
 
 /** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
 const FLOOR_PIECES: number[] = [];
+/** Scratch objects for the allocation-free projection in the hot loops above. */
+const SCRATCH_BASIS = cameraBasis(REST_CAMERA);
+const SCRATCH_A = scratchProjected();
+const SCRATCH_B = scratchProjected();
+const SCRATCH_POINT = { x: 0, y: 0, z: 0 };
 
 const RIVER_PARTICLES = 280;
 

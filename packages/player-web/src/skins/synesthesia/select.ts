@@ -2,6 +2,7 @@ import { Container, Graphics, Sprite } from 'pixi.js';
 import { createFlock, stepFlock } from './boids.ts';
 import { drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
+  cameraBasis,
   emberColor,
   hsvToHex,
   mixCamera,
@@ -10,9 +11,11 @@ import {
   orbitParticles,
   pointCloudPyramid,
   projectPoint,
+  projectViewInto,
   REST_CAMERA,
   roamingCamera,
-  starfieldPoint,
+  scratchProjected,
+  starfieldInto,
   viewPoint,
   wanderPoint,
 } from './space.ts';
@@ -121,6 +124,11 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private readonly stars: Sprite[] = [];
   /** Holds {@link stars}; the one layer that stays lit through the launch warp. */
   private readonly starLayer = new Container();
+  /** Scratch objects for the allocation-free projection in `tick`'s per-particle loops. */
+  private readonly scratchBasis = cameraBasis(REST_CAMERA);
+  private readonly scratchPoint = { x: 0, y: 0, z: 0 };
+  private readonly scratchHead = scratchProjected();
+  private readonly scratchTail = scratchProjected();
   /** Each star's trail during the launch warp, drawn behind the stars. */
   private readonly trails = new Graphics();
   private readonly lock = new Graphics();
@@ -271,6 +279,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const trails = this.trails;
     trails.clear();
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
+    const basis = cameraBasis(camera, this.scratchBasis);
     const shownStars = Math.round(STAR_COUNT + (WARP_STAR_COUNT - STAR_COUNT) * settle);
     for (let index = 0; index < this.stars.length; index += 1) {
       const star = this.stars[index]!;
@@ -278,8 +287,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         star.visible = false;
         continue;
       }
-      const point = starfieldPoint(index, this.travel, STARFIELD);
-      const projected = projectPoint(viewPoint(point, camera), cx, cy, 200);
+      const point = starfieldInto(this.scratchPoint, index, this.travel, STARFIELD);
+      const projected = projectViewInto(this.scratchHead, point.x, point.y, point.z, basis, cx, cy, 200);
       star.visible = projected.visible;
       if (!projected.visible) continue;
       const nearness = Math.min(1, projected.scale);
@@ -294,7 +303,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       if (trail > 0) {
         // The tail sits further down the same path, so every trail points back at the vanishing point.
         const tailZ = Math.min(STARFIELD.far, point.z + trail);
-        const tail = projectPoint(viewPoint({ x: point.x, y: point.y, z: tailZ }, camera), cx, cy, 200);
+        const tail = projectViewInto(this.scratchTail, point.x, point.y, tailZ, basis, cx, cy, 200);
         if (tail.visible) {
           sharedShapeBatch.line(
             trails,
@@ -337,8 +346,6 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
     // Floor of light points scrolling toward the viewer.
-    const project = (x: number, z: number) =>
-      projectPoint(viewPoint({ x, y: 150, z }, camera, WORLD_ORBIT), cx, floorY, 200);
     const spacing = 100;
     const offset = this.travel % spacing;
     // Floor points and the river go out as a few batched instructions.
@@ -349,7 +356,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const color = emberColor(0.3 + 0.65 * nearness);
       const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * (1 + drive.bass));
       for (let x = -1800; x <= 1800; x += 50) {
-        const point = project(x, z);
+        const point = projectViewInto(this.scratchHead, x, 150, z, basis, cx, floorY, 200, WORLD_ORBIT);
         if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
           continue;
         }

@@ -3,6 +3,7 @@ import {
   burstParticlePosition,
   clipSegmentOutsideRect,
   burstParticles,
+  cameraBasis,
   emberColor,
   fibonacciSphere,
   limbGlow,
@@ -13,12 +14,15 @@ import {
   particleRiverPoint,
   pointCloudPyramid,
   projectPoint,
+  projectViewInto,
   randomShot,
   reflectedLight,
   REST_CAMERA,
   roamingCamera,
   rotateX,
   rotateY,
+  scratchProjected,
+  starfieldInto,
   starfieldPoint,
   vanishingPoint,
   viewPoint,
@@ -402,5 +406,37 @@ describe('clipSegmentOutsideRect', () => {
     const out: number[] = [];
     expect(clipSegmentOutsideRect(0, 0, 40, 40, rect, out)).toBe(2);
     expect(out).toEqual([0, 0, 10, 10, 30, 30, 40, 40]);
+  });
+});
+
+describe('projectViewInto', () => {
+  it('matches projectPoint(viewPoint(...)) without allocating', () => {
+    const camera = { x: 12, y: -30, z: 40, yaw: 0.3, pitch: -0.2 };
+    const basis = cameraBasis(camera);
+    const out = scratchProjected();
+    for (const [x, y, z, orbit] of [
+      [0, 0, 0, 0],
+      [120, 80, 500, 0],
+      [-300, 150, 900, 220],
+      [10, 10, -400, 0],
+    ] as const) {
+      const expected = projectPoint(viewPoint({ x, y, z }, camera, orbit), 400, 240, 200);
+      const actual = projectViewInto(out, x, y, z, basis, 400, 240, 200, orbit);
+      expect(actual).toBe(out);
+      expect(actual.visible).toBe(expected.visible);
+      expect(actual.x).toBeCloseTo(expected.x, 9);
+      expect(actual.y).toBeCloseTo(expected.y, 9);
+      expect(actual.scale).toBeCloseTo(expected.scale, 9);
+    }
+  });
+});
+
+describe('starfieldInto', () => {
+  it('matches starfieldPoint', () => {
+    const options = { spread: 560, near: 10, far: 1000, speed: 1 };
+    const out = { x: 0, y: 0, z: 0 };
+    for (const index of [0, 7, 319]) {
+      expect(starfieldInto(out, index, 123.4, options)).toEqual(starfieldPoint(index, 123.4, options));
+    }
   });
 });

@@ -34,6 +34,71 @@ export function projectPoint(point: Vec3, cx: number, cy: number, focal: number)
   return { x: cx + point.x * scale, y: cy + point.y * scale, scale, visible: true };
 }
 
+/** A camera's yaw / pitch sines and cosines, worked out once per frame for {@link projectViewInto}. */
+export interface CameraBasis {
+  camera: CameraPose;
+  cosYaw: number;
+  sinYaw: number;
+  cosPitch: number;
+  sinPitch: number;
+}
+
+/** The basis for `camera`, written into `out` (a fresh object when omitted). */
+export function cameraBasis(camera: CameraPose, out?: CameraBasis): CameraBasis {
+  const basis = out ?? { camera, cosYaw: 1, sinYaw: 0, cosPitch: 1, sinPitch: 0 };
+  basis.camera = camera;
+  basis.cosYaw = Math.cos(camera.yaw);
+  basis.sinYaw = Math.sin(camera.yaw);
+  basis.cosPitch = Math.cos(camera.pitch);
+  basis.sinPitch = Math.sin(camera.pitch);
+  return basis;
+}
+
+/**
+ * `projectPoint(viewPoint({ x, y, z }, camera, orbit), cx, cy, focal)` without allocating: the result is written into
+ * `out`. For the hot loops that project thousands of points a frame.
+ */
+export function projectViewInto(
+  out: Projected,
+  x: number,
+  y: number,
+  z: number,
+  basis: CameraBasis,
+  cx: number,
+  cy: number,
+  focal: number,
+  orbit = 0,
+): Projected {
+  const camera = basis.camera;
+  const lx = x - camera.x;
+  const ly = y - camera.y;
+  const lz = z - camera.z - orbit;
+  // rotateY by -yaw, then rotateX by pitch (see `viewPoint`).
+  const x1 = lx * basis.cosYaw - lz * basis.sinYaw;
+  const z1 = lx * basis.sinYaw + lz * basis.cosYaw;
+  const y2 = ly * basis.cosPitch - z1 * basis.sinPitch;
+  const z2 = ly * basis.sinPitch + z1 * basis.cosPitch + orbit;
+  const depth = focal + z2;
+  if (depth <= 1e-3) {
+    out.x = cx;
+    out.y = cy;
+    out.scale = 0;
+    out.visible = false;
+    return out;
+  }
+  const scale = focal / depth;
+  out.x = cx + x1 * scale;
+  out.y = cy + y2 * scale;
+  out.scale = scale;
+  out.visible = true;
+  return out;
+}
+
+/** A blank {@link Projected} to reuse with {@link projectViewInto}. */
+export function scratchProjected(): Projected {
+  return { x: 0, y: 0, scale: 0, visible: false };
+}
+
 export function rotateY(point: Vec3, angle: number): Vec3 {
   const cos = Math.cos(angle);
   const sin = Math.sin(angle);
@@ -105,6 +170,21 @@ export function burstParticlePosition(particle: BurstParticle, t: number, radius
  * Star `index` of a looping starfield flying toward the camera. Depth cycles over `[near, far]` at `speed` units/s;
  * lateral position is a fixed per-star spread in `[-spread, spread]`.
  */
+/** {@link starfieldPoint} written into `out` instead of a fresh object. */
+export function starfieldInto(
+  out: Vec3,
+  index: number,
+  seconds: number,
+  options: { spread: number; near: number; far: number; speed: number },
+): Vec3 {
+  const span = options.far - options.near;
+  const phase = hash01(index * 7 + 3) * span;
+  out.x = (hash01(index * 7 + 1) * 2 - 1) * options.spread;
+  out.y = (hash01(index * 7 + 2) * 2 - 1) * options.spread * 0.62;
+  out.z = options.far - ((seconds * options.speed + phase) % span);
+  return out;
+}
+
 export function starfieldPoint(
   index: number,
   seconds: number,
