@@ -12,7 +12,7 @@ const recordLog = logger('record');
  */
 export interface GameplayRecorder {
   startRecording(): void;
-  stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number } | undefined>;
+  stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number; seekable: boolean } | undefined>;
   isRecording(): boolean;
 }
 
@@ -158,11 +158,10 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     try {
       const result = await gameplay.stopRecording();
       if (result) {
-        // `MediaRecorder`'s native WebM stream is play-only — post-process the blob to inject `Duration` + `Cues` so
-        // external players can seek inside it. Cheap on the typical chart-length take (a few hundred ms for a 1-3
-        // minute recording on M-series hardware) and gracefully falls back to the raw blob if the patch fails, so a
-        // corrupt take is never silently lost.
-        const seekable = await makeWebmSeekable(result.blob);
+        // The `MediaRecorder` fallback writes a play-only WebM stream — post-process it to inject `Duration` + `Cues`
+        // so external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
+        // silently lost. The WebCodecs backend writes the seek index itself.
+        const seekable = result.seekable ? result.blob : await makeWebmSeekable(result.blob);
         const filename = `${deps.getRecordingFilenameBase()}.webm`;
         downloadBlob(seekable, filename);
         const seconds = (result.durationMs / 1000).toFixed(1);
