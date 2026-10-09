@@ -149,12 +149,10 @@ export function renderSynesthesiaChrome({
   layout,
 }: PixiChromeContext): void {
   const seconds = (runtime.nowMs ?? 0) / 1000;
-  // The idle monitor shows its cloud only while there is no BGA; it redraws (and re-shows) it below if so.
+  // The idle monitor shows its cloud only while there is no BGA; it redraws (and re-shows) it below if so. Its clock
+  // carries on across hidden frames: the cloud clamps each step, so a gap just resumes it.
   const monitorCloud = MONITOR_CLOUDS.get(layer);
-  if (monitorCloud) {
-    monitorCloud.cloud.view.visible = false;
-    monitorCloud.lastSeconds = undefined;
-  }
+  if (monitorCloud) monitorCloud.cloud.view.visible = false;
   const beatPhase = runtime.beatPhase ?? 0;
   const pulse = (1 - beatPhase) ** 2;
   const hue = sceneHue(seconds, beatPhase);
