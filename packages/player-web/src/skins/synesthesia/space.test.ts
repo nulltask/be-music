@@ -155,6 +155,16 @@ describe('pointCloudPyramid', () => {
 describe('particleRiverPoint', () => {
   const options = { length: 800, speed: 100, amplitude: 30, width: 10 };
 
+  it('places a particle by the distance travelled when one is given', () => {
+    // Same distance, different speeds: the particle is in the same place along the river.
+    expect(particleRiverPoint(4, 2, options, 300).x).toBeCloseTo(
+      particleRiverPoint(4, 2, { ...options, speed: 500 }, 300).x,
+      9,
+    );
+    // Without a distance it falls back to seconds × speed.
+    expect(particleRiverPoint(4, 3, options).x).toBeCloseTo(particleRiverPoint(4, 3, options, 300).x, 9);
+  });
+
   it('stays within the river bounds', () => {
     for (let index = 0; index < 200; index += 1) {
       const point = particleRiverPoint(index, 3.7, options);

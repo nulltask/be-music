@@ -331,9 +331,13 @@ export function particleRiverPoint(
   index: number,
   seconds: number,
   options: { length: number; speed: number; amplitude: number; width: number; seed?: number },
+  distance?: number,
 ): Vec3 {
   const base = (options.seed ?? 0) * 211 + index * 23;
-  const along = (hash01(base + 1) + (seconds * options.speed) / options.length) % 1;
+  // `distance` (world units travelled, accumulated by the caller) lets the river's speed change without the particles
+  // jumping; without it the flow is `seconds × speed`.
+  const travelled = distance ?? seconds * options.speed;
+  const along = (hash01(base + 1) + travelled / options.length) % 1;
   const x = (along - 0.5) * options.length;
   // Sum of two uniforms ≈ triangular spread: dense core, feathered edges.
   const across = (hash01(base + 2) + hash01(base + 3) - 1) * options.width;

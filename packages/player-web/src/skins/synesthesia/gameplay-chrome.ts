@@ -2,6 +2,7 @@ import { Graphics, type Container } from 'pixi.js';
 import { GROOVE } from './layout.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
 import { ChargeCloud } from './charge-cloud.ts';
+import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
 import { drawFrame, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
@@ -96,18 +97,58 @@ const SCHOOL_SPECS = [
   { seed: 41, palette: 'blue', bounds: { minX: -300, maxX: 800, minY: -260, maxY: 40, minZ: 300, maxZ: 1200 } },
   { seed: 73, palette: 'magenta', bounds: { minX: -800, maxX: 800, minY: -240, maxY: 80, minZ: 700, maxZ: 1700 } },
 ] as const;
-const SCHOOLS = new WeakMap<object, { flocks: Flock[]; lastMs: number }>();
+const SCHOOLS = new WeakMap<object, { flocks: Flock[]; lastMs: number; kick: KickState }>();
 
-/** The chrome layer's schools, created on first use (or when their size changes) and stepped to `nowMs`. */
+/** The dust field's shape; it moves by accumulated travel (see advanceTravel), so its own speed is one unit per unit. */
+const DUST_FIELD = { spread: 640, near: 20, far: 900, speed: 1 } as const;
+
+interface Travel {
+  seconds: number;
+  dust: number;
+  floor: number;
+  river: number;
+}
+
+const TRAVEL = new WeakMap<object, Travel>();
+
+/**
+ * Accumulates how far the dust, floor and rivers have travelled at their current `speeds` (world units per second).
+ * Positions computed as `seconds × speed` jump whenever the speed changes, so the music or the zone changing pace would
+ * teleport every particle; integrating keeps the motion continuous. Restarts when the clock runs backwards.
+ */
+function advanceTravel(key: object, seconds: number, speeds: Omit<Travel, 'seconds'>): Travel {
+  let state = TRAVEL.get(key);
+  if (!state || seconds < state.seconds) {
+    state = { seconds, dust: 0, floor: 0, river: 0 };
+    TRAVEL.set(key, state);
+  }
+  const dt = Math.min(0.1, seconds - state.seconds);
+  state.dust += speeds.dust * dt;
+  state.floor += speeds.floor * dt;
+  state.river += speeds.river * dt;
+  state.seconds = seconds;
+  return state;
+}
+
+/**
+ * The chrome layer's schools, created on first use (or when their size changes) and stepped to `nowMs`, with the kick
+ * envelope (from the spectrum `bands` and `onset`) that flicks the fish up.
+ */
 function advanceSchools(
   key: object,
   nowMs: number,
   size: number,
   forces: { gather: number; scatter: number },
-): Flock[] {
+  bands: readonly number[],
+  onset: number,
+): { flocks: Flock[]; swell: number } {
   let state = SCHOOLS.get(key);
   if (!state || state.flocks[0]!.count !== size || nowMs < state.lastMs) {
-    state = { flocks: SCHOOL_SPECS.map((spec) => createFlock(spec.seed, size, spec.bounds)), lastMs: nowMs };
+    state = {
+      flocks: SCHOOL_SPECS.map((spec) => createFlock(spec.seed, size, spec.bounds)),
+      lastMs: nowMs,
+      kick: KICK_REST,
+    };
     SCHOOLS.set(key, state);
   }
   const dt = (nowMs - state.lastMs) / 1000;
@@ -115,8 +156,9 @@ function advanceSchools(
     // Offset each leader's clock so the schools never shadow one another.
     stepFlock(flock, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
   });
+  state.kick = stepKick(state.kick, bands, onset, Math.min(0.1, dt));
   state.lastMs = nowMs;
-  return state.flocks;
+  return { flocks: state.flocks, swell: state.kick.swell };
 }
 /**
  * The idle monitor's charge cloud, one per chrome layer (it outlives the per-frame pools), with the clock of its last
@@ -182,18 +224,31 @@ export function renderSynesthesiaChrome({
   const light = layerPool.acquireGraphics();
   light.label = 'synesthesia-gameplay/light';
   light.blendMode = 'add';
-  drawDust(light, seconds, pulse, hasBga, tier, hit, camera, drive);
-  drawFloor(light, seconds, pulse, hasBga, tier, hit, camera, drive);
+  // Dust, floor and rivers move by accumulated travel, so the music and the zone can change their speed smoothly.
+  const travel = advanceTravel(layer, seconds, {
+    dust: (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level),
+    floor: 150 * (1 + 0.3 * tier),
+    river: 260 + 60 * tier,
+  });
+  drawDust(light, hasBga, tier, hit, camera, travel.dust);
+  drawFloor(light, travel.floor, pulse, hasBga, tier, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
-    drawRiver(light, seconds, river, hasBga, tier, camera, drive);
+    drawRiver(light, seconds, travel.river, river, hasBga, tier, camera, drive);
   }
   if (effects.enabled) {
     // Schools of light fish swimming through the space: tighter on the beat, scattering on every key press.
-    const schools = advanceSchools(layer, runtime.nowMs ?? 0, effects.screenWide ? SCHOOL_SIZE : SCHOOL_SIZE / 2, {
-      gather: Math.max(pulse * 0.6, drive.bass),
-      scatter: Math.max(impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount, 0.8 * drive.onset),
-    });
+    const { flocks: schools, swell } = advanceSchools(
+      layer,
+      runtime.nowMs ?? 0,
+      effects.screenWide ? SCHOOL_SIZE : SCHOOL_SIZE / 2,
+      {
+        gather: Math.max(pulse * 0.6, drive.bass),
+        scatter: Math.max(impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount, 0.8 * drive.onset),
+      },
+      drive.bands,
+      drive.onset,
+    );
     const shown = effects.screenWide ? schools.length : 1;
     for (let school = 0; school < shown; school += 1) {
       drawSchool(
@@ -203,6 +258,7 @@ export function renderSynesthesiaChrome({
         {
           alpha: 0.95,
           palette: SCHOOL_SPECS[school]!.palette,
+          swell,
           skip: (x, y) =>
             x < -10 || x > DESIGN_WIDTH + 10 || y < 0 || y > DESIGN_HEIGHT || (hasBga && insideBga(x, y, 4)),
         },
@@ -327,21 +383,18 @@ function drawGround(graphics: Graphics, hasBga: boolean, hit: number, hitColor: 
  */
 function drawDust(
   graphics: Graphics,
-  seconds: number,
-  pulse: number,
   hasBga: boolean,
   tier: number,
   hit: number,
   camera: CameraPose,
-  drive: AudioDrive,
+  distance: number,
 ): void {
   const batch = sharedShapeBatch;
   const count = 220 + 50 * tier;
-  const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level);
-  const field = { spread: 640, near: 20, far: 900, speed };
   const basis = cameraBasis(camera, SCRATCH_BASIS);
   for (let index = 0; index < count; index += 1) {
-    const point = starfieldInto(SCRATCH_POINT, index, seconds, field);
+    // `distance` is the field's accumulated travel, so a change of speed accelerates the motes instead of jumping them.
+    const point = starfieldInto(SCRATCH_POINT, index, distance, DUST_FIELD);
     const projected = projectViewInto(SCRATCH_A, point.x, point.y, point.z, basis, VANISH.x, VANISH.y, 180);
     if (!projected.visible) continue;
     if (projected.x < 0 || projected.x > DESIGN_WIDTH || projected.y < 0 || projected.y > DESIGN_HEIGHT) continue;
@@ -362,7 +415,7 @@ function drawDust(
 /** Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines. */
 function drawFloor(
   graphics: Graphics,
-  seconds: number,
+  distance: number,
   pulse: number,
   hasBga: boolean,
   tier: number,
@@ -388,7 +441,7 @@ function drawFloor(
   }
   graphics.stroke({ color: SYN_EMBER, width: 1, alpha: Math.min(0.4, 0.05 * glow) });
   const spacing = 90;
-  const offset = (seconds * 150 * (1 + 0.3 * tier)) % spacing;
+  const offset = distance % spacing;
   for (let z = spacing - offset; z < 2400; z += spacing) {
     const nearness = 1 - z / 2400;
     const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * glow);
@@ -421,6 +474,7 @@ const RIVER_PARTICLES = 280;
 function drawRiver(
   graphics: Graphics,
   seconds: number,
+  distance: number,
   river: number,
   hasBga: boolean,
   tier: number,
@@ -440,7 +494,7 @@ function drawRiver(
   const toWorld = (local: { x: number; y: number; z: number }) =>
     viewPoint({ x: local.x, y: baseY + local.y, z: baseZ + local.z + local.x * slope }, camera);
   for (let index = 0; index < RIVER_PARTICLES; index += 1) {
-    const local = particleRiverPoint(index, seconds, options);
+    const local = particleRiverPoint(index, seconds, options, distance);
     const head = projectPoint(toWorld(local), CENTER_X, FLOOR.horizon, FLOOR.focal);
     const tail = projectPoint(toWorld({ ...local, x: local.x - 26 }), CENTER_X, FLOOR.horizon, FLOOR.focal);
     if (!head.visible || !tail.visible) continue;
