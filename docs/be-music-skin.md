@@ -258,12 +258,95 @@ Make reactions large enough to read: a pulse of a few percent is invisible at 60
 
 `effectProfile(level)` turns it into the amounts the built-in skins use. Respect it: some players need it.
 
+## Performance
+
+A skin shares each frame with the player's judging, audio scheduling, and BGA decoding. At 120 Hz a whole frame is about 8 ms, so aim to keep your `draw` well under half of that on a mid-range laptop. Rhythm games feel a dropped frame more than most apps do.
+
+### General techniques
+
+- **Measure first.** Record a play in the browser's Performance panel, or wrap your `draw` in `performance.now()` calls. Test on a dense chart, at the highest refresh rate you can, at a high `devicePixelRatio`, and with `effects: 'full'`.
+- **Draw only what changed.**
+  - Static layers can be rendered once and reused: backgrounds, frames, labels, lane beds, and anything else that depends only on the layout. Keep them in an offscreen canvas or texture.
+  - Rebuild them only when their inputs change: `layout` changes with the chart's lanes, and select state changes with `frame.revision`.
+- **Don't allocate in the hot path.** New arrays, objects, closures, and strings every frame feed the garbage collector, and its pauses show up as hitches. Instead:
+  - Reuse buffers and pools.
+  - Precompute colour strings and lookup tables.
+  - Keep per-hit randomness deterministic with `hash01` and a seed instead of storing particle objects.
+- **Batch by state.** Group everything that shares a colour, texture, blend mode, or shader, and draw each group in one go. Changing state between every note is usually the biggest cost.
+- **Treat text as an image.** Rasterizing text is expensive.
+  - Render a label once and redraw it only when its value changes.
+  - Build numbers from a digit atlas. `layoutTabularRun` gives you the glyph positions.
+- **Budget effects.**
+  - Cap particle counts, and share one budget across overlapping hits instead of giving each hit its own.
+  - Scale with `effectProfile(effects)`.
+  - Drop the decorative layers first under `'reduced'` and `'off'`.
+- **Mind the fill rate.** The surface is dot by dot, so at `devicePixelRatio` 3 there are nine times as many pixels as at 1. Full-screen gradients, large translucent overlays, and blurs all scale with that. Render costly soft layers at a lower resolution and scale them up, or replace them with pre-rendered sprites.
+- **Never read pixels back.** `getImageData`, `readPixels`, and buffer `mapAsync` stall the pipeline.
+- **Prepare in `setup`.**
+  - Decode images (`createImageBitmap`, `await image.decode()`), build atlases, and compile shaders there, never in the first draw.
+  - List your fonts in `fontLoads`.
+
+### Canvas 2D
+
+- **Group by fill.** Set `fillStyle` once per colour group rather than once per shape; sort notes by kind if that helps.
+- **Batch paths.**
+  - Use `fillRect` for rectangles.
+  - For many shapes of one style, call `beginPath()` once, add every `rect()` / `arc()`, and `fill()` once.
+- **Avoid `shadowBlur` and `filter`.** Both are very slow per draw call. Fake glows with a pre-rendered glow sprite drawn with `drawImage`, using `globalCompositeOperation = 'lighter'` for additive light.
+- **Stamp repeated shapes.** Draw a note, bomb frame, or glyph once into an `OffscreenCanvas` and stamp it with `drawImage`. That is far cheaper than rebuilding the path.
+- **Snap to whole pixels.** Rounding coordinates (`Math.round`) avoids anti-aliasing work and keeps edges crisp on the dot-by-dot surface.
+- **Avoid needless state changes.** Changing `font`, `globalAlpha`, or the composite mode costs; cache `measureText` results.
+- **Don't clear twice.** The surface comes cleared every frame.
+
+### WebGL / WebGL 2
+
+- **Cut draw calls.**
+  - Draw all notes (or all particles) in one call with instancing: `drawArraysInstanced` in WebGL 2, or `ANGLE_instanced_arrays` in WebGL 1.
+  - Pack images into texture atlases.
+  - Use vertex array objects to skip per-draw attribute setup.
+- **Keep GPU resources alive.**
+  - Allocate buffers and textures in `setup`.
+  - Update them each frame with `bufferSubData` into a preallocated `DYNAMIC_DRAW` buffer; never create or delete them per frame.
+- **Avoid synchronous calls.**
+  - Look up uniform and attribute locations once.
+  - Keep `getError`, `getParameter`, and `readPixels` out of the hot path; each forces the CPU to wait for the GPU.
+- **Sort by state.** Order draws by program, then texture, then blend mode.
+- **Composite correctly.** The canvas is composited over the BGA, so output premultiplied colour and blend with `blendFunc(ONE, ONE_MINUS_SRC_ALPHA)`. Request `{ alpha: true, premultipliedAlpha: true }` in `contextAttributes`.
+- **Weigh anti-aliasing.** MSAA (`antialias: true`) multiplies fill cost at high density. Pixel-precise skins can turn it off.
+- **Handle context loss.** Listen for `webglcontextlost` / `webglcontextrestored` on the canvas and rebuild your resources.
+
+### WebGPU
+
+- **Build everything up front.** Create pipelines (`createRenderPipelineAsync`), bind group layouts, bind groups, and buffers in `setup`; cache bind groups instead of recreating them per frame.
+- **Configure for the BGA.** Configure the context once with `format: navigator.gpu.getPreferredCanvasFormat()` and `alphaMode: 'premultiplied'`, so the BGA shows through transparent pixels.
+- **Encode lean frames.**
+  - Use one command encoder and as few render passes as possible.
+  - Upload per-frame data with `queue.writeBuffer` into persistent buffers.
+  - Draw notes and particles instanced.
+- **No readback.** Avoid `mapAsync` in the frame loop.
+- **Handle device loss.** Watch `device.lost` and recreate the device and resources.
+
+### With a framework
+
+- **Retain the scene graph.**
+  - Rebuild the select scene only when `frame.revision` changes.
+  - Pool per-frame display objects instead of creating and destroying them. `skins/pixi-kit` shows both, with `ChildPool` and `definePixiSkin`.
+- **PixiJS specifics:**
+  - Reuse `Text` objects and `TextStyle` instances so texts keep their textures.
+  - Use `ParticleContainer` for thousands of sprites.
+  - Set `eventMode = 'none'`; the player handles input.
+- **three.js specifics:**
+  - Use `InstancedMesh` for notes and particles, and merge static geometry.
+  - Reuse materials.
+  - `dispose()` everything in `teardown`.
+
 ## Fonts
 
 List every face you draw with in `fontLoads`. The host loads them with `document.fonts.load` before mounting, so the first frame does not rasterize with a fallback face. Make sure the host can obtain the face itself, either from a font service or bundled with your skin.
 
 ## Packaging and loading
 
+- **Install:** add `@be-music/skin-sdk` as a dependency of your skin (`npm install @be-music/skin-sdk`), along with the rendering framework you use. You don't need `@be-music/player-web`.
 - **Imports:** a skin module imports `@be-music/skin-sdk`, the rendering framework it chooses, and its own files. The built-in skins are held to this rule by a test, so anything they use from the player is available to you.
 - **Export:** export the skin as the module's default export.
 - **Hosts:** a host registers skins in a registry:
@@ -302,4 +385,5 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 - [ ] Select rows line up with `select.layout`, and buttons are declared with `frame.hit` on every draw.
 - [ ] Audio reactions go through `audioDrive`, and `effects` is respected.
 - [ ] Every face is listed in `fontLoads`.
+- [ ] `draw` stays well under half a frame on a dense chart at high density, with no per-frame allocations or pixel readback.
 - [ ] Checked in single play, double play, 5 / 7 / 9 / 10 / 14 / 24 / 48 KEY, and with and without a BGA.
