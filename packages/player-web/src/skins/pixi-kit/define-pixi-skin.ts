@@ -26,13 +26,14 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
     ...meta,
     context: 'webgl2',
     // Pixi needs a stencil buffer for masks; the canvas is composited over the BGA, so it keeps (premultiplied) alpha.
-    // The drawing buffer is preserved so the player can upload it whenever it renders.
+    // The player uploads the canvas in the same frame it is drawn, so the drawing buffer needn't be preserved (keeping
+    // it would cost a full-surface copy every frame).
     contextAttributes: {
       alpha: true,
       premultipliedAlpha: true,
       antialias: true,
       stencil: true,
-      preserveDrawingBuffer: true,
+      preserveDrawingBuffer: false,
     },
     async setup(surface) {
       const renderer = new WebGLRenderer();
@@ -102,6 +103,9 @@ class PixiSurface {
     const renderer = this.renderer;
     setTextResolution(surface.pixelRatio);
     const root = build();
+    // The canvas never sees the pointer (the player handles input), so skip Pixi's hit-testing tree entirely.
+    root.eventMode = 'none';
+    root.interactiveChildren = false;
     if (
       renderer.resolution !== surface.pixelRatio ||
       renderer.screen.width !== surface.width ||
@@ -125,12 +129,12 @@ class GameplayScreen {
   private readonly root = new Container();
   private readonly layer = new Container();
   private readonly lanes = new Graphics();
-  private readonly notes = new Container();
+  /** Every note and long note this frame, drawn into one Graphics (they only add geometry, in draw order). */
+  private readonly notes = new Graphics();
   private readonly bombs = new Container();
   private readonly overlayLayer = new Container();
   private readonly layerPool = new ChildPool(this.layer);
   private readonly overlayLayerPool = new ChildPool(this.overlayLayer);
-  private readonly notePool = new ChildPool(this.notes);
   private readonly bombPool = new ChildPool(this.bombs);
 
   constructor(definition: PixiSkinDefinition) {
@@ -175,16 +179,21 @@ class GameplayScreen {
       audio,
     });
 
-    this.notePool.begin();
-    try {
-      for (const note of frame.longNotes) {
-        skin.renderLongNote({ graphics: this.notePool.acquireGraphics(), ...note, nowMs });
-      }
-      for (const note of frame.notes) {
-        skin.renderNote({ graphics: this.notePool.acquireGraphics(), ...note, nowMs });
-      }
-    } finally {
-      this.notePool.end();
+    const notes = this.notes;
+    notes.clear();
+    for (const note of frame.longNotes) {
+      skin.renderLongNote({
+        graphics: notes,
+        kind: note.kind,
+        x: note.x,
+        w: note.w,
+        top: note.top,
+        bottom: note.bottom,
+        nowMs,
+      });
+    }
+    for (const note of frame.notes) {
+      skin.renderNote({ graphics: notes, kind: note.kind, x: note.x, w: note.w, y: note.y, nowMs });
     }
 
     this.bombPool.begin();
@@ -197,7 +206,7 @@ class GameplayScreen {
   }
 
   destroy(): void {
-    for (const pool of [this.layerPool, this.overlayLayerPool, this.notePool, this.bombPool]) pool.destroy();
+    for (const pool of [this.layerPool, this.overlayLayerPool, this.bombPool]) pool.destroy();
     this.root.destroy({ children: true });
   }
 }
@@ -210,6 +219,8 @@ class SelectScreen {
   private readonly renderer: PixiSelectRenderer;
   private readonly root = new Container();
   private readonly layer = new Container();
+  /** Retires the previous rebuild a frame late, so unchanged labels keep their text textures. */
+  private readonly disposer = new LaggedDisposer();
   private revision = -1;
   private needsFrame = false;
   private hits: PixiHitArea[] = [];
@@ -222,7 +233,7 @@ class SelectScreen {
   build(frame: BeMusicSelectFrame): Container {
     if (frame.revision !== this.revision || this.needsFrame || frame.launchAt !== undefined) {
       this.revision = frame.revision;
-      for (const child of this.layer.removeChildren()) child.destroy({ children: true, context: true });
+      this.disposer.cycle(this.layer);
       // The Pixi renderer declares its click targets through `addHitArea`; they are replayed into `frame.hit` below.
       const pixiFrame: PixiSelectFrame = { ...frame, layer: this.layer };
       this.hits = collectHitAreas(() => {
@@ -235,6 +246,7 @@ class SelectScreen {
   }
 
   destroy(): void {
+    this.disposer.flush();
     this.renderer.dispose();
     this.root.destroy({ children: true });
   }
