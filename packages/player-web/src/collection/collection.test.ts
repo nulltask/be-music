@@ -7,6 +7,7 @@ import {
   resolveChartImageAsset,
   resolveChartPlayVariant,
 } from './collection.ts';
+import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BeMusicEvent, BeMusicJson } from '../../../json/src/index.ts';
 import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
 
@@ -49,6 +50,30 @@ const MINIMAL_BMS = ['#TITLE Test', '#BPM 120', '#PLAYER 1', '#00111:0F'].join('
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('loadSongCollectionFromFiles with deferred drop handles', () => {
+  test('parses unopened charts in path order and leaves assets unopened', async () => {
+    const opened: string[] = [];
+    const deferred = (path: string, contents = '') =>
+      new DeferredDroppedFile(
+        {
+          name: path.split('/').at(-1)!,
+          file: (resolve) => {
+            opened.push(path);
+            resolve(new File([contents], path.split('/').at(-1)!));
+          },
+        },
+        path,
+      );
+    const charts = Array.from({ length: 12 }, (_, index) =>
+      deferred(`Pack/S${String(index).padStart(2, '0')}/main.bms`, MINIMAL_BMS.replace('Test', `Song ${index}`)),
+    );
+    const collection = await loadSongCollectionFromFiles([...charts].reverse().concat(deferred('Pack/S00/kick.wav')));
+    expect(collection.errors).toEqual([]);
+    expect(collection.songs.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
+    expect(opened).not.toContain('Pack/S00/kick.wav');
+  });
 });
 
 describe('loadSongCollectionFromFiles progress events', () => {
