@@ -220,8 +220,9 @@ const DEFAULT_UI_FONT_LOADS: readonly string[] = [
   '400 22px "LINE Seed JP"',
   '700 18px "LINE Seed JP"',
   '900 32px "Azeret Mono"',
-  // Every built-in skin's faces, so switching skins never rasterizes a first frame with a fallback font.
-  ...new Set(BUILT_IN_BE_MUSIC_SKINS.flatMap((skin) => skin.fontLoads)),
+  // Every registered skin's faces (the built-ins plus any added at startup, such as a remembered Lattice), so switching
+  // skins never rasterizes a first frame with a fallback font.
+  ...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads)),
 ];
 
 async function waitForDefaultUiFonts(): Promise<void> {
