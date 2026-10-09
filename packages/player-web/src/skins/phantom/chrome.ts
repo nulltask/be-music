@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, Graphics, GraphicsContext } from 'pixi.js';
 import { GROOVE } from './layout.ts';
 import { DEFAULT_DISPLAY_FONT, DEFAULT_HEADLINE_FONT } from './fonts.ts';
 import {
@@ -137,7 +137,16 @@ function renderChromeFrame(
   frame.label = 'default-gameplay/chrome';
   // The poster moves with the music: halftone swells on the bass, the idle burst kicks on onsets, a spectrum strip.
   const drive = audioDrive(runtime.audio, runtime.effects);
-  drawBackground(frame, hasBga ? bga : undefined, drive);
+  const hole = hasBga ? bga : undefined;
+  const idleMonitor = bga !== undefined && !hasBga ? bga : undefined;
+  if (layerPool) {
+    // The ground, the floor wedge, and the idle monitor's field barely change: they come from cached geometry, keyed by
+    // the BGA rect and the audio level quantized well below a pixel, instead of being re-tessellated every frame.
+    showStaticLayers(layer, hole, drive, idleMonitor);
+  } else {
+    drawGround(frame.context, hole);
+    drawWedge(frame.context, quantizeLevel(drive.bass));
+  }
 
   const effects = effectProfile(runtime.effects);
   drawPlayfield(
@@ -148,6 +157,7 @@ function renderChromeFrame(
   );
   // The monitor shrinks to fit beside a double-play field; only a page-wide keyboard field leaves no room for it.
   if (bga) {
+    if (!layerPool && idleMonitor) drawMonitorField(frame.context, idleMonitor, quantizeLevel(drive.level));
     drawBgaFrame(frame, layer, bga, hasBga, runtime.nowMs, drive, layerPool);
   }
   drawGauge(frame, layer, runtime, layerPool);
@@ -184,44 +194,141 @@ function renderChromeFrame(
  */
 export const renderFallbackLr2Frame: typeof renderDefaultGameplayFrame = renderDefaultGameplayFrame;
 
+/** Steps the audio-driven halftone radius is quantized to — well under a pixel, so the swell still reads smooth. */
+const HALFTONE_LEVELS = 32;
+
+function quantizeLevel(value: number): number {
+  return Math.round(Math.max(0, Math.min(1, value)) * HALFTONE_LEVELS) / HALFTONE_LEVELS;
+}
+
+/** The layer's persistent Graphics under all pooled chrome: the ground, the floor wedge, and the idle monitor field. */
+interface StaticLayers {
+  ground: Graphics;
+  wedge: Graphics;
+  monitor: Graphics;
+}
+
+const STATIC_LAYERS = new WeakMap<Container, StaticLayers>();
+const GROUND_CONTEXTS = new Map<string, GraphicsContext>();
+const WEDGE_CONTEXTS = new Map<number, GraphicsContext>();
+const MONITOR_CONTEXTS = new Map<string, GraphicsContext>();
+/** Monitor fields kept: a handful of rects (single / double play) at every level. */
+const MONITOR_CONTEXT_LIMIT = 4 * (HALFTONE_LEVELS + 1);
+
+function rectKey(rect: BeMusicRect | undefined): string {
+  return rect ? `${rect.x},${rect.y},${rect.w},${rect.h}` : '-';
+}
+
+function cachedContext<K>(
+  cache: Map<K, GraphicsContext>,
+  key: K,
+  draw: (context: GraphicsContext) => void,
+  limit = 64,
+) {
+  let context = cache.get(key);
+  if (!context) {
+    if (cache.size >= limit) {
+      const oldest = cache.keys().next().value as K;
+      // Retired contexts may still be shown this frame by another layer; let them go with the garbage collector.
+      cache.delete(oldest);
+    }
+    context = new GraphicsContext();
+    draw(context);
+    cache.set(key, context);
+  }
+  return context;
+}
+
+function showStaticLayers(
+  layer: Container,
+  hole: BeMusicRect | undefined,
+  drive: AudioDrive,
+  idleMonitor: BeMusicRect | undefined,
+): void {
+  let layers = STATIC_LAYERS.get(layer);
+  if (!layers) {
+    layers = { ground: new Graphics(), wedge: new Graphics(), monitor: new Graphics() };
+    layers.ground.label = 'default-gameplay/ground';
+    layers.wedge.label = 'default-gameplay/wedge';
+    layers.monitor.label = 'default-gameplay/monitor-field';
+    layer.addChildAt(layers.monitor, 0);
+    layer.addChildAt(layers.wedge, 0);
+    layer.addChildAt(layers.ground, 0);
+    STATIC_LAYERS.set(layer, layers);
+  }
+  layers.ground.context = cachedContext(GROUND_CONTEXTS, rectKey(hole), (context) => drawGround(context, hole));
+  const bass = quantizeLevel(drive.bass);
+  layers.wedge.context = cachedContext(WEDGE_CONTEXTS, bass, (context) => drawWedge(context, bass));
+  layers.monitor.visible = idleMonitor !== undefined;
+  if (idleMonitor) {
+    const level = quantizeLevel(drive.level);
+    layers.monitor.context = cachedContext(
+      MONITOR_CONTEXTS,
+      `${rectKey(idleMonitor)}:${level}`,
+      (context) => drawMonitorField(context, idleMonitor, level),
+      MONITOR_CONTEXT_LIMIT,
+    );
+  }
+}
+
 /**
- * Ink ground and the halftone floor wedge. The playfield itself stays undecorated so notes read cleanly. With a live BGA the ground leaves a
- * hole over the BGA rect — the BGA layer renders BEHIND this chrome layer, so anything painted there would cover the
- * video. Every decoration is placed so it never crosses that rect.
+ * Ink ground with diagonal pinstripes, and the floor wedge's red faces. The playfield itself stays undecorated so notes
+ * read cleanly. With a live BGA the ground leaves a hole over the BGA rect — the BGA layer renders BEHIND this chrome
+ * layer, so anything painted there would cover the video. Every decoration is placed so it never crosses that rect.
  */
-function drawBackground(frame: Graphics, hole: BeMusicRect | undefined, drive: AudioDrive): void {
-  fillRectAroundHole(frame, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, PHANTOM_BLACK, hole);
+function drawGround(context: GraphicsContext, hole: BeMusicRect | undefined): void {
+  fillRectAroundHole(context, 0, 0, DESIGN_WIDTH, DESIGN_HEIGHT, PHANTOM_BLACK, hole);
   // Faint diagonal pinstripes over the lower-left quadrant — gives the ink ground a printed texture.
   for (let stripe = 0; stripe < 12; stripe += 1) {
     const x0 = -120 + stripe * 44;
-    frame.poly([x0, DESIGN_HEIGHT, x0 + 14, DESIGN_HEIGHT, x0 + 134, 352, x0 + 120, 352]).fill({
+    context.poly([x0, DESIGN_HEIGHT, x0 + 14, DESIGN_HEIGHT, x0 + 134, 352, x0 + 120, 352]).fill({
       color: PHANTOM_CHARCOAL,
       alpha: 0.7,
     });
   }
-
-  // Floor wedge: deep red base, hot red face, ink halftone swelling toward the lower-right corner.
-  frame
+  // Floor wedge: deep red base and hot red face.
+  context
     .poly([FLOOR_WEDGE[0]! - 18, DESIGN_HEIGHT, DESIGN_WIDTH, 342, DESIGN_WIDTH, DESIGN_HEIGHT])
     .fill(PHANTOM_RED_DEEP);
-  frame.poly([...FLOOR_WEDGE]).fill(PHANTOM_RED);
+  context.poly([...FLOOR_WEDGE]).fill(PHANTOM_RED);
+}
+
+/** The wedge's ink halftone, swelling toward the lower-right corner and with the bass, then its paper-white cut line. */
+function drawWedge(context: GraphicsContext, bass: number): void {
   for (const dot of halftoneField({
     x: 300,
     y: 352,
     w: DESIGN_WIDTH - 300,
     h: DESIGN_HEIGHT - 352,
     pitch: 9,
-    maxRadius: 4.2 * (1 + 1.2 * drive.bass),
+    maxRadius: 4.2 * (1 + 1.2 * bass),
     direction: { x: 1, y: 1 },
   })) {
-    if (isInsideFloorWedge(dot.x, dot.y)) frame.circle(dot.x, dot.y, dot.r);
+    if (isInsideFloorWedge(dot.x, dot.y)) context.circle(dot.x, dot.y, dot.r);
   }
   // One fill for the whole field instead of one per dot.
-  frame.fill({ color: PHANTOM_INK, alpha: 0.55 });
+  context.fill({ color: PHANTOM_INK, alpha: 0.55 });
   // Paper-white cut line tracing the wedge's leading edge.
-  frame
+  context
     .poly([FLOOR_WEDGE[0]! + 26, DESIGN_HEIGHT, DESIGN_WIDTH, 360, DESIGN_WIDTH, 363, FLOOR_WEDGE[0]! + 32, 480])
     .fill({ color: PHANTOM_WHITE, alpha: 0.9 });
+}
+
+/** The idle monitor's ink ground and red halftone, swelling with the loudness. */
+function drawMonitorField(context: GraphicsContext, bga: BeMusicRect, level: number): void {
+  context.rect(bga.x, bga.y, bga.w, bga.h).fill(PHANTOM_INK);
+  for (const dot of halftoneField({
+    x: bga.x + 4,
+    y: bga.y + 4,
+    w: bga.w - 8,
+    h: bga.h - 8,
+    pitch: 12,
+    maxRadius: 5 * (1 + 1.1 * level),
+    direction: { x: -0.6, y: 1 },
+  })) {
+    context.circle(dot.x, dot.y, dot.r);
+  }
+  context.fill({ color: PHANTOM_RED, alpha: 0.75 });
 }
 
 function isInsideFloorWedge(x: number, y: number): boolean {
@@ -232,7 +339,7 @@ function isInsideFloorWedge(x: number, y: number): boolean {
 
 /** Fills `rect` minus the `hole` rect (the live BGA) as up to four axis-aligned pieces. */
 function fillRectAroundHole(
-  frame: Graphics,
+  frame: GraphicsContext,
   x: number,
   y: number,
   w: number,
@@ -359,21 +466,9 @@ function drawBgaFrame(
     width: 3,
     join: 'miter',
   });
+  // The ink ground and red halftone under the idle burst come from `drawMonitorField`, beneath this frame.
   if (hasBga) return;
 
-  frame.rect(bga.x, bga.y, bga.w, bga.h).fill(PHANTOM_INK);
-  for (const dot of halftoneField({
-    x: bga.x + 4,
-    y: bga.y + 4,
-    w: bga.w - 8,
-    h: bga.h - 8,
-    pitch: 12,
-    maxRadius: 5 * (1 + 1.1 * drive.level),
-    direction: { x: -0.6, y: 1 },
-  })) {
-    frame.circle(dot.x, dot.y, dot.r);
-  }
-  frame.fill({ color: PHANTOM_RED, alpha: 0.75 });
   // Slow-turning starburst behind the slug — the idle screen is alive, not a hole in the cabinet.
   // It pumps on the bass and jolts a notch round on every onset. Sized off the monitor, which shrinks in double play.
   const spin = (nowMs !== undefined ? nowMs / 6000 : 0) + 0.25 * drive.onset;
