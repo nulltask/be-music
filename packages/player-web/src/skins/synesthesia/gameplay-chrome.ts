@@ -1,8 +1,9 @@
 import { Graphics, type Container } from 'pixi.js';
 import { GROOVE } from './layout.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
+import { ChargeCloud } from './charge-cloud.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
-import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
+import { drawFrame, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   clipSegmentOutsideRect,
   emberColor,
@@ -10,8 +11,6 @@ import {
   hsvToHex,
   mixCamera,
   particleRiverPoint,
-  fibonacciSphere,
-  orbitParticles,
   pointCloudPyramid,
   projectPoint,
   projectViewInto,
@@ -119,9 +118,20 @@ function advanceSchools(
   state.lastMs = nowMs;
   return state.flocks;
 }
-/** The idle monitor's orb shell: dense enough to read as a sphere at monitor size, sparse enough to stay cheap. */
-const ORB_SHELL = fibonacciSphere(560, 11);
-const ORB = orbitParticles(11, 22);
+/**
+ * The idle monitor's charge cloud, one per chrome layer (it outlives the per-frame pools), with the clock of its last
+ * simulation step. A smaller cloud than the select screen's: the monitor is small.
+ */
+const MONITOR_CLOUDS = new WeakMap<Container, { cloud: ChargeCloud; lastSeconds: number | undefined }>();
+
+function monitorCloudFor(layer: Container): { cloud: ChargeCloud; lastSeconds: number | undefined } {
+  let state = MONITOR_CLOUDS.get(layer);
+  if (state === undefined) {
+    state = { cloud: new ChargeCloud(192), lastSeconds: undefined };
+    MONITOR_CLOUDS.set(layer, state);
+  }
+  return state;
+}
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
 
 /**
@@ -139,6 +149,12 @@ export function renderSynesthesiaChrome({
   layout,
 }: PixiChromeContext): void {
   const seconds = (runtime.nowMs ?? 0) / 1000;
+  // The idle monitor shows its cloud only while there is no BGA; it redraws (and re-shows) it below if so.
+  const monitorCloud = MONITOR_CLOUDS.get(layer);
+  if (monitorCloud) {
+    monitorCloud.cloud.view.visible = false;
+    monitorCloud.lastSeconds = undefined;
+  }
   const beatPhase = runtime.beatPhase ?? 0;
   const pulse = (1 - beatPhase) ** 2;
   const hue = sceneHue(seconds, beatPhase);
@@ -583,35 +599,30 @@ function drawBgaFrame(
     }
   }
   sharedShapeBatch.flush();
-  // The audio orb roams the monitor's little world close to the camera: a visualizer-style shell of sparks and
-  // fibres with a black moon circling it.
+  // The audio orb roams the monitor's little world close to the camera: a small charge cloud, its dark magnet orbs
+  // wrapped in a fluid of particles, kept inside the monitor.
   const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
-  const moonLayer = pool.acquireGraphics();
-  moonLayer.label = 'synesthesia-gameplay/orb-moon';
-  moonLayer.blendMode = 'normal';
-  const frontLayer = pool.acquireGraphics();
-  frontLayer.label = 'synesthesia-gameplay/orb-front';
-  frontLayer.blendMode = 'add';
-  const orb = drawMagnetoOrb(
-    { back: light, moon: moonLayer, front: frontLayer },
-    () => pool.acquireSprite(),
-    ORB_SHELL,
-    ORB,
-    {
-      ...roam,
-      radius: 24 * (1 + 0.03 * pulse),
-      view,
-      drive,
-      seconds,
-      alpha: 1,
-      moon: { size: 0.45, distance: 2, speed: 0.65, phase: 1.1, tilt: 0.35 },
-      clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
-    },
-  );
-  if (orb) {
+  const at = projectPoint(viewPoint(roam, view.camera, view.orbit), view.cx, view.cy, view.focal);
+  const state = monitorCloudFor(layer);
+  const host = light.parent!;
+  if (state.cloud.view.parent === host) host.removeChild(state.cloud.view);
+  host.addChildAt(state.cloud.view, host.getChildIndex(light) + 1);
+  const scale = at.visible ? 60 * at.scale * (1 + 0.03 * pulse) : 0;
+  state.cloud.update({
+    x: at.x,
+    y: at.y,
+    scale,
+    seconds,
+    dt: state.lastSeconds === undefined ? 0 : seconds - state.lastSeconds,
+    drive,
+    alpha: at.visible ? 1 : 0,
+    clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
+  });
+  state.lastSeconds = seconds;
+  if (at.visible) {
     // Lock-on reticle tracking it.
-    const lock = orb.radius * 1.6 + 5 * pulse;
-    drawReticle(light, orb.x - lock, orb.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
+    const lock = scale * 0.55 + 5 * pulse;
+    drawReticle(light, at.x - lock, at.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
   }
   // A dark slip under the label, so the monitor's floor horizon never runs through the type.
   const slip = pool.acquireGraphics();

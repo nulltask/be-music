@@ -323,84 +323,6 @@ export function pointCloudPyramid(seed: number, count: number): CloudPoint[] {
 }
 
 /**
- * `count` points spread evenly over the unit sphere (a Fibonacci lattice), each with a per-point size / brightness
- * weight in [0.3, 1]. Deterministic for `seed` (which only varies the weights).
- */
-export function fibonacciSphere(count: number, seed: number): CloudPoint[] {
-  const points: CloudPoint[] = [];
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  for (let index = 0; index < count; index += 1) {
-    const y = count > 1 ? 1 - (2 * index) / (count - 1) : 0;
-    const ring = Math.sqrt(Math.max(0, 1 - y * y));
-    const theta = golden * index;
-    points.push({
-      x: Math.cos(theta) * ring,
-      y,
-      z: Math.sin(theta) * ring,
-      weight: 0.3 + 0.7 * hash01(seed * 173 + index),
-    });
-  }
-  return points;
-}
-
-/**
- * Limb brightening for a shell point whose view-space normal has depth component `normalZ` (−1 facing the camera,
- * 0 on the silhouette, +1 facing away): 1 on the silhouette falling to `floor` at the centre of the disc, the way a
- * glowing shell reads brightest at its edge.
- */
-export function limbGlow(normalZ: number, floor = 0.25): number {
-  const edge = 1 - Math.min(1, Math.abs(Number.isFinite(normalZ) ? normalZ : 0));
-  return floor + (1 - floor) * edge ** 1.5;
-}
-
-/**
- * One particle of the audio orb: a light riding a tilted circular orbit around the core, tied to a
- * spectrum band.
- */
-export interface OrbitParticle {
-  /** Orbit radius as a multiple of the core radius, [1.3, 2.8]. */
-  reach: number;
-  /** Orbit-plane tilts (radians). */
-  tiltX: number;
-  tiltZ: number;
-  /** Angular speed (rad / s), signed. */
-  speed: number;
-  phase: number;
-  /** Spectrum band (0..15) the orbit breathes with. */
-  band: number;
-  /** Size / brightness weight in [0.4, 1]. */
-  weight: number;
-}
-
-/** `count` orbit particles, deterministic for `seed`. */
-export function orbitParticles(seed: number, count: number): OrbitParticle[] {
-  const particles: OrbitParticle[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const base = seed * 263 + index * 29;
-    particles.push({
-      reach: 1.3 + 1.5 * hash01(base + 1) ** 1.4,
-      tiltX: (hash01(base + 2) - 0.5) * Math.PI,
-      tiltZ: (hash01(base + 3) - 0.5) * Math.PI,
-      speed: (0.5 + 1.4 * hash01(base + 4)) * (hash01(base + 5) > 0.5 ? 1 : -1),
-      phase: hash01(base + 6) * Math.PI * 2,
-      band: Math.floor(hash01(base + 7) * 16) % 16,
-      weight: 0.4 + 0.6 * hash01(base + 8),
-    });
-  }
-  return particles;
-}
-
-/** Position of `particle` at orbit `angle` on a circle of `radius` (in the orb's local frame, centred on the core). */
-export function orbitPosition(particle: OrbitParticle, angle: number, radius: number): Vec3 {
-  const flat: Vec3 = { x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius };
-  const tilted = rotateX(flat, particle.tiltX);
-  // Tilt about z: rotate the (x, y) pair.
-  const cos = Math.cos(particle.tiltZ);
-  const sin = Math.sin(particle.tiltZ);
-  return { x: tilted.x * cos - tilted.y * sin, y: tilted.x * sin + tilted.y * cos, z: tilted.z };
-}
-
-/**
  * Particle `index` of a flowing river of light, in river-local space: it travels along `x` from `-length / 2` to
  * `length / 2` at `speed` units/s (looping), weaving on a slow sine, with a fixed per-particle offset across the
  * stream so the river has body. Deterministic for (`index`, `seconds`).
@@ -543,25 +465,6 @@ export function wanderPoint(seconds: number, seed: number, bounds: Box3): Vec3 {
     y: mix(bounds.minY, bounds.maxY, axis(0.193, 0.427, 2)),
     z: mix(bounds.minZ, bounds.maxZ, axis(0.101, 0.263, 3)),
   };
-}
-
-/**
- * How a glossy body at screen offset (`dx`, `dy`) *toward* a light source `distance` px away catches it: `angle` is
- * the direction of the light on screen, and `strength` (0..1) falls off with distance in units of the source's
- * radius and rises with its `energy` (0..1, e.g. the music's level).
- */
-export function reflectedLight(
-  dx: number,
-  dy: number,
-  distance: number,
-  sourceRadius: number,
-  energy: number,
-): { angle: number; strength: number } {
-  const angle = Math.atan2(dy, dx);
-  const reach = Math.max(1e-6, sourceRadius) * 2.2;
-  const falloff = Math.min(1, reach / Math.max(distance, sourceRadius));
-  const strength = Math.max(0, Math.min(1, falloff * (0.45 + 0.55 * Math.max(0, Math.min(1, energy)))));
-  return { angle, strength };
 }
 
 /** Axis-aligned rectangle (x / y / w / h) for {@link clipSegmentOutsideRect}. */
