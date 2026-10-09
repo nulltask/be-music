@@ -45,6 +45,7 @@
     "@be-music/player": "workspace:*",
     "@be-music/player-tui": "workspace:*",
     "@be-music/player-web": "workspace:*",
+    "@be-music/skin-sdk": "workspace:*",
     "@be-music/stringifier": "workspace:*",
     "@be-music/utils": "workspace:*",
     "@changesets/cli": "^3.0.3",

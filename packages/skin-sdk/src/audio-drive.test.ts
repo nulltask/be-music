@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { SILENT_AUDIO } from '../runtime/audio-analysis.ts';
+import { SILENT_AUDIO } from './audio.ts';
 import { audioDrive, bandAt, bandLevel } from './audio-drive.ts';
 
 const LOUD = {

@@ -5,7 +5,7 @@ import {
   type BrowserBrowseEntry,
   type BeMusicSelectFrame,
   type BeMusicSurface,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, stat, text } from './theme.ts';
 
 /** Where the song list sits; the player uses the same numbers to tell which row was clicked. */

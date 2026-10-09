@@ -1,4 +1,4 @@
-import type { BeMusicRect, BeMusicStage } from '../skin/be-music/types.ts';
+import type { BeMusicRect, BeMusicStage } from './types.ts';
 
 /**
  * 16:9 design canvas shared by the built-in skins. It keeps the 480 px height of the LR2-compatible 640x480 canvas, so

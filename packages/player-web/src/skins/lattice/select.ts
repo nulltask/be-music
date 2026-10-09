@@ -24,7 +24,7 @@ import {
   formatPlayVariantLabel,
   resolveSongRowFacts,
   stageProgress,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import {
   addHitArea,
   addSkinText,

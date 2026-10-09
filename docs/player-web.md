@@ -97,7 +97,7 @@ explicitly chooses the default family. It provides select, gameplay, and result 
 files.
 
 The family draws every screen through a be-music skin, a code-defined skin built on the public
-`@be-music/player-web/skin-sdk` subpath. See [Writing a be-music skin](./be-music-skin.md) to make one.
+`@be-music/skin-sdk` package. See [Writing a be-music skin](./be-music-skin.md) to make one.
 
 Gameplay still shares the common engine, note renderer, BGA renderer, audio bus, and input handling with
 `PixiGameplayView`, but the default chrome is injected from `scene/default/gameplay.ts` through the

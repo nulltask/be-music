@@ -1,4 +1,4 @@
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, type BeMusicSkin } from '../../skin-sdk/index.ts';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, type BeMusicSkin } from '@be-music/skin-sdk';
 import { drawGameplay } from './gameplay.ts';
 import { drawResult } from './result.ts';
 import { SELECT_LAYOUT, SELECT_OUTRO_MS, drawSelect } from './select.ts';

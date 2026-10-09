@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { PixiGameplayResultData } from '../scene/core/result-data.ts';
+import type { BeMusicResultData } from './result-data.ts';
 import { resolveResultLamp, resolveResultTrackRows } from './result-track.ts';
 
-function score(partial: Partial<PixiGameplayResultData['score']>): PixiGameplayResultData['score'] {
+function score(partial: Partial<BeMusicResultData['score']>): BeMusicResultData['score'] {
   return { total: 100, perfect: 0, great: 0, good: 0, bad: 0, poor: 0, emptyPoor: 0, exScore: 0, score: 0, ...partial };
 }
 
@@ -38,7 +38,7 @@ describe('resolveResultTrackRows', () => {
     totalNotes: 100,
     chartPath: 'song.bms',
     chart: { events: [{ measure: 0, channel: '11', position: [0, 1], value: '01' }], bms: { player: 1 } },
-  } as unknown as PixiGameplayResultData['song'];
+  } as unknown as BeMusicResultData['song'];
 
   it('lists level, rounded tempo and the combo breaks', () => {
     const rows = resolveResultTrackRows({ song, score: score({ bad: 2, poor: 3 }) });
@@ -50,7 +50,7 @@ describe('resolveResultTrackRows', () => {
   });
 
   it('dashes out a missing level or tempo', () => {
-    const bare = { ...song, playLevel: undefined, bpm: undefined } as PixiGameplayResultData['song'];
+    const bare = { ...song, playLevel: undefined, bpm: undefined } as BeMusicResultData['song'];
     const rows = resolveResultTrackRows({ song: bare, score: score({}) });
     expect(rows[1]!.value).toBe('-');
     expect(rows[2]!.value).toBe('-');

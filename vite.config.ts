@@ -15,6 +15,7 @@ const workspacePackages = [
   'player-tui',
   'lr2-skin',
   'beatoraja-skin',
+  'skin-sdk',
   'editor',
   'player-web',
 ] as const;

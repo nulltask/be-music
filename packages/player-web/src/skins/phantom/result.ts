@@ -30,7 +30,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { alignCapCenter, type PixiResultFrame, type PixiResultSkin, resolveSkinTextStyle } from '../pixi-kit/index.ts';
 
 /** Default-family result entrance timeline (ms from scene start): counters roll up, then the rank badge lands. */

@@ -1,5 +1,5 @@
 import { Color, FillGradient, type Graphics } from 'pixi.js';
-import { type BeMusicLaneKind, resolveLaneRuns } from '../../skin-sdk/index.ts';
+import { type BeMusicLaneKind, resolveLaneRuns } from '@be-music/skin-sdk';
 import {
   type PixiBombsContext,
   type PixiLanesContext,

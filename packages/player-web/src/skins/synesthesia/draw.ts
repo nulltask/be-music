@@ -16,7 +16,7 @@ import {
   type Vec3,
 } from './space.ts';
 import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
-import { type AudioDrive, bandLevel, hash01 } from '../../skin-sdk/index.ts';
+import { type AudioDrive, bandLevel, hash01 } from '@be-music/skin-sdk';
 import { pointLayerFor } from '../pixi-kit/index.ts';
 
 /**

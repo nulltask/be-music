@@ -1,4 +1,4 @@
-import { hash01 } from '../../skin-sdk/index.ts';
+import { hash01 } from '@be-music/skin-sdk';
 
 /**
  * Pure motion helpers for the Lattice skin: the needle field (short strokes on a grid that turn like iron filings in

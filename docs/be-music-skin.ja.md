@@ -2,7 +2,7 @@
 
 # be-music スキンの作り方
 
-このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/player-web/skin-sdk` サブパスに対して書きます。組み込みスキンもまさにこのサブパスだけを使っており、Synesthesia・Phantom・Lattice・Plain はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
+このガイドは、ブラウザプレイヤーの組み込み（デフォルト）ファミリー向けにスキンを作りたい人のためのものです。スキンは `@be-music/skin-sdk` パッケージに対して書きます。組み込みスキンもまさにこのパッケージだけを使っており、Synesthesia・Phantom・Lattice・Plain はプレイヤーの他の部分を一切 import していません。組み込みスキンにできることは、あなたのスキンにもできます。
 
 be-music スキンはデータファイルではなくコードです。LR2 / beatoraja テーマはシーンが解釈しますが、be-music スキンはすべての画面を自分で描きます。それ以外はすべてプレイヤーの担当です。
 
@@ -27,7 +27,7 @@ SDK 自体は描画を行わず、描画フレームワークも import しま�
 ## クイックスタート: Canvas 2D スキン
 
 ```ts
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/player-web/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/skin-sdk';
 
 export default defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
@@ -81,7 +81,7 @@ export default defineBeMusicSkin({
 
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/player-web/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/skin-sdk';
 
 const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
 
@@ -264,7 +264,7 @@ export default defineBeMusicSkin({
 
 ## パッケージングと読み込み
 
-- **import の範囲:** スキンモジュールが import するのは `@be-music/player-web/skin-sdk`、選んだ描画フレームワーク、自身のファイルです。組み込みスキンもテストでこのルールを守らされているので、組み込みスキンがプレイヤーから使っているものはすべて使えます。
+- **import の範囲:** スキンモジュールが import するのは `@be-music/skin-sdk`、選んだ描画フレームワーク、自身のファイルです。組み込みスキンもテストでこのルールを守らされているので、組み込みスキンがプレイヤーから使っているものはすべて使えます。
 - **export:** スキンはモジュールの default export にします。
 - **ホスト側:** ホストはスキンをレジストリに登録します。
 

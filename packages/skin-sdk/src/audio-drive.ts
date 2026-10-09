@@ -1,4 +1,4 @@
-import { AUDIO_BAND_COUNT, SILENT_AUDIO, type AudioFeatures } from '../runtime/audio-analysis.ts';
+import { AUDIO_BAND_COUNT, SILENT_AUDIO, type BeMusicAudioFrame } from './audio.ts';
 
 /**
  * Audio drive for built-in skins: the frame's audio features scaled by the effects level (full = as analysed, reduced
@@ -20,7 +20,7 @@ export interface AudioDrive {
 const SILENT_BANDS: readonly number[] = Object.freeze(Array.from({ length: AUDIO_BAND_COUNT }, () => 0));
 
 export function audioDrive(
-  audio: AudioFeatures | undefined,
+  audio: BeMusicAudioFrame | undefined,
   effects: 'full' | 'reduced' | 'off' | undefined,
 ): AudioDrive {
   const amount = effects === 'off' ? 0 : effects === 'reduced' ? 0.5 : 1;

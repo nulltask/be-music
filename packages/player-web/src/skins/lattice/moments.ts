@@ -16,7 +16,7 @@ import {
   type BeMusicGameplayRuntime,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_WIDTH as DESIGN_WIDTH,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
 
 /** Stand-in for a layout without a BGA (a page-wide keyboard field): milestones then play in their area. */

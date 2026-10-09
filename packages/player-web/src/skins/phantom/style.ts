@@ -1,4 +1,4 @@
-import { hash01 } from '../../skin-sdk/index.ts';
+import { hash01 } from '@be-music/skin-sdk';
 import type { Graphics } from 'pixi.js';
 
 /**

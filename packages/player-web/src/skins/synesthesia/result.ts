@@ -33,7 +33,7 @@ import {
   resolveResultTrackRows,
   rollUpValue,
   stageProgress,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
 const ROLL_DELAY_MS = 700;

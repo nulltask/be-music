@@ -12,7 +12,7 @@ import type {
   BeMusicSelectLayout,
   BeMusicSkin,
   BrowserSongEntry,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import type { ChildPool } from './pools.ts';
 
 /**

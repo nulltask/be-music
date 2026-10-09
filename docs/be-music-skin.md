@@ -2,7 +2,7 @@
 
 # Writing a be-music skin
 
-This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/player-web/skin-sdk` subpath. The built-in skins use exactly this subpath: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
+This guide is for people who want to make a skin for the browser player's built-in (default) family. Skins are written against the `@be-music/skin-sdk` package. The built-in skins use exactly this package: Synesthesia, Phantom, Lattice, and Plain import nothing else from the player. Anything they do, your skin can do too.
 
 A be-music skin is code, not a data file. LR2 and beatoraja themes are interpreted by a scene; a be-music skin draws every screen itself. The player keeps ownership of everything else:
 
@@ -27,7 +27,7 @@ Your skin bundles its own framework as a dependency. Plain is deliberately small
 ## Quick start: a Canvas 2D skin
 
 ```ts
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/player-web/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin, resolveLaneRuns } from '@be-music/skin-sdk';
 
 export default defineBeMusicSkin({
   apiVersion: BE_MUSIC_SKIN_API_VERSION,
@@ -81,7 +81,7 @@ Create the framework's renderer on the surface's canvas in `setup`, and release 
 
 ```ts
 import { WebGLRenderer, Container } from 'pixi.js';
-import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/player-web/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, defineBeMusicSkin } from '@be-music/skin-sdk';
 
 const renderers = new WeakMap<HTMLCanvasElement, WebGLRenderer>();
 
@@ -264,7 +264,7 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 
 ## Packaging and loading
 
-- **Imports:** a skin module imports `@be-music/player-web/skin-sdk`, the rendering framework it chooses, and its own files. The built-in skins are held to this rule by a test, so anything they use from the player is available to you.
+- **Imports:** a skin module imports `@be-music/skin-sdk`, the rendering framework it chooses, and its own files. The built-in skins are held to this rule by a test, so anything they use from the player is available to you.
 - **Export:** export the skin as the module's default export.
 - **Hosts:** a host registers skins in a registry:
 

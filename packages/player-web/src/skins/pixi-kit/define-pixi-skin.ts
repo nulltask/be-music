@@ -6,7 +6,7 @@ import {
   type BeMusicSelectFrame,
   type BeMusicSkin,
   type BeMusicSurface,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { ChildPool, LaggedDisposer } from './pools.ts';
 import { setTextResolution } from './resolution.ts';
 import { collectHitAreas, type PixiHitArea } from './skin-text.ts';

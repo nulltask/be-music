@@ -1,6 +1,11 @@
-import type { BeMusicJson } from '@be-music/json';
+import type { BrowserSongEntry, BrowserSongSourceKind } from '@be-music/skin-sdk';
 
-export type BrowserSongSourceKind = 'directory' | 'zip' | 'files';
+export type {
+  BrowserBrowseEntry,
+  BrowserFolderNode,
+  BrowserSongEntry,
+  BrowserSongSourceKind,
+} from '@be-music/skin-sdk';
 
 /**
  * Asset payload kept inside a {@link BrowserSongAssetSource}. Each file from the dropped bundle is either:
@@ -24,47 +29,11 @@ export interface BrowserSongAssetSource {
   files: ReadonlyMap<string, BrowserSongAssetEntry>;
 }
 
-export interface BrowserSongEntry {
-  id: string;
-  sourceId: string;
-  sourceLabel: string;
-  sourceKind: BrowserSongSourceKind;
-  chartPath: string;
-  directoryLabel: string;
-  fileLabel: string;
-  title: string;
-  subtitle?: string;
-  artist?: string;
-  genre?: string;
-  playLevel?: number | string;
-  bpm?: number;
-  totalNotes: number;
-  chart: BeMusicJson;
-}
-
 export interface BrowserSongCollection {
   sources: BrowserSongAssetSource[];
   songs: BrowserSongEntry[];
   errors: Array<{ sourceId: string; path?: string; message: string }>;
 }
-
-/**
- * One folder of songs surfaced by `groupSongsByFolder`. The label is the human-readable folder name (top-level
- * directory inside the source, falling back to the source label) and `songs` are all the BMS charts whose
- * `directoryLabel` resolves to it.
- */
-export interface BrowserFolderNode {
-  label: string;
-  songs: readonly BrowserSongEntry[];
-}
-
-/**
- * One entry in the bar list when navigating the song collection. A select view either shows folder bars (when at the
- * root) or song bars (when inside a folder).
- */
-export type BrowserBrowseEntry =
-  | { kind: 'folder'; folder: BrowserFolderNode }
-  | { kind: 'song'; song: BrowserSongEntry };
 
 /**
  * Phases reported by the dropped-folder loaders so a host UI can show a meaningful "Loading…" state instead of a frozen

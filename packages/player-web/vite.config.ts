@@ -16,7 +16,6 @@ export default defineConfig({
       collection: 'src/collection/index.ts',
       runtime: 'src/runtime/index.ts',
       // Everything a be-music skin is written against (the built-in skins use nothing else).
-      'skin-sdk': 'src/skin-sdk/index.ts',
     },
   }),
 });

@@ -56,7 +56,7 @@ import {
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
   punchScale,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import {
   addHudNumber,
   addHudText,

@@ -141,7 +141,7 @@ import type {
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import { resolveGameplayLayout } from '../../skin-sdk/layout.ts';
+import { resolveGameplayLayout } from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import {
   PHANTOM_BOMB_DURATION_MS,

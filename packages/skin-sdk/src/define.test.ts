@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import type { BeMusicSkin } from '../skin/be-music/types.ts';
+import type { BeMusicSkin } from './types.ts';
 import {
   BE_MUSIC_SKIN_API_VERSION,
   defineBeMusicSkin,

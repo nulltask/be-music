@@ -1,5 +1,5 @@
 import { CanvasTextMetrics, type Container, Text, TextStyle } from 'pixi.js';
-import { DEFAULT_TEXT_FONT, layoutTabularRun } from '../../skin-sdk/index.ts';
+import { DEFAULT_TEXT_FONT, layoutTabularRun } from '@be-music/skin-sdk';
 import type { ChildPool } from './pools.ts';
 import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';

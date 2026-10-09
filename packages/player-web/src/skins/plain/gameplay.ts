@@ -6,7 +6,7 @@ import {
   resolveLaneRuns,
   type BeMusicGameplayFrame,
   type BeMusicSurface,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import {
   ACCENT,
   DANGER,

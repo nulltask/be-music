@@ -1,7 +1,7 @@
 import { phantomSkin } from './phantom/index.ts';
 import { plainSkin } from './plain/index.ts';
 import { synesthesiaSkin } from './synesthesia/index.ts';
-import type { BeMusicSkin } from '../skin-sdk/index.ts';
+import type { BeMusicSkin } from '@be-music/skin-sdk';
 
 /**
  * The be-music skins a player loads by default, in picker order; the first is the default. More skins — the bundled

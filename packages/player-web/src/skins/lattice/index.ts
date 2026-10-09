@@ -8,7 +8,7 @@ import {
 } from './playfield.ts';
 import { latticeResultSkin } from './result.ts';
 import { latticeSelectSkin } from './select.ts';
-import { BE_MUSIC_SKIN_API_VERSION, wideStage, type BeMusicSkin } from '../../skin-sdk/index.ts';
+import { BE_MUSIC_SKIN_API_VERSION, wideStage, type BeMusicSkin } from '@be-music/skin-sdk';
 import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**

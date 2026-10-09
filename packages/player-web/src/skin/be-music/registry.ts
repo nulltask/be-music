@@ -1,8 +1,7 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { isScratchLaneForVariant, resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
-import type { BeMusicLaneKind, BeMusicSelectLayout, BeMusicSkin } from './types.ts';
-import { validateBeMusicSkin } from '../../skin-sdk/define.ts';
+import { validateBeMusicSkin, type BeMusicSelectLayout, type BeMusicSkin } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
+
+export { resolveBeMusicLaneKind } from '@be-music/skin-sdk';
 
 const log = logger('be-music-skin');
 
@@ -78,27 +77,6 @@ export function createBeMusicSkinRegistry(
       };
     },
   };
-}
-
-/** Chromatic offsets of the black keys within an octave (C# D# F# G# A#). */
-const KEYBOARD_BLACK_KEY_SEMITONES = new Set([1, 3, 6, 8, 10]);
-
-/**
- * Visual class of a lane. `laneIndex` is the LR2 lane id (0 / 10 = scratch, 1..9 / 11..19 = keys, -1 when the lane
- * has no LR2 rect). IIDX convention: odd keys white, even keys black. The 24 / 48-key keyboard modes colour by piano
- * key instead, repeating every octave.
- */
-export function resolveBeMusicLaneKind(
-  channel: string,
-  laneIndex: number,
-  playVariant: ChartPlayVariant | undefined,
-): BeMusicLaneKind {
-  if (isScratchLaneForVariant(channel, playVariant)) return 'scratch';
-  if (playVariant === '24' || playVariant === '48') {
-    const semitone = (resolveSideRelativeLaneIndex(channel, playVariant) - 1) % 12;
-    return KEYBOARD_BLACK_KEY_SEMITONES.has(semitone) ? 'black' : 'white';
-  }
-  return (laneIndex % 10) % 2 === 0 ? 'black' : 'white';
 }
 
 /**

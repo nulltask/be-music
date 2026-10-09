@@ -13,8 +13,13 @@
  * - Text and motion: tabular figure layout, the default text face, easing, staged timelines, roll-up counters, and a
  *   deterministic hash for jitter.
  */
-export type * from '../skin/be-music/types.ts';
-export type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from '../collection/types.ts';
+export type * from './types.ts';
+export type * from './song.ts';
+export type * from './result-data.ts';
+
+export * from './audio.ts';
+export * from './playfield.ts';
+export * from './lane-geometry.ts';
 
 export * from './define.ts';
 export * from './stage.ts';

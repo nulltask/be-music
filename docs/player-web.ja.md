@@ -92,7 +92,7 @@ scene に依存しない LR2 Pixi helper は [`skin/lr2/render.ts`](../packages/
 built-in default family は、LR2 / beatoraja theme がない場合、または host が default family を明示的に選んだ場合に使う skinless path です。
 theme file なしで select、gameplay、result の表示を提供します。
 
-この family はすべての画面を be-music スキン（公開サブパス `@be-music/player-web/skin-sdk` 上に書かれたコード定義のスキン）で描きます。
+この family はすべての画面を be-music スキン（公開パッケージ `@be-music/skin-sdk` 上に書かれたコード定義のスキン）で描きます。
 スキンの作り方は [be-music スキンの作り方](./be-music-skin.ja.md) を参照してください。
 
 gameplay は `PixiGameplayView` と共通の engine、note renderer、BGA renderer、audio bus、input handling を共有します。

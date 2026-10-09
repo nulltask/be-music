@@ -1,8 +1,8 @@
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { PLAYFIELD } from '../scene/gameplay-geometry.ts';
-import { resolveLr2LaneIndex, resolveSkinlessLaneLayout } from '../scene/gameplay-lanes.ts';
-import { resolveBeMusicLaneKind } from '../skin/be-music/registry.ts';
-import type { BeMusicGameplayLayout, BeMusicStage } from '../skin/be-music/types.ts';
+import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
+import { PLAYFIELD } from './playfield.ts';
+import { resolveBeMusicLaneKind, resolveSkinlessLaneLayout } from './lane-geometry.ts';
+import type { BeMusicGameplayLayout, BeMusicStage } from './types.ts';
 
 /** What {@link resolveGameplayLayout} needs to know about the chart: its lane channels and play variant. */
 export interface GameplayLayoutInput {

@@ -25,7 +25,7 @@ import {
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_WIDTH as DESIGN_WIDTH,
   stageProgress,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { addHudText, type ChildPool } from '../pixi-kit/index.ts';
 
 const MILESTONE_MS = 1100;

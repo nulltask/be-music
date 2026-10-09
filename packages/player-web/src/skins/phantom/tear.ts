@@ -9,7 +9,7 @@ import {
   tornBandPoints,
   type RansomPaper,
 } from './style.ts';
-import { easeOutBack, easeOutCubic, DEFAULT_TEXT_FONT, hash01 } from '../../skin-sdk/index.ts';
+import { easeOutBack, easeOutCubic, DEFAULT_TEXT_FONT, hash01 } from '@be-music/skin-sdk';
 
 /**
  * Phantom cut-in pieces: the torn-paper strip that rips across the screen (red splash behind a white rim around an ink

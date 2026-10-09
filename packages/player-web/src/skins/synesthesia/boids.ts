@@ -1,4 +1,4 @@
-import { hash01 } from '../../skin-sdk/index.ts';
+import { hash01 } from '@be-music/skin-sdk';
 
 /**
  * A 3D school of boids (Reynolds' separation / alignment / cohesion) for the Synesthesia backdrop: fish of light that

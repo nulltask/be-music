@@ -2,7 +2,7 @@ import type { BeMusicJson } from '@be-music/json';
 import { createTimingResolver } from '@be-music/audio-renderer/triggers';
 import { resolveChartPlayVariant } from '@be-music/chart';
 import { extractLandmineNotes, extractPlayableNotes } from '@be-music/player/playable-notes';
-import type { BrowserSongEntry } from '../collection/types.ts';
+import type { BrowserSongEntry } from './song.ts';
 
 /**
  * What a player wants to know about a chart before starting it, beyond its title and level: how long it runs, the

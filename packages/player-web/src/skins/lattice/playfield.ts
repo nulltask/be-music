@@ -9,7 +9,7 @@ import {
   effectProfile,
   hash01,
   resolveLaneRuns,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import {
   type PixiBombsContext,
   type PixiLanesContext,

@@ -3,7 +3,7 @@ import {
   resolveResultTrackRows,
   type BeMusicResultFrame,
   type BeMusicSurface,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import { ACCENT, DANGER, INK, MUTED, PANEL, stat, text } from './theme.ts';
 
 const MARGIN = 16;

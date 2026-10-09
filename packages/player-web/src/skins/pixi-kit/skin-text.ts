@@ -1,5 +1,5 @@
 import { type Color, type Container, Text, TextStyle } from 'pixi.js';
-import { DEFAULT_TEXT_FONT } from '../../skin-sdk/index.ts';
+import { DEFAULT_TEXT_FONT } from '@be-music/skin-sdk';
 import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
 

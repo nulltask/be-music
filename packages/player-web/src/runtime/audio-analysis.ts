@@ -4,39 +4,12 @@
  * tested without Web Audio; {@link AudioAnalyzer} wraps an `AnalyserNode` and samples it once per rendered frame.
  */
 
-/** Number of log-spaced spectrum bands in {@link AudioFeatures.bands}. */
-export const AUDIO_BAND_COUNT = 16;
+import { AUDIO_BAND_COUNT, SILENT_AUDIO, type BeMusicAudioFrame } from '@be-music/skin-sdk';
 
-export interface AudioFeatures {
-  /** Smoothed loudness in 0..1 (RMS mapped from -48 dBFS → 0 to 0 dBFS → 1). */
-  readonly level: number;
-  /** Fast-attack, slow-release loudness in 0..1 — good for meters and flashes. */
-  readonly peak: number;
-  /** Instantaneous RMS level in dBFS, clamped to [-96, 0]. */
-  readonly db: number;
-  /** Smoothed energy in 0..1 below 150 Hz / 150 Hz–2 kHz / above 2 kHz. */
-  readonly bass: number;
-  readonly mid: number;
-  readonly high: number;
-  /** {@link AUDIO_BAND_COUNT} log-spaced band energies (≈ 30 Hz → 14 kHz), each 0..1, smoothed. */
-  readonly bands: readonly number[];
-  /** 1 on a detected transient (kick, snare, stab), decaying toward 0 over ~150 ms. */
-  readonly onset: number;
-  /** Clock ms of the most recent onset (`undefined` until the first). */
-  readonly onsetAtMs: number | undefined;
-}
+export { AUDIO_BAND_COUNT, SILENT_AUDIO };
 
-export const SILENT_AUDIO: AudioFeatures = Object.freeze({
-  level: 0,
-  peak: 0,
-  db: -96,
-  bass: 0,
-  mid: 0,
-  high: 0,
-  bands: Object.freeze(Array.from({ length: AUDIO_BAND_COUNT }, () => 0)),
-  onset: 0,
-  onsetAtMs: undefined,
-});
+/** One frame's analysis (the skin SDK's {@link BeMusicAudioFrame}). */
+export type AudioFeatures = BeMusicAudioFrame;
 
 /** Half-open FFT bin ranges `[start, end)` for `count` log-spaced bands between `minHz` and `maxHz`. */
 export function logBandBins(

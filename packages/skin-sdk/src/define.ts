@@ -1,4 +1,4 @@
-import type { BeMusicSkin, BeMusicSurfaceContextKind } from '../skin/be-music/types.ts';
+import type { BeMusicSkin, BeMusicSurfaceContextKind } from './types.ts';
 
 /**
  * The skin API revision this build of the player implements. Skins record the revision they were written against in

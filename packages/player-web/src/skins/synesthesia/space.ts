@@ -1,4 +1,4 @@
-import { hash01 } from '../../skin-sdk/index.ts';
+import { hash01 } from '@be-music/skin-sdk';
 
 /**
  * Pure 3D helpers for the Synesthesia skin: a pinhole projection, deterministic particle bursts, a looping starfield,

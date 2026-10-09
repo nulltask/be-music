@@ -1,7 +1,7 @@
 import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
 import { getDesignPixelRatio } from '../../scene/core/viewport.ts';
 import { ChildPool } from '../../scene/pixi-utils.ts';
-import { wideStage } from '../../skin-sdk/stage.ts';
+import { wideStage } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
 import type {
   BeMusicBomb,

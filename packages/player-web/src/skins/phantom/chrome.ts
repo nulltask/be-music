@@ -43,7 +43,7 @@ import {
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
-} from '../../skin-sdk/index.ts';
+} from '@be-music/skin-sdk';
 import {
   addHudNumber as addNumber,
   addHudText as addText,
