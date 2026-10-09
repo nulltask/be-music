@@ -1,4 +1,5 @@
 import { Container, Graphics, WebGLRenderer } from 'pixi.js';
+import { runGpuPasses } from './gpu-pass.ts';
 import {
   defineBeMusicSkin,
   type BeMusicGameplayFrame,
@@ -113,6 +114,8 @@ class PixiSurface {
     ) {
       renderer.resize(surface.width, surface.height, surface.pixelRatio);
     }
+    // GPU work the frame asked for while it was built (simulation steps into render textures) runs first.
+    runGpuPasses(renderer);
     renderer.render({ container: root, clear: true });
   }
 
