@@ -183,14 +183,51 @@ export function isPlayableInputChannel(channel: string): boolean {
 }
 
 export function resolveLaneChannels(notes: ReadonlyArray<ChannelLike>, playVariant?: ChartPlayVariant): string[] {
-  const preferred =
-    playVariant === '24' || playVariant === '48'
-      ? KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant]
-      : playVariant === '9'
-        ? ['11', '12', '13', '14', '15', '16', '17', '18', '19', '22', '23', '24', '25']
-        : ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
   const used = new Set(notes.map((note) => note.channel).filter(isPlayableInputChannel));
-  return preferred.filter((channel) => used.has(channel));
+  return preferredLaneOrder(playVariant).filter((channel) => used.has(channel));
+}
+
+/** Left-to-right rendering order of every lane a play variant can use. */
+function preferredLaneOrder(playVariant?: ChartPlayVariant): readonly string[] {
+  if (playVariant === '24' || playVariant === '48') return KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant];
+  if (playVariant === '9') return ['11', '12', '13', '14', '15', '16', '17', '18', '19', '22', '23', '24', '25'];
+  return ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
+}
+
+/** Every lane of each play variant (9 KEY has two layouts, see {@link resolvePlayVariantLaneChannels}). */
+const PLAY_VARIANT_LANES: Record<'5' | '7' | '10' | '14', readonly string[]> = {
+  '5': ['16', '11', '12', '13', '14', '15'],
+  '7': ['16', '11', '12', '13', '14', '15', '18', '19'],
+  '10': ['16', '11', '12', '13', '14', '15', '26', '21', '22', '23', '24', '25'],
+  '14': ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'],
+};
+const POPN_9KEY_BME_LANES = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+const POPN_9KEY_PMS_LANES = ['11', '12', '13', '14', '15', '22', '23', '24', '25'];
+
+/**
+ * The full lane set of a chart's play variant, in rendering order — every lane of the 5 / 7 / 9 / 10 / 14 / 24 /
+ * 48 KEY layout, whether or not the chart puts notes on it, so a chart that only uses a few lanes still plays on the
+ * whole keyboard. 9 KEY takes the PMS layout (`22..25` on the right) when the chart uses any of those channels, the
+ * BME layout (`11..19`) otherwise. Lanes the chart uses outside the variant's set are kept too, so no note loses its
+ * lane. Without a variant this is {@link resolveLaneChannels}: just the lanes in use.
+ */
+export function resolvePlayVariantLaneChannels(
+  notes: ReadonlyArray<ChannelLike>,
+  playVariant?: ChartPlayVariant,
+): string[] {
+  const used = resolveLaneChannels(notes, playVariant);
+  if (!playVariant) return used;
+  let variantLanes: readonly string[];
+  if (playVariant === '24' || playVariant === '48') {
+    variantLanes = KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant];
+  } else if (playVariant === '9') {
+    const pms = used.some((channel) => POPN_9KEY_PMS_LANES.includes(channel) && !POPN_9KEY_BME_LANES.includes(channel));
+    variantLanes = pms ? POPN_9KEY_PMS_LANES : POPN_9KEY_BME_LANES;
+  } else {
+    variantLanes = PLAY_VARIANT_LANES[playVariant];
+  }
+  const lanes = new Set([...variantLanes, ...used]);
+  return preferredLaneOrder(playVariant).filter((channel) => lanes.has(channel));
 }
 
 const IIDX_5KEY_SP_BINDINGS: FixedLaneDefinition[] = [

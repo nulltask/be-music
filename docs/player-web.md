@@ -96,6 +96,9 @@ The built-in default family is the skinless path used when no LR2 or beatoraja t
 explicitly chooses the default family. It provides select, gameplay, and result presentation without requiring theme
 files.
 
+The family draws every screen through a be-music skin, a code-defined skin built on the public
+`@be-music/skin-sdk` package. See [Writing a be-music skin](./be-music-skin.md) to make one.
+
 Gameplay still shares the common engine, note renderer, BGA renderer, audio bus, and input handling with
 `PixiGameplayView`, but the default chrome is injected from `scene/default/gameplay.ts` through the
 `skinlessChromeRenderer` option. The LR2 gameplay scene does not import the default renderer; it only provides the

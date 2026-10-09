@@ -494,6 +494,7 @@ const workspaceRootAliases: WorkspaceAlias[] = [
   { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
   { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
   { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
+  { find: '@be-music/skin-sdk', replacement: resolve(repositoryDir, 'packages/skin-sdk/src/index.ts') },
 ];
 
 const workspaceAliases = [...workspaceSubpathAliases, ...workspaceRootAliases];

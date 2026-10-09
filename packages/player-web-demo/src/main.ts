@@ -3,6 +3,7 @@
 // single area (`logger`, `Rectangle`).
 import {
   BUILT_IN_BE_MUSIC_SKINS,
+  latticeSkin,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
   DefaultPixiSongSelectView,
@@ -23,6 +24,7 @@ import {
 import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
+  type BeMusicSkin,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   findBeatorajaThemeBgm,
@@ -141,6 +143,14 @@ app.innerHTML = DEMO_APP_HTML;
 /** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
 const BE_MUSIC_SKINS = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
 const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
+// Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
+if (readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
+
+/** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */
+function loadSkinFonts(skin: BeMusicSkin): void {
+  if (!('fonts' in document)) return;
+  for (const font of skin.fontLoads) void document.fonts.load(font).catch(() => {});
+}
 
 function readStoredBuiltInSkinId(): string | undefined {
   try {
@@ -148,6 +158,19 @@ function readStoredBuiltInSkinId(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
+
+/** Stored effect level, else `'reduced'` when the OS asks for reduced motion, else `'full'`. */
+function readStoredSkinEffects(): 'full' | 'reduced' | 'off' {
+  try {
+    const stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
+    if (stored === 'full' || stored === 'reduced' || stored === 'off') return stored;
+  } catch {
+    // Storage blocked — fall through to the media query.
+  }
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
 }
 
 function storeBuiltInSkinId(id: string): void {
@@ -197,8 +220,9 @@ const DEFAULT_UI_FONT_LOADS: readonly string[] = [
   '400 22px "LINE Seed JP"',
   '700 18px "LINE Seed JP"',
   '900 32px "Azeret Mono"',
-  // Every built-in skin's faces, so switching skins never rasterizes a first frame with a fallback font.
-  ...new Set(BUILT_IN_BE_MUSIC_SKINS.flatMap((skin) => skin.fontLoads)),
+  // Every registered skin's faces (the built-ins plus any added at startup, such as a remembered Lattice), so switching
+  // skins never rasterizes a first frame with a fallback font.
+  ...new Set(BE_MUSIC_SKINS.skins.flatMap((skin) => skin.fontLoads)),
 ];
 
 async function waitForDefaultUiFonts(): Promise<void> {
@@ -547,6 +571,7 @@ class PlayerWebDemoApp {
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
       skinFamilyOverride: 'auto',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
+      skinEffects: readStoredSkinEffects(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -832,11 +857,36 @@ class PlayerWebDemoApp {
     this.rebuildSkinFamilyPicker();
     // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
     // scene. Persisted so a reload keeps the pick.
-    gui
-      .add(this.guiState, 'builtInSkin', Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id])))
+    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
+    const skinPicker = gui
+      .add(this.guiState, 'builtInSkin', skinOptions())
       .name('Built-in skin')
       .onChange((id: string) => {
         this.handleBuiltInSkinChange(id);
+      });
+    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
+    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
+    // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
+    const addSkins = gui.addFolder('Add skin');
+    const skinSource = {
+      url: '',
+      addLattice: () => this.addBeMusicSkin(latticeSkin),
+      addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
+    };
+    addSkins.add(skinSource, 'addLattice').name('Add Lattice');
+    addSkins.add(skinSource, 'url').name('Skin module URL');
+    addSkins.add(skinSource, 'addFromUrl').name('Add from URL');
+    addSkins.close();
+    gui
+      .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
+      .name('Skin effects')
+      .onChange((level: 'full' | 'reduced' | 'off') => {
+        try {
+          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
+        } catch {
+          // Private windows / blocked storage: the pick still applies for this session.
+        }
+        this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
     // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
     // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
@@ -1691,6 +1741,47 @@ class PlayerWebDemoApp {
   /** The be-music skin the default-family scenes render with. */
   private get beMusicSkin() {
     return BE_MUSIC_SKINS.resolve(this.guiState.builtInSkin);
+  }
+
+  /** Registers `skin` (validated), loads its fonts, and switches to it; reports why when it is refused. */
+  private addBeMusicSkin(skin: BeMusicSkin): void {
+    const problems = BE_MUSIC_SKINS.add(skin);
+    if (problems.length > 0) {
+      this.setStatus(`Skin "${skin.id}" was not added: ${problems.join('; ')}`);
+      return;
+    }
+    loadSkinFonts(skin);
+    this.handleBuiltInSkinChange(skin.id);
+    this.setStatus(`Added skin ${skin.label} ${skin.version} by ${skin.author.name}`);
+  }
+
+  /**
+   * Imports a skin module from `url` and adds its default export. A skin is code that runs with this page's full
+   * access, so the user confirms the source first.
+   */
+  private async addBeMusicSkinFromUrl(url: string): Promise<void> {
+    const trimmed = url.trim();
+    if (!trimmed) {
+      this.setStatus('Enter the URL of a skin module first');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Load the skin at ${trimmed}?\n\nA skin is code that runs with full access to this page. Only load skins you trust.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const module = (await import(/* @vite-ignore */ trimmed)) as { default?: BeMusicSkin };
+      if (!module.default) {
+        this.setStatus('That module has no default export to use as a skin');
+        return;
+      }
+      this.addBeMusicSkin(module.default);
+    } catch (error) {
+      this.setStatus(`Could not load the skin: ${(error as Error).message}`);
+    }
   }
 
   /**
@@ -3152,7 +3243,11 @@ class PlayerWebDemoApp {
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
-      : new DefaultPixiSongSelectView({ ...selectSceneOptions, beMusicSkin: this.beMusicSkin });
+      : new DefaultPixiSongSelectView({
+          ...selectSceneOptions,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+        });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
   }
@@ -3310,7 +3405,11 @@ class PlayerWebDemoApp {
     if (playSkin === undefined) {
       // Default-family path: no LR2 skin loaded for this chart. `DefaultPixiGameplayView` strips the skin / invisible-
       // note-skin slots from its option shape, so neither value flows in here.
-      return new DefaultPixiGameplayView({ ...sharedOptions, beMusicSkin: this.beMusicSkin });
+      return new DefaultPixiGameplayView({
+        ...sharedOptions,
+        beMusicSkin: this.beMusicSkin,
+        beMusicEffects: this.guiState.skinEffects,
+      });
     }
     return new PixiGameplayView({
       ...sharedOptions,
@@ -3460,7 +3559,11 @@ class PlayerWebDemoApp {
     };
     this.resultView = lr2ResultSkin
       ? new PixiResultView({ skin: lr2ResultSkin, ...sharedResultOptions })
-      : new DefaultPixiResultView({ ...sharedResultOptions, beMusicSkin: this.beMusicSkin });
+      : new DefaultPixiResultView({
+          ...sharedResultOptions,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+        });
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;

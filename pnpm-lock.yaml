@@ -54,6 +54,9 @@ importers:
       '@be-music/player-web':
         specifier: workspace:*
         version: link:packages/player-web
+      '@be-music/skin-sdk':
+        specifier: workspace:*
+        version: link:packages/skin-sdk
       '@be-music/stringifier':
         specifier: workspace:*
         version: link:packages/stringifier
@@ -261,6 +264,9 @@ importers:
       '@be-music/player':
         specifier: workspace:*
         version: link:../player
+      '@be-music/skin-sdk':
+        specifier: workspace:*
+        version: link:../skin-sdk
       '@be-music/utils':
         specifier: workspace:*
         version: link:../utils
@@ -328,6 +334,25 @@ importers:
       wrangler:
         specifier: ^4.145.0
         version: 4.145.0(@cloudflare/workers-types@5.20261001.1)(@types/node@26.6.1)
+
+  packages/skin-sdk:
+    dependencies:
+      '@be-music/audio-renderer':
+        specifier: workspace:*
+        version: link:../audio-renderer
+      '@be-music/chart':
+        specifier: workspace:*
+        version: link:../chart
+      '@be-music/json':
+        specifier: workspace:*
+        version: link:../json
+      '@be-music/player':
+        specifier: workspace:*
+        version: link:../player
+    devDependencies:
+      '@be-music/parser':
+        specifier: workspace:*
+        version: link:../parser
 
   packages/stringifier:
     dependencies:

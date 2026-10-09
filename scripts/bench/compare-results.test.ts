@@ -36,6 +36,7 @@ function createSnapshot(
       player: [],
       'player-tui': [],
       'lr2-skin': [],
+      'skin-sdk': [],
       'player-web': [],
     },
     totals: {

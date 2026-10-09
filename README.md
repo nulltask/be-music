@@ -16,6 +16,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
+- `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
 - `@be-music/player-web`: Browser PixiJS player core for song selection, built-in default / LR2 / beatoraja skin rendering, gameplay, result scenes, and recording
 - `@be-music/player-web-demo`: Private Vite demo that wires folder/ZIP drops, LR2/beatoraja themes, debug controls, and browser playback together
 - `@be-music/editor`: CLI editor (import/edit/export)
@@ -150,6 +151,13 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Discovers play / select / decide / result / course-result entries, with play skins grouped by `5` / `7` / `9` / `10` / `14` / `24` / `24d` — every one of them mountable for gameplay
 - Resolves `property[]`, `filepath[]`, category groups, custom offsets, wildcard source paths, and case-insensitive assets
 - Normalizes image, imageset, value, float-value, text, slider, note, judge, gauge, graph, BPM graph, timing graph, song-list, custom event, destination, and PM character elements
+
+### be-music skin SDK (`@be-music/skin-sdk`)
+
+- Skin contract for the browser player's built-in family: the skin draws each screen onto a canvas from plain per-frame data
+- Imports no rendering framework; a skin brings its own (Canvas 2D, WebGL / WebGPU, PixiJS, three.js, …)
+- Stage, lane layout, moment, judgement word, audio drive, song fact, and motion helpers
+- See [Writing a be-music skin](./docs/be-music-skin.md)
 
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 

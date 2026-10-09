@@ -79,6 +79,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/g
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
+import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
@@ -119,11 +120,10 @@ import {
 } from './gameplay-bga.ts';
 import {
   isPlayableInputChannel,
-  resolveFallbackLaneLayout,
-  resolveLaneChannels,
+  resolvePlayVariantLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
-  shouldPreserveFallbackSideWidth,
+  resolveSkinlessLaneLayout,
 } from '../gameplay-lanes.ts';
 import type {
   SkinlessGameplayChromeRenderer,
@@ -132,10 +132,30 @@ import type {
 } from '../gameplay-chrome.ts';
 import { resolveGameplayAudioTailCleanupDelayMs, resolvePostChartResultDelayMs } from './gameplay-result-delay.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicBomb, BeMusicLaneFrame, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type {
+  BeMusicBomb,
+  BeMusicEffectLevel,
+  BeMusicGameplayLayout,
+  BeMusicLaneFrame,
+  BeMusicSkin,
+  BeMusicStage,
+} from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import { phantomSkin } from '../default/phantom/index.ts';
-import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
+import { resolveGameplayLayout } from '@be-music/skin-sdk';
+import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import {
+  PHANTOM_BOMB_DURATION_MS,
+  renderPhantomBombs,
+  renderPhantomLanes,
+  renderPhantomLongNote,
+  renderPhantomNote,
+} from '../../skins/phantom/playfield.ts';
+import {
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+  setDesignPixelRatio,
+  setDesignTextResolution,
+} from './viewport.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
 import { logger } from '../../logger.ts';
 
@@ -205,20 +225,35 @@ export interface GameplayBgaTarget {
 }
 
 /** Default-family BGA rect: the fixed {@link BGA} square, drawn opaque and untinted. */
-const DEFAULT_BGA_TARGET: GameplayBgaTarget = {
-  x: BGA.x,
-  y: BGA.y,
-  w: BGA.w,
-  h: BGA.h,
-  noBase: false,
-  noLayer: false,
-  noPoor: false,
-  applyToSprite: (sprite) => {
-    sprite.alpha = 1;
-    sprite.tint = 0xffffff;
-    sprite.blendMode = 'normal';
-  },
-};
+const DEFAULT_BGA_TARGET: GameplayBgaTarget = createDefaultBgaTarget(BGA);
+
+function createDefaultBgaTarget(rect: { x: number; y: number; w: number; h: number }): GameplayBgaTarget {
+  return {
+    x: rect.x,
+    y: rect.y,
+    w: rect.w,
+    h: rect.h,
+    noBase: false,
+    noLayer: false,
+    noPoor: false,
+    applyToSprite: (sprite) => {
+      sprite.alpha = 1;
+      sprite.tint = 0xffffff;
+      sprite.blendMode = 'normal';
+    },
+  };
+}
+
+/** Design canvas of the scene: its width / height and, for the be-music path, the skin's stage. */
+export interface GameplayStageSize {
+  width: number;
+  height: number;
+}
+
+/** The LR2-compatible 640x480 canvas. */
+const LEGACY_STAGE_SIZE: GameplayStageSize = { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
+/** The 640x480 stage with the fixed default-family BGA square, for skins that declare no stage of their own. */
+const LEGACY_STAGE: BeMusicStage = { ...LEGACY_STAGE_SIZE, resolveBgaRect: () => ({ ...BGA }) };
 
 /** Lane rectangle in design pixels. `bottom` is the judgement line a note's bottom edge lands on. */
 export interface GameplayLaneRect {
@@ -278,6 +313,14 @@ const DEFAULT_THEME_TIMING: GameplayThemeTiming = {
 };
 
 /**
+ * Scene transitions for be-music skins: the play screen fades up from black as it appears (every select outro ends
+ * dark) and fades back to black, with the audio, before the result or select screen takes over — instead of cutting
+ * in and out mid-animation.
+ */
+const BE_MUSIC_ENTER_FADE_MS = 400;
+const BE_MUSIC_THEME_TIMING: GameplayThemeTiming = { ...DEFAULT_THEME_TIMING, fadeOutMs: 450 };
+
+/**
  * Scene moments a theme can react to (the LR2 family stamps its skin timers from these). `at` is the
  * {@link CoreGameplayView.playClock} value the scene recorded for the moment.
  */
@@ -310,6 +353,8 @@ export interface CoreGameplayViewOptions {
    * Phantom skin.
    */
   beMusicSkin?: BeMusicSkin;
+  /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
+  beMusicEffects?: BeMusicEffectLevel;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -575,6 +620,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * with a different aspect ratio.
    */
   private readonly designClipMask = new Graphics();
+  /** Layout last handed to the be-music chrome, keyed by the lane set it was built for. */
+  private beMusicLayout:
+    | { channels: readonly string[]; variant: ChartPlayVariant | undefined; layout: BeMusicGameplayLayout }
+    | undefined;
+  /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBgaTargets}). */
+  private stageBgaTarget: GameplayBgaTarget | undefined;
   /**
    * Cached screen / design dimensions baked into the static graphics (`viewportBackground`, `background`,
    * `designClipMask`). Compared against the per-frame values so we only call `.clear().rect().fill()` when the size
@@ -708,7 +759,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * moment the gameplay view appears, not from the moment notes begin scrolling.
    */
   protected sceneStartTime = 0;
+  /** Intro length scheduled by `start()` (theme `#PLAYSTART` or the fallback), for chrome count-ins. */
+  private scheduledIntroMs = 0;
+  /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
+  private lastJudgeAt: number | undefined;
+  private lastImpulseAt: number | undefined;
+  private lastImpulseKind: 'white' | 'black' | 'scratch' | undefined;
   private startTime = 0;
+  /**
+   * True while the chart's assets are still loading: from {@link prepare} until audio is decoded and the BGA preload
+   * (which may be transcoding video) has settled. Skins show it as NOW LOADING on the lanes.
+   */
+  private assetsLoading = false;
+  /** Set by {@link mount}: show the playfield (in its loading state) during {@link prepare} instead of hiding it. */
+  private revealWhilePreparing = false;
   /**
    * `audioContext.currentTime` value that corresponds to chart-second 0. Used to schedule background samples with
    * sample-accurate Web Audio timing.
@@ -732,6 +796,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * See `audio-bus.ts` for the architecture and per-mode topology.
    */
   private audioBus: AudioBusHandle | undefined;
+  /** Analyser tapped off the bus output; feeds audio-reactive be-music skins. */
+  private audioAnalyzer: AudioAnalyzer | undefined;
+  /** This frame's audio features (sampled once per render, on the play clock). */
+  private audioFrame: AudioFeatures | undefined;
   /**
    * Most-recently-applied compressor mode. Distinct from the bus's `mode` getter so we can decide what to flip back to
    * when `setAudioCompressor(true)` re-enables compression after a temporary `'off'` (we restore whatever
@@ -1067,8 +1135,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** Intro gates and exit fade / close lengths the scene should follow. Default: all zero (skinless timing). */
   protected get themeTiming(): GameplayThemeTiming {
-    return DEFAULT_THEME_TIMING;
+    return this.paintsThroughBeMusicSkin ? BE_MUSIC_THEME_TIMING : DEFAULT_THEME_TIMING;
   }
+
+  /** Whether the scene paints through a be-music skin (rather than a theme or a host chrome renderer). */
+  private get paintsThroughBeMusicSkin(): boolean {
+    return this.options.beMusicSkin !== undefined && this.options.skinlessChromeRenderer === undefined;
+  }
+
+  /** `performance.now()` of the first rendered frame, for the be-music entrance fade. */
+  private enteredAt: number | undefined;
 
   /**
    * Notified at scene moments a theme animates against (scene stages, exit phases, judgements, full combo, gauge
@@ -1084,7 +1160,35 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * rect. Pushing nothing hides the BGA for the frame.
    */
   protected collectBgaTargets(out: GameplayBgaTarget[]): void {
-    out.push(DEFAULT_BGA_TARGET);
+    const stage = this.beMusicStage;
+    if (!stage) {
+      out.push(DEFAULT_BGA_TARGET);
+      return;
+    }
+    const { right } = resolveSkinlessLaneLayout(this.laneChannels, this.laneChannels.length, this.chartPlayVariant);
+    const rect = stage.resolveBgaRect(right);
+    const cached = this.stageBgaTarget;
+    if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
+      out.push(cached);
+      return;
+    }
+    this.stageBgaTarget = createDefaultBgaTarget(rect);
+    out.push(this.stageBgaTarget);
+  }
+
+  /**
+   * Design canvas the scene renders into. The be-music path uses its skin's {@link BeMusicSkin.stage} (16:9 for the
+   * built-in skins); a host-supplied `skinlessChromeRenderer` and themes keep the LR2-compatible 640x480.
+   */
+  protected get stageSize(): GameplayStageSize {
+    return this.beMusicStage ?? LEGACY_STAGE_SIZE;
+  }
+
+  /** The be-music skin's stage while the scene paints through it, otherwise `undefined`. */
+  private get beMusicStage(): BeMusicStage | undefined {
+    if (this.options.skinlessChromeRenderer) return undefined;
+    const skin = this.options.beMusicSkin;
+    return skin ? resolveBeMusicSkinStage(skin) : undefined;
   }
 
   /**
@@ -1128,7 +1232,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /** How long the bomb on `channel` stays alive, in ms. Default: the be-music skin's own effect length. */
   protected resolveBombDurationMs(_channel: string): number {
-    return this.playfieldSkin.gameplay.bombDurationMs;
+    return this.skinBinding?.bombDurationMs ?? PHANTOM_BOMB_DURATION_MS;
   }
 
   /** Release-fade span in ms for key-on timer `timerId` (100..119). Default: {@link KEY_ON_FADE_OUT_MS}. */
@@ -1150,6 +1254,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * call `start()` only when the splash is dismissed. See the `showDecide` flow in `player-web-demo`.
    */
   public async mount(host: PixiSceneHost, song: BrowserSongEntry, source?: BrowserSongAssetSource): Promise<void> {
+    // No splash covers the load window on this path, so the playfield comes up straight away and shows the loading
+    // state (see `revealWhilePreparing`) instead of a blank stage while chart audio decodes.
+    this.revealWhilePreparing = true;
     await this.prepare(host, song, source);
     if (this.disposed) return;
     this.start();
@@ -1183,11 +1290,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.textLayer.label = 'gameplay/text';
     this.overlay.label = 'gameplay/pause-overlay';
     this.designClipMask.label = 'gameplay/design-clip';
-    // DESIGN_WIDTH / DESIGN_HEIGHT are module constants for gameplay (LR2 default 640×480), so the mask and design
-    // background never change shape post-mount. Stamp them once here and skip the per-frame rebuild that was
-    // contributing to the rAF handler's runtime.
-    this.designClipMask.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(0xffffff);
-    this.background.rect(0, 0, DESIGN_WIDTH, DESIGN_HEIGHT).fill(BG);
+    // The stage size is fixed for the scene's lifetime, so the mask and design background never change shape
+    // post-mount. Stamp them once here and skip the per-frame rebuild that was contributing to the rAF handler's
+    // runtime.
+    const stage = this.stageSize;
+    this.designClipMask.rect(0, 0, stage.width, stage.height).fill(0xffffff);
+    this.background.rect(0, 0, stage.width, stage.height).fill(BG);
     // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
     // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
     // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
@@ -1288,7 +1396,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // painting on the shared stage during the load window without z-order contention. `start()` flips this back on the
     // moment the host hands control over to gameplay.
     this.sceneRoot.visible = false;
+    this.assetsLoading = true;
     this.prepareSong(song);
+    if (this.revealWhilePreparing) {
+      // Hold the chart clock before its start (see `start()`) and draw the loading playfield while assets decode.
+      this.startTime = Number.POSITIVE_INFINITY;
+      this.sceneRoot.visible = true;
+      this.startAnimationLoop();
+    }
     await this.prepareTheme();
     if (this.disposed) return;
     await this.prepareAudio();
@@ -1300,6 +1415,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // `bgaReadyPromise`, so notes still don't begin until the BGA is in place.
     this.bgaReadyPromise = this.prepareBga().catch((error) => {
       log.warn('BGA preload failed; continuing without it', error);
+    });
+    void this.bgaReadyPromise.then(() => {
+      this.assetsLoading = false;
     });
   }
 
@@ -1324,6 +1442,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Skinless / non-LR2 demos have no timing directives; fall back to the legacy 3-second wait so the slide-in chrome
     // of the built-in fallback frame still has room to land before notes begin.
     const introMs = playStartOffsetMs > 0 ? playStartOffsetMs : FALLBACK_INTRO_DELAY_MS;
+    this.scheduledIntroMs = introMs;
     // The chart waits on BOTH the configured PLAY START delay AND the BGA preload (which may still be transcoding video
     // in the background — see `prepare()`). Until the gate opens below, `startTime = +Infinity` keeps `isIntroPlaying`
     // true and the rAF loop in the intro (LR2 LOADING) phase.
@@ -1632,6 +1751,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.webAudioSession = undefined;
     // Tear down the bus before closing the AudioContext so its `disconnect()` calls don't race with context shutdown.
     // The bus doesn't own the AudioContext itself; closing that is the next step.
+    this.audioAnalyzer?.dispose();
+    this.audioAnalyzer = undefined;
+    this.audioFrame = undefined;
     const audioBus = this.audioBus;
     this.audioBus = undefined;
     const audioContext = this.audioContext;
@@ -1714,6 +1836,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // own `destroy()` (which clears `GraphicsContext` resources) rather than chained through `destroy({children:true})`
     // which can skip some Pixi v8 cleanup paths.
     try {
+      this.skinBindingInstance?.dispose();
+      this.skinBindingInstance = undefined;
       this.noteLayerPool.destroy();
       this.skinLayerPool.destroy();
       this.overlayLayerPool.destroy();
@@ -1898,11 +2022,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // chart suppress its own first trigger because a same-key node from the old play looks "still playing" until it
     // ends naturally.
 
-    // PMS / 9 KEY (Pop'n) charts route channel `17` (and the PMS-STD `22..25` block) as lane notes —
-    // `resolveLaneChannels` would otherwise filter `17` out as FREE ZONE under the IIDX default ordering. Hand it the
-    // chart variant so the lane set matches what the LR2 default 9-keys play skin expects.
+    // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
+    // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
+    // (a lane in 9 KEY, FREE ZONE in IIDX) and the 9 KEY layout the LR2 default 9-keys play skin expects.
     this.chartPlayVariant = resolveChartPlayVariant(song);
-    this.laneChannels = resolveLaneChannels(this.notes, this.chartPlayVariant);
+    this.laneChannels = resolvePlayVariantLaneChannels(this.notes, this.chartPlayVariant);
     // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
     // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without
     // this, charts that use a Free-Zone channel had a renderer-side total larger than the engine's by the
@@ -2136,6 +2260,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       initialVolumes: this.audioVolumes,
       initialCompressorParams: this.audioCompressorParams,
     });
+    // Audio-reactive skins read the post-mix signal from the bus's analysis tap.
+    this.audioAnalyzer = new AudioAnalyzer(this.audioContext);
+    this.audioBus.outputNode.connect(this.audioAnalyzer.input);
     // Use the control-flow-resolved chart so #IF-gated #WAVxx declarations match the chosen #RANDOM branch.
     const chart = this.resolvedChart ?? this.song.chart;
     // BMS spec — `#VOLWAV <0..ZZ>` declares the chart's master volume scaling (100 = unity, 80 = 80 % loud, > 100
@@ -2824,7 +2951,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private applyExitFadeAlpha(): void {
     if (!this.exiting) {
-      if (this.root.alpha !== 1) this.root.alpha = 1;
+      let alpha = 1;
+      if (this.paintsThroughBeMusicSkin) {
+        const now = performance.now();
+        this.enteredAt ??= now;
+        alpha = Math.min(1, (now - this.enteredAt) / BE_MUSIC_ENTER_FADE_MS);
+      }
+      if (this.root.alpha !== alpha) this.root.alpha = alpha;
       return;
     }
     const fadeOutMs = this.themeTiming.fadeOutMs;
@@ -2986,6 +3119,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const until = seconds + 0.6;
     this.lastJudge = judge;
     this.lastJudgeUntil = until;
+    this.lastJudgeAt = this.playClock();
     // Themes restart their per-side judge animation on every judgement (LR2 timer 46 / 47 drives the attached
     // `#DST_NOWJUDGE` / `#DST_NOWCOMBO` chains from time=0 per hit). When `channel` isn't supplied (legacy callers) we
     // default to the 1P side. PMS / 9 KEY is single-side so every judgement collapses onto 1P regardless of the
@@ -3048,8 +3182,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private render(seconds: number): void {
     const screenWidth = this.app.screen.width;
     const screenHeight = this.app.screen.height;
-    const viewport = resolveScaledViewport(screenWidth, screenHeight, DESIGN_WIDTH, DESIGN_HEIGHT);
+    const { width: designWidth, height: designHeight } = this.stageSize;
+    const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
+    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
     // Only rebuild the static rect graphics when their backing dimensions actually change. The previous unconditional
     // `.clear().rect().fill()` chain ran on every rAF tick and rebuilt the GraphicsContext for each — Pixi v8 has no
     // change-detection built in.
@@ -3061,13 +3197,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
     this.applyExitFadeAlpha();
-    this.perf.time('renderSkin', () => this.renderThemeLayer(DESIGN_WIDTH, DESIGN_HEIGHT));
+    this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
+    this.perf.time('renderSkin', () => this.renderThemeLayer(designWidth, designHeight));
     this.perf.time('renderBga', () => this.renderBga(seconds));
-    this.perf.time('renderLanes', () => this.renderLanes(DESIGN_WIDTH, DESIGN_HEIGHT));
-    this.perf.time('renderNotes', () => this.renderNotes(seconds, DESIGN_HEIGHT));
+    this.perf.time('renderLanes', () => this.renderLanes(designWidth, designHeight));
+    this.perf.time('renderNotes', () => this.renderNotes(seconds, designHeight));
     this.perf.time('renderShutter', () => this.renderShutter());
     this.perf.time('renderBombs', () => this.renderBombs());
-    this.perf.time('renderText', () => this.renderText(DESIGN_WIDTH, DESIGN_HEIGHT, seconds));
+    this.perf.time('renderText', () => this.renderText(designWidth, designHeight, seconds));
   }
 
   /**
@@ -3210,12 +3347,33 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         seed: Math.floor(startedAt * 7.31) % 100_003,
       });
     }
-    this.playfieldSkin.gameplay.renderBombs({ pool: this.bombLayerPool, bombs, nowMs: now });
+    const binding = this.skinBinding;
+    if (binding) {
+      binding.addBombs(bombs);
+      return;
+    }
+    renderPhantomBombs({
+      pool: this.bombLayerPool,
+      bombs,
+      nowMs: now,
+      combo: this.tracker.combo,
+      effects: this.options.beMusicEffects ?? 'full',
+      audio: this.audioFrame,
+    });
   }
 
-  /** Active be-music skin for scene-painted playfield parts; the built-in Phantom skin unless the host picked one. */
-  private get playfieldSkin(): BeMusicSkin {
-    return this.options.beMusicSkin ?? phantomSkin;
+  private skinBindingInstance: BeMusicGameplayBinding | undefined;
+
+  /**
+   * The be-music skin's gameplay binding while the scene paints through a skin: lanes, notes, and hit effects are handed
+   * to it as data and the skin draws them on its own canvas. `undefined` for themes, whose missing pieces (lanes, notes
+   * without a cell, bombs) are drawn here in the built-in Phantom style instead.
+   */
+  private get skinBinding(): BeMusicGameplayBinding | undefined {
+    const skin = this.options.beMusicSkin;
+    if (!skin || this.options.skinlessChromeRenderer) return undefined;
+    this.skinBindingInstance ??= new BeMusicGameplayBinding(skin);
+    return this.skinBindingInstance;
   }
 
   /**
@@ -3411,6 +3569,26 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     });
   }
 
+  /**
+   * Milliseconds since the chart's first beat for chrome count-ins. Before the play-start gate opens (`startTime` is
+   * still +Infinity) it counts toward the scheduled intro end and holds just below zero if the BGA preload runs long.
+   */
+  private resolveChartMs(): number | undefined {
+    if (this.startTime === 0) return undefined;
+    if (Number.isFinite(this.startTime)) return performance.now() - this.startTime;
+    return Math.min(-1, this.playClock() - this.sceneStartTime - this.scheduledIntroMs);
+  }
+
+  /** Records the latest key press / autoplay hit for input-reactive skin visuals. */
+  private noteImpulse(channel: string): void {
+    this.lastImpulseAt = this.playClock();
+    this.lastImpulseKind = resolveBeMusicLaneKind(
+      channel,
+      resolveLr2LaneIndex(channel, this.chartPlayVariant),
+      this.chartPlayVariant,
+    );
+  }
+
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
     const seconds = this.currentSeconds();
@@ -3464,6 +3642,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeSurvival: this.gaugeState.survival === true,
       fast: this.fastCount,
       slow: this.slowCount,
+      totalNotes: total,
+      // While assets load the count-in waits: the skin shows NOW LOADING instead.
+      chartMs: this.assetsLoading ? undefined : this.resolveChartMs(),
+      loading: this.assetsLoading,
+      judgeAtMs: this.lastJudgeAt,
+      impulseAtMs: this.lastImpulseAt,
+      impulseKind: this.lastImpulseKind,
+      effects: this.options.beMusicEffects ?? 'full',
+      audio: this.audioFrame,
     };
   }
 
@@ -3482,17 +3669,39 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.overlayLayer.position.set(0, 0);
       this.bgaLayer.scale.set(1);
       this.bgaLayer.position.set(0, 0);
-      (this.options.skinlessChromeRenderer ?? this.options.beMusicSkin?.gameplay.renderChrome)?.({
+      const context = {
         layer: this.skinLayer,
         overlayLayer: this.overlayLayer,
         layerPool: this.skinLayerPool,
         overlayLayerPool: this.overlayLayerPool,
         runtime: this.resolveSkinlessGameplayChromeRuntime(),
-      });
+      };
+      if (this.options.skinlessChromeRenderer) {
+        this.options.skinlessChromeRenderer(context);
+      } else {
+        this.skinBinding?.renderChrome({ ...context, layout: this.resolveBeMusicLayout() });
+      }
     } finally {
       this.skinLayerPool.end();
       this.overlayLayerPool.end();
     }
+  }
+
+  /**
+   * The gameplay layout handed to the be-music skin's chrome: stage, lanes, playfield bounds, judgement line, and BGA
+   * rect. Lane geometry only changes with the chart, so it is rebuilt when the lane channels or play variant change.
+   */
+  private resolveBeMusicLayout(): BeMusicGameplayLayout {
+    const cached = this.beMusicLayout;
+    if (cached && cached.channels === this.laneChannels && cached.variant === this.chartPlayVariant) {
+      return cached.layout;
+    }
+    const layout = resolveGameplayLayout(
+      { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant },
+      this.beMusicStage ?? LEGACY_STAGE,
+    );
+    this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, layout };
+    return layout;
   }
 
   /** Approximate total duration of the loaded chart in seconds. */
@@ -3509,21 +3718,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const themeOwnsPlayfield = this.themeOwnsPlayfield;
     const fallbackTop = PLAYFIELD.y;
     const fallbackBottom = PLAYFIELD.judgementY;
-    const fallbackLanes = resolveFallbackLaneLayout({
-      channels: this.laneChannels,
-      laneCount: this.laneChannels.length,
-      playVariant: this.chartPlayVariant,
-      x: PLAYFIELD.x,
-      w: PLAYFIELD.w,
-      preserveSideWidth: shouldPreserveFallbackSideWidth(this.laneChannels, this.chartPlayVariant),
-    });
+    const { lanes: fallbackLanes, left: fallbackLeft } = resolveSkinlessLaneLayout(
+      this.laneChannels,
+      this.laneChannels.length,
+      this.chartPlayVariant,
+    );
 
     const skinlessLanes: BeMusicLaneFrame[] = [];
     this.laneChannels.forEach((channel, index) => {
       // A theme-authored lane rect wins; channels the theme doesn't place use the default-family layout.
       const themeLane = this.resolveThemeLaneRect(channel, width, height);
       const fallbackLane = fallbackLanes[index];
-      const x = themeLane ? themeLane.x : (fallbackLane?.x ?? PLAYFIELD.x);
+      const x = themeLane ? themeLane.x : (fallbackLane?.x ?? fallbackLeft);
       const w = themeLane ? themeLane.w : Math.max(4, fallbackLane?.w ?? PLAYFIELD.w);
       const top = themeLane ? themeLane.top : fallbackTop;
       const bottom = themeLane ? themeLane.bottom : fallbackBottom;
@@ -3552,11 +3758,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
     if (!themeOwnsPlayfield && skinlessLanes.length > 0) {
       const beat = this.currentBeat(this.currentSeconds());
-      this.playfieldSkin.gameplay.renderLanes({
+      const binding = this.skinBinding;
+      if (binding) {
+        binding.addLanes(skinlessLanes);
+        return;
+      }
+      renderPhantomLanes({
         graphics: this.laneLayer,
         lanes: skinlessLanes,
         beatPhase: beat - Math.floor(beat),
         nowMs: this.playClock(),
+        combo: this.tracker.combo,
+        effects: this.options.beMusicEffects ?? 'full',
+        audio: this.audioFrame,
       });
     }
   }
@@ -3872,16 +4086,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       sprite.height = cell.height;
       return;
     }
+    const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
+    const binding = this.skinBinding;
+    if (binding) {
+      binding.addNote({ kind, x: lane.x, w: lane.w, y });
+      return;
+    }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `note-fallback[lane=${laneIndex},ch=${channel}]`;
-    this.playfieldSkin.gameplay.renderNote({
-      graphics: graphic,
-      kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
-      x: lane.x,
-      w: lane.w,
-      y,
-      nowMs: this.playClock(),
-    });
+    renderPhantomNote({ graphics: graphic, kind, x: lane.x, w: lane.w, y, nowMs: this.playClock() });
   }
 
   /**
@@ -3918,17 +4131,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         sprite.height = Math.max(1, bottom - top);
       }
     } else {
-      const graphic = this.noteLayerPool.acquireGraphics();
-      graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
-      this.playfieldSkin.gameplay.renderLongNote({
-        graphics: graphic,
-        kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
-        x: lane.x,
-        w: lane.w,
-        top,
-        bottom,
-        nowMs: this.playClock(),
-      });
+      const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
+      const binding = this.skinBinding;
+      if (binding) {
+        binding.addLongNote({ kind, x: lane.x, w: lane.w, top, bottom });
+      } else {
+        const graphic = this.noteLayerPool.acquireGraphics();
+        graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
+        renderPhantomLongNote({ graphics: graphic, kind, x: lane.x, w: lane.w, top, bottom, nowMs: this.playClock() });
+      }
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
     const endCell = this.resolveThemeNoteCell('lnend', laneIndex);
@@ -4259,9 +4470,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private applyEngineCommand(command: PlayerUiCommand): void {
     switch (command.kind) {
       case 'flash-lane':
+        this.noteImpulse(command.channel);
         this.flashKeyOnTimer(command.channel);
         break;
       case 'press-lane':
+        this.noteImpulse(command.channel);
         this.pressedChannels.add(command.channel);
         this.startKeyOnTimer(command.channel);
         break;

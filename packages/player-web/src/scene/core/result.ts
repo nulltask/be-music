@@ -5,9 +5,15 @@ import { disposeChildren } from '../pixi-utils.ts';
 import { logger } from '../../logger.ts';
 import type { BrowserSongCollection } from '../../collection/types.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
-import type { BeMusicSkin } from '../../skin/be-music/types.ts';
-import { phantomSkin } from '../default/phantom/index.ts';
-import { resolveDesignTextResolution, resolveScaledViewport, setDesignTextResolution } from './viewport.ts';
+import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
+import { phantomSkin } from '../../skins/phantom/index.ts';
+import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import {
+  resolveDesignTextResolution,
+  resolveScaledViewport,
+  setDesignPixelRatio,
+  setDesignTextResolution,
+} from './viewport.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
 
 const log = logger('result');
@@ -58,6 +64,8 @@ const DEFAULT_STARTINPUT_MS = 1500;
 export interface CoreResultViewOptions {
   /** be-music skin for the skinless result panel. Defaults to the built-in Phantom skin. */
   beMusicSkin?: BeMusicSkin;
+  /** Showmanship level for the be-music skin's result entrance. Defaults to `'full'`. */
+  beMusicEffects?: BeMusicEffectLevel;
   /**
    * Loaded song collection — needed to resolve per-song artwork (BANNER / STAGEFILE / BACKBMP) via the same
    * chart-asset loader the select view uses. May be `undefined` for embed scenarios where the result is rendered outside
@@ -105,6 +113,8 @@ export class CoreResultView {
   private readonly timeoutHandles = new Set<number>();
   /** Fallback summary panel (used when no theme paints the frame). */
   private readonly fallbackLayer = new Container();
+  /** Draws the be-music skin's result on its canvas, shown in `fallbackLayer`; created on first use. */
+  private skinBinding: BeMusicResultBinding | undefined;
   /** Clip mask for the design rect — keeps theme artwork from bleeding into the letterbox bars. */
   private readonly designClipMask = new Graphics();
   /**
@@ -309,6 +319,8 @@ export class CoreResultView {
       log.warn('texture cleanup threw', error);
     }
     try {
+      this.skinBinding?.dispose();
+      this.skinBinding = undefined;
       this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
@@ -348,10 +360,12 @@ export class CoreResultView {
     const screenWidth = this.app.screen.width || FALLBACK_DESIGN_WIDTH;
     const screenHeight = this.app.screen.height || FALLBACK_DESIGN_HEIGHT;
     const themeSize = this.themeDesignSize;
-    const designWidth = themeSize ? themeSize.width : FALLBACK_DESIGN_WIDTH;
-    const designHeight = themeSize ? themeSize.height : FALLBACK_DESIGN_HEIGHT;
+    const stage = resolveBeMusicSkinStage(this.options.beMusicSkin ?? phantomSkin);
+    const designWidth = themeSize ? themeSize.width : stage.width;
+    const designHeight = themeSize ? themeSize.height : stage.height;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, this.app.renderer.resolution));
+    setDesignPixelRatio(viewport.scale * this.app.renderer.resolution);
     if (this.cachedScreenWidth !== screenWidth || this.cachedScreenHeight !== screenHeight) {
       this.viewportBackground.clear().rect(0, 0, screenWidth, screenHeight).fill(BG);
       this.cachedScreenWidth = screenWidth;
@@ -370,11 +384,12 @@ export class CoreResultView {
     // state alive, which the original report described as "browser freezes after the song ends" — accumulated
     // GraphicsContext + glyph atlas slots stalled the next reconcile pass. See `pixi-utils.ts` for the full rationale.
     disposeChildren(this.skinLayer);
-    disposeChildren(this.fallbackLayer);
     if (this.renderTheme()) {
       // No empty-state hint here — the theme's own artwork covers the whole canvas.
+      this.fallbackLayer.visible = false;
       return;
     }
+    this.fallbackLayer.visible = true;
     this.renderFallbackPanel(designWidth, designHeight);
   }
 
@@ -385,8 +400,11 @@ export class CoreResultView {
     const now = performance.now();
     // A skip (Enter before the chart draw finishes → timer 151) jumps the skin's entrance to its settled layout.
     const skipped = this.timerStartedAt.has(151);
-    (this.options.beMusicSkin ?? phantomSkin).result.render({
-      layer: this.fallbackLayer,
+    if (!this.skinBinding) {
+      this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin);
+      this.fallbackLayer.addChild(this.skinBinding.view);
+    }
+    this.skinBinding.render({
       designWidth,
       designHeight,
       result,
@@ -394,6 +412,7 @@ export class CoreResultView {
       ratePercent: computeScoreRate(result.score) * 100,
       elapsedMs: skipped ? Number.POSITIVE_INFINITY : now - this.sceneStartedAt,
       nowMs: now,
+      effects: this.options.beMusicEffects ?? 'full',
     });
   }
 

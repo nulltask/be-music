@@ -45,6 +45,7 @@ function createSnapshot(overrides: Partial<ExportsBenchmarkSnapshot> = {}): Expo
       player: [],
       'player-tui': [],
       'lr2-skin': [],
+      'skin-sdk': [],
       'player-web': [],
     },
     totals: {

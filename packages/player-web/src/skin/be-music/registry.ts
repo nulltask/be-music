@@ -1,18 +1,54 @@
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
-import { isScratchLaneForVariant, resolveSideRelativeLaneIndex } from '../../scene/gameplay-lanes.ts';
-import type { BeMusicLaneKind, BeMusicSelectLayout, BeMusicSkin } from './types.ts';
+import { validateBeMusicSkin, type BeMusicSelectLayout, type BeMusicSkin } from '@be-music/skin-sdk';
+import { logger } from '../../logger.ts';
+
+export { resolveBeMusicLaneKind } from '@be-music/skin-sdk';
+
+const log = logger('be-music-skin');
 
 export interface BeMusicSkinRegistry {
+  /** Every registered skin, in registration order (a skin added later with a known id keeps its place). */
   readonly skins: readonly BeMusicSkin[];
   /** The skin with `id`, or the first registered skin when `id` is unknown / undefined. */
   resolve(id: string | undefined): BeMusicSkin;
+  /**
+   * Registers another skin — a third-party one, or an optional built-in such as `latticeSkin`. The skin is validated
+   * like the initial ones (see `validateBeMusicSkin`); a skin with an id already registered replaces that one (handy
+   * when reloading a skin under development). Returns the problems that kept the skin out, empty when it was added.
+   */
+  add(skin: BeMusicSkin): string[];
+  /** Calls `listener` after every successful {@link add}; returns the function that stops it. */
+  subscribe(listener: () => void): () => void;
 }
 
-/** Registry over a fixed, non-empty skin list. The first entry is the fallback for unknown ids. */
-export function createBeMusicSkinRegistry(skins: readonly BeMusicSkin[]): BeMusicSkinRegistry {
+export interface BeMusicSkinRegistryOptions {
+  /**
+   * Called for each skin left out because its declaration is invalid or written for an unsupported API revision (see
+   * `validateBeMusicSkin`). Defaults to a logged warning.
+   */
+  onRejected?: (skin: BeMusicSkin, problems: readonly string[]) => void;
+}
+
+/**
+ * Registry over a skin list that hosts can extend with {@link BeMusicSkinRegistry.add}. Skins whose declaration doesn't validate (an unsupported `apiVersion`, a malformed
+ * id or version, …) are left out, so a third-party skin built for another player release can't break the host. The
+ * first accepted entry is the fallback for unknown ids; at least one must be accepted.
+ */
+export function createBeMusicSkinRegistry(
+  candidates: readonly BeMusicSkin[],
+  options: BeMusicSkinRegistryOptions = {},
+): BeMusicSkinRegistry {
+  const onRejected =
+    options.onRejected ??
+    ((skin: BeMusicSkin, problems: readonly string[]) =>
+      log.warn(`skipping skin "${skin.id}": ${problems.join('; ')}`));
+  const skins = candidates.filter((skin) => {
+    const problems = validateBeMusicSkin(skin);
+    if (problems.length > 0) onRejected(skin, problems);
+    return problems.length === 0;
+  });
   const first = skins[0];
   if (!first) {
-    throw new Error('createBeMusicSkinRegistry: at least one skin is required');
+    throw new Error('createBeMusicSkinRegistry: at least one valid skin is required');
   }
   const byId = new Map<string, BeMusicSkin>();
   for (const skin of skins) {
@@ -21,31 +57,26 @@ export function createBeMusicSkinRegistry(skins: readonly BeMusicSkin[]): BeMusi
     }
     byId.set(skin.id, skin);
   }
+  const listeners = new Set<() => void>();
   return {
-    skins,
-    resolve: (id) => (id !== undefined ? byId.get(id) : undefined) ?? first,
+    get skins() {
+      return [...byId.values()];
+    },
+    resolve: (id) => (id !== undefined ? byId.get(id) : undefined) ?? byId.values().next().value ?? first,
+    add(skin) {
+      const problems = validateBeMusicSkin(skin);
+      if (problems.length > 0) return problems;
+      byId.set(skin.id, skin);
+      for (const listener of listeners) listener();
+      return [];
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
   };
-}
-
-/** Chromatic offsets of the black keys within an octave (C# D# F# G# A#). */
-const KEYBOARD_BLACK_KEY_SEMITONES = new Set([1, 3, 6, 8, 10]);
-
-/**
- * Visual class of a lane. `laneIndex` is the LR2 lane id (0 / 10 = scratch, 1..9 / 11..19 = keys, -1 when the lane
- * has no LR2 rect). IIDX convention: odd keys white, even keys black. The 24 / 48-key keyboard modes colour by piano
- * key instead, repeating every octave.
- */
-export function resolveBeMusicLaneKind(
-  channel: string,
-  laneIndex: number,
-  playVariant: ChartPlayVariant | undefined,
-): BeMusicLaneKind {
-  if (isScratchLaneForVariant(channel, playVariant)) return 'scratch';
-  if (playVariant === '24' || playVariant === '48') {
-    const semitone = (resolveSideRelativeLaneIndex(channel, playVariant) - 1) % 12;
-    return KEYBOARD_BLACK_KEY_SEMITONES.has(semitone) ? 'black' : 'white';
-  }
-  return (laneIndex % 10) % 2 === 0 ? 'black' : 'white';
 }
 
 /**

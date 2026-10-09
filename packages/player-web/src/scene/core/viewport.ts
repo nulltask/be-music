@@ -51,3 +51,18 @@ export function setDesignTextResolution(value: number): void {
 export function getDesignTextResolution(): number {
   return designTextResolution;
 }
+
+let designPixelRatio = 1;
+
+/**
+ * Device pixels per design pixel on screen right now (`viewport scale × renderer resolution`, not rounded). Set by the
+ * shared scenes next to {@link setDesignTextResolution}; canvas skins size their canvases from it so each canvas pixel
+ * lands on exactly one screen pixel.
+ */
+export function setDesignPixelRatio(value: number): void {
+  designPixelRatio = Number.isFinite(value) && value > 0 ? value : 1;
+}
+
+export function getDesignPixelRatio(): number {
+  return designPixelRatio;
+}

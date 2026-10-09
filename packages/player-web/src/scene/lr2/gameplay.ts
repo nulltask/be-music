@@ -31,6 +31,8 @@ import {
   BOMB_CYCLE_MS,
   BOMB_DIVX,
   BOMB_DIVY,
+  DESIGN_HEIGHT,
+  DESIGN_WIDTH,
   HISPEED_MAX,
   HISPEED_MIN,
   LR2_1P_BOMB_TIMER_BASE,
@@ -64,6 +66,7 @@ import {
   KEY_ON_FADE_OUT_MS,
   type CoreGameplayViewOptions,
   type GameplayBgaTarget,
+  type GameplayStageSize,
   type GameplayLaneRect,
   type GameplayMeasureLineFrame,
   type GameplayThemeEvent,
@@ -392,6 +395,11 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // Integrate turntable physics before render so the disc's angle reflects this frame's elapsed time. Cheap
     // (constant work per side).
     this.updateTurntable(this.playClock());
+  }
+
+  /** An LR2 skin is authored for the 640x480 canvas; without one the scene paints the be-music stage. */
+  protected override get stageSize(): GameplayStageSize {
+    return this.options.skin ? { width: DESIGN_WIDTH, height: DESIGN_HEIGHT } : super.stageSize;
   }
 
   protected override collectBgaTargets(out: GameplayBgaTarget[]): void {

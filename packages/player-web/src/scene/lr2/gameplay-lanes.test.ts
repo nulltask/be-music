@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   isScratchLaneForVariant,
   resolveFallbackLaneLayout,
+  resolveFallbackPlayfieldSpan,
+  resolveSkinlessLaneLayout,
+  IIDX_DP_SIDE_GAP,
   shouldPreserveFallbackSideWidth,
+  usesIidxLaneWidths,
 } from '../gameplay-lanes.ts';
 
 describe('isScratchLaneForVariant', () => {
@@ -17,7 +21,7 @@ describe('isScratchLaneForVariant', () => {
 });
 
 describe('resolveFallbackLaneLayout', () => {
-  it('makes scratch lanes wider than normal key lanes while fitting the requested width', () => {
+  it('makes scratch lanes wider than normal key lanes, edge to edge, while fitting the requested width', () => {
     const lanes = resolveFallbackLaneLayout({
       channels: ['16', '11', '12', '13', '14', '15', '18', '19'],
       playVariant: '7',
@@ -28,7 +32,7 @@ describe('resolveFallbackLaneLayout', () => {
     expect(lanes).toHaveLength(8);
     expect(lanes[0]?.isScratch).toBe(true);
     expect(lanes[0]!.w).toBeGreaterThan(lanes[1]!.w);
-    expect(lanes[1]!.x - (lanes[0]!.x + lanes[0]!.w)).toBeCloseTo(2);
+    expect(lanes[1]!.x - (lanes[0]!.x + lanes[0]!.w)).toBeCloseTo(0);
     expect(lanes.at(-1)!.x + lanes.at(-1)!.w).toBeCloseTo(33 + 194);
   });
 
@@ -61,7 +65,7 @@ describe('resolveFallbackLaneLayout', () => {
     expect(lanes.at(-1)!.x + lanes.at(-1)!.w).toBeCloseTo(33 + 194);
   });
 
-  it('splits the 48 keyboard-mode lanes into 1P / 2P banks with a side gap', () => {
+  it('splits the 48 keyboard-mode lanes into edge-to-edge 1P / 2P banks', () => {
     const lanes = ['1', '2'].flatMap((side) => Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `${side}${lane}`));
     const rects = resolveFallbackLaneLayout({
       channels: lanes,
@@ -74,10 +78,10 @@ describe('resolveFallbackLaneLayout', () => {
     expect(rects).toHaveLength(48);
     expect(rects.filter((rect) => rect.side === '1P')).toHaveLength(24);
     expect(rects.filter((rect) => rect.side === '2P')).toHaveLength(24);
-    // The 2P bank starts strictly right of the 1P bank's trailing edge — the side gap.
+    // The 2P bank starts exactly on the 1P bank's trailing edge — no side gap.
     const lastOfP1 = rects[23]!;
     const firstOfP2 = rects[24]!;
-    expect(firstOfP2.x).toBeGreaterThan(lastOfP1.x + lastOfP1.w);
+    expect(firstOfP2.x).toBeCloseTo(lastOfP1.x + lastOfP1.w);
     // Per-side width is preserved, so a 48-lane chart extends the playfield instead of squashing each lane.
     const spRects = resolveFallbackLaneLayout({
       channels: lanes.slice(0, 24),
@@ -135,7 +139,7 @@ describe('resolveFallbackLaneLayout', () => {
     expect(twoScratch.x + twoScratch.w).toBeCloseTo(Math.max(...lanes.map((lane) => lane.x + lane.w)));
   });
 
-  it('inserts a visible gap between 1P and 2P fallback lanes', () => {
+  it('butts the 2P fallback lanes straight onto the 1P lanes by default', () => {
     const lanes = resolveFallbackLaneLayout({
       channels: ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'],
       playVariant: '14',
@@ -147,7 +151,7 @@ describe('resolveFallbackLaneLayout', () => {
     const oneRight = Math.max(...lanes.filter((lane) => lane.side === '1P').map((lane) => lane.x + lane.w));
     const twoLeft = Math.min(...lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x));
 
-    expect(twoLeft - oneRight).toBeCloseTo(14);
+    expect(twoLeft - oneRight).toBeCloseTo(0);
   });
 
   it('uses the requested DP side gap when provided', () => {
@@ -173,5 +177,128 @@ describe('shouldPreserveFallbackSideWidth', () => {
     expect(shouldPreserveFallbackSideWidth(['11', '12', '21'], '7')).toBe(true);
     expect(shouldPreserveFallbackSideWidth(['11', '12', '13'], '7')).toBe(false);
     expect(shouldPreserveFallbackSideWidth(['11', '12', '21'], '9')).toBe(false);
+  });
+});
+
+describe('resolveFallbackPlayfieldSpan', () => {
+  it('keeps the LR2 default 7K span for the IIDX / PMS families', () => {
+    for (const variant of [undefined, '5', '7', '9', '10', '14'] as const) {
+      expect(resolveFallbackPlayfieldSpan(variant)).toEqual({ x: 33, w: 194 });
+    }
+  });
+
+  it('widens the keyboard modes', () => {
+    expect(resolveFallbackPlayfieldSpan('24')).toEqual({ x: 12, w: 252 });
+    expect(resolveFallbackPlayfieldSpan('48')).toEqual({ x: 12, w: 308 });
+  });
+});
+
+/** One side's 24 keyboard-mode channels: `11..19`, `1A..1O` (or the `2x` bank). */
+function keyboardChannels(side: '1' | '2'): string[] {
+  return Array.from('123456789ABCDEFGHIJKLMNO', (digit) => `${side}${digit}`);
+}
+
+describe('resolveSkinlessLaneLayout', () => {
+  it('lays a 7K chart out on the default span', () => {
+    const layout = resolveSkinlessLaneLayout(['16', '11', '12', '13', '14', '15', '18', '19'], 8, '7');
+
+    expect(layout.left).toBe(33);
+    expect(layout.right).toBeCloseTo(227);
+  });
+
+  it('gives 24 KEY lanes the wider column, left of the BGA', () => {
+    const channels = keyboardChannels('1');
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, '24');
+
+    expect(layout.lanes).toHaveLength(24);
+    expect(layout.left).toBe(12);
+    expect(layout.right).toBeCloseTo(264);
+    for (const lane of layout.lanes) expect(lane.w).toBeCloseTo(10.5);
+  });
+
+  it('spreads both 48 KEY banks across the page', () => {
+    const channels = [...keyboardChannels('1'), ...keyboardChannels('2')];
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, '48');
+
+    expect(layout.lanes).toHaveLength(48);
+    expect(layout.right).toBeCloseTo(12 + 308 * 2);
+    for (const lane of layout.lanes) expect(lane.w).toBeCloseTo(308 / 24);
+  });
+});
+
+describe('usesIidxLaneWidths', () => {
+  it('covers the 5 / 7 / 10 / 14 KEY families only', () => {
+    for (const variant of ['5', '7', '10', '14'] as const) expect(usesIidxLaneWidths(variant)).toBe(true);
+    for (const variant of [undefined, '9', '24', '48'] as const) expect(usesIidxLaneWidths(variant)).toBe(false);
+  });
+});
+
+describe('resolveSkinlessLaneLayout fixed IIDX widths', () => {
+  const widthsByChannel = (channels: string[], variant: '5' | '7' | '10' | '14') => {
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, variant);
+    return { layout, widths: Object.fromEntries(layout.lanes.map((lane) => [lane.channel, lane.w])) };
+  };
+
+  it('gives 7K a 41 px scratch, 24 px white keys, and 19 px black keys', () => {
+    const { layout, widths } = widthsByChannel(['16', '11', '12', '13', '14', '15', '18', '19'], '7');
+
+    expect(widths).toEqual({ '16': 41, '11': 24, '12': 19, '13': 24, '14': 19, '15': 24, '18': 19, '19': 24 });
+    expect(layout.right).toBe(33 + 194);
+  });
+
+  it('keeps the same widths in 5K, so the playfield narrows instead of stretching', () => {
+    const { layout, widths } = widthsByChannel(['16', '11', '12', '13', '14', '15'], '5');
+
+    expect(widths).toEqual({ '16': 41, '11': 24, '12': 19, '13': 24, '14': 19, '15': 24 });
+    expect(layout.right).toBe(33 + 41 + 24 * 3 + 19 * 2);
+  });
+
+  it('keeps the same widths on both DP sides', () => {
+    const tenKey = widthsByChannel(['16', '11', '12', '13', '14', '15', '21', '22', '23', '24', '25', '26'], '10');
+    const fourteenKey = widthsByChannel(
+      ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'],
+      '14',
+    );
+
+    expect(tenKey.widths['26']).toBe(41);
+    expect(tenKey.widths['21']).toBe(24);
+    expect(tenKey.widths['22']).toBe(19);
+    expect(tenKey.layout.right).toBe(33 + (41 + 24 * 3 + 19 * 2) * 2 + IIDX_DP_SIDE_GAP);
+    expect(fourteenKey.widths['29']).toBe(24);
+    expect(fourteenKey.widths['28']).toBe(19);
+    expect(fourteenKey.layout.right).toBe(33 + 194 * 2 + IIDX_DP_SIDE_GAP);
+  });
+
+  it('opens the arcade gap between the DP banks', () => {
+    const { layout } = widthsByChannel(
+      ['16', '11', '12', '13', '14', '15', '18', '19', '21', '22', '23', '24', '25', '28', '29', '26'],
+      '14',
+    );
+    const oneP = layout.lanes.filter((lane) => lane.side === '1P');
+    const twoP = layout.lanes.filter((lane) => lane.side === '2P');
+    const oneRight = Math.max(...oneP.map((lane) => lane.x + lane.w));
+    const twoLeft = Math.min(...twoP.map((lane) => lane.x));
+    expect(oneRight).toBe(33 + 194);
+    expect(twoLeft - oneRight).toBe(IIDX_DP_SIDE_GAP);
+    // About 0.31 of a side, as on the cabinet.
+    expect(IIDX_DP_SIDE_GAP / 194).toBeCloseTo(0.31, 1);
+  });
+
+  it('keeps the 48 KEY banks together', () => {
+    const channels = [...keyboardChannels('1'), ...keyboardChannels('2')];
+    const layout = resolveSkinlessLaneLayout(channels, channels.length, '48');
+    const oneRight = Math.max(...layout.lanes.filter((lane) => lane.side === '1P').map((lane) => lane.x + lane.w));
+    const twoLeft = Math.min(...layout.lanes.filter((lane) => lane.side === '2P').map((lane) => lane.x));
+    expect(twoLeft).toBeCloseTo(oneRight);
+  });
+
+  it('packs the lanes edge to edge in display order', () => {
+    const { layout } = widthsByChannel(['16', '11', '12', '13', '14', '15', '18', '19'], '7');
+    const sorted = [...layout.lanes].sort((a, b) => a.x - b.x);
+
+    expect(sorted[0]!.channel).toBe('16');
+    for (let index = 1; index < sorted.length; index += 1) {
+      expect(sorted[index]!.x).toBeCloseTo(sorted[index - 1]!.x + sorted[index - 1]!.w);
+    }
   });
 });
