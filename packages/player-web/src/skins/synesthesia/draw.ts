@@ -437,7 +437,7 @@ export function drawMagnetoOrb(
     node.alpha = Math.min(1, alpha);
   };
   const place = (local: Vec3) => toScreen({ x: options.x + local.x, y: options.y + local.y, z: options.z + local.z });
-  const breathe = options.radius * (1 + 0.12 * drive.bass);
+  const breathe = options.radius * (0.8 + 0.55 * drive.bass + 0.25 * drive.onset);
   const screenRadius = breathe * centre.scale;
   const spin = options.seconds * (options.spin ?? 0.25);
   const tilt = options.tilt ?? 0.35;

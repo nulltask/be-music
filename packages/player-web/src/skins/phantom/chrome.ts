@@ -210,7 +210,7 @@ function drawBackground(frame: Graphics, hole: BeMusicRect | undefined, drive: A
     w: DESIGN_WIDTH - 300,
     h: DESIGN_HEIGHT - 352,
     pitch: 9,
-    maxRadius: 4.2 * (1 + 0.45 * drive.bass),
+    maxRadius: 4.2 * (1 + 1.2 * drive.bass),
     direction: { x: 1, y: 1 },
   })) {
     if (isInsideFloorWedge(dot.x, dot.y)) frame.circle(dot.x, dot.y, dot.r);
@@ -373,7 +373,7 @@ function drawBgaFrame(
     w: bga.w - 8,
     h: bga.h - 8,
     pitch: 12,
-    maxRadius: 5 * (1 + 0.5 * drive.level),
+    maxRadius: 5 * (1 + 1.1 * drive.level),
     direction: { x: -0.6, y: 1 },
   })) {
     frame.circle(dot.x, dot.y, dot.r);
@@ -381,8 +381,8 @@ function drawBgaFrame(
   frame.fill({ color: PHANTOM_RED, alpha: 0.75 });
   // Slow-turning starburst behind the slug — the idle screen is alive, not a hole in the cabinet.
   // It pumps on the bass and jolts a notch round on every onset. Sized off the monitor, which shrinks in double play.
-  const spin = (nowMs !== undefined ? nowMs / 6000 : 0) + 0.1 * drive.onset;
-  const pump = (1 + 0.2 * drive.bass + 0.1 * drive.onset) * (bga.w / 256);
+  const spin = (nowMs !== undefined ? nowMs / 6000 : 0) + 0.25 * drive.onset;
+  const pump = (0.8 + 0.6 * drive.bass + 0.3 * drive.onset) * (bga.w / 256);
   const cx = bga.x + bga.w / 2;
   const cy = bga.y + bga.h / 2;
   frame
@@ -687,7 +687,7 @@ function drawScorePlate(
   const badgeX = x + w - 10;
   const badgeY = y + h - 14;
   // The badge pumps with the bass.
-  const pump = 1 + 0.16 * drive.bass;
+  const pump = 1 + 0.45 * drive.bass;
   const badge = starburstPoints(badgeX, badgeY, 27 * pump, 17 * pump, 12, -0.2, 0.22, rank.length);
   frame
     .poly(badge)

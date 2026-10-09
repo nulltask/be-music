@@ -59,8 +59,50 @@ export function logBandBins(
   return ranges;
 }
 
+/** A running window of what a signal has recently done: its floor and ceiling (see {@link normalizeToRecentRange}). */
+export interface RecentRange {
+  floor: number;
+  ceiling: number;
+}
+
+/** Narrowest window a signal is stretched over, so a near-steady signal stays near-steady instead of amplifying noise. */
+/** An empty range: the first value seen becomes both its floor and its ceiling. */
+export function createRecentRange(): RecentRange {
+  return { floor: Number.POSITIVE_INFINITY, ceiling: Number.NEGATIVE_INFINITY };
+}
+
+/** Share of the absolute level kept in the analysed bands next to their recent-range placement. */
+const ABSOLUTE_SHARE = 0.35;
+const MIN_RECENT_SPAN = 0.12;
+/** Seconds the floor takes to rise after a quiet passage / the ceiling to fall after a loud one. */
+const FLOOR_RISE_SECONDS = 3;
+const CEILING_FALL_SECONDS = 2;
+
+/**
+ * Automatic gain for visuals: places `value` within the range the signal has covered over the last few seconds and
+ * returns 0..1, updating `range` in place. The floor drops instantly and creeps back up; the ceiling jumps instantly and
+ * eases back down. A loud, compressed mix whose raw spectrum sits near full scale therefore still swings from bottom
+ * to top with the music instead of pinning at the maximum.
+ */
+export function normalizeToRecentRange(value: number, range: RecentRange, dtSeconds: number): number {
+  const dt = Math.max(0, dtSeconds);
+  if (value < range.floor) range.floor = value;
+  else range.floor += (value - range.floor) * Math.min(1, dt / FLOOR_RISE_SECONDS);
+  if (value > range.ceiling) range.ceiling = value;
+  else range.ceiling += (value - range.ceiling) * Math.min(1, dt / CEILING_FALL_SECONDS);
+  // A window narrower than the minimum is widened about its middle, so a steady signal reads mid-scale.
+  const span = Math.max(MIN_RECENT_SPAN, range.ceiling - range.floor);
+  const bottom = (range.floor + range.ceiling - span) / 2;
+  return Math.max(0, Math.min(1, (value - bottom) / span));
+}
+
 export interface AudioAnalysisState {
   bands: number[];
+  /** Recent range of each raw band and of bass / mid / high, for their automatic gain. */
+  bandRanges: RecentRange[];
+  bassRange: RecentRange;
+  midRange: RecentRange;
+  highRange: RecentRange;
   bass: number;
   mid: number;
   high: number;
@@ -77,6 +119,10 @@ export interface AudioAnalysisState {
 export function createAudioAnalysisState(): AudioAnalysisState {
   return {
     bands: Array.from({ length: AUDIO_BAND_COUNT }, () => 0),
+    bandRanges: Array.from({ length: AUDIO_BAND_COUNT }, () => createRecentRange()),
+    bassRange: createRecentRange(),
+    midRange: createRecentRange(),
+    highRange: createRecentRange(),
     bass: 0,
     mid: 0,
     high: 0,
@@ -134,12 +180,17 @@ export function analyzeAudioFrame(state: AudioAnalysisState, input: AudioFrameIn
     target > current
       ? current + (target - current) * Math.min(1, dt * 30)
       : current + (target - current) * Math.min(1, dt / releaseSeconds);
+  // Bands and bass / mid / high are mostly placed within their recent range (see `normalizeToRecentRange`), so visuals
+  // swing with the music however loud the mix is; a little of the absolute level stays so loud still reads louder than
+  // quiet, and silence still reads as zero.
+  const gain = (value: number, range: RecentRange) =>
+    value < 0.01 ? 0 : ABSOLUTE_SHARE * value + (1 - ABSOLUTE_SHARE) * normalizeToRecentRange(value, range, dt);
   for (let band = 0; band < AUDIO_BAND_COUNT; band += 1) {
-    state.bands[band] = follow(state.bands[band]!, raw[band]!, 0.18);
+    state.bands[band] = follow(state.bands[band]!, gain(raw[band]!, state.bandRanges[band]!), 0.18);
   }
-  state.bass = follow(state.bass, average(20, 150), 0.2);
-  state.mid = follow(state.mid, average(150, 2000), 0.2);
-  state.high = follow(state.high, average(2000, 12000), 0.15);
+  state.bass = follow(state.bass, gain(average(20, 150), state.bassRange), 0.2);
+  state.mid = follow(state.mid, gain(average(150, 2000), state.midRange), 0.2);
+  state.high = follow(state.high, gain(average(2000, 12000), state.highRange), 0.15);
   state.level = follow(state.level, loudness, 0.25);
   state.peak = Math.max(loudness, state.peak * Math.exp(-dt / 0.35));
 

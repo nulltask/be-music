@@ -4,7 +4,9 @@ import {
   SILENT_AUDIO,
   analyzeAudioFrame,
   createAudioAnalysisState,
+  createRecentRange,
   logBandBins,
+  normalizeToRecentRange,
   type AudioFrameInput,
 } from './audio-analysis.ts';
 
@@ -84,5 +86,37 @@ describe('analyzeAudioFrame', () => {
     const features = analyzeAudioFrame(state, frame({ level: 0.5, allBins: 200, dtSeconds: Number.NaN }));
     expect(features.onset).toBe(0);
     expect(features.level).toBe(0);
+  });
+});
+
+describe('normalizeToRecentRange', () => {
+  it('stretches a signal over the range it recently covered', () => {
+    const range = createRecentRange();
+    normalizeToRecentRange(0.9, range, 1 / 60);
+    normalizeToRecentRange(0.7, range, 1 / 60);
+    expect(normalizeToRecentRange(0.9, range, 1 / 60)).toBeGreaterThan(0.9);
+    expect(normalizeToRecentRange(0.7, range, 1 / 60)).toBeLessThan(0.1);
+  });
+
+  it('reads a loud, steady signal as mid-scale instead of pinning it at the maximum', () => {
+    const range = createRecentRange();
+    let value = 0;
+    for (let frame = 0; frame < 60 * 8; frame += 1) value = normalizeToRecentRange(0.95, range, 1 / 60);
+    expect(value).toBeCloseTo(0.5, 2);
+  });
+
+  it('swings fully with a loud signal that pulses', () => {
+    const range = createRecentRange();
+    let low = 1;
+    let high = 0;
+    for (let frame = 0; frame < 60 * 6; frame += 1) {
+      const value = normalizeToRecentRange(frame % 30 < 15 ? 0.95 : 0.8, range, 1 / 60);
+      if (frame > 60 * 3) {
+        low = Math.min(low, value);
+        high = Math.max(high, value);
+      }
+    }
+    expect(high).toBeGreaterThan(0.9);
+    expect(low).toBeLessThan(0.2);
   });
 });

@@ -250,7 +250,7 @@ class PhantomSelectRenderer implements BeMusicSelectRenderer {
     const beatPulse = (1 - ((seconds * beatsPerSecond) % 1)) ** 3;
     if (this.burst) {
       this.burst.rotation = seconds * 0.12 + 0.12 * drive.onset;
-      this.burst.scale.set(1 + 0.06 * beatPulse + 0.24 * drive.bass + 0.1 * drive.onset);
+      this.burst.scale.set(0.85 + 0.06 * beatPulse + 0.6 * drive.bass + 0.3 * drive.onset);
     }
     this.kicker.x = -((seconds * 36) % KICKER_PITCH);
     const card = this.activeCard;

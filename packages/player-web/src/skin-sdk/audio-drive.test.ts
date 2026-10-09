@@ -63,6 +63,12 @@ describe('bandLevel', () => {
     expect(bandLevel([0.95, 0.95], 0, 2)).toBe(1);
   });
 
+  it('keeps a mid-scale band near mid-height', () => {
+    const value = bandLevel([0.6, 0.6], 0, 2);
+    expect(value).toBeGreaterThan(0.35);
+    expect(value).toBeLessThan(0.65);
+  });
+
   it('tilts toward the treble', () => {
     const flat = [0.4, 0.4, 0.4, 0.4];
     expect(bandLevel(flat, 3, 4)).toBeGreaterThan(bandLevel(flat, 0, 4));

@@ -49,11 +49,12 @@ export function bandAt(bands: readonly number[], index: number, count: number): 
 }
 
 /**
- * Display level of column `index` of `count` (0..1): {@link bandAt} with a treble tilt (music carries far less energy
- * up top, so higher columns are boosted) and the floor / ceiling stretched so bars use their full height.
+ * Display level of column `index` of `count` (0..1): {@link bandAt} with a slight treble tilt and the floor / ceiling
+ * stretched so bars use their full height. The analysed bands already follow each band's recent range, so a bar drops
+ * to the bottom between hits and reaches the top on them rather than resting near either end.
  */
 export function bandLevel(bands: readonly number[], index: number, count: number): number {
   const position = count > 1 ? index / (count - 1) : 0;
-  const tilted = bandAt(bands, index, count) * (1 + 0.9 * position);
-  return Math.max(0, Math.min(1, (tilted - 0.2) / 0.72));
+  const tilted = bandAt(bands, index, count) * (1 + 0.3 * position);
+  return Math.max(0, Math.min(1, (tilted - 0.3) / 0.62));
 }
