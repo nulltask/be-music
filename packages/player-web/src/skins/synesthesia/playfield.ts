@@ -36,10 +36,14 @@ interface LaneLight {
 
 // Readable first, in the skin's ember palette: white keys burn warm white-gold with an ember halo, black keys run
 // electric blue, scratch hot magenta.
+/**
+ * Lane lights. `body` colours the notes: they differ in lightness as well as hue (white, deep blue, hot magenta) so the
+ * three lane kinds stay apart at a glance, even on a lit beam; `glow` colours beams, halos, and bursts.
+ */
 const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
-  white: { body: 0xfff1dc, glow: 0xff7a1e, hue: 0.07 },
-  black: { body: 0xa6dcff, glow: 0x3fb4ff, hue: 0.57 },
-  scratch: { body: 0xff9fd0, glow: 0xff3d9e, hue: 0.92 },
+  white: { body: 0xffffff, glow: 0xff7a1e, hue: 0.07 },
+  black: { body: 0x2f6dff, glow: 0x3fb4ff, hue: 0.57 },
+  scratch: { body: 0xff2b8a, glow: 0xff3d9e, hue: 0.92 },
 };
 
 const NOTE_HEIGHT = 8;
@@ -129,19 +133,19 @@ export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }:
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: soft outer glow, translucent core, bright centre filament.
-  graphics.rect(bodyX - 2, bodyTop, bodyW + 4, bodyH).fill({ color: light.glow, alpha: 0.08 });
+  // A beam of light between head and tail: a translucent core with a bright centre filament.
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
   graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 });
   drawNote(graphics, bodyX, bottom, bodyW, light);
   drawNote(graphics, bodyX, top, bodyW, light);
 }
 
-/** A flat bar with a white filament on top and a same-hue halo — glowing, but still a plain rectangle to read. */
+/** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */
 function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight): void {
-  graphics.rect(x - 3, y - NOTE_HEIGHT - 3, w + 6, NOTE_HEIGHT + 6).fill({ color: light.glow, alpha: 0.14 });
+  // A dark rim lifts the bar off the lit lane and the beam behind it.
+  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
   graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill(light.body);
-  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.95 });
+  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 });
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */

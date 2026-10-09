@@ -175,7 +175,8 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   // Rank: a spinning 3D particle ring that bursts outward as the letter ignites.
   const rank = group('rank');
   const rankCx = MARGIN + 88;
-  const rankCy = TOP + 68;
+  // The ring sits between the DJ LEVEL label and the rate, clear of both.
+  const rankCy = TOP + 76;
   const topRank = rankLabel === 'AAA' || rankLabel === 'AA';
   const rankColor = topRank ? SYN_AMBER : accent;
   glass(rank.g, MARGIN, TOP, 176, TOP_ROW_H, rankColor);
@@ -183,7 +184,7 @@ export function renderSynesthesiaResult(frame: BeMusicResultFrame): void {
   const ringIn = easeOutCubic(stageProgress(elapsed, 400, 900));
   for (let index = 0; index < 60; index += 1) {
     const angle = (Math.PI * 2 * index) / 60 + seconds * 0.9;
-    const radius = 56 * ringIn;
+    const radius = 50 * ringIn;
     const point = projectPoint(
       rotateX(
         rotateY({ x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius }, 0.2),

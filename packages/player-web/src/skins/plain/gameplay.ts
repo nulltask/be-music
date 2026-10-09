@@ -24,6 +24,8 @@ import {
 } from './theme.ts';
 
 const NOTE_HEIGHT = 6;
+/** Top of the right-hand judgement column: level with the BGA band's top, whatever size the BGA takes. */
+const COLUMN_TOP = 66;
 const MARGIN = 16;
 
 /** The play screen: lanes and notes on the left, the BGA beside them, the HUD around them. */
@@ -129,7 +131,7 @@ function judgeColor(judge: string): string {
 
 /** Header (mode, tempo, speed), the gauge under the lanes, the track and the score figures along the bottom. */
 function drawHud(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame, width: number, height: number): void {
-  const { runtime, layout } = frame;
+  const { runtime } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
   text(ctx, `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`, 110, 18, {
@@ -177,7 +179,7 @@ function drawHud(ctx: CanvasRenderingContext2D, frame: CanvasGameplayFrame, widt
   ];
   const columnX = width - MARGIN - 80;
   counts.forEach(([label, count], index) => {
-    const y = (layout.bga?.y ?? 60) + 10 + index * 22;
+    const y = COLUMN_TOP + index * 22;
     text(ctx, label, columnX, y, { size: 11, color: MUTED, weight: 700 });
     text(ctx, String(count ?? 0), columnX + 80, y, { size: 13, align: 'right' });
   });
