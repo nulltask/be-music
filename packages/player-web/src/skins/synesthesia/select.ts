@@ -63,7 +63,9 @@ const ROW_NOTES_W = 84;
 const SLIDE_MS = 320;
 const OUTRO_MS = 700;
 const INTRO_STAGGER_MS = 45;
+/** Stars drifting past while browsing, and the denser field the launch warp dashes through. */
 const STAR_COUNT = 320;
+const WARP_STAR_COUNT = 900;
 const RIVER_PARTICLES = 340;
 const ORB_SHELL = fibonacciSphere(900, 23);
 const ORB = orbitParticles(23, 30);
@@ -101,8 +103,8 @@ function framePanel(graphics: Graphics, x: number, y: number, w: number, h: numb
 
 /**
  * Synesthesia song select, set in a cosmic particle world. The persistent back layer is a particle world — data dust
- * pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids, a floor of light points, a golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply
- * in `tick`. The front layer snaps a lock-on reticle onto the focused card.
+ * pouring out of the vanishing point at the focused chart's tempo, point-cloud pyramids, a floor of light points, a
+ * golden river of particles, and a roaming visualizer-style audio orb — redrawn cheaply in `tick`. The front layer snaps a lock-on reticle onto the focused card.
  */
 class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   public readonly backLayer = new Container();
@@ -111,6 +113,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   /** Additive particle world: floor, pyramids, river, and the orb's tails. */
   private readonly world = new Graphics();
   private readonly stars: Sprite[] = [];
+  /** Holds {@link stars}; the one layer that stays lit through the launch warp. */
+  private readonly starLayer = new Container();
   private readonly lock = new Graphics();
   private readonly cursorGlow = new Sprite();
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
@@ -163,35 +167,58 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   }
 
   /**
-   * Launch outro — the warp: the star field rushes forward (in `tick`), a white bloom opens from the
-   * vanishing point with the chosen title in it, and the screen falls to black for the gameplay count-in.
+   * Launch outro — the warp: the panels and list fade away while the camera dashes straight through the particle field
+   * in black space (in `tick`), and the chosen title condenses at the centre out of wide-tracked light with its artist
+   * under it, a lock-on reticle snapping shut around it. Then the screen falls to black for the count-in.
    */
   private renderOutro(frame: PixiSelectFrame): void {
     const t = Math.min(1, (frame.nowMs - (frame.launchAt ?? frame.nowMs)) / OUTRO_MS);
     const { designWidth, designHeight, layer } = frame;
-    const g = new Graphics();
-    g.label = 'synesthesia-select/outro';
-    const cx = designWidth * 0.58;
-    const cy = designHeight * 0.44;
-    const bloom = easeOutCubic(Math.min(1, t / 0.7));
-    for (let ring = 5; ring >= 1; ring -= 1) {
-      g.circle(cx, cy, (40 + 520 * bloom) * (ring / 5)).fill({ color: SYN_FLARE, alpha: 0.1 * bloom });
-    }
+    const song = frame.focusedSong;
+    const cx = designWidth / 2;
+    const cy = designHeight / 2;
     const dark = Math.max(0, (t - 0.72) / 0.28);
-    if (dark > 0) g.rect(0, 0, designWidth, designHeight).fill({ color: SYN_VOID, alpha: dark });
-    layer.addChild(g);
-    addSkinText(layer, frame.focusedSong?.title ?? '', cx, cy, {
-      size: 22,
+    // Fade the list and panels out of the way, leaving black space and the particles rushing past.
+    const away = 1 - easeOutCubic(Math.min(1, t / 0.25));
+    for (const child of layer.children) child.alpha *= away;
+    const form = easeOutCubic(Math.min(1, t / 0.4));
+    const alpha = Math.min(1, t * 4) * (1 - dark);
+    const title = addSkinText(layer, song?.title ?? '', cx, cy - 6, {
+      size: 26,
       weight: '500',
       fill: SYN_WHITE,
       fontFamily: SYN_TEXT_FONT,
-      letterSpacing: 2 + 10 * bloom,
+      letterSpacing: 2 + 14 * (1 - form),
       anchorX: 0.5,
       anchorY: 0.5,
-      maxWidth: designWidth - 80,
-      alpha: Math.min(1, t * 3) * (1 - dark),
+      maxWidth: designWidth - 120,
+      alpha,
       dropShadow: { color: SYN_EMBER, distance: 0, blur: 16, alpha: 1 },
     });
+    if (song?.artist) {
+      addSkinText(layer, song.artist, cx, cy + 24, {
+        size: 11,
+        fill: SYN_MIST,
+        fontFamily: SYN_TEXT_FONT,
+        letterSpacing: 2,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        maxWidth: designWidth - 160,
+        alpha: alpha * Math.min(1, Math.max(0, (t - 0.15) / 0.2)),
+      });
+    }
+    // Lock-on: brackets close from wide to tight around the title.
+    const lock = easeOutCubic(Math.min(1, t / 0.35));
+    const boxW = Math.min(designWidth - 80, title.width + 48) + 160 * (1 - lock);
+    const boxH = 64 + 60 * (1 - lock);
+    const reticle = new Graphics();
+    reticle.label = 'synesthesia-select/outro-lock';
+    drawReticle(reticle, cx - boxW / 2, cy - boxH / 2 + 4, boxW, boxH, SYN_WHITE, 0.85 * alpha, {
+      arm: 12,
+      width: 1.5,
+    });
+    if (dark > 0) reticle.rect(0, 0, designWidth, designHeight).fill({ color: SYN_VOID, alpha: dark });
+    layer.addChild(reticle);
   }
 
   public tick(
@@ -218,32 +245,47 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // Camera: the backdrop roams between random shots (flying, sometimes hard-cutting) with a handheld drift.
     // Reduced effects halve the moves; off keeps it at rest.
+    // On launch the camera settles and flies dead straight, so the warp reads as a dash through the particles.
+    const settle = easeOutCubic(Math.min(1, warp / 0.3));
     const camera = mixCamera(
       REST_CAMERA,
       roamingCamera(seconds, 13, CAMERA_RANGE, CAMERA_CYCLE_S),
-      this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1,
+      (this.effects === 'off' ? 0 : this.effects === 'reduced' ? 0.5 : 1) * (1 - settle),
     );
-    // Data dust pouring out of the vanishing point — speed follows the focused chart's tempo.
-    const cx = this.designWidth * 0.58;
-    const cy = this.designHeight * 0.44;
-    const speed = (80 + beatsPerSecond * 55) * (1 + 16 * warp * warp) * (1 + 1.2 * drive.level);
+    // Data dust pouring out of the vanishing point — speed follows the focused chart's tempo. Launching steers the
+    // vanishing point to the centre of the screen, where the chosen title appears, and floors the throttle.
+    const cx = this.designWidth * (0.58 - 0.08 * settle);
+    const cy = this.designHeight * (0.44 + 0.06 * settle);
+    const speed = (80 + beatsPerSecond * 55) * (1 + 60 * warp * warp) * (1 + 1.2 * drive.level);
     this.travel += dt * speed * (warp > 0 ? 1 : rate);
+    const shownStars = Math.round(STAR_COUNT + (WARP_STAR_COUNT - STAR_COUNT) * settle);
     for (let index = 0; index < this.stars.length; index += 1) {
       const star = this.stars[index]!;
+      if (index >= shownStars) {
+        star.visible = false;
+        continue;
+      }
       const point = starfieldPoint(index, this.travel, { spread: 560, near: 10, far: 1000, speed: 1 });
       const projected = projectPoint(viewPoint(point, camera), cx, cy, 200);
       star.visible = projected.visible;
       if (!projected.visible) continue;
       const nearness = Math.min(1, projected.scale);
-      const size = 1 + 3 * nearness * nearness;
+      // Rushing past, the near particles swell and brighten.
+      const size = (1 + 3 * nearness * nearness) * (1 + 2.5 * warp * nearness);
       star.position.set(projected.x, projected.y);
       star.rotation = 0;
       star.width = size;
       star.height = size;
-      star.alpha = 0.2 + 0.8 * nearness;
+      star.alpha = Math.min(1, (0.2 + 0.8 * nearness) * (1 + warp));
       star.tint = index % 9 === 0 ? SYN_CYAN : index % 13 === 0 ? SYN_MAGENTA : emberColor(0.4 + 0.6 * nearness);
     }
 
+    // The cursor's lock-on lets go as the warp starts, and everything but the rushing particles falls behind.
+    this.frontLayer.alpha = 1 - settle;
+    const behind = 1 - 0.9 * settle;
+    for (const node of this.backLayer.children) {
+      if (node !== this.starLayer && node !== this.ground) node.alpha = behind;
+    }
     const world = this.world;
     world.clear();
     const floorY = this.designHeight * 0.7;
@@ -412,9 +454,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       top = bottom;
     }
     const glow = synGlowTexture();
-    const starLayer = new Container();
+    const starLayer = this.starLayer;
     starLayer.blendMode = 'add';
-    for (let index = 0; index < STAR_COUNT; index += 1) {
+    for (let index = 0; index < WARP_STAR_COUNT; index += 1) {
       const star = new Sprite(glow);
       star.anchor.set(0.5);
       star.blendMode = 'add';
