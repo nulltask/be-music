@@ -9,7 +9,13 @@
  * The family metadata itself (`defaultSkinFamily`) lives in `skin/default/family.ts` alongside the LR2 / beatoraja
  * metadata — see that file for the family contract.
  */
-export * from '../../skins/phantom/chrome.ts';
+// The Phantom chrome's long-standing standalone entry points (kept for hosts that call them directly).
+export {
+  renderDefaultGameplayFrame,
+  renderFallbackLr2Frame,
+  type FallbackGameplayRenderOptions,
+  type FallbackGameplayRuntime,
+} from '../../skins/phantom/chrome.ts';
 export * from './gameplay.ts';
 export * from './result.ts';
 export * from './select.ts';
