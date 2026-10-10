@@ -66,7 +66,8 @@ export function renderSynesthesiaLanes({
   const tier = effectProfile(effects).enabled ? comboTier(combo ?? 0) : 0;
   // ...and swells on every bass hit of the mix.
   const heat = 1 + 0.3 * tier + 0.9 * drive.bass;
-  const lineColor = tier >= 3 ? emberColor(0.55 + 0.35 * Math.sin(nowMs / 700)) : 0xff8a2a;
+  // Stepped through 17 shades so the cached beat gradient (one per colour) stays bounded.
+  const lineColor = tier >= 3 ? emberColor(0.55 + (0.35 * Math.round(8 * Math.sin(nowMs / 700))) / 8) : 0xff8a2a;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
   let gridLeft = Number.POSITIVE_INFINITY;
@@ -111,15 +112,17 @@ export function renderSynesthesiaLanes({
     graphics.rect(run.right - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0xff7a1e, alpha: 0.25 });
   }
 
-  // Judgement line: a white filament wrapped in stacked ember bloom that swells on each beat — one per play side, so
-  // it never crosses the gap between the double-play banks.
+  // Judgement line: a crisp white filament with no bloom around it — one per play side, so it never crosses the gap
+  // between the double-play banks. The beat rises above it instead: an ember wash fading up the lanes that leaps tall
+  // and bright on each beat and settles back before the next.
   const y = gridBottom;
+  const beatHeight = Math.min(gridBottom - gridTop, 36 + 110 * pulse * (0.7 + 0.3 * heat));
+  const beatAlpha = Math.min(1, (0.1 + 0.55 * pulse) * heat);
   for (const run of resolveLaneRuns(lanes)) {
     const lineW = run.right - run.left;
-    graphics.rect(run.left, y - 14, lineW, 22).fill({ color: lineColor, alpha: (0.05 + 0.08 * pulse) * heat });
     graphics
-      .rect(run.left, y - 6, lineW, 8)
-      .fill({ color: lineColor, alpha: Math.min(0.8, (0.16 + 0.14 * pulse) * heat) });
+      .rect(run.left, y - 3 - beatHeight, lineW, beatHeight)
+      .fill({ fill: beatGradient(lineColor), alpha: beatAlpha });
     graphics.rect(run.left, y - 3, lineW, 3).fill({ color: 0xffd08a, alpha: 0.85 });
     graphics.rect(run.left, y - 2, lineW, 1).fill(0xffffff);
   }
@@ -354,6 +357,30 @@ function renderBomb(
 const COLUMN_GRADIENTS = new Map<number, FillGradient>();
 
 /** Vertical light column for `color`: transparent at the top, brightening toward the base. Local texture space. */
+const BEAT_GRADIENTS = new Map<number, FillGradient>();
+
+/** The beat wash above the judgement line in `color`: clear at the top, easing in to a soft glow at the line. */
+function beatGradient(color: number): FillGradient {
+  let gradient = BEAT_GRADIENTS.get(color);
+  if (!gradient) {
+    const rgb = new Color(color);
+    gradient = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: 'local',
+      colorStops: [
+        { offset: 0, color: rgb.setAlpha(0).toRgbaString() },
+        { offset: 0.45, color: rgb.setAlpha(0.06).toRgbaString() },
+        { offset: 0.8, color: rgb.setAlpha(0.22).toRgbaString() },
+        { offset: 1, color: rgb.setAlpha(0.45).toRgbaString() },
+      ],
+    });
+    BEAT_GRADIENTS.set(color, gradient);
+  }
+  return gradient;
+}
+
 function resolveColumnGradient(color: number): FillGradient {
   let gradient = COLUMN_GRADIENTS.get(color);
   if (!gradient) {

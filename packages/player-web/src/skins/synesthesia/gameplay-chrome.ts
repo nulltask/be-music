@@ -1,17 +1,18 @@
 import { Graphics, type Container } from 'pixi.js';
 import { GROOVE } from './layout.ts';
 import { drawSynesthesiaMoments } from './moments.ts';
+import { ChargeCloud } from './charge-cloud.ts';
+import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
-import { drawFrame, drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
+import { drawFrame, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
+  floorRise,
   clipSegmentOutsideRect,
   emberColor,
   cameraBasis,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
-  fibonacciSphere,
-  orbitParticles,
   pointCloudPyramid,
   projectPoint,
   projectViewInto,
@@ -24,6 +25,13 @@ import {
   wanderPoint,
   type CameraPose,
 } from './space.ts';
+import {
+  SPECTRUM_RIDGE_HEIGHT,
+  SpectrumHistory,
+  floorRowStep,
+  spectrumLevels,
+  spectrumRise,
+} from './spectrum-floor.ts';
 import {
   SYN_AMBER,
   SYN_CYAN,
@@ -41,6 +49,7 @@ import {
   sceneHue,
 } from './style.ts';
 import {
+  AUDIO_BAND_COUNT,
   audioDrive,
   type AudioDrive,
   type BeMusicRect,
@@ -93,22 +102,85 @@ const SCHOOL_SIZE = 70;
  * independently, so the flocks cross, part, and pass in front of one another.
  */
 const SCHOOL_SPECS = [
-  { seed: 17, palette: 'ember', bounds: { minX: -650, maxX: 450, minY: -200, maxY: 110, minZ: 160, maxZ: 900 } },
-  { seed: 41, palette: 'blue', bounds: { minX: -300, maxX: 800, minY: -260, maxY: 40, minZ: 300, maxZ: 1200 } },
-  { seed: 73, palette: 'magenta', bounds: { minX: -800, maxX: 800, minY: -240, maxY: 80, minZ: 700, maxZ: 1700 } },
+  {
+    seed: 17,
+    palette: 'ember',
+    band: 'bass',
+    bounds: { minX: -650, maxX: 450, minY: -200, maxY: 110, minZ: 160, maxZ: 900 },
+  },
+  {
+    seed: 41,
+    palette: 'blue',
+    band: 'mid',
+    bounds: { minX: -300, maxX: 800, minY: -260, maxY: 40, minZ: 300, maxZ: 1200 },
+  },
+  {
+    seed: 73,
+    palette: 'magenta',
+    band: 'high',
+    bounds: { minX: -800, maxX: 800, minY: -240, maxY: 80, minZ: 700, maxZ: 1700 },
+  },
 ] as const;
-const SCHOOLS = new WeakMap<object, { flocks: Flock[]; lastMs: number }>();
+const SCHOOLS = new WeakMap<object, { flocks: Flock[]; lastMs: number; kick: KickState }>();
 
-/** The chrome layer's schools, created on first use (or when their size changes) and stepped to `nowMs`. */
+/** The dust field's shape; it moves by accumulated travel (see advanceTravel), so its own speed is one unit per unit. */
+const DUST_FIELD = { spread: 640, near: 20, far: 900, speed: 1 } as const;
+
+interface Travel {
+  seconds: number;
+  dust: number;
+  floor: number;
+  river: number;
+  /** The recent spectrum the floor is shaped from (see spectrum-floor.ts). */
+  spectrum: SpectrumHistory;
+}
+
+const TRAVEL = new WeakMap<object, Travel>();
+
+/**
+ * Accumulates how far the dust, floor and rivers have travelled at their current `speeds` (world units per second).
+ * Positions computed as `seconds × speed` jump whenever the speed changes, so the music or the zone changing pace would
+ * teleport every particle; integrating keeps the motion continuous. Restarts when the clock runs backwards.
+ */
+function advanceTravel(
+  key: object,
+  seconds: number,
+  speeds: Omit<Travel, 'seconds' | 'spectrum'>,
+  bands: readonly number[],
+): Travel {
+  let state = TRAVEL.get(key);
+  if (!state || seconds < state.seconds) {
+    state = { seconds, dust: 0, floor: 0, river: 0, spectrum: new SpectrumHistory() };
+    TRAVEL.set(key, state);
+  }
+  const dt = Math.min(0.1, seconds - state.seconds);
+  state.dust += speeds.dust * dt;
+  state.floor += speeds.floor * dt;
+  state.river += speeds.river * dt;
+  state.spectrum.push(spectrumLevels(bands, SCRATCH_LEVELS), dt);
+  state.seconds = seconds;
+  return state;
+}
+
+/**
+ * The chrome layer's schools, created on first use (or when their size changes) and stepped to `nowMs`, with the kick
+ * envelope (from the spectrum `bands` and `onset`) that flicks the fish up.
+ */
 function advanceSchools(
   key: object,
   nowMs: number,
   size: number,
   forces: { gather: number; scatter: number },
-): Flock[] {
+  bands: readonly number[],
+  onset: number,
+): { flocks: Flock[]; swell: number } {
   let state = SCHOOLS.get(key);
   if (!state || state.flocks[0]!.count !== size || nowMs < state.lastMs) {
-    state = { flocks: SCHOOL_SPECS.map((spec) => createFlock(spec.seed, size, spec.bounds)), lastMs: nowMs };
+    state = {
+      flocks: SCHOOL_SPECS.map((spec) => createFlock(spec.seed, size, spec.bounds)),
+      lastMs: nowMs,
+      kick: KICK_REST,
+    };
     SCHOOLS.set(key, state);
   }
   const dt = (nowMs - state.lastMs) / 1000;
@@ -116,12 +188,24 @@ function advanceSchools(
     // Offset each leader's clock so the schools never shadow one another.
     stepFlock(flock, dt, { seconds: nowMs / 1000 + index * 41.7, ...forces });
   });
+  state.kick = stepKick(state.kick, bands, onset, Math.min(0.1, dt));
   state.lastMs = nowMs;
-  return state.flocks;
+  return { flocks: state.flocks, swell: state.kick.swell };
 }
-/** The idle monitor's orb shell: dense enough to read as a sphere at monitor size, sparse enough to stay cheap. */
-const ORB_SHELL = fibonacciSphere(560, 11);
-const ORB = orbitParticles(11, 22);
+/**
+ * The idle monitor's charge cloud, one per chrome layer (it outlives the per-frame pools), with the clock of its last
+ * simulation step. A smaller cloud than the select screen's: the monitor is small.
+ */
+const MONITOR_CLOUDS = new WeakMap<Container, { cloud: ChargeCloud; lastSeconds: number | undefined }>();
+
+function monitorCloudFor(layer: Container): { cloud: ChargeCloud; lastSeconds: number | undefined } {
+  let state = MONITOR_CLOUDS.get(layer);
+  if (state === undefined) {
+    state = { cloud: new ChargeCloud(192), lastSeconds: undefined };
+    MONITOR_CLOUDS.set(layer, state);
+  }
+  return state;
+}
 const PYRAMIDS = [pointCloudPyramid(3, 520), pointCloudPyramid(8, 420), pointCloudPyramid(5, 700)];
 
 /**
@@ -139,6 +223,10 @@ export function renderSynesthesiaChrome({
   layout,
 }: PixiChromeContext): void {
   const seconds = (runtime.nowMs ?? 0) / 1000;
+  // The idle monitor shows its cloud only while there is no BGA; it redraws (and re-shows) it below if so. Its clock
+  // carries on across hidden frames: the cloud clamps each step, so a gap just resumes it.
+  const monitorCloud = MONITOR_CLOUDS.get(layer);
+  if (monitorCloud) monitorCloud.cloud.view.visible = false;
   const beatPhase = runtime.beatPhase ?? 0;
   const pulse = (1 - beatPhase) ** 2;
   const hue = sceneHue(seconds, beatPhase);
@@ -168,18 +256,36 @@ export function renderSynesthesiaChrome({
   const light = layerPool.acquireGraphics();
   light.label = 'synesthesia-gameplay/light';
   light.blendMode = 'add';
-  drawDust(light, seconds, pulse, hasBga, tier, hit, camera, drive);
-  drawFloor(light, seconds, pulse, hasBga, tier, hit, camera, drive);
+  // Dust, floor and rivers move by accumulated travel, so the music and the zone can change their speed smoothly.
+  const travel = advanceTravel(
+    layer,
+    seconds,
+    {
+      dust: (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level),
+      floor: 150 * (1 + 0.3 * tier),
+      river: 260 + 60 * tier,
+    },
+    drive.bands,
+  );
+  drawDust(light, hasBga, tier, hit, camera, travel.dust);
+  drawFloor(light, travel.floor, travel.spectrum, seconds, pulse, hasBga, tier, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
-    drawRiver(light, seconds, river, hasBga, tier, camera, drive);
+    drawRiver(light, seconds, travel.river, river, hasBga, tier, camera, drive);
   }
   if (effects.enabled) {
     // Schools of light fish swimming through the space: tighter on the beat, scattering on every key press.
-    const schools = advanceSchools(layer, runtime.nowMs ?? 0, effects.screenWide ? SCHOOL_SIZE : SCHOOL_SIZE / 2, {
-      gather: Math.max(pulse * 0.6, drive.bass),
-      scatter: Math.max(impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount, 0.8 * drive.onset),
-    });
+    const { flocks: schools, swell } = advanceSchools(
+      layer,
+      runtime.nowMs ?? 0,
+      effects.screenWide ? SCHOOL_SIZE : SCHOOL_SIZE / 2,
+      {
+        gather: Math.max(pulse * 0.6, drive.bass),
+        scatter: Math.max(impulse(runtime.impulseAtMs, runtime.nowMs ?? 0, 520) * effects.amount, 0.8 * drive.onset),
+      },
+      drive.bands,
+      drive.onset,
+    );
     const shown = effects.screenWide ? schools.length : 1;
     for (let school = 0; school < shown; school += 1) {
       drawSchool(
@@ -189,6 +295,8 @@ export function renderSynesthesiaChrome({
         {
           alpha: 0.95,
           palette: SCHOOL_SPECS[school]!.palette,
+          swell,
+          glowLevel: drive[SCHOOL_SPECS[school]!.band],
           skip: (x, y) =>
             x < -10 || x > DESIGN_WIDTH + 10 || y < 0 || y > DESIGN_HEIGHT || (hasBga && insideBga(x, y, 4)),
         },
@@ -313,21 +421,18 @@ function drawGround(graphics: Graphics, hasBga: boolean, hit: number, hitColor: 
  */
 function drawDust(
   graphics: Graphics,
-  seconds: number,
-  pulse: number,
   hasBga: boolean,
   tier: number,
   hit: number,
   camera: CameraPose,
-  drive: AudioDrive,
+  distance: number,
 ): void {
   const batch = sharedShapeBatch;
   const count = 220 + 50 * tier;
-  const speed = (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level);
-  const field = { spread: 640, near: 20, far: 900, speed };
   const basis = cameraBasis(camera, SCRATCH_BASIS);
   for (let index = 0; index < count; index += 1) {
-    const point = starfieldInto(SCRATCH_POINT, index, seconds, field);
+    // `distance` is the field's accumulated travel, so a change of speed accelerates the motes instead of jumping them.
+    const point = starfieldInto(SCRATCH_POINT, index, distance, DUST_FIELD);
     const projected = projectViewInto(SCRATCH_A, point.x, point.y, point.z, basis, VANISH.x, VANISH.y, 180);
     if (!projected.visible) continue;
     if (projected.x < 0 || projected.x > DESIGN_WIDTH || projected.y < 0 || projected.y > DESIGN_HEIGHT) continue;
@@ -345,9 +450,15 @@ function drawDust(
   batch.flush();
 }
 
-/** Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines. */
+/**
+ * Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines.
+ * The lattice is the music's spectrum: bass on the left to highs on the right, rising as ridges that leave the viewer
+ * and roll out into the distance (see spectrumRise), over low Perlin-noise ground.
+ */
 function drawFloor(
   graphics: Graphics,
+  distance: number,
+  spectrum: SpectrumHistory,
   seconds: number,
   pulse: number,
   hasBga: boolean,
@@ -374,17 +485,26 @@ function drawFloor(
   }
   graphics.stroke({ color: SYN_EMBER, width: 1, alpha: Math.min(0.4, 0.05 * glow) });
   const spacing = 90;
-  const offset = (seconds * 150 * (1 + 0.3 * tier)) % spacing;
+  const offset = distance % spacing;
   for (let z = spacing - offset; z < 2400; z += spacing) {
     const nearness = 1 - z / 2400;
     const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * glow);
     const size = 0.6 + 1.4 * nearness * nearness;
     const color = emberColor(0.3 + 0.65 * nearness);
-    for (let x = -1500; x <= 1500; x += 50) {
-      const point = projectViewInto(SCRATCH_A, x, height, z, basis, CENTER_X, horizon, focal);
+    // Near rows get more points, so they read as continuous waveforms.
+    const step = floorRowStep(z, focal, FLOOR_SCREEN_GAP);
+    for (let x = -1500; x <= 1500; x += step) {
+      // The band follows where the point sits on screen: bass at the left edge, highs at the right.
+      const ground = projectViewInto(SCRATCH_A, x, height, z, basis, CENTER_X, horizon, focal);
+      if (!ground.visible || ground.x < -4 || ground.x > DESIGN_WIDTH + 4) continue;
+      const ridge = spectrumRise(spectrum, ground.x / DESIGN_WIDTH, z);
+      const rise = ridge + floorRise(x, z + distance, seconds, FLOOR_GROUND);
+      const point = projectViewInto(SCRATCH_A, x, height - rise, z, basis, CENTER_X, horizon, focal);
       if (!point.visible || point.x < -4 || point.x > DESIGN_WIDTH + 4 || point.y > DESIGN_HEIGHT + 4) continue;
       if (hasBga && insideBga(point.x, point.y, 2)) continue;
-      sharedShapeBatch.rect(graphics, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
+      // Crests catch more light than the valleys.
+      const lit = Math.min(1, alpha * (1 + (1.4 * ridge) / SPECTRUM_RIDGE_HEIGHT));
+      sharedShapeBatch.rect(graphics, color, lit, point.x - size / 2, point.y - size / 2, size, size);
     }
   }
   sharedShapeBatch.flush();
@@ -392,6 +512,12 @@ function drawFloor(
 
 /** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
 const FLOOR_PIECES: number[] = [];
+/** Height (world units) of the Perlin-noise ground under the floor's spectrum ridges. */
+const FLOOR_GROUND = 10;
+/** Screen gap (px) the floor rows' points aim for, so near rows read as waveforms. */
+const FLOOR_SCREEN_GAP = 6;
+/** Scratch band levels written each frame into the floor's spectrum history. */
+const SCRATCH_LEVELS = new Float32Array(AUDIO_BAND_COUNT);
 /** Scratch objects for the allocation-free projection in the hot loops above. */
 const SCRATCH_BASIS = cameraBasis(REST_CAMERA);
 const SCRATCH_A = scratchProjected();
@@ -407,6 +533,7 @@ const RIVER_PARTICLES = 280;
 function drawRiver(
   graphics: Graphics,
   seconds: number,
+  distance: number,
   river: number,
   hasBga: boolean,
   tier: number,
@@ -426,7 +553,7 @@ function drawRiver(
   const toWorld = (local: { x: number; y: number; z: number }) =>
     viewPoint({ x: local.x, y: baseY + local.y, z: baseZ + local.z + local.x * slope }, camera);
   for (let index = 0; index < RIVER_PARTICLES; index += 1) {
-    const local = particleRiverPoint(index, seconds, options);
+    const local = particleRiverPoint(index, seconds, options, distance);
     const head = projectPoint(toWorld(local), CENTER_X, FLOOR.horizon, FLOOR.focal);
     const tail = projectPoint(toWorld({ ...local, x: local.x - 26 }), CENTER_X, FLOOR.horizon, FLOOR.focal);
     if (!head.visible || !tail.visible) continue;
@@ -583,35 +710,30 @@ function drawBgaFrame(
     }
   }
   sharedShapeBatch.flush();
-  // The audio orb roams the monitor's little world close to the camera: a visualizer-style shell of sparks and
-  // fibres with a black moon circling it.
+  // The audio orb roams the monitor's little world close to the camera: a small charge cloud, its dark magnet orbs
+  // wrapped in a fluid of particles, kept inside the monitor.
   const roam = wanderPoint(seconds * 0.8, 2, { minX: -55, maxX: 55, minY: -125, maxY: -70, minZ: -120, maxZ: 0 });
-  const moonLayer = pool.acquireGraphics();
-  moonLayer.label = 'synesthesia-gameplay/orb-moon';
-  moonLayer.blendMode = 'normal';
-  const frontLayer = pool.acquireGraphics();
-  frontLayer.label = 'synesthesia-gameplay/orb-front';
-  frontLayer.blendMode = 'add';
-  const orb = drawMagnetoOrb(
-    { back: light, moon: moonLayer, front: frontLayer },
-    () => pool.acquireSprite(),
-    ORB_SHELL,
-    ORB,
-    {
-      ...roam,
-      radius: 24 * (1 + 0.03 * pulse),
-      view,
-      drive,
-      seconds,
-      alpha: 1,
-      moon: { size: 0.45, distance: 2, speed: 0.65, phase: 1.1, tilt: 0.35 },
-      clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
-    },
-  );
-  if (orb) {
+  const at = projectPoint(viewPoint(roam, view.camera, view.orbit), view.cx, view.cy, view.focal);
+  const state = monitorCloudFor(layer);
+  const host = light.parent!;
+  if (state.cloud.view.parent === host) host.removeChild(state.cloud.view);
+  host.addChildAt(state.cloud.view, host.getChildIndex(light) + 1);
+  const scale = at.visible ? 60 * at.scale * (1 + 0.03 * pulse) : 0;
+  state.cloud.update({
+    x: at.x,
+    y: at.y,
+    scale,
+    seconds,
+    dt: state.lastSeconds === undefined ? 0 : seconds - state.lastSeconds,
+    drive,
+    alpha: at.visible ? 1 : 0,
+    clip: { x: BGA.x, y: BGA.y, w: BGA.w, h: BGA.h - 22 },
+  });
+  state.lastSeconds = seconds;
+  if (at.visible) {
     // Lock-on reticle tracking it.
-    const lock = orb.radius * 1.6 + 5 * pulse;
-    drawReticle(light, orb.x - lock, orb.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
+    const lock = scale * 0.55 + 5 * pulse;
+    drawReticle(light, at.x - lock, at.y - lock, lock * 2, lock * 2, SYN_FLARE, 0.5, { arm: 8, cross: true });
   }
   // A dark slip under the label, so the monitor's floor horizon never runs through the type.
   const slip = pool.acquireGraphics();

@@ -1,28 +1,76 @@
-import type { Graphics, Sprite } from 'pixi.js';
+import type { Graphics } from 'pixi.js';
 import type { Flock } from './boids.ts';
 import {
   emberColor,
-  limbGlow,
-  orbitPosition,
   projectPoint,
-  reflectedLight,
   rotateX,
   rotateY,
   viewPoint,
   type CameraPose,
   type CloudPoint,
-  type OrbitParticle,
   type Projected,
   type Vec3,
 } from './space.ts';
 import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
-import { type AudioDrive, bandLevel, hash01 } from '@be-music/skin-sdk';
+import { hash01 } from '@be-music/skin-sdk';
 import { pointLayerFor } from '../pixi-kit/index.ts';
 
 /**
  * Shared Synesthesia drawing: hairline frames with lock-on corners (a rhythm-shooter targeting reticle) and projected point
  * clouds. Callers own the `Graphics`; these only append geometry.
  */
+
+/** Most grains one square point breaks into. */
+const MAX_GRAINS = 5;
+
+/**
+ * Where the grains of a point sit, as fractions of the point's size: a golden-angle spiral, so a cluster of any count
+ * fills the point's square evenly without lining up into a pattern.
+ */
+const GRAIN_OFFSETS: Float32Array = (() => {
+  const offsets = new Float32Array(MAX_GRAINS * 2);
+  for (let index = 0; index < MAX_GRAINS; index += 1) {
+    const radius = index === 0 ? 0 : 0.42 * Math.sqrt(index / (MAX_GRAINS - 1));
+    const angle = index * 2.39996;
+    offsets[index * 2] = Math.cos(angle) * radius;
+    offsets[index * 2 + 1] = Math.sin(angle) * radius;
+  }
+  return offsets;
+})();
+
+/**
+ * How a square point of `size` px and `alpha` breaks into fine grains: each grain is about half the point's size
+ * (0.6–1.1 px), there are as many as it takes to cover a share of the point (1–5), and their alpha is set so the
+ * cluster gives off about the light the point did. Pure.
+ */
+export function grainsFor(size: number, alpha: number): { count: number; size: number; alpha: number } {
+  const grain = Math.max(0.6, Math.min(1.1, size * 0.5));
+  const count = Math.max(1, Math.min(MAX_GRAINS, Math.round((size / grain) ** 2 * 0.45)));
+  return { count, size: grain, alpha: Math.min(1, (alpha * size * size * 0.8) / (count * grain * grain)) };
+}
+
+/** Most grains one segment breaks into. */
+const MAX_TRAIL_GRAINS = 32;
+
+/** Most parallel lanes a wide segment's grains spread over. */
+const MAX_TRAIL_LANES = 3;
+
+/**
+ * How a segment `length` px long and `width` px thick breaks into a trail of fine grains: grains about a pixel across,
+ * spaced about 1.6 px apart (up to MAX_TRAIL_GRAINS per lane), laid in 1–3 parallel lanes across the stroke's width,
+ * with their alpha set so the trail gives off about the light the stroke did. Pure.
+ */
+export function trailGrainsFor(
+  length: number,
+  width: number,
+  alpha: number,
+): { count: number; lanes: number; size: number; alpha: number } {
+  const grain = Math.max(0.6, Math.min(1.1, width * 0.6));
+  const count = Math.max(1, Math.min(MAX_TRAIL_GRAINS, Math.round(length / 1.6) + 1));
+  const lanes = Math.max(1, Math.min(MAX_TRAIL_LANES, Math.round(width / 1.5)));
+  const area = Math.max(grain * grain, length * width);
+  return { count, lanes, size: grain, alpha: Math.min(1, (alpha * area * 0.8) / (count * lanes * grain * grain)) };
+}
 
 /**
  * Batches thousands of tiny additive shapes into a handful of draw instructions: rects and line segments are bucketed
@@ -62,8 +110,21 @@ export class ShapeBatch {
     const eighths = Math.round(Math.min(1, alpha) * 8);
     if (eighths <= 0) return;
     if (this.points && w === h) {
-      // Square points become GPU particles (exact colour and alpha, no geometry rebuild).
-      pointLayerFor(graphics).point(x + w / 2, y + h / 2, w, rawColor, Math.min(1, alpha));
+      // Square points become GPU particles (exact colour and alpha, no geometry rebuild), broken into fine grains so
+      // every particle in the skin shares the audio orb's fine, dusty texture.
+      const layer = pointLayerFor(graphics);
+      const grains = grainsFor(w, Math.min(1, alpha));
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      for (let index = 0; index < grains.count; index += 1) {
+        layer.point(
+          cx + GRAIN_OFFSETS[index * 2]! * w,
+          cy + GRAIN_OFFSETS[index * 2 + 1]! * w,
+          grains.size,
+          rawColor,
+          grains.alpha,
+        );
+      }
       return;
     }
     const key = (this.id(graphics) * 9 + eighths) * 4096 + colorIndex(rawColor);
@@ -73,6 +134,15 @@ export class ShapeBatch {
       this.rects.set(key, bucket);
     }
     bucket.data.push(x, y, w, h);
+  }
+
+  /**
+   * A soft glow sprite `size` px across centred on `(cx, cy)`, on its own particle layer next to `graphics`. Only drawn
+   * in points mode; elsewhere (tests, targets outside the scene graph) it is skipped.
+   */
+  public glow(graphics: Graphics, color: number, alpha: number, cx: number, cy: number, size: number): void {
+    if (!this.points || alpha <= 0.004 || size <= 0) return;
+    pointLayerFor(graphics, synGlowTexture()).point(cx, cy, size, color, Math.min(1, alpha));
   }
 
   public line(
@@ -87,6 +157,29 @@ export class ShapeBatch {
   ): void {
     const eighths = Math.round(Math.min(1, alpha) * 8);
     if (eighths <= 0) return;
+    if (this.points) {
+      // Segments break into a trail of fine grains too, so trails, fish and sparks share the dusty texture.
+      const length = Math.hypot(x1 - x0, y1 - y0);
+      const grains = trailGrainsFor(length, width, Math.min(1, alpha));
+      const layer = pointLayerFor(graphics);
+      // Wide strokes lay their grains in parallel lanes across the width, so a fatter stroke reads wider, not brighter.
+      const nx = length > 0 ? -(y1 - y0) / length : 0;
+      const ny = length > 0 ? (x1 - x0) / length : 0;
+      for (let lane = 0; lane < grains.lanes; lane += 1) {
+        const across = (lane - (grains.lanes - 1) / 2) * (width / grains.lanes);
+        for (let index = 0; index < grains.count; index += 1) {
+          const t = grains.count === 1 ? 0.5 : index / (grains.count - 1);
+          layer.point(
+            x0 + (x1 - x0) * t + nx * across,
+            y0 + (y1 - y0) * t + ny * across,
+            grains.size,
+            rawColor,
+            grains.alpha,
+          );
+        }
+      }
+      return;
+    }
     const halfSteps = Math.min(63, Math.max(1, Math.round(width * 2)));
     const key = ((this.id(graphics) * 9 + eighths) * 64 + halfSteps) * 4096 + colorIndex(rawColor);
     let bucket = this.lines.get(key);
@@ -308,9 +401,26 @@ export function drawSchool(
   graphics: Graphics,
   flock: Flock,
   project: (point: Vec3) => Projected,
-  style: { alpha: number; palette?: 'ember' | 'blue' | 'magenta'; skip?: (x: number, y: number) => boolean },
+  style: {
+    alpha: number;
+    palette?: 'ember' | 'blue' | 'magenta';
+    skip?: (x: number, y: number) => boolean;
+    /** 0..1: how hard the latest kick is flicking every fish up, swollen and white-hot (see stepKick). */
+    swell?: number;
+    /** 0..1: the level of the school's range of the music (bass, mids, or highs); the glow brightens and spreads with it. */
+    glowLevel?: number;
+  },
 ): void {
   const palette = style.palette ?? 'ember';
+  // On a kick each fish flicks up: a fatter body, a bigger head, a slightly longer stretch, flashing white.
+  const swell = Math.max(0, Math.min(1, style.swell ?? 0));
+  const girth = 1 + 1.6 * swell;
+  const stretch = 0.16 * (1 + 0.5 * swell);
+  // The glow follows the school's range of the music: a faint halo while it is quiet, bright and wide when it is loud —
+  // while the kick drives the swell.
+  const level = Math.max(0, Math.min(1, style.glowLevel ?? 0));
+  const glowGain = (0.3 + 1.2 * level) * (1 + 0.7 * swell);
+  const glowSpread = (1 + 0.4 * level) * (1 + 0.5 * swell);
   const { position: p, velocity: v } = flock;
   const batch = sharedShapeBatch;
   for (let index = 0; index < flock.count; index += 1) {
@@ -322,9 +432,9 @@ export function drawSchool(
     if (style.skip?.(head.x, head.y)) continue;
     // Tail length follows speed, so a darting fish stretches.
     const tail = project({
-      x: x - v[index * 3]! * 0.16,
-      y: y - v[index * 3 + 1]! * 0.16,
-      z: z - v[index * 3 + 2]! * 0.16,
+      x: x - v[index * 3]! * stretch,
+      y: y - v[index * 3 + 1]! * stretch,
+      z: z - v[index * 3 + 2]! * stretch,
     });
     if (!tail.visible) continue;
     const nearness = Math.min(1, head.scale * 2.4);
@@ -341,15 +451,25 @@ export function drawSchool(
           : index % 7 === 0
             ? SYN_CYAN
             : emberColor(0.55 + 0.4 * heat);
-    const alpha = style.alpha * (0.35 + 0.65 * nearness);
+    const alpha = style.alpha * (0.35 + 0.65 * nearness) * (1 + 0.8 * swell);
+    const lit = swell > 0.01 ? mixColor(color, SYN_WHITE, Math.min(1, swell * 1.2)) : color;
     const mx = (head.x + tail.x) / 2;
     const my = (head.y + tail.y) / 2;
-    batch.line(graphics, color, alpha * 0.55, 0.6 + 1 * nearness, tail.x, tail.y, mx, my);
-    batch.line(graphics, color, alpha, 1 + 2 * nearness, mx, my, head.x, head.y);
-    const size = 1.2 + 2.2 * nearness;
+    // Every fish carries a soft halo around its head, swelling with its range of the music and blooming on a kick.
+    batch.glow(
+      graphics,
+      lit,
+      style.alpha * (0.1 + 0.25 * nearness) * glowGain,
+      head.x,
+      head.y,
+      (10 + 22 * nearness) * glowSpread,
+    );
+    batch.line(graphics, lit, alpha * 0.55, (0.6 + 1 * nearness) * girth, tail.x, tail.y, mx, my);
+    batch.line(graphics, lit, alpha, (1 + 2 * nearness) * girth, mx, my, head.x, head.y);
+    const size = (1.2 + 2.2 * nearness) * (1 + 1.4 * swell);
     batch.rect(
       graphics,
-      heat > 0.8 ? SYN_WHITE : color,
+      heat > 0.8 ? SYN_WHITE : lit,
       Math.min(1, alpha * 1.3),
       head.x - size / 2,
       head.y - size / 2,
@@ -360,277 +480,10 @@ export function drawSchool(
   batch.flush();
 }
 
-export interface MagnetoOrbOptions {
-  /** World centre and rest shell radius. */
-  x: number;
-  y: number;
-  z: number;
-  radius: number;
-  view: { cx: number; cy: number; focal: number; camera?: CameraPose; orbit?: number };
-  drive: AudioDrive;
-  seconds: number;
-  alpha: number;
-  /** Tilt of the shell's spin (radians) and spin speed (rad / s). */
-  tilt?: number;
-  spin?: number;
-  /**
-   * A black moon revolving round the orb like a satellite: `size` and `distance` are fractions of the shell radius,
-   * `speed` in rad / s, `tilt` the orbit plane's inclination. Omit for none.
-   */
-  moon?: { size: number; distance: number; speed: number; phase: number; tilt?: number };
-  /** Screen rect the orb must stay inside (e.g. the idle monitor). */
-  clip?: { x: number; y: number; w: number; h: number };
-}
-
-/** The three layers an orb draws into, back to front: additive light, a normal-blend layer for the black moon, and
- * additive light again for the half of the shell facing the camera. */
-export interface MagnetoOrbLayers {
-  back: Graphics;
-  moon: Graphics;
-  front: Graphics;
-}
-
-const ORB_HAZE = 0x5a3cff;
-const ORB_VIOLET = 0x8a6bff;
-const ORB_BLUE = 0x5b8bff;
-const ORB_PINK = 0xff7ad9;
-const ORB_WHITE = 0xf2eaff;
-const ORB_FIBER = 0xb9a8ff;
-const ORB_MOON = 0x0b0518;
-const SHELL_COLORS = [ORB_VIOLET, ORB_BLUE, ORB_WHITE, ORB_VIOLET, ORB_PINK, ORB_BLUE] as const;
-/** Samples per orbit tail. */
-const TRAIL_STEPS = 12;
-
-/**
- * A particle-shell orb in the manner of classic music visualizers: a hollow shell of countless violet / blue / pink /
- * white sparks, brightest at its silhouette, bristling with fine fibres that shoot out from the surface, wrapped in a
- * violet haze and a few lights racing round on tilted orbits — and, for contrast, a black moon circling it. The
- * music drives it: each latitude swells and grows longer fibres with its spectrum band (lows south, highs north),
- * the shell breathes on the bass, onsets burst the fibres outward, the highs twinkle the sparks. Returns the
- * projected centre and shell radius.
- */
-export function drawMagnetoOrb(
-  layers: MagnetoOrbLayers,
-  acquireSprite: () => Sprite,
-  shell: readonly CloudPoint[],
-  particles: readonly OrbitParticle[],
-  options: MagnetoOrbOptions,
-): { x: number; y: number; radius: number } | undefined {
-  const { view, drive, clip } = options;
-  const toScreen = (point: Vec3) =>
-    projectPoint(view.camera ? viewPoint(point, view.camera, view.orbit) : point, view.cx, view.cy, view.focal);
-  const centre = toScreen({ x: options.x, y: options.y, z: options.z });
-  if (!centre.visible) return undefined;
-  const outside = (x: number, y: number) =>
-    clip !== undefined && (x < clip.x || x > clip.x + clip.w || y < clip.y || y > clip.y + clip.h);
-  const levels = Array.from({ length: 16 }, (_, column) => bandLevel(drive.bands, column, 16));
-  const glow = synGlowTexture();
-  const sparkle = (x: number, y: number, size: number, tint: number, alpha: number) => {
-    if (alpha < 0.02 || size < 0.8 || outside(x, y)) return;
-    const node = acquireSprite();
-    node.texture = glow;
-    node.anchor.set(0.5);
-    node.blendMode = 'add';
-    node.position.set(x, y);
-    node.width = size;
-    node.height = size;
-    node.tint = tint;
-    node.alpha = Math.min(1, alpha);
-  };
-  const place = (local: Vec3) => toScreen({ x: options.x + local.x, y: options.y + local.y, z: options.z + local.z });
-  const breathe = options.radius * (0.8 + 0.55 * drive.bass + 0.25 * drive.onset);
-  const screenRadius = breathe * centre.scale;
-  const spin = options.seconds * (options.spin ?? 0.25);
-  const tilt = options.tilt ?? 0.35;
-
-  // Thousands of dots, fibres, and tail segments go out as a handful of batched instructions.
-  const batch = sharedShapeBatch;
-  const addDot = (layer: Graphics, color: number, alpha: number, x: number, y: number, size: number) =>
-    batch.rect(layer, color, alpha, x - size / 2, y - size / 2, size, size);
-  const addLine = (
-    layer: Graphics,
-    color: number,
-    alpha: number,
-    width: number,
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-  ) => batch.line(layer, color, alpha, width, x0, y0, x1, y1);
-
-  // Violet haze behind everything.
-  for (let ring = 4; ring >= 1; ring -= 1) {
-    const r = screenRadius * (0.9 + 0.45 * ring);
-    if (
-      clip &&
-      (centre.x - r < clip.x ||
-        centre.x + r > clip.x + clip.w ||
-        centre.y - r < clip.y ||
-        centre.y + r > clip.y + clip.h)
-    ) {
-      continue;
-    }
-    layers.back
-      .circle(centre.x, centre.y, r)
-      .fill({ color: ORB_HAZE, alpha: (0.05 + 0.05 * drive.level) * options.alpha });
-  }
-
-  // The shell and its fibres; each point lands on the back or front layer by which way it faces.
-  for (let index = 0; index < shell.length; index += 1) {
-    const point = shell[index]!;
-    const latitude = (1 - point.y) / 2;
-    const band = levels[Math.min(15, Math.floor(latitude * 16))] ?? 0;
-    const heat = hash01(index * 7 + 3);
-    const radius = breathe * (1 + 0.22 * band);
-    let normal: Vec3 = rotateY(point, spin);
-    normal = rotateX(normal, tilt);
-    const projected = place({ x: normal.x * radius, y: normal.y * radius, z: normal.z * radius });
-    if (!projected.visible || outside(projected.x, projected.y)) continue;
-    const limb = limbGlow(normal.z);
-    const target = normal.z < 0 ? layers.front : layers.back;
-    const depth = projected.scale / Math.max(1e-6, centre.scale);
-    const color = SHELL_COLORS[index % SHELL_COLORS.length]!;
-    const twinkle = 1 - 0.5 * drive.high * (0.5 + 0.5 * Math.sin(options.seconds * 9 + index * 1.7));
-    const alpha = Math.min(1, options.alpha * limb * (0.35 + 0.65 * point.weight) * (0.75 + 0.5 * band) * twinkle);
-    const size = Math.max(0.7, (0.8 + 1.7 * point.weight * limb) * depth * Math.min(1.6, centre.scale * 2.2));
-    addDot(target, color, alpha, projected.x, projected.y, size);
-    // Fibres: every other point bristles outward, longest where its band is loud and on onsets.
-    if (index % 2 === 0 && limb > 0.3) {
-      const length = breathe * (0.25 + 1.1 * band + 0.9 * drive.onset * heat) * (0.55 + 0.45 * point.weight);
-      const mid = place({
-        x: normal.x * (radius + length * 0.5),
-        y: normal.y * (radius + length * 0.5),
-        z: normal.z * (radius + length * 0.5),
-      });
-      const tip = place({
-        x: normal.x * (radius + length),
-        y: normal.y * (radius + length),
-        z: normal.z * (radius + length),
-      });
-      if (mid.visible && tip.visible && !outside(tip.x, tip.y)) {
-        const fibreAlpha = 0.45 * limb * (0.45 + band) * options.alpha;
-        addLine(target, ORB_FIBER, fibreAlpha, 0.7, projected.x, projected.y, mid.x, mid.y);
-        addLine(target, ORB_FIBER, fibreAlpha * 0.4, 0.5, mid.x, mid.y, tip.x, tip.y);
-      }
-    }
-    if (heat > 0.95 && limb > 0.45) {
-      sparkle(
-        projected.x,
-        projected.y,
-        (8 + 14 * band) * Math.min(1.4, centre.scale * 2),
-        heat > 0.975 ? ORB_WHITE : color,
-        alpha * 0.8,
-      );
-    }
-  }
-
-  // A few lights racing round on tilted orbits, dragging tails.
-  const speedUp = 1 + 0.8 * drive.level;
-  const trailStep = 0.07 * (1 + 1.2 * drive.level);
-  for (const particle of particles) {
-    const band = levels[particle.band] ?? 0;
-    const radius = breathe * particle.reach * (1 + 0.35 * band + 0.5 * drive.onset * (particle.weight > 0.7 ? 1 : 0.4));
-    const color = particle.band < 5 ? ORB_PINK : particle.band < 11 ? ORB_VIOLET : ORB_WHITE;
-    const head = particle.phase + options.seconds * particle.speed * speedUp;
-    const direction = particle.speed > 0 ? -1 : 1;
-    let previous: { x: number; y: number } | undefined;
-    for (let step = 0; step <= TRAIL_STEPS; step += 1) {
-      const local = orbitPosition(particle, head + direction * step * trailStep, radius);
-      const point = place(local);
-      if (!point.visible || outside(point.x, point.y)) {
-        previous = undefined;
-        continue;
-      }
-      const target = local.z < 0 ? layers.front : layers.back;
-      if (previous) {
-        const fade = (1 - step / (TRAIL_STEPS + 1)) ** 1.6;
-        addLine(
-          target,
-          color,
-          fade * (0.3 + 0.5 * band) * options.alpha,
-          (0.5 + 1.2 * particle.weight) * Math.min(1.6, point.scale * 1.6),
-          previous.x,
-          previous.y,
-          point.x,
-          point.y,
-        );
-      } else if (step === 0) {
-        sparkle(
-          point.x,
-          point.y,
-          (5 + 6 * particle.weight) * Math.min(1.5, point.scale * 2) * (1 + band),
-          color,
-          (0.4 + 0.5 * band) * options.alpha,
-        );
-      }
-      previous = { x: point.x, y: point.y };
-    }
-  }
-
-  batch.flush();
-
-  // The black moon: an opaque dark satellite revolving round the orb on a tilted orbit (traced faintly), catching a
-  // thin violet rim. On the far side of its orbit the orb's front shell draws over it.
-  if (options.moon) {
-    const moon = options.moon;
-    const path = { reach: 1, tiltX: moon.tilt ?? 0.28, tiltZ: -0.22, speed: moon.speed, phase: 0, band: 0, weight: 1 };
-    const distance = options.radius * moon.distance;
-    let previous: { x: number; y: number } | undefined;
-    for (let step = 0; step <= 64; step += 1) {
-      const point = place(orbitPosition(path, (step / 64) * Math.PI * 2, distance));
-      if (!point.visible || outside(point.x, point.y)) {
-        previous = undefined;
-        continue;
-      }
-      if (previous) {
-        layers.back
-          .moveTo(previous.x, previous.y)
-          .lineTo(point.x, point.y)
-          .stroke({ color: ORB_VIOLET, width: 0.75, alpha: 0.18 * options.alpha });
-      }
-      previous = { x: point.x, y: point.y };
-    }
-    const orbit = orbitPosition(path, moon.phase + options.seconds * moon.speed, distance);
-    const at = place(orbit);
-    const r = breathe * moon.size * at.scale;
-    if (at.visible && !outside(at.x - r, at.y - r) && !outside(at.x + r, at.y + r)) {
-      const g = layers.moon;
-      g.circle(at.x, at.y, r).fill({ color: ORB_MOON, alpha: 0.97 * options.alpha });
-      // It reflects the orb: the side facing it glows violet → blue in soft bands, a specular glint sits toward the
-      // light, and the orb's sparks are mirrored along the lit limb — all brighter when the orb is close and loud.
-      const light = reflectedLight(
-        centre.x - at.x,
-        centre.y - at.y,
-        Math.hypot(centre.x - at.x, centre.y - at.y),
-        screenRadius,
-        Math.max(drive.level, drive.bass),
-      );
-      const lit = light.strength * options.alpha;
-      for (let band = 0; band < 5; band += 1) {
-        const spread = 1.25 - band * 0.2;
-        const radius = r * (0.93 - band * 0.11);
-        g.moveTo(at.x + Math.cos(light.angle - spread) * radius, at.y + Math.sin(light.angle - spread) * radius);
-        g.arc(at.x, at.y, radius, light.angle - spread, light.angle + spread).stroke({
-          color: band < 2 ? ORB_BLUE : ORB_VIOLET,
-          width: r * 0.12,
-          alpha: lit * (0.45 - band * 0.07),
-        });
-      }
-      const glintX = at.x + Math.cos(light.angle - 0.35) * r * 0.55;
-      const glintY = at.y + Math.sin(light.angle - 0.35) * r * 0.55;
-      g.circle(glintX, glintY, r * 0.26).fill({ color: ORB_VIOLET, alpha: 0.3 * lit });
-      g.circle(glintX, glintY, r * 0.1).fill({ color: ORB_WHITE, alpha: Math.min(1, 1.1 * lit) });
-      for (let spark = 0; spark < 7; spark += 1) {
-        const angle = light.angle + (spark - 3) * 0.28 + Math.sin(options.seconds * 1.7 + spark) * 0.05;
-        const twinkle = 0.5 + 0.5 * Math.sin(options.seconds * 6 + spark * 2.1);
-        g.circle(at.x + Math.cos(angle) * r * 0.8, at.y + Math.sin(angle) * r * 0.8, Math.max(0.6, r * 0.045)).fill({
-          color: SHELL_COLORS[spark % SHELL_COLORS.length]!,
-          alpha: lit * (0.35 + 0.5 * twinkle * drive.high + 0.2 * twinkle),
-        });
-      }
-      // A faint fresnel rim all the way round.
-      g.circle(at.x, at.y, r).stroke({ color: ORB_VIOLET, width: 1, alpha: (0.25 + 0.35 * lit) * options.alpha });
-    }
-  }
-  return { x: centre.x, y: centre.y, radius: screenRadius };
+/** `from` blended toward `to` by `t` (0..1), per RGB channel. */
+function mixColor(from: number, to: number, t: number): number {
+  const r = Math.round(((from >> 16) & 255) + (((to >> 16) & 255) - ((from >> 16) & 255)) * t);
+  const g = Math.round(((from >> 8) & 255) + (((to >> 8) & 255) - ((from >> 8) & 255)) * t);
+  const b = Math.round((from & 255) + ((to & 255) - (from & 255)) * t);
+  return (r << 16) | (g << 8) | b;
 }

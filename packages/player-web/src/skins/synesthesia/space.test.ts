@@ -5,18 +5,15 @@ import {
   burstParticles,
   cameraBasis,
   emberColor,
-  fibonacciSphere,
-  limbGlow,
+  floorRise,
   hsvToHex,
   mixCamera,
-  orbitParticles,
-  orbitPosition,
   particleRiverPoint,
+  perlin2,
   pointCloudPyramid,
   projectPoint,
   projectViewInto,
   randomShot,
-  reflectedLight,
   REST_CAMERA,
   roamingCamera,
   rotateX,
@@ -157,65 +154,18 @@ describe('pointCloudPyramid', () => {
   });
 });
 
-describe('fibonacciSphere', () => {
-  it('spreads unit vectors evenly over the sphere', () => {
-    const points = fibonacciSphere(500, 2);
-    expect(points).toHaveLength(500);
-    let mx = 0;
-    let my = 0;
-    let mz = 0;
-    for (const point of points) {
-      expect(Math.hypot(point.x, point.y, point.z)).toBeCloseTo(1, 9);
-      mx += point.x;
-      my += point.y;
-      mz += point.z;
-    }
-    expect(Math.hypot(mx, my, mz) / points.length).toBeLessThan(0.01);
-  });
-});
-
-describe('limbGlow', () => {
-  it('peaks on the silhouette and dims toward the disc centre', () => {
-    expect(limbGlow(0)).toBe(1);
-    expect(limbGlow(-1)).toBeCloseTo(0.25, 12);
-    expect(limbGlow(1, 0.1)).toBeCloseTo(0.1, 12);
-    expect(limbGlow(-0.5)).toBeGreaterThan(limbGlow(-0.9));
-  });
-});
-
-describe('orbitParticles', () => {
-  it('builds particles within their ranges', () => {
-    const particles = orbitParticles(4, 80);
-    expect(particles).toHaveLength(80);
-    for (const particle of particles) {
-      expect(particle.reach).toBeGreaterThanOrEqual(1.3);
-      expect(particle.reach).toBeLessThanOrEqual(2.8);
-      expect(Math.abs(particle.speed)).toBeGreaterThanOrEqual(0.5);
-      expect(particle.band).toBeGreaterThanOrEqual(0);
-      expect(particle.band).toBeLessThan(16);
-    }
-    expect(orbitParticles(4, 5)).toEqual(orbitParticles(4, 5));
-  });
-});
-
-describe('orbitPosition', () => {
-  it('keeps every point of the orbit at its radius', () => {
-    const [particle] = orbitParticles(1, 1);
-    for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
-      const point = orbitPosition(particle!, angle, 50);
-      expect(Math.hypot(point.x, point.y, point.z)).toBeCloseTo(50, 9);
-    }
-  });
-
-  it('lies flat in the xz plane with no tilt', () => {
-    const flat = { reach: 2, tiltX: 0, tiltZ: 0, speed: 1, phase: 0, band: 0, weight: 1 };
-    expect(orbitPosition(flat, Math.PI / 2, 10).y).toBeCloseTo(0, 12);
-    expect(orbitPosition(flat, Math.PI / 2, 10).z).toBeCloseTo(10, 12);
-  });
-});
-
 describe('particleRiverPoint', () => {
   const options = { length: 800, speed: 100, amplitude: 30, width: 10 };
+
+  it('places a particle by the distance travelled when one is given', () => {
+    // Same distance, different speeds: the particle is in the same place along the river.
+    expect(particleRiverPoint(4, 2, options, 300).x).toBeCloseTo(
+      particleRiverPoint(4, 2, { ...options, speed: 500 }, 300).x,
+      9,
+    );
+    // Without a distance it falls back to seconds × speed.
+    expect(particleRiverPoint(4, 3, options).x).toBeCloseTo(particleRiverPoint(4, 3, options, 300).x, 9);
+  });
 
   it('stays within the river bounds', () => {
     for (let index = 0; index < 200; index += 1) {
@@ -361,20 +311,6 @@ describe('wanderPoint', () => {
   });
 });
 
-describe('reflectedLight', () => {
-  it('points at the source', () => {
-    expect(reflectedLight(0, -10, 10, 5, 1).angle).toBeCloseTo(-Math.PI / 2, 12);
-  });
-
-  it('is stronger close to the source and when it is loud', () => {
-    const near = reflectedLight(10, 0, 20, 10, 0.5).strength;
-    const far = reflectedLight(10, 0, 200, 10, 0.5).strength;
-    expect(near).toBeGreaterThan(far);
-    expect(reflectedLight(10, 0, 50, 10, 1).strength).toBeGreaterThan(reflectedLight(10, 0, 50, 10, 0).strength);
-    expect(reflectedLight(1, 0, 1, 10, 1).strength).toBe(1);
-  });
-});
-
 describe('clipSegmentOutsideRect', () => {
   const rect = { x: 10, y: 10, w: 20, h: 20 };
 
@@ -438,5 +374,45 @@ describe('starfieldInto', () => {
     for (const index of [0, 7, 319]) {
       expect(starfieldInto(out, index, 123.4, options)).toEqual(starfieldPoint(index, 123.4, options));
     }
+  });
+});
+
+describe('perlin2', () => {
+  it('is zero on lattice points and stays within -1..1', () => {
+    expect(perlin2(3, 7)).toBe(0);
+    for (let index = 0; index < 500; index += 1) {
+      const value = perlin2(index * 0.37 + 0.11, index * 0.53 - 4.2);
+      expect(Math.abs(value)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is continuous', () => {
+    expect(Math.abs(perlin2(1.5, 2.5) - perlin2(1.5001, 2.5))).toBeLessThan(0.001);
+  });
+});
+
+describe('floorRise', () => {
+  it('is flat with no amplitude', () => {
+    expect(floorRise(120, 800, 3, 0)).toBe(0);
+  });
+
+  it('never dips below the floor or above the amplitude', () => {
+    let peak = 0;
+    for (let x = -1500; x <= 1500; x += 50) {
+      for (let z = 0; z < 3000; z += 90) {
+        const rise = floorRise(x, z, 2, 100);
+        expect(rise).toBeGreaterThanOrEqual(0);
+        expect(rise).toBeLessThanOrEqual(100);
+        peak = Math.max(peak, rise);
+      }
+    }
+    // Some of the floor actually rises.
+    expect(peak).toBeGreaterThan(30);
+  });
+
+  it('scales with the amplitude', () => {
+    const small = floorRise(-300, 1200, 1, 10);
+    const large = floorRise(-300, 1200, 1, 100);
+    expect(large).toBeCloseTo(small * 10, 6);
   });
 });

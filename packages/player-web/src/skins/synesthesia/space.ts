@@ -323,84 +323,6 @@ export function pointCloudPyramid(seed: number, count: number): CloudPoint[] {
 }
 
 /**
- * `count` points spread evenly over the unit sphere (a Fibonacci lattice), each with a per-point size / brightness
- * weight in [0.3, 1]. Deterministic for `seed` (which only varies the weights).
- */
-export function fibonacciSphere(count: number, seed: number): CloudPoint[] {
-  const points: CloudPoint[] = [];
-  const golden = Math.PI * (3 - Math.sqrt(5));
-  for (let index = 0; index < count; index += 1) {
-    const y = count > 1 ? 1 - (2 * index) / (count - 1) : 0;
-    const ring = Math.sqrt(Math.max(0, 1 - y * y));
-    const theta = golden * index;
-    points.push({
-      x: Math.cos(theta) * ring,
-      y,
-      z: Math.sin(theta) * ring,
-      weight: 0.3 + 0.7 * hash01(seed * 173 + index),
-    });
-  }
-  return points;
-}
-
-/**
- * Limb brightening for a shell point whose view-space normal has depth component `normalZ` (−1 facing the camera,
- * 0 on the silhouette, +1 facing away): 1 on the silhouette falling to `floor` at the centre of the disc, the way a
- * glowing shell reads brightest at its edge.
- */
-export function limbGlow(normalZ: number, floor = 0.25): number {
-  const edge = 1 - Math.min(1, Math.abs(Number.isFinite(normalZ) ? normalZ : 0));
-  return floor + (1 - floor) * edge ** 1.5;
-}
-
-/**
- * One particle of the audio orb: a light riding a tilted circular orbit around the core, tied to a
- * spectrum band.
- */
-export interface OrbitParticle {
-  /** Orbit radius as a multiple of the core radius, [1.3, 2.8]. */
-  reach: number;
-  /** Orbit-plane tilts (radians). */
-  tiltX: number;
-  tiltZ: number;
-  /** Angular speed (rad / s), signed. */
-  speed: number;
-  phase: number;
-  /** Spectrum band (0..15) the orbit breathes with. */
-  band: number;
-  /** Size / brightness weight in [0.4, 1]. */
-  weight: number;
-}
-
-/** `count` orbit particles, deterministic for `seed`. */
-export function orbitParticles(seed: number, count: number): OrbitParticle[] {
-  const particles: OrbitParticle[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const base = seed * 263 + index * 29;
-    particles.push({
-      reach: 1.3 + 1.5 * hash01(base + 1) ** 1.4,
-      tiltX: (hash01(base + 2) - 0.5) * Math.PI,
-      tiltZ: (hash01(base + 3) - 0.5) * Math.PI,
-      speed: (0.5 + 1.4 * hash01(base + 4)) * (hash01(base + 5) > 0.5 ? 1 : -1),
-      phase: hash01(base + 6) * Math.PI * 2,
-      band: Math.floor(hash01(base + 7) * 16) % 16,
-      weight: 0.4 + 0.6 * hash01(base + 8),
-    });
-  }
-  return particles;
-}
-
-/** Position of `particle` at orbit `angle` on a circle of `radius` (in the orb's local frame, centred on the core). */
-export function orbitPosition(particle: OrbitParticle, angle: number, radius: number): Vec3 {
-  const flat: Vec3 = { x: Math.cos(angle) * radius, y: 0, z: Math.sin(angle) * radius };
-  const tilted = rotateX(flat, particle.tiltX);
-  // Tilt about z: rotate the (x, y) pair.
-  const cos = Math.cos(particle.tiltZ);
-  const sin = Math.sin(particle.tiltZ);
-  return { x: tilted.x * cos - tilted.y * sin, y: tilted.x * sin + tilted.y * cos, z: tilted.z };
-}
-
-/**
  * Particle `index` of a flowing river of light, in river-local space: it travels along `x` from `-length / 2` to
  * `length / 2` at `speed` units/s (looping), weaving on a slow sine, with a fixed per-particle offset across the
  * stream so the river has body. Deterministic for (`index`, `seconds`).
@@ -409,9 +331,13 @@ export function particleRiverPoint(
   index: number,
   seconds: number,
   options: { length: number; speed: number; amplitude: number; width: number; seed?: number },
+  distance?: number,
 ): Vec3 {
   const base = (options.seed ?? 0) * 211 + index * 23;
-  const along = (hash01(base + 1) + (seconds * options.speed) / options.length) % 1;
+  // `distance` (world units travelled, accumulated by the caller) lets the river's speed change without the particles
+  // jumping; without it the flow is `seconds × speed`.
+  const travelled = distance ?? seconds * options.speed;
+  const along = (hash01(base + 1) + travelled / options.length) % 1;
   const x = (along - 0.5) * options.length;
   // Sum of two uniforms ≈ triangular spread: dense core, feathered edges.
   const across = (hash01(base + 2) + hash01(base + 3) - 1) * options.width;
@@ -545,25 +471,6 @@ export function wanderPoint(seconds: number, seed: number, bounds: Box3): Vec3 {
   };
 }
 
-/**
- * How a glossy body at screen offset (`dx`, `dy`) *toward* a light source `distance` px away catches it: `angle` is
- * the direction of the light on screen, and `strength` (0..1) falls off with distance in units of the source's
- * radius and rises with its `energy` (0..1, e.g. the music's level).
- */
-export function reflectedLight(
-  dx: number,
-  dy: number,
-  distance: number,
-  sourceRadius: number,
-  energy: number,
-): { angle: number; strength: number } {
-  const angle = Math.atan2(dy, dx);
-  const reach = Math.max(1e-6, sourceRadius) * 2.2;
-  const falloff = Math.min(1, reach / Math.max(distance, sourceRadius));
-  const strength = Math.max(0, Math.min(1, falloff * (0.45 + 0.55 * Math.max(0, Math.min(1, energy)))));
-  return { angle, strength };
-}
-
 /** Axis-aligned rectangle (x / y / w / h) for {@link clipSegmentOutsideRect}. */
 export interface ClipRect {
   x: number;
@@ -623,4 +530,77 @@ export function clipSegmentOutsideRect(
     pieces += 1;
   }
   return pieces;
+}
+
+/** Shuffled 0..255 (doubled so lookups never wrap) for {@link perlin2}; fixed, so the terrain is the same every run. */
+const PERLIN_PERM: Uint8Array = (() => {
+  const base = Array.from({ length: 256 }, (_, index) => index);
+  for (let index = 255; index > 0; index -= 1) {
+    const swap = Math.floor(hash01(index * 13 + 7) * (index + 1));
+    [base[index], base[swap]] = [base[swap]!, base[index]!];
+  }
+  const perm = new Uint8Array(512);
+  for (let index = 0; index < 512; index += 1) perm[index] = base[index & 255]!;
+  return perm;
+})();
+
+function perlinGrad(hash: number, x: number, y: number): number {
+  // Eight gradient directions: the four axes and the four diagonals.
+  switch (hash & 7) {
+    case 0:
+      return x + y;
+    case 1:
+      return -x + y;
+    case 2:
+      return x - y;
+    case 3:
+      return -x - y;
+    case 4:
+      return x;
+    case 5:
+      return -x;
+    case 6:
+      return y;
+    default:
+      return -y;
+  }
+}
+
+/** Classic 2D Perlin gradient noise: smooth, zero on integer lattice points, roughly within -1..1. */
+export function perlin2(x: number, y: number): number {
+  const xf = Math.floor(x);
+  const yf = Math.floor(y);
+  const xi = xf & 255;
+  const yi = yf & 255;
+  const dx = x - xf;
+  const dy = y - yf;
+  const u = dx * dx * dx * (dx * (dx * 6 - 15) + 10);
+  const v = dy * dy * dy * (dy * (dy * 6 - 15) + 10);
+  const p = PERLIN_PERM;
+  const aa = p[p[xi]! + yi]!;
+  const ab = p[p[xi]! + yi + 1]!;
+  const ba = p[p[xi + 1]! + yi]!;
+  const bb = p[p[xi + 1]! + yi + 1]!;
+  const x1 = perlinGrad(aa, dx, dy) + u * (perlinGrad(ba, dx - 1, dy) - perlinGrad(aa, dx, dy));
+  const x2 = perlinGrad(ab, dx, dy - 1) + u * (perlinGrad(bb, dx - 1, dy - 1) - perlinGrad(ab, dx, dy - 1));
+  return x1 + v * (x2 - x1);
+}
+
+/** World units per noise cell of the floor's terrain; the second octave runs at 2.3x the frequency. */
+const TERRAIN_CELL = 520;
+
+/**
+ * Height (world units, >= 0, upward) the floor rises at `(x, worldZ)`: two octaves of Perlin noise shaped into rounded
+ * hills over flat valleys, drifting slowly with `seconds`. `worldZ` is the point's depth plus the distance travelled,
+ * so the hills scroll with the floor. `amplitude` sets the tallest hill; the skins drive it with the music's level.
+ */
+export function floorRise(x: number, worldZ: number, seconds: number, amplitude: number): number {
+  if (amplitude <= 0) return 0;
+  const drift = seconds * 0.05;
+  const nx = x / TERRAIN_CELL;
+  const nz = worldZ / TERRAIN_CELL;
+  const n = perlin2(nx + drift, nz) * 0.7 + perlin2(nx * 2.3 - drift, nz * 2.3 + 17.3) * 0.3;
+  // Most of the noise swells into rounded hills (smoothstep over it); only its lowest stretches stay flat valley floor.
+  const crest = Math.max(0, Math.min(1, n * 1.5 + 0.4));
+  return amplitude * crest * crest * (3 - 2 * crest);
 }

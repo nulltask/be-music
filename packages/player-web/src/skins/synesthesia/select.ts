@@ -1,14 +1,15 @@
 import { Container, Graphics, Sprite } from 'pixi.js';
 import { createFlock, stepFlock } from './boids.ts';
-import { drawMagnetoOrb, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
+import { ChargeCloud } from './charge-cloud.ts';
+import { KICK_REST, stepKick, type KickState } from './kick.ts';
+import { drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
+  floorRise,
   cameraBasis,
   emberColor,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
-  fibonacciSphere,
-  orbitParticles,
   pointCloudPyramid,
   projectPoint,
   projectViewInto,
@@ -19,6 +20,14 @@ import {
   viewPoint,
   wanderPoint,
 } from './space.ts';
+import {
+  SPECTRUM_RIDGE_HEIGHT,
+  SpectrumHistory,
+  floorRowStep,
+  spectrumLevels,
+  spectrumRise,
+} from './spectrum-floor.ts';
+
 import {
   SYN_AMBER,
   SYN_CYAN,
@@ -37,6 +46,7 @@ import {
   synGlowTexture,
 } from './style.ts';
 import {
+  AUDIO_BAND_COUNT,
   easeOutCubic,
   audioDrive,
   type BeMusicAudioFrame,
@@ -54,7 +64,6 @@ import {
   type PixiSelectFrame,
   type PixiSelectRenderer,
   type PixiSelectSkin,
-  ChildPool,
   type SkinTextOptions,
 } from '../pixi-kit/index.ts';
 
@@ -76,19 +85,35 @@ const STAR_TRAIL_SECONDS = 0.07;
 const STAR_TRAIL_MAX = 220;
 const WARP_STAR_COUNT = 900;
 const RIVER_PARTICLES = 340;
-const ORB_SHELL = fibonacciSphere(900, 23);
-const ORB = orbitParticles(23, 30);
-const SMALL_SHELL = fibonacciSphere(400, 31);
-const SMALL_ORB = orbitParticles(31, 12);
 /** How far the select camera roams around the pyramid field. */
 const CAMERA_RANGE = { x: 240, y: 110, yaw: 0.38, pitch: 0.16 } as const;
 const CAMERA_CYCLE_S = 6;
 const SCHOOL_SIZE = 80;
-/** Three schools in the floor frame (floor at y 150), each with its own box, light, and seed. */
+/** Screen gap (px) the floor rows' points aim for, so near rows read as waveforms. */
+const FLOOR_SCREEN_GAP = 6;
+/**
+ * Three schools in the floor frame (floor at y 150), each with its own box, light, and seed, and each glowing with its
+ * own range of the music: the ember school with the bass, the blue with the mids, the magenta with the highs.
+ */
 const SCHOOL_SPECS = [
-  { seed: 29, palette: 'ember', bounds: { minX: -700, maxX: 500, minY: -240, maxY: 90, minZ: 140, maxZ: 900 } },
-  { seed: 57, palette: 'blue', bounds: { minX: -300, maxX: 900, minY: -300, maxY: 40, minZ: 300, maxZ: 1300 } },
-  { seed: 91, palette: 'magenta', bounds: { minX: -900, maxX: 900, minY: -280, maxY: 60, minZ: 800, maxZ: 1900 } },
+  {
+    seed: 29,
+    palette: 'ember',
+    band: 'bass',
+    bounds: { minX: -700, maxX: 500, minY: -240, maxY: 90, minZ: 140, maxZ: 900 },
+  },
+  {
+    seed: 57,
+    palette: 'blue',
+    band: 'mid',
+    bounds: { minX: -300, maxX: 900, minY: -300, maxY: 40, minZ: 300, maxZ: 1300 },
+  },
+  {
+    seed: 91,
+    palette: 'magenta',
+    band: 'high',
+    bounds: { minX: -900, maxX: 900, minY: -280, maxY: 60, minZ: 800, maxZ: 1900 },
+  },
 ] as const;
 /** Depth the world shots pivot around — the pyramid field. */
 const WORLD_ORBIT = 900;
@@ -134,18 +159,20 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private readonly lock = new Graphics();
   private readonly cursorGlow = new Sprite();
   private cursorChangedAt = Number.NEGATIVE_INFINITY;
-  /** Glow sprites for the audio orb, drawn over the world graphics. */
-  private readonly orbHost = new Container();
-  /** Normal-blend layer for the orb's black moon, and the additive layer for the camera-facing half of its shell. */
-  private readonly orbMoon = new Graphics();
-  private readonly orbFront = new Graphics();
-  private readonly orbSprites = new ChildPool(this.orbHost);
+  /** The foreground orb: a charge cloud, and the clock of its last simulation step. */
+  private readonly chargeCloud = new ChargeCloud();
+  private lastOrbSeconds: number | undefined;
+  /** The low end's kick envelope, which puffs up the fish. */
+  private kick: KickState = KICK_REST;
   private readonly flocks = SCHOOL_SPECS.map((spec) => createFlock(spec.seed, SCHOOL_SIZE, spec.bounds));
   private built = false;
   private designWidth = 640;
   private designHeight = 480;
   /** Accumulated star / grid travel (speed-weighted seconds), so a speed change never makes the field jump. */
   private travel = 0;
+  /** The recent spectrum the floor is shaped from (see spectrum-floor.ts). */
+  private readonly spectrum = new SpectrumHistory();
+  private readonly spectrumScratch = new Float32Array(AUDIO_BAND_COUNT);
   private lastTickMs: number | undefined;
   private effects: PixiSelectFrame['effects'] = 'full';
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
@@ -251,6 +278,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const seconds = (nowMs / 1000) * rate;
     const dt = this.lastTickMs === undefined ? 0 : Math.min(0.1, (nowMs - this.lastTickMs) / 1000);
     this.lastTickMs = nowMs;
+    // Kicks puff up the fish.
+    this.kick = stepKick(this.kick, drive.bands, drive.onset, dt);
     const warp = launchAt !== undefined ? Math.min(1, (nowMs - launchAt) / OUTRO_MS) : 0;
     const bpm = focusedSong?.bpm;
     const beatsPerSecond = (bpm !== undefined && Number.isFinite(bpm) && bpm > 0 ? Math.min(bpm, 300) : 120) / 60;
@@ -345,7 +374,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         referenceScale: 200 / (200 + z),
       });
     }
-    // Floor of light points scrolling toward the viewer.
+    // Floor of light points scrolling toward the viewer, written with the music's spectrum: bass on the left to highs on
+    // the right, rising as ridges that leave the viewer and roll out into the distance, over low Perlin-noise ground.
+    this.spectrum.push(spectrumLevels(drive.bands, this.spectrumScratch), dt);
     const spacing = 100;
     const offset = this.travel % spacing;
     // Floor points and the river go out as a few batched instructions.
@@ -355,12 +386,21 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const size = 0.6 + 1.5 * nearness * nearness;
       const color = emberColor(0.3 + 0.65 * nearness);
       const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * (1 + drive.bass));
-      for (let x = -1800; x <= 1800; x += 50) {
-        const point = projectViewInto(this.scratchHead, x, 150, z, basis, cx, floorY, 200, WORLD_ORBIT);
+      // Near rows get more points, so they read as continuous waveforms.
+      const step = floorRowStep(z, 200, FLOOR_SCREEN_GAP);
+      for (let x = -1800; x <= 1800; x += step) {
+        // The band follows where the point sits on screen: bass at the left edge, highs at the right.
+        const ground = projectViewInto(this.scratchHead, x, 150, z, basis, cx, floorY, 200, WORLD_ORBIT);
+        if (!ground.visible || ground.x < -4 || ground.x > this.designWidth + 4) continue;
+        const ridge = spectrumRise(this.spectrum, ground.x / this.designWidth, z);
+        const rise = ridge + floorRise(x, z + this.travel, seconds, 10);
+        const point = projectViewInto(this.scratchHead, x, 150 - rise, z, basis, cx, floorY, 200, WORLD_ORBIT);
         if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
           continue;
         }
-        batch.rect(world, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
+        // Crests catch more light than the valleys.
+        const lit = Math.min(1, alpha * (1 + (1.4 * ridge) / SPECTRUM_RIDGE_HEIGHT));
+        batch.rect(world, color, lit, point.x - size / 2, point.y - size / 2, size, size);
       }
     }
     // A golden river of particles sweeping across the floor.
@@ -405,45 +445,29 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
           world,
           this.flocks[school]!,
           (point) => projectPoint(viewPoint(point, camera, WORLD_ORBIT), cx, floorY, 200),
-          { alpha: 0.95 * (1 - warp), palette: SCHOOL_SPECS[school]!.palette },
+          {
+            alpha: 0.95 * (1 - warp),
+            palette: SCHOOL_SPECS[school]!.palette,
+            swell: this.kick.swell,
+            glowLevel: drive[SCHOOL_SPECS[school]!.band],
+          },
         );
       }
     }
-    // Two audio orbs roam the space — the big one and its black moon right up by the camera — visualizer-style shells of sparks and fibres, the big one
-    // with a black moon circling it. On launch they swell into the warp.
-    this.orbSprites.begin();
-    this.orbMoon.clear();
-    this.orbFront.clear();
-    const layers = { back: world, moon: this.orbMoon, front: this.orbFront };
-    const orbView = { cx, cy: floorY, focal: 200, camera, orbit: WORLD_ORBIT };
+    // The audio orb roams the space right up by the camera, and swells into the warp on launch.
     const big = wanderPoint(seconds * 0.6, 5, { minX: -210, maxX: 230, minY: -140, maxY: -20, minZ: -70, maxZ: 150 });
-    const small = wanderPoint(seconds * 0.75 + 40, 9, {
-      minX: -360,
-      maxX: 360,
-      minY: -190,
-      maxY: 30,
-      minZ: 80,
-      maxZ: 700,
+    // The foreground orb is a charge cloud: dark magnet orbs in a fluid of particles, stepped on the GPU.
+    const bigAt = projectPoint(viewPoint(big, camera, WORLD_ORBIT), cx, floorY, 200);
+    this.chargeCloud.update({
+      x: bigAt.x,
+      y: bigAt.y,
+      scale: (bigAt.visible ? 135 * bigAt.scale : 0) * (1 + 0.03 * pulse) * (1 + 0.8 * warp),
+      seconds,
+      dt: this.lastOrbSeconds === undefined ? 0 : seconds - this.lastOrbSeconds,
+      drive,
+      alpha: bigAt.visible ? 1 - warp * 0.5 : 0,
     });
-    // Draw the farther orb first so the nearer one's shell lands over it.
-    const orbs = [
-      { at: big, shell: ORB_SHELL, particles: ORB, radius: 58, moon: true },
-      { at: small, shell: SMALL_SHELL, particles: SMALL_ORB, radius: 34, moon: false },
-    ].sort((left, right) => right.at.z - left.at.z);
-    for (const orb of orbs) {
-      drawMagnetoOrb(layers, () => this.orbSprites.acquireSprite(), orb.shell, orb.particles, {
-        ...orb.at,
-        radius: orb.radius * (1 + 0.03 * pulse) * (1 + 0.8 * warp),
-        view: orbView,
-        drive,
-        seconds,
-        alpha: 1 - warp * 0.5,
-        tilt: orb.moon ? 0.35 : -0.5,
-        spin: orb.moon ? 0.22 : -0.35,
-        ...(orb.moon ? { moon: { size: 0.42, distance: 2.1, speed: 0.55, phase: 0.4, tilt: 0.3 } } : {}),
-      });
-    }
-    this.orbSprites.end();
+    this.lastOrbSeconds = seconds;
 
     // Lock-on reticle snapping onto the focused card, plus a breathing glow under it.
     const card = this.activeCard;
@@ -470,6 +494,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   }
 
   public dispose(): void {
+    this.chargeCloud.destroy();
     this.backLayer.destroy({ children: true });
     this.frontLayer.destroy({ children: true });
   }
@@ -502,10 +527,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       this.stars.push(star);
     }
     this.world.blendMode = 'add';
-    this.orbHost.blendMode = 'add';
-    this.orbFront.blendMode = 'add';
     this.trails.blendMode = 'add';
-    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.orbMoon, this.orbFront, this.orbHost);
+    this.backLayer.addChild(this.ground, this.world, this.trails, starLayer, this.chargeCloud.view);
 
     this.cursorGlow.texture = glow;
     this.cursorGlow.anchor.set(0.5);
