@@ -492,7 +492,7 @@ class PlayerWebDemoApp {
    * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
    * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
    */
-  private activePlayAutoSavePlaylog = true;
+  private activePlayAutoSavePlaylog = false;
   /**
    * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
    * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
@@ -554,10 +554,10 @@ class PlayerWebDemoApp {
       // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
       // beatoraja LANEEFFECT ON) for timing-learning play.
       judgedNoteDisplay: 'HIDE',
-      // Play-history auto-save defaults ON: every finished play downloads its play-log (`*.bmplay.json`) when the
-      // result scene mounts, so the input replay is preserved without the user having to remember anything. The
-      // Debug Menu checkbox turns the download off for users who don't want per-play files piling up.
-      autoSavePlaylog: true,
+      // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
+      // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
+      // scene mounts.
+      autoSavePlaylog: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
       // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
       // play. The judge ruleset has no in-skin counterpart — the Debug Menu is its only surface.
@@ -1106,7 +1106,7 @@ class PlayerWebDemoApp {
           this.selectView?.setPlayOptions({ autoScratch2P: value });
         }),
     );
-    // Play-history auto-save — ON by default. When enabled, every finished play downloads its play-log
+    // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
     // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
     // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song

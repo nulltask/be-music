@@ -112,7 +112,7 @@ export interface DemoGuiState {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
-   * When true (the default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * When true (off by default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
    */
