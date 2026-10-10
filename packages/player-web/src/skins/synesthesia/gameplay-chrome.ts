@@ -259,6 +259,7 @@ export function renderSynesthesiaChrome({
           alpha: 0.95,
           palette: SCHOOL_SPECS[school]!.palette,
           swell,
+          bass: drive.bass,
           skip: (x, y) =>
             x < -10 || x > DESIGN_WIDTH + 10 || y < 0 || y > DESIGN_HEIGHT || (hasBga && insideBga(x, y, 4)),
         },

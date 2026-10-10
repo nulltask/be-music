@@ -401,7 +401,12 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
           world,
           this.flocks[school]!,
           (point) => projectPoint(viewPoint(point, camera, WORLD_ORBIT), cx, floorY, 200),
-          { alpha: 0.95 * (1 - warp), palette: SCHOOL_SPECS[school]!.palette, swell: this.kick.swell },
+          {
+            alpha: 0.95 * (1 - warp),
+            palette: SCHOOL_SPECS[school]!.palette,
+            swell: this.kick.swell,
+            bass: drive.bass,
+          },
         );
       }
     }
