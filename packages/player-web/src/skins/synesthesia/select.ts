@@ -405,7 +405,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
             alpha: 0.95 * (1 - warp),
             palette: SCHOOL_SPECS[school]!.palette,
             swell: this.kick.swell,
-            bass: drive.bass,
+            high: drive.high,
           },
         );
       }
