@@ -764,10 +764,14 @@ function audioFallbackPaths(path: string): string[] {
  * more often than as a real Windows bitmap. Mirrors {@link resolveChartAudioAsset}'s codec-walking behavior, with the
  * order tuned for graphics:
  *
- * - 1. `.png` (lossless, broadly supported, the modern default) 2. `.jpg` / `.jpeg` (lossy, smaller — common for photo
- *   BGA) 3. `.gif` (legacy but still seen in older charts) 4. `.bmp` (the literal `#BMPxx` extension) 5. the original
- *   path verbatim — keeps video BGA references (`.mpg` / `.mp4` / `.webm` / …) and any exotic format not in the list
- *   above resolving correctly.
+ * - 1. `.webp` (first, so a pack re-encoded to WebP to save space wins over any leftover originals) 2. `.png`
+ *   (lossless, broadly supported, the modern default) 3. `.jpg` / `.jpeg` (lossy, smaller — common for photo BGA) 4.
+ *   `.gif` (legacy but still seen in older charts) 5. `.bmp` (the literal `#BMPxx` extension) 6. the original path
+ *   verbatim — keeps video BGA references (`.mpg` / `.mp4` / `.webm` / …) and any exotic format not in the list above
+ *   resolving correctly.
+ *
+ * The bytes are decoded by content, not by the declared extension, so a `#BMPxx foo.bmp` resolved to `foo.webp` decodes
+ * as WebP.
  *
  * Case is handled by `resolveChartAsset` itself (case-insensitive lookup), so this list doesn't need explicit
  * upper-case duplicates.
@@ -802,7 +806,7 @@ function imageFallbackPaths(path: string): string[] {
     return [path];
   }
   const base = path.slice(0, dotIndex);
-  const candidates = [`${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
+  const candidates = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];
   if (!candidates.includes(path)) {
     candidates.push(path);
   }
