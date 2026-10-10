@@ -41,7 +41,7 @@ const MILESTONE_COLORS = [SYN_AMBER, SYN_CYAN, SYN_MAGENTA] as const;
  *
  * - the count-in: READY condenses out of wide-tracked light over a widening filament, then START flares out on the
  *   first beat;
- * - every 100 combo: the count glows over the BGA monitor, caught in a lock-on reticle that snaps shut on it;
+ * - every 100 combo: the count glows in the middle of the BGA monitor, caught in a lock-on reticle that snaps shut on it;
  * - the clear line: a light sweep runs the length of the gauge;
  * - a full combo: a warm bloom, a 3D sphere of voxel sparks bursting from the centre of the screen, and FULL COMBO
  *   glowing gold.
@@ -88,7 +88,6 @@ export function drawSynesthesiaMoments(
       milestone,
       resolveMilestoneArea(layout.playfield.right, 346, layout.stage.width),
       layout.bga ?? NO_MONITOR,
-      runtime.hasBga === true,
       pool,
     );
   }
@@ -169,19 +168,17 @@ function drawMilestone(
   t: number,
   area: MilestoneArea,
   bga: BeMusicRect,
-  hasBga: boolean,
   pool: ChildPool,
 ): void {
   // Each hundred takes the next accent light in turn: gold, electric blue, magenta.
   const color = MILESTONE_COLORS[Math.max(0, Math.floor(value / 100) - 1) % MILESTONE_COLORS.length]!;
-  // The count plays in the milestone area — over the monitor beside the lanes, or in the band below them in double
-  // play — never over the notes. Over a live BGA it sits small on the monitor's top edge.
-  // A keyboard field too wide for a monitor plays the count in the middle of its area instead.
+  // The count plays in the milestone area — centred on the monitor beside the lanes, BGA or not, or in the band below
+  // them in double play — never over the notes. A keyboard field too wide for a monitor plays the count in the middle
+  // of its area instead.
   const below = area.mode === 'below' || bga.w === 0;
-  hasBga = hasBga && bga.w > 0;
-  const compact = hasBga || below;
+  const compact = below;
   const cx = below ? area.x + area.w / 2 : bga.x + bga.w / 2;
-  const cy = below ? area.y + area.h / 2 - 10 : hasBga ? bga.y + 30 : bga.y + bga.h / 2 - 10;
+  const cy = below ? area.y + area.h / 2 - 10 : bga.y + bga.h / 2 - 10;
   const alpha = Math.min(1, t / 0.12) * (1 - Math.max(0, (t - 0.7) / 0.3));
   const count = addHudText(
     layer,

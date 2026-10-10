@@ -9,3 +9,5 @@ Every other Synesthesia particle (floor, pyramids, rivers, dust, schools, star t
 Synesthesia's fish now carry a soft glow around their heads that brightens and spreads with the bass, and flick up and flash white on every kick drum (an envelope that fires only on the attack of the lowest bands, gone within about 0.15 s), their glow blooming with them. The gameplay dust no longer flickers and teleports when the music's level changes its speed, and the gameplay floor and rivers no longer jump on entering a zone: they now move by accumulated travel, as the select screen already did.
 
 Synesthesia's judgement line loses the bloom around it and stays a crisp filament; the beat now rises above it as an ember gradient that leaps up the lanes on each beat.
+
+Synesthesia's 100-combo milestones now play in the middle of the BGA monitor even while a BGA is showing, instead of shrinking onto its top edge.
