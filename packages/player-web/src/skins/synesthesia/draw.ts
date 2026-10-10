@@ -419,8 +419,8 @@ export function drawSchool(
   // The glow follows the school's range of the music: a faint halo while it is quiet, bright and wide when it is loud —
   // while the kick drives the swell.
   const level = Math.max(0, Math.min(1, style.glowLevel ?? 0));
-  const glowGain = (0.35 + 2.2 * level) * (1 + 2 * swell);
-  const glowSpread = (1 + 0.6 * level) * (1 + 0.9 * swell);
+  const glowGain = (0.3 + 1.2 * level) * (1 + 0.7 * swell);
+  const glowSpread = (1 + 0.4 * level) * (1 + 0.5 * swell);
   const { position: p, velocity: v } = flock;
   const batch = sharedShapeBatch;
   for (let index = 0; index < flock.count; index += 1) {
