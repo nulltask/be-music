@@ -5,8 +5,6 @@ import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   floorRise,
-  followTerrain,
-  terrainAmplitude,
   cameraBasis,
   emberColor,
   hsvToHex,
@@ -22,6 +20,14 @@ import {
   viewPoint,
   wanderPoint,
 } from './space.ts';
+import {
+  SPECTRUM_RIDGE_HEIGHT,
+  SpectrumHistory,
+  floorRowStep,
+  spectrumLevels,
+  spectrumRise,
+} from './spectrum-floor.ts';
+
 import {
   SYN_AMBER,
   SYN_CYAN,
@@ -40,6 +46,7 @@ import {
   synGlowTexture,
 } from './style.ts';
 import {
+  AUDIO_BAND_COUNT,
   easeOutCubic,
   audioDrive,
   type BeMusicAudioFrame,
@@ -82,6 +89,8 @@ const RIVER_PARTICLES = 340;
 const CAMERA_RANGE = { x: 240, y: 110, yaw: 0.38, pitch: 0.16 } as const;
 const CAMERA_CYCLE_S = 6;
 const SCHOOL_SIZE = 80;
+/** Screen gap (px) the floor rows' points aim for, so near rows read as waveforms. */
+const FLOOR_SCREEN_GAP = 6;
 /**
  * Three schools in the floor frame (floor at y 150), each with its own box, light, and seed, and each glowing with its
  * own range of the music: the ember school with the bass, the blue with the mids, the magenta with the highs.
@@ -161,8 +170,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private designHeight = 480;
   /** Accumulated star / grid travel (speed-weighted seconds), so a speed change never makes the field jump. */
   private travel = 0;
-  /** The floor terrain's swell (0..1), following the preview's level (see followTerrain). */
-  private terrain = 0;
+  /** The recent spectrum the floor is shaped from (see spectrum-floor.ts). */
+  private readonly spectrum = new SpectrumHistory();
+  private readonly spectrumScratch = new Float32Array(AUDIO_BAND_COUNT);
   private lastTickMs: number | undefined;
   private effects: PixiSelectFrame['effects'] = 'full';
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
@@ -364,9 +374,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         referenceScale: 200 / (200 + z),
       });
     }
-    // Floor of light points scrolling toward the viewer, rolling into Perlin-noise hills that heave with the music.
-    this.terrain = followTerrain(this.terrain, drive.level, dt);
-    const amplitude = terrainAmplitude(this.terrain);
+    // Floor of light points scrolling toward the viewer, written with the music's spectrum: bass on the left to highs on
+    // the right, rising as ridges that leave the viewer and roll out into the distance, over low Perlin-noise ground.
+    this.spectrum.push(spectrumLevels(drive.bands, this.spectrumScratch), dt);
     const spacing = 100;
     const offset = this.travel % spacing;
     // Floor points and the river go out as a few batched instructions.
@@ -376,14 +386,20 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const size = 0.6 + 1.5 * nearness * nearness;
       const color = emberColor(0.3 + 0.65 * nearness);
       const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * (1 + drive.bass));
-      for (let x = -1800; x <= 1800; x += 50) {
-        const rise = floorRise(x, z + this.travel, seconds, amplitude);
+      // Near rows get more points, so they read as continuous waveforms.
+      const step = floorRowStep(z, 200, FLOOR_SCREEN_GAP);
+      for (let x = -1800; x <= 1800; x += step) {
+        // The band follows where the point sits on screen: bass at the left edge, highs at the right.
+        const ground = projectViewInto(this.scratchHead, x, 150, z, basis, cx, floorY, 200, WORLD_ORBIT);
+        if (!ground.visible || ground.x < -4 || ground.x > this.designWidth + 4) continue;
+        const ridge = spectrumRise(this.spectrum, ground.x / this.designWidth, z);
+        const rise = ridge + floorRise(x, z + this.travel, seconds, 10);
         const point = projectViewInto(this.scratchHead, x, 150 - rise, z, basis, cx, floorY, 200, WORLD_ORBIT);
         if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
           continue;
         }
         // Crests catch more light than the valleys.
-        const lit = Math.min(1, alpha * (1 + (0.9 * rise) / amplitude));
+        const lit = Math.min(1, alpha * (1 + (1.4 * ridge) / SPECTRUM_RIDGE_HEIGHT));
         batch.rect(world, color, lit, point.x - size / 2, point.y - size / 2, size, size);
       }
     }

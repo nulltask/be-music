@@ -12,4 +12,4 @@ Synesthesia's judgement line loses the bloom around it and stays a crisp filamen
 
 Synesthesia's 100-combo milestones now play in the middle of the BGA monitor even while a BGA is showing, instead of shrinking onto its top edge.
 
-Synesthesia's floor now rolls into Perlin-noise hills that scroll with it and heave with the music's level, low rolling ground when quiet and tall ridges when loud, with the crests catching more light.
+Synesthesia's floor now shows the music's spectrum: bass on the left of the screen to highs on the right, each band rising as a ridge that leaves the viewer and rolls out into the distance, so the ground in front of the camera shows what is playing now; near rows get denser points so they read as waveforms, over low Perlin-noise ground.

@@ -7,8 +7,6 @@ import { createFlock, stepFlock, type Flock } from './boids.ts';
 import { drawFrame, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   floorRise,
-  followTerrain,
-  terrainAmplitude,
   clipSegmentOutsideRect,
   emberColor,
   cameraBasis,
@@ -28,6 +26,13 @@ import {
   type CameraPose,
 } from './space.ts';
 import {
+  SPECTRUM_RIDGE_HEIGHT,
+  SpectrumHistory,
+  floorRowStep,
+  spectrumLevels,
+  spectrumRise,
+} from './spectrum-floor.ts';
+import {
   SYN_AMBER,
   SYN_CYAN,
   SYN_GREEN,
@@ -44,6 +49,7 @@ import {
   sceneHue,
 } from './style.ts';
 import {
+  AUDIO_BAND_COUNT,
   audioDrive,
   type AudioDrive,
   type BeMusicRect,
@@ -125,8 +131,8 @@ interface Travel {
   dust: number;
   floor: number;
   river: number;
-  /** The floor terrain's swell (0..1), following the music's level (see followTerrain). */
-  terrain: number;
+  /** The recent spectrum the floor is shaped from (see spectrum-floor.ts). */
+  spectrum: SpectrumHistory;
 }
 
 const TRAVEL = new WeakMap<object, Travel>();
@@ -139,19 +145,19 @@ const TRAVEL = new WeakMap<object, Travel>();
 function advanceTravel(
   key: object,
   seconds: number,
-  speeds: Omit<Travel, 'seconds' | 'terrain'>,
-  level: number,
+  speeds: Omit<Travel, 'seconds' | 'spectrum'>,
+  bands: readonly number[],
 ): Travel {
   let state = TRAVEL.get(key);
   if (!state || seconds < state.seconds) {
-    state = { seconds, dust: 0, floor: 0, river: 0, terrain: 0 };
+    state = { seconds, dust: 0, floor: 0, river: 0, spectrum: new SpectrumHistory() };
     TRAVEL.set(key, state);
   }
   const dt = Math.min(0.1, seconds - state.seconds);
   state.dust += speeds.dust * dt;
   state.floor += speeds.floor * dt;
   state.river += speeds.river * dt;
-  state.terrain = followTerrain(state.terrain, level, dt);
+  state.spectrum.push(spectrumLevels(bands, SCRATCH_LEVELS), dt);
   state.seconds = seconds;
   return state;
 }
@@ -259,10 +265,10 @@ export function renderSynesthesiaChrome({
       floor: 150 * (1 + 0.3 * tier),
       river: 260 + 60 * tier,
     },
-    drive.level,
+    drive.bands,
   );
   drawDust(light, hasBga, tier, hit, camera, travel.dust);
-  drawFloor(light, travel.floor, terrainAmplitude(travel.terrain), seconds, pulse, hasBga, tier, hit, camera, drive);
+  drawFloor(light, travel.floor, travel.spectrum, seconds, pulse, hasBga, tier, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
     drawRiver(light, seconds, travel.river, river, hasBga, tier, camera, drive);
@@ -446,12 +452,13 @@ function drawDust(
 
 /**
  * Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines.
- * The lattice rolls into Perlin-noise hills (see floorRise) up to `amplitude` tall, so it heaves with the music.
+ * The lattice is the music's spectrum: bass on the left to highs on the right, rising as ridges that leave the viewer
+ * and roll out into the distance (see spectrumRise), over low Perlin-noise ground.
  */
 function drawFloor(
   graphics: Graphics,
   distance: number,
-  amplitude: number,
+  spectrum: SpectrumHistory,
   seconds: number,
   pulse: number,
   hasBga: boolean,
@@ -484,13 +491,19 @@ function drawFloor(
     const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * glow);
     const size = 0.6 + 1.4 * nearness * nearness;
     const color = emberColor(0.3 + 0.65 * nearness);
-    for (let x = -1500; x <= 1500; x += 50) {
-      const rise = floorRise(x, z + distance, seconds, amplitude);
+    // Near rows get more points, so they read as continuous waveforms.
+    const step = floorRowStep(z, focal, FLOOR_SCREEN_GAP);
+    for (let x = -1500; x <= 1500; x += step) {
+      // The band follows where the point sits on screen: bass at the left edge, highs at the right.
+      const ground = projectViewInto(SCRATCH_A, x, height, z, basis, CENTER_X, horizon, focal);
+      if (!ground.visible || ground.x < -4 || ground.x > DESIGN_WIDTH + 4) continue;
+      const ridge = spectrumRise(spectrum, ground.x / DESIGN_WIDTH, z);
+      const rise = ridge + floorRise(x, z + distance, seconds, FLOOR_GROUND);
       const point = projectViewInto(SCRATCH_A, x, height - rise, z, basis, CENTER_X, horizon, focal);
       if (!point.visible || point.x < -4 || point.x > DESIGN_WIDTH + 4 || point.y > DESIGN_HEIGHT + 4) continue;
       if (hasBga && insideBga(point.x, point.y, 2)) continue;
       // Crests catch more light than the valleys.
-      const lit = Math.min(1, alpha * (1 + (0.9 * rise) / amplitude));
+      const lit = Math.min(1, alpha * (1 + (1.4 * ridge) / SPECTRUM_RIDGE_HEIGHT));
       sharedShapeBatch.rect(graphics, color, lit, point.x - size / 2, point.y - size / 2, size, size);
     }
   }
@@ -499,6 +512,12 @@ function drawFloor(
 
 /** Scratch buffer for clipped floor lines (`x0, y0, x1, y1` quads), reused every frame. */
 const FLOOR_PIECES: number[] = [];
+/** Height (world units) of the Perlin-noise ground under the floor's spectrum ridges. */
+const FLOOR_GROUND = 10;
+/** Screen gap (px) the floor rows' points aim for, so near rows read as waveforms. */
+const FLOOR_SCREEN_GAP = 6;
+/** Scratch band levels written each frame into the floor's spectrum history. */
+const SCRATCH_LEVELS = new Float32Array(AUDIO_BAND_COUNT);
 /** Scratch objects for the allocation-free projection in the hot loops above. */
 const SCRATCH_BASIS = cameraBasis(REST_CAMERA);
 const SCRATCH_A = scratchProjected();

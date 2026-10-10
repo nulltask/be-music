@@ -604,19 +604,3 @@ export function floorRise(x: number, worldZ: number, seconds: number, amplitude:
   const crest = Math.max(0, Math.min(1, n * 1.5 + 0.4));
   return amplitude * crest * crest * (3 - 2 * crest);
 }
-
-/** Rise / fall time constants (s) of {@link followTerrain}: hills spring up with the music and settle more slowly. */
-const TERRAIN_RISE_S = 0.08;
-const TERRAIN_FALL_S = 0.7;
-
-/** Eases the terrain's swell toward `level` (0..1) over `dt` seconds: quick to rise, slow to fall, so hills don't jitter. */
-export function followTerrain(previous: number, level: number, dt: number): number {
-  const target = Math.max(0, Math.min(1, level));
-  const tau = target > previous ? TERRAIN_RISE_S : TERRAIN_FALL_S;
-  return target + (previous - target) * Math.exp(-Math.max(0, dt) / tau);
-}
-
-/** Tallest floor hill (world units) at a terrain swell of `swell` (0..1): low rolling ground at rest, big ridges when loud. */
-export function terrainAmplitude(swell: number): number {
-  return 6 + 110 * Math.max(0, Math.min(1, swell));
-}

@@ -6,14 +6,12 @@ import {
   cameraBasis,
   emberColor,
   floorRise,
-  followTerrain,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
   perlin2,
   pointCloudPyramid,
   projectPoint,
-  terrainAmplitude,
   projectViewInto,
   randomShot,
   REST_CAMERA,
@@ -416,27 +414,5 @@ describe('floorRise', () => {
     const small = floorRise(-300, 1200, 1, 10);
     const large = floorRise(-300, 1200, 1, 100);
     expect(large).toBeCloseTo(small * 10, 6);
-  });
-});
-
-describe('followTerrain', () => {
-  it('rises faster than it falls', () => {
-    const up = followTerrain(0, 1, 0.1);
-    const down = 1 - followTerrain(1, 0, 0.1);
-    expect(up).toBeGreaterThan(down);
-    expect(up).toBeGreaterThan(0.5);
-  });
-
-  it('holds still with no time passing and clamps the level', () => {
-    expect(followTerrain(0.4, 1, 0)).toBeCloseTo(0.4, 9);
-    expect(followTerrain(0, 5, 10)).toBeCloseTo(1, 6);
-  });
-});
-
-describe('terrainAmplitude', () => {
-  it('grows with the swell, from low ground to tall ridges', () => {
-    expect(terrainAmplitude(0)).toBe(6);
-    expect(terrainAmplitude(1)).toBe(116);
-    expect(terrainAmplitude(2)).toBe(116);
   });
 });
