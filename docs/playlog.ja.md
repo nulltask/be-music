@@ -47,7 +47,7 @@ TypeScript 型・シリアライザ・防御的パーサは
 - LR2 / default ゲームプレイシーンは `PixiGameplayResultData.playlog` として公開します。
 - beatoraja ゲームプレイシーンは `PixiBeatorajaGameplayView.getPlaylog()` として公開します。
 - デモはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
-  Debug Menu の **Auto-save play history** チェックボックス（デフォルト ON）で制御します。プレイログ関連
+  Debug Menu の **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。プレイログ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
 - Debug Menu の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、判定幅
