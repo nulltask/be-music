@@ -21,9 +21,14 @@ export class PointLayer {
   private shown = 0;
 
   private readonly anchor: Graphics;
+  private readonly texture: Texture;
+  /** Position among the anchor's layers; layer `slot` sits `slot + 1` children after the anchor. */
+  private readonly slot: number;
 
-  public constructor(anchor: Graphics) {
+  public constructor(anchor: Graphics, texture: Texture = Texture.WHITE, slot = 0) {
     this.anchor = anchor;
+    this.texture = texture;
+    this.slot = slot;
     this.container = new ParticleContainer({
       dynamicProperties: { position: true, vertex: true, color: true, rotation: true, uvs: false },
     });
@@ -31,13 +36,13 @@ export class PointLayer {
     this.container.onRender = () => this.commit();
   }
 
-  /** Writes one square point centred on `(cx, cy)`. */
+  /** Writes one square point (or one copy of the layer's texture) `size` px wide, centred on `(cx, cy)`. */
   public point(cx: number, cy: number, size: number, color: number, alpha: number): void {
     const particle = this.next();
     particle.x = cx;
     particle.y = cy;
-    particle.scaleX = size;
-    particle.scaleY = size;
+    particle.scaleX = size / this.texture.width;
+    particle.scaleY = size / this.texture.height;
     particle.rotation = 0;
     particle.tint = color;
     particle.alpha = alpha;
@@ -50,8 +55,8 @@ export class PointLayer {
     const dy = y1 - y0;
     particle.x = (x0 + x1) / 2;
     particle.y = (y0 + y1) / 2;
-    particle.scaleX = Math.hypot(dx, dy);
-    particle.scaleY = width;
+    particle.scaleX = Math.hypot(dx, dy) / this.texture.width;
+    particle.scaleY = width / this.texture.height;
     particle.rotation = Math.atan2(dy, dx);
     particle.tint = color;
     particle.alpha = alpha;
@@ -65,19 +70,22 @@ export class PointLayer {
     }
     let particle = this.particles[this.cursor];
     if (!particle) {
-      particle = new Particle({ texture: Texture.WHITE, anchorX: 0.5, anchorY: 0.5 });
+      particle = new Particle({ texture: this.texture, anchorX: 0.5, anchorY: 0.5 });
       this.particles.push(particle);
     }
     this.cursor += 1;
     return particle;
   }
 
-  /** Keeps the layer right after its anchor, so the anchor's later siblings (HUD panels, text) stay on top. */
+  /**
+   * Keeps the layer right after its anchor (after the anchor's earlier layers), so the anchor's later siblings (HUD
+   * panels, text) stay on top.
+   */
   private attach(): void {
     const parent: Container | null = this.anchor.parent;
     if (!parent) return;
     if (this.container.parent !== parent) parent.addChild(this.container);
-    const target = parent.getChildIndex(this.anchor) + 1;
+    const target = parent.getChildIndex(this.anchor) + 1 + this.slot;
     if (parent.getChildIndex(this.container) !== target) {
       parent.setChildIndex(this.container, Math.min(target, parent.children.length - 1));
     }
@@ -100,14 +108,23 @@ export class PointLayer {
   }
 }
 
-const LAYERS = new WeakMap<Graphics, PointLayer>();
+const LAYERS = new WeakMap<Graphics, Map<Texture, PointLayer>>();
 
-/** The particle layer riding along with `anchor` (created on first use). */
-export function pointLayerFor(anchor: Graphics): PointLayer {
-  let layer = LAYERS.get(anchor);
+/**
+ * The particle layer riding along with `anchor` that draws `texture` (Pixi's 1x1 white by default), created on first
+ * use. A particle container batches a single texture, so each texture gets its own layer; an anchor's layers stack in
+ * the order they were first asked for.
+ */
+export function pointLayerFor(anchor: Graphics, texture: Texture = Texture.WHITE): PointLayer {
+  let layers = LAYERS.get(anchor);
+  if (!layers) {
+    layers = new Map();
+    LAYERS.set(anchor, layers);
+  }
+  let layer = layers.get(texture);
   if (!layer) {
-    layer = new PointLayer(anchor);
-    LAYERS.set(anchor, layer);
+    layer = new PointLayer(anchor, texture, layers.size);
+    layers.set(texture, layer);
   }
   return layer;
 }

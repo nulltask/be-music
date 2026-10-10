@@ -11,7 +11,7 @@ import {
   type Projected,
   type Vec3,
 } from './space.ts';
-import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE } from './style.ts';
+import { SYN_CYAN, SYN_GLASS, SYN_MAGENTA, SYN_WHITE, synGlowTexture } from './style.ts';
 import { hash01 } from '@be-music/skin-sdk';
 import { pointLayerFor } from '../pixi-kit/index.ts';
 
@@ -134,6 +134,15 @@ export class ShapeBatch {
       this.rects.set(key, bucket);
     }
     bucket.data.push(x, y, w, h);
+  }
+
+  /**
+   * A soft glow sprite `size` px across centred on `(cx, cy)`, on its own particle layer next to `graphics`. Only drawn
+   * in points mode; elsewhere (tests, targets outside the scene graph) it is skipped.
+   */
+  public glow(graphics: Graphics, color: number, alpha: number, cx: number, cy: number, size: number): void {
+    if (!this.points || alpha <= 0.004 || size <= 0) return;
+    pointLayerFor(graphics, synGlowTexture()).point(cx, cy, size, color, Math.min(1, alpha));
   }
 
   public line(
@@ -439,6 +448,15 @@ export function drawSchool(
     const lit = swell > 0.01 ? mixColor(color, SYN_WHITE, Math.min(1, swell * 1.2)) : color;
     const mx = (head.x + tail.x) / 2;
     const my = (head.y + tail.y) / 2;
+    // Every fish carries a soft halo around its head, blooming wide and bright on a kick.
+    batch.glow(
+      graphics,
+      lit,
+      style.alpha * (0.1 + 0.25 * nearness) * (1 + 2 * swell),
+      head.x,
+      head.y,
+      (10 + 22 * nearness) * (1 + 0.9 * swell),
+    );
     batch.line(graphics, lit, alpha * 0.55, (0.6 + 1 * nearness) * girth, tail.x, tail.y, mx, my);
     batch.line(graphics, lit, alpha, (1 + 2 * nearness) * girth, mx, my, head.x, head.y);
     const size = (1.2 + 2.2 * nearness) * (1 + 1.4 * swell);
