@@ -4,6 +4,7 @@ import {
   renderSynesthesiaBombs,
   renderSynesthesiaLanes,
   renderSynesthesiaLongNote,
+  renderSynesthesiaMine,
   renderSynesthesiaNote,
 } from './playfield.ts';
 import { synesthesiaResultSkin } from './result.ts';
@@ -32,6 +33,7 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
     renderChrome: renderSynesthesiaChrome,
     renderLanes: renderSynesthesiaLanes,
     renderNote: renderSynesthesiaNote,
+    renderMine: renderSynesthesiaMine,
     renderLongNote: renderSynesthesiaLongNote,
     renderBombs: renderSynesthesiaBombs,
     bombDurationMs: SYNESTHESIA_BOMB_DURATION_MS,
