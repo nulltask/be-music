@@ -6,6 +6,9 @@ import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { createFlock, stepFlock, type Flock } from './boids.ts';
 import { drawFrame, drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
+  floorRise,
+  followTerrain,
+  terrainAmplitude,
   clipSegmentOutsideRect,
   emberColor,
   cameraBasis,
@@ -122,6 +125,8 @@ interface Travel {
   dust: number;
   floor: number;
   river: number;
+  /** The floor terrain's swell (0..1), following the music's level (see followTerrain). */
+  terrain: number;
 }
 
 const TRAVEL = new WeakMap<object, Travel>();
@@ -131,16 +136,22 @@ const TRAVEL = new WeakMap<object, Travel>();
  * Positions computed as `seconds × speed` jump whenever the speed changes, so the music or the zone changing pace would
  * teleport every particle; integrating keeps the motion continuous. Restarts when the clock runs backwards.
  */
-function advanceTravel(key: object, seconds: number, speeds: Omit<Travel, 'seconds'>): Travel {
+function advanceTravel(
+  key: object,
+  seconds: number,
+  speeds: Omit<Travel, 'seconds' | 'terrain'>,
+  level: number,
+): Travel {
   let state = TRAVEL.get(key);
   if (!state || seconds < state.seconds) {
-    state = { seconds, dust: 0, floor: 0, river: 0 };
+    state = { seconds, dust: 0, floor: 0, river: 0, terrain: 0 };
     TRAVEL.set(key, state);
   }
   const dt = Math.min(0.1, seconds - state.seconds);
   state.dust += speeds.dust * dt;
   state.floor += speeds.floor * dt;
   state.river += speeds.river * dt;
+  state.terrain = followTerrain(state.terrain, level, dt);
   state.seconds = seconds;
   return state;
 }
@@ -240,13 +251,18 @@ export function renderSynesthesiaChrome({
   light.label = 'synesthesia-gameplay/light';
   light.blendMode = 'add';
   // Dust, floor and rivers move by accumulated travel, so the music and the zone can change their speed smoothly.
-  const travel = advanceTravel(layer, seconds, {
-    dust: (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level),
-    floor: 150 * (1 + 0.3 * tier),
-    river: 260 + 60 * tier,
-  });
+  const travel = advanceTravel(
+    layer,
+    seconds,
+    {
+      dust: (120 + 40 * pulse) * (1 + 0.45 * tier) * (1 + 2.2 * hit) * (1 + 1.2 * drive.level),
+      floor: 150 * (1 + 0.3 * tier),
+      river: 260 + 60 * tier,
+    },
+    drive.level,
+  );
   drawDust(light, hasBga, tier, hit, camera, travel.dust);
-  drawFloor(light, travel.floor, pulse, hasBga, tier, hit, camera, drive);
+  drawFloor(light, travel.floor, terrainAmplitude(travel.terrain), seconds, pulse, hasBga, tier, hit, camera, drive);
   const rivers = tier >= 4 ? 3 : tier >= 2 ? 2 : 1;
   for (let river = 0; river < rivers; river += 1) {
     drawRiver(light, seconds, travel.river, river, hasBga, tier, camera, drive);
@@ -428,10 +444,15 @@ function drawDust(
   batch.flush();
 }
 
-/** Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines. */
+/**
+ * Particle-world floor: a lattice of light points scrolling toward the player on the beat, over faint radial guide lines.
+ * The lattice rolls into Perlin-noise hills (see floorRise) up to `amplitude` tall, so it heaves with the music.
+ */
 function drawFloor(
   graphics: Graphics,
   distance: number,
+  amplitude: number,
+  seconds: number,
   pulse: number,
   hasBga: boolean,
   tier: number,
@@ -464,10 +485,13 @@ function drawFloor(
     const size = 0.6 + 1.4 * nearness * nearness;
     const color = emberColor(0.3 + 0.65 * nearness);
     for (let x = -1500; x <= 1500; x += 50) {
-      const point = projectViewInto(SCRATCH_A, x, height, z, basis, CENTER_X, horizon, focal);
+      const rise = floorRise(x, z + distance, seconds, amplitude);
+      const point = projectViewInto(SCRATCH_A, x, height - rise, z, basis, CENTER_X, horizon, focal);
       if (!point.visible || point.x < -4 || point.x > DESIGN_WIDTH + 4 || point.y > DESIGN_HEIGHT + 4) continue;
       if (hasBga && insideBga(point.x, point.y, 2)) continue;
-      sharedShapeBatch.rect(graphics, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
+      // Crests catch more light than the valleys.
+      const lit = Math.min(1, alpha * (1 + (0.9 * rise) / amplitude));
+      sharedShapeBatch.rect(graphics, color, lit, point.x - size / 2, point.y - size / 2, size, size);
     }
   }
   sharedShapeBatch.flush();

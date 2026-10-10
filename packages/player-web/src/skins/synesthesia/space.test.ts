@@ -5,11 +5,15 @@ import {
   burstParticles,
   cameraBasis,
   emberColor,
+  floorRise,
+  followTerrain,
   hsvToHex,
   mixCamera,
   particleRiverPoint,
+  perlin2,
   pointCloudPyramid,
   projectPoint,
+  terrainAmplitude,
   projectViewInto,
   randomShot,
   REST_CAMERA,
@@ -372,5 +376,67 @@ describe('starfieldInto', () => {
     for (const index of [0, 7, 319]) {
       expect(starfieldInto(out, index, 123.4, options)).toEqual(starfieldPoint(index, 123.4, options));
     }
+  });
+});
+
+describe('perlin2', () => {
+  it('is zero on lattice points and stays within -1..1', () => {
+    expect(perlin2(3, 7)).toBe(0);
+    for (let index = 0; index < 500; index += 1) {
+      const value = perlin2(index * 0.37 + 0.11, index * 0.53 - 4.2);
+      expect(Math.abs(value)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is continuous', () => {
+    expect(Math.abs(perlin2(1.5, 2.5) - perlin2(1.5001, 2.5))).toBeLessThan(0.001);
+  });
+});
+
+describe('floorRise', () => {
+  it('is flat with no amplitude', () => {
+    expect(floorRise(120, 800, 3, 0)).toBe(0);
+  });
+
+  it('never dips below the floor or above the amplitude', () => {
+    let peak = 0;
+    for (let x = -1500; x <= 1500; x += 50) {
+      for (let z = 0; z < 3000; z += 90) {
+        const rise = floorRise(x, z, 2, 100);
+        expect(rise).toBeGreaterThanOrEqual(0);
+        expect(rise).toBeLessThanOrEqual(100);
+        peak = Math.max(peak, rise);
+      }
+    }
+    // Some of the floor actually rises.
+    expect(peak).toBeGreaterThan(30);
+  });
+
+  it('scales with the amplitude', () => {
+    const small = floorRise(-300, 1200, 1, 10);
+    const large = floorRise(-300, 1200, 1, 100);
+    expect(large).toBeCloseTo(small * 10, 6);
+  });
+});
+
+describe('followTerrain', () => {
+  it('rises faster than it falls', () => {
+    const up = followTerrain(0, 1, 0.1);
+    const down = 1 - followTerrain(1, 0, 0.1);
+    expect(up).toBeGreaterThan(down);
+    expect(up).toBeGreaterThan(0.5);
+  });
+
+  it('holds still with no time passing and clamps the level', () => {
+    expect(followTerrain(0.4, 1, 0)).toBeCloseTo(0.4, 9);
+    expect(followTerrain(0, 5, 10)).toBeCloseTo(1, 6);
+  });
+});
+
+describe('terrainAmplitude', () => {
+  it('grows with the swell, from low ground to tall ridges', () => {
+    expect(terrainAmplitude(0)).toBe(6);
+    expect(terrainAmplitude(1)).toBe(116);
+    expect(terrainAmplitude(2)).toBe(116);
   });
 });

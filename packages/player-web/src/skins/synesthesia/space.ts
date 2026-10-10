@@ -531,3 +531,92 @@ export function clipSegmentOutsideRect(
   }
   return pieces;
 }
+
+/** Shuffled 0..255 (doubled so lookups never wrap) for {@link perlin2}; fixed, so the terrain is the same every run. */
+const PERLIN_PERM: Uint8Array = (() => {
+  const base = Array.from({ length: 256 }, (_, index) => index);
+  for (let index = 255; index > 0; index -= 1) {
+    const swap = Math.floor(hash01(index * 13 + 7) * (index + 1));
+    [base[index], base[swap]] = [base[swap]!, base[index]!];
+  }
+  const perm = new Uint8Array(512);
+  for (let index = 0; index < 512; index += 1) perm[index] = base[index & 255]!;
+  return perm;
+})();
+
+function perlinGrad(hash: number, x: number, y: number): number {
+  // Eight gradient directions: the four axes and the four diagonals.
+  switch (hash & 7) {
+    case 0:
+      return x + y;
+    case 1:
+      return -x + y;
+    case 2:
+      return x - y;
+    case 3:
+      return -x - y;
+    case 4:
+      return x;
+    case 5:
+      return -x;
+    case 6:
+      return y;
+    default:
+      return -y;
+  }
+}
+
+/** Classic 2D Perlin gradient noise: smooth, zero on integer lattice points, roughly within -1..1. */
+export function perlin2(x: number, y: number): number {
+  const xf = Math.floor(x);
+  const yf = Math.floor(y);
+  const xi = xf & 255;
+  const yi = yf & 255;
+  const dx = x - xf;
+  const dy = y - yf;
+  const u = dx * dx * dx * (dx * (dx * 6 - 15) + 10);
+  const v = dy * dy * dy * (dy * (dy * 6 - 15) + 10);
+  const p = PERLIN_PERM;
+  const aa = p[p[xi]! + yi]!;
+  const ab = p[p[xi]! + yi + 1]!;
+  const ba = p[p[xi + 1]! + yi]!;
+  const bb = p[p[xi + 1]! + yi + 1]!;
+  const x1 = perlinGrad(aa, dx, dy) + u * (perlinGrad(ba, dx - 1, dy) - perlinGrad(aa, dx, dy));
+  const x2 = perlinGrad(ab, dx, dy - 1) + u * (perlinGrad(bb, dx - 1, dy - 1) - perlinGrad(ab, dx, dy - 1));
+  return x1 + v * (x2 - x1);
+}
+
+/** World units per noise cell of the floor's terrain; the second octave runs at 2.3x the frequency. */
+const TERRAIN_CELL = 520;
+
+/**
+ * Height (world units, >= 0, upward) the floor rises at `(x, worldZ)`: two octaves of Perlin noise shaped into rounded
+ * hills over flat valleys, drifting slowly with `seconds`. `worldZ` is the point's depth plus the distance travelled,
+ * so the hills scroll with the floor. `amplitude` sets the tallest hill; the skins drive it with the music's level.
+ */
+export function floorRise(x: number, worldZ: number, seconds: number, amplitude: number): number {
+  if (amplitude <= 0) return 0;
+  const drift = seconds * 0.05;
+  const nx = x / TERRAIN_CELL;
+  const nz = worldZ / TERRAIN_CELL;
+  const n = perlin2(nx + drift, nz) * 0.7 + perlin2(nx * 2.3 - drift, nz * 2.3 + 17.3) * 0.3;
+  // Most of the noise swells into rounded hills (smoothstep over it); only its lowest stretches stay flat valley floor.
+  const crest = Math.max(0, Math.min(1, n * 1.5 + 0.4));
+  return amplitude * crest * crest * (3 - 2 * crest);
+}
+
+/** Rise / fall time constants (s) of {@link followTerrain}: hills spring up with the music and settle more slowly. */
+const TERRAIN_RISE_S = 0.08;
+const TERRAIN_FALL_S = 0.7;
+
+/** Eases the terrain's swell toward `level` (0..1) over `dt` seconds: quick to rise, slow to fall, so hills don't jitter. */
+export function followTerrain(previous: number, level: number, dt: number): number {
+  const target = Math.max(0, Math.min(1, level));
+  const tau = target > previous ? TERRAIN_RISE_S : TERRAIN_FALL_S;
+  return target + (previous - target) * Math.exp(-Math.max(0, dt) / tau);
+}
+
+/** Tallest floor hill (world units) at a terrain swell of `swell` (0..1): low rolling ground at rest, big ridges when loud. */
+export function terrainAmplitude(swell: number): number {
+  return 6 + 110 * Math.max(0, Math.min(1, swell));
+}

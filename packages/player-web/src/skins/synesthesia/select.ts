@@ -4,6 +4,9 @@ import { ChargeCloud } from './charge-cloud.ts';
 import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
+  floorRise,
+  followTerrain,
+  terrainAmplitude,
   cameraBasis,
   emberColor,
   hsvToHex,
@@ -158,6 +161,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   private designHeight = 480;
   /** Accumulated star / grid travel (speed-weighted seconds), so a speed change never makes the field jump. */
   private travel = 0;
+  /** The floor terrain's swell (0..1), following the preview's level (see followTerrain). */
+  private terrain = 0;
   private lastTickMs: number | undefined;
   private effects: PixiSelectFrame['effects'] = 'full';
   private activeCard: { x: number; y: number; w: number; h: number } | undefined;
@@ -359,7 +364,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         referenceScale: 200 / (200 + z),
       });
     }
-    // Floor of light points scrolling toward the viewer.
+    // Floor of light points scrolling toward the viewer, rolling into Perlin-noise hills that heave with the music.
+    this.terrain = followTerrain(this.terrain, drive.level, dt);
+    const amplitude = terrainAmplitude(this.terrain);
     const spacing = 100;
     const offset = this.travel % spacing;
     // Floor points and the river go out as a few batched instructions.
@@ -370,11 +377,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const color = emberColor(0.3 + 0.65 * nearness);
       const alpha = Math.min(1, (0.12 + 0.7 * nearness * nearness) * (0.7 + 0.3 * pulse) * (1 + drive.bass));
       for (let x = -1800; x <= 1800; x += 50) {
-        const point = projectViewInto(this.scratchHead, x, 150, z, basis, cx, floorY, 200, WORLD_ORBIT);
+        const rise = floorRise(x, z + this.travel, seconds, amplitude);
+        const point = projectViewInto(this.scratchHead, x, 150 - rise, z, basis, cx, floorY, 200, WORLD_ORBIT);
         if (!point.visible || point.x < -4 || point.x > this.designWidth + 4 || point.y > this.designHeight + 4) {
           continue;
         }
-        batch.rect(world, color, alpha, point.x - size / 2, point.y - size / 2, size, size);
+        // Crests catch more light than the valleys.
+        const lit = Math.min(1, alpha * (1 + (0.9 * rise) / amplitude));
+        batch.rect(world, color, lit, point.x - size / 2, point.y - size / 2, size, size);
       }
     }
     // A golden river of particles sweeping across the floor.

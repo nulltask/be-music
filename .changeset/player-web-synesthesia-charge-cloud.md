@@ -11,3 +11,5 @@ Synesthesia's fish now carry a soft glow around their heads that brightens and s
 Synesthesia's judgement line loses the bloom around it and stays a crisp filament; the beat now rises above it as an ember gradient that leaps up the lanes on each beat.
 
 Synesthesia's 100-combo milestones now play in the middle of the BGA monitor even while a BGA is showing, instead of shrinking onto its top edge.
+
+Synesthesia's floor now rolls into Perlin-noise hills that scroll with it and heave with the music's level, low rolling ground when quiet and tall ridges when loud, with the crests catching more light.
