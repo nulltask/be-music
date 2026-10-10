@@ -244,6 +244,18 @@ export interface BeMusicNote {
   y: number;
 }
 
+/**
+ * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at. Pressing the lane as it
+ * passes the judgement line costs a BAD, so draw it as something to avoid. Only handed to skins that set
+ * {@link BeMusicGameplaySkin.drawsMines}.
+ */
+export interface BeMusicMine {
+  kind: BeMusicLaneKind;
+  x: number;
+  w: number;
+  y: number;
+}
+
 /** A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). */
 export interface BeMusicLongNote {
   kind: BeMusicLaneKind;
@@ -277,6 +289,8 @@ export interface BeMusicGameplayFrame {
   lanes: readonly BeMusicLaneFrame[];
   notes: readonly BeMusicNote[];
   longNotes: readonly BeMusicLongNote[];
+  /** Mine notes still ahead of the player. Always empty unless the skin sets {@link BeMusicGameplaySkin.drawsMines}. */
+  mines: readonly BeMusicMine[];
   /** Live hit effects with their age. */
   bombs: readonly BeMusicBomb[];
   /** Fractional beat position in [0, 1). */
@@ -290,6 +304,11 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
   draw(surface: BeMusicSurface<K>, frame: BeMusicGameplayFrame): void;
   /** How long a hit effect lives (ms) before the player retires it. Default 300. */
   readonly bombDurationMs?: number;
+  /**
+   * Set to `true` when the skin draws mine notes itself from `frame.mines`. Otherwise the player draws them over the
+   * skin in its own built-in style, so a skin written before mines reached the frame still shows them.
+   */
+  readonly drawsMines?: boolean;
 }
 
 /** Song-list geometry shared by the skin (drawing) and the scene (row hit-testing). */

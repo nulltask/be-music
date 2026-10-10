@@ -7,6 +7,7 @@ import {
   type BeMusicSkin,
   type BeMusicSurface,
 } from '@be-music/skin-sdk';
+import { drawCautionMine } from './mine.ts';
 import { ChildPool, LaggedDisposer } from './pools.ts';
 import { setTextResolution } from './resolution.ts';
 import { collectHitAreas, type PixiHitArea } from './skin-text.ts';
@@ -55,6 +56,8 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
     },
     gameplay: {
       bombDurationMs: gameplay.bombDurationMs,
+      // Pixi skins always draw mines: their own `renderMine`, or the player's caution-striped bar.
+      drawsMines: true,
       draw(surface, frame) {
         const target = surfaceFor(surface);
         if (!target) return;
@@ -194,6 +197,12 @@ class GameplayScreen {
     }
     for (const note of frame.notes) {
       skin.renderNote({ graphics: notes, kind: note.kind, x: note.x, w: note.w, y: note.y, nowMs });
+    }
+    // Mines after the notes, so a mine sharing a beat with a note paints on top.
+    for (const mine of frame.mines) {
+      if (skin.renderMine)
+        skin.renderMine({ graphics: notes, kind: mine.kind, x: mine.x, w: mine.w, y: mine.y, nowMs });
+      else drawCautionMine(notes, mine.x, mine.w, mine.y);
     }
 
     this.bombPool.begin();

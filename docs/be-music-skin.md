@@ -175,11 +175,14 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 - `lanes`: each lane's rect (`x`, `w`, `top`, `bottom` at the judgement line), `kind`, and `beam`, the key-beam intensity (1 while held, then decaying).
 - `notes`: tap notes as `{ kind, x, w, y }`, where `y` is the note's bottom edge.
 - `longNotes`: long notes as `{ kind, x, w, top, bottom }`. `top` is the tail; `bottom` is the head, clamped to the judgement line while held.
+- `mines`: mine notes as `{ kind, x, w, y }`, where `y` is the bottom edge. Pressing the lane as one passes the judgement line costs a BAD. Empty unless the skin sets `gameplay.drawsMines` (below).
 - `bombs`: live hit effects with `elapsedMs` and a stable `seed`.
 - `runtime`: the HUD values (below).
 - `beatPhase`, `nowMs`, `effects`, and `audio`.
 
 `gameplay.bombDurationMs` (default 300) sets how long a hit effect lives.
+
+Set `gameplay.drawsMines: true` to draw mine notes yourself from `frame.mines`. Without it the player draws them over your canvas as red bars with yellow caution stripes, so a skin that ignores mines still shows them.
 
 `runtime` (`BeMusicGameplayRuntime`) carries:
 
