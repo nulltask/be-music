@@ -368,6 +368,26 @@ describe('resolveChartImageAsset', () => {
     expect(entry).toBe(PNG_BYTES);
   });
 
+  test('prefers a `.webp` over every other image format', () => {
+    // A pack re-encoded to WebP to save space may still carry the original PNG / BMP next to it; the WebP wins.
+    const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const BMP_BYTES = new Uint8Array([0x42, 0x4d]);
+    const source = makeAssetSource({
+      'Song/_logo.webp': WEBP_BYTES,
+      'Song/_logo.png': PNG_BYTES,
+      'Song/_logo.bmp': BMP_BYTES,
+    });
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp')).toBe(WEBP_BYTES);
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.png')).toBe(WEBP_BYTES);
+  });
+
+  test('falls back past a missing `.webp` to the other formats', () => {
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const source = makeAssetSource({ 'Song/_logo.png': PNG_BYTES });
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.webp')).toBe(PNG_BYTES);
+  });
+
   test('does NOT fall back to a same-basename `.png` when the chart referenced a video file', () => {
     // Regression: BMS charts often ship a still cover frame as `_scualee.png` alongside the actual `_scualee.mpg`.
     // Walking image candidates first would resolve `_scualee.mpg` to the PNG bytes, which then go through the video
