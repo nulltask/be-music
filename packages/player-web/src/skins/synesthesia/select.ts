@@ -79,11 +79,29 @@ const RIVER_PARTICLES = 340;
 const CAMERA_RANGE = { x: 240, y: 110, yaw: 0.38, pitch: 0.16 } as const;
 const CAMERA_CYCLE_S = 6;
 const SCHOOL_SIZE = 80;
-/** Three schools in the floor frame (floor at y 150), each with its own box, light, and seed. */
+/**
+ * Three schools in the floor frame (floor at y 150), each with its own box, light, and seed, and each glowing with its
+ * own range of the music: the ember school with the bass, the blue with the mids, the magenta with the highs.
+ */
 const SCHOOL_SPECS = [
-  { seed: 29, palette: 'ember', bounds: { minX: -700, maxX: 500, minY: -240, maxY: 90, minZ: 140, maxZ: 900 } },
-  { seed: 57, palette: 'blue', bounds: { minX: -300, maxX: 900, minY: -300, maxY: 40, minZ: 300, maxZ: 1300 } },
-  { seed: 91, palette: 'magenta', bounds: { minX: -900, maxX: 900, minY: -280, maxY: 60, minZ: 800, maxZ: 1900 } },
+  {
+    seed: 29,
+    palette: 'ember',
+    band: 'bass',
+    bounds: { minX: -700, maxX: 500, minY: -240, maxY: 90, minZ: 140, maxZ: 900 },
+  },
+  {
+    seed: 57,
+    palette: 'blue',
+    band: 'mid',
+    bounds: { minX: -300, maxX: 900, minY: -300, maxY: 40, minZ: 300, maxZ: 1300 },
+  },
+  {
+    seed: 91,
+    palette: 'magenta',
+    band: 'high',
+    bounds: { minX: -900, maxX: 900, minY: -280, maxY: 60, minZ: 800, maxZ: 1900 },
+  },
 ] as const;
 /** Depth the world shots pivot around — the pyramid field. */
 const WORLD_ORBIT = 900;
@@ -405,7 +423,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
             alpha: 0.95 * (1 - warp),
             palette: SCHOOL_SPECS[school]!.palette,
             swell: this.kick.swell,
-            high: drive.high,
+            glowLevel: drive[SCHOOL_SPECS[school]!.band],
           },
         );
       }

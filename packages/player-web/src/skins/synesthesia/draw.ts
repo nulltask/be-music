@@ -407,8 +407,8 @@ export function drawSchool(
     skip?: (x: number, y: number) => boolean;
     /** 0..1: how hard the latest kick is flicking every fish up, swollen and white-hot (see stepKick). */
     swell?: number;
-    /** 0..1: the music's high-band level; the fish's glow brightens and spreads with it. */
-    high?: number;
+    /** 0..1: the level of the school's range of the music (bass, mids, or highs); the glow brightens and spreads with it. */
+    glowLevel?: number;
   },
 ): void {
   const palette = style.palette ?? 'ember';
@@ -416,11 +416,11 @@ export function drawSchool(
   const swell = Math.max(0, Math.min(1, style.swell ?? 0));
   const girth = 1 + 1.6 * swell;
   const stretch = 0.16 * (1 + 0.5 * swell);
-  // The glow follows the highs (hats, cymbals, shimmer): a faint halo when the top end is quiet, bright and wide when
-  // it sizzles — while the kick drives the swell.
-  const high = Math.max(0, Math.min(1, style.high ?? 0));
-  const glowGain = (0.35 + 2.2 * high) * (1 + 2 * swell);
-  const glowSpread = (1 + 0.6 * high) * (1 + 0.9 * swell);
+  // The glow follows the school's range of the music: a faint halo while it is quiet, bright and wide when it is loud —
+  // while the kick drives the swell.
+  const level = Math.max(0, Math.min(1, style.glowLevel ?? 0));
+  const glowGain = (0.35 + 2.2 * level) * (1 + 2 * swell);
+  const glowSpread = (1 + 0.6 * level) * (1 + 0.9 * swell);
   const { position: p, velocity: v } = flock;
   const batch = sharedShapeBatch;
   for (let index = 0; index < flock.count; index += 1) {
@@ -455,7 +455,7 @@ export function drawSchool(
     const lit = swell > 0.01 ? mixColor(color, SYN_WHITE, Math.min(1, swell * 1.2)) : color;
     const mx = (head.x + tail.x) / 2;
     const my = (head.y + tail.y) / 2;
-    // Every fish carries a soft halo around its head, swelling with the highs and blooming on a kick.
+    // Every fish carries a soft halo around its head, swelling with its range of the music and blooming on a kick.
     batch.glow(
       graphics,
       lit,

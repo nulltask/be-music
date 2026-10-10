@@ -93,9 +93,24 @@ const SCHOOL_SIZE = 70;
  * independently, so the flocks cross, part, and pass in front of one another.
  */
 const SCHOOL_SPECS = [
-  { seed: 17, palette: 'ember', bounds: { minX: -650, maxX: 450, minY: -200, maxY: 110, minZ: 160, maxZ: 900 } },
-  { seed: 41, palette: 'blue', bounds: { minX: -300, maxX: 800, minY: -260, maxY: 40, minZ: 300, maxZ: 1200 } },
-  { seed: 73, palette: 'magenta', bounds: { minX: -800, maxX: 800, minY: -240, maxY: 80, minZ: 700, maxZ: 1700 } },
+  {
+    seed: 17,
+    palette: 'ember',
+    band: 'bass',
+    bounds: { minX: -650, maxX: 450, minY: -200, maxY: 110, minZ: 160, maxZ: 900 },
+  },
+  {
+    seed: 41,
+    palette: 'blue',
+    band: 'mid',
+    bounds: { minX: -300, maxX: 800, minY: -260, maxY: 40, minZ: 300, maxZ: 1200 },
+  },
+  {
+    seed: 73,
+    palette: 'magenta',
+    band: 'high',
+    bounds: { minX: -800, maxX: 800, minY: -240, maxY: 80, minZ: 700, maxZ: 1700 },
+  },
 ] as const;
 const SCHOOLS = new WeakMap<object, { flocks: Flock[]; lastMs: number; kick: KickState }>();
 
@@ -259,7 +274,7 @@ export function renderSynesthesiaChrome({
           alpha: 0.95,
           palette: SCHOOL_SPECS[school]!.palette,
           swell,
-          high: drive.high,
+          glowLevel: drive[SCHOOL_SPECS[school]!.band],
           skip: (x, y) =>
             x < -10 || x > DESIGN_WIDTH + 10 || y < 0 || y > DESIGN_HEIGHT || (hasBga && insideBga(x, y, 4)),
         },
