@@ -150,6 +150,7 @@ import {
   renderPhantomLongNote,
   renderPhantomNote,
 } from '../../skins/phantom/playfield.ts';
+import { drawCautionMine } from '../../skins/pixi-kit/mine.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -3934,8 +3935,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * Renders one landmine sprite. Tries the theme's mine cell first (e.g. the LR2 skin's `#SRC_NOTE` `mine` slot,
-   * animated per its `divX/divY/cycle`); falls back to a red rectangle with a yellow caution stripe so the no-skin path
-   * still flags the hazard distinctly from playable notes.
+   * animated per its `divX/divY/cycle`), then hands it to a be-music skin that draws mines itself; otherwise falls back
+   * to the caution-striped bar ({@link drawCautionMine}) so the hazard still reads distinctly from playable notes.
    */
   private renderMineNote(laneIndex: number, channel: string, lane: GameplayLaneRect, y: number): void {
     const cell = this.resolveThemeNoteCell('mine', laneIndex);
@@ -3949,22 +3950,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       sprite.height = cell.height;
       return;
     }
+    const binding = this.skinBinding;
+    if (binding?.drawsMines) {
+      binding.addMine({
+        kind: resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant),
+        x: lane.x,
+        w: lane.w,
+        y,
+      });
+      return;
+    }
     const graphic = this.noteLayerPool.acquireGraphics();
     graphic.label = `mine-fallback[lane=${laneIndex},ch=${channel}]`;
-    const mineX = lane.x + 2;
-    const mineW = Math.max(4, lane.w - 4);
-    graphic
-      .roundRect(mineX, y - 12, mineW, 12, 3)
-      .fill(0x6e1414)
-      .stroke({ color: 0xffd166, width: 1, alignment: 1 });
-    // Diagonal caution stripes.
-    const stripeStep = 8;
-    for (let sx = mineX - 12; sx < mineX + mineW; sx += stripeStep) {
-      graphic
-        .poly([sx, y - 1, sx + 4, y - 1, sx + 4 + 8, y - 11, sx + 8, y - 11])
-        .fill({ color: 0xffd166, alpha: 0.55 });
-    }
-    graphic.rect(mineX, y - 12, mineW, 1).fill({ color: 0xff8a8a, alpha: 0.8 });
+    drawCautionMine(graphic, lane.x, lane.w, y);
   }
 
   /**

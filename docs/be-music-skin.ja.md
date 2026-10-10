@@ -175,11 +175,14 @@ export default defineBeMusicSkin({
 - `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。
 - `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。
 - `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。
+- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。判定ラインを通過する瞬間にそのレーンを押すと BAD になります。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs` と固定の `seed` を持ちます。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 
 `gameplay.bombDurationMs`（既定 300）でヒットエフェクトの寿命を指定します。
+
+`gameplay.drawsMines: true` を設定すると、地雷ノーツを `frame.mines` から自分で描けます。設定しない場合はプレイヤーが黄色の注意縞が入った赤いバーとしてキャンバスの上に描くので、地雷を扱わないスキンでも地雷は表示されます。
 
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
