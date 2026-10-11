@@ -1,5 +1,88 @@
 # @be-music/player-web
 
+## 0.9.0
+
+### Minor Changes
+
+- dc99100: Dropping a large BMS folder no longer stalls on "Collecting files…": the drop walk now lists the tree first and only opens the files needed right away (theme candidates outside chart folders, play-logs and archives), while charts, audio and BGA stay as unopened `DeferredDroppedFile` handles that open on first read. The chart parser also keeps a few chart reads in flight ahead of the chart it is parsing.
+  
+  Dropping a whole BMS library no longer slows to a crawl part-way through "Parsing charts…" (and eventually crashes the tab): every parsed chart kept in the collection now drops the stringifier-only `preservation` layers, stops pinning the decoded chart source, and keeps its `events` packed in typed arrays that are rebuilt on read (the most recently read charts stay unpacked). On a 5,537-chart library this takes the JS heap after loading from about 2 GB to about 0.5 GB. A 686k-file / 5,537-chart drop now finishes in about 36 s at a steady parse rate instead of stalling after ~2,500 charts.
+  
+  - `readDroppedFiles` now returns `BrowserDroppedFile[]` (`File | DeferredDroppedFile`), and the collection loaders and `BrowserSongAssetEntry` accept the deferred handles.
+  - New `materializeDroppedFiles` opens deferred handles into plain `File`s for APIs that need them, and `createEagerDropPathPredicate` exposes the open-now rule.
+- 9dbb569: Be-music skins that declare a `portraitStage` are drawn on it while the screen is taller than wide, on every screen (select, decide, gameplay, result); 5 / 7 / 9 KEY play gets the portrait playfield in both layout modes, and double play and the keyboard modes stay on the landscape stage. Rotating the device re-lays the current screen out on the next frame, mid-play included, and `PixiSceneHost.getStageOrientation()` tells hosts which stage the active screen uses.
+- 7260b23: Be-music skins can change play options and open the readme from the select screen through the new `setPlayOption`, `cyclePlayOption`, and `toggleReadme` actions (unknown keys and values outside an option's choices are ignored, `hiSpeed` and `shutter` are clamped, and each change bumps the select frame's `revision`). `PixiPlayOptions` and its value unions are now aliases of the SDK's `BeMusicPlayOptions` types.
+  
+  The player now fills these new skin fields:
+  
+  - Runtime: `song`, `lastJudgeDeltaMs` / `judgeTimings`, `minBpm` / `maxBpm` / `mainBpm`, `songLengthMs` / `songElapsedMs`, `failedAtMs` / `allNotesDoneAtMs` / `outroAtMs`, `gaugeRiseAtMs` / `gaugeMaxAtMs`, `scoreHistory` / `gaugeHistory`, `laneCovers` / `visibleMs` / `greenNumber` (beatoraja's duration and green number, over the current scroll and BPM), and `judgeWindows` (the engine's resolved windows in ms; a mid-chart `#EXRANK` change is not reflected).
+  - Lanes and notes: each lane's `pressedAtMs` / `releasedAtMs` and `holding` / `holdStartedAtMs`, each long note's `mode` (as the active ruleset plays it) and `state` (`pending` / `held` / `dropped` / `done`), `autoplay` on notes and long notes played by autoplay or auto-scratch, the `judge` that set off each bomb, and `measureLines` (one per lane run) for skins that set `drawsMeasureLines`.
+  - Select: `pointer` in the stage's design pixels, `hit` returns whether the pointer is over the rect, and `songRecord(song)` answers from the new `resolveSongRecord` select-scene option, through which a host hands skins its per-chart best records (lamp, EX score, max combo, miss count, play count); without it every song reads as never played.
+  - Result data: `lamp`, `gaugeType`, `judgeRuleset`, `fast` / `slow`, and `judgeTimings`.
+  - Song images: `songImage(song, kind)` on the select, decide, gameplay, and result frames returns the song's `#STAGEFILE`, `#BANNER`, or `#BACKBMP` as an `ImageBitmap`, loaded lazily from the song collection (select bumps `revision` when one arrives). Each scene keeps at most 32 decoded images and closes the least recently used one beyond that.
+  - Skin settings: every frame carries `settings`. The gameplay, select, result, and decide scenes take the player's stored values through the new `beMusicSkinSettings` option, check them with `resolveBeMusicSkinSettings` (now also exported from `@be-music/player-web/skin`), and take changes through `setBeMusicSkinSettings`, which the skin sees from the next frame (select also bumps `revision`). Without stored values the skin draws with its defaults.
+  - BGA: a skin that sets `drawsBga` receives `frame.bga` with the active base, layer, and POOR images and `poorActive`.
+  
+  A skin that sets `drawsLaneCover`, `drawsMeasureLines`, or `drawsBga` now draws the lane covers, measure lines, or BGA itself, and the player stops drawing its own.
+  
+  The new `DefaultPixiDecideView` shows a skin's `decide` screen between select and play for its `durationMs` (Enter, Space, or a click skips ahead; Escape cancels back to select); hosts mount it only when the skin declares one.
+- 0848402: The play screen can use the skin SDK's touch layout: pass `layoutMode: 'touch'` in the gameplay view options and the be-music skins get wide, equal-width lanes across most of the stage, a slightly lower judgement line, and no BGA. Notes, lane beams, touch zones, and the skin's `frame.layout` all follow the touch lanes, and notes scroll in at the lane top instead of drawing over the skin's header. The 24 / 48 KEY modes, themes, and a host `skinlessChromeRenderer` keep the standard layout. Default `'standard'` leaves play unchanged.
+  
+  - Synesthesia's judgement tally no longer slides up under the header when there is no BGA monitor (touch layout, 48 KEY).
+  - Lattice's onset ripples no longer start from the stage's top-left corner when there is no BGA monitor.
+- 5dfc779: The built-in and LR2 play screens can be played on a touch screen, and the select list scrolls with a swipe.
+  
+  - Each lane is a touch zone from the lower part of the lane down to the bottom of the stage, with gaps between lanes split between neighbours. Every finger presses, holds, and releases its lane independently, and sliding a finger into another lane releases the old lane and presses the new one. Touches are fed to the engine through the same lane-input path as the keyboard, with the pointer event's timestamp, so judgement, long notes, key beams, auto scratch, and play logs behave as with keys. Mouse clicks keep their old behaviour.
+  - The play scene keeps the page from scrolling or zooming under the fingers (`touch-action: none` on the canvas during play) and lifts every finger when the play pauses.
+  - `CoreGameplayView` gains `requestTogglePause()`, `isPaused()`, and `requestExit()` (Escape's exit, fade-out included), so a host can offer on-screen pause / quit controls on devices without a keyboard.
+  - On the select screen a touch acts on lift: a tap picks a row as a click does, and a swipe along the list moves the cursor one entry per row travelled (or pans the open README).
+
+### Patch Changes
+
+- 38a2568: Fix the beatoraja select screen showing a chart's LN mode one step off: `#LNMODE` counts from 1 (1 = LN, 2 = CN, 3 = HCN), so a CN chart showed as HCN and an HCN chart as LN. The authored value is now mapped onto the LNMODE button index before it is shown or cycled.
+- 00e8bce: BGA images (`#BMPxx`) and the LR2 skins' stage file, banner and back BMP now look for a `.webp` of the same name first, ahead of `.png` / `.jpg` / `.jpeg` / `.gif` / `.bmp`, so a pack re-encoded to WebP loads without editing its charts. The bytes are decoded by content, so a `#BMPxx foo.bmp` resolved to `foo.webp` decodes as WebP.
+- 6808622: Measure lines in double play no longer cross the gap between the two lane banks: the built-in fallback now draws one line per bank instead of a single line from the leftmost lane to the rightmost.
+- 3f1b6b3: The play screen's BPM readout now follows the chart's tempo changes instead of showing its header BPM throughout, and every built-in skin shows the genre on its select and play screens. Synesthesia and Lattice put it where their fixed NOW SELECTING caption was.
+- e265198: Long song titles, artists, genres, and stat values in the built-in skins no longer get squeezed until they are unreadable: text is narrowed to at most 85% width, and anything still too long is clipped to its box and scrolls through it like a marquee (rests at the start, scrolls, rests at the end, then returns), including on screens that are not redrawn every frame. Synesthesia, Lattice, and Phantom share this through their Pixi helpers, with unfocused list rows clipped at the start instead of scrolling; Plain does the same with its own Canvas 2D code.
+  
+  Also fixes text that ran outside its panel: the genre line on Synesthesia's result screen, and the BPM, gimmick, and other stat values (plus the list row facts and folder label) on Plain's screens.
+- d2f7f82: The built-in mine's caution stripes no longer spill out of the mine into the neighbouring lanes. Mine notes now reach be-music skins that draw them (`gameplay.drawsMines`), and the built-in Pixi skins draw them through an optional `renderMine`, falling back to the caution-striped bar.
+  
+  Synesthesia draws its own mines: note-shaped but dark crimson, with a broken filament that flickers where a note carries its clean white one.
+- 1518e28: Plain has a portrait layout for phones and tablets held upright: the select screen puts the focused song (genre, title, artist, its facts, PLAY and AUTO) in a card above a full-width list with two-line, thumb-sized rows; the play screen keeps its header, the track, the score figures, the judgement counts, and the gauge in the band above the lanes, beside the BGA; and the result stacks its sections. The landscape layout is unchanged.
+- 5f76923: Every built-in skin now heads the song with its genre, then the title, then the artist, on the select, play, and result screens (Plain's result screen gains the genre). The play screen's rank letter (F to AAA) in Synesthesia, Lattice, and Phantom sat below its RANK label; it now lines up with the label, and Phantom's rank badge no longer breaks out of the score plate. Synesthesia's playfield floor rule no longer runs four pixels past the right rail.
+- c749205: Synesthesia's audio orb is now a charge cloud: five small dark orbs, each lit by how far its own slice of the spectrum jumps above its recent level (a one-frame flash with light shafts, then a glow that fades over about a second), so loud passages keep their peaks instead of washing out, hang in a GPU-simulated fluid of up to ~150,000 particles, drawn as the same square dots as the skin's other point clouds. The particles are drawn to or driven off the orbs by charge, with each particle tuned to one spectrum band, and flock through a coarse velocity/density grid so the cloud folds into smoky sheets lit pink to white near a flaring orb and deep indigo elsewhere. The select screen's foreground orb and the gameplay idle monitor use it; the old particle shell, its fibres, the smaller background orb and the black moon are gone.
+  
+  Every other Synesthesia particle (floor, pyramids, rivers, dust, schools, star trails, hit sparks) now shares the cloud's finer texture: square points break into clusters of grains about a pixel across, and segments into trails of such grains, giving off about the same light as before.
+  
+  Synesthesia's fish now carry a soft glow around their heads that brightens and spreads with the music (the ember school with the bass, the blue with the mids, the magenta with the highs), and flick up and flash white on every kick drum (an envelope that fires only on the attack of the lowest bands, gone within about 0.15 s), their glow blooming with them. The gameplay dust no longer flickers and teleports when the music's level changes its speed, and the gameplay floor and rivers no longer jump on entering a zone: they now move by accumulated travel, as the select screen already did.
+  
+  Synesthesia's judgement line loses the bloom around it and stays a crisp filament; the beat now rises above it as an ember gradient that leaps up the lanes on each beat.
+  
+  Synesthesia's 100-combo milestones now play in the middle of the BGA monitor even while a BGA is showing, instead of shrinking onto its top edge.
+  
+  Synesthesia's floor now shows the music's spectrum: bass on the left of the screen to highs on the right, each band rising as a ridge that leaves the viewer and rolls out into the distance, so the ground in front of the camera shows what is playing now; near rows get denser points so they read as waveforms, over low Perlin-noise ground.
+  
+  Synesthesia's mines no longer sink into the lane: they burn bright crimson inside a red halo that throbs like a warning light, with a white-hot flickering filament.
+  
+  On launch the camera now flies past Synesthesia's charge cloud: its dark orbs stream out of the vanishing point with the stars, swelling until they leave the screen.
+  
+  Synesthesia's schools are now mantas instead of fish: each one beats its wings out of step with the rest of its school, and a kick flings the wings wide and white-hot.
+  
+  Synesthesia's hit bursts throw more particles: a skirt of fine, dimmer powder now spreads along the judgement line under each fountain, rising only about a lane's width, so bursts read fuller without dusting the lanes the next notes fall down.
+- 77b070f: Synesthesia has a portrait layout for phones and tablets held upright: the select screen puts the focused song in a card above a full-width list with thumb-sized rows, the play screen runs the lanes down the lower part of the screen under the BGA monitor, a HUD column, and a full-width gauge, and the result stacks its panels.
+  
+  - The 100-combo cut-in no longer covers the bottom HUD when there is no BGA monitor (the landscape touch layout, 48 KEY): it plays in the side column under the judgement tally.
+  - The play header keeps its top corners clear for the host's controls, so a touch pause button no longer covers the PLAY label and a menu tab no longer covers the ruleset label.
+- Updated dependencies [73fd398]
+- Updated dependencies [7260b23]
+- Updated dependencies [3f1b6b3]
+- Updated dependencies [d2f7f82]
+- Updated dependencies [9a79565]
+- Updated dependencies [7f01985]
+  - @be-music/player@0.8.0
+  - @be-music/skin-sdk@0.2.0
+
 ## 0.8.0
 
 ### Minor Changes

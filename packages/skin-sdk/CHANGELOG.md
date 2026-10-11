@@ -1,5 +1,35 @@
 # @be-music/skin-sdk
 
+## 0.2.0
+
+### Minor Changes
+
+- 7260b23: Skins now receive everything they need to match what LR2 and beatoraja skins can show. Every addition is optional or opt-in, so existing skins keep working unchanged.
+  
+  - Gameplay runtime: `song`, `lastJudgeDeltaMs` / `judgeTimings` (positive = late), `judgeWindows`, `laneCovers`, `visibleMs`, `greenNumber`, `minBpm` / `maxBpm` / `mainBpm`, `songLengthMs` / `songElapsedMs`, `failedAtMs` / `allNotesDoneAtMs` / `outroAtMs`, `gaugeRiseAtMs` / `gaugeMaxAtMs`, and `scoreHistory` / `gaugeHistory`.
+  - Gameplay frame: `measureLines` and `bga` behind the new opt-in `drawsMeasureLines` / `drawsBga` flags, `drawsLaneCover`, per-lane press / release / hold times, long-note `mode` / `state`, `autoplay` on notes, and the `judge` behind each bomb.
+  - Select frame: `playOptions` / `playOptionChoices` with `setPlayOption`, `cyclePlayOption`, and `toggleReadme` actions, `pointer`, `songRecord(song)`, and `hit` returning whether the pointer is over the rect. `BeMusicPlayOptions` and its value unions now live in the SDK.
+  - Result data: `lamp`, `gaugeType`, `judgeRuleset`, `fast` / `slow`, and `judgeTimings`, with `binJudgeTimings` for timing histograms.
+  - An optional decide screen (`skin.decide`), skin settings (`skin.settings`, resolved with `resolveBeMusicSkinSettings` and checked by `validateBeMusicSkin`), and `songImage(song, kind)` on every frame.
+- 3f1b6b3: The gameplay runtime gains `songGenre`, and `bpm` is now documented as the BPM at the playhead.
+- d2f7f82: Gameplay frames now carry mine notes: `frame.mines` lists each one as `{ kind, x, w, y }`, and a skin that sets `gameplay.drawsMines: true` draws them itself. Skins that leave it unset keep the player's built-in mine drawing, so existing skins still show mines.
+- 9a79565: Add a portrait stage, so a skin can draw phones and tablets held upright on a 9:16 canvas instead of a 16:9 one shrunk into a thin band.
+  
+  - `BeMusicSkin.portraitStage` (optional): the canvas a skin draws on while the screen is taller than wide. `tallStage` is the built-in one, 480×854 (`wideStage` on its side), with its BGA in a 206 px square at the top left.
+  - `resolveBeMusicStage(skin, screen, chart?)` picks the stage for a screen; gameplay keeps the landscape stage for charts too wide for portrait (double play, 24 / 48 KEY; see `supportsPortraitLayout`).
+  - On a portrait stage `resolveGameplayLayout` lays the lanes across the stage's width in its lower part, in both the standard and the touch mode, keeps the BGA above them, and reports `orientation: 'portrait'` on the layout. `resolveGameplayLaneGeometry` takes the stage as an optional fifth argument.
+  - `BeMusicSurface.orientation` and `BeMusicSelectSkin.portraitLayout` (optional), plus `resolveStageOrientation`, `resolveBeMusicSelectLayout`, `resolvePortraitLaneLayout`, `PORTRAIT_PLAYFIELD`, `TALL_STAGE_WIDTH`, `TALL_STAGE_HEIGHT`, `TALL_STAGE_BGA`, and the `BeMusicStageOrientation` type.
+- 7f01985: Add a touch gameplay layout, so a host can give touch-screen players finger-sized lanes and skins receive them through the layout they already read.
+  
+  - `resolveGameplayLayout` takes an optional `layoutMode: 'standard' | 'touch'` (default `'standard'`, unchanged geometry). In `'touch'` the lanes spread from the stage's left margin to the judgement tally's column with every key one width (at most 72 px) and a scratch 1.4 keys wide, the lanes run from y 48 (below the header band) to a judgement line at y 330 (above the bottom HUD band), so no built-in HUD panel covers them, and `bga` is `undefined`. The 24 / 48 KEY modes keep the standard layout.
+  - `BeMusicGameplayLayout` gains an optional `mode` reporting the layout the host resolved.
+  - New helpers: `resolveGameplayLaneGeometry` (lane rects, bounds, and judgement line for either mode), `resolveTouchLaneLayout`, `supportsTouchLayout`, and the `TOUCH_PLAYFIELD` constants, plus the `GameplayLayoutMode` type.
+
+### Patch Changes
+
+- Updated dependencies [73fd398]
+  - @be-music/player@0.8.0
+
 ## 0.1.0
 
 ### Minor Changes

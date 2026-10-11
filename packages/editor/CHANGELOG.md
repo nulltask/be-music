@@ -1,5 +1,13 @@
 # @be-music/editor
 
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [f4dc1c3]
+- Updated dependencies [5fcba7b]
+  - @be-music/stringifier@0.3.3
+
 ## 0.2.4
 
 ### Patch Changes
