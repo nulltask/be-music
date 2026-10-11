@@ -49,6 +49,11 @@ export interface PixiGameplaySkin {
   renderLanes(context: PixiLanesContext): void;
   /** One tap note; `context.graphics` is a fresh pooled `Graphics` owned by this note. */
   renderNote(context: PixiNoteContext): void;
+  /**
+   * One mine note, to be read as something to avoid. Optional: without it the kit draws the player's caution-striped
+   * bar ({@link drawCautionMine}).
+   */
+  renderMine?(context: PixiNoteContext): void;
   /** One long note body plus its head / tail caps; `context.graphics` is a fresh pooled `Graphics`. */
   renderLongNote(context: PixiLongNoteContext): void;
   /** Every live hit effect for this frame. Acquire children from `context.pool` (Graphics / Sprite / Text). */

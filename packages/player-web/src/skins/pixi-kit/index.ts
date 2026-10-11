@@ -12,3 +12,4 @@ export * from './skin-text.ts';
 export * from './text-metrics.ts';
 export * from './particle-layer.ts';
 export * from './key-beam.ts';
+export * from './mine.ts';

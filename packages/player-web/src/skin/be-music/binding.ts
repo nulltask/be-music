@@ -10,6 +10,7 @@ import type {
   BeMusicGameplayRuntime,
   BeMusicLaneFrame,
   BeMusicLongNote,
+  BeMusicMine,
   BeMusicNote,
   BeMusicResultFrame,
   BeMusicSelectFrame,
@@ -153,12 +154,15 @@ class SkinSurface {
  */
 export class BeMusicGameplayBinding {
   readonly bombDurationMs: number;
+  /** Whether the skin draws mines from the frame; when false the scene draws them itself. */
+  readonly drawsMines: boolean;
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private frame: BeMusicGameplayFrame | undefined;
   private lanes: BeMusicLaneFrame[] = [];
   private notes: BeMusicNote[] = [];
   private longNotes: BeMusicLongNote[] = [];
+  private mines: BeMusicMine[] = [];
   private bombs: BeMusicBomb[] = [];
   private frameNumber = 0;
   private drawnFrame = -1;
@@ -167,6 +171,7 @@ export class BeMusicGameplayBinding {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
+    this.drawsMines = skin.gameplay.drawsMines === true;
   }
 
   /** Starts a frame and shows the skin's canvas in `layerPool` (the scene's chrome layer, above the BGA). */
@@ -180,6 +185,7 @@ export class BeMusicGameplayBinding {
     this.lanes = [];
     this.notes = [];
     this.longNotes = [];
+    this.mines = [];
     this.bombs = [];
     this.frame = {
       nowMs: runtime.nowMs ?? 0,
@@ -188,6 +194,7 @@ export class BeMusicGameplayBinding {
       lanes: this.lanes,
       notes: this.notes,
       longNotes: this.longNotes,
+      mines: this.mines,
       bombs: this.bombs,
       beatPhase: runtime.beatPhase ?? 0,
       effects: runtime.effects ?? 'full',
@@ -212,6 +219,10 @@ export class BeMusicGameplayBinding {
 
   addLongNote(note: BeMusicLongNote): void {
     this.longNotes.push(note);
+  }
+
+  addMine(mine: BeMusicMine): void {
+    this.mines.push(mine);
   }
 
   addBombs(bombs: readonly BeMusicBomb[]): void {

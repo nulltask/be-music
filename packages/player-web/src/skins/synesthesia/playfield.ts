@@ -18,6 +18,7 @@ import {
   type BeMusicLaneKind,
   comboTier,
   effectProfile,
+  hash01,
   resolveLaneRuns,
 } from '@be-music/skin-sdk';
 import {
@@ -127,6 +128,36 @@ export function renderSynesthesiaLanes({
 
 export function renderSynesthesiaNote({ graphics, kind, x, w, y }: PixiNoteContext): void {
   drawNote(graphics, x, y, Math.max(4, w), LIGHTS[kind]);
+}
+
+/** Width (px) of one segment of a mine's broken filament, gap included. */
+const MINE_SEGMENT = 6;
+/** How often (per second) the mine's filament re-rolls which segments are lit. */
+const MINE_FLICKER_HZ = 14;
+
+/**
+ * Whether segment `segment` of the broken filament of a mine in the lane at `laneX` is lit at play time `nowMs`: about
+ * two in three are, re-rolled {@link MINE_FLICKER_HZ} times a second, so the filament stutters like a failing light.
+ */
+export function mineFilamentLit(laneX: number, segment: number, nowMs: number): boolean {
+  const tick = Math.floor((nowMs / 1000) * MINE_FLICKER_HZ);
+  return hash01(Math.round(laneX) * 131 + segment * 17 + tick * 7919) > 0.35;
+}
+
+/**
+ * A mine: shaped like a note so it reads in the same rhythm, but dark crimson with a broken, flickering filament where a
+ * note carries its clean white one — a note that has gone wrong, to be left alone.
+ */
+export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteContext): void {
+  const bodyW = Math.max(4, w);
+  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, bodyW + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0x5a0a12);
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 1).fill(0xff2b3a);
+  for (let segment = 0; segment * MINE_SEGMENT < bodyW; segment += 1) {
+    if (!mineFilamentLit(x, segment, nowMs)) continue;
+    const left = segment * MINE_SEGMENT;
+    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill({ color: 0xff5a5a, alpha: 0.95 });
+  }
 }
 
 export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
