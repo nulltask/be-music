@@ -63,6 +63,15 @@ describe('ShapeBatch', () => {
     expect(calls).toEqual(['move 0,0', 'line 5,5', 'stroke f8f8f8 1 1', 'move 0,1', 'line 5,6', 'stroke f8f8f8 2 1']);
   });
 
+  it('strokes streaks as solid lines even when segments break into grains', () => {
+    const { graphics, calls } = recorder();
+    const batch = new ShapeBatch(true);
+    batch.streak(graphics, 0xffffff, 1, 1, 0, 0, 40, 30);
+    batch.streak(graphics, 0xffffff, 0.01, 1, 0, 0, 40, 30);
+    batch.flush();
+    expect(calls).toEqual(['move 0,0', 'line 40,30', 'stroke f8f8f8 1 1']);
+  });
+
   it('starts every flush empty and routes buckets to the graphics given that frame', () => {
     const first = recorder();
     const second = recorder();

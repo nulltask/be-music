@@ -180,6 +180,38 @@ export class ShapeBatch {
       }
       return;
     }
+    this.strokeLine(graphics, rawColor, eighths, width, x0, y0, x1, y1);
+  }
+
+  /**
+   * A solid stroked segment, never broken into grains: for motion streaks such as the warp's speed lines, which have
+   * to read as continuous light.
+   */
+  public streak(
+    graphics: Graphics,
+    rawColor: number,
+    alpha: number,
+    width: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    const eighths = Math.round(Math.min(1, alpha) * 8);
+    if (eighths <= 0) return;
+    this.strokeLine(graphics, rawColor, eighths, width, x0, y0, x1, y1);
+  }
+
+  private strokeLine(
+    graphics: Graphics,
+    rawColor: number,
+    eighths: number,
+    width: number,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
     const halfSteps = Math.min(63, Math.max(1, Math.round(width * 2)));
     const key = ((this.id(graphics) * 9 + eighths) * 64 + halfSteps) * 4096 + colorIndex(rawColor);
     let bucket = this.lines.get(key);

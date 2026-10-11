@@ -334,7 +334,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         const tailZ = Math.min(STARFIELD.far, point.z + trail);
         const tail = projectViewInto(this.scratchTail, point.x, point.y, tailZ, basis, cx, cy, 200);
         if (tail.visible) {
-          sharedShapeBatch.line(
+          // Solid streaks, not grains: the warp's speed lines read as continuous light.
+          sharedShapeBatch.streak(
             trails,
             star.tint,
             star.alpha * 0.7,
