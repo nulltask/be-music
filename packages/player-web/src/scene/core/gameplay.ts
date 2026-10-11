@@ -36,6 +36,7 @@ import {
   type PlayerSummary,
 } from '@be-music/player/core/engine';
 import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
@@ -79,6 +80,8 @@ import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/g
 import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
+import { toBeMusicJudgeWindows } from './judge-windows.ts';
+import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
@@ -148,7 +151,7 @@ import type {
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import { resolveGameplayLayout } from '@be-music/skin-sdk';
+import { resolveGameplayLayout, type BeMusicJudgeWindows, type BeMusicLongNote } from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import {
   PHANTOM_BOMB_DURATION_MS,
@@ -931,6 +934,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
    */
   private readonly judgeTimings = new JudgeTimingLog();
+  /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
+  private readonly longNotes = new LongNoteTracker();
+  /**
+   * How the engine's ruleset plays long notes and its judge windows (ms), from `onRulesetResolved` at engine launch.
+   * The windows are the ones in force when the chart starts: an LR2 mid-chart `#EXRANKxx` change narrows or widens
+   * the engine's windows from then on, but is not reflected here.
+   */
+  private longNoteStyle: LongNoteStyle | undefined;
+  private judgeWindows: BeMusicJudgeWindows | undefined;
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
   private chartBpmRange: ChartBpmRange | undefined;
   /**
@@ -1911,6 +1923,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.lanePressedAt.clear();
     this.laneReleasedAt.clear();
     this.judgeTimings.clear();
+    this.longNotes.clear();
+    this.longNoteStyle = undefined;
+    this.judgeWindows = undefined;
     this.timerStartedAt.clear();
     this.bombStartedAt.clear();
     this.bombJudge.clear();
@@ -2161,6 +2176,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.fullComboFired = false;
     this.displayedScore = 0;
     this.judgeTimings.clear();
+    this.longNotes.clear();
     this.playMoments = {};
     this.lanePressedAt.clear();
     this.laneReleasedAt.clear();
@@ -3766,6 +3782,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
       scoreHistory: this.scoreHistory,
       gaugeHistory: this.gaugeHistory,
+      judgeWindows: this.judgeWindows,
       laneCovers,
       visibleMs,
       greenNumber: visibleMs === undefined ? undefined : resolveGreenNumber(visibleMs),
@@ -3911,6 +3928,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         beam: this.resolveFallbackLaneLaserAlpha(channel),
         pressedAtMs: this.lanePressedAt.get(channel),
         releasedAtMs: this.laneReleasedAt.get(channel),
+        holding: this.longNotes.isHolding(channel),
+        holdStartedAtMs: this.longNotes.holdStartedAtMs(channel),
       });
     });
 
@@ -4048,7 +4067,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         if (yEnd > lane.bottom || y < lane.top - 48) {
           continue;
         }
-        this.renderLongNote(laneIndex, note.channel, lane, y, yEnd);
+        this.renderLongNote(laneIndex, note, lane, y, yEnd);
         continue;
       }
       // Single notes hide the moment their bottom edge passes the judgement-line bottom (= `lane.bottom`). Until then
@@ -4291,11 +4310,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private renderLongNote(
     laneIndex: number,
-    channel: string,
+    note: RuntimeNote,
     lane: GameplayLaneRect,
     yStart: number,
     yEnd: number,
   ): void {
+    const channel = note.channel;
     // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
     // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
     // *bottom edge* sits at `yEnd` (just-timing of the tail) The body fills the band between them; we clamp the bottom
@@ -4321,7 +4341,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
       const binding = this.skinBinding;
       if (binding) {
-        binding.addLongNote({ kind, x: lane.x, w: lane.w, top, bottom, autoplay: this.isAutoplayedChannel(channel) });
+        binding.addLongNote({
+          kind,
+          x: lane.x,
+          w: lane.w,
+          top,
+          bottom,
+          mode: this.resolveLongNoteMode(note),
+          state: this.longNotes.stateOf(channel, note.beat, note.judged),
+          autoplay: this.isAutoplayedChannel(channel),
+        });
       } else {
         const graphic = this.noteLayerPool.acquireGraphics();
         graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
@@ -4481,6 +4510,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
         // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.
         gauge: this.resolveSelectedGauge(),
+        // The engine reports the ruleset after applying the judge ruleset, the debug window override, and (for a
+        // replay) the recorded settings below, so the windows skins see are the ones the run is judged with.
+        onRulesetResolved: (info) => this.applyResolvedRuleset(info),
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
         ...(this.options.replay !== undefined
           ? {
@@ -4708,8 +4740,32 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       case 'clear-poor-bga':
         this.lastPoorAt = -Number.POSITIVE_INFINITY;
         break;
+      case 'long-note-start':
+        this.longNotes.start(command.channel, command.beat, command.mode, this.playClock());
+        break;
+      case 'long-note-end':
+        this.longNotes.end(command.channel, command.outcome);
+        break;
     }
     this.onThemeEvent({ kind: 'lane-command', command });
+  }
+
+  /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */
+  private applyResolvedRuleset(info: PlayerRulesetInfo): void {
+    this.longNoteStyle = info.longNoteStyle;
+    this.judgeWindows = toBeMusicJudgeWindows(info.windows);
+  }
+
+  /**
+   * The mode a long note plays in: the one the engine announced while it is held, otherwise worked out from the
+   * ruleset's long-note style (unknown until the engine reports its ruleset).
+   */
+  private resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'] {
+    const held = this.longNotes.heldMode(note.channel, note.beat);
+    if (held !== undefined) return held;
+    return this.longNoteStyle === undefined
+      ? undefined
+      : resolveBeMusicLongNoteMode(this.longNoteStyle, note.longNoteMode);
   }
 
   /**
