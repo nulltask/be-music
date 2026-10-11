@@ -57,8 +57,11 @@ export function drawResult({ context: ctx, width, height }: BeMusicSurface<'2d'>
   const x = width - MARGIN - 220;
   ctx.fillStyle = PANEL;
   ctx.fillRect(x, 60, 220, 330);
-  text(ctx, result.song.title, x + 14, 82, { size: 14, weight: 800, maxWidth: 192 });
-  text(ctx, result.song.artist ?? '', x + 14, 102, { size: 11, color: MUTED, maxWidth: 192 });
+  // Genre, title, artist — the order every built-in skin uses.
+  const lift = result.song.genre ? 12 : 0;
+  if (result.song.genre) text(ctx, result.song.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192 });
+  text(ctx, result.song.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192 });
+  text(ctx, result.song.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192 });
   resolveResultTrackRows(result).forEach((row, index) => {
     const y = 140 + index * 34;
     text(ctx, row.label, x + 14, y, { size: 10, color: MUTED, weight: 700 });
