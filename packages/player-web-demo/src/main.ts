@@ -736,7 +736,19 @@ class PlayerWebDemoApp {
     this.hostMounted = true;
     await this.sceneHost.mount(this.elements.stage);
     this.wireCanvasFullscreen();
+    this.sceneHost.app.ticker.add(this.syncGameplayShellState);
   }
+
+  /**
+   * Marks the shell `in-gameplay` while a play screen is up, so the select-screen overlays (the floating Help button and
+   * the search box) step aside instead of covering the skin's track plate. Checked every frame because the gameplay
+   * views are created and torn down along many paths (and attach to the stage directly rather than through
+   * `setScene`).
+   */
+  private readonly syncGameplayShellState = (): void => {
+    const inGameplay = this.gameplayView !== undefined || this.beatorajaGameplayView !== undefined;
+    this.elements.shell.classList.toggle('in-gameplay', inGameplay);
+  };
 
   /**
    * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
