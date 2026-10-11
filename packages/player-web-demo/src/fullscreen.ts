@@ -62,3 +62,22 @@ export function shouldCaptureFullscreenEscape(
 ): boolean {
   return (event.key === 'Escape' || event.code === 'Escape') && getFullscreenElement(doc) !== null;
 }
+
+type OrientationLike = { orientation?: { lock?: (orientation: string) => Promise<void> } };
+
+/**
+ * Enter fullscreen on `element` (unless something already is) and ask for landscape, for a phone's first tap. Either
+ * step may be unsupported (iPhone Safari has neither) or refused; both failures leave the page as it was.
+ */
+export async function enterTouchFullscreen(
+  element: FullscreenElementLike,
+  doc: FullscreenDocumentLike = document,
+  screenLike: OrientationLike = globalThis.screen as OrientationLike,
+): Promise<void> {
+  try {
+    if (getFullscreenElement(doc) === null) await requestFullscreen(element);
+    await screenLike?.orientation?.lock?.('landscape');
+  } catch {
+    // NotSupportedError / NotAllowedError / SecurityError — stay as we are.
+  }
+}

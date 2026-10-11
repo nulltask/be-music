@@ -186,7 +186,12 @@ body {
  */
 .stage {
   position: relative;
-  width: 100%;
+  /*
+   * Keep the stage clear of a landscape phone's notch / rounded corners. Only the sides: the stage is height-bound on a
+   * phone, so giving up the bottom inset (home indicator) would shrink the whole play field. Zero on desktops.
+   */
+  width: auto;
+  margin: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -1873,4 +1878,178 @@ body {
 .shell.in-gameplay .help-button:hover,
 .shell.in-gameplay .help-button:focus-visible {
   opacity: 1;
+}
+
+/*
+ * Phones and tablets. `main.ts` marks the root `touch-first` (and `phone` for phone-sized screens) from
+ * `device-profile.ts`; nothing here applies on a desktop.
+ *
+ * The page chrome steps off the stage: the stage is fitted to the screen's height on a landscape phone, so any overlay
+ * sits on top of the skin's own text. The search box only shows while it is being typed in (the skins' search area
+ * focuses it), the Help button shrinks to an icon in the corner, and the Debug Menu collapses to a short tab.
+ */
+@supports (height: 100dvh) {
+  html.touch-first body,
+  html.touch-first #app {
+    height: 100dvh;
+  }
+}
+
+html.touch-first .search-input:not(:focus) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.touch-first .search-input:focus {
+  top: max(8px, env(safe-area-inset-top, 0px));
+  bottom: auto;
+  left: 50%;
+  width: min(320px, 70vw);
+  transform: translateX(-50%);
+  font-size: 16px; /* 16px keeps iOS Safari from zooming the page on focus */
+}
+
+html.phone .help-button {
+  left: max(8px, env(safe-area-inset-left, 0px));
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  transform: none;
+  padding: 7px;
+}
+
+html.phone .help-button:hover,
+html.phone .help-button:focus-visible {
+  transform: none;
+}
+
+html.phone .help-button-label {
+  display: none;
+}
+
+html.phone .lil-gui.lil-root.lil-closed {
+  --width: 116px !important;
+}
+
+html.phone .lil-gui.lil-root {
+  max-height: 100dvh;
+  overflow-y: auto;
+  right: env(safe-area-inset-right, 0px);
+}
+
+/* No hover on a touch screen to reveal the hidden Help button, and it must not take taps meant for the lanes. */
+html.touch-first .shell.in-gameplay .help-button {
+  visibility: hidden;
+}
+
+html.touch-first:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
+  opacity: 0.35;
+}
+
+/* Touch play controls: a pause button during play; Resume / Quit while paused. */
+.touch-controls {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  z-index: 9;
+  display: none;
+  gap: 8px;
+}
+
+html.touch-first .shell.in-gameplay.touch-play .touch-controls {
+  display: flex;
+}
+
+.touch-control {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  background: rgb(11 14 22 / 0.55);
+  color: rgb(248 250 252 / 0.75);
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-control svg {
+  width: 18px;
+  height: 18px;
+}
+
+.touch-control--text {
+  display: none;
+  padding: 0 16px;
+}
+
+.shell.play-paused .touch-control {
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+}
+
+.shell.play-paused .touch-control--text {
+  display: inline-grid;
+  border-color: rgb(255 209 102 / 0.5);
+  color: #ffd166;
+}
+
+/* Phones held upright: ask for landscape. */
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  html.phone .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgb(8 9 13 / 0.94);
+    text-align: center;
+  }
+}
+
+.rotate-hint-icon {
+  width: 56px;
+  height: 56px;
+  color: #ffd166;
+  animation: rotate-hint-turn 2.4s ease-in-out infinite;
+}
+
+.rotate-hint-title {
+  margin-top: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.rotate-hint-subtitle {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgb(210 217 228 / 0.75);
+}
+
+@keyframes rotate-hint-turn {
+  0%,
+  30% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-hint-icon {
+    animation: none;
+  }
 }

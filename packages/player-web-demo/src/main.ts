@@ -141,7 +141,15 @@ import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
-import { exitFullscreen, shouldCaptureFullscreenEscape, toggleFullscreen } from './fullscreen.ts';
+import { enterTouchFullscreen, exitFullscreen, shouldCaptureFullscreenEscape, toggleFullscreen } from './fullscreen.ts';
+import {
+  type PlayLayoutChoice,
+  type SkinEffectsLevel,
+  readDeviceSignals,
+  resolvePlayLayoutMode,
+  resolveDefaultSkinEffects,
+  resolveDeviceProfile,
+} from './device-profile.ts';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
@@ -180,15 +188,28 @@ function readStoredBuiltInSkinId(): string | undefined {
 
 const SKIN_EFFECTS_STORAGE_KEY = 'be-music-demo.skin-effects';
 
-/** Stored effect level, else `'reduced'` when the OS asks for reduced motion, else `'full'`. */
-function readStoredSkinEffects(): 'full' | 'reduced' | 'off' {
+/** Stored effect level, else `'reduced'` on a phone / tablet or when the OS asks for reduced motion, else `'full'`. */
+function readStoredSkinEffects(): SkinEffectsLevel {
+  let stored: string | null = null;
   try {
-    const stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
-    if (stored === 'full' || stored === 'reduced' || stored === 'off') return stored;
+    stored = window.localStorage.getItem(SKIN_EFFECTS_STORAGE_KEY);
   } catch {
-    // Storage blocked — fall through to the media query.
+    // Storage blocked — fall back to the device default.
   }
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+  return resolveDefaultSkinEffects(stored, readDeviceSignals());
+}
+
+const PLAY_LAYOUT_STORAGE_KEY = 'be-music-demo.play-layout';
+
+/** Stored Debug Menu play-layout pick, `'auto'` when none. */
+function readStoredPlayLayout(): PlayLayoutChoice {
+  try {
+    const stored = window.localStorage.getItem(PLAY_LAYOUT_STORAGE_KEY);
+    if (stored === 'auto' || stored === 'standard' || stored === 'touch') return stored;
+  } catch {
+    // Storage blocked — use the default.
+  }
+  return 'auto';
 }
 
 function storeBuiltInSkinId(id: string): void {
@@ -603,6 +624,7 @@ class PlayerWebDemoApp {
       skinFamilyOverride: 'auto',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
       skinEffects: readStoredSkinEffects(),
+      playLayout: readStoredPlayLayout(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       record: () => {
@@ -765,7 +787,28 @@ class PlayerWebDemoApp {
     this.hostMounted = true;
     await this.sceneHost.mount(this.elements.stage);
     this.wireCanvasFullscreen();
+    this.wireTouchControls();
     this.sceneHost.app.ticker.add(this.syncGameplayShellState);
+  }
+
+  /** Last state {@link syncGameplayShellState} applied, so the per-frame check only touches the DOM on a change. */
+  private shellGameplayState = '';
+
+  /**
+   * The on-screen pause / quit buttons phones and tablets get during play (they have no Space or Escape key). Pause
+   * toggles; Quit, shown while paused, leaves the play the way Escape does.
+   */
+  private wireTouchControls(): void {
+    const pause = document.querySelector<HTMLButtonElement>('#touch-pause');
+    const quit = document.querySelector<HTMLButtonElement>('#touch-quit');
+    pause?.addEventListener('click', () => this.gameplayView?.requestTogglePause());
+    quit?.addEventListener('click', () => {
+      const view = this.gameplayView;
+      if (!view) return;
+      // Resume first so the exit fade (which runs on the play clock) plays out instead of freezing on the pause.
+      if (view.isPaused()) view.requestTogglePause();
+      view.requestExit();
+    });
   }
 
   /**
@@ -776,7 +819,25 @@ class PlayerWebDemoApp {
    */
   private readonly syncGameplayShellState = (): void => {
     const inGameplay = this.gameplayView !== undefined || this.beatorajaGameplayView !== undefined;
-    this.elements.shell.classList.toggle('in-gameplay', inGameplay);
+    // The built-in / LR2 play views take touch input and expose pause / exit for the touch controls.
+    const touchPlay = this.gameplayView !== undefined;
+    const paused = this.gameplayView?.isPaused() === true;
+    const state = `${inGameplay}/${touchPlay}/${paused}`;
+    if (state === this.shellGameplayState) return;
+    this.shellGameplayState = state;
+    const { shell } = this.elements;
+    shell.classList.toggle('in-gameplay', inGameplay);
+    shell.classList.toggle('touch-play', touchPlay);
+    shell.classList.toggle('play-paused', paused);
+    // No pinch zoom while playing: a stray two-finger touch on the lanes would otherwise zoom the page.
+    document
+      .querySelector('meta[name="viewport"]')
+      ?.setAttribute(
+        'content',
+        inGameplay
+          ? 'width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no'
+          : 'width=device-width, initial-scale=1.0, viewport-fit=cover',
+      );
   };
 
   /**
@@ -786,8 +847,24 @@ class PlayerWebDemoApp {
    * fullscreen.
    */
   private wireCanvasFullscreen(): void {
-    this.sceneHost.app.canvas.addEventListener('dblclick', (event) => {
+    const canvas = this.sceneHost.app.canvas;
+    let lastPointerType = 'mouse';
+    let autoFullscreenTried = false;
+    canvas.addEventListener('pointerdown', (event) => {
+      lastPointerType = event.pointerType;
+      // A phone gives the stage the whole screen on the first tap: the browser bars eat a large share of a landscape
+      // phone's height, and the stage is fitted to that height. The whole page goes fullscreen (not just the shell) so the
+      // Debug Menu stays reachable. Once only, so leaving fullscreen sticks. iPhone Safari has no element fullscreen and
+      // simply stays windowed.
+      if (deviceProfile.phone && event.pointerType === 'touch' && !autoFullscreenTried) {
+        autoFullscreenTried = true;
+        void enterTouchFullscreen(document.documentElement);
+      }
+    });
+    canvas.addEventListener('dblclick', (event) => {
       event.preventDefault();
+      // Double taps are lane presses during play, not a fullscreen toggle.
+      if (lastPointerType !== 'mouse' && this.elements.shell.classList.contains('in-gameplay')) return;
       void toggleFullscreen(this.elements.shell);
     });
     window.addEventListener(
@@ -930,6 +1007,17 @@ class PlayerWebDemoApp {
           // Private windows / blocked storage: the pick still applies for this session.
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+      });
+    // Auto picks the touch layout on phones / tablets; applies from the next play.
+    gui
+      .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
+      .name('Play layout')
+      .onChange((choice: PlayLayoutChoice) => {
+        try {
+          window.localStorage.setItem(PLAY_LAYOUT_STORAGE_KEY, choice);
+        } catch {
+          // Private windows / blocked storage: the pick still applies for this session.
+        }
       });
     // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
     this.skinSettingsFolder = gui.addFolder('Skin settings');
@@ -3575,6 +3663,7 @@ class PlayerWebDemoApp {
         ...sharedOptions,
         beMusicSkin: this.beMusicSkin,
         beMusicEffects: this.guiState.skinEffects,
+        layoutMode: resolvePlayLayoutMode(this.guiState.playLayout, deviceProfile),
         beMusicSkinSettings: this.beMusicSkinSettings,
       });
     }
@@ -3796,6 +3885,12 @@ class PlayerWebDemoApp {
 // do this BEFORE constructing the demo app so that even a hard-fail (Pixi `Application.init()` throwing on a no-WebGL2
 // browser) still leaves the user looking at the unsupported-browser message rather than a blank canvas.
 renderBrowserCompatPanel(checkBrowserCompat());
+
+// Phones and tablets: lighter chrome over the stage, touch play controls, and a rotate prompt on phones held upright
+// (see the `html.touch-first` / `html.phone` rules in styles.css).
+const deviceProfile = resolveDeviceProfile(readDeviceSignals());
+document.documentElement.classList.toggle('touch-first', deviceProfile.touchFirst);
+document.documentElement.classList.toggle('phone', deviceProfile.phone);
 
 // Wire up the bottom-right Help button + unified Help / OSS modal. The acknowledgement list is rendered lazily on first
 // open of the OSS tab, so the initial paint isn't blocked on rendering ~30 dependency cards.
