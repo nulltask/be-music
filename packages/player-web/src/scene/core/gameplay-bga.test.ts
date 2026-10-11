@@ -3,6 +3,7 @@ import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { describe, expect, it } from 'vite-plus/test';
 import {
   buildBgaTimeline,
+  buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
   isVideoExtension,
   pickActiveBgaCue,
@@ -125,5 +126,42 @@ describe('isVideoExtension', () => {
     expect(isVideoExtension('movie.MPG')).toBe(true);
     expect(isVideoExtension('movie.webm')).toBe(true);
     expect(isVideoExtension('image.png')).toBe(false);
+  });
+});
+
+describe('buildSkinBgaFrame', () => {
+  const images = {
+    base: new Map([
+      ['01', 'base-01'],
+      ['CC', 'poor-CC'],
+    ]),
+    layer: new Map([['AA', 'layer-AA']]),
+  };
+  const resolve = (key: string, track: 'base' | 'layer') => images[track].get(key);
+
+  it('hands over the base and layer images outside a POOR', () => {
+    expect(buildSkinBgaFrame({ base: '01', layer: 'AA', poor: undefined }, resolve)).toEqual({
+      base: 'base-01',
+      layer: 'layer-AA',
+      poorActive: false,
+    });
+  });
+
+  it('reads the layer from the keyed layer map, not the base map', () => {
+    expect(buildSkinBgaFrame({ base: undefined, layer: '01', poor: undefined }, resolve)).toEqual({
+      poorActive: false,
+    });
+  });
+
+  it('marks the POOR active only when its image is there', () => {
+    expect(buildSkinBgaFrame({ base: '01', layer: undefined, poor: 'CC' }, resolve)).toEqual({
+      base: 'base-01',
+      poor: 'poor-CC',
+      poorActive: true,
+    });
+    expect(buildSkinBgaFrame({ base: '01', layer: undefined, poor: 'ZZ' }, resolve)).toEqual({
+      base: 'base-01',
+      poorActive: false,
+    });
   });
 });

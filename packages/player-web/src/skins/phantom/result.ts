@@ -414,21 +414,28 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
   });
   const textX = TRACK_X + 16;
   const textW = trackW - 24;
-  addText(track.root, result.song.title || 'Untitled chart', textX, trackTop + 22, {
+  // Genre, title, artist — the order every built-in skin uses.
+  const genreLift = result.song.genre ? 14 : 0;
+  if (result.song.genre) {
+    addText(track.root, result.song.genre.toUpperCase(), textX, trackTop + 20, {
+      size: 9,
+      weight: '800',
+      fill: PHANTOM_ASH,
+      maxWidth: textW,
+    });
+  }
+  addText(track.root, result.song.title || 'Untitled chart', textX, trackTop + 22 + genreLift, {
     size: 16,
     fill: PHANTOM_WHITE,
     fontFamily: DEFAULT_HEADLINE_FONT,
     maxWidth: textW,
   });
-  addText(track.root, result.song.artist ?? '', textX, trackTop + 46, {
+  addText(track.root, result.song.artist ?? '', textX, trackTop + 46 + genreLift, {
     size: 10,
     weight: '800',
     fill: PHANTOM_RED_HOT,
     maxWidth: textW,
   });
-  if (result.song.genre) {
-    addText(track.root, result.song.genre, textX, trackTop + 62, { size: 9, fill: PHANTOM_ASH, maxWidth: textW });
-  }
   track.g.rect(textX, trackTop + 84, textW, 1).fill(PHANTOM_SLATE);
   resolveResultTrackRows(result).forEach((row, index) => {
     const rowY = trackTop + 96 + index * 36;

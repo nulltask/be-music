@@ -423,6 +423,17 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
     chrome.poly(parallelogramPoints(20, 62, 74, 16, 6)).fill(PHANTOM_RED);
     addText('SELECTED', 28, 70, { ...tagStyle(PHANTOM_WHITE), anchorY: 0.5 });
+    const genre = song?.genre?.trim();
+    if (genre) {
+      addText(genre.toUpperCase(), 288, 70, {
+        size: 9,
+        weight: '800',
+        fill: PHANTOM_ASH,
+        anchorX: 1,
+        anchorY: 0.5,
+        maxWidth: 180,
+      });
+    }
     // Title / artist slide in from the right after each cursor move.
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
     addText(songTitle, 24 + slide * 28, 90, {

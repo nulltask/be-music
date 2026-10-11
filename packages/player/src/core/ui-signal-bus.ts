@@ -88,13 +88,33 @@ export interface PlayerUiFramePayload {
   activeAudioVoiceCount?: number;
 }
 
+/**
+ * How the active ruleset plays a long note — which is not always the chart's `#LNMODE`: LR2 plays every long note as
+ * an `'ln'`, IIDX plays them as charge notes. `'ln'` judges once (the start, early release = BAD), `'cn'` judges the
+ * start and the release, `'hcn'` additionally drains the gauge while it isn't held.
+ */
+export type PlayerUiLongNoteMode = 'ln' | 'cn' | 'hcn';
+
+/**
+ * How a held long note finished: `'complete'` when its end was judged a hit, `'dropped'` when it ended in a BAD / POOR
+ * (released early, or a broken charge-note head under IIDX).
+ */
+export type PlayerUiLongNoteOutcome = 'complete' | 'dropped';
+
 export type PlayerUiCommand =
   | { kind: 'flash-lane'; channel: string }
   | { kind: 'hold-lane-until-beat'; channel: string; beat: number }
   | { kind: 'press-lane'; channel: string }
   | { kind: 'release-lane'; channel: string }
   | { kind: 'trigger-poor-bga'; seconds: number }
-  | { kind: 'clear-poor-bga' };
+  | { kind: 'clear-poor-bga' }
+  /**
+   * A long note's head was hit (or autoplayed) and the hold began. `beat` is the head's beat, which identifies the long
+   * note on its lane; `mode` is the mode the engine actually plays it in. At most one long note is held per channel.
+   */
+  | { kind: 'long-note-start'; channel: string; beat: number; mode: PlayerUiLongNoteMode }
+  /** The long note held on `channel` (announced by the last `long-note-start` there) finished. */
+  | { kind: 'long-note-end'; channel: string; outcome: PlayerUiLongNoteOutcome };
 
 export interface PlayerUiSignalBus {
   readonly frameTick: WritableSignal<number>;

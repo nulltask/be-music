@@ -4,6 +4,7 @@
 import {
   BUILT_IN_BE_MUSIC_SKINS,
   latticeSkin,
+  DefaultPixiDecideView,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
   DefaultPixiSongSelectView,
@@ -24,7 +25,9 @@ import {
 import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
+  resolveBeMusicSkinSettings,
   type BeMusicSkin,
+  type BeMusicSongRecord,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   findBeatorajaThemeBgm,
@@ -106,6 +109,19 @@ import {
   type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
+import {
+  mergeSongRecord,
+  readStoredSongRecords,
+  songRecordKey,
+  songRecordPlayFromResult,
+  storeSongRecords,
+} from './song-records.ts';
+import {
+  describeSkinSettingControllers,
+  readStoredSkinSettings,
+  setStoredSkinSetting,
+  storeSkinSettings,
+} from './skin-settings.ts';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import type { PlayerSummary } from '@be-music/player/core/engine';
@@ -444,7 +460,7 @@ class PlayerWebDemoApp {
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
   private resultView: PixiResultView | DefaultPixiResultView | undefined;
-  private decideView: PixiDecideView | undefined;
+  private decideView: PixiDecideView | DefaultPixiDecideView | undefined;
   private hostMounted = false;
   /**
    * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
@@ -487,6 +503,19 @@ class PlayerWebDemoApp {
   private readonly playOptionControllers: Controller[] = [];
   /** Per-entry chart-file SHA-256 cache (`''` = lookup failed) — see {@link resolveChartSha256}. */
   private readonly chartSha256Cache = new Map<string, string>();
+  /** In-flight {@link resolveChartSha256} lookups, so a chart is hashed once however often it is asked for. */
+  private readonly chartSha256Pending = new Map<string, Promise<string | undefined>>();
+  /** Best record per chart ({@link songRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
+  private readonly songRecords = readStoredSongRecords();
+  /** Each be-music skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
+  private readonly skinSettings = readStoredSkinSettings();
+  /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
+  private skinSettingsFolder: GUI | undefined;
+  /**
+   * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
+   * for autoplay and replay plays, which never touch the records.
+   */
+  private activePlayRecordKey: string | undefined;
   /**
    * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
    * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
@@ -736,7 +765,19 @@ class PlayerWebDemoApp {
     this.hostMounted = true;
     await this.sceneHost.mount(this.elements.stage);
     this.wireCanvasFullscreen();
+    this.sceneHost.app.ticker.add(this.syncGameplayShellState);
   }
+
+  /**
+   * Marks the shell `in-gameplay` while a play screen is up, so the select-screen overlays (the floating Help button and
+   * the search box) step aside instead of covering the skin's track plate. Checked every frame because the gameplay
+   * views are created and torn down along many paths (and attach to the stage directly rather than through
+   * `setScene`).
+   */
+  private readonly syncGameplayShellState = (): void => {
+    const inGameplay = this.gameplayView !== undefined || this.beatorajaGameplayView !== undefined;
+    this.elements.shell.classList.toggle('in-gameplay', inGameplay);
+  };
 
   /**
    * Double-click the Pixi canvas to toggle the demo shell into (and out of) fullscreen.
@@ -890,6 +931,9 @@ class PlayerWebDemoApp {
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
+    // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
+    this.skinSettingsFolder = gui.addFolder('Skin settings');
+    this.rebuildSkinSettingsFolder();
     // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
     // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
     // 1-option dropdown.
@@ -1359,9 +1403,41 @@ class PlayerWebDemoApp {
     if (cached !== undefined) {
       return cached === '' ? undefined : cached;
     }
-    const hash = await computeChartFileSha256(resolveSongSource(this.collection, song), song.chartPath);
-    this.chartSha256Cache.set(song.id, hash ?? '');
-    return hash;
+    const pending = this.chartSha256Pending.get(song.id);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const lookup = computeChartFileSha256(resolveSongSource(this.collection, song), song.chartPath)
+      .catch(() => undefined)
+      .then((hash) => {
+        this.chartSha256Cache.set(song.id, hash ?? '');
+        return hash;
+      })
+      .finally(() => this.chartSha256Pending.delete(song.id));
+    this.chartSha256Pending.set(song.id, lookup);
+    return lookup;
+  }
+
+  /**
+   * A chart's best record for the select skin's `frame.songRecord`. Records are keyed by chart hash, which is only known
+   * once the chart has been hashed: the first lookup starts hashing it and answers from the path key meanwhile (where a
+   * chart that could not be hashed keeps its record), so a skin sees the record a frame or two later.
+   */
+  private lookupSongRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined {
+    if (this.songRecords.size === 0) {
+      return undefined;
+    }
+    const hash = this.chartSha256Cache.get(song.id);
+    if (hash === undefined) {
+      void this.resolveChartSha256(song);
+    }
+    return this.songRecords.get(songRecordKey(song, hash || undefined));
+  }
+
+  /** Folds a finished play into its chart's best record and persists the records. */
+  private recordSongResult(key: string, data: PixiGameplayResultData): void {
+    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), songRecordPlayFromResult(data)));
+    storeSongRecords(this.songRecords);
   }
 
   /**
@@ -1799,7 +1875,65 @@ class PlayerWebDemoApp {
   private handleBuiltInSkinChange(id: string): void {
     this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
     storeBuiltInSkinId(this.guiState.builtInSkin);
+    this.rebuildSkinSettingsFolder();
     this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+  }
+
+  /** The stored values for the active be-music skin's settings, as handed to its scenes (`beMusicSkinSettings`). */
+  private get beMusicSkinSettings(): Readonly<Record<string, unknown>> | undefined {
+    return this.skinSettings.get(this.beMusicSkin.id);
+  }
+
+  /**
+   * Refills the "Skin settings" folder from the active be-music skin's `settings` schema — a dropdown per choice, a
+   * slider per number, a checkbox per toggle — seeded with the stored values, and hides it when the skin declares none.
+   * Every change is stored under the skin's id and reaches the scenes on screen at once.
+   */
+  private rebuildSkinSettingsFolder(): void {
+    const folder = this.skinSettingsFolder;
+    if (!folder) return;
+    // `controllersRecursive` returns a copy, so destroying (which splices `folder.controllers`) is safe mid-loop.
+    for (const controller of folder.controllersRecursive()) controller.destroy();
+    const skin = this.beMusicSkin;
+    const controllers = describeSkinSettingControllers(skin.settings);
+    folder.show(controllers.length > 0);
+    if (controllers.length === 0) return;
+    const values: Record<string, unknown> = { ...resolveBeMusicSkinSettings(skin, this.skinSettings.get(skin.id)) };
+    for (const controller of controllers) {
+      const added =
+        controller.kind === 'dropdown'
+          ? folder.add(values, controller.id, controller.options)
+          : controller.kind === 'slider'
+            ? folder.add(values, controller.id, controller.min, controller.max, controller.step)
+            : folder.add(values, controller.id);
+      added.name(controller.name).onChange((value: string | number | boolean) => {
+        setStoredSkinSetting(this.skinSettings, skin.id, controller.id, value);
+        storeSkinSettings(this.skinSettings);
+        this.applyBeMusicSkinSettings();
+      });
+    }
+    folder
+      .add(
+        {
+          reset: () => {
+            this.skinSettings.delete(skin.id);
+            storeSkinSettings(this.skinSettings);
+            this.applyBeMusicSkinSettings();
+            this.rebuildSkinSettingsFolder();
+          },
+        },
+        'reset',
+      )
+      .name('Reset to defaults');
+  }
+
+  /** Hands the active be-music skin's settings to the scenes on screen, which draw with them from their next frame. */
+  private applyBeMusicSkinSettings(): void {
+    const settings = this.beMusicSkinSettings;
+    this.selectView?.setBeMusicSkinSettings(settings);
+    this.gameplayView?.setBeMusicSkinSettings(settings);
+    this.resultView?.setBeMusicSkinSettings(settings);
+    if (this.decideView instanceof DefaultPixiDecideView) this.decideView.setBeMusicSkinSettings(settings);
   }
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
@@ -3232,6 +3366,7 @@ class PlayerWebDemoApp {
         this.guiState.autoScratch2P = options.autoScratch2P;
         this.refreshPlayOptionControllers();
       },
+      resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
       onSongSelected: (song: BrowserSongEntry) => {
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
         // the view is hidden, so the cue isn't cut by the gameplay mount.
@@ -3255,6 +3390,7 @@ class PlayerWebDemoApp {
           ...selectSceneOptions,
           beMusicSkin: this.beMusicSkin,
           beMusicEffects: this.guiState.skinEffects,
+          beMusicSkinSettings: this.beMusicSkinSettings,
         });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
@@ -3263,7 +3399,8 @@ class PlayerWebDemoApp {
   /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, falls straight through to `playSong` so themes that don't ship a Decide
-   * directory still play the chart immediately.
+   * directory still play the chart immediately. On the default family the splash is the be-music skin's own decide
+   * screen, shown only when the skin declares one.
    *
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
@@ -3278,9 +3415,15 @@ class PlayerWebDemoApp {
       if (!mounted) await this.playSong(song, overrides);
       return;
     }
-    if (decideFamily === 'default' || !this.decideSkin) {
-      // Default family has no decide splash by design — same for an LR2-only setup that didn't ship a decide skin.
-      // The select view's `playDecideSound` already fired so the audio cue still plays.
+    // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
+    // the play itself runs on a beatoraja theme.
+    const beMusicDecide =
+      decideFamily === 'default' &&
+      this.beMusicSkin.decide !== undefined &&
+      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) !== 'beatoraja';
+    if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
+      // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
+      // view's `playDecideSound` already fired so the audio cue still plays.
       await this.playSong(song, overrides);
       return;
     }
@@ -3302,8 +3445,7 @@ class PlayerWebDemoApp {
       advanced = true;
       then();
     };
-    this.decideView = new PixiDecideView({
-      skin: this.decideSkin,
+    const callbacks = {
       onContinue: () =>
         advance(() => {
           void this.startGameplayAfterDecide(song, preloaded);
@@ -3315,7 +3457,19 @@ class PlayerWebDemoApp {
           this.gameplayView = undefined;
           void this.showSelect();
         }),
-    });
+    };
+    const playOptions = this.selectView?.getPlayOptions();
+    this.decideView = beMusicDecide
+      ? new DefaultPixiDecideView({
+          ...callbacks,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+          beMusicSkinSettings: this.beMusicSkinSettings,
+          ...(playOptions !== undefined
+            ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
+            : {}),
+        })
+      : new PixiDecideView({ ...callbacks, skin: this.decideSkin });
     await this.decideView.mount(this.sceneHost, { song, collection: this.collection });
   }
 
@@ -3360,11 +3514,15 @@ class PlayerWebDemoApp {
   ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
+    const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
+    // Only a play the player actually played counts towards the chart's best record.
+    this.activePlayRecordKey =
+      autoPlay || replay !== undefined ? undefined : songRecordKey(song, overrides.chartSha256);
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
       // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
-      autoPlay: overrides.autoPlay ?? this.guiState.autoPlay,
+      autoPlay,
       autoPauseOnBlur: this.guiState.autoPauseOnBlur,
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
@@ -3417,6 +3575,7 @@ class PlayerWebDemoApp {
         ...sharedOptions,
         beMusicSkin: this.beMusicSkin,
         beMusicEffects: this.guiState.skinEffects,
+        beMusicSkinSettings: this.beMusicSkinSettings,
       });
     }
     return new PixiGameplayView({
@@ -3571,11 +3730,16 @@ class PlayerWebDemoApp {
           ...sharedResultOptions,
           beMusicSkin: this.beMusicSkin,
           beMusicEffects: this.guiState.skinEffects,
+          beMusicSkinSettings: this.beMusicSkinSettings,
         });
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
+    if (this.activePlayRecordKey !== undefined) {
+      this.recordSongResult(this.activePlayRecordKey, data);
+      this.activePlayRecordKey = undefined;
+    }
     this.maybeAutoSavePlaylog(data.playlog);
     this.unlockPlaylogOptions();
   }

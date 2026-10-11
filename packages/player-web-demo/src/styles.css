@@ -1857,3 +1857,20 @@ body {
     transition: none;
   }
 }
+
+/*
+ * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
+ * reachable by hovering where it sits.
+ */
+.shell.in-gameplay .search-input {
+  visibility: hidden;
+}
+
+.shell.in-gameplay .help-button {
+  opacity: 0;
+}
+
+.shell.in-gameplay .help-button:hover,
+.shell.in-gameplay .help-button:focus-visible {
+  opacity: 1;
+}

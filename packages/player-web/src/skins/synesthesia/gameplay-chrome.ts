@@ -628,7 +628,8 @@ function drawPlayfieldWell(
     graphics.circle(left - 1, y, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
     graphics.circle(left - 1, y, 7).fill({ color: accent, alpha: 0.25 });
   }
-  graphics.rect(left - 1, PLAYFIELD_FRAME_BOTTOM, w + 4, 1).fill({ color: accent, alpha: 0.7 });
+  // The floor rule runs from the left rail's outer edge (left - 1) to the right rail's (right + 3), and no further.
+  graphics.rect(left - 1, PLAYFIELD_FRAME_BOTTOM, w, 1).fill({ color: accent, alpha: 0.7 });
 }
 
 /**
@@ -845,11 +846,24 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
 function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
   const { x, y, w, h } = SONG_PLATE;
   drawFrame(graphics, x, y, w, h, accent);
+  // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
+  const genre = runtime.songGenre?.trim();
+  const lift = genre ? 5 : 0;
+  if (genre) {
+    addHudText(
+      layer,
+      genre.toUpperCase(),
+      x + 14,
+      y + 3,
+      { size: 8, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: w - 28 },
+      pool,
+    );
+  }
   addHudText(
     layer,
     runtime.songTitle?.trim() || 'Untitled chart',
     x + 14,
-    y + 6,
+    y + 6 + lift,
     {
       size: 15,
       weight: '500',
@@ -950,10 +964,12 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     layer,
     rank,
     x + w - 12,
-    y + 84,
+    // Centred on the RANK label's line, like the other figures sit on theirs.
+    y + 81,
     {
       ...displayStyle(rank.length >= 3 ? 12 : 16, SYN_AMBER),
       anchorX: 1,
+      anchorY: 0.5,
       maxWidth: 46,
       dropShadow: { color: SYN_AMBER, alpha: 0.8, blur: 8, distance: 0 },
     },

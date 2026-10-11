@@ -149,6 +149,8 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 | `contextAttributes`, `setup`, `teardown` | no       | See [Surfaces](#surfaces) and [Using a framework](#using-a-framework).                                                                |
 | `stage`                                  | no       | Design canvas; defaults to `wideStage`. See [Stage and layout](#stage-and-layout).                                                    |
 | `gameplay`, `select`, `result`           | yes      | Each screen's `draw` function; see [Screens](#screens).                                                                               |
+| `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                     |
+| `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                        |
 
 `validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing.
 
@@ -172,22 +174,36 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 `gameplay.draw(surface, frame)` receives a `BeMusicGameplayFrame`:
 
 - `layout`: see [Stage and layout](#stage-and-layout).
-- `lanes`: each lane's rect (`x`, `w`, `top`, `bottom` at the judgement line), `kind`, and `beam`, the key-beam intensity (1 while held, then decaying).
-- `notes`: tap notes as `{ kind, x, w, y }`, where `y` is the note's bottom edge.
-- `longNotes`: long notes as `{ kind, x, w, top, bottom }`. `top` is the tail; `bottom` is the head, clamped to the judgement line while held.
+- `lanes`: each lane's rect (`x`, `w`, `top`, `bottom` at the judgement line), `kind`, and `beam`, the key-beam intensity (1 while held, then decaying). `pressedAtMs` / `releasedAtMs` are the play-clock times of the lane's last press and release; `holding` and `holdStartedAtMs` tell whether a long note in the lane is being held, and since when.
+- `notes`: tap notes as `{ kind, x, w, y }`, where `y` is the note's bottom edge. `autoplay` is set on notes autoplay or auto-scratch will hit.
+- `longNotes`: long notes as `{ kind, x, w, top, bottom }`. `top` is the tail; `bottom` is the head, clamped to the judgement line while held. `mode` (`'ln'` / `'cn'` / `'hcn'`) says how the note judges, `state` (`'pending'` / `'held'` / `'dropped'` / `'done'`) where it is in its life, and `autoplay` whether autoplay plays it.
 - `mines`: mine notes as `{ kind, x, w, y }`, where `y` is the bottom edge. Pressing the lane as one passes the judgement line costs a BAD. Empty unless the skin sets `gameplay.drawsMines` (below).
-- `bombs`: live hit effects with `elapsedMs` and a stable `seed`.
+- `bombs`: live hit effects with `elapsedMs`, a stable `seed`, and the `judge` that set them off.
+- `measureLines`: measure lines as `{ side, x, w, y }`, one per lane run they cross. Empty unless the skin sets `gameplay.drawsMeasureLines`.
+- `bga`: the BGA layers to composite (`{ base?, layer?, poor?, poorActive }`). `undefined` unless the skin sets `gameplay.drawsBga`.
 - `runtime`: the HUD values (below).
 - `beatPhase`, `nowMs`, `effects`, and `audio`.
+- `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images).
 
 `gameplay.bombDurationMs` (default 300) sets how long a hit effect lives.
 
-Set `gameplay.drawsMines: true` to draw mine notes yourself from `frame.mines`. Without it the player draws them over your canvas as red bars with yellow caution stripes, so a skin that ignores mines still shows them.
+#### Drawing it yourself
+
+By default the player draws a few things over (or behind) your canvas, so a skin that ignores them still shows them. Set the matching flag on `gameplay` to draw them yourself instead:
+
+| Flag                | You draw from        | Without it                                                              |
+| ------------------- | -------------------- | ----------------------------------------------------------------------- |
+| `drawsMines`        | `frame.mines`        | The player draws red bars with yellow caution stripes over your canvas. |
+| `drawsLaneCover`    | `runtime.laneCovers` | The player draws its SUDDEN+ / HIDDEN+ covers over your canvas.         |
+| `drawsMeasureLines` | `frame.measureLines` | The player draws its own measure lines.                                 |
+| `drawsBga`          | `frame.bga`          | The player shows the BGA behind your canvas, in `layout.bga`.           |
+
+Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBga`, the `layer` image arrives with pure black already turned transparent (the BMS layer convention) while `base` and `poor` are opaque: draw them with plain alpha blending, and show `poor` instead of the others while `poorActive`. A bmson layer (its spec keeps black opaque) and a video layer arrive as authored. The images are `ImageBitmap`s or, for a video BGA, the playing `<video>` element; a `#BGA` sub-region arrives as its own cropped image (missing for the first frame or two while it is cut). The player still picks the frame of a `#SWBGA` animation, but leaves a slot's `#ARGB` tint and opacity to you.
 
 `runtime` (`BeMusicGameplayRuntime`) carries:
 
 - **Song and score:**
-  - `songTitle`, `songArtist`, `bpm`, `hiSpeed`
+  - `songTitle`, `songArtist`, `songGenre`, `bpm` (the BPM at the playhead, following tempo changes), `hiSpeed`
   - `score`, `exScore`, `exScoreMax`, `combo`, `maxCombo`
   - judgement counts (`perfect` … `poor`, `fast`, `slow`)
   - `rank`, `totalNotes`
@@ -196,6 +212,14 @@ Set `gameplay.drawsMines: true` to draw mine notes yourself from `frame.mines`. 
 - **Play state:** `autoplay`, `hasBga`, `loading` (show NOW LOADING while audio decodes or a BGA transcodes), `progressRatio`, `chartMs`, `beatPhase`, `nowMs`
 - **Event timestamps:** `judgeAtMs`, `impulseAtMs`, `impulseKind` (the last judgement and key press, for punch and impulse effects)
 - **Comfort and sound:** `effects`, `audio`
+- **Chart:** `song` (the `BrowserSongEntry` being played; level, difficulty, `#RANK`, and `#TOTAL` are in `song.chart.metadata`), `minBpm`, `maxBpm`, `mainBpm`
+- **Timing:** `lastJudgeDeltaMs` and `judgeTimings` (the last 64 timed judgements, oldest first); see [Judgement timing](#judgement-timing). `judgeWindows` gives the ruleset's windows in ms per note class (`note`, `scratch`, `longNoteEnd`), resolved from `#RANK` when the play starts (a later `#EXRANK` change is not reflected).
+- **Lane cover:** `laneCovers` (per side: `sudden`, `hidden`, `lift` as fractions of the lane height), `visibleMs` (how long a note is on screen), and `greenNumber` (`visibleMs × 0.6`)
+- **Song clock:** `songLengthMs` and `songElapsedMs`, on the audio clock: it starts at 0 with the song and stops while paused, so the remaining time is `songLengthMs - songElapsedMs`. `chartMs` differs: it is measured from the chart's first beat and runs negative through the count-in.
+- **Once-per-play moments:** `failedAtMs` (the gauge failed mid-play), `allNotesDoneAtMs` (the last playable note was judged), `outroAtMs` (the chart ended), `gaugeRiseAtMs` (the gauge first rose), and `gaugeMaxAtMs` (it first reached its maximum). Each is a play-clock time latched when the moment happens, `undefined` before.
+- **Histories:** `scoreHistory` and `gaugeHistory`, the samples the result screen receives. They are the host's live arrays: read them, never mutate them.
+
+Every runtime field is optional. A host that can't provide one leaves it `undefined`, so draw a sensible fallback.
 
 ### Select
 
@@ -204,22 +228,79 @@ Set `gameplay.drawsMines: true` to draw mine notes yourself from `frame.mines`. 
 - **`select.draw(surface, frame)`** receives a `BeMusicSelectFrame`:
   - `entries`, `selectedIndex`, `firstVisibleIndex`, `visibleRows`, `focusedSong`
   - `folderLabel`, `searchQuery`, `totalCharts`
-  - `actions` (`play`, `autoPlay`, `activateSearch`)
-  - `revision`, which increases whenever the select state changes (cursor, folder, search, list contents). A retained scene graph can be rebuilt only when it moves.
+  - `actions`: `play`, `autoPlay`, `activateSearch`, `setPlayOption(key, value)`, `cyclePlayOption(key, step?)` (step 1 or -1, wrapping), and `toggleReadme()` (opens or closes the focused song's `.txt`)
+  - `playOptions` (`BeMusicPlayOptions`: hi-speed, random, gauge, HIDDEN / SUDDEN, lane cover, BGA, list filters, …) and `playOptionChoices`, the values each enum or on / off option can take. Values outside the choices are ignored; `hiSpeed` and `shutter` take any number and are clamped to their range, and `cyclePlayOption` leaves them alone.
+  - `songRecord(song)`: the player's best record on a chart (`{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none
+  - `pointer`: the pointer in design pixels, or `undefined`
+  - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images)
+  - `revision`, which increases whenever the select state changes (cursor, folder, search, list contents, play options, the readme opening or closing). A retained scene graph can be rebuilt only when it moves.
   - `sceneStartedAt` and `cursorChangedAt` for entrance and focus transitions
   - `nowMs`, `effects`, `launchAt`, and `audio`
-  - `hit(x, y, w, h, action, cursor?)`: makes a rect clickable for this frame. Declare your hit areas on every draw.
+  - `hit(x, y, w, h, action, cursor?)`: makes a rect clickable for this frame and returns whether the pointer is over it, for hover states. Declare your hit areas on every draw.
 
 ### Result
 
 `result.draw(surface, frame)` receives a `BeMusicResultFrame`:
 
-- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log.
+- `result` (`BeMusicResultData`): scores, judgement counts, gauge and score history, and the play log. When the host provides them, also `lamp` (the clear lamp: `FAILED`, the gauge it was cleared on, `FULL_COMBO`, `PERFECT`, `MAX`), `gaugeType`, `judgeRuleset`, `fast` / `slow`, and `judgeTimings` (every timed judgement of the play).
 - `rankLabel` (IIDX DJ level) and `ratePercent`.
 - `elapsedMs` since the scene mounted, or `Infinity` once the player skipped the entrance.
 - `nowMs` and `effects`.
+- `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images).
 
-`resolveResultLamp` and `resolveResultTrackRows` give the clear lamp and track rows the built-in skins show.
+`resolveResultLamp` and `resolveResultTrackRows` give the clear lamp and track rows the built-in skins show. `binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` turns the timings into a histogram.
+
+### Decide
+
+A skin may add a decide screen, shown between picking a chart and the play. Hosts mount it only when `skin.decide` exists and go straight to the play otherwise.
+
+- **`decide.durationMs`:** how long the screen shows (default 2000). The player can skip ahead with Enter or go back to select with Escape.
+- **`decide.draw(surface, frame)`** receives a `BeMusicDecideFrame`: `song`, `playOptions`, `elapsedMs` since the screen mounted, `nowMs`, `effects`, `audio`, `settings`, and `songImage`.
+
+## Judgement timing
+
+Timing offsets are signed milliseconds with the engine's convention: **positive is late (SLOW), negative is early (FAST)**, 0 is dead on.
+
+- `runtime.lastJudgeDeltaMs` is the most recent offset, and `runtime.judgeTimings` the last 64 as `{ atMs, deltaMs, judge, channel? }`, oldest first.
+- `result.judgeTimings` holds every timed judgement of the play.
+- Only judgements with a press carry a timing. Autoplay hits, mine BADs, and missed notes (a POOR without a press) are left out.
+- `binJudgeTimings(timings, binMs = 1, rangeMs?)` returns `{ binMs, originMs, counts }`, a histogram whose bin edges sit on multiples of `binMs`. Pass `rangeMs` to cover `-rangeMs..rangeMs` whatever the timings, so histograms of different plays line up.
+
+## Skin settings
+
+A skin can declare options the player tunes, such as a colour theme, a judge-text offset, or an effect toggle:
+
+```ts
+settings: [
+  {
+    kind: 'choice',
+    id: 'theme',
+    label: 'Theme',
+    options: [
+      { value: 'neon', label: 'Neon' },
+      { value: 'mono', label: 'Mono' },
+    ],
+    default: 'neon',
+  },
+  { kind: 'number', id: 'judgeOffset', label: 'Judge offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
+  { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
+],
+```
+
+- **Kinds:** `choice` (one of `options`), `number` (`min..max`, with an optional `step` and `unit` of `'px'`, `'ms'`, or `'%'`), and `toggle`.
+- **Validation:** `validateBeMusicSkin` checks the schema. Ids must be unique, labels must not be empty, and every `default` must be one of the options or lie in its range.
+- **Values:** every frame carries `settings`, the player's values keyed by id. Hosts persist the values per skin and resolve them with `resolveBeMusicSkinSettings(skin, stored)`, which falls back to the default for anything missing, stale, or mistyped, clamps numbers into their range, and drops ids the skin no longer declares. You can rely on every declared id being present with the right type.
+- **Live changes:** the player may change a value while a screen is showing; the next frame carries it, and on select `revision` moves too. Read `frame.settings` every frame (or key anything you derive from it on `revision`) rather than caching it from the first frame.
+- **In the be-music player:** hosts pass the stored values to the scenes with the `beMusicSkinSettings` option and update them with `setBeMusicSkinSettings`. The demo builds a "Skin settings" folder in its Debug Menu from the schema (a dropdown per `choice`, a slider per `number` with the unit in its name, a checkbox per `toggle`), hides it for a skin that declares none, and saves the values per skin id in the browser.
+
+## Song images
+
+`songImage(song, kind)` is on every frame (select, decide, gameplay, and result). It returns the song's `'stageFile'`, `'banner'`, or `'backBmp'` as an `ImageBitmap`, ready for `drawImage` or a texture upload.
+
+- Images load lazily. The first calls return `undefined` while an image decodes; the screen is redrawn once it is ready (on select, `revision` moves).
+- It also returns `undefined` when the song has no such image or the host doesn't provide images, so always draw a fallback.
+- Don't close or transfer the bitmap: the host caches it.
+- Look the image up on every draw rather than keeping the bitmap (or a texture made from it) across frames. The host keeps a bounded number of images and closes the least recently used one to make room.
 
 ## SDK helpers
 
@@ -232,6 +313,8 @@ Set `gameplay.drawsMines: true` to draw mine notes yourself from `frame.mines`. 
 | Loading    | `LOADING_WORD`, `loadingDots(nowMs)`                                                                                                                                       |
 | Sound      | `audioDrive`, `bandAt`, `bandLevel`; see [Reacting to the music](#reacting-to-the-music)                                                                                   |
 | Result     | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                              |
+| Timing     | `binJudgeTimings`; see [Judgement timing](#judgement-timing)                                                                                                               |
+| Settings   | `resolveBeMusicSkinSettings`, `validateBeMusicSkinSettings`; see [Skin settings](#skin-settings)                                                                           |
 | Song facts | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`, `formatPlayVariantLabel`                                               |
 | Text       | `DEFAULT_TEXT_FONT`, `layoutTabularRun` (tabular figures)                                                                                                                  |
 | Motion     | `easeOutCubic`, `easeOutBack`, `stageProgress`, `rollUpValue`, `hash01` (deterministic jitter)                                                                             |
@@ -386,6 +469,10 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 - [ ] The BGA rect is left transparent when `runtime.hasBga`.
 - [ ] NOW LOADING is shown while `runtime.loading`.
 - [ ] Select rows line up with `select.layout`, and buttons are declared with `frame.hit` on every draw.
+- [ ] Every `draws*` flag you set is matched by drawing that element yourself.
+- [ ] Optional runtime fields and `songImage` lookups that come back `undefined` have a fallback.
+- [ ] Timing displays treat positive `deltaMs` as late (SLOW) and negative as early (FAST).
+- [ ] `settings` ids are unique and every default is valid.
 - [ ] Audio reactions go through `audioDrive`, and `effects` is respected.
 - [ ] Every face is listed in `fontLoads`.
 - [ ] `draw` stays well under half a frame on a dense chart at high density, with no per-frame allocations or pixel readback.

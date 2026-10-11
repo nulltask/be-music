@@ -52,7 +52,7 @@
     "@types/node": "^26.6.1",
     "@vitest/coverage-v8": "catalog:",
     "rimraf": "^6.0.1",
-    "tinybench": "^6.2.0",
+    "tinybench": "^6.2.1",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
