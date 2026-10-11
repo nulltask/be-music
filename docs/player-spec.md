@@ -49,24 +49,24 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 ### Supported commands
 
-| command                                                                                                                                 | Handling in player                                                                                                                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens.                                    |
-| `#BANNER`                                                                                                                               | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose.                                                        |
-| `#STAGEFILE`                                                                                                                            | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay.                                     |
-| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | Used to display, sort, filter, and display the results of the song selection screen.                                                                                 |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | Used for time resolution.                                                                                                                                            |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | Used for judgment range, display rank, groove gauge calculation.                                                                                                     |
-| `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                              |
-| `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values. |
-| `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                               |
-| `#PATH_WAV`                                                                                                                             | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play.                                              |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                    |
-| `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                           |
-| `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                    |
-| `#POORBGA`                                                                                                                              | Used to override the default value of POOR images.                                                                                                                   |
-| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | Used to calculate note drawing distance.                                                                                                                             |
-| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts.                                                                                                                   |
+| command                                                                                                                                 | Handling in player                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens.                                                                                                                                        |
+| `#BANNER`                                                                                                                               | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose.                                                                                                                                                            |
+| `#STAGEFILE`                                                                                                                            | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay.                                                                                                                                         |
+| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | Used to display, sort, filter, and display the results of the song selection screen.                                                                                                                                                                                     |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | Used for time resolution.                                                                                                                                                                                                                                                |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | Used for judgment range, display rank, groove gauge calculation.                                                                                                                                                                                                         |
+| `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                                                                                                                                  |
+| `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values.                                                                                                     |
+| `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                                                                                                                                   |
+| `#PATH_WAV`                                                                                                                             | Tried as a directory prefix before the bare path when browser gameplay and the offline renderer (`renderJson`) resolve samples; the song selection screen preview also uses it to search for files. The terminal player does not apply it when loading samples for play. |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                                                                                                                        |
+| `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                                                                                                                               |
+| `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                                                                                                                        |
+| `#POORBGA`                                                                                                                              | Used to override the default value of POOR images.                                                                                                                                                                                                                       |
+| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | Used to calculate note drawing distance.                                                                                                                                                                                                                                 |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts.                                                                                                                                                                                                                       |
 
 ### Unsupported channels
 
@@ -133,6 +133,9 @@ The terminal object of `#LNOBJ` itself is not left in the performance note strin
 Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
 
 ### Landmines
+
+Mine channels are mapped to their corresponding playable lane and kept in a separate array.
+Mines are not included in `summary.total`.
 
 Mines follow the LR2 detonation model (LR2's own changelog; the damage model is confirmed against beatoraja's `JudgeManager`).
 
@@ -209,6 +212,19 @@ A window is a signed `[late bound, early bound]` pair in microseconds, resolved 
 per context (note vs long-note end). LR2 uses one table for all four contexts; beatoraja widens scratch by 10 ms
 per judge and gives long-note ends their own table.
 
+### Baseline widths
+
+The player bases its windows on LR2's measured judgment widths (hitkey's diary entry of 2015-01-19; they match lr2oraja's LR2-compatible table).
+
+| `#RANK`         | `PGREAT`                                            | `GREAT` | `GOOD`   | `BAD`    |
+| --------------- | --------------------------------------------------- | ------- | -------- | -------- |
+| `0` `VERY HARD` | `±8ms`                                              | `±24ms` | `±40ms`  | `±200ms` |
+| `1` `HARD`      | `±15ms`                                             | `±30ms` | `±60ms`  | `±200ms` |
+| `2` `NORMAL`    | `±18ms`                                             | `±40ms` | `±100ms` | `±200ms` |
+| `3` `EASY`      | `±21ms`                                             | `±60ms` | `±120ms` | `±200ms` |
+| `4` `VERY EASY` | Same as `NORMAL` (LR2 treats `#RANK 4` as `NORMAL`) |         |          |          |
+
+The `BAD` width is fixed at `±200ms` regardless of rank or extension commands. Scratch uses the same widths as the keys.
 The boundaries of `PERFECT` / `GREAT` / `GOOD` / `BAD` are determined by these four windows, walked inner to outer.
 An input outside every window reaches no note: the lane keysound plays and the press falls through to the
 empty-POOR path. `POOR` is a note that was missed outright.
@@ -314,12 +330,11 @@ When the judgment is confirmed, do the following:
 - Set combo back to 0.
 - Update score.
 - For ordinary note `BAD`, set groove gauge to `-4`.
-- For manual landmine hit, keep the displayed judgment as `BAD` and apply mine damage separately.
 
 ### `POOR`
 
 `POOR` is a failure for the note being played.
-Occurs when a note passes the `BAD` window, or when a manual input deviation exceeds the `BAD` window.
+Occurs when a note passes the `BAD` window without being hit.
 
 When `POOR` occurs, do the following:
 
@@ -353,13 +368,11 @@ The LN repeat-suppress window after a long-note release is treated the same way 
 
 ### Landmine
 
-During manual input, if a mine candidate is closer or the same distance as a normal note candidate, the landmine will be prioritized.
-Treat mines as `BAD` and turn off the combo.
-Groove gauge damage is calculated from the mine object value as uppercase base36, using `damage = value / 2`.
-The applied gauge result is still clamped to `2-100%`, so a large value such as `ZZ` practically drops the gauge to `2%`.
-If `#WAV00` is defined, trigger that sample on the mine hit path.
+A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judge counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
+It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
+An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values.
 
-The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md): the `value / 2` interpretation follows Hitkey's command memo, and the `#WAV00` / `ZZ` convention is supplemented by Obj Tech Lovers chapter3-2 and chapter4-7.
+The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md).
 
 ## NOTES・combo・score
 
@@ -452,7 +465,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- Manual landmine hit: `-(mineValue(base36) / 2)`
+- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`), applied as a raw delta
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
@@ -621,6 +634,9 @@ With `LNMODE=3`, the gauge continues to decrease even during hold break.
 
 The player body is independent of the UI implementation and notifies the state through `stateSignals` and `uiSignals`.
 Judge/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
+The UI command queue also carries long-note lifecycle commands: `long-note-start` (with `mode`: `ln` / `cn` / `hcn`, the mode the active ruleset actually plays the note in, which can differ from the chart's `#LNMODE`) when a hold begins, and `long-note-end` (with `outcome`: `complete` / `dropped`) when it finishes.
+
+`PlayerOptions.onRulesetResolved` is called once before playback starts with a `PlayerRulesetInfo` (`id`, `rulesetId`, `longNoteStyle`, and the judge `windows` in µs at the start of the chart), so a host can show the windows the engine actually uses instead of re-deriving them.
 
 ### Loading screen
 
@@ -637,7 +653,7 @@ The loading text is overlaid on top of it, and the background color of each char
 
 If `#STAGEFILE` is not specified, the file is not found, the format is not supported, or decoding fails, it will fall back to a text loading screen without an image.
 `#STAGEFILE` is only for loading and does not refer to the BGA renderer during gameplay. The viewport remains a black background while the first base BGA cue is not yet enabled.
-If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. If not specified, ANSI display will be displayed.
+If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. Kitty graphics is enabled by default; with `--no-kitty-graphics` or on an unsupported terminal, ANSI display is used.
 The default implementation of video BGA is progressive decode. The UI runtime is set to ready when the first frame is ready, and the remaining frames are decoded step by step with another worker after the gameplay starts.
 
 ### Music Select (song selection screen)
@@ -650,7 +666,7 @@ The song selection screen displays the following information:
 - `#BANNER` or bmson `info.banner_image`
 
 The banner will be displayed on the right side of the metadata block and will fit within the block while maintaining the aspect ratio.
-If `--kitty-graphics` is enabled and the terminal supports it, the banner will also be displayed using the Kitty graphics protocol. If not specified, ANSI display will be displayed.
+If `--kitty-graphics` is enabled and the terminal supports it, the banner will also be displayed using the Kitty graphics protocol. Kitty graphics is enabled by default; with `--no-kitty-graphics` or on an unsupported terminal, ANSI display is used.
 
 On the song selection screen, `#PREVIEW` is given priority for preview playback.
 Place a short settle delay before starting the preview to prevent the preview process from continuing to run while the cursor is being hit.
@@ -683,7 +699,8 @@ The visual distance of a note is determined by the integral of the piecewise-con
 ### Non-TUI output
 
 If TUI is disabled, the mode start message, lane assignment, judgment log, and final result are output as text.
-`renderSummary()` formats the result in the following order: `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / FAST / SLOW / EX-SCORE / SCORE`.
+`renderSummary()` formats the result in the following order: `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / EMPTY / FAST / SLOW / EX-SCORE / SCORE`.
+`EMPTY` is the empty-POOR count. The `SCORE` line is printed only under the `lr2` ruleset, the only one that defines a money score.
 
 ## `PlayerSummary`
 
@@ -711,4 +728,4 @@ ruleset-scoped gauge id), `survival`, and `failedMidPlay`.
 - Independent 2P gauge variant in browser gameplay
 - Gauge timeline display
 - beatoraja's non-default note-selection algorithms (`duration` / `lowest` / `score`) are implemented but not
-  exposed as an option
+  exposed as a live-play option (the `bms-playlog` simulator can select them with `--algorithm=`)

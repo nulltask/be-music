@@ -138,6 +138,14 @@ EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 
 pnpm playlog -- results/Song-2026-08-17T10-00-00-000Z.bmplay.json
 ```
 
+```
+RULESET        EX     RATE     DJ   PG     GR     GD    BD    PR    EPR   FAST   SLOW   COMBO  SCORE   GAUGE
+be-music/native 1180  83.10%  AA   ...
+lr2/1          1180   83.10%   AA   ...                                          ...    140000  96.0% GROOVE CLEAR
+beatoraja/1    1174   82.68%   AA   ...
+iidx/1         1102   77.61%   AA   ...
+```
+
 オプション: `--ruleset=lr2,beatoraja,iidx|all`、`--gauge=<id>`（ルールセット固有のゲージ上書き）、
 `--algorithm=combo|duration|lowest|score`（beatoraja のノート選択）、`--json`。
 
