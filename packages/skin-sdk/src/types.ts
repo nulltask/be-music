@@ -442,6 +442,8 @@ export interface BeMusicMeasureLine {
  * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBga}).
  * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
  * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
+ * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
+ * already picked; a slot's `#ARGB` tint and opacity are left to the skin.
  */
 export interface BeMusicBgaFrame {
   /** The base layer (`#BMP` on channel 04), or a video frame. */

@@ -75,3 +75,31 @@ export function isVideoExtension(path: string): boolean {
   const lower = path.toLowerCase();
   return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/u.test(lower);
 }
+
+/** The BGA keys showing this frame, as `renderBga` resolved them (`#SWBGA` frames already picked). */
+export interface ActiveBgaKeys {
+  base: string | undefined;
+  layer: string | undefined;
+  /** Set only while a POOR is being shown. */
+  poor: string | undefined;
+}
+
+/**
+ * The `frame.bga` a skin that sets `drawsBga` receives: the image behind each active key (`resolve` reads the base or
+ * layer texture map), with `poorActive` set when a POOR image is there to show in place of the base and layer.
+ */
+export function buildSkinBgaFrame<Image>(
+  keys: ActiveBgaKeys,
+  resolve: (key: string, track: 'base' | 'layer') => Image | undefined,
+): { base?: Image; layer?: Image; poor?: Image; poorActive: boolean } {
+  const base = keys.base !== undefined ? resolve(keys.base, 'base') : undefined;
+  const layer = keys.layer !== undefined ? resolve(keys.layer, 'layer') : undefined;
+  // POOR images decode like the base (no chroma key), so they live in the base map.
+  const poor = keys.poor !== undefined ? resolve(keys.poor, 'base') : undefined;
+  return {
+    ...(base !== undefined ? { base } : {}),
+    ...(layer !== undefined ? { layer } : {}),
+    ...(poor !== undefined ? { poor } : {}),
+    poorActive: poor !== undefined,
+  };
+}

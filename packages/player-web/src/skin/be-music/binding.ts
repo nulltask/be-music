@@ -4,6 +4,7 @@ import { ChildPool } from '../../scene/pixi-utils.ts';
 import { resolveBeMusicSkinSettings, wideStage } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
 import type {
+  BeMusicBgaFrame,
   BeMusicBomb,
   BeMusicGameplayFrame,
   BeMusicGameplayLayout,
@@ -223,7 +224,7 @@ export class BeMusicGameplayBinding {
       mines: this.mines,
       bombs: this.bombs,
       measureLines: this.measureLines,
-      // Wired in a later commit: the scene doesn't hand BGA layers to skins yet.
+      // Filled by `setBga` for a skin that sets `drawsBga`.
       bga: undefined,
       beatPhase: runtime.beatPhase ?? 0,
       effects: runtime.effects ?? 'full',
@@ -263,6 +264,11 @@ export class BeMusicGameplayBinding {
 
   addBombs(bombs: readonly BeMusicBomb[]): void {
     for (const bomb of bombs) this.bombs.push({ ...bomb });
+  }
+
+  /** The BGA layers showing this frame; handed over only for a skin that sets `drawsBga`. */
+  setBga(bga: BeMusicBgaFrame | undefined): void {
+    if (this.frame && this.drawsBga) this.frame.bga = bga;
   }
 
   dispose(): void {

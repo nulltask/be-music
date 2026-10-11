@@ -120,6 +120,7 @@ import {
 } from '../gameplay-constants.ts';
 import {
   buildBgaTimeline,
+  buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
   isVideoExtension,
   pickActiveBgaCue,
@@ -144,6 +145,7 @@ import type {
   BeMusicBomb,
   BeMusicEffectLevel,
   BeMusicGameplayLayout,
+  BeMusicImage,
   BeMusicJudge,
   BeMusicLaneCover,
   BeMusicLaneFrame,
@@ -1899,6 +1901,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.skinBindingInstance = undefined;
       this.songImages?.dispose();
       this.songImages = undefined;
+      for (const crop of this.skinBgaCrops.values()) crop?.close();
+      this.skinBgaCrops.clear();
       this.noteLayerPool.destroy();
       this.skinLayerPool.destroy();
       this.overlayLayerPool.destroy();
@@ -3560,6 +3564,24 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.syncBgaVideo('base', baseCue, seconds);
     this.syncBgaVideo('layer', layerCue, seconds);
 
+    const binding = this.skinBinding;
+    if (binding?.drawsBga) {
+      // The skin composites the BGA itself: hand it the images and leave the BGA layer empty.
+      binding.setBga(
+        buildSkinBgaFrame(
+          {
+            base: baseKey !== undefined ? this.resolveBgaFrameKey(baseKey, baseCue?.seconds, seconds) : undefined,
+            layer: layerKey !== undefined ? this.resolveBgaFrameKey(layerKey, layerCue?.seconds, seconds) : undefined,
+            poor: poorKey,
+          },
+          (key, track) =>
+            this.resolveSkinBgaImage((track === 'layer' ? this.bgaLayerTextures : this.bgaTextures).get(key)),
+        ),
+      );
+      this.bgaLayerPool.end();
+      return;
+    }
+
     for (const bga of visibleBgas) {
       const { x, y, w, h } = bga;
       if (w <= 0 || h <= 0) continue;
@@ -3570,19 +3592,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         cueSeconds: number | undefined,
       ): void => {
         if (!key) return;
-        // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA. When the cue's slot matches a parsed
-        // entry, advance through its frame list at the authored interval and swap in the source `#BMPxx` texture for
-        // the currently-visible frame. The fast path (no `#SWBGAxx` entry) leaves `key` untouched so the existing
-        // static texture lookup wins.
-        let resolvedKey = key;
-        if (cueSeconds !== undefined) {
-          const swBga = this.switchingBgas.get(key);
-          if (swBga) {
-            const elapsedMs = Math.max(0, (seconds - cueSeconds) * 1000);
-            const frameKey = pickSwitchingBgaFrame(swBga, elapsedMs);
-            if (frameKey) resolvedKey = frameKey;
-          }
-        }
+        const resolvedKey = this.resolveBgaFrameKey(key, cueSeconds, seconds);
         const texture = textures.get(resolvedKey);
         if (!texture) return;
         // Stretch the BGA texture to fill this rect exactly. The previous version routed through a BMS 256×256 spec
@@ -3632,6 +3642,54 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
     }
     this.bgaLayerPool.end();
+  }
+
+  /**
+   * The slot to show for the BGA cue `key` that fired at `cueSeconds`. BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...`
+   * declares an animated BGA: when the cue's slot matches a parsed entry, advance through its frame list at the
+   * authored interval and show the source `#BMPxx` of the currently-visible frame. Otherwise (no `#SWBGAxx` entry, or
+   * no cue time as for POOR) `key` itself.
+   */
+  private resolveBgaFrameKey(key: string, cueSeconds: number | undefined, seconds: number): string {
+    if (cueSeconds === undefined) return key;
+    const swBga = this.switchingBgas.get(key);
+    if (!swBga) return key;
+    const elapsedMs = Math.max(0, (seconds - cueSeconds) * 1000);
+    return pickSwitchingBgaFrame(swBga, elapsedMs) || key;
+  }
+
+  /**
+   * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't
+   * carry the crop the way a Pixi sub-texture does). `null` while the crop is being made.
+   */
+  private readonly skinBgaCrops = new Map<Texture, ImageBitmap | null>();
+
+  /**
+   * The image behind a loaded BGA texture, for `frame.bga`: the decoded bitmap or the `<video>` element itself, or a
+   * cropped copy for a `#BGAxx` sub-region (made on first use, so `undefined` for a frame or two).
+   */
+  private resolveSkinBgaImage(texture: Texture | undefined): BeMusicImage | undefined {
+    if (!texture) return undefined;
+    const source = texture.source;
+    const resource = source.resource as BeMusicImage | undefined;
+    if (!resource) return undefined;
+    const { frame } = texture;
+    if (frame.x === 0 && frame.y === 0 && frame.width === source.width && frame.height === source.height) {
+      return resource;
+    }
+    const crop = this.skinBgaCrops.get(texture);
+    if (crop !== undefined) return crop ?? undefined;
+    this.skinBgaCrops.set(texture, null);
+    createImageBitmap(resource, frame.x, frame.y, frame.width, frame.height).then(
+      (bitmap) => {
+        if (this.disposed || !this.skinBgaCrops.has(texture)) bitmap.close();
+        else this.skinBgaCrops.set(texture, bitmap);
+      },
+      () => {
+        // Leave the `null` marker: the crop isn't retried, the sub-region just doesn't show.
+      },
+    );
+    return undefined;
   }
 
   /**

@@ -198,7 +198,7 @@ By default the player draws a few things over (or behind) your canvas, so a skin
 | `drawsMeasureLines` | `frame.measureLines` | The player draws its own measure lines.                                 |
 | `drawsBga`          | `frame.bga`          | The player shows the BGA behind your canvas, in `layout.bga`.           |
 
-Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBga`, the `layer` image arrives with pure black already turned transparent (the BMS layer convention) while `base` and `poor` are opaque: draw them with plain alpha blending, and show `poor` instead of the others while `poorActive`.
+Every flag defaults to `false`, and the frame field it unlocks stays empty (or `undefined`) until you set it, so existing skins keep their look. With `drawsBga`, the `layer` image arrives with pure black already turned transparent (the BMS layer convention) while `base` and `poor` are opaque: draw them with plain alpha blending, and show `poor` instead of the others while `poorActive`. A bmson layer (its spec keeps black opaque) and a video layer arrive as authored. The images are `ImageBitmap`s or, for a video BGA, the playing `<video>` element; a `#BGA` sub-region arrives as its own cropped image (missing for the first frame or two while it is cut). The player still picks the frame of a `#SWBGA` animation, but leaves a slot's `#ARGB` tint and opacity to you.
 
 `runtime` (`BeMusicGameplayRuntime`) carries:
 

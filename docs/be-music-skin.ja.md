@@ -198,7 +198,7 @@ export default defineBeMusicSkin({
 | `drawsMeasureLines` | `frame.measureLines` | プレイヤーが自前の小節線を描きます。                                   |
 | `drawsBga`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
 
-どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBga` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。
+どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBga` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。bmson のレイヤー（仕様で黒は不透明のまま）と動画のレイヤーは作者が作ったとおりに渡されます。画像は `ImageBitmap`、動画の BGA なら再生中の `<video>` 要素です。`#BGA` の部分領域は切り出した画像として渡されます（切り出しが終わるまでの最初の 1〜2 フレームは渡されません）。`#SWBGA` のアニメーションのフレームはプレイヤーが選びますが、スロットの `#ARGB` による色と不透明度はスキンに任されます。
 
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
