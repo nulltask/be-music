@@ -18,8 +18,13 @@ export class JudgeTimingLog {
   private dirty = false;
   private allTimings: BeMusicJudgeTiming[] = [];
   private latest: number | undefined;
+  private readonly capacity: number;
 
-  constructor(private readonly capacity = RECENT_JUDGE_TIMING_COUNT) {}
+  // A plain field rather than a parameter property: the benchmarks run this file through Node's type stripping, which
+  // only accepts erasable syntax.
+  constructor(capacity = RECENT_JUDGE_TIMING_COUNT) {
+    this.capacity = capacity;
+  }
 
   /**
    * Records one judgement. Ignored (returns `false`) when it carries no finite timing or its grade isn't one of
