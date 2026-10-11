@@ -134,21 +134,23 @@ export default defineBeMusicSkin({
 
 すべてのスキンが以下を宣言します。`defineBeMusicSkin` は内容を検査し、不正なら例外を投げます。壊れたスキンは定義した場所で失敗します。
 
-| フィールド                               | 必須 | ルール                                                                                                         |
-| ---------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------------- |
-| `apiVersion`                             | ○    | ビルドに使った SDK の `BE_MUSIC_SKIN_API_VERSION`。プレイヤーは未対応の API リビジョン向けスキンを拒否します。 |
-| `id`                                     | ○    | 小文字英字・数字・ハイフン（`my-skin`）。ホストが保存するので、リリース間で変えないでください。                |
-| `label`                                  | ○    | ピッカーに表示する名前。                                                                                       |
-| `version`                                | ○    | スキン自体のリリース。セマンティックバージョン（`1.2.0`）。                                                    |
-| `author`                                 | ○    | `{ name, url? }`。`url` は http(s)。                                                                           |
-| `description`                            | —    | ピッカー向けの 1〜2 文。                                                                                       |
-| `homepage`                               | —    | プロジェクトページやリポジトリの http(s) URL。                                                                 |
-| `license`                                | —    | スキンのコードと素材の SPDX 識別子（`MIT`）。                                                                  |
-| `fontLoads`                              | ○    | 描画に使う CSS フォント指定（`'400 24px "Anton"'`）。空でも可。                                                |
-| `context`                                | ○    | `'2d'`、`'webgl'`、`'webgl2'`、`'webgpu'` のいずれか。                                                         |
-| `contextAttributes`、`setup`、`teardown` | —    | [サーフェス](#サーフェス)と[フレームワークを使う](#フレームワークを使う)を参照。                               |
-| `stage`                                  | —    | デザインキャンバス。既定は `wideStage`。[ステージとレイアウト](#ステージとレイアウト)を参照。                  |
-| `gameplay`、`select`、`result`           | ○    | 各画面の `draw` 関数。[画面](#画面)を参照。                                                                    |
+| フィールド                               | 必須 | ルール                                                                                                                                                              |
+| ---------------------------------------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`                             | ○    | ビルドに使った SDK の `BE_MUSIC_SKIN_API_VERSION`（現在は 2）。プレイヤーは未対応の API リビジョン向けスキンを拒否します。[バージョニング](#バージョニング)を参照。 |
+| `id`                                     | ○    | 小文字英字・数字・ハイフン（`my-skin`）。ホストが保存するので、リリース間で変えないでください。                                                                     |
+| `label`                                  | ○    | ピッカーに表示する名前。                                                                                                                                            |
+| `version`                                | ○    | スキン自体のリリース。セマンティックバージョン（`1.2.0`）。                                                                                                         |
+| `author`                                 | ○    | `{ name, url? }`。`url` は http(s)。                                                                                                                                |
+| `description`                            | —    | ピッカー向けの 1〜2 文。                                                                                                                                            |
+| `homepage`                               | —    | プロジェクトページやリポジトリの http(s) URL。                                                                                                                      |
+| `license`                                | —    | スキンのコードと素材の SPDX 識別子（`MIT`）。                                                                                                                       |
+| `fontLoads`                              | ○    | 描画に使う CSS フォント指定（`'400 24px "Anton"'`）。空でも可。                                                                                                     |
+| `context`                                | ○    | `'2d'`、`'webgl'`、`'webgl2'`、`'webgpu'` のいずれか。                                                                                                              |
+| `contextAttributes`、`setup`、`teardown` | —    | [サーフェス](#サーフェス)と[フレームワークを使う](#フレームワークを使う)を参照。                                                                                    |
+| `stage`                                  | —    | デザインキャンバス。既定は `wideStage`。[ステージとレイアウト](#ステージとレイアウト)を参照。                                                                       |
+| `gameplay`、`select`、`result`           | ○    | 各画面の `draw` 関数。[画面](#画面)を参照。                                                                                                                         |
+| `decide`                                 | —    | 選曲とプレイの間の決定画面。[決定画面](#決定画面)を参照。                                                                                                           |
+| `settings`                               | —    | プレイヤーが調整できるスキンのオプション。[スキン設定](#スキン設定)を参照。                                                                                         |
 
 `validateBeMusicSkin(skin)` は、例外を投げずに同じ問題をメッセージの配列で返します。
 
@@ -172,17 +174,31 @@ export default defineBeMusicSkin({
 `gameplay.draw(surface, frame)` は `BeMusicGameplayFrame` を受け取ります。
 
 - `layout`: [ステージとレイアウト](#ステージとレイアウト)を参照。
-- `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。
-- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。
-- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。
+- `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。`pressedAtMs` / `releasedAtMs` はそのレーンを最後に押した・離したプレイクロック時刻、`holding` と `holdStartedAtMs` はそのレーンでロングノーツを押し続けているかと、その開始時刻です。
+- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。
+- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。
 - `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。判定ラインを通過する瞬間にそのレーンを押すと BAD になります。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
-- `bombs`: 生きているヒットエフェクト。`elapsedMs` と固定の `seed` を持ちます。
+- `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
+- `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
+- `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBga` を設定したとき以外は `undefined` です。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
+- `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
 `gameplay.bombDurationMs`（既定 300）でヒットエフェクトの寿命を指定します。
 
-`gameplay.drawsMines: true` を設定すると、地雷ノーツを `frame.mines` から自分で描けます。設定しない場合はプレイヤーが黄色の注意縞が入った赤いバーとしてキャンバスの上に描くので、地雷を扱わないスキンでも地雷は表示されます。
+#### 自分で描く
+
+既定では、いくつかの要素をプレイヤーがキャンバスの上（または後ろ）に描くので、それらを扱わないスキンでも表示されます。自分で描きたい場合は `gameplay` に対応するフラグを設定します。
+
+| フラグ              | 描画に使うデータ     | 設定しない場合                                                         |
+| ------------------- | -------------------- | ---------------------------------------------------------------------- |
+| `drawsMines`        | `frame.mines`        | プレイヤーが黄色の注意縞入りの赤いバーをキャンバスの上に描きます。     |
+| `drawsLaneCover`    | `runtime.laneCovers` | プレイヤーが SUDDEN+ / HIDDEN+ のカバーをキャンバスの上に描きます。    |
+| `drawsMeasureLines` | `frame.measureLines` | プレイヤーが自前の小節線を描きます。                                   |
+| `drawsBga`          | `frame.bga`          | プレイヤーが BGA をキャンバスの後ろ、`layout.bga` の位置に表示します。 |
+
+どのフラグも既定は `false` で、解禁されるフレームのフィールドは設定するまで空（または `undefined`）のままです。既存のスキンの見た目は変わりません。`drawsBga` では、`layer` の画像は BMS のレイヤーの慣習どおり純粋な黒が透明になった状態で渡され、`base` と `poor` は不透明です。通常のアルファブレンドで描き、`poorActive` の間は他の代わりに `poor` を表示してください。
 
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
@@ -196,6 +212,14 @@ export default defineBeMusicSkin({
 - **プレイ状態:** `autoplay`、`hasBga`、`loading`（音声デコードや BGA 変換の間は NOW LOADING を表示）、`progressRatio`、`chartMs`、`beatPhase`、`nowMs`
 - **イベント時刻:** `judgeAtMs`、`impulseAtMs`、`impulseKind`（直近の判定とキー入力。パンチやインパルスの演出用）
 - **快適性とサウンド:** `effects`、`audio`
+- **譜面:** `song`（プレイ中の `BrowserSongEntry`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`
+- **タイミング:** `lastJudgeDeltaMs` と `judgeTimings`（タイミング付きの直近 64 判定、古い順）。[判定タイミング](#判定タイミング)を参照。`judgeWindows` はルールセットの判定幅をノーツの種類（`note`、`scratch`、`longNoteEnd`）ごとに ms で表します。プレイ開始時に `#RANK` から決まり、途中の `#EXRANK` の変更は反映されません。
+- **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（ノーツが画面に見えている時間）、`greenNumber`（`visibleMs × 0.6`）
+- **曲の時計:** `songLengthMs` と `songElapsedMs`。オーディオの時計で、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
+- **1 プレイに 1 度の瞬間:** `failedAtMs`（プレイ中にゲージが尽きた）、`allNotesDoneAtMs`（最後のノーツが判定された）、`outroAtMs`（譜面が終わった）、`gaugeRiseAtMs`（ゲージが初めて上がった）、`gaugeMaxAtMs`（初めて最大に達した）。どれもその瞬間に固定されるプレイクロック時刻で、それまでは `undefined` です。
+- **推移:** `scoreHistory` と `gaugeHistory`。リザルト画面が受け取るのと同じサンプルです。ホストが更新中の配列そのものなので、読むだけにして変更しないでください。
+
+runtime のフィールドはすべて省略可能です。ホストが提供できない値は `undefined` になるので、適切な代替表示を用意してください。
 
 ### 選曲
 
@@ -204,22 +228,76 @@ export default defineBeMusicSkin({
 - **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
   - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
   - `folderLabel`、`searchQuery`、`totalCharts`
-  - `actions`（`play`、`autoPlay`、`activateSearch`）
+  - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）
+  - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。
+  - `songRecord(song)`: その譜面でのプレイヤーのベスト記録（`{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`
+  - `pointer`: デザインピクセルでのポインタ位置。なければ `undefined`
+  - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照
   - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。
   - 登場やフォーカス移動のトランジション用の `sceneStartedAt`、`cursorChangedAt`
   - `nowMs`、`effects`、`launchAt`、`audio`
-  - `hit(x, y, w, h, action, cursor?)`: 矩形をそのフレームの間だけクリック可能にします。クリック領域は描画のたびに宣言してください。
+  - `hit(x, y, w, h, action, cursor?)`: 矩形をそのフレームの間だけクリック可能にし、ポインタが矩形の上にあるかを返します（ホバー表示用）。クリック領域は描画のたびに宣言してください。
 
 ### リザルト
 
 `result.draw(surface, frame)` は `BeMusicResultFrame` を受け取ります。
 
-- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。
+- `result`（`BeMusicResultData`）: スコア、判定数、ゲージとスコアの推移、プレイログ。ホストが提供する場合は、`lamp`（クリアランプ: `FAILED`、クリアしたゲージ、`FULL_COMBO`、`PERFECT`、`MAX`）、`gaugeType`、`judgeRuleset`、`fast` / `slow`、`judgeTimings`（プレイ中のタイミング付き判定すべて）も入ります。
 - `rankLabel`（IIDX の DJ LEVEL）、`ratePercent`。
 - `elapsedMs`: シーン開始からの経過。登場演出をスキップした後は `Infinity`。
 - `nowMs`、`effects`。
+- `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
-`resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。
+`resolveResultLamp` と `resolveResultTrackRows` が、組み込みスキンの表示するクリアランプとトラック行を返します。`binJudgeTimings(result.judgeTimings, binMs, rangeMs?)` でタイミングをヒストグラムにできます。
+
+### 決定画面
+
+スキンは、譜面を選んでからプレイが始まるまでの決定画面を追加できます。ホストは `skin.decide` があるときだけこれを表示し、なければそのままプレイに進みます。
+
+- **`decide.durationMs`:** 画面を表示する時間（既定 2000）。プレイヤーは Enter で先に進み、Escape で選曲に戻れます。
+- **`decide.draw(surface, frame)`** は `BeMusicDecideFrame` を受け取ります: `song`、`playOptions`、画面表示からの `elapsedMs`、`nowMs`、`effects`、`audio`、`settings`、`songImage`。
+
+## 判定タイミング
+
+タイミングのずれは符号付きのミリ秒で、エンジンの慣習に従います。**正は遅い（SLOW）、負は早い（FAST）**、0 はジャストです。
+
+- `runtime.lastJudgeDeltaMs` が直近のずれ、`runtime.judgeTimings` が直近 64 件の `{ atMs, deltaMs, judge, channel? }`（古い順）です。
+- `result.judgeTimings` にはプレイ中のタイミング付き判定がすべて入ります。
+- タイミングを持つのは押下を伴う判定だけです。オートプレイの判定、地雷の BAD、見逃し（押下のない POOR）は含まれません。
+- `binJudgeTimings(timings, binMs = 1, rangeMs?)` は `{ binMs, originMs, counts }` を返します。ビンの境界は `binMs` の倍数に揃います。`rangeMs` を渡すとタイミングにかかわらず `-rangeMs..rangeMs` を覆うので、別のプレイのヒストグラムと並べられます。
+
+## スキン設定
+
+スキンは、配色テーマ、判定文字の位置、演出のオンオフなど、プレイヤーが調整できるオプションを宣言できます。
+
+```ts
+settings: [
+  {
+    kind: 'choice',
+    id: 'theme',
+    label: 'Theme',
+    options: [
+      { value: 'neon', label: 'Neon' },
+      { value: 'mono', label: 'Mono' },
+    ],
+    default: 'neon',
+  },
+  { kind: 'number', id: 'judgeOffset', label: 'Judge offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
+  { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
+],
+```
+
+- **種類:** `choice`（`options` のいずれか）、`number`（`min..max`。省略可能な `step` と、`'px'`・`'ms'`・`'%'` の `unit`）、`toggle`。
+- **検査:** `validateBeMusicSkin` がスキーマを検査します。id は重複不可、ラベルは空不可で、`default` は選択肢のいずれか、または範囲内でなければなりません。
+- **値:** すべてのフレームが `settings`（id をキーにしたプレイヤーの値）を持ちます。ホストは値をスキンごとに保存し、`resolveBeMusicSkinSettings(skin, stored)` で解決します。欠けている値、古い値、型の違う値は既定値に戻り、数値は範囲内に収められ、スキンが宣言しなくなった id は捨てられます。宣言した id はすべて正しい型で揃っていると考えて構いません。
+
+## 曲の画像
+
+`songImage(song, kind)` はすべてのフレーム（選曲、決定、ゲームプレイ、リザルト）にあります。曲の `'stageFile'`、`'banner'`、`'backBmp'` を `ImageBitmap` で返すので、そのまま `drawImage` やテクスチャのアップロードに使えます。
+
+- 画像は遅延読み込みです。デコード中の最初の呼び出しは `undefined` を返し、準備ができると画面が描き直されます（選曲では `revision` が進みます）。
+- 曲にその画像がない場合や、ホストが画像を提供しない場合も `undefined` を返すので、必ず代替表示を用意してください。
+- ビットマップを close したり transfer したりしないでください。ホストがキャッシュしています。
 
 ## SDK ヘルパー
 
@@ -232,6 +310,8 @@ export default defineBeMusicSkin({
 | ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`                                                                                                                                            |
 | サウンド   | `audioDrive`、`bandAt`、`bandLevel`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                |
 | リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                   |
+| タイミング | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                      |
+| 設定       | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                    |
 | 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                    |
 | テキスト   | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                       |
 | モーション | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                       |
@@ -376,6 +456,7 @@ export default defineBeMusicSkin({
 
 - **`version` を上げるとき:** スキンをリリースするたびに上げます。プレイヤーから見たセマンティックバージョニングに従い、見た目の追加はマイナー、修正はパッチにします。
 - **`apiVersion`:** ビルドに使った SDK の定数にします。スキン API に互換性のない変更が入ると、プレイヤーは `BE_MUSIC_SKIN_API_VERSION` を上げます。古いリビジョン向けのスキンは、新しい SDK で再ビルドするまで拒否されます。
+- **リビジョン 2:** 現在のリビジョンです。スキンが受け取るものを増やしただけ（フレームと runtime の新しいフィールド、オプトインの `draws*` フラグ、決定画面、スキン設定、曲の画像）なので、リビジョン 1 のスキンはそのまま動き、プレイヤーは 1 と 2 の両方を受け付けます。新しい SDK で再ビルドして `apiVersion: 2` にする必要があるのは、新しいフィールドを使う場合だけです。なお `frame.hit` は真偽値を返すようになりましたが、戻り値を使わないスキンには影響しません。
 - **`id` を固定する:** ホストは選択中のスキンを `id` で保存します。
 
 ## チェックリスト
@@ -386,6 +467,10 @@ export default defineBeMusicSkin({
 - [ ] `runtime.hasBga` のとき BGA の矩形を透明のまま残している。
 - [ ] `runtime.loading` の間は NOW LOADING を表示している。
 - [ ] 選曲の行が `select.layout` と揃い、ボタンは描画のたびに `frame.hit` で宣言している。
+- [ ] 設定した `draws*` フラグに対応する要素を自分で描いている。
+- [ ] runtime の省略可能なフィールドや `songImage` が `undefined` のときの代替表示がある。
+- [ ] タイミング表示は正の `deltaMs` を遅い（SLOW）、負を早い（FAST）として扱っている。
+- [ ] `settings` の id が重複せず、既定値がすべて有効。
 - [ ] 音への反応は `audioDrive` を通し、`effects` を尊重している。
 - [ ] 使うフェイスをすべて `fontLoads` に挙げている。
 - [ ] ノーツの多い譜面・高密度でも `draw` が 1 フレームの半分を十分下回り、毎フレームの確保やピクセルの読み戻しがない。

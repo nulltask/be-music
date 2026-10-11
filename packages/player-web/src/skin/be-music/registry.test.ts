@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { createBeMusicSkinRegistry, resolveBeMusicLaneKind, resolveSelectListWindow } from './registry.ts';
+import { BE_MUSIC_SKIN_API_VERSION } from '@be-music/skin-sdk';
 import type { BeMusicSkin } from './types.ts';
 
-function stubSkin(id: string, apiVersion = 1): BeMusicSkin {
+const FUTURE_API_VERSION = BE_MUSIC_SKIN_API_VERSION + 1;
+
+function stubSkin(id: string, apiVersion = BE_MUSIC_SKIN_API_VERSION): BeMusicSkin {
   return {
     apiVersion,
     id,
@@ -25,6 +28,11 @@ describe('createBeMusicSkinRegistry', () => {
     expect(registry.resolve(undefined).id).toBe('phantom');
   });
 
+  it('accepts skins written for revision 1', () => {
+    const registry = createBeMusicSkinRegistry([stubSkin('legacy', 1)]);
+    expect(registry.skins.map((skin) => skin.id)).toEqual(['legacy']);
+  });
+
   it('rejects an empty list and duplicate ids', () => {
     expect(() => createBeMusicSkinRegistry([])).toThrow();
     expect(() => createBeMusicSkinRegistry([stubSkin('a'), stubSkin('a')])).toThrow(/duplicate/);
@@ -32,13 +40,13 @@ describe('createBeMusicSkinRegistry', () => {
 
   it('leaves out skins for an unsupported API revision and reports them', () => {
     const rejected: string[] = [];
-    const registry = createBeMusicSkinRegistry([stubSkin('future', 2), stubSkin('phantom')], {
+    const registry = createBeMusicSkinRegistry([stubSkin('future', FUTURE_API_VERSION), stubSkin('phantom')], {
       onRejected: (skin, problems) => rejected.push(`${skin.id}: ${problems[0]}`),
     });
     expect(registry.skins.map((skin) => skin.id)).toEqual(['phantom']);
     expect(registry.resolve('future').id).toBe('phantom');
     expect(rejected).toHaveLength(1);
-    expect(rejected[0]).toMatch(/^future: apiVersion 2/u);
+    expect(rejected[0]).toMatch(/^future: apiVersion 3/u);
   });
 
   it('adds skins later, replacing one with the same id, and notifies subscribers', () => {
@@ -62,13 +70,15 @@ describe('createBeMusicSkinRegistry', () => {
 
   it('refuses to add an invalid skin and reports why', () => {
     const registry = createBeMusicSkinRegistry([stubSkin('phantom')]);
-    const problems = registry.add(stubSkin('future', 2));
-    expect(problems[0]).toMatch(/apiVersion 2/u);
+    const problems = registry.add(stubSkin('future', FUTURE_API_VERSION));
+    expect(problems[0]).toMatch(/apiVersion 3/u);
     expect(registry.skins.map((skin) => skin.id)).toEqual(['phantom']);
   });
 
   it('throws when no skin is valid', () => {
-    expect(() => createBeMusicSkinRegistry([stubSkin('future', 2)], { onRejected: () => {} })).toThrow(/valid/u);
+    expect(() => createBeMusicSkinRegistry([stubSkin('future', FUTURE_API_VERSION)], { onRejected: () => {} })).toThrow(
+      /valid/u,
+    );
   });
 });
 

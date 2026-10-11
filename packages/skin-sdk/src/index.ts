@@ -9,19 +9,24 @@
  * - Play state: judgement words (`judgeDisplayWord`, the flashing GREAT of a PERFECT), moments (combo milestones, the
  *   clear line, full combo, count-in progress), effect levels, input impulses, and the loading caption.
  * - Sound: `audioDrive` turns the frame's audio analysis into ready-to-use drive values.
- * - Song facts: select-row facts (`resolveSongRowFacts`), result lamp and track rows.
+ * - Song facts: select-row facts (`resolveSongRowFacts`), result lamp and track rows, and judgement-timing histograms
+ *   (`binJudgeTimings`).
+ * - Skin settings: `resolveBeMusicSkinSettings` fills in and checks the values of a skin's `settings` schema.
  * - Text and motion: tabular figure layout, the default text face, easing, staged timelines, roll-up counters, and a
  *   deterministic hash for jitter.
  */
 export type * from './types.ts';
 export type * from './song.ts';
 export type * from './result-data.ts';
+export type * from './play-options.ts';
 
 export * from './audio.ts';
 export * from './playfield.ts';
 export * from './lane-geometry.ts';
 
 export * from './define.ts';
+export * from './settings.ts';
+export * from './judge-timing.ts';
 export * from './stage.ts';
 export * from './layout.ts';
 export * from './fonts.ts';

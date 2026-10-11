@@ -24,10 +24,19 @@ function skin(overrides: Partial<BeMusicSkin> = {}): BeMusicSkin {
 }
 
 describe('isSupportedBeMusicSkinApiVersion', () => {
-  it('accepts the current revision only', () => {
+  it('is at revision 2', () => {
+    expect(BE_MUSIC_SKIN_API_VERSION).toBe(2);
+  });
+
+  it('accepts the current revision and revision 1, which revision 2 only added to', () => {
     expect(isSupportedBeMusicSkinApiVersion(BE_MUSIC_SKIN_API_VERSION)).toBe(true);
+    expect(isSupportedBeMusicSkinApiVersion(1)).toBe(true);
+  });
+
+  it('refuses future and unknown revisions', () => {
     expect(isSupportedBeMusicSkinApiVersion(BE_MUSIC_SKIN_API_VERSION + 1)).toBe(false);
     expect(isSupportedBeMusicSkinApiVersion(0)).toBe(false);
+    expect(isSupportedBeMusicSkinApiVersion(1.5)).toBe(false);
   });
 });
 
@@ -51,6 +60,36 @@ describe('validateBeMusicSkin', () => {
 
   it('reports an unsupported API revision', () => {
     expect(validateBeMusicSkin(skin({ apiVersion: 99 }))[0]).toMatch(/apiVersion 99/u);
+  });
+
+  it('passes a revision 1 skin', () => {
+    expect(validateBeMusicSkin(skin({ apiVersion: 1 }))).toEqual([]);
+  });
+
+  it('checks an optional decide screen', () => {
+    expect(validateBeMusicSkin(skin({ decide: { durationMs: 1500, draw: () => {} } }))).toEqual([]);
+    expect(validateBeMusicSkin(skin({ decide: {} as BeMusicSkin['decide'] }))).toEqual([
+      'decide.draw must be a function',
+    ]);
+    expect(validateBeMusicSkin(skin({ decide: { durationMs: -1, draw: () => {} } }))).toEqual([
+      'decide.durationMs -1 must be a non-negative number',
+    ]);
+  });
+
+  it('includes problems with the settings schema', () => {
+    expect(
+      validateBeMusicSkin(skin({ settings: [{ kind: 'toggle', id: 'glow', label: 'Glow', default: true }] })),
+    ).toEqual([]);
+    expect(
+      validateBeMusicSkin(
+        skin({
+          settings: [
+            { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
+            { kind: 'toggle', id: 'glow', label: 'Glow again', default: false },
+          ],
+        }),
+      ),
+    ).toEqual(['setting "glow": id is used more than once']);
   });
 
   it('reports malformed ids, versions, and metadata', () => {

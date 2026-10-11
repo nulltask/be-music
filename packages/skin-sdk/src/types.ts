@@ -1,7 +1,9 @@
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { BeMusicAudioFrame } from './audio.ts';
-import type { BeMusicResultData } from './result-data.ts';
-import type { BrowserBrowseEntry, BrowserSongEntry } from './song.ts';
+import type { BeMusicPlayOptions } from './play-options.ts';
+import type { BeMusicResultData, GaugeHistorySample, ScoreHistorySample } from './result-data.ts';
+import type { BeMusicSkinSetting, BeMusicSkinSettingValues } from './settings.ts';
+import type { BeMusicSongImageKind, BeMusicSongRecord, BrowserBrowseEntry, BrowserSongEntry } from './song.ts';
 
 /**
  * be-music skin format — the code-defined skins the built-in (default) family renders with when no LR2 / beatoraja
@@ -56,6 +58,17 @@ export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfac
   readonly gameplay: BeMusicGameplaySkin<K>;
   readonly select: BeMusicSelectSkin<K>;
   readonly result: BeMusicResultSkin<K>;
+  /**
+   * The decide screen shown between picking a chart and the play (title card, stage file, the chosen options). Hosts
+   * mount it only when a skin declares one, and go straight from select to gameplay otherwise.
+   */
+  readonly decide?: BeMusicDecideSkin<K>;
+  /**
+   * Options the player can tune for this skin (a colour theme, a judge-text offset, an effect toggle). Hosts build
+   * their settings UI from this schema, persist the values per skin, and hand them back on every frame as `settings`,
+   * already checked and filled in by {@link resolveBeMusicSkinSettings}. Ids must be unique.
+   */
+  readonly settings?: readonly BeMusicSkinSetting[];
 }
 
 /** A skin's maker, as shown in skin pickers and credits. */
@@ -115,6 +128,15 @@ export interface BeMusicStage {
  */
 export type BeMusicEffectLevel = 'full' | 'reduced' | 'off';
 
+/** A judgement grade, best first. */
+export type BeMusicJudge = 'PERFECT' | 'GREAT' | 'GOOD' | 'BAD' | 'POOR';
+
+/** A play side. `'2P'` only exists in double play. */
+export type BeMusicSide = '1P' | '2P';
+
+/** An image the host hands a skin (song images, BGA layers): anything `drawImage` / `texImage2D` accepts. */
+export type BeMusicImage = CanvasImageSource;
+
 /** Visual class of a lane, resolved from its channel — skins pick colours per class. */
 export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
 
@@ -122,7 +144,7 @@ export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
 export interface BeMusicLayoutLane {
   channel: string | undefined;
   kind: BeMusicLaneKind;
-  side: '1P' | '2P';
+  side: BeMusicSide;
   x: number;
   w: number;
 }
@@ -145,7 +167,7 @@ export interface BeMusicGameplayLayout {
     top: number;
     judgementY: number;
     /** Horizontal extent of each play side present (`2P` only in double play). */
-    sides: Partial<Record<'1P' | '2P', { left: number; right: number }>>;
+    sides: Partial<Record<BeMusicSide, { left: number; right: number }>>;
   };
   /** The BGA rect, or `undefined` when the playfield leaves no room for one. */
   bga: BeMusicRect | undefined;
@@ -153,7 +175,7 @@ export interface BeMusicGameplayLayout {
 
 /** One side's recent judgement. */
 export interface BeMusicJudgeState {
-  side: '1P' | '2P';
+  side: BeMusicSide;
   /** PERFECT / GREAT / GOOD / BAD / POOR. Empty when no recent judge. */
   judge?: string;
   combo?: number;
@@ -224,6 +246,110 @@ export interface BeMusicGameplayRuntime {
   effects?: BeMusicEffectLevel;
   /** Live analysis of the mix for audio-reactive chrome (loudness, spectrum, onsets); absent without Web Audio. */
   audio?: BeMusicAudioFrame;
+  /**
+   * The chart being played — level, difficulty, `#RANK`, `#TOTAL` and the rest of its header via
+   * `song.chart.metadata`, plus the same images {@link BeMusicGameplayFrame.songImage} resolves.
+   */
+  song?: BrowserSongEntry;
+  /**
+   * Signed timing offset (ms) of the most recent timed judgement: positive when the press was late (SLOW), negative
+   * when early (FAST), 0 dead on. Only judgements with a timing carry one — autoplay hits, mine BADs and missed notes
+   * (POOR without a press) leave it unchanged.
+   */
+  lastJudgeDeltaMs?: number;
+  /**
+   * The most recent timed judgements (at most 64), oldest first — drives timing meters. Same rules as
+   * {@link lastJudgeDeltaMs}.
+   */
+  judgeTimings?: readonly BeMusicJudgeTiming[];
+  /** SUDDEN+ / HIDDEN+ / LIFT per play side, as fractions of the lane height. */
+  laneCovers?: readonly BeMusicLaneCover[];
+  /**
+   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed.
+   */
+  visibleMs?: number;
+  /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
+  greenNumber?: number;
+  /** Lowest, highest, and main (longest-held) BPM of the chart. */
+  minBpm?: number;
+  maxBpm?: number;
+  mainBpm?: number;
+  /**
+   * Length of the song (ms) and how far the audio has played (ms), on the audio clock: it stops while paused and
+   * starts at 0 when the song starts. Remaining time is `songLengthMs - songElapsedMs`. Unlike {@link chartMs}, which is
+   * measured from the chart's first beat and runs negative through the count-in, this measures the song as heard.
+   */
+  songLengthMs?: number;
+  songElapsedMs?: number;
+  /**
+   * Play-clock ms (the {@link nowMs} clock) of moments that happen at most once per play, latched when they occur and
+   * `undefined` before: the gauge failing mid-play, the last playable note being judged, and the chart's end (the
+   * outro).
+   */
+  failedAtMs?: number;
+  allNotesDoneAtMs?: number;
+  outroAtMs?: number;
+  /**
+   * Play-clock ms when the gauge first rose above its starting value, and when it first reached its maximum.
+   * `undefined` until it happens.
+   */
+  gaugeRiseAtMs?: number;
+  gaugeMaxAtMs?: number;
+  /**
+   * EX-score and gauge samples taken at every judgement so far, the same series the result screen receives. They are
+   * the host's live arrays, shared by reference: read them, never mutate them.
+   */
+  scoreHistory?: readonly ScoreHistorySample[];
+  gaugeHistory?: readonly GaugeHistorySample[];
+  /**
+   * The judge windows of the active ruleset, in ms. Resolved from the chart's `#RANK` when the play starts; a mid-chart
+   * `#EXRANK` change is not reflected.
+   */
+  judgeWindows?: BeMusicJudgeWindows;
+}
+
+/**
+ * One timed judgement: when it happened and how far off the press was. `deltaMs` is positive when late (SLOW) and
+ * negative when early (FAST). See {@link binJudgeTimings} for a histogram.
+ */
+export interface BeMusicJudgeTiming {
+  /** Play-clock ms of the judgement. */
+  atMs: number;
+  /** Signed offset (ms): > 0 late, < 0 early. */
+  deltaMs: number;
+  judge: BeMusicJudge;
+  /** Lane channel of the judged note. */
+  channel?: string;
+}
+
+/** One play side's lane covers, as fractions (0..1) of the lane height. */
+export interface BeMusicLaneCover {
+  side: BeMusicSide;
+  /** SUDDEN+: the cover over the top of the lanes. */
+  sudden: number;
+  /** HIDDEN+: the cover just above the judgement line. */
+  hidden: number;
+  /** LIFT: how far the judgement line is raised. */
+  lift: number;
+}
+
+/** One judge window: how early and how late (both positive ms) a press still earns the grade. */
+export interface BeMusicJudgeWindow {
+  earlyMs: number;
+  lateMs: number;
+}
+
+/** The windows of one note class; `emptyPoor` is the window for an empty POOR, when the ruleset has one. */
+export type BeMusicJudgeWindowSet = Record<'perfect' | 'great' | 'good' | 'bad', BeMusicJudgeWindow> & {
+  emptyPoor?: BeMusicJudgeWindow;
+};
+
+/** The active ruleset's judge windows per note class. */
+export interface BeMusicJudgeWindows {
+  note: BeMusicJudgeWindowSet;
+  scratch: BeMusicJudgeWindowSet;
+  /** The release of a long note that judges its end (charge / hell charge notes). */
+  longNoteEnd: BeMusicJudgeWindowSet;
 }
 
 export interface BeMusicLaneFrame {
@@ -236,6 +362,12 @@ export interface BeMusicLaneFrame {
   bottom: number;
   /** Key-beam intensity in [0, 1]: 1 while held, decaying after release. */
   beam: number;
+  /** Play-clock ms of the lane's last key press and release (also for autoplay hits). */
+  pressedAtMs?: number;
+  releasedAtMs?: number;
+  /** True while a long note in this lane is held, and the play-clock ms the hold started. */
+  holding?: boolean;
+  holdStartedAtMs?: number;
 }
 
 /** A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. */
@@ -244,6 +376,8 @@ export interface BeMusicNote {
   x: number;
   w: number;
   y: number;
+  /** True when autoplay (or auto-scratch) will hit this note. */
+  autoplay?: boolean;
 }
 
 /**
@@ -265,7 +399,20 @@ export interface BeMusicLongNote {
   w: number;
   top: number;
   bottom: number;
+  /**
+   * How the long note judges: `'ln'` (only the start counts), `'cn'` (charge note: the release is judged too), or
+   * `'hcn'` (hell charge note: the gauge drains while it isn't held).
+   */
+  mode?: BeMusicLongNoteMode;
+  /** Where the long note is in its life: not yet reached, being held, let go early, or completed. */
+  state?: BeMusicLongNoteState;
+  /** True when autoplay (or auto-scratch) plays this long note. */
+  autoplay?: boolean;
 }
+
+export type BeMusicLongNoteMode = 'ln' | 'cn' | 'hcn';
+
+export type BeMusicLongNoteState = 'pending' | 'held' | 'dropped' | 'done';
 
 export interface BeMusicBomb {
   channel: string;
@@ -278,7 +425,41 @@ export interface BeMusicBomb {
   elapsedMs: number;
   /** Stable per-hit seed so particle scatter doesn't shimmer frame to frame. */
   seed: number;
+  /** The judgement that set the hit off. */
+  judge?: BeMusicJudge;
 }
+
+/** A measure (bar) line crossing one lane run, as drawn this frame. */
+export interface BeMusicMeasureLine {
+  side: BeMusicSide;
+  /** Left edge and width of the lane run it crosses. */
+  x: number;
+  w: number;
+  y: number;
+}
+
+/**
+ * The BGA layers showing this frame, for a skin that composites the BGA itself ({@link BeMusicGameplaySkin.drawsBga}).
+ * Following the BMS convention, the host hands {@link layer} with pure black (`#000000`) already turned transparent,
+ * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
+ */
+export interface BeMusicBgaFrame {
+  /** The base layer (`#BMP` on channel 04), or a video frame. */
+  base?: BeMusicImage;
+  /** The layer drawn over the base (channel 07). */
+  layer?: BeMusicImage;
+  /** The miss image (channel 06), shown while {@link poorActive}. */
+  poor?: BeMusicImage;
+  /** True while a POOR is being shown: draw {@link poor} in place of the base and layer. */
+  poorActive: boolean;
+}
+
+/**
+ * Looks up one of a song's images (`#STAGEFILE`, `#BANNER`, `#BACKBMP`). Images load lazily: the first calls return
+ * `undefined` while the image decodes, and the screen is redrawn (on select, `revision` moves) once it is ready. Also
+ * `undefined` when the song has no such image or the host doesn't provide images.
+ */
+export type BeMusicSongImageLookup = (song: BrowserSongEntry, kind: BeMusicSongImageKind) => ImageBitmap | undefined;
 
 /** Everything on the gameplay screen this frame. */
 export interface BeMusicGameplayFrame {
@@ -295,10 +476,20 @@ export interface BeMusicGameplayFrame {
   mines: readonly BeMusicMine[];
   /** Live hit effects with their age. */
   bombs: readonly BeMusicBomb[];
+  /**
+   * Measure lines on screen, one per lane run they cross. Always empty unless the skin sets
+   * {@link BeMusicGameplaySkin.drawsMeasureLines}.
+   */
+  measureLines: readonly BeMusicMeasureLine[];
+  /** The BGA layers to composite. Always `undefined` unless the skin sets {@link BeMusicGameplaySkin.drawsBga}. */
+  bga: BeMusicBgaFrame | undefined;
   /** Fractional beat position in [0, 1). */
   beatPhase: number;
   effects: BeMusicEffectLevel;
   audio: BeMusicAudioFrame | undefined;
+  /** The player's values for the skin's {@link BeMusicSkin.settings}. */
+  settings: BeMusicSkinSettingValues;
+  songImage: BeMusicSongImageLookup;
 }
 
 export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
@@ -311,6 +502,21 @@ export interface BeMusicGameplaySkin<K extends BeMusicSurfaceContextKind = BeMus
    * skin in its own built-in style, so a skin written before mines reached the frame still shows them.
    */
   readonly drawsMines?: boolean;
+  /**
+   * Set to `true` when the skin draws the lane covers (SUDDEN+ / HIDDEN+) itself from `runtime.laneCovers`. Otherwise
+   * the player draws its own covers over the skin.
+   */
+  readonly drawsLaneCover?: boolean;
+  /**
+   * Set to `true` when the skin draws measure lines itself from `frame.measureLines`. Otherwise the player draws its
+   * own lines.
+   */
+  readonly drawsMeasureLines?: boolean;
+  /**
+   * Set to `true` when the skin composites the BGA itself from `frame.bga`. Otherwise the player shows the BGA behind
+   * the skin's canvas, in {@link BeMusicGameplayLayout.bga}.
+   */
+  readonly drawsBga?: boolean;
 }
 
 /** Song-list geometry shared by the skin (drawing) and the scene (row hit-testing). */
@@ -326,7 +532,18 @@ export interface BeMusicSelectActions {
   play: () => void;
   autoPlay: () => void;
   activateSearch: () => void;
+  /** Sets one play option. Values outside the option's choices are ignored. */
+  setPlayOption<K extends keyof BeMusicPlayOptions>(key: K, value: BeMusicPlayOptions[K]): void;
+  /** Moves one play option to its next (`step` 1, the default) or previous (`-1`) choice, wrapping around. */
+  cyclePlayOption(key: keyof BeMusicPlayOptions, step?: 1 | -1): void;
+  /** Opens or closes the focused song's readme (the `.txt` beside the chart), when it has one. */
+  toggleReadme(): void;
 }
+
+/** The values each play option can take, for options with a fixed set of choices (numeric ones are left out). */
+export type BeMusicPlayOptionChoices = {
+  readonly [K in keyof BeMusicPlayOptions]?: readonly BeMusicPlayOptions[K][];
+};
 
 /** Everything on the select screen this frame. */
 export interface BeMusicSelectFrame {
@@ -358,12 +575,23 @@ export interface BeMusicSelectFrame {
   launchAt: number | undefined;
   /** What is playing right now: the BGM or the chart preview (see {@link BeMusicAudioFrame}). */
   audio: BeMusicAudioFrame | undefined;
+  /** The current play options; change them through {@link BeMusicSelectActions.setPlayOption}. */
+  playOptions: Readonly<BeMusicPlayOptions>;
+  /** The choices of every play option that has a fixed set. */
+  playOptionChoices: BeMusicPlayOptionChoices;
+  /** The pointer in design pixels, or `undefined` when it is outside the screen (or there is none). */
+  pointer: { x: number; y: number } | undefined;
+  /** The player's best record on `song`, or `undefined` when the host keeps none (or it was never played). */
+  songRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined;
+  songImage: BeMusicSongImageLookup;
+  /** The player's values for the skin's {@link BeMusicSkin.settings}. */
+  settings: BeMusicSkinSettingValues;
   /**
    * Makes the rect (design pixels) run `action` when clicked — e.g. `frame.hit(x, y, w, h, frame.actions.play)`. Hit
    * areas last for the frame they were declared in, so declare them on every draw. `cursor` is the CSS cursor shown
-   * over the rect (`'pointer'` by default).
+   * over the rect (`'pointer'` by default). Returns whether the pointer is over the rect, for hover states.
    */
-  hit(x: number, y: number, w: number, h: number, action: () => void, cursor?: string): void;
+  hit(x: number, y: number, w: number, h: number, action: () => void, cursor?: string): boolean;
 }
 
 export interface BeMusicSelectSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
@@ -388,9 +616,40 @@ export interface BeMusicResultFrame {
   elapsedMs: number;
   nowMs: number;
   effects: BeMusicEffectLevel;
+  songImage: BeMusicSongImageLookup;
+  /** The player's values for the skin's {@link BeMusicSkin.settings}. */
+  settings: BeMusicSkinSettingValues;
 }
 
 export interface BeMusicResultSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /** Draws one result frame. Called every frame while the result screen is shown. */
   draw(surface: BeMusicSurface<K>, frame: BeMusicResultFrame): void;
+}
+
+/** Everything on the decide screen this frame. */
+export interface BeMusicDecideFrame {
+  designWidth: number;
+  designHeight: number;
+  nowMs: number;
+  /** Milliseconds since the screen mounted. */
+  elapsedMs: number;
+  /** The chart about to be played. */
+  song: BrowserSongEntry;
+  /** The options the play will run with. */
+  playOptions: Readonly<BeMusicPlayOptions>;
+  songImage: BeMusicSongImageLookup;
+  effects: BeMusicEffectLevel;
+  /** The player's values for the skin's {@link BeMusicSkin.settings}. */
+  settings: BeMusicSkinSettingValues;
+  audio: BeMusicAudioFrame | undefined;
+}
+
+export interface BeMusicDecideSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
+  /**
+   * How long (ms) the screen shows before the play starts. Default 2000. The player can skip ahead (Enter) or go back to
+   * select (Escape) meanwhile.
+   */
+  readonly durationMs?: number;
+  /** Draws one decide frame. Called every frame while the decide screen is shown. */
+  draw(surface: BeMusicSurface<K>, frame: BeMusicDecideFrame): void;
 }

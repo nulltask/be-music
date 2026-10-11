@@ -1,7 +1,7 @@
 import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
 import { getDesignPixelRatio } from '../../scene/core/viewport.ts';
 import { ChildPool } from '../../scene/pixi-utils.ts';
-import { wideStage } from '@be-music/skin-sdk';
+import { resolveBeMusicSkinSettings, wideStage } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
 import type {
   BeMusicBomb,
@@ -13,8 +13,11 @@ import type {
   BeMusicMine,
   BeMusicNote,
   BeMusicResultFrame,
+  BeMusicMeasureLine,
   BeMusicSelectFrame,
   BeMusicSkin,
+  BeMusicSkinSettingValues,
+  BeMusicSongImageLookup,
   BeMusicStage,
   BeMusicSurface,
   BeMusicSurfaceContextMap,
@@ -26,6 +29,14 @@ import type {
  */
 
 const log = logger('be-music-skin');
+
+/** Song images aren't loaded for be-music skins yet: every lookup reports the image as unavailable. */
+// Wired in a later commit.
+const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
+
+/** Measure lines aren't collected for skins yet, so opted-in skins see none. */
+// Wired in a later commit.
+const NO_MEASURE_LINES: readonly BeMusicMeasureLine[] = Object.freeze([]);
 
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
@@ -156,7 +167,14 @@ export class BeMusicGameplayBinding {
   readonly bombDurationMs: number;
   /** Whether the skin draws mines from the frame; when false the scene draws them itself. */
   readonly drawsMines: boolean;
+  /** Whether the skin draws the lane covers from `runtime.laneCovers`; when false the scene draws them itself. */
+  readonly drawsLaneCover: boolean;
+  /** Whether the skin draws measure lines from the frame; when false the scene draws them itself. */
+  readonly drawsMeasureLines: boolean;
+  /** Whether the skin composites the BGA from the frame; when false the scene shows it behind the skin. */
+  readonly drawsBga: boolean;
   private readonly skin: BeMusicSkin;
+  private readonly settings: BeMusicSkinSettingValues;
   private readonly surface: SkinSurface;
   private frame: BeMusicGameplayFrame | undefined;
   private lanes: BeMusicLaneFrame[] = [];
@@ -172,6 +190,10 @@ export class BeMusicGameplayBinding {
     this.surface = new SkinSurface(skin);
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
     this.drawsMines = skin.gameplay.drawsMines === true;
+    this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
+    this.drawsMeasureLines = skin.gameplay.drawsMeasureLines === true;
+    this.drawsBga = skin.gameplay.drawsBga === true;
+    this.settings = resolveBeMusicSkinSettings(skin);
   }
 
   /** Starts a frame and shows the skin's canvas in `layerPool` (the scene's chrome layer, above the BGA). */
@@ -196,9 +218,14 @@ export class BeMusicGameplayBinding {
       longNotes: this.longNotes,
       mines: this.mines,
       bombs: this.bombs,
+      measureLines: NO_MEASURE_LINES,
+      // Wired in a later commit: the scene doesn't hand BGA layers to skins yet.
+      bga: undefined,
       beatPhase: runtime.beatPhase ?? 0,
       effects: runtime.effects ?? 'full',
       audio: runtime.audio,
+      settings: this.settings,
+      songImage: NO_SONG_IMAGE,
     };
     const sprite = context.layerPool.acquireSprite();
     sprite.texture = this.surface.texture;
@@ -241,8 +268,14 @@ export class BeMusicGameplayBinding {
   };
 }
 
-/** The select frame the scene hands over; the binding adds `revision`, `audio`, and `hit`. */
-export type BeMusicSelectSceneFrame = Omit<BeMusicSelectFrame, 'revision' | 'audio' | 'hit'>;
+/**
+ * The select frame the scene hands over; the binding adds `revision`, `audio`, `hit`, and the skin-facing extras
+ * (`pointer`, `songRecord`, `songImage`, `settings`).
+ */
+export type BeMusicSelectSceneFrame = Omit<
+  BeMusicSelectFrame,
+  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'songImage' | 'settings'
+>;
 
 /**
  * Select for one scene: {@link render} records the latest state when the scene's input changes, and {@link tick} draws
@@ -257,6 +290,9 @@ export class BeMusicSelectBinding {
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
+  private readonly settings: BeMusicSkinSettingValues;
+  /** The pointer in design pixels. Wired in a later commit: the scene doesn't report it yet. */
+  private readonly pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
   private revision = 0;
 
@@ -264,6 +300,7 @@ export class BeMusicSelectBinding {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.outroMs = skin.select.outroMs ?? 0;
+    this.settings = resolveBeMusicSkinSettings(skin);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
     this.hitPool = new ChildPool(this.frontLayer);
   }
@@ -285,6 +322,7 @@ export class BeMusicSelectBinding {
     if (!base) return;
     const pool = this.hitPool;
     pool.begin();
+    const pointer = this.pointer;
     const frame: BeMusicSelectFrame = {
       ...base,
       nowMs,
@@ -292,6 +330,11 @@ export class BeMusicSelectBinding {
       launchAt,
       audio,
       revision: this.revision,
+      pointer,
+      // Wired in a later commit: the host keeps no play records for skins yet.
+      songRecord: () => undefined,
+      songImage: NO_SONG_IMAGE,
+      settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {
         const area = pool.acquireGraphics();
         area.rect(x, y, w, h).fill({ color: 0xffffff, alpha: 0.001 });
@@ -299,6 +342,7 @@ export class BeMusicSelectBinding {
         area.cursor = cursor;
         area.removeAllListeners('pointerdown');
         area.on('pointerdown', action);
+        return pointer !== undefined && pointer.x >= x && pointer.x < x + w && pointer.y >= y && pointer.y < y + h;
       },
     };
     try {
@@ -316,20 +360,26 @@ export class BeMusicSelectBinding {
   }
 }
 
+/** The result frame the scene hands over; the binding adds `songImage` and `settings`. */
+export type BeMusicResultSceneFrame = Omit<BeMusicResultFrame, 'songImage' | 'settings'>;
+
 /** Result for one scene: draws the skin every frame onto a canvas shown by {@link view}. */
 export class BeMusicResultBinding {
   /** Persistent container showing the skin's canvas; the scene mounts it once. */
   readonly view = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
+  private readonly settings: BeMusicSkinSettingValues;
 
   constructor(skin: BeMusicSkin) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
+    this.settings = resolveBeMusicSkinSettings(skin);
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 
-  render(frame: BeMusicResultFrame): void {
+  render(sceneFrame: BeMusicResultSceneFrame): void {
+    const frame: BeMusicResultFrame = { ...sceneFrame, songImage: NO_SONG_IMAGE, settings: this.settings };
     this.surface.draw((surface) => this.skin.result.draw(surface, frame));
   }
 

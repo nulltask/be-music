@@ -1,13 +1,17 @@
+import { validateBeMusicSkinSettings } from './settings.ts';
 import type { BeMusicSkin, BeMusicSurfaceContextKind } from './types.ts';
 
 /**
  * The skin API revision this build of the player implements. Skins record the revision they were written against in
  * `apiVersion`; a host refuses skins from a revision it doesn't support.
  */
-export const BE_MUSIC_SKIN_API_VERSION = 1;
+export const BE_MUSIC_SKIN_API_VERSION = 2;
 
-/** Skin API revisions this host can run. */
-const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([BE_MUSIC_SKIN_API_VERSION]);
+/**
+ * Skin API revisions this host can run. Revision 2 only added to what revision 1 skins receive (new frame fields,
+ * opt-in `draws*` flags, the decide screen, skin settings), so revision 1 skins still run unchanged.
+ */
+const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([1, BE_MUSIC_SKIN_API_VERSION]);
 
 /** Whether this host can run a skin written against `apiVersion`. */
 export function isSupportedBeMusicSkinApiVersion(apiVersion: number): boolean {
@@ -32,7 +36,7 @@ function isHttpUrl(value: string): boolean {
 
 /**
  * Problems with a skin's declaration — an unsupported API revision, a malformed id or version, missing author, bad
- * URLs — as human-readable messages. Empty when the skin is fine.
+ * URLs, an invalid `settings` schema — as human-readable messages. Empty when the skin is fine.
  */
 export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   const problems: string[] = [];
@@ -57,6 +61,14 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   for (const screen of ['gameplay', 'select', 'result'] as const) {
     if (typeof skin[screen]?.draw !== 'function') problems.push(`${screen}.draw must be a function`);
   }
+  if (skin.decide !== undefined) {
+    if (typeof skin.decide.draw !== 'function') problems.push('decide.draw must be a function');
+    const { durationMs } = skin.decide;
+    if (durationMs !== undefined && !(Number.isFinite(durationMs) && durationMs >= 0)) {
+      problems.push(`decide.durationMs ${String(durationMs)} must be a non-negative number`);
+    }
+  }
+  problems.push(...validateBeMusicSkinSettings(skin.settings));
   return problems;
 }
 
