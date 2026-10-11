@@ -501,7 +501,8 @@ function drawPlayfieldWell(
     graphics.circle(left - 1, y, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
     graphics.circle(left - 1, y, 7).fill({ color: accent, alpha: 0.25 });
   }
-  graphics.rect(left - 1, PLAYFIELD_FRAME_BOTTOM, w + 4, 1).fill({ color: accent, alpha: 0.7 });
+  // The floor rule runs from the left rail's outer edge (left - 1) to the right rail's (right + 3), and no further.
+  graphics.rect(left - 1, PLAYFIELD_FRAME_BOTTOM, w, 1).fill({ color: accent, alpha: 0.7 });
 }
 
 /**
