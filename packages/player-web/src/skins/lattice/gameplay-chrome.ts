@@ -684,39 +684,35 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
   const sc = hudScramble(runtime);
   graphics.rect(x, y, w, 1).fill(LAT_INK);
   addHudText(layer, sc('TRACK', 300, 6), x, y + 6, monoStyle(), pool);
+  // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
+  const genre = runtime.songGenre?.trim();
+  const lift = genre ? 9 : 0;
+  if (genre) {
+    addHudText(
+      layer,
+      sc(genre.toUpperCase(), 330, 9),
+      x + 48,
+      y + 4,
+      { ...monoStyle(), size: 8, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
+      pool,
+    );
+  }
   addHudText(
     layer,
     sc(runtime.songTitle?.trim() || 'Untitled chart', 360, 7),
     x + 48,
-    y + 4,
+    y + 4 + lift,
     { size: 15, weight: '500', fill: LAT_INK, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
     pool,
   );
-  const genre = runtime.songGenre?.trim();
-  if (genre) {
-    addHudText(
-      layer,
-      sc(genre.toUpperCase(), 520, 9),
-      x + w,
-      y + 27,
-      { ...monoStyle(), fontFamily: LAT_TEXT_FONT, anchorX: 1, maxWidth: 200 },
-      pool,
-    );
-  }
   const artist = runtime.songArtist?.trim();
   if (artist) {
     addHudText(
       layer,
       sc(artist, 460, 8),
       x + 48,
-      y + 26,
-      {
-        size: 10,
-        weight: '300',
-        fill: LAT_GRAPHITE,
-        fontFamily: LAT_TEXT_FONT,
-        maxWidth: w - 48 - (genre ? 216 : 0),
-      },
+      y + 26 + lift / 2,
+      { size: 10, weight: '300', fill: LAT_GRAPHITE, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
       pool,
     );
   }

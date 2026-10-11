@@ -212,7 +212,12 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
   const trackW = designWidth - 20 - trackX;
   rule(trackX, 66, trackW, 680);
   text(decode('11 TRACK', 680, 8), trackX, 74, { ...mono(), alpha: fadeIn(680) });
-  text(decode(result.song.title || 'Untitled chart', 700, 9, 600), trackX, 92, {
+  // Genre, title, artist — the order every built-in skin uses.
+  const genreLift = result.song.genre ? 16 : 0;
+  if (result.song.genre) {
+    text(result.song.genre.toUpperCase(), trackX, 92, { ...mono(), maxWidth: trackW, alpha: fadeIn(680) });
+  }
+  text(decode(result.song.title || 'Untitled chart', 700, 9, 600), trackX, 92 + genreLift, {
     size: 15,
     weight: '500',
     fill: LAT_INK,
@@ -220,7 +225,7 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
     maxWidth: trackW,
     alpha: fadeIn(700),
   });
-  text(result.song.artist ?? '', trackX, 114, {
+  text(result.song.artist ?? '', trackX, 114 + genreLift, {
     size: 10,
     weight: '400',
     fill: LAT_GRAPHITE,
@@ -228,9 +233,6 @@ export function renderLatticeResult(frame: PixiResultFrame): void {
     maxWidth: trackW,
     alpha: fadeIn(720),
   });
-  if (result.song.genre) {
-    text(result.song.genre.toUpperCase(), trackX, 130, { ...mono(), maxWidth: trackW, alpha: fadeIn(740) });
-  }
   resolveResultTrackRows(result).forEach((row, index) => {
     const y = 178 + index * 44;
     const delay = 740 + index * 60;

@@ -723,11 +723,24 @@ function drawGauge(graphics: Graphics, layer: Container, runtime: Runtime, accen
 function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, accent: number, pool: ChildPool): void {
   const { x, y, w, h } = SONG_PLATE;
   drawFrame(graphics, x, y, w, h, accent);
+  // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
+  const genre = runtime.songGenre?.trim();
+  const lift = genre ? 5 : 0;
+  if (genre) {
+    addHudText(
+      layer,
+      genre.toUpperCase(),
+      x + 14,
+      y + 3,
+      { size: 8, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, maxWidth: w - 28 },
+      pool,
+    );
+  }
   addHudText(
     layer,
     runtime.songTitle?.trim() || 'Untitled chart',
     x + 14,
-    y + 6,
+    y + 6 + lift,
     {
       size: 15,
       weight: '500',
@@ -738,17 +751,6 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
     },
     pool,
   );
-  const genre = runtime.songGenre?.trim();
-  if (genre) {
-    addHudText(
-      layer,
-      genre.toUpperCase(),
-      x + w - 14,
-      y + 29,
-      { size: 9, weight: '500', fill: SYN_DIM, fontFamily: SYN_TEXT_FONT, letterSpacing: 1, anchorX: 1, maxWidth: 200 },
-      pool,
-    );
-  }
   const artist = runtime.songArtist?.trim();
   if (artist) {
     addHudText(
@@ -756,7 +758,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, a
       artist,
       x + 14,
       y + 28,
-      { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: w - 28 - (genre ? 216 : 0) },
+      { size: 10, weight: '300', fill: SYN_MIST, fontFamily: SYN_TEXT_FONT, maxWidth: w - 28 },
       pool,
     );
   }

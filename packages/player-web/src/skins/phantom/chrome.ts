@@ -670,33 +670,35 @@ function drawSongPlate(
     .fill(PHANTOM_PAPER)
     .stroke({ color: PHANTOM_INK, width: 2 });
   frame.poly(parallelogramPoints(x + 6, y + 6, 5, h - 12, 5)).fill(PHANTOM_RED);
-  addText(
-    layer,
-    runtime.songTitle?.trim() || 'Untitled chart',
-    x + 22,
-    y + 5,
-    { size: 16, fill: PHANTOM_INK, fontFamily: DEFAULT_HEADLINE_FONT, maxWidth: w - 30 },
-    pool,
-  );
+  // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
   const genre = runtime.songGenre?.trim();
+  const lift = genre ? 8 : 0;
   if (genre) {
     addText(
       layer,
       genre.toUpperCase(),
-      x + w - 18,
-      y + 28,
-      { size: 9, weight: '800', fill: PHANTOM_ASH, anchorX: 1, maxWidth: 200 },
+      x + 22,
+      y + 3,
+      { size: 8, weight: '800', fill: PHANTOM_ASH, maxWidth: w - 30 },
       pool,
     );
   }
+  addText(
+    layer,
+    runtime.songTitle?.trim() || 'Untitled chart',
+    x + 22,
+    y + 5 + lift,
+    { size: 16, fill: PHANTOM_INK, fontFamily: DEFAULT_HEADLINE_FONT, maxWidth: w - 30 },
+    pool,
+  );
   const artist = runtime.songArtist?.trim();
   if (artist) {
     addText(
       layer,
       artist,
       x + 20,
-      y + 27,
-      { size: 10, weight: '800', fill: PHANTOM_RED, maxWidth: w - 30 - (genre ? 216 : 0) },
+      y + 27 + lift / 2,
+      { size: 10, weight: '800', fill: PHANTOM_RED, maxWidth: w - 30 },
       pool,
     );
   }

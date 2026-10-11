@@ -180,9 +180,10 @@ function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
   ctx.fillRect(gaugeX + (gaugeW * clear) / 100, gaugeY - 3, 1, 14);
 
   // Track, bottom left.
+  // Genre, title, artist — the order every built-in skin uses.
+  if (runtime.songGenre) text(ctx, runtime.songGenre, MARGIN, height - 70, { size: 10, color: MUTED, maxWidth: 380 });
   text(ctx, runtime.songTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380 });
-  const byline = [runtime.songArtist, runtime.songGenre].filter(Boolean).join('  /  ');
-  text(ctx, byline, MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380 });
+  text(ctx, runtime.songArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380 });
 
   // Score figures, bottom right, in one row.
   const figures: Array<[string, string]> = [
