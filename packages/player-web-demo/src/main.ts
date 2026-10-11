@@ -25,6 +25,7 @@ import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
   type BeMusicSkin,
+  type BeMusicSongRecord,
   discoverBeatorajaSelectBgmPath,
   discoverBeatorajaSystemSoundPaths,
   findBeatorajaThemeBgm,
@@ -106,6 +107,13 @@ import {
   type BeatorajaSkinHeader,
 } from '@be-music/beatoraja-skin';
 import { BeatorajaSkinOptionsGui } from './beatoraja-skin-options-gui.ts';
+import {
+  mergeSongRecord,
+  readStoredSongRecords,
+  songRecordKey,
+  songRecordPlayFromResult,
+  storeSongRecords,
+} from './song-records.ts';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import type { PlayerSummary } from '@be-music/player/core/engine';
@@ -487,6 +495,15 @@ class PlayerWebDemoApp {
   private readonly playOptionControllers: Controller[] = [];
   /** Per-entry chart-file SHA-256 cache (`''` = lookup failed) — see {@link resolveChartSha256}. */
   private readonly chartSha256Cache = new Map<string, string>();
+  /** In-flight {@link resolveChartSha256} lookups, so a chart is hashed once however often it is asked for. */
+  private readonly chartSha256Pending = new Map<string, Promise<string | undefined>>();
+  /** Best record per chart ({@link songRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
+  private readonly songRecords = readStoredSongRecords();
+  /**
+   * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
+   * for autoplay and replay plays, which never touch the records.
+   */
+  private activePlayRecordKey: string | undefined;
   /**
    * `guiState.autoSavePlaylog` as it was when the current play STARTED. The result-screen auto-save decision reads
    * this latch, not the live checkbox, so the value in effect at song start governs the whole play (the checkbox is
@@ -1371,9 +1388,41 @@ class PlayerWebDemoApp {
     if (cached !== undefined) {
       return cached === '' ? undefined : cached;
     }
-    const hash = await computeChartFileSha256(resolveSongSource(this.collection, song), song.chartPath);
-    this.chartSha256Cache.set(song.id, hash ?? '');
-    return hash;
+    const pending = this.chartSha256Pending.get(song.id);
+    if (pending !== undefined) {
+      return pending;
+    }
+    const lookup = computeChartFileSha256(resolveSongSource(this.collection, song), song.chartPath)
+      .catch(() => undefined)
+      .then((hash) => {
+        this.chartSha256Cache.set(song.id, hash ?? '');
+        return hash;
+      })
+      .finally(() => this.chartSha256Pending.delete(song.id));
+    this.chartSha256Pending.set(song.id, lookup);
+    return lookup;
+  }
+
+  /**
+   * A chart's best record for the select skin's `frame.songRecord`. Records are keyed by chart hash, which is only known
+   * once the chart has been hashed: the first lookup starts hashing it and answers from the path key meanwhile (where a
+   * chart that could not be hashed keeps its record), so a skin sees the record a frame or two later.
+   */
+  private lookupSongRecord(song: BrowserSongEntry): BeMusicSongRecord | undefined {
+    if (this.songRecords.size === 0) {
+      return undefined;
+    }
+    const hash = this.chartSha256Cache.get(song.id);
+    if (hash === undefined) {
+      void this.resolveChartSha256(song);
+    }
+    return this.songRecords.get(songRecordKey(song, hash || undefined));
+  }
+
+  /** Folds a finished play into its chart's best record and persists the records. */
+  private recordSongResult(key: string, data: PixiGameplayResultData): void {
+    this.songRecords.set(key, mergeSongRecord(this.songRecords.get(key), songRecordPlayFromResult(data)));
+    storeSongRecords(this.songRecords);
   }
 
   /**
@@ -3244,6 +3293,7 @@ class PlayerWebDemoApp {
         this.guiState.autoScratch2P = options.autoScratch2P;
         this.refreshPlayOptionControllers();
       },
+      resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
       onSongSelected: (song: BrowserSongEntry) => {
         // Fire the decide cue first — it plays through the select view's AudioContext which keeps running even after
         // the view is hidden, so the cue isn't cut by the gameplay mount.
@@ -3372,11 +3422,15 @@ class PlayerWebDemoApp {
   ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
+    const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
+    // Only a play the player actually played counts towards the chart's best record.
+    this.activePlayRecordKey =
+      autoPlay || replay !== undefined ? undefined : songRecordKey(song, overrides.chartSha256);
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
       // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
-      autoPlay: overrides.autoPlay ?? this.guiState.autoPlay,
+      autoPlay,
       autoPauseOnBlur: this.guiState.autoPauseOnBlur,
       initialHiSpeed: playOptions?.hiSpeed,
       bga: playOptions?.bga,
@@ -3588,6 +3642,10 @@ class PlayerWebDemoApp {
     this.gameplayView?.dispose({ preserveAudioTail: true });
     this.gameplayView = undefined;
     this.setStatus(`Result: ${data.song.title}`);
+    if (this.activePlayRecordKey !== undefined) {
+      this.recordSongResult(this.activePlayRecordKey, data);
+      this.activePlayRecordKey = undefined;
+    }
     this.maybeAutoSavePlaylog(data.playlog);
     this.unlockPlaylogOptions();
   }
