@@ -69,6 +69,13 @@ export interface CoreResultViewOptions {
   /** Showmanship level for the be-music skin's result entrance. Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
+  /**
    * Loaded song collection — needed to resolve per-song artwork (BANNER / STAGEFILE / BACKBMP) via the same
    * chart-asset loader the select view uses. May be `undefined` for embed scenarios where the result is rendered outside
    * a library context.
@@ -155,9 +162,21 @@ export class CoreResultView {
    */
   protected readonly timerStartedAt: Map<number, number> = new Map<number, number>();
   protected options: CoreResultViewOptions;
+  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: CoreResultViewOptions = {}) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
+  }
+
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.skinBinding?.setSettings(stored);
   }
 
   private get app(): Application {
@@ -413,6 +432,7 @@ export class CoreResultView {
       });
       this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin, {
         songImage: this.songImages.lookup,
+        settings: this.beMusicSkinSettings,
       });
       this.fallbackLayer.addChild(this.skinBinding.view);
     }

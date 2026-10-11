@@ -1,7 +1,7 @@
 import { validateBeMusicSkin, type BeMusicSelectLayout, type BeMusicSkin } from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
 
-export { resolveBeMusicLaneKind } from '@be-music/skin-sdk';
+export { resolveBeMusicLaneKind, resolveBeMusicSkinSettings } from '@be-music/skin-sdk';
 
 const log = logger('be-music-skin');
 

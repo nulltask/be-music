@@ -375,6 +375,13 @@ export interface CoreSongSelectViewOptions {
   beMusicSkin?: BeMusicSkin;
   /** Showmanship level for the be-music skin (entrance, outro, ambient motion). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
+  /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
   onSongSelected?: (song: BrowserSongEntry) => void;
   /**
    * AUTOPLAY-mode launch hook. Fired when the user clicks the skin's AUTOPLAY button (#SRC_BUTTON `type = 16`) or
@@ -784,9 +791,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    */
   private readonly oneShotDecoding = new Set<string>();
   protected options: TOptions;
+  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
     this.selectBgmBytes = options.selectBgm;
     this.setOneShotBytes('decide', options.decideBgm);
     this.setSystemSounds(options.systemSounds);
@@ -800,6 +810,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * Returns a shallow snapshot of the current play-option state. The host typically calls this from `onSongSelected` /
    * `onSongAutoPlay` and forwards the values onto {@link PixiGameplayViewOptions}.
    */
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.beMusicRenderer?.setSettings(stored);
+  }
+
   public getPlayOptions(): PixiPlayOptions {
     return { ...this.playOptions };
   }
@@ -2339,6 +2358,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, {
         resolveSongRecord: this.options.resolveSongRecord,
         songImage: songImages.lookup,
+        settings: this.beMusicSkinSettings,
       });
       this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
       this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);

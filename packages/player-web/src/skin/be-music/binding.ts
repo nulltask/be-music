@@ -39,6 +39,12 @@ const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
 /** Hosts that keep no play records report every song as never played. */
 const NO_SONG_RECORD = (): BeMusicSongRecord | undefined => undefined;
 
+/**
+ * The player's stored values for a skin's settings, keyed by setting id, as a host persisted them. Bindings check them
+ * against the skin's schema with `resolveBeMusicSkinSettings` before a skin sees them.
+ */
+export type BeMusicStoredSkinSettings = Readonly<Record<string, unknown>>;
+
 /** How long the decide screen shows when the skin doesn't say (`BeMusicDecideSkin.durationMs`). */
 const DEFAULT_DECIDE_DURATION_MS = 2000;
 
@@ -178,7 +184,7 @@ export class BeMusicGameplayBinding {
   /** Whether the skin composites the BGA from the frame; when false the scene shows it behind the skin. */
   readonly drawsBga: boolean;
   private readonly skin: BeMusicSkin;
-  private readonly settings: BeMusicSkinSettingValues;
+  private settings: BeMusicSkinSettingValues;
   private readonly songImage: BeMusicSongImageLookup;
   private readonly surface: SkinSurface;
   private frame: BeMusicGameplayFrame | undefined;
@@ -191,8 +197,14 @@ export class BeMusicGameplayBinding {
   private frameNumber = 0;
   private drawnFrame = -1;
 
-  /** `songImage` resolves the song's images for `frame.songImage`; without one every image reads as unavailable. */
-  constructor(skin: BeMusicSkin, options: { songImage?: BeMusicSongImageLookup } = {}) {
+  /**
+   * `songImage` resolves the song's images for `frame.songImage`; without one every image reads as unavailable.
+   * `settings` are the player's stored values for the skin's settings; without them the skin draws with its defaults.
+   */
+  constructor(
+    skin: BeMusicSkin,
+    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings } = {},
+  ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
@@ -201,7 +213,12 @@ export class BeMusicGameplayBinding {
     this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
     this.drawsMeasureLines = skin.gameplay.drawsMeasureLines === true;
     this.drawsBga = skin.gameplay.drawsBga === true;
-    this.settings = resolveBeMusicSkinSettings(skin);
+    this.settings = resolveBeMusicSkinSettings(skin, options.settings);
+  }
+
+  /** Replaces the player's values for the skin's settings; the next frame draws with them. */
+  setSettings(stored: BeMusicStoredSkinSettings | undefined): void {
+    this.settings = resolveBeMusicSkinSettings(this.skin, stored);
   }
 
   /** Starts a frame and shows the skin's canvas in `layerPool` (the scene's chrome layer, above the BGA). */
@@ -309,7 +326,7 @@ export class BeMusicSelectBinding {
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
-  private readonly settings: BeMusicSkinSettingValues;
+  private settings: BeMusicSkinSettingValues;
   private readonly songRecord: BeMusicSelectFrame['songRecord'];
   private readonly songImage: BeMusicSongImageLookup;
   /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
@@ -320,18 +337,23 @@ export class BeMusicSelectBinding {
   /**
    * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
    * reads as never played. `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
-   * arrives); without one every image reads as unavailable.
+   * arrives); without one every image reads as unavailable. `settings` are the player's stored values for the skin's
+   * settings; without them the skin draws with its defaults.
    */
   constructor(
     skin: BeMusicSkin,
-    options: { resolveSongRecord?: BeMusicSelectFrame['songRecord']; songImage?: BeMusicSongImageLookup } = {},
+    options: {
+      resolveSongRecord?: BeMusicSelectFrame['songRecord'];
+      songImage?: BeMusicSongImageLookup;
+      settings?: BeMusicStoredSkinSettings;
+    } = {},
   ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.outroMs = skin.select.outroMs ?? 0;
     this.songRecord = options.resolveSongRecord ?? NO_SONG_RECORD;
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
-    this.settings = resolveBeMusicSkinSettings(skin);
+    this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
     this.hitPool = new ChildPool(this.frontLayer);
   }
@@ -339,6 +361,15 @@ export class BeMusicSelectBinding {
   /** Records the select state after an input-driven change. Drawing happens in {@link tick}. */
   render(frame: BeMusicSelectSceneFrame): void {
     this.frame = frame;
+    this.revision += 1;
+  }
+
+  /**
+   * Replaces the player's values for the skin's settings and moves `frame.revision`, so a skin that caches its layout
+   * per revision redraws with them on the next {@link tick}.
+   */
+  setSettings(stored: BeMusicStoredSkinSettings | undefined): void {
+    this.settings = resolveBeMusicSkinSettings(this.skin, stored);
     this.revision += 1;
   }
 
@@ -416,16 +447,27 @@ export class BeMusicResultBinding {
   readonly view = new Container();
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
-  private readonly settings: BeMusicSkinSettingValues;
+  private settings: BeMusicSkinSettingValues;
   private readonly songImage: BeMusicSongImageLookup;
 
-  /** `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. */
-  constructor(skin: BeMusicSkin, options: { songImage?: BeMusicSongImageLookup } = {}) {
+  /**
+   * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
+   * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
+   */
+  constructor(
+    skin: BeMusicSkin,
+    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings } = {},
+  ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
-    this.settings = resolveBeMusicSkinSettings(skin);
+    this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
+  }
+
+  /** Replaces the player's values for the skin's settings; the next frame draws with them. */
+  setSettings(stored: BeMusicStoredSkinSettings | undefined): void {
+    this.settings = resolveBeMusicSkinSettings(this.skin, stored);
   }
 
   render(sceneFrame: BeMusicResultSceneFrame): void {
@@ -450,17 +492,28 @@ export class BeMusicDecideBinding {
   readonly durationMs: number;
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
-  private readonly settings: BeMusicSkinSettingValues;
+  private settings: BeMusicSkinSettingValues;
   private readonly songImage: BeMusicSongImageLookup;
 
-  /** `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. */
-  constructor(skin: BeMusicSkin, options: { songImage?: BeMusicSongImageLookup } = {}) {
+  /**
+   * `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. `settings`
+   * are the player's stored values for the skin's settings; without them the skin draws with its defaults.
+   */
+  constructor(
+    skin: BeMusicSkin,
+    options: { songImage?: BeMusicSongImageLookup; settings?: BeMusicStoredSkinSettings } = {},
+  ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
-    this.settings = resolveBeMusicSkinSettings(skin);
+    this.settings = resolveBeMusicSkinSettings(skin, options.settings);
     this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.durationMs = Math.max(0, skin.decide?.durationMs ?? DEFAULT_DECIDE_DURATION_MS);
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
+  }
+
+  /** Replaces the player's values for the skin's settings; the next frame draws with them. */
+  setSettings(stored: BeMusicStoredSkinSettings | undefined): void {
+    this.settings = resolveBeMusicSkinSettings(this.skin, stored);
   }
 
   /** Draws one frame; a no-op for a skin without a decide screen. */

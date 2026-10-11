@@ -369,6 +369,13 @@ export interface CoreGameplayViewOptions {
   beMusicSkin?: BeMusicSkin;
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
+  /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -1148,9 +1155,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private readonly perf = new PerfTracker('gameplay');
   protected readonly options: TOptions;
+  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
     if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
       // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
@@ -3498,9 +3508,21 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         resolveSource: (song) =>
           this.source !== undefined && song.sourceId === this.source.id ? this.source : undefined,
       });
-      this.skinBindingInstance = new BeMusicGameplayBinding(skin, { songImage: this.songImages.lookup });
+      this.skinBindingInstance = new BeMusicGameplayBinding(skin, {
+        songImage: this.songImages.lookup,
+        settings: this.beMusicSkinSettings,
+      });
     }
     return this.skinBindingInstance;
+  }
+
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.skinBindingInstance?.setSettings(stored);
   }
 
   /**

@@ -287,6 +287,26 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveBeMusicLaneKind('1D', -1, '24');
     },
   });
+  define('player-web.resolveBeMusicSkinSettings', {
+    run: () => {
+      playerWebCoreApi.resolveBeMusicSkinSettings(
+        {
+          settings: [
+            {
+              kind: 'choice',
+              id: 'theme',
+              label: 'Theme',
+              options: [{ value: 'dark', label: 'Dark' }],
+              default: 'dark',
+            },
+            { kind: 'number', id: 'offset', label: 'Offset', min: -50, max: 50, step: 1, default: 0, unit: 'px' },
+            { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
+          ],
+        },
+        { theme: 'light', offset: 80, glow: false, stale: 1 },
+      );
+    },
+  });
   define('player-web.resolveSelectListWindow', {
     run: () => {
       playerWebCoreApi.resolveSelectListWindow(playerWebCoreApi.phantomSkin.select.layout, 480, 50, 100);

@@ -44,6 +44,13 @@ export interface CoreDecideViewOptions {
   beMusicSkin: BeMusicSkin;
   /** Showmanship level handed to the skin. Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
+  /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
   /** The options the play will run with (`frame.playOptions`). Defaults to the select scene's defaults. */
   playOptions?: Readonly<BeMusicPlayOptions>;
   /** Fired once when the screen's time is up or the player skips ahead (Enter / Space / click). */
@@ -77,12 +84,24 @@ export class CoreDecideView {
   private disposed = false;
   private finished = false;
   private readonly options: CoreDecideViewOptions;
+  /** The player's stored values for the skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
   private readonly tickerHandle = (): void => {
     if (!this.disposed) this.render();
   };
 
   public constructor(options: CoreDecideViewOptions) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
+  }
+
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.binding?.setSettings(stored);
   }
 
   /** How long the screen shows before continuing: the skin's `decide.durationMs`, 0 when it has no decide screen. */
@@ -104,7 +123,10 @@ export class CoreDecideView {
       this.songImages = new SongImageCache({
         resolveSource: (song) => (collection ? resolveSongSource(collection, song) : undefined),
       });
-      this.binding = new BeMusicDecideBinding(skin, { songImage: this.songImages.lookup });
+      this.binding = new BeMusicDecideBinding(skin, {
+        songImage: this.songImages.lookup,
+        settings: this.beMusicSkinSettings,
+      });
       this.root.addChild(this.binding.view);
     }
     this.root.addChild(this.designClipMask);
