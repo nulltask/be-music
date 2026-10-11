@@ -229,11 +229,11 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
   - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
   - `folderLabel`、`searchQuery`、`totalCharts`
   - `actions`: `play`、`autoPlay`、`activateSearch`、`setPlayOption(key, value)`、`cyclePlayOption(key, step?)`（step は 1 か -1、端で折り返し）、`toggleReadme()`（フォーカス中の曲の `.txt` を開閉）
-  - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。
+  - `playOptions`（`BeMusicPlayOptions`: ハイスピード、ランダム、ゲージ、HIDDEN / SUDDEN、レーンカバー、BGA、リストのフィルタなど）と `playOptionChoices`（列挙型・オンオフのオプションが取りうる値）。選択肢にない値は無視されます。`hiSpeed` と `shutter` は任意の数値を受け付けて範囲内に丸められ、`cyclePlayOption` では変わりません。
   - `songRecord(song)`: その譜面でのプレイヤーのベスト記録（`{ lamp, exScore?, maxCombo?, missCount?, playCount? }`）。ホストが記録を持たなければ `undefined`
   - `pointer`: デザインピクセルでのポインタ位置。なければ `undefined`
   - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照
-  - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。
+  - `revision`: 選曲の状態（カーソル、フォルダ、検索、リスト内容、プレイオプション、readme の開閉）が変わるたびに増えます。保持型のシーングラフは、これが変わったときだけ作り直せば済みます。
   - 登場やフォーカス移動のトランジション用の `sceneStartedAt`、`cursorChangedAt`
   - `nowMs`、`effects`、`launchAt`、`audio`
   - `hit(x, y, w, h, action, cursor?)`: 矩形をそのフレームの間だけクリック可能にし、ポインタが矩形の上にあるかを返します（ホバー表示用）。クリック領域は描画のたびに宣言してください。

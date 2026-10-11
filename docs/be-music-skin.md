@@ -229,11 +229,11 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
   - `entries`, `selectedIndex`, `firstVisibleIndex`, `visibleRows`, `focusedSong`
   - `folderLabel`, `searchQuery`, `totalCharts`
   - `actions`: `play`, `autoPlay`, `activateSearch`, `setPlayOption(key, value)`, `cyclePlayOption(key, step?)` (step 1 or -1, wrapping), and `toggleReadme()` (opens or closes the focused song's `.txt`)
-  - `playOptions` (`BeMusicPlayOptions`: hi-speed, random, gauge, HIDDEN / SUDDEN, lane cover, BGA, list filters, …) and `playOptionChoices`, the values each enum or on / off option can take. Values outside the choices are ignored.
+  - `playOptions` (`BeMusicPlayOptions`: hi-speed, random, gauge, HIDDEN / SUDDEN, lane cover, BGA, list filters, …) and `playOptionChoices`, the values each enum or on / off option can take. Values outside the choices are ignored; `hiSpeed` and `shutter` take any number and are clamped to their range, and `cyclePlayOption` leaves them alone.
   - `songRecord(song)`: the player's best record on a chart (`{ lamp, exScore?, maxCombo?, missCount?, playCount? }`), or `undefined` when the host keeps none
   - `pointer`: the pointer in design pixels, or `undefined`
   - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images)
-  - `revision`, which increases whenever the select state changes (cursor, folder, search, list contents). A retained scene graph can be rebuilt only when it moves.
+  - `revision`, which increases whenever the select state changes (cursor, folder, search, list contents, play options, the readme opening or closing). A retained scene graph can be rebuilt only when it moves.
   - `sceneStartedAt` and `cursorChangedAt` for entrance and focus transitions
   - `nowMs`, `effects`, `launchAt`, and `audio`
   - `hit(x, y, w, h, action, cursor?)`: makes a rect clickable for this frame and returns whether the pointer is over it, for hover states. Declare your hit areas on every draw.

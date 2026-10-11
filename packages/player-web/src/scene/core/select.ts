@@ -297,6 +297,50 @@ const PLAY_OPTION_CHOICES: BeMusicPlayOptionChoices = {
   gauge2P: GAUGE_CYCLE,
 };
 
+/** Numeric play options a be-music skin may set, each with the clamp the select scene applies to it. */
+const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PixiPlayOptions]?: (value: number) => number } = {
+  hiSpeed: clampHiSpeed,
+  shutter: clampShutter,
+};
+
+/**
+ * Validates a be-music skin's `setPlayOption(key, value)`. Returns the value to store — clamped for the numeric options
+ * (`hiSpeed`, `shutter`) — or `undefined` when the change must be ignored: an unknown key, a value outside the option's
+ * choices, or a non-finite / non-numeric value for a numeric option. Skins are untyped at runtime, so every input is
+ * checked rather than trusted.
+ */
+export function resolveSkinPlayOptionValue<K extends keyof PixiPlayOptions>(
+  key: K,
+  value: unknown,
+): PixiPlayOptions[K] | undefined {
+  if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
+  const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
+  if (choices) return choices.includes(value) ? (value as PixiPlayOptions[K]) : undefined;
+  const clamp = NUMERIC_PLAY_OPTION_CLAMPS[key];
+  if (!clamp || typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return clamp(value) as PixiPlayOptions[K];
+}
+
+/**
+ * The choice `step` places after `current` in `key`'s choices, wrapping around either end — what a be-music skin's
+ * `cyclePlayOption(key, step)` moves to. Any negative `step` goes back one and anything else forward one. A value
+ * outside the choices lands on the first choice; options without a fixed set of choices (`hiSpeed`, `shutter`, or an
+ * unknown key) return `undefined`.
+ */
+export function cycleSkinPlayOptionValue<K extends keyof PixiPlayOptions>(
+  key: K,
+  current: PixiPlayOptions[K],
+  step: number = 1,
+): PixiPlayOptions[K] | undefined {
+  if (!Object.hasOwn(PLAY_OPTION_CHOICES, key)) return undefined;
+  const choices = PLAY_OPTION_CHOICES[key] as readonly PixiPlayOptions[K][] | undefined;
+  if (!choices || choices.length === 0) return undefined;
+  const index = choices.indexOf(current);
+  if (index < 0) return choices[0];
+  const delta = step < 0 ? -1 : 1;
+  return choices[(index + delta + choices.length) % choices.length];
+}
+
 /** Play options that filter or reorder the song list: changing one moves the cursor back to the top. */
 const LIST_PLAY_OPTIONS: ReadonlySet<keyof PixiPlayOptions> = new Set(['difficultyFilter', 'keysFilter', 'sort']);
 
@@ -2286,11 +2330,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     activateSearch: (): void => this.options.onSearchActivate?.(),
     setPlayOption: (key, value): void => this.setSkinPlayOption(key, value),
     cyclePlayOption: (key, step = 1): void => {
-      const choices = PLAY_OPTION_CHOICES[key] as readonly PixiPlayOptions[typeof key][] | undefined;
-      if (!choices || choices.length === 0) return;
-      const index = choices.indexOf(this.playOptions[key]);
-      const next = index < 0 ? choices[0]! : choices[(index + step + choices.length) % choices.length]!;
-      this.setSkinPlayOption(key, next);
+      const next = cycleSkinPlayOptionValue(key, this.playOptions[key], step);
+      if (next !== undefined) this.setSkinPlayOption(key, next);
     },
     toggleReadme: (): void => {
       const song = this.focusedSong();
@@ -2299,22 +2340,13 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   };
 
   /**
-   * A be-music skin's play-option change: values outside the option's choices (or range) are dropped, and a list
-   * filter / sort change moves the cursor back to the top like the LR2 buttons do.
+   * A be-music skin's play-option change: values outside the option's choices (or range) are dropped (see {@link
+   * resolveSkinPlayOptionValue}), and a list filter / sort change moves the cursor back to the top like the LR2 buttons
+   * do.
    */
   private setSkinPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
-    const choices = PLAY_OPTION_CHOICES[key] as readonly PixiPlayOptions[K][] | undefined;
-    let next = value;
-    if (choices) {
-      if (!choices.includes(value)) return;
-    } else if (typeof value !== 'number') {
-      return;
-    } else if (key === 'hiSpeed') {
-      next = clampHiSpeed(value) as PixiPlayOptions[K];
-    } else if (key === 'shutter') {
-      next = clampShutter(value) as PixiPlayOptions[K];
-    }
-    if (this.playOptions[key] === next) return;
+    const next = resolveSkinPlayOptionValue(key, value);
+    if (next === undefined || this.playOptions[key] === next) return;
     this.setPlayOption(key, next);
     if (LIST_PLAY_OPTIONS.has(key)) this.snapCursorAfterFilterChange();
   }
