@@ -12,8 +12,8 @@ import type { BeMusicSongImageKind, BeMusicSongRecord, BrowserBrowseEntry, Brows
  * framework such as PixiJS or three.js that the skin brings along. The player owns input, timing, audio, judging, and
  * layout, collects what is on screen each frame as plain data, and shows the skin's canvas.
  *
- * Nothing here depends on a rendering framework. Skins are written against the public `@be-music/player-web/skin-sdk`
- * subpath and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
+ * Nothing here depends on a rendering framework. Skins are written against the `@be-music/skin-sdk` package
+ * and declared with its `defineBeMusicSkin`, which checks {@link BeMusicSkin.apiVersion} and the metadata.
  * Hosts pick one with {@link BeMusicSkin.id} from a registry (`createBeMusicSkinRegistry`) and pass it to the default
  * scene classes via their `beMusicSkin` option.
  */
