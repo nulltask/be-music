@@ -10,6 +10,7 @@ export * from './types.ts';
 export * from './pools.ts';
 export * from './hud-text.ts';
 export * from './skin-text.ts';
+export * from './marquee.ts';
 export * from './text-metrics.ts';
 export * from './particle-layer.ts';
 export * from './key-beam.ts';

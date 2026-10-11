@@ -10,7 +10,7 @@ const MARGIN = 16;
 
 /** The result screen: verdict and rank, the score figures, the judgement counts, and the chart's facts. */
 export function drawResult({ context: ctx, width, height }: BeMusicSurface<'2d'>, frame: BeMusicResultFrame): void {
-  const { result } = frame;
+  const { result, nowMs } = frame;
   ctx.fillStyle = INK;
   ctx.fillRect(0, 0, width, height);
 
@@ -36,7 +36,7 @@ export function drawResult({ context: ctx, width, height }: BeMusicSurface<'2d'>
     ['NOTES', String(result.score.total)],
   ];
   figures.forEach(([label, value], index) => {
-    stat(ctx, label, value, 240 + (index % 3) * 130, 76 + Math.floor(index / 3) * 56);
+    stat(ctx, label, value, 240 + (index % 3) * 130, 76 + Math.floor(index / 3) * 56, { maxWidth: 120, nowMs });
   });
 
   // Judgement counts.
@@ -59,13 +59,13 @@ export function drawResult({ context: ctx, width, height }: BeMusicSurface<'2d'>
   ctx.fillRect(x, 60, 220, 330);
   // Genre, title, artist — the order every built-in skin uses.
   const lift = result.song.genre ? 12 : 0;
-  if (result.song.genre) text(ctx, result.song.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192 });
-  text(ctx, result.song.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192 });
-  text(ctx, result.song.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192 });
+  if (result.song.genre) text(ctx, result.song.genre, x + 14, 78, { size: 10, color: MUTED, maxWidth: 192, nowMs });
+  text(ctx, result.song.title, x + 14, 82 + lift, { size: 14, weight: 800, maxWidth: 192, nowMs });
+  text(ctx, result.song.artist ?? '', x + 14, 102 + lift, { size: 11, color: MUTED, maxWidth: 192, nowMs });
   resolveResultTrackRows(result).forEach((row, index) => {
     const y = 140 + index * 34;
     text(ctx, row.label, x + 14, y, { size: 10, color: MUTED, weight: 700 });
-    text(ctx, row.value, x + 206, y, { size: 14, align: 'right' });
+    text(ctx, row.value, x + 206, y, { size: 14, align: 'right', maxWidth: 120, nowMs });
   });
   const lamp = resolveResultLamp(result);
   text(ctx, lamp, x + 110, 360, { size: 18, weight: 800, align: 'center', color: lamp === 'FAILED' ? DANGER : ACCENT });
