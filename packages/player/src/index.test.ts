@@ -2292,14 +2292,21 @@ describe('player', () => {
     // We run a baseline scenario without the mine to capture the reference gauge value
     // (PERFECT-only run), then assert the mine-present run lands the SAME verdict counts
     // but a STRICTLY LOWER gauge — proving the mine drained gauge silently.
-    // Two lane-input taps: the first hits the LN head, the second taps again at the mine
-    // time so `handleMappedInputTokens` is called with the LN still active — that's the
-    // codepath that resolves a mine candidate (the engine only looks for landmines on
-    // lane-input dispatches, not as a per-frame sweep). Without the second tap, the mine
-    // expires silently via `markExpiredLandmines` and the silent-damage branch never runs.
+    // The first lane-input tap hits the LN head; the rest tap again around the mine time so
+    // `handleMappedInputTokens` is called with the LN still active — that's the codepath that
+    // resolves a mine candidate (the engine only looks for landmines on lane-input dispatches,
+    // not as a per-frame sweep). Without such a tap, the mine expires silently via
+    // `markExpiredLandmines` and the silent-damage branch never runs. The taps are real-time
+    // timers, so one tap exactly at the mine missed its window whenever a loaded CI runner
+    // delayed it; a burst every 50 ms across 600–950 ms keeps one inside the window. Re-taps
+    // during the hold are neutral (no verdict, no empty POOR), and the baseline run replays the
+    // same schedule, so the verdict comparison below is unaffected.
     const inputSchedule: Array<{ delayMs: number; command: PlayerInputCommand }> = [
       { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-      { delayMs: 750, command: { kind: 'lane-input', tokens: ['z'] } },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        delayMs: 600 + index * 50,
+        command: { kind: 'lane-input', tokens: ['z'] } as PlayerInputCommand,
+      })),
       { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
     ];
     const baselineSummary = await manualPlay(createLnobjLongNoteChart(2), {
