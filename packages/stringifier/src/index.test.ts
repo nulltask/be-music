@@ -584,6 +584,31 @@ describe('stringifier', () => {
     ]);
   });
 
+  test('BMS stringify: writes every `#WAVCMD` line once the header no longer matches its source', () => {
+    const parsed = parseChart(['#TITLE Before', '#WAVCMD 00 01 48', '#WAVCMD 01 02 50', '#00111:01', ''].join('\n'));
+    parsed.metadata.title = 'After';
+
+    const output = stringifyBms(parsed);
+
+    expect(output).toContain('#TITLE After');
+    expect(output.split('\n').filter((line) => line.startsWith('#WAVCMD'))).toEqual([
+      '#WAVCMD 00 01 48',
+      '#WAVCMD 01 02 50',
+    ]);
+    expect(parseChart(output).bms.wavCmds).toEqual(['00 01 48', '01 02 50']);
+  });
+
+  test('BMS stringify: falls back to the legacy `wavCmd` when `wavCmds` is empty', () => {
+    const json = createEmptyJson('bms');
+    json.bms.wavCmd = '00 01 48';
+
+    expect(
+      stringifyBms(json)
+        .split('\n')
+        .filter((line) => line.startsWith('#WAVCMD')),
+    ).toEqual(['#WAVCMD 00 01 48']);
+  });
+
   test('bmson stringify: writes mines back to `key_channels` with their damage instead of as sound notes', () => {
     const source = parseBmson(
       JSON.stringify({

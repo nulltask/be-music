@@ -437,8 +437,13 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   }
   pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption, base);
 
-  if (typeof json.bms.wavCmd === 'string' && json.bms.wavCmd.length > 0) {
-    lines.push(`#WAVCMD ${json.bms.wavCmd}`);
+  // Charts declare one `#WAVCMD` line per (parameter, slot) pair, so write every line; the legacy `wavCmd` only holds the
+  // first, and stands in when `wavCmds` is empty.
+  const wavCmds = (json.bms.wavCmds?.length ?? 0) > 0 ? json.bms.wavCmds : [json.bms.wavCmd];
+  for (const wavCmd of wavCmds) {
+    if (typeof wavCmd === 'string' && wavCmd.length > 0) {
+      lines.push(`#WAVCMD ${wavCmd}`);
+    }
   }
 
   if (typeof json.bms.lnType === 'number') {
@@ -764,6 +769,7 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
     left.option === right.option &&
     areStringMapsEqual(left.changeOption, right.changeOption) &&
     left.wavCmd === right.wavCmd &&
+    areStringArraysEqual(left.wavCmds, right.wavCmds) &&
     areStringMapsEqual(left.exWav, right.exWav) &&
     areStringMapsEqual(left.exBmp, right.exBmp) &&
     areStringMapsEqual(left.bga, right.bga) &&
