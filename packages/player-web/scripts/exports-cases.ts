@@ -466,6 +466,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.loadBeatorajaThemeFromFiles([]);
     },
   });
+  define('player-web.lnModeDirectiveToIndex', {
+    run: () => {
+      playerWebCoreApi.lnModeDirectiveToIndex(3);
+    },
+  });
   define('player-web.logger', {
     run: () => {
       playerWebCoreApi.logger('bench');
