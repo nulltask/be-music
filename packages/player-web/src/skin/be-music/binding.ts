@@ -6,6 +6,7 @@ import { logger } from '../../logger.ts';
 import type {
   BeMusicBgaFrame,
   BeMusicBomb,
+  BeMusicDecideFrame,
   BeMusicGameplayFrame,
   BeMusicGameplayLayout,
   BeMusicGameplayRuntime,
@@ -37,6 +38,9 @@ const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
 
 /** Hosts that keep no play records report every song as never played. */
 const NO_SONG_RECORD = (): BeMusicSongRecord | undefined => undefined;
+
+/** How long the decide screen shows when the skin doesn't say (`BeMusicDecideSkin.durationMs`). */
+const DEFAULT_DECIDE_DURATION_MS = 2000;
 
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
@@ -427,6 +431,44 @@ export class BeMusicResultBinding {
   render(sceneFrame: BeMusicResultSceneFrame): void {
     const frame: BeMusicResultFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
     this.surface.draw((surface) => this.skin.result.draw(surface, frame));
+  }
+
+  dispose(): void {
+    this.view.destroy({ children: true });
+    this.surface.destroy();
+  }
+}
+
+/** The decide frame the scene hands over; the binding adds `songImage` and `settings`. */
+export type BeMusicDecideSceneFrame = Omit<BeMusicDecideFrame, 'songImage' | 'settings'>;
+
+/** Decide for one scene: draws the skin's `decide` every frame onto a canvas shown by {@link view}. */
+export class BeMusicDecideBinding {
+  /** Persistent container showing the skin's canvas; the scene mounts it once. */
+  readonly view = new Container();
+  /** How long (ms) the screen shows before the play starts (the skin's `decide.durationMs`, default 2000). */
+  readonly durationMs: number;
+  private readonly skin: BeMusicSkin;
+  private readonly surface: SkinSurface;
+  private readonly settings: BeMusicSkinSettingValues;
+  private readonly songImage: BeMusicSongImageLookup;
+
+  /** `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. */
+  constructor(skin: BeMusicSkin, options: { songImage?: BeMusicSongImageLookup } = {}) {
+    this.skin = skin;
+    this.surface = new SkinSurface(skin);
+    this.settings = resolveBeMusicSkinSettings(skin);
+    this.songImage = options.songImage ?? NO_SONG_IMAGE;
+    this.durationMs = Math.max(0, skin.decide?.durationMs ?? DEFAULT_DECIDE_DURATION_MS);
+    this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
+  }
+
+  /** Draws one frame; a no-op for a skin without a decide screen. */
+  render(sceneFrame: BeMusicDecideSceneFrame): void {
+    const decide = this.skin.decide;
+    if (!decide) return;
+    const frame: BeMusicDecideFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
+    this.surface.draw((surface) => decide.draw(surface, frame));
   }
 
   dispose(): void {

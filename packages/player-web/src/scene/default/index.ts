@@ -16,6 +16,7 @@ export {
   type FallbackGameplayRenderOptions,
   type FallbackGameplayRuntime,
 } from '../../skins/phantom/chrome.ts';
+export * from './decide.ts';
 export * from './gameplay.ts';
 export * from './result.ts';
 export * from './select.ts';
