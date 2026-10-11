@@ -130,6 +130,8 @@ export interface PixiSelectRenderer {
 
 export interface PixiSelectSkin {
   readonly layout: BeMusicSelectLayout;
+  /** The list's geometry on the skin's portrait stage (see `BeMusicSelectSkin.portraitLayout`). */
+  readonly portraitLayout?: BeMusicSelectLayout;
   /** Length of the launch outro (ms) the select screen keeps drawing after a chart is picked. */
   readonly outroMs?: number;
   /** Creates the renderer for one select screen. */

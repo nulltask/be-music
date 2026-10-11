@@ -43,6 +43,7 @@ import {
   setDesignTextResolution,
 } from './viewport.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
+import { resolveBeMusicSelectLayout, resolveStageOrientation, type BeMusicSelectLayout } from '@be-music/skin-sdk';
 import { isTouchDrag, stepTouchScroll } from './touch-scroll.ts';
 
 const log = logger('select');
@@ -1308,11 +1309,17 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       const now = performance.now();
       // The skinless chrome is rebuilt only on input; keep re-rendering while a slide-in is still in flight. Driven by
       // the last render's own state (not a time window) so a long frame hitch can't strand a half-finished slide.
-      if (this.beMusicNeedsFrame) {
+      // Also re-render when the screen was resized: a rotation can switch the skin to its other stage.
+      const screen = this.app.screen;
+      if (
+        this.beMusicNeedsFrame ||
+        screen.width !== this.cachedScreenWidth ||
+        screen.height !== this.cachedScreenHeight
+      ) {
         this.perf.time('render', () => this.render());
       }
       if (this.beMusicBackHolder.visible && this.beMusicRenderer) {
-        const { width, height } = resolveBeMusicSkinStage(this.beMusicSkin);
+        const { width, height } = this.beMusicDesignSize;
         const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
         this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
         this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
@@ -1828,7 +1835,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   /** Design pixels a swipe travels per cursor step: the list's row pitch. */
   private resolveTouchScrollPitch(): number {
-    return this.themeDesignSize ? 30 : this.beMusicSkin.select.layout.rowHeight;
+    return this.themeDesignSize ? 30 : this.beMusicSelectLayout.rowHeight;
   }
 
   /**
@@ -2116,7 +2123,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // Geometry must mirror the `render()` layout above: rows begin at `listTop` with `rowHeight` pitch, and the visible
     // window centers on `selectedIndex` with the same `start` calculation. Anything outside the list rectangle is a
     // no-op.
-    const layout = this.beMusicSkin.select.layout;
+    const layout = this.beMusicSelectLayout;
     const { listX, listTop, rowHeight } = layout;
     const listBottom = designHeight - layout.listBottomInset;
     if (virtualX < listX || virtualY < listTop || virtualY > listBottom) {
@@ -2340,6 +2347,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.host?.setStageOrientation(
+      useTheme ? 'landscape' : resolveStageOrientation({ width: designWidth, height: designHeight }),
+    );
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
@@ -2390,7 +2400,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     this.hint.visible = false;
     const renderer = this.ensureBeMusicRenderer();
     const selectWindow = resolveSelectListWindow(
-      this.beMusicSkin.select.layout,
+      this.beMusicSelectLayout,
       designHeight,
       this.selectedIndex,
       entries.length,
@@ -2523,10 +2533,22 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     return this.themeDesignSize ?? this.beMusicDesignSize;
   }
 
-  /** The be-music skin's stage (640×480 when the skin declares none). */
+  /**
+   * The be-music skin's stage for the current screen: its portrait stage while the screen is upright and the skin has
+   * one, its landscape stage otherwise.
+   */
   private get beMusicDesignSize(): SelectDesignSize {
-    const stage = resolveBeMusicSkinStage(this.beMusicSkin);
+    const screen = this.host?.app.screen;
+    const stage = resolveBeMusicSkinStage(
+      this.beMusicSkin,
+      screen && screen.width > 0 && screen.height > 0 ? screen : undefined,
+    );
     return { width: stage.width, height: stage.height };
+  }
+
+  /** Where the skin's song list sits on the current stage. */
+  private get beMusicSelectLayout(): BeMusicSelectLayout {
+    return resolveBeMusicSelectLayout(this.beMusicSkin.select, this.beMusicDesignSize);
   }
 
   /**

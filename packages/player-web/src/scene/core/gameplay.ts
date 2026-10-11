@@ -155,6 +155,7 @@ import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import {
   resolveGameplayLaneGeometry,
   resolveGameplayLayout,
+  resolveStageOrientation,
   type BeMusicJudgeWindows,
   type BeMusicLongNote,
   type GameplayLayoutMode,
@@ -387,8 +388,9 @@ export interface CoreGameplayViewOptions {
   beMusicEffects?: BeMusicEffectLevel;
   /**
    * Gameplay layout for the be-music skins. `'touch'` (for touch screens) spreads the lanes across most of the stage
-   * with a low judgement line and no BGA; the 24 / 48 KEY modes, themes, and a host `skinlessChromeRenderer` keep the
-   * standard layout regardless. Defaults to `'standard'`.
+   * with a low judgement line and (on a landscape stage) no BGA; the 24 / 48 KEY modes, themes, and a host
+   * `skinlessChromeRenderer` keep the standard layout regardless. On a portrait screen a skin with a portrait stage
+   * plays 5 / 7 / 9 KEY charts on it, in either mode. Defaults to `'standard'`.
    */
   layoutMode?: GameplayLayoutMode;
   /**
@@ -665,8 +667,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private readonly designClipMask = new Graphics();
   /** Layout last handed to the be-music chrome, keyed by the lane set it was built for. */
   private beMusicLayout:
-    | { channels: readonly string[]; variant: ChartPlayVariant | undefined; layout: BeMusicGameplayLayout }
+    | {
+        channels: readonly string[];
+        variant: ChartPlayVariant | undefined;
+        stage: BeMusicStage;
+        layout: BeMusicGameplayLayout;
+      }
     | undefined;
+  /** Design size the clip mask and design background were last drawn at (the stage can change with the screen). */
+  private stampedDesignWidth = -1;
+  private stampedDesignHeight = -1;
   /** BGA target for the be-music stage, rebuilt only when the rect moves (see {@link collectBgaTargets}). */
   private stageBgaTarget: GameplayBgaTarget | undefined;
   /**
@@ -1265,8 +1275,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       return;
     }
     const geometry = this.resolveLaneGeometry();
-    // The touch layout gives the BGA's room to the lanes.
-    if (geometry.mode === 'touch') return;
+    // The landscape touch layout gives the BGA's room to the lanes.
+    if (geometry.mode === 'touch' && geometry.orientation === 'landscape') return;
     const rect = stage.resolveBgaRect(geometry.right);
     const cached = this.stageBgaTarget;
     if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
@@ -1296,11 +1306,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * How far above a lane's top notes still draw while they scroll in. The standard lanes start at the stage's top edge,
-   * so notes enter from off-stage; the touch lanes start below the skin's header band, so notes there appear at the
-   * lane top instead of drawing over the header.
+   * so notes enter from off-stage; the touch and portrait lanes start below the skin's header band (or the BGA and HUD
+   * above them), so notes there appear at the lane top instead of drawing over the chrome.
    */
   private get noteOverscan(): number {
-    return this.layoutMode === 'touch' ? 0 : NOTE_OVERSCAN;
+    return this.layoutMode === 'touch' || resolveStageOrientation(this.stageSize) === 'portrait' ? 0 : NOTE_OVERSCAN;
   }
 
   /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
@@ -1310,14 +1320,24 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       this.laneChannels.length,
       this.chartPlayVariant,
       this.layoutMode,
+      this.beMusicStage,
     );
   }
 
-  /** The be-music skin's stage while the scene paints through it, otherwise `undefined`. */
+  /**
+   * The be-music skin's stage while the scene paints through it, otherwise `undefined`: its portrait stage while the
+   * screen is upright and the chart fits a portrait playfield, its landscape stage otherwise. Read every frame, so a
+   * rotation mid-play re-lays the screen out on the next frame.
+   */
   private get beMusicStage(): BeMusicStage | undefined {
     if (this.options.skinlessChromeRenderer) return undefined;
     const skin = this.options.beMusicSkin;
-    return skin ? resolveBeMusicSkinStage(skin) : undefined;
+    if (!skin) return undefined;
+    const screen = this.host?.app.screen;
+    return resolveBeMusicSkinStage(skin, screen && screen.width > 0 && screen.height > 0 ? screen : undefined, {
+      laneChannels: this.laneChannels,
+      playVariant: this.chartPlayVariant,
+    });
   }
 
   /**
@@ -1419,12 +1439,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.textLayer.label = 'gameplay/text';
     this.overlay.label = 'gameplay/pause-overlay';
     this.designClipMask.label = 'gameplay/design-clip';
-    // The stage size is fixed for the scene's lifetime, so the mask and design background never change shape
-    // post-mount. Stamp them once here and skip the per-frame rebuild that was contributing to the rAF handler's
-    // runtime.
-    const stage = this.stageSize;
-    this.designClipMask.rect(0, 0, stage.width, stage.height).fill(0xffffff);
-    this.background.rect(0, 0, stage.width, stage.height).fill(BG);
+    // The mask and design background only change shape with the stage (a rotation can switch a skin between its
+    // landscape and portrait stages), so they are stamped here and restamped by `render` only when the stage changes,
+    // skipping the per-frame rebuild that was contributing to the rAF handler's runtime.
+    this.stampDesignRect(this.stageSize);
     // The gameplay scene owns its own pointerdown listener on the canvas itself (`this.focus`) and a window-level
     // keydown listener — none of the per-layer children need to participate in Pixi's interaction system. Marking
     // each render-only Container as `eventMode = 'none'` lets the interaction manager skip the entire subtree
@@ -3491,6 +3509,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.stampDesignRect(this.stageSize);
+    this.host?.setStageOrientation(resolveStageOrientation(this.stageSize));
     this.applyExitFadeAlpha();
     this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
     this.perf.time('renderSkin', () => this.renderThemeLayer(designWidth, designHeight));
@@ -4123,19 +4143,35 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * The gameplay layout handed to the be-music skin's chrome: stage, lanes, playfield bounds, judgement line, and BGA
-   * rect. Lane geometry only changes with the chart, so it is rebuilt when the lane channels or play variant change.
+   * rect. Lane geometry only changes with the chart and the stage, so it is rebuilt when the lane channels, the play
+   * variant, or the stage (a rotation) change.
    */
   private resolveBeMusicLayout(): BeMusicGameplayLayout {
+    const stage = this.beMusicStage ?? LEGACY_STAGE;
     const cached = this.beMusicLayout;
-    if (cached && cached.channels === this.laneChannels && cached.variant === this.chartPlayVariant) {
+    if (
+      cached &&
+      cached.channels === this.laneChannels &&
+      cached.variant === this.chartPlayVariant &&
+      cached.stage === stage
+    ) {
       return cached.layout;
     }
     const layout = resolveGameplayLayout(
       { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant, layoutMode: this.layoutMode },
-      this.beMusicStage ?? LEGACY_STAGE,
+      stage,
     );
-    this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, layout };
+    this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, stage, layout };
     return layout;
+  }
+
+  /** Redraws the design clip mask and background for a stage of `size`, when it differs from the last one drawn. */
+  private stampDesignRect(size: GameplayStageSize): void {
+    if (size.width === this.stampedDesignWidth && size.height === this.stampedDesignHeight) return;
+    this.stampedDesignWidth = size.width;
+    this.stampedDesignHeight = size.height;
+    this.designClipMask.clear().rect(0, 0, size.width, size.height).fill(0xffffff);
+    this.background.clear().rect(0, 0, size.width, size.height).fill(BG);
   }
 
   /** Approximate total duration of the loaded chart in seconds. */
