@@ -36,6 +36,7 @@ import {
   type PlayerSummary,
 } from '@be-music/player/core/engine';
 import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
+import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
@@ -76,6 +77,13 @@ import {
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import { resolveClearLamp } from './clear-lamp.ts';
+import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
+import { JudgeTimingLog } from './judge-timing-log.ts';
+import { toBeMusicJudgeWindows } from './judge-windows.ts';
+import { LongNoteTracker, resolveBeMusicLongNoteMode } from './long-note-tracker.ts';
+import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
+import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
@@ -112,6 +120,7 @@ import {
 } from '../gameplay-constants.ts';
 import {
   buildBgaTimeline,
+  buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
   isVideoExtension,
   pickActiveBgaCue,
@@ -136,13 +145,17 @@ import type {
   BeMusicBomb,
   BeMusicEffectLevel,
   BeMusicGameplayLayout,
+  BeMusicImage,
+  BeMusicJudge,
+  BeMusicLaneCover,
   BeMusicLaneFrame,
   BeMusicSkin,
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import { resolveGameplayLayout } from '@be-music/skin-sdk';
+import { resolveGameplayLayout, type BeMusicJudgeWindows, type BeMusicLongNote } from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import {
   PHANTOM_BOMB_DURATION_MS,
   renderPhantomBombs,
@@ -356,6 +369,13 @@ export interface CoreGameplayViewOptions {
   beMusicSkin?: BeMusicSkin;
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
+  /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
   onExit?: () => void;
   /**
    * Restart hook. Fired when the player presses the restart hotkey (`R` by default) — host should dispose this view and
@@ -919,6 +939,53 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private gaugeHistory: Array<{ progress: number; value: number }> = [];
   /** Same shape as `gaugeHistory`, but tracking running EX score. */
   private scoreHistory: Array<{ progress: number; exScore: number }> = [];
+  /**
+   * Timed judgements of the current play, fed from the engine's judge-combo bus. Its recent window reaches skins as
+   * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
+   */
+  private readonly judgeTimings = new JudgeTimingLog();
+  /** Long-note holds of the current play, fed from the engine's `long-note-start` / `long-note-end` commands. */
+  private readonly longNotes = new LongNoteTracker();
+  /**
+   * How the engine's ruleset plays long notes and its judge windows (ms), from `onRulesetResolved` at engine launch.
+   * The windows are the ones in force when the chart starts: an LR2 mid-chart `#EXRANKxx` change narrows or widens
+   * the engine's windows from then on, but is not reflected here.
+   */
+  private longNoteStyle: LongNoteStyle | undefined;
+  private judgeWindows: BeMusicJudgeWindows | undefined;
+  /** The chart's BPM range, worked out once per {@link prepareSong}. */
+  private chartBpmRange: ChartBpmRange | undefined;
+  /**
+   * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
+   * See {@link isAutoplayedChannel}.
+   */
+  private autoScratchChannels: ReadonlySet<string> = new Set();
+  /**
+   * Play-clock ms of once-per-play moments (gauge failed, last note judged, chart end, gauge first risen above its
+   * start / reaching its max), latched as they happen and cleared per {@link prepareSong}.
+   */
+  private playMoments: {
+    failedAtMs?: number;
+    allNotesDoneAtMs?: number;
+    outroAtMs?: number;
+    gaugeRiseAtMs?: number;
+    gaugeMaxAtMs?: number;
+  } = {};
+  /**
+   * Lane covers handed to skins as `runtime.laneCovers`, one per play side with lanes. Rebuilt when the lane channels
+   * change and refilled in place every frame, so the runtime allocates nothing for them.
+   */
+  private laneCovers: { channels: readonly string[]; covers: BeMusicLaneCover[] } | undefined;
+  /**
+   * Lane runs measure lines cross for a skin that draws them (`drawsMeasureLines`), with the lane geometry they were
+   * worked out from; rebuilt only when the lanes move.
+   */
+  private measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
+  /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
+  private readonly bombJudge = new Map<string, BeMusicJudge>();
+  /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
+  private readonly lanePressedAt = new Map<string, number>();
+  private readonly laneReleasedAt = new Map<string, number>();
   protected lastJudge = '';
   protected lastJudgeUntil = 0;
   /**
@@ -1088,9 +1155,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private readonly perf = new PerfTracker('gameplay');
   protected readonly options: TOptions;
+  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
     if (options.initialHiSpeed !== undefined && Number.isFinite(options.initialHiSpeed)) {
       // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
@@ -1839,6 +1909,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     try {
       this.skinBindingInstance?.dispose();
       this.skinBindingInstance = undefined;
+      this.songImages?.dispose();
+      this.songImages = undefined;
+      for (const crop of this.skinBgaCrops.values()) crop?.close();
+      this.skinBgaCrops.clear();
       this.noteLayerPool.destroy();
       this.skinLayerPool.destroy();
       this.overlayLayerPool.destroy();
@@ -1863,8 +1937,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.autoSampleTriggers = [];
 
     this.pressedChannels.clear();
+    this.lanePressedAt.clear();
+    this.laneReleasedAt.clear();
+    this.judgeTimings.clear();
+    this.longNotes.clear();
+    this.longNoteStyle = undefined;
+    this.judgeWindows = undefined;
     this.timerStartedAt.clear();
     this.bombStartedAt.clear();
+    this.bombJudge.clear();
     this.keyOnFadeOutStart.clear();
     this.wavCmdVolumeMultipliers.clear();
     this.switchingBgas.clear();
@@ -2111,6 +2192,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.slowCount = 0;
     this.fullComboFired = false;
     this.displayedScore = 0;
+    this.judgeTimings.clear();
+    this.longNotes.clear();
+    this.playMoments = {};
+    this.lanePressedAt.clear();
+    this.laneReleasedAt.clear();
+    this.chartBpmRange = resolveChartBpmRange(
+      resolver.tempoPoints,
+      this.songDurationSeconds,
+      resolved.metadata.bpm > 0 ? resolved.metadata.bpm : this.song?.bpm,
+    );
+    this.autoScratchChannels = this.resolveAutoScratchEnabled()
+      ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
+      : new Set();
     this.bgaTimeline = buildBgaTimeline(resolved, resolver);
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
@@ -2139,6 +2233,25 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private resolveEmptyPoorCountsInPoorDisplay(): boolean {
     const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
     return ruleset === 'lr2';
+  }
+
+  /** The compat ruleset judging the play (a replay's recorded one wins). */
+  private resolveJudgeRuleset(): string {
+    return this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+  }
+
+  /**
+   * Whether the engine runs with auto-scratch, mirroring the `autoScratch` engine option: a replay's recorded flag, or
+   * either side's toggle (the engine has one flag for both scratch lanes).
+   */
+  private resolveAutoScratchEnabled(): boolean {
+    if (this.options.replay !== undefined) return this.options.replay.play.autoScratch === true;
+    return this.options.autoScratch1P === true || this.options.autoScratch2P === true;
+  }
+
+  /** Whether the engine plays `channel`'s notes itself: every lane under autoplay, the scratch under auto-scratch. */
+  private isAutoplayedChannel(channel: string): boolean {
+    return this.options.autoPlay === true || this.autoScratchChannels.has(channel);
   }
 
   /**
@@ -2719,6 +2832,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   private startKeyOnTimer(channel: string): void {
+    this.lanePressedAt.set(channel, this.playClock());
     const timerId = this.resolveKeyOnTimerId(channel);
     if (timerId === undefined) {
       return;
@@ -2739,6 +2853,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * laser back to its fade-in origin before the decay).
    */
   private releaseKeyOnTimer(channel: string): void {
+    this.laneReleasedAt.set(channel, this.playClock());
     const timerId = this.resolveKeyOnTimerId(channel);
     if (timerId === undefined) return;
     // Stamp the fade origin unconditionally — the render-side cleanup uses it as the authoritative clock for the
@@ -2831,9 +2946,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Starts a bomb (hit explosion) on `channel`. The core scene draws it from `bombStartedAt`; themes react through the
    * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant).
    */
-  private triggerBomb(channel: string): void {
+  private triggerBomb(channel: string, judge?: BeMusicJudge): void {
     const now = this.playClock();
     this.bombStartedAt.set(channel, now);
+    if (judge) this.bombJudge.set(channel, judge);
+    else this.bombJudge.delete(channel);
     this.onThemeEvent({ kind: 'bomb', channel, at: now });
   }
 
@@ -3057,6 +3174,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeHistory,
       scoreHistory,
       ...(this.playlog !== undefined ? { playlog: this.playlog } : {}),
+      lamp: resolveClearLamp({ cleared: this.gaugeState.cleared, score: this.score, gaugeType: this.gaugeState.type }),
+      gaugeType: this.gaugeState.type,
+      judgeRuleset: this.resolveJudgeRuleset(),
+      fast: this.fastCount,
+      slow: this.slowCount,
+      // `clear` swaps in a fresh list for the next play, so the result can keep this one.
+      judgeTimings: this.judgeTimings.all,
     };
   }
 
@@ -3225,6 +3349,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         continue;
       }
       this.bombStartedAt.delete(channel);
+      this.bombJudge.delete(channel);
       this.onThemeEvent({ kind: 'bomb-retired', channel });
     }
   }
@@ -3239,6 +3364,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private renderShutter(): void {
     this.shutterLayer.clear();
+    // A be-music skin that draws its own covers reads them from `runtime.laneCovers` instead.
+    if (this.skinBinding?.drawsLaneCover) return;
     // LANE COVER (`button_type 46`) is the master ON/OFF switch for the playfield mask. With it OFF, no shutter renders
     // even if HIDDEN / SUDDEN / HID+SUD is selected — matches LR2's behavior where the user toggles LANE COVER off to
     // hide the cover without losing the height they had dialed in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
@@ -3346,6 +3473,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         elapsedMs: Math.max(0, now - startedAt),
         // Stable per hit: the start time changes on every re-trigger, so a new hit gets a new scatter.
         seed: Math.floor(startedAt * 7.31) % 100_003,
+        judge: this.bombJudge.get(channel),
       });
     }
     const binding = this.skinBinding;
@@ -3364,6 +3492,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   private skinBindingInstance: BeMusicGameplayBinding | undefined;
+  /** Song images handed to the be-music skin (`frame.songImage`), from the playing song's asset source. */
+  private songImages: SongImageCache | undefined;
 
   /**
    * The be-music skin's gameplay binding while the scene paints through a skin: lanes, notes, and hit effects are handed
@@ -3373,8 +3503,26 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private get skinBinding(): BeMusicGameplayBinding | undefined {
     const skin = this.options.beMusicSkin;
     if (!skin || this.options.skinlessChromeRenderer) return undefined;
-    this.skinBindingInstance ??= new BeMusicGameplayBinding(skin);
+    if (!this.skinBindingInstance) {
+      this.songImages = new SongImageCache({
+        resolveSource: (song) =>
+          this.source !== undefined && song.sourceId === this.source.id ? this.source : undefined,
+      });
+      this.skinBindingInstance = new BeMusicGameplayBinding(skin, {
+        songImage: this.songImages.lookup,
+        settings: this.beMusicSkinSettings,
+      });
+    }
     return this.skinBindingInstance;
+  }
+
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.skinBindingInstance?.setSettings(stored);
   }
 
   /**
@@ -3438,6 +3586,24 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.syncBgaVideo('base', baseCue, seconds);
     this.syncBgaVideo('layer', layerCue, seconds);
 
+    const binding = this.skinBinding;
+    if (binding?.drawsBga) {
+      // The skin composites the BGA itself: hand it the images and leave the BGA layer empty.
+      binding.setBga(
+        buildSkinBgaFrame(
+          {
+            base: baseKey !== undefined ? this.resolveBgaFrameKey(baseKey, baseCue?.seconds, seconds) : undefined,
+            layer: layerKey !== undefined ? this.resolveBgaFrameKey(layerKey, layerCue?.seconds, seconds) : undefined,
+            poor: poorKey,
+          },
+          (key, track) =>
+            this.resolveSkinBgaImage((track === 'layer' ? this.bgaLayerTextures : this.bgaTextures).get(key)),
+        ),
+      );
+      this.bgaLayerPool.end();
+      return;
+    }
+
     for (const bga of visibleBgas) {
       const { x, y, w, h } = bga;
       if (w <= 0 || h <= 0) continue;
@@ -3448,19 +3614,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         cueSeconds: number | undefined,
       ): void => {
         if (!key) return;
-        // BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...` declares an animated BGA. When the cue's slot matches a parsed
-        // entry, advance through its frame list at the authored interval and swap in the source `#BMPxx` texture for
-        // the currently-visible frame. The fast path (no `#SWBGAxx` entry) leaves `key` untouched so the existing
-        // static texture lookup wins.
-        let resolvedKey = key;
-        if (cueSeconds !== undefined) {
-          const swBga = this.switchingBgas.get(key);
-          if (swBga) {
-            const elapsedMs = Math.max(0, (seconds - cueSeconds) * 1000);
-            const frameKey = pickSwitchingBgaFrame(swBga, elapsedMs);
-            if (frameKey) resolvedKey = frameKey;
-          }
-        }
+        const resolvedKey = this.resolveBgaFrameKey(key, cueSeconds, seconds);
         const texture = textures.get(resolvedKey);
         if (!texture) return;
         // Stretch the BGA texture to fill this rect exactly. The previous version routed through a BMS 256×256 spec
@@ -3510,6 +3664,54 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
     }
     this.bgaLayerPool.end();
+  }
+
+  /**
+   * The slot to show for the BGA cue `key` that fired at `cueSeconds`. BMS spec — `#SWBGAxx fr:tot:lp:ARGB N1 N2 ...`
+   * declares an animated BGA: when the cue's slot matches a parsed entry, advance through its frame list at the
+   * authored interval and show the source `#BMPxx` of the currently-visible frame. Otherwise (no `#SWBGAxx` entry, or
+   * no cue time as for POOR) `key` itself.
+   */
+  private resolveBgaFrameKey(key: string, cueSeconds: number | undefined, seconds: number): string {
+    if (cueSeconds === undefined) return key;
+    const swBga = this.switchingBgas.get(key);
+    if (!swBga) return key;
+    const elapsedMs = Math.max(0, (seconds - cueSeconds) * 1000);
+    return pickSwitchingBgaFrame(swBga, elapsedMs) || key;
+  }
+
+  /**
+   * Cropped copies of the `#BGAxx` sub-region textures, for a skin that composites the BGA itself (a canvas image can't
+   * carry the crop the way a Pixi sub-texture does). `null` while the crop is being made.
+   */
+  private readonly skinBgaCrops = new Map<Texture, ImageBitmap | null>();
+
+  /**
+   * The image behind a loaded BGA texture, for `frame.bga`: the decoded bitmap or the `<video>` element itself, or a
+   * cropped copy for a `#BGAxx` sub-region (made on first use, so `undefined` for a frame or two).
+   */
+  private resolveSkinBgaImage(texture: Texture | undefined): BeMusicImage | undefined {
+    if (!texture) return undefined;
+    const source = texture.source;
+    const resource = source.resource as BeMusicImage | undefined;
+    if (!resource) return undefined;
+    const { frame } = texture;
+    if (frame.x === 0 && frame.y === 0 && frame.width === source.width && frame.height === source.height) {
+      return resource;
+    }
+    const crop = this.skinBgaCrops.get(texture);
+    if (crop !== undefined) return crop ?? undefined;
+    this.skinBgaCrops.set(texture, null);
+    createImageBitmap(resource, frame.x, frame.y, frame.width, frame.height).then(
+      (bitmap) => {
+        if (this.disposed || !this.skinBgaCrops.has(texture)) bitmap.close();
+        else this.skinBgaCrops.set(texture, bitmap);
+      },
+      () => {
+        // Leave the `null` marker: the crop isn't retried, the sub-region just doesn't show.
+      },
+    );
+    return undefined;
   }
 
   /**
@@ -3593,6 +3795,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
     const seconds = this.currentSeconds();
+    const songLengthSeconds = this.resolveSongDurationSeconds();
     const usesPlayer2 = this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
     const judgeSides: SkinlessGameplayJudgeState[] = [];
     for (const side of ['1P', '2P'] as const) {
@@ -3604,11 +3807,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         judgeSides.push({ side, judge: state.judge, combo: state.combo });
       }
     }
+    const bpm = this.timingResolver?.bpmAtBeat(this.currentBeat(seconds)) ?? this.song?.bpm;
+    const laneCovers = this.resolveLaneCovers();
+    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm);
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
       songGenre: this.song?.genre,
-      bpm: this.timingResolver?.bpmAtBeat(this.currentBeat(seconds)) ?? this.song?.bpm,
+      bpm,
       hiSpeed: this.hiSpeed,
       score: this.score.score,
       exScore: this.score.exScore,
@@ -3631,15 +3837,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       autoplay: this.options.autoPlay === true,
       hasBga: this.hasBga,
       nowMs: this.playClock(),
-      progressRatio: (() => {
-        const totalSeconds = this.resolveSongDurationSeconds();
-        return totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
-      })(),
+      progressRatio: songLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / songLengthSeconds)) : 0,
       beatPhase: (() => {
         const beat = this.currentBeat(seconds);
         return beat - Math.floor(beat);
       })(),
-      rulesetLabel: this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2',
+      rulesetLabel: this.resolveJudgeRuleset(),
       gaugeLabel: this.gaugeState.type ?? 'GROOVE',
       gaugeSurvival: this.gaugeState.survival === true,
       fast: this.fastCount,
@@ -3653,7 +3856,66 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       impulseKind: this.lastImpulseKind,
       effects: this.options.beMusicEffects ?? 'full',
       audio: this.audioFrame,
+      song: this.song,
+      lastJudgeDeltaMs: this.judgeTimings.lastDeltaMs,
+      judgeTimings: this.judgeTimings.recent,
+      minBpm: this.chartBpmRange?.minBpm,
+      maxBpm: this.chartBpmRange?.maxBpm,
+      mainBpm: this.chartBpmRange?.mainBpm,
+      songLengthMs: this.song ? songLengthSeconds * 1000 : undefined,
+      // Clamped to the length so the remaining time never runs negative through the audio tail.
+      songElapsedMs: this.song ? Math.min(seconds, songLengthSeconds) * 1000 : undefined,
+      failedAtMs: this.playMoments.failedAtMs,
+      allNotesDoneAtMs: this.playMoments.allNotesDoneAtMs,
+      outroAtMs: this.playMoments.outroAtMs,
+      gaugeRiseAtMs: this.playMoments.gaugeRiseAtMs,
+      gaugeMaxAtMs: this.playMoments.gaugeMaxAtMs,
+      // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
+      scoreHistory: this.scoreHistory,
+      gaugeHistory: this.gaugeHistory,
+      judgeWindows: this.judgeWindows,
+      laneCovers,
+      visibleMs,
+      greenNumber: visibleMs === undefined ? undefined : resolveGreenNumber(visibleMs),
     };
+  }
+
+  /**
+   * The lane covers of each play side with lanes, as {@link renderShutter} draws them (whether or not it does: a skin
+   * that sets `drawsLaneCover` reads them to draw its own). The array and its entries are reused across frames.
+   */
+  private resolveLaneCovers(): readonly BeMusicLaneCover[] {
+    let cache = this.laneCovers;
+    if (!cache || cache.channels !== this.laneChannels) {
+      const covers: BeMusicLaneCover[] = [];
+      for (const side of ['1P', '2P'] as const) {
+        if (this.laneChannels.some((channel) => isChannelOnSide(channel, side))) {
+          covers.push({ side, sudden: 0, hidden: 0, lift: 0 });
+        }
+      }
+      cache = { channels: this.laneChannels, covers };
+      this.laneCovers = cache;
+    }
+    const { laneCover, shutter } = this.options;
+    for (const cover of cache.covers) {
+      const mode = (cover.side === '1P' ? this.options.hiddenSudden1P : this.options.hiddenSudden2P) ?? 'OFF';
+      fillLaneCover(cover, mode, shutter, laneCover);
+    }
+    return cache.covers;
+  }
+
+  /**
+   * How long a note stays visible below `cover` (the first play side's) at the current scroll and BPM, over the lanes
+   * laid out last frame. `undefined` until the lanes are laid out or while the BPM is unknown. `#SCROLL` / `#SPEED`
+   * changes are not taken into account.
+   */
+  private resolveVisibleMs(cover: BeMusicLaneCover | undefined, bpm: number | undefined): number | undefined {
+    if (this.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
+    let laneHeight = 0;
+    for (const lane of this.laneX.values()) {
+      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    }
+    return resolveNoteVisibleMs(laneHeight, cover?.sudden ?? 0, cover?.lift ?? 0, PIXELS_PER_BEAT * this.hiSpeed, bpm);
   }
 
   /**
@@ -3755,6 +4017,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         top,
         bottom,
         beam: this.resolveFallbackLaneLaserAlpha(channel),
+        pressedAtMs: this.lanePressedAt.get(channel),
+        releasedAtMs: this.laneReleasedAt.get(channel),
+        holding: this.longNotes.isHolding(channel),
+        holdStartedAtMs: this.longNotes.holdStartedAtMs(channel),
       });
     });
 
@@ -3892,7 +4158,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         if (yEnd > lane.bottom || y < lane.top - 48) {
           continue;
         }
-        this.renderLongNote(laneIndex, note.channel, lane, y, yEnd);
+        this.renderLongNote(laneIndex, note, lane, y, yEnd);
         continue;
       }
       // Single notes hide the moment their bottom edge passes the judgement-line bottom (= `lane.bottom`). Until then
@@ -4052,6 +4318,25 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.renderThemeMeasureLines({ beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom })) {
       return;
     }
+    const binding = this.skinBinding;
+    if (binding?.drawsMeasureLines) {
+      // The skin draws them: hand it one line per lane run, so double play's gap stays clear.
+      const runs = this.resolveMeasureLineRuns();
+      for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
+        const beat = beats[beatIndex]!;
+        if (!this.scrollMapper && beat > maxBeat) {
+          break;
+        }
+        const y = bottom - beatDistance(beat) * pixelsPerBeat;
+        if (y < top - 1 || y > bottom + 1) {
+          continue;
+        }
+        for (const run of runs) {
+          binding.addMeasureLine({ side: run.side, x: run.x, w: run.w, y });
+        }
+      }
+      return;
+    }
     // Fallback: simple white strip when the theme draws none. One pooled `Graphics` carries every line — the
     // accumulated rect-fill commands form one batched draw, no per-line allocation.
     const x0 = left.x;
@@ -4068,6 +4353,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
       graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
     }
+  }
+
+  /** The lane runs of this frame's lanes, recomputed only when their geometry changes. */
+  private resolveMeasureLineRuns(): readonly SideLaneRun[] {
+    let signature = this.laneX.size;
+    for (const lane of this.laneX.values()) {
+      signature = (signature * 31 + lane.x * 7 + lane.w) % 1_000_000_007;
+    }
+    const cached = this.measureLineRuns;
+    if (cached && cached.signature === signature) return cached.runs;
+    const runs = resolveSideLaneRuns(this.laneX);
+    this.measureLineRuns = { signature, runs };
+    return runs;
   }
 
   private renderSingleNote(laneIndex: number, channel: string, lane: GameplayLaneRect, y: number): void {
@@ -4088,7 +4386,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
     const binding = this.skinBinding;
     if (binding) {
-      binding.addNote({ kind, x: lane.x, w: lane.w, y });
+      binding.addNote({ kind, x: lane.x, w: lane.w, y, autoplay: this.isAutoplayedChannel(channel) });
       return;
     }
     const graphic = this.noteLayerPool.acquireGraphics();
@@ -4103,11 +4401,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private renderLongNote(
     laneIndex: number,
-    channel: string,
+    note: RuntimeNote,
     lane: GameplayLaneRect,
     yStart: number,
     yEnd: number,
   ): void {
+    const channel = note.channel;
     // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
     // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
     // *bottom edge* sits at `yEnd` (just-timing of the tail) The body fills the band between them; we clamp the bottom
@@ -4133,7 +4432,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
       const binding = this.skinBinding;
       if (binding) {
-        binding.addLongNote({ kind, x: lane.x, w: lane.w, top, bottom });
+        binding.addLongNote({
+          kind,
+          x: lane.x,
+          w: lane.w,
+          top,
+          bottom,
+          mode: this.resolveLongNoteMode(note),
+          state: this.longNotes.stateOf(channel, note.beat, note.judged),
+          autoplay: this.isAutoplayedChannel(channel),
+        });
       } else {
         const graphic = this.noteLayerPool.acquireGraphics();
         graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
@@ -4293,6 +4601,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // ruleset's gauge line-up and runs its curve, so HARD really drains and DEATH really ends the run.
         // `resolveSelectedGauge` prefers the replay's recorded pick, so a played-back log runs its original gauge.
         gauge: this.resolveSelectedGauge(),
+        // The engine reports the ruleset after applying the judge ruleset, the debug window override, and (for a
+        // replay) the recorded settings below, so the windows skins see are the ones the run is judged with.
+        onRulesetResolved: (info) => this.applyResolvedRuleset(info),
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
         ...(this.options.replay !== undefined
           ? {
@@ -4438,8 +4749,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const next = summary.gauge.current;
       if (next !== previous) {
         this.onThemeEvent({ kind: 'gauge', previous, next });
+        // Latch the first rise above the starting value and the first time the gauge tops out.
+        const moments = this.playMoments;
+        if (next > summary.gauge.initial) moments.gaugeRiseAtMs ??= this.playClock();
+        if (next >= summary.gauge.max) moments.gaugeMaxAtMs ??= this.playClock();
       }
+      if (summary.gauge.failedMidPlay === true) this.playMoments.failedAtMs ??= this.playClock();
     }
+    // `poor` excludes empty POORs, so this counts judged notes only.
+    const judged = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
+    if (summary.total > 0 && judged >= summary.total) this.playMoments.allNotesDoneAtMs ??= this.playClock();
     // Note: the per-note `judged` flag is no longer synced here. The renderer's `this.notes` /
     // `this.mineNotes` are references into the same `PreparedPlaybackChartData` instance the engine is
     // judging against (handed in via `engineOptions.preparedChart`), so when the engine sets
@@ -4512,8 +4831,32 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       case 'clear-poor-bga':
         this.lastPoorAt = -Number.POSITIVE_INFINITY;
         break;
+      case 'long-note-start':
+        this.longNotes.start(command.channel, command.beat, command.mode, this.playClock());
+        break;
+      case 'long-note-end':
+        this.longNotes.end(command.channel, command.outcome);
+        break;
     }
     this.onThemeEvent({ kind: 'lane-command', command });
+  }
+
+  /** Keeps the engine's long-note style and its judge windows (converted to ms) for the skin runtime. */
+  private applyResolvedRuleset(info: PlayerRulesetInfo): void {
+    this.longNoteStyle = info.longNoteStyle;
+    this.judgeWindows = toBeMusicJudgeWindows(info.windows);
+  }
+
+  /**
+   * The mode a long note plays in: the one the engine announced while it is held, otherwise worked out from the
+   * ruleset's long-note style (unknown until the engine reports its ruleset).
+   */
+  private resolveLongNoteMode(note: RuntimeNote): BeMusicLongNote['mode'] {
+    const held = this.longNotes.heldMode(note.channel, note.beat);
+    if (held !== undefined) return held;
+    return this.longNoteStyle === undefined
+      ? undefined
+      : resolveBeMusicLongNoteMode(this.longNoteStyle, note.longNoteMode);
   }
 
   /**
@@ -4549,9 +4892,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.tracker.combo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
     const judgeKind = state.judge as JudgeKind;
+    // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`; the log skips them.
+    this.judgeTimings.push(this.playClock(), state.judge, state.deltaMs, state.channel);
     this.publishJudge(judgeKind, this.currentSeconds(), state.channel);
     if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
-      this.triggerBomb(state.channel);
+      this.triggerBomb(state.channel, judgeKind);
     }
   }
 
@@ -4565,6 +4910,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private handleSharedEngineChartFinished(finalSummary: Readonly<PlayerSummary> | undefined): void {
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
+    this.playMoments.outroAtMs ??= this.playClock();
     const delayMs = resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds());
     // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
     // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or

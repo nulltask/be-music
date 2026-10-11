@@ -39,3 +39,34 @@ export interface BrowserFolderNode {
 export type BrowserBrowseEntry =
   | { kind: 'folder'; folder: BrowserFolderNode }
   | { kind: 'song'; song: BrowserSongEntry };
+
+/** A song image a host can hand a skin: the chart's `#STAGEFILE`, `#BANNER`, or `#BACKBMP`. */
+export type BeMusicSongImageKind = 'stageFile' | 'banner' | 'backBmp';
+
+/**
+ * Clear lamp of a play or a best record, worst first: not played, failed, then the gauge the chart was cleared on
+ * (ASSIST EASY … EX HARD), FULL COMBO (no BAD / POOR), PERFECT (no GOOD or worse), and MAX (every note a PGREAT).
+ */
+export type BeMusicClearLamp =
+  | 'NO_PLAY'
+  | 'FAILED'
+  | 'ASSIST_EASY'
+  | 'EASY'
+  | 'NORMAL'
+  | 'HARD'
+  | 'EX_HARD'
+  | 'FULL_COMBO'
+  | 'PERFECT'
+  | 'MAX';
+
+/** The player's best record on one chart, as a host keeps it. */
+export interface BeMusicSongRecord {
+  /** Best clear lamp so far. */
+  lamp: BeMusicClearLamp;
+  exScore?: number;
+  maxCombo?: number;
+  /** Fewest BAD + POOR. */
+  missCount?: number;
+  /** How many times the chart was played. */
+  playCount?: number;
+}

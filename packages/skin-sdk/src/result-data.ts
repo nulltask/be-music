@@ -1,6 +1,7 @@
 import type { ScoreSummary } from '@be-music/player/core/scoring';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import type { BrowserSongEntry } from './song.ts';
+import type { BeMusicJudgeTiming } from './types.ts';
+import type { BeMusicClearLamp, BrowserSongEntry } from './song.ts';
 
 /**
  * One sample of the gauge polyline. `progress` is the chart-time fraction (0 = first note, 1 = last playable / sample
@@ -55,4 +56,18 @@ export interface BeMusicResultData {
    * legacy paths that finished without the shared engine having produced one. See `@be-music/player/playlog`.
    */
   playlog?: BeMusicPlaylog;
+  /** The play's clear lamp (FAILED, the gauge it was cleared on, FULL COMBO, …). */
+  lamp?: BeMusicClearLamp;
+  /** Gauge the play ran on, as the ruleset names it (`GROOVE`, `HARD`, `EX-HARD`, …). */
+  gaugeType?: string;
+  /** Compat ruleset that judged the play (`lr2` / `beatoraja` / `iidx`). */
+  judgeRuleset?: string;
+  /** FAST (early) and SLOW (late) GREAT / GOOD counts. */
+  fast?: number;
+  slow?: number;
+  /**
+   * Every timed judgement of the play, oldest first (see `BeMusicGameplayRuntime.lastJudgeDeltaMs` for which ones
+   * carry a timing). Feed it to {@link binJudgeTimings} for a timing histogram.
+   */
+  judgeTimings?: readonly BeMusicJudgeTiming[];
 }

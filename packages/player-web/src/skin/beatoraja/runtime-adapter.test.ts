@@ -319,6 +319,24 @@ describe('BeatorajaRuntimeAdapter — applyCommand', () => {
     expect(adapter.getTimerStart(lnHoldTimerId(1, 7)!)).toBeUndefined();
   });
 
+  it('ignores the long-note start / end commands (the LN-hold state stays on hold-lane / release-lane)', () => {
+    const clock = makeClock();
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: clock.now,
+    });
+    clock.advance(1000);
+    adapter.applyCommand({ kind: 'hold-lane-until-beat', channel: '11', beat: 64 });
+    adapter.applyCommand({ kind: 'long-note-start', channel: '11', beat: 32, mode: 'cn' });
+    expect(adapter.isLaneLnHeld('11')).toBe(true);
+    adapter.applyCommand({ kind: 'long-note-end', channel: '11', outcome: 'dropped' });
+    expect(adapter.isLaneLnHeld('11')).toBe(true);
+    expect(adapter.getTimerStart(lnHoldTimerId(1, 1)!)).toBe(1000);
+    adapter.applyCommand({ kind: 'long-note-start', channel: '12', beat: 32, mode: 'ln' });
+    expect(adapter.isLaneLnHeld('12')).toBe(false);
+  });
+
   it('routes scratch (16 / 26) onto lane 0 → timer 100 (1P) / 110 (2P)', () => {
     // prop.lua `keyon_1p_scratch = 100`, `keyon_2p_scratch = 110`. Earlier the adapter mapped scratch
     // onto lane 8 → timer 108 (`keyon_1p_key8`), so scratch presses never lit the right beam.

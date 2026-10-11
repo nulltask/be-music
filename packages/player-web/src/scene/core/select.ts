@@ -15,8 +15,25 @@ import type {
   BrowserSongEntry,
 } from '../../collection/types.ts';
 import { CORE_TEXT_FONT } from './fonts.ts';
-import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
+import type {
+  BeMusicBgaMode,
+  BeMusicBgaSize,
+  BeMusicDifficultyFilter,
+  BeMusicEffectLevel,
+  BeMusicGaugeType,
+  BeMusicHiddenSudden,
+  BeMusicHsFix,
+  BeMusicKeysFilter,
+  BeMusicPlayOptionChoices,
+  BeMusicPlayOptions,
+  BeMusicRandomMode,
+  BeMusicSelectActions,
+  BeMusicSelectSort,
+  BeMusicSkin,
+  BeMusicSongRecord,
+} from '../../skin/be-music/types.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import {
@@ -81,164 +98,30 @@ export interface PixiSongSelectNavigation {
 }
 
 /**
- * Per-session gameplay tweaks the user picks from the select-screen "PLAY OPTIONS" overlay (toggled with Space). The
- * host reads the current snapshot via {@link CoreSongSelectView.getPlayOptions} on song-pick and feeds it into {@link
- * PixiGameplayViewOptions}.
- *
- * Kept deliberately small for now — HiSpeed and AutoPlay are the two choices that change every play session. Note
- * arrangement (RANDOM / MIRROR / S-RANDOM), gauge type, and judge rank would slot in here once the gameplay engine
- * grows the corresponding transformations.
+ * Per-session gameplay tweaks the user picks on the select screen. The shape lives in `@be-music/skin-sdk` as
+ * `BeMusicPlayOptions` so be-music skins can read and change it; these names are kept for existing importers.
  */
-export interface PixiPlayOptions {
-  /**
-   * Visual scroll-speed multiplier. The chart's note-to-second mapping is unchanged; only the on-screen pixels-per-beat
-   * scaling moves. Range matches gameplay's runtime adjust hotkeys (`ArrowUp` / `ArrowDown` during play).
-   */
-  hiSpeed: number;
-  /**
-   * When `true`, every note auto-judges as PERFECT at its scheduled time. Mirrors the LR2 AUTOPLAY skin button
-   * (`#SRC_BUTTON type=16`); the dedicated `onSongAutoPlay` callback also forces this on for that single launch
-   * regardless of what's stored here.
-   */
-  autoPlay: boolean;
-  /**
-   * BGA (background animation) display mode. Mirrors the LR2 `#SRC_BUTTON,type=72` cycle (OFF / ON / AUTOPLAY ONLY).
-   * When `'AUTOPLAY_ONLY'` the BGA renders only when {@link autoPlay} (or the AUTOPLAY skin-button override) is also
-   * active — matches LR2 behavior where AUTOPLAY ONLY hides BGA during regular human-played sessions.
-   */
-  bga: PixiBgaMode;
-  /**
-   * BGA frame size — `'NORMAL'` uses the skin's default `#DST_BGA` rect (op 30), `'EXTEND'` uses the larger variant
-   * gated on op 31. Mirrors `#SRC_BUTTON,type=73`.
-   */
-  bgaSize: PixiBgaSize;
-  /**
-   * Score-graph (per-judge prediction line) display flag. Mirrors `#SRC_BUTTON,type=70` and ops 38 (off) / 39 (on). The
-   * LR2 default skin gates its score-graph chrome on op 39 — toggling this on reveals those elements without needing a
-   * dedicated renderer in the gameplay scene.
-   */
-  scoreGraph: boolean;
-  /**
-   * Difficulty filter for the song-list. `'ALL'` shows every chart; the named values restrict the bar list to charts
-   * whose `#DIFFICULTY` matches the corresponding LR2 enum (1=BEGINNER.. 5=INSANE). Mirrors `#SRC_BUTTON,type=10`
-   * (cycling) and types 91..96 (direct set).
-   */
-  difficultyFilter: PixiDifficultyFilter;
-  /**
-   * Keymode filter for the song-list. `'ALL'` shows every chart; the named values restrict the bar list to charts whose
-   * lane usage matches the corresponding LR2 keymode op (160=7K..164=9K). Mirrors `#SRC_BUTTON,type=11` cycling.
-   */
-  keysFilter: PixiKeysFilter;
-  /**
-   * Sort order for the song-list. Mirrors `#SRC_BUTTON,type=12` cycling (off / level / title / clear). `'CLEAR'` is a
-   * no-op for now — without persisted play history every chart has the same "not played" status, so the sorted order
-   * matches the input order anyway.
-   */
-  sort: PixiSelectSort;
-  /**
-   * HS-FIX mode picked from `#SRC_BUTTON,type=55`. Without HS-FIX (`'OFF'`) the visual scroll rate scales with the
-   * chart's BPM, so high-BPM sections fly past while low-BPM sections crawl. The other modes apply a one-time HS
-   * multiplier so the user's chosen HS feels consistent across the chart:
-   *
-   * - `'MAXBPM'` — pegs the user's HS to the chart's MAX BPM (slower segments scroll proportionally slower).
-   * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
-   * - `'AVERAGE'` — pegs to the time-weighted average BPM.
-   * - `'CONSTANT'` — adjusts HS at every BPM change so visual scroll is exactly constant. Falls back to `'AVERAGE'`
-   *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
-   */
-  hsFix: PixiHsFix;
-  /**
-   * 1P-side HIDDEN / SUDDEN effect picked from `#SRC_BUTTON,type=50`. Cycles OFF → HIDDEN → SUDDEN → HID+SUD on each
-   * click. Drives the opaque mask over the 1P keyboard / scratch lanes. SP charts only render this side; DP charts pair
-   * it with {@link hiddenSudden2P}.
-   */
-  hiddenSudden1P: PixiHiddenSudden;
-  /**
-   * 2P-side HIDDEN / SUDDEN effect picked from `#SRC_BUTTON,type=51`. Independent from the 1P value — LR2's panel UI
-   * exposes per-side cycle buttons because real players sometimes want, e.g., HIDDEN on their dominant side and OFF on
-   * the other.
-   */
-  hiddenSudden2P: PixiHiddenSudden;
-  /**
-   * Shutter / LANE COVER coverage (0..1) — the fraction of the playfield the LANE COVER (and any active HIDDEN / SUDDEN
-   * masks) occupies. Drives slider `type=4 / 5` on the panel-1 shutter track. Adjustable via the 1P 4-key / 6-key
-   * (`KeyD` / `KeyF`) when panel 1 is open. Independent from {@link laneCover} — height is preserved across ON/OFF
-   * toggles so the user doesn't have to redial it after re-enabling the cover.
-   */
-  shutter: number;
-  /**
-   * LANE COVER ON / OFF toggle. In LR2's SYSTEM OPTION panel this is the binary state shown next to the "LANE COVER"
-   * label — distinct from {@link shutter} (which is the height). When OFF, the gameplay-side mask is hidden regardless
-   * of `shutter`. When ON, the mask renders at the `shutter`-derived height.
-   */
-  laneCover: boolean;
-  /**
-   * 1P side auto-scratch flag picked from `#SRC_BUTTON,type=44`. When true the scratch lane (channel 16) auto-judges as
-   * PERFECT at every note's scheduled time, so the player only has to play the keys.
-   */
-  autoScratch1P: boolean;
-  /** 2P side auto-scratch (`#SRC_BUTTON,type=45`, channel 26). */
-  autoScratch2P: boolean;
-  /**
-   * DP FLIP toggle picked from `#SRC_BUTTON,type=54`. When true, 1P and 2P lane channels are swapped at chart-prepare
-   * time. Only DP charts have lanes on both sides, so SP charts are unaffected. LR2 has no dedicated op for DP FLIP —
-   * it's a pure gameplay-side transformation.
-   */
-  dpFlip: boolean;
-  /**
-   * Note-arrangement mode for the 1P keyboard lanes (channels 11..15 + 18 + 19). Mirrors `#SRC_BUTTON,type=42`. Scratch
-   * (channel 16) is never touched.
-   *
-   * - `OFF` — original chart layout
-   * - `MIRROR` — reverse the lane order (1↔7, 2↔6, 3↔5)
-   * - `RANDOM` — chart-wide random permutation of the lanes
-   * - `S-RANDOM` — per-chord random assignment (chord shapes are NOT preserved)
-   * - `SCATTER` — currently aliased to `RANDOM`; reserved for a future per-measure permutation pass
-   */
-  random1P: PixiRandomMode;
-  /** 2P side note arrangement (channels 21..25 + 28 + 29). */
-  random2P: PixiRandomMode;
-  /**
-   * 1P gauge variant (`#SRC_BUTTON,type=40`):
-   *
-   * - `GROOVE` — LR2 default cumulative gauge (start 20 %, clear 80 %)
-   * - `HARD` — survival gauge (start 100 %, fail at 0 %)
-   * - `DEATH` — instant-death (start 100 %, any miss = 0)
-   * - `EASY` — gentler GROOVE (clear 60 %)
-   */
-  gauge1P: PixiGaugeType;
-  /** 2P gauge variant (`#SRC_BUTTON,type=41`). */
-  gauge2P: PixiGaugeType;
-}
-
+export type PixiPlayOptions = BeMusicPlayOptions;
 /** Allowed values for {@link PixiPlayOptions.difficultyFilter}. */
-export type PixiDifficultyFilter = 'ALL' | 'BEGINNER' | 'NORMAL' | 'HYPER' | 'ANOTHER' | 'INSANE';
-
+export type PixiDifficultyFilter = BeMusicDifficultyFilter;
 /** Allowed values for {@link PixiPlayOptions.keysFilter}. */
-export type PixiKeysFilter = 'ALL' | 'KEYS_5' | 'KEYS_7' | 'KEYS_9' | 'KEYS_10' | 'KEYS_14';
-
+export type PixiKeysFilter = BeMusicKeysFilter;
 /** Allowed values for {@link PixiPlayOptions.sort}. */
-export type PixiSelectSort = 'OFF' | 'LEVEL' | 'TITLE' | 'CLEAR';
-
+export type PixiSelectSort = BeMusicSelectSort;
 /** Allowed values for {@link PixiPlayOptions.hsFix}. */
-export type PixiHsFix = 'OFF' | 'MAXBPM' | 'MINBPM' | 'AVERAGE' | 'CONSTANT';
-
+export type PixiHsFix = BeMusicHsFix;
 /** Allowed values for {@link PixiPlayOptions.hiddenSudden1P} / `hiddenSudden2P`. */
-export type PixiHiddenSudden = 'OFF' | 'HIDDEN' | 'SUDDEN' | 'HID+SUD';
-
+export type PixiHiddenSudden = BeMusicHiddenSudden;
 /** Allowed values for {@link PixiPlayOptions.random1P} / `random2P`. */
-export type PixiRandomMode = 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER';
-
+export type PixiRandomMode = BeMusicRandomMode;
 /** Allowed values for {@link PixiPlayOptions.gauge1P} / `gauge2P`. */
-export type PixiGaugeType = 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
+export type PixiGaugeType = BeMusicGaugeType;
+/** Allowed values for {@link PixiPlayOptions.bga}. */
+export type PixiBgaMode = BeMusicBgaMode;
+/** Allowed values for {@link PixiPlayOptions.bgaSize}. */
+export type PixiBgaSize = BeMusicBgaSize;
 
 const SHUTTER_DEFAULT = 0.25;
-
-/** Allowed values for {@link PixiPlayOptions.bga}. */
-export type PixiBgaMode = 'OFF' | 'ON' | 'AUTOPLAY_ONLY';
-
-/** Allowed values for {@link PixiPlayOptions.bgaSize}. */
-export type PixiBgaSize = 'NORMAL' | 'EXTEND';
 
 /**
  * Cycle order for {@link PixiPlayOptions.bga}. Matches the LR2 default-skin cell order on the `#SRC_BUTTON,type=72`
@@ -394,6 +277,75 @@ function cycleNext<T>(values: readonly T[], current: T): T {
   return values[(index + 1) % values.length]!;
 }
 
+/** Choices of every enum / on-off play option, in their LR2 button cycle order — what be-music skins can pick from. */
+const PLAY_OPTION_CHOICES: BeMusicPlayOptionChoices = {
+  autoPlay: BOOLEAN_CYCLE,
+  bga: BGA_CYCLE,
+  bgaSize: BGA_SIZE_CYCLE,
+  scoreGraph: BOOLEAN_CYCLE,
+  difficultyFilter: DIFFICULTY_FILTER_CYCLE,
+  keysFilter: KEYS_FILTER_CYCLE,
+  sort: SORT_CYCLE,
+  hsFix: HS_FIX_CYCLE,
+  hiddenSudden1P: HIDDEN_SUDDEN_CYCLE,
+  hiddenSudden2P: HIDDEN_SUDDEN_CYCLE,
+  laneCover: BOOLEAN_CYCLE,
+  autoScratch1P: BOOLEAN_CYCLE,
+  autoScratch2P: BOOLEAN_CYCLE,
+  dpFlip: BOOLEAN_CYCLE,
+  random1P: RANDOM_CYCLE,
+  random2P: RANDOM_CYCLE,
+  gauge1P: GAUGE_CYCLE,
+  gauge2P: GAUGE_CYCLE,
+};
+
+/** Numeric play options a be-music skin may set, each with the clamp the select scene applies to it. */
+const NUMERIC_PLAY_OPTION_CLAMPS: { readonly [K in keyof PixiPlayOptions]?: (value: number) => number } = {
+  hiSpeed: clampHiSpeed,
+  shutter: clampShutter,
+};
+
+/**
+ * Validates a be-music skin's `setPlayOption(key, value)`. Returns the value to store — clamped for the numeric options
+ * (`hiSpeed`, `shutter`) — or `undefined` when the change must be ignored: an unknown key, a value outside the option's
+ * choices, or a non-finite / non-numeric value for a numeric option. Skins are untyped at runtime, so every input is
+ * checked rather than trusted.
+ */
+export function resolveSkinPlayOptionValue<K extends keyof PixiPlayOptions>(
+  key: K,
+  value: unknown,
+): PixiPlayOptions[K] | undefined {
+  if (!Object.hasOwn(DEFAULT_PLAY_OPTIONS, key)) return undefined;
+  const choices = PLAY_OPTION_CHOICES[key] as readonly unknown[] | undefined;
+  if (choices) return choices.includes(value) ? (value as PixiPlayOptions[K]) : undefined;
+  const clamp = NUMERIC_PLAY_OPTION_CLAMPS[key];
+  if (!clamp || typeof value !== 'number' || !Number.isFinite(value)) return undefined;
+  return clamp(value) as PixiPlayOptions[K];
+}
+
+/**
+ * The choice `step` places after `current` in `key`'s choices, wrapping around either end — what a be-music skin's
+ * `cyclePlayOption(key, step)` moves to. Any negative `step` goes back one and anything else forward one. A value
+ * outside the choices lands on the first choice; options without a fixed set of choices (`hiSpeed`, `shutter`, or an
+ * unknown key) return `undefined`.
+ */
+export function cycleSkinPlayOptionValue<K extends keyof PixiPlayOptions>(
+  key: K,
+  current: PixiPlayOptions[K],
+  step: number = 1,
+): PixiPlayOptions[K] | undefined {
+  if (!Object.hasOwn(PLAY_OPTION_CHOICES, key)) return undefined;
+  const choices = PLAY_OPTION_CHOICES[key] as readonly PixiPlayOptions[K][] | undefined;
+  if (!choices || choices.length === 0) return undefined;
+  const index = choices.indexOf(current);
+  if (index < 0) return choices[0];
+  const delta = step < 0 ? -1 : 1;
+  return choices[(index + delta + choices.length) % choices.length];
+}
+
+/** Play options that filter or reorder the song list: changing one moves the cursor back to the top. */
+const LIST_PLAY_OPTIONS: ReadonlySet<keyof PixiPlayOptions> = new Set(['difficultyFilter', 'keysFilter', 'sort']);
+
 /**
  * Bundle of LR2 system sound-effect bytes (typically loaded from `LR2files\Sound\lr2\*.wav`). Each field is the encoded
  * audio payload (WAV / OGG / MP3 / etc.); {@link CoreSongSelectView} decodes lazily on first play through its own
@@ -423,6 +375,13 @@ export interface CoreSongSelectViewOptions {
   beMusicSkin?: BeMusicSkin;
   /** Showmanship level for the be-music skin (entrance, outro, ambient motion). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
+  /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
   onSongSelected?: (song: BrowserSongEntry) => void;
   /**
    * AUTOPLAY-mode launch hook. Fired when the user clicks the skin's AUTOPLAY button (#SRC_BUTTON `type = 16`) or
@@ -482,6 +441,13 @@ export interface CoreSongSelectViewOptions {
    * knows.
    */
   onPlayOptionsChange?: (options: PixiPlayOptions) => void;
+  /**
+   * Looks up the player's best record on a chart, for a be-music skin's `frame.songRecord(song)` (its lamp, best
+   * scores, play count). Return `undefined` for a chart that has no record. Called while the skin draws, possibly
+   * for every visible row on every frame, so it should be a cheap lookup. Omit it when the host keeps no records: every
+   * song then reads as never played.
+   */
+  resolveSongRecord?: (song: BrowserSongEntry) => BeMusicSongRecord | undefined;
 }
 
 /** Design-canvas size a skin family's theme renders the select frame into. */
@@ -616,6 +582,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   private readonly beMusicBackHolder = new Container();
   private readonly beMusicFrontHolder = new Container();
   private beMusicRenderer: BeMusicSelectBinding | undefined;
+  /** Song images handed to the be-music skin (`frame.songImage`); created with the renderer. */
+  private songImages: SongImageCache | undefined;
   /** Set when the last skinless render reported an unfinished transition, so the next tick renders again. */
   private beMusicNeedsFrame = false;
   /** `performance.now()` of the last cursor move — drives the skin's focus transitions. */
@@ -823,9 +791,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    */
   private readonly oneShotDecoding = new Set<string>();
   protected options: TOptions;
+  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: TOptions = {} as TOptions) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
     this.selectBgmBytes = options.selectBgm;
     this.setOneShotBytes('decide', options.decideBgm);
     this.setSystemSounds(options.systemSounds);
@@ -839,6 +810,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * Returns a shallow snapshot of the current play-option state. The host typically calls this from `onSongSelected` /
    * `onSongAutoPlay` and forwards the values onto {@link PixiGameplayViewOptions}.
    */
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.beMusicRenderer?.setSettings(stored);
+  }
+
   public getPlayOptions(): PixiPlayOptions {
     return { ...this.playOptions };
   }
@@ -1320,8 +1300,11 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       if (this.beMusicNeedsFrame) {
         this.perf.time('render', () => this.render());
       }
-      if (this.beMusicBackHolder.visible) {
-        this.beMusicRenderer?.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
+      if (this.beMusicBackHolder.visible && this.beMusicRenderer) {
+        const { width, height } = resolveBeMusicSkinStage(this.beMusicSkin);
+        const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
+        this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
+        this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
       }
     }
     const report = this.perf.endFrame(() => ({
@@ -1345,6 +1328,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (this.launchTimer !== undefined) window.clearTimeout(this.launchTimer);
     this.beMusicRenderer?.dispose();
     this.beMusicRenderer = undefined;
+    this.songImages?.dispose();
+    this.songImages = undefined;
     window.removeEventListener('keydown', this.handleKeyDown);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
@@ -1445,6 +1430,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       return;
     }
     this.collection = collection;
+    // Images cached for the previous collection's songs may not match the new one's files.
+    this.songImages?.clear();
     this.browseStack = [];
     this.parentCursorStack = [];
     this.selectedIndex = 0;
@@ -2348,6 +2335,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       actions: this.beMusicActions,
       effects: this.options.beMusicEffects ?? 'full',
       launchAt: this.launchAt,
+      playOptions: this.playOptions,
+      playOptionChoices: PLAY_OPTION_CHOICES,
     });
     // The binding draws the skin every frame in `tick`; nothing needs a re-render here.
     this.beMusicNeedsFrame = this.launchAt !== undefined;
@@ -2361,19 +2350,49 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   private ensureBeMusicRenderer(): BeMusicSelectBinding {
     if (!this.beMusicRenderer) {
-      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin);
+      const songImages = new SongImageCache({
+        resolveSource: (song) => resolveSongSource(this.collection, song),
+        onLoaded: () => this.beMusicRenderer?.invalidate(),
+      });
+      this.songImages = songImages;
+      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, {
+        resolveSongRecord: this.options.resolveSongRecord,
+        songImage: songImages.lookup,
+        settings: this.beMusicSkinSettings,
+      });
       this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
       this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
     }
     return this.beMusicRenderer;
   }
 
-  /** PLAY / AUTO PLAY / search callbacks handed to the skin's hit areas. */
-  private readonly beMusicActions = {
+  /** PLAY / AUTO PLAY / search / play-option / readme callbacks handed to the skin's hit areas. */
+  private readonly beMusicActions: BeMusicSelectActions = {
     play: (): void => this.launchFocusedSong(false),
     autoPlay: (): void => this.launchFocusedSong(true),
     activateSearch: (): void => this.options.onSearchActivate?.(),
+    setPlayOption: (key, value): void => this.setSkinPlayOption(key, value),
+    cyclePlayOption: (key, step = 1): void => {
+      const next = cycleSkinPlayOptionValue(key, this.playOptions[key], step);
+      if (next !== undefined) this.setSkinPlayOption(key, next);
+    },
+    toggleReadme: (): void => {
+      const song = this.focusedSong();
+      if (song) this.toggleReadText(song);
+    },
   };
+
+  /**
+   * A be-music skin's play-option change: values outside the option's choices (or range) are dropped (see {@link
+   * resolveSkinPlayOptionValue}), and a list filter / sort change moves the cursor back to the top like the LR2 buttons
+   * do.
+   */
+  private setSkinPlayOption<K extends keyof PixiPlayOptions>(key: K, value: PixiPlayOptions[K]): void {
+    const next = resolveSkinPlayOptionValue(key, value);
+    if (next === undefined || this.playOptions[key] === next) return;
+    this.setPlayOption(key, next);
+    if (LIST_PLAY_OPTIONS.has(key)) this.snapCursorAfterFilterChange();
+  }
 
   private launchFocusedSong(autoPlay: boolean): void {
     const focused = this.focusedSong();

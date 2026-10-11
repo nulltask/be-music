@@ -64,6 +64,26 @@ const BENCH_AUDIO = {
   bands: Array.from({ length: skinSdkApi.AUDIO_BAND_COUNT }, (_, index) => index / skinSdkApi.AUDIO_BAND_COUNT),
 };
 const BENCH_PALETTE = [0xffffff, 0xffd84a, 0x4ad8ff];
+const BENCH_SETTINGS = [
+  {
+    kind: 'choice',
+    id: 'theme',
+    label: 'Theme',
+    options: [
+      { value: 'neon', label: 'Neon' },
+      { value: 'mono', label: 'Mono' },
+    ],
+    default: 'neon',
+  },
+  { kind: 'number', id: 'judgeOffset', label: 'Judge offset', min: -40, max: 40, step: 2, default: 0, unit: 'px' },
+  { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
+] satisfies skinSdkApi.BeMusicSkinSetting[];
+const BENCH_STORED_SETTINGS = { theme: 'mono', judgeOffset: 72, glow: 'yes', removed: 1 };
+const BENCH_JUDGE_TIMINGS = Array.from({ length: 1000 }, (_, index) => ({
+  atMs: index * 120,
+  deltaMs: Math.round(Math.sin(index * 1.7) * 60),
+  judge: 'GREAT',
+})) satisfies skinSdkApi.BeMusicJudgeTiming[];
 const BENCH_SKIN = {
   apiVersion: skinSdkApi.BE_MUSIC_SKIN_API_VERSION,
   id: 'bench',
@@ -91,6 +111,11 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
   define('skin-sdk.bandLevel', {
     run: () => {
       skinSdkApi.bandLevel(BENCH_AUDIO.bands, 5, 24);
+    },
+  });
+  define('skin-sdk.binJudgeTimings', {
+    run: () => {
+      skinSdkApi.binJudgeTimings(BENCH_JUDGE_TIMINGS, 2, 100);
     },
   });
   define('skin-sdk.comboTier', {
@@ -198,6 +223,11 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
       skinSdkApi.resolveBeMusicLaneKind('12', 2, '7');
     },
   });
+  define('skin-sdk.resolveBeMusicSkinSettings', {
+    run: () => {
+      skinSdkApi.resolveBeMusicSkinSettings({ settings: BENCH_SETTINGS }, BENCH_STORED_SETTINGS);
+    },
+  });
   define('skin-sdk.resolveFallbackLaneLayout', {
     run: () => {
       skinSdkApi.resolveFallbackLaneLayout({
@@ -297,6 +327,11 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
   define('skin-sdk.validateBeMusicSkin', {
     run: () => {
       skinSdkApi.validateBeMusicSkin(BENCH_SKIN);
+    },
+  });
+  define('skin-sdk.validateBeMusicSkinSettings', {
+    run: () => {
+      skinSdkApi.validateBeMusicSkinSettings(BENCH_SETTINGS);
     },
   });
 }

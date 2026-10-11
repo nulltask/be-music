@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vite-plus/test';
+import type { PixiGameplayResultData } from '@be-music/player-web/scenes';
+import {
+  CLEAR_LAMP_ORDER,
+  clearLampRank,
+  mergeSongRecord,
+  parseSongRecords,
+  serializeSongRecords,
+  songRecordKey,
+  songRecordPlayFromResult,
+} from './song-records.ts';
+
+describe('clearLampRank', () => {
+  it('ranks lamps from NO_PLAY up to MAX', () => {
+    expect(clearLampRank('NO_PLAY')).toBe(0);
+    expect(clearLampRank('FAILED')).toBeLessThan(clearLampRank('ASSIST_EASY'));
+    expect(clearLampRank('EX_HARD')).toBeLessThan(clearLampRank('FULL_COMBO'));
+    expect(clearLampRank('MAX')).toBe(CLEAR_LAMP_ORDER.length - 1);
+  });
+});
+
+describe('mergeSongRecord', () => {
+  const play = { lamp: 'HARD' as const, exScore: 1500, maxCombo: 400, missCount: 12 };
+
+  it('starts a record from the first play', () => {
+    expect(mergeSongRecord(undefined, play)).toEqual({ ...play, playCount: 1 });
+  });
+
+  it('keeps each best independently and counts the play', () => {
+    const previous = { lamp: 'EX_HARD' as const, exScore: 1400, maxCombo: 500, missCount: 20, playCount: 3 };
+    expect(mergeSongRecord(previous, play)).toEqual({
+      lamp: 'EX_HARD',
+      exScore: 1500,
+      maxCombo: 500,
+      missCount: 12,
+      playCount: 4,
+    });
+  });
+
+  it('upgrades the lamp when the play is better', () => {
+    expect(mergeSongRecord({ lamp: 'FAILED', playCount: 1 }, play).lamp).toBe('HARD');
+    expect(mergeSongRecord({ lamp: 'HARD', playCount: 1 }, { ...play, lamp: 'FAILED' }).lamp).toBe('HARD');
+  });
+
+  it('fills fields a stored record lacks', () => {
+    expect(mergeSongRecord({ lamp: 'NORMAL' }, play)).toEqual({
+      lamp: 'HARD',
+      exScore: 1500,
+      maxCombo: 400,
+      missCount: 12,
+      playCount: 1,
+    });
+  });
+});
+
+describe('songRecordPlayFromResult', () => {
+  const score = { total: 10, perfect: 5, great: 2, good: 1, bad: 1, poor: 1, emptyPoor: 4, exScore: 12, score: 0 };
+
+  it('reads the lamp, EX score, max combo, and BAD + POOR', () => {
+    const data = { score, maxCombo: 6, cleared: true, lamp: 'EASY' } as PixiGameplayResultData;
+    expect(songRecordPlayFromResult(data)).toEqual({ lamp: 'EASY', exScore: 12, maxCombo: 6, missCount: 2 });
+  });
+
+  it('falls back to the gauge verdict without a lamp', () => {
+    expect(songRecordPlayFromResult({ score, maxCombo: 0, cleared: false } as PixiGameplayResultData).lamp).toBe(
+      'FAILED',
+    );
+    expect(songRecordPlayFromResult({ score, maxCombo: 0, cleared: true } as PixiGameplayResultData).lamp).toBe(
+      'NORMAL',
+    );
+  });
+});
+
+describe('songRecordKey', () => {
+  it('prefers the chart SHA-256 and falls back to the chart path', () => {
+    expect(songRecordKey({ chartPath: 'a/b.bms' }, 'abc123')).toBe('sha256:abc123');
+    expect(songRecordKey({ chartPath: 'a/b.bms' }, undefined)).toBe('path:a/b.bms');
+    expect(songRecordKey({ chartPath: 'a/b.bms' }, '')).toBe('path:a/b.bms');
+  });
+});
+
+describe('parseSongRecords / serializeSongRecords', () => {
+  it('round-trips records', () => {
+    const records = new Map([
+      ['sha256:abc', { lamp: 'FULL_COMBO' as const, exScore: 900, maxCombo: 450, missCount: 0, playCount: 2 }],
+      ['path:x.bms', { lamp: 'FAILED' as const, playCount: 1 }],
+    ]);
+    expect(parseSongRecords(serializeSongRecords(records))).toEqual(records);
+  });
+
+  it('yields no records for missing, unreadable, or foreign-version data', () => {
+    expect(parseSongRecords(null).size).toBe(0);
+    expect(parseSongRecords('{not json').size).toBe(0);
+    expect(parseSongRecords('[]').size).toBe(0);
+    expect(parseSongRecords(JSON.stringify({ version: 2, records: { a: { lamp: 'MAX' } } })).size).toBe(0);
+  });
+
+  it('drops entries with an unknown lamp and leaves out malformed counts', () => {
+    const raw = JSON.stringify({
+      version: 1,
+      records: {
+        bad: { lamp: 'SUPER_CLEAR', exScore: 10 },
+        ok: { lamp: 'HARD', exScore: -1, maxCombo: 1.5, missCount: '3', playCount: 4 },
+      },
+    });
+    expect([...parseSongRecords(raw)]).toEqual([['ok', { lamp: 'HARD', playCount: 4 }]]);
+  });
+});

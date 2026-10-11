@@ -984,6 +984,31 @@ async function loadTextureFromImageData(
   }
 }
 
+/**
+ * Decodes an image asset (PNG, BMP, JPG, TGA, registered formats, …) into an `ImageBitmap`, for consumers that draw
+ * with the canvas APIs rather than Pixi (be-music skins' song images). No chroma key is applied. `undefined` when the
+ * bytes don't decode; the caller owns the bitmap and `close()`s it when done.
+ */
+export async function loadImageBitmapFromBytes(path: string, bytes: Uint8Array): Promise<ImageBitmap | undefined> {
+  const lower = path.toLowerCase();
+  try {
+    if (lower.endsWith('.tga')) {
+      const imageData = decodeTgaImageData(bytes);
+      return imageData ? await createImageBitmap(imageData) : undefined;
+    }
+    const decoded = resolveImageDecoder(lower)?.(bytes);
+    if (decoded) {
+      // Copy into an `ArrayBuffer`-backed view: `ImageData` rejects views typed over `ArrayBufferLike`.
+      const pixels = new Uint8ClampedArray(new ArrayBuffer(decoded.rgba.byteLength));
+      pixels.set(decoded.rgba);
+      return await createImageBitmap(new ImageData(pixels, decoded.width, decoded.height));
+    }
+    return await createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>]));
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizeLoadTextureOptions(
   input: { r: number; g: number; b: number } | LoadTextureOptions | undefined,
 ): LoadTextureOptions {
@@ -1072,6 +1097,31 @@ async function decodeTgaTexture(
   options: LoadTextureOptions = {},
   label?: string,
 ): Promise<Texture | undefined> {
+  const imageData = decodeTgaImageData(bytes, options);
+  if (!imageData) {
+    return undefined;
+  }
+  const { width, height } = imageData;
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return undefined;
+  }
+  context.putImageData(imageData, 0, 0);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) {
+    return undefined;
+  }
+  return loadTextureFromBlob(blob, label);
+}
+
+/**
+ * Decodes an uncompressed or RLE true-colour / grayscale TGA into RGBA pixels, applying the chroma keys in `options`.
+ * `undefined` for truncated files and variants it doesn't handle (colour-mapped, 15/16-bit).
+ */
+function decodeTgaImageData(bytes: Uint8Array, options: LoadTextureOptions = {}): ImageData | undefined {
   const transparentColor = options.transparentColor;
   const keyOutBlack = options.keyOutBlack === true;
   if (bytes.length < 18) {
@@ -1171,17 +1221,5 @@ async function decodeTgaTexture(
     }
   }
 
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    return undefined;
-  }
-  context.putImageData(imageData, 0, 0);
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
-  if (!blob) {
-    return undefined;
-  }
-  return loadTextureFromBlob(blob, label);
+  return imageData;
 }
