@@ -25,6 +25,7 @@ import {
 import {
   BeatorajaSkinAudioPlayer,
   createBeMusicSkinRegistry,
+  resolveBeMusicSkinSettings,
   type BeMusicSkin,
   type BeMusicSongRecord,
   discoverBeatorajaSelectBgmPath,
@@ -115,6 +116,12 @@ import {
   songRecordPlayFromResult,
   storeSongRecords,
 } from './song-records.ts';
+import {
+  describeSkinSettingControllers,
+  readStoredSkinSettings,
+  setStoredSkinSetting,
+  storeSkinSettings,
+} from './skin-settings.ts';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import type { PlayerSummary } from '@be-music/player/core/engine';
@@ -500,6 +507,10 @@ class PlayerWebDemoApp {
   private readonly chartSha256Pending = new Map<string, Promise<string | undefined>>();
   /** Best record per chart ({@link songRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
   private readonly songRecords = readStoredSongRecords();
+  /** Each be-music skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
+  private readonly skinSettings = readStoredSkinSettings();
+  /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
+  private skinSettingsFolder: GUI | undefined;
   /**
    * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
    * for autoplay and replay plays, which never touch the records.
@@ -920,6 +931,9 @@ class PlayerWebDemoApp {
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
       });
+    // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
+    this.skinSettingsFolder = gui.addFolder('Skin settings');
+    this.rebuildSkinSettingsFolder();
     // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
     // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
     // 1-option dropdown.
@@ -1861,7 +1875,65 @@ class PlayerWebDemoApp {
   private handleBuiltInSkinChange(id: string): void {
     this.guiState.builtInSkin = BE_MUSIC_SKINS.resolve(id).id;
     storeBuiltInSkinId(this.guiState.builtInSkin);
+    this.rebuildSkinSettingsFolder();
     this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+  }
+
+  /** The stored values for the active be-music skin's settings, as handed to its scenes (`beMusicSkinSettings`). */
+  private get beMusicSkinSettings(): Readonly<Record<string, unknown>> | undefined {
+    return this.skinSettings.get(this.beMusicSkin.id);
+  }
+
+  /**
+   * Refills the "Skin settings" folder from the active be-music skin's `settings` schema — a dropdown per choice, a
+   * slider per number, a checkbox per toggle — seeded with the stored values, and hides it when the skin declares none.
+   * Every change is stored under the skin's id and reaches the scenes on screen at once.
+   */
+  private rebuildSkinSettingsFolder(): void {
+    const folder = this.skinSettingsFolder;
+    if (!folder) return;
+    // `controllersRecursive` returns a copy, so destroying (which splices `folder.controllers`) is safe mid-loop.
+    for (const controller of folder.controllersRecursive()) controller.destroy();
+    const skin = this.beMusicSkin;
+    const controllers = describeSkinSettingControllers(skin.settings);
+    folder.show(controllers.length > 0);
+    if (controllers.length === 0) return;
+    const values: Record<string, unknown> = { ...resolveBeMusicSkinSettings(skin, this.skinSettings.get(skin.id)) };
+    for (const controller of controllers) {
+      const added =
+        controller.kind === 'dropdown'
+          ? folder.add(values, controller.id, controller.options)
+          : controller.kind === 'slider'
+            ? folder.add(values, controller.id, controller.min, controller.max, controller.step)
+            : folder.add(values, controller.id);
+      added.name(controller.name).onChange((value: string | number | boolean) => {
+        setStoredSkinSetting(this.skinSettings, skin.id, controller.id, value);
+        storeSkinSettings(this.skinSettings);
+        this.applyBeMusicSkinSettings();
+      });
+    }
+    folder
+      .add(
+        {
+          reset: () => {
+            this.skinSettings.delete(skin.id);
+            storeSkinSettings(this.skinSettings);
+            this.applyBeMusicSkinSettings();
+            this.rebuildSkinSettingsFolder();
+          },
+        },
+        'reset',
+      )
+      .name('Reset to defaults');
+  }
+
+  /** Hands the active be-music skin's settings to the scenes on screen, which draw with them from their next frame. */
+  private applyBeMusicSkinSettings(): void {
+    const settings = this.beMusicSkinSettings;
+    this.selectView?.setBeMusicSkinSettings(settings);
+    this.gameplayView?.setBeMusicSkinSettings(settings);
+    this.resultView?.setBeMusicSkinSettings(settings);
+    if (this.decideView instanceof DefaultPixiDecideView) this.decideView.setBeMusicSkinSettings(settings);
   }
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
@@ -3318,6 +3390,7 @@ class PlayerWebDemoApp {
           ...selectSceneOptions,
           beMusicSkin: this.beMusicSkin,
           beMusicEffects: this.guiState.skinEffects,
+          beMusicSkinSettings: this.beMusicSkinSettings,
         });
     await this.selectView.mount(this.sceneHost);
     this.selectView.setCollection(this.collection);
@@ -3391,6 +3464,7 @@ class PlayerWebDemoApp {
           ...callbacks,
           beMusicSkin: this.beMusicSkin,
           beMusicEffects: this.guiState.skinEffects,
+          beMusicSkinSettings: this.beMusicSkinSettings,
           ...(playOptions !== undefined
             ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
             : {}),
@@ -3501,6 +3575,7 @@ class PlayerWebDemoApp {
         ...sharedOptions,
         beMusicSkin: this.beMusicSkin,
         beMusicEffects: this.guiState.skinEffects,
+        beMusicSkinSettings: this.beMusicSkinSettings,
       });
     }
     return new PixiGameplayView({
@@ -3655,6 +3730,7 @@ class PlayerWebDemoApp {
           ...sharedResultOptions,
           beMusicSkin: this.beMusicSkin,
           beMusicEffects: this.guiState.skinEffects,
+          beMusicSkinSettings: this.beMusicSkinSettings,
         });
     await this.resultView.mount(this.sceneHost, data);
     this.gameplayView?.dispose({ preserveAudioTail: true });
