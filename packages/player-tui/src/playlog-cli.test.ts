@@ -76,6 +76,14 @@ describe('playlog-cli', () => {
     expect(() => parsePlaylogCliArgs(['--frobnicate'])).toThrow(/unknown option '--frobnicate'/);
   });
 
+  test('parsePlaylogCliArgs: `--` ends the options and everything after it is a file', () => {
+    expect(parsePlaylogCliArgs(['--', 'a.bmplay.json']).files).toEqual(['a.bmplay.json']);
+
+    const args = parsePlaylogCliArgs(['--json', '--', '--weird.bmplay.json', '--', 'b.bmplay.json']);
+    expect(args.json).toBe(true);
+    expect(args.files).toEqual(['--weird.bmplay.json', '--', 'b.bmplay.json']);
+  });
+
   test('parsePlaylogCliArgs: --help and -h set the help flag', () => {
     expect(parsePlaylogCliArgs(['--help']).help).toBe(true);
     expect(parsePlaylogCliArgs(['-h']).help).toBe(true);
