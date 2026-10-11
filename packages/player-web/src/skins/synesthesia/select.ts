@@ -5,6 +5,7 @@ import { KICK_REST, stepKick, type KickState } from './kick.ts';
 import { drawPointCloud, drawReticle, drawSchool, sharedShapeBatch } from './draw.ts';
 import {
   floorRise,
+  flyPast,
   cameraBasis,
   emberColor,
   hsvToHex,
@@ -455,18 +456,20 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         );
       }
     }
-    // The audio orb roams the space right up by the camera, and swells into the warp on launch.
+    // The audio orb roams the space right up by the camera; on launch the camera flies past it, so it streams out of
+    // the vanishing point with the stars, swelling until it leaves the screen.
     const big = wanderPoint(seconds * 0.6, 5, { minX: -210, maxX: 230, minY: -140, maxY: -20, minZ: -70, maxZ: 150 });
     // The foreground orb is a charge cloud: dark magnet orbs in a fluid of particles, stepped on the GPU.
     const bigAt = projectPoint(viewPoint(big, camera, WORLD_ORBIT), cx, floorY, 200);
+    const passing = flyPast(bigAt.x, bigAt.y, 135 * bigAt.scale * (1 + 0.03 * pulse), cx, cy, warp);
     this.chargeCloud.update({
-      x: bigAt.x,
-      y: bigAt.y,
-      scale: (bigAt.visible ? 135 * bigAt.scale : 0) * (1 + 0.03 * pulse) * (1 + 0.8 * warp),
+      x: passing.x,
+      y: passing.y,
+      scale: bigAt.visible ? passing.scale : 0,
       seconds,
       dt: this.lastOrbSeconds === undefined ? 0 : seconds - this.lastOrbSeconds,
       drive,
-      alpha: bigAt.visible ? 1 - warp * 0.5 : 0,
+      alpha: bigAt.visible ? passing.alpha : 0,
     });
     this.lastOrbSeconds = seconds;
 

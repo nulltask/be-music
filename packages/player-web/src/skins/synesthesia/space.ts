@@ -604,3 +604,40 @@ export function floorRise(x: number, worldZ: number, seconds: number, amplitude:
   const crest = Math.max(0, Math.min(1, n * 1.5 + 0.4));
   return amplitude * crest * crest * (3 - 2 * crest);
 }
+
+/** Nearest the fly-past pushes an object off the vanishing point (px), so one sitting on it still slides past. */
+const FLY_PAST_MIN_OFFSET = 40;
+
+/**
+ * Where an object at `(x, y)` drawn at `scale` lands as the camera flies past it during the launch warp (`warp` 0..1):
+ * it streams out from the vanishing point `(vpX, vpY)` like the stars, growing faster and faster (ease-in) until it
+ * leaves the screen, and fades over the last quarter of the warp.
+ */
+export function flyPast(
+  x: number,
+  y: number,
+  scale: number,
+  vpX: number,
+  vpY: number,
+  warp: number,
+): { x: number; y: number; scale: number; alpha: number } {
+  const t = Math.max(0, Math.min(1, warp));
+  let dx = x - vpX;
+  let dy = y - vpY;
+  const distance = Math.hypot(dx, dy);
+  if (distance < FLY_PAST_MIN_OFFSET) {
+    // Sitting on the vanishing point: slide off down and to the right, below the launch title.
+    const ux = distance > 1e-6 ? dx / distance : 0.6;
+    const uy = distance > 1e-6 ? dy / distance : 0.8;
+    dx = ux * FLY_PAST_MIN_OFFSET;
+    dy = uy * FLY_PAST_MIN_OFFSET;
+  }
+  const reach = 1 + 5 * t * t;
+  const fade = Math.max(0, Math.min(1, (t - 0.75) / 0.25));
+  return {
+    x: t > 0 ? vpX + dx * reach : x,
+    y: t > 0 ? vpY + dy * reach : y,
+    scale: scale * reach,
+    alpha: 1 - fade * fade * (3 - 2 * fade),
+  };
+}

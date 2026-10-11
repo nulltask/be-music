@@ -15,3 +15,5 @@ Synesthesia's 100-combo milestones now play in the middle of the BGA monitor eve
 Synesthesia's floor now shows the music's spectrum: bass on the left of the screen to highs on the right, each band rising as a ridge that leaves the viewer and rolls out into the distance, so the ground in front of the camera shows what is playing now; near rows get denser points so they read as waveforms, over low Perlin-noise ground.
 
 Synesthesia's mines no longer sink into the lane: they burn bright crimson inside a red halo that throbs like a warning light, with a white-hot flickering filament.
+
+On launch the camera now flies past Synesthesia's charge cloud: its dark orbs stream out of the vanishing point with the stars, swelling until they leave the screen.

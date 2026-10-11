@@ -5,6 +5,7 @@ import {
   burstParticles,
   cameraBasis,
   emberColor,
+  flyPast,
   floorRise,
   hsvToHex,
   mixCamera,
@@ -414,5 +415,31 @@ describe('floorRise', () => {
     const small = floorRise(-300, 1200, 1, 10);
     const large = floorRise(-300, 1200, 1, 100);
     expect(large).toBeCloseTo(small * 10, 6);
+  });
+});
+
+describe('flyPast', () => {
+  it('leaves the object alone before the warp', () => {
+    expect(flyPast(300, 200, 50, 320, 240, 0)).toEqual({ x: 300, y: 200, scale: 50, alpha: 1 });
+  });
+
+  it('streams the object out from the vanishing point, growing and speeding up', () => {
+    const early = flyPast(400, 240, 50, 320, 240, 0.3);
+    const late = flyPast(400, 240, 50, 320, 240, 0.9);
+    expect(early.x).toBeGreaterThan(400);
+    expect(late.x).toBeGreaterThan(early.x);
+    expect(late.x - early.x).toBeGreaterThan(early.x - 400);
+    expect(late.scale).toBeGreaterThan(early.scale);
+    expect(early.y).toBe(240);
+  });
+
+  it('fades out over the last quarter of the warp', () => {
+    expect(flyPast(400, 240, 50, 320, 240, 0.7).alpha).toBe(1);
+    expect(flyPast(400, 240, 50, 320, 240, 1).alpha).toBe(0);
+  });
+
+  it('pushes an object sitting on the vanishing point off it', () => {
+    const passed = flyPast(320, 240, 50, 320, 240, 0.5);
+    expect(Math.hypot(passed.x - 320, passed.y - 240)).toBeGreaterThan(40);
   });
 });
