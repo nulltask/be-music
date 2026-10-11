@@ -4,6 +4,7 @@
 import {
   BUILT_IN_BE_MUSIC_SKINS,
   latticeSkin,
+  DefaultPixiDecideView,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
   DefaultPixiSongSelectView,
@@ -452,7 +453,7 @@ class PlayerWebDemoApp {
    */
   private beatorajaSelectSnapshot: import('@be-music/player-web').PixiBeatorajaSelectSceneSnapshot | undefined;
   private resultView: PixiResultView | DefaultPixiResultView | undefined;
-  private decideView: PixiDecideView | undefined;
+  private decideView: PixiDecideView | DefaultPixiDecideView | undefined;
   private hostMounted = false;
   /**
    * Last-known cursor / folder state of the select view, captured before gameplay so returning to song select restores
@@ -3325,7 +3326,8 @@ class PlayerWebDemoApp {
   /**
    * Mounts the decide-screen splash and routes the user into gameplay when it dismisses (auto-advance OR Enter / Space
    * / Escape input). Without a decide skin, falls straight through to `playSong` so themes that don't ship a Decide
-   * directory still play the chart immediately.
+   * directory still play the chart immediately. On the default family the splash is the be-music skin's own decide
+   * screen, shown only when the skin declares one.
    *
    * The decide view runs alongside the select view's AudioContext — `playDecideSound` was already fired at song-pick
    * time, and the splash visually masks the chart-load + gameplay-mount window that comes next.
@@ -3340,9 +3342,15 @@ class PlayerWebDemoApp {
       if (!mounted) await this.playSong(song, overrides);
       return;
     }
-    if (decideFamily === 'default' || !this.decideSkin) {
-      // Default family has no decide splash by design — same for an LR2-only setup that didn't ship a decide skin.
-      // The select view's `playDecideSound` already fired so the audio cue still plays.
+    // A be-music skin's decide screen hands over to the LR2 / default gameplay preloaded below, so it is skipped when
+    // the play itself runs on a beatoraja theme.
+    const beMusicDecide =
+      decideFamily === 'default' &&
+      this.beMusicSkin.decide !== undefined &&
+      pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song) !== 'beatoraja';
+    if (!beMusicDecide && (decideFamily === 'default' || !this.decideSkin)) {
+      // No decide splash: a be-music skin without one, or an LR2-only setup that didn't ship a decide skin. The select
+      // view's `playDecideSound` already fired so the audio cue still plays.
       await this.playSong(song, overrides);
       return;
     }
@@ -3364,8 +3372,7 @@ class PlayerWebDemoApp {
       advanced = true;
       then();
     };
-    this.decideView = new PixiDecideView({
-      skin: this.decideSkin,
+    const callbacks = {
       onContinue: () =>
         advance(() => {
           void this.startGameplayAfterDecide(song, preloaded);
@@ -3377,7 +3384,18 @@ class PlayerWebDemoApp {
           this.gameplayView = undefined;
           void this.showSelect();
         }),
-    });
+    };
+    const playOptions = this.selectView?.getPlayOptions();
+    this.decideView = beMusicDecide
+      ? new DefaultPixiDecideView({
+          ...callbacks,
+          beMusicSkin: this.beMusicSkin,
+          beMusicEffects: this.guiState.skinEffects,
+          ...(playOptions !== undefined
+            ? { playOptions: { ...playOptions, autoPlay: overrides.autoPlay ?? this.guiState.autoPlay } }
+            : {}),
+        })
+      : new PixiDecideView({ ...callbacks, skin: this.decideSkin });
     await this.decideView.mount(this.sceneHost, { song, collection: this.collection });
   }
 
