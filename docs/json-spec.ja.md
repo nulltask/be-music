@@ -43,7 +43,7 @@
   "events": [],
   "bms": {
     "lnType": 1,
-    "lnMode": 0,
+    "lnMode": 1,
     "lnObjs": ["AA", "ZZ"],
     "defExRank": 120,
     "exRank": {
@@ -206,15 +206,17 @@
 
 `bms` は BMS 固有の追加情報を保持する拡張領域です。
 
+- `preview`: `#PREVIEW` の値
 - `lnType`: `#LNTYPE` の値
-- `lnMode`: `#LNMODE` の値
+- `lnMode`: `#LNMODE` の値（`1` = LN、`2` = CN、`3` = HCN）。正の値だけを保持
 - `lnObjs`: 複数 `#LNOBJ` 宣言を宣言順で保持した配列 (2桁 base36)
+- `volWav`: `#VOLWAV` の値
 - `defExRank`: `#DEFEXRANK` の値
 - `exRank`: `#EXRANKxx` のマップ
 - `argb`: `#ARGBxx` のマップ
 - `player`: `#PLAYER` の値
 - `pathWav`: `#PATH_WAV` の値
-- `base`: `#BASE` の値。現在は `36` または `62`。省略時は `36`
+- `base`: 譜面が `#BASE 62` を宣言している場合は `62`。それ以外は省略し、省略時は `36`
 - `baseBpm`: `#BASEBPM` の値
 - `stp`: `#STP` の値配列
 - `option`: `#OPTION` の値
@@ -256,7 +258,7 @@ ID を消費する code は手動で upper-case せず、`resolveBmsBase(json)` 
 `bmson` は bmson 固有の追加情報を保持する拡張領域です。
 
 - `version`: bmson のバージョン文字列
-- `info`: `resolution` に加え、`subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, 画像/preview 系を保持
+- `info`: `resolution` に加え、`subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, `lnType`（beatoraja の `info.ln_type`: `1` = LN、`2` = CN、`3` = HCN）, 画像/preview 系を保持
 - `barlinesSuppressed`: bmson source が明示的に `lines: []` を書いた場合だけ `true` になります。`lines` 欠落とは区別し、欠落時は既定の 4/4 barline model を意味します
 - `bga`: `header`, `events`, `layerEvents`, `poorEvents` を保持
 
@@ -285,6 +287,7 @@ interface BeMusicEvent {
   bmson?: {
     l?: number;
     c?: boolean;
+    t?: number;
     damage?: number;
   };
 }
@@ -292,6 +295,7 @@ interface BeMusicEvent {
 
 `bmson.damage` は beatoraja-style bmson `key_channels` の mine note に使います。
 譜面で authoring された gauge damage を非負数で保持し、通常の `sound_channels` note では省略します。
+`bmson.t` は beatoraja のノート単位のロングノート種別（`notes[].t`: `1` = LN、`2` = CN、`3` = HCN）です。ロングノート（`l > 0`）のときだけ保持し、`bmson.info.lnType` より優先されます。
 
 ## `position` の意味
 

@@ -3,12 +3,12 @@
 # LR2 skin implementation notes
 
 This document summarizes the current `@be-music/lr2-skin` implementation.
-The package parses Lunatic Rave 2 skin files into renderer-independent data structures; PixiJS rendering belongs to `@be-music/player-web`, and CLI/TUI rendering does not consume LR2 skins.
+The package parses Lunatic Rave 2 skin files into renderer-independent data structures; PixiJS rendering belongs to `@be-music/player-web`, and CLI/TUI rendering belongs to `@be-music/player-tui`, which does not consume LR2 skins.
 
 ## Scope
 
 - `@be-music/lr2-skin` reads `.lr2skin` CSV files for select, decide, play, and result scenes.
-- The package resolves theme assets from dropped folders or in-memory file maps, including case-insensitive paths, wildcard file references, TGA images, and DXA archives.
+- The package resolves theme assets from dropped folders or in-memory file maps, including case-insensitive paths, wildcard file references, TGA and DDS images, and DXA archives.
 - The package keeps skin timing, op conditions, source rectangles, destination keyframes, and scene-specific element groups in plain TypeScript objects.
 - The package does not create PixiJS objects, WebAudio nodes, or browser DOM UI.
 
@@ -23,6 +23,8 @@ Play skins are grouped by variant so the browser player can choose the layout th
 - `10`
 - `14`
 
+LR2 never shipped keyboard-mode play skins, so `24` / `48` KEY charts borrow a `7` / `14` play skin (`PLAY_SKIN_FALLBACKS` in `play-skin.ts`): the skin supplies the frame, gauge, and judge graphics, and the lanes fall back to the host's playfield.
+
 The parser keeps select, decide, play, and result data in one `Lr2Skin` shape.
 Consumers read only the fields that make sense for their scene.
 
@@ -30,6 +32,7 @@ Consumers read only the fields that make sense for their scene.
 
 Implemented directives include:
 
+- `#INFORMATION`, `#ENDOFHEADER`
 - `#INCLUDE`
 - `#IMAGE`
 - `#LR2FONT`
@@ -43,6 +46,8 @@ Implemented directives include:
 - `#PLAYSTART`
 - `#CLOSE`
 - `#RELOADBANNER`
+- `#RESOLUTION`, `#TRANSCOLOR`, `#FADEOUT`, `#SKIP`, `#LOADEND`
+- `#FLIPSIDE`, `#FLIPRESULT`, `#DISABLEFLIP`
 - `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`
 
 Implemented element families include:
@@ -50,7 +55,9 @@ Implemented element families include:
 - Image elements with `#SRC_IMAGE` / `#DST_IMAGE`
 - Number, text, slider, bargraph, button, and mouse cursor elements
 - Play-scene elements for BGA, groove gauge, judge line, measure line, judge/combo effects, key-on effects, LN hold effects, and bombs
-- Select-scene bar body, title, level, lamp, rank, flash, cursor, and click-target elements
+- Play-scene note graphics: `#SRC_NOTE`, `#SRC_LN_START` / `#SRC_LN_BODY` / `#SRC_LN_END`, `#SRC_MINE`, and their `#SRC_AUTO_*` autoplay variants
+- `#SRC_README` / `#DST_README` and `#SRC_ONMOUSE` / `#DST_ONMOUSE` elements
+- Select-scene bar body, title, level, lamp, my lamp, rival / rival lamp, rank, flash, cursor, and click-target elements
 - Result-scene gauge chart and score chart elements
 - LR2 special graphics for `STAGEFILE`, `BACKBMP`, `BANNER`, skin thumbnail, black, and white runtime-bound textures
 
@@ -61,7 +68,7 @@ The resolver normalizes LR2-style path separators and performs case-insensitive 
 
 The resolver also supports wildcard asset references used by LR2 themes.
 When an asset lives inside a DXA archive, the DXA reader exposes the archive entries to the same lookup path.
-TGA images are decoded by `tga.ts`, and bitmap fonts are prepared from `#LR2FONT` declarations by `font.ts`.
+TGA images are decoded by `tga.ts` and DDS images by `dds.ts` (the browser player registers it as the `.dds` decoder, since browsers cannot decode DDS), and bitmap fonts are prepared from `#LR2FONT` declarations by `font.ts`.
 
 ## Browser player usage
 

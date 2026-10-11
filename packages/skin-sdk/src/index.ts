@@ -1,5 +1,5 @@
 /**
- * `@be-music/player-web/skin-sdk` — everything a be-music skin is written against, and nothing that draws. A skin gets
+ * `@be-music/skin-sdk` — everything a be-music skin is written against, and nothing that draws. A skin gets
  * a canvas and plain frame data from the player and renders with whatever it brings: the Canvas 2D API, raw WebGL /
  * WebGPU, or a framework such as PixiJS or three.js. The SDK itself imports no rendering framework.
  *

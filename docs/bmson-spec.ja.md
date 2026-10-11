@@ -83,6 +83,8 @@
 - [x] `stop_events` 出力 (`09` 由来)
 - [x] `notes.l` 出力 (未指定時 `l=0`)
 - [x] `notes.c` 出力 (未指定時 `c=false`)
+- [x] `notes.t` 出力 (beatoraja 拡張、ロングノートのみ)
+- [x] `info.ln_type` 出力 (beatoraja 拡張)
 - [x] `bga.bga_header` 出力
 - [x] `bga.bga_events` 出力
 - [x] `bga.layer_events` 出力
@@ -115,14 +117,14 @@
 - [ ] 同一 `y` の `bpm_events` を末尾優先で適用
 - [ ] 同一 `y` の `stop_events` を加算して適用
 - [ ] sound channel スライス規則（`c` と restart）に基づく再生
-- [ ] 同一 slice に playable/BGM が混在する場合の BGM 破棄規則
+- [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
 - [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
 
 ## 実装が読み込むフィールド (parser)
 
-- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `bpm_events`, `stop_events`, `bga`
-- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`
-- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`
+- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
+- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
+- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
 - `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
@@ -139,9 +141,15 @@
 - `key = base36(i + 1)` を2桁化
 - `notes[].y` を分数位置へ変換してイベント化
 - `notes[].l/c` は `events[].bmson.l/c` として保持
+- `notes[].t`（1 = LN、2 = CN、3 = HCN）はロングノート（`l > 0`）のとき `events[].bmson.t` として保持し、`info.ln_type` は `bmson.info.lnType` に保持
 - `lines` が存在する場合、`lines` 区間を小節として `measure` と `position` を算出
-- `notes[].x` のユニーク値を昇順採番し、BMS互換チャンネルへ写像
-- `x` 未指定時は `11`
+- `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
+  1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
+  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ）
+  3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
+  4. それ以外の hint では、正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番
+- `x` が未指定、または `x <= 0` のノートは BGM (`01`)
+- レーン表にない正の `x` は `11` にフォールバックするため、レーン 1 に重なる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
@@ -163,6 +171,7 @@
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
+- ロングノートの `events[].bmson.t` を `notes[].t` へ、`bmson.info.lnType` を `info.ln_type` へ反映
 - `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
 - `bmson.bga` が存在すれば `bga` を出力
 
@@ -172,10 +181,11 @@
 
 ## y -> position 変換規則
 
-- `lines` がある場合:
+- `lines` が 2 本以上ある場合:
   - `measure = y` が属する `lines` 区間のインデックス
   - `position = [y - lineStart, lineEnd - lineStart]`
-- `lines` がない場合:
+  - 最後の小節線より後は、そこから 4/4 の小節（各 `resolution * 4` tick）として延長
+- `lines` がない、または 1 本以下の場合:
   - `beat = y / resolution`
   - `measure = floor(beat / 4)`
   - `position = [round(y) % (resolution * 4), resolution * 4]`

@@ -60,12 +60,14 @@ without hard-coding integer literals.
 
 `evaluateBeatorajaLuaSkin()` runs the entry script under a hand-built sandbox built on Fengari. Only the standard
 libraries actually used by the reference theme (`base`, `table`, `string`, `math`) are exposed; `package`, `io`,
-`os`, and `debug` are left out. `dofile`, `loadfile`, `load`, `loadstring`, and `collectgarbage` are nilled out so a
-malicious skin can't reach beyond its own theme files.
+`os`, `debug`, and `coroutine` are left out. `loadfile`, `load`, `loadstring`, and `collectgarbage` are nilled out, and
+`dofile` is replaced by a version that only resolves files inside the theme bundle (for example
+`dofile(skin_config.get_path("Play/lua/sp/info.lua"))`), so a malicious skin can't reach beyond its own theme files.
 
 `require()` is reimplemented on top of a registry of preloaded module sources. The host registers every `.lua`
 neighboring the entry script (and one level up — beatoraja themes occasionally split helpers into a parent
 `play_parts.lua`). Modules are cached so a `require()` call always returns the same table on subsequent invocations.
+beatoraja's `timer_util` / `event_util` helper modules are built in and can be required without shipping them.
 
 The two-phase contract:
 
@@ -91,7 +93,7 @@ visibility at runtime via `isElementVisible()`. Negative codes are treated as ne
 The package keeps the loaded skin tree close to upstream, then exposes typed normalizers for renderer work.
 Normalizers live under `src/elements/` and cover image, imageset, value, float-value, text, slider, note, judge,
 judge graph, gauge, gauge graph, BPM graph, timing visualizer, timing distribution graph, song list, custom event,
-direction, destination, PM character, and generic graph elements.
+direction (the `angle` of graph and slider elements), destination, PM character, and generic graph elements.
 
 Destination normalization carries keyframes, offsets, op gates, and interpolation data in renderer-independent
 objects. Value and image helpers resolve `divx` / `divy` cell math, carry-forward frames, and loop wrapping so a
