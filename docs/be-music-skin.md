@@ -159,6 +159,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 - **Stage:** the stage is the design canvas a skin draws on. `wideStage` is the 16:9 stage the built-in skins use (854×480), and the default.
 - **BGA placement:** `BeMusicStage.resolveBgaRect(playfieldRight)` decides where the gameplay BGA goes. The player composites the video there, and your skin frames the same rect. `wideStage` grows the BGA beside a single-play field and shrinks it next to wide double-play or keyboard fields.
 - **Layout per frame:** each gameplay frame comes with `layout` (`BeMusicGameplayLayout`), resolved by the host:
+  - `mode`: `'standard'` or `'touch'` (optional; absent means `'standard'`). See the touch layout below.
   - `stage`: width and height.
   - `lanes`: every lane, with its channel, kind (`white` / `black` / `scratch`), side, x, and width. The full layout of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY) is always present, even for lanes the chart never uses.
   - `playfield`: `left`, `right`, `centerX`, `top`, `judgementY`, and `sides` (the horizontal extent of 1P and, in double play, 2P).
@@ -166,6 +167,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 - **Placing chrome:** place your chrome from these values instead of hard-coding geometry. Host-side layout changes (double play, keyboard modes, new aspect ratios) then reach your skin for free.
 - **Double-play gap:** the 1P and 2P banks stand 60 px apart. `resolveLaneRuns(lanes)` returns one `{ left, right }` run per contiguous bank. Draw the judgement line and lane grid per run so nothing crosses the gap.
 - **Lane widths:** lane widths are fixed by the player. Skins colour lanes, but never resize or move them.
+- **Touch layout:** on touch screens the host may resolve the layout with `layoutMode: 'touch'` (`resolveGameplayLayout` input). The lanes then spread across the stage from its left margin to the judgement tally's column (`TOUCH_PLAYFIELD`): every key one width (at most 72 px) and a scratch 1.4 keys wide, the lanes run from y 48 (below the header band) to the judgement line at y 330 (above the bottom HUD band), and `bga` is `undefined`. The 24 / 48 KEY modes keep the standard layout (`supportsTouchLayout`). A skin that places its chrome from `layout` needs no change; read `layout.mode` only to restyle something for touch play. Keep chrome that sits beside the lanes in the standard layout (anything placed from the BGA rect) working when `bga` is `undefined`.
 
 ## Screens
 
@@ -307,7 +309,7 @@ settings: [
 | Area       | Helpers                                                                                                                                                                    |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Stage      | `wideStage`, `resolveStageBgaRect`, `STAGE_WIDTH`, `STAGE_HEIGHT`, `STAGE_MARGIN`, `STAGE_SIDE_COLUMN`, `STAGE_BGA_BAND`                                                   |
-| Layout     | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea`                                                                                                         |
+| Layout     | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea`, `resolveGameplayLaneGeometry`, `resolveTouchLaneLayout`, `supportsTouchLayout`, `TOUCH_PLAYFIELD`      |
 | Judgements | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`                                                                                    |
 | Moments    | `trackMoments` / `updateMoments` (count-in, every 100 combo, clear line, full combo, combo break), `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile` |
 | Loading    | `LOADING_WORD`, `loadingDots(nowMs)`                                                                                                                                       |

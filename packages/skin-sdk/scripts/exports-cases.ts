@@ -269,6 +269,21 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
       skinSdkApi.resolveResultTrackRows(BENCH_RESULT);
     },
   });
+  define('skin-sdk.resolveGameplayLaneGeometry', {
+    run: () => {
+      skinSdkApi.resolveGameplayLaneGeometry(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7', 'touch');
+    },
+  });
+  define('skin-sdk.resolveTouchLaneLayout', {
+    run: () => {
+      skinSdkApi.resolveTouchLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');
+    },
+  });
+  define('skin-sdk.supportsTouchLayout', {
+    run: () => {
+      skinSdkApi.supportsTouchLayout('7');
+    },
+  });
   define('skin-sdk.resolveSkinlessLaneLayout', {
     run: () => {
       skinSdkApi.resolveSkinlessLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');

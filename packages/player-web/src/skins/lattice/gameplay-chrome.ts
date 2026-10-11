@@ -330,8 +330,8 @@ function resolveFieldInput(
             ageMs: nowMs - atMs,
             strength: amount,
           })),
-          // Onsets ring out of the monitor.
-          ...onsets.map((atMs) => ({
+          // Onsets ring out of the monitor (when there is one: the touch layout and 48 KEY have none).
+          ...(BGA.w > 0 ? onsets : []).map((atMs) => ({
             x: BGA.x + BGA.w / 2,
             y: BGA.y + BGA.h / 2,
             ageMs: nowMs - atMs,

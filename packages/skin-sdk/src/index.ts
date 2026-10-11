@@ -29,6 +29,7 @@ export * from './settings.ts';
 export * from './judge-timing.ts';
 export * from './stage.ts';
 export * from './layout.ts';
+export * from './touch-layout.ts';
 export * from './fonts.ts';
 export * from './motion.ts';
 export * from './tabular.ts';

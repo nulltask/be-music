@@ -155,7 +155,19 @@ export interface BeMusicLayoutLane {
  * chrome from this instead of computing geometry themselves, so host-side layout changes (double play, keyboard
  * modes, new aspect ratios) reach every skin.
  */
+/**
+ * How the host lays out the gameplay screen. `'standard'` is the cabinet-style playfield; `'touch'` is for playing on a
+ * touch screen: wide, equal-width lanes across most of the stage, a low judgement line, and no BGA.
+ */
+export type GameplayLayoutMode = 'standard' | 'touch';
+
 export interface BeMusicGameplayLayout {
+  /**
+   * The layout mode the host resolved. Optional so a layout built by hand stays valid; absent means `'standard'`. In
+   * `'touch'` the lanes and playfield bounds already describe the touch geometry and `bga` is `undefined`, so a skin
+   * placing its chrome from this layout needs no mode check — read it only to restyle something for touch play.
+   */
+  mode?: GameplayLayoutMode;
   stage: { width: number; height: number };
   lanes: readonly BeMusicLayoutLane[];
   playfield: {
