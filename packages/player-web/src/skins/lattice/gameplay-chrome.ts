@@ -692,6 +692,17 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
     { size: 15, weight: '500', fill: LAT_INK, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
     pool,
   );
+  const genre = runtime.songGenre?.trim();
+  if (genre) {
+    addHudText(
+      layer,
+      sc(genre.toUpperCase(), 520, 9),
+      x + w,
+      y + 27,
+      { ...monoStyle(), fontFamily: LAT_TEXT_FONT, anchorX: 1, maxWidth: 200 },
+      pool,
+    );
+  }
   const artist = runtime.songArtist?.trim();
   if (artist) {
     addHudText(
@@ -699,7 +710,13 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
       sc(artist, 460, 8),
       x + 48,
       y + 26,
-      { size: 10, weight: '300', fill: LAT_GRAPHITE, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
+      {
+        size: 10,
+        weight: '300',
+        fill: LAT_GRAPHITE,
+        fontFamily: LAT_TEXT_FONT,
+        maxWidth: w - 48 - (genre ? 216 : 0),
+      },
       pool,
     );
   }

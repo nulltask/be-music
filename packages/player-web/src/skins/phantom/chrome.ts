@@ -678,9 +678,27 @@ function drawSongPlate(
     { size: 16, fill: PHANTOM_INK, fontFamily: DEFAULT_HEADLINE_FONT, maxWidth: w - 30 },
     pool,
   );
+  const genre = runtime.songGenre?.trim();
+  if (genre) {
+    addText(
+      layer,
+      genre.toUpperCase(),
+      x + w - 18,
+      y + 28,
+      { size: 9, weight: '800', fill: PHANTOM_ASH, anchorX: 1, maxWidth: 200 },
+      pool,
+    );
+  }
   const artist = runtime.songArtist?.trim();
   if (artist) {
-    addText(layer, artist, x + 20, y + 27, { size: 10, weight: '800', fill: PHANTOM_RED, maxWidth: w - 30 }, pool);
+    addText(
+      layer,
+      artist,
+      x + 20,
+      y + 27,
+      { size: 10, weight: '800', fill: PHANTOM_RED, maxWidth: w - 30 - (genre ? 216 : 0) },
+      pool,
+    );
   }
 }
 

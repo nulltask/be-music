@@ -187,7 +187,7 @@ export default defineBeMusicSkin({
 `runtime`（`BeMusicGameplayRuntime`）の値:
 
 - **曲とスコア:**
-  - `songTitle`、`songArtist`、`bpm`、`hiSpeed`
+  - `songTitle`、`songArtist`、`songGenre`、`bpm`（再生位置での BPM。テンポ変化に追従）、`hiSpeed`
   - `score`、`exScore`、`exScoreMax`、`combo`、`maxCombo`
   - 判定数（`perfect` 〜 `poor`、`fast`、`slow`）
   - `rank`、`totalNotes`

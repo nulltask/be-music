@@ -556,7 +556,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     // Info panel.
     framePanel(chrome, 14, 56, 290, 302, accent);
-    addText('NOW SELECTING', 30, 70, labelStyle(accent));
+    // The genre heads the card, in the accent light, where a fixed caption used to sit.
+    const genre = song?.genre?.trim();
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
     addText(songTitle, 30 + slide * 24, 86, {
       size: 18,
@@ -567,6 +568,17 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       alpha: 1 - slide,
       dropShadow: { color: accent, distance: 0, blur: 10, alpha: 0.8 },
     });
+    if (genre) {
+      addText(genre.toUpperCase(), 30 + slide * 16, 70, {
+        size: 9,
+        weight: '500',
+        fill: accent,
+        fontFamily: SYN_TEXT_FONT,
+        letterSpacing: 2,
+        maxWidth: 258,
+        alpha: 1 - slide,
+      });
+    }
     if (songArtist) {
       addText(songArtist, 30 + slide * 40, 114, {
         size: 10,

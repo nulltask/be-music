@@ -3607,7 +3607,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
-      bpm: this.song?.bpm,
+      songGenre: this.song?.genre,
+      bpm: this.timingResolver?.bpmAtBeat(this.currentBeat(seconds)) ?? this.song?.bpm,
       hiSpeed: this.hiSpeed,
       score: this.score.score,
       exScore: this.score.exScore,
