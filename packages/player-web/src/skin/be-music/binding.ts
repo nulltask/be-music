@@ -294,8 +294,8 @@ export class BeMusicSelectBinding {
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
   private readonly settings: BeMusicSkinSettingValues;
-  /** The pointer in design pixels. Wired in a later commit: the scene doesn't report it yet. */
-  private readonly pointer: BeMusicSelectFrame['pointer'] = undefined;
+  /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
+  private pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
   private revision = 0;
 
@@ -312,6 +312,18 @@ export class BeMusicSelectBinding {
   render(frame: BeMusicSelectSceneFrame): void {
     this.frame = frame;
     this.revision += 1;
+  }
+
+  /**
+   * Records where the pointer is, in the stage's design pixels, or `undefined` when it is off the stage. Read by the
+   * next {@link tick} as `frame.pointer` and by `frame.hit`'s hover test.
+   */
+  setPointer(x: number | undefined, y: number | undefined): void {
+    if (x === undefined || y === undefined) {
+      this.pointer = undefined;
+    } else if (this.pointer?.x !== x || this.pointer.y !== y) {
+      this.pointer = { x, y };
+    }
   }
 
   /** Draws the skin with the latest state, the current time, and what is playing. */

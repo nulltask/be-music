@@ -1226,8 +1226,11 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       if (this.beMusicNeedsFrame) {
         this.perf.time('render', () => this.render());
       }
-      if (this.beMusicBackHolder.visible) {
-        this.beMusicRenderer?.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
+      if (this.beMusicBackHolder.visible && this.beMusicRenderer) {
+        const { width, height } = resolveBeMusicSkinStage(this.beMusicSkin);
+        const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
+        this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
+        this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
       }
     }
     const report = this.perf.endFrame(() => ({
