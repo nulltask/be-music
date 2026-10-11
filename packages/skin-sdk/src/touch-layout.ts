@@ -19,7 +19,8 @@ import type { GameplayLayoutMode } from './types.ts';
 export const TOUCH_PLAYFIELD = {
   left: 16,
   right: 730,
-  top: 0,
+  /** Below the header band the built-in skins draw along the top of the stage (at most 44 px tall). */
+  top: 48,
   judgementY: 330,
   /** Widest a key gets, about 58 CSS px on a landscape phone (stage scale 0.81). */
   maxKeyWidth: 72,

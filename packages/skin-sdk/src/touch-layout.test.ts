@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { resolveGameplayLayout } from './layout.ts';
 import { PLAYFIELD } from './playfield.ts';
-import { wideStage } from './stage.ts';
+import { STAGE_BGA_BAND, STAGE_SIDE_COLUMN, wideStage } from './stage.ts';
 import {
   TOUCH_PLAYFIELD,
   resolveGameplayLaneGeometry,
@@ -123,5 +123,20 @@ describe('resolveGameplayLayout in touch mode', () => {
     expect(layout.mode).toBe('standard');
     expect(layout.playfield.judgementY).toBe(PLAYFIELD.judgementY);
     expect(layout.bga).toBeDefined();
+  });
+});
+
+describe('TOUCH_PLAYFIELD reserved regions', () => {
+  it('keeps the lanes left of the judgement tally column', () => {
+    expect(TOUCH_PLAYFIELD.right).toBeLessThan(STAGE_SIDE_COLUMN.x);
+  });
+
+  it('starts the lanes below the header band', () => {
+    expect(TOUCH_PLAYFIELD.top).toBeGreaterThanOrEqual(44);
+    expect(TOUCH_PLAYFIELD.top).toBeLessThan(STAGE_BGA_BAND.top);
+  });
+
+  it('keeps the judgement line above the bottom HUD band', () => {
+    expect(TOUCH_PLAYFIELD.judgementY).toBeLessThan(STAGE_BGA_BAND.bottom);
   });
 });
