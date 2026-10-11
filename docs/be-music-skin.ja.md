@@ -159,6 +159,7 @@ export default defineBeMusicSkin({
 - **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）で、既定値でもあります。
 - **BGA の配置:** `BeMusicStage.resolveBgaRect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
+  - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
   - `stage`: 幅と高さ。
   - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
   - `playfield`: `left`、`right`、`centerX`、`top`、`judgementY`、`sides`（1P と、DP なら 2P の水平範囲）。
@@ -166,6 +167,7 @@ export default defineBeMusicSkin({
 - **クロームの配置:** ジオメトリをハードコードせず、これらの値から配置してください。DP、鍵盤モード、新しいアスペクト比などホスト側のレイアウト変更が、そのままスキンにも反映されます。
 - **DP の隙間:** 1P と 2P のバンクは 60 px 離れています。`resolveLaneRuns(lanes)` は連続したバンクごとに `{ left, right }` を 1 つ返します。判定ラインやレーングリッドはラン単位で描き、隙間をまたがないようにします。
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
+- **タッチレイアウト:** タッチ画面では、ホストが `layoutMode: 'touch'`（`resolveGameplayLayout` の入力）でレイアウトを解決することがあります。このときレーンはステージの左マージンから判定集計の列まで広がり（`TOUCH_PLAYFIELD`）、鍵盤はすべて同じ幅（最大 72 px）、スクラッチは鍵盤 1.4 本分、判定ラインは y 330 で、`bga` は `undefined` です。24 / 48 KEY は標準レイアウトのままです（`supportsTouchLayout`）。`layout` からクロームを配置しているスキンは変更不要です。`layout.mode` はタッチプレイ向けに見た目を変えたいときだけ読んでください。標準レイアウトでレーンの横に置くクローム（BGA の矩形から配置するもの）は、`bga` が `undefined` でも崩れないようにしてください。
 
 ## 画面
 
@@ -307,7 +309,7 @@ settings: [
 | 分野       | ヘルパー                                                                                                                                                                        |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | ステージ   | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`                                                        |
-| レイアウト | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`                                                                                                              |
+| レイアウト | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`           |
 | 判定       | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`                                                                                          |
 | 演出       | `trackMoments` / `updateMoments`（カウントイン、100 コンボごと、クリアライン、フルコンボ、コンボ切れ）、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile` |
 | ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`                                                                                                                                            |

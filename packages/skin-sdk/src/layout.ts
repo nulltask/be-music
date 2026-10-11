@@ -1,14 +1,19 @@
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveLr2LaneIndex } from '@be-music/player/core/lane-layout';
-import { PLAYFIELD } from './playfield.ts';
-import { resolveBeMusicLaneKind, resolveSkinlessLaneLayout } from './lane-geometry.ts';
-import type { BeMusicGameplayLayout, BeMusicStage } from './types.ts';
+import { resolveBeMusicLaneKind } from './lane-geometry.ts';
+import { resolveGameplayLaneGeometry } from './touch-layout.ts';
+import type { BeMusicGameplayLayout, BeMusicStage, GameplayLayoutMode } from './types.ts';
 
 /** What {@link resolveGameplayLayout} needs to know about the chart: its lane channels and play variant. */
 export interface GameplayLayoutInput {
   laneChannels?: readonly string[];
   laneCount?: number;
   playVariant?: ChartPlayVariant;
+  /**
+   * `'touch'` asks for the touch layout (see {@link resolveGameplayLaneGeometry}); play modes it does not cover keep the
+   * standard one. Defaults to `'standard'`.
+   */
+  layoutMode?: GameplayLayoutMode;
 }
 
 /**
@@ -19,7 +24,12 @@ export interface GameplayLayoutInput {
 export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusicStage): BeMusicGameplayLayout {
   const channels = input.laneChannels;
   const variant = input.playVariant;
-  const { lanes, left, right } = resolveSkinlessLaneLayout(channels, input.laneCount ?? channels?.length, variant);
+  const { mode, lanes, left, right, top, judgementY } = resolveGameplayLaneGeometry(
+    channels,
+    input.laneCount ?? channels?.length,
+    variant,
+    input.layoutMode,
+  );
   const sides: BeMusicGameplayLayout['playfield']['sides'] = {};
   const layoutLanes = lanes.map((lane, index) => {
     const bounds = sides[lane.side];
@@ -39,19 +49,21 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
       w: lane.w,
     };
   });
-  const bga = stage.resolveBgaRect(right);
+  // The touch layout gives the BGA's room to the lanes.
+  const bga = mode === 'touch' ? undefined : stage.resolveBgaRect(right);
   return {
+    mode,
     stage: { width: stage.width, height: stage.height },
     lanes: layoutLanes,
     playfield: {
       left,
       right,
       centerX: (left + right) / 2,
-      top: PLAYFIELD.y,
-      judgementY: PLAYFIELD.judgementY,
+      top,
+      judgementY,
       sides,
     },
-    bga: bga.w > 0 && bga.h > 0 ? { ...bga } : undefined,
+    bga: bga && bga.w > 0 && bga.h > 0 ? { ...bga } : undefined,
   };
 }
 
