@@ -841,10 +841,12 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     layer,
     rank,
     x + w - 12,
-    y + 84,
+    // Centred on the RANK label's line, like the other figures sit on theirs.
+    y + 81,
     {
       ...displayStyle(rank.length >= 3 ? 12 : 16, SYN_AMBER),
       anchorX: 1,
+      anchorY: 0.5,
       maxWidth: 46,
       dropShadow: { color: SYN_AMBER, alpha: 0.8, blur: 8, distance: 0 },
     },

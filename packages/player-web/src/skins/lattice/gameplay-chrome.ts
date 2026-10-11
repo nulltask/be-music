@@ -787,8 +787,13 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     layer,
     rank,
     x + w,
-    y + 70,
-    { ...displayStyle(rank.length >= 3 ? 16 : 20, rank.startsWith('AA') ? LAT_ACCENT : LAT_INK, '300'), anchorX: 1 },
+    // Centred on the 06 RANK label's line, like the other figures sit on theirs.
+    y + 79,
+    {
+      ...displayStyle(rank.length >= 3 ? 16 : 20, rank.startsWith('AA') ? LAT_ACCENT : LAT_INK, '300'),
+      anchorX: 1,
+      anchorY: 0.5,
+    },
     pool,
   );
 }

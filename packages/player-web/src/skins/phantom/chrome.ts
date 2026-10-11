@@ -793,12 +793,12 @@ function drawScorePlate(
   // Rank badge: the letter sits on a jagged red burst — the calling card of the run.
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
   const topRank = rank === 'AAA' || rank === 'AA';
-  // Anchored on the plate's lower-right corner and allowed to break out of the frame, so it never crowds COMBO / MAX.
-  const badgeX = x + w - 10;
-  const badgeY = y + h - 14;
+  // Centred on the RANK label's line at the plate's right edge, inside the frame and clear of MAX above it.
+  const badgeX = x + w - 34;
+  const badgeY = y + 78;
   // The badge pumps with the bass.
-  const pump = 1 + 0.45 * drive.bass;
-  const badge = starburstPoints(badgeX, badgeY, 27 * pump, 17 * pump, 12, -0.2, 0.22, rank.length);
+  const pump = 1 + 0.25 * drive.bass;
+  const badge = starburstPoints(badgeX, badgeY, 22 * pump, 14 * pump, 12, -0.2, 0.22, rank.length);
   frame
     .poly(badge)
     .fill(topRank ? PHANTOM_GOLD : PHANTOM_RED)
@@ -810,10 +810,10 @@ function drawScorePlate(
     badgeX + 1,
     badgeY + 1,
     {
-      ...displayStyle(rank.length >= 3 ? 18 : 28, topRank ? PHANTOM_INK : PHANTOM_WHITE),
+      ...displayStyle(rank.length >= 3 ? 15 : 23, topRank ? PHANTOM_INK : PHANTOM_WHITE),
       anchorX: 0.5,
       anchorY: 0.5,
-      maxWidth: 42,
+      maxWidth: 34,
     },
     pool,
   );
