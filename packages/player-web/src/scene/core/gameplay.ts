@@ -79,6 +79,7 @@ import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/g
 import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
+import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
@@ -139,6 +140,7 @@ import type {
   BeMusicBomb,
   BeMusicEffectLevel,
   BeMusicGameplayLayout,
+  BeMusicLaneCover,
   BeMusicLaneFrame,
   BeMusicSkin,
   BeMusicStage,
@@ -945,6 +947,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     gaugeRiseAtMs?: number;
     gaugeMaxAtMs?: number;
   } = {};
+  /**
+   * Lane covers handed to skins as `runtime.laneCovers`, one per play side with lanes. Rebuilt when the lane channels
+   * change and refilled in place every frame, so the runtime allocates nothing for them.
+   */
+  private laneCovers: { channels: readonly string[]; covers: BeMusicLaneCover[] } | undefined;
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
   private readonly lanePressedAt = new Map<string, number>();
   private readonly laneReleasedAt = new Map<string, number>();
@@ -3311,6 +3318,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private renderShutter(): void {
     this.shutterLayer.clear();
+    // A be-music skin that draws its own covers reads them from `runtime.laneCovers` instead.
+    if (this.skinBinding?.drawsLaneCover) return;
     // LANE COVER (`button_type 46`) is the master ON/OFF switch for the playfield mask. With it OFF, no shutter renders
     // even if HIDDEN / SUDDEN / HID+SUD is selected — matches LR2's behavior where the user toggles LANE COVER off to
     // hide the cover without losing the height they had dialed in. The HIDDEN / SUDDEN cycle picks WHERE the mask sits
@@ -3677,11 +3686,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         judgeSides.push({ side, judge: state.judge, combo: state.combo });
       }
     }
+    const bpm = this.timingResolver?.bpmAtBeat(this.currentBeat(seconds)) ?? this.song?.bpm;
+    const laneCovers = this.resolveLaneCovers();
+    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm);
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
       songGenre: this.song?.genre,
-      bpm: this.timingResolver?.bpmAtBeat(this.currentBeat(seconds)) ?? this.song?.bpm,
+      bpm,
       hiSpeed: this.hiSpeed,
       score: this.score.score,
       exScore: this.score.exScore,
@@ -3740,7 +3752,48 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
       scoreHistory: this.scoreHistory,
       gaugeHistory: this.gaugeHistory,
+      laneCovers,
+      visibleMs,
+      greenNumber: visibleMs === undefined ? undefined : resolveGreenNumber(visibleMs),
     };
+  }
+
+  /**
+   * The lane covers of each play side with lanes, as {@link renderShutter} draws them (whether or not it does: a skin
+   * that sets `drawsLaneCover` reads them to draw its own). The array and its entries are reused across frames.
+   */
+  private resolveLaneCovers(): readonly BeMusicLaneCover[] {
+    let cache = this.laneCovers;
+    if (!cache || cache.channels !== this.laneChannels) {
+      const covers: BeMusicLaneCover[] = [];
+      for (const side of ['1P', '2P'] as const) {
+        if (this.laneChannels.some((channel) => isChannelOnSide(channel, side))) {
+          covers.push({ side, sudden: 0, hidden: 0, lift: 0 });
+        }
+      }
+      cache = { channels: this.laneChannels, covers };
+      this.laneCovers = cache;
+    }
+    const { laneCover, shutter } = this.options;
+    for (const cover of cache.covers) {
+      const mode = (cover.side === '1P' ? this.options.hiddenSudden1P : this.options.hiddenSudden2P) ?? 'OFF';
+      fillLaneCover(cover, mode, shutter, laneCover);
+    }
+    return cache.covers;
+  }
+
+  /**
+   * How long a note stays visible below `cover` (the first play side's) at the current scroll and BPM, over the lanes
+   * laid out last frame. `undefined` until the lanes are laid out or while the BPM is unknown. `#SCROLL` / `#SPEED`
+   * changes are not taken into account.
+   */
+  private resolveVisibleMs(cover: BeMusicLaneCover | undefined, bpm: number | undefined): number | undefined {
+    if (this.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
+    let laneHeight = 0;
+    for (const lane of this.laneX.values()) {
+      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    }
+    return resolveNoteVisibleMs(laneHeight, cover?.sudden ?? 0, cover?.lift ?? 0, PIXELS_PER_BEAT * this.hiSpeed, bpm);
   }
 
   /**
