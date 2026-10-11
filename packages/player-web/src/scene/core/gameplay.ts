@@ -132,7 +132,6 @@ import {
   resolvePlayVariantLaneChannels,
   resolveLr2LaneIndex,
   resolveSideRelativeLaneIndex,
-  resolveSkinlessLaneLayout,
 } from '../gameplay-lanes.ts';
 import type {
   SkinlessGameplayChromeRenderer,
@@ -153,7 +152,13 @@ import type {
   BeMusicStage,
 } from '../../skin/be-music/types.ts';
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
-import { resolveGameplayLayout, type BeMusicJudgeWindows, type BeMusicLongNote } from '@be-music/skin-sdk';
+import {
+  resolveGameplayLaneGeometry,
+  resolveGameplayLayout,
+  type BeMusicJudgeWindows,
+  type BeMusicLongNote,
+  type GameplayLayoutMode,
+} from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import {
@@ -377,6 +382,12 @@ export interface CoreGameplayViewOptions {
   beMusicSkin?: BeMusicSkin;
   /** Showmanship level for the be-music skin (count-ins, shakes, particles). Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
+  /**
+   * Gameplay layout for the be-music skins. `'touch'` (for touch screens) spreads the lanes across most of the stage
+   * with a low judgement line and no BGA; the 24 / 48 KEY modes, themes, and a host `skinlessChromeRenderer` keep the
+   * standard layout regardless. Defaults to `'standard'`.
+   */
+  layoutMode?: GameplayLayoutMode;
   /**
    * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
    * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
@@ -1250,8 +1261,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       out.push(DEFAULT_BGA_TARGET);
       return;
     }
-    const { right } = resolveSkinlessLaneLayout(this.laneChannels, this.laneChannels.length, this.chartPlayVariant);
-    const rect = stage.resolveBgaRect(right);
+    const geometry = this.resolveLaneGeometry();
+    // The touch layout gives the BGA's room to the lanes.
+    if (geometry.mode === 'touch') return;
+    const rect = stage.resolveBgaRect(geometry.right);
     const cached = this.stageBgaTarget;
     if (cached && cached.x === rect.x && cached.y === rect.y && cached.w === rect.w && cached.h === rect.h) {
       out.push(cached);
@@ -1267,6 +1280,25 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   protected get stageSize(): GameplayStageSize {
     return this.beMusicStage ?? LEGACY_STAGE_SIZE;
+  }
+
+  /**
+   * The layout mode in effect: `'touch'` only when asked for and the be-music skin's own stage is painted (a host chrome
+   * renderer or theme brings its own geometry). The play mode may still fall back to standard — see
+   * {@link resolveLaneGeometry}.
+   */
+  private get layoutMode(): GameplayLayoutMode {
+    return this.options.layoutMode === 'touch' && this.beMusicStage !== undefined ? 'touch' : 'standard';
+  }
+
+  /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
+  private resolveLaneGeometry(): ReturnType<typeof resolveGameplayLaneGeometry> {
+    return resolveGameplayLaneGeometry(
+      this.laneChannels,
+      this.laneChannels.length,
+      this.chartPlayVariant,
+      this.layoutMode,
+    );
   }
 
   /** The be-music skin's stage while the scene paints through it, otherwise `undefined`. */
@@ -4087,7 +4119,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       return cached.layout;
     }
     const layout = resolveGameplayLayout(
-      { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant },
+      { laneChannels: this.laneChannels, playVariant: this.chartPlayVariant, layoutMode: this.layoutMode },
       this.beMusicStage ?? LEGACY_STAGE,
     );
     this.beMusicLayout = { channels: this.laneChannels, variant: this.chartPlayVariant, layout };
@@ -4106,13 +4138,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.laneLayer.clear();
     this.laneX.clear();
     const themeOwnsPlayfield = this.themeOwnsPlayfield;
-    const fallbackTop = PLAYFIELD.y;
-    const fallbackBottom = PLAYFIELD.judgementY;
-    const { lanes: fallbackLanes, left: fallbackLeft } = resolveSkinlessLaneLayout(
-      this.laneChannels,
-      this.laneChannels.length,
-      this.chartPlayVariant,
-    );
+    const {
+      lanes: fallbackLanes,
+      left: fallbackLeft,
+      top: fallbackTop,
+      judgementY: fallbackBottom,
+    } = this.resolveLaneGeometry();
 
     const skinlessLanes: BeMusicLaneFrame[] = [];
     this.laneChannels.forEach((channel, index) => {

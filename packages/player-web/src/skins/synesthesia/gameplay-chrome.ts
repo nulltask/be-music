@@ -64,6 +64,7 @@ import {
   loadingDots,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
+  STAGE_BGA_BAND,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
   STAGE_WIDTH as DESIGN_WIDTH,
@@ -987,7 +988,8 @@ const TALLY: ReadonlyArray<readonly [label: string, key: 'perfect' | 'great' | '
 ];
 
 function drawJudgeTally(graphics: Graphics, layer: Container, runtime: Runtime, x: number, pool: ChildPool): void {
-  const y = BGA.y - 6;
+  // Level with the monitor's top; with no monitor (the touch layout, 48 KEY) the top of the band it would sit in.
+  const y = (BGA.h > 0 ? BGA.y : STAGE_BGA_BAND.top) - 6;
   const w = DESIGN_WIDTH - HUD_MARGIN - x;
   drawFrame(graphics, x, y, w, 186, SYN_EMBER);
   for (let row = 0; row < TALLY.length; row += 1) {
