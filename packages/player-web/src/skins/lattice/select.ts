@@ -486,6 +486,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: facts ? ROW_BPM_W : 70,
+        marquee: active,
       },
     );
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
@@ -547,6 +548,8 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: Math.max(24, factsLeft - x - 62),
+        // Only the focused row scrolls a long title; the others clip it at its start.
+        marquee: active,
       },
     );
     title.label = `fallback-title[idx=${entryIndex}]`;
@@ -562,6 +565,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: factsLeft - artistX,
+        marquee: active,
       });
     }
     return introT < 1 || titleScramble < 1;

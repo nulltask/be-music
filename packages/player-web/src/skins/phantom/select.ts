@@ -637,6 +637,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       maxWidth: facts ? ROW_BPM_W : 64,
+      marquee: active,
     });
     meta.label = `fallback-meta[idx=${entryIndex}]`;
     let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(64, meta.width) : 0) - 10;
@@ -685,6 +686,8 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       fill: active ? PHANTOM_INK : PHANTOM_WHITE,
       anchorY: 0.5,
       maxWidth: titleMax,
+      // Only the focused row scrolls a long title; the others clip it at its start.
+      marquee: active,
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
     // The artist trails the title in a quieter weight while there is room for it.
@@ -697,6 +700,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
         fill: active ? PHANTOM_RED : PHANTOM_ASH,
         anchorY: 0.5,
         maxWidth: factsLeft - artistX,
+        marquee: active,
       });
     }
     return slide > 0 || intro > 0;
