@@ -1,7 +1,12 @@
 import { CanvasSource, Container, Sprite, Texture } from 'pixi.js';
 import { getDesignPixelRatio } from '../../scene/core/viewport.ts';
 import { ChildPool } from '../../scene/pixi-utils.ts';
-import { resolveBeMusicSkinSettings, wideStage } from '@be-music/skin-sdk';
+import {
+  resolveBeMusicSkinSettings,
+  resolveBeMusicStage,
+  resolveStageOrientation,
+  wideStage,
+} from '@be-music/skin-sdk';
 import { logger } from '../../logger.ts';
 import type {
   BeMusicBgaFrame,
@@ -51,10 +56,21 @@ const DEFAULT_DECIDE_DURATION_MS = 2000;
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
 
-/** The design canvas `skin` draws on (the 16:9 `wideStage` unless it declares another). */
-export function resolveBeMusicSkinStage(skin: BeMusicSkin): BeMusicStage {
-  return skin.stage ?? wideStage;
+/**
+ * The design canvas `skin` draws on: its landscape stage (the 16:9 `wideStage` unless it declares another), or — given
+ * the `screen` it is shown on — its portrait stage when the screen is upright and the skin has one (see
+ * `resolveBeMusicStage`; `chart` keeps gameplay on the landscape stage for play modes too wide for portrait).
+ */
+export function resolveBeMusicSkinStage(
+  skin: BeMusicSkin,
+  screen?: { width: number; height: number },
+  chart?: Parameters<typeof resolveBeMusicStage>[2],
+): BeMusicStage {
+  return screen ? resolveBeMusicStage(skin, screen, chart) : (skin.stage ?? wideStage);
 }
+
+/** The size of the stage a surface draws one frame on. */
+type SurfaceSize = { width: number; height: number };
 
 /** One canvas + the texture showing it, sized to the screen pixels the stage covers (dot by dot). */
 class SkinSurface {
@@ -65,18 +81,24 @@ class SkinSurface {
   private state: 'new' | 'pending' | 'ready' | 'failed' | 'destroyed' = 'new';
   private pixelRatio = 1;
   private readonly skin: BeMusicSkin;
-  private readonly stage: BeMusicStage;
+  /** The stage size of the frame being drawn; follows the screen when the host switches between the skin's stages. */
+  private stage: SurfaceSize;
 
   constructor(skin: BeMusicSkin) {
     this.skin = skin;
     this.stage = resolveBeMusicSkinStage(skin);
     // Nearest sampling: the canvas is sized to the screen pixels it covers, so it is shown dot by dot, never filtered.
     this.source = new CanvasSource({ resource: this.canvas, scaleMode: 'nearest' });
-    this.texture = new Texture({ source: this.source });
+    // Dynamic: sprites showing the texture follow its size when the stage changes (a rotation between the skin's
+    // landscape and portrait stages).
+    this.texture = new Texture({ source: this.source, dynamic: true });
   }
 
-  /** Runs `paint` on the surface (once it is set up) and uploads the result. */
-  draw(paint: (surface: BeMusicSurface) => void): void {
+  /** Runs `paint` on the surface (once it is set up) sized to the stage `size`, and uploads the result. */
+  draw(size: SurfaceSize, paint: (surface: BeMusicSurface) => void): void {
+    if (size.width !== this.stage.width || size.height !== this.stage.height) {
+      this.stage = { width: size.width, height: size.height };
+    }
     this.resize();
     if (!this.ensureContext() || this.state !== 'ready') return;
     const surface = this.surface();
@@ -114,6 +136,7 @@ class SkinSurface {
       context: this.context!,
       width: this.stage.width,
       height: this.stage.height,
+      orientation: resolveStageOrientation(this.stage),
       pixelRatio: this.pixelRatio,
     };
   }
@@ -126,7 +149,14 @@ class SkinSurface {
     const { width, height } = this.stage;
     const pixelWidth = Math.max(1, Math.min(MAX_CANVAS_EDGE, Math.round(width * getDesignPixelRatio())));
     const ratio = pixelWidth / width;
-    if (ratio === this.pixelRatio && this.canvas.width > 0) return;
+    if (
+      ratio === this.pixelRatio &&
+      this.canvas.width > 0 &&
+      this.source.width === width &&
+      this.source.height === height
+    ) {
+      return;
+    }
     this.pixelRatio = ratio;
     this.source.resize(width, height, ratio);
   }
@@ -300,7 +330,7 @@ export class BeMusicGameplayBinding {
     const frame = this.frame;
     if (!frame || this.drawnFrame === this.frameNumber) return;
     this.drawnFrame = this.frameNumber;
-    this.surface.draw((surface) => this.skin.gameplay.draw(surface, frame));
+    this.surface.draw(frame.layout.stage, (surface) => this.skin.gameplay.draw(surface, frame));
   };
 }
 
@@ -424,7 +454,9 @@ export class BeMusicSelectBinding {
       },
     };
     try {
-      this.surface.draw((surface) => this.skin.select.draw(surface, frame));
+      this.surface.draw({ width: frame.designWidth, height: frame.designHeight }, (surface) =>
+        this.skin.select.draw(surface, frame),
+      );
     } finally {
       pool.end();
     }
@@ -472,7 +504,9 @@ export class BeMusicResultBinding {
 
   render(sceneFrame: BeMusicResultSceneFrame): void {
     const frame: BeMusicResultFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
-    this.surface.draw((surface) => this.skin.result.draw(surface, frame));
+    this.surface.draw({ width: frame.designWidth, height: frame.designHeight }, (surface) =>
+      this.skin.result.draw(surface, frame),
+    );
   }
 
   dispose(): void {
@@ -521,7 +555,9 @@ export class BeMusicDecideBinding {
     const decide = this.skin.decide;
     if (!decide) return;
     const frame: BeMusicDecideFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
-    this.surface.draw((surface) => decide.draw(surface, frame));
+    this.surface.draw({ width: frame.designWidth, height: frame.designHeight }, (surface) =>
+      decide.draw(surface, frame),
+    );
   }
 
   dispose(): void {

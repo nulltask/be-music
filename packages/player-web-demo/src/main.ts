@@ -822,13 +822,16 @@ class PlayerWebDemoApp {
     // The built-in / LR2 play views take touch input and expose pause / exit for the touch controls.
     const touchPlay = this.gameplayView !== undefined;
     const paused = this.gameplayView?.isPaused() === true;
-    const state = `${inGameplay}/${touchPlay}/${paused}`;
+    // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
+    const portraitStage = this.sceneHost.getStageOrientation() === 'portrait';
+    const state = `${inGameplay}/${touchPlay}/${paused}/${portraitStage}`;
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
     shell.classList.toggle('touch-play', touchPlay);
     shell.classList.toggle('play-paused', paused);
+    document.documentElement.classList.toggle('portrait-stage', portraitStage);
     // No pinch zoom while playing: a stray two-finger touch on the lanes would otherwise zoom the page.
     document
       .querySelector('meta[name="viewport"]')

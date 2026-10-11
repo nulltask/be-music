@@ -18,17 +18,18 @@ export interface GameplayLayoutInput {
 
 /**
  * The gameplay layout the host hands to a skin's chrome every frame (`context.layout`), built from the chart's lanes and
- * the skin's stage. Hosts call it; skins normally just read `context.layout`, but can call it to build a layout for a
+ * the skin's stage — a portrait stage (taller than wide) gets the portrait playfield. Hosts call it; skins normally just read `context.layout`, but can call it to build a layout for a
  * preview or a test frame.
  */
 export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusicStage): BeMusicGameplayLayout {
   const channels = input.laneChannels;
   const variant = input.playVariant;
-  const { mode, lanes, left, right, top, judgementY } = resolveGameplayLaneGeometry(
+  const { mode, orientation, lanes, left, right, top, judgementY } = resolveGameplayLaneGeometry(
     channels,
     input.laneCount ?? channels?.length,
     variant,
     input.layoutMode,
+    stage,
   );
   const sides: BeMusicGameplayLayout['playfield']['sides'] = {};
   const layoutLanes = lanes.map((lane, index) => {
@@ -49,10 +50,11 @@ export function resolveGameplayLayout(input: GameplayLayoutInput, stage: BeMusic
       w: lane.w,
     };
   });
-  // The touch layout gives the BGA's room to the lanes.
-  const bga = mode === 'touch' ? undefined : stage.resolveBgaRect(right);
+  // The landscape touch layout gives the BGA's room to the lanes; a portrait stage keeps it above them.
+  const bga = mode === 'touch' && orientation === 'landscape' ? undefined : stage.resolveBgaRect(right);
   return {
     mode,
+    orientation,
     stage: { width: stage.width, height: stage.height },
     lanes: layoutLanes,
     playfield: {

@@ -8,6 +8,7 @@ import type { PixiGameplayResultData } from './result-data.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { resolveStageOrientation } from '@be-music/skin-sdk';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { resolveSongSource } from '../../collection/collection.ts';
 import {
@@ -385,7 +386,10 @@ export class CoreResultView {
     const screenWidth = this.app.screen.width || FALLBACK_DESIGN_WIDTH;
     const screenHeight = this.app.screen.height || FALLBACK_DESIGN_HEIGHT;
     const themeSize = this.themeDesignSize;
-    const stage = resolveBeMusicSkinStage(this.options.beMusicSkin ?? phantomSkin);
+    const stage = resolveBeMusicSkinStage(this.options.beMusicSkin ?? phantomSkin, {
+      width: screenWidth,
+      height: screenHeight,
+    });
     const designWidth = themeSize ? themeSize.width : stage.width;
     const designHeight = themeSize ? themeSize.height : stage.height;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
@@ -398,6 +402,7 @@ export class CoreResultView {
     }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.host?.setStageOrientation(themeSize ? 'landscape' : resolveStageOrientation(stage));
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);

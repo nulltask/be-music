@@ -70,6 +70,12 @@ export class PixiSceneHost {
   public readonly app: Application = new Application();
   /** The currently-active scene, or `undefined` between transitions. */
   private current: PixiScene | undefined;
+  /**
+   * Orientation of the design stage the active scene is drawing on: `'portrait'` while a be-music skin draws on its
+   * portrait stage, `'landscape'` otherwise (and for themes). Scenes report it every frame via
+   * {@link setStageOrientation}; hosts read it to decide whether to ask a phone held upright to rotate.
+   */
+  private orientation: 'landscape' | 'portrait' = 'landscape';
   /** Set after the first `mount` so re-mount calls are a no-op. */
   private mounted = false;
   /** Set when {@link dispose} runs so subsequent calls short-circuit. */
@@ -173,6 +179,8 @@ export class PixiSceneHost {
       }
       const previous = this.current;
       this.current = scene;
+      // Until the next scene reports its stage (themes never do), it is a landscape one.
+      this.orientation = 'landscape';
       if (previous) {
         try {
           await previous.exit();
@@ -221,6 +229,16 @@ export class PixiSceneHost {
     return () => {
       ticker.remove(callback);
     };
+  }
+
+  /** Called by the active scene with the orientation of the stage it draws on (see {@link getStageOrientation}). */
+  public setStageOrientation(orientation: 'landscape' | 'portrait'): void {
+    this.orientation = orientation;
+  }
+
+  /** The orientation of the stage the active scene draws on; `'landscape'` until it reports one. */
+  public getStageOrientation(): 'landscape' | 'portrait' {
+    return this.orientation;
   }
 
   public getCurrentScene(): PixiScene | undefined {

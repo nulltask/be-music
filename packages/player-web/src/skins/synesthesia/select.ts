@@ -69,6 +69,13 @@ import {
 } from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
+/**
+ * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
+ * a thumb's height to tap).
+ */
+const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 344, listBottomInset: 34, rowHeight: 36 };
+/** The focused-song card on the portrait stage. */
+const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 236 } as const;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
@@ -123,6 +130,7 @@ const PYRAMIDS = [pointCloudPyramid(12, 900), pointCloudPyramid(4, 560), pointCl
 export const synesthesiaSelectSkin: PixiSelectSkin = {
   outroMs: OUTRO_MS,
   layout: LAYOUT,
+  portraitLayout: PORTRAIT_LAYOUT,
   createRenderer: () => new SynesthesiaSelectRenderer(),
 };
 
@@ -191,13 +199,18 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         : input;
     this.ensureBuilt(frame.designWidth, frame.designHeight);
     this.activeCard = undefined;
-    let needsFrame = this.renderChrome(frame);
-    const listWidth = frame.designWidth - LAYOUT.listX - 14;
+    const portrait = frame.designHeight > frame.designWidth;
+    let needsFrame = portrait ? this.renderPortraitChrome(frame) : this.renderChrome(frame);
+    const layout = portrait ? PORTRAIT_LAYOUT : LAYOUT;
+    const listWidth = frame.designWidth - layout.listX - (portrait ? 12 : 14);
     for (let visibleIndex = 0; visibleIndex < frame.visibleRows; visibleIndex += 1) {
       const entryIndex = frame.firstVisibleIndex + visibleIndex;
       const entry = frame.entries[entryIndex];
       if (!entry) break;
-      needsFrame = this.renderRow(frame, entry, entryIndex, visibleIndex, listWidth) || needsFrame;
+      needsFrame =
+        (portrait
+          ? this.renderPortraitRow(frame, entry, entryIndex, visibleIndex, listWidth)
+          : this.renderRow(frame, entry, entryIndex, visibleIndex, listWidth)) || needsFrame;
     }
     const visible = this.activeCard !== undefined;
     this.cursorGlow.visible = visible;
@@ -505,22 +518,26 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
   }
 
   private ensureBuilt(designWidth: number, designHeight: number): void {
+    // The stage can change between draws (a rotation): the ground is repainted for the new size.
+    if (designWidth !== this.designWidth || designHeight !== this.designHeight || !this.built) {
+      this.designWidth = designWidth;
+      this.designHeight = designHeight;
+      const bands: ReadonlyArray<readonly [number, number]> = [
+        [SYN_DEEP, 0.3],
+        [0x070201, 0.55],
+        [0x040100, 0.8],
+        [SYN_VOID, 1],
+      ];
+      this.ground.clear();
+      let top = 0;
+      for (const [color, until] of bands) {
+        const bottom = designHeight * until;
+        this.ground.rect(0, top, designWidth, bottom - top).fill(color);
+        top = bottom;
+      }
+    }
     if (this.built) return;
     this.built = true;
-    this.designWidth = designWidth;
-    this.designHeight = designHeight;
-    const bands: ReadonlyArray<readonly [number, number]> = [
-      [SYN_DEEP, 0.3],
-      [0x070201, 0.55],
-      [0x040100, 0.8],
-      [SYN_VOID, 1],
-    ];
-    let top = 0;
-    for (const [color, until] of bands) {
-      const bottom = designHeight * until;
-      this.ground.rect(0, top, designWidth, bottom - top).fill(color);
-      top = bottom;
-    }
     const glow = synGlowTexture();
     const starLayer = this.starLayer;
     starLayer.blendMode = 'add';
@@ -717,6 +734,301 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
 
     layer.addChildAt(chrome, 0);
     return slide > 0 || intro < 1;
+  }
+
+  /**
+   * Portrait select: the header, the focused song as a card across the top (genre, title, artist, the mode / tempo /
+   * level chips, the level lights, PLAY and AUTO), the search bar, and the library line at the foot; the list runs
+   * full width between them. Nothing is set smaller than 10 design px.
+   */
+  private renderPortraitChrome(frame: PixiSelectFrame): boolean {
+    const { layer, designWidth, designHeight, entries, focusedSong: song } = frame;
+    const chrome = new Graphics();
+    chrome.label = 'synesthesia-select/chrome';
+    const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
+    const addText = (text: string, x: number, y: number, options: SkinTextOptions = {}) =>
+      addSkinText(layer, text, x, y, options);
+    const label = (fill: number = SYN_DIM): SkinTextOptions => ({ ...labelStyle(fill), size: 10 });
+
+    const songArtist = song?.artist || song?.subtitle || '';
+    const playLevel = song?.playLevel !== undefined ? String(song.playLevel) : '-';
+    const playLevelNumber =
+      song?.playLevel !== undefined ? Number.parseFloat(String(song.playLevel).replace(/^[^\d.]+/u, '')) : NaN;
+    const categoryName = frame.searchQuery ? `Search: ${frame.searchQuery}` : (frame.folderLabel ?? 'Library');
+    const position =
+      entries.length > 0 ? `${Math.min(frame.selectedIndex + 1, entries.length)} / ${entries.length}` : '0 / 0';
+
+    // Header: title as light, a hairline, and the folder on the right.
+    chrome.rect(0, 0, designWidth, 40).fill({ color: SYN_VOID, alpha: 0.5 });
+    chrome.rect(0, 40, designWidth, 1).fill({ color: accent, alpha: 0.5 });
+    const intro = easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 0, 900));
+    addText('MUSIC SELECT', 16, 14, {
+      size: 12,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      letterSpacing: 4 + 8 * (1 - intro) + 2,
+      alpha: intro,
+      dropShadow: { color: accent, distance: 0, blur: 8, alpha: 0.9 },
+    });
+    addText(categoryName, designWidth - 16, 15, {
+      size: 11,
+      weight: '500',
+      fill: SYN_MIST,
+      fontFamily: SYN_TEXT_FONT,
+      anchorX: 1,
+      maxWidth: 200,
+    });
+
+    // The focused-song card.
+    const card = PORTRAIT_CARD;
+    framePanel(chrome, card.x, card.y, card.w, card.h, accent);
+    const left = card.x + 16;
+    const innerW = card.w - 32;
+    const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
+    const genre = song?.genre?.trim();
+    if (genre) {
+      addText(genre.toUpperCase(), left + slide * 16, card.y + 14, {
+        size: 10,
+        weight: '500',
+        fill: accent,
+        fontFamily: SYN_TEXT_FONT,
+        letterSpacing: 2,
+        maxWidth: innerW,
+        alpha: 1 - slide,
+      });
+    }
+    addText(song?.title ?? 'No chart selected', left + slide * 24, card.y + 30, {
+      size: 18,
+      weight: '500',
+      fill: SYN_WHITE,
+      fontFamily: SYN_TEXT_FONT,
+      maxWidth: innerW,
+      alpha: 1 - slide,
+      dropShadow: { color: accent, distance: 0, blur: 10, alpha: 0.8 },
+    });
+    if (songArtist) {
+      addText(songArtist, left + slide * 40, card.y + 56, {
+        size: 11,
+        weight: '300',
+        fill: SYN_MIST,
+        fontFamily: SYN_TEXT_FONT,
+        maxWidth: innerW,
+        alpha: 1 - slide,
+      });
+    }
+    chrome.rect(left, card.y + 78, innerW, 1).fill({ color: accent, alpha: 0.35 });
+
+    const chipGap = 8;
+    const chipW = (innerW - 2 * chipGap) / 3;
+    const stats: ReadonlyArray<readonly [label: string, value: string, fill: number]> = [
+      ['MODE', song ? formatPlayVariantLabel(song) : '- KEYS', SYN_WHITE],
+      ['BPM', song?.bpm !== undefined ? String(Math.round(song.bpm)) : '-', SYN_WHITE],
+      ['LEVEL', playLevel, SYN_AMBER],
+    ];
+    stats.forEach(([name, value, fill], index) => {
+      const x = left + index * (chipW + chipGap);
+      const y = card.y + 90;
+      chrome.rect(x, y, chipW, 46).fill({ color: SYN_VOID, alpha: 0.5 });
+      chrome.rect(x, y, chipW, 46).stroke({ color: accent, width: 1, alpha: 0.25 });
+      drawReticle(chrome, x, y, chipW, 46, SYN_MIST, 0.6, { arm: 5, width: 1 });
+      addText(name, x + 10, y + 8, label());
+      addText(value, x + 10, y + 23, {
+        size: 14,
+        fill,
+        fontFamily: SYN_DISPLAY_FONT,
+        maxWidth: chipW - 18,
+        dropShadow: { color: fill, distance: 0, blur: 6, alpha: 0.6 },
+      });
+    });
+
+    // Level as a row of lights, with the list position at its end.
+    const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
+    const dots = 12;
+    const dotsY = card.y + 154;
+    for (let dot = 0; dot < dots; dot += 1) {
+      const lit = dot < Math.round(levelRatio * dots);
+      const x = left + 8 + dot * 22;
+      const color = levelColor(dot / dots);
+      if (lit) {
+        chrome.circle(x, dotsY, 7).fill({ color, alpha: 0.18 });
+        chrome.circle(x, dotsY, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
+      } else {
+        chrome.circle(x, dotsY, 2).fill({ color: SYN_DIM, alpha: 0.5 });
+      }
+    }
+    addText(position, left + innerW, dotsY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
+    if (song?.fileLabel) {
+      addText(song.fileLabel, left, card.y + 166, {
+        size: 10,
+        weight: '300',
+        fill: SYN_DIM,
+        fontFamily: SYN_TEXT_FONT,
+        maxWidth: innerW,
+      });
+    }
+
+    // PLAY (primary glowing pill) / AUTO PLAY (secondary outline), thumb-sized.
+    const buttonY = card.y + 186;
+    const playW = Math.round(innerW * 0.62);
+    chrome.rect(left - 4, buttonY - 4, playW + 8, 44).fill({ color: accent, alpha: 0.16 });
+    chrome.rect(left, buttonY, playW, 36).fill({ color: accent, alpha: 0.88 });
+    drawReticle(chrome, left - 4, buttonY - 4, playW + 8, 44, SYN_WHITE, 0.95, { arm: 8, width: 1.5 });
+    addText('PLAY', left + playW / 2, buttonY + 18, {
+      size: 14,
+      fill: SYN_VOID,
+      fontFamily: SYN_DISPLAY_FONT,
+      letterSpacing: 6,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+    const autoX = left + playW + 16;
+    const autoW = left + innerW - autoX;
+    chrome.rect(autoX, buttonY + 2, autoW, 32).stroke({ color: SYN_MIST, width: 1, alpha: 0.45 });
+    drawReticle(chrome, autoX, buttonY + 2, autoW, 32, SYN_MIST, 0.8, { arm: 5, width: 1 });
+    addText('AUTO', autoX + autoW / 2, buttonY + 18, {
+      size: 10,
+      fill: SYN_MIST,
+      fontFamily: SYN_DISPLAY_FONT,
+      letterSpacing: 3,
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+    addHitArea(left - 4, buttonY - 4, playW + 8, 44, 'pointer', frame.actions.play);
+    addHitArea(autoX - 2, buttonY - 2, autoW + 4, 40, 'pointer', frame.actions.autoPlay);
+
+    // Search.
+    const searchY = card.y + card.h + 10;
+    framePanel(chrome, card.x, searchY, card.w, 32, accent);
+    addText('SEARCH', left, searchY + 16, { ...label(accent), anchorY: 0.5 });
+    addText(frame.searchQuery || 'Title / artist / genre', left + 84, searchY + 16, {
+      size: 11,
+      anchorY: 0.5,
+      weight: '300',
+      fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
+      fontFamily: SYN_TEXT_FONT,
+      maxWidth: innerW - 84,
+    });
+    addHitArea(card.x, searchY, card.w, 32, 'text', frame.actions.activateSearch);
+
+    // Library line at the foot.
+    const footY = designHeight - 17;
+    chrome.rect(0, designHeight - 32, designWidth, 1).fill({ color: accent, alpha: 0.3 });
+    addText(`${entries.length} shown / ${frame.totalCharts} charts`, 16, footY, {
+      size: 11,
+      weight: '500',
+      fill: SYN_MIST,
+      fontFamily: SYN_TEXT_FONT,
+      anchorY: 0.5,
+    });
+    addText(frame.searchQuery ? 'SEARCH RESULTS' : frame.folderLabel ? 'CHARTS' : 'FOLDERS', designWidth - 16, footY, {
+      ...label(),
+      anchorX: 1,
+      anchorY: 0.5,
+    });
+
+    layer.addChildAt(chrome, 0);
+    return slide > 0 || intro < 1;
+  }
+
+  /**
+   * One portrait list row: the level orb, the title over the artist, and the tempo over the note count on the right —
+   * two lines in a row a thumb tall.
+   */
+  private renderPortraitRow(
+    frame: PixiSelectFrame,
+    entry: BrowserBrowseEntry,
+    entryIndex: number,
+    visibleIndex: number,
+    listWidth: number,
+  ): boolean {
+    const { listX, listTop, rowHeight } = PORTRAIT_LAYOUT;
+    const y = listTop + visibleIndex * rowHeight;
+    const rowH = rowHeight - 4;
+    const active = entryIndex === frame.selectedIndex;
+    const song = entry.kind === 'song' ? entry.song : undefined;
+    const folder = entry.kind === 'folder' ? entry.folder : undefined;
+    const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
+    const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
+    const intro =
+      1 - easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 120 + visibleIndex * INTRO_STAGGER_MS, 420));
+    // The focused row steps out a little to the left; the list is full width, so it does not grow.
+    const rowX = (active ? listX - 4 : listX) + slide * 18 + intro * 80;
+    const rowW = listWidth + (active ? 4 : 0);
+    const alpha = 1 - intro;
+    const row = new Graphics();
+    row.alpha = alpha;
+    row.label = `fallback-row[idx=${entryIndex},kind=${entry.kind}${active ? ',active' : ''}]`;
+    if (active) {
+      row.rect(rowX, y, rowW, rowH).fill({ color: accent, alpha: 0.24 });
+      row.rect(rowX, y, rowW, rowH).stroke({ color: SYN_FLARE, width: 1, alpha: 0.6 });
+      this.activeCard = { x: rowX, y, w: rowW, h: rowH };
+    } else {
+      row.rect(rowX, y, rowW, rowH).fill({ color: SYN_GLASS, alpha: 0.55 });
+      row.rect(rowX, y, rowW, rowH).stroke({ color: accent, width: 1, alpha: 0.16 });
+    }
+    const midY = y + rowH / 2;
+    const level = song?.playLevel !== undefined ? String(song.playLevel) : folder ? 'DIR' : '-';
+    const orbColor = song ? levelColor(Math.min(1, Number.parseFloat(level) / 12 || 0)) : SYN_MIST;
+    row.circle(rowX + 18, midY, 12).fill({ color: orbColor, alpha: active ? 0.35 : 0.18 });
+    frame.layer.addChild(row);
+    addSkinText(frame.layer, level, rowX + 18, midY, {
+      size: 10,
+      fill: SYN_WHITE,
+      fontFamily: SYN_DISPLAY_FONT,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      alpha,
+      maxWidth: 22,
+    });
+    const facts = song ? resolveSongRowFacts(song) : undefined;
+    const factsW = 84;
+    const factsRight = rowX + rowW - 10;
+    const factStyle = (fill: number): SkinTextOptions => ({
+      size: 10,
+      fill,
+      fontFamily: SYN_DISPLAY_FONT,
+      letterSpacing: 0.5,
+      anchorX: 1,
+      anchorY: 0.5,
+      alpha,
+      maxWidth: factsW,
+      marquee: active,
+    });
+    if (facts) {
+      addSkinText(frame.layer, `${facts.bpm} BPM`, factsRight, midY - 7, factStyle(active ? SYN_WHITE : SYN_MIST));
+      addSkinText(frame.layer, `${facts.notes} NOTES`, factsRight, midY + 8, factStyle(SYN_DIM));
+    } else {
+      const count = folder?.songs.length ?? 0;
+      addSkinText(frame.layer, `${count} chart${count === 1 ? '' : 's'}`, factsRight, midY, factStyle(SYN_MIST));
+    }
+    const textX = rowX + 38;
+    const textW = Math.max(24, factsRight - factsW - 10 - textX);
+    const artist = song?.artist?.trim();
+    const title = addSkinText(frame.layer, song?.title ?? folder?.label ?? '', textX, artist ? midY - 7 : midY, {
+      size: 12,
+      weight: active ? '500' : '300',
+      fill: SYN_WHITE,
+      fontFamily: SYN_TEXT_FONT,
+      anchorY: 0.5,
+      alpha,
+      maxWidth: textW,
+      marquee: active,
+      ...(active ? { dropShadow: { color: accent, distance: 0, blur: 8, alpha: 0.9 } } : {}),
+    });
+    title.label = `fallback-title[idx=${entryIndex}]`;
+    if (artist) {
+      addSkinText(frame.layer, artist, textX, midY + 8, {
+        size: 10,
+        weight: '300',
+        fill: active ? SYN_MIST : SYN_DIM,
+        fontFamily: SYN_TEXT_FONT,
+        anchorY: 0.5,
+        alpha,
+        maxWidth: textW,
+        marquee: active,
+      });
+    }
+    return slide > 0 || intro > 0;
   }
 
   private renderRow(

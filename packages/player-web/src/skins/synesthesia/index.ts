@@ -9,7 +9,7 @@ import {
 } from './playfield.ts';
 import { synesthesiaResultSkin } from './result.ts';
 import { synesthesiaSelectSkin } from './select.ts';
-import { BE_MUSIC_SKIN_API_VERSION, wideStage, type BeMusicSkin } from '@be-music/skin-sdk';
+import { BE_MUSIC_SKIN_API_VERSION, tallStage, wideStage, type BeMusicSkin } from '@be-music/skin-sdk';
 import { definePixiSkin } from '../pixi-kit/index.ts';
 
 /**
@@ -29,6 +29,7 @@ export const synesthesiaSkin: BeMusicSkin = definePixiSkin({
   license: 'MIT',
   fontLoads: ['400 16px "Michroma"', '300 12px "M PLUS 1p"', '500 12px "M PLUS 1p"'],
   stage: wideStage,
+  portraitStage: tallStage,
   gameplay: {
     renderChrome: renderSynesthesiaChrome,
     renderLanes: renderSynesthesiaLanes,

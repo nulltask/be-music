@@ -5,6 +5,7 @@ import { resolveSongSource } from '../../collection/collection.ts';
 import type { BrowserSongCollection, BrowserSongEntry } from '../../collection/types.ts';
 import type { BeMusicEffectLevel, BeMusicPlayOptions, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { BeMusicDecideBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { resolveStageOrientation } from '@be-music/skin-sdk';
 import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import {
   resolveDesignTextResolution,
@@ -174,9 +175,13 @@ export class CoreDecideView {
     const host = this.host;
     const target = this.target;
     if (!host || !target) return;
-    const { width: designWidth, height: designHeight } = resolveBeMusicSkinStage(this.options.beMusicSkin);
-    const screenWidth = host.app.screen.width || designWidth;
-    const screenHeight = host.app.screen.height || designHeight;
+    const screen = host.app.screen;
+    const { width: designWidth, height: designHeight } = resolveBeMusicSkinStage(
+      this.options.beMusicSkin,
+      screen.width > 0 && screen.height > 0 ? screen : undefined,
+    );
+    const screenWidth = screen.width || designWidth;
+    const screenHeight = screen.height || designHeight;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
     setDesignTextResolution(resolveDesignTextResolution(viewport.scale, host.app.renderer.resolution));
     setDesignPixelRatio(viewport.scale * host.app.renderer.resolution);
@@ -187,6 +192,7 @@ export class CoreDecideView {
     }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    host.setStageOrientation(resolveStageOrientation({ width: designWidth, height: designHeight }));
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.cachedDesignWidth = designWidth;

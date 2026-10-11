@@ -127,6 +127,7 @@ The built-in Pixi skins do exactly this through `skins/pixi-kit/define-pixi-skin
 - **`'2d'` surfaces** come cleared and scaled, so you draw in design pixels (854×480 on the default stage).
 - **WebGL and WebGPU surfaces** are entirely yours. `surface.pixelRatio` gives the canvas pixels per design pixel; resize your renderer when it changes.
 - **Dot by dot:** each canvas is sized to the device pixels the stage covers on screen (viewport scale × `devicePixelRatio`) and shown with nearest sampling. Your pixels map one to one onto the screen.
+- **Stage changes:** a skin with a `portraitStage` can be switched between its two stages while a screen is shown (the device rotates). The next draw then comes on a surface of the other size, with `surface.orientation` (`'landscape'` or `'portrait'`) saying which, so size anything you build from `surface.width` / `surface.height` (or the frame's `designWidth` / `designHeight`, `layout.stage`) rather than once at setup.
 - **Transparency:** the canvas is composited over the BGA video. Leave the BGA rect transparent wherever the video should show.
 - **`contextAttributes`:** passed through to `canvas.getContext`.
 
@@ -148,6 +149,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 | `context`                                | yes      | `'2d'`, `'webgl'`, `'webgl2'`, or `'webgpu'`.                                                                                         |
 | `contextAttributes`, `setup`, `teardown` | no       | See [Surfaces](#surfaces) and [Using a framework](#using-a-framework).                                                                |
 | `stage`                                  | no       | Design canvas; defaults to `wideStage`. See [Stage and layout](#stage-and-layout).                                                    |
+| `portraitStage`                          | no       | Design canvas for portrait screens, e.g. `tallStage`. See [Stage and layout](#stage-and-layout).                                      |
 | `gameplay`, `select`, `result`           | yes      | Each screen's `draw` function; see [Screens](#screens).                                                                               |
 | `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                     |
 | `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                        |
@@ -157,9 +159,11 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 ## Stage and layout
 
 - **Stage:** the stage is the design canvas a skin draws on. `wideStage` is the 16:9 stage the built-in skins use (854×480), and the default.
+- **Portrait stage:** a skin may also declare a `portraitStage`, the canvas it draws on while the screen is taller than wide. `tallStage` is the built-in one: 480×854 (9:16), `wideStage` turned on its side, so type keeps its size; a phone browser's viewport (about 9:16 to 9:19.5 once its toolbars take their share) letterboxes a little and a 3:4 tablet pillarboxes. Hosts pick the stage per frame with `resolveBeMusicStage(skin, screen, chart?)`: the portrait stage when the skin has one and the screen is portrait, otherwise `stage`. Gameplay stays on `stage` for charts too wide for a portrait playfield: only single play up to 9 lanes (5 / 7 KEY, 9 KEY) goes portrait (`supportsPortraitLayout`); double play (10 / 14 KEY) and the keyboard modes (24 / 48 KEY) are drawn on the landscape stage, scaled down (the demo asks a phone to rotate). A skin without a `portraitStage` is always drawn on `stage`.
 - **BGA placement:** `BeMusicStage.resolveBgaRect(playfieldRight)` decides where the gameplay BGA goes. The player composites the video there, and your skin frames the same rect. `wideStage` grows the BGA beside a single-play field and shrinks it next to wide double-play or keyboard fields.
 - **Layout per frame:** each gameplay frame comes with `layout` (`BeMusicGameplayLayout`), resolved by the host:
   - `mode`: `'standard'` or `'touch'` (optional; absent means `'standard'`). See the touch layout below.
+  - `orientation`: `'landscape'` or `'portrait'` (optional; absent means `'landscape'`). See the portrait layout below.
   - `stage`: width and height.
   - `lanes`: every lane, with its channel, kind (`white` / `black` / `scratch`), side, x, and width. The full layout of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY) is always present, even for lanes the chart never uses.
   - `playfield`: `left`, `right`, `centerX`, `top`, `judgementY`, and `sides` (the horizontal extent of 1P and, in double play, 2P).
@@ -168,6 +172,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 - **Double-play gap:** the 1P and 2P banks stand 60 px apart. `resolveLaneRuns(lanes)` returns one `{ left, right }` run per contiguous bank. Draw the judgement line and lane grid per run so nothing crosses the gap.
 - **Lane widths:** lane widths are fixed by the player. Skins colour lanes, but never resize or move them.
 - **Touch layout:** on touch screens the host may resolve the layout with `layoutMode: 'touch'` (`resolveGameplayLayout` input). The lanes then spread across the stage from its left margin to the judgement tally's column (`TOUCH_PLAYFIELD`): every key one width (at most 72 px) and a scratch 1.4 keys wide, the lanes run from y 48 (below the header band) to the judgement line at y 330 (above the bottom HUD band), and `bga` is `undefined`. The 24 / 48 KEY modes keep the standard layout (`supportsTouchLayout`). A skin that places its chrome from `layout` needs no change; read `layout.mode` only to restyle something for touch play. Keep chrome that sits beside the lanes in the standard layout (anything placed from the BGA rect) working when `bga` is `undefined`.
+- **Portrait layout:** on a portrait stage the lanes span the stage's width in its lower part, in both modes (`PORTRAIT_PLAYFIELD`, scaled to the stage from the 480×854 `tallStage`): they run from y 300 down to a low judgement line, and the BGA and HUD go in the band above them (`tallStage` puts the BGA in a 206 px square at the top left, under a 40 px header band). `'touch'` gives every key one width (a scratch 1.4 keys wide) across the stage between 12 px margins, with the judgement line at y 740, leaving a band under it for the thumbs; `'standard'` keeps the cabinet's key widths (7 KEY 374 px wide), centred, with the judgement line at y 786. `bga` comes from the portrait stage's `resolveBgaRect` in both modes. `resolvePortraitLaneLayout` returns the lane rects for a portrait stage.
 
 ## Screens
 
@@ -226,6 +231,7 @@ Every runtime field is optional. A host that can't provide one leaves it `undefi
 ### Select
 
 - **`select.layout`:** `listX`, `listTop`, `listBottomInset`, and `rowHeight`. The scene hit-tests rows with these numbers, so the rows you draw must match them.
+- **`select.portraitLayout`:** the same numbers on the skin's `portraitStage` (optional; defaults to `layout`). `resolveBeMusicSelectLayout(select, stage)` picks the one for a stage.
 - **`select.outroMs`:** length of the launch outro. After a chart is picked, the screen keeps drawing with `frame.launchAt` set until it ends, and ignores input meanwhile.
 - **`select.draw(surface, frame)`** receives a `BeMusicSelectFrame`:
   - `entries`, `selectedIndex`, `firstVisibleIndex`, `visibleRows`, `focusedSong`
@@ -306,20 +312,20 @@ settings: [
 
 ## SDK helpers
 
-| Area       | Helpers                                                                                                                                                                    |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Stage      | `wideStage`, `resolveStageBgaRect`, `STAGE_WIDTH`, `STAGE_HEIGHT`, `STAGE_MARGIN`, `STAGE_SIDE_COLUMN`, `STAGE_BGA_BAND`                                                   |
-| Layout     | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea`, `resolveGameplayLaneGeometry`, `resolveTouchLaneLayout`, `supportsTouchLayout`, `TOUCH_PLAYFIELD`      |
-| Judgements | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`                                                                                    |
-| Moments    | `trackMoments` / `updateMoments` (count-in, every 100 combo, clear line, full combo, combo break), `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile` |
-| Loading    | `LOADING_WORD`, `loadingDots(nowMs)`                                                                                                                                       |
-| Sound      | `audioDrive`, `bandAt`, `bandLevel`; see [Reacting to the music](#reacting-to-the-music)                                                                                   |
-| Result     | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                              |
-| Timing     | `binJudgeTimings`; see [Judgement timing](#judgement-timing)                                                                                                               |
-| Settings   | `resolveBeMusicSkinSettings`, `validateBeMusicSkinSettings`; see [Skin settings](#skin-settings)                                                                           |
-| Song facts | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`, `formatPlayVariantLabel`                                               |
-| Text       | `DEFAULT_TEXT_FONT`, `layoutTabularRun` (tabular figures)                                                                                                                  |
-| Motion     | `easeOutCubic`, `easeOutBack`, `stageProgress`, `rollUpValue`, `hash01` (deterministic jitter)                                                                             |
+| Area       | Helpers                                                                                                                                                                                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stage      | `wideStage`, `resolveStageBgaRect`, `STAGE_WIDTH`, `STAGE_HEIGHT`, `STAGE_MARGIN`, `STAGE_SIDE_COLUMN`, `STAGE_BGA_BAND`, `tallStage`, `TALL_STAGE_WIDTH`, `TALL_STAGE_HEIGHT`, `TALL_STAGE_BGA`, `resolveBeMusicStage`, `resolveStageOrientation`                               |
+| Layout     | `resolveGameplayLayout`, `resolveLaneRuns`, `resolveMilestoneArea`, `resolveGameplayLaneGeometry`, `resolveTouchLaneLayout`, `supportsTouchLayout`, `TOUCH_PLAYFIELD`, `resolvePortraitLaneLayout`, `supportsPortraitLayout`, `PORTRAIT_PLAYFIELD`, `resolveBeMusicSelectLayout` |
+| Judgements | `judgeDisplayWord` (a PERFECT prints as GREAT), `isFlashingGreat`, `flashingGreatColor`                                                                                                                                                                                          |
+| Moments    | `trackMoments` / `updateMoments` (count-in, every 100 combo, clear line, full combo, combo break), `comboTier`, `momentProgress`, `impulse`, `punchScale`, `effectProfile`                                                                                                       |
+| Loading    | `LOADING_WORD`, `loadingDots(nowMs)`                                                                                                                                                                                                                                             |
+| Sound      | `audioDrive`, `bandAt`, `bandLevel`; see [Reacting to the music](#reacting-to-the-music)                                                                                                                                                                                         |
+| Result     | `resolveResultLamp`, `resolveResultTrackRows`                                                                                                                                                                                                                                    |
+| Timing     | `binJudgeTimings`; see [Judgement timing](#judgement-timing)                                                                                                                                                                                                                     |
+| Settings   | `resolveBeMusicSkinSettings`, `validateBeMusicSkinSettings`; see [Skin settings](#skin-settings)                                                                                                                                                                                 |
+| Song facts | `resolveSongRowFacts`, `resolveSongStats`, `resolveSongTags`, `formatSongLength`, `formatBpmRange`, `formatPlayVariantLabel`                                                                                                                                                     |
+| Text       | `DEFAULT_TEXT_FONT`, `layoutTabularRun` (tabular figures)                                                                                                                                                                                                                        |
+| Motion     | `easeOutCubic`, `easeOutBack`, `stageProgress`, `rollUpValue`, `hash01` (deterministic jitter)                                                                                                                                                                                   |
 
 ## Reacting to the music
 

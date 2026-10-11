@@ -87,6 +87,7 @@ describe('resolveGameplayLaneGeometry', () => {
     const standard = resolveSkinlessLaneLayout(SP7, 8, '7');
     expect(resolveGameplayLaneGeometry(SP7, 8, '7')).toEqual({
       mode: 'standard',
+      orientation: 'landscape',
       ...standard,
       top: PLAYFIELD.y,
       judgementY: PLAYFIELD.judgementY,

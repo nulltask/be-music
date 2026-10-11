@@ -1944,6 +1944,21 @@ html.touch-first:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
   opacity: 0.35;
 }
 
+/* During play the collapsed Debug Menu is just its chevron, so it stays off the skin's header labels. */
+html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
+  --width: 40px !important;
+}
+
+html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed > .lil-title {
+  overflow: hidden;
+  white-space: nowrap;
+  color: transparent;
+}
+
+html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed > .lil-title::before {
+  color: var(--text-color);
+}
+
 /* Touch play controls: a pause button during play; Resume / Quit while paused. */
 .touch-controls {
   position: absolute;
@@ -1998,13 +2013,13 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   color: #ffd166;
 }
 
-/* Phones held upright: ask for landscape. */
+/* Phones held upright: ask for landscape, unless the screen is drawn on the skin's portrait stage. */
 .rotate-hint {
   display: none;
 }
 
 @media (orientation: portrait) {
-  html.phone .rotate-hint {
+  html.phone:not(.portrait-stage) .rotate-hint {
     position: fixed;
     inset: 0;
     z-index: 30;

@@ -70,6 +70,7 @@ export function definePixiSkin(definition: PixiSkinDefinition): BeMusicSkin<'web
     },
     select: {
       layout: select.layout,
+      portraitLayout: select.portraitLayout,
       outroMs: select.outroMs,
       draw(surface, frame) {
         const target = surfaceFor(surface);

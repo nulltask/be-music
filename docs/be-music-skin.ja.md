@@ -127,6 +127,7 @@ export default defineBeMusicSkin({
 - **`'2d'` サーフェス:** クリア・スケール済みなので、デザインピクセル（デフォルトステージで 854×480）で描けます。
 - **WebGL / WebGPU サーフェス:** 全体をスキンが扱います。`surface.pixelRatio` がデザインピクセルあたりのキャンバスピクセル数です。値が変わったらレンダラーをリサイズしてください。
 - **ドットバイドット:** 各キャンバスは画面上でステージが覆うデバイスピクセル数（ビューポート倍率 × `devicePixelRatio`）で確保され、nearest サンプリングで表示されます。描いたピクセルは画面に 1 対 1 で対応します。
+- **ステージの切り替わり:** `portraitStage` を持つスキンは、画面の表示中（端末を回したとき）に 2 つのステージの間で切り替わることがあります。次の描画は大きさの違うサーフェスで届き、どちらのステージかは `surface.orientation`（`'landscape'` か `'portrait'`）でわかります。組み立てるものはセットアップ時に一度だけでなく、`surface.width` / `surface.height`（またはフレームの `designWidth` / `designHeight`、`layout.stage`）から大きさを決めてください。
 - **透過:** キャンバスは BGA 動画の上に合成されます。動画を見せたい場所では BGA の矩形を透明のまま残してください。
 - **`contextAttributes`:** `canvas.getContext` にそのまま渡されます。
 
@@ -148,6 +149,7 @@ export default defineBeMusicSkin({
 | `context`                                | ○    | `'2d'`、`'webgl'`、`'webgl2'`、`'webgpu'` のいずれか。                                                         |
 | `contextAttributes`、`setup`、`teardown` | —    | [サーフェス](#サーフェス)と[フレームワークを使う](#フレームワークを使う)を参照。                               |
 | `stage`                                  | —    | デザインキャンバス。既定は `wideStage`。[ステージとレイアウト](#ステージとレイアウト)を参照。                  |
+| `portraitStage`                          | —    | 縦長の画面用のデザインキャンバス（`tallStage` など）。[ステージとレイアウト](#ステージとレイアウト)を参照。    |
 | `gameplay`、`select`、`result`           | ○    | 各画面の `draw` 関数。[画面](#画面)を参照。                                                                    |
 | `decide`                                 | —    | 選曲とプレイの間の決定画面。[決定画面](#決定画面)を参照。                                                      |
 | `settings`                               | —    | プレイヤーが調整できるスキンのオプション。[スキン設定](#スキン設定)を参照。                                    |
@@ -157,9 +159,11 @@ export default defineBeMusicSkin({
 ## ステージとレイアウト
 
 - **ステージ:** スキンが描くデザインキャンバスです。`wideStage` は組み込みスキンが使う 16:9 のステージ（854×480）で、既定値でもあります。
+- **縦向きステージ:** スキンは `portraitStage` も宣言できます。画面が横より縦に長いあいだ描くキャンバスです。組み込みの `tallStage` は 480×854（9:16）で、`wideStage` を横倒しにしたものなので文字の大きさは変わりません。スマートフォンのブラウザの表示領域（ツールバーを除くと 9:16〜9:19.5 程度）では上下にわずかな余白が、3:4 のタブレットでは左右に余白が出ます。ホストは `resolveBeMusicStage(skin, screen, chart?)` でフレームごとにステージを選びます。スキンが縦向きステージを持ち、画面が縦向きならそちらを、それ以外は `stage` を使います。縦向きのプレイフィールドに収まらない譜面のゲームプレイは `stage` のままです。縦向きにするのは 9 レーンまでの SP（5 / 7 KEY、9 KEY）だけで（`supportsPortraitLayout`）、DP（10 / 14 KEY）と鍵盤モード（24 / 48 KEY）は横向きステージを縮小して描きます（デモはスマートフォンに回転を促します）。`portraitStage` の無いスキンは常に `stage` で描かれます。
 - **BGA の配置:** `BeMusicStage.resolveBgaRect(playfieldRight)` がゲームプレイの BGA の位置を決めます。プレイヤーはそこに動画を合成し、スキンは同じ矩形に枠を描きます。`wideStage` は SP では BGA を大きく取り、幅の広い DP や鍵盤モードの横では縮めます。
 - **フレームごとのレイアウト:** ゲームプレイの各フレームには、ホストが解決した `layout`（`BeMusicGameplayLayout`）が付きます。
   - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
+  - `orientation`: `'landscape'` または `'portrait'`（省略可。無ければ `'landscape'`）。下の縦向きレイアウトを参照してください。
   - `stage`: 幅と高さ。
   - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
   - `playfield`: `left`、`right`、`centerX`、`top`、`judgementY`、`sides`（1P と、DP なら 2P の水平範囲）。
@@ -168,6 +172,7 @@ export default defineBeMusicSkin({
 - **DP の隙間:** 1P と 2P のバンクは 60 px 離れています。`resolveLaneRuns(lanes)` は連続したバンクごとに `{ left, right }` を 1 つ返します。判定ラインやレーングリッドはラン単位で描き、隙間をまたがないようにします。
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
 - **タッチレイアウト:** タッチ画面では、ホストが `layoutMode: 'touch'`（`resolveGameplayLayout` の入力）でレイアウトを解決することがあります。このときレーンはステージの左マージンから判定集計の列まで広がり（`TOUCH_PLAYFIELD`）、鍵盤はすべて同じ幅（最大 72 px）、スクラッチは鍵盤 1.4 本分、レーンはヘッダー帯の下の y 48 から下部 HUD 帯の上にある y 330 の判定ラインまでで、`bga` は `undefined` です。24 / 48 KEY は標準レイアウトのままです（`supportsTouchLayout`）。`layout` からクロームを配置しているスキンは変更不要です。`layout.mode` はタッチプレイ向けに見た目を変えたいときだけ読んでください。標準レイアウトでレーンの横に置くクローム（BGA の矩形から配置するもの）は、`bga` が `undefined` でも崩れないようにしてください。
+- **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBgaRect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
 
 ## 画面
 
@@ -226,6 +231,7 @@ runtime のフィールドはすべて省略可能です。ホストが提供で
 ### 選曲
 
 - **`select.layout`:** `listX`、`listTop`、`listBottomInset`、`rowHeight`。シーンはこの値で行の当たり判定をするので、描く行と一致させてください。
+- **`select.portraitLayout`:** スキンの `portraitStage` での同じ値（省略可。無ければ `layout`）。ステージに合うほうは `resolveBeMusicSelectLayout(select, stage)` で選べます。
 - **`select.outroMs`:** 曲決定後のアウトロの長さ。終わるまで `frame.launchAt` を設定したまま描画が続き、その間の入力は無視されます。
 - **`select.draw(surface, frame)`** は `BeMusicSelectFrame` を受け取ります。
   - `entries`、`selectedIndex`、`firstVisibleIndex`、`visibleRows`、`focusedSong`
@@ -306,20 +312,20 @@ settings: [
 
 ## SDK ヘルパー
 
-| 分野       | ヘルパー                                                                                                                                                                        |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ステージ   | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`                                                        |
-| レイアウト | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`           |
-| 判定       | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`                                                                                          |
-| 演出       | `trackMoments` / `updateMoments`（カウントイン、100 コンボごと、クリアライン、フルコンボ、コンボ切れ）、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile` |
-| ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`                                                                                                                                            |
-| サウンド   | `audioDrive`、`bandAt`、`bandLevel`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                |
-| リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                   |
-| タイミング | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                      |
-| 設定       | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                    |
-| 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                    |
-| テキスト   | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                       |
-| モーション | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                       |
+| 分野       | ヘルパー                                                                                                                                                                                                                                                                         |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ステージ   | `wideStage`、`resolveStageBgaRect`、`STAGE_WIDTH`、`STAGE_HEIGHT`、`STAGE_MARGIN`、`STAGE_SIDE_COLUMN`、`STAGE_BGA_BAND`、`tallStage`、`TALL_STAGE_WIDTH`、`TALL_STAGE_HEIGHT`、`TALL_STAGE_BGA`、`resolveBeMusicStage`、`resolveStageOrientation`                               |
+| レイアウト | `resolveGameplayLayout`、`resolveLaneRuns`、`resolveMilestoneArea`、`resolveGameplayLaneGeometry`、`resolveTouchLaneLayout`、`supportsTouchLayout`、`TOUCH_PLAYFIELD`、`resolvePortraitLaneLayout`、`supportsPortraitLayout`、`PORTRAIT_PLAYFIELD`、`resolveBeMusicSelectLayout` |
+| 判定       | `judgeDisplayWord`（PERFECT は GREAT と表示）、`isFlashingGreat`、`flashingGreatColor`                                                                                                                                                                                           |
+| 演出       | `trackMoments` / `updateMoments`（カウントイン、100 コンボごと、クリアライン、フルコンボ、コンボ切れ）、`comboTier`、`momentProgress`、`impulse`、`punchScale`、`effectProfile`                                                                                                  |
+| ロード中   | `LOADING_WORD`、`loadingDots(nowMs)`                                                                                                                                                                                                                                             |
+| サウンド   | `audioDrive`、`bandAt`、`bandLevel`。[音楽に反応させる](#音楽に反応させる)を参照                                                                                                                                                                                                 |
+| リザルト   | `resolveResultLamp`、`resolveResultTrackRows`                                                                                                                                                                                                                                    |
+| タイミング | `binJudgeTimings`。[判定タイミング](#判定タイミング)を参照                                                                                                                                                                                                                       |
+| 設定       | `resolveBeMusicSkinSettings`、`validateBeMusicSkinSettings`。[スキン設定](#スキン設定)を参照                                                                                                                                                                                     |
+| 曲情報     | `resolveSongRowFacts`、`resolveSongStats`、`resolveSongTags`、`formatSongLength`、`formatBpmRange`、`formatPlayVariantLabel`                                                                                                                                                     |
+| テキスト   | `DEFAULT_TEXT_FONT`、`layoutTabularRun`（等幅数字の配置）                                                                                                                                                                                                                        |
+| モーション | `easeOutCubic`、`easeOutBack`、`stageProgress`、`rollUpValue`、`hash01`（決定的なゆらぎ）                                                                                                                                                                                        |
 
 ## 音楽に反応させる
 

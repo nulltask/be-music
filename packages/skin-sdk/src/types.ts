@@ -44,6 +44,13 @@ export interface BeMusicSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfac
   readonly fontLoads: readonly string[];
   /** Design canvas the skin draws on and where its gameplay BGA sits. Defaults to the 16:9 `wideStage`. */
   readonly stage?: BeMusicStage;
+  /**
+   * Design canvas for screens taller than wide (a phone or tablet held upright), e.g. the 9:16 `tallStage`. Hosts draw
+   * on it while the screen is portrait, and on {@link stage} otherwise; gameplay stays on {@link stage} for play modes
+   * too wide for a portrait playfield (see `supportsPortraitLayout`). A skin without one is always drawn on
+   * {@link stage}, scaled down to fit a portrait screen. Pick between the two with `resolveBeMusicStage`.
+   */
+  readonly portraitStage?: BeMusicStage;
   /** Which canvas context the player creates for each surface. */
   readonly context: K;
   /** Attributes passed to `canvas.getContext` (e.g. `{ alpha: true }`, `{ antialias: true, stencil: true }`). */
@@ -98,6 +105,12 @@ export interface BeMusicSurface<K extends BeMusicSurfaceContextKind = BeMusicSur
   /** Size in design pixels (the stage size). */
   width: number;
   height: number;
+  /**
+   * Which of the skin's stages this surface is drawn on: `'portrait'` for {@link BeMusicSkin.portraitStage},
+   * `'landscape'` otherwise. Absent means `'landscape'`. The stage (and with it the surface's size) can change between
+   * draws when the screen rotates.
+   */
+  orientation?: BeMusicStageOrientation;
   /** Canvas pixels per design pixel. `'2d'` surfaces come cleared and pre-scaled by it; other contexts apply it. */
   pixelRatio: number;
 }
@@ -110,7 +123,10 @@ export interface BeMusicRect {
   h: number;
 }
 
-/** A skin's design canvas (see {@link BeMusicSkin.stage}). */
+/** Whether a stage is wider than tall (`'landscape'`) or taller than wide (`'portrait'`). */
+export type BeMusicStageOrientation = 'landscape' | 'portrait';
+
+/** A skin's design canvas (see {@link BeMusicSkin.stage} and {@link BeMusicSkin.portraitStage}). */
 export interface BeMusicStage {
   readonly width: number;
   readonly height: number;
@@ -157,17 +173,25 @@ export interface BeMusicLayoutLane {
  */
 /**
  * How the host lays out the gameplay screen. `'standard'` is the cabinet-style playfield; `'touch'` is for playing on a
- * touch screen: wide, equal-width lanes across most of the stage, a low judgement line, and no BGA.
+ * touch screen: wide, equal-width lanes across most of the stage, a low judgement line, and (on a landscape stage) no
+ * BGA.
  */
 export type GameplayLayoutMode = 'standard' | 'touch';
 
 export interface BeMusicGameplayLayout {
   /**
    * The layout mode the host resolved. Optional so a layout built by hand stays valid; absent means `'standard'`. In
-   * `'touch'` the lanes and playfield bounds already describe the touch geometry and `bga` is `undefined`, so a skin
-   * placing its chrome from this layout needs no mode check — read it only to restyle something for touch play.
+   * `'touch'` the lanes and playfield bounds already describe the touch geometry and `bga` is `undefined` on a
+   * landscape stage, so a skin placing its chrome from this layout needs no mode check — read it only to restyle
+   * something for touch play.
    */
   mode?: GameplayLayoutMode;
+  /**
+   * The orientation of the stage the layout is for. Optional so a layout built by hand stays valid; absent means
+   * `'landscape'`. On a portrait stage the lanes span the stage's width in its lower part and the BGA sits above them in
+   * both layout modes.
+   */
+  orientation?: BeMusicStageOrientation;
   stage: { width: number; height: number };
   lanes: readonly BeMusicLayoutLane[];
   playfield: {
@@ -612,6 +636,11 @@ export interface BeMusicSelectFrame {
 export interface BeMusicSelectSkin<K extends BeMusicSurfaceContextKind = BeMusicSurfaceContextKind> {
   /** Where the song list sits (the player hit-tests the rows with it). */
   readonly layout: BeMusicSelectLayout;
+  /**
+   * Where the song list sits on the skin's {@link BeMusicSkin.portraitStage}. Defaults to {@link layout}. See
+   * `resolveBeMusicSelectLayout`.
+   */
+  readonly portraitLayout?: BeMusicSelectLayout;
   /** Length of the launch outro (ms) the select screen keeps drawing after a chart is picked. Default 0. */
   readonly outroMs?: number;
   /** Draws one select frame. Called every frame while the select screen is shown. */

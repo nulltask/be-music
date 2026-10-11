@@ -33,6 +33,7 @@ import {
   rollUpValue,
   stageProgress,
 } from '@be-music/skin-sdk';
+import { resolveResultGrid } from './result-grid.ts';
 import { addSkinText, type PixiResultFrame, type PixiResultSkin, type SkinTextOptions } from '../pixi-kit/index.ts';
 
 /** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
@@ -42,26 +43,6 @@ const ROLL_DELAY_MS = 700;
 const ROLL_MS = 1100;
 const RANK_DELAY_MS = 1600;
 
-/**
- * Result grid (design px): a 16 px page margin and 12 px gutters. Top row: the DJ LEVEL panel and two columns of
- * metric panels (44 px tall, 10 px apart); bottom row: the judgement rows and the two graphs, which share one top and
- * bottom line.
- */
-const MARGIN = 16;
-const TOP = 64;
-const TOP_ROW_H = 152;
-const METRIC_X = [204, 420] as const;
-const METRIC_Y = [TOP, TOP + 54, TOP + 108] as const;
-const METRIC_W = 204;
-const METRIC_H = 44;
-const BOTTOM_TOP = 232;
-const BOTTOM_H = 200;
-const GRAPHS_X = MARGIN + 292 + 12;
-/** Right edge shared by the metric columns and the graphs; the 16:9 track column starts one gutter after it. */
-const GRID_RIGHT = METRIC_X[1] + METRIC_W;
-const TRACK_X = GRID_RIGHT + 12;
-const ROWS_TOP = BOTTOM_TOP + 34;
-const ROWS_BOTTOM = ROWS_TOP + 4 * 32 + 12;
 const RANK_BURST = burstParticles(29, 260);
 
 export const synesthesiaResultSkin: PixiResultSkin = { render: (frame) => renderSynesthesiaResult(frame) };
@@ -74,6 +55,10 @@ export const synesthesiaResultSkin: PixiResultSkin = { render: (frame) => render
  */
 export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const { result, designWidth, designHeight, nowMs, rankLabel, layer } = frame;
+  // Panels sit on the landscape grid, or stack on a portrait stage (see resolveResultGrid).
+  const grid = resolveResultGrid(designWidth, designHeight);
+  const portrait = designHeight > designWidth;
+  const margin = grid.margin;
   // Effects off: skip the entrance and render the settled result.
   const elapsed = frame.effects === 'off' ? Number.POSITIVE_INFINITY : frame.elapsedMs * ENTRANCE_PACE;
   const seconds = nowMs / 1000;
@@ -106,8 +91,10 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     fontFamily: SYN_DISPLAY_FONT,
     ...extra,
   });
+  // Labels read at 9 px on the landscape stage; the portrait stage is shown smaller on a phone, so they go up to 10.
+  const labelSize = portrait ? 10 : 9;
   const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM, maxWidth?: number) =>
-    text(target, value, x, y, display(9, fill, { letterSpacing: 2, maxWidth }));
+    text(target, value, x, y, display(labelSize, fill, { letterSpacing: 2, maxWidth }));
 
   // Space: warm black, dust pouring out of the vanishing point, and a floor of points.
   const space = group('space');
@@ -160,7 +147,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const verdict = group('verdict');
   const verdictT = easeOutCubic(stageProgress(elapsed, 100, 900));
   verdict.g.rect(0, 44, designWidth, 1).fill({ color: verdictColor, alpha: 0.5 * verdictT });
-  text(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', MARGIN, 14, {
+  text(verdict.root, cleared ? 'STAGE CLEAR' : 'FAILED', margin, 14, {
     ...display(15, SYN_WHITE),
     letterSpacing: 6 + 22 * (1 - verdictT),
     alpha: verdictT,
@@ -169,13 +156,14 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
 
   // Rank: sparks burst outward as the letter ignites.
   const rank = group('rank');
-  const rankCx = MARGIN + 88;
+  const rankBox = grid.rank;
+  const rankCx = rankBox.x + rankBox.w / 2;
   // The rank sits between the DJ LEVEL label and the rate, clear of both.
-  const rankCy = TOP + 76;
+  const rankCy = rankBox.y + Math.round(rankBox.h / 2);
   const topRank = rankLabel === 'AAA' || rankLabel === 'AA';
   const rankColor = topRank ? SYN_AMBER : accent;
-  glass(rank.g, MARGIN, TOP, 176, TOP_ROW_H, rankColor);
-  label('DJ LEVEL', MARGIN + 14, TOP + 12, rank.root, rankColor);
+  glass(rank.g, rankBox.x, rankBox.y, rankBox.w, rankBox.h, rankColor);
+  label('DJ LEVEL', rankBox.x + 14, rankBox.y + 12, rank.root, rankColor);
   const burstT = stageProgress(elapsed, RANK_DELAY_MS, 1100);
   if (burstT > 0 && burstT < 1) {
     for (const particle of RANK_BURST) {
@@ -219,7 +207,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   letter.position.set(rankCx, rankCy);
   letter.scale.set(stamp >= 1 ? 1 + 0.03 * heartbeat : 1.8 - 0.8 * easeOutBack(stamp));
   const rate = frame.ratePercent * easeOutCubic(roll);
-  text(rank.root, `${rate.toFixed(2)}%`, rankCx, TOP + TOP_ROW_H - 14, {
+  text(rank.root, `${rate.toFixed(2)}%`, rankCx, rankBox.y + rankBox.h - 14, {
     ...display(10, SYN_MIST),
     anchorX: 0.5,
     anchorY: 0.5,
@@ -228,29 +216,24 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   rise(rank.root, 250);
 
   // Metric panels.
-  const metrics: ReadonlyArray<readonly [x: number, y: number, name: string, value: string, fill: number]> = [
-    [METRIC_X[0], METRIC_Y[0], 'SCORE', String(rollUpValue(result.score.score, roll)), SYN_WHITE],
-    [METRIC_X[0], METRIC_Y[1], 'EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, SYN_WHITE],
-    [METRIC_X[0], METRIC_Y[2], 'MAX COMBO', String(rollUpValue(result.maxCombo, roll)), SYN_AMBER],
-    [
-      METRIC_X[1],
-      METRIC_Y[0],
-      'GAUGE',
-      `${rollUpValue(Math.round(result.gauge), roll)}%`,
-      cleared ? SYN_AMBER : SYN_RED,
-    ],
-    [METRIC_X[1], METRIC_Y[1], 'PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, SYN_WHITE],
-    [METRIC_X[1], METRIC_Y[2], 'NOTES', String(rollUpValue(result.score.total, roll)), SYN_WHITE],
+  const metrics: ReadonlyArray<readonly [name: string, value: string, fill: number]> = [
+    ['SCORE', String(rollUpValue(result.score.score, roll)), SYN_WHITE],
+    ['EX SCORE', `${rollUpValue(result.score.exScore, roll)} / ${exMax}`, SYN_WHITE],
+    ['MAX COMBO', String(rollUpValue(result.maxCombo, roll)), SYN_AMBER],
+    ['GAUGE', `${rollUpValue(Math.round(result.gauge), roll)}%`, cleared ? SYN_AMBER : SYN_RED],
+    ['PLAY TIME', `${(result.playSeconds * easeOutCubic(roll)).toFixed(1)}s`, SYN_WHITE],
+    ['NOTES', String(rollUpValue(result.score.total, roll)), SYN_WHITE],
   ];
-  metrics.forEach(([x, y, name, value, fill], index) => {
+  metrics.forEach(([name, value, fill], index) => {
+    const { x, y, w, h } = grid.metrics[index]!;
     const panel = group(`metric-${index}`);
-    glass(panel.g, x, y, METRIC_W, METRIC_H, accent);
+    glass(panel.g, x, y, w, h, accent);
     label(name, x + 14, y + 10, panel.root);
-    text(panel.root, value, x + METRIC_W - 14, y + 29, {
+    text(panel.root, value, x + w - 14, y + h - 15, {
       ...display(14, fill),
       anchorX: 1,
       anchorY: 0.5,
-      maxWidth: 120,
+      maxWidth: Math.min(120, w - 28),
       dropShadow: { color: fill, distance: 0, blur: 6, alpha: 0.7 },
     });
     rise(panel.root, 320 + index * 80);
@@ -258,8 +241,9 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
 
   // Judgement rows.
   const judges = group('judgement');
-  glass(judges.g, MARGIN, BOTTOM_TOP, 292, BOTTOM_H, SYN_EMBER);
-  label('JUDGEMENT', MARGIN + 14, BOTTOM_TOP + 12, judges.root, SYN_EMBER);
+  const judgeBox = grid.judges;
+  glass(judges.g, judgeBox.x, judgeBox.y, judgeBox.w, judgeBox.h, SYN_EMBER);
+  label('JUDGEMENT', judgeBox.x + 14, judgeBox.y + 12, judges.root, SYN_EMBER);
   const rows: ReadonlyArray<readonly [name: string, count: number, color: number]> = [
     ['PGREAT', result.score.perfect, SYN_FLARE],
     ['GREAT', result.score.great, SYN_AMBER],
@@ -269,18 +253,20 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   ];
   const judgeTotal = Math.max(1, result.score.total);
   rows.forEach(([name, count, color], index) => {
-    const y = ROWS_TOP + index * 32;
+    const y = grid.rowsTop + index * grid.rowPitch;
     const grow = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + index * 70, ROLL_MS));
-    judges.g.circle(MARGIN + 18, y + 6, 2.5).fill({ color, alpha: 1 });
-    judges.g.circle(MARGIN + 18, y + 6, 6).fill({ color, alpha: 0.2 });
-    label(name, MARGIN + 30, y + 2, judges.root, color);
-    judges.g.rect(MARGIN + 98, y + 6, 140, 1).fill({ color: SYN_DIM, alpha: 0.35 });
-    const barW = (140 * Math.min(count, judgeTotal) * grow) / judgeTotal;
+    const x = judgeBox.x;
+    const barX = x + grid.barOffset;
+    judges.g.circle(x + 18, y + 6, 2.5).fill({ color, alpha: 1 });
+    judges.g.circle(x + 18, y + 6, 6).fill({ color, alpha: 0.2 });
+    label(name, x + 30, y + 2, judges.root, color);
+    judges.g.rect(barX, y + 6, grid.barWidth, 1).fill({ color: SYN_DIM, alpha: 0.35 });
+    const barW = (grid.barWidth * Math.min(count, judgeTotal) * grow) / judgeTotal;
     if (barW > 0) {
-      judges.g.rect(MARGIN + 98, y + 4, barW, 5).fill({ color, alpha: 0.18 });
-      judges.g.rect(MARGIN + 98, y + 6, barW, 1.5).fill({ color, alpha: 0.95 });
+      judges.g.rect(barX, y + 4, barW, 5).fill({ color, alpha: 0.18 });
+      judges.g.rect(barX, y + 6, barW, 1.5).fill({ color, alpha: 0.95 });
     }
-    text(judges.root, String(rollUpValue(count, roll)), MARGIN + 292 - 14, y + 6, {
+    text(judges.root, String(rollUpValue(count, roll)), x + judgeBox.w - 14, y + 6, {
       ...display(11, SYN_WHITE),
       anchorX: 1,
       anchorY: 0.5,
@@ -291,17 +277,18 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   // Graphs as glowing filaments drawing in.
   const graphs = group('graphs');
   // The two filaments share the judgement rows' top and bottom lines.
-  const graphX = GRAPHS_X + 14;
-  const graphW = GRID_RIGHT - 14 - graphX;
-  const graphH = (ROWS_BOTTOM - ROWS_TOP - 24) / 2;
-  glass(graphs.g, GRAPHS_X, BOTTOM_TOP, GRID_RIGHT - GRAPHS_X, BOTTOM_H, accent);
-  label('GROOVE GAUGE', graphX, BOTTOM_TOP + 12, graphs.root);
-  label('EX SCORE', graphX, ROWS_TOP + graphH + 12, graphs.root);
+  const graphBox = grid.graphs;
+  const graphX = graphBox.x + 14;
+  const graphW = graphBox.x + graphBox.w - 14 - graphX;
+  const graphH = (grid.graphsBottom - grid.graphsTop - 24) / 2;
+  glass(graphs.g, graphBox.x, graphBox.y, graphBox.w, graphBox.h, accent);
+  label('GROOVE GAUGE', graphX, graphBox.y + 12, graphs.root);
+  label('EX SCORE', graphX, grid.graphsTop + graphH + 12, graphs.root);
   const draw = easeOutCubic(stageProgress(elapsed, ROLL_DELAY_MS + 150, ROLL_MS + 300));
   filament(
     graphs.g,
     graphX,
-    ROWS_TOP,
+    grid.graphsTop,
     graphW,
     graphH,
     result.gaugeHistory.map((s) => ({ x: s.progress, y: s.value / 100 })),
@@ -311,7 +298,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   filament(
     graphs.g,
     graphX,
-    ROWS_BOTTOM - graphH,
+    grid.graphsBottom - graphH,
     graphW,
     graphH,
     result.scoreHistory.map((s) => ({ x: s.progress, y: exMax > 0 ? s.exScore / exMax : 0 })),
@@ -322,18 +309,17 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
 
   // Track column: the chart's card, its facts, and the clear lamp glowing at the foot.
   const track = group('track');
-  const trackW = designWidth - MARGIN - TRACK_X;
-  const trackH = BOTTOM_TOP + BOTTOM_H - TOP;
-  glass(track.g, TRACK_X, TOP, trackW, trackH, accent);
-  const trackTextX = TRACK_X + 14;
+  const { x: trackX, y: trackTop, w: trackW, h: trackH } = grid.track;
+  glass(track.g, trackX, trackTop, trackW, trackH, accent);
+  const trackTextX = trackX + 14;
   const trackTextW = trackW - 28;
-  label('TRACK', trackTextX, TOP + 12, track.root, SYN_EMBER);
+  label('TRACK', trackTextX, trackTop + 12, track.root, SYN_EMBER);
   // Genre, title, artist — the order every built-in skin uses.
   const genreLift = result.song.genre ? 14 : 0;
   if (result.song.genre) {
-    label(result.song.genre.toUpperCase(), trackTextX, TOP + 30, track.root, SYN_DIM, trackTextW);
+    label(result.song.genre.toUpperCase(), trackTextX, trackTop + 30, track.root, SYN_DIM, trackTextW);
   }
-  text(track.root, result.song.title || 'Untitled chart', trackTextX, TOP + 30 + genreLift, {
+  text(track.root, result.song.title || 'Untitled chart', trackTextX, trackTop + 30 + genreLift, {
     size: 15,
     weight: '500',
     fill: SYN_WHITE,
@@ -341,29 +327,36 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     maxWidth: trackTextW,
     dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
   });
-  text(track.root, result.song.artist ?? '', trackTextX, TOP + 52 + genreLift, {
+  text(track.root, result.song.artist ?? '', trackTextX, trackTop + 52 + genreLift, {
     size: 10,
     weight: '300',
     fill: SYN_MIST,
     fontFamily: SYN_TEXT_FONT,
     maxWidth: trackTextW,
   });
-  track.g.rect(trackTextX, TOP + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
+  track.g.rect(trackTextX, trackTop + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
+  // The fact rows run down one column (landscape) or fill two side by side (portrait), 34 / 30 px apart.
+  const columns = grid.trackColumns;
+  const columnGap = 24;
+  const columnW = (trackTextW - columnGap * (columns - 1)) / columns;
+  const rowPitch = columns > 1 ? 30 : 34;
   resolveResultTrackRows(result).forEach((row, index) => {
-    const rowY = TOP + 100 + index * 34;
-    label(row.label, trackTextX, rowY + 4, track.root);
-    text(track.root, row.value, trackTextX + trackTextW, rowY + 9, {
-      ...display(15, SYN_WHITE),
+    const columnX = trackTextX + (index % columns) * (columnW + columnGap);
+    const rowY = trackTop + 100 + Math.floor(index / columns) * rowPitch;
+    label(row.label, columnX, rowY + 4, track.root, SYN_DIM, columnW - 50);
+    text(track.root, row.value, columnX + columnW, rowY + 9, {
+      ...display(columns > 1 ? 13 : 15, SYN_WHITE),
       anchorX: 1,
       anchorY: 0.5,
-      maxWidth: trackTextW - 90,
+      maxWidth: columns > 1 ? 56 : trackTextW - 90,
     });
-    track.g.rect(trackTextX, rowY + 24, trackTextW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
+    track.g.rect(columnX, rowY + 24, columnW, 1).fill({ color: SYN_DIM, alpha: 0.3 });
   });
   const lamp = resolveResultLamp(result);
   const lampColor =
     lamp === 'PERFECT' ? SYN_WHITE : lamp === 'FULL COMBO' ? SYN_CYAN : lamp === 'CLEAR' ? SYN_AMBER : SYN_RED;
-  const lampY = TOP + trackH - 50;
+  // The lamp sits 16 px off the card's foot (10 px under two fact columns, which take the room).
+  const lampY = trackTop + trackH - (columns > 1 ? 44 : 50);
   drawFrame(track.g, trackTextX, lampY, trackTextW, 34, lampColor, { fill: 0.6, arm: 8 });
   text(track.root, lamp, trackTextX + trackTextW / 2, lampY + 17, {
     ...display(14, SYN_WHITE),
@@ -377,9 +370,9 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
 
   // Total score.
   const total = group('total');
-  total.g.rect(0, designHeight - 44, designWidth, 1).fill({ color: accent, alpha: 0.4 });
-  label('TOTAL SCORE', MARGIN, designHeight - 26, total.root, accent);
-  text(total.root, String(rollUpValue(result.score.score, roll)), 150, designHeight - 22, {
+  total.g.rect(0, grid.totalY, designWidth, 1).fill({ color: accent, alpha: 0.4 });
+  label('TOTAL SCORE', margin, grid.totalY + 18, total.root, accent);
+  text(total.root, String(rollUpValue(result.score.score, roll)), 150, grid.totalY + 22, {
     ...display(16, SYN_WHITE),
     anchorY: 0.5,
     letterSpacing: 2,
