@@ -2,7 +2,7 @@
 '@be-music/player-web': minor
 ---
 
-The be-music skin registry accepts skins written for skin API revision 2 as well as revision 1. Skins can change play options and open the readme from the select screen through the new `setPlayOption`, `cyclePlayOption`, and `toggleReadme` actions (unknown keys and values outside an option's choices are ignored, `hiSpeed` and `shutter` are clamped, and each change bumps the select frame's `revision`), and every frame carries the skin's settings resolved to their defaults. `PixiPlayOptions` and its value unions are now aliases of the SDK's `BeMusicPlayOptions` types.
+The be-music skin registry accepts skins written for skin API revision 2 as well as revision 1. Skins can change play options and open the readme from the select screen through the new `setPlayOption`, `cyclePlayOption`, and `toggleReadme` actions (unknown keys and values outside an option's choices are ignored, `hiSpeed` and `shutter` are clamped, and each change bumps the select frame's `revision`). `PixiPlayOptions` and its value unions are now aliases of the SDK's `BeMusicPlayOptions` types.
 
 The player now fills these revision 2 fields:
 
@@ -11,6 +11,7 @@ The player now fills these revision 2 fields:
 - Select: `pointer` in the stage's design pixels, `hit` returns whether the pointer is over the rect, and `songRecord(song)` answers from the new `resolveSongRecord` select-scene option, through which a host hands skins its per-chart best records (lamp, EX score, max combo, miss count, play count); without it every song reads as never played.
 - Result data: `lamp`, `gaugeType`, `judgeRuleset`, `fast` / `slow`, and `judgeTimings`.
 - Song images: `songImage(song, kind)` on the select, decide, gameplay, and result frames returns the song's `#STAGEFILE`, `#BANNER`, or `#BACKBMP` as an `ImageBitmap`, loaded lazily from the song collection (select bumps `revision` when one arrives). Each scene keeps at most 32 decoded images and closes the least recently used one beyond that.
+- Skin settings: every frame carries `settings`. The gameplay, select, result, and decide scenes take the player's stored values through the new `beMusicSkinSettings` option, check them with `resolveBeMusicSkinSettings` (now also exported from `@be-music/player-web/skin`), and take changes through `setBeMusicSkinSettings`, which the skin sees from the next frame (select also bumps `revision`). Without stored values the skin draws with its defaults.
 - BGA: a skin that sets `drawsBga` receives `frame.bga` with the active base, layer, and POOR images and `poorActive`.
 
 A skin that sets `drawsLaneCover`, `drawsMeasureLines`, or `drawsBga` now draws the lane covers, measure lines, or BGA itself, and the player stops drawing its own.
