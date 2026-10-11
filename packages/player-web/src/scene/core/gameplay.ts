@@ -76,6 +76,7 @@ import {
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import { JudgeTimingLog } from './judge-timing-log.ts';
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
@@ -919,6 +920,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private gaugeHistory: Array<{ progress: number; value: number }> = [];
   /** Same shape as `gaugeHistory`, but tracking running EX score. */
   private scoreHistory: Array<{ progress: number; exScore: number }> = [];
+  /**
+   * Timed judgements of the current play, fed from the engine's judge-combo bus. Its recent window reaches skins as
+   * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
+   */
+  private readonly judgeTimings = new JudgeTimingLog();
   protected lastJudge = '';
   protected lastJudgeUntil = 0;
   /**
@@ -1863,6 +1869,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.autoSampleTriggers = [];
 
     this.pressedChannels.clear();
+    this.judgeTimings.clear();
     this.timerStartedAt.clear();
     this.bombStartedAt.clear();
     this.keyOnFadeOutStart.clear();
@@ -2111,6 +2118,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.slowCount = 0;
     this.fullComboFired = false;
     this.displayedScore = 0;
+    this.judgeTimings.clear();
     this.bgaTimeline = buildBgaTimeline(resolved, resolver);
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
@@ -3057,6 +3065,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeHistory,
       scoreHistory,
       ...(this.playlog !== undefined ? { playlog: this.playlog } : {}),
+      // `clear` swaps in a fresh list for the next play, so the result can keep this one.
+      judgeTimings: this.judgeTimings.all,
     };
   }
 
@@ -3653,6 +3663,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       impulseKind: this.lastImpulseKind,
       effects: this.options.beMusicEffects ?? 'full',
       audio: this.audioFrame,
+      lastJudgeDeltaMs: this.judgeTimings.lastDeltaMs,
+      judgeTimings: this.judgeTimings.recent,
     };
   }
 
@@ -4549,6 +4561,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.tracker.combo = state.combo;
     if (state.combo > this.maxCombo) this.maxCombo = state.combo;
     const judgeKind = state.judge as JudgeKind;
+    // Autoplay hits, mine BADs, and missed notes carry no `deltaMs`; the log skips them.
+    this.judgeTimings.push(this.playClock(), state.judge, state.deltaMs, state.channel);
     this.publishJudge(judgeKind, this.currentSeconds(), state.channel);
     if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
       this.triggerBomb(state.channel);
