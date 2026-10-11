@@ -284,6 +284,44 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
       skinSdkApi.supportsTouchLayout('7');
     },
   });
+  define('skin-sdk.resolveStageOrientation', {
+    run: () => {
+      skinSdkApi.resolveStageOrientation(skinSdkApi.tallStage);
+    },
+  });
+  define('skin-sdk.supportsPortraitLayout', {
+    run: () => {
+      skinSdkApi.supportsPortraitLayout(BENCH_CHANNELS_7K, '7');
+    },
+  });
+  define('skin-sdk.resolveBeMusicStage', {
+    run: () => {
+      skinSdkApi.resolveBeMusicStage(
+        { stage: skinSdkApi.wideStage, portraitStage: skinSdkApi.tallStage },
+        { width: 390, height: 844 },
+        { laneChannels: BENCH_CHANNELS_7K, playVariant: '7' },
+      );
+    },
+  });
+  define('skin-sdk.resolveBeMusicSelectLayout', {
+    run: () => {
+      skinSdkApi.resolveBeMusicSelectLayout(
+        { layout: { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 } },
+        skinSdkApi.tallStage,
+      );
+    },
+  });
+  define('skin-sdk.resolvePortraitLaneLayout', {
+    run: () => {
+      skinSdkApi.resolvePortraitLaneLayout(
+        BENCH_CHANNELS_7K,
+        BENCH_CHANNELS_7K.length,
+        '7',
+        'touch',
+        skinSdkApi.tallStage,
+      );
+    },
+  });
   define('skin-sdk.resolveSkinlessLaneLayout', {
     run: () => {
       skinSdkApi.resolveSkinlessLaneLayout(BENCH_CHANNELS_7K, BENCH_CHANNELS_7K.length, '7');

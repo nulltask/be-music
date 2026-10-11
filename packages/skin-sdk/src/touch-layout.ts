@@ -6,7 +6,8 @@ import {
   resolveSkinlessLaneLayout,
   type FallbackLaneLayoutRect,
 } from './lane-geometry.ts';
-import type { GameplayLayoutMode } from './types.ts';
+import { resolvePortraitLaneLayout, resolveStageOrientation } from './portrait.ts';
+import type { BeMusicStageOrientation, GameplayLayoutMode } from './types.ts';
 
 /**
  * Geometry of the touch layout on the 854x480 stage, in design px. The lanes take the stage from its left margin up to
@@ -34,6 +35,8 @@ export const TOUCH_PLAYFIELD = {
 export interface GameplayLaneGeometry {
   /** The layout actually used: `'touch'` falls back to `'standard'` for play modes the touch layout does not cover. */
   mode: GameplayLayoutMode;
+  /** The orientation of the stage the geometry was laid out for. */
+  orientation: BeMusicStageOrientation;
   lanes: FallbackLaneLayoutRect[];
   /** Left edge of the leftmost lane / right edge of the rightmost lane. */
   left: number;
@@ -85,18 +88,30 @@ export function resolveTouchLaneLayout(
 }
 
 /**
- * The lane geometry for `mode`: the standard layout ({@link resolveSkinlessLaneLayout} under the LR2 7K judgement
- * line), or the touch layout when asked for and the play mode supports it ({@link supportsTouchLayout}).
+ * The lane geometry for `mode` on `stage` (the 854x480 landscape stage when omitted). On a landscape stage: the
+ * standard layout ({@link resolveSkinlessLaneLayout} under the LR2 7K judgement line), or the touch layout when asked
+ * for and the play mode supports it ({@link supportsTouchLayout}). On a portrait stage: the portrait playfield in either
+ * mode ({@link resolvePortraitLaneLayout}); hosts only put charts that fit one (`supportsPortraitLayout`) on a portrait
+ * stage.
  */
 export function resolveGameplayLaneGeometry(
   channels: readonly string[] | undefined,
   laneCount: number | undefined,
   playVariant: ChartPlayVariant | undefined,
   mode: GameplayLayoutMode = 'standard',
+  stage?: { width: number; height: number },
 ): GameplayLaneGeometry {
+  if (stage && resolveStageOrientation(stage) === 'portrait') {
+    return {
+      mode,
+      orientation: 'portrait',
+      ...resolvePortraitLaneLayout(channels, laneCount, playVariant, mode, stage),
+    };
+  }
   if (mode === 'touch' && supportsTouchLayout(playVariant)) {
     return {
       mode: 'touch',
+      orientation: 'landscape',
       ...resolveTouchLaneLayout(channels, laneCount, playVariant),
       top: TOUCH_PLAYFIELD.top,
       judgementY: TOUCH_PLAYFIELD.judgementY,
@@ -104,6 +119,7 @@ export function resolveGameplayLaneGeometry(
   }
   return {
     mode: 'standard',
+    orientation: 'landscape',
     ...resolveSkinlessLaneLayout(channels, laneCount, playVariant),
     top: PLAYFIELD.y,
     judgementY: PLAYFIELD.judgementY,
