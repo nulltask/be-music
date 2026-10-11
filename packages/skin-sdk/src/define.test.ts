@@ -24,13 +24,8 @@ function skin(overrides: Partial<BeMusicSkin> = {}): BeMusicSkin {
 }
 
 describe('isSupportedBeMusicSkinApiVersion', () => {
-  it('is at revision 2', () => {
-    expect(BE_MUSIC_SKIN_API_VERSION).toBe(2);
-  });
-
-  it('accepts the current revision and revision 1, which revision 2 only added to', () => {
+  it('accepts the current revision', () => {
     expect(isSupportedBeMusicSkinApiVersion(BE_MUSIC_SKIN_API_VERSION)).toBe(true);
-    expect(isSupportedBeMusicSkinApiVersion(1)).toBe(true);
   });
 
   it('refuses future and unknown revisions', () => {
@@ -60,10 +55,6 @@ describe('validateBeMusicSkin', () => {
 
   it('reports an unsupported API revision', () => {
     expect(validateBeMusicSkin(skin({ apiVersion: 99 }))[0]).toMatch(/apiVersion 99/u);
-  });
-
-  it('passes a revision 1 skin', () => {
-    expect(validateBeMusicSkin(skin({ apiVersion: 1 }))).toEqual([]);
   });
 
   it('checks an optional decide screen', () => {

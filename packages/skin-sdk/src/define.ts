@@ -5,13 +5,10 @@ import type { BeMusicSkin, BeMusicSurfaceContextKind } from './types.ts';
  * The skin API revision this build of the player implements. Skins record the revision they were written against in
  * `apiVersion`; a host refuses skins from a revision it doesn't support.
  */
-export const BE_MUSIC_SKIN_API_VERSION = 2;
+export const BE_MUSIC_SKIN_API_VERSION = 1;
 
-/**
- * Skin API revisions this host can run. Revision 2 only added to what revision 1 skins receive (new frame fields,
- * opt-in `draws*` flags, the decide screen, skin settings), so revision 1 skins still run unchanged.
- */
-const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([1, BE_MUSIC_SKIN_API_VERSION]);
+/** Skin API revisions this host can run. */
+const SUPPORTED_API_VERSIONS: ReadonlySet<number> = new Set([BE_MUSIC_SKIN_API_VERSION]);
 
 /** Whether this host can run a skin written against `apiVersion`. */
 export function isSupportedBeMusicSkinApiVersion(apiVersion: number): boolean {

@@ -134,23 +134,23 @@ The built-in Pixi skins do exactly this through `skins/pixi-kit/define-pixi-skin
 
 Every skin declares these fields. `defineBeMusicSkin` checks them and throws when they are malformed, so a broken skin fails where it is defined.
 
-| Field                                    | Required | Rule                                                                                                                                                                               |
-| ---------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apiVersion`                             | yes      | `BE_MUSIC_SKIN_API_VERSION` from the SDK you build against (currently 2). The player refuses skins written for an API revision it does not support. See [Versioning](#versioning). |
-| `id`                                     | yes      | Lowercase letters, digits, and hyphens (`my-skin`). Hosts persist it, so keep it stable across releases.                                                                           |
-| `label`                                  | yes      | Name shown in pickers.                                                                                                                                                             |
-| `version`                                | yes      | Your skin's own release as a semantic version (`1.2.0`).                                                                                                                           |
-| `author`                                 | yes      | `{ name, url? }`. `url` must be http(s).                                                                                                                                           |
-| `description`                            | no       | One or two sentences for pickers.                                                                                                                                                  |
-| `homepage`                               | no       | http(s) URL of the project page or repository.                                                                                                                                     |
-| `license`                                | no       | SPDX identifier of the skin's code and assets (`MIT`).                                                                                                                             |
-| `fontLoads`                              | yes      | CSS font shorthands the skin draws with (`'400 24px "Anton"'`). It may be empty.                                                                                                   |
-| `context`                                | yes      | `'2d'`, `'webgl'`, `'webgl2'`, or `'webgpu'`.                                                                                                                                      |
-| `contextAttributes`, `setup`, `teardown` | no       | See [Surfaces](#surfaces) and [Using a framework](#using-a-framework).                                                                                                             |
-| `stage`                                  | no       | Design canvas; defaults to `wideStage`. See [Stage and layout](#stage-and-layout).                                                                                                 |
-| `gameplay`, `select`, `result`           | yes      | Each screen's `draw` function; see [Screens](#screens).                                                                                                                            |
-| `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                                                                  |
-| `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                                                                     |
+| Field                                    | Required | Rule                                                                                                                                  |
+| ---------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `apiVersion`                             | yes      | `BE_MUSIC_SKIN_API_VERSION` from the SDK you build against. The player refuses skins written for an API revision it does not support. |
+| `id`                                     | yes      | Lowercase letters, digits, and hyphens (`my-skin`). Hosts persist it, so keep it stable across releases.                              |
+| `label`                                  | yes      | Name shown in pickers.                                                                                                                |
+| `version`                                | yes      | Your skin's own release as a semantic version (`1.2.0`).                                                                              |
+| `author`                                 | yes      | `{ name, url? }`. `url` must be http(s).                                                                                              |
+| `description`                            | no       | One or two sentences for pickers.                                                                                                     |
+| `homepage`                               | no       | http(s) URL of the project page or repository.                                                                                        |
+| `license`                                | no       | SPDX identifier of the skin's code and assets (`MIT`).                                                                                |
+| `fontLoads`                              | yes      | CSS font shorthands the skin draws with (`'400 24px "Anton"'`). It may be empty.                                                      |
+| `context`                                | yes      | `'2d'`, `'webgl'`, `'webgl2'`, or `'webgpu'`.                                                                                         |
+| `contextAttributes`, `setup`, `teardown` | no       | See [Surfaces](#surfaces) and [Using a framework](#using-a-framework).                                                                |
+| `stage`                                  | no       | Design canvas; defaults to `wideStage`. See [Stage and layout](#stage-and-layout).                                                    |
+| `gameplay`, `select`, `result`           | yes      | Each screen's `draw` function; see [Screens](#screens).                                                                               |
+| `decide`                                 | no       | The decide screen between select and play; see [Decide](#decide).                                                                     |
+| `settings`                               | no       | Options the player can tune for the skin; see [Skin settings](#skin-settings).                                                        |
 
 `validateBeMusicSkin(skin)` returns the same problems as a list of messages without throwing.
 
@@ -459,7 +459,6 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 
 - **When to bump `version`:** whenever you release the skin. Follow semantic versioning from the player's point of view: a new look is a minor version, a fix is a patch.
 - **`apiVersion`:** set it to the SDK constant you built against. When the skin API changes incompatibly, the player raises `BE_MUSIC_SKIN_API_VERSION`. Skins written for an older revision are then refused until they are rebuilt against the new SDK.
-- **Revision 2:** the current revision. It only added to what skins receive: new frame and runtime fields, the opt-in `draws*` flags, the decide screen, skin settings, and song images. A revision 1 skin therefore still runs unchanged, and the player accepts both 1 and 2. Rebuilding against the new SDK and setting `apiVersion: 2` only matters if you use the new fields. Note that `frame.hit` now returns a boolean, which a skin that ignores the result never notices.
 - **Keep `id` stable:** hosts persist the selected skin by its `id`.
 
 ## Checklist

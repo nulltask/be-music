@@ -2,9 +2,9 @@
 '@be-music/player-web': minor
 ---
 
-The be-music skin registry accepts skins written for skin API revision 2 as well as revision 1. Skins can change play options and open the readme from the select screen through the new `setPlayOption`, `cyclePlayOption`, and `toggleReadme` actions (unknown keys and values outside an option's choices are ignored, `hiSpeed` and `shutter` are clamped, and each change bumps the select frame's `revision`). `PixiPlayOptions` and its value unions are now aliases of the SDK's `BeMusicPlayOptions` types.
+Be-music skins can change play options and open the readme from the select screen through the new `setPlayOption`, `cyclePlayOption`, and `toggleReadme` actions (unknown keys and values outside an option's choices are ignored, `hiSpeed` and `shutter` are clamped, and each change bumps the select frame's `revision`). `PixiPlayOptions` and its value unions are now aliases of the SDK's `BeMusicPlayOptions` types.
 
-The player now fills these revision 2 fields:
+The player now fills these new skin fields:
 
 - Runtime: `song`, `lastJudgeDeltaMs` / `judgeTimings`, `minBpm` / `maxBpm` / `mainBpm`, `songLengthMs` / `songElapsedMs`, `failedAtMs` / `allNotesDoneAtMs` / `outroAtMs`, `gaugeRiseAtMs` / `gaugeMaxAtMs`, `scoreHistory` / `gaugeHistory`, `laneCovers` / `visibleMs` / `greenNumber` (beatoraja's duration and green number, over the current scroll and BPM), and `judgeWindows` (the engine's resolved windows in ms; a mid-chart `#EXRANK` change is not reflected).
 - Lanes and notes: each lane's `pressedAtMs` / `releasedAtMs` and `holding` / `holdStartedAtMs`, each long note's `mode` (as the active ruleset plays it) and `state` (`pending` / `held` / `dropped` / `done`), `autoplay` on notes and long notes played by autoplay or auto-scratch, the `judge` that set off each bomb, and `measureLines` (one per lane run) for skins that set `drawsMeasureLines`.
