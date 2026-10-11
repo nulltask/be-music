@@ -583,4 +583,57 @@ describe('stringifier', () => {
       { measure: 1, channel: '11', position: [2, 3], value: 'Zz' },
     ]);
   });
+
+  test('bmson stringify: writes mines back to `key_channels` with their damage instead of as sound notes', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'Mines', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+        key_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 2, y: 480, damage: 10 },
+              { x: 1, y: 960 },
+            ],
+          },
+        ],
+      }),
+    );
+    const output = JSON.parse(stringifyBmson(source)) as {
+      sound_channels: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
+    };
+
+    expect(output.sound_channels.map((channel) => channel.name)).toEqual(['key.wav']);
+    expect(output.sound_channels[0]!.notes).toEqual([expect.objectContaining({ x: 1, y: 0 })]);
+    expect(output.key_channels).toEqual([
+      {
+        name: 'mine.wav',
+        notes: [
+          { x: 2, y: 480, damage: 10 },
+          { x: 1, y: 960 },
+        ],
+      },
+    ]);
+
+    const reparsed = parseBmson(JSON.stringify(output));
+    const mines = reparsed.events.filter((event) => /^[DE]/i.test(event.channel));
+    expect(mines.map((event) => [event.channel, event.bmson?.damage])).toEqual([
+      ['D2', 10],
+      ['D1', undefined],
+    ]);
+  });
+
+  test('bmson stringify: omits `key_channels` when the chart has no mines', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'No mines', init_bpm: 120, resolution: 240 },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
+  });
 });
