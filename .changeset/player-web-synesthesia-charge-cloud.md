@@ -19,3 +19,5 @@ Synesthesia's mines no longer sink into the lane: they burn bright crimson insid
 On launch the camera now flies past Synesthesia's charge cloud: its dark orbs stream out of the vanishing point with the stars, swelling until they leave the screen.
 
 Synesthesia's schools are now mantas instead of fish: each one beats its wings out of step with the rest of its school, and a kick flings the wings wide and white-hot.
+
+Synesthesia's hit bursts throw more particles: a skirt of fine, dimmer powder now spreads along the judgement line under each fountain, rising only about a lane's width, so bursts read fuller without dusting the lanes the next notes fall down.

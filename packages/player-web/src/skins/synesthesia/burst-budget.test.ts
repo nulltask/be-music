@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { BURST_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
+import { BURST_FRAME_BUDGET, BURST_SKIRT_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
 
 describe('burstGrainCount', () => {
   it('draws the full tier-scaled burst while few bombs overlap', () => {
@@ -11,6 +11,11 @@ describe('burstGrainCount', () => {
   it('shares the frame budget once many bombs overlap', () => {
     expect(burstGrainCount(170, 24, 4, 1, 8)).toBe(BURST_FRAME_BUDGET / 8);
     expect(burstGrainCount(170, 24, 4, 1, 16) * 16).toBeLessThanOrEqual(BURST_FRAME_BUDGET);
+  });
+
+  it('shares a separate budget when one is given', () => {
+    expect(burstGrainCount(140, 16, 4, 1, 1, BURST_SKIRT_FRAME_BUDGET)).toBe(204);
+    expect(burstGrainCount(140, 16, 4, 1, 8, BURST_SKIRT_FRAME_BUDGET)).toBe(BURST_SKIRT_FRAME_BUDGET / 8);
   });
 
   it('never goes negative', () => {

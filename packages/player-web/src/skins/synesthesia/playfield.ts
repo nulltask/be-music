@@ -9,7 +9,7 @@ import {
   type BurstParticle,
   type Vec3,
 } from './space.ts';
-import { burstGrainCount } from './burst-budget.ts';
+import { BURST_SKIRT_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
 import { drawReticle, sharedShapeBatch } from './draw.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
 import {
@@ -195,19 +195,28 @@ function drawNote(graphics: Graphics, x: number, y: number, w: number, light: La
 const BURST_PARTICLES = 170;
 const BURST_PARTICLES_PER_TIER = 24;
 const BURST_PARTICLES_MAX = BURST_PARTICLES + BURST_PARTICLES_PER_TIER * 4;
+/**
+ * Skirt grains per hit at combo tier 0 (each tier adds {@link BURST_SKIRT_PER_TIER}): fine powder that spreads along
+ * the judgement line and barely rises, so it thickens the burst without dusting the lanes the next notes fall down.
+ */
+const BURST_SKIRT = 140;
+const BURST_SKIRT_PER_TIER = 16;
+const BURST_SKIRT_MAX = BURST_SKIRT + BURST_SKIRT_PER_TIER * 4;
+/** Seed offset so a hit's skirt flies in different directions from its sparks. */
+const SKIRT_SEED = 0x5f3759df;
 const BURST_FOCAL = 260;
 /** Grain size (0.4..1) from which a spark leaves a hairline trail / carries a glow sprite; the rest is fine powder. */
 const POWDER_TRAIL_SIZE = 0.85;
 const POWDER_GLINT_SIZE = 0.94;
 const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
 
-function cachedBurst(seed: number): BurstParticle[] {
+function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[] {
   let particles = PARTICLE_CACHE.get(seed);
   if (!particles) {
-    particles = burstParticles(seed, BURST_PARTICLES_MAX);
+    particles = burstParticles(seed, count);
     PARTICLE_CACHE.set(seed, particles);
     // Live bombs never exceed a few dozen; keep the cache bounded.
-    if (PARTICLE_CACHE.size > 64) {
+    if (PARTICLE_CACHE.size > 128) {
       const oldest = PARTICLE_CACHE.keys().next().value;
       if (oldest !== undefined) PARTICLE_CACHE.delete(oldest);
     }
@@ -240,7 +249,15 @@ export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: PixiBomb
   const crowd = 1 / Math.sqrt(Math.max(1, bombs.length / 2));
   for (const bomb of bombs) {
     const grains = burstGrainCount(BURST_PARTICLES, BURST_PARTICLES_PER_TIER, tier, profile.amount, bombs.length);
-    renderBomb(pool, bomb, tier, crowd, profile.amount, grains);
+    const skirt = burstGrainCount(
+      BURST_SKIRT,
+      BURST_SKIRT_PER_TIER,
+      tier,
+      profile.amount,
+      bombs.length,
+      BURST_SKIRT_FRAME_BUDGET,
+    );
+    renderBomb(pool, bomb, tier, crowd, profile.amount, grains, skirt);
   }
 }
 
@@ -269,6 +286,7 @@ function renderBomb(
   crowd: number,
   amount: number,
   grains: number,
+  skirt: number,
 ): void {
   const t = Math.max(0, Math.min(1, bomb.elapsedMs / SYNESTHESIA_BOMB_DURATION_MS));
   if (t >= 1) return;
@@ -350,6 +368,33 @@ function renderBomb(
     // White-hot at launch, cooling into the lane's hue.
     sprite.tint = tint;
     sprite.alpha = sparkAlpha;
+  }
+  // 3b. Skirt: fine, dimmer powder thrown out sideways along the judgement line. It rises at most about a lane's width
+  // and settles back, so the burst reads fuller while the lanes above — where the next notes fall — stay clear.
+  const skirtParticles = cachedBurst(bomb.seed ^ SKIRT_SEED, BURST_SKIRT_MAX);
+  const skirtCount = Math.min(skirtParticles.length, skirt);
+  for (let index = 0; index < skirtCount; index += 1) {
+    const particle = skirtParticles[index]!;
+    const life = t / particle.life;
+    if (life >= 1) continue;
+    const position = burstParticlePosition(particle, life, radius * 0.85, gravity);
+    const head = project({
+      x: position.x * 1.1,
+      y: Math.min(unit * 0.4, position.y * 0.25 - unit * 0.7 * particle.speed * (1 - (1 - life) ** 2)),
+      z: position.z * 0.9,
+    });
+    if (!head.visible) continue;
+    const tint = hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.55 + life * 1.5), 1);
+    const side = Math.max(0.6, (0.5 + 0.7 * particle.size) * head.scale * (1 - life * 0.5));
+    batch.rect(
+      effects,
+      tint,
+      (1 - life) ** 1.2 * (0.45 + 0.25 * crowd),
+      head.x - side / 2,
+      head.y - side / 2,
+      side,
+      side,
+    );
   }
   batch.flush();
 
