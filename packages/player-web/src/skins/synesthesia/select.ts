@@ -452,6 +452,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
             palette: SCHOOL_SPECS[school]!.palette,
             swell: this.kick.swell,
             glowLevel: drive[SCHOOL_SPECS[school]!.band],
+            seconds,
           },
         );
       }

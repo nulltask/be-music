@@ -1,5 +1,6 @@
 import type { Graphics } from 'pixi.js';
 import type { Flock } from './boids.ts';
+import { createMantaShape, mantaShapeInto } from './manta.ts';
 import {
   emberColor,
   projectPoint,
@@ -437,17 +438,19 @@ export function drawSchool(
     alpha: number;
     palette?: 'ember' | 'blue' | 'magenta';
     skip?: (x: number, y: number) => boolean;
-    /** 0..1: how hard the latest kick is flicking every fish up, swollen and white-hot (see stepKick). */
+    /** 0..1: how hard the latest kick is flicking every manta up, wings flung wide and white-hot (see stepKick). */
     swell?: number;
     /** 0..1: the level of the school's range of the music (bass, mids, or highs); the glow brightens and spreads with it. */
     glowLevel?: number;
+    /** Scene clock (s) that beats the wings. */
+    seconds?: number;
   },
 ): void {
   const palette = style.palette ?? 'ember';
-  // On a kick each fish flicks up: a fatter body, a bigger head, a slightly longer stretch, flashing white.
+  // On a kick each manta flicks up: wider, harder-beating wings, a thicker outline, flashing white.
   const swell = Math.max(0, Math.min(1, style.swell ?? 0));
-  const girth = 1 + 1.6 * swell;
-  const stretch = 0.16 * (1 + 0.5 * swell);
+  const girth = 1 + 1.2 * swell;
+  const seconds = style.seconds ?? 0;
   // The glow follows the school's range of the music: a faint halo while it is quiet, bright and wide when it is loud —
   // while the kick drives the swell.
   const level = Math.max(0, Math.min(1, style.glowLevel ?? 0));
@@ -455,21 +458,27 @@ export function drawSchool(
   const glowSpread = (1 + 0.4 * level) * (1 + 0.5 * swell);
   const { position: p, velocity: v } = flock;
   const batch = sharedShapeBatch;
+  const at = SCHOOL_SCRATCH_POSITION;
+  const heading = SCHOOL_SCRATCH_VELOCITY;
   for (let index = 0; index < flock.count; index += 1) {
-    const x = p[index * 3]!;
-    const y = p[index * 3 + 1]!;
-    const z = p[index * 3 + 2]!;
-    const head = project({ x, y, z });
-    if (!head.visible) continue;
-    if (style.skip?.(head.x, head.y)) continue;
-    // Tail length follows speed, so a darting fish stretches.
-    const tail = project({
-      x: x - v[index * 3]! * stretch,
-      y: y - v[index * 3 + 1]! * stretch,
-      z: z - v[index * 3 + 2]! * stretch,
-    });
-    if (!tail.visible) continue;
-    const nearness = Math.min(1, head.scale * 2.4);
+    at.x = p[index * 3]!;
+    at.y = p[index * 3 + 1]!;
+    at.z = p[index * 3 + 2]!;
+    const center = project(at);
+    if (!center.visible) continue;
+    if (style.skip?.(center.x, center.y)) continue;
+    heading.x = v[index * 3]!;
+    heading.y = v[index * 3 + 1]!;
+    heading.z = v[index * 3 + 2]!;
+    // Each manta beats its wings out of step with the rest of the school.
+    const shape = mantaShapeInto(SCHOOL_MANTA, at, heading, seconds, hash01(index * 7 + 1) * Math.PI * 2, swell);
+    const nose = project(shape.nose);
+    const leftTip = project(shape.leftTip);
+    const rightTip = project(shape.rightTip);
+    const tailRoot = project(shape.tailRoot);
+    const tailEnd = project(shape.tailEnd);
+    if (!nose.visible || !leftTip.visible || !rightTip.visible || !tailRoot.visible) continue;
+    const nearness = Math.min(1, center.scale * 2.4);
     const heat = hash01(index * 5 + 3);
     const color =
       palette === 'blue'
@@ -485,32 +494,42 @@ export function drawSchool(
             : emberColor(0.55 + 0.4 * heat);
     const alpha = style.alpha * (0.35 + 0.65 * nearness) * (1 + 0.8 * swell);
     const lit = swell > 0.01 ? mixColor(color, SYN_WHITE, Math.min(1, swell * 1.2)) : color;
-    const mx = (head.x + tail.x) / 2;
-    const my = (head.y + tail.y) / 2;
-    // Every fish carries a soft halo around its head, swelling with its range of the music and blooming on a kick.
+    // Every manta carries a soft halo, swelling with its range of the music and blooming on a kick.
     batch.glow(
       graphics,
       lit,
       style.alpha * (0.1 + 0.25 * nearness) * glowGain,
-      head.x,
-      head.y,
-      (10 + 22 * nearness) * glowSpread,
+      center.x,
+      center.y,
+      (12 + 26 * nearness) * glowSpread,
     );
-    batch.line(graphics, lit, alpha * 0.55, (0.6 + 1 * nearness) * girth, tail.x, tail.y, mx, my);
-    batch.line(graphics, lit, alpha, (1 + 2 * nearness) * girth, mx, my, head.x, head.y);
-    const size = (1.2 + 2.2 * nearness) * (1 + 1.4 * swell);
+    // The wings' outline: nose out to each wingtip and back in to the tail root, brighter along the leading edges.
+    const edge = (0.8 + 1.4 * nearness) * girth;
+    batch.line(graphics, lit, alpha, edge, nose.x, nose.y, leftTip.x, leftTip.y);
+    batch.line(graphics, lit, alpha, edge, nose.x, nose.y, rightTip.x, rightTip.y);
+    batch.line(graphics, lit, alpha * 0.55, edge * 0.7, leftTip.x, leftTip.y, tailRoot.x, tailRoot.y);
+    batch.line(graphics, lit, alpha * 0.55, edge * 0.7, rightTip.x, rightTip.y, tailRoot.x, tailRoot.y);
+    if (tailEnd.visible) {
+      batch.line(graphics, lit, alpha * 0.35, edge * 0.5, tailRoot.x, tailRoot.y, tailEnd.x, tailEnd.y);
+    }
+    const size = (1.2 + 2 * nearness) * (1 + 1.2 * swell);
     batch.rect(
       graphics,
       heat > 0.8 ? SYN_WHITE : lit,
       Math.min(1, alpha * 1.3),
-      head.x - size / 2,
-      head.y - size / 2,
+      nose.x - size / 2,
+      nose.y - size / 2,
       size,
       size,
     );
   }
   batch.flush();
 }
+
+/** Scratch state for {@link drawSchool}, reused every frame. */
+const SCHOOL_SCRATCH_POSITION: Vec3 = { x: 0, y: 0, z: 0 };
+const SCHOOL_SCRATCH_VELOCITY: Vec3 = { x: 0, y: 0, z: 0 };
+const SCHOOL_MANTA = createMantaShape();
 
 /** `from` blended toward `to` by `t` (0..1), per RGB channel. */
 function mixColor(from: number, to: number, t: number): number {

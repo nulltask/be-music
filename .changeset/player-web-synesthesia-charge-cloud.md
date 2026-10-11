@@ -17,3 +17,5 @@ Synesthesia's floor now shows the music's spectrum: bass on the left of the scre
 Synesthesia's mines no longer sink into the lane: they burn bright crimson inside a red halo that throbs like a warning light, with a white-hot flickering filament.
 
 On launch the camera now flies past Synesthesia's charge cloud: its dark orbs stream out of the vanishing point with the stars, swelling until they leave the screen.
+
+Synesthesia's schools are now mantas instead of fish: each one beats its wings out of step with the rest of its school, and a kick flings the wings wide and white-hot.
