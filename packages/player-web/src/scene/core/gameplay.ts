@@ -76,6 +76,7 @@ import {
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
 import { PerfTracker } from '../perf.ts';
@@ -2184,6 +2185,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return ruleset === 'lr2';
   }
 
+  /** The compat ruleset judging the play (a replay's recorded one wins). */
+  private resolveJudgeRuleset(): string {
+    return this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
+  }
+
   /**
    * Whether the engine runs with auto-scratch, mirroring the `autoScratch` engine option: a replay's recorded flag, or
    * either side's toggle (the engine has one flag for both scratch lanes).
@@ -3116,6 +3122,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       gaugeHistory,
       scoreHistory,
       ...(this.playlog !== undefined ? { playlog: this.playlog } : {}),
+      lamp: resolveClearLamp({ cleared: this.gaugeState.cleared, score: this.score, gaugeType: this.gaugeState.type }),
+      gaugeType: this.gaugeState.type,
+      judgeRuleset: this.resolveJudgeRuleset(),
+      fast: this.fastCount,
+      slow: this.slowCount,
       // `clear` swaps in a fresh list for the next play, so the result can keep this one.
       judgeTimings: this.judgeTimings.all,
     };
@@ -3698,7 +3709,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         const beat = this.currentBeat(seconds);
         return beat - Math.floor(beat);
       })(),
-      rulesetLabel: this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2',
+      rulesetLabel: this.resolveJudgeRuleset(),
       gaugeLabel: this.gaugeState.type ?? 'GROOVE',
       gaugeSurvival: this.gaugeState.survival === true,
       fast: this.fastCount,
