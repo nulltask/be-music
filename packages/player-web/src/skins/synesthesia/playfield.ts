@@ -148,18 +148,25 @@ export function mineFilamentLit(laneX: number, segment: number, nowMs: number): 
 }
 
 /**
- * A mine: shaped like a note so it reads in the same rhythm, but dark crimson with a broken, flickering filament where a
- * note carries its clean white one — a note that has gone wrong, to be left alone.
+ * A mine: shaped like a note so it reads in the same rhythm, but bright crimson in a throbbing red halo, with a broken,
+ * flickering filament where a note carries its clean white one — a note that has gone wrong, to be left alone.
  */
 export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
+  // A red halo that throbs like a warning light (twice a second), so the mine stands out of the lane at a glance.
+  const alarm = 0.5 + 0.5 * Math.sin((nowMs / 1000) * Math.PI * 4);
+  graphics
+    .rect(x - 4, y - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+    .fill({ color: 0xff2030, alpha: 0.18 + 0.22 * alarm });
   graphics.rect(x - 1, y - NOTE_HEIGHT - 1, bodyW + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0x5a0a12);
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 1).fill(0xff2b3a);
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0xc4142c);
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).stroke({ color: 0xff6070, width: 1, alignment: 1 });
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 2).fill({ color: 0xff8a94, alpha: 0.9 });
+  // The broken filament burns white-hot where a note's runs clean.
   for (let segment = 0; segment * MINE_SEGMENT < bodyW; segment += 1) {
     if (!mineFilamentLit(x, segment, nowMs)) continue;
     const left = segment * MINE_SEGMENT;
-    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill({ color: 0xff5a5a, alpha: 0.95 });
+    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill(0xffe0e0);
   }
 }
 
