@@ -22,7 +22,7 @@ SDK 自体は描画を行わず、描画フレームワークも import しま�
 | PixiJS                        | `'webgl2'`                          | `setup` でキャンバス上に Pixi レンダラーを作り、シーングラフを組んで `draw` で描画 | Synesthesia、Phantom、Lattice（`packages/player-web/src/skins/`、`skins/pixi-kit/` 経由） |
 | three.js、素の WebGL / WebGPU | `'webgl'` / `'webgl2'` / `'webgpu'` | `setup` でレンダラーやパイプラインを作り、`draw` で描画し、`teardown` で解放       | —                                                                                         |
 
-フレームワークは、スキン自身の依存として同梱します。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。
+フレームワークは、スキン自身の依存として同梱します。Plain は意図的に小さく読みやすく作ってあるので、出発点としてコピーして使えます。縦向きの画面への対応の仕方も示しています（[縦向きに対応する](#縦向きに対応する)を参照）。
 
 ## クイックスタート: Canvas 2D スキン
 
@@ -173,6 +173,43 @@ export default defineBeMusicSkin({
 - **レーン幅:** レーン幅はプレイヤーが決めます。スキンはレーンに色を付けますが、大きさや位置は変えません。
 - **タッチレイアウト:** タッチ画面では、ホストが `layoutMode: 'touch'`（`resolveGameplayLayout` の入力）でレイアウトを解決することがあります。このときレーンはステージの左マージンから判定集計の列まで広がり（`TOUCH_PLAYFIELD`）、鍵盤はすべて同じ幅（最大 72 px）、スクラッチは鍵盤 1.4 本分、レーンはヘッダー帯の下の y 48 から下部 HUD 帯の上にある y 330 の判定ラインまでで、`bga` は `undefined` です。24 / 48 KEY は標準レイアウトのままです（`supportsTouchLayout`）。`layout` からクロームを配置しているスキンは変更不要です。`layout.mode` はタッチプレイ向けに見た目を変えたいときだけ読んでください。標準レイアウトでレーンの横に置くクローム（BGA の矩形から配置するもの）は、`bga` が `undefined` でも崩れないようにしてください。
 - **縦向きレイアウト:** 縦向きステージでは、どちらのモードでもレーンがステージの幅いっぱいに下側を占めます（`PORTRAIT_PLAYFIELD`。480×854 の `tallStage` を基準にステージの大きさへ拡縮）。レーンは y 300 から低い位置の判定ラインまでで、BGA と HUD はその上の帯に置きます（`tallStage` では BGA は 40 px のヘッダー帯の下、左上の 206 px 四方）。`'touch'` は左右 12 px のマージンの間に鍵盤をすべて同じ幅（スクラッチは鍵盤 1.4 本分）で並べ、判定ラインを y 740 に置いて、その下に親指を置く帯を残します。`'standard'` は筐体の鍵盤幅（7 KEY で幅 374 px）を保って中央に置き、判定ラインは y 786 です。`bga` はどちらのモードでも縦向きステージの `resolveBgaRect` から来ます。縦向きステージのレーン矩形は `resolvePortraitLaneLayout` で得られます。
+
+### 縦向きに対応する
+
+縦向き対応はオプトインです。Plain（`packages/player-web/src/skins/plain/`）がその実例です。`index.ts` でオプトインし、`layout.ts` で縦向きの配置をテスト付きの素の関数として求め、各画面のファイルがサーフェスの向きで描き分けています。
+
+```ts
+import { defineBeMusicSkin, resolveStageOrientation, tallStage } from '@be-music/skin-sdk';
+
+export default defineBeMusicSkin({
+  // …メタデータ…
+  portraitStage: tallStage, // 画面が縦長のあいだは 480×854
+  select: {
+    layout: { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 },
+    // ホストは縦向きの一覧をこの値で当たり判定する。選択中の曲のカードの下に全幅で置く。
+    portraitLayout: { listX: 16, listTop: 304, listBottomInset: 30, rowHeight: 40 },
+    draw(surface, frame) {
+      // ステージは描画の合間に（端末を回すと）変わるので、毎回確かめる。
+      if (resolveStageOrientation(surface) === 'portrait') drawPortraitSelect(surface, frame);
+      else drawLandscapeSelect(surface, frame);
+    },
+  },
+  gameplay: {
+    draw(surface, frame) {
+      drawLanesAndNotes(surface, frame); // どちらの向きでも frame.layout の位置に描く
+      // 縦向きではレーンが下側を占めるので、HUD は layout.playfield.top より上の帯に置く。
+      if (frame.layout.orientation === 'portrait') drawHudAbove(surface, frame.layout);
+      else drawHudAround(surface, frame.layout);
+    },
+  },
+  // result: 縦向きのサーフェスでは横向きのパネルを縦に積む …
+});
+```
+
+- **変わるもの:** 変わるのはクロームだけです。レーン、ノーツ、判定ライン、BGA の矩形はどちらのステージでも `frame.layout` に配置済みで届くので、Plain は両方を同じコードで描いています。
+- **レイアウトから置く:** 縦向きのクロームは `layout.playfield.top` より上の帯、`layout.bga` の横や下に置き、480×854 を決め打ちせず `surface.width` / `surface.height` から大きさを決めてください。そうすれば別の縦向きステージでも動きます。
+- **隅と文字:** プレイ画面のヘッダーの上の隅はホストのタッチ操作用に空けておき（Plain は 52 px）、10 デザイン px 未満の文字は使わないでください。スマートフォンでは幅 480 px のステージが 1 デザイン px あたり約 0.8 CSS px で表示されます。
+- **横向きは残る:** `portraitStage` の無いスキンは縦向きの画面で縮小されるだけです。また、横向きステージが必要な譜面（DP、24 / 48 KEY）は、スキンが縦向きステージを持っていても `stage` で描かれます。
 
 ## 画面
 
@@ -485,3 +522,4 @@ settings: [
 - [ ] 使うフェイスをすべて `fontLoads` に挙げている。
 - [ ] ノーツの多い譜面・高密度でも `draw` が 1 フレームの半分を十分下回り、毎フレームの確保やピクセルの読み戻しがない。
 - [ ] SP、DP、5 / 7 / 9 / 10 / 14 / 24 / 48 KEY、BGA あり・なしで確認した。
+- [ ] `portraitStage` を持つなら、スマートフォンとタブレットを縦に持った状態と、プレイ中の回転で確認した。
