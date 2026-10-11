@@ -929,6 +929,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** The chart's BPM range, worked out once per {@link prepareSong}. */
   private chartBpmRange: ChartBpmRange | undefined;
   /**
+   * Scratch lanes the engine plays itself under auto-scratch (empty when it is off), resolved per {@link prepareSong}.
+   * See {@link isAutoplayedChannel}.
+   */
+  private autoScratchChannels: ReadonlySet<string> = new Set();
+  /**
    * Play-clock ms of once-per-play moments (gauge failed, last note judged, chart end, gauge first risen above its
    * start / reaching its max), latched as they happen and cleared per {@link prepareSong}.
    */
@@ -939,6 +944,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     gaugeRiseAtMs?: number;
     gaugeMaxAtMs?: number;
   } = {};
+  /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
+  private readonly lanePressedAt = new Map<string, number>();
+  private readonly laneReleasedAt = new Map<string, number>();
   protected lastJudge = '';
   protected lastJudgeUntil = 0;
   /**
@@ -1883,6 +1891,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.autoSampleTriggers = [];
 
     this.pressedChannels.clear();
+    this.lanePressedAt.clear();
+    this.laneReleasedAt.clear();
     this.judgeTimings.clear();
     this.timerStartedAt.clear();
     this.bombStartedAt.clear();
@@ -2134,11 +2144,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.displayedScore = 0;
     this.judgeTimings.clear();
     this.playMoments = {};
+    this.lanePressedAt.clear();
+    this.laneReleasedAt.clear();
     this.chartBpmRange = resolveChartBpmRange(
       resolver.tempoPoints,
       this.songDurationSeconds,
       resolved.metadata.bpm > 0 ? resolved.metadata.bpm : this.song?.bpm,
     );
+    this.autoScratchChannels = this.resolveAutoScratchEnabled()
+      ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
+      : new Set();
     this.bgaTimeline = buildBgaTimeline(resolved, resolver);
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
@@ -2167,6 +2182,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private resolveEmptyPoorCountsInPoorDisplay(): boolean {
     const ruleset = this.options.replay?.play.judgeRuleset ?? this.options.judgeRuleset ?? 'lr2';
     return ruleset === 'lr2';
+  }
+
+  /**
+   * Whether the engine runs with auto-scratch, mirroring the `autoScratch` engine option: a replay's recorded flag, or
+   * either side's toggle (the engine has one flag for both scratch lanes).
+   */
+  private resolveAutoScratchEnabled(): boolean {
+    if (this.options.replay !== undefined) return this.options.replay.play.autoScratch === true;
+    return this.options.autoScratch1P === true || this.options.autoScratch2P === true;
+  }
+
+  /** Whether the engine plays `channel`'s notes itself: every lane under autoplay, the scratch under auto-scratch. */
+  private isAutoplayedChannel(channel: string): boolean {
+    return this.options.autoPlay === true || this.autoScratchChannels.has(channel);
   }
 
   /**
@@ -2747,6 +2776,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   private startKeyOnTimer(channel: string): void {
+    this.lanePressedAt.set(channel, this.playClock());
     const timerId = this.resolveKeyOnTimerId(channel);
     if (timerId === undefined) {
       return;
@@ -2767,6 +2797,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * laser back to its fade-in origin before the decay).
    */
   private releaseKeyOnTimer(channel: string): void {
+    this.laneReleasedAt.set(channel, this.playClock());
     const timerId = this.resolveKeyOnTimerId(channel);
     if (timerId === undefined) return;
     // Stamp the fade origin unconditionally — the render-side cleanup uses it as the authoritative clock for the
@@ -3800,6 +3831,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         top,
         bottom,
         beam: this.resolveFallbackLaneLaserAlpha(channel),
+        pressedAtMs: this.lanePressedAt.get(channel),
+        releasedAtMs: this.laneReleasedAt.get(channel),
       });
     });
 
@@ -4133,7 +4166,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
     const binding = this.skinBinding;
     if (binding) {
-      binding.addNote({ kind, x: lane.x, w: lane.w, y });
+      binding.addNote({ kind, x: lane.x, w: lane.w, y, autoplay: this.isAutoplayedChannel(channel) });
       return;
     }
     const graphic = this.noteLayerPool.acquireGraphics();
@@ -4178,7 +4211,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
       const binding = this.skinBinding;
       if (binding) {
-        binding.addLongNote({ kind, x: lane.x, w: lane.w, top, bottom });
+        binding.addLongNote({ kind, x: lane.x, w: lane.w, top, bottom, autoplay: this.isAutoplayedChannel(channel) });
       } else {
         const graphic = this.noteLayerPool.acquireGraphics();
         graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
