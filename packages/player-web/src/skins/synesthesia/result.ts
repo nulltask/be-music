@@ -106,8 +106,8 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     fontFamily: SYN_DISPLAY_FONT,
     ...extra,
   });
-  const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM) =>
-    text(target, value, x, y, display(9, fill, { letterSpacing: 2 }));
+  const label = (value: string, x: number, y: number, target: Container, fill: number = SYN_DIM, maxWidth?: number) =>
+    text(target, value, x, y, display(9, fill, { letterSpacing: 2, maxWidth }));
 
   // Space: warm black, dust pouring out of the vanishing point, and a floor of points.
   const space = group('space');
@@ -331,7 +331,7 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   // Genre, title, artist — the order every built-in skin uses.
   const genreLift = result.song.genre ? 14 : 0;
   if (result.song.genre) {
-    label(result.song.genre.toUpperCase(), trackTextX, TOP + 30, track.root);
+    label(result.song.genre.toUpperCase(), trackTextX, TOP + 30, track.root, SYN_DIM, trackTextW);
   }
   text(track.root, result.song.title || 'Untitled chart', trackTextX, TOP + 30 + genreLift, {
     size: 15,

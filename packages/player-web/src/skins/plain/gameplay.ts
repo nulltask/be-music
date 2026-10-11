@@ -156,7 +156,7 @@ function judgeColor(judge: string): string {
 
 /** Header (mode, tempo, speed), the gauge under the lanes, the track and the score figures along the bottom. */
 function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, width: number, height: number): void {
-  const { runtime } = frame;
+  const { runtime, nowMs } = frame;
 
   text(ctx, runtime.autoplay ? 'AUTO PLAY' : 'PLAY', MARGIN, 18, { size: 12, weight: 800, color: ACCENT });
   text(ctx, `BPM ${Math.round(runtime.bpm ?? 0)}   SPEED x${(runtime.hiSpeed ?? 0).toFixed(1)}`, 110, 18, {
@@ -181,9 +181,11 @@ function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
 
   // Track, bottom left.
   // Genre, title, artist — the order every built-in skin uses.
-  if (runtime.songGenre) text(ctx, runtime.songGenre, MARGIN, height - 70, { size: 10, color: MUTED, maxWidth: 380 });
-  text(ctx, runtime.songTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380 });
-  text(ctx, runtime.songArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380 });
+  if (runtime.songGenre) {
+    text(ctx, runtime.songGenre, MARGIN, height - 70, { size: 10, color: MUTED, maxWidth: 380, nowMs });
+  }
+  text(ctx, runtime.songTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380, nowMs });
+  text(ctx, runtime.songArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380, nowMs });
 
   // Score figures, bottom right, in one row.
   const figures: Array<[string, string]> = [
@@ -193,7 +195,7 @@ function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
     ['RANK', runtime.rank ?? '-'],
   ];
   figures.forEach(([label, value], index) => {
-    stat(ctx, label, value, width - MARGIN - 400 + index * 106, height - 56);
+    stat(ctx, label, value, width - MARGIN - 400 + index * 106, height - 56, { maxWidth: 98, nowMs });
   });
 
   // Judgement counts down the right edge, beside the BGA.

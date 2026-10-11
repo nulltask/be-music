@@ -752,6 +752,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
       alpha,
       maxWidth: facts ? ROW_BPM_W : 70,
+      marquee: active,
     });
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
     let factsLeft = rowX + rowW - 14 - (facts ? ROW_BPM_W : meta ? Math.min(70, metaNode.width) : 0) - 12;
@@ -801,6 +802,8 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       anchorY: 0.5,
       alpha,
       maxWidth: Math.max(24, factsLeft - rowX - 34),
+      // Only the focused row scrolls a long title; the others clip it at its start.
+      marquee: active,
       ...(active ? { dropShadow: { color: accent, distance: 0, blur: 8, alpha: 0.9 } } : {}),
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
@@ -816,6 +819,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: factsLeft - artistX,
+        marquee: active,
       });
     }
     return slide > 0 || intro > 0;
