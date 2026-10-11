@@ -33,6 +33,7 @@ import type {
   BeMusicSongRecord,
 } from '../../skin/be-music/types.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import {
@@ -574,6 +575,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
   private readonly beMusicBackHolder = new Container();
   private readonly beMusicFrontHolder = new Container();
   private beMusicRenderer: BeMusicSelectBinding | undefined;
+  /** Song images handed to the be-music skin (`frame.songImage`); created with the renderer. */
+  private songImages: SongImageCache | undefined;
   /** Set when the last skinless render reported an unfinished transition, so the next tick renders again. */
   private beMusicNeedsFrame = false;
   /** `performance.now()` of the last cursor move — drives the skin's focus transitions. */
@@ -1306,6 +1309,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (this.launchTimer !== undefined) window.clearTimeout(this.launchTimer);
     this.beMusicRenderer?.dispose();
     this.beMusicRenderer = undefined;
+    this.songImages?.dispose();
+    this.songImages = undefined;
     window.removeEventListener('keydown', this.handleKeyDown);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.handlePointerDown);
@@ -1406,6 +1411,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       return;
     }
     this.collection = collection;
+    // Images cached for the previous collection's songs may not match the new one's files.
+    this.songImages?.clear();
     this.browseStack = [];
     this.parentCursorStack = [];
     this.selectedIndex = 0;
@@ -2324,7 +2331,15 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   private ensureBeMusicRenderer(): BeMusicSelectBinding {
     if (!this.beMusicRenderer) {
-      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, this.options.resolveSongRecord);
+      const songImages = new SongImageCache({
+        resolveSource: (song) => resolveSongSource(this.collection, song),
+        onLoaded: () => this.beMusicRenderer?.invalidate(),
+      });
+      this.songImages = songImages;
+      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, {
+        resolveSongRecord: this.options.resolveSongRecord,
+        songImage: songImages.lookup,
+      });
       this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
       this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
     }

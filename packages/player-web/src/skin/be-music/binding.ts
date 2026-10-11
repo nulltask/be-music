@@ -31,8 +31,7 @@ import type {
 
 const log = logger('be-music-skin');
 
-/** Song images aren't loaded for be-music skins yet: every lookup reports the image as unavailable. */
-// Wired in a later commit.
+/** Hosts that hand no song images report every image as unavailable. */
 const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
 
 /** Hosts that keep no play records report every song as never played. */
@@ -175,6 +174,7 @@ export class BeMusicGameplayBinding {
   readonly drawsBga: boolean;
   private readonly skin: BeMusicSkin;
   private readonly settings: BeMusicSkinSettingValues;
+  private readonly songImage: BeMusicSongImageLookup;
   private readonly surface: SkinSurface;
   private frame: BeMusicGameplayFrame | undefined;
   private lanes: BeMusicLaneFrame[] = [];
@@ -186,9 +186,11 @@ export class BeMusicGameplayBinding {
   private frameNumber = 0;
   private drawnFrame = -1;
 
-  constructor(skin: BeMusicSkin) {
+  /** `songImage` resolves the song's images for `frame.songImage`; without one every image reads as unavailable. */
+  constructor(skin: BeMusicSkin, options: { songImage?: BeMusicSongImageLookup } = {}) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
+    this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.bombDurationMs = skin.gameplay.bombDurationMs ?? 300;
     this.drawsMines = skin.gameplay.drawsMines === true;
     this.drawsLaneCover = skin.gameplay.drawsLaneCover === true;
@@ -227,7 +229,7 @@ export class BeMusicGameplayBinding {
       effects: runtime.effects ?? 'full',
       audio: runtime.audio,
       settings: this.settings,
-      songImage: NO_SONG_IMAGE,
+      songImage: this.songImage,
     };
     const sprite = context.layerPool.acquireSprite();
     sprite.texture = this.surface.texture;
@@ -299,6 +301,7 @@ export class BeMusicSelectBinding {
   private readonly hitPool: ChildPool;
   private readonly settings: BeMusicSkinSettingValues;
   private readonly songRecord: BeMusicSelectFrame['songRecord'];
+  private readonly songImage: BeMusicSongImageLookup;
   /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
   private pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
@@ -306,13 +309,18 @@ export class BeMusicSelectBinding {
 
   /**
    * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
-   * reads as never played.
+   * reads as never played. `songImage` resolves song images for `frame.songImage` (call {@link invalidate} when one
+   * arrives); without one every image reads as unavailable.
    */
-  constructor(skin: BeMusicSkin, resolveSongRecord?: BeMusicSelectFrame['songRecord']) {
+  constructor(
+    skin: BeMusicSkin,
+    options: { resolveSongRecord?: BeMusicSelectFrame['songRecord']; songImage?: BeMusicSongImageLookup } = {},
+  ) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.outroMs = skin.select.outroMs ?? 0;
-    this.songRecord = resolveSongRecord ?? NO_SONG_RECORD;
+    this.songRecord = options.resolveSongRecord ?? NO_SONG_RECORD;
+    this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.settings = resolveBeMusicSkinSettings(skin);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
     this.hitPool = new ChildPool(this.frontLayer);
@@ -321,6 +329,11 @@ export class BeMusicSelectBinding {
   /** Records the select state after an input-driven change. Drawing happens in {@link tick}. */
   render(frame: BeMusicSelectSceneFrame): void {
     this.frame = frame;
+    this.revision += 1;
+  }
+
+  /** Moves `frame.revision` without a state change, e.g. when a song image the skin asked for has loaded. */
+  invalidate(): void {
     this.revision += 1;
   }
 
@@ -357,7 +370,7 @@ export class BeMusicSelectBinding {
       revision: this.revision,
       pointer,
       songRecord: this.songRecord,
-      songImage: NO_SONG_IMAGE,
+      songImage: this.songImage,
       settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {
         const area = pool.acquireGraphics();
@@ -394,16 +407,19 @@ export class BeMusicResultBinding {
   private readonly skin: BeMusicSkin;
   private readonly surface: SkinSurface;
   private readonly settings: BeMusicSkinSettingValues;
+  private readonly songImage: BeMusicSongImageLookup;
 
-  constructor(skin: BeMusicSkin) {
+  /** `songImage` resolves song images for `frame.songImage`; without one every image reads as unavailable. */
+  constructor(skin: BeMusicSkin, options: { songImage?: BeMusicSongImageLookup } = {}) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.settings = resolveBeMusicSkinSettings(skin);
+    this.songImage = options.songImage ?? NO_SONG_IMAGE;
     this.view.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
   }
 
   render(sceneFrame: BeMusicResultSceneFrame): void {
-    const frame: BeMusicResultFrame = { ...sceneFrame, songImage: NO_SONG_IMAGE, settings: this.settings };
+    const frame: BeMusicResultFrame = { ...sceneFrame, songImage: this.songImage, settings: this.settings };
     this.surface.draw((surface) => this.skin.result.draw(surface, frame));
   }
 

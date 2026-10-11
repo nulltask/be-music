@@ -153,6 +153,7 @@ import type {
 import { resolveBeMusicLaneKind } from '../../skin/be-music/registry.ts';
 import { resolveGameplayLayout, type BeMusicJudgeWindows, type BeMusicLongNote } from '@be-music/skin-sdk';
 import { BeMusicGameplayBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import {
   PHANTOM_BOMB_DURATION_MS,
   renderPhantomBombs,
@@ -1896,6 +1897,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     try {
       this.skinBindingInstance?.dispose();
       this.skinBindingInstance = undefined;
+      this.songImages?.dispose();
+      this.songImages = undefined;
       this.noteLayerPool.destroy();
       this.skinLayerPool.destroy();
       this.overlayLayerPool.destroy();
@@ -3475,6 +3478,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   private skinBindingInstance: BeMusicGameplayBinding | undefined;
+  /** Song images handed to the be-music skin (`frame.songImage`), from the playing song's asset source. */
+  private songImages: SongImageCache | undefined;
 
   /**
    * The be-music skin's gameplay binding while the scene paints through a skin: lanes, notes, and hit effects are handed
@@ -3484,7 +3489,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private get skinBinding(): BeMusicGameplayBinding | undefined {
     const skin = this.options.beMusicSkin;
     if (!skin || this.options.skinlessChromeRenderer) return undefined;
-    this.skinBindingInstance ??= new BeMusicGameplayBinding(skin);
+    if (!this.skinBindingInstance) {
+      this.songImages = new SongImageCache({
+        resolveSource: (song) =>
+          this.source !== undefined && song.sourceId === this.source.id ? this.source : undefined,
+      });
+      this.skinBindingInstance = new BeMusicGameplayBinding(skin, { songImage: this.songImages.lookup });
+    }
     return this.skinBindingInstance;
   }
 

@@ -8,6 +8,8 @@ import type { PixiGameplayResultData } from './result-data.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { resolveSongSource } from '../../collection/collection.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -115,6 +117,8 @@ export class CoreResultView {
   private readonly fallbackLayer = new Container();
   /** Draws the be-music skin's result on its canvas, shown in `fallbackLayer`; created on first use. */
   private skinBinding: BeMusicResultBinding | undefined;
+  /** Song images handed to the be-music skin (`frame.songImage`); created with the binding. */
+  private songImages: SongImageCache | undefined;
   /** Clip mask for the design rect — keeps theme artwork from bleeding into the letterbox bars. */
   private readonly designClipMask = new Graphics();
   /**
@@ -321,6 +325,8 @@ export class CoreResultView {
     try {
       this.skinBinding?.dispose();
       this.skinBinding = undefined;
+      this.songImages?.dispose();
+      this.songImages = undefined;
       this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
@@ -401,7 +407,13 @@ export class CoreResultView {
     // A skip (Enter before the chart draw finishes → timer 151) jumps the skin's entrance to its settled layout.
     const skipped = this.timerStartedAt.has(151);
     if (!this.skinBinding) {
-      this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin);
+      const collection = this.options.collection;
+      this.songImages = new SongImageCache({
+        resolveSource: (song) => (collection ? resolveSongSource(collection, song) : undefined),
+      });
+      this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin, {
+        songImage: this.songImages.lookup,
+      });
       this.fallbackLayer.addChild(this.skinBinding.view);
     }
     this.skinBinding.render({

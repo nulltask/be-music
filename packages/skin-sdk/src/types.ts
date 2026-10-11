@@ -457,7 +457,8 @@ export interface BeMusicBgaFrame {
 /**
  * Looks up one of a song's images (`#STAGEFILE`, `#BANNER`, `#BACKBMP`). Images load lazily: the first calls return
  * `undefined` while the image decodes, and the screen is redrawn (on select, `revision` moves) once it is ready. Also
- * `undefined` when the song has no such image or the host doesn't provide images.
+ * `undefined` when the song has no such image or the host doesn't provide images. Look the image up on every draw rather
+ * than keeping it: hosts cache a bounded number and may close the least recently used one.
  */
 export type BeMusicSongImageLookup = (song: BrowserSongEntry, kind: BeMusicSongImageKind) => ImageBitmap | undefined;
 
