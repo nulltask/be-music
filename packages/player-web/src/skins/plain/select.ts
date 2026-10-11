@@ -56,6 +56,7 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   }
   text(ctx, song.title, x + 16, y + 28, { size: 18, weight: 800, maxWidth: PANEL_W - 32 });
   text(ctx, song.artist ?? '', x + 16, y + 52, { size: 11, color: MUTED, maxWidth: PANEL_W - 32 });
+  if (song.genre) text(ctx, song.genre, x + 16, y + 70, { size: 10, color: MUTED, maxWidth: PANEL_W - 32 });
 
   const facts = resolveSongRowFacts(song);
   stat(ctx, 'MODE', formatPlayVariantLabel(song), x + 16, y + 92);

@@ -181,7 +181,8 @@ function drawHud(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame, wid
 
   // Track, bottom left.
   text(ctx, runtime.songTitle ?? '', MARGIN, height - 50, { size: 16, weight: 700, maxWidth: 380 });
-  text(ctx, runtime.songArtist ?? '', MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380 });
+  const byline = [runtime.songArtist, runtime.songGenre].filter(Boolean).join('  /  ');
+  text(ctx, byline, MARGIN, height - 28, { size: 11, color: MUTED, maxWidth: 380 });
 
   // Score figures, bottom right, in one row.
   const figures: Array<[string, string]> = [

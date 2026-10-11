@@ -187,7 +187,7 @@ Set `gameplay.drawsMines: true` to draw mine notes yourself from `frame.mines`. 
 `runtime` (`BeMusicGameplayRuntime`) carries:
 
 - **Song and score:**
-  - `songTitle`, `songArtist`, `bpm`, `hiSpeed`
+  - `songTitle`, `songArtist`, `songGenre`, `bpm` (the BPM at the playhead, following tempo changes), `hiSpeed`
   - `score`, `exScore`, `exScoreMax`, `combo`, `maxCombo`
   - judgement counts (`perfect` … `poor`, `fast`, `slow`)
   - `rank`, `totalNotes`

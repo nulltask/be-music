@@ -252,7 +252,16 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         ? `No. ${String(Math.min(frame.selectedIndex + 1, entries.length)).padStart(3, '0')} / ${String(entries.length).padStart(3, '0')}`
         : 'No. 000 / 000';
     chrome.rect(14, 56, 290, 1).fill(LAT_INK);
-    text(onEntry('NOW SELECTING', 120, 3), 14, 63, mono());
+    // The genre heads the block, where a fixed caption used to sit.
+    const genre = song?.genre?.trim();
+    if (genre) {
+      text(
+        onCursor(genre.toUpperCase(), 60, 3),
+        14,
+        63,
+        mono(LAT_GRAPHITE, { fontFamily: LAT_TEXT_FONT, maxWidth: 190 }),
+      );
+    }
     text(onCursor(position, 0, 4, 260), 304, 63, mono(LAT_INK, { anchorX: 1 }));
     addStaggeredSkinText(
       layer,

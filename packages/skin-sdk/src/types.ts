@@ -163,6 +163,8 @@ export interface BeMusicJudgeState {
 export interface BeMusicGameplayRuntime {
   songTitle?: string;
   songArtist?: string;
+  songGenre?: string;
+  /** BPM at the playhead: follows the chart's tempo changes (and holds through stops), not just its header BPM. */
   bpm?: number;
   hiSpeed?: number;
   score?: number;
