@@ -4290,7 +4290,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /**
    * Draws horizontal measure lines on the playfield at every `#MEASURE` boundary. A theme may draw its own
    * ({@link renderThemeMeasureLines}; the LR2 family uses `#SRC_LINE` / `#DST_LINE`); otherwise we fall back to a thin
-   * bar spanning the lane area.
+   * bar across each run of adjacent lanes, so double play's banks get one each and the gap between them stays clear.
    */
   private renderMeasureLines(currentBeat: number, pixelsPerBeat: number): void {
     const beats = this.resolveMeasureBeats();
@@ -4337,10 +4337,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
       return;
     }
-    // Fallback: simple white strip when the theme draws none. One pooled `Graphics` carries every line — the
-    // accumulated rect-fill commands form one batched draw, no per-line allocation.
-    const x0 = left.x;
-    const x1 = right.x + right.w;
+    // Fallback: simple white strip when the theme draws none, one per run of adjacent lanes so double play's gap stays
+    // clear. One pooled `Graphics` carries every line — the accumulated rect-fill commands form one batched draw, no
+    // per-line allocation.
+    const runs = this.resolveMeasureLineRuns();
     const graphic = this.noteLayerPool.acquireGraphics();
     for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
       const beat = beats[beatIndex]!;
@@ -4351,7 +4351,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       if (y < top - 1 || y > bottom + 1) {
         continue;
       }
-      graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
+      for (const run of runs) {
+        graphic.rect(run.x, Math.round(y), run.w, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
+      }
     }
   }
 

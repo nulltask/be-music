@@ -9,7 +9,7 @@ import {
   type BurstParticle,
   type Vec3,
 } from './space.ts';
-import { burstGrainCount } from './burst-budget.ts';
+import { BURST_SKIRT_FRAME_BUDGET, burstGrainCount } from './burst-budget.ts';
 import { drawReticle, sharedShapeBatch } from './draw.ts';
 import { SYN_GLOW_SIZE, synGlowTexture } from './style.ts';
 import {
@@ -67,7 +67,8 @@ export function renderSynesthesiaLanes({
   const tier = effectProfile(effects).enabled ? comboTier(combo ?? 0) : 0;
   // ...and swells on every bass hit of the mix.
   const heat = 1 + 0.3 * tier + 0.9 * drive.bass;
-  const lineColor = tier >= 3 ? emberColor(0.55 + 0.35 * Math.sin(nowMs / 700)) : 0xff8a2a;
+  // Stepped through 17 shades so the cached beat gradient (one per colour) stays bounded.
+  const lineColor = tier >= 3 ? emberColor(0.55 + (0.35 * Math.round(8 * Math.sin(nowMs / 700))) / 8) : 0xff8a2a;
   let gridTop = Number.POSITIVE_INFINITY;
   let gridBottom = 0;
   let gridLeft = Number.POSITIVE_INFINITY;
@@ -112,15 +113,17 @@ export function renderSynesthesiaLanes({
     graphics.rect(run.right - 1, gridTop, 1, Math.max(1, gridBottom - gridTop)).fill({ color: 0xff7a1e, alpha: 0.25 });
   }
 
-  // Judgement line: a white filament wrapped in stacked ember bloom that swells on each beat — one per play side, so
-  // it never crosses the gap between the double-play banks.
+  // Judgement line: a crisp white filament with no bloom around it — one per play side, so it never crosses the gap
+  // between the double-play banks. The beat rises above it instead: an ember wash fading up the lanes that leaps tall
+  // and bright on each beat and settles back before the next.
   const y = gridBottom;
+  const beatHeight = Math.min(gridBottom - gridTop, 36 + 110 * pulse * (0.7 + 0.3 * heat));
+  const beatAlpha = Math.min(1, (0.1 + 0.55 * pulse) * heat);
   for (const run of resolveLaneRuns(lanes)) {
     const lineW = run.right - run.left;
-    graphics.rect(run.left, y - 14, lineW, 22).fill({ color: lineColor, alpha: (0.05 + 0.08 * pulse) * heat });
     graphics
-      .rect(run.left, y - 6, lineW, 8)
-      .fill({ color: lineColor, alpha: Math.min(0.8, (0.16 + 0.14 * pulse) * heat) });
+      .rect(run.left, y - 3 - beatHeight, lineW, beatHeight)
+      .fill({ fill: beatGradient(lineColor), alpha: beatAlpha });
     graphics.rect(run.left, y - 3, lineW, 3).fill({ color: 0xffd08a, alpha: 0.85 });
     graphics.rect(run.left, y - 2, lineW, 1).fill(0xffffff);
   }
@@ -145,18 +148,25 @@ export function mineFilamentLit(laneX: number, segment: number, nowMs: number): 
 }
 
 /**
- * A mine: shaped like a note so it reads in the same rhythm, but dark crimson with a broken, flickering filament where a
- * note carries its clean white one — a note that has gone wrong, to be left alone.
+ * A mine: shaped like a note so it reads in the same rhythm, but bright crimson in a throbbing red halo, with a broken,
+ * flickering filament where a note carries its clean white one — a note that has gone wrong, to be left alone.
  */
 export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteContext): void {
   const bodyW = Math.max(4, w);
+  // A red halo that throbs like a warning light (twice a second), so the mine stands out of the lane at a glance.
+  const alarm = 0.5 + 0.5 * Math.sin((nowMs / 1000) * Math.PI * 4);
+  graphics
+    .rect(x - 4, y - NOTE_HEIGHT - 4, bodyW + 8, NOTE_HEIGHT + 8)
+    .fill({ color: 0xff2030, alpha: 0.18 + 0.22 * alarm });
   graphics.rect(x - 1, y - NOTE_HEIGHT - 1, bodyW + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0x5a0a12);
-  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 1).fill(0xff2b3a);
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).fill(0xc4142c);
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, NOTE_HEIGHT).stroke({ color: 0xff6070, width: 1, alignment: 1 });
+  graphics.rect(x, y - NOTE_HEIGHT, bodyW, 2).fill({ color: 0xff8a94, alpha: 0.9 });
+  // The broken filament burns white-hot where a note's runs clean.
   for (let segment = 0; segment * MINE_SEGMENT < bodyW; segment += 1) {
     if (!mineFilamentLit(x, segment, nowMs)) continue;
     const left = segment * MINE_SEGMENT;
-    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill({ color: 0xff5a5a, alpha: 0.95 });
+    graphics.rect(x + left, y - 5, Math.min(MINE_SEGMENT - 2, bodyW - left), 2).fill(0xffe0e0);
   }
 }
 
@@ -185,19 +195,28 @@ function drawNote(graphics: Graphics, x: number, y: number, w: number, light: La
 const BURST_PARTICLES = 170;
 const BURST_PARTICLES_PER_TIER = 24;
 const BURST_PARTICLES_MAX = BURST_PARTICLES + BURST_PARTICLES_PER_TIER * 4;
+/**
+ * Skirt grains per hit at combo tier 0 (each tier adds {@link BURST_SKIRT_PER_TIER}): fine powder that spreads along
+ * the judgement line and barely rises, so it thickens the burst without dusting the lanes the next notes fall down.
+ */
+const BURST_SKIRT = 140;
+const BURST_SKIRT_PER_TIER = 16;
+const BURST_SKIRT_MAX = BURST_SKIRT + BURST_SKIRT_PER_TIER * 4;
+/** Seed offset so a hit's skirt flies in different directions from its sparks. */
+const SKIRT_SEED = 0x5f3759df;
 const BURST_FOCAL = 260;
 /** Grain size (0.4..1) from which a spark leaves a hairline trail / carries a glow sprite; the rest is fine powder. */
 const POWDER_TRAIL_SIZE = 0.85;
 const POWDER_GLINT_SIZE = 0.94;
 const PARTICLE_CACHE = new Map<number, BurstParticle[]>();
 
-function cachedBurst(seed: number): BurstParticle[] {
+function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[] {
   let particles = PARTICLE_CACHE.get(seed);
   if (!particles) {
-    particles = burstParticles(seed, BURST_PARTICLES_MAX);
+    particles = burstParticles(seed, count);
     PARTICLE_CACHE.set(seed, particles);
     // Live bombs never exceed a few dozen; keep the cache bounded.
-    if (PARTICLE_CACHE.size > 64) {
+    if (PARTICLE_CACHE.size > 128) {
       const oldest = PARTICLE_CACHE.keys().next().value;
       if (oldest !== undefined) PARTICLE_CACHE.delete(oldest);
     }
@@ -230,7 +249,15 @@ export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: PixiBomb
   const crowd = 1 / Math.sqrt(Math.max(1, bombs.length / 2));
   for (const bomb of bombs) {
     const grains = burstGrainCount(BURST_PARTICLES, BURST_PARTICLES_PER_TIER, tier, profile.amount, bombs.length);
-    renderBomb(pool, bomb, tier, crowd, profile.amount, grains);
+    const skirt = burstGrainCount(
+      BURST_SKIRT,
+      BURST_SKIRT_PER_TIER,
+      tier,
+      profile.amount,
+      bombs.length,
+      BURST_SKIRT_FRAME_BUDGET,
+    );
+    renderBomb(pool, bomb, tier, crowd, profile.amount, grains, skirt);
   }
 }
 
@@ -259,6 +286,7 @@ function renderBomb(
   crowd: number,
   amount: number,
   grains: number,
+  skirt: number,
 ): void {
   const t = Math.max(0, Math.min(1, bomb.elapsedMs / SYNESTHESIA_BOMB_DURATION_MS));
   if (t >= 1) return;
@@ -341,6 +369,33 @@ function renderBomb(
     sprite.tint = tint;
     sprite.alpha = sparkAlpha;
   }
+  // 3b. Skirt: fine, dimmer powder thrown out sideways along the judgement line. It rises at most about a lane's width
+  // and settles back, so the burst reads fuller while the lanes above — where the next notes fall — stay clear.
+  const skirtParticles = cachedBurst(bomb.seed ^ SKIRT_SEED, BURST_SKIRT_MAX);
+  const skirtCount = Math.min(skirtParticles.length, skirt);
+  for (let index = 0; index < skirtCount; index += 1) {
+    const particle = skirtParticles[index]!;
+    const life = t / particle.life;
+    if (life >= 1) continue;
+    const position = burstParticlePosition(particle, life, radius * 0.85, gravity);
+    const head = project({
+      x: position.x * 1.1,
+      y: Math.min(unit * 0.4, position.y * 0.25 - unit * 0.7 * particle.speed * (1 - (1 - life) ** 2)),
+      z: position.z * 0.9,
+    });
+    if (!head.visible) continue;
+    const tint = hsvToHex(light.hue + particle.hueShift, Math.min(0.9, 0.55 + life * 1.5), 1);
+    const side = Math.max(0.6, (0.5 + 0.7 * particle.size) * head.scale * (1 - life * 0.5));
+    batch.rect(
+      effects,
+      tint,
+      (1 - life) ** 1.2 * (0.45 + 0.25 * crowd),
+      head.x - side / 2,
+      head.y - side / 2,
+      side,
+      side,
+    );
+  }
   batch.flush();
 
   // 4. Core flash + anamorphic streak.
@@ -385,6 +440,30 @@ function renderBomb(
 const COLUMN_GRADIENTS = new Map<number, FillGradient>();
 
 /** Vertical light column for `color`: transparent at the top, brightening toward the base. Local texture space. */
+const BEAT_GRADIENTS = new Map<number, FillGradient>();
+
+/** The beat wash above the judgement line in `color`: clear at the top, easing in to a soft glow at the line. */
+function beatGradient(color: number): FillGradient {
+  let gradient = BEAT_GRADIENTS.get(color);
+  if (!gradient) {
+    const rgb = new Color(color);
+    gradient = new FillGradient({
+      type: 'linear',
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: 'local',
+      colorStops: [
+        { offset: 0, color: rgb.setAlpha(0).toRgbaString() },
+        { offset: 0.45, color: rgb.setAlpha(0.06).toRgbaString() },
+        { offset: 0.8, color: rgb.setAlpha(0.22).toRgbaString() },
+        { offset: 1, color: rgb.setAlpha(0.45).toRgbaString() },
+      ],
+    });
+    BEAT_GRADIENTS.set(color, gradient);
+  }
+  return gradient;
+}
+
 function resolveColumnGradient(color: number): FillGradient {
   let gradient = COLUMN_GRADIENTS.get(color);
   if (!gradient) {
