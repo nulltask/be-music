@@ -670,33 +670,35 @@ function drawSongPlate(
     .fill(PHANTOM_PAPER)
     .stroke({ color: PHANTOM_INK, width: 2 });
   frame.poly(parallelogramPoints(x + 6, y + 6, 5, h - 12, 5)).fill(PHANTOM_RED);
-  addText(
-    layer,
-    runtime.songTitle?.trim() || 'Untitled chart',
-    x + 22,
-    y + 5,
-    { size: 16, fill: PHANTOM_INK, fontFamily: DEFAULT_HEADLINE_FONT, maxWidth: w - 30 },
-    pool,
-  );
+  // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
   const genre = runtime.songGenre?.trim();
+  const lift = genre ? 8 : 0;
   if (genre) {
     addText(
       layer,
       genre.toUpperCase(),
-      x + w - 18,
-      y + 28,
-      { size: 9, weight: '800', fill: PHANTOM_ASH, anchorX: 1, maxWidth: 200 },
+      x + 22,
+      y + 3,
+      { size: 8, weight: '800', fill: PHANTOM_ASH, maxWidth: w - 30 },
       pool,
     );
   }
+  addText(
+    layer,
+    runtime.songTitle?.trim() || 'Untitled chart',
+    x + 22,
+    y + 5 + lift,
+    { size: 16, fill: PHANTOM_INK, fontFamily: DEFAULT_HEADLINE_FONT, maxWidth: w - 30 },
+    pool,
+  );
   const artist = runtime.songArtist?.trim();
   if (artist) {
     addText(
       layer,
       artist,
       x + 20,
-      y + 27,
-      { size: 10, weight: '800', fill: PHANTOM_RED, maxWidth: w - 30 - (genre ? 216 : 0) },
+      y + 27 + lift / 2,
+      { size: 10, weight: '800', fill: PHANTOM_RED, maxWidth: w - 30 },
       pool,
     );
   }
@@ -791,12 +793,12 @@ function drawScorePlate(
   // Rank badge: the letter sits on a jagged red burst — the calling card of the run.
   const rank = runtime.rank && runtime.rank !== '-' ? runtime.rank : 'F';
   const topRank = rank === 'AAA' || rank === 'AA';
-  // Anchored on the plate's lower-right corner and allowed to break out of the frame, so it never crowds COMBO / MAX.
-  const badgeX = x + w - 10;
-  const badgeY = y + h - 14;
+  // Centred on the RANK label's line at the plate's right edge, inside the frame and clear of MAX above it.
+  const badgeX = x + w - 34;
+  const badgeY = y + 78;
   // The badge pumps with the bass.
-  const pump = 1 + 0.45 * drive.bass;
-  const badge = starburstPoints(badgeX, badgeY, 27 * pump, 17 * pump, 12, -0.2, 0.22, rank.length);
+  const pump = 1 + 0.25 * drive.bass;
+  const badge = starburstPoints(badgeX, badgeY, 22 * pump, 14 * pump, 12, -0.2, 0.22, rank.length);
   frame
     .poly(badge)
     .fill(topRank ? PHANTOM_GOLD : PHANTOM_RED)
@@ -808,10 +810,10 @@ function drawScorePlate(
     badgeX + 1,
     badgeY + 1,
     {
-      ...displayStyle(rank.length >= 3 ? 18 : 28, topRank ? PHANTOM_INK : PHANTOM_WHITE),
+      ...displayStyle(rank.length >= 3 ? 15 : 23, topRank ? PHANTOM_INK : PHANTOM_WHITE),
       anchorX: 0.5,
       anchorY: 0.5,
-      maxWidth: 42,
+      maxWidth: 34,
     },
     pool,
   );

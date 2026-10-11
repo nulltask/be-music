@@ -328,7 +328,12 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
   const trackTextX = TRACK_X + 14;
   const trackTextW = trackW - 28;
   label('TRACK', trackTextX, TOP + 12, track.root, SYN_EMBER);
-  text(track.root, result.song.title || 'Untitled chart', trackTextX, TOP + 30, {
+  // Genre, title, artist — the order every built-in skin uses.
+  const genreLift = result.song.genre ? 14 : 0;
+  if (result.song.genre) {
+    label(result.song.genre.toUpperCase(), trackTextX, TOP + 30, track.root);
+  }
+  text(track.root, result.song.title || 'Untitled chart', trackTextX, TOP + 30 + genreLift, {
     size: 15,
     weight: '500',
     fill: SYN_WHITE,
@@ -336,16 +341,13 @@ export function renderSynesthesiaResult(frame: PixiResultFrame): void {
     maxWidth: trackTextW,
     dropShadow: { color: accent, alpha: 0.7, blur: 6, distance: 0 },
   });
-  text(track.root, result.song.artist ?? '', trackTextX, TOP + 52, {
+  text(track.root, result.song.artist ?? '', trackTextX, TOP + 52 + genreLift, {
     size: 10,
     weight: '300',
     fill: SYN_MIST,
     fontFamily: SYN_TEXT_FONT,
     maxWidth: trackTextW,
   });
-  if (result.song.genre) {
-    label(result.song.genre.toUpperCase(), trackTextX, TOP + 68, track.root);
-  }
   track.g.rect(trackTextX, TOP + 88, trackTextW, 1).fill({ color: accent, alpha: 0.3 });
   resolveResultTrackRows(result).forEach((row, index) => {
     const rowY = TOP + 100 + index * 34;
