@@ -188,6 +188,9 @@ import { logger } from '../../logger.ts';
 
 const log = logger('gameplay');
 
+/** Design px above a lane's top through which notes keep drawing as they scroll in (standard layout). */
+const NOTE_OVERSCAN = 48;
+
 /**
  * View-side runtime note alias. Used to keep `this.notes` typed even though the view no longer extends
  * `TimedPlayableNote` with extra renderer state — judge status is now tracked through the same `judged` flag
@@ -1289,6 +1292,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private get layoutMode(): GameplayLayoutMode {
     return this.options.layoutMode === 'touch' && this.beMusicStage !== undefined ? 'touch' : 'standard';
+  }
+
+  /**
+   * How far above a lane's top notes still draw while they scroll in. The standard lanes start at the stage's top edge,
+   * so notes enter from off-stage; the touch lanes start below the skin's header band, so notes there appear at the
+   * lane top instead of drawing over the header.
+   */
+  private get noteOverscan(): number {
+    return this.layoutMode === 'touch' ? 0 : NOTE_OVERSCAN;
   }
 
   /** Lane rects, playfield bounds, and judgement line of the built-in playfield for the loaded chart. */
@@ -4226,6 +4238,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   private renderNotes(seconds: number, _height: number): void {
+    const overscan = this.noteOverscan;
     this.noteLayerPool.begin();
     if (this.isIntroPlaying()) {
       // Intro period — the theme is sliding its frame chrome in. Notes and measure lines stay off-screen until the
@@ -4267,7 +4280,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         const lane = this.laneX.get(invisible.channel);
         if (!lane) continue;
         const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
-        if (y < lane.top - 48 || y > lane.bottom) continue;
+        if (y < lane.top - overscan || y > lane.bottom) continue;
         const cell = this.resolveThemeNoteCell(
           'invisible',
           resolveLr2LaneIndex(invisible.channel, this.chartPlayVariant),
@@ -4312,7 +4325,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // yEnd is *above* y (smaller value, since beats grow upward visually). Hide the LN once its tail (yEnd) has
         // visually crossed the judgement-line bottom — at that point every part of the long note is below the line and
         // shouldn't paint over the keys area. Also clip when the head is still off-screen above the playfield.
-        if (yEnd > lane.bottom || y < lane.top - 48) {
+        if (yEnd > lane.bottom || y < lane.top - overscan) {
           continue;
         }
         this.renderLongNote(laneIndex, note, lane, y, yEnd);
@@ -4322,7 +4335,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // the note's visibility depends on `judgedNoteDisplay`: - `'HIDE'` (default) — judged notes disappear the instant
       // they were judged (LR2 / beatoraja default behavior). - `'KEEP_SCROLLING'` — judged notes keep scrolling until
       // their position passes the line (≈ beatoraja's LANEEFFECT ON).
-      if (y < lane.top - 48 || y > lane.bottom) {
+      if (y < lane.top - overscan || y > lane.bottom) {
         continue;
       }
       // Read the engine's `judged` flag directly off the shared `TimedPlayableNote` instance — the engine
@@ -4350,7 +4363,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const lane = this.laneX.get(mine.channel);
       if (!lane) continue;
       const y = lane.bottom - beatDistance(mine.beat) * pixelsPerBeat;
-      if (y < lane.top - 48 || y > lane.bottom) continue;
+      if (y < lane.top - overscan || y > lane.bottom) continue;
       const laneIndex = resolveLr2LaneIndex(mine.channel, this.chartPlayVariant);
       this.renderMineNote(laneIndex, mine.channel, lane, y);
     }
@@ -4571,7 +4584,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // *bottom edge* sits at `yEnd` (just-timing of the tail) The body fills the band between them; we clamp the bottom
     // to the judgement-line bottom (= `lane.bottom`) so the body never paints over the keys area below the line — even
     // mid-LN where the head has already passed but the tail is still above.
-    const top = Math.max(lane.top - 48, Math.min(yStart, yEnd));
+    const top = Math.max(lane.top - this.noteOverscan, Math.min(yStart, yEnd));
     const bottom = Math.min(lane.bottom, Math.max(yStart, yEnd));
     const bodyCell = this.resolveThemeNoteCell('lnbody', laneIndex);
     if (bodyCell) {
