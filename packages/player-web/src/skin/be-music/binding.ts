@@ -18,6 +18,7 @@ import type {
   BeMusicSkin,
   BeMusicSkinSettingValues,
   BeMusicSongImageLookup,
+  BeMusicSongRecord,
   BeMusicStage,
   BeMusicSurface,
   BeMusicSurfaceContextMap,
@@ -33,6 +34,9 @@ const log = logger('be-music-skin');
 /** Song images aren't loaded for be-music skins yet: every lookup reports the image as unavailable. */
 // Wired in a later commit.
 const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
+
+/** Hosts that keep no play records report every song as never played. */
+const NO_SONG_RECORD = (): BeMusicSongRecord | undefined => undefined;
 
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
@@ -294,15 +298,21 @@ export class BeMusicSelectBinding {
   private readonly surface: SkinSurface;
   private readonly hitPool: ChildPool;
   private readonly settings: BeMusicSkinSettingValues;
+  private readonly songRecord: BeMusicSelectFrame['songRecord'];
   /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
   private pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
   private revision = 0;
 
-  constructor(skin: BeMusicSkin) {
+  /**
+   * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
+   * reads as never played.
+   */
+  constructor(skin: BeMusicSkin, resolveSongRecord?: BeMusicSelectFrame['songRecord']) {
     this.skin = skin;
     this.surface = new SkinSurface(skin);
     this.outroMs = skin.select.outroMs ?? 0;
+    this.songRecord = resolveSongRecord ?? NO_SONG_RECORD;
     this.settings = resolveBeMusicSkinSettings(skin);
     this.backLayer.addChild(new Sprite({ texture: this.surface.texture, roundPixels: true }));
     this.hitPool = new ChildPool(this.frontLayer);
@@ -346,8 +356,7 @@ export class BeMusicSelectBinding {
       audio,
       revision: this.revision,
       pointer,
-      // Wired in a later commit: the host keeps no play records for skins yet.
-      songRecord: () => undefined,
+      songRecord: this.songRecord,
       songImage: NO_SONG_IMAGE,
       settings: this.settings,
       hit: (x, y, w, h, action, cursor = 'pointer') => {

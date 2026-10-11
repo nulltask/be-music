@@ -30,6 +30,7 @@ import type {
   BeMusicSelectActions,
   BeMusicSelectSort,
   BeMusicSkin,
+  BeMusicSongRecord,
 } from '../../skin/be-music/types.ts';
 import { BeMusicSelectBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
@@ -432,6 +433,13 @@ export interface CoreSongSelectViewOptions {
    * knows.
    */
   onPlayOptionsChange?: (options: PixiPlayOptions) => void;
+  /**
+   * Looks up the player's best record on a chart, for a be-music skin's `frame.songRecord(song)` (its lamp, best
+   * scores, play count). Return `undefined` for a chart that has no record. Called while the skin draws, possibly
+   * for every visible row on every frame, so it should be a cheap lookup. Omit it when the host keeps no records: every
+   * song then reads as never played.
+   */
+  resolveSongRecord?: (song: BrowserSongEntry) => BeMusicSongRecord | undefined;
 }
 
 /** Design-canvas size a skin family's theme renders the select frame into. */
@@ -2316,7 +2324,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
 
   private ensureBeMusicRenderer(): BeMusicSelectBinding {
     if (!this.beMusicRenderer) {
-      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin);
+      this.beMusicRenderer = new BeMusicSelectBinding(this.beMusicSkin, this.options.resolveSongRecord);
       this.beMusicBackHolder.addChild(this.beMusicRenderer.backLayer);
       this.beMusicFrontHolder.addChild(this.beMusicRenderer.frontLayer);
     }
