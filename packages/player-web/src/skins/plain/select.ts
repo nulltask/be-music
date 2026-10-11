@@ -26,6 +26,8 @@ export function drawSelect({ context: ctx, width, height }: BeMusicSurface<'2d'>
     size: 11,
     color: MUTED,
     align: 'right',
+    maxWidth: width - MARGIN * 2 - 140,
+    nowMs: frame.nowMs,
   });
 
   drawFocusedSong(ctx, frame);
@@ -55,18 +57,23 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
     return;
   }
   // Genre, title, artist — the order every built-in skin uses.
+  const { nowMs } = frame;
   const lift = song.genre ? 12 : 0;
-  if (song.genre) text(ctx, song.genre, x + 16, y + 22, { size: 10, color: MUTED, maxWidth: PANEL_W - 32 });
-  text(ctx, song.title, x + 16, y + 28 + lift, { size: 18, weight: 800, maxWidth: PANEL_W - 32 });
-  text(ctx, song.artist ?? '', x + 16, y + 52 + lift, { size: 11, color: MUTED, maxWidth: PANEL_W - 32 });
+  const textW = PANEL_W - 32;
+  if (song.genre) text(ctx, song.genre, x + 16, y + 22, { size: 10, color: MUTED, maxWidth: textW, nowMs });
+  text(ctx, song.title, x + 16, y + 28 + lift, { size: 18, weight: 800, maxWidth: textW, nowMs });
+  text(ctx, song.artist ?? '', x + 16, y + 52 + lift, { size: 11, color: MUTED, maxWidth: textW, nowMs });
 
+  // Three columns of facts; each value keeps to its column (a wide BPM range or gimmick list scrolls).
   const facts = resolveSongRowFacts(song);
-  stat(ctx, 'MODE', formatPlayVariantLabel(song), x + 16, y + 92);
-  stat(ctx, 'LEVEL', String(song.playLevel ?? '-'), x + 110, y + 92);
-  stat(ctx, 'BPM', facts.bpm, x + 190, y + 92);
-  stat(ctx, 'NOTES', facts.notes, x + 16, y + 140);
-  stat(ctx, 'LENGTH', facts.length, x + 110, y + 140);
-  stat(ctx, 'GIMMICKS', facts.tags.join(' ') || '-', x + 190, y + 140);
+  const narrow = { maxWidth: 86, nowMs };
+  const wide = { maxWidth: 84, nowMs };
+  stat(ctx, 'MODE', formatPlayVariantLabel(song), x + 16, y + 92, narrow);
+  stat(ctx, 'LEVEL', String(song.playLevel ?? '-'), x + 110, y + 92, { maxWidth: 72, nowMs });
+  stat(ctx, 'BPM', facts.bpm, x + 190, y + 92, wide);
+  stat(ctx, 'NOTES', facts.notes, x + 16, y + 140, narrow);
+  stat(ctx, 'LENGTH', facts.length, x + 110, y + 140, { maxWidth: 72, nowMs });
+  stat(ctx, 'GIMMICKS', facts.tags.join(' ') || '-', x + 190, y + 140, wide);
 
   button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
   button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
@@ -103,7 +110,7 @@ function drawList(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFrame, widt
     const selected = index === frame.selectedIndex;
     ctx.fillStyle = selected ? ACCENT : row % 2 === 0 ? PANEL : INK;
     ctx.fillRect(listX, y, rowW, rowHeight - 2);
-    drawRow(ctx, entry, listX, y + (rowHeight - 2) / 2, rowW, selected);
+    drawRow(ctx, entry, listX, y + (rowHeight - 2) / 2, rowW, selected ? frame.nowMs : undefined);
   }
 }
 
@@ -113,21 +120,24 @@ function drawRow(
   x: number,
   midY: number,
   w: number,
-  selected: boolean,
+  /** The frame clock on the selected row, whose long texts scroll; other rows just clip theirs. */
+  nowMs: number | undefined,
 ): void {
-  const dim = selected ? TEXT : MUTED;
+  const dim = nowMs !== undefined ? TEXT : MUTED;
   if (entry.kind === 'folder') {
-    text(ctx, `▸ ${entry.folder.label}`, x + 12, midY, { size: 12, weight: 700, maxWidth: w - 120 });
+    text(ctx, `▸ ${entry.folder.label}`, x + 12, midY, { size: 12, weight: 700, maxWidth: w - 120, nowMs });
     text(ctx, `${entry.folder.songs.length} charts`, x + w - 12, midY, { size: 11, color: dim, align: 'right' });
     return;
   }
   const song = entry.song;
   const facts = resolveSongRowFacts(song);
   text(ctx, String(song.playLevel ?? '-'), x + 22, midY, { size: 12, weight: 800, align: 'center' });
-  text(ctx, song.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300 });
+  text(ctx, song.title, x + 44, midY, { size: 12, weight: 700, maxWidth: w - 300, nowMs });
   text(ctx, `${facts.notes} NOTES   ${facts.length}   ${facts.bpm} BPM`, x + w - 12, midY, {
     size: 11,
     color: dim,
     align: 'right',
+    maxWidth: 236,
+    nowMs,
   });
 }
