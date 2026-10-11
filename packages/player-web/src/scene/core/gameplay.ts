@@ -76,6 +76,7 @@ import {
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
@@ -925,6 +926,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `runtime.judgeTimings`, the full list as the result data's `judgeTimings`.
    */
   private readonly judgeTimings = new JudgeTimingLog();
+  /** The chart's BPM range, worked out once per {@link prepareSong}. */
+  private chartBpmRange: ChartBpmRange | undefined;
+  /**
+   * Play-clock ms of once-per-play moments (gauge failed, last note judged, chart end, gauge first risen above its
+   * start / reaching its max), latched as they happen and cleared per {@link prepareSong}.
+   */
+  private playMoments: {
+    failedAtMs?: number;
+    allNotesDoneAtMs?: number;
+    outroAtMs?: number;
+    gaugeRiseAtMs?: number;
+    gaugeMaxAtMs?: number;
+  } = {};
   protected lastJudge = '';
   protected lastJudgeUntil = 0;
   /**
@@ -2119,6 +2133,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.fullComboFired = false;
     this.displayedScore = 0;
     this.judgeTimings.clear();
+    this.playMoments = {};
+    this.chartBpmRange = resolveChartBpmRange(
+      resolver.tempoPoints,
+      this.songDurationSeconds,
+      resolved.metadata.bpm > 0 ? resolved.metadata.bpm : this.song?.bpm,
+    );
     this.bgaTimeline = buildBgaTimeline(resolved, resolver);
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
@@ -3603,6 +3623,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private resolveSkinlessGameplayChromeRuntime(): SkinlessGameplayChromeRuntime {
     const total = this.score.total > 0 ? this.score.total : 0;
     const seconds = this.currentSeconds();
+    const songLengthSeconds = this.resolveSongDurationSeconds();
     const usesPlayer2 = this.chartPlayVariant !== '9' && this.laneChannels.some((channel) => channel.startsWith('2'));
     const judgeSides: SkinlessGameplayJudgeState[] = [];
     for (const side of ['1P', '2P'] as const) {
@@ -3641,10 +3662,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       autoplay: this.options.autoPlay === true,
       hasBga: this.hasBga,
       nowMs: this.playClock(),
-      progressRatio: (() => {
-        const totalSeconds = this.resolveSongDurationSeconds();
-        return totalSeconds > 0 ? Math.max(0, Math.min(1, seconds / totalSeconds)) : 0;
-      })(),
+      progressRatio: songLengthSeconds > 0 ? Math.max(0, Math.min(1, seconds / songLengthSeconds)) : 0,
       beatPhase: (() => {
         const beat = this.currentBeat(seconds);
         return beat - Math.floor(beat);
@@ -3663,8 +3681,23 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       impulseKind: this.lastImpulseKind,
       effects: this.options.beMusicEffects ?? 'full',
       audio: this.audioFrame,
+      song: this.song,
       lastJudgeDeltaMs: this.judgeTimings.lastDeltaMs,
       judgeTimings: this.judgeTimings.recent,
+      minBpm: this.chartBpmRange?.minBpm,
+      maxBpm: this.chartBpmRange?.maxBpm,
+      mainBpm: this.chartBpmRange?.mainBpm,
+      songLengthMs: this.song ? songLengthSeconds * 1000 : undefined,
+      // Clamped to the length so the remaining time never runs negative through the audio tail.
+      songElapsedMs: this.song ? Math.min(seconds, songLengthSeconds) * 1000 : undefined,
+      failedAtMs: this.playMoments.failedAtMs,
+      allNotesDoneAtMs: this.playMoments.allNotesDoneAtMs,
+      outroAtMs: this.playMoments.outroAtMs,
+      gaugeRiseAtMs: this.playMoments.gaugeRiseAtMs,
+      gaugeMaxAtMs: this.playMoments.gaugeMaxAtMs,
+      // Shared by reference: the arrays only grow during a play, and skins are told not to mutate them.
+      scoreHistory: this.scoreHistory,
+      gaugeHistory: this.gaugeHistory,
     };
   }
 
@@ -4450,8 +4483,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const next = summary.gauge.current;
       if (next !== previous) {
         this.onThemeEvent({ kind: 'gauge', previous, next });
+        // Latch the first rise above the starting value and the first time the gauge tops out.
+        const moments = this.playMoments;
+        if (next > summary.gauge.initial) moments.gaugeRiseAtMs ??= this.playClock();
+        if (next >= summary.gauge.max) moments.gaugeMaxAtMs ??= this.playClock();
       }
+      if (summary.gauge.failedMidPlay === true) this.playMoments.failedAtMs ??= this.playClock();
     }
+    // `poor` excludes empty POORs, so this counts judged notes only.
+    const judged = summary.perfect + summary.great + summary.good + summary.bad + summary.poor;
+    if (summary.total > 0 && judged >= summary.total) this.playMoments.allNotesDoneAtMs ??= this.playClock();
     // Note: the per-note `judged` flag is no longer synced here. The renderer's `this.notes` /
     // `this.mineNotes` are references into the same `PreparedPlaybackChartData` instance the engine is
     // judging against (handed in via `engineOptions.preparedChart`), so when the engine sets
@@ -4579,6 +4620,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private handleSharedEngineChartFinished(finalSummary: Readonly<PlayerSummary> | undefined): void {
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
+    this.playMoments.outroAtMs ??= this.playClock();
     const delayMs = resolvePostChartResultDelayMs(this.notes, this.timingResolver, this.currentSeconds());
     // Hold the play scene for roughly two measures after the final note. This keeps the last hit / final keysound from
     // being swallowed by an immediate result transition while still falling back to a one-frame defer on empty charts or
