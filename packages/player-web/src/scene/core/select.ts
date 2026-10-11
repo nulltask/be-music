@@ -43,6 +43,7 @@ import {
   setDesignTextResolution,
 } from './viewport.ts';
 import { masterOutput } from '../../runtime/master-volume.ts';
+import { isTouchDrag, stepTouchScroll } from './touch-scroll.ts';
 
 const log = logger('select');
 const BG = new Color('#050912');
@@ -690,6 +691,14 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    */
   private lastWheelMoveAt = Number.NEGATIVE_INFINITY;
   /**
+   * The finger currently on the list (touch / pen only): where it touched down and last was, in canvas CSS pixels,
+   * whether it has moved far enough to be a swipe, and the swipe travel not yet turned into a cursor step. A touch acts
+   * on lift — as a tap when it never became a swipe — so swiping the list does not also pick the row it started on.
+   */
+  private touchGesture:
+    | { pointerId: number; startX: number; startY: number; lastY: number; dragging: boolean; carry: number }
+    | undefined;
+  /**
    * Last known pointer position in **design-space** coordinates, used by `#SRC_ONMOUSE` hit-tests and
    * `#SRC_MOUSECURSOR` follow. `-1` means "no pointer over canvas yet"; both renderers skip drawing in that case.
    */
@@ -1059,6 +1068,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     host.app.canvas.addEventListener('pointerdown', this.handlePointerDown);
     host.app.canvas.addEventListener('pointermove', this.handlePointerMove);
     host.app.canvas.addEventListener('pointerleave', this.handlePointerLeave);
+    host.app.canvas.addEventListener('pointerup', this.handlePointerUp);
+    host.app.canvas.addEventListener('pointercancel', this.handlePointerCancel);
     // Wheel scroll → cursor move. `passive: false` so we can call preventDefault and stop the page from scrolling under
     // the floating debug toolbar (which would otherwise compete for wheel events when the canvas is full-screen).
     host.app.canvas.addEventListener('wheel', this.handleWheel, { passive: false });
@@ -1336,6 +1347,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.host.app.canvas.removeEventListener('pointermove', this.handlePointerMove);
       this.host.app.canvas.removeEventListener('wheel', this.handleWheel);
       this.host.app.canvas.removeEventListener('pointerleave', this.handlePointerLeave);
+      this.host.app.canvas.removeEventListener('pointerup', this.handlePointerUp);
+      this.host.app.canvas.removeEventListener('pointercancel', this.handlePointerCancel);
     }
     // Tear down BGM + preview playback before scene-graph teardown so no `BufferSourceNode` outlives the view. The
     // preview engine MUST go first — it shares this AudioContext, and disposing it after the context is closed throws
@@ -1783,7 +1796,55 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
     this.mouseX = (event.offsetX - viewport.x) / viewport.scale;
     this.mouseY = (event.offsetY - viewport.y) / viewport.scale;
+    const gesture = this.touchGesture;
+    if (gesture === undefined || gesture.pointerId !== event.pointerId) return;
+    if (!gesture.dragging) {
+      if (!isTouchDrag(event.offsetX - gesture.startX, event.offsetY - gesture.startY)) return;
+      gesture.dragging = true;
+    }
+    const delta = (event.offsetY - gesture.lastY) / viewport.scale;
+    gesture.lastY = event.offsetY;
+    // A swipe over the open README pans its body, as the wheel does.
+    if (this.readTextOpen) {
+      this.scrollReadText(-delta);
+      return;
+    }
+    const step = stepTouchScroll(gesture.carry, delta, this.resolveTouchScrollPitch());
+    gesture.carry = step.carry;
+    if (step.steps !== 0) this.moveCursorBy(step.steps);
   };
+
+  /** A finger lifting: a touch that never became a swipe is a tap at the point it touched down. */
+  private readonly handlePointerUp = (event: PointerEvent): void => {
+    const gesture = this.touchGesture;
+    if (gesture === undefined || gesture.pointerId !== event.pointerId) return;
+    this.touchGesture = undefined;
+    if (!gesture.dragging) this.handlePointerTap(gesture.startX, gesture.startY);
+  };
+
+  private readonly handlePointerCancel = (event: PointerEvent): void => {
+    if (this.touchGesture?.pointerId === event.pointerId) this.touchGesture = undefined;
+  };
+
+  /** Design pixels a swipe travels per cursor step: the list's row pitch. */
+  private resolveTouchScrollPitch(): number {
+    return this.themeDesignSize ? 30 : this.beMusicSkin.select.layout.rowHeight;
+  }
+
+  /**
+   * Moves the cursor `steps` entries (forward when positive), one slot at a time so the bar slide animates each step,
+   * wrapping at the ends like the keyboard and wheel.
+   */
+  private moveCursorBy(steps: number): void {
+    const entries = this.currentEntries();
+    if (entries.length === 0) return;
+    const direction = steps > 0 ? 1 : -1;
+    for (let index = 0; index < Math.abs(steps); index += 1) {
+      this.selectedIndex = (this.selectedIndex + direction + entries.length) % entries.length;
+      this.noteCursorChange(direction);
+    }
+    this.render();
+  }
 
   private readonly handlePointerLeave = (): void => {
     this.mouseX = -1;
@@ -2006,12 +2067,31 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     // the mount-time / setVisible-time start may have left the context suspended. Cheap to call repeatedly
     // (early-returns when a source is already playing).
     void this.startSelectBgm();
+    // A finger may be starting a swipe over the list, so its tap waits for the lift (`handlePointerUp`).
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+      if (this.touchGesture !== undefined) return;
+      this.touchGesture = {
+        pointerId: event.pointerId,
+        startX: event.offsetX,
+        startY: event.offsetY,
+        lastY: event.offsetY,
+        dragging: false,
+        carry: 0,
+      };
+      return;
+    }
+    if (this.readTextOpen) event.preventDefault();
+    this.handlePointerTap(event.offsetX, event.offsetY);
+  };
+
+  /** A click (or a touch that did not swipe) at canvas point (`offsetX`, `offsetY`), in CSS pixels. */
+  private handlePointerTap(offsetX: number, offsetY: number): void {
+    if (!this.visible || this.launchAt !== undefined) return;
     // README modal owns the pointer while open. LR2 uses Enter (the decide key) for panel close, mirrored on the
     // keyboard path; on the mouse side we accept any click anywhere as a dismiss to cover users who'd reach for "click
     // outside the card" before reading the footer hint. The README content itself isn't interactive so consuming the
     // click loses no affordance.
     if (this.readTextOpen) {
-      event.preventDefault();
       this.closeReadText();
       return;
     }
@@ -2020,8 +2100,8 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const themeSize = this.themeDesignSize;
     const { width: designWidth, height: designHeight } = themeSize ?? this.beMusicDesignSize;
     const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
-    const virtualX = (event.offsetX - viewport.x) / viewport.scale;
-    const virtualY = (event.offsetY - viewport.y) / viewport.scale;
+    const virtualX = (offsetX - viewport.x) / viewport.scale;
+    const virtualY = (offsetY - viewport.y) / viewport.scale;
 
     if (themeSize) {
       this.handleThemePointerDown(virtualX, virtualY);
@@ -2070,7 +2150,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     } else {
       this.launchSong(entry.song);
     }
-  };
+  }
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     // A launch outro is playing — the chart is already chosen.

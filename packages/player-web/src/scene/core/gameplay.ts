@@ -171,6 +171,14 @@ import {
   setDesignTextResolution,
 } from './viewport.ts';
 import type { PixiGameplayResultData } from './result-data.ts';
+import {
+  TouchLaneTracker,
+  canvasPointToDesign,
+  hitTestTouchLane,
+  isTouchPlayPointer,
+  resolveTouchLaneZones,
+  type TouchLaneChange,
+} from './touch-lanes.ts';
 import { logger } from '../../logger.ts';
 
 const log = logger('gameplay');
@@ -874,6 +882,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * the view resumed.
    */
   private sharedEngineInputSignals: PlayerInputSignalBus | undefined;
+  /** Which lane each finger on the canvas holds (touch play). */
+  private readonly touchLanes = new TouchLaneTracker();
+  /** Input token a touch on each lane channel presses, from the chart's lane bindings (built on the first touch). */
+  private touchTokenByChannel: Map<string, string> | undefined;
+  /** The canvas `touch-action` before this scene set it to `none`, restored on dispose. */
+  private previousCanvasTouchAction: string | undefined;
   /**
    * Latch flipped on the first non-zero `frame.currentSeconds` from the engine. The view's
    * `audioContextStartTime` is re-anchored at that moment so the renderer's chart-time matches what the engine
@@ -1424,6 +1438,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // input goes through the WebInputRuntime's own `keydown` listener to the engine's input bus.
     window.addEventListener('keydown', this.handleSharedEngineExitKey);
     this.app.canvas.addEventListener('pointerdown', this.focus);
+    // Touch play: fingers on the lanes press them. `touch-action: none` keeps the page from scrolling or zooming under
+    // the fingers while the play is up.
+    this.previousCanvasTouchAction = this.app.canvas.style.touchAction;
+    this.app.canvas.style.touchAction = 'none';
+    this.app.canvas.addEventListener('pointerdown', this.handleTouchPointer);
+    this.app.canvas.addEventListener('pointermove', this.handleTouchPointer);
+    this.app.canvas.addEventListener('pointerup', this.handleTouchPointerUp);
+    this.app.canvas.addEventListener('pointercancel', this.handleTouchPointerUp);
     document.addEventListener('visibilitychange', this.handleVisibilityChange);
     // `visibilitychange` covers tab switching but not always app switching (Cmd-Tab / Alt-Tab) — fall back to window
     // blur/focus so the gameplay also pauses when the user moves to another OS app entirely. Use the capture phase so
@@ -1578,6 +1600,28 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Hides / shows the scene's subtree on the shared stage. Toggles `sceneRoot.visible` (cheap) instead of touching the
    * canvas display — the canvas is shared with the select scene now, so we mustn't make it `display: none` from here.
    */
+  /**
+   * Pauses or resumes the play, as Space does. For hosts that offer on-screen controls — a touch device has no keyboard
+   * to press Space or Escape on.
+   */
+  public requestTogglePause(): void {
+    if (this.disposed || this.exiting) return;
+    this.togglePause();
+  }
+
+  /** Whether the play is paused (by Space, {@link requestTogglePause}, or the auto-pause on losing focus). */
+  public isPaused(): boolean {
+    return this.paused;
+  }
+
+  /** Leaves the play the way Escape does: the theme's fade-out runs, then the host's `onExit` fires. */
+  public requestExit(): void {
+    this.beginExitSequence(() => {
+      this.sharedEngineAbortController?.abort();
+      this.options.onExit?.();
+    });
+  }
+
   public setVisible(visible: boolean): void {
     this.sceneRoot.visible = visible;
   }
@@ -1733,6 +1777,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     window.removeEventListener('keydown', this.handleSharedEngineExitKey);
     if (this.host) {
       this.host.app.canvas.removeEventListener('pointerdown', this.focus);
+      const canvas = this.host.app.canvas;
+      canvas.removeEventListener('pointerdown', this.handleTouchPointer);
+      canvas.removeEventListener('pointermove', this.handleTouchPointer);
+      canvas.removeEventListener('pointerup', this.handleTouchPointerUp);
+      canvas.removeEventListener('pointercancel', this.handleTouchPointerUp);
+      if (this.previousCanvasTouchAction !== undefined) canvas.style.touchAction = this.previousCanvasTouchAction;
+      this.touchLanes.upAll();
     }
     document.removeEventListener('visibilitychange', this.handleVisibilityChange);
     window.removeEventListener('blur', this.handleWindowBlur, true);
@@ -1955,6 +2006,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.mineNotes = [];
     this.invisibleNotes.length = 0;
     this.preparedChart = undefined;
+    this.touchTokenByChannel = undefined;
     this.resolvedChart = undefined;
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
@@ -2042,6 +2094,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       0 /* auxiliaryPlaybackEndSeconds — engine recomputes its own audio horizon from realtime triggers */,
     );
     this.preparedChart = prepared;
+    this.touchTokenByChannel = undefined;
     this.notes = prepared.notes;
     this.mineNotes = prepared.landmineNotes;
     this.invisibleNotes = prepared.invisibleNotes;
@@ -2708,10 +2761,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (event.repeat) return;
     if (event.code === 'Escape') {
       event.preventDefault();
-      this.beginExitSequence(() => {
-        this.sharedEngineAbortController?.abort();
-        this.options.onExit?.();
-      });
+      this.requestExit();
       return;
     }
     if (event.code === 'F5') {
@@ -2879,7 +2929,83 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.keyFlashTimeouts.add(timeout);
   }
 
+  /**
+   * A finger touching down on or moving over the canvas: presses the lane under it, or — when it slid out of the lane it
+   * held — releases that lane and presses the new one. Mouse pointers are left alone (a click only focuses the canvas).
+   */
+  private readonly handleTouchPointer = (event: PointerEvent): void => {
+    if (!isTouchPlayPointer(event.pointerType)) return;
+    if (event.type === 'pointermove' && !this.touchLanes.isTracking(event.pointerId)) return;
+    const { width: designWidth, height: designHeight } = this.stageSize;
+    const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
+    const point = canvasPointToDesign(event.offsetX, event.offsetY, viewport);
+    const zones = resolveTouchLaneZones(
+      Array.from(this.laneX, ([channel, lane]) => ({ channel, ...lane })),
+      {
+        stageHeight: designHeight,
+      },
+    );
+    const channel = hitTestTouchLane(zones, point.x, point.y);
+    const change =
+      event.type === 'pointerdown'
+        ? this.touchLanes.down(event.pointerId, channel)
+        : this.touchLanes.move(event.pointerId, channel);
+    if (event.type === 'pointerdown') event.preventDefault();
+    this.pushTouchLaneChange(change, event.timeStamp);
+  };
+
+  private readonly handleTouchPointerUp = (event: PointerEvent): void => {
+    if (!isTouchPlayPointer(event.pointerType)) return;
+    this.pushTouchLaneChange(this.touchLanes.up(event.pointerId), event.timeStamp);
+  };
+
+  /** Lifts every finger, e.g. when the play pauses, so no lane stays held through the pause. */
+  private releaseAllTouchLanes(): void {
+    this.pushTouchLaneChange(this.touchLanes.upAll(), performance.now());
+  }
+
+  /**
+   * Forwards touch presses / releases to the engine exactly as the keyboard runtime forwards keys: a release as a
+   * `kitty-state` release, a press as one `lane-input` per lane (so two lanes tapped together judge two notes) plus a
+   * `kitty-state` press that keeps the lane held for long notes and the key beam. `timeStamp` is the event's
+   * `DOMHighResTimeStamp`, promoted to the engine's wall-clock domain the same way the keyboard path does.
+   */
+  private pushTouchLaneChange(change: TouchLaneChange, timeStamp: number): void {
+    const signals = this.sharedEngineInputSignals;
+    if (!signals || (change.pressed.length === 0 && change.released.length === 0)) return;
+    const pressedAt = performance.timeOrigin + timeStamp;
+    const releaseTokens = this.resolveTouchTokens(change.released);
+    if (releaseTokens.length > 0) {
+      signals.pushCommand({ kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens, pressedAt });
+    }
+    const pressTokens = this.resolveTouchTokens(change.pressed);
+    if (pressTokens.length === 0) return;
+    for (const token of pressTokens) signals.pushCommand({ kind: 'lane-input', tokens: [token], pressedAt });
+    signals.pushCommand({ kind: 'kitty-state', pressTokens, repeatTokens: [], releaseTokens: [], pressedAt });
+  }
+
+  /** The input tokens pressing `channels`: each lane binding's first token, the one its key on the keyboard sends. */
+  private resolveTouchTokens(channels: readonly string[]): string[] {
+    if (channels.length === 0) return [];
+    let tokens = this.touchTokenByChannel;
+    if (tokens === undefined) {
+      tokens = new Map();
+      for (const binding of this.preparedChart?.laneBindings ?? []) {
+        const token = binding.inputTokens[0];
+        if (token !== undefined && !tokens.has(binding.channel)) tokens.set(binding.channel, token.toLowerCase());
+      }
+      if (this.preparedChart !== undefined) this.touchTokenByChannel = tokens;
+    }
+    const resolved: string[] = [];
+    for (const channel of channels) {
+      const token = tokens.get(channel);
+      if (token !== undefined) resolved.push(token);
+    }
+    return resolved;
+  }
+
   private togglePause(): void {
+    if (!this.paused) this.releaseAllTouchLanes();
     if (this.paused) {
       this.paused = false;
       this.pauseTotal += performance.now() - this.pauseTime;
