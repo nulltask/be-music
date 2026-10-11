@@ -14,3 +14,4 @@ export * from './text-metrics.ts';
 export * from './particle-layer.ts';
 export * from './key-beam.ts';
 export * from './gpu-pass.ts';
+export * from './mine.ts';
