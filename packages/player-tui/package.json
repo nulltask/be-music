@@ -24,7 +24,7 @@
     "build:bundle": "vp pack",
     "build": "vp pack",
     "build:sea": "node --conditions=source ../../scripts/build-sea.ts --package player",
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "clean": "rimraf dist",
     "dev": "node --conditions=source src/cli.ts",
     "playlog": "node --conditions=source src/playlog-cli.ts",
     "diag:keyboard": "node --conditions=source src/keyboard-diagnostic.ts",

@@ -22,7 +22,7 @@
   "scripts": {
     "build:bundle": "vp pack",
     "build": "vp pack",
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "clean": "rimraf dist",
     "dev": "node --conditions=source src/cli.ts",
     "bench": "node --conditions=source scripts/bench.ts"
   },
