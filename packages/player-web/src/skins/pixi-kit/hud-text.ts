@@ -1,5 +1,6 @@
 import { CanvasTextMetrics, type Container, Text, TextStyle } from 'pixi.js';
 import { DEFAULT_TEXT_FONT, layoutTabularRun } from '@be-music/skin-sdk';
+import { fitTextToWidth, stopMarquee } from './marquee.ts';
 import type { ChildPool } from './pools.ts';
 import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
@@ -20,7 +21,10 @@ export interface HudTextOptions {
   letterSpacing?: number;
   anchorX?: number;
   anchorY?: number;
+  /** Width to fit the text into (squeezed a little, then scrolled as a marquee; see `fitTextToWidth`). */
   maxWidth?: number;
+  /** `false` clips an overflowing text at its start instead of scrolling it. */
+  marquee?: boolean;
   /** Horizontal skew in radians (negative leans the glyph tops right, like italic). */
   skewX?: number;
   rotation?: number;
@@ -60,15 +64,21 @@ export function addHudText(
   // Pooled texts keep their previous skew / rotation, so both are always written.
   node.skew.set(opts.skewX ?? 0, 0);
   node.rotation = opts.rotation ?? 0;
-  if (opts.maxWidth !== undefined && node.width > opts.maxWidth) {
-    node.scale.x = opts.maxWidth / node.width;
-  }
-  if (opts.scale !== undefined && opts.scale !== 1) {
-    node.scale.x *= opts.scale;
-    node.scale.y = opts.scale;
-  }
   if (!pool) {
     layer.addChild(node);
+  }
+  if (opts.maxWidth !== undefined) {
+    // Pooled nodes live in the pool's text host; the clip box joins them there.
+    fitTextToWidth(node, node.parent ?? layer, {
+      maxWidth: opts.maxWidth,
+      anchorX: opts.anchorX ?? 0,
+      anchorY: opts.anchorY ?? 0,
+      scale: opts.scale,
+      scroll: opts.marquee,
+    });
+  } else {
+    stopMarquee(node);
+    if (opts.scale !== undefined && opts.scale !== 1) node.scale.set(opts.scale, opts.scale);
   }
   return node;
 }

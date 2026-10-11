@@ -30,7 +30,13 @@ import {
   rollUpValue,
   stageProgress,
 } from '@be-music/skin-sdk';
-import { alignCapCenter, type PixiResultFrame, type PixiResultSkin, resolveSkinTextStyle } from '../pixi-kit/index.ts';
+import {
+  alignCapCenter,
+  fitTextToWidth,
+  type PixiResultFrame,
+  type PixiResultSkin,
+  resolveSkinTextStyle,
+} from '../pixi-kit/index.ts';
 
 /** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
  * sooner without changing its order or easing. */
@@ -121,10 +127,14 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
     alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '500', options.size ?? 10);
     node.position.set(x, y);
     node.skew.set(options.skew ?? 0, 0);
-    if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-      node.scale.x = options.maxWidth / node.width;
-    }
     target.addChild(node);
+    if (options.maxWidth !== undefined) {
+      fitTextToWidth(node, target, {
+        maxWidth: options.maxWidth,
+        anchorX: options.anchorX ?? 0,
+        anchorY: options.anchorY ?? 0,
+      });
+    }
     return node;
   };
   /** Slide a group in from an offset with an ease-out, fading as it lands. */
@@ -556,10 +566,8 @@ function renderMetric(
   valueText.anchor.set(1, 0.5);
   alignCapCenter(valueText, DEFAULT_DISPLAY_FONT, '400', 22);
   valueText.position.set(x + METRIC_W - 8, y + METRIC_H / 2 + 1);
-  if (valueText.width > 100) {
-    valueText.scale.x = 100 / valueText.width;
-  }
   target.addChild(valueText);
+  fitTextToWidth(valueText, target, { maxWidth: 100, anchorX: 1, anchorY: 0.5 });
 }
 
 /** Polyline of `points` inside the rect, drawn up to `progress` (0..1) of the horizontal span. */

@@ -1,4 +1,4 @@
-import type { Container, Graphics } from 'pixi.js';
+import { Container, type Graphics } from 'pixi.js';
 import {
   bendNeedle,
   digitTransitions,
@@ -12,6 +12,8 @@ import {
   addHudText,
   addSkinText,
   type ChildPool,
+  resolveTextSqueeze,
+  startMarquee,
   type HudTextOptions,
   pointLayerFor,
   type SkinTextOptions,
@@ -247,7 +249,8 @@ export function displayStyle(
 
 /**
  * Non-pooled twin of {@link addStaggeredHudText} for scenes rebuilt per render (select / result). A word wider than
- * `options.maxWidth` is squeezed as a whole, letters and advances alike.
+ * `options.maxWidth` is squeezed as a whole, letters and advances alike, down to `MIN_TEXT_SQUEEZE`; past that the
+ * letters are grouped, clipped to the box, and scrolled as one marquee.
  */
 export function addStaggeredSkinText(
   layer: Container,
@@ -261,8 +264,12 @@ export function addStaggeredSkinText(
   const nodes = chars.map((char) => addSkinText(layer, char, 0, y, { ...options, anchorX: 0, maxWidth: undefined }));
   const widths = nodes.map((node) => node.width);
   const total = widths.reduce((sum, width) => sum + width, 0);
-  const squeeze = options.maxWidth !== undefined && total > options.maxWidth ? options.maxWidth / total : 1;
-  let cursor = x - total * squeeze * (options.anchorX ?? 0);
+  const maxWidth = options.maxWidth;
+  const squeeze = maxWidth !== undefined ? resolveTextSqueeze(total, maxWidth) : 1;
+  const overflow = maxWidth !== undefined ? total * squeeze - maxWidth : 0;
+  // An overflowing word moves as one group inside its clip box; the letters are laid out from the group's left edge.
+  const group = overflow > 0.5 ? new Container() : undefined;
+  let cursor = group ? 0 : x - total * squeeze * (options.anchorX ?? 0);
   const baseAlpha = options.alpha ?? 1;
   nodes.forEach((node, index) => {
     const move = motion(index, nodes.length);
@@ -273,5 +280,20 @@ export function addStaggeredSkinText(
     node.scale.set(scale * squeeze, scale);
     node.alpha = baseAlpha * (move.alpha ?? 1);
     cursor += advance;
+    group?.addChild(node);
   });
+  if (group && maxWidth !== undefined) {
+    layer.addChild(group);
+    const height = (options.size ?? 10) * 1.5;
+    const middle = y + (0.5 - (options.anchorY ?? 0)) * height;
+    const left = x - maxWidth * (options.anchorX ?? 0);
+    startMarquee(
+      group,
+      layer,
+      { left, top: middle - height * 1.5, width: maxWidth, height: height * 3 },
+      overflow,
+      `${Math.round(maxWidth)}|${text}`,
+      options.marquee,
+    );
+  }
 }
