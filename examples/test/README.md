@@ -29,7 +29,6 @@ resolution. Add a chart here and it is picked up automatically; break one and th
 | `extended-directives.bms`              | The same directive family with payloads the `@be-music/chart` value parsers accept: `#EXWAV` `pvf`, `#EXBMP` ARGB tuple, `#ARGB` hex and decimal, `#BGA` sub-region, `#SWBGA` animation, `#WAVCMD` pitch/volume/loop, `#EXRANK` on channel `A0`, `#CHANGEOPTION` on channel `A6`, `#STP`. |
 | `base62-ids.bms`                       | `#BASE 62` — upper, lower and mixed case object IDs as distinct slots, in indexed headers, channel streams, `#LNOBJ`, and inside a `#RANDOM` / `#IF` block.          |
 | `sjis-encoding-test.bms`               | Shift_JIS auto-detection. Its parsed IR is pinned in `sjis-encoding-test.json`.                                                                                     |
-| `benchmark-command-mix-100.bms`        | Parser throughput over 100 measures with a mixed command load. Not wired to `pnpm bench`, which uses its own inline chart.                                           |
 
 ### Timing and drawing gimmicks
 
@@ -117,5 +116,4 @@ Regenerate them through the editor API rather than by hand — that is what keep
 | `branch.wav`, `right.wav`, `wrong.wav`                     | Secondary keysounds, mostly for telling control-flow branches apart by ear.       |
 | `retrigger_a.wav`, `retrigger_b.wav`                       | The 2.2 s samples the retrigger charts need in order to overlap at all.           |
 | `ogg-test.ogg`                                             | The Vorbis sample `ogg-test.bms` declares.                                        |
-| `ogg-test.wav`                                             | The uncompressed source for `ogg-test.ogg`. Kept as source material; no test reads it. |
 | `render-codec-test.mp3` / `.ogg` / `.opus`                 | The audio-renderer's per-codec decode cases, and its missing-`.wav` fallback case. |

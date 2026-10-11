@@ -54,7 +54,7 @@
   "scripts": {
     "build:bundle": "vp pack",
     "build": "vp pack",
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "clean": "rimraf dist",
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
