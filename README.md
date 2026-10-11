@@ -13,7 +13,7 @@ BMS/BMSON toolchain composed of TypeScript + pnpm workspaces.
 - `@be-music/stringifier`: Stringization from JSON to `.bms` / `.bmson`
 - `@be-music/audio-renderer`: Render the music score and output `.wav` / `.aiff`
 - `@be-music/player`: Shared playback engine, timing, judgment, scoring, gauge, BGA timeline, and UI/audio adapter contracts
-- `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds
+- `@be-music/player-tui`: Terminal UI and `bms-player` CLI frontend for autoplay, keyboard play, Music Select, BGA, and SEA builds, plus the `bms-playlog` play-log re-simulator
 - `@be-music/lr2-skin`: Renderer-independent Lunatic Rave 2 skin parser, asset resolver, and theme loader
 - `@be-music/beatoraja-skin`: Renderer-independent beatoraja JSON/Lua skin parser, normalizer, and theme loader
 - `@be-music/skin-sdk`: Framework-free SDK for writing be-music skins for the browser player
@@ -56,7 +56,7 @@ pnpm run release:version
 - Normal feature PR adds `.changeset/*.md` for the changed package
 - When you want to release, run `pnpm run release:version` on `devel` and commit the generated `packages/*/package.json` and `packages/*/CHANGELOG.md` updates together.
 - In that state, if you merge the release PR of `devel -> main`, a separate GitHub Release will be created only for the package whose version has increased.
-- The player SEA executable is built from `@be-music/player-tui` and attached to the `@be-music/player` release; `@be-music/audio-renderer` also ships a SEA zip
+- The player SEA executable is built from `@be-music/player-tui` and attached to the `@be-music/player-tui` release; `@be-music/audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
 The tag is created in the format `@be-music/package-name@x.y.z`.
@@ -71,6 +71,7 @@ The tag is created in the format `@be-music/package-name@x.y.z`.
 - [Terminal player implementation notes](./docs/player-tui.md)
 - [Browser player implementation notes](./docs/player-web.md)
 - [Play log (play history) specification](./docs/playlog.md)
+- [Writing a be-music skin](./docs/be-music-skin.md)
 - [LR2 skin implementation notes](./docs/lr2-skin.md)
 - [beatoraja skin implementation notes](./docs/beatoraja-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./docs/json-spec.md)
@@ -113,7 +114,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - UI and input signal buses for lane flashes, POOR BGA commands, frame snapshots, pause, restart, and high-speed changes
 - Shared note extraction for playable notes, legacy long notes, `#LNOBJ`, FREE ZONE, mines, and invisible notes
 - Shared judgment windows, dynamic `#EXRANKxx` changes, score, groove gauge, scroll-distance, BGA timelines, and result summaries
-- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, and `playable-notes`
+- Browser-safe subpath exports for reusable helpers such as `core/engine`, `core/bga-timeline`, `core/scroll-distance`, `core/groove-gauge`, `playable-notes`, and `playlog`
 
 ### terminal player (`@be-music/player-tui`)
 
@@ -136,6 +137,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Output dynamics tuning with compressor/limiter switches and threshold/release controls
 - Structured log output (`~/.be-music/logs/player.ndjson`, overwritten with `--log-file`)
 - Node worker split for gameplay, TUI rendering, and video BGA decoding
+- `bms-playlog` CLI that re-derives LR2 / beatoraja / IIDX results from a recorded play log (see [Play log specification](./docs/playlog.md))
 
 ### LR2 skin (`@be-music/lr2-skin`)
 
@@ -156,14 +158,15 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 
 - Skin contract for the browser player's built-in family: the skin draws each screen onto a canvas from plain per-frame data
 - Imports no rendering framework; a skin brings its own (Canvas 2D, WebGL / WebGPU, PixiJS, three.js, …)
-- Stage, lane layout, moment, judgement word, audio drive, song fact, and motion helpers
+- Stage, lane layout, touch / portrait layout, moment, judgement word, loading, audio drive, song fact, result track, skin settings, and motion helpers
 - See [Writing a be-music skin](./docs/be-music-skin.md)
 
 ### browser player (`@be-music/player-web` / `@be-music/player-web-demo`)
 
 - Browser song library for dropped folders, ZIPs, and mixed song/LR2/beatoraja theme drops
 - Lazy browser asset loading for large audio/video files, with case-insensitive path lookup
-- Built-in default skin family for skinless select, gameplay, and result scenes
+- Built-in be-music skins (Synesthesia by default, Phantom, and Plain, plus the opt-in Lattice) for select, gameplay, and result, and for a decide screen when the skin declares one
+- Touch play and a touch gameplay layout on touch-first devices, portrait stages for skins that provide one, and per-skin settings
 - LR2 select / decide / gameplay / result skin parsing and rendering on PixiJS
 - beatoraja select / decide / gameplay / result skin parsing and rendering on PixiJS
 - Separated default gameplay chrome injection so default-skin rendering does not depend on LR2 renderer modules
@@ -261,6 +264,17 @@ pnpm run player:web
 
 The demo starts a Vite dev server. Drop a BMS/BMSON song folder, an LR2 theme folder, a beatoraja theme folder, a ZIP, or a song folder and LR2/beatoraja theme folder together into the browser.
 
+The demo can also load archives from a URL: `?music=<zip URL>&skin=<zip URL>` (either parameter may be omitted) feeds the archives into the same pipeline as a drop. Cross-origin `https` URLs are fetched through the same-origin proxy route `/__url-load-proxy`, served by the Vite dev server and by the Cloudflare Worker.
+
+To deploy the demo to Cloudflare Workers (Static Assets plus a Worker, see `packages/player-web-demo/wrangler.jsonc`):
+
+```bash
+pnpm --filter @be-music/player-web-demo run cf:r2:create # once: create the R2 bucket for ffmpeg-core
+pnpm --filter @be-music/player-web-demo run deploy:cf
+```
+
+`deploy:cf` builds the demo, uploads `ffmpeg-core.wasm` / `ffmpeg-core.js` to R2 only when they changed (they exceed the Static Assets per-file limit and are served from R2 through the Worker), and runs `wrangler deploy`. `cf:r2:push` force-uploads the ffmpeg core.
+
 ### 6. Editor
 
 ```bash
@@ -269,6 +283,15 @@ pnpm run editor add-note chart.json 0 11 1 2 01
 pnpm run editor export chart.json chart.bms
 ```
 
+### 7. Play log re-simulation
+
+```bash
+pnpm run playlog -- /path/to/Song.bmplay.json
+pnpm run playlog -- /path/to/Song.bmplay.json --ruleset=lr2,beatoraja --json
+```
+
+See [Play log specification](./docs/playlog.md) for the options.
+
 ## Player Operations
 
 ### Song selection screen
@@ -276,6 +299,7 @@ pnpm run editor export chart.json chart.bms
 - `↑/↓` or `k/j`: Move
 - `←/→` or `h/l`: Move page
 - `Ctrl+b / Ctrl+f`: Move page
+- `g` or `Home` / `G` or `End`: Jump to the first / last entry
 - `1-5`: DIFFICULTY filter
 - `0`: DIFFICULTY filter cancellation
 - `a`: `MANUAL -> AUTO SCRATCH -> AUTO` switching
@@ -295,6 +319,7 @@ pnpm run editor export chart.json chart.bms
 ### Results screen
 
 - `Enter` or `Esc`: Return to song selection screen
+- `r`: Play the same chart again (single-chart mode)
 
 ## Automatic lane mode determination and input assignment
 
