@@ -34,10 +34,6 @@ const log = logger('be-music-skin');
 // Wired in a later commit.
 const NO_SONG_IMAGE: BeMusicSongImageLookup = () => undefined;
 
-/** Measure lines aren't collected for skins yet, so opted-in skins see none. */
-// Wired in a later commit.
-const NO_MEASURE_LINES: readonly BeMusicMeasureLine[] = Object.freeze([]);
-
 /** Largest canvas edge a surface allocates, whatever the window size. */
 const MAX_CANVAS_EDGE = 4096;
 
@@ -182,6 +178,7 @@ export class BeMusicGameplayBinding {
   private longNotes: BeMusicLongNote[] = [];
   private mines: BeMusicMine[] = [];
   private bombs: BeMusicBomb[] = [];
+  private measureLines: BeMusicMeasureLine[] = [];
   private frameNumber = 0;
   private drawnFrame = -1;
 
@@ -209,6 +206,7 @@ export class BeMusicGameplayBinding {
     this.longNotes = [];
     this.mines = [];
     this.bombs = [];
+    this.measureLines = [];
     this.frame = {
       nowMs: runtime.nowMs ?? 0,
       runtime,
@@ -218,7 +216,7 @@ export class BeMusicGameplayBinding {
       longNotes: this.longNotes,
       mines: this.mines,
       bombs: this.bombs,
-      measureLines: NO_MEASURE_LINES,
+      measureLines: this.measureLines,
       // Wired in a later commit: the scene doesn't hand BGA layers to skins yet.
       bga: undefined,
       beatPhase: runtime.beatPhase ?? 0,
@@ -250,6 +248,11 @@ export class BeMusicGameplayBinding {
 
   addMine(mine: BeMusicMine): void {
     this.mines.push(mine);
+  }
+
+  /** Collected only for a skin that sets `drawsMeasureLines`; the scene draws its own lines otherwise. */
+  addMeasureLine(line: BeMusicMeasureLine): void {
+    this.measureLines.push(line);
   }
 
   addBombs(bombs: readonly BeMusicBomb[]): void {

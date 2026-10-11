@@ -80,6 +80,7 @@ import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
 import { fillLaneCover, resolveGreenNumber, resolveNoteVisibleMs } from './lane-cover.ts';
+import { resolveSideLaneRuns, type SideLaneRun } from './measure-line-runs.ts';
 import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
@@ -952,6 +953,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * change and refilled in place every frame, so the runtime allocates nothing for them.
    */
   private laneCovers: { channels: readonly string[]; covers: BeMusicLaneCover[] } | undefined;
+  /**
+   * Lane runs measure lines cross for a skin that draws them (`drawsMeasureLines`), with the lane geometry they were
+   * worked out from; rebuilt only when the lanes move.
+   */
+  private measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
   private readonly lanePressedAt = new Map<string, number>();
   private readonly laneReleasedAt = new Map<string, number>();
@@ -4194,6 +4200,25 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.renderThemeMeasureLines({ beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom })) {
       return;
     }
+    const binding = this.skinBinding;
+    if (binding?.drawsMeasureLines) {
+      // The skin draws them: hand it one line per lane run, so double play's gap stays clear.
+      const runs = this.resolveMeasureLineRuns();
+      for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
+        const beat = beats[beatIndex]!;
+        if (!this.scrollMapper && beat > maxBeat) {
+          break;
+        }
+        const y = bottom - beatDistance(beat) * pixelsPerBeat;
+        if (y < top - 1 || y > bottom + 1) {
+          continue;
+        }
+        for (const run of runs) {
+          binding.addMeasureLine({ side: run.side, x: run.x, w: run.w, y });
+        }
+      }
+      return;
+    }
     // Fallback: simple white strip when the theme draws none. One pooled `Graphics` carries every line — the
     // accumulated rect-fill commands form one batched draw, no per-line allocation.
     const x0 = left.x;
@@ -4210,6 +4235,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
       graphic.rect(x0, Math.round(y), x1 - x0, 1).fill({ color: 0x9a8fd0, alpha: 0.28 });
     }
+  }
+
+  /** The lane runs of this frame's lanes, recomputed only when their geometry changes. */
+  private resolveMeasureLineRuns(): readonly SideLaneRun[] {
+    let signature = this.laneX.size;
+    for (const lane of this.laneX.values()) {
+      signature = (signature * 31 + lane.x * 7 + lane.w) % 1_000_000_007;
+    }
+    const cached = this.measureLineRuns;
+    if (cached && cached.signature === signature) return cached.runs;
+    const runs = resolveSideLaneRuns(this.laneX);
+    this.measureLineRuns = { signature, runs };
+    return runs;
   }
 
   private renderSingleNote(laneIndex: number, channel: string, lane: GameplayLaneRect, y: number): void {
