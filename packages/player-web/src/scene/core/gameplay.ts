@@ -141,6 +141,7 @@ import type {
   BeMusicBomb,
   BeMusicEffectLevel,
   BeMusicGameplayLayout,
+  BeMusicJudge,
   BeMusicLaneCover,
   BeMusicLaneFrame,
   BeMusicSkin,
@@ -958,6 +959,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * worked out from; rebuilt only when the lanes move.
    */
   private measureLineRuns: { signature: number; runs: SideLaneRun[] } | undefined;
+  /** Judgement that set off each lane's live bomb, by channel; absent for bombs without one (an autoplayed LN head). */
+  private readonly bombJudge = new Map<string, BeMusicJudge>();
   /** Play-clock ms of each lane's last key press / release (also autoplay hits), by channel. */
   private readonly lanePressedAt = new Map<string, number>();
   private readonly laneReleasedAt = new Map<string, number>();
@@ -1910,6 +1913,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.judgeTimings.clear();
     this.timerStartedAt.clear();
     this.bombStartedAt.clear();
+    this.bombJudge.clear();
     this.keyOnFadeOutStart.clear();
     this.wavCmdVolumeMultipliers.clear();
     this.switchingBgas.clear();
@@ -2909,9 +2913,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Starts a bomb (hit explosion) on `channel`. The core scene draws it from `bombStartedAt`; themes react through the
    * `bomb` event (the LR2 family stamps its per-lane bomb timer at the same instant).
    */
-  private triggerBomb(channel: string): void {
+  private triggerBomb(channel: string, judge?: BeMusicJudge): void {
     const now = this.playClock();
     this.bombStartedAt.set(channel, now);
+    if (judge) this.bombJudge.set(channel, judge);
+    else this.bombJudge.delete(channel);
     this.onThemeEvent({ kind: 'bomb', channel, at: now });
   }
 
@@ -3310,6 +3316,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         continue;
       }
       this.bombStartedAt.delete(channel);
+      this.bombJudge.delete(channel);
       this.onThemeEvent({ kind: 'bomb-retired', channel });
     }
   }
@@ -3433,6 +3440,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         elapsedMs: Math.max(0, now - startedAt),
         // Stable per hit: the start time changes on every re-trigger, so a new hit gets a new scatter.
         seed: Math.floor(startedAt * 7.31) % 100_003,
+        judge: this.bombJudge.get(channel),
       });
     }
     const binding = this.skinBinding;
@@ -4741,7 +4749,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.judgeTimings.push(this.playClock(), state.judge, state.deltaMs, state.channel);
     this.publishJudge(judgeKind, this.currentSeconds(), state.channel);
     if ((judgeKind === 'PERFECT' || judgeKind === 'GREAT') && state.channel) {
-      this.triggerBomb(state.channel);
+      this.triggerBomb(state.channel, judgeKind);
     }
   }
 
