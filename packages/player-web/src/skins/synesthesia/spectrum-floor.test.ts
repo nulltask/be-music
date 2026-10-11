@@ -54,8 +54,22 @@ describe('SpectrumHistory', () => {
 describe('spectrumLevels', () => {
   it('maps silence to zero and a loud spectrum to full level', () => {
     const out = new Float32Array(16);
-    expect([...spectrumLevels(new Array(16).fill(0), out)].every((level) => level === 0)).toBe(true);
-    expect([...spectrumLevels(new Array(16).fill(1), out)].every((level) => level === 1)).toBe(true);
+    expect(
+      [
+        ...spectrumLevels(
+          Array.from({ length: 16 }, () => 0),
+          out,
+        ),
+      ].every((level) => level === 0),
+    ).toBe(true);
+    expect(
+      [
+        ...spectrumLevels(
+          Array.from({ length: 16 }, () => 1),
+          out,
+        ),
+      ].every((level) => level === 1),
+    ).toBe(true);
   });
 });
 
