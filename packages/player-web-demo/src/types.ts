@@ -55,6 +55,8 @@ export interface DemoGuiState {
   builtInSkin: string;
   /** Showmanship level for the built-in skins. Persisted in `localStorage`. */
   skinEffects: 'full' | 'reduced' | 'off';
+  /** Gameplay layout pick: `'auto'` follows the device (touch layout on phones / tablets). Persisted in `localStorage`. */
+  playLayout: 'auto' | 'standard' | 'touch';
   /**
    * When true, gameplay auto-pauses on tab visibility change / window blur and auto-resumes on focus. False (the
    * default) keeps the play scene running in the background — convenient for capturing recordings while another window
@@ -112,7 +114,7 @@ export interface DemoGuiState {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
-   * When true (the default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * When true (off by default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
    */

@@ -8,7 +8,7 @@ Use [`player-spec.md`](./player-spec.md) for shared runtime semantics such as ti
 ## Shared runtime integration
 
 The browser player drives gameplay through `@be-music/player/core/engine`.
-The engine owns judgment, keysound trigger routing, long-note handling, mine priority, score, gauge, and chart-finish
+The engine owns judgment, keysound trigger routing, long-note handling, mine detonation, score, gauge, and chart-finish
 semantics. The LR2 gameplay scene starts one engine run at the LR2 `PLAYSTART` gate, while the beatoraja gameplay
 scene mounts the engine behind `BeatorajaRuntimeAdapter`. Both paths mirror engine frame snapshots into scene state
 and translate engine UI commands into Pixi visual effects.
@@ -50,6 +50,16 @@ When a mixed drop contains chart files, the loader treats the chart directories 
 When no chart file is present, the whole drop is treated as a theme candidate. LR2 detection uses `.lr2skin` files, while beatoraja detection uses `.luaskin` files or JSON files under a `skin/` path segment.
 Double-click the playfield to toggle the demo into fullscreen; `Esc` leaves fullscreen before it runs the usual scene action.
 
+### Phones and tablets
+
+The demo treats a device whose primary pointer is a finger (`(pointer: coarse)`, or a touch pointer on a phone-sized screen) as touch-first:
+
+- **Touch play:** in the built-in and LR2 play screens, each lane is a touch zone from the lower part of the lane down to the bottom of the screen. Every finger presses, holds (long notes), and releases its lane on its own; sliding a finger into the next lane releases the old lane and presses the new one. Touches go through the same input path as the keyboard, so judgement, key beams, and play logs behave the same. A pause button sits in the top-left corner during play; while paused it shows Quit.
+- **Touch layout:** the built-in skins switch to the touch gameplay layout: equal-width lanes across most of the stage (keys up to 72 design px, about 58 CSS px on a landscape phone), a slightly lower judgement line, and no BGA. 24 / 48 KEY charts keep the standard layout. The Debug Menu's **Play layout** (Auto / Desktop / Touch) overrides the choice from the next play.
+- **Select screen:** tap rows and buttons as with a mouse; swipe the list up or down to scroll it.
+- **Effects:** the skin effect level starts at Reduced unless one was picked in the Debug Menu before.
+- **Screen:** the page chrome steps off the stage (the search box only shows while typing, Help shrinks to an icon), the first tap on a phone asks for fullscreen in landscape where the browser allows it, and a phone held upright shows a prompt to rotate it.
+
 ## Browser loading model
 
 - Dropped paths are normalized with the shared `@be-music/utils/core` path helpers.
@@ -81,7 +91,7 @@ The default LR2 skin is the verified compatibility target; custom themes work be
 
 The select scene exposes in-scene LR2 PLAY OPTION controls for hi-speed, autoplay, BGA mode/size, filters, sort, HS-FIX, HIDDEN/SUDDEN, lane cover, auto scratch, DP flip, 1P/2P random and mirror modes, and gauge variants.
 Select-time options are carried into gameplay during chart preparation.
-The current shared-engine path still publishes a `GROOVE` gauge summary; LR2 gauge buttons mainly drive skin op state and the scene-local setup, and independent 2P gauge math is not wired yet.
+The selected gauge is passed to the shared engine, which resolves it against the active ruleset's gauge line-up and runs its curve (HARD really drains, DEATH really ends the run); a replay runs the gauge recorded in its play log. Independent 2P gauge math is not wired yet.
 
 The groove-gauge bar renders as LR2's 50 beads (2 % each) using the single `#SRC_GROOVEGAUGE` 4-cell sprite (`表赤/表緑/裏赤/裏緑` = lit-red, lit-green, unlit-red, unlit-green). Beads at or above the 80 % clear border use the green cell; below it they use red. Survival gauges (HARD / DEATH) have no clear border in LR2, so the whole bar renders red. The bar tracks the live gauge value only — there is no peak-hold / afterimage bead (LR2 has none). The bead cell-selection logic is the pure `resolveGrooveGaugeBeads` helper in `scene/lr2/gameplay-hud.ts`.
 
@@ -176,7 +186,7 @@ pnpm bench -- --packages player-web
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
-- Every play records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the Debug Menu's "Auto-save play history" checkbox (ON by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
+- Every play except a replay records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the Debug Menu's "Auto-save play history" checkbox (OFF by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
 
 ## Compatibility boundary
 

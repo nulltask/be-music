@@ -55,11 +55,12 @@ package は `BEATORAJA_SKIN_TYPE` 定数と `playVariantForSkinType` / `sceneFor
 
 `evaluateBeatorajaLuaSkin()` は Fengari の上に手作りした sandbox で entry script を実行します。
 default theme が実際に使う `base` / `table` / `string` / `math` のみ expose し、`package` / `io` / `os` / `debug` は除外します。
-`dofile` / `loadfile` / `load` / `loadstring` / `collectgarbage` は nil 化し、悪意ある skin が theme 外に到達できないようにします。
+`coroutine` も除外します。`loadfile` / `load` / `loadstring` / `collectgarbage` は nil 化し、`dofile` は theme bundle 内のファイルだけを解決する実装（例: `dofile(skin_config.get_path("Play/lua/sp/info.lua"))`）に置き換えて、悪意ある skin が theme 外に到達できないようにします。
 
 `require()` は事前登録した module source registry の上に再実装しています。
 host は entry script と同一 directory および 1 階層上 (beatoraja theme は `play_parts.lua` を共通化していることがあります) の `.lua` を全て登録します。
 module は cache されるので、後続の `require()` は同じ table を返します。
+beatoraja の `timer_util` / `event_util` helper module は組み込みで用意しており、theme に同梱しなくても `require()` できます。
 
 2-phase 契約:
 
@@ -83,7 +84,7 @@ end
 ## Element normalization
 
 package は読み込んだ skin tree を upstream に近い形で保持しつつ、renderer 向けには型付き normalizer を expose します。
-normalizer は `src/elements/` 配下にあり、image、imageset、value、float-value、text、slider、note、judge、judge graph、gauge、gauge graph、BPM graph、timing visualizer、timing distribution graph、song list、custom event、direction、destination、PM character、generic graph element を扱います。
+normalizer は `src/elements/` 配下にあり、image、imageset、value、float-value、text、slider、note、judge、judge graph、gauge、gauge graph、BPM graph、timing visualizer、timing distribution graph、song list、custom event、direction（graph と slider element の `angle`）、destination、PM character、generic graph element を扱います。
 
 destination normalization は keyframe、offset、op gate、interpolation data を renderer 非依存の object に変換します。
 value / image helper は `divx` / `divy` cell math、frame の carry-forward、loop wrapping を解決するため、renderer は source JSON / Lua table を再解釈せずに現在 frame を sample できます。

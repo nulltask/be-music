@@ -42,7 +42,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **long note (LN)**: Note with a start and end point. Hold, release, and end judgment depend on `LNMODE`.
 - **LNOBJ**: BMS long-note terminator object declared by `#LNOBJ`.
 - **LNMODE**: BMS long-note judgment rule. `1`, `2`, and `3` change end judgment and hold-break behavior.
-- **mine**: Damage note. This repository treats a manual mine hit as `BAD` with chart-defined gauge damage.
+- **mine**: Damage note. Following LR2, a mine explodes when its lane is held as it crosses the judge line or pressed within the `PGREAT` window; the explosion only drains the gauge by the chart-defined damage and is not a judgment.
 - **judge**: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` result. It affects score, combo, and gauge.
 - **FAST/SLOW**: Timing-direction display for early or late hits. The current implementation aggregates only `GREAT` and `GOOD`.
 - **EX-SCORE**: IIDX-compatible score where `PERFECT=2`, `GREAT=1`, and other judgments add `0`.
@@ -58,7 +58,10 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **terminal player**: The `@be-music/player-tui` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
 - **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. It handles browser drops, LR2/beatoraja skin rendering, browser gameplay, result scenes, and recording.
 - **skin family**: Browser-player scene family selected from the loaded theme state. The current families are LR2, beatoraja, and the built-in default family.
-- **default skin family**: Built-in browser-player skin family used when no external theme is active or when the host explicitly selects it. It supplies skinless select, gameplay, and result chrome; gameplay injects its chrome into the shared gameplay runtime without making LR2 import the default renderer.
+- **default skin family**: Built-in browser-player skin family used when no external theme is active or when the host explicitly selects it. It draws select, gameplay, and result (and decide, when the skin declares one) through a be-music skin; gameplay injects its chrome into the shared gameplay runtime without making LR2 import the default renderer.
+- **be-music skin**: Code-based skin written against `@be-music/skin-sdk`. The player hands it a canvas and plain per-frame data, and the skin draws each screen with whatever renderer it brings.
+- **built-in skins**: The be-music skins bundled with the browser player: Synesthesia (the default), Phantom, and Plain, plus the opt-in Lattice.
+- **touch layout / portrait stage**: Gameplay layouts for touch-first devices. The touch layout spreads equal-width lanes across the stage; a skin with a `portraitStage` can also be shown on a portrait (9:16) stage.
 - **LR2 skin**: Lunatic Rave 2 CSV skin format handled by `@be-music/lr2-skin`. The package parses skin files and resolves theme assets independently from PixiJS.
 - **beatoraja skin**: beatoraja JSON or Lua skin format handled by `@be-music/beatoraja-skin`. The package parses headers and full skins, resolves options and assets, and normalizes elements independently from PixiJS.
 
@@ -94,6 +97,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **Sound / Visual status**: Separate loading-screen progress states for audio and visual resources.
 - **structured log**: NDJSON execution log written separately from TUI output, usually under `~/.be-music/logs/player.ndjson`.
 - **video BGA streaming**: Policy that prepares only the first video frame before gameplay starts, then decodes remaining frames progressively.
+- **play log (playlog)**: Recorded input replay of one play (`*.bmplay.json`): the resolved chart, every key press and release, and the play settings. `bms-playlog` re-simulates it under the LR2, beatoraja, and IIDX rulesets.
 - **PlayerSummary**: Final playback summary containing judge counts, FAST/SLOW, EX-SCORE, SCORE, gauge, and clear state.
 
 ## Related Documents
@@ -101,8 +105,12 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - [Specification top](./README.md)
 - [BMS implementation specification](./bms-spec.md)
 - [BMSON implementation specification](./bmson-spec.md)
+- [Bemuse implementation specification](./bemuse-spec.md)
 - [Player implementation specification](./player-spec.md)
+- [Terminal player implementation notes](./player-tui.md)
 - [Browser player implementation notes](./player-web.md)
+- [Play log (play history) specification](./playlog.md)
+- [Writing a be-music skin](./be-music-skin.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)

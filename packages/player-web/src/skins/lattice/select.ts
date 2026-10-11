@@ -252,7 +252,16 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         ? `No. ${String(Math.min(frame.selectedIndex + 1, entries.length)).padStart(3, '0')} / ${String(entries.length).padStart(3, '0')}`
         : 'No. 000 / 000';
     chrome.rect(14, 56, 290, 1).fill(LAT_INK);
-    text(onEntry('NOW SELECTING', 120, 3), 14, 63, mono());
+    // The genre heads the block, where a fixed caption used to sit.
+    const genre = song?.genre?.trim();
+    if (genre) {
+      text(
+        onCursor(genre.toUpperCase(), 60, 3),
+        14,
+        63,
+        mono(LAT_GRAPHITE, { fontFamily: LAT_TEXT_FONT, maxWidth: 190 }),
+      );
+    }
     text(onCursor(position, 0, 4, 260), 304, 63, mono(LAT_INK, { anchorX: 1 }));
     addStaggeredSkinText(
       layer,
@@ -477,6 +486,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: facts ? ROW_BPM_W : 70,
+        marquee: active,
       },
     );
     metaNode.label = `fallback-meta[idx=${entryIndex}]`;
@@ -538,6 +548,8 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: Math.max(24, factsLeft - x - 62),
+        // Only the focused row scrolls a long title; the others clip it at its start.
+        marquee: active,
       },
     );
     title.label = `fallback-title[idx=${entryIndex}]`;
@@ -553,6 +565,7 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
         anchorY: 0.5,
         alpha,
         maxWidth: factsLeft - artistX,
+        marquee: active,
       });
     }
     return introT < 1 || titleScramble < 1;

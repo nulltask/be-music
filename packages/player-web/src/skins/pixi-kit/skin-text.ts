@@ -1,6 +1,7 @@
 import { type Color, type Container, Text, TextStyle } from 'pixi.js';
 import { DEFAULT_TEXT_FONT } from '@be-music/skin-sdk';
 import { rememberStyle } from './hud-text.ts';
+import { fitTextToWidth } from './marquee.ts';
 import { textResolution } from './resolution.ts';
 import { alignCapCenter } from './text-metrics.ts';
 
@@ -12,7 +13,13 @@ export interface SkinTextOptions {
   letterSpacing?: number;
   anchorX?: number;
   anchorY?: number;
+  /**
+   * Width to fit the text into: squeezed horizontally down to `MIN_TEXT_SQUEEZE`, then clipped to the box and scrolled
+   * like a marquee (see `fitTextToWidth`).
+   */
   maxWidth?: number;
+  /** `false` clips an overflowing text at its start instead of scrolling it (e.g. unfocused list rows). */
+  marquee?: boolean;
   skewX?: number;
   alpha?: number;
   stroke?: { color: number; width: number; alignment?: number; join?: 'round' | 'bevel' | 'miter' };
@@ -21,8 +28,8 @@ export interface SkinTextOptions {
 }
 
 /**
- * One text node for built-in skin chrome that is rebuilt on input (select / result), squeezed horizontally to
- * `maxWidth` when needed. Per-frame HUD text uses pooled nodes instead (see the gameplay chrome renderers).
+ * One text node for built-in skin chrome that is rebuilt on input (select / result), fitted to `maxWidth` when needed
+ * (squeezed a little, then scrolled as a marquee; see `fitTextToWidth`). Per-frame HUD text uses pooled nodes instead (see the gameplay chrome renderers).
  */
 export function addSkinText(layer: Container, text: string, x: number, y: number, options: SkinTextOptions = {}): Text {
   const node = new Text({
@@ -36,10 +43,15 @@ export function addSkinText(layer: Container, text: string, x: number, y: number
   node.position.set(x, y);
   node.skew.set(options.skewX ?? 0, 0);
   node.alpha = options.alpha ?? 1;
-  if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-    node.scale.x = options.maxWidth / node.width;
-  }
   layer.addChild(node);
+  if (options.maxWidth !== undefined) {
+    fitTextToWidth(node, layer, {
+      maxWidth: options.maxWidth,
+      anchorX: options.anchorX ?? 0,
+      anchorY: options.anchorY ?? 0,
+      scroll: options.marquee,
+    });
+  }
   return node;
 }
 

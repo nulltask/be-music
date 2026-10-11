@@ -330,8 +330,8 @@ function resolveFieldInput(
             ageMs: nowMs - atMs,
             strength: amount,
           })),
-          // Onsets ring out of the monitor.
-          ...onsets.map((atMs) => ({
+          // Onsets ring out of the monitor (when there is one: the touch layout and 48 KEY have none).
+          ...(BGA.w > 0 ? onsets : []).map((atMs) => ({
             x: BGA.x + BGA.w / 2,
             y: BGA.y + BGA.h / 2,
             ageMs: nowMs - atMs,
@@ -684,11 +684,24 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
   const sc = hudScramble(runtime);
   graphics.rect(x, y, w, 1).fill(LAT_INK);
   addHudText(layer, sc('TRACK', 300, 6), x, y + 6, monoStyle(), pool);
+  // Genre, title, artist — the order every built-in skin uses; the genre rides a small line above the title.
+  const genre = runtime.songGenre?.trim();
+  const lift = genre ? 9 : 0;
+  if (genre) {
+    addHudText(
+      layer,
+      sc(genre.toUpperCase(), 330, 9),
+      x + 48,
+      y + 4,
+      { ...monoStyle(), size: 8, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
+      pool,
+    );
+  }
   addHudText(
     layer,
     sc(runtime.songTitle?.trim() || 'Untitled chart', 360, 7),
     x + 48,
-    y + 4,
+    y + 4 + lift,
     { size: 15, weight: '500', fill: LAT_INK, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
     pool,
   );
@@ -698,7 +711,7 @@ function drawSongPlate(graphics: Graphics, layer: Container, runtime: Runtime, p
       layer,
       sc(artist, 460, 8),
       x + 48,
-      y + 26,
+      y + 26 + lift / 2,
       { size: 10, weight: '300', fill: LAT_GRAPHITE, fontFamily: LAT_TEXT_FONT, maxWidth: w - 48 },
       pool,
     );
@@ -774,8 +787,13 @@ function drawScorePanel(graphics: Graphics, layer: Container, runtime: Runtime, 
     layer,
     rank,
     x + w,
-    y + 70,
-    { ...displayStyle(rank.length >= 3 ? 16 : 20, rank.startsWith('AA') ? LAT_ACCENT : LAT_INK, '300'), anchorX: 1 },
+    // Centred on the 06 RANK label's line, like the other figures sit on theirs.
+    y + 79,
+    {
+      ...displayStyle(rank.length >= 3 ? 16 : 20, rank.startsWith('AA') ? LAT_ACCENT : LAT_INK, '300'),
+      anchorX: 1,
+      anchorY: 0.5,
+    },
     pool,
   );
 }

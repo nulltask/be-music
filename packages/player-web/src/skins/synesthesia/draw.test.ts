@@ -1,6 +1,6 @@
 import type { Graphics } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
-import { ShapeBatch } from './draw.ts';
+import { grainsFor, ShapeBatch, trailGrainsFor } from './draw.ts';
 
 /** Records the geometry and paint calls a `Graphics` receives, in order. */
 function recorder(): { graphics: Graphics; calls: string[] } {
@@ -63,6 +63,15 @@ describe('ShapeBatch', () => {
     expect(calls).toEqual(['move 0,0', 'line 5,5', 'stroke f8f8f8 1 1', 'move 0,1', 'line 5,6', 'stroke f8f8f8 2 1']);
   });
 
+  it('strokes streaks as solid lines even when segments break into grains', () => {
+    const { graphics, calls } = recorder();
+    const batch = new ShapeBatch(true);
+    batch.streak(graphics, 0xffffff, 1, 1, 0, 0, 40, 30);
+    batch.streak(graphics, 0xffffff, 0.01, 1, 0, 0, 40, 30);
+    batch.flush();
+    expect(calls).toEqual(['move 0,0', 'line 40,30', 'stroke f8f8f8 1 1']);
+  });
+
   it('starts every flush empty and routes buckets to the graphics given that frame', () => {
     const first = recorder();
     const second = recorder();
@@ -73,5 +82,55 @@ describe('ShapeBatch', () => {
     batch.flush();
     expect(first.calls).toEqual(['rect 0,0,1,1', 'fill f80808 1']);
     expect(second.calls).toEqual(['rect 9,9,1,1', 'fill f80808 1']);
+  });
+});
+
+describe('grainsFor', () => {
+  it('keeps a small point as one finer grain carrying the same light', () => {
+    const grains = grainsFor(1, 0.4);
+    expect(grains.count).toBe(1);
+    expect(grains.size).toBeLessThan(1);
+    expect(grains.count * grains.size ** 2 * grains.alpha).toBeCloseTo(0.8 * 1 * 0.4, 6);
+  });
+
+  it('breaks a larger point into several grains no bigger than about a pixel', () => {
+    const grains = grainsFor(4, 0.2);
+    expect(grains.count).toBeGreaterThan(1);
+    expect(grains.count).toBeLessThanOrEqual(5);
+    expect(grains.size).toBeLessThanOrEqual(1.1);
+    expect(grains.size).toBeGreaterThanOrEqual(0.6);
+  });
+
+  it('never asks for more than full opacity', () => {
+    expect(grainsFor(3, 1).alpha).toBeLessThanOrEqual(1);
+    expect(grainsFor(0.5, 1).alpha).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('trailGrainsFor', () => {
+  it('spaces grains about a pixel and a half apart along the segment', () => {
+    expect(trailGrainsFor(16, 1, 0.5).count).toBe(11);
+    expect(trailGrainsFor(0, 1, 0.5).count).toBe(1);
+  });
+
+  it('caps very long trails and keeps grains about a pixel across', () => {
+    const grains = trailGrainsFor(400, 3, 0.5);
+    expect(grains.count).toBe(32);
+    expect(grains.size).toBeLessThanOrEqual(1.1);
+    expect(grains.alpha).toBeLessThanOrEqual(1);
+  });
+
+  it('carries about the light the stroke did', () => {
+    const grains = trailGrainsFor(10, 1, 0.3);
+    expect(grains.lanes).toBe(1);
+    expect(grains.count * grains.size ** 2 * grains.alpha).toBeCloseTo(0.8 * 10 * 1 * 0.3, 6);
+  });
+
+  it('spreads a wide stroke over parallel lanes without adding light', () => {
+    const thin = trailGrainsFor(10, 1.4, 0.2);
+    const wide = trailGrainsFor(10, 4.5, 0.2);
+    expect(wide.lanes).toBe(3);
+    expect(wide.lanes).toBeGreaterThan(thin.lanes);
+    expect(wide.count * wide.lanes * wide.size ** 2 * wide.alpha).toBeCloseTo(0.8 * 10 * 4.5 * 0.2, 6);
   });
 });

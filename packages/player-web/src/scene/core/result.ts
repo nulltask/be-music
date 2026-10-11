@@ -8,6 +8,9 @@ import type { PixiGameplayResultData } from './result-data.ts';
 import type { BeMusicEffectLevel, BeMusicSkin } from '../../skin/be-music/types.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import { BeMusicResultBinding, resolveBeMusicSkinStage } from '../../skin/be-music/binding.ts';
+import { resolveStageOrientation } from '@be-music/skin-sdk';
+import { SongImageCache } from '../../skin/be-music/song-images.ts';
+import { resolveSongSource } from '../../collection/collection.ts';
 import {
   resolveDesignTextResolution,
   resolveScaledViewport,
@@ -67,6 +70,13 @@ export interface CoreResultViewOptions {
   /** Showmanship level for the be-music skin's result entrance. Defaults to `'full'`. */
   beMusicEffects?: BeMusicEffectLevel;
   /**
+   * The player's stored values for the be-music skin's `settings`, keyed by setting id. They are checked against the
+   * skin's schema (`resolveBeMusicSkinSettings`: unknown ids dropped, invalid values replaced by the default, numbers
+   * clamped) and handed to the skin as `frame.settings`. Omit it to draw with the skin's defaults; change it live with
+   * `setBeMusicSkinSettings`.
+   */
+  beMusicSkinSettings?: Readonly<Record<string, unknown>>;
+  /**
    * Loaded song collection — needed to resolve per-song artwork (BANNER / STAGEFILE / BACKBMP) via the same
    * chart-asset loader the select view uses. May be `undefined` for embed scenarios where the result is rendered outside
    * a library context.
@@ -115,6 +125,8 @@ export class CoreResultView {
   private readonly fallbackLayer = new Container();
   /** Draws the be-music skin's result on its canvas, shown in `fallbackLayer`; created on first use. */
   private skinBinding: BeMusicResultBinding | undefined;
+  /** Song images handed to the be-music skin (`frame.songImage`); created with the binding. */
+  private songImages: SongImageCache | undefined;
   /** Clip mask for the design rect — keeps theme artwork from bleeding into the letterbox bars. */
   private readonly designClipMask = new Graphics();
   /**
@@ -151,9 +163,21 @@ export class CoreResultView {
    */
   protected readonly timerStartedAt: Map<number, number> = new Map<number, number>();
   protected options: CoreResultViewOptions;
+  /** The player's stored values for the be-music skin's settings (`beMusicSkinSettings`, then the setter). */
+  private beMusicSkinSettings: Readonly<Record<string, unknown>> | undefined;
 
   public constructor(options: CoreResultViewOptions = {}) {
     this.options = options;
+    this.beMusicSkinSettings = options.beMusicSkinSettings;
+  }
+
+  /**
+   * Replaces the player's values for the be-music skin's `settings` (see the `beMusicSkinSettings` option); the skin
+   * draws with them from the next frame. `undefined` goes back to the skin's defaults.
+   */
+  public setBeMusicSkinSettings(stored: Readonly<Record<string, unknown>> | undefined): void {
+    this.beMusicSkinSettings = stored;
+    this.skinBinding?.setSettings(stored);
   }
 
   private get app(): Application {
@@ -321,6 +345,8 @@ export class CoreResultView {
     try {
       this.skinBinding?.dispose();
       this.skinBinding = undefined;
+      this.songImages?.dispose();
+      this.songImages = undefined;
       this.sceneRoot.destroy({ children: true, context: true });
     } catch (error) {
       log.warn('sceneRoot.destroy threw', error);
@@ -360,7 +386,10 @@ export class CoreResultView {
     const screenWidth = this.app.screen.width || FALLBACK_DESIGN_WIDTH;
     const screenHeight = this.app.screen.height || FALLBACK_DESIGN_HEIGHT;
     const themeSize = this.themeDesignSize;
-    const stage = resolveBeMusicSkinStage(this.options.beMusicSkin ?? phantomSkin);
+    const stage = resolveBeMusicSkinStage(this.options.beMusicSkin ?? phantomSkin, {
+      width: screenWidth,
+      height: screenHeight,
+    });
     const designWidth = themeSize ? themeSize.width : stage.width;
     const designHeight = themeSize ? themeSize.height : stage.height;
     const viewport = resolveScaledViewport(screenWidth, screenHeight, designWidth, designHeight);
@@ -373,6 +402,7 @@ export class CoreResultView {
     }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.host?.setStageOrientation(themeSize ? 'landscape' : resolveStageOrientation(stage));
     if (this.cachedDesignWidth !== designWidth || this.cachedDesignHeight !== designHeight) {
       this.designClipMask.clear().rect(0, 0, designWidth, designHeight).fill(0xffffff);
       this.background.clear().rect(0, 0, designWidth, designHeight).fill(BG);
@@ -401,7 +431,14 @@ export class CoreResultView {
     // A skip (Enter before the chart draw finishes → timer 151) jumps the skin's entrance to its settled layout.
     const skipped = this.timerStartedAt.has(151);
     if (!this.skinBinding) {
-      this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin);
+      const collection = this.options.collection;
+      this.songImages = new SongImageCache({
+        resolveSource: (song) => (collection ? resolveSongSource(collection, song) : undefined),
+      });
+      this.skinBinding = new BeMusicResultBinding(this.options.beMusicSkin ?? phantomSkin, {
+        songImage: this.songImages.lookup,
+        settings: this.beMusicSkinSettings,
+      });
       this.fallbackLayer.addChild(this.skinBinding.view);
     }
     this.skinBinding.render({

@@ -30,7 +30,13 @@ import {
   rollUpValue,
   stageProgress,
 } from '@be-music/skin-sdk';
-import { alignCapCenter, type PixiResultFrame, type PixiResultSkin, resolveSkinTextStyle } from '../pixi-kit/index.ts';
+import {
+  alignCapCenter,
+  fitTextToWidth,
+  type PixiResultFrame,
+  type PixiResultSkin,
+  resolveSkinTextStyle,
+} from '../pixi-kit/index.ts';
 
 /** How fast the entrance timeline plays: the choreography below is authored at 1x and runs 1.3x, so the card settles
  * sooner without changing its order or easing. */
@@ -121,10 +127,14 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
     alignCapCenter(node, options.fontFamily ?? DEFAULT_TEXT_FONT, options.weight ?? '500', options.size ?? 10);
     node.position.set(x, y);
     node.skew.set(options.skew ?? 0, 0);
-    if (options.maxWidth !== undefined && node.width > options.maxWidth) {
-      node.scale.x = options.maxWidth / node.width;
-    }
     target.addChild(node);
+    if (options.maxWidth !== undefined) {
+      fitTextToWidth(node, target, {
+        maxWidth: options.maxWidth,
+        anchorX: options.anchorX ?? 0,
+        anchorY: options.anchorY ?? 0,
+      });
+    }
     return node;
   };
   /** Slide a group in from an offset with an ease-out, fading as it lands. */
@@ -414,21 +424,28 @@ export function renderPhantomResult(frame: PixiResultFrame): void {
   });
   const textX = TRACK_X + 16;
   const textW = trackW - 24;
-  addText(track.root, result.song.title || 'Untitled chart', textX, trackTop + 22, {
+  // Genre, title, artist — the order every built-in skin uses.
+  const genreLift = result.song.genre ? 14 : 0;
+  if (result.song.genre) {
+    addText(track.root, result.song.genre.toUpperCase(), textX, trackTop + 20, {
+      size: 9,
+      weight: '800',
+      fill: PHANTOM_ASH,
+      maxWidth: textW,
+    });
+  }
+  addText(track.root, result.song.title || 'Untitled chart', textX, trackTop + 22 + genreLift, {
     size: 16,
     fill: PHANTOM_WHITE,
     fontFamily: DEFAULT_HEADLINE_FONT,
     maxWidth: textW,
   });
-  addText(track.root, result.song.artist ?? '', textX, trackTop + 46, {
+  addText(track.root, result.song.artist ?? '', textX, trackTop + 46 + genreLift, {
     size: 10,
     weight: '800',
     fill: PHANTOM_RED_HOT,
     maxWidth: textW,
   });
-  if (result.song.genre) {
-    addText(track.root, result.song.genre, textX, trackTop + 62, { size: 9, fill: PHANTOM_ASH, maxWidth: textW });
-  }
   track.g.rect(textX, trackTop + 84, textW, 1).fill(PHANTOM_SLATE);
   resolveResultTrackRows(result).forEach((row, index) => {
     const rowY = trackTop + 96 + index * 36;
@@ -549,10 +566,8 @@ function renderMetric(
   valueText.anchor.set(1, 0.5);
   alignCapCenter(valueText, DEFAULT_DISPLAY_FONT, '400', 22);
   valueText.position.set(x + METRIC_W - 8, y + METRIC_H / 2 + 1);
-  if (valueText.width > 100) {
-    valueText.scale.x = 100 / valueText.width;
-  }
   target.addChild(valueText);
+  fitTextToWidth(valueText, target, { maxWidth: 100, anchorX: 1, anchorY: 0.5 });
 }
 
 /** Polyline of `points` inside the rect, drawn up to `progress` (0..1) of the horizontal span. */

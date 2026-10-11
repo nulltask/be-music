@@ -83,6 +83,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] `stop_events` output (from `09`)
 - [x] `notes.l` output (`l=0` if not specified)
 - [x] `notes.c` output (`c=false` if not specified)
+- [x] `notes.t` output (beatoraja extension, long notes only)
+- [x] `info.ln_type` output (beatoraja extension)
 - [x] `bga.bga_header` output
 - [x] `bga.bga_events` output
 - [x] `bga.layer_events` output
@@ -115,14 +117,14 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [ ] Apply `bpm_events` of the same `y` with priority to the end
 - [ ] Add and apply `stop_events` of the same `y`
 - [ ] Playback based on sound channel slicing rules (`c` and restart)
-- [ ] BGM discard rules when playable/BGM are mixed in the same slice
+- [x] BGM discard when a playable note and a BGM note share the same `y` in one sound channel (applied at parse time; the BGM note is dropped)
 - [ ] Composite playback of the same `(x,y)` notes from different sound channels as Layered Notes
 
 ## Fields read by implementation (parser)
 
-- Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `bpm_events`, `stop_events`, `bga`
-- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`
-- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`
+- Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `key_channels` (beatoraja extension), `bpm_events`, `stop_events`, `bga`
+- `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
+- `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
 - `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
@@ -139,9 +141,15 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Convert `key = base36(i + 1)` to 2 digits
 - Convert `notes[].y` to fractional position and turn it into an event
 - `notes[].l/c` is kept as `events[].bmson.l/c`
+- `notes[].t` (1 = LN, 2 = CN, 3 = HCN) is kept as `events[].bmson.t` on long notes (`l > 0`); `info.ln_type` is kept as `bmson.info.lnType`
 - If `lines` exists, calculate `measure` and `position` using the `lines` interval as a measure.
-- Number the unique values ​​of `notes[].x` in ascending order and map them to BMS compatible channels.
-- `11` if `x` is not specified
+- Map `notes[].x` to BMS channels by `info.mode_hint`, in this order:
+  1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
+  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, and `popn-9k` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`).
+  3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
+  4. Any other hint numbers the unique positive `x` values in ascending order onto consecutive channels from `11`.
+- A note with `x` omitted or `x <= 0` becomes BGM (`01`).
+- A positive `x` that the lane table does not cover falls back to `11`, so it lands on lane 1.
 - `bpm_events` is converted to `resources.bpm` + channel `08`
 - `stop_events` is converted to `resources.stop` + channel `09`
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
@@ -163,6 +171,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Generate `bpm_events` from `03` / `08` channels
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)
+- Reflect `events[].bmson.t` to `notes[].t` on long notes, and `bmson.info.lnType` to `info.ln_type`
 - If `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` are consistent with the current IR, re-output them in favor of their array structure.
 - Output `bga` if `bmson.bga` exists
 
@@ -172,10 +181,11 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 
 ## y -> position conversion rule
 
-- If you have `lines`:
+- If `lines` has at least two entries:
   - index of the `lines` interval to which `measure = y` belongs
   - `position = [y - lineStart, lineEnd - lineStart]`
-- If `lines` is missing:
+  - After the last line, measures continue as 4/4 measures (`resolution * 4` ticks each) counted from the last line
+- If `lines` is missing or has fewer than two entries:
   - `beat = y/resolution`
   - `measure = floor(beat / 4)`
   - `position = [round(y) % (resolution * 4), resolution * 4]`

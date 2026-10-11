@@ -49,24 +49,24 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 ### 対応コマンド
 
-| command                                                                                                                                 | player における扱い                                                                                                                                    |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。                                                    |
-| `#BANNER`                                                                                                                               | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。                                                                  |
-| `#STAGEFILE`                                                                                                                            | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。                                                          |
-| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | 選曲画面の表示、ソート、フィルタ、結果表示に使います。                                                                                                 |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | 時間解決に使います。                                                                                                                                   |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | 判定幅、表示ランク、groove gauge 計算に使います。                                                                                                      |
-| `#WAVxx`, `#BMPxx`                                                                                                                      | 音声・BGA リソース解決に使います。                                                                                                                     |
-| `#BASE`                                                                                                                                 | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。 |
-| `#PREVIEW`                                                                                                                              | 選曲画面のプレビュー再生で優先的に使います。                                                                                                           |
-| `#PATH_WAV`                                                                                                                             | 選曲画面プレビューのファイル探索にだけ使います。通常プレイ中の sample 解決には使いません。                                                             |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                       |
-| `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                |
-| `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                     |
-| `#POORBGA`                                                                                                                              | POOR 画像の既定値上書きに使います。                                                                                                                    |
-| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                       |
-| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                 |
+| command                                                                                                                                 | player における扱い                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。                                                                                                                                                  |
+| `#BANNER`                                                                                                                               | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。                                                                                                                                                                |
+| `#STAGEFILE`                                                                                                                            | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。                                                                                                                                                        |
+| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | 選曲画面の表示、ソート、フィルタ、結果表示に使います。                                                                                                                                                                                               |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | 時間解決に使います。                                                                                                                                                                                                                                 |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | 判定幅、表示ランク、groove gauge 計算に使います。                                                                                                                                                                                                    |
+| `#WAVxx`, `#BMPxx`                                                                                                                      | 音声・BGA リソース解決に使います。                                                                                                                                                                                                                   |
+| `#BASE`                                                                                                                                 | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。                                                                                               |
+| `#PREVIEW`                                                                                                                              | 選曲画面のプレビュー再生で優先的に使います。                                                                                                                                                                                                         |
+| `#PATH_WAV`                                                                                                                             | ブラウザのゲームプレイとオフラインレンダラ（`renderJson`）が sample を解決するとき、素のパスより先にディレクトリ接頭辞として試します。選曲画面プレビューのファイル探索にも使います。ターミナル player はプレイ用の sample 読み込みでは適用しません。 |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                                                                                                                     |
+| `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                                                                                                              |
+| `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                                                                                                                   |
+| `#POORBGA`                                                                                                                              | POOR 画像の既定値上書きに使います。                                                                                                                                                                                                                  |
+| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                                                                                                                     |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                                                                                                               |
 
 ### 未対応チャンネル
 
@@ -135,8 +135,16 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 ### 地雷
 
 地雷チャンネルは、対応する playable lane に写像したうえで別配列として保持します。
-地雷は `summary.total` に含めませんが、手動入力時には通常ノートより優先して `BAD` を発生させることがあります。
-`#WAV00` が定義されている場合、player は手動で地雷に当たったときの爆発音としてそれを使用します。
+地雷は `summary.total` に含めません。
+
+地雷は LR2 の発動モデルに合わせます（LR2 自身の changelog。ダメージモデルは beatoraja `JudgeManager` で確認）。
+
+- 発動条件は LR2 の2条件です。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
+- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
+- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
+- ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
+- `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
+- kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
 
 ### 不可視ノート
 
@@ -315,12 +323,11 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 - combo を 0 に戻す。
 - score を更新する。
 - 通常ノートの `BAD` では groove gauge を `-4` する。
-- 手動地雷ヒットでは判定表示を `BAD` のままにして、地雷値ベースのダメージを別途適用する。
 
 ### `POOR`
 
 `POOR` は演奏対象ノートに対する失敗です。
-ノートが `BAD` 窓を過ぎた場合、または手動入力のズレが `BAD` 窓を超えた場合に発生します。
+ノートが打鍵されないまま `BAD` 窓を過ぎた場合に発生します。
 
 `POOR` 発生時は次を行います。
 
@@ -354,14 +361,11 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 ### 地雷
 
-地雷は LR2 の発動モデルに合わせます（LR2 自身の changelog。ダメージモデルは beatoraja `JudgeManager` で確認）。
+地雷の爆発は判定語ではありません。`BAD` / `POOR` を発生させず、判定カウンタ・combo・EX-SCORE・score も変更せず、近くの通常ノート候補より優先されることもありません。
+行うのはゲージへの地雷ダメージ適用と、定義されていれば `#WAV00` の発音だけです。発動条件とダメージ規則は [地雷](#地雷) を参照してください。
+オブジェクト値が 2 文字の大文字 base36 ID でない場合（または `00` の場合）は既定ダメージ `4%` にフォールバックします。`#BASE 62` の小文字の値もこれに該当します。
 
-- 発動条件は LR2 の2条件です。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
-- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
-- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
-- ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
-- `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
-- kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
+この規則の根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) にまとめています。
 
 ## NOTES・combo・score
 
@@ -452,7 +456,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- 手動地雷ヒット: `-(mineValue(base36) / 2)`
+- 地雷の爆発: `-mineValue(base36)`（bmson では `damage`）。生デルタとして適用
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
@@ -616,6 +620,9 @@ manual long note で保持が切れた場合は、対応チャンネルの再生
 
 player 本体は UI 実装に依存せず、`stateSignals` と `uiSignals` を通じて状態を通知します。
 judge/combo、フレーム情報、POOR BGA、レーンフラッシュ、レーン保持表示はこの信号経由で伝えます。
+UI コマンドキューはロングノートの開始・終了も伝えます。保持が始まると `long-note-start`（`mode` は `ln` / `cn` / `hcn`。有効なルールセットが実際にそのノートを処理するモードで、譜面の `#LNMODE` と異なる場合があります）、終わると `long-note-end`（`outcome` は `complete` / `dropped`）を送ります。
+
+`PlayerOptions.onRulesetResolved` は再生開始前に 1 回だけ `PlayerRulesetInfo`（`id`、`rulesetId`、`longNoteStyle`、譜面開始時点の判定窓 `windows`（µs））を渡して呼ばれます。ホストは判定窓を自前で導出し直さずに、エンジンが実際に使う値を表示できます。
 
 ### Loading screen
 
@@ -632,7 +639,7 @@ loading 文言はその上へオーバーレイし、各文字セルの背景色
 
 `#STAGEFILE` が未指定、ファイル未発見、非対応形式、デコード失敗の場合は、画像なしのテキスト loading screen へフォールバックします。
 `#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
-`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。未指定時は ANSI 表示です。
+`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。Kitty graphics は既定で有効で、`--no-kitty-graphics` を指定した場合や非対応端末では ANSI 表示になります。
 動画 BGA の既定実装は progressive decode です。最初のフレームが用意できた時点で UI runtime を ready にし、残りのフレームは gameplay 開始後に別 worker で段階的にデコードします。
 
 ### Music Select (選曲画面)
@@ -645,7 +652,7 @@ loading 文言はその上へオーバーレイし、各文字セルの背景色
 - `#BANNER` または bmson `info.banner_image`
 
 banner は metadata block の右側に表示し、縦横比を維持したまま block 内に収めます。
-`--kitty-graphics` が有効で、対応端末なら banner も Kitty graphics protocol で表示します。未指定時は ANSI 表示です。
+`--kitty-graphics` が有効で、対応端末なら banner も Kitty graphics protocol で表示します。Kitty graphics は既定で有効で、`--no-kitty-graphics` を指定した場合や非対応端末では ANSI 表示になります。
 
 選曲画面では `#PREVIEW` を優先してプレビュー再生します。
 プレビュー開始前には短い settle delay を置き、カーソル連打中に preview 処理が走り続けないようにします。
@@ -678,7 +685,8 @@ long note は body と tail を持つ 1 本のノートとして描画し、保�
 ### TUI 以外の出力
 
 TUI が無効な場合は、モード開始メッセージ、レーン割り当て、判定ログ、最終 result をテキストで出力します。
-`renderSummary()` は `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / FAST / SLOW / EX-SCORE / SCORE` の順で結果を整形します。
+`renderSummary()` は `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / EMPTY / FAST / SLOW / EX-SCORE / SCORE` の順で結果を整形します。
+`EMPTY` は空 POOR の数です。`SCORE` 行は、マネースコアを定義している唯一のルールセットである `lr2` のときだけ出力します。
 
 ## `PlayerSummary`
 
@@ -706,4 +714,4 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 - browser gameplay での 2P 独立 gauge variant
 - ゲージ推移タイムライン表示
 - beatoraja の非デフォルトのノート選択アルゴリズム（`duration` / `lowest` / `score`）は実装済みですが
-  オプションとしては公開していません
+  ライブプレイのオプションとしては公開していません（`bms-playlog` のシミュレータでは `--algorithm=` で選べます）

@@ -96,6 +96,7 @@
 - [x] チャンネル `E1-E9` (地雷) を解釈
 - [x] MANUAL モードで「押したまま判定線を通過」または「`PGREAT` 窓以内での押下」で地雷を爆発させる（LR2 準拠）
 - [x] 地雷ダメージはオブジェクト値（大文字 base36）をそのままパーセントとして適用し、判定・コンボには影響させない（LR2 / beatoraja 準拠）
+- [x] 地雷のオブジェクト値が 2 文字の大文字 base36 ID でない場合や `00` の場合は既定ダメージ `4%` にフォールバック（`#BASE 62` の小文字の値もこの既定値になる）
 - [x] `#WAV00` が定義されている場合、MANUAL モードの地雷ヒットで爆発音として使用
 - [x] 地雷を `TOTAL` / `EX-SCORE` の対象ノート数から除外
 
@@ -140,7 +141,8 @@
 - [x] 制御構文 `#ENDSW` を保持して実行時評価
 - [x] 拡張ヘッダ `#PREVIEW` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#LNTYPE` を `bms` 拡張領域へ保持
-- [x] 拡張ヘッダ `#LNMODE` を `bms` 拡張領域へ保持
+- [x] 拡張ヘッダ `#LNMODE` を `bms` 拡張領域へ保持（`1` = LN、`2` = CN、`3` = HCN）
+- [x] player は `beatoraja` ルールセットで `#LNMODE 2` / `3` のロングノートを CN / HCN として処理する。`iidx` はすべてのロングノートを CN（`#LNMODE 3` なら HCN）、`lr2` はすべて LN として処理する
 - [x] 拡張ヘッダ `#LNOBJ` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#VOLWAV` を `bms` 拡張領域へ保持
 - [x] 拡張ヘッダ `#DEFEXRANK` を `bms` 拡張領域へ保持
@@ -243,7 +245,7 @@ runtime と round-trip の扱い:
 
 - [x] 拡張チャンネル `#mmm51-59` (LN: `LNTYPE=1`) の専用挙動
 - [x] 拡張チャンネル `#mmm61-69` (LN: `LNTYPE=2`) の専用挙動
-- [x] ヘッダ `#MIDIFILE` の専用解釈（現在は未知ヘッダ扱い）
+- [x] ヘッダ `#MIDIFILE` の専用解釈（`bms.midiFile` に保持。再生はしない）
 - [x] チャンネル `06` (POOR-BMP/BGA 切替) の再生時挙動
 - [x] `#POORBGA` 未指定時に `#BMP00` を POOR 画像として扱う既定挙動
 - [x] `#BPM` 未指定時の既定値 `130` を互換動作として扱う方針整理（IR 既定値 `130` に統一）
@@ -300,7 +302,7 @@ runtime と round-trip の扱い:
 - [ ] `#BMPxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
 - [ ] 未定義 `#BPMxx` / `#STOPxx` 参照時の互換挙動（無視・既定値・エラー）
 - [ ] `#STOPxx` 空定義参照（例: `#05209:` の未定義トークン）時の互換挙動
-- [ ] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針
+- [x] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針: 前後の空白を除去して受理する
 - [x] 制御構文の別表記 `#ELSE IF n` / `#END IF` / 値なし `#END` を `#ELSEIF n` / `#ENDIF` として受理（保存・出力時は正規形へ正規化、`#END <他の値>` は未知ヘッダのまま）
 - [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
 - [x] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
@@ -331,8 +333,10 @@ runtime と round-trip の扱い:
 ## player 固有挙動
 
 - 使用チャンネルからレーンモードを自動判定 (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
-- レーンモードを自動判定できない場合は拡張子で補完 (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
-- 拡張レーンチャンネル (`1A..1O` / `2A..2O`) は拡張子の補完を含む他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` を選びます
+- 拡張レーンチャンネル (`1A..1O` / `2A..2O`) は他のどのルールよりも優先して `24 KEY SP` / `48 KEY DP` を選びます
+- `.pms` 譜面はチャンネルにかかわらず `9 KEY` です。この判定は拡張レーンの次、内容による判定より前に行います
+- `9 KEY` は内容からも判定します: `#PLAYER 3` でチャンネル `17` を使う譜面、`11..19` をすべて使う 1P 譜面、`21` / `26..29` を使わずに `22..25` を使う譜面（`.bms` / `.bme` で書かれた PMS-STD）
+- チャンネルからレーンモードを判定できない場合は拡張子で補完 (`.bms -> 5 KEY`, `.bme -> 7 KEY`)
 - `.pms` 譜面の 9KEY は標準配列 (`PMS-STD`) / 互換配列 (`PMS-COMPAT`) をチャンネル分布から推定し、`LANE` 表示に反映
 - FREE ZONE (`17` / `27`) は独立レーンを作らずスクラッチレーン (`16` / `26`) 上に描画。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では通常レーンとして扱う
 - FREE ZONE ノート長は 4 分音符固定
@@ -363,10 +367,10 @@ runtime と round-trip の扱い:
 
 - `SCROLL 0` で同一レーン・同一描画セルに複数ノートが重なる場合、先行ノートを基準位置に置き、後続ノートは判定ラインから遠ざかる側（上方向）へ順に積み上げる
 - `SCROLL < 0` は「逆走表示の忠実再現」ではなく「ノート接近表示の維持」を優先し、描画距離は `abs(distance)` で扱う
-- `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat）で上限を設ける
+- `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-tui/src/tui/tui.ts`）で上限を設ける
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
-- 上記ポリシーの回帰は `packages/player/src/tui/lane-stacking.test.ts`・`packages/player/src/core/timeline.test.ts`・`packages/player/src/bga.test.ts` で検証する
+- 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/player/src/core/timeline.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する
 
 ## イベント位置の扱い
 

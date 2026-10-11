@@ -583,4 +583,82 @@ describe('stringifier', () => {
       { measure: 1, channel: '11', position: [2, 3], value: 'Zz' },
     ]);
   });
+
+  test('BMS stringify: writes every `#WAVCMD` line once the header no longer matches its source', () => {
+    const parsed = parseChart(['#TITLE Before', '#WAVCMD 00 01 48', '#WAVCMD 01 02 50', '#00111:01', ''].join('\n'));
+    parsed.metadata.title = 'After';
+
+    const output = stringifyBms(parsed);
+
+    expect(output).toContain('#TITLE After');
+    expect(output.split('\n').filter((line) => line.startsWith('#WAVCMD'))).toEqual([
+      '#WAVCMD 00 01 48',
+      '#WAVCMD 01 02 50',
+    ]);
+    expect(parseChart(output).bms.wavCmds).toEqual(['00 01 48', '01 02 50']);
+  });
+
+  test('BMS stringify: falls back to the legacy `wavCmd` when `wavCmds` is empty', () => {
+    const json = createEmptyJson('bms');
+    json.bms.wavCmd = '00 01 48';
+
+    expect(
+      stringifyBms(json)
+        .split('\n')
+        .filter((line) => line.startsWith('#WAVCMD')),
+    ).toEqual(['#WAVCMD 00 01 48']);
+  });
+
+  test('bmson stringify: writes mines back to `key_channels` with their damage instead of as sound notes', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'Mines', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+        key_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 2, y: 480, damage: 10 },
+              { x: 1, y: 960 },
+            ],
+          },
+        ],
+      }),
+    );
+    const output = JSON.parse(stringifyBmson(source)) as {
+      sound_channels: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
+    };
+
+    expect(output.sound_channels.map((channel) => channel.name)).toEqual(['key.wav']);
+    expect(output.sound_channels[0]!.notes).toEqual([expect.objectContaining({ x: 1, y: 0 })]);
+    expect(output.key_channels).toEqual([
+      {
+        name: 'mine.wav',
+        notes: [
+          { x: 2, y: 480, damage: 10 },
+          { x: 1, y: 960 },
+        ],
+      },
+    ]);
+
+    const reparsed = parseBmson(JSON.stringify(output));
+    const mines = reparsed.events.filter((event) => /^[DE]/i.test(event.channel));
+    expect(mines.map((event) => [event.channel, event.bmson?.damage])).toEqual([
+      ['D2', 10],
+      ['D1', undefined],
+    ]);
+  });
+
+  test('bmson stringify: omits `key_channels` when the chart has no mines', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'No mines', init_bpm: 120, resolution: 240 },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
+  });
 });

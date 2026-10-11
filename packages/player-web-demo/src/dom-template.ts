@@ -179,6 +179,32 @@ export const DEMO_APP_HTML = `
       <span class="help-button-label">Help</span>
     </button>
     <!--
+      Touch play controls. Phones and tablets have no Space / Esc key, so
+      during play a pause button sits in the top-left corner; while paused
+      it shows Resume and Quit. Hidden on desktops and outside play.
+    -->
+    <div class="touch-controls" id="touch-controls">
+      <button class="touch-control" id="touch-pause" type="button" aria-label="Pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round" /></svg>
+      </button>
+      <button class="touch-control touch-control--text" id="touch-quit" type="button">Quit</button>
+    </div>
+    <!--
+      Shown on phones held upright: the play field is laid out for
+      landscape, so ask for a turn instead of shrinking it to a strip.
+    -->
+    <div class="rotate-hint" aria-live="polite">
+      <div class="rotate-hint-card">
+        <svg class="rotate-hint-icon" viewBox="0 0 48 48" aria-hidden="true">
+          <rect x="15" y="6" width="18" height="32" rx="3" fill="none" stroke="currentColor" stroke-width="2.4" />
+          <path d="M8 34a17 17 0 0 0 17 9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
+          <path d="M21 40l4 3-3 4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+        <div class="rotate-hint-title">Rotate your device</div>
+        <div class="rotate-hint-subtitle">The player is laid out for landscape.</div>
+      </div>
+    </div>
+    <!--
       Help modal. Two tabs:
       - Usage: drag-drop instructions, keyboard shortcuts,
         gameplay keys, options.

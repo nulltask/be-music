@@ -1,3 +1,4 @@
+import { validateBeMusicSkinSettings } from './settings.ts';
 import type { BeMusicSkin, BeMusicSurfaceContextKind } from './types.ts';
 
 /**
@@ -32,7 +33,7 @@ function isHttpUrl(value: string): boolean {
 
 /**
  * Problems with a skin's declaration — an unsupported API revision, a malformed id or version, missing author, bad
- * URLs — as human-readable messages. Empty when the skin is fine.
+ * URLs, an invalid `settings` schema — as human-readable messages. Empty when the skin is fine.
  */
 export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   const problems: string[] = [];
@@ -57,6 +58,14 @@ export function validateBeMusicSkin(skin: BeMusicSkin): string[] {
   for (const screen of ['gameplay', 'select', 'result'] as const) {
     if (typeof skin[screen]?.draw !== 'function') problems.push(`${screen}.draw must be a function`);
   }
+  if (skin.decide !== undefined) {
+    if (typeof skin.decide.draw !== 'function') problems.push('decide.draw must be a function');
+    const { durationMs } = skin.decide;
+    if (durationMs !== undefined && !(Number.isFinite(durationMs) && durationMs >= 0)) {
+      problems.push(`decide.durationMs ${String(durationMs)} must be a non-negative number`);
+    }
+  }
+  problems.push(...validateBeMusicSkinSettings(skin.settings));
   return problems;
 }
 

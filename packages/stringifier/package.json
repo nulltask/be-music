@@ -1,6 +1,6 @@
 {
   "name": "@be-music/stringifier",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Stringifier from be-music JSON charts to BMS or BMSON",
   "license": "MIT",
   "bin": {
@@ -22,7 +22,7 @@
   "scripts": {
     "build:bundle": "vp pack",
     "build": "vp pack",
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "clean": "rimraf dist",
     "dev": "node --conditions=source src/cli.ts",
     "bench": "node --conditions=source scripts/bench.ts"
   },

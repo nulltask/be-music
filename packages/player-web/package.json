@@ -1,6 +1,6 @@
 {
   "name": "@be-music/player-web",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Vanilla browser PixiJS core for be-music song selection and gameplay",
   "license": "MIT",
   "files": [
@@ -43,7 +43,7 @@
   },
   "scripts": {
     "build": "vp pack",
-    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "clean": "rimraf dist",
     "bench": "node --conditions=source scripts/bench.ts"
   },
   "dependencies": {
@@ -63,7 +63,7 @@
     "fflate": "^0.8.3",
     "mediabunny": "^1.61.3",
     "mp4-muxer": "^5.2.2",
-    "pixi.js": "^8.21.0",
+    "pixi.js": "^8.22.0",
     "ts-ebml": "^3.0.2"
   }
 }

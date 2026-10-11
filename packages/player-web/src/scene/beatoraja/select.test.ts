@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import type { Container, Text, Texture } from 'pixi.js';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
-import { PixiBeatorajaSelectScene } from './select.ts';
+import { lnModeDirectiveToIndex, PixiBeatorajaSelectScene } from './select.ts';
 
 function fakeTextureCache(): BeatorajaTextureCache {
   const empty = new Map<number | string, Texture>();
@@ -77,5 +77,19 @@ describe('PixiBeatorajaSelectScene disposal', () => {
     expect(internals.searchPromptText).not.toBe(oldPrompt);
 
     scene.dispose();
+  });
+});
+
+describe('lnModeDirectiveToIndex', () => {
+  it('maps the 1-based `#LNMODE` values onto the 0-based LNMODE button index', () => {
+    expect(lnModeDirectiveToIndex(1)).toBe(0);
+    expect(lnModeDirectiveToIndex(2)).toBe(1);
+    expect(lnModeDirectiveToIndex(3)).toBe(2);
+  });
+
+  it('reads a missing or out-of-range `#LNMODE` as LN', () => {
+    expect(lnModeDirectiveToIndex(undefined)).toBe(0);
+    expect(lnModeDirectiveToIndex(0)).toBe(0);
+    expect(lnModeDirectiveToIndex(4)).toBe(0);
   });
 });

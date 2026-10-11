@@ -29,7 +29,6 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 | `extended-directives.bms`             | 同じ命令群を `@be-music/chart` の値パーサが受け付けるペイロードで記述。`#EXWAV` の `pvf`、`#EXBMP` の ARGB タプル、`#ARGB` の 16 進と 10 進、`#BGA` 部分矩形、`#SWBGA` アニメーション、`#WAVCMD` の pitch/volume/loop、チャネル `A0` からの `#EXRANK`、チャネル `A6` からの `#CHANGEOPTION`、`#STP`。 |
 | `base62-ids.bms`                      | `#BASE 62` — 大文字・小文字・混在の ID を別スロットとして扱う。インデックス付きヘッダ、チャネルストリーム、`#LNOBJ`、`#RANDOM` / `#IF` ブロック内のすべてで検証。 |
 | `sjis-encoding-test.bms`              | Shift_JIS の自動判定。パース結果の IR は `sjis-encoding-test.json` に固定してある。                                        |
-| `benchmark-command-mix-100.bms`       | 混在コマンド 100 小節でのパーサスループット。`pnpm bench` は独自のインライン譜面を使うため、こちらには繋がっていない。       |
 
 ### タイミング・描画ギミック
 
@@ -117,5 +116,4 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 | `branch.wav`, `right.wav`, `wrong.wav`     | 副次的なキー音。主に制御フローの分岐を耳で聞き分けるため。               |
 | `retrigger_a.wav`, `retrigger_b.wav`       | リトリガー譜面が重なりを作るために必要な 2.2 秒サンプル。               |
 | `ogg-test.ogg`                             | `ogg-test.bms` が宣言する Vorbis サンプル。                            |
-| `ogg-test.wav`                             | `ogg-test.ogg` の非圧縮元データ。素材として残しているだけで、テストは読んでいない。 |
 | `render-codec-test.mp3` / `.ogg` / `.opus` | audio-renderer のコーデック別デコードケースと、`.wav` 不在時のフォールバックケース。 |

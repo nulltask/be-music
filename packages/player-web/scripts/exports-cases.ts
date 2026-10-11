@@ -24,6 +24,10 @@ const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
 const BENCH_WAV_FILE = makeBenchFile('Songs/Bench/kick.wav', 'RIFF');
+const BENCH_DROPPED_ENTRY = {
+  name: 'kick.wav',
+  file: (resolve: (file: File) => void) => resolve(BENCH_WAV_FILE),
+};
 const BENCH_SOURCE = makeBenchSource();
 const BENCH_SONG = makeBenchSong();
 const BENCH_PLAYLOG = makeBenchPlaylog();
@@ -258,6 +262,17 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       registry.detectThemeFamilies(['Theme/play_7.lr2skin', 'Skin/play7.luaskin']);
     },
   });
+  define('player-web.createEagerDropPathPredicate', {
+    run: () => {
+      const isEager = playerWebCoreApi.createEagerDropPathPredicate([
+        'Songs/Example/main.bms',
+        'Songs/Example/kick.wav',
+        'Theme/play_7.lr2skin',
+      ]);
+      isEager('Songs/Example/kick.wav');
+      isEager('Theme/play_7.lr2skin');
+    },
+  });
   define('player-web.createBeMusicSkinRegistry', {
     run: () => {
       const registry = playerWebCoreApi.createBeMusicSkinRegistry([playerWebCoreApi.phantomSkin]);
@@ -272,6 +287,26 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveBeMusicLaneKind('1D', -1, '24');
     },
   });
+  define('player-web.resolveBeMusicSkinSettings', {
+    run: () => {
+      playerWebCoreApi.resolveBeMusicSkinSettings(
+        {
+          settings: [
+            {
+              kind: 'choice',
+              id: 'theme',
+              label: 'Theme',
+              options: [{ value: 'dark', label: 'Dark' }],
+              default: 'dark',
+            },
+            { kind: 'number', id: 'offset', label: 'Offset', min: -50, max: 50, step: 1, default: 0, unit: 'px' },
+            { kind: 'toggle', id: 'glow', label: 'Glow', default: true },
+          ],
+        },
+        { theme: 'light', offset: 80, glow: false, stale: 1 },
+      );
+    },
+  });
   define('player-web.resolveSelectListWindow', {
     run: () => {
       playerWebCoreApi.resolveSelectListWindow(playerWebCoreApi.phantomSkin.select.layout, 480, 50, 100);
@@ -281,6 +316,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     run: () => {
       playerWebCoreApi.createCroppedBeatorajaTexture(undefined, { x: 0, y: 0, w: 16, h: 16 });
     },
+  });
+  define('player-web.DefaultPixiDecideView', {
+    run: () => {
+      new playerWebCoreApi.DefaultPixiDecideView({ beMusicSkin: playerWebCoreApi.phantomSkin });
+    },
+    interactive: true,
   });
   define('player-web.DefaultPixiGameplayView', {
     run: () => {
@@ -307,6 +348,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
         { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 },
         720,
       );
+    },
+  });
+  define('player-web.DeferredDroppedFile', {
+    run: async () => {
+      const file = new playerWebCoreApi.DeferredDroppedFile(BENCH_DROPPED_ENTRY, 'Songs/Bench/kick.wav');
+      await file.arrayBuffer();
     },
   });
   define('player-web.describeSongCollection', {
@@ -419,6 +466,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.loadBeatorajaThemeFromFiles([]);
     },
   });
+  define('player-web.lnModeDirectiveToIndex', {
+    run: () => {
+      playerWebCoreApi.lnModeDirectiveToIndex(3);
+    },
+  });
   define('player-web.logger', {
     run: () => {
       playerWebCoreApi.logger('bench');
@@ -447,6 +499,14 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.makeWebmSeekable(new Blob([BENCH_BYTES]));
     },
     interactive: true,
+  });
+  define('player-web.materializeDroppedFiles', {
+    run: async () => {
+      await playerWebCoreApi.materializeDroppedFiles([
+        BENCH_BMS_FILE,
+        new playerWebCoreApi.DeferredDroppedFile(BENCH_DROPPED_ENTRY, 'Songs/Bench/kick.wav'),
+      ]);
+    },
   });
   define('player-web.matchesSearchQuery', {
     run: () => {

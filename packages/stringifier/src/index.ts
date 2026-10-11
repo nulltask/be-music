@@ -1,6 +1,7 @@
 import {
   compareEvents,
   createBeatResolver,
+  isLandmineChannel,
   isSampleTriggerChannel,
   parseBpmFrom03Token,
   sortEvents,
@@ -90,13 +91,18 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
 
+  // Lanes get bmson `x` numbers from every playable channel in use, plus the lanes mines sit on (a mine on `D3` sits on
+  // lane `13`), so a mine keeps its lane even where no playable note shares it.
   const playableChannelSet = new Set<string>();
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     if (channel === '01' || !isSampleTriggerChannel(channel)) {
       continue;
     }
-    playableChannelSet.add(channel);
+    const lane = isLandmineChannel(channel) ? landmineChannelToPlayableChannel(channel) : channel;
+    if (lane) {
+      playableChannelSet.add(lane);
+    }
   }
   const playableChannels = [...playableChannelSet].sort();
 
@@ -107,6 +113,8 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     string,
     { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean; t?: number }> }
   >();
+  // beatoraja's `key_channels` extension: mines, grouped by sample like `sound_channels`, each keeping its `damage`.
+  const keyChannels = new Map<string, { name: string; notes: Array<{ x: number; y: number; damage?: number }> }>();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
   // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
@@ -121,6 +129,21 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     }
 
     const y = Math.round(beatResolver.eventToBeat(event) * resolution);
+    if (isSampleChannel && isLandmineChannel(channel)) {
+      const lane = landmineChannelToPlayableChannel(channel);
+      const x = lane ? xMap.get(lane) : undefined;
+      if (x !== undefined) {
+        const key = normalizeObjectKey(event.value, idBase);
+        const damage =
+          typeof event.bmson?.damage === 'number' && Number.isFinite(event.bmson.damage) && event.bmson.damage >= 0
+            ? event.bmson.damage
+            : undefined;
+        const slot = keyChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
+        slot.notes.push({ x, y, ...(damage !== undefined ? { damage } : {}) });
+        keyChannels.set(key, slot);
+      }
+      continue;
+    }
     if (isSampleChannel) {
       const key = normalizeObjectKey(event.value, idBase);
       const fileName = json.resources.wav[key] ?? key;
@@ -171,6 +194,9 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     stop_events: stopEvents,
     sound_channels: [...soundChannels.values()],
   };
+  if (keyChannels.size > 0) {
+    bmson.key_channels = [...keyChannels.values()];
+  }
   const bga = createBmsonBgaForOutput(json);
   if (bga) {
     bmson.bga = bga;
@@ -411,8 +437,13 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   }
   pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption, base);
 
-  if (typeof json.bms.wavCmd === 'string' && json.bms.wavCmd.length > 0) {
-    lines.push(`#WAVCMD ${json.bms.wavCmd}`);
+  // Charts declare one `#WAVCMD` line per (parameter, slot) pair, so write every line; the legacy `wavCmd` only holds the
+  // first, and stands in when `wavCmds` is empty.
+  const wavCmds = (json.bms.wavCmds?.length ?? 0) > 0 ? json.bms.wavCmds : [json.bms.wavCmd];
+  for (const wavCmd of wavCmds) {
+    if (typeof wavCmd === 'string' && wavCmd.length > 0) {
+      lines.push(`#WAVCMD ${wavCmd}`);
+    }
   }
 
   if (typeof json.bms.lnType === 'number') {
@@ -738,6 +769,7 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
     left.option === right.option &&
     areStringMapsEqual(left.changeOption, right.changeOption) &&
     left.wavCmd === right.wavCmd &&
+    areStringArraysEqual(left.wavCmds, right.wavCmds) &&
     areStringMapsEqual(left.exWav, right.exWav) &&
     areStringMapsEqual(left.exBmp, right.exBmp) &&
     areStringMapsEqual(left.bga, right.bga) &&
@@ -1423,4 +1455,13 @@ function normalizeBmsonBgaEventEntries(
     });
   }
   return normalized;
+}
+
+/** The playable lane a landmine channel sits on (`D3` → `13`, `E5` → `25`), or `undefined` for anything else. */
+function landmineChannelToPlayableChannel(channel: string): string | undefined {
+  if (channel.length !== 2) return undefined;
+  const side = channel[0]!.toUpperCase();
+  if (side === 'D') return `1${channel[1]}`;
+  if (side === 'E') return `2${channel[1]}`;
+  return undefined;
 }

@@ -423,6 +423,17 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       .stroke({ color: PHANTOM_WHITE, width: 2, join: 'miter' });
     chrome.poly(parallelogramPoints(20, 62, 74, 16, 6)).fill(PHANTOM_RED);
     addText('SELECTED', 28, 70, { ...tagStyle(PHANTOM_WHITE), anchorY: 0.5 });
+    const genre = song?.genre?.trim();
+    if (genre) {
+      addText(genre.toUpperCase(), 288, 70, {
+        size: 9,
+        weight: '800',
+        fill: PHANTOM_ASH,
+        anchorX: 1,
+        anchorY: 0.5,
+        maxWidth: 180,
+      });
+    }
     // Title / artist slide in from the right after each cursor move.
     const slide = 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS));
     addText(songTitle, 24 + slide * 28, 90, {
@@ -626,6 +637,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       anchorX: 1,
       anchorY: 0.5,
       maxWidth: facts ? ROW_BPM_W : 64,
+      marquee: active,
     });
     meta.label = `fallback-meta[idx=${entryIndex}]`;
     let factsLeft = rowX + rowW - 12 - (facts ? ROW_BPM_W : metaText ? Math.min(64, meta.width) : 0) - 10;
@@ -674,6 +686,8 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       fill: active ? PHANTOM_INK : PHANTOM_WHITE,
       anchorY: 0.5,
       maxWidth: titleMax,
+      // Only the focused row scrolls a long title; the others clip it at its start.
+      marquee: active,
     });
     title.label = `fallback-title[idx=${entryIndex}]`;
     // The artist trails the title in a quieter weight while there is room for it.
@@ -686,6 +700,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
         fill: active ? PHANTOM_RED : PHANTOM_ASH,
         anchorY: 0.5,
         maxWidth: factsLeft - artistX,
+        marquee: active,
       });
     }
     return slide > 0 || intro > 0;

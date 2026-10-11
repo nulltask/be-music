@@ -1,5 +1,13 @@
 # @be-music/player-tui
 
+## 0.5.1
+
+### Patch Changes
+
+- 63bea3f: Fix `bms-playlog` rejecting `--` with "unknown option '--'", which broke `pnpm playlog -- <file>`. `--` now ends the options, and every argument after it is read as a file.
+- Updated dependencies [73fd398]
+  - @be-music/player@0.8.0
+
 ## 0.5.0
 
 ### Minor Changes

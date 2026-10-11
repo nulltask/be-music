@@ -3,7 +3,7 @@
 - Write commit messages in English.
 - Follow Conventional Commits format: `<type>(optional-scope): <subject>`.
 - Use clear and concise subjects in the imperative mood.
-- Use `feat:` for new features, `fix:` for bug fixes, `docs:` for documentation-only changes, `refactor:` for non-functional code changes, `test:` for tests, and `chore:` for maintenance tasks.
+- Use `feat:` for new features, `fix:` for bug fixes, `docs:` for documentation-only changes, `refactor:` for non-functional code changes, `perf:` for performance improvements, `test:` for tests, `style:` for formatting-only changes, `ci:` for CI configuration, and `chore:` for maintenance tasks.
 - Keep one logical change per commit when possible.
 - For documentation-only updates, append `[ci skip]` at the end of the commit message.
 
@@ -50,7 +50,7 @@
 
 # Testing Rules
 
-- Add tests in the same change that introduces new exported functions, new parser directives, new pure-function helpers, or behavior changes to existing ones. Vitest lives at the workspace root (`pnpm test`) and individual packages keep `*.test.ts` next to the source under test.
+- Add tests in the same change that introduces new exported functions, new parser directives, new pure-function helpers, or behavior changes to existing ones. Vitest lives at the workspace root (`pnpm test` runs `vp test run`, which executes the projects listed in the root `vite.config.ts`) and individual packages keep `*.test.ts` next to the source under test.
 - Tests are mandatory for: parser additions (e.g. new `#SRC_*` directive), pure helpers / utilities, format / op-table mappings (e.g. clear lamp / rank op resolvers), loader path-resolution rules, and any "given input → expected output" function.
 - Tests are optional for: Pixi scene classes that bind a WebGL context, demo-side wiring (`packages/player-web-demo/src/main.ts`), and integration glue whose only effect is calling already-tested helpers. When refactoring a previously-untested scene, prefer extracting the logic-heavy parts into pure functions and testing those rather than mocking the renderer.
 - When you change a tested helper's behavior, update or add the case that covers the new behavior — never delete an assertion just because it would otherwise fail.
