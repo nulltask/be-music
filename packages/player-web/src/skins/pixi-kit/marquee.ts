@@ -31,7 +31,7 @@ export const DEFAULT_MARQUEE_TIMING: MarqueeTiming = {
  * Horizontal scale that fits a text `width` wide into `maxWidth`: 1 when it fits, the squeeze when it fits squeezed
  * no further than `minSqueeze`, otherwise `minSqueeze` (the text then overflows and scrolls).
  */
-export function resolveTextSqueeze(width: number, maxWidth: number, minSqueeze = MIN_TEXT_SQUEEZE): number {
+export function resolveTextSqueeze(width: number, maxWidth: number, minSqueeze: number = MIN_TEXT_SQUEEZE): number {
   if (!(width > maxWidth) || !(width > 0)) return 1;
   return Math.max(minSqueeze, Math.max(0, maxWidth) / width);
 }
