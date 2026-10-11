@@ -22,7 +22,7 @@ The SDK does not draw and imports no rendering framework. Draw the canvas with w
 | PixiJS                       | `'webgl2'`                           | Create a Pixi renderer on the canvas in `setup`, build a scene graph, render it in `draw` | Synesthesia, Phantom, Lattice (`packages/player-web/src/skins/`, through `skins/pixi-kit/`) |
 | three.js, raw WebGL / WebGPU | `'webgl'`, `'webgl2'`, or `'webgpu'` | Create the renderer or pipelines in `setup`, render in `draw`, release them in `teardown` | —                                                                                           |
 
-Your skin bundles its own framework as a dependency. Plain is deliberately small and readable; copy it as a starting point.
+Your skin bundles its own framework as a dependency. Plain is deliberately small and readable; copy it as a starting point. It also shows how to support portrait screens; see [Supporting portrait](#supporting-portrait).
 
 ## Quick start: a Canvas 2D skin
 
@@ -173,6 +173,43 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
 - **Lane widths:** lane widths are fixed by the player. Skins colour lanes, but never resize or move them.
 - **Touch layout:** on touch screens the host may resolve the layout with `layoutMode: 'touch'` (`resolveGameplayLayout` input). The lanes then spread across the stage from its left margin to the judgement tally's column (`TOUCH_PLAYFIELD`): every key one width (at most 72 px) and a scratch 1.4 keys wide, the lanes run from y 48 (below the header band) to the judgement line at y 330 (above the bottom HUD band), and `bga` is `undefined`. The 24 / 48 KEY modes keep the standard layout (`supportsTouchLayout`). A skin that places its chrome from `layout` needs no change; read `layout.mode` only to restyle something for touch play. Keep chrome that sits beside the lanes in the standard layout (anything placed from the BGA rect) working when `bga` is `undefined`.
 - **Portrait layout:** on a portrait stage the lanes span the stage's width in its lower part, in both modes (`PORTRAIT_PLAYFIELD`, scaled to the stage from the 480×854 `tallStage`): they run from y 300 down to a low judgement line, and the BGA and HUD go in the band above them (`tallStage` puts the BGA in a 206 px square at the top left, under a 40 px header band). `'touch'` gives every key one width (a scratch 1.4 keys wide) across the stage between 12 px margins, with the judgement line at y 740, leaving a band under it for the thumbs; `'standard'` keeps the cabinet's key widths (7 KEY 374 px wide), centred, with the judgement line at y 786. `bga` comes from the portrait stage's `resolveBgaRect` in both modes. `resolvePortraitLaneLayout` returns the lane rects for a portrait stage.
+
+### Supporting portrait
+
+Portrait support is opt-in. Plain (`packages/player-web/src/skins/plain/`) is the worked example: `index.ts` opts in, `layout.ts` works out the portrait geometry as plain, tested functions, and each screen file switches on the surface's orientation.
+
+```ts
+import { defineBeMusicSkin, resolveStageOrientation, tallStage } from '@be-music/skin-sdk';
+
+export default defineBeMusicSkin({
+  // …metadata…
+  portraitStage: tallStage, // 480×854 while the screen is taller than wide
+  select: {
+    layout: { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 },
+    // The host hit-tests the portrait list with these numbers: full width, under a focused-song card.
+    portraitLayout: { listX: 16, listTop: 304, listBottomInset: 30, rowHeight: 40 },
+    draw(surface, frame) {
+      // The stage can change between two draws (the device rotates), so check it on every draw.
+      if (resolveStageOrientation(surface) === 'portrait') drawPortraitSelect(surface, frame);
+      else drawLandscapeSelect(surface, frame);
+    },
+  },
+  gameplay: {
+    draw(surface, frame) {
+      drawLanesAndNotes(surface, frame); // placed by frame.layout in either orientation
+      // Portrait: the lanes fill the lower part, so the HUD goes in the band above layout.playfield.top.
+      if (frame.layout.orientation === 'portrait') drawHudAbove(surface, frame.layout);
+      else drawHudAround(surface, frame.layout);
+    },
+  },
+  // result: stack the landscape panels on a portrait surface …
+});
+```
+
+- **What changes:** only the chrome. Lanes, notes, the judgement line and the BGA rect come placed in `frame.layout` for either stage; Plain draws them with the same code in both.
+- **Place from the layout:** put portrait chrome in the band above `layout.playfield.top`, beside or under `layout.bga`, and size it from `surface.width` / `surface.height` rather than 480×854, so another portrait stage works too.
+- **Corners and type:** keep the top corners of the play header free for a host's touch controls (Plain leaves 52 px), and set nothing below 10 design px: a phone shows the 480 px wide stage at about 0.8 CSS px per design px.
+- **Landscape stays:** a skin without `portraitStage` is simply scaled down on portrait screens, and charts that need the landscape stage (double play, 24 / 48 KEY) are drawn on `stage` even when the skin has a portrait one.
 
 ## Screens
 
@@ -485,3 +522,4 @@ List every face you draw with in `fontLoads`. The host loads them with `document
 - [ ] Every face is listed in `fontLoads`.
 - [ ] `draw` stays well under half a frame on a dense chart at high density, with no per-frame allocations or pixel readback.
 - [ ] Checked in single play, double play, 5 / 7 / 9 / 10 / 14 / 24 / 48 KEY, and with and without a BGA.
+- [ ] With a `portraitStage`: checked held upright on a phone and a tablet, and rotated mid-play.

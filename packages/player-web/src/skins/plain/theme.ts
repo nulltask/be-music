@@ -119,6 +119,15 @@ export function text(ctx: CanvasRenderingContext2D, value: string, x: number, y:
   ctx.restore();
 }
 
+/** How {@link stat} fits its value, and how big its caption is. */
+export interface StatOptions {
+  /** Box the value must fit (it scrolls with `nowMs` when it cannot). */
+  maxWidth?: number;
+  nowMs?: number;
+  /** Caption size; 9 px on the landscape stage, 10 on the portrait one (which a phone shows smaller). */
+  labelSize?: number;
+}
+
 /** A label above a value: the small grey caption and the figure under it, the value fitted to `maxWidth`. */
 export function stat(
   ctx: CanvasRenderingContext2D,
@@ -126,8 +135,8 @@ export function stat(
   value: string,
   x: number,
   y: number,
-  fit?: { maxWidth: number; nowMs: number },
+  options: StatOptions = {},
 ): void {
-  text(ctx, label, x, y, { size: 9, color: MUTED, weight: 700 });
-  text(ctx, value, x, y + 16, { size: 16, maxWidth: fit?.maxWidth, nowMs: fit?.nowMs });
+  text(ctx, label, x, y, { size: options.labelSize ?? 9, color: MUTED, weight: 700 });
+  text(ctx, value, x, y + 16, { size: 16, maxWidth: options.maxWidth, nowMs: options.nowMs });
 }
