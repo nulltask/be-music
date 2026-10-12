@@ -300,6 +300,28 @@ describe('reviewer repros (finding A6)', () => {
       'long-note halves split across a branch boundary',
       ['#BPM 150', '#LNOBJ ZZ', '#00111:01', '#RANDOM 2', '#IF 1', '#00211:ZZ', '#ENDIF', '#ENDRANDOM'],
     ],
+    [
+      'branch headers a later top-level line overrides (file order)',
+      [
+        '#BPM 150',
+        '#BPM01 300',
+        '#00111:01',
+        '#RANDOM 2',
+        '#IF 1',
+        '#BPM 200',
+        '#BPM01 200',
+        '#TOTAL 400',
+        '#00112:01',
+        '#ELSE',
+        '#BPM02 240',
+        '#ENDIF',
+        '#ENDRANDOM',
+        '#BPM 180',
+        '#BPM01 250',
+        '#00208:01',
+        '#00308:02',
+      ],
+    ],
   ])('composes like the parser: %s', (label, lines) => {
     expect(checkAgainstParser(lines.join('\n'), label)).toBeGreaterThan(1);
   });

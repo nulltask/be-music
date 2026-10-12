@@ -936,6 +936,10 @@ function collectStaticKeys(
   for (let index = model.start; index < model.end; index += 1) {
     const entry = entries[index]!;
     if (entry.kind === 'header') {
+      if (entry.overriddenByLaterHeader === true) {
+        // A later top-level line defines the same header, so this one never applies (file order).
+        continue;
+      }
       const indexed = INDEXED_DEFINITION_PATTERN.exec(entry.command);
       if (indexed) {
         const keyRaw = base === 62 ? (entry.commandRaw ?? entry.command).slice(indexed[1]!.length) : indexed[2]!;

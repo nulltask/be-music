@@ -8,7 +8,8 @@
  * one set of draws. This module drives the same frame operations (`pushValueFrame`, `applyBranchCommand`,
  * `isControlFlowActive`) for every outcome at once: it builds, per **segment** (a stretch of the capture from an empty
  * stack back to an empty stack), a reduced ordered decision diagram whose paths are the outcomes and whose leaves are
- * the lines applied for them.
+ * the lines applied for them. A header line that a later top-level line overrides (`overriddenByLaterHeader`) is never
+ * applied, as in the parser.
  *
  * Every variable (a `#RANDOM` / `#SWITCH` line with at least two values) is split into **value classes**: one per
  * label some `#IF` / `#ELSEIF` (random) or `#CASE` (switch) line compares it with, within `1..max`, plus one class
@@ -284,7 +285,10 @@ class SegmentEvaluator {
           } else {
             applyBranchCommand(walk.frames, entry.command, entry.value, walk.position);
           }
-        } else if (isControlFlowActive(walk.frames)) {
+        } else if (
+          isControlFlowActive(walk.frames) &&
+          !(entry.kind === 'header' && entry.overriddenByLaterHeader === true)
+        ) {
           walk.emitted.push(walk.position);
         }
         walk.position += 1;
