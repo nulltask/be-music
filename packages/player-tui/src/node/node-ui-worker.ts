@@ -1,16 +1,7 @@
 import { createAbortError, isAbortError } from '@be-music/utils/core';
 import type { LogLevel } from '@be-music/utils/log';
-import { createBeatResolver } from '@be-music/chart';
+import { createBpmTimeline, createMeasureTimeline, createStopBeatWindows, resolveChart } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
-import { createTimingResolver } from '@be-music/audio-renderer';
-import {
-  createBpmTimeline,
-  createMeasureBoundariesBeats,
-  createMeasureTimeline,
-  createScrollTimeline,
-  createSpeedTimeline,
-  createStopBeatWindows,
-} from '@be-music/player/core/timeline';
 import { createBgaAnsiRenderer } from '../bga.ts';
 import {
   resolveDisplayedJudgeRankLabel,
@@ -71,8 +62,10 @@ async function bootstrap(): Promise<void> {
     key: binding.keyLabel,
     isScratch: binding.isScratch,
   }));
-  const timingResolver = createTimingResolver(initData.json);
-  const beatResolver = createBeatResolver(initData.json);
+  // The worker receives the chart over `postMessage`, so it resolves it again on its side.
+  const resolvedChart = resolveChart(initData.json);
+  const timingResolver = resolvedChart.timing;
+  const beatResolver = resolvedChart.beatResolver;
   const measureLengths = new Map<number, number>();
   for (const measure of initData.json.measures) {
     const measureIndex = Math.max(0, Math.floor(measure.index));
@@ -83,13 +76,14 @@ async function bootstrap(): Promise<void> {
   }
   const measureTimeline = createMeasureTimeline(initData.json, timingResolver, beatResolver);
   const bpmTimeline = createBpmTimeline(initData.json, timingResolver);
-  const scrollTimeline = createScrollTimeline(initData.json, beatResolver);
-  const speedTimeline = createSpeedTimeline(initData.json, beatResolver);
+  const scrollTimeline = resolvedChart.scroll;
+  const speedTimeline = resolvedChart.speed;
   const stopWindows = createStopBeatWindows(timingResolver).map((window) => ({
     startSeconds: window.startSeconds,
     endSeconds: window.endSeconds,
   }));
-  const measureBoundariesBeats = createMeasureBoundariesBeats(initData.json, beatResolver);
+  // The resolved chart's bar lines: none when a bmson chart suppresses them with `lines: []`.
+  const measureBoundariesBeats = [...resolvedChart.barLines];
 
   const tui = new PlayerTui({
     mode: initData.mode,
@@ -98,8 +92,8 @@ async function bootstrap(): Promise<void> {
     artist: initData.json.metadata.artist,
     genre: initData.json.metadata.genre,
     player: initData.json.bms.player,
-    rank: resolveDisplayedJudgeRankValue(initData.json),
-    rankLabel: resolveDisplayedJudgeRankLabel(initData.json),
+    rank: resolveDisplayedJudgeRankValue(resolvedChart),
+    rankLabel: resolveDisplayedJudgeRankLabel(resolvedChart),
     playLevel: resolveDisplayedPlayLevelValue(initData.json),
     lanes,
     speed: initData.speed,

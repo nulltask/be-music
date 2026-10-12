@@ -1,12 +1,10 @@
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
-  isBmsBgmVolumeChangeChannel,
-  isBmsDynamicVolumeChangeChannel,
-  isBmsKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
-  parseBmsDynamicVolumeGain,
+  resolveChart,
   usesMonophonicWavPlayback,
+  type ResolvedVolumeChange,
   volWavToLinearGain,
 } from '@be-music/chart';
 // `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
@@ -21,20 +19,13 @@ let nodeFsPromisesPromise: Promise<NodeFsPromises> | undefined;
 let nodePathPromise: Promise<NodePath> | undefined;
 const loadNodeFsPromises = (): Promise<NodeFsPromises> => (nodeFsPromisesPromise ??= import('node:fs/promises'));
 const loadNodePath = (): Promise<NodePath> => (nodePathPromise ??= import('node:path'));
-import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
 import { resolveSamplePath } from './sample-path.ts';
-import {
-  collectSampleTriggersWithContext,
-  createTimingBuildContext,
-  createTimingResolverWithContext,
-  type TimedSampleTrigger,
-  type TimingBuildContext,
-  type TimingResolver,
-} from './triggers.ts';
+import { type TimedSampleTrigger } from './triggers.ts';
 
 export * from './triggers.ts';
 export interface RenderOptions {
@@ -85,13 +76,9 @@ interface StereoSample {
   right: Float32Array;
 }
 
-type DynamicVolumeBus = 'bgm' | 'play';
-
-interface DynamicVolumeChange {
-  bus: DynamicVolumeBus;
-  seconds: number;
-  gain: number;
-}
+/** A BMS dynamic volume change from the resolved chart (`ResolvedChart.volumeChanges`). */
+type DynamicVolumeChange = Pick<ResolvedVolumeChange, 'bus' | 'seconds' | 'gain'>;
+type DynamicVolumeBus = DynamicVolumeChange['bus'];
 
 interface DynamicVolumeState {
   index: number;
@@ -121,37 +108,6 @@ const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
 const FALLBACK_SAMPLE_CACHE = new Map<string, StereoSample>();
 
-function collectDynamicVolumeChanges(
-  json: BeMusicJson,
-  resolver: TimingResolver,
-  context: TimingBuildContext,
-): DynamicVolumeChange[] {
-  if (json.sourceFormat !== 'bms') {
-    return [];
-  }
-  const changes: DynamicVolumeChange[] = [];
-  for (const event of context.sortedEvents) {
-    const normalizedChannel = normalizeChannel(event.channel);
-    if (!isBmsDynamicVolumeChangeChannel(normalizedChannel)) {
-      continue;
-    }
-    const gain = parseBmsDynamicVolumeGain(event.value);
-    if (gain === undefined) {
-      continue;
-    }
-    changes.push({
-      bus: isBmsKeyVolumeChangeChannel(normalizedChannel)
-        ? 'play'
-        : isBmsBgmVolumeChangeChannel(normalizedChannel)
-          ? 'bgm'
-          : 'play',
-      seconds: resolver.eventToSeconds(event),
-      gain,
-    });
-  }
-  return changes;
-}
-
 function advanceDynamicVolumeGain(
   changes: readonly DynamicVolumeChange[],
   seconds: number,
@@ -180,14 +136,9 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const onSampleLoadProgress = options.onSampleLoadProgress;
   throwIfAborted(signal);
 
-  const timingContext = createTimingBuildContext(json);
-  const resolver = createTimingResolverWithContext(json, timingContext);
-  const dynamicVolumeChanges = splitDynamicVolumeChangesByBus(
-    collectDynamicVolumeChanges(json, resolver, timingContext),
-  );
-  const triggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
-    inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
-  });
+  const resolved = resolveChart(json, { inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true });
+  const dynamicVolumeChanges = splitDynamicVolumeChangesByBus(resolved.volumeChanges);
+  const triggers = resolved.sampleTriggers;
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();
@@ -227,7 +178,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   };
 }
 
-function splitDynamicVolumeChangesByBus(changes: DynamicVolumeChange[]): DynamicVolumeChangesByBus {
+function splitDynamicVolumeChangesByBus(changes: ReadonlyArray<DynamicVolumeChange>): DynamicVolumeChangesByBus {
   const partitioned: DynamicVolumeChangesByBus = {
     bgm: [],
     play: [],
@@ -240,7 +191,7 @@ function splitDynamicVolumeChangesByBus(changes: DynamicVolumeChange[]): Dynamic
 
 async function scheduleSampleRenders(params: {
   json: BeMusicJson;
-  triggers: TimedSampleTrigger[];
+  triggers: ReadonlyArray<TimedSampleTrigger>;
   sampleRate: number;
   tailSeconds: number;
   startSeconds: number;

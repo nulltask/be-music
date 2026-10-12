@@ -1,3 +1,4 @@
+import { createEmptyJson } from '@be-music/json';
 import { describe, expect, it, vi } from 'vite-plus/test';
 import {
   BEATORAJA_OP,
@@ -2096,21 +2097,17 @@ describe('BeatorajaRuntimeAdapter — resolveNumberValue BPM', () => {
     bpmTable?: Record<string, number>;
     events?: ReadonlyArray<{ measure?: number; channel: string; value?: string; pos?: [number, number] }>;
   }): import('@be-music/json').BeMusicJson {
-    return {
-      metadata: { bpm: opts.bpm, title: 'bpm-test' } as unknown as import('@be-music/json').BeMusicJson['metadata'],
-      events: (opts.events ?? []).map((e) => ({
-        measure: e.measure ?? 0,
-        channel: e.channel,
-        position: (e.pos ?? [0, 1]) as unknown as import('@be-music/json').BeMusicJson['events'][0]['position'],
-        value: e.value ?? '01',
-      })),
-      measures: [],
-      bms: { lnObjs: [] } as unknown as import('@be-music/json').BeMusicJson['bms'],
-      resources: {
-        bpm: opts.bpmTable ?? {},
-        stop: {},
-      } as unknown as import('@be-music/json').BeMusicJson['resources'],
-    } as unknown as import('@be-music/json').BeMusicJson;
+    const chart = createEmptyJson();
+    chart.metadata.bpm = opts.bpm;
+    chart.metadata.title = 'bpm-test';
+    chart.events = (opts.events ?? []).map((e) => ({
+      measure: e.measure ?? 0,
+      channel: e.channel,
+      position: (e.pos ?? [0, 1]) as unknown as import('@be-music/json').BeMusicJson['events'][0]['position'],
+      value: e.value ?? '01',
+    }));
+    chart.resources.bpm = opts.bpmTable ?? {};
+    return chart;
   }
 
   it("returns the chart's BPM for all variants on a constant-tempo chart", () => {

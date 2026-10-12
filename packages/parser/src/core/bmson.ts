@@ -9,6 +9,7 @@ import type {
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
 } from '@be-music/json';
+import { resolveBmsonModeHintLayout } from '@be-music/chart';
 import { normalizeSortedUniqueNonNegativeIntegers } from '@be-music/utils/core';
 
 export interface BmsonInfo {
@@ -107,113 +108,6 @@ interface MeasurePositionWithFraction {
 /** Lane codes of a `<side><lane>` BMS channel, left to right: the classic `1..9` columns, then the extended `A..Z`. */
 const BMS_LANE_CODES = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-/** Lanes per side of the bmson `keyboard-24k` layouts: 24 keys, then the wheel up / down. */
-const BMSON_KEYBOARD_SIDE_LANES = 26;
-
-/**
- * bmson `mode_hint` → BMS lane channel maps.
- *
- * Each entry maps a bmson `x` lane index (1-based, left-to-right) onto the BMS playable channel that
- * `extractTimedNotes` and `resolveChartPlayVariant` expect. Without these, the legacy positional fallback would
- * mis-route `beat-7k`'s key 6 / 7 onto scratch (`16`) / FREE ZONE (`17`) — the channel digits that happen to come next
- * in numeric order — instead of `18` / `19`.
- *
- * Keys mirror the bmson 1.0.0 spec's mode hints (plus beatoraja's `keyboard-24k` / `keyboard-24k-double`); values
- * follow the canonical IIDX / Pop'n / keyboard channel layout that LR2 / beatoraja ship default skins for.
- */
-const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
-  'beat-5k': new Map([
-    [1, '11'],
-    [2, '12'],
-    [3, '13'],
-    [4, '14'],
-    [5, '15'],
-    [6, '16'],
-  ]),
-  'beat-7k': new Map([
-    [1, '11'],
-    [2, '12'],
-    [3, '13'],
-    [4, '14'],
-    [5, '15'],
-    [6, '18'],
-    [7, '19'],
-    [8, '16'],
-  ]),
-  'beat-10k': new Map([
-    [1, '11'],
-    [2, '12'],
-    [3, '13'],
-    [4, '14'],
-    [5, '15'],
-    [6, '16'],
-    [7, '21'],
-    [8, '22'],
-    [9, '23'],
-    [10, '24'],
-    [11, '25'],
-    [12, '26'],
-  ]),
-  'beat-14k': new Map([
-    [1, '11'],
-    [2, '12'],
-    [3, '13'],
-    [4, '14'],
-    [5, '15'],
-    [6, '18'],
-    [7, '19'],
-    [8, '16'],
-    [9, '21'],
-    [10, '22'],
-    [11, '23'],
-    [12, '24'],
-    [13, '25'],
-    [14, '28'],
-    [15, '29'],
-    [16, '26'],
-  ]),
-  'popn-5k': new Map([
-    [1, '11'],
-    [2, '12'],
-    [3, '13'],
-    [4, '14'],
-    [5, '15'],
-  ]),
-  // PMS-STD (`#PLAYER 3` Pop'n) routes the right-hand half of the 9-lane bank through the 2P-side `22..25` channels —
-  // same convention `play_9.lr2skin` and `lane-layout.ts` use.
-  'popn-9k': new Map([
-    [1, '11'],
-    [2, '12'],
-    [3, '13'],
-    [4, '14'],
-    [5, '15'],
-    [6, '22'],
-    [7, '23'],
-    [8, '24'],
-    [9, '25'],
-  ]),
-  // Keyboardmania-style 24-key layouts (beatoraja / BmsONE): x=1..24 are the keys left to right (C..B over two
-  // octaves), x=25 / 26 the wheel up / down. They run onto the extended `11..19` + `1A..1O` bank, with the wheel on
-  // `1P` / `1Q`; the double layout repeats that on the 2P side from x=27.
-  'keyboard-24k': createKeyboardLaneMap(1),
-  'keyboard-24k-double': createKeyboardLaneMap(2),
-};
-
-/**
- * Builds the `keyboard-24k` (one side) / `keyboard-24k-double` (two sides) lane map: side `s` (0-based) takes
- * x = s*26 + 1..26 onto `<side><lane>` with lane codes `1..9`, `A..O` (the 24 keys) and `P` / `Q` (wheel up / down).
- * Every `x` keeps its lane even when the chart leaves others empty, so nothing compacts.
- */
-function createKeyboardLaneMap(sides: 1 | 2): ReadonlyMap<number, string> {
-  const map = new Map<number, string>();
-  for (let side = 0; side < sides; side += 1) {
-    for (let lane = 0; lane < BMSON_KEYBOARD_SIDE_LANES; lane += 1) {
-      map.set(side * BMSON_KEYBOARD_SIDE_LANES + lane + 1, `${side + 1}${BMS_LANE_CODES[lane]}`);
-    }
-  }
-  return map;
-}
-
 /**
  * bmson 1.0.0 spec — when a chart omits / blanks `mode_hint`, the default is `beat-7k` ("Default value is 'beat-7k'").
  * Applied centrally in {@link buildBmsonLaneMap} so the default lane routing follows the spec instead of falling
@@ -236,15 +130,19 @@ const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
  * 2. Canonical IIDX / Pop'n / keyboard hint → authoritative table. Unknown hints (BmsONE's single-player
  *    `keyboard-48k` among them, which is NOT the two-player `keyboard-24k-double`) take step 4.
  * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
- * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behavior for
- *    bmson dialects unknown to us).
+ * 4. Anything else is an unknown hint. When every `x` in use fits the `beat-7k` table, it is read as `beat-7k`, as
+ *    beatoraja (with a warning), Qwilight and Bemuse read it. A chart with lanes past that table (BmsONE's
+ *    `keyboard-36k` / `48k` / `60k`) would lose them to BGM there, so it keeps the positional map over its `x` values
+ *    instead (be-music decision, docs/format-compat.md §3.2).
  */
 export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?: string): Map<number, string> {
   const trimmedHint = typeof modeHint === 'string' ? modeHint.trim() : '';
   const effectiveHint = trimmedHint.length > 0 ? trimmedHint : BMSON_DEFAULT_MODE_HINT;
-  const hintedMap = MODE_HINT_LANE_MAPS[effectiveHint];
-  if (hintedMap) {
-    return new Map(hintedMap);
+  // The fixed lane tables (the bmson spec's hints and beatoraja's keyboard hints) come from the play-mode table in
+  // `@be-music/chart`, which the stringifier writes `x` from too.
+  const hinted = resolveBmsonModeHintLayout(effectiveHint);
+  if (hinted) {
+    return new Map(hinted.channelByX);
   }
   const genericMatch = effectiveHint.match(BMSON_GENERIC_KEYS_PATTERN);
   if (genericMatch) {
@@ -265,6 +163,11 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?:
         }
       }
     }
+  }
+
+  const beat7k = resolveBmsonModeHintLayout(BMSON_DEFAULT_MODE_HINT)!;
+  if ([...xValues].every((x) => beat7k.channelByX.has(x))) {
+    return new Map(beat7k.channelByX);
   }
 
   const sorted = [...xValues].sort((left, right) => left - right);

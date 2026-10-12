@@ -1,8 +1,8 @@
+import { resolveChart } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
-import { resolveJudgeRankPercent } from '../core/judge-window.ts';
-import { resolveChartLongNoteMode } from '../ruleset/index.ts';
+import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import {
@@ -27,7 +27,8 @@ export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
 export type PlaylogRecorderChartData = Pick<
   PreparedPlaybackChartData,
   'notes' | 'landmineNotes' | 'invisibleNotes' | 'activeFreeZoneChannels' | 'scorableNotes' | 'laneDisplayMode'
->;
+> &
+  Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
@@ -146,7 +147,8 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
 function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   const { json, chart } = options;
   const idBase = resolveBmsBase(json);
-  const chartLnMode = resolveChartLongNoteMode(json);
+  const resolved = chart.resolvedChart ?? resolveChart(json);
+  const chartLnMode = resolved.lnMode;
   const notes: PlaylogNote[] = [];
 
   for (const note of chart.notes) {
@@ -189,17 +191,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     notes[index]!.id = index;
   }
 
-  const judgeRank: PlaylogChart['judgeRank'] = {
-    percent: resolveJudgeRankPercent(json),
-  };
-  const sourceRank = json.metadata.rank;
-  if (typeof sourceRank === 'number' && Number.isFinite(sourceRank)) {
-    judgeRank.sourceRank = sourceRank;
-  }
-  const sourceExRank = json.sourceFormat === 'bmson' ? json.bmson.info.judgeRank : json.bms.defExRank;
-  if (typeof sourceExRank === 'number' && Number.isFinite(sourceExRank)) {
-    judgeRank.sourceExRank = sourceExRank;
-  }
+  const judgeRank: PlaylogChart['judgeRank'] = resolveChartJudgeRankFacts(json, resolved);
   const timelineSource = options.dynamicJudgeRankChanges ?? [];
   if (timelineSource.length > 0) {
     judgeRank.timeline = timelineSource.map((change) => ({
@@ -225,8 +217,8 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   }
   if (typeof json.metadata.artist === 'string' && json.metadata.artist.length > 0) result.artist = json.metadata.artist;
   if (typeof json.metadata.genre === 'string' && json.metadata.genre.length > 0) result.genre = json.metadata.genre;
-  if (typeof json.metadata.total === 'number' && Number.isFinite(json.metadata.total)) {
-    result.total = json.metadata.total;
+  if (resolved.total.value !== undefined) {
+    result.total = resolved.total.value;
   }
   return result;
 }

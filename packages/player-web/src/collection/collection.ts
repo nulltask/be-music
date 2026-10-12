@@ -1,12 +1,11 @@
 import { unzipSync } from 'fflate';
 import {
   type ChartPlayVariant,
-  isPlayableChannel,
+  resolveChart,
   resolveChartPlayVariant as resolveChartPlayVariantForChart,
 } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
 import type { BeMusicJson } from '@be-music/json';
-import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
@@ -474,7 +473,7 @@ export async function loadSongCollectionFromFiles(
           throw new Error(`chart bytes missing for ${path}`);
         }
         const chart = parseChart(path, chartBytes);
-        const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
+        const notes = resolveChart(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true }).notes;
         const song: BrowserSongEntry = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
@@ -489,7 +488,9 @@ export async function loadSongCollectionFromFiles(
           genre: chart.metadata.genre,
           playLevel: chart.metadata.playLevel,
           bpm: chart.metadata.bpm,
-          totalNotes: notes.filter((note) => isScoreTargetChannel(note.channel)).length,
+          // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
+          // notes at all. A long note counts once.
+          totalNotes: notes.filter((note) => note.freeZone !== true).length,
           chart,
         };
         songs.push(song);
@@ -589,14 +590,10 @@ function parseChart(path: string, bytes: Uint8Array) {
   return parseBms(decodeBmsText(bytes).text);
 }
 
-function isScoreTargetChannel(channel: string): boolean {
-  return isPlayableChannel(channel);
-}
-
 /**
  * Reports a song's play variant (`5` / `7` / `9` / `10` / `14` / `24` / `48`), which picks the play skin and lane
  * layout. A thin cached wrapper over `@be-music/chart`'s `resolveChartPlayVariant` — the lane-mode rule the engine and
- * the CLI use too — fed with the song's chart path (for the `.pms` / `.bme` extension rules), events, and `#PLAYER`.
+ * the CLI use too — fed with the song's chart path (for the `.pms` extension rule), events, and `#PLAYER`.
  *
  * `chart` defaults to the song's parsed chart, which is what song select sees before any `#RANDOM` roll. A gameplay
  * scene passes the chart it resolved for the play instead, so lanes added by the chosen `#RANDOM` / `#SWITCH` branch

@@ -3,6 +3,7 @@ import {
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
   type BmsObjectLineEntry,
+  type BmsControlFlowHeaderEntry,
   type BmsSourceLineEntry,
   type BmsonMineChannelEntry,
   type BeMusicEvent,
@@ -13,6 +14,7 @@ import {
   normalizeObjectKey,
   resolveBmsBase,
 } from '@be-music/json';
+import { drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import {
   buildBmsObjectLineEntry,
@@ -47,7 +49,6 @@ import {
   type ControlFlowCaptureFrameType,
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
-import { decodeBmsText, decodeUtf8Text } from './bms-text-decode.ts';
 
 const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
@@ -94,6 +95,8 @@ type MeasureLengthEntry = BeMusicJson['measures'][number];
 export function parseBms(input: string): BeMusicJson {
   const json = createEmptyJson('bms');
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
+  // Branch header lines by the header they define, until a later top-level line of the same header overrides them.
+  const capturedHeadersByKey = new Map<string, BmsControlFlowHeaderEntry[]>();
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   let hasValidMainBpmHeader = false;
   // Resolve the chart's object-ID radix BEFORE main parsing so that every `#WAVxx` / `#BMPxx` key + every
@@ -175,8 +178,9 @@ export function parseBms(input: string): BeMusicJson {
     // base-62 charts (`#BASE 62`) put lowercase letters in indexed-header keys (e.g. `#WAV0a`), so most charts skip
     // this entirely and the JSON stays compact.
     const commandCaseDiffers = command !== commandRaw;
+    const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
     if (controlFlowCaptureStack.length > 0) {
-      const headerEntry: BmsSourceLineEntry = {
+      const headerEntry: BmsControlFlowHeaderEntry = {
         kind: 'header',
         command,
         value,
@@ -184,7 +188,24 @@ export function parseBms(input: string): BeMusicJson {
       };
       json.bms.controlFlow.push(headerEntry);
       json.preservation.bms.sourceLines.push(headerEntry);
+      if (definitionKey !== undefined) {
+        const captured = capturedHeadersByKey.get(definitionKey);
+        if (captured) {
+          captured.push(headerEntry);
+        } else {
+          capturedHeadersByKey.set(definitionKey, [headerEntry]);
+        }
+      }
       return;
+    }
+
+    // LR2 and beatoraja apply header lines in file order: a top-level line overrides the same header in any branch
+    // above it, taken or not.
+    if (definitionKey !== undefined && value.length > 0) {
+      for (const entry of capturedHeadersByKey.get(definitionKey) ?? []) {
+        entry.overriddenByLaterHeader = true;
+      }
+      capturedHeadersByKey.delete(definitionKey);
     }
 
     json.preservation.bms.sourceLines.push({
@@ -522,33 +543,29 @@ export function parseChart(input: string, formatHint?: string): BeMusicJson {
   return parseBms(input);
 }
 
-export interface ParseChartFileOptions {
-  signal?: AbortSignal;
-}
-
-export async function parseChartFile(filePath: string, options: ParseChartFileOptions = {}): Promise<BeMusicJson> {
-  const [{ readFile }, { extname }] = await Promise.all([import('node:fs/promises'), import('node:path')]);
-  const buffer = await readFile(filePath, {
-    signal: options.signal,
-  });
-  const extension = extname(filePath).toLowerCase();
-  if (extension === '.bmson') {
-    return parseBmson(decodeUtf8Text(buffer));
-  }
-  if (extension === '.json') {
-    return parseChart(decodeUtf8Text(buffer), 'json');
-  }
-  const decoded = decodeBmsText(buffer);
-  return parseBms(decoded.text);
-}
-
 export interface ResolveBmsControlFlowOptions {
+  /** Random source for the draws, in `[0, 1)`. Defaults to `Math.random`. */
   random?: () => number;
 }
 
+/**
+ * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with freshly drawn outcomes: shorthand for
+ * `resolveBmsControlFlowWithDraws(input, drawRandomOutcomes(input, random))`. A host that needs to know which branches
+ * it played (the play log, the RANDOM summary, a second scene showing the same chart) draws once with
+ * `drawRandomOutcomes` (`@be-music/chart`) and resolves with {@link resolveBmsControlFlowWithDraws} instead.
+ */
 export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsControlFlowOptions = {}): BeMusicJson {
-  return resolveControlFlow(input, {
-    random: options.random,
+  return resolveBmsControlFlowWithDraws(input, drawRandomOutcomes(input, options.random ?? Math.random));
+}
+
+/**
+ * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with explicit outcomes — the draws made once for a play
+ * with `drawRandomOutcomes`, or the ones a play log recorded. The same chart and draws always give the same result.
+ *
+ * @throws RangeError when `draws` was not drawn for `input`'s control flow.
+ */
+export function resolveBmsControlFlowWithDraws(input: BeMusicJson, draws: RandomDraws): BeMusicJson {
+  return resolveControlFlow(input, draws, {
     applyHeader: (json, command, commandRaw, value) => {
       // Replay path: prefer the case-preserved `commandRaw` when available so a `#WAV0a` captured inside a `#RANDOM` /
       // `#IF` block on a `#BASE 62` chart still registers under the lowercase key. Falls back to the uppercased
@@ -731,6 +748,26 @@ function detectBmsBase(input: string): 36 | 62 {
     resolved = match[1] === '62' ? 62 : 36;
   }
   return resolved;
+}
+
+/** Header commands whose lines add up instead of replacing each other, so file order never makes one override another. */
+const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ']);
+
+/**
+ * Which definition a header line sets, for the file-order rule: the command, plus the normalized object key of an
+ * indexed header (`WAV01`). `undefined` for repeatable headers.
+ */
+function resolveHeaderDefinitionKey(command: string, commandRaw: string, base: 36 | 62): string | undefined {
+  if (REPEATABLE_HEADER_COMMANDS.has(command)) {
+    return undefined;
+  }
+  const indexed = command.match(INDEXED_HEADER_COMMAND);
+  if (indexed) {
+    const directive = indexed[1]!;
+    const keyRaw = base === 62 ? commandRaw.slice(directive.length) : indexed[2]!;
+    return `${directive}${normalizeObjectKey(keyRaw, base)}`;
+  }
+  return command;
 }
 
 function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, value: string, base: 36 | 62): void {
@@ -1511,6 +1548,7 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
       command,
       value: typeof raw.value === 'string' ? raw.value : '',
       ...(commandRaw ? { commandRaw } : {}),
+      ...(raw.overriddenByLaterHeader === true ? { overriddenByLaterHeader: true as const } : {}),
     };
   }
   if (kind === 'object') {

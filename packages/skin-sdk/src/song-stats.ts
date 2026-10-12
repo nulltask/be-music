@@ -1,7 +1,5 @@
 import type { BeMusicJson } from '@be-music/json';
-import { createTimingResolver } from '@be-music/audio-renderer/triggers';
-import { resolveChartPlayVariant } from '@be-music/chart';
-import { extractLandmineNotes, extractPlayableNotes } from '@be-music/player/playable-notes';
+import { resolveChart, resolveChartPlayVariant } from '@be-music/chart';
 import type { BrowserSongEntry } from './song.ts';
 
 /**
@@ -38,12 +36,14 @@ function computeSongStats(chart: BeMusicJson, fallbackBpm: number | undefined): 
   let maxBpm = 0;
   let stops = false;
   try {
-    for (const note of extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true })) {
+    // The song list sees the chart before any `#RANDOM` draw: only its unconditional content counts.
+    const resolved = resolveChart(chart, { inferBmsLnTypeWhenMissing: true });
+    for (const note of resolved.notes) {
       lengthSeconds = Math.max(lengthSeconds, note.endSeconds ?? note.seconds);
       if (note.endBeat !== undefined) longNotes += 1;
     }
-    mines = extractLandmineNotes(chart).length;
-    const timing = createTimingResolver(chart);
+    mines = resolved.mines.length;
+    const timing = resolved.timing;
     for (const point of timing.tempoPoints) {
       // Zero / negative tempos are stop-like gimmicks, not a tempo the player reads.
       if (!(point.bpm > 0) || !Number.isFinite(point.bpm)) continue;

@@ -10,7 +10,9 @@ import {
   parseChart,
   parseChartFile,
   resolveBmsControlFlow,
+  resolveBmsControlFlowWithDraws,
 } from './index.ts';
+import { drawRandomOutcomes } from '../../chart/src/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -234,6 +236,41 @@ describe('parser', () => {
     expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
   });
 
+  test('BMS: applies headers in file order across a taken branch, as LR2 and beatoraja do', () => {
+    const source = [
+      '#WAV01 top-before.wav',
+      '#BPM 120',
+      '#RANDOM 1',
+      '#IF 1',
+      '#WAV01 branch.wav',
+      '#WAV02 branch.wav',
+      '#BPM 150',
+      '#STP 001.000 100',
+      '#ENDIF',
+      '#ENDRANDOM',
+      '#WAV02 top-after.wav',
+      '#BPM 180',
+      '#STP 002.000 100',
+      '#00111:0102',
+      '',
+    ].join('\n');
+    const resolved = resolveBmsControlFlow(parseChart(source), { random: () => 0 });
+
+    // A branch line beats an earlier top-level line and loses to a later one, whatever the header.
+    expect(resolved.resources.wav['01']).toBe('branch.wav');
+    expect(resolved.resources.wav['02']).toBe('top-after.wav');
+    expect(resolved.metadata.bpm).toBe(180);
+    // Repeatable commands still add up.
+    expect([...resolved.bms.stp].sort()).toEqual(['001.000 100', '002.000 100']);
+
+    // The rule survives a round trip through the JSON IR.
+    const viaJson = resolveBmsControlFlow(parseChart(JSON.stringify(parseChart(source)), 'chart.json'), {
+      random: () => 0,
+    });
+    expect(viaJson.resources.wav['02']).toBe('top-after.wav');
+    expect(viaJson.metadata.bpm).toBe(180);
+  });
+
   test('BMS: parses extension headers into dedicated fields', async () => {
     const json = await parseChartFile(unifiedBmsChartPath);
 
@@ -455,6 +492,57 @@ describe('parser', () => {
     expect(parsed.metadata.extras.SETSWITCH).toBeUndefined();
   });
 
+  test('BMS: resolves control flow with explicit draws, the same draws always giving the same chart', async () => {
+    const parsed = await parseChartFile(unifiedBmsChartPath);
+    for (const roll of [0, 0.5, 0.9999999]) {
+      const draws = drawRandomOutcomes(parsed, () => roll);
+      const resolved = resolveBmsControlFlowWithDraws(parsed, draws);
+      expect(resolveBmsControlFlowWithDraws(parsed, draws)).toEqual(resolved);
+      // `resolveBmsControlFlow` is the same resolution with draws it makes itself.
+      expect(resolveBmsControlFlow(parsed, { random: () => roll })).toEqual(resolved);
+    }
+    // Resolving does not touch the source chart.
+    expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
+  });
+
+  test('BMS: a resolved chart carries no control flow, so resolving it again changes nothing', () => {
+    const parsed = parseChart(
+      [
+        '#RANDOM 2',
+        '#IF 1',
+        '#WAV01 one.wav',
+        '#00111:01',
+        '#ENDIF',
+        '#IF 2',
+        '#00112:01',
+        '#ENDIF',
+        '#ENDRANDOM',
+      ].join('\n'),
+      'bms',
+    );
+    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(resolved.bms.controlFlow).toEqual([]);
+    expect(resolved.events.map((event) => event.channel)).toEqual(['11']);
+    for (const roll of [0, 0.9]) {
+      // Without control flow there is nothing left to draw, so no roll can stack a second branch on top.
+      expect(resolveBmsControlFlow(resolved, { random: () => roll })).toEqual(resolved);
+    }
+    expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
+  });
+
+  test('BMS: rejects draws that were not drawn for the chart', () => {
+    const parsed = parseChart(['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
+    expect(() => resolveBmsControlFlowWithDraws(parsed, [])).toThrow(RangeError);
+    expect(() => resolveBmsControlFlowWithDraws(parsed, [{ command: 'RANDOM', range: 2, value: 3 }])).toThrow(
+      RangeError,
+    );
+    const plain = parseChart('#00111:01', 'bms');
+    expect(() => resolveBmsControlFlowWithDraws(plain, [{ command: 'RANDOM', range: 2, value: 1 }])).toThrow(
+      RangeError,
+    );
+    expect(resolveBmsControlFlowWithDraws(plain, [])).toEqual(plain);
+  });
+
   test('bmson: maps version/lines/info.resolution into IR', async () => {
     const chartPath = resolve(rootDir, 'examples/test/bmson-lines-resolution-test.bmson');
     const input = await readFile(chartPath, 'utf8');
@@ -596,6 +684,37 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['11', '12', '13', '14', '15', '18', '19', '16']);
   });
 
+  test.each([
+    ['beat-5k', [1, 2, 3, 4, 5, 8], ['11', '12', '13', '14', '15', '16']],
+    [
+      'beat-10k',
+      [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16],
+      ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'],
+    ],
+  ])(
+    'bmson: mode_hint=%s puts the scratch on x 8 (and 16) like the bmson spec and beatoraja',
+    (modeHint, xs, channels) => {
+      // bmson spec "Canonical List of Mode Hints" (`doc/index.rst` L825 / L827) and jbms-parser BMSONDecoder's
+      // `keyassign`: each side spans 8 `x` values with the scratch last, so x 6 / 7 (14 / 15) have no lane.
+      const json = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [{ name: 'sample.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        }),
+      );
+
+      const sortedChannels = json.events
+        .slice()
+        .sort(
+          (left, right) =>
+            left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+        )
+        .map((event) => event.channel);
+      expect(sortedChannels).toEqual(channels);
+    },
+  );
+
   test('bmson: mode_hint=popn-9k routes x=6..9 onto the PMS-STD 22..25 channels', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -720,6 +839,55 @@ describe('parser', () => {
     expect(sortEventsByTime(json.events)).toEqual(['11', '14', '32', 'D3']);
   });
 
+  test.each(['beat-9k', 'BEAT-7K', 'iidx-7k'])(
+    'bmson: an unknown mode_hint (%s) whose lanes fit beat-7k reads as beat-7k, as beatoraja, Qwilight and Bemuse do',
+    (modeHint) => {
+      const json = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [
+            {
+              name: 'key.wav',
+              notes: [
+                { x: 1, y: 0 },
+                { x: 6, y: 240 },
+                { x: 7, y: 480 },
+                { x: 8, y: 720 },
+              ],
+            },
+          ],
+          mine_channels: [{ name: 'mine.wav', notes: [{ x: 7, y: 960 }] }],
+        }),
+      );
+
+      // x 6 / 7 are the 6th / 7th keys (18 / 19) and x 8 the scratch (16), not the next lanes in numeric order.
+      expect(sortEventsByTime(json.events)).toEqual(['11', '18', '19', '16', 'D9']);
+    },
+  );
+
+  test('bmson: an unknown mode_hint with lanes past x 8 keeps every lane, numbered in order', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-36k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 8, y: 240 },
+              { x: 12, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // beatoraja would turn x 12 into BGM; be-music keeps the chart playable.
+    expect(sortEventsByTime(json.events)).toEqual(['11', '12', '13']);
+  });
+
   test('bmson: mode_hint=keyboard-48k (BmsONE single-player 48 keys) is not aliased to keyboard-24k-double', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -771,7 +939,7 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['19', '11', '15']);
   });
 
-  test('bmson: unknown mode_hint falls back to positional `x` ordering', () => {
+  test('bmson: an unknown mode_hint is still loaded, on the beat-7k lanes when its x values fit them', () => {
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -789,8 +957,7 @@ describe('parser', () => {
       }),
     );
 
-    // Unknown mode_hints (`kabuki-3k` etc.) fall through onto the positional fallback so consumers can still load the
-    // chart even if no canonical layout matches.
+    // Unknown mode_hints (`kabuki-3k` etc.) are read as beat-7k when every x fits its table, as other players read them.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -798,11 +965,15 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['13', '11', '12']);
+    expect(sortedChannels).toEqual(['19', '11', '15']);
   });
 
   test.each([
     ['beat-7k', 9],
+    ['beat-5k', 6],
+    ['beat-5k', 7],
+    ['beat-10k', 14],
+    ['beat-10k', 17],
     ['popn-5k', 6],
     ['keyboard-24k', 27],
   ])('bmson: an x outside the %s lane table is a BGM note, as in beatoraja', (modeHint, outsideX) => {
@@ -1648,6 +1819,39 @@ describe('parser', () => {
     const decoded = decodeBmsText(sjisBytes);
     expect(decoded.encoding).toBe('shift_jis');
     expect(decoded.text).toContain('テスト');
+  });
+
+  test('decodeBmsText: detects a Korean EUC-KR chart, as beatoraja and Bemuse do', () => {
+    // "#TITLE 한국 노래\n#ARTIST 가수\n#BPM 150\n#00111:01\n" in EUC-KR (KS X 1001).
+    const eucKrBytes = new Uint8Array([
+      35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 32, 179, 235, 183, 161, 10, 35, 65, 82, 84, 73, 83, 84, 32, 176,
+      161, 188, 246, 10, 35, 66, 80, 77, 32, 49, 53, 48, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
+    ]);
+    const decoded = decodeBmsText(eucKrBytes);
+    expect(decoded.encoding).toBe('euc-kr');
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('한국 노래');
+    expect(parsed.metadata.artist).toBe('가수');
+  });
+
+  test('decodeBmsText: honors #CHARSET EUC-KR / CP949', () => {
+    const directive = new TextEncoder().encode('#CHARSET CP949\n');
+    const title = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 10]); // "#TITLE 한국\n"
+    const merged = new Uint8Array(directive.length + title.length);
+    merged.set(directive, 0);
+    merged.set(title, directive.length);
+    const decoded = decodeBmsText(merged);
+    expect(decoded.encoding).toBe('euc-kr');
+    expect(decoded.text).toContain('#TITLE 한국');
+  });
+
+  test('decodeBmsText: does not read half-width katakana Shift_JIS that is not Hangul-shaped as EUC-KR', () => {
+    // "#TITLE ﾃﾞﾝﾜ\n#00111:01\n" in Shift_JIS. These bytes also form valid EUC-KR pairs, but one of the two is a
+    // Hanja, which Korean chart text does not look like.
+    const sjisBytes = new Uint8Array([
+      35, 84, 73, 84, 76, 69, 32, 195, 222, 221, 220, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
+    ]);
+    expect(decodeBmsText(sjisBytes).encoding).not.toBe('euc-kr');
   });
 
   test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
