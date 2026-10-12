@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vite-plus/test';
 import { createScrollDistanceMapper } from '@be-music/player/core/scroll-distance';
 import {
   changesScrollRate,
+  collectLaneTimelineBeats,
+  collectResolvedLaneTimelineBeats,
+  firstBeatAfter,
   isDrawnAtTime,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
@@ -68,6 +71,34 @@ describe('changesScrollRate', () => {
   });
 });
 
+describe('collectLaneTimelineBeats / firstBeatAfter', () => {
+  it('merges the lists into sorted beats without repeats', () => {
+    expect([...collectLaneTimelineBeats([4, 1, 2], [2, 3], [], [Number.NaN, 0])]).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it('collects every timeline of a resolved chart: notes, long-note ends, mines, invisible, bars, tempo and scroll', () => {
+    const beats = collectResolvedLaneTimelineBeats({
+      notes: [{ beat: 1 }, { beat: 2, endBeat: 5 }] as never,
+      mines: [{ beat: 3 }] as never,
+      invisibleNotes: [{ beat: 3.5 }] as never,
+      barLines: [0, 4, 8],
+      timing: { tempoPoints: [{ beat: 0 }, { beat: 6 }], stopPoints: [{ beat: 7 }] } as never,
+      scroll: [{ beat: 9, speed: 2 }],
+      speed: [{ beat: 10, speed: 1 }],
+    });
+    expect([...beats]).toEqual([0, 1, 2, 3, 3.5, 4, 5, 6, 7, 8, 9, 10]);
+  });
+
+  it('finds the first beat strictly after a beat', () => {
+    const beats = [1, 2, 4];
+    expect(firstBeatAfter(beats, 0)).toBe(1);
+    expect(firstBeatAfter(beats, 2)).toBe(4);
+    expect(firstBeatAfter(beats, 3.5)).toBe(4);
+    expect(firstBeatAfter(beats, 4)).toBe(Number.POSITIVE_INFINITY);
+    expect(firstBeatAfter(beats, Number.POSITIVE_INFINITY)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
 describe('resolveNoteDrawRules', () => {
   it('follows beatoraja whenever the chart scrolls (LR2 has no #SCROLL) or the beatoraja ruleset judges', () => {
     expect(resolveNoteDrawRules(true, 'lr2')).toBe('beatoraja');
@@ -90,6 +121,49 @@ describe('resolveNoteDrawWindow', () => {
   it('keeps everything a tall lane holds, through zero and negative scroll', () => {
     // A 9-beat lane is never overrun before beat 12 + (9 - 0): every note on screen is drawn.
     expect(drawnBeats([3, 7, 8.5, 11, 13], 0, 9)).toEqual([3, 7, 8.5, 11, 13]);
+  });
+
+  it('also draws the first timeline past the lane top, as LaneRenderer checks the lane top after drawing', () => {
+    // From beat 2 the 4-beat lane is overrun at beat 6. The timeline at beat 7 is drawn (in the band above the lane),
+    // the walk then stops, so beat 9.5 — back inside the lane after the negative scroll — still is not reached.
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 2,
+      nowSeconds: 0,
+      mapper: createScrollDistanceMapper(GIMMICK_SCROLL),
+      laneBeats: 4,
+      timelineBeats: collectLaneTimelineBeats([3, 5, 7, 9.5], [8, 10, 12]),
+      overscanBeats: 1,
+    });
+    expect(window.lastBeat).toBe(7);
+    expect(isPastDrawWindow(window, 7)).toBe(false);
+    expect(isPastDrawWindow(window, 9.5)).toBe(true);
+  });
+
+  it('stops on a timeline without notes (a #SCROLL point) when that is the first past the lane top', () => {
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 4,
+      nowSeconds: 0,
+      mapper: createScrollDistanceMapper(GIMMICK_SCROLL),
+      laneBeats: 3,
+      timelineBeats: collectLaneTimelineBeats([5, 9.5], [8, 10, 12]),
+      overscanBeats: 1,
+    });
+    // Overrun at beat 7; the #SCROLL point at beat 8 is the next timeline, so the note at 9.5 is never reached.
+    expect(window.lastBeat).toBe(8);
+  });
+
+  it('extends a plain lane end to the next timeline too', () => {
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 4,
+      nowSeconds: 0,
+      laneBeats: 2,
+      timelineBeats: [5, 6, 6.5, 7],
+      overscanBeats: 1,
+    });
+    expect(window.lastBeat).toBe(6.5);
   });
 
   it('matches the plain lane end when nothing scrolls', () => {

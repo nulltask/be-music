@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { parseBms } from '@be-music/parser';
-import { createBeatorajaScrollMapper, resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
+import {
+  createBeatorajaLaneTimelineBeats,
+  createBeatorajaScrollMapper,
+  resolveBeatorajaScrollPlacement,
+} from './scroll-placement.ts';
 
 const SCROLL_CHART = parseBms(
   ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 0.5', '#00111:01', '#001SC:01', '#00211:01'].join('\n'),
@@ -24,6 +28,12 @@ describe('createBeatorajaScrollMapper', () => {
       ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 1', '#SPEED01 1', '#00111:01', '#001SC:01', '#001SP:01'].join('\n'),
     );
     expect(createBeatorajaScrollMapper(chart)).toBeUndefined();
+  });
+});
+
+describe('createBeatorajaLaneTimelineBeats', () => {
+  it('lists the beats of the notes, bar lines and #SCROLL points', () => {
+    expect([...createBeatorajaLaneTimelineBeats(SCROLL_CHART)]).toEqual([0, 4, 8]);
   });
 });
 
@@ -52,5 +62,18 @@ describe('resolveBeatorajaScrollPlacement', () => {
     // Two beats of lane distance reach four chart beats ahead at half speed.
     expect(placement.window).toMatchObject({ rules: 'beatoraja', currentBeat: 4, nowSeconds: 2, stageBottomY: 720 });
     expect(placement.window!.lastBeat).toBeGreaterThanOrEqual(8);
+  });
+
+  it('takes in the first timeline past the lane top', () => {
+    const placement = resolveBeatorajaScrollPlacement({
+      currentBeat: 0,
+      nowSeconds: 0,
+      mapper: createBeatorajaScrollMapper(SCROLL_CHART),
+      laneBeats: 2,
+      timelineBeats: createBeatorajaLaneTimelineBeats(SCROLL_CHART),
+      stageBottomY: 720,
+    });
+    // The lane is overrun at beat 2; the next timeline is the measure-1 note and #SCROLL point at beat 4.
+    expect(placement.window!.lastBeat).toBe(4);
   });
 });

@@ -41,7 +41,7 @@ import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaPixelsPerBeat } from './notes.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
-import { createBeatorajaScrollMapper } from './scroll-placement.ts';
+import { createBeatorajaLaneTimelineBeats, createBeatorajaScrollMapper } from './scroll-placement.ts';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { flipRectToPixi, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
@@ -224,6 +224,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly chartMarkers: ReturnType<typeof computeBeatorajaChartMarkers>;
   /** The chart's `#SCROLL` / `#SPEED` distance integrator; `undefined` when it has neither. */
   private readonly scrollMapper: ScrollDistanceMapperLike | undefined;
+  /** Beats of the chart's lane timelines, built only for a chart that scrolls. */
+  private readonly laneTimelineBeats: Float64Array | undefined;
   /**
    * Chart's BPM curve as a polyline in `[0, 1]²` — computed once at construction and handed to
    * the play skin view's `resolveBpmGraphPoints` so any `bpmgraph[]` element gets a real curve
@@ -292,6 +294,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const effectiveChart = options.dpFlip === true ? flipDpChart(options.chart) : options.chart;
     this.options = effectiveChart === options.chart ? options : { ...options, chart: effectiveChart };
     this.scrollMapper = createBeatorajaScrollMapper(effectiveChart);
+    this.laneTimelineBeats = this.scrollMapper ? createBeatorajaLaneTimelineBeats(effectiveChart) : undefined;
     this.skinAudioRenderContext = {
       activeOps: new Set<number>(),
       getTimerStart: () => undefined,
@@ -412,6 +415,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: options.textures,
       canvasHeight: this.view.height,
       scrollMapper: this.scrollMapper,
+      timelineBeats: this.laneTimelineBeats,
     });
     // Marker layer goes ON the same container as notes — insertion order makes markers paint
     // first, then notes paint on top. Authors expect this so a falling note can visually cross
@@ -781,6 +785,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: opts.textures,
       canvasHeight: this.view.height,
       scrollMapper: this.scrollMapper,
+      timelineBeats: this.laneTimelineBeats,
     });
     this.markerLayer = new BeatorajaMarkerLayer({
       group: noteSection.group,

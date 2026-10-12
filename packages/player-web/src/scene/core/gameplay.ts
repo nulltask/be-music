@@ -54,6 +54,7 @@ import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import {
   changesScrollRate,
+  collectResolvedLaneTimelineBeats,
   isDrawnAtTime,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
@@ -787,6 +788,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * points. Falls back to plain beat-difference math when no scroll/speed events are present.
    */
   private scrollMapper: ScrollDistanceMapperLike | undefined;
+  /** Beats of the chart's lane timelines, for the last timeline beatoraja's rules draw past the lane top. */
+  private laneTimelineBeats: Float64Array = new Float64Array(0);
   /**
    * Engine's `preparePlaybackChartData` result, computed once during {@link prepareSong} and forwarded to the
    * shared engine via `engineOptions.preparedChart`. Holds the canonical `notes` / `landmineNotes` /
@@ -2290,6 +2293,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
       ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
       : undefined;
+    this.laneTimelineBeats = collectResolvedLaneTimelineBeats(resolvedPlay);
     this.autoSampleTriggers = resolvedPlay.sampleTriggers
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
@@ -4319,6 +4323,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       nowSeconds: seconds,
       mapper: this.scrollMapper,
       laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
+      timelineBeats: this.laneTimelineBeats,
       overscanBeats: 48 / Math.max(1, pixelsPerBeat),
       stageBottomY: height,
     });

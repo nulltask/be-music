@@ -2,10 +2,15 @@
 // `scroll_events` included): the same distance integrator and `LaneRenderer` draw window the core gameplay view uses
 // (`../core/note-draw-window.ts`), so SCROLL gimmicks show up in beatoraja skins as they do in beatoraja.
 
-import { createBeatResolver, createScrollTimeline, createSpeedTimeline } from '@be-music/chart';
+import { createBeatResolver, createScrollTimeline, createSpeedTimeline, resolveChart } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { changesScrollRate, resolveNoteDrawWindow, type NoteDrawWindow } from '../core/note-draw-window.ts';
+import {
+  changesScrollRate,
+  collectResolvedLaneTimelineBeats,
+  resolveNoteDrawWindow,
+  type NoteDrawWindow,
+} from '../core/note-draw-window.ts';
 
 /** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1). */
 export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceMapperLike | undefined {
@@ -18,6 +23,11 @@ export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceM
   return createScrollDistanceMapper(scroll, speed, { invalidDistance: 0 });
 }
 
+/** Beats of the chart's lane timelines, for the last timeline `LaneRenderer` draws past the lane top. */
+export function createBeatorajaLaneTimelineBeats(chart: BeMusicJson): Float64Array {
+  return collectResolvedLaneTimelineBeats(resolveChart(chart));
+}
+
 export interface BeatorajaScrollPlacementInput {
   currentBeat: number;
   /** Chart time of the playhead, in seconds. */
@@ -25,6 +35,8 @@ export interface BeatorajaScrollPlacementInput {
   mapper: ScrollDistanceMapperLike | undefined;
   /** The lane's height in beats of scroll distance (lane pixels over pixels per beat). */
   laneBeats: number;
+  /** Beats of the chart's lane timelines ({@link createBeatorajaLaneTimelineBeats}). */
+  timelineBeats?: ArrayLike<number>;
   /** Bottom edge of the stage, in the lanes' coordinates (y grows downward). */
   stageBottomY: number;
 }
@@ -40,7 +52,7 @@ export interface BeatorajaScrollPlacement {
 }
 
 export function resolveBeatorajaScrollPlacement(input: BeatorajaScrollPlacementInput): BeatorajaScrollPlacement {
-  const { currentBeat, nowSeconds, mapper, laneBeats, stageBottomY } = input;
+  const { currentBeat, nowSeconds, mapper, laneBeats, timelineBeats, stageBottomY } = input;
   if (mapper === undefined) {
     return { window: undefined, distance: (beat) => beat - currentBeat };
   }
@@ -51,6 +63,7 @@ export function resolveBeatorajaScrollPlacement(input: BeatorajaScrollPlacementI
       nowSeconds,
       mapper,
       laneBeats,
+      timelineBeats,
       overscanBeats: 0,
       stageBottomY,
     }),

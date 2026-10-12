@@ -160,6 +160,8 @@ export interface BeatorajaNoteLayerOptions {
    * sit at their beat distance.
    */
   scrollMapper?: ScrollDistanceMapperLike;
+  /** Beats of the chart's lane timelines (`createBeatorajaLaneTimelineBeats`), used with `scrollMapper`. */
+  timelineBeats?: ArrayLike<number>;
 }
 
 interface CroppedSprite {
@@ -200,6 +202,7 @@ export class BeatorajaNoteLayer {
   private readonly canvasHeight: number;
   private readonly judgementYOverride?: number;
   private readonly scrollMapper?: ScrollDistanceMapperLike;
+  private readonly timelineBeats?: ArrayLike<number>;
   /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
   private readonly graphicsPool: Graphics[] = [];
   /** Pool of skin-sprite nodes (tap notes / mines / LN caps). One sprite per slot — texture swapped per use. */
@@ -223,6 +226,7 @@ export class BeatorajaNoteLayer {
     this.canvasHeight = options.canvasHeight;
     this.judgementYOverride = options.judgementY;
     this.scrollMapper = options.scrollMapper;
+    this.timelineBeats = options.timelineBeats;
     // bodyLayer first (= back), noteLayer second (= front). See field doc for rationale.
     this.container.addChild(this.bodyLayer);
     this.container.addChild(this.noteLayer);
@@ -274,6 +278,7 @@ export class BeatorajaNoteLayer {
       nowSeconds: frame.currentSeconds,
       mapper: this.scrollMapper,
       laneBeats: pixelsPerBeat > 0 ? (judgementY - laneTopY) / pixelsPerBeat : 0,
+      timelineBeats: this.timelineBeats,
       stageBottomY: this.canvasHeight,
     });
     const drawBottom = drawWindow ? resolveDrawBottom(drawWindow, judgementY) : judgementY;
