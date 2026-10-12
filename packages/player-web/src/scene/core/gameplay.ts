@@ -4498,8 +4498,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.measureBeatCache.songId === song.id) {
       return this.measureBeatCache.beats;
     }
-    // The resolved chart's bar lines: one per measure start through the measure after the last object, using the chosen
-    // `#RANDOM` branch's `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
+    // The resolved chart's bar lines: one per measure start up to the last measure, using the chosen `#RANDOM` branch's
+    // `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
     const beats = [...(this.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
     this.measureBeatCache = { songId: song.id, beats };
     return beats;
