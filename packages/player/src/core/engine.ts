@@ -2906,7 +2906,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (!markLandmineJudged(landmine)) {
       return;
     }
-    const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, idBase);
+    const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, idBase, resolvedJson.sourceFormat);
     const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, wavResources);
     if (landmineExplosionEvent) {
       if (!uiEnabled) {

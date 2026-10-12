@@ -141,7 +141,7 @@ Mines follow the LR2 detonation model (LR2's own changelog; the damage model is 
 
 - A mine explodes on either of LR2's two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
-- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead.
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
 - kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
@@ -372,7 +372,7 @@ The LN repeat-suppress window after a long-note release is treated the same way 
 
 A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judge counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
 It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
-An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values.
+An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` uses the same `4%`.
 
 The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md).
 
@@ -467,7 +467,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`), applied as a raw delta
+- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`, `4` when a bmson mine has none), applied as a raw delta
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 

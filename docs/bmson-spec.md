@@ -155,7 +155,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
 - Original array of `stop_events` is kept in `preservation.bmson.stopEvents`
 - Original array of `sound_channels` is kept in `preservation.bmson.soundChannels`
-- `key_channels` entries are registered after `sound_channels`, routed through the same `mode_hint` lane map, converted to BMS landmine channels, and keep `events[].bmson.damage`
+- `key_channels` entries are registered after `sound_channels`, routed through the same `mode_hint` lane map, converted to BMS landmine channels, and keep `events[].bmson.damage`. The event value is the WAV slot registered for the key channel, so the player never reads it as damage: a mine without `damage` deals the default `4` (%), the same fallback as an invalid BMS mine value
 - `bga` is kept in `bmson.bga`
 
 ## BMS/BMSON intermediate representation -> BMSON conversion (stringifier)

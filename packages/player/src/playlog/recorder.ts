@@ -173,7 +173,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
       channel: mine.channel,
       type: 'mine',
       timeUs: secondsToMicroseconds(mine.seconds),
-      damage: resolveLandmineGaugeEffect(mine.event, idBase).damage,
+      damage: resolveLandmineGaugeEffect(mine.event, idBase, json.sourceFormat).damage,
     });
   }
   for (const invisible of chart.invisibleNotes) {
