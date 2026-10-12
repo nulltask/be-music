@@ -50,6 +50,17 @@ When a mixed drop contains chart files, the loader treats the chart directories 
 When no chart file is present, the whole drop is treated as a theme candidate. LR2 detection uses `.lr2skin` files, while beatoraja detection uses `.luaskin` files or JSON files under a `skin/` path segment.
 Double-click the playfield to toggle the demo into fullscreen; `Esc` leaves fullscreen before it runs the usual scene action.
 
+### Debug Menu
+
+The lil-gui **Debug Menu** (top-right, collapsed on arrival) puts the everyday controls first and groups the rest into folders. Every folder remembers whether it was left open or closed (`localStorage`, `be-music-demo.debug-menu-folders`); the panel itself always starts collapsed.
+
+- **Top level:** Status (read-only), Open folder, Open files (ZIP / play log), Skin family, Built-in skin, ● Record, 📸 Screenshot. Open files picks chart ZIP archives (loaded like `?music=`) or a play log (`*.bmplay.json`) to replay; Open folder uses the folder picker and the same pipeline as a drop.
+- **Play options** (open): Auto play, Gauge, Random 1P / 2P, DP flip, Auto scratch 1P / 2P, Judge windows. Latched at song start and disabled during a play.
+- **Audio** (open): Master / Key sound / BGM volume (%), then the **Compressor** folder (Enabled, per-stage toggles, and each compressor's threshold / knee / ratio / attack / release with a reset).
+- **Skin & display** (closed): Skin effects, Play layout, Judged notes, Toggle fullscreen, LR2 theme (once a drop carries LR2 themes), **Beatoraja skins** (per-scene pickers, shown while a beatoraja theme is loaded), **Skin settings** (the active built-in skin's settings, when it has any), **Add skin**.
+- **Library & records** (closed): Music / Skin ZIP URL with Load from URLs (the `?music=` / `?skin=` path on demand), Auto-save play history, Clear best records, and the **BGA video transcode** folder.
+- **Developer** (closed): Auto pause on blur, Show invisible notes, FPS (renderer frame rate, sampled while the folder is open), and Reset settings and reload, which clears every stored demo setting except the best records.
+
 ### Phones and tablets
 
 The demo treats a device whose primary pointer is a finger (`(pointer: coarse)`, or a touch pointer on a phone-sized screen) as touch-first:
@@ -186,7 +197,7 @@ pnpm bench -- --packages player-web
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
-- Every play except a replay records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the Debug Menu's "Auto-save play history" checkbox (OFF by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
+- Every play except a replay records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the "Auto-save play history" checkbox in the Debug Menu's "Library & records" folder (OFF by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
 
 ## Compatibility boundary
 
