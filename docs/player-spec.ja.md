@@ -102,6 +102,7 @@ player は次の順序で譜面を実行します。
 5. `AUTO` / `MANUAL` / `AUTO SCRATCH` のいずれかのメインループを実行し、最後に `PlayerSummary` を返します。
 
 時間解決では、通常の `#STOPxx` に加えて、BMS 拡張 `#STP` も停止イベントとして扱います。
+同じ位置に `#STOPxx` のオブジェクトが複数あれば、LR2 や beatoraja と同じく最後のものが勝ちます。bmson の同じパルスの `stop_events` は、bmson 仕様のとおり加算します。
 `#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、player の時間解決では無視します。
 
 ## 制御構文の扱い

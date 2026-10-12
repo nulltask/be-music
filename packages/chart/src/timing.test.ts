@@ -30,6 +30,32 @@ describe('timing', () => {
     expect(timing.bpmAtBeat(5)).toBe(240);
   });
 
+  test('keeps the last BMS #STOP at one position, as LR2 and beatoraja do', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.stop['01'] = 48;
+    json.resources.stop['02'] = 96;
+    json.bms.stp = ['001.000 500'];
+    json.events = [
+      { measure: 1, channel: '09', position: [0, 1], value: '01' },
+      { measure: 1, channel: '09', position: [0, 1], value: '02' },
+    ];
+    // 96 / 192 of a 120 BPM measure = 1 s replaces the 0.5 s stop; `#STP` lines still add up (0.5 s).
+    expect(createTimingResolver(json).stopPoints.map((point) => point.seconds)).toEqual([0.5, 1]);
+  });
+
+  test('adds up bmson stop_events on one pulse, as the bmson spec says', () => {
+    const json = createEmptyJson('bmson');
+    json.metadata.bpm = 120;
+    json.resources.stop['01'] = 48;
+    json.resources.stop['02'] = 96;
+    json.events = [
+      { measure: 1, channel: '09', position: [0, 1], value: '01' },
+      { measure: 1, channel: '09', position: [0, 1], value: '02' },
+    ];
+    expect(createTimingResolver(json).stopPoints.at(-1)?.cumulativeSeconds).toBeCloseTo(1.5);
+  });
+
   test('reads #STP stops in milliseconds', () => {
     const json = createEmptyJson();
     json.metadata.bpm = 120;

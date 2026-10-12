@@ -138,6 +138,10 @@ function createStopPoints(
   }
 
   const idBase = resolveBmsBase(json);
+  // BMS keeps one `#STOPxx` per position and the last one wins, as LR2 (OpenLR2 L26666-26670) and beatoraja (one STOP
+  // per timeline) read it. bmson stops on one pulse add up, as its spec says; so do `#STP` lines.
+  const lastStopWins = json.sourceFormat === 'bms';
+  const stopIndexByBeat = new Map<number, number>();
   for (const event of sortedEvents) {
     const normalizedChannel = normalizeChannel(event.channel);
     if (!isStopChannel(normalizedChannel)) {
@@ -150,6 +154,14 @@ function createStopPoints(
     }
     const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
     const seconds = (duration / 192) * (240 / bpm);
+    const replaced = lastStopWins ? stopIndexByBeat.get(beat) : undefined;
+    if (replaced !== undefined) {
+      rawPoints[replaced]!.seconds = seconds;
+      continue;
+    }
+    if (lastStopWins) {
+      stopIndexByBeat.set(beat, rawPoints.length);
+    }
     rawPoints.push({
       beat,
       seconds,
