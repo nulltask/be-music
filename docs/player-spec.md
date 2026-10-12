@@ -466,10 +466,16 @@ split.
 - `EASY` starts at `20%`, floors at `2%`, and clears at `80%` with gentler numbers
 - `HARD` / `EX-HARD` / `DEATH` start at `100%` and fail the moment they drop below `2%`
 - Upper limit is `100%`
-- When `#TOTAL` is specified, use that value as is
-- When `#TOTAL` is absent, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
-  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja and IIDX
-  use their own defaults.
+- When `#TOTAL` is specified (and above 0), use that value as is
+- When `#TOTAL` is absent or ≤ 0, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
+  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja uses its own
+  default (`max(260, 7.605 n / (0.01 n + 6.5))`); the IIDX gauge does not read TOTAL at all (its recovery comes from
+  the note count), and the TOTAL it reports follows the LR2 curve.
+- bmson `info.total` is not an absolute TOTAL but a percentage of the ruleset's default: every ruleset plays it as
+  `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
+  without `total` therefore plays at the ruleset default, not at TOTAL 100.
+- `summary.gauge.effectiveTotal` reports the resolved value, and beatoraja skins' TOTAL readout (ref 368) shows it during
+  play and on the result screen. Play-logs record the chart's raw value and resolve it again on replay.
 
 ### Increase/Decrease
 

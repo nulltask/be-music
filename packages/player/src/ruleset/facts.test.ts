@@ -5,6 +5,8 @@ import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
 import {
   countBaseNotes,
   createEmptyRulesetNoteCounts,
+  resolveBeatorajaDefaultTotal,
+  resolveLr2DefaultTotal,
   resolveRuleset,
   rulesetChartFactsFromChart,
   type RulesetChartFacts,
@@ -95,6 +97,57 @@ describe('ruleset/beatoraja bmson judge_rank default', () => {
   });
 });
 
+describe('effective TOTAL', () => {
+  // 100 base notes: LR2 default (100 / 5 + 200) × 0.8 = 176; beatoraja default max(260, 760.5 / 7.5) = 260.
+  const lr2Default = resolveLr2DefaultTotal(100);
+  const beatorajaDefault = resolveBeatorajaDefaultTotal(100);
+  const defaults = { lr2: lr2Default, beatoraja: beatorajaDefault, iidx: lr2Default } as const;
+
+  test('the default formulas give the expected values for 100 notes', () => {
+    expect(lr2Default).toBeCloseTo(176, 9);
+    expect(beatorajaDefault).toBe(260);
+  });
+
+  for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+    describe(id, () => {
+      test('BMS #TOTAL is an absolute TOTAL', () => {
+        expect(resolveRuleset(facts({ total: 300 }), id).effectiveTotal).toBe(300);
+      });
+
+      test('BMS without #TOTAL (or with #TOTAL <= 0) uses the ruleset default', () => {
+        expect(resolveRuleset(facts(), id).effectiveTotal).toBeCloseTo(defaults[id], 9);
+        expect(resolveRuleset(facts({ total: 0 }), id).effectiveTotal).toBeCloseTo(defaults[id], 9);
+      });
+
+      test('bmson total is a percentage of the ruleset default', () => {
+        // The parser pins an absent bmson `total` to the spec default 100, so 100 and "absent" must agree.
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson' }), id).effectiveTotal).toBeCloseTo(defaults[id], 9);
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson', total: 100 }), id).effectiveTotal).toBeCloseTo(
+          defaults[id],
+          9,
+        );
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson', total: 150 }), id).effectiveTotal).toBeCloseTo(
+          defaults[id] * 1.5,
+          9,
+        );
+      });
+
+      test('bmson total 0 falls back to 100 % of the ruleset default (beatoraja BMSPlayerRule)', () => {
+        expect(resolveRuleset(facts({ sourceFormat: 'bmson', total: 0 }), id).effectiveTotal).toBeCloseTo(
+          defaults[id],
+          9,
+        );
+      });
+    });
+  }
+
+  test('the lr2 GROOVE gauge recovers from the effective TOTAL of a bmson chart', () => {
+    // 100 % of the LR2 default over 100 notes: +1.76 per PGREAT, not +1.00 (an absolute TOTAL 100).
+    const gauge = resolveRuleset(facts({ sourceFormat: 'bmson', total: 100 }), 'lr2').gauge;
+    expect(gauge.values[0]).toBeCloseTo(lr2Default / 100, 9);
+  });
+});
+
 describe('ruleset chart-facts adapters agree', () => {
   test('the engine adapter and the play-log adapter derive the same facts from one chart', () => {
     // A live play and a replay of that same play must resolve the SAME ruleset, so the two adapters have to agree.
@@ -135,6 +188,38 @@ describe('ruleset chart-facts adapters agree', () => {
     for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
       expect(resolveRuleset(fromChart, id).noteCount).toBe(resolveRuleset(fromPlaylog, id).noteCount);
       expect(resolveRuleset(fromChart, id).effectiveTotal).toBe(resolveRuleset(fromPlaylog, id).effectiveTotal);
+    }
+  });
+
+  test('a bmson play and its replay resolve the same effective TOTAL', () => {
+    const json = createEmptyJson('bmson');
+    json.metadata.total = 150;
+    const scorableNotes = [{ channel: '11', seconds: 1, beat: 0, judged: false, event: {} as never }] as never;
+    const fromChart = rulesetChartFactsFromChart(json, { scorableNotes, laneDisplayMode: '7keys' });
+    const playlog: BeMusicPlaylog = {
+      format: 'be-music-playlog',
+      version: 1,
+      clock: { unit: 'us', origin: 'chart-zero' },
+      chart: {
+        sourceFormat: 'bmson',
+        laneMode: '7keys',
+        total: 150,
+        lnMode: 1,
+        judgeRank: { percent: fromChart.judgeRank.percent },
+        noteCount: 1,
+        notes: [{ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 }],
+      },
+      inputs: [],
+      play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+    };
+    const fromPlaylog = rulesetChartFactsFromPlaylog(playlog);
+    expect(fromChart).toEqual(fromPlaylog);
+    for (const id of ['lr2', 'beatoraja', 'iidx'] as const) {
+      const live = resolveRuleset(fromChart, id).effectiveTotal;
+      expect(resolveRuleset(fromPlaylog, id).effectiveTotal).toBe(live);
+      // 150 % of the ruleset's default for one note, never an absolute TOTAL 150.
+      const fallback = id === 'beatoraja' ? resolveBeatorajaDefaultTotal(1) : resolveLr2DefaultTotal(1);
+      expect(live).toBeCloseTo(fallback * 1.5, 9);
     }
   });
 });

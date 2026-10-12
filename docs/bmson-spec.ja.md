@@ -48,7 +48,7 @@
 - [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBmp`, `metadata.banner`, `metadata.stageFile` へ mirror
 - [x] 明示的な `lines: []` を barline suppression として扱い、`bmson.barlinesSuppressed` に保持
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
-- [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` は保持（ライフバーが増えない）として扱う
+- [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
 - [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
 - [ ] `version` の互換判定を SemVer で行う方針の明文化
@@ -137,6 +137,7 @@
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
 - `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
 - `info.total` が有限数なら使い（負値は仕様どおり絶対値へ正規化）、それ以外は bmson 既定値 `100` を適用
+- `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`iidx`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
 - `key = base36(i + 1)` を2桁化
@@ -188,8 +189,8 @@
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力
 - `sound_channels` は `wav` キー単位で出力
-- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、それ以外は `beat-<レーン数>k` を出力
-- キーボード系 hint ではホイールも含め各レーンに上の表の固定 `x` を与えるため、再パースで同じレーンに戻る。ほかの hint では使っているレーンを `x = 1` から採番
+- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、使用レーンがすべてプレイ種別の hint（`beat-5k` / `beat-7k` / `beat-10k` / `beat-14k` / `popn-9k`）の表に収まればその hint、それ以外は `beat-<レーン数>k` を出力
+- 上の表にある hint（キーボード系とホイールを含む）では各レーンに表の固定 `x` を与えるため、再パースで同じレーンに戻る。表にないレーンはその後ろに続け、未知の hint では使っているレーンを `x = 1` から採番
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
