@@ -483,6 +483,23 @@ describe('parser', () => {
     ).toBe(true);
   });
 
+  test.each([
+    ['info.resolution', { info: { init_bpm: 120, resolution: -480 } }],
+    ['root resolution', { info: { init_bpm: 120 }, resolution: -480 }],
+  ])('bmson: a negative %s is read as its absolute value per the 1.0.0 spec', (_label, document) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        ...document,
+        sound_channels: [{ name: 'sample.wav', notes: [{ x: 1, y: 960 }] }],
+      }),
+    );
+
+    // Spec: "If negative, take the absolute value." At 480 pulses per quarter note, y = 960 is beat 2 of measure 0.
+    expect(json.bmson.info.resolution).toBe(480);
+    expect(json.events).toEqual([{ measure: 0, channel: '11', position: [960, 1920], value: '01' }]);
+  });
+
   test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
     const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
     const input = await readFile(chartPath, 'utf8');
@@ -784,6 +801,50 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['13', '11', '12']);
   });
 
+  test.each([
+    ['beat-7k', 9],
+    ['popn-5k', 6],
+    ['keyboard-24k', 27],
+  ])('bmson: an x outside the %s lane table is a BGM note, as in beatoraja', (modeHint, outsideX) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+        sound_channels: [
+          { name: 'key.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'outside.wav', notes: [{ x: outsideX, y: 240 }] },
+        ],
+      }),
+    );
+
+    // beatoraja's BMSONDecoder maps `x` through the hint's key table and plays anything outside it as a background
+    // note, so the sound still plays but no lane receives a note.
+    expect(json.events.map((event) => [event.channel, event.value])).toEqual([
+      ['11', '01'],
+      ['01', '02'],
+    ]);
+  });
+
+  test('bmson: an out-of-table x on the same pulse as a playable note of its sound channel is dropped like x = 0', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 9, y: 0 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(json.events.map((event) => event.channel)).toEqual(['11']);
+  });
+
   test('bmson: generic-Nkeys mode_hint generates a left-to-right positional map', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -803,8 +864,8 @@ describe('parser', () => {
       }),
     );
 
-    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map so the parser routes it to the
-    // channel-11 default (consumers see one playable note at lane 1 plus three at the explicit slots).
+    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map, so it is a BGM note (01), as
+    // beatoraja plays an x outside the key table.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -812,7 +873,7 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['11', '12', '13', '11']);
+    expect(sortedChannels).toEqual(['11', '12', '13', '01']);
   });
 
   test('bmson: missing info.total defaults to 100 per the 1.0.0 spec', () => {
@@ -1528,13 +1589,21 @@ describe('parser', () => {
     expect(parsed.resources.wav['0A']).toBe('lower.wav');
   });
 
-  test('BMS: `#BASE 62` after the first object line is ignored', () => {
+  test('BMS: `#BASE 62` after the first object line still applies to the whole file, as in beatoraja', () => {
     const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
 
-    // Pre-scan stops at the first object line; the late `#BASE 62` doesn't take effect, so case is folded as in default
-    // base-36.
-    expect(parsed.bms.base).toBeUndefined();
-    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+    // beatoraja's BMSDecoder reads `#BASE` in a separate pass over the whole file before decoding, so its position does
+    // not matter.
+    expect(parsed.bms.base).toBe(62);
+    expect(parsed.resources.wav['0a']).toBe('lower.wav');
+    expect(parsed.events.map((event) => event.value)).toEqual(['0a']);
+  });
+
+  test('BMS: the last `#BASE` in the file wins, as in beatoraja', () => {
+    expect(parseChart(['#BASE 62', '#00111:0a', '#BASE 36', ''].join('\n')).bms.base).toBeUndefined();
+    expect(parseChart(['#BASE 36', '#00111:0a', '#BASE 62', ''].join('\n')).bms.base).toBe(62);
+    // A `#BASE` line inside a control-flow block counts too: beatoraja's pre-pass does not evaluate `#IF`.
+    expect(parseChart(['#RANDOM 2', '#IF 2', '#BASE 62', '#ENDIF', '#00111:0a', ''].join('\n')).bms.base).toBe(62);
   });
 
   test('BMS: `#BASE 62` preserves case for indexed-headers inside #RANDOM / #IF blocks', () => {

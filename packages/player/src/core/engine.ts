@@ -2564,6 +2564,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     inputTokenToChannels,
   } = playbackChart;
   let { totalSeconds } = playbackChart;
+  // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
+  // background audio at its own time (auto play already sounds every play-lane trigger).
+  appendShadowedNoteTriggers(
+    nonPlayableRealtimeAudioTriggers,
+    resolvedJson,
+    playbackChart.shadowedNotes,
+    inferBmsLnTypeWhenMissing,
+    timingResolver,
+  );
   // Hoisted constants — see the matching block in `autoPlay`. Same rationale: the manual-play loop touches both heavily
   // per tick / per input event, and these don't change across the play session.
   const idBase = resolveBmsBase(resolvedJson);
@@ -5256,6 +5265,51 @@ function collectRealtimeAudioTriggers(
     });
   }
   return filtered;
+}
+
+/**
+ * Adds the play-lane triggers of `shadowedNotes` to `target` (kept sorted by time). Notes are matched to triggers by
+ * channel, position and value rather than by identity, because a host-prepared chart may come from another resolution
+ * of the same chart than the one the engine collects triggers from.
+ */
+function appendShadowedNoteTriggers(
+  target: Array<TimedSampleTrigger & RealtimeAudioTrigger>,
+  json: BeMusicJson,
+  shadowedNotes: readonly TimedPlayableNote[] | undefined,
+  inferBmsLnTypeWhenMissing: boolean,
+  resolver: TimingResolver,
+): void {
+  if (!shadowedNotes || shadowedNotes.length === 0) {
+    return;
+  }
+  const pendingByKey = new Map<string, number>();
+  for (const note of shadowedNotes) {
+    const key = createEventMatchKey(note.event);
+    pendingByKey.set(key, (pendingByKey.get(key) ?? 0) + 1);
+  }
+  let appended = false;
+  for (const trigger of collectRealtimeAudioTriggers(
+    json,
+    inferBmsLnTypeWhenMissing,
+    isPlayLaneSoundChannel,
+    resolver,
+  )) {
+    const key = createEventMatchKey(trigger.event);
+    const pending = pendingByKey.get(key) ?? 0;
+    if (pending === 0) {
+      continue;
+    }
+    pendingByKey.set(key, pending - 1);
+    target.push(trigger);
+    appended = true;
+  }
+  if (appended) {
+    target.sort((left, right) => left.seconds - right.seconds);
+  }
+}
+
+function createEventMatchKey(event: BeMusicEvent): string {
+  return `${normalizeChannel(event.channel)}:${event.measure}:${event.position[0]}/${event.position[1]}:${event.value}`;
 }
 
 function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMissing: boolean): string[] {

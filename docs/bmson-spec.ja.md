@@ -50,6 +50,7 @@
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
 - [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
+- [x] `mode_hint` のレーン表にない `x` の note を、beatoraja と同じく BGM (`01`) として解釈
 - [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
 - [ ] `version` の互換判定を SemVer で行う方針の明文化
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
@@ -118,6 +119,7 @@
 - [ ] 同一 `y` の `stop_events` を加算して適用
 - [ ] sound channel スライス規則（`c` と restart）に基づく再生
 - [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
+- [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は、beatoraja と同じく player では最初の sound channel のノート 1 つとして判定し、ほかの sound channel もその時刻に鳴らす（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
 - [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
 
 ## 実装が読み込むフィールド (parser)
@@ -135,6 +137,7 @@
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
+- resolution が `0` や `null` なら既定値 `240` を使い、負の値は仕様のとおり絶対値として読む（beatoraja は `0` 以下の値をすべて `240` として扱う）。整数でない値は切り捨てる
 - `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
 - `info.total` が有限数なら使い（負値は仕様どおり絶対値へ正規化）、それ以外は bmson 既定値 `100` を適用
 - `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`iidx`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
@@ -165,7 +168,8 @@
 
   `keyboard-24k` / `keyboard-24k-double` の譜面は、使うレーンにかかわらず `24 KEY SP` / `48 KEY DP` として遊ぶ（プレイヤー仕様を参照）。BmsONE の `keyboard-48k` は 1 人用の 48 鍵レイアウトで 2 人用の `keyboard-24k-double` とは別物のため別名扱いせず、ほかの未知の hint と同じく手順 4 の位置ベースの採番になる
 
-- レーン表にない正の `x` は `11` にフォールバックするため、レーン 1 に重なる
+- 固定レーン表の hint や `generic-Nkeys` で、レーン表にない正の `x` は BGM ノート (`01`) になる。音は鳴るが、どのレーンにもノートは置かない。beatoraja も hint の鍵盤表にない `x` を同じく扱う。手順 4 の位置ベースの採番ではすべての正の `x` にレーンがあるため、表にない `x` は生じない
+- 表にないノートが同じ sound channel の playable ノートと同じ `y` にある場合は、`x = 0` のノートと同じく捨てる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持

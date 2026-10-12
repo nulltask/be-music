@@ -1,3 +1,4 @@
+import { volWavToLinearGain } from '@be-music/chart';
 import {
   normalizeChannel,
   normalizeObjectKey,
@@ -10,12 +11,9 @@ const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
 const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
 
+/** The chart-wide `#VOLWAV` gain; see {@link volWavToLinearGain} for the accepted range. */
 export function resolveChartVolWavGain(chart: BeMusicJson): number {
-  const volWav = chart.bms.volWav;
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
-    return 1;
-  }
-  return volWav / 100;
+  return volWavToLinearGain(chart.bms.volWav);
 }
 
 export function resolveDisplayedJudgeRankValue(chart: BeMusicJson): number {

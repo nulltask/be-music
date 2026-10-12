@@ -50,6 +50,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] Treat missing `lines` as the bmson 4/4 default model
 - [x] Treat missing / non-numeric `info.total` as the bmson default `100`, take the absolute value of a negative one, and keep `0` as written
 - [x] Treat missing, zero, negative, or non-numeric `info.init_bpm` as a parse error
+- [x] Interpret an `x` outside the `mode_hint` lane table as background music (`01`), as beatoraja does
 - [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
 - [ ] Clarification of policy for determining compatibility of `version` with SemVer
 - [ ] Error policy when required information such as `info.title` / `artist` / `genre` is missing
@@ -118,6 +119,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [ ] Add and apply `stop_events` of the same `y`
 - [ ] Playback based on sound channel slicing rules (`c` and restart)
 - [x] BGM discard when a playable note and a BGM note share the same `y` in one sound channel (applied at parse time; the BGM note is dropped)
+- [x] Layered notes (several sound channels with a note on the same `x` and `y`) are one judged note in the player, the first sound channel's, as in beatoraja; the other sound channels still sound at that time ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
 - [ ] Composite playback of the same `(x,y)` notes from different sound channels as Layered Notes
 
 ## Fields read by implementation (parser)
@@ -135,6 +137,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Keep `lines[].y` in `preservation.bmson.lines`
 - Keep `info.resolution` in `bmson.info.resolution`
 - Also read the root `resolution` for compatibility, and adopt it if `info.resolution` is not present.
+- A resolution of `0` or `null` means the default `240`; a negative resolution is read as its absolute value, as the spec says (beatoraja uses `240` for any value `<= 0`). A non-integer is floored.
 - Reject the document when `info.init_bpm` is missing or not a positive finite number.
 - Use `info.total` when finite (normalizing a negative value to its absolute value per the spec), otherwise apply the bmson default `100`.
 - `info.total` is a percentage of the player's default TOTAL, not an absolute TOTAL. Every player ruleset (`lr2`, `beatoraja`, `iidx`) plays it as `total / 100 ×` its own default TOTAL, and a value ≤ 0 means 100 % — the beatoraja behaviour (`BMSPlayerRule.validate`) — so `total: 0` does not freeze the gauge even though the spec says the lifebar then does not increase. See [player-spec](./player-spec.md#initial-and-default-values-lr2).
@@ -165,7 +168,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 
   `keyboard-24k` / `keyboard-24k-double` charts play as `24 KEY SP` / `48 KEY DP` whatever lanes they use (see the player spec). BmsONE's `keyboard-48k` is a single-player 48-key layout, not the two-player `keyboard-24k-double`, so it is not aliased to it and takes the positional rule 4 like any other unknown hint.
 
-- A positive `x` that the lane table does not cover falls back to `11`, so it lands on lane 1.
+- A positive `x` that the lane table of a fixed-table or `generic-Nkeys` hint does not cover is a BGM note (`01`): its sound plays, but no lane gets a note. beatoraja treats an `x` outside the hint's key table the same way. Under the positional rule 4 every positive `x` gets a lane, so no `x` is outside it.
+- An out-of-table note on the same `y` as a playable note of the same sound channel is dropped, like an `x = 0` note.
 - `bpm_events` is converted to `resources.bpm` + channel `08`
 - `stop_events` is converted to `resources.stop` + channel `09`
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
