@@ -53,6 +53,7 @@ import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import {
+  changesScrollRate,
   isDrawnAtTime,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
@@ -2281,15 +2282,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.timingResolver = resolver;
     // Build a STOP-aware seconds→beat resolver for `currentBeat`.
     this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
-    // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, so the common case
-    // stays on the plain beat-diff path with no extra cost.
+    // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so
+    // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
     const beatResolver = resolvedPlay.beatResolver;
     const scrollTimeline = resolvedPlay.scroll;
     const speedTimeline = resolvedPlay.speed;
-    this.scrollMapper =
-      scrollTimeline.length > 0 || speedTimeline.length > 0
-        ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
-        : undefined;
+    this.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
+      ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
+      : undefined;
     this.autoSampleTriggers = resolvedPlay.sampleTriggers
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);

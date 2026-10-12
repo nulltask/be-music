@@ -5,14 +5,14 @@
 import { createBeatResolver, createScrollTimeline, createSpeedTimeline } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
-import { resolveNoteDrawWindow, type NoteDrawWindow } from '../core/note-draw-window.ts';
+import { changesScrollRate, resolveNoteDrawWindow, type NoteDrawWindow } from '../core/note-draw-window.ts';
 
-/** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither. */
+/** The chart's `#SCROLL` / `#SPEED` distance integrator, or `undefined` when it has neither (or only points at 1). */
 export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceMapperLike | undefined {
   const beatResolver = createBeatResolver(chart);
   const scroll = createScrollTimeline(chart, beatResolver);
   const speed = createSpeedTimeline(chart, beatResolver);
-  if (scroll.length === 0 && speed.length === 0) {
+  if (!changesScrollRate(scroll, speed)) {
     return undefined;
   }
   return createScrollDistanceMapper(scroll, speed, { invalidDistance: 0 });

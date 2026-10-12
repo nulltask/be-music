@@ -18,6 +18,13 @@ describe('createBeatorajaScrollMapper', () => {
   it('is undefined for a chart without #SCROLL or #SPEED, so plain charts keep the beat-difference path', () => {
     expect(createBeatorajaScrollMapper(parseBms(['#BPM 120', '#00111:01'].join('\n')))).toBeUndefined();
   });
+
+  it('is undefined when every #SCROLL / #SPEED point is 1, so the chart keeps its ruleset rules', () => {
+    const chart = parseBms(
+      ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 1', '#SPEED01 1', '#00111:01', '#001SC:01', '#001SP:01'].join('\n'),
+    );
+    expect(createBeatorajaScrollMapper(chart)).toBeUndefined();
+  });
 });
 
 describe('resolveBeatorajaScrollPlacement', () => {

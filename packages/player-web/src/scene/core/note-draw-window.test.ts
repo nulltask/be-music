@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { createScrollDistanceMapper } from '@be-music/player/core/scroll-distance';
 import {
+  changesScrollRate,
   isDrawnAtTime,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
@@ -37,6 +38,35 @@ function drawnBeats(beats: readonly number[], currentBeat: number, laneBeats: nu
   }
   return drawn;
 }
+
+describe('changesScrollRate', () => {
+  it('is false without points and when every #SCROLL / #SPEED point is 1', () => {
+    expect(changesScrollRate([], [])).toBe(false);
+    expect(
+      changesScrollRate(
+        [
+          { beat: 0, speed: 1 },
+          { beat: 4, speed: 1 },
+        ],
+        [{ beat: 2, speed: 1 }],
+      ),
+    ).toBe(false);
+  });
+
+  it('is true once any #SCROLL or #SPEED point differs from 1', () => {
+    expect(
+      changesScrollRate(
+        [
+          { beat: 0, speed: 1 },
+          { beat: 4, speed: 0.5 },
+        ],
+        [],
+      ),
+    ).toBe(true);
+    expect(changesScrollRate([], [{ beat: 0, speed: 2 }])).toBe(true);
+    expect(changesScrollRate([{ beat: 8, speed: -1 }], [{ beat: 0, speed: 1 }])).toBe(true);
+  });
+});
 
 describe('resolveNoteDrawRules', () => {
   it('follows beatoraja whenever the chart scrolls (LR2 has no #SCROLL) or the beatoraja ruleset judges', () => {

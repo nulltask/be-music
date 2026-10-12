@@ -1,3 +1,4 @@
+import type { ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 
 /**
@@ -10,10 +11,21 @@ import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-dist
  *   object past the lane top, so nothing beyond it draws, even what a later negative `#SCROLL` brings back down. A
  *   note, mine or bar line whose time has come is gone, judged or not; a long note stays while its end is ahead.
  *
- * LR2 has no `#SCROLL` / `#SPEED`, so a chart with either is drawn by beatoraja's rules whatever the ruleset; so is any
- * chart judged under the `beatoraja` ruleset.
+ * LR2 has no `#SCROLL` / `#SPEED`, so a chart with either is drawn by beatoraja's rules whatever the ruleset (unless
+ * every point is 1, see {@link changesScrollRate}); so is any chart judged under the `beatoraja` ruleset.
  */
 export type NoteDrawRules = 'lr2' | 'beatoraja';
+
+/**
+ * Whether a chart's `#SCROLL` / `#SPEED` points change how it scrolls: some point other than 1. A chart whose points are
+ * all 1 scrolls as one without any, so it needs no distance integrator and keeps the judge ruleset's drawing rules.
+ */
+export function changesScrollRate(
+  scroll: ReadonlyArray<ScrollTimelinePoint>,
+  speed: ReadonlyArray<SpeedTimelinePoint>,
+): boolean {
+  return scroll.some((point) => point.speed !== 1) || speed.some((point) => point.speed !== 1);
+}
 
 export function resolveNoteDrawRules(scrolling: boolean, judgeRuleset: string): NoteDrawRules {
   return scrolling || judgeRuleset === 'beatoraja' ? 'beatoraja' : 'lr2';
