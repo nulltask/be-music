@@ -155,13 +155,19 @@ function resolveLr2WindowTables(percent: number, overrideBadMs: number | undefin
   return { note, scratch: note, longNoteEnd: longEnd, longScratchEnd: longEnd };
 }
 
+/** bmson `info.judge_rank` default (bmson 1.0.0; beatoraja's bmson model initialises it to 100). */
+const BMSON_DEFAULT_JUDGE_RANK = 100;
+
 /** beatoraja judgerank percent per `BMSPlayerRule.validate` (NORMAL window rule). */
 function resolveBeatorajaJudgeRank(chart: RulesetChartFacts, rankTable: readonly number[]): number {
   const exRank = chart.judgeRank.sourceExRank;
+  if (chart.sourceFormat === 'bmson') {
+    // bmson's judge_rank is the judgerank itself; a chart that omits it gets the format default, not BMS #RANK 2.
+    // Decided here rather than in the chart facts so a play-log, which records `sourceExRank` only when the chart sets
+    // it, resolves the same windows on replay.
+    return typeof exRank === 'number' && exRank > 0 ? exRank : BMSON_DEFAULT_JUDGE_RANK;
+  }
   if (typeof exRank === 'number' && exRank > 0) {
-    if (chart.sourceFormat === 'bmson') {
-      return exRank;
-    }
     // BMS #DEFEXRANK: value × (NORMAL-rule rank-2 percent) / 100.
     return (exRank * rankTable[2]!) / 100;
   }

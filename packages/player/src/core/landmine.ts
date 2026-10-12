@@ -1,4 +1,4 @@
-import { normalizeObjectKey, type BeMusicEvent } from '@be-music/json';
+import { normalizeObjectKey, type BeMusicEvent, type BeMusicSourceFormat } from '@be-music/json';
 
 export const DEFAULT_LANDMINE_GAUGE_DAMAGE = 4;
 const BASE36_OBJECT_KEY_PATTERN = /^[0-9A-Z]{2}$/;
@@ -23,10 +23,16 @@ export interface LandmineGaugeEffect {
  * bmson `key_channels[].notes[].damage` is an explicit per-mine gauge percentage; when present it wins over the BMS
  * value rule because the event value there is the WAV slot, not a damage encoding. `damage: 0` is a valid
  * authored value (a no-damage decoration mine), so the guard checks finiteness rather than truthiness.
+ *
+ * For a bmson chart (`sourceFormat: 'bmson'`) the value rule never applies: the parser numbers each `key_channels`
+ * WAV slot after the sound channels, so reading it as damage would make the damage depend on how many sound channels
+ * the chart has. A bmson mine without a usable `damage` deals {@link DEFAULT_LANDMINE_GAUGE_DAMAGE}, the same fallback
+ * as an invalid BMS mine value.
  */
 export function resolveLandmineGaugeEffect(
   landmineEvent: Pick<BeMusicEvent, 'value' | 'bmson'>,
   base: 36 | 62 = 36,
+  sourceFormat: BeMusicSourceFormat = 'bms',
 ): LandmineGaugeEffect {
   const objectValue = normalizeObjectKey(landmineEvent.value, base);
   const bmsonDamage = landmineEvent.bmson?.damage;
@@ -37,7 +43,7 @@ export function resolveLandmineGaugeEffect(
       gaugeDelta: -bmsonDamage,
     };
   }
-  if (!BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
+  if (sourceFormat === 'bmson' || !BASE36_OBJECT_KEY_PATTERN.test(objectValue)) {
     return {
       objectValue,
       damage: DEFAULT_LANDMINE_GAUGE_DAMAGE,

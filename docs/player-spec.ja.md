@@ -141,7 +141,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 
 - 発動条件は LR2 の2条件です。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
 - 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
-- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
+- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。`damage` のない bmson の地雷は既定の `4%` です（オブジェクト値はパーサーが割り当てた WAV スロットでありダメージ表現ではないため、ダメージとしては読みません）。
 - ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
 - `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
 - kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
@@ -279,6 +279,8 @@ bmson では次の優先順位で判定幅を決めます。
 
 bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱い、同じ LR2 アンカー補間で判定幅へ換算します。
 そのため `judgeRank=100` は `NORMAL`（`±18/±40/±100/±200ms`）そのままです。
+`beatoraja` ruleset は `judge_rank` をそのまま judgerank として使い、`judge_rank` のない bmson 譜面は
+`judge_rank: 100`（bmson の既定値。7 KEY の PGREAT は `±20ms`）として判定します。BMS の `#RANK 2` 扱いにはなりません。
 
 現在の実装では、bmson に BMS の `#EXRANKxx` 相当の動的判定幅変更はありません。
 
@@ -369,7 +371,7 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 地雷の爆発は判定語ではありません。`BAD` / `POOR` を発生させず、判定カウンタ・combo・EX-SCORE・score も変更せず、近くの通常ノート候補より優先されることもありません。
 行うのはゲージへの地雷ダメージ適用と、定義されていれば `#WAV00` の発音だけです。発動条件とダメージ規則は [地雷](#地雷) を参照してください。
-オブジェクト値が 2 文字の大文字 base36 ID でない場合（または `00` の場合）は既定ダメージ `4%` にフォールバックします。`#BASE 62` の小文字の値もこれに該当します。
+オブジェクト値が 2 文字の大文字 base36 ID でない場合（または `00` の場合）は既定ダメージ `4%` にフォールバックします。`#BASE 62` の小文字の値もこれに該当します。`damage` のない bmson の地雷も同じ `4%` です。
 
 この規則の根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) にまとめています。
 
@@ -462,7 +464,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- 地雷の爆発: `-mineValue(base36)`（bmson では `damage`）。生デルタとして適用
+- 地雷の爆発: `-mineValue(base36)`（bmson では `damage`。`damage` のない bmson の地雷は `4`）。生デルタとして適用
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
