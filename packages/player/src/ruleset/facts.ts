@@ -13,7 +13,10 @@ export interface RulesetChartFacts {
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`resolveLaneDisplayMode` output) — picks beatoraja's per-mode window tables. */
   laneMode: string;
-  /** Raw `#TOTAL` / bmson `info.total`. Absent when the chart specified none; each ruleset applies its own default. */
+  /**
+   * Raw `#TOTAL` (absolute) / bmson `info.total` (a percentage of the ruleset's default TOTAL). Absent when the chart
+   * specified none; each ruleset applies its own default.
+   */
   total?: number;
   /** Chart-level long-note mode after `#LNMODE` / `info.ln_type` resolution. */
   lnMode: LongNoteMode;

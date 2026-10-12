@@ -545,8 +545,8 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
   // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalizing at parse time keeps the
   // gauge formula (`+TOTAL/N`) on the positive branch and means every downstream consumer (gauge, stringifier,
-  // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
-  // per the same spec section).
+  // round-trip re-parse) sees the canonical value. `total: 0` is kept as written; the spec says the lifebar then doesn't
+  // increase, but the player's rulesets follow beatoraja and treat `total <= 0` as 100 % of their default TOTAL.
   copyIfFiniteNumberAbs(normalized, 'total', info.total);
   // beatoraja bmson extension — `info.ln_type` picks the chart-wide long-note type (1: LN, 2: CN, 3: HCN). Per-note
   // `t` entries override it downstream.
@@ -786,8 +786,7 @@ function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, 
 
 /**
  * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so spec fields that say "if negative, take the absolute
- * value" (notably `info.total`) get normalized at parse time. Keeps `0` intact so its spec-defined "lifebar doesn't
- * increase" meaning is preserved.
+ * value" (notably `info.total`) get normalized at parse time. Keeps `0` intact so consumers see the value as written.
  */
 function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value === 'number' && Number.isFinite(value)) {
