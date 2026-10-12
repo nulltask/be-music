@@ -379,6 +379,7 @@ runtime と round-trip の扱い:
 - BOM がない場合は `#CHARSET` 宣言を解決（対応エンコーディングに正規化できた場合のみ）
 - ASCII のみのファイルは UTF-8 として扱う
 - 厳密 UTF-8 検証（マルチバイト列を含み fatal デコードに成功）を通れば UTF-8 とみなす
+- 非 ASCII のバイトがすべて KS X 1001 の 2 バイトの組（先頭・後続とも `0xA1`〜`0xFE`。beatoraja の EUC-KR 判定と同じ）になり、非 ASCII の文字の 90 % 以上がハングル音節なら韓国語の `euc-kr`
 - 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
 - この判定は `@be-music/parser` の `decodeBmsText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 

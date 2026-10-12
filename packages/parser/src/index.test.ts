@@ -1821,6 +1821,39 @@ describe('parser', () => {
     expect(decoded.text).toContain('テスト');
   });
 
+  test('decodeBmsText: detects a Korean EUC-KR chart, as beatoraja and Bemuse do', () => {
+    // "#TITLE 한국 노래\n#ARTIST 가수\n#BPM 150\n#00111:01\n" in EUC-KR (KS X 1001).
+    const eucKrBytes = new Uint8Array([
+      35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 32, 179, 235, 183, 161, 10, 35, 65, 82, 84, 73, 83, 84, 32, 176,
+      161, 188, 246, 10, 35, 66, 80, 77, 32, 49, 53, 48, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
+    ]);
+    const decoded = decodeBmsText(eucKrBytes);
+    expect(decoded.encoding).toBe('euc-kr');
+    const parsed = parseChart(decoded.text);
+    expect(parsed.metadata.title).toBe('한국 노래');
+    expect(parsed.metadata.artist).toBe('가수');
+  });
+
+  test('decodeBmsText: honors #CHARSET EUC-KR / CP949', () => {
+    const directive = new TextEncoder().encode('#CHARSET CP949\n');
+    const title = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 199, 209, 177, 185, 10]); // "#TITLE 한국\n"
+    const merged = new Uint8Array(directive.length + title.length);
+    merged.set(directive, 0);
+    merged.set(title, directive.length);
+    const decoded = decodeBmsText(merged);
+    expect(decoded.encoding).toBe('euc-kr');
+    expect(decoded.text).toContain('#TITLE 한국');
+  });
+
+  test('decodeBmsText: does not read half-width katakana Shift_JIS that is not Hangul-shaped as EUC-KR', () => {
+    // "#TITLE ﾃﾞﾝﾜ\n#00111:01\n" in Shift_JIS. These bytes also form valid EUC-KR pairs, but one of the two is a
+    // Hanja, which Korean chart text does not look like.
+    const sjisBytes = new Uint8Array([
+      35, 84, 73, 84, 76, 69, 32, 195, 222, 221, 220, 10, 35, 48, 48, 49, 49, 49, 58, 48, 49, 10,
+    ]);
+    expect(decodeBmsText(sjisBytes).encoding).not.toBe('euc-kr');
+  });
+
   test('decodeBmsText: #CHARSET shift_jis with non-ASCII title surfaces the kana', () => {
     // Same shift_jis content as above but with the directive explicitly set. The directive should drive the decode path
     // even though autodetect would also pick shift_jis, ensuring deterministic decoding when the chart author declares

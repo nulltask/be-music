@@ -379,6 +379,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - If there is no BOM, resolve the `#CHARSET` declaration (only when it canonicalizes to a supported encoding)
 - ASCII-only files are treated as UTF-8
 - A buffer that passes strict UTF-8 validation (fatal decode succeeds with multibyte sequences present) is UTF-8
+- A buffer whose every non-ASCII byte pairs up as KS X 1001 (`0xA1`–`0xFE` lead and trail, beatoraja's EUC-KR probe) and whose non-ASCII text is at least 90 % Hangul syllables is Korean `euc-kr`
 - Otherwise infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
 - This detection is unified in `@be-music/parser`'s `decodeBmsText`, so CLI / TUI / Web all produce the same result
 
