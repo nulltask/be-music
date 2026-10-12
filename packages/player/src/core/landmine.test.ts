@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { parseChart } from '../../../parser/src/index.ts';
-import { extractLandmineNotes } from '../playable-notes.ts';
+import { extractInvisiblePlayableNotes, extractLandmineNotes } from '../playable-notes.ts';
 import { DEFAULT_LANDMINE_GAUGE_DAMAGE, resolveLandmineGaugeEffect } from './landmine.ts';
 
 describe('landmine', () => {
@@ -47,7 +47,7 @@ describe('landmine', () => {
   });
 
   test('a bmson mine without `damage` deals the default 4, not its WAV slot read as base 36', () => {
-    // The parser binds every `key_channels` entry to a WAV slot numbered after the sound channels, so the event value
+    // The parser binds every `mine_channels` entry to a WAV slot numbered after the sound channels, so the event value
     // is a resource ID, not a damage encoding.
     expect(resolveLandmineGaugeEffect({ value: '0A' }, 36, 'bmson')).toEqual({
       objectValue: '0A',
@@ -74,7 +74,7 @@ describe('landmine', () => {
             name: `s${index}.wav`,
             notes: [{ x: 1, y: 240 * (index + 1), l: 0, c: false }],
           })),
-          key_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }],
+          mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }],
         }),
         'bmson',
       );
@@ -90,5 +90,20 @@ describe('landmine', () => {
       DEFAULT_LANDMINE_GAUGE_DAMAGE,
       DEFAULT_LANDMINE_GAUGE_DAMAGE,
     ]);
+  });
+
+  test('a bmson `key_channels` note is a hidden note, never a mine', () => {
+    // beatoraja reads `key_channels` as hidden (invisible) notes and `mine_channels` as mines.
+    const json = parseChart(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'hidden', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 960, damage: 50 }] }],
+      }),
+      'bmson',
+    );
+    expect(extractLandmineNotes(json)).toEqual([]);
+    expect(extractInvisiblePlayableNotes(json).map((note) => [note.channel, note.event.value])).toEqual([['12', '02']]);
   });
 });

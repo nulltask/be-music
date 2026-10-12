@@ -30,7 +30,7 @@
         "subtitle": "",
         "artist": "Codex",
         "genre": "",
-        "modeHint": "beat-1k",
+        "modeHint": "beat-5k",
         "level": 0,
         "initBpm": 120,
         "resolution": 240
@@ -72,7 +72,7 @@
       "    \"genre\": \"\",",
       "    \"level\": 0,",
       "    \"init_bpm\": 120,",
-      "    \"mode_hint\": \"beat-1k\",",
+      "    \"mode_hint\": \"beat-5k\",",
       "    \"resolution\": 240",
       "  },",
       "  \"version\": \"1.0.0\",",
@@ -393,7 +393,7 @@
             "djLevel": "B",
             "gauge": {
               "type": "GROOVE",
-              "final": 89.17,
+              "final": 100,
               "cleared": true
             },
             "score": 129166
