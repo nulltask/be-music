@@ -1,6 +1,7 @@
 import { effect } from 'alien-signals';
 import { createAbortError } from '@be-music/utils/core';
 import type { LogEntry } from '@be-music/utils/log';
+import type { RandomDraws } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { Worker, type MessagePort } from 'node:worker_threads';
 import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
@@ -18,7 +19,10 @@ import type {
 } from './node-gameplay-worker-protocol.ts';
 
 export interface NodeGameplayRuntimeOptions {
+  /** The chart to play, already resolved (`resolveBmsControlFlowWithDraws`). */
   json: BeMusicJson;
+  /** The `#RANDOM` / `#SWITCH` draws `json` was resolved with, for the engine's RANDOM summary. */
+  randomDraws?: RandomDraws;
   mode: 'auto' | 'manual';
   autoScratch?: boolean;
   playOptions: NodeGameplayWorkerPlayOptions;
@@ -285,6 +289,7 @@ async function handleUiLifecycleAck(
 function createWorkerInitData(options: NodeGameplayRuntimeOptions): NodeGameplayWorkerInitData {
   return {
     json: options.json,
+    ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
     mode: options.mode,
     autoScratch: options.autoScratch,
     playOptions: options.playOptions,

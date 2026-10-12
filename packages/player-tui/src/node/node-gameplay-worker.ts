@@ -296,6 +296,7 @@ async function bootstrap(): Promise<void> {
   try {
     const playOptions = {
       ...initData.playOptions,
+      ...(initData.randomDraws !== undefined ? { randomDraws: initData.randomDraws } : {}),
       signal: abortController.signal,
       createInputRuntime,
       createUiRuntime: initData.playOptions.tui ? createUiRuntime : undefined,

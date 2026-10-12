@@ -7,6 +7,7 @@ import { createFileLogger, createNoopLogger, type LogEntry, type Logger, type Lo
 import readline from 'node:readline';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
+import { resolvePlayChart, type ResolvedPlayChart } from './play-chart.ts';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
 import {
   PlayerInterruptedError,
@@ -837,6 +838,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     : undefined;
   const chartLoadingAbortCapture = beginLoadingAbortCapture();
   let json: Awaited<ReturnType<typeof parseChartFile>>;
+  let playChart: ResolvedPlayChart;
   try {
     reportPlayLoadingProgress?.({
       ratio: 0.03,
@@ -878,6 +880,9 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
       ratio: 0.16,
       message: 'Chart parsed.',
     });
+    // Resolve `#RANDOM` / `#SWITCH` once here, so the preview render and the play below use the same branches and
+    // the engine never draws on its own. A restart draws again (LR2 / beatoraja re-roll each play).
+    playChart = resolvePlayChart(json);
 
     if (args.renderAudioPath) {
       reportPlayLoadingProgress?.({
@@ -885,7 +890,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         message: 'Rendering preview audio...',
       });
       const outputPath = resolveCliPath(args.renderAudioPath);
-      const audioRendered = await renderJson(json, {
+      const audioRendered = await renderJson(playChart.json, {
         baseDir: dirname(chartPath),
         inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
         signal: chartLoadingAbortCapture?.signal,
@@ -924,7 +929,8 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     };
     try {
       summary = await runNodeGameplayRuntime({
-        json,
+        json: playChart.json,
+        randomDraws: playChart.randomDraws,
         mode: effectivePlayMode === 'auto' ? 'auto' : 'manual',
         autoScratch: effectivePlayMode === 'auto-scratch',
         playOptions,
@@ -968,6 +974,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         throw new PlayerInterruptedError(cancelReason);
       }
       if (error instanceof PlayerInterruptedError && error.reason === 'restart') {
+        playChart = resolvePlayChart(json);
         playLoadingScreenRenderState.stageFileDrawn = false;
         reportPlayLoadingProgress?.({
           ratio: 0.34,

@@ -116,6 +116,17 @@ afterEach(() => {
 });
 
 describe('node gameplay runtime', () => {
+  test('hands the gameplay worker the resolved chart together with the draws it was resolved with', async () => {
+    const json = createEmptyJson('bms');
+    const randomDraws = [{ command: 'RANDOM' as const, range: 2, value: 2 }];
+    const promise = runNodeGameplayRuntime(createOptions({ json, randomDraws }));
+
+    expect(workerState.lastWorkerOptions?.workerData).toMatchObject({ json, randomDraws });
+
+    getLastWorker().emit('message', { kind: 'result', summary: createSummary() });
+    await promise;
+  });
+
   test('passes source resolution condition to the gameplay worker in source runs', async () => {
     const promise = runNodeGameplayRuntime(createOptions());
     const workerExecArgv = workerState.lastWorkerOptions?.execArgv;
