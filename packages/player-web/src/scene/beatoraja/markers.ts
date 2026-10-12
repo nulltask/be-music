@@ -17,6 +17,7 @@ import {
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import { isDrawnAtTime, isPastDrawWindow, resolveDrawBottom, type NoteDrawWindow } from '../core/note-draw-window.ts';
 
 /** Beat positions per marker kind. Caller computes these from the chart once per play. */
 export interface BeatorajaMarkerBeats {
@@ -141,8 +142,18 @@ export class BeatorajaMarkerLayer {
      * integrator, so bar lines move with the notes. Defaults to the beat difference.
      */
     distance?: (beat: number) => number;
+    /**
+     * beatoraja's `LaneRenderer` window, on a chart that scrolls (the note layer's): markers stop after the first
+     * timeline past the lane top, one whose time has come is gone, and one a negative rate puts below the line while
+     * its time is ahead still draws, down to the stage bottom. Omitted: every marker in the lane draws.
+     */
+    window?: NoteDrawWindow;
+    /** Chart time of a beat, in seconds; with `window`, hides a marker whose time has come. */
+    secondsAt?: (beat: number) => number;
   }): void {
     const distance = args.distance ?? ((beat: number): number => beat - args.currentBeat);
+    const { window, secondsAt } = args;
+    const drawBottom = window ? resolveDrawBottom(window, args.judgementY) : args.judgementY;
     let used = 0;
     const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number> }> = [
       { kind: this.kindData.group, beats: args.markers.group },
@@ -162,6 +173,10 @@ export class BeatorajaMarkerLayer {
       for (const proto of kind) {
         if (proto.texture === undefined) continue;
         for (const beat of beats) {
+          if (window) {
+            if (isPastDrawWindow(window, beat)) break;
+            if (secondsAt && !isDrawnAtTime(window, secondsAt(beat))) continue;
+          }
           const scrollY = args.judgementY - distance(beat) * args.pixelsPerBeat;
           // Apply the authored bottom offset relative to the lane's authored bottom — mirrors
           // upstream's `line.draw(..., 0, y - hl)` (`LaneRenderer.java:373`). Without this the
@@ -173,7 +188,7 @@ export class BeatorajaMarkerLayer {
           // well above the lane bottom (e.g., a hypothetical "ceiling marker") doesn't get
           // culled prematurely. 24-pixel slack matches the note layer's culling so markers
           // don't pop in/out at the edge.
-          if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
+          if (y < args.laneTopY - 24 || y > drawBottom + 24) continue;
           const sprite = this.acquireSprite(used);
           sprite.texture = proto.texture;
           // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.

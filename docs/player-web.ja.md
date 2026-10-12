@@ -172,7 +172,7 @@ beatoraja の描画は判定ラインでノートを切り取らないため、�
 
 terminal player も、双方向にスクロールする譜面では同じ位置でたどるのを打ち切ります。
 
-beatoraja のプレイスキンも、ノートと小節線を同じ `#SCROLL` / `#SPEED` の距離で置き、どちらかを含む譜面ではノートを beatoraja の規則で描きます（[`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)）。それ以外の譜面では拍の差による配置のままです。
+beatoraja のプレイスキンも、ノートと小節線を同じ `#SCROLL` / `#SPEED` の距離で置き、どちらかを含む譜面ではノート・小節線・BPM / STOP マーカーを beatoraja の規則で描きます（[`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)）。それ以外の譜面では拍の差による配置のままです。
 
 ## HS-FIX
 

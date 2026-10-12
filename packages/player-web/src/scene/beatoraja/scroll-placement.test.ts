@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { parseBms } from '@be-music/parser';
 import {
-  createBeatorajaLaneTimelineBeats,
+  createBeatorajaLaneTimelines,
   createBeatorajaScrollMapper,
   resolveBeatorajaScrollPlacement,
 } from './scroll-placement.ts';
@@ -31,9 +31,12 @@ describe('createBeatorajaScrollMapper', () => {
   });
 });
 
-describe('createBeatorajaLaneTimelineBeats', () => {
-  it('lists the beats of the notes, bar lines and #SCROLL points', () => {
-    expect([...createBeatorajaLaneTimelineBeats(SCROLL_CHART)]).toEqual([0, 4, 8]);
+describe('createBeatorajaLaneTimelines', () => {
+  it('lists the beats of the notes, bar lines and #SCROLL points, and times them', () => {
+    const timelines = createBeatorajaLaneTimelines(SCROLL_CHART);
+    expect([...timelines.beats]).toEqual([0, 4, 8]);
+    // 120 BPM: two beats a second.
+    expect(timelines.beatToSeconds(4)).toBeCloseTo(2, 9);
   });
 });
 
@@ -70,7 +73,7 @@ describe('resolveBeatorajaScrollPlacement', () => {
       nowSeconds: 0,
       mapper: createBeatorajaScrollMapper(SCROLL_CHART),
       laneBeats: 2,
-      timelineBeats: createBeatorajaLaneTimelineBeats(SCROLL_CHART),
+      timelineBeats: createBeatorajaLaneTimelines(SCROLL_CHART).beats,
       stageBottomY: 720,
     });
     // The lane is overrun at beat 2; the next timeline is the measure-1 note and #SCROLL point at beat 4.

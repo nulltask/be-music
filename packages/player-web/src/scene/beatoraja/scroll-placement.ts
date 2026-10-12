@@ -23,9 +23,17 @@ export function createBeatorajaScrollMapper(chart: BeMusicJson): ScrollDistanceM
   return createScrollDistanceMapper(scroll, speed, { invalidDistance: 0 });
 }
 
-/** Beats of the chart's lane timelines, for the last timeline `LaneRenderer` draws past the lane top. */
-export function createBeatorajaLaneTimelineBeats(chart: BeMusicJson): Float64Array {
-  return collectResolvedLaneTimelineBeats(resolveChart(chart));
+/** The chart's lane timelines as beatoraja's `LaneRenderer` walks them. */
+export interface BeatorajaLaneTimelines {
+  /** Beats of the lane timelines, for the last timeline drawn past the lane top. */
+  beats: Float64Array;
+  /** Chart time of a beat, in seconds, for hiding bar lines whose time has come. */
+  beatToSeconds: (beat: number) => number;
+}
+
+export function createBeatorajaLaneTimelines(chart: BeMusicJson): BeatorajaLaneTimelines {
+  const resolved = resolveChart(chart);
+  return { beats: collectResolvedLaneTimelineBeats(resolved), beatToSeconds: resolved.timing.beatToSeconds };
 }
 
 export interface BeatorajaScrollPlacementInput {
@@ -35,7 +43,7 @@ export interface BeatorajaScrollPlacementInput {
   mapper: ScrollDistanceMapperLike | undefined;
   /** The lane's height in beats of scroll distance (lane pixels over pixels per beat). */
   laneBeats: number;
-  /** Beats of the chart's lane timelines ({@link createBeatorajaLaneTimelineBeats}). */
+  /** Beats of the chart's lane timelines ({@link createBeatorajaLaneTimelines}). */
   timelineBeats?: ArrayLike<number>;
   /** Bottom edge of the stage, in the lanes' coordinates (y grows downward). */
   stageBottomY: number;

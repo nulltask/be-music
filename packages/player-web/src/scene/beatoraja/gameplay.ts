@@ -41,7 +41,12 @@ import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaPixelsPerBeat } from './notes.ts';
 import { BeatorajaMarkerLayer } from './markers.ts';
-import { createBeatorajaLaneTimelineBeats, createBeatorajaScrollMapper } from './scroll-placement.ts';
+import {
+  createBeatorajaLaneTimelines,
+  createBeatorajaScrollMapper,
+  resolveBeatorajaScrollPlacement,
+  type BeatorajaLaneTimelines,
+} from './scroll-placement.ts';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { flipRectToPixi, type BeatorajaRenderContext } from '../../skin/beatoraja/render.ts';
 import { computeBeatorajaChartMarkers } from '../../chart/beatoraja/markers.ts';
@@ -224,8 +229,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly chartMarkers: ReturnType<typeof computeBeatorajaChartMarkers>;
   /** The chart's `#SCROLL` / `#SPEED` distance integrator; `undefined` when it has neither. */
   private readonly scrollMapper: ScrollDistanceMapperLike | undefined;
-  /** Beats of the chart's lane timelines, built only for a chart that scrolls. */
-  private readonly laneTimelineBeats: Float64Array | undefined;
+  /** The chart's lane timelines, built only for a chart that scrolls. */
+  private readonly laneTimelines: BeatorajaLaneTimelines | undefined;
   /**
    * Chart's BPM curve as a polyline in `[0, 1]²` — computed once at construction and handed to
    * the play skin view's `resolveBpmGraphPoints` so any `bpmgraph[]` element gets a real curve
@@ -294,7 +299,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const effectiveChart = options.dpFlip === true ? flipDpChart(options.chart) : options.chart;
     this.options = effectiveChart === options.chart ? options : { ...options, chart: effectiveChart };
     this.scrollMapper = createBeatorajaScrollMapper(effectiveChart);
-    this.laneTimelineBeats = this.scrollMapper ? createBeatorajaLaneTimelineBeats(effectiveChart) : undefined;
+    this.laneTimelines = this.scrollMapper ? createBeatorajaLaneTimelines(effectiveChart) : undefined;
     this.skinAudioRenderContext = {
       activeOps: new Set<number>(),
       getTimerStart: () => undefined,
@@ -415,7 +420,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: options.textures,
       canvasHeight: this.view.height,
       scrollMapper: this.scrollMapper,
-      timelineBeats: this.laneTimelineBeats,
+      timelineBeats: this.laneTimelines?.beats,
     });
     // Marker layer goes ON the same container as notes — insertion order makes markers paint
     // first, then notes paint on top. Authors expect this so a falling note can visually cross
@@ -785,7 +790,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       textures: opts.textures,
       canvasHeight: this.view.height,
       scrollMapper: this.scrollMapper,
-      timelineBeats: this.laneTimelineBeats,
+      timelineBeats: this.laneTimelines?.beats,
     });
     this.markerLayer = new BeatorajaMarkerLayer({
       group: noteSection.group,
@@ -1046,14 +1051,25 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // layer.
       const laneHeightPixi = Math.max(0, laneBounds.bottomY - laneBounds.topY);
       const currentBeat = this.currentFrame.currentBeat;
-      const scrollMapper = this.scrollMapper;
+      const pixelsPerBeat = beatorajaPixelsPerBeat(laneHeightPixi, this.hiSpeed);
+      // On a chart that scrolls, bar lines follow the notes' `LaneRenderer` window as well as their distance.
+      const placement = resolveBeatorajaScrollPlacement({
+        currentBeat,
+        nowSeconds: this.currentFrame.currentSeconds,
+        mapper: this.scrollMapper,
+        laneBeats: pixelsPerBeat > 0 ? laneHeightPixi / pixelsPerBeat : 0,
+        timelineBeats: this.laneTimelines?.beats,
+        stageBottomY: this.view.height,
+      });
       this.markerLayer.update({
         currentBeat,
-        distance: scrollMapper ? (beat) => scrollMapper.distanceBetween(currentBeat, beat) : undefined,
+        distance: this.scrollMapper ? placement.distance : undefined,
         judgementY: laneBounds.bottomY,
         laneTopY: laneBounds.topY,
-        pixelsPerBeat: beatorajaPixelsPerBeat(laneHeightPixi, this.hiSpeed),
+        pixelsPerBeat,
         markers: this.chartMarkers,
+        window: placement.window,
+        secondsAt: this.laneTimelines?.beatToSeconds,
       });
       this.bgaLayer?.update(this.currentFrame.currentSeconds, ctx, this.adapter.isPoorBgaActive());
     }

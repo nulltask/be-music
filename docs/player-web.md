@@ -180,7 +180,7 @@ beatoraja's renderer does not clip notes at the judgement line, so a note a nega
 
 The terminal player stops its walk at the same point when a chart scrolls both ways.
 
-beatoraja play skins place notes and bar lines with the same `#SCROLL` / `#SPEED` distances and, on a chart with either, draw notes by beatoraja's rules ([`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)); on other charts they keep their beat-distance placement.
+beatoraja play skins place notes and bar lines with the same `#SCROLL` / `#SPEED` distances and, on a chart with either, draw notes, bar lines and BPM / STOP markers by beatoraja's rules ([`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)); on other charts they keep their beat-distance placement.
 
 ## HS-FIX
 

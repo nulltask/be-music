@@ -160,7 +160,7 @@ export interface BeatorajaNoteLayerOptions {
    * sit at their beat distance.
    */
   scrollMapper?: ScrollDistanceMapperLike;
-  /** Beats of the chart's lane timelines (`createBeatorajaLaneTimelineBeats`), used with `scrollMapper`. */
+  /** Beats of the chart's lane timelines (`createBeatorajaLaneTimelines`), used with `scrollMapper`. */
   timelineBeats?: ArrayLike<number>;
 }
 
