@@ -153,7 +153,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
   1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
   2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below). As in the bmson spec's canonical list and beatoraja, `beat-5k` keeps the scratch on `x` 8 and leaves `x` 6 / 7 without a lane, and `beat-10k` puts the 2P keys on `x` 9-13 and the 2P scratch on `x` 16. The tables are `BMSON_MODE_HINT_LAYOUTS` in `@be-music/chart`, built from the play-mode table (see [Player spec — Play-mode table](./player-spec.md#play-mode-table)).
   3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
-  4. Any other hint numbers the unique positive `x` values of `sound_channels`, `key_channels` and `mine_channels` in ascending order onto consecutive channels from `11`.
+  4. Any other hint is unknown. When every positive `x` of `sound_channels`, `key_channels` and `mine_channels` is in the `beat-7k` table (1–8), the chart is read as `beat-7k`, as beatoraja (with a warning), Qwilight and Bemuse read it. Otherwise the unique positive `x` values are numbered in ascending order onto consecutive channels from `11`: beatoraja would turn the lanes past `x` 8 into BGM, and keeping them is what the author meant (be-music decision).
 - A note with `x` omitted or `x <= 0` becomes BGM (`01`).
 - The keyboard hints (Keyboardmania-style 24 keys plus the wheel, as beatoraja reads them) give every `x` a fixed lane, so a chart that leaves some keys empty never shifts onto the wrong ones:
 
@@ -167,9 +167,9 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
   |                       | 36-50   | `2A`-`2O`         | 2P keys 10-24            |
   |                       | 51 / 52 | `2P` / `2Q`       | 2P wheel up / wheel down |
 
-  `keyboard-24k` / `keyboard-24k-double` charts play as `24 KEY SP` / `48 KEY DP` whatever lanes they use (see the player spec). BmsONE's `keyboard-48k` is a single-player 48-key layout, not the two-player `keyboard-24k-double`, so it is not aliased to it and takes the positional rule 4 like any other unknown hint.
+  `keyboard-24k` / `keyboard-24k-double` charts play as `24 KEY SP` / `48 KEY DP` whatever lanes they use (see the player spec). BmsONE's `keyboard-48k` is a single-player 48-key layout, not the two-player `keyboard-24k-double`, so it is not aliased to it and takes rule 4 like any other unknown hint.
 
-- A positive `x` that the lane table of a fixed-table or `generic-Nkeys` hint does not cover is a BGM note (`01`): its sound plays, but no lane gets a note. beatoraja treats an `x` outside the hint's key table the same way. Under the positional rule 4 every positive `x` gets a lane, so no `x` is outside it.
+- A positive `x` that the lane table of a fixed-table or `generic-Nkeys` hint does not cover is a BGM note (`01`): its sound plays, but no lane gets a note. beatoraja treats an `x` outside the hint's key table the same way. Under rule 4 every positive `x` gets a lane, so no `x` is outside it.
 - An out-of-table note on the same `y` as a playable note of the same sound channel is dropped, like an `x = 0` note.
 - `bpm_events` is converted to `resources.bpm` + channel `08`
 - `stop_events` is converted to `resources.stop` + channel `09`
@@ -195,7 +195,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - If `bmson.barlinesSuppressed` is `true`, output `lines: []`.
 - `sound_channels` outputs in `wav` keys
 - `info.mode_hint` is `bmson.info.modeHint` when set; otherwise `keyboard-24k` / `keyboard-24k-double` for a `24 KEY SP` / `48 KEY DP` chart, else the play variant's hint (`beat-5k` / `beat-7k` / `beat-10k` / `beat-14k` / `popn-9k`) when every lane in use is in its table, else the spec's left-to-right `generic-<lanes>keys` (a made-up `beat-<lanes>k` would be an unknown hint, which other players read as `beat-7k`)
-- Under every hint in the table above (keyboard layouts and wheel included) each lane gets its fixed `x` from that table, so the chart re-parses onto the same lanes; lanes outside the table follow after it, and unknown hints number the lanes in use from `x = 1`
+- Under every hint in the table above (keyboard layouts and wheel included) each lane gets its fixed `x` from that table, so the chart re-parses onto the same lanes; lanes outside the table follow after it, and a layout that no canonical hint fits is written as `generic-<lanes>keys`, numbering the lanes in use from `x = 1`
 - Generate `bpm_events` from `03` / `08` channels
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)

@@ -130,8 +130,10 @@ const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
  * 2. Canonical IIDX / Pop'n / keyboard hint → authoritative table. Unknown hints (BmsONE's single-player
  *    `keyboard-48k` among them, which is NOT the two-player `keyboard-24k-double`) take step 4.
  * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
- * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behavior for
- *    bmson dialects unknown to us).
+ * 4. Anything else is an unknown hint. When every `x` in use fits the `beat-7k` table, it is read as `beat-7k`, as
+ *    beatoraja (with a warning), Qwilight and Bemuse read it. A chart with lanes past that table (BmsONE's
+ *    `keyboard-36k` / `48k` / `60k`) would lose them to BGM there, so it keeps the positional map over its `x` values
+ *    instead (be-music decision, docs/format-compat.md §3.2).
  */
 export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?: string): Map<number, string> {
   const trimmedHint = typeof modeHint === 'string' ? modeHint.trim() : '';
@@ -161,6 +163,11 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?:
         }
       }
     }
+  }
+
+  const beat7k = resolveBmsonModeHintLayout(BMSON_DEFAULT_MODE_HINT)!;
+  if ([...xValues].every((x) => beat7k.channelByX.has(x))) {
+    return new Map(beat7k.channelByX);
   }
 
   const sorted = [...xValues].sort((left, right) => left - right);

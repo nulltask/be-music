@@ -1586,7 +1586,7 @@ function normalizeBmsonBgaEventEntries(
  * play-mode layout (from the play-mode table in `@be-music/chart`) — always for the 24 / 48 KEY keyboard layouts, whose
  * wheel and extended lanes only have a home there, and for the other layouts when every lane in use has a place in the
  * hint's table — else the spec's `generic-<lanes>keys`, a layout ordered left to right. (A made-up `beat-<lanes>k` would be
- * an unknown hint, which beatoraja, Qwilight and Bemuse read as `beat-7k`.)
+ * an unknown hint, which beatoraja, Qwilight, Bemuse and the be-music parser read as `beat-7k`.)
  */
 function resolveBmsonModeHintForOutput(json: BeMusicJson, playableChannels: readonly string[]): string {
   if (json.bmson.info.modeHint !== undefined) {

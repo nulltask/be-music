@@ -804,6 +804,55 @@ describe('parser', () => {
     expect(sortEventsByTime(json.events)).toEqual(['11', '14', '32', 'D3']);
   });
 
+  test.each(['beat-9k', 'BEAT-7K', 'iidx-7k'])(
+    'bmson: an unknown mode_hint (%s) whose lanes fit beat-7k reads as beat-7k, as beatoraja, Qwilight and Bemuse do',
+    (modeHint) => {
+      const json = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [
+            {
+              name: 'key.wav',
+              notes: [
+                { x: 1, y: 0 },
+                { x: 6, y: 240 },
+                { x: 7, y: 480 },
+                { x: 8, y: 720 },
+              ],
+            },
+          ],
+          mine_channels: [{ name: 'mine.wav', notes: [{ x: 7, y: 960 }] }],
+        }),
+      );
+
+      // x 6 / 7 are the 6th / 7th keys (18 / 19) and x 8 the scratch (16), not the next lanes in numeric order.
+      expect(sortEventsByTime(json.events)).toEqual(['11', '18', '19', '16', 'D9']);
+    },
+  );
+
+  test('bmson: an unknown mode_hint with lanes past x 8 keeps every lane, numbered in order', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-36k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 8, y: 240 },
+              { x: 12, y: 480 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // beatoraja would turn x 12 into BGM; be-music keeps the chart playable.
+    expect(sortEventsByTime(json.events)).toEqual(['11', '12', '13']);
+  });
+
   test('bmson: mode_hint=keyboard-48k (BmsONE single-player 48 keys) is not aliased to keyboard-24k-double', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -855,7 +904,7 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['19', '11', '15']);
   });
 
-  test('bmson: unknown mode_hint falls back to positional `x` ordering', () => {
+  test('bmson: an unknown mode_hint is still loaded, on the beat-7k lanes when its x values fit them', () => {
     const json = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -873,8 +922,7 @@ describe('parser', () => {
       }),
     );
 
-    // Unknown mode_hints (`kabuki-3k` etc.) fall through onto the positional fallback so consumers can still load the
-    // chart even if no canonical layout matches.
+    // Unknown mode_hints (`kabuki-3k` etc.) are read as beat-7k when every x fits its table, as other players read them.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -882,7 +930,7 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['13', '11', '12']);
+    expect(sortedChannels).toEqual(['19', '11', '15']);
   });
 
   test.each([
