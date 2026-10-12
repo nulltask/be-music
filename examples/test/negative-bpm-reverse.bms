@@ -27,8 +27,10 @@
 #00301:03
 
 *-- measure 4: BPM changes to -65 at the measure boundary (channel 08 -> #BPM02)
-*-- expected in LR2: chart scrolls in REVERSE at |65| from here, judging freezes,
-*-- and NOTHING below this line ever sounds (event pump freezes). Stage never ends; ESC to exit.
+*-- expected in LR2: chart scrolls in REVERSE at |65| from here (mirrored chart position),
+*-- presses keep judging on the mirrored clock 2R - now (no misses past R), and NOTHING below
+*-- this line ever sounds (event pump freezes). Stage never ends; ESC exits as FAILED because
+*-- notes are left unjudged.
 #00408:02
 #00413:00020202
 
