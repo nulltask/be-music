@@ -48,7 +48,8 @@ export interface ResolvedNoteContext {
   beatResolver: BeatResolver;
   sortedEvents: ReadonlyArray<BeMusicEvent>;
   idBase: 36 | 62;
-  playVariant: ChartPlayVariant;
+  /** The play variant (only judged notes need it, for FREE ZONE), resolved on demand. */
+  resolvePlayVariant: () => ChartPlayVariant;
   inferBmsLnTypeWhenMissing: boolean;
 }
 
@@ -75,7 +76,7 @@ interface MutableNote {
  */
 export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLists {
   const { json, timing, beatResolver } = context;
-  const freeZoneActive = variantUsesFreeZone(context.playVariant);
+  const freeZoneActive = variantUsesFreeZone(context.resolvePlayVariant());
   const bmsonResolution = json.sourceFormat === 'bmson' ? Math.max(1, json.bmson.info.resolution || 240) : undefined;
   const lnType = json.bmson.info.lnType;
   const chartLongNoteType: LongNoteMode | undefined = lnType === 1 || lnType === 2 || lnType === 3 ? lnType : undefined;

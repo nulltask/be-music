@@ -8,9 +8,11 @@ import {
   isBmsKeyVolumeChangeChannel,
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
+  resolveChart,
   sortEvents,
   usesMonophonicWavPlayback,
   type RandomDraws,
+  type ResolvedChart,
 } from '@be-music/chart';
 // Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
 // engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
@@ -40,7 +42,6 @@ import {
   type RenderResult,
   type TimedSampleTrigger,
   type TimingResolver,
-  collectSampleTriggers,
   createTimingResolver,
   renderSingleSample,
 } from '@be-music/audio-renderer';
@@ -112,16 +113,11 @@ import {
 } from '../ruleset/index.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
-import {
-  createBeatAtSecondsResolverFromTimingResolver,
-  createBpmTimeline,
-  createScrollTimeline,
-  createSpeedTimeline,
-  createStopBeatWindows,
-} from './timeline.ts';
+import { createBeatAtSecondsResolverFromTimingResolver, createBpmTimeline, createStopBeatWindows } from './timeline.ts';
 import {
   createInitialPlayerSummary,
   initializePlayerUiRuntime,
+  preparePlaybackChart,
   preparePlaybackChartData,
   type PreparedPlaybackChartData,
 } from './bootstrap.ts';
@@ -629,7 +625,7 @@ const BGA_LAYER2_CHANNEL = '0A';
 
 export { applyHighSpeedControlAction, resolveHighSpeedControlActionFromLaneChannels, type HighSpeedControlAction };
 export { resolveJudgeWindowsMs };
-export { preparePlaybackChartData, type PreparedPlaybackChartData };
+export { preparePlaybackChart, preparePlaybackChartData, type PreparedPlaybackChartData };
 
 export function applyFastSlowForJudge(
   summary: Pick<PlayerSummary, 'fast' | 'slow'>,
@@ -1350,14 +1346,15 @@ function createNoopPlaybackEventTracer(): NoTuiPlaybackEventTracer {
 }
 
 function createNoTuiPlaybackEventTracer(params: {
-  json: BeMusicJson;
-  resolver: TimingResolver;
+  resolved: ResolvedChart;
   writeOutput: (text: string) => void;
   judgeWindowMs?: number;
 }): NoTuiPlaybackEventTracer {
-  const { json, resolver, writeOutput, judgeWindowMs } = params;
-  const beatResolver = createBeatResolver(json);
-  const sortedEvents = sortEvents(json.events);
+  const { resolved, writeOutput, judgeWindowMs } = params;
+  const json = resolved.source;
+  const resolver = resolved.timing;
+  const beatResolver = resolved.beatResolver;
+  const sortedEvents = resolved.sortedEvents;
   let nextOrder = 0;
   const measureLengthEvents = resolveLoggedMeasureLengthTimeline(json, resolver, beatResolver)
     .map((point) =>
@@ -1384,7 +1381,7 @@ function createNoTuiPlaybackEventTracer(params: {
       ),
     )
     .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const scrollEvents = createScrollTimeline(json, beatResolver)
+  const scrollEvents = resolved.scroll
     .map((point) => {
       const seconds = resolver.beatToSeconds(point.beat);
       return createScheduledPlaybackEvent(
@@ -1397,7 +1394,7 @@ function createNoTuiPlaybackEventTracer(params: {
       );
     })
     .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const speedEvents = createSpeedTimeline(json, beatResolver)
+  const speedEvents = resolved.speed
     .map((point) => {
       const seconds = resolver.beatToSeconds(point.beat);
       return createScheduledPlaybackEvent(
@@ -1431,7 +1428,7 @@ function createNoTuiPlaybackEventTracer(params: {
       ),
     ])
     .filter((event): event is NoTuiScheduledPlaybackEvent => event !== undefined);
-  const judgeRankEvents = collectDynamicBmsJudgeRankChanges(json, resolver)
+  const judgeRankEvents = resolved.judgeRank.changes
     .map((change) => {
       const badWindow = resolveBmsJudgeWindowsMsForExRankValue(change.exRankValue, judgeWindowMs).bad;
       return createScheduledPlaybackEvent(
@@ -1636,6 +1633,7 @@ async function cleanupFailedPlaybackPreparation(
 
 async function initializePlaybackRuntimeResources(params: {
   resolvedJson: BeMusicJson;
+  resolvedChart: ResolvedChart;
   options: PlayerOptions;
   mode: CreatePlayerUiRuntimeContext['mode'];
   laneDisplayMode: string;
@@ -1676,7 +1674,7 @@ async function initializePlaybackRuntimeResources(params: {
   );
   const audioInitialization = createTrackedPromise(
     createAudioSessionIfEnabled(
-      params.resolvedJson,
+      params.resolvedChart,
       params.options,
       params.audioMode,
       progressReporter.reportAudioProgress,
@@ -1745,6 +1743,19 @@ function resolvePlaybackControlFlow(json: BeMusicJson, draws: RandomDraws): Cont
   };
 }
 
+/**
+ * The engine's Resolved layer for a play: `resolveChart` over the control-flow-resolved chart, with the host's lane mode
+ * inputs and long-note inference. Timing, triggers, timelines and chart facts all come from it.
+ */
+function resolveEngineChart(resolvedJson: BeMusicJson, options: PlayerOptions): ResolvedChart {
+  return resolveChart(resolvedJson, {
+    randomDraws: options.randomDraws,
+    chartPath: options.laneModeExtension,
+    playVariant: options.playVariant,
+    inferBmsLnTypeWhenMissing: Boolean(options.inferBmsLnTypeWhenMissing),
+  });
+}
+
 function resolvePlayerChart(json: BeMusicJson, options: PlayerOptions): ControlFlowResolutionResult {
   if (options.randomDraws === undefined && hasControlFlow(json)) {
     // The engine never draws: rolling here would give the play branches nobody outside the engine knows about (the
@@ -1790,41 +1801,9 @@ export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomP
   return summary;
 }
 
-interface DynamicBmsJudgeRankChange {
-  seconds: number;
-  /** Raw `#EXRANKxx` value (`RANK 2 = 100` unit) — conversion to judge windows is owned by `judge-window.ts`. */
-  exRankValue: number;
-}
-
 interface TimedAudioVolumeEvent {
   event: BeMusicEvent;
   seconds: number;
-}
-
-function collectDynamicBmsJudgeRankChanges(
-  json: BeMusicJson,
-  resolver: TimingResolver = createTimingResolver(json),
-): DynamicBmsJudgeRankChange[] {
-  if (json.sourceFormat !== 'bms') {
-    return [];
-  }
-  const idBase = resolveBmsBase(json);
-  const changes: DynamicBmsJudgeRankChange[] = [];
-  for (const event of sortEvents(json.events)) {
-    if (normalizeChannel(event.channel) !== 'A0') {
-      continue;
-    }
-    const raw = json.bms.exRank[normalizeObjectKey(event.value, idBase)];
-    const parsed = Number.parseFloat(raw ?? '');
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      continue;
-    }
-    changes.push({
-      seconds: resolver.eventToSeconds(event),
-      exRankValue: parsed,
-    });
-  }
-  return changes;
 }
 
 function collectRealtimeAudioVolumeEvents(
@@ -1858,18 +1837,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const speed = options.speed ?? 1;
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
-  const timingResolver = createTimingResolver(resolvedJson);
+  const resolvedChart = resolveEngineChart(resolvedJson, options);
+  const timingResolver = resolvedChart.timing;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
   const realtimeAudioTriggers = collectRealtimeAudioTriggers(
-    resolvedJson,
-    inferBmsLnTypeWhenMissing,
+    resolvedChart,
     (channel) => !isInvisiblePlayLaneSoundChannel(channel),
-    timingResolver,
   );
   const realtimeAudioEndSeconds =
     options.audio === false
@@ -1881,16 +1858,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // arrays drifted" bugs that plagued the web runtime through the Phase-4c shared-engine migration.
   const playbackChart =
     options.preparedChart ??
-    preparePlaybackChartData(
-      resolvedJson,
-      {
-        showInvisibleNotes: options.showInvisibleNotes,
-        laneModeExtension: options.laneModeExtension,
-        playVariant: options.playVariant,
-      },
-      inferBmsLnTypeWhenMissing,
-      realtimeAudioEndSeconds,
-    );
+    preparePlaybackChart(resolvedChart, { laneModeExtension: options.laneModeExtension }, realtimeAudioEndSeconds);
   const {
     landmineNotes,
     invisibleNotes,
@@ -1929,7 +1897,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
-          dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
+          dynamicJudgeRankChanges: resolvedChart.judgeRank.changes,
           play: {
             mode: 'auto',
             autoScratch: false,
@@ -1962,6 +1930,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     audioSession,
   } = await initializePlaybackRuntimeResources({
     resolvedJson,
+    resolvedChart,
     options,
     mode: 'AUTO',
     laneDisplayMode,
@@ -1985,8 +1954,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const playbackEventTracer = uiEnabled
     ? createNoopPlaybackEventTracer()
     : createNoTuiPlaybackEventTracer({
-        json: resolvedJson,
-        resolver: timingResolver,
+        resolved: resolvedChart,
         writeOutput,
       });
   const playbackStateLogger = uiEnabled
@@ -2009,9 +1977,8 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   const autoDebugAudioEstimator = options.debugActiveAudio
-    ? await createDebugActiveAudioEstimator(resolvedJson, {
+    ? await createDebugActiveAudioEstimator(resolvedChart, {
         baseDir: options.audioBaseDir,
-        inferBmsLnTypeWhenMissing,
         signal: options.signal,
       })
     : undefined;
@@ -2511,24 +2478,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
-  const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const autoScratchEnabled = options.autoScratch === true;
   const speed = options.speed ?? 1;
   const judgeRuleset: JudgeWindowRuleset = options.judgeRuleset ?? 'lr2';
-  const timingResolver = createTimingResolver(resolvedJson);
+  const resolvedChart = resolveEngineChart(resolvedJson, options);
+  const timingResolver = resolvedChart.timing;
   // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
   // non-LR2 rulesets keep their initial windows for the whole chart.
-  const dynamicJudgeRankChanges =
-    judgeRuleset === 'lr2' ? collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver) : [];
+  const dynamicJudgeRankChanges = judgeRuleset === 'lr2' ? resolvedChart.judgeRank.changes : [];
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
   const nonPlayableRealtimeAudioTriggers = collectRealtimeAudioTriggers(
-    resolvedJson,
-    inferBmsLnTypeWhenMissing,
+    resolvedChart,
     (channel) => !isPlayLaneSoundChannel(channel),
-    timingResolver,
   );
   const nonPlayableRealtimeAudioEndSeconds =
     options.audio === false
@@ -2537,14 +2501,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // Same shared-instance fast path as `autoPlay`. See `PlayerOptions.preparedChart`.
   const playbackChart =
     options.preparedChart ??
-    preparePlaybackChartData(
-      resolvedJson,
-      {
-        showInvisibleNotes: options.showInvisibleNotes,
-        laneModeExtension: options.laneModeExtension,
-        playVariant: options.playVariant,
-      },
-      inferBmsLnTypeWhenMissing,
+    preparePlaybackChart(
+      resolvedChart,
+      { laneModeExtension: options.laneModeExtension },
       nonPlayableRealtimeAudioEndSeconds,
     );
   const {
@@ -2561,13 +2520,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   let { totalSeconds } = playbackChart;
   // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
   // background audio at its own time (auto play already sounds every play-lane trigger).
-  appendShadowedNoteTriggers(
-    nonPlayableRealtimeAudioTriggers,
-    resolvedJson,
-    playbackChart.shadowedNotes,
-    inferBmsLnTypeWhenMissing,
-    timingResolver,
-  );
+  appendShadowedNoteTriggers(nonPlayableRealtimeAudioTriggers, resolvedChart, playbackChart.shadowedNotes);
   // Hoisted constants — see the matching block in `autoPlay`. Same rationale: the manual-play loop touches both heavily
   // per tick / per input event, and these don't change across the play session.
   const idBase = resolveBmsBase(resolvedJson);
@@ -2662,6 +2615,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     audioSession,
   } = await initializePlaybackRuntimeResources({
     resolvedJson,
+    resolvedChart,
     options,
     mode: autoScratchEnabled ? 'AUTO SCRATCH' : 'MANUAL',
     laneDisplayMode,
@@ -2685,8 +2639,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const playbackEventTracer = uiEnabled
     ? createNoopPlaybackEventTracer()
     : createNoTuiPlaybackEventTracer({
-        json: resolvedJson,
-        resolver: timingResolver,
+        resolved: resolvedChart,
         writeOutput,
         judgeWindowMs: options.judgeWindowMs,
       });
@@ -4408,11 +4361,12 @@ async function settleMaybeAsyncWithTimeout(
 }
 
 async function createAudioSessionIfEnabled(
-  json: BeMusicJson,
+  resolved: ResolvedChart,
   options: PlayerOptions,
   mode: 'auto' | 'manual',
   onLoadProgress?: (progress: AudioSessionLoadProgress) => void,
 ): Promise<AudioSession | undefined> {
+  const json = resolved.source;
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   if (options.audio === false) {
@@ -4441,7 +4395,6 @@ async function createAudioSessionIfEnabled(
   const masterVolume = normalizeMasterVolume(options.volume);
   const bgmVolume = normalizeBgmVolume(options.bgmVolume, masterVolume);
   const playVolume = normalizePlayVolume(options.playVolume, masterVolume);
-  const inferBmsLnTypeWhenMissing = Boolean(options.inferBmsLnTypeWhenMissing);
   const chartWavGain = resolveChartVolWavGain(json);
   const lnobjEndEvents = collectLnobjEndEvents(json);
   const runtimeSampleRate = RUNTIME_AUDIO_SAMPLE_RATE;
@@ -4452,7 +4405,7 @@ async function createAudioSessionIfEnabled(
   });
   throwIfAborted(options.signal);
   const samplesByKey = await buildRuntimeSampleMap(
-    json,
+    resolved,
     options,
     runtimeSampleRate,
     (progress) => {
@@ -4464,7 +4417,6 @@ async function createAudioSessionIfEnabled(
       });
     },
     chartWavGain,
-    inferBmsLnTypeWhenMissing,
     options.signal,
   );
   // Cache the chart's object-ID radix so the per-event runtime lookup below uses the same case-sensitivity as the keys
@@ -4500,7 +4452,7 @@ async function createAudioSessionIfEnabled(
 
   writeOutput(`Audio backend: ${output.label}\n`);
 
-  const eventPlaybackMap = buildEventPlaybackMap(json, inferBmsLnTypeWhenMissing);
+  const eventPlaybackMap = buildEventPlaybackMap(resolved);
   onLoadProgress?.({
     ratio: 1,
     message: 'Audio ready.',
@@ -4697,18 +4649,15 @@ function collectActiveAudioFileNames(activeVoices: ActiveVoice[]): string[] {
 }
 
 async function createDebugActiveAudioEstimator(
-  json: BeMusicJson,
+  resolved: ResolvedChart,
   options: {
     baseDir?: string;
-    inferBmsLnTypeWhenMissing?: boolean;
     signal?: AbortSignal;
   } = {},
 ): Promise<DebugActiveAudioEstimator> {
   throwIfAborted(options.signal);
-  const resolver = createTimingResolver(json);
-  const triggers = collectSampleTriggers(json, resolver, {
-    inferBmsLnTypeWhenMissing: Boolean(options.inferBmsLnTypeWhenMissing),
-  });
+  const json = resolved.source;
+  const triggers = resolved.sampleTriggers;
   const sampleDurationSecondsByKey = await buildDebugSampleDurationSecondsMap(
     triggers,
     options.baseDir,
@@ -4810,7 +4759,7 @@ async function createDebugActiveAudioEstimator(
 }
 
 async function buildDebugSampleDurationSecondsMap(
-  triggers: TimedSampleTrigger[],
+  triggers: ReadonlyArray<TimedSampleTrigger>,
   baseDir: string | undefined,
   signal: AbortSignal | undefined,
   base: 36 | 62,
@@ -5173,17 +5122,17 @@ export function shouldUseAutoMixBgmHeadroomControl(options: PlayerOptions): bool
 }
 
 async function buildRuntimeSampleMap(
-  json: BeMusicJson,
+  resolved: ResolvedChart,
   options: PlayerOptions,
   sampleRate: number,
   onProgress?: (progress: { loaded: number; total: number; sampleKey: string; samplePath?: string }) => void,
   chartWavGain = 1,
-  inferBmsLnTypeWhenMissing = false,
   signal?: AbortSignal,
 ): Promise<Map<string, RenderResult>> {
   throwIfAborted(signal);
+  const json = resolved.source;
   const sampleMap = new Map<string, RenderResult>();
-  const keys = collectRealtimeAudioSampleKeys(json, inferBmsLnTypeWhenMissing);
+  const keys = collectRealtimeAudioSampleKeys(resolved);
 
   if (keys.length === 0) {
     onProgress?.({
@@ -5225,13 +5174,9 @@ async function buildRuntimeSampleMap(
   return sampleMap;
 }
 
-function buildEventPlaybackMap(
-  json: BeMusicJson,
-  inferBmsLnTypeWhenMissing: boolean,
-): Map<BeMusicEvent, PlayableNotePlayback> {
+function buildEventPlaybackMap(resolved: ResolvedChart): Map<BeMusicEvent, PlayableNotePlayback> {
   const playbackMap = new Map<BeMusicEvent, PlayableNotePlayback>();
-  const resolver = createTimingResolver(json);
-  for (const trigger of collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })) {
+  for (const trigger of resolved.sampleTriggers) {
     playbackMap.set(trigger.event, {
       offsetSeconds: trigger.sampleOffsetSeconds,
       durationSeconds: trigger.sampleDurationSeconds,
@@ -5242,14 +5187,11 @@ function buildEventPlaybackMap(
 }
 
 function collectRealtimeAudioTriggers(
-  json: BeMusicJson,
-  inferBmsLnTypeWhenMissing: boolean,
+  resolved: ResolvedChart,
   includeChannel: (channel: string) => boolean = () => true,
-  resolver: TimingResolver = createTimingResolver(json),
 ): Array<TimedSampleTrigger & RealtimeAudioTrigger> {
-  const triggers = collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing });
   const filtered: Array<TimedSampleTrigger & RealtimeAudioTrigger> = [];
-  for (const trigger of triggers) {
+  for (const trigger of resolved.sampleTriggers) {
     if (!includeChannel(trigger.channel)) {
       continue;
     }
@@ -5269,10 +5211,8 @@ function collectRealtimeAudioTriggers(
  */
 function appendShadowedNoteTriggers(
   target: Array<TimedSampleTrigger & RealtimeAudioTrigger>,
-  json: BeMusicJson,
+  resolved: ResolvedChart,
   shadowedNotes: readonly TimedPlayableNote[] | undefined,
-  inferBmsLnTypeWhenMissing: boolean,
-  resolver: TimingResolver,
 ): void {
   if (!shadowedNotes || shadowedNotes.length === 0) {
     return;
@@ -5283,12 +5223,7 @@ function appendShadowedNoteTriggers(
     pendingByKey.set(key, (pendingByKey.get(key) ?? 0) + 1);
   }
   let appended = false;
-  for (const trigger of collectRealtimeAudioTriggers(
-    json,
-    inferBmsLnTypeWhenMissing,
-    isPlayLaneSoundChannel,
-    resolver,
-  )) {
+  for (const trigger of collectRealtimeAudioTriggers(resolved, isPlayLaneSoundChannel)) {
     const key = createEventMatchKey(trigger.event);
     const pending = pendingByKey.get(key) ?? 0;
     if (pending === 0) {
@@ -5307,10 +5242,10 @@ function createEventMatchKey(event: BeMusicEvent): string {
   return `${normalizeChannel(event.channel)}:${event.measure}:${event.position[0]}/${event.position[1]}:${event.value}`;
 }
 
-function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMissing: boolean): string[] {
-  const resolver = createTimingResolver(json);
+function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
+  const json = resolved.source;
   const keys = new Set<string>();
-  for (const trigger of collectSampleTriggers(json, resolver, { inferBmsLnTypeWhenMissing })) {
+  for (const trigger of resolved.sampleTriggers) {
     keys.add(trigger.sampleKey);
   }
   if (

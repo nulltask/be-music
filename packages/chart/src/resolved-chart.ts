@@ -139,11 +139,13 @@ class LazyResolvedChart implements ResolvedChart {
   readonly randomDraws: RandomDraws;
   readonly hasUnresolvedControlFlow: boolean;
   readonly idBase: 36 | 62;
-  readonly playVariant: ChartPlayVariant;
   readonly inferBmsLnTypeWhenMissing: boolean;
   readonly beatResolver: BeatResolver;
   readonly sortedEvents: ReadonlyArray<BeMusicEvent>;
   readonly timing: TimingResolver;
+  private readonly playVariantInput: ChartPlayVariant | undefined;
+  private readonly chartPath: string | undefined;
+  private playVariantCache: ChartPlayVariant | undefined;
   private judgedCache: ResolvedNoteLists | undefined;
   private minesCache: ResolvedNote[] | undefined;
   private invisibleCache: ResolvedNote[] | undefined;
@@ -160,19 +162,25 @@ class LazyResolvedChart implements ResolvedChart {
     this.randomDraws = options.randomDraws ?? [];
     this.hasUnresolvedControlFlow = hasControlFlow(chart);
     this.idBase = resolveBmsBase(chart);
-    this.playVariant =
-      options.playVariant ??
-      resolveChartPlayVariant({
-        chartPath: options.chartPath,
-        events: chart.events,
-        bms: chart.bms,
-        bmson: chart.bmson,
-      });
+    this.playVariantInput = options.playVariant;
+    this.chartPath = options.chartPath;
     this.inferBmsLnTypeWhenMissing = options.inferBmsLnTypeWhenMissing === true;
     const context = createTimingBuildContext(chart);
     this.beatResolver = context.beatResolver;
     this.sortedEvents = context.sortedEvents;
     this.timing = createTimingResolverWithContext(chart, context);
+  }
+
+  get playVariant(): ChartPlayVariant {
+    this.playVariantCache ??=
+      this.playVariantInput ??
+      resolveChartPlayVariant({
+        chartPath: this.chartPath,
+        events: this.source.events,
+        bms: this.source.bms,
+        bmson: this.source.bmson,
+      });
+    return this.playVariantCache;
   }
 
   get layouts(): ReadonlyArray<PlayModeLayout> {
@@ -272,7 +280,7 @@ class LazyResolvedChart implements ResolvedChart {
       beatResolver: this.beatResolver,
       sortedEvents: this.sortedEvents,
       idBase: this.idBase,
-      playVariant: this.playVariant,
+      resolvePlayVariant: () => this.playVariant,
       inferBmsLnTypeWhenMissing: this.inferBmsLnTypeWhenMissing,
     };
   }
