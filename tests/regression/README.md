@@ -1,10 +1,10 @@
 [日本語版はこちら](./README.ja.md)
 
-# Golden Corpus
+# Regression Corpus
 
-`corpus.test.ts` pushes every chart in [`examples/test`](../../examples/test/README.md) through the whole toolchain and pins what each stage produces in `__golden__/<chart>.json`. Unit tests assert what a function should do; this suite records what the toolchain currently does on real chart files, so a refactor that moves logic between packages fails here as soon as any stage's output shifts.
+`corpus.test.ts` pushes every chart in [`examples/test`](../../examples/test/README.md) through the whole toolchain and pins what each stage produces in `__expected__/<chart>.json`. Unit tests assert what a function should do; this suite records what the toolchain currently does on real chart files, so a refactor that moves logic between packages fails here as soon as any stage's output shifts.
 
-## What each golden file records
+## What each expected file records
 
 - `parse`: metadata, resources, measures, BMS / bmson extensions, the control-flow directives, and every event (`measure:channel@num/den=value`).
 - `stringify`: the chart written back to its own format (one array entry per line), plus `roundTripPlayableNotesEqual`, which is whether re-parsing that output gives back the same playable notes.
@@ -21,14 +21,14 @@ Times are integer microseconds and beats are rounded to 1e-6, so floating-point 
 ## Running and updating
 
 ```bash
-pnpm test:golden
+pnpm test:regression
 ```
 
 ```bash
-pnpm test:golden -u
+pnpm test:regression -u
 ```
 
-A golden diff is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `examples/test` adds a golden file automatically.
+A diff in an expected file is not automatically a bug. When the change is intended, regenerate with `-u` and review the diff in the pull request like code. Adding a chart to `examples/test` adds an expected file automatically.
 
 ## Why live engine results are not pinned
 

@@ -18,14 +18,14 @@ import { stringifyBms, stringifyBmson } from '@be-music/stringifier';
 import { describe, expect, test } from 'vite-plus/test';
 
 /**
- * Golden corpus: every chart in `examples/test` is pushed through the whole pipeline — parse, `#RANDOM` resolution,
+ * Regression corpus: every chart in `examples/test` is pushed through the whole pipeline — parse, `#RANDOM` resolution,
  * timing, sample triggers, the engine's prepared note list, the three ruleset simulators under fixed input streams,
- * and stringify — and the observable output of each stage is pinned in `__golden__/<chart>.json`.
+ * and stringify — and the observable output of each stage is pinned in `__expected__/<chart>.json`.
  *
  * The unit tests next to each source file assert what a function should do. This suite records what the toolchain
  * currently DOES on real chart files, so a refactor that moves logic between packages fails here the moment any
- * stage's output shifts, even in a corner no unit test thought to cover. A diff in a golden file is not automatically
- * a bug: when the change is intended, regenerate with `pnpm test:golden -u` and review the diff like code.
+ * stage's output shifts, even in a corner no unit test thought to cover. A diff in an expected file is not automatically
+ * a bug: when the change is intended, regenerate with `pnpm test:regression -u` and review the diff like code.
  */
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -51,7 +51,7 @@ const TAP_HOLD_US = 40_000;
 const roundUs = (seconds: number): number => Math.round(seconds * 1_000_000);
 const round6 = (value: number): number => Math.round(value * 1_000_000) / 1_000_000;
 
-describe('golden corpus', async () => {
+describe('regression corpus', async () => {
   const charts = (await readdir(fixtureDir))
     .filter((entry) => CHART_EXTENSIONS.has(extname(entry).toLowerCase()))
     .sort();
@@ -63,20 +63,20 @@ describe('golden corpus', async () => {
 
   for (const name of charts) {
     test(name, async () => {
-      const golden = await buildGolden(resolve(fixtureDir, name), name);
-      await expect(`${JSON.stringify(golden, null, 2)}\n`).toMatchFileSnapshot(`__golden__/${name}.json`);
+      const expected = await buildExpected(resolve(fixtureDir, name), name);
+      await expect(`${JSON.stringify(expected, null, 2)}\n`).toMatchFileSnapshot(`__expected__/${name}.json`);
     });
   }
 });
 
-async function buildGolden(path: string, name: string): Promise<Record<string, unknown>> {
+async function buildExpected(path: string, name: string): Promise<Record<string, unknown>> {
   const parsed = await parseChartFile(path);
   const hasControlFlow = parsed.sourceFormat === 'bms' && parsed.bms.controlFlow.length > 0;
   const variants = hasControlFlow ? RANDOM_VARIANTS : [{ id: 'default', random: () => 0 }];
 
   const resolvedVariants: Record<string, unknown> = {};
   for (const variant of variants) {
-    resolvedVariants[variant.id] = await buildResolvedGolden(parsed, path, variant.random);
+    resolvedVariants[variant.id] = await buildResolvedExpected(parsed, path, variant.random);
   }
 
   return {
@@ -111,7 +111,7 @@ function formatEvent(event: BeMusicEvent): string {
 /**
  * Stringifies the chart back to its own format and re-parses it. The output text is pinned so stringifier changes
  * show up as a readable diff, and the playable notes of the re-parsed chart are compared against the original's so
- * a lossy round trip is visible in the golden file instead of hidden behind a text diff.
+ * a lossy round trip is visible in the expected file instead of hidden behind a text diff.
  */
 function summarizeStringify(json: BeMusicJson): Record<string, unknown> {
   const isBmson = json.sourceFormat === 'bmson';
@@ -144,7 +144,7 @@ function formatPlayableNotes(json: BeMusicJson): string[] {
   ].sort();
 }
 
-async function buildResolvedGolden(
+async function buildResolvedExpected(
   parsed: BeMusicJson,
   path: string,
   random: () => number,
