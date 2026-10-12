@@ -280,6 +280,14 @@ describe('fingerprint sensitivity', () => {
     const fiveKeys = ['#BPM 150', '#00111:01', '#00115:01'].join('\n');
     expect(playDocument(fiveKeys).laneMode).toBe('5');
     expect(playDocument(fiveKeys, 'dir.v2/song.BME').laneMode).toBe('5');
+    // `.bme` is not a lane-mode input, so a chart document records no extension for it.
+    const random = ['#BPM 150', '#00111:01', '#RANDOM 2', '#IF 1', '#00218:01', '#ENDIF', '#ENDRANDOM'].join('\n');
+    expect(computeChartFingerprint(parseBms(random), { chartPath: 'song.bme' })).toBe(chartFingerprint(random));
+    expect(chartDocument(random).lanes.extension).toBeNull();
+    expect(
+      (createChartFingerprintDocument(parseBms(random), { chartPath: 'SONG.PMS' }) as BeMusicChartFingerprintDocument)
+        .lanes.extension,
+    ).toBe('.pms');
   });
 
   test('counts long-note channels for the lane mode', () => {

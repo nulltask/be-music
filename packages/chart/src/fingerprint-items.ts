@@ -923,8 +923,8 @@ export function flattenItems(items: ChartItems): FlatItems {
   return { notes, mines: [...items.mines], timeline, lengths: items.lengths, header: items.header };
 }
 
-/** The chart-file extensions the lane mode reads (spec 3.5); any other extension counts as none. */
-export type LaneModeExtension = '.pms' | '.bme' | null;
+/** The chart-file extension the lane mode reads (spec 3.5); any other extension counts as none. */
+export type LaneModeExtension = '.pms' | null;
 
 /**
  * The lane-mode extension of a chart path or bare extension: only the last path segment counts, as in
@@ -941,7 +941,7 @@ export function resolveLaneModeExtension(chartPath: string | undefined): LaneMod
     return null;
   }
   const extension = trimmed.slice(dot).toLowerCase();
-  return extension === '.pms' || extension === '.bme' ? extension : null;
+  return extension === '.pms' ? extension : null;
 }
 
 /**

@@ -13,7 +13,7 @@ function benchRandomDraws(source: chartApi.ControlFlowSource): chartApi.RandomDr
 }
 
 const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
-const BENCH_FINGERPRINT_OPTIONS: chartApi.BeMusicFingerprintOptions = { chartPath: 'sample.bme' };
+const BENCH_FINGERPRINT_OPTIONS: chartApi.BeMusicFingerprintOptions = { chartPath: 'sample.bms' };
 const BENCH_FINGERPRINT_DOCUMENTS = new WeakMap<object, chartApi.BeMusicFingerprintDocument>();
 
 function getBenchFingerprintDocument(

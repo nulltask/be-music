@@ -153,7 +153,7 @@ describe('golden fingerprints (bmfp1)', () => {
   test.each([
     [
       'BMS 7 KEY with LN, mines, BPM, STOP, SCROLL, SPEED',
-      () => computePlayFingerprint(parseBms(SP7), { chartPath: 'golden.bme' }),
+      () => computePlayFingerprint(parseBms(SP7), { chartPath: 'golden.bms' }),
       'bmfp1:b3e314d45a43486059ebf7b93a87ddd32a54827803753ad0bb71f904755b2405',
     ],
     [

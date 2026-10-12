@@ -32,8 +32,8 @@ export const FINGERPRINT_FACTOR_OUTCOME_LIMIT = 1024;
 export interface BeMusicFingerprintOptions {
   /**
    * Path, file name, or bare extension of the chart, or `undefined` when unknown. Only its extension is read, exactly
-   * as in `resolveChartPlayVariant`: `.pms` makes the chart 9 KEY, and `.bme` makes a chart without a 6 / 7 key
-   * column 7 / 14 KEY. Part of the fingerprint's input, so it is required.
+   * as in `resolveChartPlayVariant`: `.pms` makes the chart 9 KEY, and any other extension counts as none. Part of the
+   * fingerprint's input, so it is required.
    */
   chartPath: string | undefined;
 }
@@ -60,7 +60,7 @@ export interface BeMusicPlayFingerprintDocument {
 }
 
 export interface FingerprintLaneModeInputs {
-  /** `".pms"`, `".bme"`, or `null` for any other or unknown extension. */
+  /** `".pms"`, or `null` for any other or unknown extension. */
   extension: LaneModeExtension;
   player3: boolean;
   /** The bmson keyboard `mode_hint`; omitted when the chart has none (any other hint is not a lane-mode input). */
