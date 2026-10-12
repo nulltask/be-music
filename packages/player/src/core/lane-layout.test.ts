@@ -128,7 +128,7 @@ describe('24 KEY / 48 KEY keyboard modes', () => {
 
   test('resolveLr2LaneIndex — keyboard modes have no LR2 lane rects, so every channel reports -1', () => {
     // LR2 only defines the 20 IIDX rects; returning -1 sends these charts to the fallback playfield
-    // instead of squeezing 24 lanes into the 7-key rect table.
+    // instead of squeezing 26 lanes into the 7-key rect table.
     expect(resolveLr2LaneIndex('11', '24')).toBe(-1);
     expect(resolveLr2LaneIndex('1O', '24')).toBe(-1);
     expect(resolveLr2LaneIndex('2A', '48')).toBe(-1);

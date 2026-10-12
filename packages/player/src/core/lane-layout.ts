@@ -165,7 +165,7 @@ export function resolveLr2LaneIndex(channel: string, playVariant?: ChartPlayVari
   if (slot < 0) return -1;
   // LR2 skins only define the 20 IIDX lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
   // `play_24.lr2skin`. Returning `-1` routes keyboard-mode charts through the caller's fallback playfield instead of
-  // squeezing 24 lanes into the 7-key rect table.
+  // squeezing 26 lanes into the 7-key rect table.
   if (playVariant === '24' || playVariant === '48') return -1;
   if (playVariant === '9') return slot;
   return channel.startsWith('2') ? 10 + slot : slot;

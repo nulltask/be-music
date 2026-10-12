@@ -341,20 +341,20 @@ If the automatic judgment is ambiguous, it will be supplemented with an extensio
 - `.bme` -> `7 KEY SP/14 KEY DP`
 - `.pms` -> `9 KEY`
 - A full `11..19` one-player keyboard or PMS-STD `22..25` without traditional IIDX 2P channels also resolves to `9 KEY`.
-- Any extended lane channel (`1A..1O` / `2A..2O`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule.
+- Any extended lane channel (`1A..1O` / `2A..2O`, or the wheel `1P` / `1Q` / `2P` / `2Q`) resolves to `24 KEY SP` / `48 KEY DP` ahead of every other rule, and so does a bmson `keyboard-24k` / `keyboard-24k-double` `mode_hint`.
 
 ### Representative mode channels and inputs
 
-| Mode                     | Channel -> Input                                                                                                                             |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                        |
-| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift` |
-| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                            |
-| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                     |
-| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                            |
-| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                            |
-| `24 KEY SP`              | `11..19` + `1A..1O` (24 lanes, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`                                              |
-| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`; the 2P bank runs past the printable-key pool and lands on function keys                                   |
+| Mode                     | Channel -> Input                                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `5 KEY SP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`                                                                         |
+| `5 KEY DP`               | `16 -> LShift`, `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `26 -> RShift`  |
+| `7 KEY SP`               | `5 KEY SP` + `18 -> f`, `19 -> v`                                                                                                             |
+| `14 KEY DP`              | `7 KEY SP` + `21 -> b`, `22 -> h`, `23 -> n`, `24 -> j`, `25 -> m`, `28 -> k`, `29 -> ,`, `26 -> RShift`                                      |
+| `9 KEY (BME-compatible)` | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `16 -> f`, `17 -> v`, `18 -> g`, `19 -> b`                                             |
+| `9 KEY (PMS-STD)`        | `11 -> z`, `12 -> s`, `13 -> x`, `14 -> d`, `15 -> c`, `22 -> f`, `23 -> v`, `24 -> g`, `25 -> b`                                             |
+| `24 KEY SP`              | `11..19` + `1A..1O` (24 keys, no scratch) -> `a s d f g h j k l ; q w e r u i o p z x c v b n`; wheel `1P -> Tab` (up), `1Q -> LShift` (down) |
+| `48 KEY DP`              | `24 KEY SP` + `21..29` + `2A..2O`, the 2P keys running past the printable-key pool onto function keys; 2P wheel `2P -> Enter`, `2Q -> RShift` |
 
 ## FREE ZONE (`17` / `27`)
 

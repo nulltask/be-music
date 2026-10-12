@@ -101,7 +101,7 @@ export interface Lr2ThemeSystemSounds {
 
 /**
  * Play-skin preference order per chart variant. LR2 never shipped a keyboard-mode skin, so `'24'` / `'48'` borrow the
- * SP / DP IIDX chains — the mounted skin supplies the frame, gauge, and judge graphics while the 24 lanes themselves
+ * SP / DP IIDX chains — the mounted skin supplies the frame, gauge, and judge graphics while the 26 lanes themselves
  * fall through to the host's fallback playfield (see `resolveLr2LaneIndex`, which returns `-1` for these variants).
  */
 const PLAY_SKIN_FALLBACKS: Record<ChartPlayVariant, readonly Lr2PlayVariant[]> = {
