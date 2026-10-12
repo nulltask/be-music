@@ -293,8 +293,8 @@ interface BeMusicEvent {
 }
 ```
 
-`bmson.damage` は beatoraja-style bmson `key_channels` の mine note に使います。
-譜面で authoring された gauge damage を非負数で保持し、通常の `sound_channels` note では省略します。
+`bmson.damage` は beatoraja の bmson 拡張 `mine_channels` の地雷に使います。
+譜面で authoring された gauge damage を非負数で保持し、それ以外の event（`key_channels`（beatoraja の隠しノート）から読んだ不可視オブジェクトを含む）では省略します。
 `bmson.t` は beatoraja のノート単位のロングノート種別（`notes[].t`: `1` = LN、`2` = CN、`3` = HCN）です。ロングノート（`l > 0`）のときだけ保持し、`bmson.info.lnType` より優先されます。
 
 ## `position` の意味

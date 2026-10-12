@@ -1283,9 +1283,12 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     const song = this.focusedSong();
     if (song === undefined) return undefined;
 
-    // BMS `#TOTAL` value (gauge total per BMS spec). Returned as the integer floor — beatoraja's
-    // value digits don't carry a fraction part for this readout. `undefined` when the chart
-    // didn't author a TOTAL header (rare; older BMS files may omit it).
+    // Chart TOTAL header (BMS `#TOTAL`, or bmson `info.total` — a percentage of the ruleset's
+    // default TOTAL, not an absolute value). Returned as the integer floor — beatoraja's value
+    // digits don't carry a fraction part for this readout. `undefined` when the chart didn't
+    // author a TOTAL header (rare; older BMS files may omit it). The effective TOTAL depends on
+    // the ruleset and the scorable-note count, so it is only shown once play starts (see the
+    // runtime adapter's 368 case).
     if (refOp === BEATORAJA_NUM.BMS_TOTAL) {
       const total = song.chart.metadata.total;
       return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : undefined;

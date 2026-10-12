@@ -133,6 +133,18 @@ bmson's `l`, FREE ZONE (`17` / `27`), BMS's `#LNOBJ`, and BMS legacy LN (`#mmm51
 The terminal object of `#LNOBJ` itself is not left in the performance note string.
 Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
 
+### Duplicate notes
+
+A lane holds at most one note per position, as in beatoraja, whose timeline keeps one note per lane.
+When several notes start on the same lane and position (two BMS object lines writing the same cell, a tap on the start of a `#mmm51-69` / `#LNOBJ` long note, or layered bmson notes with the same `x` and `y`), only one is played and judged:
+
+- A long note wins over a tap. beatoraja also replaces a tap with a `5x` / `6x` long note that starts on it.
+- Otherwise the first note in event order wins: the lowest object ID for BMS, the first sound channel for bmson. For bmson this is the note beatoraja judges. For BMS, beatoraja keeps the later line of the file instead, but the IR does not record line order. LR2's choice is not known.
+
+The other notes are not judged, drawn, or counted in `summary.total`. Their keysound still plays, at their own time, as background audio in manual play (auto play already sounds every play-lane object), unless it is the same `#WAVxx` / sound channel as the kept note's.
+`extractTimedNotes` returns these notes as `shadowedNotes`.
+Landmines and invisible notes are not collapsed.
+
 ### Landmines
 
 Mine channels are mapped to their corresponding playable lane and kept in a separate array.
@@ -142,7 +154,7 @@ Mines follow the LR2 detonation model (LR2's own changelog; the damage model is 
 
 - A mine explodes on either of LR2's two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
-- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `mine_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
 - kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
@@ -152,6 +164,7 @@ Mines follow the LR2 detonation model (LR2's own changelog; the damage model is 
 Invisible notes are kept separate from the normal playing target.
 They update the same-lane keysound fallback state using the same timing rule as visible notes: once the invisible object's early `BAD` window opens, that WAV becomes the lane's current fallback sound until a later visible or invisible object takes over.
 They are included in the UI drawing target only when `showInvisibleNotes` is enabled, but are not included in the number of judgments or `summary.total`.
+bmson `key_channels` (beatoraja's hidden notes) are read as invisible notes, and `AUTO` and the select-screen preview stay silent on them on every lane, the extended 24 / 48 KEY lanes included.
 
 ### FREE ZONE
 
@@ -465,10 +478,16 @@ split.
 - `EASY` starts at `20%`, floors at `2%`, and clears at `80%` with gentler numbers
 - `HARD` / `EX-HARD` / `DEATH` start at `100%` and fail the moment they drop below `2%`
 - Upper limit is `100%`
-- When `#TOTAL` is specified, use that value as is
-- When `#TOTAL` is absent, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
-  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja and IIDX
-  use their own defaults.
+- When `#TOTAL` is specified (and above 0), use that value as is
+- When `#TOTAL` is absent or ≤ 0, LR2's note-count formula supplies it (`LR2_bmsload.cpp`): `(n / 5 + 200) × 0.8` below
+  400 notes, `((n - 400) / 2.5 + 280) × 0.8` below 600, `((n - 600) / 5 + 360) × 0.8` above. beatoraja uses its own
+  default (`max(260, 7.605 n / (0.01 n + 6.5))`); the IIDX gauge does not read TOTAL at all (its recovery comes from
+  the note count), and the TOTAL it reports follows the LR2 curve.
+- bmson `info.total` is not an absolute TOTAL but a percentage of the ruleset's default: every ruleset plays it as
+  `total / 100 ×` its own default, and a value ≤ 0 means 100 % (beatoraja `BMSPlayerRule.validate`). A bmson chart
+  without `total` therefore plays at the ruleset default, not at TOTAL 100.
+- `summary.gauge.effectiveTotal` reports the resolved value, and beatoraja skins' TOTAL readout (ref 368) shows it during
+  play and on the result screen. Play-logs record the chart's raw value and resolve it again on replay.
 
 ### Increase/Decrease
 
@@ -609,11 +628,11 @@ Clamp the playback time so that it does not become negative.
 ### `#VOLWAV`
 
 BMS's `#VOLWAV` is treated as the volume multiplier for the entire score.
-If omitted, the default value is `100`, and the effective gain is `bms.volWav / 100`.
+If omitted, the default value is `100`. The effective gain is `bms.volWav / 100` when `0 < bms.volWav < 200` and `1` otherwise, as in beatoraja (LR2 ignores `#VOLWAV`).
 
 - `#VOLWAV 100`: Keep the original volume
-- `#VOLWAV 200`: `2` times the original volume
-- `#VOLWAV 0`: Silence
+- `#VOLWAV 150`: `1.5` times the original volume
+- `#VOLWAV 0`, `#VOLWAV 200` or above: Keep the original volume
 
 This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJson()`.
 The actual device applies only linear gain and does not reproduce player- or hardware-dependent volume differences.

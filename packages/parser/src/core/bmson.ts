@@ -3,7 +3,8 @@ import type {
   BeMusicPosition,
   BmsonBpmEventEntry,
   BmsonKeyChannelEntry,
-  BmsonKeyNoteEntry,
+  BmsonMineChannelEntry,
+  BmsonMineNoteEntry,
   BmsonSoundChannelEntry,
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
@@ -57,21 +58,19 @@ export interface BmsonSoundChannel {
 }
 
 /**
- * beatoraja's bmson extension for mine notes. Each note carries a gauge `damage` value (0..100) alongside the same lane
- * / timing fields a regular `sound_channels` note has. The channel `name` is the WAV played on contact (the "explosion
- * sample").
+ * beatoraja's bmson extensions `key_channels` (hidden notes) and `mine_channels` (mines) share one note shape: a lane
+ * `x`, a pulse `y` and, read on mines only, a gauge `damage` (0..100). The channel `name` is the sample the note plays
+ * — the hidden note's keysound, or the mine's explosion.
  */
-export interface BmsonKeyNote {
+export interface BmsonExtensionNote {
   x?: number;
   y: number;
-  l?: number;
-  c?: boolean;
   damage?: number;
 }
 
-export interface BmsonKeyChannel {
+export interface BmsonExtensionChannel {
   name: string;
-  notes?: BmsonKeyNote[];
+  notes?: BmsonExtensionNote[];
 }
 
 export interface BmsonDocument {
@@ -83,10 +82,15 @@ export interface BmsonDocument {
   stop_events?: BmsonStopEvent[];
   sound_channels?: BmsonSoundChannel[];
   /**
-   * beatoraja extension — mine note channels. Each channel maps onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P)
-   * using the same `mode_hint` lane convention `sound_channels` uses for playable lanes.
+   * beatoraja extension — hidden (invisible) note channels. Each note maps onto a BMS invisible channel (`3x` for 1P,
+   * `4x` for 2P) using the same `mode_hint` lane convention `sound_channels` uses for playable lanes.
    */
-  key_channels?: BmsonKeyChannel[];
+  key_channels?: BmsonExtensionChannel[];
+  /**
+   * beatoraja extension — mine channels. Each note maps onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P) the
+   * same way, keeping its `damage`.
+   */
+  mine_channels?: BmsonExtensionChannel[];
   bga?: {
     bga_header?: Array<{ id: number; name: string }>;
     bga_events?: Array<{ y: number; id: number }>;
@@ -273,7 +277,7 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?:
 
 /**
  * Converts a BMS playable lane channel into its matching BMS landmine channel — `Dx` for 1P (`1X` keys) and `Ex` for 2P
- * (`2X` keys). Used to route bmson `key_channels` notes through the same lane resolver as playable notes while keeping
+ * (`2X` keys). Used to route bmson `mine_channels` notes through the same lane resolver as playable notes while keeping
  * them tagged as mines downstream.
  */
 export function bmsPlayableChannelToLandmineChannel(channel: string): string | undefined {
@@ -285,24 +289,34 @@ export function bmsPlayableChannelToLandmineChannel(channel: string): string | u
   return undefined;
 }
 
+/**
+ * Converts a BMS playable lane channel into its matching BMS invisible channel — `3x` for 1P (`1X` keys) and `4x` for
+ * 2P (`2X` keys). Used to route bmson `key_channels` (hidden notes) through the same lane resolver as playable notes.
+ */
+export function bmsPlayableChannelToInvisibleChannel(channel: string): string | undefined {
+  if (channel.length !== 2) return undefined;
+  const side = channel[0];
+  const lane = channel[1];
+  if (side === '1') return `3${lane}`;
+  if (side === '2') return `4${lane}`;
+  return undefined;
+}
+
 export function resolveBmsonResolution(document: BmsonDocument): number {
-  const infoResolution =
-    typeof document.info?.resolution === 'number' && Number.isFinite(document.info.resolution)
-      ? Math.floor(document.info.resolution)
-      : undefined;
-  if (infoResolution && infoResolution > 0) {
-    return infoResolution;
-  }
+  // `info.resolution`, else the root-level `resolution` older writers emit, else the spec default 240.
+  return normalizeBmsonResolution(document.info?.resolution) ?? normalizeBmsonResolution(document.resolution) ?? 240;
+}
 
-  const rootResolution =
-    typeof document.resolution === 'number' && Number.isFinite(document.resolution)
-      ? Math.floor(document.resolution)
-      : undefined;
-  if (rootResolution && rootResolution > 0) {
-    return rootResolution;
+/**
+ * Per the bmson 1.0.0 spec, 0 / `null` / missing means the default (`undefined` here) and a negative resolution is read
+ * as its absolute value (beatoraja uses 240 for any value <= 0 instead).
+ */
+function normalizeBmsonResolution(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
   }
-
-  return 240;
+  const resolution = Math.floor(Math.abs(value));
+  return resolution > 0 ? resolution : undefined;
 }
 
 export function normalizeBmsonLines(lines: unknown): number[] {
@@ -418,11 +432,19 @@ export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEn
 }
 
 export function normalizeBmsonKeyChannels(input: unknown): BmsonKeyChannelEntry[] {
+  return normalizeBmsonExtensionChannels(input, false);
+}
+
+export function normalizeBmsonMineChannels(input: unknown): BmsonMineChannelEntry[] {
+  return normalizeBmsonExtensionChannels(input, true);
+}
+
+function normalizeBmsonExtensionChannels(input: unknown, keepDamage: boolean): BmsonMineChannelEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  const channels: BmsonKeyChannelEntry[] = [];
+  const channels: BmsonMineChannelEntry[] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -433,7 +455,7 @@ export function normalizeBmsonKeyChannels(input: unknown): BmsonKeyChannelEntry[
     }
     channels.push({
       name: raw.name,
-      notes: normalizeBmsonKeyNotes(raw.notes),
+      notes: normalizeBmsonExtensionNotes(raw.notes, keepDamage),
     });
   }
   return channels;
@@ -545,8 +567,8 @@ export function normalizeBmsonInfoForIr(info: BmsonInfo, resolution: number): Be
   copyIfPositiveFiniteNumber(normalized, 'judgeRank', info.judge_rank);
   // bmson 1.0.0 spec — `total` "must be ≥ 0. If negative, take the absolute value." Normalizing at parse time keeps the
   // gauge formula (`+TOTAL/N`) on the positive branch and means every downstream consumer (gauge, stringifier,
-  // round-trip re-parse) sees the canonical value. `total: 0` stays semantically meaningful (lifebar doesn't increase,
-  // per the same spec section).
+  // round-trip re-parse) sees the canonical value. `total: 0` is kept as written; the spec says the lifebar then doesn't
+  // increase, but the player's rulesets follow beatoraja and treat `total <= 0` as 100 % of their default TOTAL.
   copyIfFiniteNumberAbs(normalized, 'total', info.total);
   // beatoraja bmson extension — `info.ln_type` picks the chart-wide long-note type (1: LN, 2: CN, 3: HCN). Per-note
   // `t` entries override it downstream.
@@ -737,12 +759,12 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
   return notes;
 }
 
-function normalizeBmsonKeyNotes(input: unknown): BmsonKeyNoteEntry[] {
+function normalizeBmsonExtensionNotes(input: unknown, keepDamage: boolean): BmsonMineNoteEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  const notes: BmsonKeyNoteEntry[] = [];
+  const notes: BmsonMineNoteEntry[] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -752,19 +774,13 @@ function normalizeBmsonKeyNotes(input: unknown): BmsonKeyNoteEntry[] {
       continue;
     }
 
-    const note: BmsonKeyNoteEntry = {
+    const note: BmsonMineNoteEntry = {
       y: Math.max(0, Math.round(raw.y)),
     };
     if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
       note.x = Math.floor(raw.x);
     }
-    if (typeof raw.l === 'number' && Number.isFinite(raw.l) && raw.l >= 0) {
-      note.l = Math.floor(raw.l);
-    }
-    if (typeof raw.c === 'boolean') {
-      note.c = raw.c;
-    }
-    if (typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
+    if (keepDamage && typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
       note.damage = raw.damage;
     }
     notes.push(note);
@@ -786,8 +802,7 @@ function copyIfFiniteNumber<T extends object>(target: T, key: keyof T & string, 
 
 /**
  * Same as {@link copyIfFiniteNumber} but applies `Math.abs` so spec fields that say "if negative, take the absolute
- * value" (notably `info.total`) get normalized at parse time. Keeps `0` intact so its spec-defined "lifebar doesn't
- * increase" meaning is preserved.
+ * value" (notably `info.total`) get normalized at parse time. Keeps `0` intact so consumers see the value as written.
  */
 function copyIfFiniteNumberAbs<T extends object>(target: T, key: keyof T & string, value: unknown): void {
   if (typeof value === 'number' && Number.isFinite(value)) {

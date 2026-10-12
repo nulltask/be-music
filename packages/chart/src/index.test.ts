@@ -37,6 +37,7 @@ import {
   resolveLnobjLongNotes,
   sortEvents,
   usesMonophonicWavPlayback,
+  volWavToLinearGain,
 } from './index.ts';
 import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
 
@@ -213,6 +214,22 @@ describe('chart', () => {
     // Missing the params or the filename token.
     expect(parseBmsExWav('pvf')).toBeUndefined();
     expect(parseBmsExWav('pvf 100,200,300')).toBeUndefined();
+  });
+
+  test("volWavToLinearGain scales by n / 100 inside beatoraja's 0 < n < 200 range", () => {
+    expect(volWavToLinearGain(100)).toBe(1);
+    expect(volWavToLinearGain(50)).toBe(0.5);
+    expect(volWavToLinearGain(150)).toBe(1.5);
+    expect(volWavToLinearGain(199)).toBeCloseTo(1.99, 10);
+  });
+
+  test('volWavToLinearGain plays a missing or out-of-range #VOLWAV at unity, as beatoraja does', () => {
+    expect(volWavToLinearGain(undefined)).toBe(1);
+    expect(volWavToLinearGain(0)).toBe(1);
+    expect(volWavToLinearGain(200)).toBe(1);
+    expect(volWavToLinearGain(500)).toBe(1);
+    expect(volWavToLinearGain(-20)).toBe(1);
+    expect(volWavToLinearGain(Number.NaN)).toBe(1);
   });
 
   test('exWavVolumeCentibelsToLinearGain treats 0 cB as unity', () => {
