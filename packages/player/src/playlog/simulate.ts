@@ -2,8 +2,10 @@ import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
+  isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   preferJudgeCandidate,
+  resolveEffectiveLongNoteMode,
   RULESET_JUDGE_NONE,
   RulesetGauge,
   selectJudgeWindowSet,
@@ -257,14 +259,7 @@ class PlaylogSimulation {
   }
 
   private resolveLongStyle(chartMode: SimLongStyle): SimLongStyle {
-    switch (this.config.longNoteStyle) {
-      case 'ln':
-        return 1;
-      case 'charge':
-        return chartMode === 3 ? 3 : 2;
-      default:
-        return chartMode;
-    }
+    return resolveEffectiveLongNoteMode(this.config.longNoteStyle, chartMode);
   }
 
   // ---- time advancement --------------------------------------------------------------------------------------
@@ -436,7 +431,8 @@ class PlaylogSimulation {
       this.applyJudge(selected.judge, dmUs);
     }
     if (this.config.multiBad) {
-      this.applyMultiBad(lanes, timeUs, windows, note, selected.judge);
+      // Only scoreable judgments (PGREAT..BAD) consume a note, so the judge is a real window index here.
+      this.applyMultiBad(lanes, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
     }
   }
 
@@ -609,7 +605,7 @@ class PlaylogSimulation {
     timeUs: number,
     windows: RulesetWindowTables,
     tnote: SimNote,
-    tnoteJudge: number,
+    tnoteJudge: RulesetJudgeIndex,
   ): void {
     const extras: Array<{ note: SimNote }> = [];
     for (const lane of lanes) {
@@ -627,12 +623,10 @@ class PlaylogSimulation {
     }
     if (extras.length === 0) return;
     extras.sort((left, right) => left.note.timeUs - right.note.timeUs);
-    const tnoteIsBad = tnoteJudge === JUDGE_BAD;
-    const filtered = extras.filter(({ note }) => {
-      if ((!tnoteIsBad || tnote.isLong) && note.timeUs > tnote.timeUs) return false;
-      if (note.isLong && note.timeUs < tnote.timeUs) return false;
-      return true;
-    });
+    const consumed = { time: tnote.timeUs, isLong: tnote.isLong, judge: tnoteJudge };
+    const filtered = extras.filter(({ note }) =>
+      isMultiBadCollectorTarget(consumed, { time: note.timeUs, isLong: note.isLong }),
+    );
     for (const { note } of filtered) {
       note.judged = true;
       this.applyJudge(JUDGE_BAD, undefined);

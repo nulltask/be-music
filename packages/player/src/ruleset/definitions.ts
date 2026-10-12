@@ -1,5 +1,6 @@
 import { resolveBmsJudgeWindowsMsForPercent, bmsExRankValueToJudgeRankPercent } from '../core/judge-window.ts';
 import { countBaseNotes, type RulesetChartFacts } from './facts.ts';
+import { isChargeLongNoteMode, resolveEffectiveLongNoteMode } from './long-note.ts';
 
 /**
  * Ruleset tables for the playlog simulators.
@@ -616,8 +617,7 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
   const { normal, long } = chart.notes;
   let count = normal;
   for (const mode of [1, 2, 3] as const) {
-    const chargeHeadAndTail = style === 'charge' || (style === 'per-note' && (mode === 2 || mode === 3));
-    count += long[mode] * (chargeHeadAndTail ? 2 : 1);
+    count += long[mode] * (isChargeLongNoteMode(resolveEffectiveLongNoteMode(style, mode)) ? 2 : 1);
   }
   return count;
 }

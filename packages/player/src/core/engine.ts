@@ -93,10 +93,13 @@ import {
 } from './judge-window.ts';
 import {
   classifyRulesetJudge,
+  isChargeLongNoteMode,
+  isMultiBadCollectorTarget,
   pgreatWindowReachUs,
   preferJudgeCandidate,
   judgeWindowEarlyReachUs,
   judgeWindowLateReachUs,
+  resolveEffectiveLongNoteMode,
   resolveRuleset,
   rulesetChartFactsFromChart,
   RULESET_JUDGE_NONE,
@@ -721,34 +724,9 @@ function resolvePlayableLongNoteMode(note: TimedPlayableNote): LongNoteMode | un
   return note.longNoteMode ?? 2;
 }
 
-/**
- * How the active ruleset plays this long note, which is not always what the chart's `#LNMODE` asks for:
- *
- * - LR2 (`'ln'`) plays every long note as an LN — one deferred judgment, early release is a BAD.
- * - beatoraja (`'per-note'`) honours the chart: 1 = LN, 2 = CN, 3 = HCN.
- * - IIDX (`'charge'`) has no LN at all — every long note is a charge note, HCN where the chart says 3.
- *
- * Charge modes (2 / 3) judge the head and the tail separately, so they contribute two judgments to the score.
- */
-function resolveEffectiveLongNoteMode(style: LongNoteStyle, chartMode: LongNoteMode): LongNoteMode {
-  switch (style) {
-    case 'ln':
-      return 1;
-    case 'charge':
-      return chartMode === 3 ? 3 : 2;
-    default:
-      return chartMode;
-  }
-}
-
 /** The UI-command spelling of an effective long-note mode. */
 function toUiLongNoteMode(mode: LongNoteMode): PlayerUiLongNoteMode {
   return mode === 3 ? 'hcn' : mode === 2 ? 'cn' : 'ln';
-}
-
-/** True for the modes that score the head on the press and the tail on the release. */
-function isChargeLongNoteMode(mode: LongNoteMode): boolean {
-  return mode === 2 || mode === 3;
 }
 
 function insertPendingAutoLongNote(
@@ -3285,8 +3263,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     consumedJudge: RulesetJudgeIndex,
   ): void => {
     const reachSeconds = maxJudgeReachSeconds(nowSec);
-    const consumedIsLong = isLongPlayableNote(consumed);
-    const consumedWasBad = consumedJudge === 3;
+    const consumedNote = { time: consumed.seconds, isLong: isLongPlayableNote(consumed), judge: consumedJudge };
     const extras: TimedPlayableNote[] = [];
     for (
       let index = lowerBoundBySeconds(scorableNotes, nowSec - reachSeconds);
@@ -3313,10 +3290,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (dmUs >= good[0] && dmUs <= good[1]) {
         continue;
       }
-      if ((!consumedWasBad || consumedIsLong) && note.seconds > consumed.seconds) {
-        continue;
-      }
-      if (isLongPlayableNote(note) && note.seconds < consumed.seconds) {
+      if (!isMultiBadCollectorTarget(consumedNote, { time: note.seconds, isLong: isLongPlayableNote(note) })) {
         continue;
       }
       extras.push(note);
