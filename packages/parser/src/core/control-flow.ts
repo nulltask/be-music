@@ -29,7 +29,8 @@ export interface ResolveControlFlowOptions {
 
 /**
  * Builds the chart `input`'s control flow resolves to under `draws`: the header and object lines
- * `evaluateControlFlow` (`@be-music/chart`) reports active are applied on a copy of `input`, in file order.
+ * `evaluateControlFlow` (`@be-music/chart`) reports active are applied on a copy of `input`, in file order, and the
+ * copy's `bms.controlFlow` is emptied.
  */
 export function resolveControlFlow(
   input: BeMusicJson,
@@ -52,6 +53,9 @@ export function resolveControlFlow(
     applyActiveControlFlowEntry(json, entry, options.applyHeader, measureByIndex);
   }
 
+  // The branches are applied: the result is a resolved chart. Dropping the control flow makes that visible to every
+  // consumer and makes resolving twice a no-op instead of stacking a second branch on top.
+  json.bms.controlFlow = [];
   json.measures.sort((left, right) => left.index - right.index);
   // Honor `#BASE 62` so post-control-flow event normalization preserves lowercase IDs instead of folding them. The
   // base was recorded on the chart by the initial `parseBms` pass.

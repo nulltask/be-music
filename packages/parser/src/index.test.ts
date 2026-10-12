@@ -470,6 +470,31 @@ describe('parser', () => {
     expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
   });
 
+  test('BMS: a resolved chart carries no control flow, so resolving it again changes nothing', () => {
+    const parsed = parseChart(
+      [
+        '#RANDOM 2',
+        '#IF 1',
+        '#WAV01 one.wav',
+        '#00111:01',
+        '#ENDIF',
+        '#IF 2',
+        '#00112:01',
+        '#ENDIF',
+        '#ENDRANDOM',
+      ].join('\n'),
+      'bms',
+    );
+    const resolved = resolveBmsControlFlow(parsed, { random: () => 0 });
+    expect(resolved.bms.controlFlow).toEqual([]);
+    expect(resolved.events.map((event) => event.channel)).toEqual(['11']);
+    for (const roll of [0, 0.9]) {
+      // Without control flow there is nothing left to draw, so no roll can stack a second branch on top.
+      expect(resolveBmsControlFlow(resolved, { random: () => roll })).toEqual(resolved);
+    }
+    expect(parsed.bms.controlFlow.length).toBeGreaterThan(0);
+  });
+
   test('BMS: rejects draws that were not drawn for the chart', () => {
     const parsed = parseChart(['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
     expect(() => resolveBmsControlFlowWithDraws(parsed, [])).toThrow(RangeError);

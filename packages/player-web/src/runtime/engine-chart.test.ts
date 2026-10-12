@@ -29,18 +29,15 @@ describe('toEngineChart', () => {
   // The host (decide screen, gameplay prep, skin graphs, BGA timeline) resolves the chart with branch 1.
   const hostResolved = resolveBmsControlFlow(parseChart(RANDOM_CHART, 'bms'), { random: () => 0 });
 
-  test('a host-resolved chart still carries its control flow, so the engine would resolve it a second time', () => {
+  test('a host-resolved chart carries no control flow, so the engine cannot resolve it a second time', () => {
     expect(laneEvents(hostResolved)).toEqual(['11:01']);
-    // The engine re-rolls (here: branch 2) and adds that branch on top of the one already resolved.
-    const reResolved = resolveBmsControlFlowForPlayback(hostResolved, () => 0.9);
-    expect(reResolved.randomPatterns).toEqual([{ index: 1, current: 2, total: 2 }]);
-    expect(laneEvents(reResolved.resolvedJson)).toEqual(['11:01', '12:02']);
-    expect(reResolved.resolvedJson.resources.wav).toEqual({ '01': 'one.wav', '02': 'two.wav' });
-    // Re-rolling the same branch duplicates its notes instead.
-    expect(laneEvents(resolveBmsControlFlowForPlayback(hostResolved, () => 0).resolvedJson)).toEqual([
-      '11:01',
-      '11:01',
-    ]);
+    expect(hostResolved.bms.controlFlow).toEqual([]);
+    for (const roll of [0, 0.9]) {
+      const reResolved = resolveBmsControlFlowForPlayback(hostResolved, () => roll);
+      expect(reResolved.randomPatterns).toEqual([]);
+      expect(laneEvents(reResolved.resolvedJson)).toEqual(['11:01']);
+      expect(reResolved.resolvedJson.resources.wav).toEqual({ '01': 'one.wav' });
+    }
   });
 
   test('the engine plays exactly the branch the host resolved', () => {
