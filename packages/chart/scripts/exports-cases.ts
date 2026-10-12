@@ -48,6 +48,26 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       });
     },
   });
+  define('chart.getPlayModeLayouts', {
+    run: () => {
+      chartApi.getPlayModeLayouts('9');
+    },
+  });
+  define('chart.findPlayModeLane', {
+    run: () => {
+      chartApi.findPlayModeLane('48', '2Q');
+    },
+  });
+  define('chart.resolvePlayLaneChannels', {
+    run: () => {
+      chartApi.resolvePlayLaneChannels('1A');
+    },
+  });
+  define('chart.resolveBmsonModeHintLayout', {
+    run: () => {
+      chartApi.resolveBmsonModeHintLayout(' beat-10k ');
+    },
+  });
   define('chart.resolveChartReferenceBpm', {
     run: (fixtures) => {
       chartApi.resolveChartReferenceBpm(fixtures.sampleBmsJson, 120);

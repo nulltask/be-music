@@ -6,6 +6,25 @@ import {
   type BeMusicJson,
 } from '@be-music/json';
 
+export {
+  BMSON_MODE_HINT_LAYOUTS,
+  PLAY_MODE_LAYOUTS,
+  findPlayModeLane,
+  getPlayModeLayouts,
+  resolveBmsonModeHintLayout,
+  resolvePlayLaneChannels,
+  type BmsonModeHint,
+  type BmsonModeHintLayout,
+  type PlayFreeZone,
+  type PlayKeyTone,
+  type PlayLane,
+  type PlayLaneChannels,
+  type PlayLaneKind,
+  type PlayModeLayout,
+  type PlayModeLayoutId,
+  type PlaySide,
+} from './play-modes.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;

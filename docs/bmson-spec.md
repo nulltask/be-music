@@ -151,7 +151,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - If `lines` exists, calculate `measure` and `position` using the `lines` interval as a measure.
 - Map `notes[].x` to BMS channels by `info.mode_hint`, in this order:
   1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
-  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below).
+  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below). The tables are `BMSON_MODE_HINT_LAYOUTS` in `@be-music/chart`, built from the play-mode table (see [Player spec — Play-mode table](./player-spec.md#play-mode-table)).
   3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
   4. Any other hint numbers the unique positive `x` values of `sound_channels`, `key_channels` and `mine_channels` in ascending order onto consecutive channels from `11`.
 - A note with `x` omitted or `x <= 0` becomes BGM (`01`).

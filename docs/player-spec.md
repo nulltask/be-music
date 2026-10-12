@@ -221,6 +221,27 @@ For reverse scratch, 1P uses left `Ctrl` and 2P uses right `Ctrl`. On macOS, use
 Distinguishing between left/right `Ctrl` and left/right `Option` is done using the kitty keyboard protocol.
 If you fall back to a terminal that does not support kitty, side-specific input of reverse scratch is not guaranteed.
 
+### Play-mode table
+
+Every play mode is declared once, in `PLAY_MODE_LAYOUTS` ([`chart/src/play-modes.ts`](../packages/chart/src/play-modes.ts),
+exported by `@be-music/chart`). For each layout it lists the lanes left to right, each with its kind (key, scratch, wheel
+up / down), side, slot (key number, `0` for the scratch, `25` / `26` for the wheel), colour class, and the BMS channels of
+every object family on it (visible `1x` / `2x`, invisible `3x` / `4x`, `#LNTYPE` `5x` / `6x`, mine `Dx` / `Ex`, the
+extended `A`..`Q` lanes included), plus the FREE ZONE channels it plays on its scratch. The bmson `mode_hint` lane tables
+(`BMSON_MODE_HINT_LAYOUTS`) are built from the same layouts. The parser, the stringifier, `resolveChartPlayVariant`, the
+player's lane layout and lane options, the CLI's lane colours, and the skin SDK's lane kinds all derive from it.
+
+| Layout  | Label                | Lanes, left to right                                                         | bmson `mode_hint`     |
+| ------- | -------------------- | ---------------------------------------------------------------------------- | --------------------- |
+| `5`     | `5 KEY SP`           | `16` (scratch), `11`-`15`                                                    | `beat-5k`             |
+| `7`     | `7 KEY SP`           | `16` (scratch), `11`-`15`, `18`, `19`                                        | `beat-7k`             |
+| `9-pms` | `9 KEY (PMS-STD)`    | `11`-`15`, `22`-`25`                                                         | `popn-9k`             |
+| `9-bme` | `9 KEY (PMS-COMPAT)` | `11`-`19`                                                                    | —                     |
+| `10`    | `5 KEY DP`           | `16` (scratch), `11`-`15`, `21`-`25`, `26` (scratch)                         | `beat-10k`            |
+| `14`    | `14 KEY DP`          | `16` (scratch), `11`-`15`, `18`, `19`, `21`-`25`, `28`, `29`, `26` (scratch) | `beat-14k`            |
+| `24`    | `24 KEY SP`          | `1P` / `1Q` (wheel), `11`-`19`, `1A`-`1O`                                    | `keyboard-24k`        |
+| `48`    | `48 KEY DP`          | as `24`, then `21`-`29`, `2A`-`2O`, `2P` / `2Q` (wheel)                      | `keyboard-24k-double` |
+
 ## Compat rulesets
 
 **The player has no judge logic of its own.** Every play runs under one of three compat rulesets — `lr2` (the

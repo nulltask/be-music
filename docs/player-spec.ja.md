@@ -208,6 +208,27 @@ reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS 
 left/right `Ctrl` と left/right `Option` の識別は kitty keyboard protocol で行います。
 kitty 非対応端末へフォールバックした場合、reverse scratch の side-specific 入力は保証しません。
 
+### プレイモード表
+
+すべてのプレイモードは `PLAY_MODE_LAYOUTS`（[`chart/src/play-modes.ts`](../packages/chart/src/play-modes.ts)、
+`@be-music/chart` から export）の 1 か所で宣言します。レイアウトごとにレーンを左から右へ並べ、各レーンの種類（鍵、scratch、
+ホイールの上 / 下）、side、slot（鍵の番号。scratch は `0`、ホイールは `25` / `26`）、色の分類、そのレーンに載る各オブジェ系統の
+BMS チャンネル（可視 `1x` / `2x`、不可視 `3x` / `4x`、`#LNTYPE` の `5x` / `6x`、地雷 `Dx` / `Ex`。拡張レーン `A`..`Q` を含む）と、
+scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` のレーン表（`BMSON_MODE_HINT_LAYOUTS`）も同じレイアウトから
+作ります。parser、stringifier、`resolveChartPlayVariant`、player のレーン配置とレーンオプション、CLI のレーン色、skin SDK の
+レーン種別は、すべてこの表から導出します。
+
+| レイアウト | 表示名               | レーン（左から右）                                                             | bmson `mode_hint`     |
+| ---------- | -------------------- | ------------------------------------------------------------------------------ | --------------------- |
+| `5`        | `5 KEY SP`           | `16`（scratch）、`11`-`15`                                                     | `beat-5k`             |
+| `7`        | `7 KEY SP`           | `16`（scratch）、`11`-`15`、`18`、`19`                                         | `beat-7k`             |
+| `9-pms`    | `9 KEY (PMS-STD)`    | `11`-`15`、`22`-`25`                                                           | `popn-9k`             |
+| `9-bme`    | `9 KEY (PMS-COMPAT)` | `11`-`19`                                                                      | —                     |
+| `10`       | `5 KEY DP`           | `16`（scratch）、`11`-`15`、`21`-`25`、`26`（scratch）                         | `beat-10k`            |
+| `14`       | `14 KEY DP`          | `16`（scratch）、`11`-`15`、`18`、`19`、`21`-`25`、`28`、`29`、`26`（scratch） | `beat-14k`            |
+| `24`       | `24 KEY SP`          | `1P` / `1Q`（ホイール）、`11`-`19`、`1A`-`1O`                                  | `keyboard-24k`        |
+| `48`       | `48 KEY DP`          | `24` と同じ並びの後に `21`-`29`、`2A`-`2O`、`2P` / `2Q`（ホイール）            | `keyboard-24k-double` |
+
 ## 互換ルールセット
 
 **このプレイヤーは独自の判定ロジックを持ちません。** すべてのプレイは 3 つの互換ルールセット
