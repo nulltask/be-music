@@ -1,3 +1,4 @@
+import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createLaneBindings,
@@ -388,5 +389,34 @@ describe('resolvePlayVariantLaneChannels', () => {
 
   test('without a variant, lists only the lanes in use', () => {
     expect(resolvePlayVariantLaneChannels(only('11', '15'))).toEqual(['11', '15']);
+  });
+});
+
+describe('the play-mode table drives the lane layout', () => {
+  test('createLaneBindings binds every lane of the layout, in the table’s order, with its side and scratch flag', () => {
+    for (const layout of Object.values(PLAY_MODE_LAYOUTS)) {
+      const bindings = createLaneBindings(
+        layout.lanes.map((lane) => lane.channel),
+        { playVariant: layout.variant, platform: 'linux' },
+      );
+      expect(bindings.map((binding) => [binding.channel, binding.side, binding.isScratch])).toEqual(
+        layout.lanes.map((lane) => [lane.channel, lane.side, lane.kind === 'scratch']),
+      );
+      expect(
+        resolveLaneDisplayMode(
+          layout.lanes.map((lane) => lane.channel),
+          { playVariant: layout.variant },
+        ),
+      ).toBe(layout.label);
+    }
+  });
+
+  test('the wheel direction is the table’s lane kind', () => {
+    for (const layout of [PLAY_MODE_LAYOUTS['24'], PLAY_MODE_LAYOUTS['48']]) {
+      for (const lane of layout.lanes) {
+        const expected = lane.kind === 'wheel-up' ? 'up' : lane.kind === 'wheel-down' ? 'down' : undefined;
+        expect(resolveWheelLaneDirection(lane.channel, layout.variant)).toBe(expected);
+      }
+    }
   });
 });
