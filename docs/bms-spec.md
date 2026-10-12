@@ -392,7 +392,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 ## Evaluation rules for control constructs
 
 - `parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
-- `player` / `audio-renderer` evaluate `bms.controlFlow` and expand valid blocks at runtime
+- Branches are decided once per play by explicit draws (`RandomDraws`, drawn with `drawRandomOutcomes`); `evaluateControlFlow` in `@be-music/chart` is the only evaluator, and the parser's `resolveBmsControlFlowWithDraws` expands the active blocks into a resolved chart without `bms.controlFlow`. Hosts resolve before playback or rendering and hand the engine the resolved chart with its draws ([Player spec — Handling control syntax](./player-spec.md#handling-control-syntax))
 - `#RANDOM n` / `#SWITCH n` generate integers of `1..n` and use them as selection values
 - `#SETRANDOM n` / `#SETSWITCH n` fix the selection value
 - `#IF` chain branches at the current RANDOM selection value, `#ELSEIF` / `#ELSE` are invalid if there is a previously established branch

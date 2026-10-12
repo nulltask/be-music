@@ -94,6 +94,7 @@ import {
   preparePlaybackChartData,
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
+  resolvePlayChart,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
@@ -337,9 +338,11 @@ beforeEach(() => {
 
 describe('player', () => {
   test('player: auto play finishes successfully', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    // The chart has `#RANDOM` blocks; the host resolves it once and hands the engine the result with its draws.
+    const { chart: json, randomDraws } = resolvePlayChart(await parseChartFile(unifiedBmsChartPath));
 
     const summary = await autoPlay(json, {
+      randomDraws,
       auto: true,
       speed: 48,
       leadInMs: 0,

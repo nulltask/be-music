@@ -275,10 +275,11 @@ export interface PlayerOptions {
    */
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
   /**
-   * The `#RANDOM` / `#SWITCH` outcomes of this play (`drawRandomOutcomes` from `@be-music/chart`). With a chart the
-   * host already resolved (`resolveBmsControlFlowWithDraws`), these are the draws it was resolved with and only feed the
-   * RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a play log against the source
-   * chart), the engine resolves it exactly once with these draws.
+   * The `#RANDOM` / `#SWITCH` outcomes of this play (`resolvePlayChart`, or `drawRandomOutcomes` from
+   * `@be-music/chart`). With a chart the host already resolved, these are the draws it was resolved with and only feed
+   * the RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a play log against the source
+   * chart), the engine resolves it exactly once with these draws. The engine never draws itself: a chart with control
+   * flow and no draws is rejected with a `TypeError`.
    */
   randomDraws?: RandomDraws;
   onResolvedChart?: (json: BeMusicJson) => void;
@@ -1745,10 +1746,15 @@ function resolvePlaybackControlFlow(json: BeMusicJson, draws: RandomDraws): Cont
 }
 
 function resolvePlayerChart(json: BeMusicJson, options: PlayerOptions): ControlFlowResolutionResult {
-  if (options.randomDraws !== undefined) {
-    return resolvePlaybackControlFlow(json, options.randomDraws);
+  if (options.randomDraws === undefined && hasControlFlow(json)) {
+    // The engine never draws: rolling here would give the play branches nobody outside the engine knows about (the
+    // host's scene, result screen and play log would show another roll, or stack a second branch on top).
+    throw new TypeError(
+      'The chart still carries #RANDOM / #SWITCH control flow. Resolve it once with resolvePlayChart (or ' +
+        'drawRandomOutcomes + resolveBmsControlFlowWithDraws) and pass the draws as PlayerOptions.randomDraws.',
+    );
   }
-  return resolveBmsControlFlowForPlayback(json);
+  return resolvePlaybackControlFlow(json, options.randomDraws ?? []);
 }
 
 function randomPatternsFromDraws(draws: RandomDraws): RandomPatternSelection[] {

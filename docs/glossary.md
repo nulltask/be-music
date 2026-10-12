@@ -50,7 +50,8 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **groove gauge**: Clear gauge. The shared core defaults to LR2-compatible `GROOVE` (`NORMAL`); the exported helper also supports `HARD`, `DEATH`, and `EASY` for browser play options.
 - **HIGH-SPEED**: User setting that changes visible note density. It does not change score time.
 - **MANUAL / AUTO SCRATCH / AUTO**: Playback modes. `MANUAL` uses player input, `AUTO SCRATCH` automates scratch lanes only, and `AUTO` automates all playable notes.
-- **control flow**: BMS branch directives such as `#RANDOM`, `#IF`, and `#SWITCH`. The parser retains them, and player/audio-renderer runtimes evaluate them before playback or rendering.
+- **control flow**: BMS branch directives such as `#RANDOM`, `#IF`, and `#SWITCH`. The parser retains them; hosts resolve them once per play, before playback or rendering, with explicit `RandomDraws`.
+- **RandomDraws**: The outcome of a chart's control flow for one play: one entry (command, range, value) per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order. Drawn once with `drawRandomOutcomes` and shared by the resolver, the engine and the play log.
 
 ## Runtime Packages
 
@@ -77,7 +78,7 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **event**: Normalized score event with `measure`, `channel`, `position`, and `value`.
 - **position**: IR event position. `[numerator, denominator]` represents a relative position inside the measure.
 - **chart semantics (`@be-music/chart`)**: Score semantics above IR, including beat resolution, event order, long-note resolution, sample triggers, BGA timelines, and reference BPM.
-- **bms.controlFlow**: BMS control-flow array retained by the parser. Branches are not finalized during parsing.
+- **bms.controlFlow**: BMS control-flow array retained by the parser. Branches are not finalized during parsing; a resolved chart has an empty array.
 
 ## Runtime And Display
 

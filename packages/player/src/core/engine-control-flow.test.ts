@@ -87,6 +87,19 @@ describe('engine control flow', () => {
     });
   }
 
+  for (const run of [autoPlay, manualPlay]) {
+    test(`${run.name} refuses a chart that still carries control flow without draws instead of rolling it`, async () => {
+      await expect(play(run, SOURCE, {})).rejects.toThrow(/randomDraws/u);
+    });
+  }
+
+  test('plays a chart without control flow without draws', async () => {
+    const plain = parseChart(['#BPM 120', '#WAV01 one.wav', '#00111:01'].join('\n'), 'bms');
+    const result = await play(autoPlay, plain, {});
+    expect(result.notes).toEqual(['11']);
+    expect(result.output).not.toContain('RANDOM');
+  });
+
   test('rejects draws that do not belong to the source chart', async () => {
     await expect(play(autoPlay, SOURCE, { randomDraws: drawsFor(3) })).rejects.toThrow(RangeError);
   });

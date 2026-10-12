@@ -106,11 +106,26 @@ In addition to the regular `#STOPxx`, time resolution also treats the BMS extens
 
 ## Handling control syntax
 
-BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved before playback starts.
-`#RANDOM` draws a random number once at runtime and reinjects that value into `resolveBmsControlFlow()` to reproduce the branch.
+BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved once per play, by the host, before playback starts.
 
-The player also maintains the RANDOM pattern selected for this playback for UI display.
-`#SETRANDOM` is recorded as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3 #2 1/2` in the order of declaration.
+The outcome of a play is an explicit value, `RandomDraws` (`@be-music/chart`): one entry per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order, each with the line's command, its `range` (the number of outcomes) and the `value` in force after it.
+
+- Every such line has an entry, including the ones nested in a branch that is not taken: the evaluator walks every directive whatever the branch state.
+- `#RANDOM n` / `#SWITCH n` draw `value` from `1..n`. A missing, zero, negative or non-numeric `n` is a single-outcome line: `range` 1, `value` 1, and it does not consume the random source.
+- `#SETRANDOM n` / `#SETSWITCH n` fix `value` to `n` (1 when `n` is missing or not positive), with `range` 1; they draw nothing.
+
+The single resolution point is the pair `drawRandomOutcomes(chart, random)` → `RandomDraws` and `resolveBmsControlFlowWithDraws(chart, draws)` (`@be-music/parser`) → resolved chart, wrapped for hosts as `resolvePlayChart(chart)` (`@be-music/player`), which returns `{ chart, randomDraws }`.
+The branch semantics (one shared stack, an open `#IF` outliving `#ENDRANDOM`, definitions in a taken branch applying to the whole chart) live once in `evaluateControlFlow` (`@be-music/chart`).
+The same chart and draws always resolve to the same result, and draws that were not drawn for the chart are rejected with a `RangeError`.
+A resolved chart carries no `bms.controlFlow`, so resolving it again changes nothing.
+
+Every host draws once and hands the same chart and draws to every consumer of the play: the CLI to the preview render and the gameplay worker, the web player to the decide screen, the gameplay scene, the engine and the result screen.
+A restart draws again, as LR2 and beatoraja re-roll each play.
+The engine (`autoPlay` / `manualPlay`) never draws: it plays a resolved chart as is, taking `PlayerOptions.randomDraws` only for the RANDOM summary.
+Handed a chart that still carries control flow together with `randomDraws` (for example a play log's draws against the source chart), it resolves the chart exactly once with them; handed one without draws, it throws a `TypeError` instead of rolling branches nobody outside the engine knows about.
+
+The RANDOM summary is derived from the draws.
+`#SETRANDOM` is shown as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3 #2 1/2` in the order of declaration.
 
 ## Note model
 

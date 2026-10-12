@@ -392,7 +392,7 @@ runtime と round-trip の扱い:
 ## 制御構文の評価ルール
 
 - `parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
-- `player` / `audio-renderer` は実行時に `bms.controlFlow` を評価して有効ブロックを展開する
+- 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart` の `evaluateControlFlow` だけで、parser の `resolveBmsControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
 - `#RANDOM n` / `#SWITCH n` は `1..n` の整数を生成して選択値にする
 - `#SETRANDOM n` / `#SETSWITCH n` は選択値を固定する
 - `#IF` チェーンは現在の RANDOM 選択値で分岐し、`#ELSEIF` / `#ELSE` は先に成立した枝がある場合は無効

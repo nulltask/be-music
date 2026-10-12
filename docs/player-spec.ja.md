@@ -106,11 +106,26 @@ player は次の順序で譜面を実行します。
 
 ## 制御構文の扱い
 
-BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に解決します。
-`#RANDOM` は実行時に乱数を 1 回引き、その値を `resolveBmsControlFlow()` へ再注入して分岐を再現します。
+BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に、ホストがプレイごとに 1 回だけ解決します。
 
-player は UI 表示用に、今回の再生で選ばれた RANDOM パターンも保持します。
-`#SETRANDOM` は固定値として記録し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
+1 回のプレイの結果は、はっきりした値 `RandomDraws`（`@be-music/chart`）で表します。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目あり、各項目は行のコマンド、`range`（取りうる結果の数）、その行の後で有効な `value` を持ちます。
+
+- 選ばれなかった分岐の中にある行も含め、該当する行にはすべて項目があります。評価器は分岐の状態にかかわらずすべての制御行をたどるためです。
+- `#RANDOM n` / `#SWITCH n` は `1..n` から `value` を引きます。`n` がない、0、負、数値でない行は結果が 1 つしかない行として扱い、`range` 1、`value` 1 とし、乱数源を消費しません。
+- `#SETRANDOM n` / `#SETSWITCH n` は `value` を `n`（`n` がないか正でなければ 1）に固定し、`range` は 1 です。乱数は引きません。
+
+解決する場所は 1 か所だけで、`drawRandomOutcomes(chart, random)` → `RandomDraws` と `resolveBmsControlFlowWithDraws(chart, draws)`（`@be-music/parser`）→ 解決済みの譜面、の組です。ホスト向けには `resolvePlayChart(chart)`（`@be-music/player`）がこれをまとめ、`{ chart, randomDraws }` を返します。
+分岐の意味（スタックは 1 本で共有する、閉じていない `#IF` は `#ENDRANDOM` の後も残る、選ばれた分岐の中の定義は譜面全体に効く）は、`evaluateControlFlow`（`@be-music/chart`）の 1 か所だけにあります。
+同じ譜面と draws からは常に同じ結果が得られ、その譜面のために引かれていない draws は `RangeError` で拒否します。
+解決済みの譜面は `bms.controlFlow` を持たないので、もう一度解決しても何も変わりません。
+
+どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、web player は決定画面、ゲームプレイシーン、エンジン、リザルト画面に渡します。
+リスタートでは引き直します。LR2 や beatoraja もプレイごとに引き直すためです。
+エンジン（`autoPlay` / `manualPlay`）は自分では引きません。解決済みの譜面はそのまま再生し、`PlayerOptions.randomDraws` は RANDOM 要約にだけ使います。
+制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とプレイログの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
+
+RANDOM 要約は draws から作ります。
+`#SETRANDOM` は固定値として表示し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
 
 ## ノートモデル
 
