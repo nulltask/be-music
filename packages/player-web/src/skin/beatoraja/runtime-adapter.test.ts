@@ -2235,3 +2235,51 @@ describe('BeatorajaRuntimeAdapter — resolveJudgeWindowsMs', () => {
     expect(windows!.bad).toBeCloseTo(200, 1);
   });
 });
+
+describe('BeatorajaRuntimeAdapter — chart TOTAL (368)', () => {
+  function frameWithTotal(effectiveTotal: number) {
+    return {
+      currentBeat: 0,
+      currentSeconds: 0,
+      totalSeconds: 100,
+      summary: {
+        score: 0,
+        total: 0,
+        perfect: 0,
+        great: 0,
+        good: 0,
+        bad: 0,
+        poor: 0,
+        emptyPoor: 0,
+        fast: 0,
+        slow: 0,
+        exScore: 0,
+        gauge: { current: 20, max: 100, clearThreshold: 80, initial: 20, effectiveTotal, cleared: false },
+      } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload['summary'],
+      notes: [],
+    } as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload;
+  }
+
+  it('reports the effective TOTAL the gauge runs on once a frame arrives', () => {
+    // beatoraja's ref 368 reads the TOTAL after `BMSPlayerRule.validate`, so a bmson `total: 100` shows the
+    // resolved TOTAL (here 260.5), not the raw percentage.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { total: 100 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    adapter.applyFrame(frameWithTotal(260.5));
+    expect(adapter.resolveNumberValue(368)).toBe(260);
+  });
+
+  it('falls back to the chart header before the first frame', () => {
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: { metadata: { total: 320 } } as unknown as import('@be-music/json').BeMusicJson,
+    });
+    expect(adapter.resolveNumberValue(368)).toBe(320);
+  });
+});
