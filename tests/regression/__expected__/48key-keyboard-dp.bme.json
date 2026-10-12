@@ -891,7 +891,7 @@
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/2",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -914,7 +914,7 @@
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/2",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -936,7 +936,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/2",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -961,7 +961,7 @@
         "perfect": {
           "inputs": 400,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/2",
             "judge": {
               "pgreat": 200,
               "great": 0,
@@ -984,7 +984,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/2",
             "judge": {
               "pgreat": 200,
               "great": 0,
@@ -1006,7 +1006,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/2",
             "judge": {
               "pgreat": 208,
               "great": 0,
@@ -1031,7 +1031,7 @@
         "offset": {
           "inputs": 344,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/2",
             "judge": {
               "pgreat": 65,
               "great": 41,
@@ -1054,7 +1054,7 @@
             "score": 96500
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/2",
             "judge": {
               "pgreat": 65,
               "great": 43,
@@ -1076,7 +1076,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/2",
             "judge": {
               "pgreat": 71,
               "great": 41,

@@ -5,6 +5,8 @@ import {
   type BeMusicPlaylog,
   type PlaylogInputEvent,
   type PlaylogNote,
+  parsePlaylog,
+  serializePlaylog,
 } from './format.ts';
 import {
   resolveBeatorajaDefaultTotal,
@@ -118,12 +120,21 @@ describe('simulatePlaylog', () => {
       expect(result.gauge.final, ruleset).toBe(100);
       expect(result.gauge.cleared, ruleset).toBe(true);
     }
-    expect(results.lr2!.ruleset).toBe('lr2/1');
-    expect(results.beatoraja!.ruleset).toBe('beatoraja/1');
-    expect(results.iidx!.ruleset).toBe('iidx/1');
+    // Revision 2: the mine rules changed (LR2's press and window-entry legs, beatoraja's hold-only rule).
+    expect(results.lr2!.ruleset).toBe('lr2/2');
+    expect(results.beatoraja!.ruleset).toBe('beatoraja/2');
+    expect(results.iidx!.ruleset).toBe('iidx/2');
     expect(results.lr2!.score).toBe(200000); // (4 PG × 50000) / 1 note
     expect(results.lr2!.djLevel).toBe('AAA');
     expect(results.beatoraja!.score).toBeUndefined(); // money score is LR2-only
+  });
+
+  test('a log whose cached results carry an older revision still parses and re-simulates under the current one', () => {
+    const playlog = makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
+    const stale = { ...simulatePlaylog(playlog, { ruleset: 'lr2' }), ruleset: 'lr2/1' };
+    const parsed = parsePlaylog(serializePlaylog({ ...playlog, results: { lr2: stale } }));
+    expect(parsed.results!.lr2!.ruleset).toBe('lr2/1');
+    expect(simulatePlaylog(parsed, { ruleset: 'lr2' }).ruleset).toBe('lr2/2');
   });
 
   test('LR2 RANK 2 windows: PGREAT ±18ms / GREAT ±40ms / GOOD ±100ms / BAD ±200ms, inclusive', () => {

@@ -103,7 +103,7 @@ ruleset; `simulatePlaylogRulesets(playlog)` runs all three. Each ruleset differs
 long-note semantics, empty-POOR behavior, and gauge tables — the constants are documented per source in
 [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts):
 
-| aspect                  | LR2 (`lr2/1`)                                     | beatoraja (`beatoraja/1`)                                   | IIDX (`iidx/1`)                                                |
+| aspect                  | LR2 (`lr2/2`)                                     | beatoraja (`beatoraja/2`)                                   | IIDX (`iidx/2`)                                                |
 | ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- |
 | source                  | lr2oraja / OpenLR2                                | beatoraja master                                            | community measurements (iidx.org)                              |
 | windows (NORMAL-rank)   | ±18/±40/±100/±200 ms                              | ±15/±45/±112.5/late 210 · early 165 ms (7K, judgerank 75 %) | ±16.67/±33.33/±116.67/±250 ms                                  |
@@ -142,9 +142,9 @@ pnpm playlog -- results/Song-2026-08-17T10-00-00-000Z.bmplay.json
 ```
 RULESET        EX     RATE     DJ   PG     GR     GD    BD    PR    EPR   FAST   SLOW   COMBO  SCORE   GAUGE
 be-music/native 1180  83.10%  AA   ...
-lr2/1          1180   83.10%   AA   ...                                          ...    140000  96.0% GROOVE CLEAR
-beatoraja/1    1174   82.68%   AA   ...
-iidx/1         1102   77.61%   AA   ...
+lr2/2          1180   83.10%   AA   ...                                          ...    140000  96.0% GROOVE CLEAR
+beatoraja/2    1174   82.68%   AA   ...
+iidx/2         1102   77.61%   AA   ...
 ```
 
 Options: `--ruleset=lr2,beatoraja,iidx|all`, `--gauge=<id>` (ruleset-scoped gauge override),
@@ -153,5 +153,13 @@ Options: `--ruleset=lr2,beatoraja,iidx|all`, `--gauge=<id>` (ruleset-scoped gaug
 ## Versioning
 
 `format: "be-music-playlog"`, `version: 1`. Unknown extra fields are ignored on parse so minor additions stay
-readable; incompatible changes bump `version`. Ruleset result ids carry their own revision (`lr2/1` etc.) — a
+readable; incompatible changes bump `version`. Ruleset result ids carry their own revision (`lr2/2` etc.) — a
 corrected ruleset bumps its revision and simply re-simulates existing files.
+
+Only the current revision of each ruleset is implemented. A log whose cached `results` carry an older id still parses
+(the ids are kept as written), and re-simulating or replaying it applies the current rules; there is no compatibility path that
+replays the old ones, so its numbers can change. The cache is never authoritative, so such entries are simply stale.
+
+| Revision                         | Change                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lr2/2`, `beatoraja/2`, `iidx/2` | Mines follow the ruleset's rule: the `lr2` / `iidx` simulators add LR2's press-inside-PGREAT and window-entry legs; under `beatoraja` only a key down as the mine crosses detonates it (engine). |

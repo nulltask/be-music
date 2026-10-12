@@ -84,7 +84,7 @@ export interface GaugeSpec {
 }
 
 export interface RulesetConfig {
-  /** Versioned ruleset id written into the result (`'lr2/1'` etc.). */
+  /** Versioned ruleset id written into the result (`'lr2/2'` etc.). */
   id: string;
   rulesetId: PlaylogRulesetId;
   windows: RulesetWindowTables;
@@ -684,7 +684,7 @@ export function resolveRuleset(
       tables: resolveLr2WindowTables(bmsExRankValueToJudgeRankPercent(change.exRankValue), overrideBadMs),
     }));
     return {
-      id: 'lr2/1',
+      id: 'lr2/2',
       rulesetId: 'lr2',
       windows: staticTables,
       windowsAt: (timeUs) => {
@@ -723,7 +723,7 @@ export function resolveRuleset(
     // FIVEKEYS / PMS break combo on an empty POOR (JudgeProperty combo[MS] = false).
     const comboBreaksOnEmptyPoor = mode === BEATORAJA_MODES.FIVEKEYS || mode === BEATORAJA_MODES.PMS;
     return {
-      id: 'beatoraja/1',
+      id: 'beatoraja/2',
       rulesetId: 'beatoraja',
       windows: tables,
       windowsAt: () => tables,
@@ -747,7 +747,7 @@ export function resolveRuleset(
   const noteCount = countRulesetNotes(chart, 'charge');
   const effectiveTotal = resolveEffectiveTotal('iidx', chart, baseNotes);
   return {
-    id: 'iidx/1',
+    id: 'iidx/2',
     rulesetId: 'iidx',
     windows: IIDX_WINDOWS,
     windowsAt: () => IIDX_WINDOWS,

@@ -1188,7 +1188,7 @@ describe('player', () => {
       if (!(error instanceof PlayerInterruptedError)) throw error;
     });
     expect(manualInfos).toHaveLength(1);
-    expect(manualInfos[0]).toMatchObject({ id: 'beatoraja/1', rulesetId: 'beatoraja', longNoteStyle: 'per-note' });
+    expect(manualInfos[0]).toMatchObject({ id: 'beatoraja/2', rulesetId: 'beatoraja', longNoteStyle: 'per-note' });
     const [lateBoundUs, earlyBoundUs] = manualInfos[0]!.windows.note.judges[0];
     expect(lateBoundUs).toBeLessThan(0);
     expect(earlyBoundUs).toBeGreaterThan(0);
@@ -1205,7 +1205,7 @@ describe('player', () => {
       onRulesetResolved: (info) => autoInfos.push(info),
     });
     expect(autoInfos).toHaveLength(1);
-    expect(autoInfos[0]).toMatchObject({ id: 'lr2/1', rulesetId: 'lr2', longNoteStyle: 'ln' });
+    expect(autoInfos[0]).toMatchObject({ id: 'lr2/2', rulesetId: 'lr2', longNoteStyle: 'ln' });
     expect(autoInfos[0]!.windows.note.judges[3][1]).toBe(300_000);
   });
 
