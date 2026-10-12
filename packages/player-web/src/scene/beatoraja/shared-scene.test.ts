@@ -1,7 +1,7 @@
 import { BEATORAJA_TEXT, type BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { createEmptyJson } from '@be-music/json';
 import { Texture } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { BrowserSongEntry } from '../../collection/types.ts';
 import type { PixiSceneHost } from '../host.ts';
 import {

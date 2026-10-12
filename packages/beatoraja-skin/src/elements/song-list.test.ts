@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { BEATORAJA_SONGLIST_BAR_COUNT, parseBeatorajaSongList } from './song-list.ts';
 import type { BeatorajaSkin } from '../types.ts';
 

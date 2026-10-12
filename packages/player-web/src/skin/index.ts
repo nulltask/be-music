@@ -21,5 +21,6 @@ export * from './beatoraja/system-sounds.ts';
 export * from './beatoraja/textures.ts';
 export * from './beatoraja/theme.ts';
 
-// Default family registration entry.
+// Default family registration entry + the be-music skin format its built-in skins implement.
 export * from './default/family.ts';
+export * from './be-music/index.ts';

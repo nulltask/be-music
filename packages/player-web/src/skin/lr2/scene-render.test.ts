@@ -1,5 +1,5 @@
-import { describe, expect, test } from 'vitest';
-import { clampFontSize, isDestinationVisible, resolveScaledViewport } from './scene-render.ts';
+import { describe, expect, test } from 'vite-plus/test';
+import { clampFontSize, isDestinationVisible } from './scene-render.ts';
 import type { Lr2DestinationRect } from '@be-music/lr2-skin';
 
 function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2DestinationRect {
@@ -25,24 +25,6 @@ function destination(overrides: Partial<Lr2DestinationRect> = {}): Lr2Destinatio
     ...overrides,
   };
 }
-
-describe('resolveScaledViewport', () => {
-  test('centers the design rectangle inside a wider screen', () => {
-    expect(resolveScaledViewport(1280, 720, 640, 480)).toEqual({
-      x: 160,
-      y: 0,
-      scale: 1.5,
-    });
-  });
-
-  test('falls back to scale 1 when the input is not usable', () => {
-    expect(resolveScaledViewport(0, 480, 640, 480)).toEqual({
-      x: -320,
-      y: 0,
-      scale: 1,
-    });
-  });
-});
 
 describe('isDestinationVisible', () => {
   test('requires the destination timer to be active', () => {

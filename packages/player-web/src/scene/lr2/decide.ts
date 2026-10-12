@@ -169,8 +169,11 @@ export class PixiDecideView {
   private inputUnlockHandle: ReturnType<typeof setTimeout> | undefined;
   private inputUnlocked = false;
   private readonly timerStartedAt = new Map<number, number>();
+  private readonly options: PixiDecideViewOptions;
 
-  public constructor(private readonly options: PixiDecideViewOptions = {}) {}
+  public constructor(options: PixiDecideViewOptions = {}) {
+    this.options = options;
+  }
 
   private get app(): Application {
     if (!this.host) {

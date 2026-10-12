@@ -1,5 +1,6 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import {
+  enterTouchFullscreen,
   exitFullscreen,
   getFullscreenElement,
   requestFullscreen,
@@ -82,5 +83,27 @@ describe('shouldCaptureFullscreenEscape', () => {
     expect(shouldCaptureFullscreenEscape({ key: 'Enter', code: 'Enter' }, { fullscreenElement: {} as Element })).toBe(
       false,
     );
+  });
+});
+
+describe('enterTouchFullscreen', () => {
+  test('enters fullscreen, then asks for landscape', async () => {
+    const request = vi.fn().mockResolvedValue(undefined);
+    const lock = vi.fn().mockResolvedValue(undefined);
+    await enterTouchFullscreen({ requestFullscreen: request }, {}, { orientation: { lock } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(lock).toHaveBeenCalledWith('landscape');
+  });
+
+  test('leaves an existing fullscreen alone', async () => {
+    const request = vi.fn().mockResolvedValue(undefined);
+    await enterTouchFullscreen({ requestFullscreen: request }, { fullscreenElement: {} as Element }, {});
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  test('swallows a refused request and a missing orientation lock', async () => {
+    const request = vi.fn().mockRejectedValue(new Error('NotAllowedError'));
+    await expect(enterTouchFullscreen({ requestFullscreen: request }, {}, {})).resolves.toBeUndefined();
+    await expect(enterTouchFullscreen({}, {}, {})).resolves.toBeUndefined();
   });
 });

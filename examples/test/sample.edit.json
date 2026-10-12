@@ -26,128 +26,472 @@
     {
       "measure": 0,
       "channel": "11",
-      "value": "01",
       "position": [
         0,
-        1
-      ]
+        4
+      ],
+      "value": "01"
     },
     {
       "measure": 0,
       "channel": "11",
-      "value": "01",
       "position": [
         1,
         4
-      ]
+      ],
+      "value": "01"
     },
     {
       "measure": 0,
       "channel": "11",
-      "value": "01",
       "position": [
-        1,
-        2
-      ]
+        2,
+        4
+      ],
+      "value": "01"
     },
     {
       "measure": 0,
       "channel": "11",
-      "value": "01",
       "position": [
         3,
         4
-      ]
+      ],
+      "value": "01"
     },
     {
       "measure": 1,
       "channel": "11",
-      "value": "01",
       "position": [
         0,
-        1
-      ]
+        4
+      ],
+      "value": "01"
     },
     {
       "measure": 1,
       "channel": "11",
-      "value": "01",
       "position": [
         1,
         4
-      ]
+      ],
+      "value": "01"
     },
     {
       "measure": 1,
       "channel": "11",
-      "value": "01",
       "position": [
-        1,
-        2
-      ]
+        2,
+        4
+      ],
+      "value": "01"
     },
     {
       "measure": 1,
       "channel": "11",
-      "value": "01",
       "position": [
         3,
         4
-      ]
+      ],
+      "value": "01"
     },
     {
       "measure": 2,
       "channel": "03",
-      "value": "64",
       "position": [
         0,
         1
-      ]
+      ],
+      "value": "64"
     },
     {
       "measure": 2,
       "channel": "11",
-      "value": "01",
       "position": [
         0,
-        1
-      ]
+        4
+      ],
+      "value": "01"
     },
     {
       "measure": 2,
       "channel": "11",
-      "value": "01",
       "position": [
         1,
         4
-      ]
+      ],
+      "value": "01"
     },
     {
       "measure": 2,
       "channel": "11",
-      "value": "01",
       "position": [
-        1,
-        2
-      ]
+        2,
+        4
+      ],
+      "value": "01"
     },
     {
       "measure": 2,
       "channel": "11",
-      "value": "01",
       "position": [
         3,
         4
-      ]
+      ],
+      "value": "01"
     },
     {
       "measure": 3,
       "channel": "11",
-      "value": "01",
       "position": [
         1,
         2
-      ]
+      ],
+      "value": "01"
     }
-  ]
+  ],
+  "bms": {
+    "controlFlow": [],
+    "lnObjs": [],
+    "exRank": {},
+    "argb": {},
+    "stp": [],
+    "wavCmds": [],
+    "changeOption": {},
+    "exWav": {},
+    "exBmp": {},
+    "bga": {},
+    "scroll": {},
+    "speed": {},
+    "swBga": {}
+  },
+  "bmson": {
+    "info": {},
+    "bga": {
+      "header": [],
+      "events": [],
+      "layerEvents": [],
+      "poorEvents": []
+    }
+  },
+  "preservation": {
+    "bms": {
+      "sourceLines": [
+        {
+          "kind": "header",
+          "command": "TITLE",
+          "value": "Sample"
+        },
+        {
+          "kind": "header",
+          "command": "ARTIST",
+          "value": "Codex"
+        },
+        {
+          "kind": "header",
+          "command": "BPM",
+          "value": "120"
+        },
+        {
+          "kind": "header",
+          "command": "WAV01",
+          "value": "sample.wav"
+        },
+        {
+          "kind": "object",
+          "measure": 0,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                0,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                1,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                2,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                3,
+                4
+              ],
+              "value": "01"
+            }
+          ]
+        },
+        {
+          "kind": "object",
+          "measure": 1,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                0,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                1,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                2,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                3,
+                4
+              ],
+              "value": "01"
+            }
+          ]
+        },
+        {
+          "kind": "object",
+          "measure": 2,
+          "channel": "03",
+          "events": [
+            {
+              "measure": 2,
+              "channel": "03",
+              "position": [
+                0,
+                1
+              ],
+              "value": "64"
+            }
+          ]
+        },
+        {
+          "kind": "object",
+          "measure": 2,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                0,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                1,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                2,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                3,
+                4
+              ],
+              "value": "01"
+            }
+          ]
+        }
+      ],
+      "objectLines": [
+        {
+          "measure": 0,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                0,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                1,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                2,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 0,
+              "channel": "11",
+              "position": [
+                3,
+                4
+              ],
+              "value": "01"
+            }
+          ]
+        },
+        {
+          "measure": 1,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                0,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                1,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                2,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 1,
+              "channel": "11",
+              "position": [
+                3,
+                4
+              ],
+              "value": "01"
+            }
+          ]
+        },
+        {
+          "measure": 2,
+          "channel": "03",
+          "events": [
+            {
+              "measure": 2,
+              "channel": "03",
+              "position": [
+                0,
+                1
+              ],
+              "value": "64"
+            }
+          ]
+        },
+        {
+          "measure": 2,
+          "channel": "11",
+          "events": [
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                0,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                1,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                2,
+                4
+              ],
+              "value": "01"
+            },
+            {
+              "measure": 2,
+              "channel": "11",
+              "position": [
+                3,
+                4
+              ],
+              "value": "01"
+            }
+          ]
+        }
+      ]
+    },
+    "bmson": {
+      "lines": [],
+      "bpmEvents": [],
+      "stopEvents": [],
+      "soundChannels": []
+    }
+  }
 }

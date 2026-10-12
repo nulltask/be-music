@@ -13,6 +13,7 @@
 - [プレイログ（プレイ履歴）仕様](playlog.ja.md)
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
+- [be-music スキンの作り方](be-music-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](json-spec.ja.md)
 - [用語集](glossary.ja.md)
 

@@ -13,7 +13,8 @@ export interface BeatResolver {
 
 /**
  * LR2 / beatoraja play-skin lane family. `'24'` / `'48'` are the Keyboardmania-style keyboard modes whose lanes run
- * past the classic `11..19` / `21..29` bank onto the extended `1A..1O` / `2A..2O` channels.
+ * past the classic `11..19` / `21..29` bank onto the extended `1A..1O` / `2A..2O` channels, plus the wheel up / down
+ * on `1P` / `1Q` (`2P` / `2Q`).
  */
 export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
 
@@ -23,7 +24,25 @@ export interface ChartPlayVariantInput {
   bms?: {
     player?: number;
   };
+  /**
+   * The bmson `mode_hint` (`json.bmson.info.modeHint`). Only the Keyboardmania hints are authoritative — see
+   * {@link resolveChartPlayVariant} — every other hint leaves the decision to the chart's lanes.
+   */
+  bmson?: {
+    info?: {
+      modeHint?: string;
+    };
+  };
 }
+
+/**
+ * bmson `mode_hint`s that name a play variant outright. The keyboard layouts are 26 lanes per side, but a chart can
+ * live entirely on the first nine keys (x ≤ 9 → `11..19`), which the lane rules would otherwise read as 7 / 9 KEY.
+ */
+const KEYBOARD_MODE_HINT_VARIANTS: ReadonlyMap<string, ChartPlayVariant> = new Map([
+  ['keyboard-24k', '24'],
+  ['keyboard-24k-double', '48'],
+]);
 
 /**
  * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
@@ -210,16 +229,30 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 /**
  * Resolves the LR2/play-skin lane family for a chart from its extension, `#PLAYER`, and playable lane usage.
  *
+ * This is the single lane-mode rule every host shares: the engine derives its lane mode from it (unless the host
+ * declares a variant explicitly), and the web / skin hosts pick play skins with it. Pass the RESOLVED chart (after
+ * `#RANDOM` / `#SWITCH`) when classifying a play, so lanes a chosen branch adds are counted. `chartPath` may be a full
+ * path or a bare extension (`.pms` / `.bme`).
+ *
+ * Lane usage counts the `1x` / `2x` lane channels plus the `5x` / `6x` `#LNTYPE` long-note channels mapped to their
+ * lanes, so `#LNOBJ` and `#LNTYPE` notations of the same chart classify alike. Mines (`Dx` / `Ex`) and invisible
+ * objects (`3x` / `4x`) never count.
+ *
  * Detection order — first match wins:
  *
+ *  -1. **bmson keyboard `mode_hint`** — `keyboard-24k` → `'24'`, `keyboard-24k-double` → `'48'`, whatever lanes the
+ *      chart uses: its `x` values already went through the keyboard lane map, so a chart that only touches the first
+ *      nine keys is still a 24-key chart. Other hints are not authoritative (`beat-7k` is also the spec default for a
+ *      missing hint, and real charts mislabel their mode), so they fall through to the lane rules.
  *   0. **Extended lane channels (`1A..1Z` / `2A..2Z`)** — the 24-key (Keyboardmania) lane bank. Only these modes
  *      author lanes past the classic nine columns, so one extended channel decides it: `'48'` when the chart also
  *      uses the 2P side, `'24'` otherwise. Checked first because a 24-key chart fills all nine classic 1P columns
  *      too, which rule 3 would otherwise claim for `'9'`.
  *   1. **`.pms` extension** — unambiguous POPN-9 marker. Trumps all content heuristics so a `.pms` file authored
  *      with `#PLAYER 1` and an unusual channel layout still routes to `'9'`.
- *   2. **`#PLAYER 3` + channel `17`** — `#PLAYER 3` is "DP or 9-key" and channel `17` is FREE ZONE under IIDX
- *      conventions; if a `#PLAYER 3` chart authors notes on `17` it can only be POPN-9.
+ *   2. **`#PLAYER 3` + channel `17`, no IIDX 2P side** — `#PLAYER 3` is "DP or 9-key" and channel `17` is FREE
+ *      ZONE under IIDX conventions; a `#PLAYER 3` chart that authors notes on `17` without `21` / `26..29` is POPN-9.
+ *      With the IIDX 2P side present it is a double-play chart with a FREE ZONE and falls through to rule 5.
  *   3. **BME POPN-9 (PLAYER 1, full 1P keyboard)** — 1P-only chart that populates ALL nine of `11..19` as
  *      playable channels. IIDX 7K uses at most `11..15 + 16 + 18 + 19` (8 channels, with `16` = scratch and `17`
  *      typically unused or FREE-ZONE keysound only); a chart that lights up all 9 columns is POPN-9 authored as
@@ -231,14 +264,27 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *      signal regardless of `#PLAYER`, extension, 1P-side scratch (`16`), or 6/7K column (`18`/`19`)
  *      usage. Catches PMS-STD authored as `.bme` / `.bms` (common when chart authors export PMS charts
  *      to `.bme` for table-friendly tooling) without requiring an explicit `.pms` extension.
- *   5. **Fallback** — classify by `2X` presence (`usesPlayer2`) and `18/19/28/29` (`uses6or7`) as IIDX `5/7/10/14`.
+ *   5. **IIDX fallback** — classify by `2X` presence (`usesPlayer2`) and `18/19/28/29` (`uses6or7`) as IIDX
+ *      `5/7/10/14`. A `.bme` chart without a 6 / 7 key column is completed to `7` / `14` (the extension names the
+ *      7-key format); every other extension stays `5` / `10`.
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
+  const modeHint = chart.bmson?.info?.modeHint;
+  const hintedVariant = typeof modeHint === 'string' ? KEYBOARD_MODE_HINT_VARIANTS.get(modeHint.trim()) : undefined;
+  if (hintedVariant !== undefined) {
+    return hintedVariant;
+  }
   const channels = new Set<string>();
   for (const event of chart.events) {
     const channel = normalizeChannel(event.channel);
     if (isPlayableChannel(channel)) {
       channels.add(channel);
+      continue;
+    }
+    // `#LNTYPE` long notes live on `5x` / `6x` but occupy the same lane as `1x` / `2x`, so they count as that lane.
+    const longNoteLane = mapBmsLongNoteChannelToPlayable(channel);
+    if (longNoteLane !== undefined) {
+      channels.add(longNoteLane);
     }
   }
   const usesPlayer2 = [...channels].some((channel) => channel.startsWith('2'));
@@ -254,7 +300,10 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   if (isPmsExtension(chart.chartPath)) {
     return '9';
   }
-  if (chart.bms?.player === 3 && channels.has('17')) {
+  // `#PLAYER 3` is "DP or 9-key", so the POPN-9 reading needs the IIDX 2P side (`21` / `26..29`) to be absent: a
+  // double-play chart with a FREE ZONE on `17` stays IIDX DP.
+  const usesOther2P = ['21', '26', '27', '28', '29'].some((c) => channels.has(c));
+  if (chart.bms?.player === 3 && channels.has('17') && !usesOther2P) {
     return '9';
   }
 
@@ -274,12 +323,13 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   // column (`18` / `19`) use. (A chart that combines `22..25` with 1P scratch is a non-standard hybrid
   // — we resolve it as POPN-9 since `22..25` is the POPN-specific signature.)
   const usesPmsStd2P = ['22', '23', '24', '25'].some((c) => channels.has(c));
-  const usesOther2P = ['21', '26', '27', '28', '29'].some((c) => channels.has(c));
   if (usesPmsStd2P && !usesOther2P) {
     return '9';
   }
 
-  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
+  // Rule 5 — IIDX families. A 6 / 7 key column decides 7 / 14 KEY; without one, a `.bme` file is still 7 / 14 KEY
+  // (the extension that names the 7-key format), and anything else is 5 / 10 KEY.
+  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel)) || isBmeExtension(chart.chartPath);
   if (usesPlayer2) {
     return uses6or7 ? '14' : '10';
   }
@@ -1441,12 +1491,26 @@ function normalizeAsciiBase36CodeFast(code: number): number {
 }
 
 function isPmsExtension(chartPath: string | undefined): boolean {
+  return resolveChartPathExtension(chartPath) === '.pms';
+}
+
+function isBmeExtension(chartPath: string | undefined): boolean {
+  return resolveChartPathExtension(chartPath) === '.bme';
+}
+
+/**
+ * Lowercased extension (with its dot) of a chart path or of a bare extension such as `.bme`. Only the last path segment
+ * counts, so a dotted directory name (`Song.bme/main`) is not mistaken for the chart's own extension.
+ */
+function resolveChartPathExtension(chartPath: string | undefined): string | undefined {
   if (typeof chartPath !== 'string' || chartPath.length === 0) {
-    return false;
+    return undefined;
   }
-  const dotIndex = chartPath.lastIndexOf('.');
-  if (dotIndex < 0) return false;
-  return chartPath.slice(dotIndex).toLowerCase() === '.pms';
+  const trimmed = chartPath.trim();
+  const dotIndex = trimmed.lastIndexOf('.');
+  const slashIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  if (dotIndex < 0 || dotIndex < slashIndex) return undefined;
+  return trimmed.slice(dotIndex).toLowerCase();
 }
 
 function isTempoNormalizedChannel(normalized: string): boolean {

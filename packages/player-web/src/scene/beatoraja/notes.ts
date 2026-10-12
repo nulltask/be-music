@@ -38,6 +38,32 @@ import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 const BEATS_PER_STANDARD_MEASURE = 4;
 
 /**
+ * The beatoraja skin lane (index into the play skin's `note[]` / `lane[]` tables) a note on `channel` draws in, or
+ * `undefined` for a channel the variant has no lane for. IIDX: keys `0..N-1`, then the scratch, per side; POPN-9: the
+ * nine buttons. The keyboard modes have no scratch: each side is 26 lanes, the 24 keys (`0..23`) then the wheel up /
+ * down (`1P` / `1Q` → `24` / `25`), with the 2P side from `26` (its wheel on `50` / `51`) — the skin lanes beatoraja's
+ * `play24` / `play24d` skins author.
+ */
+export function resolveBeatorajaNoteLane(channel: string, variant: ChartPlayVariant): number | undefined {
+  const slot = resolveSideKeySlot(channel, variant);
+  if (slot < 0) return undefined;
+  if (variant === '24' || variant === '48') {
+    const baseLane = slot - 1;
+    const isPlayer2 = variant === '48' && channel.startsWith('2');
+    return isPlayer2 ? KEYBOARD_SKIN_SIDE_LANES + baseLane : baseLane;
+  }
+  if (variant === '9') return slot - 1;
+  const numKeys = variant === '5' || variant === '10' ? 5 : 7;
+  const baseLane = slot === 0 ? numKeys : slot - 1;
+  if (variant === '10' || variant === '14') {
+    const isPlayer2 = channel.startsWith('2');
+    const sideLanes = numKeys + 1;
+    return isPlayer2 ? sideLanes + baseLane : baseLane;
+  }
+  return baseLane;
+}
+
+/**
  * Compute the per-beat scroll distance in skin-pixel space. Mirrors upstream
  * `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed`:
  *
@@ -101,11 +127,13 @@ const KEYBOARD_KEY_PALETTE = [
   'white',
 ] as const;
 /**
- * Lane slots one side occupies in a `play24` / `play24d` skin's `note[]` table: 24 key columns plus the trailing
- * `note-su` / `note-sd` scratch pair. The engine's keyboard modes don't author those two, but the 2P bank still has to
- * start after them so DP lanes line up with the skin's rect table.
+ * Lane slots one side occupies in a `play24` / `play24d` skin's `note[]` table: 24 key columns, then the wheel up /
+ * down pair (`note-su` / `note-sd`, skin lanes 24 / 25 — 50 / 51 on the 2P side). The engine's `1P` / `1Q` (`2P` /
+ * `2Q`) wheel lanes resolve to slots 25 / 26, so they land on that pair, and the 2P bank starts after it.
  */
 const KEYBOARD_SKIN_SIDE_LANES = 26;
+/** Key columns per side in a `play24` skin; the side's remaining lanes are the wheel. */
+const KEYBOARD_SKIN_SIDE_KEYS = 24;
 const PALETTE_COLOR: Record<string, number> = {
   white: FALLBACK_COLOR_BY_KEY.white!,
   blue: FALLBACK_COLOR_BY_KEY.blue!,
@@ -272,7 +300,7 @@ export class BeatorajaNoteLayer {
       // as soon as the head's judge fired. The LN branch below handles its own tail-past culling via the
       // `yEnd` check.
       if (!isLongNote && note.judged) continue;
-      const lane = this.resolveLane(note);
+      const lane = resolveBeatorajaNoteLane(note.channel, this.variant);
       if (lane === undefined) continue;
       const rect = rects[lane];
       if (rect === undefined) continue;
@@ -386,26 +414,6 @@ export class BeatorajaNoteLayer {
     let top = Number.POSITIVE_INFINITY;
     for (const rect of rects) top = Math.min(top, rect.y);
     return Number.isFinite(top) ? top : 0;
-  }
-
-  private resolveLane(note: PlayerUiFrameNote): number | undefined {
-    const slot = resolveSideKeySlot(note.channel, this.variant);
-    if (slot < 0) return undefined;
-    if (this.variant === '24' || this.variant === '48') {
-      // Keyboard modes have no scratch, so the 24 columns map straight onto the skin's leading lane slots.
-      const baseLane = slot - 1;
-      const isPlayer2 = this.variant === '48' && note.channel.startsWith('2');
-      return isPlayer2 ? KEYBOARD_SKIN_SIDE_LANES + baseLane : baseLane;
-    }
-    if (this.variant === '9') return slot - 1;
-    const numKeys = this.variant === '5' || this.variant === '10' ? 5 : 7;
-    const baseLane = slot === 0 ? numKeys : slot - 1;
-    if (this.variant === '10' || this.variant === '14') {
-      const isPlayer2 = note.channel.startsWith('2');
-      const sideLanes = numKeys + 1;
-      return isPlayer2 ? sideLanes + baseLane : baseLane;
-    }
-    return baseLane;
   }
 
   /**
@@ -674,7 +682,10 @@ export class BeatorajaNoteLayer {
 
   private fallbackColorForLane(lane: number): number {
     if (this.variant === '24' || this.variant === '48') {
-      const key = KEYBOARD_KEY_PALETTE[(lane % KEYBOARD_SKIN_SIDE_LANES) % KEYBOARD_KEY_PALETTE.length] ?? 'white';
+      const sideLane = lane % KEYBOARD_SKIN_SIDE_LANES;
+      // The wheel takes the scratch red, like the skins' own `note-su` / `note-sd` art.
+      if (sideLane >= KEYBOARD_SKIN_SIDE_KEYS) return PALETTE_COLOR.red!;
+      const key = KEYBOARD_KEY_PALETTE[sideLane % KEYBOARD_KEY_PALETTE.length] ?? 'white';
       return PALETTE_COLOR[key] ?? PALETTE_COLOR.white!;
     }
     const palette = this.variant === '9' ? POP_KEY_PALETTE : SEVEN_KEY_PALETTE;

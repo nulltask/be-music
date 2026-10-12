@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from './input-signal-bus.ts';
 
 describe('player input signal bus', () => {

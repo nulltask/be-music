@@ -43,8 +43,15 @@ Options:
 
 export function parsePlaylogCliArgs(argv: readonly string[]): PlaylogCliArgs {
   const args: PlaylogCliArgs = { files: [], rulesets: [...PLAYLOG_SIMULATOR_RULESETS], json: false, help: false };
+  // `--` ends the options, as with other CLIs: `pnpm playlog -- <file>` forwards it, and anything after it is a file
+  // even when its name starts with `--`.
+  let optionsEnded = false;
   for (const arg of argv) {
-    if (arg === '--help' || arg === '-h') {
+    if (optionsEnded) {
+      args.files.push(arg);
+    } else if (arg === '--') {
+      optionsEnded = true;
+    } else if (arg === '--help' || arg === '-h') {
       args.help = true;
     } else if (arg === '--json') {
       args.json = true;

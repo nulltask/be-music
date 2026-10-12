@@ -1,5 +1,5 @@
 import type { BeMusicEvent } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { Lr2SkinInputFile } from './file-lookup.ts';
 import {
   loadLr2ThemeSkinsFromFiles,
@@ -35,14 +35,12 @@ function songWithChannels(channels: string[]): Lr2PlaySkinSong {
     chartPath: 'Song/main.bms',
     chart: {
       bms: {},
-      events: channels.map(
-        (channel, index): BeMusicEvent => ({
-          measure: index,
-          channel,
-          position: [0, 1],
-          value: '01',
-        }),
-      ),
+      events: channels.map((channel, index): BeMusicEvent => ({
+        measure: index,
+        channel,
+        position: [0, 1],
+        value: '01',
+      })),
     },
   };
 }
@@ -60,7 +58,7 @@ describe('LR2 play-skin helpers', () => {
 
   test('pickLr2PlaySkin falls back to the SP / DP IIDX skins for 24-key keyboard charts', () => {
     // LR2 never shipped a keyboard-mode skin. A 24-key chart still needs a frame / gauge / judge skin, so it
-    // borrows the SP chain (`'7'` first) and its 24 lanes render through the host's fallback playfield; the
+    // borrows the SP chain (`'7'` first) and its 26 lanes (24 keys + wheel) render through the host's fallback playfield; the
     // 48-key DP form borrows the DP chain (`'14'` first).
     const skins: Lr2PlaySkinMap = { '7': skin('7K'), '14': skin('14K') };
 

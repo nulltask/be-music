@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
+import { describe, expect, it } from 'vite-plus/test';
+import { beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat, resolveBeatorajaNoteLane } from './notes.ts';
 
 // Mirrors upstream `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed` divided by
 // `getMeasureBeats(1.0) === 4` to convert "y-delta per measure" into "y-delta per beat".
@@ -54,5 +54,32 @@ describe('beatorajaDisplayScrollBeat (LR2 negative-BPM reversal display clock)',
     expect(beatorajaDisplayScrollBeat({ currentBeat: 21, displayBeat: 11 })).toBe(11);
     // A mirrored beat of 0 is a valid position (back at the chart head) — `??` must not treat it as unset.
     expect(beatorajaDisplayScrollBeat({ currentBeat: 32, displayBeat: 0 })).toBe(0);
+  });
+});
+
+describe('resolveBeatorajaNoteLane', () => {
+  it('maps the 24 keys onto skin lanes 0..23 and the wheel up / down onto 24 / 25', () => {
+    expect(resolveBeatorajaNoteLane('11', '24')).toBe(0);
+    expect(resolveBeatorajaNoteLane('1O', '24')).toBe(23);
+    expect(resolveBeatorajaNoteLane('1P', '24')).toBe(24);
+    expect(resolveBeatorajaNoteLane('1Q', '24')).toBe(25);
+    expect(resolveBeatorajaNoteLane('1R', '24')).toBeUndefined();
+  });
+
+  it('puts the 48 KEY 2P side after the 1P wheel, its wheel on 50 / 51', () => {
+    expect(resolveBeatorajaNoteLane('1Q', '48')).toBe(25);
+    expect(resolveBeatorajaNoteLane('21', '48')).toBe(26);
+    expect(resolveBeatorajaNoteLane('2O', '48')).toBe(49);
+    expect(resolveBeatorajaNoteLane('2P', '48')).toBe(50);
+    expect(resolveBeatorajaNoteLane('2Q', '48')).toBe(51);
+  });
+
+  it('keeps the IIDX scratch after the keys of its side', () => {
+    expect(resolveBeatorajaNoteLane('11', '7')).toBe(0);
+    expect(resolveBeatorajaNoteLane('16', '7')).toBe(7);
+    expect(resolveBeatorajaNoteLane('21', '14')).toBe(8);
+    expect(resolveBeatorajaNoteLane('26', '14')).toBe(15);
+    expect(resolveBeatorajaNoteLane('16', '10')).toBe(5);
+    expect(resolveBeatorajaNoteLane('25', '9')).toBe(8);
   });
 });

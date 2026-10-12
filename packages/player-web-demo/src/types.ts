@@ -51,12 +51,29 @@ export type SkinFamilySceneKind = 'select' | 'decide' | 'gameplay' | 'result';
  */
 export interface DemoGuiState {
   autoPlay: boolean;
+  /** Id of the be-music skin the default (no-theme) family renders with. Persisted in `localStorage`. */
+  builtInSkin: string;
+  /** Showmanship level for the built-in skins. Persisted in `localStorage`. */
+  skinEffects: 'full' | 'reduced' | 'off';
+  /** Gameplay layout pick: `'auto'` follows the device (touch layout on phones / tablets). Persisted in `localStorage`. */
+  playLayout: 'auto' | 'standard' | 'touch';
   /**
    * When true, gameplay auto-pauses on tab visibility change / window blur and auto-resumes on focus. False (the
    * default) keeps the play scene running in the background — convenient for capturing recordings while another window
    * holds focus.
    */
   autoPauseOnBlur: boolean;
+  /** Master volume in percent (0..100) over every sound the player makes, applied live and remembered across reloads. */
+  masterVolume: number;
+  /** Keysound bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
+  keyVolume: number;
+  /** BGM bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
+  bgmVolume: number;
+  /**
+   * Ask the platform audio session for `'playback'` so sound plays with the iPhone / iPad silent switch on (pausing other
+   * apps' music). Off by default; only offered where `navigator.audioSession` exists. Remembered across reloads.
+   */
+  playInSilentMode: boolean;
   compressor: boolean;
   compressorKey: boolean;
   compressorBgm: boolean;
@@ -102,7 +119,7 @@ export interface DemoGuiState {
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**
-   * When true (the default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
+   * When true (off by default), the play-log (`*.bmplay.json` input replay — see `@be-music/player/playlog`) recorded
    * during gameplay is automatically downloaded the moment the result scene mounts, for both the LR2/default and
    * beatoraja result paths. Toggled from the Debug Menu's "Auto-save play history" checkbox.
    */

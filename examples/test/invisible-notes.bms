@@ -1,0 +1,67 @@
+*---------------------- METADATA FIELD
+
+#TITLE Invisible Keysound Channels
+#SUBTITLE Channels 3x / 4x sound without being drawn or judged
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 2
+#TOTAL 250
+#DIFFICULTY 2
+
+*---------------------- EXTENDED HEADER FIELD
+* The `3x` / `4x` channel families are "invisible" (hidden) keysound objects:
+* they belong to a lane and play through the key bus, but they are never drawn
+* and never judged. Chart authors use them to keep a lane's sample assignment
+* alive across a section where no note should be hit.
+*
+* Two properties are only observable from a whole chart, which is why this
+* fixture exists next to the channel-classifier unit tests:
+*
+*   - invisible channels are play-lane SOUND channels but not PLAYABLE ones, so
+*     they must not contribute a judged note
+*   - they must not influence lane-mode detection either: the 2P-side `4x`
+*     channels below must not turn this single-player chart into a DP chart
+*
+* Visible lanes are `11..13` plus `18` / `19`, so the expected lane mode is
+* 7 KEY SP.
+
+#PLAYER 1
+#LNTYPE 1
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+#WAV03 right.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - visible reference bar only.
+#00011:01010101
+#00018:00020002
+#00019:02000200
+
+* Measure 1 - invisible objects on the 1P side interleaved with visible ones.
+* Only the `11` / `18` / `19` notes should be judged.
+#00111:01000100
+#00131:00030003
+#00132:03030303
+#00133:00000303
+#00118:00020000
+#00119:00000002
+
+* Measure 2 - invisible objects on the 2P side. These must sound but must not
+* make the chart a DP chart.
+#00241:03030303
+#00242:00030003
+#00211:01010101
+
+* Measure 3 - invisible only, no visible notes at all. The lane keeps its sample
+* assignment while nothing is judged.
+#00331:03030303
+#00341:00030003
+
+*---------------------- CONTROL FLOW FIELD

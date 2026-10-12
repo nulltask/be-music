@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyRulesetNoteCounts, type RulesetChartFacts } from './facts.ts';
 import { resolveRuleset } from './definitions.ts';
 import {

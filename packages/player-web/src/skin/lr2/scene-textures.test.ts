@@ -1,5 +1,5 @@
 import { LR2_SPECIAL_GRAPHIC, type Lr2ImageRect, type Lr2Skin } from '@be-music/lr2-skin';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   collectDecideSkinTexturePaths,
   collectResultSkinTexturePaths,

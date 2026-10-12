@@ -43,7 +43,7 @@ Also, as it is still in the early stages of development, backward compatibility 
   "events": [],
   "bms": {
     "lnType": 1,
-    "lnMode": 0,
+    "lnMode": 1,
     "lnObjs": ["AA", "ZZ"],
     "defExRank": 120,
     "exRank": {
@@ -198,7 +198,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `backBmp`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
 - `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
-- `rank`: BMS `#RANK` or bmson `info.judge_rank`
+- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the stringifier converts between the two units when writing bmson
 - `total`: BMS `#TOTAL` or bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` or bmson `info.init_bpm`; BMS defaults to `130`, while bmson requires a positive `init_bpm`
@@ -206,15 +206,17 @@ Also, as it is still in the early stages of development, backward compatibility 
 
 `bms` is an extension area that holds additional BMS-specific information.
 
+- `preview`: value of `#PREVIEW`
 - `lnType`: value of `#LNTYPE`
-- `lnMode`: value of `#LNMODE`
+- `lnMode`: value of `#LNMODE` (`1` = LN, `2` = CN, `3` = HCN); only positive values are kept
 - `lnObjs`: Array holding multiple `#LNOBJ` declarations in declaration order (2 digit base36)
+- `volWav`: value of `#VOLWAV`
 - `defExRank`: value of `#DEFEXRANK`
 - `exRank`: Map of `#EXRANKxx`
 - `argb`: map of `#ARGBxx`
 - `player`: value of `#PLAYER`
 - `pathWav`: value of `#PATH_WAV`
-- `base`: value of `#BASE`; currently `36` or `62`. Omitted value means `36`.
+- `base`: `62` when the chart declares `#BASE 62`; omitted otherwise, which means `36`.
 - `baseBpm`: value of `#BASEBPM`
 - `stp`: `#STP` value array
 - `option`: value of `#OPTION`
@@ -256,7 +258,7 @@ This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 be
 `bmson` is an extension area that holds additional bmson-specific information.
 
 - `version`: bmson version string
-- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, and image/preview fields.
+- `info`: In addition to `resolution`, retains `subartists`, `chartName`, `level`, `initBpm`, `modeHint`, `judgeRank`, `total`, `lnType` (beatoraja `info.ln_type`: `1` = LN, `2` = CN, `3` = HCN), and image/preview fields.
 - `barlinesSuppressed`: `true` only when the bmson source authored an explicit `lines: []`; missing `lines` remains distinct and means the default 4/4 barline model.
 - `bga`: Keep `header`, `events`, `layerEvents`, `poorEvents`
 
@@ -285,6 +287,7 @@ interface BeMusicEvent {
   bmson?: {
     l?: number;
     c?: boolean;
+    t?: number;
     damage?: number;
   };
 }
@@ -292,6 +295,7 @@ interface BeMusicEvent {
 
 `bmson.damage` is used for beatoraja-style bmson `key_channels` mine notes.
 It stores the authored gauge damage as a non-negative number and is absent on ordinary `sound_channels` notes.
+`bmson.t` is the beatoraja per-note long-note type (`notes[].t`: `1` = LN, `2` = CN, `3` = HCN). It is kept only on long notes (`l > 0`) and overrides `bmson.info.lnType`.
 
 ## Meaning of `position`
 

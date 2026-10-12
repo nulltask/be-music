@@ -13,6 +13,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Play log (play history) specification](./playlog.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
+- [Writing a be-music skin](./be-music-skin.md)
 - [BMS/BMSON intermediate representation (`@be-music/json`) implementation specification](./json-spec.md)
 - [Glossary](./glossary.md)
 

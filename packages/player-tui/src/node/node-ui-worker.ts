@@ -232,7 +232,11 @@ async function bootstrap(): Promise<void> {
           bgaRenderer?.triggerPoor(command.seconds);
           continue;
         }
-        bgaRenderer?.clearPoor();
+        if (command.kind === 'clear-poor-bga') {
+          bgaRenderer?.clearPoor();
+        }
+        // Long-note start / end commands are for graphical skins; the TUI already lights the lane through
+        // `hold-lane-until-beat` / `release-lane`.
       }
     }
 

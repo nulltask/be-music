@@ -1,3 +1,4 @@
+import { resolveChartPlayVariant } from '@be-music/chart';
 import { normalizeChannel } from '@be-music/json';
 
 export interface ChannelLike {
@@ -14,7 +15,8 @@ export interface LaneBinding {
 
 /**
  * Mirrors `ChartPlayVariant` from `@be-music/chart`. `'24'` / `'48'` are the Keyboardmania keyboard modes, whose lanes
- * run onto the extended `1A..1O` / `2A..2O` channels and have no scratch column.
+ * run onto the extended `1A..1O` / `2A..2O` channels plus the wheel up / down on `1P` / `1Q` (`2P` / `2Q`), and have no
+ * scratch column.
  */
 export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
 
@@ -97,11 +99,10 @@ export interface LaneModeOptions {
   chartExtension?: string;
   platform?: NodeJS.Platform;
   /**
-   * Direct lane-mode override. When the host has already classified the chart's variant
-   * (e.g. via `resolveChartPlayVariant` from `@be-music/chart`), pass it here to bypass the
-   * content-based heuristic entirely. Useful for charts the heuristic under-classifies —
-   * notably `.bme` POPN-9 charts authored with `#PLAYER 1` + channels 16/17/18/19, which the
-   * heuristic would route to `7-key-sp`.
+   * The chart's play variant when the caller already knows it (an explicit host declaration, or
+   * `resolveChartPlayVariant` from `@be-music/chart` run over the chart's events). Without it the
+   * lane mode is resolved by that same `resolveChartPlayVariant` rule over the given channels,
+   * `chartExtension`, and `player`.
    */
   playVariant?: ChartPlayVariant;
 }
@@ -118,7 +119,8 @@ export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArr
 export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVariant): number {
   if (playVariant === '24' || playVariant === '48') {
     // Keyboard modes have no scratch, so slot `0` is never produced and `isScratchLaneForVariant` stays false for
-    // every channel. Lanes are the plain 1-based column index within the side (`11` → 1, `19` → 9, `1A` → 10, …).
+    // every channel. Lanes are the plain 1-based column index within the side (`11` → 1, `19` → 9, `1A` → 10, …,
+    // `1O` → 24), then the wheel: `1P` → 25 (up), `1Q` → 26 (down) — beatoraja's keyboard lane offsets.
     if (channel.length !== 2) return -1;
     if (channel[0] !== '1' && channel[0] !== '2') return -1;
     const laneIndex = resolveLaneIndex(channel[1]!);
@@ -163,7 +165,7 @@ export function resolveLr2LaneIndex(channel: string, playVariant?: ChartPlayVari
   if (slot < 0) return -1;
   // LR2 skins only define the 20 IIDX lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
   // `play_24.lr2skin`. Returning `-1` routes keyboard-mode charts through the caller's fallback playfield instead of
-  // squeezing 24 lanes into the 7-key rect table.
+  // squeezing 26 lanes into the 7-key rect table.
   if (playVariant === '24' || playVariant === '48') return -1;
   if (playVariant === '9') return slot;
   return channel.startsWith('2') ? 10 + slot : slot;
@@ -178,19 +180,89 @@ export function isScratch(channel: string): boolean {
   return channel === '16' || channel === '26';
 }
 
+/**
+ * Which way a keyboard-mode wheel lane turns: `'up'` for `1P` / `2P`, `'down'` for `1Q` / `2Q`, `undefined` for every
+ * other lane and for every channel outside the 24 / 48 KEY modes. The wheel is judged like a key, but it sits on the
+ * outer edge of its side and the lane options leave it in place.
+ */
+export function resolveWheelLaneDirection(channel: string, playVariant?: ChartPlayVariant): 'up' | 'down' | undefined {
+  if (playVariant !== '24' && playVariant !== '48') return undefined;
+  if (channel.length !== 2) return undefined;
+  const side = channel.charCodeAt(0);
+  if (side !== 0x31 && (side !== 0x32 || playVariant !== '48')) return undefined;
+  const lane = channel.charCodeAt(1) & 0xdf;
+  if (lane === 0x50) return 'up';
+  if (lane === 0x51) return 'down';
+  return undefined;
+}
+
+/**
+ * The lanes of one side the lane options (MIRROR / RANDOM / S-RANDOM / …) permute, in lane order. The IIDX families
+ * move the keys `11..15` / `18` / `19` (`21..` on 2P) and leave the scratch alone; the keyboard modes move their 24 keys
+ * and leave the wheel alone. Lanes the chart does not use are the caller's to drop.
+ */
+export function resolveLaneOptionChannels(side: '1P' | '2P', playVariant?: ChartPlayVariant): readonly string[] {
+  if (playVariant === '24' || playVariant === '48') {
+    return side === '2P' && playVariant === '24' ? [] : KEYBOARD_MODE_KEY_CHANNELS[side];
+  }
+  return IIDX_LANE_OPTION_CHANNELS[side];
+}
+
+const IIDX_LANE_OPTION_CHANNELS: Record<'1P' | '2P', readonly string[]> = {
+  '1P': ['11', '12', '13', '14', '15', '18', '19'],
+  '2P': ['21', '22', '23', '24', '25', '28', '29'],
+};
+
 export function isPlayableInputChannel(channel: string): boolean {
   return channel.startsWith('1') || channel.startsWith('2');
 }
 
 export function resolveLaneChannels(notes: ReadonlyArray<ChannelLike>, playVariant?: ChartPlayVariant): string[] {
-  const preferred =
-    playVariant === '24' || playVariant === '48'
-      ? KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant]
-      : playVariant === '9'
-        ? ['11', '12', '13', '14', '15', '16', '17', '18', '19', '22', '23', '24', '25']
-        : ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
   const used = new Set(notes.map((note) => note.channel).filter(isPlayableInputChannel));
-  return preferred.filter((channel) => used.has(channel));
+  return preferredLaneOrder(playVariant).filter((channel) => used.has(channel));
+}
+
+/** Left-to-right rendering order of every lane a play variant can use. */
+function preferredLaneOrder(playVariant?: ChartPlayVariant): readonly string[] {
+  if (playVariant === '24' || playVariant === '48') return KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant];
+  if (playVariant === '9') return ['11', '12', '13', '14', '15', '16', '17', '18', '19', '22', '23', '24', '25'];
+  return ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'];
+}
+
+/** Every lane of each play variant (9 KEY has two layouts, see {@link resolvePlayVariantLaneChannels}). */
+const PLAY_VARIANT_LANES: Record<'5' | '7' | '10' | '14', readonly string[]> = {
+  '5': ['16', '11', '12', '13', '14', '15'],
+  '7': ['16', '11', '12', '13', '14', '15', '18', '19'],
+  '10': ['16', '11', '12', '13', '14', '15', '26', '21', '22', '23', '24', '25'],
+  '14': ['16', '11', '12', '13', '14', '15', '18', '19', '26', '21', '22', '23', '24', '25', '28', '29'],
+};
+const POPN_9KEY_BME_LANES = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+const POPN_9KEY_PMS_LANES = ['11', '12', '13', '14', '15', '22', '23', '24', '25'];
+
+/**
+ * The full lane set of a chart's play variant, in rendering order — every lane of the 5 / 7 / 9 / 10 / 14 / 24 /
+ * 48 KEY layout, whether or not the chart puts notes on it, so a chart that only uses a few lanes still plays on the
+ * whole keyboard. 9 KEY takes the PMS layout (`22..25` on the right) when the chart uses any of those channels, the
+ * BME layout (`11..19`) otherwise. Lanes the chart uses outside the variant's set are kept too, so no note loses its
+ * lane. Without a variant this is {@link resolveLaneChannels}: just the lanes in use.
+ */
+export function resolvePlayVariantLaneChannels(
+  notes: ReadonlyArray<ChannelLike>,
+  playVariant?: ChartPlayVariant,
+): string[] {
+  const used = resolveLaneChannels(notes, playVariant);
+  if (!playVariant) return used;
+  let variantLanes: readonly string[];
+  if (playVariant === '24' || playVariant === '48') {
+    variantLanes = KEYBOARD_MODE_PREFERRED_CHANNELS[playVariant];
+  } else if (playVariant === '9') {
+    const pms = used.some((channel) => POPN_9KEY_PMS_LANES.includes(channel) && !POPN_9KEY_BME_LANES.includes(channel));
+    variantLanes = pms ? POPN_9KEY_PMS_LANES : POPN_9KEY_BME_LANES;
+  } else {
+    variantLanes = PLAY_VARIANT_LANES[playVariant];
+  }
+  const lanes = new Set([...variantLanes, ...used]);
+  return preferredLaneOrder(playVariant).filter((channel) => lanes.has(channel));
 }
 
 const IIDX_5KEY_SP_BINDINGS: FixedLaneDefinition[] = [
@@ -255,31 +327,60 @@ const POPN_9KEY_PMS_BINDINGS: FixedLaneDefinition[] = [
 ];
 
 const EXTENDED_LANE_DIGITS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-/** Lanes per side in the Keyboardmania modes — 24 columns (`11..19` + `1A..1O`), no scratch. */
-const KEYBOARD_MODE_SIDE_LANE_COUNT = 24;
-const KEYBOARDMANIA_SIDE_CHANNELS = EXTENDED_LANE_DIGITS.slice(0, KEYBOARD_MODE_SIDE_LANE_COUNT);
+/** Keys per side in the Keyboardmania modes — 24 columns (`11..19` + `1A..1O`), no scratch. */
+const KEYBOARD_MODE_SIDE_KEY_COUNT = 24;
+/** Lanes per side in the Keyboardmania modes — the 24 keys, then the wheel up / down (`1P` / `1Q`). */
+const KEYBOARD_MODE_SIDE_LANE_COUNT = 26;
+const KEYBOARDMANIA_SIDE_KEYS = EXTENDED_LANE_DIGITS.slice(0, KEYBOARD_MODE_SIDE_KEY_COUNT);
+
+const KEYBOARD_MODE_KEY_CHANNELS: Record<'1P' | '2P', readonly string[]> = {
+  '1P': Array.from(KEYBOARDMANIA_SIDE_KEYS, (lane) => `1${lane}`),
+  '2P': Array.from(KEYBOARDMANIA_SIDE_KEYS, (lane) => `2${lane}`),
+};
 
 /**
- * Left-to-right lane ordering for the keyboard modes. Unlike the IIDX families there is no scratch to hoist to the
- * outside edge, so the order is simply the side's columns in ascending lane index (`11`, `12`, …, `1O`), with the 2P
- * bank appended for `'48'`.
+ * Left-to-right lane ordering for the keyboard modes: the side's keys in ascending lane index (`11`, `12`, …, `1O`),
+ * with the wheel (up, then down) on the outer edge — left of the 1P keys, right of the 2P keys — where the IIDX
+ * families keep their scratch.
  */
 const KEYBOARD_MODE_PREFERRED_CHANNELS: Record<'24' | '48', string[]> = {
-  '24': [...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `1${lane}`),
-  '48': [
-    ...[...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `1${lane}`),
-    ...[...KEYBOARDMANIA_SIDE_CHANNELS].map((lane) => `2${lane}`),
+  '24': ['1P', '1Q', ...KEYBOARD_MODE_KEY_CHANNELS['1P']],
+  '48': ['1P', '1Q', ...KEYBOARD_MODE_KEY_CHANNELS['1P'], ...KEYBOARD_MODE_KEY_CHANNELS['2P'], '2P', '2Q'],
+};
+
+/**
+ * Default wheel keys. They sit on the outer edges of the keyboard, off the 24 / 48-key pool (`KEY_LAYOUT`, then
+ * `f1`…): Tab / Left Shift for the 1P wheel up / down, Enter / Right Shift for the 2P wheel. The arrow keys stay free
+ * for the in-play hi-speed controls.
+ */
+const KEYBOARD_MODE_WHEEL_BINDINGS: Record<'1P' | '2P', FixedLaneDefinition[]> = {
+  '1P': [
+    { channel: '1P', keyLabel: 'Tab', inputTokens: ['tab'], side: '1P' },
+    { channel: '1Q', keyLabel: 'LShift', inputTokens: ['shift-left'], side: '1P' },
+  ],
+  '2P': [
+    { channel: '2P', keyLabel: 'Enter', inputTokens: ['enter'], side: '2P' },
+    { channel: '2Q', keyLabel: 'RShift', inputTokens: ['shift-right'], side: '2P' },
   ],
 };
 
-const KBM_24KEY_SP_BINDINGS = createKeyboardModeBindings([['1', '1P']], KEYBOARDMANIA_SIDE_CHANNELS);
-const KBM_48KEY_DP_BINDINGS = createKeyboardModeBindings(
-  [
-    ['1', '1P'],
-    ['2', '2P'],
-  ],
-  KEYBOARDMANIA_SIDE_CHANNELS,
-);
+// Bindings run in lane order (the terminal player draws its lanes in this order): the 1P wheel, the keys, then the 2P
+// wheel. The keys take the pool in order across both sides, exactly as before the wheel lanes existed.
+const KBM_24KEY_SP_BINDINGS = [
+  ...KEYBOARD_MODE_WHEEL_BINDINGS['1P'],
+  ...createKeyboardModeBindings([['1', '1P']], KEYBOARDMANIA_SIDE_KEYS),
+];
+const KBM_48KEY_DP_BINDINGS = [
+  ...KEYBOARD_MODE_WHEEL_BINDINGS['1P'],
+  ...createKeyboardModeBindings(
+    [
+      ['1', '1P'],
+      ['2', '2P'],
+    ],
+    KEYBOARDMANIA_SIDE_KEYS,
+  ),
+  ...KEYBOARD_MODE_WHEEL_BINDINGS['2P'],
+];
 
 const FIXED_BINDINGS_BY_MODE: Record<LaneMode, FixedLaneDefinition[]> = {
   '5-key-sp': IIDX_5KEY_SP_BINDINGS,
@@ -393,95 +494,32 @@ export function resolveLaneDisplayMode(channels: string[], options: LaneModeOpti
   return `${label} (${layout === 'standard' ? 'PMS-STD' : 'PMS-COMPAT'})`;
 }
 
+/**
+ * Lane mode for a channel set. The mode always comes from `resolveChartPlayVariant` (`@be-music/chart`), the rule every
+ * host shares: the host-declared `playVariant` when there is one, otherwise the shared rule run over these channels,
+ * `chartExtension`, and `player`. There is deliberately no second heuristic here, so the engine, the CLI, and the web
+ * hosts cannot disagree on 5 KEY vs 7 KEY (and on the beatoraja judge windows that follow from it).
+ */
 function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions): LaneMode {
-  const hasExtendedLane = [...existing].some((channel) => {
-    if (channel.length !== 2) {
-      return false;
-    }
-    if (channel[0] !== '1' && channel[0] !== '2') {
-      return false;
-    }
-    const laneIndex = resolveLaneIndex(channel[1]);
-    return laneIndex !== undefined && laneIndex > 9;
-  });
-  const has2P = [...existing].some((channel) => is2PSideLaneChannel(channel));
-  const has7KeyMarker = existing.has('18') || existing.has('19');
-  const has14KeyMarker = has7KeyMarker || existing.has('28') || existing.has('29');
-
-  // **Direct host override** — when the caller already classified the variant (e.g. the
-  // gameplay scene's `resolveChartPlayVariant`-derived `chartVariant`), trust it and bypass
-  // the heuristic.  Especially important for `.bme` POPN-9 charts authored with `#PLAYER 1`
-  // + channels 16/17/18/19: the heuristic below routes those to `7-key-sp` (channel 16 →
-  // scratch, 17 → FREE ZONE), dropping the `f/v/g/b` POPN-9 key bindings and the channel-17
-  // notes from `scorableNotes`.  Host-driven classification — even when based on the same
-  // heuristic — gives the rest of the pipeline a single source of truth.
-  if (options.playVariant !== undefined) {
-    switch (options.playVariant) {
-      case '5':
-        return '5-key-sp';
-      case '7':
-        return '7-key-sp';
-      case '9':
-        return '9-key';
-      case '10':
-        return '5-key-dp';
-      case '14':
-        return '14-key-dp';
-      case '24':
-        return '24-key-sp';
-      case '48':
-        return '48-key-dp';
-    }
-  }
-
-  if (hasExtendedLane) {
-    return has2P ? '48-key-dp' : '24-key-sp';
-  }
-
-  if (isPmsExtension(options.chartExtension)) {
-    return '9-key';
-  }
-
-  if (has2P && has14KeyMarker) {
-    return '14-key-dp';
-  }
-
-  if (options.player === 3 && existing.has('17')) {
-    return '9-key';
-  }
-
-  if (has7KeyMarker) {
-    return '7-key-sp';
-  }
-
-  const fallback = resolveLaneModeByExtension(options.chartExtension, has2P);
-  if (fallback) {
-    return fallback;
-  }
-
-  if (has2P) {
-    return '5-key-dp';
-  }
-
-  return '5-key-sp';
+  const variant =
+    options.playVariant ??
+    resolveChartPlayVariant({
+      chartPath: options.chartExtension,
+      events: Array.from(existing, (channel) => ({ channel })),
+      bms: { player: options.player },
+    });
+  return LANE_MODE_BY_PLAY_VARIANT[variant];
 }
 
-function resolveLaneModeByExtension(chartExtension: string | undefined, has2P: boolean): LaneMode | undefined {
-  if (isPmsExtension(chartExtension)) {
-    return '9-key';
-  }
-  if (typeof chartExtension !== 'string') {
-    return undefined;
-  }
-  const normalized = chartExtension.trim().toLowerCase();
-  if (normalized === '.bme') {
-    return has2P ? '14-key-dp' : '7-key-sp';
-  }
-  if (normalized === '.bms') {
-    return has2P ? '5-key-dp' : '5-key-sp';
-  }
-  return undefined;
-}
+const LANE_MODE_BY_PLAY_VARIANT: Record<ChartPlayVariant, LaneMode> = {
+  '5': '5-key-sp',
+  '7': '7-key-sp',
+  '9': '9-key',
+  '10': '5-key-dp',
+  '14': '14-key-dp',
+  '24': '24-key-sp',
+  '48': '48-key-dp',
+};
 
 function resolveModeBindings(
   mode: LaneMode,
@@ -567,16 +605,6 @@ function resolveFreeZoneScratchChannel(channel: string): string | undefined {
     return '26';
   }
   return undefined;
-}
-
-function is2PSideLaneChannel(channel: string): boolean {
-  if (channel.length !== 2) {
-    return false;
-  }
-  if (channel[0] !== '2') {
-    return false;
-  }
-  return resolveLaneIndex(channel[1]) !== undefined;
 }
 
 function resolveLaneIndex(lane: string): number | undefined {

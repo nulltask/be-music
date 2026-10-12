@@ -1,5 +1,70 @@
 # @be-music/player-web-demo
 
+## 0.5.0
+
+### Minor Changes
+
+- The demo now plays on phones and tablets: touch-first devices default the skin effects to Reduced, play with the touch layout (Debug Menu "Play layout": Auto / Desktop / Touch), show pause and quit buttons during play, ask for fullscreen and landscape on a phone's first tap, and block pinch zoom and double-tap fullscreen during play. The Help button and search box no longer sit on top of the play screen.
+  
+  Be-music skins get more from the demo:
+  
+  - A Skin settings folder in the Debug Menu, built from the active skin's settings schema; values are stored per skin and apply at once, with a reset button.
+  - A skin's decide screen is shown between select and play when the skin defines one.
+  - A best record per chart (lamp, EX score, max combo, fewest misses, play count) is kept in localStorage and handed to the select skin.
+  
+  Play-history auto-save is now off by default.
+
+### Patch Changes
+
+- dc99100: Large folder drops reach the song list faster because the demo now hands song-bundle files to the collection loader unopened and only opens theme files before mounting a theme.
+- 7051b53: Phones held upright no longer get the rotate prompt on screens drawn on the skin's portrait stage (Synesthesia), only where the screen stays landscape (other skins, double play, 24 / 48 KEY). During play the collapsed Debug Menu shrinks to its chevron, so it stays off the skin's header.
+- Updated dependencies [38a2568]
+- Updated dependencies [00e8bce]
+- Updated dependencies [6808622]
+- Updated dependencies [dc99100]
+- Updated dependencies [3f1b6b3]
+- Updated dependencies [e265198]
+- Updated dependencies [d2f7f82]
+- Updated dependencies [1518e28]
+- Updated dependencies [9dbb569]
+- Updated dependencies [7260b23]
+- Updated dependencies [5f76923]
+- Updated dependencies [c749205]
+- Updated dependencies [77b070f]
+- Updated dependencies [0848402]
+- Updated dependencies [5dfc779]
+  - @be-music/player-web@0.9.0
+
+## 0.4.0
+
+### Minor Changes
+
+- The demo's Debug Menu gains controls for the new player features, and the page is easier to use full screen.
+  
+  - A built-in skin picker (Synesthesia by default), a _Skin effects_ level, and an _Add skin_ folder that adds the optional Lattice skin or a skin module from a URL (after a trust prompt); every registered skin's fonts are preloaded so its first frames don't fall back to another face.
+  - Volume and compressor sections: master, keysound, and BGM volume, plus live tuning of the key, BGM, master, and legacy compressors.
+  - Double-clicking the canvas toggles fullscreen, and the help button sits centred along the bottom edge.
+
+### Patch Changes
+
+- Updated dependencies [cd83c89]
+- Updated dependencies [9534c16]
+- Updated dependencies [36bcb71]
+- Updated dependencies [2c368ed]
+- Updated dependencies [d9958ac]
+- Updated dependencies [202a28b]
+- Updated dependencies [0319694]
+- Updated dependencies [202a28b]
+- Updated dependencies [750c47d]
+- Updated dependencies [b3fa635]
+- Updated dependencies [4ab6e91]
+- Updated dependencies [8b07494]
+- Updated dependencies [d5e558c]
+- Updated dependencies [0103435]
+  - @be-music/player-web@0.8.0
+  - @be-music/lr2-skin@0.1.6
+  - @be-music/beatoraja-skin@0.2.0
+
 ## 0.3.2
 
 ### Patch Changes

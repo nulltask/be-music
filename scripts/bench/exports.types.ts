@@ -13,6 +13,7 @@ export const PACKAGE_NAMES = [
   'player',
   'player-tui',
   'lr2-skin',
+  'skin-sdk',
   'player-web',
 ] as const;
 

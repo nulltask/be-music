@@ -127,16 +127,13 @@ async function main(): Promise<void> {
       await writeFile(notesPath, `${release.notes.trim()}\n`, 'utf8');
 
       const assets = await resolveAssets(options.assetsDir, release);
-      const releaseExists =
-        runGh(['release', 'view', release.tagName, '--repo', options.repo], true) !== null;
+      const releaseExists = runGh(['release', 'view', release.tagName, '--repo', options.repo], true) !== null;
 
       if (releaseExists) {
         if (assets.length > 0) {
-          execFileSync(
-            'gh',
-            ['release', 'upload', release.tagName, ...assets, '--clobber', '--repo', options.repo],
-            { stdio: 'inherit' },
-          );
+          execFileSync('gh', ['release', 'upload', release.tagName, ...assets, '--clobber', '--repo', options.repo], {
+            stdio: 'inherit',
+          });
         }
         execFileSync(
           'gh',
@@ -181,7 +178,7 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 });

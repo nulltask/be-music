@@ -135,7 +135,9 @@ function createTimedExtractionContext(json: BeMusicJson, playVariant?: ChartPlay
       if (normalizedChannel !== '17' && normalizedChannel !== '27') {
         return false;
       }
-      freeZoneActive ??= variantUsesFreeZone(resolveChartPlayVariant({ events: json.events, bms: json.bms }));
+      freeZoneActive ??= variantUsesFreeZone(
+        resolveChartPlayVariant({ events: json.events, bms: json.bms, bmson: json.bmson }),
+      );
       return freeZoneActive;
     },
   };

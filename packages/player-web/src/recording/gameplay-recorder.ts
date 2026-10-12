@@ -1,16 +1,18 @@
 /**
- * Records the gameplay scene to a downloadable video Blob using `MediaRecorder` + `HTMLCanvasElement.captureStream` for
- * video and `MediaStreamAudioDestinationNode` for audio. Output is a single WebM container with a VP9 / VP8 video track
- * and an Opus audio track — VP9 preferred, falls back through the codec / mime-type chain if the browser doesn't expose
- * it.
+ * Records the gameplay scene to a downloadable WebM Blob (VP9 / VP8 video, Opus audio).
  *
- * Why this approach over offline rendering:
+ * Two backends, picked at {@link GameplayRecorder.start}:
  *
- * - **Real-time.** Captures the canvas as it actually plays, so the recording reflects exactly what the user saw (frame
- *   skips, jank and all). Acceptable trade-off for a debugging / sharing tool.
- * - **No new deps.** All four APIs (`MediaRecorder`, `captureStream`, `MediaStreamAudioDestinationNode`, `Blob`
- *   download) are part of the modern browser baseline. A WASM encoder + offline render pipeline would be more accurate
- *   but order-of-magnitude more complex.
+ * - **WebCodecs + Mediabunny** (preferred; see `webcodecs-recorder.ts`). Frames and audio samples are stamped with the
+ *   `AudioContext` clock the gameplay runs on, so picture and sound are in sync by construction, and the output is
+ *   seekable as written.
+ * - **`MediaRecorder`** fallback for browsers without `VideoEncoder` / `AudioEncoder` / `AudioWorklet`, or without a
+ *   WebM-compatible encoder. It records `canvas.captureStream` + a `MediaStreamAudioDestinationNode`; the browser
+ *   stamps both on arrival, which leaves the picture a few tens of milliseconds ahead of the sound, and its output
+ *   needs {@link makeWebmSeekable} before external players can seek in it.
+ *
+ * Both capture in real time, so the recording reflects what the player saw (frame skips and all) rather than an offline
+ * re-render.
  *
  * Usage:
  *
@@ -18,12 +20,13 @@
  * const recorder = new GameplayRecorder({ canvas, audioContext, audioOutput });
  * recorder.start();
  * // ... gameplay runs ...
- * const blob = await recorder.stop();
- * downloadBlob(blob, 'song.webm');
+ * const result = await recorder.stop();
+ * downloadBlob(result.seekable ? result.blob : await makeWebmSeekable(result.blob), 'song.webm');
  * ```
  *
  * Disposed instances throw on further calls; the host should construct a fresh recorder per recording session.
  */
+import { WebCodecsCapture, supportsWebCodecsRecording } from './webcodecs-recorder.ts';
 
 export interface GameplayRecorderOptions {
   /**
@@ -43,8 +46,9 @@ export interface GameplayRecorderOptions {
    */
   audioOutput: AudioNode;
   /**
-   * Frames per second to capture. Defaults to 60 to match the gameplay tick. Setting a lower value (e.g. 30) produces a
-   * smaller output at the cost of jerkier scrolling notes.
+   * Maximum frames per second to capture. Defaults to 60 to match the gameplay tick. Frames are taken as the scene
+   * paints them (one per animation frame, thinned to this rate), so a display faster than `fps` is sampled down and a
+   * lower value (e.g. 30) produces a smaller output at the cost of jerkier scrolling notes.
    */
   fps?: number;
   /**
@@ -62,6 +66,25 @@ export interface GameplayRecorderOptions {
    * should rely on the built-in negotiation that picks the best supported variant.
    */
   mimeType?: string;
+  /**
+   * Largest video frame to encode, in pixels. Defaults to 1920×1080. A canvas larger than this (a high-DPR display in a
+   * big window easily reaches 3000×2000) is scaled down to fit before encoding — software VP9 cannot keep up with such
+   * frames in real time, so the encoder starts dropping frames and the video stutters out of step with the audio.
+   */
+  maxVideoSize?: { width: number; height: number };
+  /**
+   * Registers a callback to run right after every scene render and returns its unregister function — typically
+   * `(cb) => { app.ticker.add(cb, undefined, UPDATE_PRIORITY.UTILITY); return () => app.ticker.remove(cb); }`, which
+   * runs after Pixi's own render. Frames are then read while the freshly drawn image is still in the canvas, stamped
+   * with the clock that drew it. Without it the recorder polls on its own `requestAnimationFrame`, which may run before
+   * the render and pick up the previous frame.
+   */
+  subscribeFrame?: (onFrame: () => void) => () => void;
+  /**
+   * Which backend to use. `'auto'` (default) prefers WebCodecs and falls back to `MediaRecorder`; an explicit
+   * {@link mimeType} implies `'media-recorder'`.
+   */
+  backend?: 'auto' | 'webcodecs' | 'media-recorder';
 }
 
 /**
@@ -73,6 +96,8 @@ export interface GameplayRecorderResult {
   blob: Blob;
   mimeType: string;
   durationMs: number;
+  /** Whether the file already carries its seek index (WebCodecs backend); otherwise run {@link makeWebmSeekable}. */
+  seekable: boolean;
 }
 
 /**
@@ -106,6 +131,36 @@ export function pickRecorderMimeType(
   return undefined;
 }
 
+/**
+ * Whether a frame-driven capture should take the frame painted at `nowMs`, given the last captured frame at `lastMs`
+ * (`undefined` before the first) and the target `fps`. At or above the display rate every painted frame is taken; below
+ * it frames are taken once their interval has (almost) elapsed — the small tolerance keeps a 30 fps target on 60 Hz
+ * from slipping to every third frame through rAF jitter.
+ */
+export function shouldCaptureFrame(nowMs: number, lastMs: number | undefined, fps: number): boolean {
+  if (lastMs === undefined || !Number.isFinite(fps) || fps <= 0) return true;
+  const interval = 1000 / fps;
+  return nowMs - lastMs >= interval - Math.min(4, interval * 0.25);
+}
+
+/**
+ * The encoded frame size for a `width`×`height` canvas: the canvas size itself when it fits inside `max`, otherwise the
+ * largest size of the same aspect ratio that does, rounded down to even dimensions (VP8 / VP9 encoders reject odd
+ * sizes).
+ */
+export function resolveCaptureSize(
+  width: number,
+  height: number,
+  max: { width: number; height: number },
+): { width: number; height: number } {
+  const scale = Math.min(1, max.width / width, max.height / height);
+  if (scale >= 1) return { width, height };
+  return {
+    width: Math.max(2, Math.floor((width * scale) / 2) * 2),
+    height: Math.max(2, Math.floor((height * scale) / 2) * 2),
+  };
+}
+
 export class GameplayRecorder {
   private readonly canvas: HTMLCanvasElement;
   private readonly audioContext: AudioContext;
@@ -114,17 +169,27 @@ export class GameplayRecorder {
   private readonly videoBitsPerSecond: number;
   private readonly audioBitsPerSecond: number;
   private readonly explicitMimeType: string | undefined;
+  private readonly maxVideoSize: { width: number; height: number };
+  private readonly subscribeFrame: ((onFrame: () => void) => () => void) | undefined;
+  private readonly backend: 'auto' | 'webcodecs' | 'media-recorder';
+  /** The canvas frames are encoded from, and the copy that refreshes it (when the scene canvas is scaled down). */
+  private source: { canvas: HTMLCanvasElement; copy?: () => void } | undefined;
+  /** Active WebCodecs session, when that backend is in use. */
+  private capture: WebCodecsCapture | undefined;
   private mediaRecorder: MediaRecorder | undefined;
   private audioDestination: MediaStreamAudioDestinationNode | undefined;
   /**
-   * The `MediaStream` returned by `canvas.captureStream(fps)`. Held so {@link stop} / {@link dispose} can release the
+   * The `MediaStream` returned by `canvas.captureStream`. Held so {@link stop} / {@link dispose} can release the
    * stream's video tracks via `track.stop()`. `MediaRecorder.stop()` only ends the recording, not the underlying
    * capture; the canvas' frame producer stays attached and burns CPU on every paint until each video track is
    * explicitly stopped.
    */
   private videoStream: MediaStream | undefined;
+  /** Unregisters the per-frame callback (see {@link startFrameLoop}). */
+  private stopFrames: (() => void) | undefined;
   private chunks: Blob[] = [];
   private startedAtMs = 0;
+  private recording = false;
   private disposed = false;
 
   public constructor(options: GameplayRecorderOptions) {
@@ -135,32 +200,145 @@ export class GameplayRecorder {
     this.videoBitsPerSecond = options.videoBitsPerSecond ?? 5_000_000;
     this.audioBitsPerSecond = options.audioBitsPerSecond ?? 192_000;
     this.explicitMimeType = options.mimeType;
+    this.maxVideoSize = options.maxVideoSize ?? { width: 1920, height: 1080 };
+    this.subscribeFrame = options.subscribeFrame;
+    this.backend = options.mimeType !== undefined ? 'media-recorder' : (options.backend ?? 'auto');
   }
 
   public isActive(): boolean {
-    return this.mediaRecorder?.state === 'recording';
+    return this.recording;
   }
 
   /**
    * Begins capture. Throws when:
    *
-   * - The browser doesn't expose `MediaRecorder` / `canvas.captureStream` / a supported MIME type. UI hosts should
-   *   handle this gracefully (hide the record button, show a toast).
+   * - Neither backend is available (no WebCodecs and no `MediaRecorder` / `canvas.captureStream` / supported MIME
+   *   type). UI hosts should handle this gracefully (hide the record button, show a toast).
    * - The recorder was previously stopped without a fresh instance (`disposed` flag) — recording is a one-shot per
-   *   instance to keep the chunk-buffer lifecycle simple.
+   *   instance to keep the buffer lifecycle simple.
+   *
+   * The WebCodecs backend finishes its setup (codec probe, worklet load) asynchronously; capture begins once it is
+   * ready, a few tens of milliseconds in. If the setup fails the recorder switches to `MediaRecorder` on the spot.
    */
   public start(): void {
     if (this.disposed) {
       throw new Error('GameplayRecorder.start: instance has already been disposed');
     }
-    if (this.mediaRecorder) {
+    if (this.recording) {
       throw new Error('GameplayRecorder.start: recording is already in progress');
     }
+    const useWebCodecs =
+      this.backend === 'webcodecs' || (this.backend === 'auto' && supportsWebCodecsRecording(this.audioContext));
+    this.source = this.createCaptureSource();
+    if (useWebCodecs) {
+      this.startWebCodecs(this.source);
+    } else {
+      this.startMediaRecorder(this.source);
+    }
+    this.recording = true;
+    this.startedAtMs = performance.now();
+  }
+
+  /**
+   * Ends capture and resolves with the assembled video Blob plus the MIME type the browser used. Idempotent — calling
+   * on a non-active recorder resolves with `undefined`.
+   *
+   * Cleans up the audio tap regardless of state, so a `stop()` call also functions as a panic abort.
+   */
+  public async stop(): Promise<GameplayRecorderResult | undefined> {
+    if (!this.recording) {
+      this.release();
+      return undefined;
+    }
+    this.recording = false;
+    this.stopFrameLoop();
+    const durationMs = performance.now() - this.startedAtMs;
+    const capture = this.capture;
+    if (capture) {
+      this.capture = undefined;
+      try {
+        const blob = await capture.finish();
+        return blob ? { blob, mimeType: 'video/webm', durationMs, seekable: true } : undefined;
+      } finally {
+        this.release();
+      }
+    }
+    const recorder = this.mediaRecorder;
+    if (!recorder || recorder.state === 'inactive') {
+      this.release();
+      return undefined;
+    }
+    const stopPromise = new Promise<void>((resolve) => {
+      recorder.addEventListener('stop', () => resolve(), { once: true });
+    });
+    recorder.stop();
+    await stopPromise;
+    const mimeType = recorder.mimeType || 'video/webm';
+    const blob = new Blob(this.chunks, { type: mimeType });
+    this.release();
+    return { blob, mimeType, durationMs, seekable: false };
+  }
+
+  /**
+   * Hard-stops without waiting for the final chunk. Discards any partially-collected data. Used by the gameplay view's
+   * `dispose` when the user ESCs out mid-recording — we don't want to dangle the audio tap and the user obviously isn't
+   * going to use the partial blob.
+   */
+  public dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.recording = false;
+    this.capture?.dispose();
+    this.capture = undefined;
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      try {
+        this.mediaRecorder.stop();
+      } catch {
+        // Throws if state is already 'inactive' or never started. Both cases are fine — nothing more to do.
+      }
+    }
+    this.release();
+  }
+
+  private startWebCodecs(source: { canvas: HTMLCanvasElement; copy?: () => void }): void {
+    const capture = new WebCodecsCapture({
+      canvas: source.canvas,
+      audioContext: this.audioContext,
+      audioOutput: this.audioOutput,
+      fps: this.fps,
+      videoBitsPerSecond: this.videoBitsPerSecond,
+      audioBitsPerSecond: this.audioBitsPerSecond,
+    });
+    this.capture = capture;
+    this.startFrameLoop(() => {
+      source.copy?.();
+      capture.captureFrame();
+    });
+    capture.prepare().catch((error: unknown) => {
+      if (this.capture !== capture) return;
+      // eslint-disable-next-line no-console
+      console.warn('[recorder] WebCodecs capture unavailable; falling back to MediaRecorder', error);
+      this.stopFrameLoop();
+      capture.dispose();
+      this.capture = undefined;
+      if (!this.recording) return;
+      try {
+        this.startMediaRecorder(source);
+      } catch (fallbackError) {
+        // eslint-disable-next-line no-console
+        console.warn('[recorder] MediaRecorder fallback failed too', fallbackError);
+        this.recording = false;
+        this.release();
+      }
+    });
+  }
+
+  private startMediaRecorder(source: { canvas: HTMLCanvasElement; copy?: () => void }): void {
     const mimeType = this.explicitMimeType ?? pickRecorderMimeType();
     if (!mimeType) {
       throw new Error('GameplayRecorder.start: browser exposes no supported MediaRecorder MIME type');
     }
-    if (typeof this.canvas.captureStream !== 'function') {
+    if (typeof source.canvas.captureStream !== 'function') {
       throw new Error('GameplayRecorder.start: HTMLCanvasElement.captureStream is unavailable');
     }
     // Audio tap. The `MediaStreamAudioDestinationNode` is a dedicated sink — connecting `audioOutput` to it is
@@ -168,10 +346,27 @@ export class GameplayRecorder {
     const audioDestination = this.audioContext.createMediaStreamDestination();
     this.audioOutput.connect(audioDestination);
     this.audioDestination = audioDestination;
+    // Frame-driven capture: `captureStream(fps)` samples the canvas on its own timer, which drifts against the render
+    // loop and drops frames (a 60 fps capture of a 60 fps render measured ~54 fps). Capturing with frame rate 0 and
+    // requesting a frame after every render takes exactly the frames the scene painted. Browsers without
+    // `requestFrame` fall back to the timer-driven capture.
+    const videoStream = source.canvas.captureStream(0);
+    const track = videoStream.getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
+    if (track && typeof track.requestFrame === 'function') {
+      this.videoStream = videoStream;
+      this.startFrameLoop(() => {
+        source.copy?.();
+        track.requestFrame();
+      });
+    } else {
+      for (const unused of videoStream.getTracks()) unused.stop();
+      this.videoStream = this.canvas.captureStream(this.fps);
+    }
     // Combine canvas video + bus audio into a single stream so the recorder treats them as one timeline.
-    const videoStream = this.canvas.captureStream(this.fps);
-    this.videoStream = videoStream;
-    const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioDestination.stream.getAudioTracks()]);
+    const combined = new MediaStream([
+      ...this.videoStream.getVideoTracks(),
+      ...audioDestination.stream.getAudioTracks(),
+    ]);
     const recorder = new MediaRecorder(combined, {
       mimeType,
       videoBitsPerSecond: this.videoBitsPerSecond,
@@ -187,62 +382,69 @@ export class GameplayRecorder {
     // stop(), which is fine for short sessions but punishes 5-minute LN grindfests.
     recorder.start(1000);
     this.mediaRecorder = recorder;
-    this.startedAtMs = performance.now();
   }
 
   /**
-   * Ends capture and resolves with the assembled video Blob plus the MIME type the browser used. Idempotent — calling
-   * on a non-active recorder resolves with `undefined`.
-   *
-   * Cleans up the audio tap regardless of state, so a `stop()` call also functions as a panic abort.
+   * The canvas to capture: the scene canvas itself when it fits {@link maxVideoSize}, otherwise a smaller 2D canvas plus
+   * a `copy` that scales the current scene frame into it.
    */
-  public async stop(): Promise<GameplayRecorderResult | undefined> {
-    const recorder = this.mediaRecorder;
-    if (!recorder) {
-      this.detachAudioTap();
-      return undefined;
-    }
-    if (recorder.state === 'inactive') {
-      this.detachAudioTap();
-      return undefined;
-    }
-    const stopPromise = new Promise<void>((resolve) => {
-      recorder.addEventListener('stop', () => resolve(), { once: true });
-    });
-    recorder.stop();
-    await stopPromise;
-    const mimeType = recorder.mimeType || 'video/webm';
-    const blob = new Blob(this.chunks, { type: mimeType });
-    this.chunks = [];
-    this.detachAudioTap();
-    this.releaseVideoStream();
-    this.mediaRecorder = undefined;
-    return {
-      blob,
-      mimeType,
-      durationMs: performance.now() - this.startedAtMs,
+  private createCaptureSource(): { canvas: HTMLCanvasElement; copy?: () => void } {
+    const { width, height } = this.canvas;
+    const size = resolveCaptureSize(width, height, this.maxVideoSize);
+    if (size.width === width && size.height === height) return { canvas: this.canvas };
+    const target = document.createElement('canvas');
+    target.width = size.width;
+    target.height = size.height;
+    const context = target.getContext('2d', { alpha: false });
+    if (!context) return { canvas: this.canvas };
+    context.imageSmoothingQuality = 'high';
+    const copy = () => {
+      // The scene canvas can be resized mid-recording (window resize); stretch whatever it holds into the fixed frame.
+      context.drawImage(this.canvas, 0, 0, target.width, target.height);
     };
+    copy();
+    return { canvas: target, copy };
   }
 
   /**
-   * Hard-stops without waiting for the final chunk. Discards any partially-collected data. Used by the gameplay view's
-   * `dispose` when the user ESCs out mid-recording — we don't want to dangle the audio tap and the user obviously isn't
-   * going to use the partial blob.
+   * Runs `onFrame` after every scene render (via {@link subscribeFrame}, else on each animation frame), thinned to
+   * {@link fps}, until {@link stopFrameLoop}.
    */
-  public dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      try {
-        this.mediaRecorder.stop();
-      } catch {
-        // Throws if state is already 'inactive' or never started. Both cases are fine — nothing more to do.
-      }
+  private startFrameLoop(onFrame: () => void): void {
+    this.stopFrameLoop();
+    let lastCapturedMs: number | undefined;
+    const tick = () => {
+      const nowMs = performance.now();
+      if (!shouldCaptureFrame(nowMs, lastCapturedMs, this.fps)) return;
+      lastCapturedMs = nowMs;
+      onFrame();
+    };
+    if (this.subscribeFrame) {
+      this.stopFrames = this.subscribeFrame(tick);
+      return;
     }
+    let handle = 0;
+    const pump = () => {
+      tick();
+      handle = requestAnimationFrame(pump);
+    };
+    handle = requestAnimationFrame(pump);
+    this.stopFrames = () => cancelAnimationFrame(handle);
+  }
+
+  private stopFrameLoop(): void {
+    this.stopFrames?.();
+    this.stopFrames = undefined;
+  }
+
+  /** Releases every capture resource: frame loop, video tracks, audio tap and buffered chunks. Idempotent. */
+  private release(): void {
+    this.stopFrameLoop();
     this.mediaRecorder = undefined;
     this.chunks = [];
-    this.detachAudioTap();
+    this.source = undefined;
     this.releaseVideoStream();
+    this.detachAudioTap();
   }
 
   /**

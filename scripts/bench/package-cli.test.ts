@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { resolvePackageBenchmarkOutputPath } from './package-cli.ts';
 
 describe('resolvePackageBenchmarkOutputPath', () => {

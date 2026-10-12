@@ -1,4 +1,4 @@
-import { Application, type ApplicationOptions, Container, RendererType } from 'pixi.js';
+import { Application, type ApplicationOptions, Container, RendererType, UPDATE_PRIORITY } from 'pixi.js';
 import { logger } from '../logger.ts';
 
 const log = logger('scene-host');
@@ -70,6 +70,12 @@ export class PixiSceneHost {
   public readonly app: Application = new Application();
   /** The currently-active scene, or `undefined` between transitions. */
   private current: PixiScene | undefined;
+  /**
+   * Orientation of the design stage the active scene is drawing on: `'portrait'` while a be-music skin draws on its
+   * portrait stage, `'landscape'` otherwise (and for themes). Scenes report it every frame via
+   * {@link setStageOrientation}; hosts read it to decide whether to ask a phone held upright to rotate.
+   */
+  private orientation: 'landscape' | 'portrait' = 'landscape';
   /** Set after the first `mount` so re-mount calls are a no-op. */
   private mounted = false;
   /** Set when {@link dispose} runs so subsequent calls short-circuit. */
@@ -122,11 +128,10 @@ export class PixiSceneHost {
       // pixel-art-style render.
       antialias: false,
       autoDensity: true,
-      // Cap the render-buffer multiplier at 2× the CSS resolution. LR2 / BMS art is pixel-art rendered through
-      // `roundPixels: true` + nearest sampling — a 3× DPR Retina display brings no perceptual benefit but multiplies
-      // the GPU's fillrate cost by ~9× compared to the 1× CSS pixel grid. The cap drops a 3× DPR display to 56 % of
-      // the previous fragment count; 1× / 2× displays (the common case) are unaffected.
-      resolution: Math.min(2, globalThis.devicePixelRatio || 1),
+      // Render at the display's full devicePixelRatio so vector chrome and text land on real device pixels. (This
+      // used to be capped at 2× to save fill-rate on 3× displays, but the built-in skins' vector shapes and text then
+      // rendered visibly soft there.)
+      resolution: globalThis.devicePixelRatio || 1,
       roundPixels: true,
       // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
       // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
@@ -174,6 +179,8 @@ export class PixiSceneHost {
       }
       const previous = this.current;
       this.current = scene;
+      // Until the next scene reports its stage (themes never do), it is a landscape one.
+      this.orientation = 'landscape';
       if (previous) {
         try {
           await previous.exit();
@@ -209,6 +216,29 @@ export class PixiSceneHost {
     })();
     this.transitionLock = next.catch(() => undefined);
     return next;
+  }
+
+  /**
+   * Runs `callback` on every tick after the stage has been rendered (Pixi renders at `UPDATE_PRIORITY.LOW`; this hooks
+   * in at `UTILITY`, below it) and returns the unregister function. Used by the gameplay recorder to read each frame
+   * while it is still in the canvas.
+   */
+  public onAfterRender(callback: () => void): () => void {
+    const ticker = this.app.ticker;
+    ticker.add(callback, undefined, UPDATE_PRIORITY.UTILITY);
+    return () => {
+      ticker.remove(callback);
+    };
+  }
+
+  /** Called by the active scene with the orientation of the stage it draws on (see {@link getStageOrientation}). */
+  public setStageOrientation(orientation: 'landscape' | 'portrait'): void {
+    this.orientation = orientation;
+  }
+
+  /** The orientation of the stage the active scene draws on; `'landscape'` until it reports one. */
+  public getStageOrientation(): 'landscape' | 'portrait' {
+    return this.orientation;
   }
 
   public getCurrentScene(): PixiScene | undefined {
@@ -331,6 +361,6 @@ function rendererTypeLabel(type: RendererType): string {
     case RendererType.BOTH:
       return 'both';
     default:
-      return `unknown(${type})`;
+      return `unknown(${String(type)})`;
   }
 }

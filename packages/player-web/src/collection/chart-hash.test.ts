@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { BrowserSongAssetSource } from './types.ts';
 import { computeChartFileSha256, computeSha256Hex } from './chart-hash.ts';
 

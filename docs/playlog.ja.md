@@ -47,7 +47,7 @@ TypeScript 型・シリアライザ・防御的パーサは
 - LR2 / default ゲームプレイシーンは `PixiGameplayResultData.playlog` として公開します。
 - beatoraja ゲームプレイシーンは `PixiBeatorajaGameplayView.getPlaylog()` として公開します。
 - デモはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
-  Debug Menu の **Auto-save play history** チェックボックス（デフォルト ON）で制御します。プレイログ関連
+  Debug Menu の **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。プレイログ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
 - Debug Menu の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、判定幅
@@ -101,17 +101,17 @@ TypeScript 型・シリアライザ・防御的パーサは
 空 POOR・ゲージ表がルールセットごとに異なります。定数の出典は
 [`packages/player/src/ruleset/definitions.ts`](../packages/player/src/ruleset/definitions.ts) に記載しています。
 
-| 項目 | LR2 (`lr2/1`) | beatoraja (`beatoraja/1`) | IIDX (`iidx/1`) |
-| --- | --- | --- | --- |
-| 出典 | lr2oraja / OpenLR2 | beatoraja master | コミュニティ実測 (iidx.org) |
-| 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms |
-| ランクスケーリング | LR2 アンカー補間、BAD 固定 | judgerank 線形、空 POOR 窓固定 | なし |
-| ノート選択 | Lowest + multi-BAD 連鎖 | Combo（デフォルト。duration / lowest / score 選択可） | Lowest |
-| ロングノート | 全て LN（終端確定の 1 判定） | ノートごとの LN / CN / HCN | 全て CN（mode 3 は HCN ゲージ） |
-| 空 POOR 窓 | 早側のみ 1000 ms | late 150 / early 500 ms（7K） | 未測定 — beatoraja の窓を代用 |
-| 空 POOR でコンボ切断 | しない | 5K / PMS のみ | しない |
-| マネースコア | `(4·PG + 2·GR + GD) × 50000 / notes` | — | —（BISTROVER で廃止） |
-| ゲージ | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表 | iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減） |
+| 項目                  | LR2 (`lr2/1`)                                           | beatoraja (`beatoraja/1`)                                    | IIDX (`iidx/1`)                                          |
+| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------- |
+| 出典                  | lr2oraja / OpenLR2                                      | beatoraja master                                             | コミュニティ実測 (iidx.org)                              |
+| 判定幅（RANK NORMAL） | ±18/±40/±100/±200 ms                                    | ±15/±45/±112.5/late 210 · early 165 ms（7K, judgerank 75 %） | ±16.67/±33.33/±116.67/±250 ms                            |
+| ランクスケーリング    | LR2 アンカー補間、BAD 固定                              | judgerank 線形、空 POOR 窓固定                               | なし                                                     |
+| ノート選択            | Lowest + multi-BAD 連鎖                                 | Combo（デフォルト。duration / lowest / score 選択可）        | Lowest                                                   |
+| ロングノート          | 全て LN（終端確定の 1 判定）                            | ノートごとの LN / CN / HCN                                   | 全て CN（mode 3 は HCN ゲージ）                          |
+| 空 POOR 窓            | 早側のみ 1000 ms                                        | late 150 / early 500 ms（7K）                                | 未測定 — beatoraja の窓を代用                            |
+| 空 POOR でコンボ切断  | しない                                                  | 5K / PMS のみ                                                | しない                                                   |
+| マネースコア          | `(4·PG + 2·GR + GD) × 50000 / notes`                    | —                                                            | —（BISTROVER で廃止）                                    |
+| ゲージ                | lr2oraja LR2 表（2 % 未満即死、32 % 未満ダメージ ×0.6） | beatoraja ネイティブ表                                       | iidx.org 表（a 値回復、HARD は 30 % 以下でダメージ半減） |
 
 EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は IIDX の 9 分率です。チャージノート系の
 ルールセットはロングノートの始点・終端を 2 判定ノートとして数えます（各ルールセットの分母は
@@ -136,6 +136,14 @@ EX スコアは全ルールセットで PGREAT × 2 + GREAT × 1、DJ LEVEL は 
 
 ```bash
 pnpm playlog -- results/Song-2026-08-17T10-00-00-000Z.bmplay.json
+```
+
+```
+RULESET        EX     RATE     DJ   PG     GR     GD    BD    PR    EPR   FAST   SLOW   COMBO  SCORE   GAUGE
+be-music/native 1180  83.10%  AA   ...
+lr2/1          1180   83.10%   AA   ...                                          ...    140000  96.0% GROOVE CLEAR
+beatoraja/1    1174   82.68%   AA   ...
+iidx/1         1102   77.61%   AA   ...
 ```
 
 オプション: `--ruleset=lr2,beatoraja,iidx|all`、`--gauge=<id>`（ルールセット固有のゲージ上書き）、

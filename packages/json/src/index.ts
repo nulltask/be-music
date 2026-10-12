@@ -51,8 +51,9 @@ export interface BmsonEventExtensions {
   t?: number;
   /**
    * Per-mine gauge damage in 0..100, sourced from a bmson `key_channels[].notes[].damage` entry. Only set on mine
-   * events emitted from `key_channels`; absent on regular `sound_channels`-derived note events. Consumers that don't
-   * read this field fall through to the BMS-side default (`<value>/2` in base-36, floor 4).
+   * events emitted from `key_channels`; absent on regular `sound_channels`-derived note events. A bmson mine without it
+   * deals the default 4: its object value is the parser-assigned WAV slot, so the BMS-side rule (the object value read
+   * in base 36 is the damage) does not apply to it.
    */
   damage?: number;
 }

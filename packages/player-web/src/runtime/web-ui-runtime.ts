@@ -27,6 +27,8 @@ export interface WebUiRuntimeCallbacks {
    * - `press-lane` / `release-lane` — manual key press / release on this lane.
    * - `trigger-poor-bga` — POOR BGA window started (the host typically draws `#xxx06` until `clear-poor-bga`).
    * - `clear-poor-bga` — POOR BGA window ended (next note hit, or the timeout elapsed).
+   * - `long-note-start` / `long-note-end` — a long note's hold began (with the mode it plays in) / finished
+   *   (`complete` or `dropped`).
    *
    * The host should switch on `command.kind` and apply the matching visual effect.
    */

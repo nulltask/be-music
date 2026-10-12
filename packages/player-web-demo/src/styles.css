@@ -186,7 +186,12 @@ body {
  */
 .stage {
   position: relative;
-  width: 100%;
+  /*
+   * Keep the stage clear of a landscape phone's notch / rounded corners. Only the sides: the stage is height-bound on a
+   * phone, so giving up the bottom inset (home indicator) would shrink the whole play field. Zero on desktops.
+   */
+  width: auto;
+  margin: 0 env(safe-area-inset-right, 0px) 0 env(safe-area-inset-left, 0px);
   height: 100%;
   min-height: 0;
   overflow: hidden;
@@ -1079,8 +1084,9 @@ body {
  */
 .help-button {
   position: absolute;
-  right: 14px;
+  left: 50%;
   bottom: 14px;
+  transform: translateX(-50%);
   z-index: 8;
   display: inline-flex;
   align-items: center;
@@ -1111,7 +1117,7 @@ body {
   color: #ffd166;
   border-color: rgb(255 209 102 / 0.4);
   background: rgb(20 24 34 / 0.85);
-  transform: translateY(-1px);
+  transform: translate(-50%, -1px);
   outline: none;
 }
 
@@ -1854,5 +1860,286 @@ body {
   .help-button,
   .help-modal-close {
     transition: none;
+  }
+}
+
+/*
+ * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
+ * reachable by hovering where it sits.
+ */
+.shell.in-gameplay .search-input {
+  visibility: hidden;
+}
+
+.shell.in-gameplay .help-button {
+  opacity: 0;
+}
+
+.shell.in-gameplay .help-button:hover,
+.shell.in-gameplay .help-button:focus-visible {
+  opacity: 1;
+}
+
+/*
+ * Phones and tablets. `main.ts` marks the root `touch-first` (and `phone` for phone-sized screens) from
+ * `device-profile.ts`; nothing here applies on a desktop.
+ *
+ * The page chrome steps off the stage: the stage is fitted to the screen's height on a landscape phone, so any overlay
+ * sits on top of the skin's own text. The search box only shows while it is being typed in (the skins' search area
+ * focuses it), the Help button shrinks to an icon in the corner, and the Debug Menu collapses to a short tab.
+ */
+@supports (height: 100dvh) {
+  html.touch-first body,
+  html.touch-first #app {
+    height: 100dvh;
+  }
+}
+
+html.touch-first .search-input:not(:focus) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.touch-first .search-input:focus {
+  top: max(8px, env(safe-area-inset-top, 0px));
+  bottom: auto;
+  left: 50%;
+  width: min(320px, 70vw);
+  transform: translateX(-50%);
+  font-size: 16px; /* 16px keeps iOS Safari from zooming the page on focus */
+}
+
+html.phone .help-button {
+  left: max(8px, env(safe-area-inset-left, 0px));
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  transform: none;
+  padding: 7px;
+}
+
+html.phone .help-button:hover,
+html.phone .help-button:focus-visible {
+  transform: none;
+}
+
+html.phone .help-button-label {
+  display: none;
+}
+
+html.phone .lil-gui.lil-root.lil-closed {
+  --width: 116px !important;
+}
+
+html.phone .lil-gui.lil-root {
+  max-height: 100dvh;
+  overflow-y: auto;
+  right: env(safe-area-inset-right, 0px);
+}
+
+/* No hover on a touch screen to reveal the hidden Help button, and it must not take taps meant for the lanes. */
+html.touch-first .shell.in-gameplay .help-button {
+  visibility: hidden;
+}
+
+html.touch-first:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
+  opacity: 0.35;
+}
+
+/* During play the collapsed Debug Menu is just its chevron, so it stays off the skin's header labels. */
+html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed {
+  --width: 40px !important;
+}
+
+html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed > .lil-title {
+  overflow: hidden;
+  white-space: nowrap;
+  color: transparent;
+}
+
+html:has(.shell.in-gameplay) .lil-gui.lil-root.lil-closed > .lil-title::before {
+  color: var(--text-color);
+}
+
+/* Touch play controls: a pause button during play; Resume / Quit while paused. */
+.touch-controls {
+  position: absolute;
+  top: max(8px, env(safe-area-inset-top, 0px));
+  left: max(8px, env(safe-area-inset-left, 0px));
+  z-index: 9;
+  display: none;
+  gap: 8px;
+}
+
+html.touch-first .shell.in-gameplay.touch-play .touch-controls {
+  display: flex;
+}
+
+.touch-control {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 999px;
+  background: rgb(11 14 22 / 0.55);
+  color: rgb(248 250 252 / 0.75);
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.touch-control svg {
+  width: 18px;
+  height: 18px;
+}
+
+.touch-control--text {
+  display: none;
+  padding: 0 16px;
+}
+
+.shell.play-paused .touch-control {
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+}
+
+.shell.play-paused .touch-control--text {
+  display: inline-grid;
+  border-color: rgb(255 209 102 / 0.5);
+  color: #ffd166;
+}
+
+/* Phones held upright: ask for landscape, unless the screen is drawn on the skin's portrait stage. */
+.rotate-hint {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  html.phone:not(.portrait-stage) .rotate-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: rgb(8 9 13 / 0.94);
+    text-align: center;
+  }
+}
+
+.rotate-hint-icon {
+  width: 56px;
+  height: 56px;
+  color: #ffd166;
+  animation: rotate-hint-turn 2.4s ease-in-out infinite;
+}
+
+.rotate-hint-title {
+  margin-top: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.rotate-hint-subtitle {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgb(210 217 228 / 0.75);
+}
+
+@keyframes rotate-hint-turn {
+  0%,
+  30% {
+    transform: rotate(0deg);
+  }
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rotate-hint-icon {
+    animation: none;
+  }
+}
+
+/* One-line explanation under a Debug Menu setting (e.g. "Play in silent mode"). */
+.lil-gui .gui-note {
+  padding: 0 var(--padding) 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgb(210 217 228 / 0.75);
+}
+
+/*
+ * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the Debug Menu
+ * (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and leaves by itself.
+ */
+.silent-mode-hint {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 6px 6px 6px 12px;
+  border: 1px solid rgb(255 209 102 / 0.35);
+  border-radius: 10px;
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.35;
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: silent-mode-hint-in 0.25s ease-out;
+}
+
+.silent-mode-hint-text {
+  flex: 1 1 auto;
+}
+
+.silent-mode-hint-action,
+.silent-mode-hint-dismiss {
+  flex: none;
+  min-height: 32px;
+  border: 1px solid rgb(255 209 102 / 0.5);
+  border-radius: 7px;
+  background: transparent;
+  color: #ffd166;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.silent-mode-hint-action {
+  padding: 0 10px;
+}
+
+.silent-mode-hint-dismiss {
+  width: 32px;
+  border-color: transparent;
+  color: rgb(210 217 228 / 0.85);
+  font-size: 16px;
+}
+
+@keyframes silent-mode-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .silent-mode-hint {
+    animation: none;
   }
 }

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { floatToInt16, writeStereoPcm16Be, writeStereoPcm16Le } from './index.ts';
 
 function expectBufferUnchanged(buffer: Buffer, fill = 0x7f): void {

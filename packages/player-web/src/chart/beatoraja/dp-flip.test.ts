@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicJson } from '@be-music/json';
 import { flipDpChannel, flipDpChart } from './dp-flip.ts';
 

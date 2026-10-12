@@ -324,7 +324,7 @@ export function createWebAudioSession(context: WebAudioSessionContext): WebAudio
       // Hard-stop every still-playing source so they don't survive into the next chart's bus and bleed audio. The
       // engine's dispose path runs after `finish` (the abort variant) — the source set is empty in the graceful
       // path so this loop is a no-op there.
-      for (const handle of [...activeSources]) {
+      for (const handle of Array.from(activeSources)) {
         stopSource(handle);
       }
       activeBySlot.clear();

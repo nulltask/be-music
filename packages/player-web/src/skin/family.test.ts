@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { beatorajaSkinFamily } from './beatoraja/family.ts';
 import { defaultSkinFamily } from './default/family.ts';
 import { createSkinFamilyRegistry, type SkinFamily } from './family.ts';

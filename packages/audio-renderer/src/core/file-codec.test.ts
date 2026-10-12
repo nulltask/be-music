@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { detectAudioFormat, encodeAiff16, encodeWav16, type StereoRenderResult } from './file-codec.ts';
 
 describe('audio file codecs', () => {

@@ -1,6 +1,6 @@
 import type { BeMusicJson } from '@be-music/json';
 import { createEmptyJson } from '@be-music/json';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   CHART_PREVIEW_STOP_FADE_OUT_SECONDS,
   ChartPreviewEngine,

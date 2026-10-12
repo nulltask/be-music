@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vite-plus/test';
 import { loadOptionalNodeModule, OPTIONAL_NODE_MODULE_DIR_ENV } from './optional-node-module.ts';
 
 describe('loadOptionalNodeModule', () => {

@@ -29,51 +29,52 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 ### 対応チャンネル
 
-| channel                      | player における扱い                                                                                                                                                          |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxx01`                     | BGM / sample trigger として再生します。                                                                                                                                      |
-| `#xxx02`                     | 小節長として時間解決と beat 解決に反映します。                                                                                                                               |
-| `#xxx03`, `#xxx08`           | BPM change として時間解決に反映します。                                                                                                                                      |
-| `#xxx04`, `#xxx07`, `#xxx0A` | BGA base / layer / layer2 として描画します。                                                                                                                                 |
-| `#xxx06`                     | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                                                                         |
-| `#xxx09`                     | STOP として時間解決に反映します。                                                                                                                                            |
-| `#xxx11-19`, `#xxx21-29`     | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY / 24KEY 以外では FREE ZONE、9KEY / 24KEY では通常ノートです。                                      |
-| `#xxx1A-1O`, `#xxx2A-2O`     | 可視演奏ノートとして扱います。24 key (Keyboardmania) バンクのレーン 10..24 です。これらのチャンネルが 1 つでもあれば `24 KEY SP` / `48 KEY DP` と判定します。                |
-| `#xxx31-39`, `#xxx41-49`（拡張の `#xxx3A-3O` / `#xxx4A-4O` を含む） | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。 |
-| `#xxx51-59`, `#xxx61-69`（拡張の `#xxx5A-5O` / `#xxx6A-6O` を含む） | BMS legacy long note として扱います。                                                                                                                 |
-| `#xxx97`, `#xxx98`           | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                                                                           |
-| `#xxxA0`                     | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                                                                         |
-| `#xxxSC`                     | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。                                                                                                               |
-| `#xxxSP`                     | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。                                                                                                                |
-| `#xxxD1-D9`, `#xxxE1-E9`（拡張の `#xxxDA-DO` / `#xxxEA-EO` を含む） | 地雷として扱います。                                                                                                                                   |
+| channel                                                             | player における扱い                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                                                            | BGM / sample trigger として再生します。                                                                                                                                                                                                                  |
+| `#xxx02`                                                            | 小節長として時間解決と beat 解決に反映します。                                                                                                                                                                                                           |
+| `#xxx03`, `#xxx08`                                                  | BPM change として時間解決に反映します。                                                                                                                                                                                                                  |
+| `#xxx04`, `#xxx07`, `#xxx0A`                                        | BGA base / layer / layer2 として描画します。                                                                                                                                                                                                             |
+| `#xxx06`                                                            | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                                                                                                                                                     |
+| `#xxx09`                                                            | STOP として時間解決に反映します。                                                                                                                                                                                                                        |
+| `#xxx11-19`, `#xxx21-29`                                            | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY / 24KEY 以外では FREE ZONE、9KEY / 24KEY では通常ノートです。                                                                                                                  |
+| `#xxx1A-1O`, `#xxx2A-2O`                                            | 可視演奏ノートとして扱います。24 key (Keyboardmania) バンクのレーン 10..24 です。これらのチャンネルが 1 つでもあれば `24 KEY SP` / `48 KEY DP` と判定します。                                                                                            |
+| `#xxx1P`, `#xxx1Q`, `#xxx2P`, `#xxx2Q`                              | 24 / 48 KEY のホイールの可視演奏ノートとして扱います。`1P` / `2P` が上、`1Q` / `2Q` が下です（bmson `keyboard-24k` のホイール `x` = 25 / 26 に対応する be-music 独自の BMS 規約）。ほかの拡張チャンネルと同じく `24 KEY SP` / `48 KEY DP` と判定します。 |
+| `#xxx31-39`, `#xxx41-49`（拡張の `#xxx3A-3O` / `#xxx4A-4O` を含む） | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。                                                                             |
+| `#xxx51-59`, `#xxx61-69`（拡張の `#xxx5A-5O` / `#xxx6A-6O` を含む） | BMS legacy long note として扱います。                                                                                                                                                                                                                    |
+| `#xxx97`, `#xxx98`                                                  | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                                                                                                                                                       |
+| `#xxxA0`                                                            | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                                                                                                                                                     |
+| `#xxxSC`                                                            | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。                                                                                                                                                                                           |
+| `#xxxSP`                                                            | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。                                                                                                                                                                                            |
+| `#xxxD1-D9`, `#xxxE1-E9`（拡張の `#xxxDA-DO` / `#xxxEA-EO` を含む） | 地雷として扱います。                                                                                                                                                                                                                                     |
 
 ### 対応コマンド
 
-| command                                                                                                                                 | player における扱い                                                                                                                                    |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。                                                    |
-| `#BANNER`                                                                                                                               | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。                                                                  |
-| `#STAGEFILE`                                                                                                                            | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。                                                          |
-| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | 選曲画面の表示、ソート、フィルタ、結果表示に使います。                                                                                                 |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | 時間解決に使います。                                                                                                                                   |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | 判定幅、表示ランク、groove gauge 計算に使います。                                                                                                      |
-| `#WAVxx`, `#BMPxx`                                                                                                                      | 音声・BGA リソース解決に使います。                                                                                                                     |
-| `#BASE`                                                                                                                                 | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。 |
-| `#PREVIEW`                                                                                                                              | 選曲画面のプレビュー再生で優先的に使います。                                                                                                           |
-| `#PATH_WAV`                                                                                                                             | 選曲画面プレビューのファイル探索にだけ使います。通常プレイ中の sample 解決には使いません。                                                             |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                       |
-| `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                |
-| `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                     |
-| `#POORBGA`                                                                                                                              | POOR 画像の既定値上書きに使います。                                                                                                                    |
-| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                       |
-| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                 |
+| command                                                                                                                                 | player における扱い                                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | 選曲画面の metadata 表示に使います。`#TITLE` / `#ARTIST` / `#GENRE` は TUI と結果画面にも使います。                                                                                                                                                  |
+| `#BANNER`                                                                                                                               | 選曲画面の banner 表示に使います。bmson では `info.banner_image` を同用途で使います。                                                                                                                                                                |
+| `#STAGEFILE`                                                                                                                            | 選曲後の loading screen 専用画像として使います。gameplay 中の BGA renderer では参照しません。                                                                                                                                                        |
+| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | 選曲画面の表示、ソート、フィルタ、結果表示に使います。                                                                                                                                                                                               |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | 時間解決に使います。                                                                                                                                                                                                                                 |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | 判定幅、表示ランク、groove gauge 計算に使います。                                                                                                                                                                                                    |
+| `#WAVxx`, `#BMPxx`                                                                                                                      | 音声・BGA リソース解決に使います。                                                                                                                                                                                                                   |
+| `#BASE`                                                                                                                                 | BMS object ID の base を選びます。`#BASE 62` では sample、BGA、BPM/STOP 参照、long-note 終端、地雷値の解決時に小文字 ID を case-sensitive に扱います。                                                                                               |
+| `#PREVIEW`                                                                                                                              | 選曲画面のプレビュー再生で優先的に使います。                                                                                                                                                                                                         |
+| `#PATH_WAV`                                                                                                                             | ブラウザのゲームプレイとオフラインレンダラ（`renderJson`）が sample を解決するとき、素のパスより先にディレクトリ接頭辞として試します。選曲画面プレビューのファイル探索にも使います。ターミナル player はプレイ用の sample 読み込みでは適用しません。 |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | BMS long note の解釈に使います。                                                                                                                                                                                                                     |
+| `#PLAYER`                                                                                                                               | レーンモード推定と表示上の player metadata に使います。                                                                                                                                                                                              |
+| `#VOLWAV`                                                                                                                               | 譜面全体の音量倍率として使います。                                                                                                                                                                                                                   |
+| `#POORBGA`                                                                                                                              | POOR 画像の既定値上書きに使います。                                                                                                                                                                                                                  |
+| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | ノート描画距離の計算に使います。                                                                                                                                                                                                                     |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | 再生開始前に制御構文として解決します。                                                                                                                                                                                                               |
 
 ### 未対応チャンネル
 
-| channel                                                                     | 現在の player 実装                                                                                                                                                                              |
-| --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxxA6`                                                                    | `#CHANGEOPTIONxx` の実行時反映チャンネルとしては未対応です。event として保持されても player runtime は参照しません。                                                                            |
-| 上の対応一覧に含まれないその他の object channel                             | parser が保持しても、player runtime は意味解釈しません。                                                                                                                                        |
+| channel                                         | 現在の player 実装                                                                                                   |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `#xxxA6`                                        | `#CHANGEOPTIONxx` の実行時反映チャンネルとしては未対応です。event として保持されても player runtime は参照しません。 |
+| 上の対応一覧に含まれないその他の object channel | parser が保持しても、player runtime は意味解釈しません。                                                             |
 
 ### 未対応コマンド
 
@@ -96,7 +97,7 @@ player は次の順序で譜面を実行します。
 
 1. BMS 制御構文を実行時に解決し、今回の再生で使う分岐済み譜面を作ります。
 2. 分岐後の譜面から、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガを抽出します。
-3. 実際に存在するチャンネル群からレーンモード、キー割り当て、FREE ZONE のエイリアスを確定します。
+3. 分岐後の譜面からレーンモードを確定し（[レーンモードと入力](#レーンモードと入力)）、実際に存在するチャンネル群からキー割り当てと FREE ZONE のエイリアスを確定します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
 5. `AUTO` / `MANUAL` / `AUTO SCRATCH` のいずれかのメインループを実行し、最後に `PlayerSummary` を返します。
 
@@ -135,8 +136,16 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 ### 地雷
 
 地雷チャンネルは、対応する playable lane に写像したうえで別配列として保持します。
-地雷は `summary.total` に含めませんが、手動入力時には通常ノートより優先して `BAD` を発生させることがあります。
-`#WAV00` が定義されている場合、player は手動で地雷に当たったときの爆発音としてそれを使用します。
+地雷は `summary.total` に含めません。
+
+地雷は LR2 の発動モデルに合わせます（LR2 自身の changelog。ダメージモデルは beatoraja `JudgeManager` で確認）。
+
+- 発動条件は LR2 の2条件です。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
+- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
+- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。`damage` のない bmson の地雷は既定の `4%` です（オブジェクト値はパーサーが割り当てた WAV スロットでありダメージ表現ではないため、ダメージとしては読みません）。
+- ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
+- `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
+- kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
 
 ### 不可視ノート
 
@@ -152,7 +161,15 @@ FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱いま
 
 ## レーンモードと入力
 
-レーンモードは、譜面に実在するチャンネル、`bms.player`、`chartExtension` から推定します。
+レーンモードは、すべての host が共有するひとつのルール `@be-music/chart` の `resolveChartPlayVariant` で決めます。
+入力は分岐後の譜面のイベント、`bms.player`、bmson の `mode_hint`、譜面の拡張子 (`PlayerOptions.laneModeExtension`) です。
+bmson の `keyboard-24k` / `keyboard-24k-double` は `24 KEY SP` / `48 KEY DP` をそのまま選ぶため、最初の 9 鍵しか使わない
+キーボード譜面も 7 / 9 KEY とは判定しません。ほかの hint はレーンによる判定に任せます。variant をすでに
+知っている host は `PlayerOptions.playVariant` で明示できます。レーン使用は `1x` / `2x` のレーンチャンネルと `5x` / `6x` の
+`#LNTYPE` ロングノートチャンネルで数え、地雷と不可視オブジェはレーンモードを変えません。そのため、これらが beatoraja
+ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。判定順は
+[BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあり、文書化済みの `.bme` 補完（6 / 7 鍵の列がない `.bme`
+譜面は `7 KEY SP` / `14 KEY DP`）も含みます。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
@@ -166,7 +183,9 @@ FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱いま
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
 FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
-`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 24 レーンをチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に持ち、scratch 列はなく、チャンネル昇順に左から右へ並べます。判定は内容ベースで、拡張レーンチャンネルが 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選びます。SP の 24 レーンは fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。48 レーンの DP は印字キーの数を超えるため末尾がファンクションキーに落ちますが、48 レーンは AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
+`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは IIDX 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
+
+ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、web player がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
 
 IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
 scratch は 1P が左 `Shift`、2P が右 `Shift` です。
@@ -201,13 +220,13 @@ beatoraja はスクラッチを判定ごとに 10 ms 広げ、ロングノート
 
 player は LR2 の実測判定幅を基準にします（hitkey 日記 2015-01-19 の実測値、lr2oraja の LR2 互換テーブルと一致）。
 
-| `#RANK` | `PGREAT` | `GREAT` | `GOOD` | `BAD` |
-| --- | --- | --- | --- | --- |
-| `0` `VERY HARD` | `±8ms` | `±24ms` | `±40ms` | `±200ms` |
-| `1` `HARD` | `±15ms` | `±30ms` | `±60ms` | `±200ms` |
-| `2` `NORMAL` | `±18ms` | `±40ms` | `±100ms` | `±200ms` |
-| `3` `EASY` | `±21ms` | `±60ms` | `±120ms` | `±200ms` |
-| `4` `VERY EASY` | `NORMAL` と同一（LR2 は `#RANK 4` を `NORMAL` として扱う） | | | |
+| `#RANK`         | `PGREAT`                                                   | `GREAT` | `GOOD`   | `BAD`    |
+| --------------- | ---------------------------------------------------------- | ------- | -------- | -------- |
+| `0` `VERY HARD` | `±8ms`                                                     | `±24ms` | `±40ms`  | `±200ms` |
+| `1` `HARD`      | `±15ms`                                                    | `±30ms` | `±60ms`  | `±200ms` |
+| `2` `NORMAL`    | `±18ms`                                                    | `±40ms` | `±100ms` | `±200ms` |
+| `3` `EASY`      | `±21ms`                                                    | `±60ms` | `±120ms` | `±200ms` |
+| `4` `VERY EASY` | `NORMAL` と同一（LR2 は `#RANK 4` を `NORMAL` として扱う） |         |          |          |
 
 `BAD` 幅は rank・拡張命令に関わらず `±200ms` で固定です。スクラッチも鍵盤と同じ幅を使います。
 `PERFECT` / `GREAT` / `GOOD` / `BAD` の境界は、この 4 本の幅を内側から順に走査して決まります。
@@ -265,6 +284,8 @@ bmson では次の優先順位で判定幅を決めます。
 
 bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱い、同じ LR2 アンカー補間で判定幅へ換算します。
 そのため `judgeRank=100` は `NORMAL`（`±18/±40/±100/±200ms`）そのままです。
+`beatoraja` ruleset は `judge_rank` をそのまま judgerank として使い、`judge_rank` のない bmson 譜面は
+`judge_rank: 100`（bmson の既定値。7 KEY の PGREAT は `±20ms`）として判定します。BMS の `#RANK 2` 扱いにはなりません。
 
 現在の実装では、bmson に BMS の `#EXRANKxx` 相当の動的判定幅変更はありません。
 
@@ -315,12 +336,11 @@ bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の�
 - combo を 0 に戻す。
 - score を更新する。
 - 通常ノートの `BAD` では groove gauge を `-4` する。
-- 手動地雷ヒットでは判定表示を `BAD` のままにして、地雷値ベースのダメージを別途適用する。
 
 ### `POOR`
 
 `POOR` は演奏対象ノートに対する失敗です。
-ノートが `BAD` 窓を過ぎた場合、または手動入力のズレが `BAD` 窓を超えた場合に発生します。
+ノートが打鍵されないまま `BAD` 窓を過ぎた場合に発生します。
 
 `POOR` 発生時は次を行います。
 
@@ -354,14 +374,11 @@ LN 解放直後の repeat-suppress 窓内も同様に空POOR を発火させま�
 
 ### 地雷
 
-地雷は LR2 の発動モデルに合わせます（LR2 自身の changelog。ダメージモデルは beatoraja `JudgeManager` で確認）。
+地雷の爆発は判定語ではありません。`BAD` / `POOR` を発生させず、判定カウンタ・combo・EX-SCORE・score も変更せず、近くの通常ノート候補より優先されることもありません。
+行うのはゲージへの地雷ダメージ適用と、定義されていれば `#WAV00` の発音だけです。発動条件とダメージ規則は [地雷](#地雷) を参照してください。
+オブジェクト値が 2 文字の大文字 base36 ID でない場合（または `00` の場合）は既定ダメージ `4%` にフォールバックします。`#BASE 62` の小文字の値もこれに該当します。`damage` のない bmson の地雷も同じ `4%` です。
 
-- 発動条件は LR2 の2条件です。「**キーを押したまま地雷が判定線を通過**」または「**地雷が判定線の `PGREAT` 窓以内にあるときの押下**」で爆発します。キーが押されていない地雷の通過は無害で、通過後かつ `PGREAT` 圏外の押下も無害です。（losak の資料は `GOOD` 窓としていますが、一次資料である LR2 changelog は「ピカグレ範囲内」と明記しています。詳細は [`bms-spec.ja.md`](./bms-spec.ja.md) 参照。）
-- 爆発はゲージ減少と `#WAV00` 爆発音のみで、**判定・コンボ・スコアには一切影響しません**。通常ノートの判定は爆発と独立に行われます（地雷が近接ノートへの入力を吸い込むことはありません）。
-- ダメージは地雷オブジェクト値（大文字 base36）を **そのままパーセントとして解釈**します（LR2 / beatoraja 準拠。nanasi 系仕様の `value / 2` とは異なります）。bmson の `key_channels[].notes[].damage` が付いた地雷はその値を優先します。
-- ダメージは HARD の 30% 緩和・`#TOTAL` 補正の対象外です（beatoraja の `gauge.addValue()` 直接加算と同じ）。
-- `ZZ`（= 1295%）は survival 系（HARD / DEATH）では即 FAILED、GROOVE / EASY では下限 `2%` で止まります。
-- kitty keyboard protocol 入力では押下/解放の実状態を使います。release イベントの無いフォールバック入力では、LN 保持と同じ短い grace 窓で「押されている」を近似します。
+この規則の根拠は [`bms-spec.ja.md`](./bms-spec.ja.md) にまとめています。
 
 ## NOTES・combo・score
 
@@ -452,7 +469,7 @@ FREE ZONE、地雷、不可視オブジェクトは `noteCount` に含めませ�
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- 手動地雷ヒット: `-(mineValue(base36) / 2)`
+- 地雷の爆発: `-mineValue(base36)`（bmson では `damage`。`damage` のない bmson の地雷は `4`）。生デルタとして適用
 
 ゲージ更新後の値は、現在の gauge type の min/max range に clamp します。
 
@@ -616,6 +633,9 @@ manual long note で保持が切れた場合は、対応チャンネルの再生
 
 player 本体は UI 実装に依存せず、`stateSignals` と `uiSignals` を通じて状態を通知します。
 judge/combo、フレーム情報、POOR BGA、レーンフラッシュ、レーン保持表示はこの信号経由で伝えます。
+UI コマンドキューはロングノートの開始・終了も伝えます。保持が始まると `long-note-start`（`mode` は `ln` / `cn` / `hcn`。有効なルールセットが実際にそのノートを処理するモードで、譜面の `#LNMODE` と異なる場合があります）、終わると `long-note-end`（`outcome` は `complete` / `dropped`）を送ります。
+
+`PlayerOptions.onRulesetResolved` は再生開始前に 1 回だけ `PlayerRulesetInfo`（`id`、`rulesetId`、`longNoteStyle`、譜面開始時点の判定窓 `windows`（µs））を渡して呼ばれます。ホストは判定窓を自前で導出し直さずに、エンジンが実際に使う値を表示できます。
 
 ### Loading screen
 
@@ -632,7 +652,7 @@ loading 文言はその上へオーバーレイし、各文字セルの背景色
 
 `#STAGEFILE` が未指定、ファイル未発見、非対応形式、デコード失敗の場合は、画像なしのテキスト loading screen へフォールバックします。
 `#STAGEFILE` は loading 専用であり、gameplay 中の BGA renderer は参照しません。最初の base BGA cue がまだ有効でない間は、viewport は黒背景のままです。
-`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。未指定時は ANSI 表示です。
+`--kitty-graphics` が有効で、対応端末なら `#STAGEFILE` は Kitty graphics protocol の画像 overlay として表示します。Kitty graphics は既定で有効で、`--no-kitty-graphics` を指定した場合や非対応端末では ANSI 表示になります。
 動画 BGA の既定実装は progressive decode です。最初のフレームが用意できた時点で UI runtime を ready にし、残りのフレームは gameplay 開始後に別 worker で段階的にデコードします。
 
 ### Music Select (選曲画面)
@@ -645,7 +665,7 @@ loading 文言はその上へオーバーレイし、各文字セルの背景色
 - `#BANNER` または bmson `info.banner_image`
 
 banner は metadata block の右側に表示し、縦横比を維持したまま block 内に収めます。
-`--kitty-graphics` が有効で、対応端末なら banner も Kitty graphics protocol で表示します。未指定時は ANSI 表示です。
+`--kitty-graphics` が有効で、対応端末なら banner も Kitty graphics protocol で表示します。Kitty graphics は既定で有効で、`--no-kitty-graphics` を指定した場合や非対応端末では ANSI 表示になります。
 
 選曲画面では `#PREVIEW` を優先してプレビュー再生します。
 プレビュー開始前には短い settle delay を置き、カーソル連打中に preview 処理が走り続けないようにします。
@@ -688,7 +708,8 @@ channel 08 経由で負の `#BPMxx` を参照すると、LR2 の片道逆スク�
 ### TUI 以外の出力
 
 TUI が無効な場合は、モード開始メッセージ、レーン割り当て、判定ログ、最終 result をテキストで出力します。
-`renderSummary()` は `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / FAST / SLOW / EX-SCORE / SCORE` の順で結果を整形します。
+`renderSummary()` は `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / EMPTY / FAST / SLOW / EX-SCORE / SCORE` の順で結果を整形します。
+`EMPTY` は空 POOR の数です。`SCORE` 行は、マネースコアを定義している唯一のルールセットである `lr2` のときだけ出力します。
 
 ## `PlayerSummary`
 
@@ -716,4 +737,4 @@ TUI が無効な場合は、モード開始メッセージ、レーン割り当�
 - browser gameplay での 2P 独立 gauge variant
 - ゲージ推移タイムライン表示
 - beatoraja の非デフォルトのノート選択アルゴリズム（`duration` / `lowest` / `score`）は実装済みですが
-  オプションとしては公開していません
+  ライブプレイのオプションとしては公開していません（`bms-playlog` のシミュレータでは `--algorithm=` で選べます）

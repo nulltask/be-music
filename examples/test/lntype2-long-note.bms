@@ -1,0 +1,66 @@
+*---------------------- METADATA FIELD
+
+#TITLE LNTYPE 2 Continuous Long Note
+#SUBTITLE MGQ-style long notes spelled as a run of repeated tokens
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 2
+#TOTAL 250
+#DIFFICULTY 2
+
+*---------------------- EXTENDED HEADER FIELD
+* `#LNTYPE 1` pairs a head and a tail object; `#LNTYPE 2` instead spells a long
+* note as an unbroken RUN of the same object ID across consecutive slots, and the
+* long note lasts from the first token of the run to the end of the last one.
+* Every token after the first is a continuation and must not trigger a keysound.
+*
+* The three cases below are the ones that separate a correct type-2 expander
+* from a naive one:
+*
+*   measure 1 - a single run inside one measure
+*   measure 2 - two runs in the same measure separated by an empty slot, which
+*               must stay two long notes rather than one
+*   measures 3-4 - a run that continues across the measure boundary
+*
+* `ln-mode-1-long-note.bms` covers the same lanes with `#LNTYPE 1` / `#LNOBJ`,
+* so the two files together cover both spellings of a long note.
+
+#PLAYER 1
+#LNTYPE 2
+#LNMODE 1
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+#WAV03 right.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - count-in taps on the visible lanes so the chart is playable.
+#00011:01010101
+#00013:00020002
+#00015:02000200
+
+* Measure 1 - one run of four eighth-note slots on lane 1 (channel 51 -> 11):
+* a single long note from beat 0 to beat 2.
+#00151:0101010100000000
+
+* Measure 2 - two runs on lane 3 (channel 53 -> 13) separated by an empty slot.
+* Expected result is two long notes, not one spanning the gap.
+#00253:0202000002020000
+
+* Measures 3 and 4 - a run that crosses the measure boundary on lane 5
+* (channel 55 -> 15). Expected result is one long note that starts in measure 3
+* and ends in measure 4.
+#00355:0000000000000303
+#00455:0303000000000000
+
+* Measure 5 - follow-up taps, verifying the lane is released and immediately
+* playable again.
+#00511:01010101
+
+*---------------------- CONTROL FLOW FIELD

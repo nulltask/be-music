@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { createPlayerUiSignalBus } from '../../../player/src/core/ui-signal-bus.ts';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '../../../player/src/core/ui-signal-bus.ts';
 import { createWebUiRuntime, drainWebUiSignals } from './web-ui-runtime.ts';
@@ -40,15 +40,15 @@ describe('createWebUiRuntime', () => {
     expect(onPoorCleared).toHaveBeenCalledTimes(1);
   });
 
-  test('stop and dispose fire their respective callbacks', () => {
+  test('stop and dispose fire their respective callbacks', async () => {
     const uiSignals = createPlayerUiSignalBus(makeInitialFrame());
     const onStop = vi.fn();
     const onDispose = vi.fn();
     const runtime = createWebUiRuntime({ uiSignals, onStop, onDispose });
     runtime.start();
-    runtime.stop();
+    await runtime.stop();
     expect(onStop).toHaveBeenCalledTimes(1);
-    runtime.dispose();
+    await runtime.dispose();
     expect(onDispose).toHaveBeenCalledTimes(1);
   });
 

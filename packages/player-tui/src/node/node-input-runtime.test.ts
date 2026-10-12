@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { createPlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 
 const manualInputState = vi.hoisted(() => ({

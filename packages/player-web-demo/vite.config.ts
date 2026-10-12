@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, type Plugin } from 'vite-plus';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');
@@ -494,6 +494,7 @@ const workspaceRootAliases: WorkspaceAlias[] = [
   { find: '@be-music/lr2-skin', replacement: resolve(repositoryDir, 'packages/lr2-skin/src/index.ts') },
   { find: '@be-music/parser', replacement: resolve(repositoryDir, 'packages/parser/src/index.ts') },
   { find: '@be-music/player-web', replacement: resolve(repositoryDir, 'packages/player-web/src/index.ts') },
+  { find: '@be-music/skin-sdk', replacement: resolve(repositoryDir, 'packages/skin-sdk/src/index.ts') },
 ];
 
 const workspaceAliases = [...workspaceSubpathAliases, ...workspaceRootAliases];

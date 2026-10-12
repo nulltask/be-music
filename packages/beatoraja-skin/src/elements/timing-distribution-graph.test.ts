@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { normalizeBeatorajaTimingDistributionGraphs } from './timing-distribution-graph.ts';
 
 describe('normalizeBeatorajaTimingDistributionGraphs', () => {

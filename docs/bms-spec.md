@@ -96,6 +96,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] Interpret channel `E1-E9` (mine)
 - [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior)
 - [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
+- [x] Fall back to a default damage of `4%` when the mine object value is not a two-character upper-case base36 ID or is `00` (under `#BASE 62`, lower-case values also take this default)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
 - [x] Exclude landmines from the number of target notes for `TOTAL` / `EX-SCORE`
 
@@ -140,7 +141,8 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Preserve control construct `#ENDSW` and evaluate at runtime
 - [x] Keep extension header `#PREVIEW` in `bms` extension area
 - [x] Keep extension header `#LNTYPE` in `bms` extension area
-- [x] Keep extension header `#LNMODE` in `bms` extension area
+- [x] Keep extension header `#LNMODE` in `bms` extension area (`1` = LN, `2` = CN, `3` = HCN)
+- [x] The player plays `#LNMODE 2` / `3` long notes as CN / HCN under the `beatoraja` ruleset; `iidx` plays every long note as CN (HCN for `#LNMODE 3`), and `lr2` plays every long note as LN
 - [x] Keep extension header `#LNOBJ` in `bms` extension area
 - [x] Keep extension header `#VOLWAV` in `bms` extension area
 - [x] Keep extension header `#DEFEXRANK` in `bms` extension area
@@ -243,7 +245,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 
 - [x] Dedicated behavior of extended channel `#mmm51-59` (LN: `LNTYPE=1`)
 - [x] Dedicated behavior of extended channel `#mmm61-69` (LN: `LNTYPE=2`)
-- [x] Dedicated interpretation of header `#MIDIFILE` (currently treated as unknown header)
+- [x] Dedicated interpretation of header `#MIDIFILE` (kept in `bms.midiFile`; not played)
 - [x] Playback behavior of channel `06` (POOR-BMP/BGA switching)
 - [x] Default behavior of treating `#BMP00` as a POOR image when `#POORBGA` is not specified
 - [x] `#BPM` Default value when not specified `130` is treated as compatible behavior (unified to IR default value `130`)
@@ -312,7 +314,7 @@ Fixtures: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-b
 - [ ] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback)
 - [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
 - [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
-- [ ] Acceptance policy for commands with leading indentation (leading blank + `#COMMAND`)
+- [x] Acceptance policy for commands with leading indentation (leading blank + `#COMMAND`): leading and trailing whitespace is trimmed and the command is accepted
 - [x] Accept the alternative spellings `#ELSE IF n` / `#END IF` / bare `#END` as `#ELSEIF n` / `#ENDIF` (normalized to the canonical form on save / output; `#END <other value>` remains an unknown header)
 - [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
 - [x] Acceptance of Bemuse extension header `#SPEEDxx` and reflection in note drawing distance
@@ -331,20 +333,25 @@ Fixtures: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-b
 
 ### TODO (SCROLL/BPM/STOP) from reference materials
 
-| TODO                                                                              | current situation | remarks                                                                                                     |
-| --------------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------------------------- |
-| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.        | correspondence | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line. |
-| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.  | correspondence | The current implementation policy is "proximity display priority", and the drawing distance is treated as an absolute value (reverse scrolling will not be reproduced)     |
-| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                            | correspondence | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.         |
-| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                 | correspondence | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                              |
-| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)     | correspondence | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                              |
-| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                   |
+| TODO                                                                                                                                       | current situation | remarks                                                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [x] `#SCROLL 0` Specify the display priority of notes that overlap in the same lane in the section before and after.                       | correspondence    | If they overlap in the same cell, place the note that comes first on the reference line, and stack subsequent notes in the direction away from the judgment line.      |
+| [x] `#SCROLL < 0`'s reverse running display (direction, near the judgment line, off-screen) is fixed as a compatible specification.        | correspondence    | The current implementation policy is "proximity display priority", and the drawing distance is treated as an absolute value (reverse scrolling will not be reproduced) |
+| [x] `#SCROLL 0` Specify the upper limit of lookahead and visible range in long intervals                                                   | correspondence    | Read-ahead is discontinued at `MAX_SCROLL_LOOKAHEAD_BEATS` (= 64 measures), and notes outside the visible range are excluded from drawing.                             |
+| [x] BPM×`100001` + `#STOPxx` Clarified "display BPM" compatibility policy when correcting                                                  | correspondence    | The same BPM value as the time resolution is displayed as is, and LR2 compatible display replacement and rounding are not performed.                                   |
+| [x] SCROLL/BPM/STOP Added regression test for complex gimmicks (partial warp, blank keystroke, reverse run)                                | correspondence    | Add complex cases to `timeline` and continue to verify POOR system with existing `bga` test group                                                                      |
+| [x] Determined the handling of beatoraja-specific appearance/disappearance bug-dependent scores (unsupported clearly or reproduction mode) | correspondence    | Specify that it is not compatible and consider reproducing mode with another option if necessary in the future.                                                        |
 
 ## Player-Specific Behavior
 
 - Automatically determine lane mode from used channel (`5 KEY SP`, `5 KEY DP`, `7 KEY SP`, `14 KEY DP`, `9 KEY`, `24 KEY SP`, `48 KEY DP`)
-- If lane mode cannot be automatically determined, complete with extension (`.bms -> 5 KEY`, `.bme -> 7 KEY`, `.pms -> 9 KEY`)
-- Extended lane channels (`1A..1O` / `2A..2O`) select `24 KEY SP` / `48 KEY DP` ahead of every other rule, including the extension fallback
+- Every host (the engine, the CLI, and the web player) decides the lane mode with one shared rule, `resolveChartPlayVariant` in `@be-music/chart`, unless the host declares the variant explicitly. For a play it runs over the chart after `#RANDOM` / `#SWITCH` are resolved, so lanes a chosen branch adds count
+- Lane usage counts the `1x` / `2x` lane channels and the `5x` / `6x` `#LNTYPE` long-note channels on the lanes they map to (so `#LNOBJ` and `#LNTYPE` spellings of a chart agree). Mines (`Dx` / `Ex`) and invisible objects (`3x` / `4x`) never decide the lane mode
+- Extended lane channels (`1A..1O` / `2A..2O`) select `24 KEY SP` / `48 KEY DP` ahead of every other rule
+- be-music-specific: channels `1P` / `1Q` (`2P` / `2Q` on the 2P side) are the 24 / 48 KEY wheel, up / down — the BMS spelling of the bmson `keyboard-24k` wheel lanes (`x` = 25 / 26). Other BMS players do not define these channels. They count as extended lanes, so they select the keyboard modes too
+- A `.pms` chart is `9 KEY` regardless of its channels; this is checked right after the extended-lane rule, before the content rules
+- `9 KEY` is also detected from content: `#PLAYER 3` with channel `17` (when the IIDX 2P side `21` / `26..29` is absent; with it the chart is IIDX DP with a FREE ZONE), a 1P chart that uses every channel `11..19`, and a chart that uses `22..25` without `21` / `26..29` (PMS-STD written as `.bms` / `.bme`)
+- Otherwise the IIDX families apply: a 6 / 7 key column (`18` / `19` / `28` / `29`) means `7 KEY SP` / `14 KEY DP`. Without one the extension completes the mode: `.bme` is `7 KEY SP` / `14 KEY DP` (the extension names the 7-key format), any other extension is `5 KEY SP` / `5 KEY DP`
 - `.pms` The 9KEY of the musical score is estimated from the standard array (`PMS-STD`) / compatible array (`PMS-COMPAT`) from the channel distribution and reflected in the `LANE` display.
 - FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`); under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are ordinary lanes instead
 - FREE ZONE Note length is fixed at quarter note
@@ -375,10 +382,10 @@ Fixtures: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-b
 
 - In `SCROLL 0`, when multiple notes overlap in the same lane and same drawing cell, the preceding note is placed at the reference position, and the subsequent notes are stacked in order toward the side (upward) away from the judgment line.
 - `SCROLL < 0` prioritizes "maintaining note approach display" rather than "faithful reproduction of backward running display", and drawing distance is handled by `abs(distance)`
-- Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat)
+- Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-tui/src/tui/tui.ts`)
 - Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
 - Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
-- Verify regression of the above policy with `packages/player/src/tui/lane-stacking.test.ts`, `packages/player/src/core/timeline.test.ts`, `packages/player/src/bga.test.ts`
+- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/player/src/core/timeline.test.ts`, `packages/player-tui/src/bga.test.ts`
 
 ## Handling of event location
 

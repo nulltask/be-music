@@ -87,7 +87,7 @@ function gitShow(ref: string, filePath: string): string | null {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (error) {
-    const stderr = error instanceof Error && 'stderr' in error ? String(error.stderr ?? '') : '';
+    const stderr = error instanceof Error && 'stderr' in error && typeof error.stderr === 'string' ? error.stderr : '';
     if (
       stderr.includes('exists on disk, but not in') ||
       stderr.includes('does not exist in') ||
@@ -200,15 +200,11 @@ async function main(): Promise<void> {
   const audioRendererRelease = seaReleases.find((release) => release.packageSlug === 'audio-renderer');
 
   if (options.jsonOutput) {
-    await writeFile(
-      options.jsonOutput,
-      `${JSON.stringify({ releases, seaReleases }, null, 2)}\n`,
-      'utf8',
-    );
+    await writeFile(options.jsonOutput, `${JSON.stringify({ releases, seaReleases }, null, 2)}\n`, 'utf8');
   }
 
   if (options.githubOutput) {
-    const outputLines = [];
+    const outputLines: string[] = [];
     setGitHubOutput(outputLines, 'has_releases', releases.length > 0 ? 'true' : 'false');
     setGitHubOutput(outputLines, 'has_sea_releases', seaReleases.length > 0 ? 'true' : 'false');
     setGitHubOutput(outputLines, 'release_player_tui', playerTuiRelease ? 'true' : 'false');
@@ -224,7 +220,7 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error);
+  const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 });

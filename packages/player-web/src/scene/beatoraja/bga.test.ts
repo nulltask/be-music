@@ -1,5 +1,5 @@
 import { Sprite, Texture, TextureSource } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaSkin } from '@be-music/beatoraja-skin';
 import { BeatorajaBgaLayer } from './bga.ts';
 

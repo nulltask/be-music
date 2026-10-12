@@ -1,4 +1,5 @@
 import { throwIfAborted } from '@be-music/utils/core';
+import { resolveChartPlayVariant } from '@be-music/chart';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import {
@@ -138,10 +139,21 @@ export function preparePlaybackChartData(
   inferBmsLnTypeWhenMissing: boolean,
   auxiliaryPlaybackEndSeconds: number,
 ): PreparedPlaybackChartData {
+  // The single lane-mode source: the host-declared variant, else the shared `resolveChartPlayVariant` rule over the
+  // resolved chart's events (post `#RANDOM`) and extension. Deriving it from events rather than from the extracted
+  // note channels keeps mines and invisible objects from deciding the lane mode.
+  const playVariant =
+    options.playVariant ??
+    resolveChartPlayVariant({
+      chartPath: options.laneModeExtension,
+      events: resolvedJson.events,
+      bms: resolvedJson.bms,
+      bmson: resolvedJson.bmson,
+    });
   const extractedNotes = extractTimedNotes(resolvedJson, {
-    // Same host classification the lane bindings use — keeps `17` / `27` FREE ZONE on the IIDX families and an
+    // Same classification the lane bindings use — keeps `17` / `27` FREE ZONE on the IIDX families and an
     // ordinary key column on POPN-9 / the 24-key keyboard modes.
-    playVariant: options.playVariant,
+    playVariant,
     includeLandmine: true,
     // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
     // Keep extraction independent from the debug overlay option so audio semantics never depend on rendering settings.
@@ -163,7 +175,7 @@ export function preparePlaybackChartData(
   const laneModeOptions = {
     player: resolvedJson.bms.player,
     chartExtension: options.laneModeExtension,
-    playVariant: options.playVariant,
+    playVariant,
   };
   const laneBindings = createLaneBindings(channels, laneModeOptions);
   const inputTokenToChannels = createInputTokenToChannelsMap(laneBindings);

@@ -42,7 +42,7 @@
 - **ロングノート (long note / LN)**: 始点と終点を持つノートです。保持、離し、終点到達の扱いは `LNMODE` に依存します。
 - **LNOBJ**: BMS の `#LNOBJ` で宣言する long note 終端オブジェクトです。
 - **LNMODE**: BMS long note の判定確定ルールです。`1`、`2`、`3` で終点判定や hold break 時の扱いが変わります。
-- **地雷 (mine)**: 押すとダメージを受けるノートです。このリポジトリでは手動地雷ヒットを `BAD` 表示と譜面値ベースの gauge damage として扱います。
+- **地雷 (mine)**: 押すとダメージを受けるノートです。LR2 に合わせ、レーンを押したまま判定線を通過するか、`PGREAT` 窓内で押すと爆発します。爆発は譜面値ベースの gauge damage を与えるだけで、判定にはなりません。
 - **判定 (judge)**: `PERFECT` / `GREAT` / `GOOD` / `BAD` / `POOR` の結果です。score、combo、gauge へ影響します。
 - **FAST / SLOW**: 判定タイミングの早押し/遅押しの補助表示です。現行実装では `GREAT` と `GOOD` のみ集計します。
 - **EX-SCORE**: IIDX 互換のスコアです。一般に `PERFECT=2`、`GREAT=1`、それ以外 `0` で集計します。
@@ -58,7 +58,10 @@
 - **terminal player**: `@be-music/player-tui` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
 - **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。browser drop、LR2 / beatoraja skin rendering、browser gameplay、result scene、recording を扱います。
 - **skin family**: browser player が読み込み済み theme 状態から選ぶ scene family です。現在は LR2、beatoraja、built-in default family があります。
-- **default skin family**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う browser player 組み込みの skin family です。skinless select、gameplay、result chrome を提供し、gameplay では LR2 が default renderer を import しない形で共有 gameplay runtime へ chrome を注入します。
+- **default skin family**: 外部 theme がない場合、または host が明示的に選ぶ場合に使う browser player 組み込みの skin family です。select、gameplay、result（スキンが宣言していれば decide も）を be-music skin で描き、gameplay では LR2 が default renderer を import しない形で共有 gameplay runtime へ chrome を注入します。
+- **be-music skin**: `@be-music/skin-sdk` に沿って書くコードベースのスキンです。player はキャンバスと毎フレームのデータを渡し、スキンは自分が持ち込んだ renderer で各画面を描きます。
+- **built-in skins**: browser player に同梱する be-music skin です。既定の Synesthesia、Phantom、Plain と、opt-in の Lattice があります。
+- **touch layout / portrait stage**: タッチ主体の端末向けの gameplay layout です。touch layout は等幅のレーンをステージいっぱいに並べます。`portraitStage` を持つスキンは縦向き（9:16）のステージでも表示できます。
 - **LR2 skin**: `@be-music/lr2-skin` が扱う Lunatic Rave 2 CSV skin format です。この package は PixiJS に依存せず、skin file の parse と theme asset 解決を行います。
 - **beatoraja skin**: `@be-music/beatoraja-skin` が扱う beatoraja JSON / Lua skin format です。この package は PixiJS に依存せず、header / full skin の parse、option / asset 解決、element normalization を行います。
 
@@ -94,6 +97,7 @@
 - **Sound / Visual status**: loading screen で audio 側と visual 側の進捗を別々に表示する状態です。
 - **structured log**: TUI 出力とは分離して書き出す NDJSON 実行ログです。通常は `~/.be-music/logs/player.ndjson` に出力します。
 - **video BGA streaming**: gameplay 開始前には動画 BGA の最初の frame だけを確保し、残りを gameplay 開始後に段階的に decode する方針です。
+- **プレイログ (playlog)**: 1 回のプレイの入力を記録したもの（`*.bmplay.json`）です。解決済み譜面、すべてのキーの押下と解放、プレイ設定を持ちます。`bms-playlog` は LR2、beatoraja、IIDX のルールセットでこれを再シミュレーションします。
 - **PlayerSummary**: 再生終了後の集計結果です。judge counts、FAST/SLOW、EX-SCORE、SCORE、gauge、clear state などを含みます。
 
 ## 関連文書
@@ -101,8 +105,12 @@
 - [仕様書トップ](./README.ja.md)
 - [BMS 実装仕様](./bms-spec.ja.md)
 - [BMSON 実装仕様](./bmson-spec.ja.md)
+- [Bemuse 実装仕様](./bemuse-spec.ja.md)
 - [Player 実装仕様](./player-spec.ja.md)
+- [Terminal player 実装メモ](./player-tui.ja.md)
 - [Browser player 実装メモ](./player-web.ja.md)
+- [プレイログ（プレイ履歴）仕様](./playlog.ja.md)
+- [be-music スキンの作り方](./be-music-skin.ja.md)
 - [LR2 skin 実装メモ](./lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](./beatoraja-skin.ja.md)
 - [BMS/BMSON 中間表現 (`@be-music/json`) 実装仕様](./json-spec.ja.md)

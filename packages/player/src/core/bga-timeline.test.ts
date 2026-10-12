@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '@be-music/json';
 import { buildBgaTimelines, pickActiveBgaCue, pickActiveBgaKey } from './bga-timeline.ts';
 

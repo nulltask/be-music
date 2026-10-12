@@ -26,8 +26,10 @@ export class RulesetGauge {
   /** Set once a survival gauge has bottomed out. The run keeps judging; the gauge stays dead. */
   failedMidPlay = false;
   private dead = false;
+  readonly spec: GaugeSpec;
 
-  constructor(readonly spec: GaugeSpec) {
+  constructor(spec: GaugeSpec) {
+    this.spec = spec;
     this.value = spec.initial;
   }
 

@@ -1,0 +1,67 @@
+*---------------------- METADATA FIELD
+
+#BASE 62
+
+#TITLE Base 62 Object IDs
+#SUBTITLE #BASE 62 keeps upper and lower case as separate slots
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 1
+#TOTAL 200
+#DIFFICULTY 1
+
+*---------------------- EXTENDED HEADER FIELD
+* `#BASE 62` is the beatoraja extension that widens the two-character object ID
+* space from base 36 to base 62 by making lower case letters distinct slots.
+* Under the default base 36 every pair below would collapse onto one key, so
+* this chart is the file-level regression guard for the case-preserving path:
+*
+*   #WAV0a / #WAV0A  - distinct sample slots
+*   #00111:0a0A0z    - distinct channel-stream tokens
+*   #LNOBJ zz        - LN end marker matched case-sensitively
+*
+* `#BASE` must appear before the first object line to take effect, so it is
+* declared at the very top of the file.
+
+#PLAYER 1
+#LNTYPE 1
+#LNMODE 1
+#LNOBJ zz
+
+*---------------------- RESOURCES FIELD
+
+#WAV0a sample.wav
+#WAV0A branch.wav
+#WAV0z right.wav
+#WAV0Z wrong.wav
+#WAVZz sample.wav
+#WAVzz sample.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - four case-distinct slots in one channel stream.
+#00011:0a0A0z0Z
+
+* Measure 1 - the same four slots on a playable lane.
+#00111:0a0A0z0Z
+
+* Measure 2 - a long note whose end marker is the lower case `zz`. Under base 36
+* this would fold to `ZZ` and stop matching the #LNOBJ declaration.
+#00211:0a00zz00
+
+* Measure 4 - lower case, upper case and mixed case IDs in one channel stream.
+#00411:0a0AZz
+
+*---------------------- CONTROL FLOW FIELD
+
+* An indexed header declared inside a control-flow branch still has to register
+* under its lower case key.
+#RANDOM 1
+#IF 1
+#WAV0b wrong.wav
+#00311:0b0b
+#ENDIF
+#ENDRANDOM

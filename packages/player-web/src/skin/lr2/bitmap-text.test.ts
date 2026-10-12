@@ -1,5 +1,5 @@
 import { Rectangle, Texture } from 'pixi.js';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { makeLr2BitmapTextSprite, type Lr2LoadedFont } from './bitmap-text.ts';
 import type { Lr2DestinationRect, Lr2TextElement } from '@be-music/lr2-skin';
 

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { createEmptyJson, type BeMusicEvent } from '../../../json/src/index.ts';
 import type { AudioBusHandle } from './audio-bus.ts';
 import { clampSampleDuration, clampSampleOffset, createWebAudioSession } from './web-audio-session.ts';

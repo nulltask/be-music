@@ -1,5 +1,5 @@
 import { Rectangle, Texture } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { createCachedCroppedTexture } from './pixi-texture.ts';
 
 function texture(width = 64, height = 64): Texture {

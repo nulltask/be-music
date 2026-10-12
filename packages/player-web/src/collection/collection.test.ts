@@ -1,5 +1,5 @@
 import { zipSync } from 'fflate';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   BrowserSongCollectionStore,
   loadSongCollectionFromFiles,
@@ -7,6 +7,7 @@ import {
   resolveChartImageAsset,
   resolveChartPlayVariant,
 } from './collection.ts';
+import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BeMusicEvent, BeMusicJson } from '../../../json/src/index.ts';
 import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
 
@@ -49,6 +50,30 @@ const MINIMAL_BMS = ['#TITLE Test', '#BPM 120', '#PLAYER 1', '#00111:0F'].join('
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('loadSongCollectionFromFiles with deferred drop handles', () => {
+  test('parses unopened charts in path order and leaves assets unopened', async () => {
+    const opened: string[] = [];
+    const deferred = (path: string, contents = '') =>
+      new DeferredDroppedFile(
+        {
+          name: path.split('/').at(-1)!,
+          file: (resolve) => {
+            opened.push(path);
+            resolve(new File([contents], path.split('/').at(-1)!));
+          },
+        },
+        path,
+      );
+    const charts = Array.from({ length: 12 }, (_, index) =>
+      deferred(`Pack/S${String(index).padStart(2, '0')}/main.bms`, MINIMAL_BMS.replace('Test', `Song ${index}`)),
+    );
+    const collection = await loadSongCollectionFromFiles([...charts].reverse().concat(deferred('Pack/S00/kick.wav')));
+    expect(collection.errors).toEqual([]);
+    expect(collection.songs.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
+    expect(opened).not.toContain('Pack/S00/kick.wav');
+  });
 });
 
 describe('loadSongCollectionFromFiles progress events', () => {
@@ -242,7 +267,25 @@ describe('resolveChartPlayVariant', () => {
   });
 
   test('classifies DP 10K (2P-side keyboard, no 6 / 7)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '21', '25'] }))).toBe('10');
+  });
+
+  test('a `.bme` chart without a 6 / 7 key column is completed to 7 / 14 KEY, as the engine and CLI do', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('14');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('7');
+  });
+
+  test('classifies the play from the resolved chart when one is given (lanes added by a `#RANDOM` branch count)', () => {
+    const song = makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15'] });
+    // Lanes 8 / 9 live only in a `#RANDOM` branch, so the unresolved chart's top-level events are 5 KEY.
+    expect(resolveChartPlayVariant(song)).toBe('5');
+    const resolved = {
+      ...song.chart,
+      events: [...song.chart.events, { measure: 2, channel: '18', position: [0, 1], value: '01' }],
+    } as BeMusicJson;
+    expect(resolveChartPlayVariant(song, resolved)).toBe('7');
+    // The song-level answer is unaffected (cached per chart object).
+    expect(resolveChartPlayVariant(song)).toBe('5');
   });
 
   test('PMS / 9 KEY: `.pms` extension wins regardless of channel layout', () => {
@@ -341,6 +384,26 @@ describe('resolveChartImageAsset', () => {
     const source = makeAssetSource({ 'Song/_logo.png': PNG_BYTES });
     const entry = resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp');
     expect(entry).toBe(PNG_BYTES);
+  });
+
+  test('prefers a `.webp` over every other image format', () => {
+    // A pack re-encoded to WebP to save space may still carry the original PNG / BMP next to it; the WebP wins.
+    const WEBP_BYTES = new Uint8Array([0x52, 0x49, 0x46, 0x46]);
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const BMP_BYTES = new Uint8Array([0x42, 0x4d]);
+    const source = makeAssetSource({
+      'Song/_logo.webp': WEBP_BYTES,
+      'Song/_logo.png': PNG_BYTES,
+      'Song/_logo.bmp': BMP_BYTES,
+    });
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.bmp')).toBe(WEBP_BYTES);
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.png')).toBe(WEBP_BYTES);
+  });
+
+  test('falls back past a missing `.webp` to the other formats', () => {
+    const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const source = makeAssetSource({ 'Song/_logo.png': PNG_BYTES });
+    expect(resolveChartImageAsset(source, 'Song/main.bms', '_logo.webp')).toBe(PNG_BYTES);
   });
 
   test('does NOT fall back to a same-basename `.png` when the chart referenced a video file', () => {

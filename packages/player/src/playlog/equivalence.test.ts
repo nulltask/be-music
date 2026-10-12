@@ -1,5 +1,5 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { manualPlay } from '../index.ts';
 import type { PlayerSummary } from '../core/engine.ts';
 import { simulatePlaylog } from './simulate.ts';

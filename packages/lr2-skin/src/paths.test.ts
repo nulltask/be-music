@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import {
   LR2_SKIN_INFORMATION_TYPE,
   informationTypeToKind,

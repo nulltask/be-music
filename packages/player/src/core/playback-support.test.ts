@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { createUiFramePublisher } from './playback-support.ts';
 import type { PlayerUiFramePayload, PlayerUiSignalBus } from './ui-signal-bus.ts';
 

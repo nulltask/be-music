@@ -1,7 +1,7 @@
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 
 async function importConfigModule(homeDir: string) {
   vi.resetModules();
@@ -15,7 +15,9 @@ async function importConfigModule(homeDir: string) {
   return import('./config.ts');
 }
 
-describe.sequential('cli config', () => {
+// These cases share the module registry through `vi.resetModules()` / `vi.doMock('node:os')`, so they must not
+// interleave. Vitest 5 removed `describe.sequential` in favor of the explicit `concurrent: false` option.
+describe('cli config', { concurrent: false }, () => {
   beforeEach(() => {
     vi.resetModules();
   });

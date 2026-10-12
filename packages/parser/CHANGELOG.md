@@ -1,5 +1,12 @@
 # @be-music/parser
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [202a28b]
+  - @be-music/chart@0.4.0
+
 ## 0.2.3
 
 ### Patch Changes

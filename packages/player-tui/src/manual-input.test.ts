@@ -1,5 +1,5 @@
 import type readline from 'node:readline';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import {
   appendFreeZoneInputChannels,
   beginStatefulKeyboardProtocolOptIn,
@@ -27,7 +27,8 @@ describe('manual input', () => {
   });
 
   test('manual-input: builds full 5-key DP lanes when 2P channels are used', () => {
-    const bindings = createLaneBindings(['11', '22'], { platform: 'linux' });
+    // `21` marks the IIDX 2P side; bare `22..25` without it is PMS-STD (9 KEY) under the shared play-variant rule.
+    const bindings = createLaneBindings(['11', '21'], { platform: 'linux' });
     expect(bindings.map((binding) => binding.channel)).toEqual([
       '16',
       '11',
@@ -90,7 +91,7 @@ describe('manual input', () => {
   });
 
   test('manual-input: uses Option for reverse scratch on macOS', () => {
-    const bindings = createLaneBindings(['11', '22'], { platform: 'darwin' });
+    const bindings = createLaneBindings(['11', '21'], { platform: 'darwin' });
 
     expect(bindings.find((binding) => binding.channel === '16')?.inputTokens).toEqual([
       'shift-left',
@@ -198,20 +199,27 @@ describe('manual input', () => {
 
   test('manual-input: builds full 24-key SP lanes when extended 1P channel is used', () => {
     const bindings = createLaneBindings(['1A']);
-    expect(bindings).toHaveLength(24);
-    expect(bindings[0]?.channel).toBe('11');
-    expect(bindings[23]?.channel).toBe('1O');
+    // The wheel up / down lanes lead (left of the keys), then the 24 keys.
+    expect(bindings).toHaveLength(26);
+    expect(bindings[0]?.channel).toBe('1P');
+    expect(bindings[1]?.channel).toBe('1Q');
+    expect(bindings[2]?.channel).toBe('11');
+    expect(bindings[25]?.channel).toBe('1O');
     expect(bindings.some((binding) => binding.channel === '21')).toBe(false);
     expect(bindings.find((binding) => binding.channel === '16')?.isScratch).toBe(false);
   });
 
   test('manual-input: builds full 48-key DP lanes when extended 2P channel is used', () => {
     const bindings = createLaneBindings(['2A']);
-    expect(bindings).toHaveLength(48);
-    expect(bindings[0]?.channel).toBe('11');
-    expect(bindings[23]?.channel).toBe('1O');
-    expect(bindings[24]?.channel).toBe('21');
-    expect(bindings[47]?.channel).toBe('2O');
+    // 1P wheel, 1P keys, 2P keys, 2P wheel — each wheel on its side's outer edge.
+    expect(bindings).toHaveLength(52);
+    expect(bindings[0]?.channel).toBe('1P');
+    expect(bindings[2]?.channel).toBe('11');
+    expect(bindings[25]?.channel).toBe('1O');
+    expect(bindings[26]?.channel).toBe('21');
+    expect(bindings[49]?.channel).toBe('2O');
+    expect(bindings[50]?.channel).toBe('2P');
+    expect(bindings[51]?.channel).toBe('2Q');
     expect(bindings.find((binding) => binding.channel === '26')?.isScratch).toBe(false);
   });
 
@@ -400,8 +408,12 @@ describe('manual input', () => {
   test('manual-input: resolves lane display mode labels', () => {
     expect(resolveLaneDisplayMode(['11'])).toBe('5 KEY SP');
     expect(resolveLaneDisplayMode(['11'], { chartExtension: '.bme' })).toBe('7 KEY SP');
-    expect(resolveLaneDisplayMode(['11', '22'])).toBe('5 KEY DP');
-    expect(resolveLaneDisplayMode(['11', '22'], { chartExtension: '.bme' })).toBe('14 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '21'])).toBe('5 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '21'], { chartExtension: '.bme' })).toBe('14 KEY DP');
+    // Bare `22..25` without `21` / `26..29` is PMS-STD content: 9 KEY whatever the extension, the same as the web
+    // host's `resolveChartPlayVariant` (the CLI used to call it 5 KEY DP / 14 KEY DP).
+    expect(resolveLaneDisplayMode(['11', '22'])).toBe('9 KEY (PMS-STD)');
+    expect(resolveLaneDisplayMode(['11', '22'], { chartExtension: '.bme' })).toBe('9 KEY (PMS-STD)');
     expect(resolveLaneDisplayMode(['11', '19'])).toBe('7 KEY SP');
     expect(resolveLaneDisplayMode(['11', '21', '29'])).toBe('14 KEY DP');
     expect(resolveLaneDisplayMode(['1A'])).toBe('24 KEY SP');

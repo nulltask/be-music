@@ -1,0 +1,61 @@
+*---------------------- METADATA FIELD
+
+#TITLE 10 KEY DP Lane Mode
+#SUBTITLE IIDX 5-key double play - channels 11..16 and 21..26
+#ARTIST be-music
+#GENRE TEST
+#BPM 120
+#PLAYLEVEL 2
+#TOTAL 250
+#DIFFICULTY 2
+
+*---------------------- EXTENDED HEADER FIELD
+* The 2P-side, no-6/7 corner of the IIDX lane-mode table: five keys plus scratch
+* on both sides, which must resolve to 10 KEY DP.
+*
+* This chart is also the counter-example for the PMS-STD content rule. That rule
+* claims any chart touching `22..25` for 9 KEY, but only when the traditional
+* IIDX 2P channels (`21` and `26..29`) are absent. A real 5-key DP chart authors
+* `21` and `26` alongside `22..25`, so it has to stay 10 KEY DP.
+*
+* See 5key-sp.bms for the rest of the lane-mode fixture family.
+
+#PLAYER 2
+#LNTYPE 1
+
+*---------------------- RESOURCES FIELD
+
+#WAV01 sample.wav
+#WAV02 branch.wav
+
+*---------------------- MEASURE LENGTH FIELD
+
+*---------------------- OBJECT DATA FIELD
+
+* Measure 0 - one eighth note per lane, sweeping 1P left to right then 2P.
+#00011:0100000000000000
+#00012:0001000000000000
+#00013:0000010000000000
+#00014:0000000100000000
+#00015:0000000001000000
+#00021:0000000000010000
+#00022:0000000000000100
+#00023:0000000000000001
+
+* Measure 1 - scratch on both sides, keys alternating between the two players.
+#00016:02000200
+#00026:00020002
+#00111:01000100
+#00115:01000100
+#00121:00010001
+#00125:00010001
+
+* Measure 2 - the 2P keyboard columns 22..25 on their own. Without 21 / 26 in
+* the chart this measure alone would look like PMS-STD, so it exists to keep the
+* 10 KEY DP classification honest.
+#00222:01010101
+#00223:01010101
+#00224:01010101
+#00225:01010101
+
+*---------------------- CONTROL FLOW FIELD

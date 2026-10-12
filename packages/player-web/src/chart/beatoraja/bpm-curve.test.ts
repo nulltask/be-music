@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { computeBeatorajaBpmCurve } from './bpm-curve.ts';
 

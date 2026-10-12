@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'vite-plus/test';
 import { encode as encodeBmp } from 'fast-bmp';
 import { encode as encodePng } from 'fast-png';
 import {

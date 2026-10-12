@@ -1,5 +1,5 @@
 import { Container, RendererType } from 'pixi.js';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vite-plus/test';
 import { PixiSceneHost, resolveRendererPreference, type PixiScene } from './host.ts';
 
 function makeScene(overrides: Partial<PixiScene> = {}): PixiScene {

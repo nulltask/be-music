@@ -13,6 +13,7 @@ import { lr2SkinBenchmarkPackage } from './lr2-skin.ts';
 import { playerBenchmarkPackage } from './player.ts';
 import { playerTuiBenchmarkPackage } from './player-tui.ts';
 import { playerWebCoreBenchmarkPackage } from './player-web.ts';
+import { skinSdkBenchmarkPackage } from './skin-sdk.ts';
 import { stringifierBenchmarkPackage } from './stringifier.ts';
 import { utilsBenchmarkPackage } from './utils.ts';
 
@@ -27,6 +28,7 @@ export const PACKAGE_DEFINITIONS: Record<PackageName, BenchmarkPackageDefinition
   player: playerBenchmarkPackage,
   'player-tui': playerTuiBenchmarkPackage,
   'lr2-skin': lr2SkinBenchmarkPackage,
+  'skin-sdk': skinSdkBenchmarkPackage,
   'player-web': playerWebCoreBenchmarkPackage,
 };
 

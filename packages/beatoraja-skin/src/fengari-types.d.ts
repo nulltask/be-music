@@ -106,7 +106,22 @@ declare module 'fengari' {
 }
 
 // `fengari-web` re-exports the same `lua` / `lauxlib` / `lualib` / `to_luastring` shapes as `fengari` itself, so we
-// declare it as the same module surface.
+// declare it as the same module surface. Unlike `fengari`, `fengari-web` ships a webpack UMD bundle whose
+// `module.exports` is built at runtime (an IIFE return value) rather than plain `exports.x = ...` assignments, so
+// Node's static cjs-module-lexer can't discover named exports on it — the package must be imported as a single
+// default value and destructured, hence the shape below is a default export instead of `fengari`'s named ones.
 declare module 'fengari-web' {
-  export { lua_State, LuaCFunction, lua, lauxlib, lualib, to_luastring, to_jsstring, luastring_of } from 'fengari';
+  import type { lua, lauxlib, lualib, lua_State, LuaCFunction, to_luastring, to_jsstring, luastring_of } from 'fengari';
+
+  export type { lua_State, LuaCFunction };
+
+  const fengariWeb: {
+    lua: typeof lua;
+    lauxlib: typeof lauxlib;
+    lualib: typeof lualib;
+    to_luastring: typeof to_luastring;
+    to_jsstring: typeof to_jsstring;
+    luastring_of: typeof luastring_of;
+  };
+  export default fengariWeb;
 }

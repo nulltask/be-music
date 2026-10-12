@@ -1,4 +1,4 @@
-import { expect, test } from 'vitest';
+import { expect, test } from 'vite-plus/test';
 import { createAbortError, isAbortError, throwIfAborted } from './index.ts';
 
 test('abort utils: createAbortError and isAbortError return AbortError semantics', () => {

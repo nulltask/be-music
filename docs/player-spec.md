@@ -29,51 +29,52 @@ Items that are only stored in the IR by the parser and not referenced by the pla
 
 ### Supported channels
 
-| channel                      | Handling in player                                                                                                                                                                                                     |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxx01`                     | Play as BGM / sample trigger.                                                                                                                                                                                          |
-| `#xxx02`                     | Reflected in time resolution and beat resolution as bar length.                                                                                                                                                        |
-| `#xxx03`, `#xxx08`           | Reflected in time resolution as BPM change.                                                                                                                                                                            |
-| `#xxx04`, `#xxx07`, `#xxx0A` | Render as BGA base / layer / layer2.                                                                                                                                                                                   |
-| `#xxx06`                     | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                                                                                 |
-| `#xxx09`                     | Reflects in time resolution as STOP.                                                                                                                                                                                   |
-| `#xxx11-19`, `#xxx21-29`     | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY / 24KEY, and normal note for 9KEY / 24KEY.                                                                      |
-| `#xxx1A-1O`, `#xxx2A-2O`     | Treated as visible performance notes — lanes 10..24 of the 24-key (Keyboardmania) bank. A single one of these channels classifies the chart as `24 KEY SP` / `48 KEY DP`.                                              |
-| `#xxx31-39`, `#xxx41-49` (and the extended `#xxx3A-3O` / `#xxx4A-4O`) | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound. |
-| `#xxx51-59`, `#xxx61-69` (and the extended `#xxx5A-5O` / `#xxx6A-6O`) | Treated as BMS legacy long note.                                                                                                                    |
-| `#xxx97`, `#xxx98`           | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                      |
-| `#xxxA0`                     | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                                                                                 |
-| `#xxxSC`                     | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                                                                                     |
-| `#xxxSP`                     | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                                                                          |
-| `#xxxD1-D9`, `#xxxE1-E9` (and the extended `#xxxDA-DO` / `#xxxEA-EO`) | Treated as a landmine.                                                                                                                              |
+| channel                                                               | Handling in player                                                                                                                                                                                                                                                            |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                                                              | Play as BGM / sample trigger.                                                                                                                                                                                                                                                 |
+| `#xxx02`                                                              | Reflected in time resolution and beat resolution as bar length.                                                                                                                                                                                                               |
+| `#xxx03`, `#xxx08`                                                    | Reflected in time resolution as BPM change.                                                                                                                                                                                                                                   |
+| `#xxx04`, `#xxx07`, `#xxx0A`                                          | Render as BGA base / layer / layer2.                                                                                                                                                                                                                                          |
+| `#xxx06`                                                              | Treated as POOR BGA cue. If `#POORBGA` is not specified, `#BMP00` is used as fallback.                                                                                                                                                                                        |
+| `#xxx09`                                                              | Reflects in time resolution as STOP.                                                                                                                                                                                                                                          |
+| `#xxx11-19`, `#xxx21-29`                                              | Treated as visible performance notes. `16` / `26` is scratch, `17` / `27` is FREE ZONE except for 9KEY / 24KEY, and normal note for 9KEY / 24KEY.                                                                                                                             |
+| `#xxx1A-1O`, `#xxx2A-2O`                                              | Treated as visible performance notes — lanes 10..24 of the 24-key (Keyboardmania) bank. A single one of these channels classifies the chart as `24 KEY SP` / `48 KEY DP`.                                                                                                     |
+| `#xxx1P`, `#xxx1Q`, `#xxx2P`, `#xxx2Q`                                | Treated as visible performance notes on the 24 / 48 KEY wheel: `1P` / `2P` turn it up, `1Q` / `2Q` down (be-music's BMS convention for the bmson `keyboard-24k` wheel, `x` = 25 / 26). They classify the chart as `24 KEY SP` / `48 KEY DP` like the other extended channels. |
+| `#xxx31-39`, `#xxx41-49` (and the extended `#xxx3A-3O` / `#xxx4A-4O`) | Treated as invisible notes. They update the corresponding lane's manual keysound state like visible notes, and may be used for display aids, but are not included in `summary.total`. `AUTO` does not produce a sound.                                                        |
+| `#xxx51-59`, `#xxx61-69` (and the extended `#xxx5A-5O` / `#xxx6A-6O`) | Treated as BMS legacy long note.                                                                                                                                                                                                                                              |
+| `#xxx97`, `#xxx98`                                                    | Treated as a dynamic volume change that changes the initial gain of the BGM/playable sound that plays after that.                                                                                                                                                             |
+| `#xxxA0`                                                              | Treated as a dynamic judgment width change that refers to `#EXRANKxx`.                                                                                                                                                                                                        |
+| `#xxxSC`                                                              | Reflects in the drawing distance as a scroll segment of the `#SCROLLxx` reference.                                                                                                                                                                                            |
+| `#xxxSP`                                                              | Reflects in the drawing distance as a speed keyframe of `#SPEEDxx` reference.                                                                                                                                                                                                 |
+| `#xxxD1-D9`, `#xxxE1-E9` (and the extended `#xxxDA-DO` / `#xxxEA-EO`) | Treated as a landmine.                                                                                                                                                                                                                                                        |
 
 ### Supported commands
 
-| command                                                                                                                                 | Handling in player                                                                                                                                                   |
-| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens.                                    |
-| `#BANNER`                                                                                                                               | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose.                                                        |
-| `#STAGEFILE`                                                                                                                            | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay.                                     |
-| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | Used to display, sort, filter, and display the results of the song selection screen.                                                                                 |
-| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | Used for time resolution.                                                                                                                                            |
-| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | Used for judgment range, display rank, groove gauge calculation.                                                                                                     |
-| `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                              |
-| `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values. |
-| `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                               |
-| `#PATH_WAV`                                                                                                                             | Used only to search for files on the song selection screen preview. It is not used to solve samples during normal play.                                              |
-| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                    |
-| `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                           |
-| `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                    |
-| `#POORBGA`                                                                                                                              | Used to override the default value of POOR images.                                                                                                                   |
-| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | Used to calculate note drawing distance.                                                                                                                             |
-| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts.                                                                                                                   |
+| command                                                                                                                                 | Handling in player                                                                                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `#TITLE`, `#SUBTITLE`, `#ARTIST`, `#SUBARTIST`, `#GENRE`, `#COMMENT`                                                                    | Used to display metadata on the song selection screen. `#TITLE` / `#ARTIST` / `#GENRE` are also used for TUI and results screens.                                                                                                                                        |
+| `#BANNER`                                                                                                                               | Used to display the banner on the song selection screen. bmson uses `info.banner_image` for the same purpose.                                                                                                                                                            |
+| `#STAGEFILE`                                                                                                                            | Used as a dedicated image for the loading screen after song selection. It is not referenced by the BGA renderer during gameplay.                                                                                                                                         |
+| `#PLAYLEVEL`, `#DIFFICULTY`                                                                                                             | Used to display, sort, filter, and display the results of the song selection screen.                                                                                                                                                                                     |
+| `#BPM`, `#BPMxx`, `#STOPxx`, `#STP`                                                                                                     | Used for time resolution.                                                                                                                                                                                                                                                |
+| `#RANK`, `#DEFEXRANK`, `#EXRANKxx`, `#TOTAL`                                                                                            | Used for judgment range, display rank, groove gauge calculation.                                                                                                                                                                                                         |
+| `#WAVxx`, `#BMPxx`                                                                                                                      | Used for audio/BGA resource resolution.                                                                                                                                                                                                                                  |
+| `#BASE`                                                                                                                                 | Selects the BMS object ID base. `#BASE 62` keeps lowercase IDs case-sensitive when resolving samples, BGA, BPM/STOP references, long-note ends, and landmine values.                                                                                                     |
+| `#PREVIEW`                                                                                                                              | Used preferentially for preview playback on the song selection screen.                                                                                                                                                                                                   |
+| `#PATH_WAV`                                                                                                                             | Tried as a directory prefix before the bare path when browser gameplay and the offline renderer (`renderJson`) resolve samples; the song selection screen preview also uses it to search for files. The terminal player does not apply it when loading samples for play. |
+| `#LNTYPE`, `#LNMODE`, `#LNOBJ`                                                                                                          | Used to interpret BMS long notes.                                                                                                                                                                                                                                        |
+| `#PLAYER`                                                                                                                               | Used for mode estimation and display player lane metadata.                                                                                                                                                                                                               |
+| `#VOLWAV`                                                                                                                               | Used as a volume multiplier for the entire score.                                                                                                                                                                                                                        |
+| `#POORBGA`                                                                                                                              | Used to override the default value of POOR images.                                                                                                                                                                                                                       |
+| `#SCROLLxx`, `#SPEEDxx`                                                                                                                 | Used to calculate note drawing distance.                                                                                                                                                                                                                                 |
+| `#RANDOM`, `#SETRANDOM`, `#IF`, `#ELSEIF`, `#ELSE`, `#ENDIF`, `#ENDRANDOM`, `#SWITCH`, `#SETSWITCH`, `#CASE`, `#SKIP`, `#DEF`, `#ENDSW` | Resolved as control syntax before playback starts.                                                                                                                                                                                                                       |
 
 ### Unsupported channels
 
-| channel                                                                                                                      | Current player implementation                                                                                                                                                                                                             |
-| ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxxA6`                                                                                                                     | It is not supported as a runtime reflection channel for `#CHANGEOPTIONxx`. Even if it is kept as an event, the player runtime does not refer to it.                                                                                       |
-| Other object channels that are not included in the above list of correspondence                                              | Even if the parser holds them, the player runtime does not interpret them.                                                                                                                                                                |
+| channel                                                                         | Current player implementation                                                                                                                       |
+| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxxA6`                                                                        | It is not supported as a runtime reflection channel for `#CHANGEOPTIONxx`. Even if it is kept as an event, the player runtime does not refer to it. |
+| Other object channels that are not included in the above list of correspondence | Even if the parser holds them, the player runtime does not interpret them.                                                                          |
 
 ### Unsupported commands
 
@@ -96,7 +97,7 @@ player executes the score in the following order:
 
 1. Resolve the BMS control syntax at runtime and create a branched score to be used for the current playback.
 2. Extract performance notes, mines, invisible notes, and real-time audio triggers from the branched score.
-3. Confirm the mode, key assignment, and lane FREE ZONE alias from the actual channels.
+3. Confirm the lane mode from the branched score (see [Lane mode and input](#lane-mode-and-input)), then the key assignment and lane FREE ZONE alias from the actual channels.
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
 5. Execute either `AUTO` / `MANUAL` / `AUTO SCRATCH` main loop and return `PlayerSummary` at the end.
 
@@ -134,14 +135,18 @@ Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are w
 
 ### Landmines
 
+Mine channels are mapped to their corresponding playable lane and kept in a separate array.
+Mines are not included in `summary.total`.
+
 Mines follow the LR2 detonation model (LR2's own changelog; the damage model is confirmed against beatoraja's `JudgeManager`).
 
 - A mine explodes on either of LR2's two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
-- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead.
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
 - kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
+
 ### Invisible Note
 
 Invisible notes are kept separate from the normal playing target.
@@ -157,7 +162,15 @@ ordinary key columns, so they keep whatever length the chart authored (a plain t
 
 ## Lane mode and input
 
-The lane mode is estimated from the actual channels in the music score, `bms.player`, and `chartExtension`.
+The lane mode comes from one rule shared by every host: `resolveChartPlayVariant` in `@be-music/chart`, run over the
+branched score's events, `bms.player`, the bmson `mode_hint`, and the chart extension (`PlayerOptions.laneModeExtension`).
+A bmson `keyboard-24k` / `keyboard-24k-double` hint selects `24 KEY SP` / `48 KEY DP` outright, so a keyboard chart that
+only uses its first nine keys is not read as 7 / 9 KEY; every other hint leaves the decision to the lanes. A host that already
+knows the variant can declare it with `PlayerOptions.playVariant`. Lane usage counts the `1x` / `2x` lane channels and
+the `5x` / `6x` `#LNTYPE` long-note channels; mines and invisible objects never change the lane mode, so they cannot
+switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The detection order is listed in
+[BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior); it includes the documented `.bme`
+completion (a `.bme` chart without a 6 / 7 key column is `7 KEY SP` / `14 KEY DP`).
 The main modes that can be automatically determined with real equipment are as follows.
 
 - `5 KEY SP`
@@ -171,13 +184,21 @@ The main modes that can be automatically determined with real equipment are as f
 Channels that do not exist in a known fixed layout will fallback to unused keys in order.
 FREE ZONE also shares the input tokens of the corresponding scratch lanes (`17 -> 16`, `27 -> 26`).
 
-`24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Their 24 lanes per side live on channels
-`11..19` + `1A..1O` (and `21..29` + `2A..2O` for the 2P side), they have no scratch column, and lanes are laid out
-left to right in ascending channel order. Detection is content-based: one extended lane channel selects the mode
-ahead of every other rule, including the `.pms` extension and the `#PLAYER 3` + `17` POPN-9 signature. The 24 SP
-lanes take the fallback key layout in order (`a s d f g h j k l ; q w e r u i o p z x c v b n`); a 48-lane DP chart
-runs past the printable-key pool and the tail lands on function keys, which is a deliberate trade — 48 lanes are an
-AUTO PLAY / rendering target, not a hand-playable one.
+`24 KEY SP` / `48 KEY DP` are the Keyboardmania-style keyboard modes. Each side has 26 lanes: 24 keys on channels
+`11..19` + `1A..1O` (`21..29` + `2A..2O` for the 2P side) and the wheel, up on `1P` and down on `1Q` (`2P` / `2Q`).
+There is no scratch column. The keys are laid out left to right in ascending channel order, and the wheel sits on the
+side's outer edge where the IIDX modes keep their scratch: left of the 1P keys, right of the 2P keys. Detection is
+content-based: one extended lane channel (the wheel included) selects the mode ahead of every other rule, including the
+`.pms` extension and the `#PLAYER 3` + `17` POPN-9 signature, and a bmson keyboard `mode_hint` selects it outright.
+
+The wheel is judged exactly like a key (the beatoraja ruleset's keyboard judge windows, no scratch-specific handling),
+it is not FREE ZONE, and the lane options (MIRROR / RANDOM / S-RANDOM) move the 24 keys of a side but leave the wheel in
+place, as they do the scratch. The 24 SP keys take the fallback key layout in order
+(`a s d f g h j k l ; q w e r u i o p z x c v b n`); the wheel has its own keys on the keyboard's edges, off that pool
+and off the arrow keys the web player uses for hi-speed: `Tab` / left `Shift` turn the 1P wheel up / down, `Enter` /
+right `Shift` the 2P wheel. (beatoraja plays the wheel from a MIDI controller's pitch bend; be-music has no MIDI input.)
+A 48-key DP chart runs past the printable-key pool and the tail of its keys lands on function keys, which is a
+deliberate trade — 48 keys are an AUTO PLAY / rendering target, not a hand-playable one.
 
 The default keyboard layout for the IIDX series is 1P as `Z S X D C F V` and 2P as `B H N J M K,`.
 For scratch, 1P is left `Shift`, 2P is right `Shift`.
@@ -208,6 +229,19 @@ A window is a signed `[late bound, early bound]` pair in microseconds, resolved 
 per context (note vs long-note end). LR2 uses one table for all four contexts; beatoraja widens scratch by 10 ms
 per judge and gives long-note ends their own table.
 
+### Baseline widths
+
+The player bases its windows on LR2's measured judgment widths (hitkey's diary entry of 2015-01-19; they match lr2oraja's LR2-compatible table).
+
+| `#RANK`         | `PGREAT`                                            | `GREAT` | `GOOD`   | `BAD`    |
+| --------------- | --------------------------------------------------- | ------- | -------- | -------- |
+| `0` `VERY HARD` | `±8ms`                                              | `±24ms` | `±40ms`  | `±200ms` |
+| `1` `HARD`      | `±15ms`                                             | `±30ms` | `±60ms`  | `±200ms` |
+| `2` `NORMAL`    | `±18ms`                                             | `±40ms` | `±100ms` | `±200ms` |
+| `3` `EASY`      | `±21ms`                                             | `±60ms` | `±120ms` | `±200ms` |
+| `4` `VERY EASY` | Same as `NORMAL` (LR2 treats `#RANK 4` as `NORMAL`) |         |          |          |
+
+The `BAD` width is fixed at `±200ms` regardless of rank or extension commands. Scratch uses the same widths as the keys.
 The boundaries of `PERFECT` / `GREAT` / `GOOD` / `BAD` are determined by these four windows, walked inner to outer.
 An input outside every window reaches no note: the lane keysound plays and the press falls through to the
 empty-POOR path. `POOR` is a note that was missed outright.
@@ -263,6 +297,8 @@ bmson determines the judgment width using the following priority order.
 
 bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
 Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
+The `beatoraja` ruleset uses `judge_rank` as the judgerank directly, and a bmson chart without it judges like
+`judge_rank: 100` (the bmson default; PGREAT `±20ms` in 7 KEY), never like BMS `#RANK 2`.
 
 In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
 
@@ -313,12 +349,11 @@ When the judgment is confirmed, do the following:
 - Set combo back to 0.
 - Update score.
 - For ordinary note `BAD`, set groove gauge to `-4`.
-- For manual landmine hit, keep the displayed judgment as `BAD` and apply mine damage separately.
 
 ### `POOR`
 
 `POOR` is a failure for the note being played.
-Occurs when a note passes the `BAD` window, or when a manual input deviation exceeds the `BAD` window.
+Occurs when a note passes the `BAD` window without being hit.
 
 When `POOR` occurs, do the following:
 
@@ -352,13 +387,11 @@ The LN repeat-suppress window after a long-note release is treated the same way 
 
 ### Landmine
 
-During manual input, if a mine candidate is closer or the same distance as a normal note candidate, the landmine will be prioritized.
-Treat mines as `BAD` and turn off the combo.
-Groove gauge damage is calculated from the mine object value as uppercase base36, using `damage = value / 2`.
-The applied gauge result is still clamped to `2-100%`, so a large value such as `ZZ` practically drops the gauge to `2%`.
-If `#WAV00` is defined, trigger that sample on the mine hit path.
+A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judge counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
+It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
+An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` uses the same `4%`.
 
-The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md): the `value / 2` interpretation follows Hitkey's command memo, and the `#WAV00` / `ZZ` convention is supplemented by Obj Tech Lovers chapter3-2 and chapter4-7.
+The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md).
 
 ## NOTES・combo・score
 
@@ -451,7 +484,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- Manual landmine hit: `-(mineValue(base36) / 2)`
+- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`, `4` when a bmson mine has none), applied as a raw delta
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 
@@ -620,6 +653,9 @@ With `LNMODE=3`, the gauge continues to decrease even during hold break.
 
 The player body is independent of the UI implementation and notifies the state through `stateSignals` and `uiSignals`.
 Judge/combo, frame information, POOR BGA, lane flash, and lane hold indication are communicated via this signal.
+The UI command queue also carries long-note lifecycle commands: `long-note-start` (with `mode`: `ln` / `cn` / `hcn`, the mode the active ruleset actually plays the note in, which can differ from the chart's `#LNMODE`) when a hold begins, and `long-note-end` (with `outcome`: `complete` / `dropped`) when it finishes.
+
+`PlayerOptions.onRulesetResolved` is called once before playback starts with a `PlayerRulesetInfo` (`id`, `rulesetId`, `longNoteStyle`, and the judge `windows` in µs at the start of the chart), so a host can show the windows the engine actually uses instead of re-deriving them.
 
 ### Loading screen
 
@@ -636,7 +672,7 @@ The loading text is overlaid on top of it, and the background color of each char
 
 If `#STAGEFILE` is not specified, the file is not found, the format is not supported, or decoding fails, it will fall back to a text loading screen without an image.
 `#STAGEFILE` is only for loading and does not refer to the BGA renderer during gameplay. The viewport remains a black background while the first base BGA cue is not yet enabled.
-If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. If not specified, ANSI display will be displayed.
+If `--kitty-graphics` is enabled and the device supports it, `#STAGEFILE` will be displayed as an image overlay using the Kitty graphics protocol. Kitty graphics is enabled by default; with `--no-kitty-graphics` or on an unsupported terminal, ANSI display is used.
 The default implementation of video BGA is progressive decode. The UI runtime is set to ready when the first frame is ready, and the remaining frames are decoded step by step with another worker after the gameplay starts.
 
 ### Music Select (song selection screen)
@@ -649,7 +685,7 @@ The song selection screen displays the following information:
 - `#BANNER` or bmson `info.banner_image`
 
 The banner will be displayed on the right side of the metadata block and will fit within the block while maintaining the aspect ratio.
-If `--kitty-graphics` is enabled and the terminal supports it, the banner will also be displayed using the Kitty graphics protocol. If not specified, ANSI display will be displayed.
+If `--kitty-graphics` is enabled and the terminal supports it, the banner will also be displayed using the Kitty graphics protocol. Kitty graphics is enabled by default; with `--no-kitty-graphics` or on an unsupported terminal, ANSI display is used.
 
 On the song selection screen, `#PREVIEW` is given priority for preview playback.
 Place a short settle delay before starting the preview to prevent the preview process from continuing to run while the cursor is being hit.
@@ -692,7 +728,8 @@ A negative `#BPMxx` referenced through channel 08 arms LR2's one-way reverse-scr
 ### Non-TUI output
 
 If TUI is disabled, the mode start message, lane assignment, judgment log, and final result are output as text.
-`renderSummary()` formats the result in the following order: `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / FAST / SLOW / EX-SCORE / SCORE`.
+`renderSummary()` formats the result in the following order: `TOTAL / GAUGE / PGREAT / GREAT / GOOD / BAD / POOR / EMPTY / FAST / SLOW / EX-SCORE / SCORE`.
+`EMPTY` is the empty-POOR count. The `SCORE` line is printed only under the `lr2` ruleset, the only one that defines a money score.
 
 ## `PlayerSummary`
 
@@ -720,4 +757,4 @@ ruleset-scoped gauge id), `survival`, and `failedMidPlay`.
 - Independent 2P gauge variant in browser gameplay
 - Gauge timeline display
 - beatoraja's non-default note-selection algorithms (`duration` / `lowest` / `score`) are implemented but not
-  exposed as an option
+  exposed as a live-play option (the `bms-playlog` simulator can select them with `--algorithm=`)

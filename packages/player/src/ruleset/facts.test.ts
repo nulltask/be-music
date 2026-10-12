@@ -1,5 +1,5 @@
 import { createEmptyJson } from '@be-music/json';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog } from '../playlog/format.ts';
 import { rulesetChartFactsFromPlaylog } from '../playlog/rulesets.ts';
 import {
@@ -66,6 +66,32 @@ describe('ruleset/facts', () => {
 
     const beatoraja = resolveRuleset(chart, 'beatoraja');
     expect(beatoraja.windowsAt(6_000_000)).toEqual(beatoraja.windows);
+  });
+});
+
+describe('ruleset/beatoraja bmson judge_rank default', () => {
+  test('a bmson chart without `judge_rank` judges like `judge_rank: 100` (the bmson default), not like #RANK 2', () => {
+    const json = createEmptyJson('bmson');
+    expect(json.bmson.info.judgeRank).toBeUndefined();
+    const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
+    const absent = resolveRuleset(rulesetChartFactsFromChart(json, chart), 'beatoraja').windows;
+    json.bmson.info.judgeRank = 100;
+    const explicit = resolveRuleset(rulesetChartFactsFromChart(json, chart), 'beatoraja').windows;
+    expect(absent).toEqual(explicit);
+    // beatoraja 7 KEY PGREAT at judgerank 100 is ±20 ms (it was ±15 ms, the NORMAL-rule rank-2 value of 75).
+    expect(absent.note.judges[0]).toEqual([-20_000, 20_000]);
+  });
+
+  test('the play-log adapter, which records `sourceExRank` only when the chart sets it, resolves the same default', () => {
+    const recorded = resolveRuleset(facts({ sourceFormat: 'bmson', judgeRank: { percent: 75 } }), 'beatoraja');
+    const explicit = resolveRuleset(
+      facts({ sourceFormat: 'bmson', judgeRank: { percent: 75, sourceExRank: 100 } }),
+      'beatoraja',
+    );
+    expect(recorded.windows).toEqual(explicit.windows);
+    // A BMS chart without #DEFEXRANK / #RANK still falls back to beatoraja's rank-2 judgerank.
+    const bms = resolveRuleset(facts({ judgeRank: { percent: 75 } }), 'beatoraja');
+    expect(bms.windows.note.judges[0]).toEqual([-15_000, 15_000]);
   });
 });
 

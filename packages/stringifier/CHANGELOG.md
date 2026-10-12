@@ -1,5 +1,20 @@
 # @be-music/stringifier
 
+## 0.3.3
+
+### Patch Changes
+
+- f4dc1c3: Fix `stringifyBms` dropping `#WAVCMD` lines: when an edited chart's header is rewritten, every line in `bms.wavCmds` is now written instead of only the first one.
+- 5fcba7b: Fix `stringifyBmson` writing mines as ordinary notes: landmine events (`Dx` / `Ex`) now go to bmson `key_channels` on the lane they sit on and keep their `damage`, instead of landing in `sound_channels` as extra playable lanes.
+
+## 0.3.2
+
+### Patch Changes
+
+- Updated dependencies [202a28b]
+  - @be-music/chart@0.4.0
+  - @be-music/parser@0.2.4
+
 ## 0.3.1
 
 ### Patch Changes

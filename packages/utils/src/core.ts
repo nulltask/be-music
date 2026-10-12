@@ -260,7 +260,7 @@ export async function loadFileEntryBytes<TFile extends Pick<AssetInputFile, 'arr
   return new Uint8Array(await entry.arrayBuffer());
 }
 
-export function asLoadedFileEntryBytes(entry: Uint8Array | unknown | undefined): Uint8Array | undefined {
+export function asLoadedFileEntryBytes(entry: unknown): Uint8Array | undefined {
   if (entry === undefined) return undefined;
   return entry instanceof Uint8Array ? entry : undefined;
 }

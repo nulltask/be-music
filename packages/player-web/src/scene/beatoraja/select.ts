@@ -71,6 +71,7 @@ import { groupSongsByFolder, resolveChartPlayVariant, resolveSongSource } from '
 import { detectChartFeatures } from '../select-ops.ts';
 import { ChartPreviewEngine } from '../../chart/preview.ts';
 import type { BrowserBrowseEntry, BrowserFolderNode, BrowserSongEntry } from '../../collection/types.ts';
+import { masterOutput } from '../../runtime/master-volume.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
   skin: BeatorajaSkin;
@@ -337,6 +338,16 @@ const SELECT_NUM_DENSITY_AVERAGE_AFTERDOT = 365;
  */
 const SCROLL_TWEEN_RATE = 0.25;
 const SCROLL_SNAP_THRESHOLD = 0.005;
+
+/**
+ * The LNMODE button index (0 = LN, 1 = CN, 2 = HCN) for a chart's authored `#LNMODE`, which counts from 1 (1 = LN,
+ * 2 = CN, 3 = HCN). Charts without the directive, or with a value outside 1..3, read as LN.
+ */
+export function lnModeDirectiveToIndex(lnMode: number | undefined): 0 | 1 | 2 {
+  if (lnMode === 2) return 1;
+  if (lnMode === 3) return 2;
+  return 0;
+}
 
 export class PixiBeatorajaSelectScene implements PixiScene {
   readonly root: Container = new Container();
@@ -1396,12 +1407,9 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     if (refOp === SELECT_REF_LNMODE_INDEX) {
       // 0 = LN, 1 = CN (charge note), 2 = HCN (hell charge note). User's LNMODE-button click
       // override (act=308) wins; otherwise fall back to the focused chart's authored `#LNMODE`
-      // (or 0 for legacy BMS that didn't author the directive).
+      // (LN for legacy BMS that did not author the directive).
       if (this.lnModeOverride !== undefined) return this.lnModeOverride;
-      const song = this.focusedSong();
-      const lnMode = song?.chart.bms?.lnMode;
-      if (typeof lnMode === 'number' && lnMode >= 0 && lnMode <= 2) return lnMode;
-      return 0;
+      return lnModeDirectiveToIndex(this.focusedSong()?.chart.bms?.lnMode);
     }
     if (refOp === SELECT_REF_BEST_CLEAR_LAMP_INDEX) {
       // Best clear lamp index — `state_clear` imageset's 11 slots map onto beatoraja's lamp
@@ -1518,10 +1526,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * advances from "LN" → "CN" rather than reverting an unset state. Wraps at 0..2.
    */
   private cycleLnModeOverride(step: number): void {
-    const song = this.focusedSong();
-    const authored = song?.chart.bms?.lnMode;
-    const current =
-      this.lnModeOverride ?? (typeof authored === 'number' && authored >= 0 && authored <= 2 ? authored : 0);
+    const current = this.lnModeOverride ?? lnModeDirectiveToIndex(this.focusedSong()?.chart.bms?.lnMode);
     const next = (((current + step) % 3) + 3) % 3;
     this.lnModeOverride = next as 0 | 1 | 2;
     // eslint-disable-next-line no-console
@@ -2709,7 +2714,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
     // start" to the console. By the time `ensureChartPreviewEngine` is called the user has
     // already triggered the scene mount through a click / keypress.
     this.previewAudioContext = new AudioContext({ latencyHint: 'interactive' });
-    this.chartPreviewEngine = new ChartPreviewEngine(this.previewAudioContext, this.previewAudioContext.destination);
+    this.chartPreviewEngine = new ChartPreviewEngine(this.previewAudioContext, masterOutput(this.previewAudioContext));
     return this.chartPreviewEngine;
   }
   private previewAudioContext: AudioContext | undefined;

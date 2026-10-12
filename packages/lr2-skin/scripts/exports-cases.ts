@@ -179,7 +179,7 @@ export function registerLr2SkinExportsCases(define: DefineBenchmarkCase): void {
   });
 }
 
-function makeBenchFile(path: string, body: string | Uint8Array): File {
+function makeBenchFile(path: string, body: string | Uint8Array<ArrayBuffer>): File {
   const name = path.split('/').at(-1) ?? path;
   const file = new File([body], name);
   Object.defineProperty(file, 'webkitRelativePath', {
@@ -216,5 +216,5 @@ function makeLr2Skin(): lr2SkinApi.Lr2Skin {
     name: 'bench',
     scratchFlip: { flipResult: false, flipSide: false, disableFlip: false, reloadBanner: false },
     files: new Map([['parts.tga', BENCH_TGA]]),
-  } as lr2SkinApi.Lr2Skin;
+  } as unknown as lr2SkinApi.Lr2Skin;
 }

@@ -100,6 +100,12 @@ interface MeasurePositionWithFraction {
   position: BeMusicPosition;
 }
 
+/** Lane codes of a `<side><lane>` BMS channel, left to right: the classic `1..9` columns, then the extended `A..Z`. */
+const BMS_LANE_CODES = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+/** Lanes per side of the bmson `keyboard-24k` layouts: 24 keys, then the wheel up / down. */
+const BMSON_KEYBOARD_SIDE_LANES = 26;
+
 /**
  * bmson `mode_hint` → BMS lane channel maps.
  *
@@ -108,8 +114,8 @@ interface MeasurePositionWithFraction {
  * mis-route `beat-7k`'s key 6 / 7 onto scratch (`16`) / FREE ZONE (`17`) — the channel digits that happen to come next
  * in numeric order — instead of `18` / `19`.
  *
- * Keys mirror the bmson 1.0.0 spec's mode hints; values follow the canonical IIDX / Pop'n channel layout that LR2 /
- * beatoraja ship default skins for.
+ * Keys mirror the bmson 1.0.0 spec's mode hints (plus beatoraja's `keyboard-24k` / `keyboard-24k-double`); values
+ * follow the canonical IIDX / Pop'n / keyboard channel layout that LR2 / beatoraja ship default skins for.
  */
 const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
   'beat-5k': new Map([
@@ -182,7 +188,27 @@ const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
     [8, '24'],
     [9, '25'],
   ]),
+  // Keyboardmania-style 24-key layouts (beatoraja / BmsONE): x=1..24 are the keys left to right (C..B over two
+  // octaves), x=25 / 26 the wheel up / down. They run onto the extended `11..19` + `1A..1O` bank, with the wheel on
+  // `1P` / `1Q`; the double layout repeats that on the 2P side from x=27.
+  'keyboard-24k': createKeyboardLaneMap(1),
+  'keyboard-24k-double': createKeyboardLaneMap(2),
 };
+
+/**
+ * Builds the `keyboard-24k` (one side) / `keyboard-24k-double` (two sides) lane map: side `s` (0-based) takes
+ * x = s*26 + 1..26 onto `<side><lane>` with lane codes `1..9`, `A..O` (the 24 keys) and `P` / `Q` (wheel up / down).
+ * Every `x` keeps its lane even when the chart leaves others empty, so nothing compacts.
+ */
+function createKeyboardLaneMap(sides: 1 | 2): ReadonlyMap<number, string> {
+  const map = new Map<number, string>();
+  for (let side = 0; side < sides; side += 1) {
+    for (let lane = 0; lane < BMSON_KEYBOARD_SIDE_LANES; lane += 1) {
+      map.set(side * BMSON_KEYBOARD_SIDE_LANES + lane + 1, `${side + 1}${BMS_LANE_CODES[lane]}`);
+    }
+  }
+  return map;
+}
 
 /**
  * bmson 1.0.0 spec — when a chart omits / blanks `mode_hint`, the default is `beat-7k` ("Default value is 'beat-7k'").
@@ -203,7 +229,8 @@ const BMSON_GENERIC_KEYS_PATTERN = /^generic-(\d+)keys?$/;
  * Resolves the `x` → BMS channel mapping for a chart's playable lanes. Order of resolution:
  *
  * 1. `mode_hint` blank / undefined → spec default `beat-7k` (per bmson 1.0.0).
- * 2. Canonical IIDX / Pop'n hint → authoritative table.
+ * 2. Canonical IIDX / Pop'n / keyboard hint → authoritative table. Unknown hints (BmsONE's single-player
+ *    `keyboard-48k` among them, which is NOT the two-player `keyboard-24k-double`) take step 4.
  * 3. `generic-Nkeys` template → left-to-right positional map sized to N keys.
  * 4. Anything else → positional fallback over the chart's actual `x` values (preserves the historical behavior for
  *    bmson dialects unknown to us).
@@ -581,9 +608,8 @@ export function normalizeBmsonExtensions(input: unknown): BeMusicJson['bmson'] {
 }
 
 function laneIndexToChannel(index: number): string {
-  const digits = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-  const first = digits[Math.floor(index / digits.length)] ?? '1';
-  const second = digits[index % digits.length];
+  const first = BMS_LANE_CODES[Math.floor(index / BMS_LANE_CODES.length)] ?? '1';
+  const second = BMS_LANE_CODES[index % BMS_LANE_CODES.length];
   return `${first}${second}`;
 }
 

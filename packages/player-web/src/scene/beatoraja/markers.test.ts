@@ -1,5 +1,5 @@
 import { Texture, TextureSource } from 'pixi.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaImageElement, BeatorajaImageId } from '@be-music/beatoraja-skin';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';

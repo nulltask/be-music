@@ -54,7 +54,12 @@ import {
   resolveHighSpeedMultiplier,
   type HighSpeedControlAction,
 } from './high-speed-control.ts';
-import { createPlayerUiSignalBus, type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
+import {
+  createPlayerUiSignalBus,
+  type PlayerGaugeSummary,
+  type PlayerUiLongNoteMode,
+  type PlayerUiSignalBus,
+} from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import { createInputWakeUp } from './input-wakeup.ts';
 import {
@@ -95,8 +100,11 @@ import {
   type JudgeSelectionCandidate,
   type JudgeWindowSetUs,
   type LongNoteStyle,
+  type PlaylogRulesetId,
+  type RulesetConfig,
   type RulesetJudgeIndex,
   type RulesetWindowTables,
+  type WindowPairUs,
 } from '../ruleset/index.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
@@ -204,25 +212,23 @@ export interface PlayerOptions {
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
+  /**
+   * The chart file's extension (`.bms` / `.bme` / `.pms` / ...). Feeds the extension rules of the shared lane-mode rule
+   * (`resolveChartPlayVariant` from `@be-music/chart`): `.pms` is 9 KEY, and a `.bme` chart without a 6 / 7 key column
+   * is completed to 7 / 14 KEY.
+   */
   laneModeExtension?: string;
   /**
-   * Direct lane-mode override. When set, the engine's `resolveLaneMode` skips its content-based
-   * heuristic and routes straight to the corresponding `LaneMode`:
+   * The chart's play variant, when the host declares it. Routes straight to the corresponding lane mode:
    *
    *   - `'5'`  → `5-key-sp`     - `'10'` → `5-key-dp`
    *   - `'7'`  → `7-key-sp`     - `'14'` → `14-key-dp`
-   *   - `'9'`  → `9-key`        - `'24'` → `24-key-sp` / `48-key-dp` (resolved against 2P presence)
+   *   - `'9'`  → `9-key`        - `'24'` → `24-key-sp`    - `'48'` → `48-key-dp`
    *
-   * Mirrors the renderer-side `chartVariant` the host has already classified the chart as. The
-   * engine's own heuristic only escalates to `9-key` when the chart is `.pms` OR `#PLAYER=3`
-   * with channel `17`, which under-classifies BME-format POPN-9 charts that author `#PLAYER 1`
-   * + channels 16/17/18/19. Without this override, those charts mounted on a 9-key skin /
-   * adapter (via the host) had their `f/v/g/b` inputs dropped because the engine's lane
-   * bindings followed `7-key-sp` (channel 16 → scratch, channel 17 → FREE ZONE, etc.).
-   *
-   * User report: 9 KEY laser and bomb sprites failed to appear. The previous
-   * `laneModeExtension`-only inference (c0da7b5) only worked for charts the heuristic could
-   * classify; this override lets the host force the engine into the variant it already decided on.
+   * When omitted, the engine resolves it with `resolveChartPlayVariant` over the resolved chart's events (after
+   * `#RANDOM`), `laneModeExtension`, and `#PLAYER` — the same rule the web hosts use to pick play skins — so the lane
+   * mode (and the beatoraja per-mode judge windows that follow from it) never depends on mines, invisible objects, or
+   * which long-note notation the chart uses.
    */
   playVariant?: ChartPlayVariant;
   /**
@@ -307,6 +313,38 @@ export interface PlayerOptions {
    * against (`preparedChart`, or a chart remapped to the log's note arrangement).
    */
   replayInputs?: readonly PlaylogInputEvent[];
+  /**
+   * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
+   * `judgeWindowMs`, and (for a replay) the recorded settings were applied. Lets a host show the windows the engine
+   * actually uses instead of re-deriving them. Under LR2 a mid-chart `#EXRANKxx` can narrow or widen the windows
+   * later; `windows` is the table in force at the start of the chart.
+   */
+  onRulesetResolved?: (info: PlayerRulesetInfo) => void;
+}
+
+export type { JudgeWindowSetUs, LongNoteStyle, PlaylogRulesetId, RulesetWindowTables, WindowPairUs };
+
+/** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
+export interface PlayerRulesetInfo {
+  /** Versioned ruleset id (`'lr2/1'`, `'beatoraja/1'`, `'iidx/1'`). */
+  id: string;
+  rulesetId: PlaylogRulesetId;
+  /** How the ruleset plays the chart's long notes (LN / per-note / charge). */
+  longNoteStyle: LongNoteStyle;
+  /**
+   * Judge windows (µs) at the start of the chart, in the ruleset convention `delta = noteTime - inputTime`: each pair
+   * is `[lateBound <= 0, earlyBound >= 0]`, so a positive delta is an EARLY press.
+   */
+  windows: RulesetWindowTables;
+}
+
+function reportResolvedRuleset(options: PlayerOptions, ruleset: RulesetConfig): void {
+  options.onRulesetResolved?.({
+    id: ruleset.id,
+    rulesetId: ruleset.rulesetId,
+    longNoteStyle: ruleset.longNoteStyle,
+    windows: ruleset.windows,
+  });
 }
 
 export interface PlayerSummary {
@@ -692,6 +730,11 @@ function resolveEffectiveLongNoteMode(style: LongNoteStyle, chartMode: LongNoteM
     default:
       return chartMode;
   }
+}
+
+/** The UI-command spelling of an effective long-note mode. */
+function toUiLongNoteMode(mode: LongNoteMode): PlayerUiLongNoteMode {
+  return mode === 3 ? 'hcn' : mode === 2 ? 'cn' : 'ln';
 }
 
 /** True for the modes that score the head on the press and the tail on the release. */
@@ -1646,7 +1689,19 @@ export function resolveBmsControlFlowForPlayback(
   randomSource: () => number = Math.random,
 ): ControlFlowResolutionResult {
   const randomPatterns: RandomPatternSelection[] = [];
+  // Values drawn here are replayed, in order, into the parser's own `#RANDOM` / `#SWITCH` draws below. The parser only
+  // draws for a line with more than one outcome (`#RANDOM 1`, a missing or non-positive range, and `#SWITCH 1` resolve
+  // to 1 without touching the source), so drawing for those lines here would shift every later replayed value onto
+  // the previous line and play a different branch than the one reported in `randomPatterns`.
   const runtimeRandomSequence: number[] = [];
+  const drawLikeParser = (total: number): number => {
+    if (total <= 1) {
+      return 1;
+    }
+    const randomValue = randomSource();
+    runtimeRandomSequence.push(randomValue);
+    return generateControlFlowRandomValue(total, randomValue);
+  };
 
   for (const entry of json.bms.controlFlow) {
     if (entry.kind !== 'directive') {
@@ -1654,11 +1709,9 @@ export function resolveBmsControlFlowForPlayback(
     }
     if (entry.command === 'RANDOM') {
       const total = parsePositiveInteger(entry.value) ?? 1;
-      const randomValue = randomSource();
-      runtimeRandomSequence.push(randomValue);
       randomPatterns.push({
         index: randomPatterns.length + 1,
-        current: generateControlFlowRandomValue(total, randomValue),
+        current: drawLikeParser(total),
         total,
       });
       continue;
@@ -1673,7 +1726,7 @@ export function resolveBmsControlFlowForPlayback(
       continue;
     }
     if (entry.command === 'SWITCH') {
-      runtimeRandomSequence.push(randomSource());
+      drawLikeParser(parsePositiveInteger(entry.value) ?? 1);
     }
   }
 
@@ -1885,6 +1938,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },
   );
+  reportResolvedRuleset(options, autoRuleset);
   const { summary, applyGaugeJudge } = createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount);
   const scoreTracker = createScoreTracker({ moneyScore: autoRuleset.moneyScore });
   // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
@@ -2212,10 +2266,15 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       // sprite vanishes while the lane laser still reads as "held" — both regressions reported during Phase 4c
       // shared-engine playthroughs.
       if (uiEnabled) {
+        uiSignals.pushCommand({ kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' });
         uiSignals.pushCommand({ kind: 'release-lane', channel: pending.note.channel });
       }
     }
   };
+
+  /** UI-command mode of a long note under the active ruleset (`autoPlay` and `manualPlay` share the mapping). */
+  const autoUiLongNoteMode = (note: TimedPlayableNote): PlayerUiLongNoteMode =>
+    toUiLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, resolvePlayableLongNoteMode(note) ?? 2));
 
   inputRuntime?.start();
 
@@ -2338,6 +2397,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             });
             insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
             if (uiEnabled) {
+              uiSignals.pushCommand({
+                kind: 'long-note-start',
+                channel: note.channel,
+                beat: note.beat,
+                mode: autoUiLongNoteMode(note),
+              });
               publishUiFrame(note.seconds, note.beat);
             }
           } else {
@@ -2559,6 +2624,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       ...(options.judgeWindowMs !== undefined ? { judgeWindowOverrideMs: options.judgeWindowMs } : {}),
     },
   );
+  reportResolvedRuleset(options, ruleset);
   /**
    * Signed judge windows in force at a given chart time. The ruleset owns the whole table set — key vs scratch,
    * note vs long-note end, and (LR2 only) the `#EXRANKxx` timeline — so the engine never derives a window itself.
@@ -2899,7 +2965,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     if (!markLandmineJudged(landmine)) {
       return;
     }
-    const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, idBase);
+    const landmineGaugeEffect = resolveLandmineGaugeEffect(landmine.event, idBase, resolvedJson.sourceFormat);
     const landmineExplosionEvent = resolveLandmineExplosionEvent(landmine.event, wavResources);
     if (landmineExplosionEvent) {
       if (!uiEnabled) {
@@ -3061,6 +3127,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           endSeconds,
         });
         insertPendingAutoLongNote(pendingAutoScratchLongNotes, note, endSeconds);
+        if (uiEnabled) {
+          uiSignals.pushCommand({
+            kind: 'long-note-start',
+            channel: note.channel,
+            beat: note.beat,
+            mode: toUiLongNoteMode(
+              resolveEffectiveLongNoteMode(ruleset.longNoteStyle, resolvePlayableLongNoteMode(note) ?? 2),
+            ),
+          });
+        }
         continue;
       }
       applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
@@ -3121,6 +3197,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // fades out at the tail. Without this the scratch streak keeps glowing past the LN's visual end. Gated on
       // `uiEnabled` to match the matching `hold-lane-until-beat` push in `applyAutoScratchJudgements`.
       if (uiEnabled) {
+        uiSignals.pushCommand({ kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' });
         uiSignals.pushCommand({ kind: 'release-lane', channel: pending.note.channel });
       }
     }
@@ -3394,6 +3471,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     // set; without it the sustain glow / lane laser would stay lit indefinitely once the engine finalizes the
     // LN (early grace expiry, end-beat reached, or kitty-state release).
     if (uiEnabled) {
+      uiSignals.pushCommand({
+        kind: 'long-note-end',
+        channel,
+        outcome: judge.kind === 'BAD' || judge.kind === 'POOR' ? 'dropped' : 'complete',
+      });
       uiSignals.pushCommand({ kind: 'release-lane', channel });
     }
     applyResolvedManualJudge(channel, judge, atSeconds);
@@ -3670,6 +3752,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // on manual play, and the skin's sustain-glow gated on timer 70..89 stays invisible for the whole hold.
       if (uiEnabled && longNoteMode !== undefined) {
         uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel, beat: candidate.endBeat ?? candidate.beat });
+        uiSignals.pushCommand({
+          kind: 'long-note-start',
+          channel,
+          beat: candidate.beat,
+          mode: toUiLongNoteMode(longNoteMode),
+        });
       }
       const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, nowSec));
       if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
@@ -3680,6 +3768,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           activeLongNotesByChannel.delete(channel);
           longHoldUntilMsByChannel.delete(channel);
           if (uiEnabled) {
+            uiSignals.pushCommand({ kind: 'long-note-end', channel, outcome: 'dropped' });
             uiSignals.pushCommand({ kind: 'release-lane', channel });
           }
           collectMultiBad();
@@ -3960,7 +4049,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         // the normal per-hold pass below (their judge instant is the pre-reversal release/end time, so frame
         // quantization must not swallow them). Holds genuinely still open at the reversal resolve silently: no
         // tail judgment, no POOR, and their keysounds play out (LR2 lets already-scheduled audio ring).
-        for (const [channel, hold] of [...activeLongNotesByChannel.entries()]) {
+        for (const [channel, hold] of activeLongNotesByChannel) {
           const releaseSeconds = longHoldReleaseSecondsByChannel.get(channel);
           const resolvesBeforeReversal =
             (releaseSeconds !== undefined && releaseSeconds < reversalSeconds) ||

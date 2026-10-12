@@ -1,8 +1,10 @@
 import {
   compareEvents,
   createBeatResolver,
+  isLandmineChannel,
   isSampleTriggerChannel,
   parseBpmFrom03Token,
+  resolveChartPlayVariant,
   sortEvents,
 } from '@be-music/chart';
 import { parseBms, parseBmson } from '@be-music/parser';
@@ -90,23 +92,30 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
 
+  // Lanes get bmson `x` numbers from every playable channel in use, plus the lanes mines sit on (a mine on `D3` sits on
+  // lane `13`), so a mine keeps its lane even where no playable note shares it.
   const playableChannelSet = new Set<string>();
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     if (channel === '01' || !isSampleTriggerChannel(channel)) {
       continue;
     }
-    playableChannelSet.add(channel);
+    const lane = isLandmineChannel(channel) ? landmineChannelToPlayableChannel(channel) : channel;
+    if (lane) {
+      playableChannelSet.add(lane);
+    }
   }
   const playableChannels = [...playableChannelSet].sort();
 
-  const xMap = new Map<string, number>();
-  playableChannels.forEach((channel, index) => xMap.set(channel, index + 1));
+  const modeHint = resolveBmsonModeHintForOutput(json, playableChannels.length);
+  const xMap = createBmsonXMap(playableChannels, modeHint);
 
   const soundChannels = new Map<
     string,
     { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean; t?: number }> }
   >();
+  // beatoraja's `key_channels` extension: mines, grouped by sample like `sound_channels`, each keeping its `damage`.
+  const keyChannels = new Map<string, { name: string; notes: Array<{ x: number; y: number; damage?: number }> }>();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
   // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
@@ -121,6 +130,21 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     }
 
     const y = Math.round(beatResolver.eventToBeat(event) * resolution);
+    if (isSampleChannel && isLandmineChannel(channel)) {
+      const lane = landmineChannelToPlayableChannel(channel);
+      const x = lane ? xMap.get(lane) : undefined;
+      if (x !== undefined) {
+        const key = normalizeObjectKey(event.value, idBase);
+        const damage =
+          typeof event.bmson?.damage === 'number' && Number.isFinite(event.bmson.damage) && event.bmson.damage >= 0
+            ? event.bmson.damage
+            : undefined;
+        const slot = keyChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
+        slot.notes.push({ x, y, ...(damage !== undefined ? { damage } : {}) });
+        keyChannels.set(key, slot);
+      }
+      continue;
+    }
     if (isSampleChannel) {
       const key = normalizeObjectKey(event.value, idBase);
       const fileName = json.resources.wav[key] ?? key;
@@ -156,21 +180,25 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       continue;
     }
     if (channel === '09') {
-      const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
-      if (typeof duration === 'number' && duration > 0) {
-        stopEvents.push({ y, duration });
+      // `#STOPxx` counts 1/192 of a 4/4 measure (48 per beat); bmson `duration` counts pulses at `resolution`.
+      const stopUnits = json.resources.stop[normalizeObjectKey(event.value, idBase)];
+      if (typeof stopUnits === 'number' && stopUnits > 0) {
+        stopEvents.push({ y, duration: Math.round((stopUnits * resolution) / 48) });
       }
     }
   }
 
   const bmson: Record<string, unknown> = {
     version: resolveBmsonVersionForOutput(json),
-    info: createBmsonInfoForOutput(json, resolution, playableChannels.length),
+    info: createBmsonInfoForOutput(json, resolution, modeHint),
     lines: mapBmsonLineValues(resolveBmsonLinesForOutput(json, resolution)),
     bpm_events: bpmEvents,
     stop_events: stopEvents,
     sound_channels: [...soundChannels.values()],
   };
+  if (keyChannels.size > 0) {
+    bmson.key_channels = [...keyChannels.values()];
+  }
   const bga = createBmsonBgaForOutput(json);
   if (bga) {
     bmson.bga = bga;
@@ -411,8 +439,13 @@ function pushBmsExtensionLines(lines: string[], json: BeMusicJson): void {
   }
   pushIndexedStringLines(lines, 'CHANGEOPTION', json.bms.changeOption, base);
 
-  if (typeof json.bms.wavCmd === 'string' && json.bms.wavCmd.length > 0) {
-    lines.push(`#WAVCMD ${json.bms.wavCmd}`);
+  // Charts declare one `#WAVCMD` line per (parameter, slot) pair, so write every line; the legacy `wavCmd` only holds the
+  // first, and stands in when `wavCmds` is empty.
+  const wavCmds = (json.bms.wavCmds?.length ?? 0) > 0 ? json.bms.wavCmds : [json.bms.wavCmd];
+  for (const wavCmd of wavCmds) {
+    if (typeof wavCmd === 'string' && wavCmd.length > 0) {
+      lines.push(`#WAVCMD ${wavCmd}`);
+    }
   }
 
   if (typeof json.bms.lnType === 'number') {
@@ -738,6 +771,7 @@ function areBmsExtensionsEqual(left: BeMusicJson['bms'], right: BeMusicJson['bms
     left.option === right.option &&
     areStringMapsEqual(left.changeOption, right.changeOption) &&
     left.wavCmd === right.wavCmd &&
+    areStringArraysEqual(left.wavCmds, right.wavCmds) &&
     areStringMapsEqual(left.exWav, right.exWav) &&
     areStringMapsEqual(left.exBmp, right.exBmp) &&
     areStringMapsEqual(left.bga, right.bga) &&
@@ -1255,11 +1289,7 @@ function resolveBmsonVersionForOutput(json: BeMusicJson): string {
   return '1.0.0';
 }
 
-function createBmsonInfoForOutput(
-  json: BeMusicJson,
-  resolution: number,
-  playableChannelCount: number,
-): Record<string, unknown> {
+function createBmsonInfoForOutput(json: BeMusicJson, resolution: number, modeHint: string): Record<string, unknown> {
   const info = json.bmson.info;
   const metadataPlayLevel = resolveBmsonCompatiblePlayLevel(json.metadata.playLevel);
   const output: Record<string, unknown> = {
@@ -1269,7 +1299,7 @@ function createBmsonInfoForOutput(
     genre: info.genre ?? json.metadata.genre ?? '',
     level: typeof info.level === 'number' ? info.level : (metadataPlayLevel ?? 0),
     init_bpm: typeof info.initBpm === 'number' ? info.initBpm : json.metadata.bpm,
-    mode_hint: info.modeHint ?? `beat-${Math.max(1, playableChannelCount)}k`,
+    mode_hint: modeHint,
     resolution,
   };
 
@@ -1281,12 +1311,12 @@ function createBmsonInfoForOutput(
     output.chart_name = info.chartName;
   }
 
-  const judgeRank = typeof info.judgeRank === 'number' ? info.judgeRank : json.metadata.rank;
-  if (typeof judgeRank === 'number' && Number.isFinite(judgeRank)) {
+  const judgeRank = resolveBmsonJudgeRankForOutput(json);
+  if (judgeRank !== undefined) {
     output.judge_rank = judgeRank;
   }
-  const total = typeof info.total === 'number' ? info.total : json.metadata.total;
-  if (typeof total === 'number' && Number.isFinite(total)) {
+  const total = resolveBmsonTotalForOutput(json);
+  if (total !== undefined) {
     output.total = total;
   }
 
@@ -1304,6 +1334,66 @@ function createBmsonInfoForOutput(
   }
 
   return output;
+}
+
+/**
+ * BMS `#RANK 0..4` (VERY HARD / HARD / NORMAL / EASY / VERY EASY) expressed on bmson's `judge_rank` axis, which is
+ * `#DEFEXRANK`'s unit (100 = NORMAL). Each entry is the `#DEFEXRANK` value that judges like that rank: LR2 places
+ * `#RANK 0..3` at 25 / 50 / 75 / 100 % and beatoraja at judgerank 25 / 50 / 75 / 100, both with NORMAL at 75, so both
+ * give 100/3, 200/3, 100 and 400/3. They disagree only on VERY EASY — LR2 plays it as NORMAL, beatoraja (bmson's native
+ * player) at judgerank 125 — and beatoraja's value (500/3) is used. Values are rounded to whole percents, which moves
+ * LR2's windows by at most 0.4 ms. beatoraja itself reads a bmson `judge_rank` as the judgerank directly instead of
+ * scaling it like `#DEFEXRANK` (× 75 / 100), so under it any bmson — including one converted from `#DEFEXRANK` or one
+ * leaving `judge_rank` at its default — judges 4/3 wider than the same value in a BMS. No value on this axis can undo
+ * that without breaking NORMAL = 100 for every other reader, so the mapping stays on the `#DEFEXRANK` axis.
+ */
+const BMS_RANK_TO_BMSON_JUDGE_RANK = [33, 67, 100, 133, 167] as const;
+
+/**
+ * bmson `info.judge_rank` shares `#DEFEXRANK`'s unit (100 = NORMAL), while BMS `#RANK` — `metadata.rank` on any
+ * non-bmson chart — is a 0..4 rank index, so writing it verbatim turned `#RANK 2` into a 2 % window. Resolution order:
+ * `bmson.info.judge_rank` as authored; for a bmson source, `metadata.rank` (the parser mirrors `judge_rank` there);
+ * otherwise a positive `#DEFEXRANK` verbatim, then an integer `#RANK 0..4` through
+ * {@link BMS_RANK_TO_BMSON_JUDGE_RANK}. beatoraja judges any other `#RANK` (out of range or fractional) as NORMAL, so
+ * the field is left out and the bmson default (100 = NORMAL) applies.
+ */
+function resolveBmsonJudgeRankForOutput(json: BeMusicJson): number | undefined {
+  const authored = json.bmson.info.judgeRank;
+  if (typeof authored === 'number' && Number.isFinite(authored)) {
+    return authored;
+  }
+  const rank = json.metadata.rank;
+  if (json.sourceFormat === 'bmson') {
+    return typeof rank === 'number' && Number.isFinite(rank) ? rank : undefined;
+  }
+  const defExRank = json.bms.defExRank;
+  if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
+    return defExRank;
+  }
+  if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 0 && rank < BMS_RANK_TO_BMSON_JUDGE_RANK.length) {
+    return BMS_RANK_TO_BMSON_JUDGE_RANK[rank];
+  }
+  return undefined;
+}
+
+/**
+ * bmson `info.total` is a percentage of the player's default TOTAL (beatoraja scales it by the note-count-based
+ * default), while BMS `#TOTAL` — and `metadata.total` on any non-bmson chart — is the absolute gauge TOTAL. Writing the
+ * absolute value would make e.g. `#TOTAL 300` mean 300% of the default, and there is no exact conversion here: the
+ * default depends on the ruleset and on how it counts long notes. So only a value already in bmson terms is written —
+ * `bmson.info.total`, or `metadata.total` of a bmson source (the parser mirrors `info.total` there) — and a BMS / JSON
+ * chart's absolute TOTAL is left out, letting the bmson default (100%) apply.
+ */
+function resolveBmsonTotalForOutput(json: BeMusicJson): number | undefined {
+  const authored = json.bmson.info.total;
+  if (typeof authored === 'number' && Number.isFinite(authored)) {
+    return authored;
+  }
+  const total = json.metadata.total;
+  if (json.sourceFormat === 'bmson' && typeof total === 'number' && Number.isFinite(total)) {
+    return total;
+  }
+  return undefined;
 }
 
 function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLevel']): number | undefined {
@@ -1423,4 +1513,56 @@ function normalizeBmsonBgaEventEntries(
     });
   }
   return normalized;
+}
+
+/** The playable lane a landmine channel sits on (`D3` → `13`, `E5` → `25`), or `undefined` for anything else. */
+/**
+ * The `mode_hint` a bmson rendering of `json` declares: the chart's own hint when it has one, else the keyboard layout
+ * for a 24 / 48 KEY chart (its wheel and extended lanes only have a home there), else `beat-<lanes>k`.
+ */
+function resolveBmsonModeHintForOutput(json: BeMusicJson, playableChannelCount: number): string {
+  if (json.bmson.info.modeHint !== undefined) {
+    return json.bmson.info.modeHint;
+  }
+  const variant = resolveChartPlayVariant({ events: json.events, bms: json.bms, bmson: json.bmson });
+  if (variant === '24') return BMSON_KEYBOARD_24K_HINT;
+  if (variant === '48') return BMSON_KEYBOARD_24K_DOUBLE_HINT;
+  return `beat-${Math.max(1, playableChannelCount)}k`;
+}
+
+const BMSON_KEYBOARD_24K_HINT = 'keyboard-24k';
+const BMSON_KEYBOARD_24K_DOUBLE_HINT = 'keyboard-24k-double';
+/** Lane codes of a `<side><lane>` channel in a keyboard layout's `x` order: 24 keys, then the wheel up / down. */
+const BMSON_KEYBOARD_LANE_CODES = '123456789ABCDEFGHIJKLMNOPQ';
+
+/**
+ * Lane channel → bmson `x`. The keyboard layouts give every lane its fixed `x` (x = side * 26 + lane, matching the
+ * parser's map), so a sparse chart keeps its keys; lanes outside the layout follow after it. Other hints number the
+ * lanes in use from 1.
+ */
+function createBmsonXMap(playableChannels: readonly string[], modeHint: string): Map<string, number> {
+  const xMap = new Map<string, number>();
+  const sides =
+    modeHint.trim() === BMSON_KEYBOARD_24K_DOUBLE_HINT ? 2 : modeHint.trim() === BMSON_KEYBOARD_24K_HINT ? 1 : 0;
+  const unmapped: string[] = [];
+  for (const channel of playableChannels) {
+    const side = channel.charCodeAt(0) - 0x30;
+    const lane = BMSON_KEYBOARD_LANE_CODES.indexOf(channel.charAt(1).toUpperCase());
+    if (channel.length === 2 && side >= 1 && side <= sides && lane >= 0) {
+      xMap.set(channel, (side - 1) * BMSON_KEYBOARD_LANE_CODES.length + lane + 1);
+    } else {
+      unmapped.push(channel);
+    }
+  }
+  const firstUnmappedX = sides * BMSON_KEYBOARD_LANE_CODES.length + 1;
+  unmapped.forEach((channel, index) => xMap.set(channel, firstUnmappedX + index));
+  return xMap;
+}
+
+function landmineChannelToPlayableChannel(channel: string): string | undefined {
+  if (channel.length !== 2) return undefined;
+  const side = channel[0]!.toUpperCase();
+  if (side === 'D') return `1${channel[1]}`;
+  if (side === 'E') return `2${channel[1]}`;
+  return undefined;
 }

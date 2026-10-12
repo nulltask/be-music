@@ -1,5 +1,5 @@
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vite-plus/test';
 import { computeResultOps, RESULT_DYNAMIC_OPS } from './result.ts';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import type { PixiGameplayResultData } from './gameplay.ts';

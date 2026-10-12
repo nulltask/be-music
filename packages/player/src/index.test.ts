@@ -1,7 +1,7 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { parseChart, parseChartFile } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
@@ -80,6 +80,7 @@ import {
   type CreateAudioSessionContext,
   type CreatePlayerUiRuntimeContext,
   type PlayerLoadProgress,
+  type PlayerRulesetInfo,
   extractInvisiblePlayableNotes,
   extractLandmineNotes,
   extractPlayableNotes,
@@ -95,6 +96,7 @@ import {
   resolveBmsControlFlowForPlayback,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
+import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
 import { resolveChartVolWavGain, resolveDisplayedJudgeRankLabel, resolveDisplayedJudgeRankValue } from './utils.ts';
 import { parsePlaylog, serializePlaylog, simulatePlaylog, type BeMusicPlaylog } from './playlog/index.ts';
 
@@ -266,6 +268,27 @@ function createJudgeComboRecorder(records: RecordedJudgeCombo[]) {
         seconds: context.uiSignals.getFrame().currentSeconds,
       });
       originalPublishJudgeCombo(judge, combo, channel, updatedAtMs);
+    };
+    return {
+      tuiEnabled: true,
+      start: () => undefined,
+      stop: () => undefined,
+      dispose: () => undefined,
+      triggerPoor: () => undefined,
+      clearPoor: () => undefined,
+    };
+  };
+}
+
+/** UI runtime that records every long-note command the engine pushes (the UI must be enabled for them to fire). */
+function createLongNoteCommandRecorder(records: PlayerUiCommand[]) {
+  return async (context: CreatePlayerUiRuntimeContext) => {
+    const original = context.uiSignals.pushCommand;
+    context.uiSignals.pushCommand = (command) => {
+      if (command.kind === 'long-note-start' || command.kind === 'long-note-end') {
+        records.push(command);
+      }
+      original(command);
     };
     return {
       tuiEnabled: true,
@@ -778,6 +801,53 @@ describe('player', () => {
     ).toBe(true);
   });
 
+  describe('player: replays each #RANDOM / #SWITCH draw into the branch it reported', () => {
+    // The final `#RANDOM 2` block puts a note on lane 11 for branch 1 and on lane 12 for branch 2, so the played
+    // branch can be read back from the resolved events and compared with the reported pattern.
+    const finalBlock = ['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'];
+    const cases: Array<{ name: string; prefix: string[]; draws: number[]; expected: number }> = [
+      { name: '#RANDOM 1', prefix: ['#RANDOM 1', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#RANDOM without a value', prefix: ['#RANDOM', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#RANDOM 0', prefix: ['#RANDOM 0', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#SWITCH 1', prefix: ['#SWITCH 1', '#ENDSW'], draws: [0.9], expected: 2 },
+      { name: '#SETRANDOM', prefix: ['#SETRANDOM 2', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#SETSWITCH', prefix: ['#SETSWITCH 2', '#ENDSW'], draws: [0.9], expected: 2 },
+      { name: '#SWITCH 3', prefix: ['#SWITCH 3', '#ENDSW'], draws: [0.9, 0], expected: 1 },
+      { name: '#RANDOM 3', prefix: ['#RANDOM 3', '#ENDRANDOM'], draws: [0, 0.9], expected: 2 },
+      {
+        name: 'a #RANDOM 1 nested in an inactive branch',
+        prefix: ['#RANDOM 2', '#IF 1', '#RANDOM 1', '#ENDRANDOM', '#ENDIF', '#ENDRANDOM'],
+        draws: [0.9, 0],
+        expected: 1,
+      },
+      {
+        name: 'a #RANDOM 2 nested in an inactive branch',
+        prefix: ['#RANDOM 2', '#IF 1', '#RANDOM 2', '#ENDRANDOM', '#ENDIF', '#ENDRANDOM'],
+        draws: [0.9, 0, 0.9],
+        expected: 2,
+      },
+    ];
+
+    for (const { name, prefix, draws, expected } of cases) {
+      test(`after ${name}`, () => {
+        const json = parseChart(['#BPM 120', ...prefix, ...finalBlock].join('\n'), 'bms');
+        let drawn = 0;
+        const resolved = resolveBmsControlFlowForPlayback(json, () => {
+          const value = draws[drawn] ?? 0;
+          drawn += 1;
+          return value;
+        });
+
+        const playedBranches = resolved.resolvedJson.events
+          .filter((event) => event.channel === '11' || event.channel === '12')
+          .map((event) => (event.channel === '11' ? 1 : 2));
+        expect(playedBranches).toEqual([expected]);
+        expect(resolved.randomPatterns.at(-1)).toMatchObject({ current: expected, total: 2 });
+        expect(drawn).toBe(draws.length);
+      });
+    }
+  });
+
   test('player: formats multiple RANDOM pattern summaries in declaration order', () => {
     const summary = formatRandomPatternSummary([
       { index: 1, current: 2, total: 3 },
@@ -990,6 +1060,131 @@ describe('player', () => {
     expect(holdIndex).toBeGreaterThanOrEqual(0);
     const releaseIndex = commands.findIndex((c, i) => i > holdIndex && c.kind === 'release-lane' && c.channel === '16');
     expect(releaseIndex).toBeGreaterThan(holdIndex);
+  });
+
+  test('player: auto play announces each long note start and completion with the mode it plays in', async () => {
+    const lr2Commands: PlayerUiCommand[] = [];
+    await autoPlay(createLnobjLongNoteChart(2), {
+      auto: true,
+      speed: 4,
+      leadInMs: 0,
+      audio: false,
+      createUiRuntime: createLongNoteCommandRecorder(lr2Commands),
+    });
+    // LR2 plays every long note as an LN, whatever `#LNMODE` says.
+    expect(lr2Commands).toEqual([
+      { kind: 'long-note-start', channel: '11', beat: 4, mode: 'ln' },
+      { kind: 'long-note-end', channel: '11', outcome: 'complete' },
+    ]);
+
+    const beatorajaCommands: PlayerUiCommand[] = [];
+    await autoPlay(createLnobjLongNoteChart(3), {
+      auto: true,
+      speed: 4,
+      leadInMs: 0,
+      audio: false,
+      judgeRuleset: 'beatoraja',
+      createUiRuntime: createLongNoteCommandRecorder(beatorajaCommands),
+    });
+    expect(beatorajaCommands).toEqual([
+      { kind: 'long-note-start', channel: '11', beat: 4, mode: 'hcn' },
+      { kind: 'long-note-end', channel: '11', outcome: 'complete' },
+    ]);
+  });
+
+  test('player: auto scratch announces the scratch long note start and completion', async () => {
+    const commands: PlayerUiCommand[] = [];
+    await manualPlay(createScratchLnobjLongNoteChart(), {
+      autoScratch: true,
+      speed: 4,
+      leadInMs: 0,
+      audio: false,
+      createUiRuntime: createLongNoteCommandRecorder(commands),
+    });
+    expect(commands).toEqual([
+      { kind: 'long-note-start', channel: '16', beat: 4, mode: 'ln' },
+      { kind: 'long-note-end', channel: '16', outcome: 'complete' },
+    ]);
+  });
+
+  test('player: a long note held to its end completes', async () => {
+    const commands: PlayerUiCommand[] = [];
+    await manualPlay(createLnobjLongNoteChart(), {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      createUiRuntime: createLongNoteCommandRecorder(commands),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    }).catch((error: unknown) => {
+      if (!(error instanceof PlayerInterruptedError)) throw error;
+    });
+    expect(commands).toEqual([
+      { kind: 'long-note-start', channel: '11', beat: 4, mode: 'ln' },
+      { kind: 'long-note-end', channel: '11', outcome: 'complete' },
+    ]);
+  });
+
+  test('player: a long note released early is dropped', async () => {
+    const commands: PlayerUiCommand[] = [];
+    await manualPlay(createLnobjLongNoteChart(1), {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      createUiRuntime: createLongNoteCommandRecorder(commands),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 520, command: { kind: 'kitty-state', pressTokens: ['z'], repeatTokens: [], releaseTokens: [] } },
+        { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 900, command: { kind: 'kitty-state', pressTokens: [], repeatTokens: [], releaseTokens: ['z'] } },
+        { delayMs: 1200, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    }).catch((error: unknown) => {
+      if (!(error instanceof PlayerInterruptedError)) throw error;
+    });
+    expect(commands).toEqual([
+      { kind: 'long-note-start', channel: '11', beat: 4, mode: 'ln' },
+      { kind: 'long-note-end', channel: '11', outcome: 'dropped' },
+    ]);
+  });
+
+  test('player: reports the resolved ruleset and its windows before playback', async () => {
+    const manualInfos: PlayerRulesetInfo[] = [];
+    await manualPlay(createLnobjLongNoteChart(), {
+      speed: 4,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeRuleset: 'beatoraja',
+      onRulesetResolved: (info) => manualInfos.push(info),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 0, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    }).catch((error: unknown) => {
+      if (!(error instanceof PlayerInterruptedError)) throw error;
+    });
+    expect(manualInfos).toHaveLength(1);
+    expect(manualInfos[0]).toMatchObject({ id: 'beatoraja/1', rulesetId: 'beatoraja', longNoteStyle: 'per-note' });
+    const [lateBoundUs, earlyBoundUs] = manualInfos[0]!.windows.note.judges[0];
+    expect(lateBoundUs).toBeLessThan(0);
+    expect(earlyBoundUs).toBeGreaterThan(0);
+
+    // The debug BAD-window override (a replay restores it from the log) reaches the reported tables too.
+    const autoInfos: PlayerRulesetInfo[] = [];
+    await autoPlay(createLnobjLongNoteChart(), {
+      auto: true,
+      speed: 4,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      judgeWindowMs: 300,
+      onRulesetResolved: (info) => autoInfos.push(info),
+    });
+    expect(autoInfos).toHaveLength(1);
+    expect(autoInfos[0]).toMatchObject({ id: 'lr2/1', rulesetId: 'lr2', longNoteStyle: 'ln' });
+    expect(autoInfos[0]!.windows.note.judges[3][1]).toBe(300_000);
   });
 
   test('player: stray key in front of a note fires LR2 empty POOR — gauge -2, counters untouched', async () => {
@@ -1353,6 +1548,40 @@ describe('player', () => {
     expect(playlog).toBeDefined();
     expect(playlog!.play.aborted).toBe(true);
     expect(playlog!.inputs).toHaveLength(0);
+  });
+
+  test('preparePlaybackChartData: lane mode comes from the shared play-variant rule, not mines or invisible objects', () => {
+    const chart = (...lines: string[]) =>
+      parseChart(['#PLAYER 1', '#BPM 120', '#WAV01 a.wav', ...lines, ''].join('\n'));
+    const laneMode = (json: ReturnType<typeof parseChart>, laneModeExtension?: string) =>
+      preparePlaybackChartData(json, { laneModeExtension }, true, 0).laneDisplayMode;
+
+    // Same pressable notes (1P lanes 1..5); a mine on lane 8 and an invisible object on lane 9 must not turn the
+    // chart into 7 KEY (and the beatoraja ruleset must not swap its 5 KEY judge windows for the 7 KEY ones).
+    const plain = chart('#00111:01', '#00115:01');
+    const withMineAndInvisible = chart('#00111:01', '#00115:01', '#001D8:01', '#00139:01');
+    expect(laneMode(plain, '.bms')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bms')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible)).toBe('5 KEY SP');
+    expect(preparePlaybackChartData(withMineAndInvisible, {}, true, 0).landmineNotes).toHaveLength(1);
+
+    // The documented `.bme` completion applies through the same rule, mines or not.
+    expect(laneMode(plain, '.bme')).toBe('7 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bme')).toBe('7 KEY SP');
+
+    // `#LNOBJ` and `#LNTYPE 1` spellings of the same long note on lane 8 resolve to the same lane mode.
+    expect(laneMode(chart('#LNOBJ ZZ', '#WAVZZ z.wav', '#00111:01', '#00118:01', '#00218:ZZ'), '.bms')).toBe(
+      '7 KEY SP',
+    );
+    expect(laneMode(chart('#LNTYPE 1', '#00111:01', '#00158:01', '#00258:01'), '.bms')).toBe('7 KEY SP');
+
+    // PMS-STD content without the `.pms` extension is 9 KEY on every host (it used to be 5 KEY DP in the engine).
+    expect(laneMode(chart('#00111:01', '#00122:01'), '.bms')).toBe('9 KEY (PMS-STD)');
+
+    // A host-declared variant still wins.
+    expect(
+      preparePlaybackChartData(plain, { laneModeExtension: '.bms', playVariant: '7' }, true, 0).laneDisplayMode,
+    ).toBe('7 KEY SP');
   });
 
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {
@@ -2465,14 +2694,21 @@ describe('player', () => {
     // We run a baseline scenario without the mine to capture the reference gauge value
     // (PERFECT-only run), then assert the mine-present run lands the SAME verdict counts
     // but a STRICTLY LOWER gauge — proving the mine drained gauge silently.
-    // Two lane-input taps: the first hits the LN head, the second taps again at the mine
-    // time so `handleMappedInputTokens` is called with the LN still active — that's the
-    // codepath that resolves a mine candidate (the engine only looks for landmines on
-    // lane-input dispatches, not as a per-frame sweep). Without the second tap, the mine
-    // expires silently via `markExpiredLandmines` and the silent-damage branch never runs.
+    // The first lane-input tap hits the LN head; the rest tap again around the mine time so
+    // `handleMappedInputTokens` is called with the LN still active — that's the codepath that
+    // resolves a mine candidate (the engine only looks for landmines on lane-input dispatches,
+    // not as a per-frame sweep). Without such a tap, the mine expires silently via
+    // `markExpiredLandmines` and the silent-damage branch never runs. The taps are real-time
+    // timers, so one tap exactly at the mine missed its window whenever a loaded CI runner
+    // delayed it; a burst every 50 ms across 600–950 ms keeps one inside the window. Re-taps
+    // during the hold are neutral (no verdict, no empty POOR), and the baseline run replays the
+    // same schedule, so the verdict comparison below is unaffected.
     const inputSchedule: Array<{ delayMs: number; command: PlayerInputCommand }> = [
       { delayMs: 520, command: { kind: 'lane-input', tokens: ['z'] } },
-      { delayMs: 750, command: { kind: 'lane-input', tokens: ['z'] } },
+      ...Array.from({ length: 8 }, (_, index) => ({
+        delayMs: 600 + index * 50,
+        command: { kind: 'lane-input', tokens: ['z'] } as PlayerInputCommand,
+      })),
       { delayMs: 1700, command: { kind: 'interrupt', reason: 'escape' } },
     ];
     const baselineSummary = await manualPlay(createLnobjLongNoteChart(2), {

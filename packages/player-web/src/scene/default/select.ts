@@ -1,23 +1,22 @@
-import { PixiSongSelectView, type PixiSongSelectViewOptions } from '../lr2/select.ts';
+import { CoreSongSelectView, type CoreSongSelectViewOptions } from '../core/select.ts';
 
 /**
- * Constructor options for {@link DefaultPixiSongSelectView}. The `skin` field is stripped because the default family
- * doesn't consume an LR2 skin object; everything else (BGM bytes, system sounds, navigation, play-option callbacks)
- * carries over unchanged.
+ * Constructor options for {@link DefaultPixiSongSelectView}. The default family doesn't consume a skin-family theme, so
+ * this is exactly the shared select options (BGM bytes, system sounds, navigation, play-option callbacks, be-music
+ * skin).
  */
-export type DefaultPixiSongSelectViewOptions = Omit<PixiSongSelectViewOptions, 'skin'>;
+export type DefaultPixiSongSelectViewOptions = CoreSongSelectViewOptions;
 
 /**
  * Default-family song-select scene. Used when the host loaded neither an LR2 theme nor a beatoraja theme (the
  * beatoraja select scene is wired separately and takes precedence whenever a beatoraja theme ships a select skin).
  *
- * Like the gameplay wrapper, this class reuses {@link PixiSongSelectView}'s built-in skinless branch
- * (`renderFallbackSelectChrome` + the 640×480 design canvas) until the LR2 scene is migrated to require a non-optional
- * skin. The wrapper exists so the demo's family-routing layer can construct the right scene without sprinkling
- * `skin: undefined` literals through the call sites.
+ * The family-neutral {@link CoreSongSelectView} already renders through the be-music skin (the 640×480 design canvas)
+ * when no theme hook takes over the frame, so this wrapper adds nothing on top — it exists so the demo's family-routing
+ * layer can construct the right scene by name.
  */
-export class DefaultPixiSongSelectView extends PixiSongSelectView {
+export class DefaultPixiSongSelectView extends CoreSongSelectView {
   constructor(options: DefaultPixiSongSelectViewOptions = {}) {
-    super({ ...options, skin: undefined });
+    super(options);
   }
 }

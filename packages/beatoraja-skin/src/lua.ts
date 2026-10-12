@@ -18,9 +18,10 @@
 // The reference beatoraja themes only use `base` / `table` / `string` / `math` so the strip is non-disruptive.
 
 import { normalizePath } from '@be-music/utils/core';
-import { lauxlib, lua, lualib, to_luastring } from 'fengari-web';
+import fengariWeb from 'fengari-web';
 import type { lua_State, LuaCFunction } from 'fengari-web';
 
+const { lauxlib, lua, lualib, to_luastring } = fengariWeb;
 const {
   LUA_OK,
   LUA_REGISTRYINDEX,
@@ -262,8 +263,11 @@ class LuaRuntimeOwner {
   private refs = 0;
   private closed = false;
   context: BeatorajaLuaRuntimeContext | undefined;
+  readonly L: lua_State;
 
-  constructor(readonly L: lua_State) {}
+  constructor(L: lua_State) {
+    this.L = L;
+  }
 
   makeFunction(ref: number): BeatorajaLuaFunctionValue {
     this.refs += 1;
@@ -957,14 +961,33 @@ function pushNumberField(L: lua_State, key: string, value: number): void {
 function formatLuaDate(fmt: string, date: Date): string {
   const useUtc = fmt.startsWith('!');
   const f = useUtc ? fmt.slice(1) : fmt;
-  const get = (utc: () => number, local: () => number): number => (useUtc ? utc.call(date) : local.call(date));
+  const get = (utc: () => number, local: () => number): number => (useUtc ? utc() : local());
   const pad = (n: number, w = 2): string => String(n).padStart(w, '0');
-  const year = get(date.getUTCFullYear, date.getFullYear);
-  const month = get(date.getUTCMonth, date.getMonth) + 1;
-  const day = get(date.getUTCDate, date.getDate);
-  const hour = get(date.getUTCHours, date.getHours);
-  const minute = get(date.getUTCMinutes, date.getMinutes);
-  const second = get(date.getUTCSeconds, date.getSeconds);
+  const year = get(
+    () => date.getUTCFullYear(),
+    () => date.getFullYear(),
+  );
+  const month =
+    get(
+      () => date.getUTCMonth(),
+      () => date.getMonth(),
+    ) + 1;
+  const day = get(
+    () => date.getUTCDate(),
+    () => date.getDate(),
+  );
+  const hour = get(
+    () => date.getUTCHours(),
+    () => date.getHours(),
+  );
+  const minute = get(
+    () => date.getUTCMinutes(),
+    () => date.getMinutes(),
+  );
+  const second = get(
+    () => date.getUTCSeconds(),
+    () => date.getSeconds(),
+  );
   return f.replace(/%(.)/g, (_match, dir) => {
     switch (dir) {
       case 'Y':

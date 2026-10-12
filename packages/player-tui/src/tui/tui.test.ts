@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 import { formatJudgeComboDisplay, PlayerTui } from './tui.ts';
 import type { TuiNoteHeight } from '@be-music/player/core/ui-options';
 
