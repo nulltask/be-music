@@ -8,6 +8,7 @@ import type {
   BeatorajaSourceBundle,
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
+import { parseChart } from '@be-music/parser';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -29,6 +30,29 @@ const BENCH_DROPPED_ENTRY = {
   file: (resolve: (file: File) => void) => resolve(BENCH_WAV_FILE),
 };
 const BENCH_SOURCE = makeBenchSource();
+const BENCH_RANDOM_CHART: BeMusicJson = parseChart(
+  [
+    '#BPM 120',
+    '#WAV01 kick.wav',
+    '#RANDOM 2',
+    '#IF 1',
+    '#00111:0101',
+    '#ENDIF',
+    '#IF 2',
+    '#00112:0101',
+    '#ENDIF',
+    '#ENDRANDOM',
+    '#SWITCH 2',
+    '#CASE 1',
+    '#00213:01',
+    '#SKIP',
+    '#DEF',
+    '#00214:01',
+    '#ENDSW',
+  ].join('\n'),
+  'bms',
+);
+
 const BENCH_SONG = makeBenchSong();
 const BENCH_PLAYLOG = makeBenchPlaylog();
 const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
@@ -728,6 +752,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.resolveDropFilePath', {
     run: () => {
       playerWebCoreApi.resolveDropFilePath(BENCH_BMS_FILE);
+    },
+  });
+  define('player-web.resolvePlayChart', {
+    run: () => {
+      playerWebCoreApi.resolvePlayChart(BENCH_RANDOM_CHART, { random: () => 0.5 });
     },
   });
   define('player-web.resolveRendererPreference', {

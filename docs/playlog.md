@@ -31,8 +31,12 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `#RANDOM` / `#SWITCH` line of the chart in file order. With the chart file,
    `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })` rebuilds the chart that was played, so a
    verifier can recompute `chart.fingerprint`. The engine fills it when it resolves the chart itself; a host that
-   resolves the chart before handing it over passes the values in `recordPlaylog.randomOutcomes` (collected with
-   `resolveBmsControlFlow`'s `onOutcome`). It is omitted for charts without control flow.
+   resolves the chart before handing it over must pass the values of that same resolution in
+   `recordPlaylog.randomOutcomes` (collected with `resolveBmsControlFlow`'s `onOutcome`), or the log cannot name the
+   branches that were played. The browser player does this: both gameplay scenes resolve the chart once with
+   `resolvePlayChart` (`@be-music/player-web/chart`), which returns the chart together with its drawn values, play
+   that chart and record those values; a replay in the core gameplay scene resolves with the log's values, so it
+   plays the recorded branches. It is omitted for charts without control flow.
 
 Judgments, EX-SCORE, combo, and gauge values live only in **`results`** — a regenerable cache keyed by ruleset id
 (`native` holds the engine's own summary at record time). Because the canonical data is the input stream, a later

@@ -64,6 +64,7 @@ import {
   type EngineDriverResult,
 } from '../../runtime/engine-driver.ts';
 import { toEngineChart } from '../../runtime/engine-chart.ts';
+import { composeBeatorajaEngineOptions } from './engine-options.ts';
 import { BeatorajaRuntimeAdapter } from '../../skin/beatoraja/runtime-adapter.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
@@ -90,11 +91,17 @@ export interface PixiBeatorajaGameplayViewOptions {
 
   // Engine driver inputs
   /**
-   * Chart already resolved with `resolveBmsControlFlow` (e.g. `prepareBeatorajaGameplayChart`'s `chart`). The view
+   * Chart already resolved with `resolvePlayChart` (e.g. `prepareBeatorajaGameplayChart`'s `chart`). The view
    * feeds this one resolution to the skin graphs, markers and the engine alike; the engine gets it through
    * {@link toEngineChart} so it does not roll `#RANDOM` / `#SWITCH` again.
    */
   chart: BeMusicJson;
+  /**
+   * Values `chart`'s `#RANDOM` / `#SWITCH` lines were resolved with, in file order (`resolvePlayChart`'s /
+   * `prepareBeatorajaGameplayChart`'s `randomOutcomes`). Recorded as the play log's `play.randomOutcomes`, so the log
+   * names the branches that were played. Omit (or pass an empty array) for a chart without control flow.
+   */
+  randomOutcomes?: ReadonlyArray<number>;
   audio: EngineDriverAudioContext;
   mode: 'manual' | 'auto';
   /**
@@ -500,21 +507,6 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // overriding the inference (rare) still take precedence.
       engineOptions: {
         ...composeBeatorajaEngineOptions(this.options),
-        // Play-log recording — host-supplied `engineOptions.recordPlaylog` fields (gauge pick, chart hash, ...)
-        // are preserved; the view adds what it owns: the DP-flip intent it applied to the chart, and the chart
-        // path in `native` so a dropped play-log can be matched back to its song.
-        recordPlaylog: {
-          ...this.options.engineOptions?.recordPlaylog,
-          ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
-          ...(this.options.chartPath !== undefined
-            ? {
-                native: {
-                  ...this.options.engineOptions?.recordPlaylog?.native,
-                  chartPath: this.options.chartPath,
-                },
-              }
-            : {}),
-        },
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
@@ -1331,58 +1323,4 @@ function resolveChartImage(
     default:
       return undefined;
   }
-}
-
-/**
- * Compose the engine's `PlayerOptions` for the run, defaulting `laneModeExtension` from the
- * chart's filename when the host didn't already supply one. Without the extension hint the
- * engine's content-based `resolveLaneMode` heuristic only classifies as `9-key` when the chart
- * declares `#PLAYER 3` AND uses channel 17 — `#PLAYER 1` PMS / BME-Pop'n charts that omit
- * channel 17 fall through to `7-key-sp`, which clamps lane bindings to channels 11..15 + 16
- * (scratch) + 18/19, treats channel 17 as FREE ZONE, and silently drops channels 16's POPN
- * key behavior. The autoplay loop iterates `scorableNotes` (= playable notes minus active
- * free-zone channels) so notes on the misclassified lanes never fire `flash-lane`, and the
- * matching keybeam / bomb / judge timers never stamp.
- *
- * Mirrors {@link extractBeatorajaChartExtension} → {@link PlayerOptions.laneModeExtension}.
- * Host-set values win so explicit overrides keep working.
- */
-function composeBeatorajaEngineOptions(
-  options: PixiBeatorajaGameplayViewOptions,
-): PixiBeatorajaGameplayViewOptions['engineOptions'] {
-  const supplied = options.engineOptions;
-  const inferred = extractBeatorajaChartExtension(options.chartPath);
-  // **`playVariant` direct override** (`engine.ts` `PlayerOptions.playVariant`).  The host
-  // already classified the chart via `pickBeatorajaPlayableVariant` and passes the result
-  // here as `options.variant` (= `chartVariant`).  Forwarding it as a direct lane-mode
-  // override means the engine routes channels 16/17/18/19 through POPN-9 bindings even when
-  // its content-based heuristic would have under-classified the chart as 7-key (e.g. `.bme`
-  // with `#PLAYER 1`).  Host-provided `engineOptions.playVariant` wins so callers that
-  // explicitly override the variant (rare) keep the same precedence model as
-  // `laneModeExtension`.
-  const result = { ...supplied };
-  if (result.laneModeExtension === undefined && inferred !== undefined) {
-    result.laneModeExtension = inferred;
-  }
-  if (result.playVariant === undefined && options.variant !== undefined) {
-    result.playVariant = chartPlayVariantForBeatorajaVariant(options.variant);
-  }
-  return result;
-}
-
-/**
- * Returns the lowercased filename extension (with leading dot, e.g. `.pms` / `.bme` / `.bms`) of
- * `chartPath`, or `undefined` when the path doesn't include a recognizable suffix. Mirrors
- * the LR2 path's `extractChartExtension` (`scene/lr2/gameplay.ts:5602`) so both gameplay surfaces
- * derive `laneModeExtension` identically. Anchors the extension on the LAST PATH SEGMENT so
- * dotted directory names (e.g. `Bok.fps/01.bms`) don't get mistaken for the chart's own
- * extension.
- */
-function extractBeatorajaChartExtension(chartPath: string | undefined): string | undefined {
-  if (typeof chartPath !== 'string' || chartPath.length === 0) return undefined;
-  const lastSlash = Math.max(chartPath.lastIndexOf('/'), chartPath.lastIndexOf('\\'));
-  const lastDot = chartPath.lastIndexOf('.');
-  if (lastDot < 0 || lastDot < lastSlash) return undefined;
-  const ext = chartPath.slice(lastDot).toLowerCase();
-  return ext.length > 1 ? ext : undefined;
 }

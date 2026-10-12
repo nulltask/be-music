@@ -89,11 +89,11 @@ import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
 import { toEngineChart } from '../../runtime/engine-chart.ts';
+import { resolvePlayChart } from '../../chart/play-chart.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
@@ -502,8 +502,9 @@ export interface CoreGameplayViewOptions {
    * Replay playback: a recorded play-log to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyPlaylogArrangement`), the
    * engine consumes `playlog.inputs` deterministically (`PlayerOptions.replayInputs`), live lane input is ignored,
-   * and no new play-log is recorded for the run. `prepare` rejects when the loaded chart does not match the log
-   * (different `#RANDOM` roll / different chart file).
+   * and no new play-log is recorded for the run. The chart's `#RANDOM` / `#SWITCH` lines take the log's
+   * `play.randomOutcomes`, so the replay plays the recorded branches. `prepare` rejects when the loaded chart does not
+   * match the log (a log without the outcomes whose branches differ, or a different chart file).
    */
   replay?: BeMusicPlaylog;
   /**
@@ -748,6 +749,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * include them all (depending on parser default), neither of which matches LR2 behavior.
    */
   private resolvedChart: BeMusicJson | undefined;
+  /**
+   * Values `resolvedChart`'s `#RANDOM` / `#SWITCH` lines were resolved with, in file order (empty without control
+   * flow). Recorded as the play log's `play.randomOutcomes` from the same resolution the engine plays.
+   */
+  private randomOutcomes: number[] = [];
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`
@@ -2071,6 +2077,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.preparedChart = undefined;
     this.touchTokenByChannel = undefined;
     this.resolvedChart = undefined;
+    this.randomOutcomes = [];
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
     this.timingResolver = undefined;
@@ -2089,10 +2096,16 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   private prepareSong(song: BrowserSongEntry): void {
     // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow first so every play-time consumer below sees the same
-    // chosen branches. `Math.random` is the random source (LR2 re-rolls each play) — for deterministic playback
-    // (replays, tests) the host can swap this for a seeded PRNG later.
-    const resolved = resolveBmsControlFlow(song.chart, { random: Math.random });
+    // chosen branches. `Math.random` is the random source (LR2 re-rolls each play); a replay takes the values its log
+    // recorded, so it plays the recorded branches. The drawn values ride along to the play log (`randomOutcomes`).
+    const { chart: resolved, randomOutcomes } = resolvePlayChart(
+      song.chart,
+      this.options.replay?.play.randomOutcomes !== undefined
+        ? { outcomes: this.options.replay.play.randomOutcomes }
+        : {},
+    );
     this.resolvedChart = resolved;
+    this.randomOutcomes = randomOutcomes;
     // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides (0..127 byte). Collect once now so every
     // subsequent `playSample{,ByKey}` is a single Map lookup; slots without an entry fall through to the unity-gain
     // fast path. Pitch / loop bytes are skipped — the helper only emits volume multipliers.
@@ -4841,6 +4854,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
                     }
                   : {}),
                 ...(this.options.dpFlip !== undefined ? { dpFlip: this.options.dpFlip } : {}),
+                // The values the played chart's `#RANDOM` / `#SWITCH` lines were resolved with (`prepareSong`), so
+                // a verifier can rebuild the played chart from the source.
+                ...(this.randomOutcomes.length > 0 ? { randomOutcomes: [...this.randomOutcomes] } : {}),
                 ...(this.song?.chartPath !== undefined ? { native: { chartPath: this.song.chartPath } } : {}),
               },
               onPlaylogRecorded: (playlog) => {

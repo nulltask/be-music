@@ -30,8 +30,12 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    判定幅オーバーライド、ESC 中断フラグ、`randomOutcomes`（譜面のすべての `#RANDOM` / `#SWITCH` 行の値を
    ファイル順に並べたもの）です。譜面ファイルがあれば `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })`
    で遊んだ譜面を組み立て直せるので、検証者は `chart.fingerprint` を計算し直せます。エンジンが自分で譜面を解決
-   するときはエンジンが記録し、エンジンに渡す前に譜面を解決するホストは（`resolveBmsControlFlow` の `onOutcome`
-   で集めた）値を `recordPlaylog.randomOutcomes` で渡します。制御構文のない譜面では省きます。
+   するときはエンジンが記録し、エンジンに渡す前に譜面を解決するホストは、その同じ解決の（`resolveBmsControlFlow`
+   の `onOutcome` で集めた）値を `recordPlaylog.randomOutcomes` で渡す必要があります。渡さなければ、ログは遊んだ
+   枝を特定できません。ブラウザプレイヤーはこれに従います。どちらのゲームプレイシーンも `resolvePlayChart`
+   （`@be-music/player-web/chart`）で譜面を 1 回だけ解決し、引いた値と一緒に受け取った譜面を遊び、その値を記録
+   します。コアのゲームプレイシーンのリプレイはログの値で解決するので、記録した枝を遊びます。制御構文のない譜面
+   では省きます。
 
 判定数・EX スコア・コンボ・ゲージ値は **`results`**（ルールセット ID をキーとする再生成可能なキャッシュ。
 `native` は記録時のエンジン自身のサマリ）にのみ存在します。正本が入力列なので、後からルールセットを修正

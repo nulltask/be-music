@@ -30,6 +30,7 @@
 //     const prep = await prepareBeatorajaGameplayChart({ song, source });
 //     const view = new PixiBeatorajaGameplayView({
 //       chart: prep.chart,
+//       randomOutcomes: prep.randomOutcomes,
 //       audio: prep.audio,
 //       bgaCues: prep.bga.cues,
 //       bgaTextures: prep.bga.textures,
@@ -46,7 +47,6 @@ import {
   createBeatResolver,
 } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { resolveBmsControlFlow } from '@be-music/parser';
 import { createBmsonSamplePlaybackMap, createTimingResolver } from '@be-music/audio-renderer/triggers';
 import { buildBgaTimelines, type BgaTimelines } from '@be-music/player/core/bga-timeline';
 import {
@@ -63,6 +63,7 @@ import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import { isVideoExtension } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
+import { resolvePlayChart, type ResolvedPlayChart } from '../play-chart.ts';
 
 const log = logger('beatoraja-prep');
 
@@ -80,18 +81,23 @@ export interface PrepareBeatorajaGameplayChartOptions {
   /** Initial audio-bus state (stage toggles, keysound / BGM volumes, compressor tuning) from the host's UI. */
   audioBusOptions?: BuildAudioBusOptions;
   /**
-   * Pre-resolved chart from a prior `resolveBmsControlFlow(song.chart)` call. When set, the prep
-   * skips the resolve step and uses this chart verbatim. Required when the host already resolved
-   * the chart for an upstream scene (e.g. the decide screen's bpmgraph), since
-   * `resolveBmsControlFlow` re-evaluates `#RANDOM` on every call — running it twice would pick
-   * different branches and produce a different chart between decide and gameplay.
+   * Chart already resolved for this play with `resolvePlayChart(song.chart)`. When set, the prep skips the resolve
+   * step and uses this resolution verbatim. Required when the host already resolved the chart for an upstream scene
+   * (e.g. the decide screen's bpmgraph), since every resolve draws `#RANDOM` again — resolving twice would pick
+   * different branches and produce a different chart between decide and gameplay. The resolution carries its drawn
+   * values, so the play log records the outcomes of the chart that is actually played.
    */
-  preResolvedChart?: BeMusicJson;
+  preResolved?: ResolvedPlayChart;
 }
 
 export interface PreparedBeatorajaGameplayChart {
   /** Resolved chart (after `#IF` / `#RANDOM` control flow). */
   chart: BeMusicJson;
+  /**
+   * Values `chart`'s `#RANDOM` / `#SWITCH` lines were resolved with, in file order (empty without control flow). Pass
+   * them to `PixiBeatorajaGameplayView`'s `randomOutcomes` so the play log records them as `play.randomOutcomes`.
+   */
+  randomOutcomes: number[];
   /** Owning `AudioContext`. Closed by {@link dispose}. */
   audioContext: AudioContext;
   /** Audio bus pre-wired to the AudioContext destination. */
@@ -124,10 +130,10 @@ export async function prepareBeatorajaGameplayChart(
   const { song, source } = options;
 
   // 1. Resolve `#IF` / `#RANDOM` control flow so every later step sees the same chosen branches.
-  // When the caller supplies `preResolvedChart`, skip the resolve — `resolveBmsControlFlow` rolls
-  // `#RANDOM` fresh each call, and rolling twice (decide-side + gameplay-side) would pick
-  // different branches per scene. The decide flow resolves once and threads the result through.
-  const chart = options.preResolvedChart ?? resolveBmsControlFlow(song.chart, { random: Math.random });
+  // When the caller supplies `preResolved`, skip the resolve — every resolve rolls `#RANDOM` fresh, and rolling twice
+  // (decide-side + gameplay-side) would pick different branches per scene. The decide flow resolves once and threads
+  // the result (chart + drawn values) through.
+  const { chart, randomOutcomes } = options.preResolved ?? resolvePlayChart(song.chart);
 
   // 2. Audio context + bus.
   const audioContext = new AudioContext({ latencyHint: 'interactive' });
@@ -296,6 +302,7 @@ export async function prepareBeatorajaGameplayChart(
 
   return {
     chart,
+    randomOutcomes,
     audioContext,
     audioBus,
     audio,
