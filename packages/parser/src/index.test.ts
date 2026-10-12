@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
-import { BMS_JSON_FORMAT } from '../../json/src/index.ts';
+import { BMS_JSON_FORMAT, type BeMusicEvent } from '../../json/src/index.ts';
 import {
   decodeBmsText,
   decodeUtf8Text,
@@ -607,6 +607,95 @@ describe('parser', () => {
       )
       .map((event) => event.channel);
     expect(channels).toEqual(['15', '22', '23', '24', '25']);
+  });
+
+  test('bmson: mode_hint=keyboard-24k maps x=1..24 onto 11..1O and the wheel x=25 / 26 onto 1P / 1Q, without compacting', () => {
+    const xs = [1, 9, 10, 24, 25, 26];
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k' },
+        sound_channels: [{ name: 'key.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        key_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 10, y: 0 },
+              { x: 26, y: 240 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('1')))).toEqual([
+      '11',
+      '19',
+      '1A',
+      '1O',
+      '1P',
+      '1Q',
+    ]);
+    // Mines take the same lanes on the landmine bank.
+    expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('D')))).toEqual(['DA', 'DQ']);
+  });
+
+  test('bmson: mode_hint=keyboard-24k keeps a sparse chart on its own lanes (no positional compaction)', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 13, y: 0 },
+              { x: 26, y: 240 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(sortEventsByTime(json.events)).toEqual(['1D', '1Q']);
+  });
+
+  test('bmson: mode_hint=keyboard-24k-double maps x=27..52 onto the 2P bank with the wheel on 2P / 2Q', () => {
+    const xs = [1, 25, 26, 27, 35, 36, 50, 51, 52];
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k-double' },
+        sound_channels: [{ name: 'key.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        key_channels: [{ name: 'mine.wav', notes: [{ x: 52, y: 0 }] }],
+      }),
+    );
+
+    expect(
+      sortEventsByTime(json.events.filter((event) => event.channel.startsWith('1') || event.channel.startsWith('2'))),
+    ).toEqual(['11', '1P', '1Q', '21', '29', '2A', '2O', '2P', '2Q']);
+    expect(json.events.filter((event) => event.channel.startsWith('E')).map((event) => event.channel)).toEqual(['EQ']);
+  });
+
+  test('bmson: mode_hint=keyboard-48k (BmsONE single-player 48 keys) is not aliased to keyboard-24k-double', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-48k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 30, y: 0 },
+              { x: 40, y: 240 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // Unknown hint → positional fallback, so x=30 / 40 stay on the 1P side instead of being read as the 2P bank.
+    expect(sortEventsByTime(json.events)).toEqual(['11', '12']);
   });
 
   test('bmson: missing mode_hint defaults to beat-7k per the 1.0.0 spec', () => {
@@ -1492,3 +1581,14 @@ describe('parser', () => {
     expect(parseChart(decoded.text).metadata.title).toBe('テスト');
   });
 });
+
+/** Channels of `events` in chart-time order. */
+function sortEventsByTime(events: readonly BeMusicEvent[]): string[] {
+  return events
+    .slice()
+    .sort(
+      (left, right) =>
+        left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+    )
+    .map((event) => event.channel);
+}
