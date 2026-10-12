@@ -1451,9 +1451,28 @@ function normalizeBmsonSubartistsForOutput(value: string[] | undefined): string[
 
 function resolveBmsonLinesForOutput(json: BeMusicJson, resolution: number): number[] {
   if (json.preservation.bmson.lines.length > 0) {
-    return normalizeBmsonLines(json.preservation.bmson.lines);
+    return normalizeBmsonLines(
+      rescaleBmsonLines(json.preservation.bmson.lines, json.bmson.info.resolution, resolution),
+    );
   }
   return createDefaultBmsonLines(json, resolution);
+}
+
+/**
+ * Preserved `lines` are pulses at the source chart's resolution; notes are re-emitted at the output resolution, so the
+ * bar lines have to follow or every note lands in the wrong measure. Without a known source resolution they are kept.
+ */
+function rescaleBmsonLines(lines: number[], sourceResolution: number | undefined, resolution: number): number[] {
+  if (
+    typeof sourceResolution !== 'number' ||
+    !Number.isFinite(sourceResolution) ||
+    sourceResolution <= 0 ||
+    Math.floor(sourceResolution) === resolution
+  ) {
+    return lines;
+  }
+  const scale = resolution / Math.floor(sourceResolution);
+  return lines.map((y) => Math.round(y * scale));
 }
 
 function normalizeBmsonLines(lines: number[]): number[] {
