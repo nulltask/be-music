@@ -7,6 +7,8 @@
  */
 export * from './audio-bus.ts';
 export * from './master-volume.ts';
+// The platform audio session (`navigator.audioSession`) — distinct from the internal engine `WebAudioSession` noted above.
+export * from './system-audio-session.ts';
 
 // Gameplay recorder lives in its own directory but is conceptually a runtime output channel — same scope as the
 // audio bus that feeds it.
