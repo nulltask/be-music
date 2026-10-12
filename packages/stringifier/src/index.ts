@@ -1314,8 +1314,8 @@ function createBmsonInfoForOutput(
     output.chart_name = info.chartName;
   }
 
-  const judgeRank = typeof info.judgeRank === 'number' ? info.judgeRank : json.metadata.rank;
-  if (typeof judgeRank === 'number' && Number.isFinite(judgeRank)) {
+  const judgeRank = resolveBmsonJudgeRankForOutput(json);
+  if (judgeRank !== undefined) {
     output.judge_rank = judgeRank;
   }
   const total = resolveBmsonTotalForOutput(json);
@@ -1337,6 +1337,46 @@ function createBmsonInfoForOutput(
   }
 
   return output;
+}
+
+/**
+ * BMS `#RANK 0..4` (VERY HARD / HARD / NORMAL / EASY / VERY EASY) expressed on bmson's `judge_rank` axis, which is
+ * `#DEFEXRANK`'s unit (100 = NORMAL). Each entry is the `#DEFEXRANK` value that judges like that rank: LR2 places
+ * `#RANK 0..3` at 25 / 50 / 75 / 100 % and beatoraja at judgerank 25 / 50 / 75 / 100, both with NORMAL at 75, so both
+ * give 100/3, 200/3, 100 and 400/3. They disagree only on VERY EASY — LR2 plays it as NORMAL, beatoraja (bmson's native
+ * player) at judgerank 125 — and beatoraja's value (500/3) is used. Values are rounded to whole percents, which moves
+ * LR2's windows by at most 0.4 ms. beatoraja itself reads a bmson `judge_rank` as the judgerank directly instead of
+ * scaling it like `#DEFEXRANK` (× 75 / 100), so under it any bmson — including one converted from `#DEFEXRANK` or one
+ * leaving `judge_rank` at its default — judges 4/3 wider than the same value in a BMS. No value on this axis can undo
+ * that without breaking NORMAL = 100 for every other reader, so the mapping stays on the `#DEFEXRANK` axis.
+ */
+const BMS_RANK_TO_BMSON_JUDGE_RANK = [33, 67, 100, 133, 167] as const;
+
+/**
+ * bmson `info.judge_rank` shares `#DEFEXRANK`'s unit (100 = NORMAL), while BMS `#RANK` — `metadata.rank` on any
+ * non-bmson chart — is a 0..4 rank index, so writing it verbatim turned `#RANK 2` into a 2 % window. Resolution order:
+ * `bmson.info.judge_rank` as authored; for a bmson source, `metadata.rank` (the parser mirrors `judge_rank` there);
+ * otherwise a positive `#DEFEXRANK` verbatim, then an integer `#RANK 0..4` through
+ * {@link BMS_RANK_TO_BMSON_JUDGE_RANK}. beatoraja judges any other `#RANK` (out of range or fractional) as NORMAL, so
+ * the field is left out and the bmson default (100 = NORMAL) applies.
+ */
+function resolveBmsonJudgeRankForOutput(json: BeMusicJson): number | undefined {
+  const authored = json.bmson.info.judgeRank;
+  if (typeof authored === 'number' && Number.isFinite(authored)) {
+    return authored;
+  }
+  const rank = json.metadata.rank;
+  if (json.sourceFormat === 'bmson') {
+    return typeof rank === 'number' && Number.isFinite(rank) ? rank : undefined;
+  }
+  const defExRank = json.bms.defExRank;
+  if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
+    return defExRank;
+  }
+  if (typeof rank === 'number' && Number.isInteger(rank) && rank >= 0 && rank < BMS_RANK_TO_BMSON_JUDGE_RANK.length) {
+    return BMS_RANK_TO_BMSON_JUDGE_RANK[rank];
+  }
+  return undefined;
 }
 
 /**

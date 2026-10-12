@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { parseBmson, parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { resolveRuleset, rulesetChartFactsFromChart, type JudgeWindowSetUs } from '../../player/src/ruleset/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -518,7 +519,7 @@ describe('stringifier', () => {
         init_bpm: number;
         mode_hint: string;
         resolution: number;
-        judge_rank: number;
+        judge_rank?: number;
         total?: number;
         subartists?: string[];
       };
@@ -536,8 +537,10 @@ describe('stringifier', () => {
       init_bpm: 150,
       mode_hint: 'beat-2k',
       resolution: 480,
-      judge_rank: 75,
     });
+    // `metadata.rank` of a non-bmson chart is a BMS `#RANK` index (0..4); 75 is out of range, which judges as NORMAL, so
+    // `judge_rank` is left out and the bmson default (100 = NORMAL) applies.
+    expect(document.info).not.toHaveProperty('judge_rank');
     // `metadata.total` of a non-bmson chart is an absolute gauge TOTAL, not bmson's percentage, so it is not written.
     expect(document.info).not.toHaveProperty('total');
     expect(document.info.subartists).toEqual(['A', 'B', '']);
@@ -716,5 +719,127 @@ describe('stringifier', () => {
 
     const output = JSON.parse(stringifyBmson(parsed)) as { info: { total?: number } };
     expect(output.info.total).toBe(120);
+  });
+  describe('bmson stringify: BMS judge rank → `judge_rank`', () => {
+    const bmsChart = (...headers: string[]): string =>
+      ['#BPM 120', ...headers, '#WAV01 key.wav', '#00111:01', ''].join('\n');
+    const judgeRankOf = (source: string): number | undefined =>
+      (JSON.parse(stringifyBmson(parseChart(source))) as { info: { judge_rank?: number } }).info.judge_rank;
+
+    // bmson `judge_rank` is on the `#DEFEXRANK` axis (100 = NORMAL); `#RANK` is a 0..4 index and used to be written
+    // verbatim, so `#RANK 2` became a 2 % window. Each rank maps to the `#DEFEXRANK` value that judges like it.
+    test.each([
+      [0, 33],
+      [1, 67],
+      [2, 100],
+      [3, 133],
+      [4, 167],
+    ])('#RANK %i → judge_rank %i', (rank, expected) => {
+      expect(judgeRankOf(bmsChart(`#RANK ${rank}`))).toBe(expected);
+    });
+
+    test.each(['5', '75', '-1', '3.5'])(
+      'leaves `judge_rank` out for #RANK %s, which judges as NORMAL (the bmson default)',
+      (rank) => {
+        expect(judgeRankOf(bmsChart(`#RANK ${rank}`))).toBeUndefined();
+      },
+    );
+
+    test('a chart without #RANK / #DEFEXRANK leaves `judge_rank` out', () => {
+      expect(judgeRankOf(bmsChart())).toBeUndefined();
+    });
+
+    test('#DEFEXRANK takes precedence and is written verbatim (same unit as `judge_rank`)', () => {
+      expect(judgeRankOf(bmsChart('#RANK 0', '#DEFEXRANK 120'))).toBe(120);
+      expect(judgeRankOf(bmsChart('#DEFEXRANK 87.5'))).toBe(87.5);
+      // A non-positive #DEFEXRANK is ignored by the engine, so #RANK still decides.
+      expect(judgeRankOf(bmsChart('#RANK 1', '#DEFEXRANK 0'))).toBe(67);
+    });
+
+    test('an explicit `bmson.info.judgeRank` on a BMS-sourced chart wins over #RANK / #DEFEXRANK', () => {
+      const parsed = parseChart(bmsChart('#RANK 0', '#DEFEXRANK 120'));
+      parsed.bmson.info.judgeRank = 90;
+      expect((JSON.parse(stringifyBmson(parsed)) as { info: { judge_rank?: number } }).info.judge_rank).toBe(90);
+    });
+
+    test("keeps a bmson source's `judge_rank` as authored on both output paths", () => {
+      const document = {
+        version: '1.0.0',
+        info: { title: 'Rank', artist: 'A', genre: 'G', init_bpm: 120, judge_rank: 3, resolution: 240 },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+      };
+      // A bmson `judge_rank: 3` is already in bmson units; it must not go through the #RANK table.
+      const preserved = parseBmson(JSON.stringify(document));
+      expect(preserved.preservation.bmson.soundChannels).toHaveLength(1);
+      expect((JSON.parse(stringifyBmson(preserved)) as { info: { judge_rank?: number } }).info.judge_rank).toBe(3);
+
+      const edited = parseBmson(JSON.stringify(document));
+      edited.events[0]!.position = [1, 2];
+      const regenerated = JSON.parse(stringifyBmson(edited)) as { info: { judge_rank?: number }; lines?: unknown };
+      expect(regenerated.lines).toBeDefined();
+      expect(regenerated.info.judge_rank).toBe(3);
+
+      // A bmson source without `judge_rank` stays without it (no #RANK fallback).
+      const { judge_rank: _omitted, ...withoutRank } = document.info;
+      const bare = parseBmson(JSON.stringify({ ...document, info: withoutRank }));
+      bare.events[0]!.position = [1, 2];
+      expect(JSON.parse(stringifyBmson(bare)).info).not.toHaveProperty('judge_rank');
+    });
+
+    describe("be-music's judge windows for the BMS and its bmson conversion", () => {
+      const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
+      const windowsOf = (
+        json: ReturnType<typeof parseChart>,
+        ruleset: 'lr2' | 'beatoraja' | 'iidx',
+      ): JudgeWindowSetUs => resolveRuleset(rulesetChartFactsFromChart(json, chart), ruleset).windows.note;
+      const convert = (source: string) => {
+        const bms = parseChart(source);
+        return { bms, bmson: parseBmson(stringifyBmson(bms)) };
+      };
+      const lateEdges = (set: JudgeWindowSetUs): number[] => set.judges.map((pair) => pair[1]);
+
+      test.each(['#RANK 0', '#RANK 1', '#RANK 2', '#RANK 3', '#RANK 4', '#DEFEXRANK 120', '#RANK 7'])(
+        'IIDX (rank-independent windows) matches for %s',
+        (header) => {
+          const { bms, bmson } = convert(bmsChart(header));
+          expect(windowsOf(bmson, 'iidx')).toEqual(windowsOf(bms, 'iidx'));
+        },
+      );
+
+      test.each(['#RANK 2', '#DEFEXRANK 120', '#DEFEXRANK 64', '#RANK 7'])('LR2 matches exactly for %s', (header) => {
+        const { bms, bmson } = convert(bmsChart(header));
+        expect(windowsOf(bmson, 'lr2')).toEqual(windowsOf(bms, 'lr2'));
+      });
+
+      test.each(['#RANK 0', '#RANK 1', '#RANK 3'])(
+        'LR2 matches %s within 0.4 ms (judge_rank is rounded to a whole percent)',
+        (header) => {
+          const { bms, bmson } = convert(bmsChart(header));
+          const expected = lateEdges(windowsOf(bms, 'lr2'));
+          const actual = lateEdges(windowsOf(bmson, 'lr2'));
+          for (const [index, edge] of actual.entries()) {
+            expect(Math.abs(edge - expected[index]!)).toBeLessThanOrEqual(400);
+          }
+        },
+      );
+
+      test('LR2 #RANK 4 differs: LR2 plays VERY EASY as NORMAL, the conversion follows beatoraja (judgerank 125)', () => {
+        const { bms, bmson } = convert(bmsChart('#RANK 4'));
+        expect(lateEdges(windowsOf(bms, 'lr2'))).toEqual([18_000, 40_000, 100_000, 200_000]);
+        expect(lateEdges(windowsOf(bmson, 'lr2'))).toEqual([24_030, 80_200, 140_200, 200_000]);
+      });
+
+      test.each(['#RANK 0', '#RANK 1', '#RANK 2', '#RANK 3', '#RANK 4', '#DEFEXRANK 120'])(
+        'beatoraja keeps the rank order but judges %s about 4/3 wider (it reads bmson judge_rank unscaled)',
+        (header) => {
+          const { bms, bmson } = convert(bmsChart(header));
+          // PGREAT is never clamped by the BAD leg, so its ratio is the judgerank ratio: bmson `judge_rank` is used as
+          // the judgerank itself, while BMS #RANK / #DEFEXRANK sit at 75 % of it (NORMAL = judgerank 75).
+          const ratio = windowsOf(bmson, 'beatoraja').judges[0][1] / windowsOf(bms, 'beatoraja').judges[0][1];
+          expect(ratio).toBeGreaterThanOrEqual(1.32);
+          expect(ratio).toBeLessThanOrEqual(1.34);
+        },
+      );
+    });
   });
 });
