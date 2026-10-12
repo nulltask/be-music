@@ -91,6 +91,6 @@ be-music は譜面を 2 つの層で読みます。**Source 層**はファイル
 
 次の利用側は、まだ独自の規則で Source 層を読んでいます。
 
-- LR2 の web シーンは、キーモードの op をプレイバリアントではなく生のチャンネルから選びます（`scene/lr2/decide.ts`、`scene/lr2/result.ts`）。LR2 の選曲シーンは BPM の範囲を `03` / `08` を走査して求めます（`scene/lr2/select.ts`）。
+- LR2 の選曲シーンは BPM の範囲を `03` / `08` を走査して求めます（`scene/lr2/select.ts`）。
 - 表示用の判定ランク（`@be-music/player/utils` の `resolveDisplayedJudgeRankValue` / `Label`）は独自の既定値を使います。
 - ターミナルの UI worker は小節線を `createMeasureBoundariesBeats` で描き、bmson の `lines: []` を反映しません。
