@@ -50,7 +50,7 @@ import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-time
 import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
-import type { BeMusicPlaylog } from '@be-music/player/playlog';
+import type { BeMusicPlaylog, PlaylogRecordingOptions } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
@@ -514,6 +514,8 @@ export interface CoreGameplayViewOptions {
    * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
    */
   chartSha256?: string;
+  /** Host application stamped into the recorded play-log's `recorder` (the engine adds its own version). */
+  playlogRecorder?: PlaylogRecordingOptions['recorder'];
   /**
    * 1P gauge variant (`#SRC_BUTTON,type=40`). Selects the ruleset's gauge (the engine resolves the curve) and drives
    * the gauge-on-red-branch op flags (43 / 45). 2P-side gauge isn't yet separately wired — the engine
@@ -4793,6 +4795,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               recordPlaylog: {
                 gauge: this.options.gauge,
                 ...(this.options.chartSha256 !== undefined ? { chartSha256: this.options.chartSha256 } : {}),
+                ...(this.options.playlogRecorder !== undefined ? { recorder: this.options.playlogRecorder } : {}),
                 ...(this.options.random1P !== undefined || this.options.random2P !== undefined
                   ? {
                       randomLane: {
