@@ -342,6 +342,7 @@ be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は
 - 前にノートのない `#LNOBJ` の終点と、終点のない `5x` / `6x` の始点は、LR2 と同じく単押しとして遊ぶ。beatoraja は捨てる（[§2.5](#25-ロングノート)）。
 - ロングノートのスタイル、判定幅、TOTAL の既定値、ゲージの曲線は、譜面のパーサではなく選んだルールセット（`lr2`、`beatoraja`、`iidx`）が決める（[§2.5](#25-ロングノート)、[§2.12](#212-判定ランク)、[§2.13](#213-total)）。
 - 地雷：ダメージは 36 進の値そのもの（LR2 / beatoraja と同じで、nanasi の半分にする規則ではない）、爆発は LR2 のモデル、既定値は 4 %。ノートと同じ位置や LN の中の地雷は、beatoraja は捨てるが LR2 と同じく残す（BMS でも bmson でも）（[§2.6](#26-地雷)、[§3.5](#35-地雷と隠しノート)）。
+- HS-FIX の `AVERAGE` は、BPM × N + STOP のギミックで偏る時間平均ではなく、beatoraja の `MAINBPM` と同じメイン BPM（最も多くのノートが置かれた BPM）に合わせる。同数のときは先に現れる BPM を選ぶ（beatoraja はハッシュマップの順序）（[ブラウザプレイヤー — HS-FIX](./player-web.ja.md#hs-fix)）。
 - `#BPM` のない譜面は BM98 の 130 で遊ぶ。LR2 はスクロールせず、beatoraja は譜面を読まない（[§2.8](#28-bpm)）。
 - 0 以下の BPM と STOP は無視する。同じ位置に BMS の `#STOP` が複数あれば最後のものが勝ち（LR2、beatoraja と同じ）、bmson の停止と `#STP` の行は加算する。STOP と同じ位置のノートは停止の前に叩く。STOP の長さは正確な値を保つ（beatoraja は停止ごとに整数マイクロ秒へ切り捨てるため、停止が数千ある譜面ではノートの時刻が数 ms 早くずれる）（[§2.8](#28-bpm)、[§2.9](#29-stop-と-stp)）。
 - SCROLL / SPEED を含む譜面は、どちらも持たない LR2 ではなく beatoraja の `LaneRenderer` の規則で描く。判定ラインの位置からレーンをたどり、最初に上端を越えた位置より先は描かない（[§2.10](#210-scroll-と-speed)）。

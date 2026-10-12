@@ -172,6 +172,20 @@ beatoraja の描画は判定ラインでノートを切り取らないため、�
 
 terminal player も、双方向にスクロールする譜面では同じ位置でたどるのを打ち切ります。
 
+## HS-FIX
+
+プレイオプションの HS-FIX は LR2 のボタンをそのまま使い、beatoraja のハイスピード固定（`LaneRenderer.init`）に合わせます。プレイヤーが設定するハイスピードは譜面の基準 BPM（`#BASEBPM`、なければ開始 BPM）での値で、HS-FIX は別の BPM でのスクロールがそれと同じ感覚になるように掛け直します。
+
+| be-music   | ハイスピードを合わせる BPM                                                               | beatoraja                                          |
+| ---------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `OFF`      | なし（スクロールは BPM に従う）                                                          | `OFF` と `STARTBPM`（基準がすでに開始 BPM のため） |
+| `MAXBPM`   | 最大 BPM                                                                                 | `MAXBPM`                                           |
+| `MINBPM`   | 最小 BPM                                                                                 | `MINBPM`                                           |
+| `AVERAGE`  | メイン BPM。最も多くのノートが置かれた BPM（`@be-music/chart` の `resolveChartMainBpm`） | `MAINBPM`                                          |
+| `CONSTANT` | 本当の一定スクロールが入るまではメイン BPM                                               | —                                                  |
+
+`AVERAGE` は以前は時間の加重平均でした。BPM × N + STOP のギミックで値が大きく偏り（145 BPM の譜面で約 810、ノートが 5.6 倍遅く流れる）、さらに最後の区間だけ STOP を含む時計で測っていました。メイン BPM は beatoraja が使う値です。同数のときは先に現れる BPM を選びます（beatoraja はハッシュマップの順序で選ぶ）。ノートの大半をギミック用の BPM に置いた譜面（"the life" は 717 ノートを 16,000,160 に置く）では、beatoraja でも be-music でもその BPM がメイン BPM になるので、HS-FIX `OFF` で遊んでください。
+
 ## Renderer と performance control
 
 - PixiJS は既定で WebGPU preference を使い、browser が初期化できない場合は PixiJS 側で fallback します。

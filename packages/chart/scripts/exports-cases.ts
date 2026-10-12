@@ -84,6 +84,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.resolveChartReferenceBpm(fixtures.sampleBmsJson, 120);
     },
   });
+  let mainBpmChart: ReturnType<typeof chartApi.resolveChart> | undefined;
+  define('chart.resolveChartMainBpm', {
+    run: (fixtures) => {
+      mainBpmChart ??= chartApi.resolveChart(fixtures.sampleBmsJson, { chartPath: 'sample.bms' });
+      chartApi.resolveChartMainBpm(mainBpmChart);
+    },
+  });
   define('chart.parseBmsExWav', {
     run: () => {
       chartApi.parseBmsExWav('pvf 1024,-200,48000 sample.wav');

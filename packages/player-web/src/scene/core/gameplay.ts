@@ -105,6 +105,7 @@ import {
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChart,
+  resolveChartMainBpm,
   resolveChartReferenceBpm,
   volWavToLinearGain,
   type BmsSwitchingBga,
@@ -2321,7 +2322,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
     // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
     // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-    this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm));
+    this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm), resolveChartMainBpm(resolvedPlay));
     // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
     // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
     // per PG/GR.
@@ -2890,61 +2891,49 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Applies the LR2 HS-FIX multiplier to {@link hiSpeed} once `prepareSong` has installed the timing resolver. Pegs the
-   * user's chosen HS to a chosen BPM so the visual scroll feels uniform across BPM changes:
+   * Applies the HS-FIX multiplier to {@link hiSpeed} once `prepareSong` has installed the timing resolver. The player's
+   * hi-speed is the one they want at `referenceBpm` (`#BASEBPM`, else the start BPM); HS-FIX rescales it so the scroll
+   * at another BPM of the chart feels like that, as beatoraja's fixed hi-speed modes do (`LaneRenderer.init`):
    *
-   * - `OFF` — leave HS as-is.
-   * - `MAXBPM` — scale by `mainBPM / maxBPM` (slow sections feel proportionally slower).
-   * - `MINBPM` — scale by `mainBPM / minBPM` (fast sections feel proportionally faster).
-   * - `AVERAGE` — scale by `mainBPM / avgBPM` where avgBPM is the time-weighted mean.
-   * - `CONSTANT` — true per-frame "constant scroll" needs a render- pipeline change that hasn't landed; falls through
+   * - `OFF` — leave HS as-is (beatoraja `OFF`; its `STARTBPM` is the same here, since the reference is the start BPM).
+   * - `MAXBPM` — scale by `referenceBpm / maxBPM` (beatoraja `MAXBPM`).
+   * - `MINBPM` — scale by `referenceBpm / minBPM` (beatoraja `MINBPM`).
+   * - `AVERAGE` — scale by `referenceBpm / mainBPM`, the BPM the most notes sit at ({@link resolveChartMainBpm},
+   *   beatoraja `MAINBPM`). A time average is skewed by the split-second BPM spikes and STOPs of BPM × N + STOP
+   *   gimmicks (an average of ~810 on a 145 BPM chart), the main BPM is not.
+   * - `CONSTANT` — true per-frame "constant scroll" needs a render-pipeline change that hasn't landed; falls through
    *   to the `AVERAGE` multiplier so the option still produces a sensible shift instead of doing nothing.
    *
    * Skipped when there are no tempo points (defensive — the resolver can be constructed empty during edge-case mounts)
    * or the chart has no BPM info.
    */
-  private applyHsFix(resolver: TimingResolver, mainBpmCandidate: number | undefined): void {
+  private applyHsFix(
+    resolver: TimingResolver,
+    referenceBpmCandidate: number | undefined,
+    mainBpm: number | undefined,
+  ): void {
     const mode = this.options.hsFix ?? 'OFF';
     if (mode === 'OFF') return;
-    const mainBpm = typeof mainBpmCandidate === 'number' && mainBpmCandidate > 0 ? mainBpmCandidate : undefined;
-    if (mainBpm === undefined) return;
+    const referenceBpm =
+      typeof referenceBpmCandidate === 'number' && referenceBpmCandidate > 0 ? referenceBpmCandidate : undefined;
+    if (referenceBpm === undefined) return;
     const tempoPoints = resolver.tempoPoints;
     if (tempoPoints.length === 0) return;
     const bpms = tempoPoints.map((point) => point.bpm).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
     if (bpms.length === 0) return;
-    const maxBpm = Math.max(...bpms);
-    const minBpm = Math.min(...bpms);
-    let multiplier = 1;
+    let targetBpm: number;
     switch (mode) {
       case 'MAXBPM':
-        multiplier = mainBpm / maxBpm;
+        targetBpm = Math.max(...bpms);
         break;
       case 'MINBPM':
-        multiplier = mainBpm / minBpm;
+        targetBpm = Math.min(...bpms);
         break;
-      case 'AVERAGE':
-      case 'CONSTANT': {
-        // Time-weighted average — each tempo segment runs from `point.seconds` to the next point's `seconds` (or the
-        // chart's last note for the final segment). Using a flat arithmetic mean would over-weight a tiny BPM-change
-        // blip relative to a long segment at the surrounding BPM.
-        const finalSeconds = Math.max(this.songDurationSeconds, tempoPoints.at(-1)?.seconds ?? 0);
-        let weightedSum = 0;
-        let totalDuration = 0;
-        for (let index = 0; index < tempoPoints.length; index += 1) {
-          const point = tempoPoints[index]!;
-          const next = tempoPoints[index + 1];
-          const start = Math.max(0, point.seconds);
-          const end = Math.max(start, next ? next.seconds : finalSeconds);
-          const duration = end - start;
-          if (duration <= 0 || !Number.isFinite(point.bpm) || point.bpm <= 0) continue;
-          weightedSum += point.bpm * duration;
-          totalDuration += duration;
-        }
-        const average = totalDuration > 0 ? weightedSum / totalDuration : mainBpm;
-        multiplier = mainBpm / Math.max(1, average);
+      default:
+        targetBpm = mainBpm ?? referenceBpm;
         break;
-      }
     }
+    const multiplier = referenceBpm / targetBpm;
     if (!Number.isFinite(multiplier) || multiplier <= 0) return;
     const next = Math.round(this.hiSpeed * multiplier * 1000) / 1000;
     this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));

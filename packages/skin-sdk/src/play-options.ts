@@ -58,7 +58,8 @@ export interface BeMusicPlayOptions {
    *
    * - `'MAXBPM'` — pegs the user's HS to the chart's MAX BPM (slower segments scroll proportionally slower).
    * - `'MINBPM'` — pegs to MIN BPM (faster segments scroll faster).
-   * - `'AVERAGE'` — pegs to the time-weighted average BPM.
+   * - `'AVERAGE'` — pegs to the main BPM, the BPM the most notes sit at (beatoraja's MAINBPM), which BPM × N + STOP
+   *   gimmicks do not skew the way a time average is.
    * - `'CONSTANT'` — adjusts HS at every BPM change so visual scroll is exactly constant. Falls back to `'AVERAGE'`
    *   behavior for now (per-frame BPM-aware scroll requires a render-pipeline change that hasn't landed yet).
    */

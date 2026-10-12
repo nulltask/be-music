@@ -180,6 +180,20 @@ beatoraja's renderer does not clip notes at the judgement line, so a note a nega
 
 The terminal player stops its walk at the same point when a chart scrolls both ways.
 
+## HS-FIX
+
+The play option's HS-FIX modes keep LR2's buttons and follow beatoraja's fixed hi-speed modes (`LaneRenderer.init`). The hi-speed the player sets is the one they want at the chart's reference BPM (`#BASEBPM`, else the start BPM); HS-FIX rescales it so that the scroll at another BPM feels like that.
+
+| be-music   | Pegs the hi-speed to                                                                     | beatoraja                                                      |
+| ---------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `OFF`      | nothing: the scroll follows the BPM                                                      | `OFF`, and `STARTBPM` (the reference already is the start BPM) |
+| `MAXBPM`   | the highest BPM                                                                          | `MAXBPM`                                                       |
+| `MINBPM`   | the lowest BPM                                                                           | `MINBPM`                                                       |
+| `AVERAGE`  | the main BPM: the BPM the most notes sit at (`resolveChartMainBpm` in `@be-music/chart`) | `MAINBPM`                                                      |
+| `CONSTANT` | the main BPM, until a true constant scroll lands                                         | —                                                              |
+
+`AVERAGE` was a time-weighted average: BPM × N + STOP gimmicks skew it (about 810 on a 145 BPM chart, so notes crawled 5.6 times too slow), and it measured the last segment on a clock that counted STOPs while the others did not. The main BPM is what beatoraja uses. Ties go to the BPM reached first, where beatoraja's pick among ties follows its hash-map order. A chart whose notes mostly sit at a gimmick BPM ("the life" puts 717 of its notes at 16,000,160) gets that BPM as its main BPM in beatoraja and in be-music alike; play such charts with HS-FIX `OFF`.
+
 ## Renderer and performance controls
 
 - PixiJS defaults to a WebGPU preference and falls back through PixiJS when the browser cannot initialize it.
