@@ -502,7 +502,7 @@ SDK は、フレームやヘルパーが使う型も export しています。�
   - 検査に通らないスキン（未対応の `apiVersion` など）は、ホストを壊さずに除外されます。
 
 - **組み込みスキン:** `BUILT_IN_BE_MUSIC_SKINS` には Synesthesia（既定）、Phantom、Plain が入っています。Lattice は `latticeSkin` として同梱されており、ホストが追加します。
-- **デモ:** デモの Debug Menu から、モジュール URL でスキンを追加できます（_Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、デモは先に確認を求めます。信頼できるスキンだけを読み込んでください。
+- **デモ:** デモの Debug Menu から、モジュール URL でスキンを追加できます（_Skin & display_ → _Add skin_ → _Skin module URL_）。スキンはページの全権限で動くため、デモは先に確認を求めます。信頼できるスキンだけを読み込んでください。
 
 ## バージョニング
 

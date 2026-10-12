@@ -13,6 +13,11 @@ export interface PlayerWebDemoElements {
    */
   songInput: HTMLInputElement;
   /**
+   * Hidden `<input type="file" multiple>` behind the Debug Menu's "Open files" button: ZIP archives and play logs, which
+   * the folder picker (`songInput`) can't select.
+   */
+  filesInput: HTMLInputElement;
+  /**
    * Floating DOM `<input>` overlay positioned near the LR2 default skin's search-text rect. Focus is given to it when
    * the user clicks the skin's `#SRC_TEXT,st=30,edit=1` region or hits the `/` shortcut; typing into it filters the
    * song list via `PixiSongSelectView.setSearchQuery`.
@@ -161,8 +166,10 @@ export interface DemoGuiState {
    * which also pushes the new value into the controller.
    */
   status: string;
-  /** Triggered by clicking the GUI's "Open Folder" button. */
+  /** Triggered by clicking the GUI's "Open folder" button. */
   openFolder: () => void;
+  /** Triggered by clicking the GUI's "Open files" button (ZIP archives / play logs). */
+  openFiles: () => void;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
   /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */

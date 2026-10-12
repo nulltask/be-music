@@ -50,6 +50,17 @@ When a mixed drop contains chart files, the loader treats the chart directories 
 When no chart file is present, the whole drop is treated as a theme candidate. LR2 detection uses `.lr2skin` files, while beatoraja detection uses `.luaskin` files or JSON files under a `skin/` path segment.
 Double-click the playfield to toggle the demo into fullscreen; `Esc` leaves fullscreen before it runs the usual scene action.
 
+### Debug Menu
+
+The lil-gui **Debug Menu** (top-right, collapsed on arrival) puts the everyday controls first and groups the rest into folders. Every folder remembers whether it was left open or closed (`localStorage`, `be-music-demo.debug-menu-folders`); the panel itself always starts collapsed.
+
+- **Top level:** Status (read-only), Open folder, Open files (ZIP / play log), Skin family, Built-in skin, ● Record, 📸 Screenshot. Open files picks chart ZIP archives (loaded like `?music=`) or a play log (`*.bmplay.json`) to replay; Open folder uses the folder picker and the same pipeline as a drop.
+- **Play options** (open): Auto play, Gauge, Random 1P / 2P, DP flip, Auto scratch 1P / 2P, Judge windows. Latched at song start and disabled during a play.
+- **Audio** (open): Master / Key sound / BGM volume (%), Play in silent mode (only where the browser has the Audio Session API, see below), then the **Compressor** folder (Enabled, per-stage toggles, and each compressor's threshold / knee / ratio / attack / release with a reset).
+- **Skin & display** (closed): Skin effects, Play layout, Judged notes, Toggle fullscreen, LR2 theme (once a drop carries LR2 themes), **Beatoraja skins** (per-scene pickers, shown while a beatoraja theme is loaded), **Skin settings** (the active built-in skin's settings, when it has any), **Add skin**.
+- **Library & records** (closed): Music / Skin ZIP URL with Load from URLs (the `?music=` / `?skin=` path on demand), Auto-save play history, Clear best records, and the **BGA video transcode** folder.
+- **Developer** (closed): Auto pause on blur, Show invisible notes, FPS (renderer frame rate, sampled while the folder is open), and Reset settings and reload, which clears every stored demo setting except the best records.
+
 ### Phones and tablets
 
 The demo treats a device whose primary pointer is a finger (`(pointer: coarse)`, or a touch pointer on a phone-sized screen) as touch-first:
@@ -59,7 +70,7 @@ The demo treats a device whose primary pointer is a finger (`(pointer: coarse)`,
 - **Select screen:** tap rows and buttons as with a mouse; swipe the list up or down to scroll it.
 - **Effects:** the skin effect level starts at Reduced unless one was picked in the Debug Menu before.
 - **Screen:** the page chrome steps off the stage (the search box only shows while typing, Help shrinks to an icon), the first tap on a phone asks for fullscreen in landscape where the browser allows it, and a phone held upright shows a prompt to rotate it.
-- **Sound in silent mode:** iOS / iPadOS Safari treats web audio as ambient sound by default: it mixes with music from other apps, and the Ring / Silent switch mutes it. Where the browser has the [Audio Session API](https://w3c.github.io/audio-session/) (`navigator.audioSession`, Safari 16.4+), the Debug Menu's **Volume** folder offers **Play in silent mode**. On, the demo sets the audio session type to `'playback'`, so sound plays with the silent switch on, but music playing in other apps pauses (and the system may show Now Playing controls). Off (the default) it restores the browser default `'auto'`, which keeps web audio mixing with other apps and obeying the switch. The choice is remembered across reloads and applied before any audio starts, again on the first tap or key press (when the scenes start their audio), and when the page comes back into view. Other browsers have no such switch for web audio and do not show the setting. The first time sound starts on a phone or tablet with the setting off, a small dismissible hint at the top of the screen offers to turn it on; it shows once per browser and leaves by itself.
+- **Sound in silent mode:** iOS / iPadOS Safari treats web audio as ambient sound by default: it mixes with music from other apps, and the Ring / Silent switch mutes it. Where the browser has the [Audio Session API](https://w3c.github.io/audio-session/) (`navigator.audioSession`, Safari 16.4+), the Debug Menu's **Audio** folder offers **Play in silent mode**. On, the demo sets the audio session type to `'playback'`, so sound plays with the silent switch on, but music playing in other apps pauses (and the system may show Now Playing controls). Off (the default) it restores the browser default `'auto'`, which keeps web audio mixing with other apps and obeying the switch. The choice is remembered across reloads and applied before any audio starts, again on the first tap or key press (when the scenes start their audio), and when the page comes back into view. Other browsers have no such switch for web audio and do not show the setting. The first time sound starts on a phone or tablet with the setting off, a small dismissible hint at the top of the screen offers to turn it on; it shows once per browser and leaves by itself.
 
 ## Browser loading model
 
@@ -188,7 +199,7 @@ pnpm bench -- --packages player-web
 - Natural chart completion waits for a short post-chart delay before opening the result scene. The visual transition
   does not cut off the remaining gameplay audio tail.
 - The gameplay recorder writes WebM output and coordinates stop/finalization before scene disposal so active recordings are flushed before the gameplay bus is torn down.
-- Every play except a replay records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the Debug Menu's "Auto-save play history" checkbox (OFF by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
+- Every play except a replay records a play log (`*.bmplay.json` input replay — resolved chart, raw press/release stream, play settings; see [playlog.md](./playlog.md)). The demo auto-downloads it when the result scene mounts, controlled by the "Auto-save play history" checkbox in the Debug Menu's "Library & records" folder (OFF by default; latched at song start and disabled during a play). The `bms-playlog` CLI re-derives LR2 / beatoraja / IIDX results from the file, and dropping a play-log onto the page replays the recorded run when the matching song is loaded.
 
 ## Compatibility boundary
 
