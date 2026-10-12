@@ -3,7 +3,7 @@ import { createBeatResolver, resolveBmsLongNotes, resolveLnobjLongNotes } from '
 import { resolveBmsBase, type BeMusicJson } from '../../json/src/index.ts';
 import { parseBms, parseBmson } from '../../parser/src/index.ts';
 import { resolveLandmineGaugeEffect } from '../../player/src/core/landmine.ts';
-import { stringifyBmson } from './index.ts';
+import { stringifyBms, stringifyBmson } from './index.ts';
 
 interface BmsonNote {
   x: number;
@@ -21,6 +21,10 @@ interface BmsonOutput {
 
 const bms = (...lines: string[]): BeMusicJson => parseBms([...lines, ''].join('\n'));
 const toBmson = (json: BeMusicJson): BmsonOutput => JSON.parse(stringifyBmson(json)) as BmsonOutput;
+const bmson = (document: Record<string, unknown>): BeMusicJson =>
+  parseBmson(JSON.stringify({ version: '1.0.0', ...document }));
+const headerLines = (output: string, command: string): string[] =>
+  output.split('\n').filter((line) => line.startsWith(`#${command} `) || line === `#${command}`);
 
 /** Every long note of a BMS chart as `[lane, startBeat, endBeat]`, both `#LNTYPE` and `#LNOBJ` spellings. */
 function bmsLongNotes(json: BeMusicJson): Array<[string, number, number]> {
@@ -155,5 +159,127 @@ describe('BMS → bmson conversion', () => {
 
     expect(output.mine_channels).toEqual([{ name: '', notes: [{ x: 1, y: 960 }] }]);
     expect(mineDamages(parseBmson(JSON.stringify(output)))).toEqual(mineDamages(source));
+  });
+});
+
+describe('bmson → BMS conversion', () => {
+  const longNoteChart = (info: Record<string, unknown>, notes: Array<Record<string, unknown>>) =>
+    bmson({
+      info: { title: 'LN', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k', ...info },
+      sound_channels: [{ name: 'key.wav', notes }],
+    });
+
+  test('long notes become #LNTYPE 1 `5x` / `6x` pairs that re-parse to the same long notes', () => {
+    const source = longNoteChart({}, [
+      { x: 1, y: 0, l: 480 },
+      { x: 2, y: 240, l: 0 },
+      { x: 8, y: 480, l: 1200 },
+    ]);
+    const output = stringifyBms(source);
+
+    expect(headerLines(output, 'LNTYPE')).toEqual(['#LNTYPE 1']);
+    expect(output).toMatch(/^#00051:/m);
+    expect(output).toMatch(/^#00056:/m);
+    const reparsed = parseBms(output);
+    expect(bmsLongNotes(reparsed)).toEqual(bmsonLongNotes(source));
+    // The short note stays a short note.
+    expect(reparsed.events.filter((event) => event.channel === '12')).toHaveLength(1);
+  });
+
+  test('a long note crossing measures and `lines` keeps its exact end', () => {
+    const source = bmson({
+      info: { title: 'LN', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+      lines: [{ y: 0 }, { y: 720 }, { y: 1680 }],
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 3, y: 600, l: 1000 }] }],
+    });
+    const reparsed = parseBms(stringifyBms(source));
+    expect(bmsLongNotes(reparsed)).toEqual(bmsonLongNotes(source));
+  });
+
+  test('BMS → bmson → BMS keeps #LNOBJ long notes as long notes', () => {
+    const source = bms('#BPM 120', '#WAV01 key.wav', '#LNOBJ ZZ', '#00111:01ZZ', '#00212:01', '#00312:ZZ');
+    const roundTrip = parseBms(stringifyBms(parseBmson(stringifyBmson(source))));
+    expect(bmsLongNotes(roundTrip)).toEqual(bmsLongNotes(source));
+  });
+
+  test.each([
+    ['a uniform `ln_type`', { ln_type: 2 }, [undefined, undefined], ['#LNMODE 2']],
+    ['a uniform per-note `t`', {}, [3, 3], ['#LNMODE 3']],
+    ['per-note `t` agreeing with `ln_type`', { ln_type: 1 }, [1, undefined], ['#LNMODE 1']],
+    ['mixed `t` falling back to `ln_type`', { ln_type: 2 }, [3, undefined], ['#LNMODE 2']],
+    ['mixed `t` without `ln_type`', {}, [1, 3], []],
+    ['no type at all', {}, [undefined, undefined], []],
+  ])('#LNMODE from %s', (_label, info, types, expected) => {
+    const source = longNoteChart(
+      info,
+      types.map((t, index) => ({ x: index + 1, y: index * 960, l: 240, ...(t !== undefined ? { t } : {}) })),
+    );
+    expect(headerLines(stringifyBms(source), 'LNMODE')).toEqual(expected);
+  });
+
+  test.each([
+    [10, '0A', 10],
+    [0, '01', 1],
+    [2.4, '02', 2],
+    [2.5, '03', 3],
+    [5000, 'ZZ', 1295],
+    [undefined, '04', 4],
+  ])('a mine with `damage` %s is written as the BMS mine value %s', (damage, value, dealt) => {
+    const source = bmson({
+      info: { title: 'Mine', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+      mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 240, ...(damage !== undefined ? { damage } : {}) }] }],
+    });
+    const output = stringifyBms(source);
+
+    const reparsed = parseBms(output);
+    expect(reparsed.events.filter((event) => event.channel === 'D2').map((event) => event.value)).toEqual([value]);
+    // The mine's sample becomes the BMS explosion sound.
+    expect(headerLines(output, 'WAV00')).toEqual(['#WAV00 mine.wav']);
+    expect(mineDamages(reparsed)).toEqual([['D2', dealt]]);
+  });
+
+  test('BMS → bmson → BMS keeps mine damage', () => {
+    const source = bms('#BPM 120', '#WAV00 bomb.wav', '#WAV01 key.wav', '#00111:01', '#001D1:0A', '#001D2:00ZZ');
+    const roundTrip = parseBms(stringifyBms(parseBmson(stringifyBmson(source))));
+    expect(mineDamages(roundTrip)).toEqual(mineDamages(source));
+    expect(roundTrip.resources.wav['00']).toBe('bomb.wav');
+  });
+
+  test('`judge_rank` becomes #DEFEXRANK (same unit) instead of an out-of-range #RANK', () => {
+    const output = stringifyBms(
+      bmson({
+        info: { title: 'Rank', init_bpm: 120, resolution: 240, judge_rank: 120 },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+      }),
+    );
+    expect(headerLines(output, 'DEFEXRANK')).toEqual(['#DEFEXRANK 120']);
+    expect(headerLines(output, 'RANK')).toEqual([]);
+    expect(parseBms(output).bms.defExRank).toBe(120);
+  });
+
+  test('a missing or non-positive `judge_rank` writes neither #RANK nor #DEFEXRANK', () => {
+    for (const info of [{}, { judge_rank: 0 }]) {
+      const output = stringifyBms(
+        bmson({
+          info: { title: 'Rank', init_bpm: 120, resolution: 240, ...info },
+          sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      );
+      expect(headerLines(output, 'DEFEXRANK')).toEqual([]);
+      expect(headerLines(output, 'RANK')).toEqual([]);
+    }
+  });
+
+  test('the percentage `total` is not written as an absolute #TOTAL', () => {
+    for (const total of [undefined, 100, 260]) {
+      const output = stringifyBms(
+        bmson({
+          info: { title: 'Total', init_bpm: 120, resolution: 240, ...(total !== undefined ? { total } : {}) },
+          sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+        }),
+      );
+      expect(headerLines(output, 'TOTAL')).toEqual([]);
+    }
   });
 });
