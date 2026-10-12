@@ -598,6 +598,52 @@ describe('engine fallbacks (findings A10 – A13)', () => {
   });
 });
 
+describe('bmson lanes as the parser maps them', () => {
+  const bmson = (modeHint: string, extra: Record<string, unknown>): string =>
+    JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 150, mode_hint: modeHint, resolution: 240 },
+      ...extra,
+    });
+
+  test('leaves key_channels (hidden notes) out and reads mine_channels as mines', () => {
+    const sound = { sound_channels: [{ name: 'a.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }] };
+    const plain = createPlayFingerprintDocument(parseBmson(bmson('beat-7k', sound)), NO_PATH);
+    const hidden = { ...sound, key_channels: [{ name: 'h.wav', notes: [{ x: 2, y: 960 }] }] };
+    expect(createPlayFingerprintDocument(parseBmson(bmson('beat-7k', hidden)), NO_PATH)).toEqual(plain);
+    const mines = { ...sound, mine_channels: [{ name: 'm.wav', notes: [{ x: 2, y: 960, damage: 7 }] }] };
+    expect(createPlayFingerprintDocument(parseBmson(bmson('beat-7k', mines)), NO_PATH).mines).toEqual([
+      { m: '1', p: '0', lane: '12', damage: '7' },
+    ]);
+  });
+
+  test('reads beat-5k / beat-10k with the scratch on x 8 / 16', () => {
+    const notes = [1, 5, 8].map((x) => ({ x, y: 960, l: 0, c: false }));
+    const fiveKeys = createPlayFingerprintDocument(
+      parseBmson(bmson('beat-5k', { sound_channels: [{ name: 'a.wav', notes }] })),
+      NO_PATH,
+    );
+    expect(fiveKeys.laneMode).toBe('5');
+    expect(fiveKeys.notes.map((note) => note.lane)).toEqual(['11', '15', '16']);
+    expect(fiveKeys).toEqual(
+      createPlayFingerprintDocument(
+        parseBms(['#BPM 150', '#DEFEXRANK 100', '#00111:01', '#00115:01', '#00116:01'].join('\n')),
+        NO_PATH,
+      ),
+    );
+    const tenKeys = createPlayFingerprintDocument(
+      parseBmson(
+        bmson('beat-10k', {
+          sound_channels: [{ name: 'a.wav', notes: [9, 13, 16].map((x) => ({ x, y: 960, l: 0, c: false })) }],
+        }),
+      ),
+      NO_PATH,
+    );
+    expect(tenKeys.laneMode).toBe('10');
+    expect(tenKeys.notes.map((note) => note.lane)).toEqual(['21', '25', '26']);
+  });
+});
+
 describe('BMS against bmson', () => {
   const bms = [
     '#PLAYER 1',
