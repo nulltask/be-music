@@ -2139,8 +2139,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     //     `'10'` (IIDX 5K DP) and route the right-side POPN columns through the IIDX 2P key bindings.
     // `resolveChartPlayVariant` already encodes the right rules for both (see `@be-music/chart`); threading
     // the result here gives the engine + adapter + renderer a single source of truth without each one
-    // re-running its own heuristic.
-    const hostPlayVariant = this.song ? resolveChartPlayVariant(this.song) : undefined;
+    // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
+    // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
+    const hostPlayVariant = resolveChartPlayVariant(song, resolved);
     const prepared = preparePlaybackChartData(
       resolved,
       {
@@ -2222,7 +2223,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Lay out the whole keyboard of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY), not just the lanes
     // the chart happens to use, so a sparse chart still plays on full lanes. The variant also decides channel `17`
     // (a lane in 9 KEY, FREE ZONE in IIDX) and the 9 KEY layout the LR2 default 9-keys play skin expects.
-    this.chartPlayVariant = resolveChartPlayVariant(song);
+    this.chartPlayVariant = hostPlayVariant;
     this.laneChannels = resolvePlayVariantLaneChannels(this.notes, this.chartPlayVariant);
     // Initialize from `prepared.scorableNotes.length` so the view's initial `score.total` matches the engine's
     // authoritative `summary.total` (= same `scorableNotes` filter, with Free-Zone channels excluded). Without

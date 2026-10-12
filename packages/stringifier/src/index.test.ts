@@ -541,7 +541,8 @@ describe('stringifier', () => {
     });
     expect(document.info.subartists).toEqual(['A', 'B', '']);
     expect(document.bpm_events.map((event) => event.bpm)).toEqual([120, 180]);
-    expect(document.stop_events[0].duration).toBe(96);
+    // 96 STOP units = 2 beats = 960 pulses at resolution 480.
+    expect(document.stop_events[0].duration).toBe(960);
   });
 
   test('stringifier: stringifyBms/stringifyBmson handle equivalent chart content', () => {
@@ -660,5 +661,19 @@ describe('stringifier', () => {
       }),
     );
     expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
+  });
+
+  test('bmson stringify: writes BMS STOP lengths as pulses at the output resolution', () => {
+    const parsed = parseChart(['#BPM 120', '#STOP01 24', '#STOP02 192', '#00109:0102', '#00111:01', ''].join('\n'));
+
+    const output = JSON.parse(stringifyBmson(parsed)) as {
+      info: { resolution: number };
+      stop_events: Array<{ y: number; duration: number }>;
+    };
+    const { resolution } = output.info;
+
+    expect(output.stop_events.map((event) => event.duration)).toEqual([resolution / 2, resolution * 4]);
+    const reparsed = parseBmson(JSON.stringify(output));
+    expect(Object.values(reparsed.resources.stop).sort((left, right) => left - right)).toEqual([24, 192]);
   });
 });

@@ -96,7 +96,7 @@ player executes the score in the following order:
 
 1. Resolve the BMS control syntax at runtime and create a branched score to be used for the current playback.
 2. Extract performance notes, mines, invisible notes, and real-time audio triggers from the branched score.
-3. Confirm the mode, key assignment, and lane FREE ZONE alias from the actual channels.
+3. Confirm the lane mode from the branched score (see [Lane mode and input](#lane-mode-and-input)), then the key assignment and lane FREE ZONE alias from the actual channels.
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
 5. Execute either `AUTO` / `MANUAL` / `AUTO SCRATCH` main loop and return `PlayerSummary` at the end.
 
@@ -141,7 +141,7 @@ Mines follow the LR2 detonation model (LR2's own changelog; the damage model is 
 
 - A mine explodes on either of LR2's two conditions: **holding the lane's key as the mine crosses the judge line**, or **pressing while the mine is within the `PGREAT` window** of the judge line. A mine passing with the key up is harmless, and a press that lands after the crossing but outside `PGREAT` is too. (losak's writeup claims the `GOOD` window, but LR2's changelog — the primary source — says the PGREAT range; see [`bms-spec.md`](./bms-spec.md).)
 - An explosion only drains the gauge and plays the `#WAV00` explosion sample — **no verdict, no combo break, no score change**. Regular note judgment runs independently of detonation (a mine never swallows the input aimed at a nearby note).
-- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead.
+- Damage interprets the mine object value (upper-case base36) **directly as a percentage** (LR2 / beatoraja behavior; this differs from the nanasi-lineage `value / 2` rule). A bmson mine with `key_channels[].notes[].damage` uses that value instead; a bmson mine without `damage` deals the default `4%` (its object value is the WAV slot the parser assigned, not a damage encoding, so it is never read as damage).
 - Mine damage bypasses the HARD sub-30% softening and the `#TOTAL` damage multiplier (same as beatoraja's direct `gauge.addValue()`).
 - `ZZ` (= 1295 %) instantly FAILs survival gauges (HARD / DEATH); GROOVE / EASY stop at the `2%` floor.
 - kitty keyboard protocol input uses the real press/release state; release-less fallback input approximates "held" with the same short grace window the LN hold logic uses.
@@ -161,7 +161,13 @@ ordinary key columns, so they keep whatever length the chart authored (a plain t
 
 ## Lane mode and input
 
-The lane mode is estimated from the actual channels in the music score, `bms.player`, and `chartExtension`.
+The lane mode comes from one rule shared by every host: `resolveChartPlayVariant` in `@be-music/chart`, run over the
+branched score's events, `bms.player`, and the chart extension (`PlayerOptions.laneModeExtension`). A host that already
+knows the variant can declare it with `PlayerOptions.playVariant`. Lane usage counts the `1x` / `2x` lane channels and
+the `5x` / `6x` `#LNTYPE` long-note channels; mines and invisible objects never change the lane mode, so they cannot
+switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The detection order is listed in
+[BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior); it includes the documented `.bme`
+completion (a `.bme` chart without a 6 / 7 key column is `7 KEY SP` / `14 KEY DP`).
 The main modes that can be automatically determined with real equipment are as follows.
 
 - `5 KEY SP`
@@ -280,6 +286,8 @@ bmson determines the judgment width using the following priority order.
 
 bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
 Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
+The `beatoraja` ruleset uses `judge_rank` as the judgerank directly, and a bmson chart without it judges like
+`judge_rank: 100` (the bmson default; PGREAT `±20ms` in 7 KEY), never like BMS `#RANK 2`.
 
 In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
 
@@ -370,7 +378,7 @@ The LN repeat-suppress window after a long-note release is treated the same way 
 
 A mine explosion is not a judgment word: it does not produce `BAD` / `POOR`, does not touch the judge counters, combo, EX-SCORE, or score, and never takes priority over a nearby note candidate.
 It only applies the mine damage to the gauge and triggers `#WAV00` when defined. See [Landmines](#landmines) for the detonation conditions and the damage rule.
-An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values.
+An object value that is not a two-character upper-case base36 ID (or is `00`) falls back to the default damage of `4%`; under `#BASE 62` this also covers lower-case values. A bmson mine without `damage` uses the same `4%`.
 
 The basis for this rule is documented in [`bms-spec.md`](./bms-spec.md).
 
@@ -465,7 +473,7 @@ The following deltas describe the `lr2` ruleset's `GROOVE` gauge. `HARD`, `DEATH
 - `GOOD`: `+baseGain / 2`
 - `BAD`: `-4`
 - `POOR`: `-6`
-- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`), applied as a raw delta
+- Landmine explosion: `-mineValue(base36)` (or the bmson `damage`, `4` when a bmson mine has none), applied as a raw delta
 
 The value after gauge update is clamped to the current gauge type's min/max range.
 

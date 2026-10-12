@@ -1,3 +1,4 @@
+import { resolveChartPlayVariant } from '@be-music/chart';
 import { normalizeChannel } from '@be-music/json';
 
 export interface ChannelLike {
@@ -97,11 +98,10 @@ export interface LaneModeOptions {
   chartExtension?: string;
   platform?: NodeJS.Platform;
   /**
-   * Direct lane-mode override. When the host has already classified the chart's variant
-   * (e.g. via `resolveChartPlayVariant` from `@be-music/chart`), pass it here to bypass the
-   * content-based heuristic entirely. Useful for charts the heuristic under-classifies —
-   * notably `.bme` POPN-9 charts authored with `#PLAYER 1` + channels 16/17/18/19, which the
-   * heuristic would route to `7-key-sp`.
+   * The chart's play variant when the caller already knows it (an explicit host declaration, or
+   * `resolveChartPlayVariant` from `@be-music/chart` run over the chart's events). Without it the
+   * lane mode is resolved by that same `resolveChartPlayVariant` rule over the given channels,
+   * `chartExtension`, and `player`.
    */
   playVariant?: ChartPlayVariant;
 }
@@ -430,95 +430,32 @@ export function resolveLaneDisplayMode(channels: string[], options: LaneModeOpti
   return `${label} (${layout === 'standard' ? 'PMS-STD' : 'PMS-COMPAT'})`;
 }
 
+/**
+ * Lane mode for a channel set. The mode always comes from `resolveChartPlayVariant` (`@be-music/chart`), the rule every
+ * host shares: the host-declared `playVariant` when there is one, otherwise the shared rule run over these channels,
+ * `chartExtension`, and `player`. There is deliberately no second heuristic here, so the engine, the CLI, and the web
+ * hosts cannot disagree on 5 KEY vs 7 KEY (and on the beatoraja judge windows that follow from it).
+ */
 function resolveLaneMode(existing: ReadonlySet<string>, options: LaneModeOptions): LaneMode {
-  const hasExtendedLane = [...existing].some((channel) => {
-    if (channel.length !== 2) {
-      return false;
-    }
-    if (channel[0] !== '1' && channel[0] !== '2') {
-      return false;
-    }
-    const laneIndex = resolveLaneIndex(channel[1]);
-    return laneIndex !== undefined && laneIndex > 9;
-  });
-  const has2P = [...existing].some((channel) => is2PSideLaneChannel(channel));
-  const has7KeyMarker = existing.has('18') || existing.has('19');
-  const has14KeyMarker = has7KeyMarker || existing.has('28') || existing.has('29');
-
-  // **Direct host override** — when the caller already classified the variant (e.g. the
-  // gameplay scene's `resolveChartPlayVariant`-derived `chartVariant`), trust it and bypass
-  // the heuristic.  Especially important for `.bme` POPN-9 charts authored with `#PLAYER 1`
-  // + channels 16/17/18/19: the heuristic below routes those to `7-key-sp` (channel 16 →
-  // scratch, 17 → FREE ZONE), dropping the `f/v/g/b` POPN-9 key bindings and the channel-17
-  // notes from `scorableNotes`.  Host-driven classification — even when based on the same
-  // heuristic — gives the rest of the pipeline a single source of truth.
-  if (options.playVariant !== undefined) {
-    switch (options.playVariant) {
-      case '5':
-        return '5-key-sp';
-      case '7':
-        return '7-key-sp';
-      case '9':
-        return '9-key';
-      case '10':
-        return '5-key-dp';
-      case '14':
-        return '14-key-dp';
-      case '24':
-        return '24-key-sp';
-      case '48':
-        return '48-key-dp';
-    }
-  }
-
-  if (hasExtendedLane) {
-    return has2P ? '48-key-dp' : '24-key-sp';
-  }
-
-  if (isPmsExtension(options.chartExtension)) {
-    return '9-key';
-  }
-
-  if (has2P && has14KeyMarker) {
-    return '14-key-dp';
-  }
-
-  if (options.player === 3 && existing.has('17')) {
-    return '9-key';
-  }
-
-  if (has7KeyMarker) {
-    return '7-key-sp';
-  }
-
-  const fallback = resolveLaneModeByExtension(options.chartExtension, has2P);
-  if (fallback) {
-    return fallback;
-  }
-
-  if (has2P) {
-    return '5-key-dp';
-  }
-
-  return '5-key-sp';
+  const variant =
+    options.playVariant ??
+    resolveChartPlayVariant({
+      chartPath: options.chartExtension,
+      events: Array.from(existing, (channel) => ({ channel })),
+      bms: { player: options.player },
+    });
+  return LANE_MODE_BY_PLAY_VARIANT[variant];
 }
 
-function resolveLaneModeByExtension(chartExtension: string | undefined, has2P: boolean): LaneMode | undefined {
-  if (isPmsExtension(chartExtension)) {
-    return '9-key';
-  }
-  if (typeof chartExtension !== 'string') {
-    return undefined;
-  }
-  const normalized = chartExtension.trim().toLowerCase();
-  if (normalized === '.bme') {
-    return has2P ? '14-key-dp' : '7-key-sp';
-  }
-  if (normalized === '.bms') {
-    return has2P ? '5-key-dp' : '5-key-sp';
-  }
-  return undefined;
-}
+const LANE_MODE_BY_PLAY_VARIANT: Record<ChartPlayVariant, LaneMode> = {
+  '5': '5-key-sp',
+  '7': '7-key-sp',
+  '9': '9-key',
+  '10': '5-key-dp',
+  '14': '14-key-dp',
+  '24': '24-key-sp',
+  '48': '48-key-dp',
+};
 
 function resolveModeBindings(
   mode: LaneMode,
@@ -604,16 +541,6 @@ function resolveFreeZoneScratchChannel(channel: string): string | undefined {
     return '26';
   }
   return undefined;
-}
-
-function is2PSideLaneChannel(channel: string): boolean {
-  if (channel.length !== 2) {
-    return false;
-  }
-  if (channel[0] !== '2') {
-    return false;
-  }
-  return resolveLaneIndex(channel[1]) !== undefined;
 }
 
 function resolveLaneIndex(lane: string): number | undefined {

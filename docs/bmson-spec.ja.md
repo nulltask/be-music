@@ -155,7 +155,7 @@
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
-- `key_channels` entry は `sound_channels` の後に登録し、同じ `mode_hint` lane map で BMS landmine channel へ変換し、`events[].bmson.damage` を保持
+- `key_channels` entry は `sound_channels` の後に登録し、同じ `mode_hint` lane map で BMS landmine channel へ変換し、`events[].bmson.damage` を保持。event の値は key channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷は既定の `4`（%）を与えます（不正な BMS 地雷値と同じフォールバック）
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)

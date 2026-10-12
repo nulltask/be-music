@@ -27,7 +27,8 @@ describe('manual input', () => {
   });
 
   test('manual-input: builds full 5-key DP lanes when 2P channels are used', () => {
-    const bindings = createLaneBindings(['11', '22'], { platform: 'linux' });
+    // `21` marks the IIDX 2P side; bare `22..25` without it is PMS-STD (9 KEY) under the shared play-variant rule.
+    const bindings = createLaneBindings(['11', '21'], { platform: 'linux' });
     expect(bindings.map((binding) => binding.channel)).toEqual([
       '16',
       '11',
@@ -90,7 +91,7 @@ describe('manual input', () => {
   });
 
   test('manual-input: uses Option for reverse scratch on macOS', () => {
-    const bindings = createLaneBindings(['11', '22'], { platform: 'darwin' });
+    const bindings = createLaneBindings(['11', '21'], { platform: 'darwin' });
 
     expect(bindings.find((binding) => binding.channel === '16')?.inputTokens).toEqual([
       'shift-left',
@@ -400,8 +401,12 @@ describe('manual input', () => {
   test('manual-input: resolves lane display mode labels', () => {
     expect(resolveLaneDisplayMode(['11'])).toBe('5 KEY SP');
     expect(resolveLaneDisplayMode(['11'], { chartExtension: '.bme' })).toBe('7 KEY SP');
-    expect(resolveLaneDisplayMode(['11', '22'])).toBe('5 KEY DP');
-    expect(resolveLaneDisplayMode(['11', '22'], { chartExtension: '.bme' })).toBe('14 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '21'])).toBe('5 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '21'], { chartExtension: '.bme' })).toBe('14 KEY DP');
+    // Bare `22..25` without `21` / `26..29` is PMS-STD content: 9 KEY whatever the extension, the same as the web
+    // host's `resolveChartPlayVariant` (the CLI used to call it 5 KEY DP / 14 KEY DP).
+    expect(resolveLaneDisplayMode(['11', '22'])).toBe('9 KEY (PMS-STD)');
+    expect(resolveLaneDisplayMode(['11', '22'], { chartExtension: '.bme' })).toBe('9 KEY (PMS-STD)');
     expect(resolveLaneDisplayMode(['11', '19'])).toBe('7 KEY SP');
     expect(resolveLaneDisplayMode(['11', '21', '29'])).toBe('14 KEY DP');
     expect(resolveLaneDisplayMode(['1A'])).toBe('24 KEY SP');
