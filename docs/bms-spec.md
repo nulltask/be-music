@@ -362,7 +362,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-tui/src/tui/tui.ts`)
 - Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
 - Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
-- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/player/src/core/timeline.test.ts`, `packages/player-tui/src/bga.test.ts`
+- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/chart/src/timelines.test.ts`, `packages/player-tui/src/bga.test.ts`
 
 ## Handling of event location
 

@@ -96,7 +96,7 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 player は次の順序で譜面を実行します。
 
 1. BMS 制御構文を実行時に解決し、今回の再生で使う分岐済み譜面を作ります。
-2. 分岐後の譜面から、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガを抽出します。
+2. 分岐後の譜面を `resolveChart`（`@be-music/chart`、[アーキテクチャ](./architecture.ja.md) を参照）で 1 回だけ解決し、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガ、テンポマップ、譜面の事実を、得られた `ResolvedChart` から取り出します。
 3. 分岐後の譜面からレーンモードを確定し（[レーンモードと入力](#レーンモードと入力)）、実際に存在するチャンネル群からキー割り当てと FREE ZONE のエイリアスを確定します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
 5. `AUTO` / `MANUAL` / `AUTO SCRATCH` のいずれかのメインループを実行し、最後に `PlayerSummary` を返します。
@@ -131,7 +131,7 @@ RANDOM 要約は draws から作ります。
 
 ### 演奏対象ノート
 
-player はまず IR の `events` を beat/seconds 付きの演奏ノート列へ正規化します。
+ノートは解決済みの譜面（`ResolvedChart.notes`、`@be-music/chart` の `resolveChart`）から取ります。`resolveChart` は IR の `events` を beat/seconds 付きのノート列へ正規化し、エンジンはそれをプレイごとの状態を持つ演奏ノートにコピーします（`preparePlaybackChart`）。
 演奏対象に含めるのは playable channel のみで、各ノートは少なくとも次の情報を持ちます。
 
 - `channel`
@@ -157,7 +157,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 - それ以外はイベント順で最初のノートを採用します。BMS では最小のオブジェクト ID、bmson では最初の sound channel です。bmson ではこれが beatoraja の判定するノートです。BMS の beatoraja はファイル内で後の行を採用しますが、IR は行順を記録していません。LR2 の選び方は分かっていません。
 
 残りのノートは判定・描画せず、`summary.total` にも数えません。ただしキー音は、採用したノートと同じ `#WAVxx` / sound channel でない限り、マニュアルプレイでは各ノートの時刻に BGM として鳴らします（オートプレイはもともと演奏レーンのオブジェクトをすべて鳴らします）。
-`extractTimedNotes` はこれらのノートを `shadowedNotes` として返します。
+解決済みの譜面はこれらのノートを `shadowedNotes` として返します（`extractTimedNotes` も同じ）。
 地雷と不可視ノートはまとめません。
 
 ### 地雷
@@ -634,7 +634,7 @@ pause 中は playback clock と audio session を同時に止め、resume で両
 
 ### 再生タイミング
 
-リアルタイム再生は、分岐解決後の譜面から `collectSampleTriggers()` で生成したトリガ列を使います。
+リアルタイム再生は、分岐解決後の譜面の解決済みトリガ列（`ResolvedChart.sampleTriggers`。`collectSampleTriggers()` で作る）を使います。
 再生時刻は負にならないように clamp します。
 
 ### 音量分離

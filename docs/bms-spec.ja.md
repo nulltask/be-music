@@ -362,7 +362,7 @@ runtime と round-trip の扱い:
 - `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-tui/src/tui/tui.ts`）で上限を設ける
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
-- 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/player/src/core/timeline.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する
+- 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/chart/src/timelines.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する
 
 ## イベント位置の扱い
 

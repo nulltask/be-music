@@ -52,10 +52,11 @@ The definitions follow general BMS/BMSON terminology where possible, but priorit
 - **MANUAL / AUTO SCRATCH / AUTO**: Playback modes. `MANUAL` uses player input, `AUTO SCRATCH` automates scratch lanes only, and `AUTO` automates all playable notes.
 - **control flow**: BMS branch directives such as `#RANDOM`, `#IF`, and `#SWITCH`. The parser retains them; hosts resolve them once per play, before playback or rendering, with explicit `RandomDraws`.
 - **RandomDraws**: The outcome of a chart's control flow for one play: one entry (command, range, value) per `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line in file order. Drawn once with `drawRandomOutcomes` and shared by the resolver, the engine and the play log.
+- **Source layer / Resolved layer**: The two layers a chart is read in. The Source layer (`BeMusicJson`) is what the file says; the Resolved layer (`ResolvedChart`, built by `resolveChart` in `@be-music/chart`) is what the player plays, with every format default and de facto rule applied. See [Architecture](./architecture.md).
 
 ## Runtime Packages
 
-- **player core**: The shared `@be-music/player` engine and helper surface. It owns timing, note extraction, judgment, scoring, gauge helpers, BGA timelines, and UI/audio adapter contracts.
+- **player core**: The shared `@be-music/player` engine and helper surface. It prepares a play from the resolved chart and owns judgment, scoring, gauge helpers, and UI/audio adapter contracts; timing, note resolution and timelines live in `@be-music/chart`.
 - **terminal player**: The `@be-music/player-tui` CLI and TUI frontend. It provides Music Select, terminal gameplay, terminal BGA, loading screens, and SEA builds on top of the core engine.
 - **browser player**: The `@be-music/player-web` PixiJS/WebAudio runtime and the `@be-music/player-web-demo` Vite host. It handles browser drops, LR2/beatoraja skin rendering, browser gameplay, result scenes, and recording.
 - **skin family**: Browser-player scene family selected from the loaded theme state. The current families are LR2, beatoraja, and the built-in default family.
