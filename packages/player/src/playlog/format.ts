@@ -74,6 +74,12 @@ export interface PlaylogChart {
   genre?: string;
   /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
   sha256?: string;
+  /**
+   * Play fingerprint (`bmfp1:…`, docs/fingerprint-spec.md) of the resolved chart that was played — identifies what
+   * the player played regardless of file bytes, keysounds, BGA or metadata. Lane options (MIRROR / RANDOM / FLIP)
+   * are not part of it; they live in `play`.
+   */
+  fingerprint?: string;
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
@@ -266,6 +272,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     artist: optionalString(chart.artist, 'chart.artist'),
     genre: optionalString(chart.genre, 'chart.genre'),
     sha256: optionalString(chart.sha256, 'chart.sha256'),
+    fingerprint: optionalString(chart.fingerprint, 'chart.fingerprint'),
     sourceFormat,
     laneMode: expectString(chart.laneMode, 'chart.laneMode'),
     total: optionalFiniteNumber(chart.total, 'chart.total'),
@@ -274,7 +281,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
     notes,
   };
-  for (const key of ['title', 'subtitle', 'artist', 'genre', 'sha256', 'total'] as const) {
+  for (const key of ['title', 'subtitle', 'artist', 'genre', 'sha256', 'fingerprint', 'total'] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }
   return parsed;

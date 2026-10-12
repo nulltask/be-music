@@ -21,6 +21,8 @@ function makePlaylog(): BeMusicPlaylog {
       subtitle: 'ANOTHER',
       artist: 'composer',
       genre: 'genre',
+      sha256: 'a'.repeat(64),
+      fingerprint: `bmfp1:${'b'.repeat(64)}`,
       sourceFormat: 'bms',
       laneMode: '7keys',
       total: 300,
@@ -104,6 +106,8 @@ describe('playlog format', () => {
     const parsed = parsePlaylog(serializePlaylog(minimal));
     expect(parsed).toEqual(minimal);
     expect(parsed.results).toBeUndefined();
+    expect(parsed.chart).not.toHaveProperty('sha256');
+    expect(parsed.chart).not.toHaveProperty('fingerprint');
   });
 
   test('rejects invalid JSON and wrong format / version / clock markers', () => {
@@ -182,6 +186,13 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('chart.lnMode: expected 1 | 2 | 3');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.chart.fingerprint = 42;
+        }),
+      ),
+    ).toThrow(/chart\.fingerprint/);
     expect(() =>
       parsePlaylog(
         corrupt((value) => {

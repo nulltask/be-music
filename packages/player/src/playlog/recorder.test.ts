@@ -1,7 +1,10 @@
+import { computePlayFingerprint } from '@be-music/chart';
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
+import { parseBms } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerSummary } from '../core/engine.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
+import { resolveLaneDisplayMode } from '../core/lane-layout.ts';
 import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts';
 import { BE_MUSIC_PLAYLOG_FORMAT, BE_MUSIC_PLAYLOG_VERSION } from './format.ts';
 import {
@@ -219,5 +222,42 @@ describe('playlog recorder', () => {
       maxCombo: 0,
       gauge: { type: 'GROOVE', final: 0, cleared: false },
     });
+  });
+
+  test('records the play fingerprint of the resolved chart', () => {
+    const json = parseBms(
+      ['#PLAYER 3', '#BPM 150', '#TITLE fingerprint', '#00111:01000100', '#00113:0001', '#00219:01'].join('\n'),
+    );
+    const playlog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
+
+    expect(playlog.chart.fingerprint).toBe(computePlayFingerprint(json));
+    expect(playlog.chart.fingerprint).toMatch(/^bmfp1:[0-9a-f]{64}$/);
+  });
+
+  test('fingerprints a chart played as 9 KEY with the .pms lane mode', () => {
+    const json = parseBms(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
+    const keysLog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
+    // The lane mode the engine reports when it plays the same chart from a `.pms` file.
+    const laneDisplayMode = resolveLaneDisplayMode(['11', '15'], { chartExtension: '.pms' });
+    const pmsLog = createPlaylogRecorder(
+      makeRecorderOptions({ json, chart: { ...makeChartData(), laneDisplayMode } }),
+    ).finalize({ summary: makeSummary() });
+
+    expect(keysLog.chart.fingerprint).toBe(computePlayFingerprint(json));
+    expect(pmsLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.pms' }));
+    expect(pmsLog.chart.fingerprint).not.toBe(keysLog.chart.fingerprint);
+  });
+
+  test('omits the fingerprint instead of failing when it cannot be computed', () => {
+    const json = makeJson();
+    Object.defineProperty(json, 'events', {
+      get: () => {
+        throw new Error('broken chart');
+      },
+    });
+    const playlog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
+
+    expect(playlog.chart).not.toHaveProperty('fingerprint');
+    expect(playlog.chart.title).toBe('My Song');
   });
 });

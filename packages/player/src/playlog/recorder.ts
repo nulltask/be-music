@@ -1,3 +1,4 @@
+import { computePlayFingerprint } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
@@ -219,6 +220,8 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   if (typeof options.chartSha256 === 'string' && options.chartSha256.length > 0) {
     result.sha256 = options.chartSha256.toLowerCase();
   }
+  const fingerprint = computePlaylogChartFingerprint(json, chart.laneDisplayMode);
+  if (fingerprint !== undefined) result.fingerprint = fingerprint;
   if (typeof json.metadata.title === 'string' && json.metadata.title.length > 0) result.title = json.metadata.title;
   if (typeof json.metadata.subtitle === 'string' && json.metadata.subtitle.length > 0) {
     result.subtitle = json.metadata.subtitle;
@@ -229,6 +232,20 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     result.total = json.metadata.total;
   }
   return result;
+}
+
+/**
+ * Play fingerprint (`bmfp1:…`) of the resolved chart. The recorder never sees the chart's file name, so the `.pms`
+ * hint the fingerprint's lane-mode detection reads comes from the lane mode the engine actually played: it plays 9 KEY
+ * exactly when the chart is `.pms`, the host classified it as 9 KEY, or its content says so, and the hint resolves
+ * all three to the fingerprint's `'9'`. A failure only drops the field — it must never break recording.
+ */
+function computePlaylogChartFingerprint(json: BeMusicJson, laneDisplayMode: string): string | undefined {
+  try {
+    return computePlayFingerprint(json, laneDisplayMode.startsWith('9 KEY') ? { chartPath: '.pms' } : {});
+  } catch {
+    return undefined;
+  }
 }
 
 function buildNativeResult(

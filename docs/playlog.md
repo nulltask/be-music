@@ -14,6 +14,12 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `timeUs` / `endTimeUs` pair, mines carry their resolved gauge damage, and the raw `#TOTAL` / `#RANK` /
    `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults. `chart.sha256` stamps the
    SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content.
+   `chart.fingerprint` stamps the play fingerprint (`bmfp1:…`, see [fingerprint-spec.md](./fingerprint-spec.md))
+   of the post-`#RANDOM` chart. Unlike `sha256` it identifies what the player played rather than the file bytes,
+   so logs of one chart still match after keysound / BGA / metadata edits, re-saves, or a BMS ↔ bmson conversion.
+   It is computed before the lane options are applied, so RANDOM / MIRROR / S-RANDOM and DP FLIP never change it —
+   they are recorded in `play` instead. The recorder computes it from the chart it is given (hosts need no change)
+   and omits the field when it cannot; logs without it still parse.
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
    `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always

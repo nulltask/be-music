@@ -173,6 +173,6 @@ bmfp1:<正規化 JSON のバイト列の SHA-256（小文字の 16 進）>
   - `createChartFingerprintDocument(json, options?)` / `createPlayFingerprintDocument(json, options?)` は正規化ドキュメントを同期的に組み立て、`canonicalizeFingerprintDocument(document)` はその RFC 8785 の文字列を返します。
   - `computePlayFingerprint` は `resolveBmsControlFlow` を通した後の譜面を受け取り、`json.bms.controlFlow` は見ません。`computeChartFingerprint` はパーサーが解決前に返す譜面（`events` は制御構文の外の内容だけ）を受け取り、`json.bms.controlFlow` から分岐を組み立て直します。
   - `options.chartPath` は譜面のファイル名をレーン構成の判定に渡します。判定は拡張子を見ます（`.pms` は常に 9 KEY）。
-- プレイログにはプレイ fingerprint を記録する予定です。
+- プレイログは、遊んだ譜面のプレイ fingerprint を `chart.fingerprint` に記録します（[playlog.ja.md](./playlog.ja.md) を参照）。`@be-music/player` の `createPlaylogRecorder` が、`#RANDOM` 解決後でレーンオプション（RANDOM / MIRROR / DP FLIP）を適用する前の譜面から求めるので、これらのオプションでは変わりません。記録処理は譜面のファイル名を知らないので、エンジンが 9 KEY として遊ばせた譜面には `.pms` のヒントを渡します。求められなかったときはこのフィールドを省きます。
 - パーサーは BMS の値を数値として保存しているので、十進文字列の代わりに、保存されている倍精度値を往復できる最短の十進表記を使います（3.1 節）。パーサーが文字列のまま持つ値（`#EXRANKxx`、`#STP`）は、その桁の並びから読みます。
 - テストでは少なくとも次を確かめます。同じ譜面で、行の順序を入れ替えたもの、`#WAV` の番号を振り直したもの、小節内の分解能が違うもの、小数の桁数が違うもの。BMS の譜面と、それを bmson に変換したもの。BGA / BGM / キー音を変えても fingerprint が変わらないこと。含める項目をそれぞれ変えると fingerprint が変わること。
