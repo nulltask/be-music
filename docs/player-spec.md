@@ -96,7 +96,7 @@ player executes the score in the following order:
 
 1. Resolve the BMS control syntax at runtime and create a branched score to be used for the current playback.
 2. Extract performance notes, mines, invisible notes, and real-time audio triggers from the branched score.
-3. Confirm the mode, key assignment, and lane FREE ZONE alias from the actual channels.
+3. Confirm the lane mode from the branched score (see [Lane mode and input](#lane-mode-and-input)), then the key assignment and lane FREE ZONE alias from the actual channels.
 4. Initialize gauges, scores, UI state, input runtime, and audio runtime.
 5. Execute either `AUTO` / `MANUAL` / `AUTO SCRATCH` main loop and return `PlayerSummary` at the end.
 
@@ -161,7 +161,13 @@ ordinary key columns, so they keep whatever length the chart authored (a plain t
 
 ## Lane mode and input
 
-The lane mode is estimated from the actual channels in the music score, `bms.player`, and `chartExtension`.
+The lane mode comes from one rule shared by every host: `resolveChartPlayVariant` in `@be-music/chart`, run over the
+branched score's events, `bms.player`, and the chart extension (`PlayerOptions.laneModeExtension`). A host that already
+knows the variant can declare it with `PlayerOptions.playVariant`. Lane usage counts the `1x` / `2x` lane channels and
+the `5x` / `6x` `#LNTYPE` long-note channels; mines and invisible objects never change the lane mode, so they cannot
+switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The detection order is listed in
+[BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior); it includes the documented `.bme`
+completion (a `.bme` chart without a 6 / 7 key column is `7 KEY SP` / `14 KEY DP`).
 The main modes that can be automatically determined with real equipment are as follows.
 
 - `5 KEY SP`

@@ -1503,6 +1503,40 @@ describe('player', () => {
     expect(playlog!.inputs).toHaveLength(0);
   });
 
+  test('preparePlaybackChartData: lane mode comes from the shared play-variant rule, not mines or invisible objects', () => {
+    const chart = (...lines: string[]) =>
+      parseChart(['#PLAYER 1', '#BPM 120', '#WAV01 a.wav', ...lines, ''].join('\n'));
+    const laneMode = (json: ReturnType<typeof parseChart>, laneModeExtension?: string) =>
+      preparePlaybackChartData(json, { laneModeExtension }, true, 0).laneDisplayMode;
+
+    // Same pressable notes (1P lanes 1..5); a mine on lane 8 and an invisible object on lane 9 must not turn the
+    // chart into 7 KEY (and the beatoraja ruleset must not swap its 5 KEY judge windows for the 7 KEY ones).
+    const plain = chart('#00111:01', '#00115:01');
+    const withMineAndInvisible = chart('#00111:01', '#00115:01', '#001D8:01', '#00139:01');
+    expect(laneMode(plain, '.bms')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bms')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible)).toBe('5 KEY SP');
+    expect(preparePlaybackChartData(withMineAndInvisible, {}, true, 0).landmineNotes).toHaveLength(1);
+
+    // The documented `.bme` completion applies through the same rule, mines or not.
+    expect(laneMode(plain, '.bme')).toBe('7 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bme')).toBe('7 KEY SP');
+
+    // `#LNOBJ` and `#LNTYPE 1` spellings of the same long note on lane 8 resolve to the same lane mode.
+    expect(laneMode(chart('#LNOBJ ZZ', '#WAVZZ z.wav', '#00111:01', '#00118:01', '#00218:ZZ'), '.bms')).toBe(
+      '7 KEY SP',
+    );
+    expect(laneMode(chart('#LNTYPE 1', '#00111:01', '#00158:01', '#00258:01'), '.bms')).toBe('7 KEY SP');
+
+    // PMS-STD content without the `.pms` extension is 9 KEY on every host (it used to be 5 KEY DP in the engine).
+    expect(laneMode(chart('#00111:01', '#00122:01'), '.bms')).toBe('9 KEY (PMS-STD)');
+
+    // A host-declared variant still wins.
+    expect(
+      preparePlaybackChartData(plain, { laneModeExtension: '.bms', playVariant: '7' }, true, 0).laneDisplayMode,
+    ).toBe('7 KEY SP');
+  });
+
   test('player: blank press between same-lane notes plays the previous keysound, not the next pending keysound', async () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 240;

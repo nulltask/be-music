@@ -96,7 +96,7 @@ player は次の順序で譜面を実行します。
 
 1. BMS 制御構文を実行時に解決し、今回の再生で使う分岐済み譜面を作ります。
 2. 分岐後の譜面から、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガを抽出します。
-3. 実際に存在するチャンネル群からレーンモード、キー割り当て、FREE ZONE のエイリアスを確定します。
+3. 分岐後の譜面からレーンモードを確定し（[レーンモードと入力](#レーンモードと入力)）、実際に存在するチャンネル群からキー割り当てと FREE ZONE のエイリアスを確定します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
 5. `AUTO` / `MANUAL` / `AUTO SCRATCH` のいずれかのメインループを実行し、最後に `PlayerSummary` を返します。
 
@@ -160,7 +160,13 @@ FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱いま
 
 ## レーンモードと入力
 
-レーンモードは、譜面に実在するチャンネル、`bms.player`、`chartExtension` から推定します。
+レーンモードは、すべての host が共有するひとつのルール `@be-music/chart` の `resolveChartPlayVariant` で決めます。
+入力は分岐後の譜面のイベント、`bms.player`、譜面の拡張子 (`PlayerOptions.laneModeExtension`) です。variant をすでに
+知っている host は `PlayerOptions.playVariant` で明示できます。レーン使用は `1x` / `2x` のレーンチャンネルと `5x` / `6x` の
+`#LNTYPE` ロングノートチャンネルで数え、地雷と不可視オブジェはレーンモードを変えません。そのため、これらが beatoraja
+ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。判定順は
+[BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあり、文書化済みの `.bme` 補完（6 / 7 鍵の列がない `.bme`
+譜面は `7 KEY SP` / `14 KEY DP`）も含みます。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
