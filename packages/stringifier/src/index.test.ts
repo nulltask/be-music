@@ -652,6 +652,64 @@ describe('stringifier', () => {
     ]);
   });
 
+  test('bmson stringify: writes a 24 KEY chart as keyboard-24k with fixed x lanes, wheel included', () => {
+    const json = createEmptyJson('bms');
+    json.resources.wav['01'] = 'key.wav';
+    json.events = ['11', '1A', '1O', '1P', '1Q', 'DQ'].map((channel, index) => ({
+      measure: 0,
+      channel,
+      position: [index, 8] as const,
+      value: '01',
+    }));
+
+    const output = JSON.parse(stringifyBmson(json)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+      key_channels?: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe('keyboard-24k');
+    expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual([1, 10, 24, 25, 26]);
+    expect(output.key_channels?.[0]!.notes.map((note) => note.x)).toEqual([26]);
+    expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual([
+      '11',
+      '1A',
+      '1O',
+      '1P',
+      '1Q',
+      'DQ',
+    ]);
+  });
+
+  test('bmson stringify: round-trips a sparse keyboard-24k-double chart without compacting its lanes', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'Keyboard', init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k-double' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 5, y: 0 },
+              { x: 26, y: 240 },
+              { x: 40, y: 480 },
+              { x: 51, y: 720 },
+            ],
+          },
+        ],
+      }),
+    );
+    // A different resolution skips the preserved document, so the lanes go through the canonical writer.
+    const output = JSON.parse(stringifyBmson(source, { resolution: 480 })) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe('keyboard-24k-double');
+    expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual([5, 26, 40, 51]);
+    expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual(['15', '1Q', '2E', '2P']);
+  });
+
   test('bmson stringify: omits `key_channels` when the chart has no mines', () => {
     const source = parseBmson(
       JSON.stringify({
