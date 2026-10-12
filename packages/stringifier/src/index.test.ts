@@ -800,9 +800,9 @@ describe('stringifier', () => {
       expect(toChannels(parseBmson(JSON.stringify(output)))).toEqual(toChannels(source));
     });
 
-    test('bmson-key-channels-mines.bmson (beat-7k, keys 6 / 7, scratch and mines)', async () => {
+    test('bmson-mine-key-channels.bmson (beat-7k, keys 6 / 7, scratch and mines)', async () => {
       const source = parseBmson(
-        await readFile(resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson'), 'utf8'),
+        await readFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'), 'utf8'),
       );
       expect(toChannels(parseBmson(stringifyBmson(source)))).toEqual(toChannels(source));
     });
@@ -876,7 +876,7 @@ describe('stringifier', () => {
   });
 
   test('bmson stringify: rescales preserved `lines` to the output resolution', async () => {
-    const chartPath = resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson');
+    const chartPath = resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson');
     const parsed = parseBmson(await readFile(chartPath, 'utf8'));
 
     const output = JSON.parse(stringifyBmson(parsed, { resolution: 480 })) as {

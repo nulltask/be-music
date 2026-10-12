@@ -1,12 +1,12 @@
 {
-  "chart": "bmson-key-channels-mines.bmson",
+  "chart": "bmson-mine-key-channels.bmson",
   "parse": {
     "sourceFormat": "bmson",
     "metadata": {
       "bpm": 150,
       "extras": {},
-      "title": "BMSON Key Channels Mines",
-      "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+      "title": "BMSON Mine / Key Channels",
+      "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
       "artist": "be-music",
       "genre": "TEST",
       "playLevel": 4,
@@ -17,7 +17,8 @@
       "wav": {
         "01": "sample.wav",
         "02": "branch.wav",
-        "03": "wrong.wav"
+        "03": "hidden.wav",
+        "04": "wrong.wav"
       },
       "bmp": {},
       "bpm": {},
@@ -27,8 +28,8 @@
     "measures": [],
     "bmson": {
       "info": {
-        "title": "BMSON Key Channels Mines",
-        "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+        "title": "BMSON Mine / Key Channels",
+        "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
         "artist": "be-music",
         "genre": "TEST",
         "modeHint": "beat-7k",
@@ -57,10 +58,12 @@
       "1:18@0/960=01 {\"l\":240,\"c\":false,\"t\":1}",
       "1:19@240/960=01 {\"l\":0,\"c\":false}",
       "1:16@480/960=01 {\"l\":0,\"c\":false}",
-      "1:D1@720/960=03 {\"damage\":0}",
-      "1:D8@840/960=03 {\"damage\":50}",
+      "1:32@600/960=03",
+      "1:36@660/960=03",
+      "1:D1@720/960=04 {\"damage\":0}",
+      "1:D8@840/960=04 {\"damage\":50}",
       "2:01@0/960=02 {\"l\":0,\"c\":false}",
-      "2:D6@0/960=03 {\"damage\":100}"
+      "2:D6@0/960=04 {\"damage\":100}"
     ]
   },
   "stringify": {
@@ -70,8 +73,8 @@
       "{",
       "  \"version\": \"1.0.0\",",
       "  \"info\": {",
-      "    \"title\": \"BMSON Key Channels Mines\",",
-      "    \"subtitle\": \"beatoraja key_channels / ln_type / notes[].t extensions\",",
+      "    \"title\": \"BMSON Mine / Key Channels\",",
+      "    \"subtitle\": \"beatoraja mine_channels / key_channels / ln_type / notes[].t extensions\",",
       "    \"artist\": \"be-music\",",
       "    \"genre\": \"TEST\",",
       "    \"level\": 4,",
@@ -164,6 +167,21 @@
       "  ],",
       "  \"key_channels\": [",
       "    {",
+      "      \"name\": \"hidden.wav\",",
+      "      \"notes\": [",
+      "        {",
+      "          \"x\": 2,",
+      "          \"y\": 1560",
+      "        },",
+      "        {",
+      "          \"x\": 8,",
+      "          \"y\": 1620",
+      "        }",
+      "      ]",
+      "    }",
+      "  ],",
+      "  \"mine_channels\": [",
+      "    {",
       "      \"name\": \"wrong.wav\",",
       "      \"notes\": [",
       "        {",
@@ -191,7 +209,7 @@
   "variants": {
     "default": {
       "randomPatterns": [],
-      "title": "BMSON Key Channels Mines",
+      "title": "BMSON Mine / Key Channels",
       "playVariant": "7",
       "referenceBpm": 150,
       "timing": {
@@ -209,6 +227,8 @@
         "1600000 18 01 ~400000",
         "2000000 19 01 ~400000",
         "2400000 16 01",
+        "2600000 32 03 ~100000",
+        "2700000 36 03",
         "3200000 01 02"
       ],
       "playlogChart": {
@@ -221,8 +241,8 @@
           "sourceExRank": 100
         },
         "noteCount": 6,
-        "title": "BMSON Key Channels Mines",
-        "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+        "title": "BMSON Mine / Key Channels",
+        "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
         "artist": "be-music",
         "genre": "TEST",
         "total": 260
@@ -234,6 +254,8 @@
         "1600000 18 long ->2000000 ln1",
         "2000000 19 normal",
         "2400000 16 normal",
+        "2600000 12 invisible",
+        "2700000 16 invisible",
         "2800000 11 mine dmg0",
         "3000000 18 mine dmg50",
         "3200000 16 mine dmg100"
