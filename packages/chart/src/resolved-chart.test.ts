@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '../../json/src/index.ts';
-import { resolveChart } from './index.ts';
+import { isInvisibleNoteChannel, resolveChart } from './index.ts';
 
 function event(measure: number, channel: string, value: string, position: [number, number] = [0, 1]): BeMusicEvent {
   return { measure, channel, position, value };
@@ -141,5 +141,18 @@ describe('resolveChart', () => {
       [4, 'play'],
     ]);
     expect(resolved.volumeChanges[1]!.gain).toBe(1);
+  });
+
+  test('isInvisibleNoteChannel matches 3x / 4x lane channels only', () => {
+    expect(['31', '49', '3A', '4z', '11', 'D1', '30', '3'].map((channel) => isInvisibleNoteChannel(channel))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 });

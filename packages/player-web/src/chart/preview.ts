@@ -1,5 +1,10 @@
-import { resolveChart, usesMonophonicWavPlayback, type TimedSampleTrigger } from '@be-music/chart';
-import { normalizeChannel, type BeMusicJson } from '@be-music/json';
+import {
+  isInvisibleNoteChannel,
+  resolveChart,
+  usesMonophonicWavPlayback,
+  type TimedSampleTrigger,
+} from '@be-music/chart';
+import type { BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
 
@@ -506,19 +511,8 @@ export class ChartPreviewEngine {
 export function collectChartPreviewTriggers(chart: BeMusicJson, cutoffSeconds: number): TimedSampleTrigger[] {
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   return resolveChart(chart, { inferBmsLnTypeWhenMissing: true })
-    .sampleTriggers.filter(
-      (trigger) => !isInvisiblePlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds,
-    )
+    .sampleTriggers.filter((trigger) => !isInvisibleNoteChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
     .sort((left, right) => left.seconds - right.seconds);
-}
-
-function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (normalized.length !== 2) return false;
-  const high = normalized.charCodeAt(0);
-  const low = normalized.charCodeAt(1);
-  // Lane codes cover the classic `1`-`9` columns and the extended `A`-`Z` ones (24 / 48 KEY, bmson `keyboard-24k`).
-  return (high === 0x33 || high === 0x34) && ((low >= 0x31 && low <= 0x39) || (low >= 0x41 && low <= 0x5a));
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

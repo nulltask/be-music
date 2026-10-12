@@ -373,4 +373,9 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       void resolved.sampleTriggers;
     },
   });
+  define('chart.isInvisibleNoteChannel', {
+    run: () => {
+      chartApi.isInvisibleNoteChannel('3A');
+    },
+  });
 }

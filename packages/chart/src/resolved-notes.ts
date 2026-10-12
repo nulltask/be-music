@@ -170,6 +170,16 @@ export function variantUsesFreeZone(variant: ChartPlayVariant): boolean {
 }
 
 /**
+ * Whether `channel` places an invisible object (`3x` / `4x`) on a lane: one that sets the lane's keysound in manual
+ * play but is neither judged nor sounded by auto play.
+ */
+export function isInvisibleNoteChannel(channel: string): boolean {
+  const normalized = normalizeChannel(channel);
+  const side = normalized.charCodeAt(0);
+  return isLaneChannel(normalized) && (side === 0x33 || side === 0x34);
+}
+
+/**
  * Lane codes span the classic `1`-`9` columns plus the extended `A`-`Z` columns the 24-key (Keyboardmania) modes author
  * lanes 10..24 on — `1A..1O` / `2A..2O` for playable notes, and the matching `3X` / `4X`, `DX` / `EX` families for
  * invisible objects and landmines.

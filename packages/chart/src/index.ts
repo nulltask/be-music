@@ -96,7 +96,7 @@ export {
   type ResolvedVolumeChange,
 } from './resolved-chart.ts';
 
-export { type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';
+export { isInvisibleNoteChannel, type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';
 
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;

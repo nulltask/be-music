@@ -3,6 +3,7 @@ import {
   createBeatResolver,
   drawRandomOutcomes,
   hasControlFlow,
+  isInvisibleNoteChannel,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
@@ -1826,7 +1827,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   const realtimeAudioTriggers = collectRealtimeAudioTriggers(
     resolvedChart,
-    (channel) => !isInvisiblePlayLaneSoundChannel(channel),
+    (channel) => !isInvisibleNoteChannel(channel),
   );
   const realtimeAudioEndSeconds =
     options.audio === false
@@ -5244,17 +5245,6 @@ function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
     keys.add(LANDMINE_EXPLOSION_SAMPLE_KEY);
   }
   return [...keys];
-}
-
-function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (normalized.length !== 2) {
-    return false;
-  }
-  const high = normalized.charCodeAt(0);
-  const low = normalized.charCodeAt(1);
-  // Lane codes cover the classic `1`-`9` columns and the extended `A`-`Z` ones (24 / 48 KEY, bmson `keyboard-24k`).
-  return (high === 0x33 || high === 0x34) && ((low >= 0x31 && low <= 0x39) || (low >= 0x41 && low <= 0x5a));
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {
