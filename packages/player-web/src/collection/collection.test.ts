@@ -275,6 +275,19 @@ describe('resolveChartPlayVariant', () => {
     expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('7');
   });
 
+  test('classifies the play from the resolved chart when one is given (lanes added by a `#RANDOM` branch count)', () => {
+    const song = makeSong({ chartPath: 'Song/main.bms', channels: ['11', '15'] });
+    // Lanes 8 / 9 live only in a `#RANDOM` branch, so the unresolved chart's top-level events are 5 KEY.
+    expect(resolveChartPlayVariant(song)).toBe('5');
+    const resolved = {
+      ...song.chart,
+      events: [...song.chart.events, { measure: 2, channel: '18', position: [0, 1], value: '01' }],
+    } as BeMusicJson;
+    expect(resolveChartPlayVariant(song, resolved)).toBe('7');
+    // The song-level answer is unaffected (cached per chart object).
+    expect(resolveChartPlayVariant(song)).toBe('5');
+  });
+
   test('PMS / 9 KEY: `.pms` extension wins regardless of channel layout', () => {
     // A `.pms` chart can use either the BME-COMPAT channel layout (`16..19`) or the PMS-STD layout (`22..25`). The
     // extension alone is enough to commit to `play_9.lr2skin`.
