@@ -767,20 +767,22 @@ describe('stringifier', () => {
   });
 
   describe('bmson stringify: keeps every lane of a non-keyboard mode_hint through parse → stringify → parse', () => {
-    const laneCounts: Array<[string, number]> = [
-      ['beat-5k', 6],
-      ['beat-7k', 8],
-      ['beat-10k', 12],
-      ['beat-14k', 16],
-      ['popn-5k', 5],
-      ['popn-9k', 9],
+    const upTo = (count: number) => Array.from({ length: count }, (_, index) => index + 1);
+    // The lane `x` values of each hint. `beat-5k` / `beat-10k` keep the scratch on x 8 / 16 like the bmson spec and
+    // beatoraja, leaving x 6 / 7 / 14 / 15 without a lane.
+    const laneXs: Array<[string, number[]]> = [
+      ['beat-5k', [1, 2, 3, 4, 5, 8]],
+      ['beat-7k', upTo(8)],
+      ['beat-10k', [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16]],
+      ['beat-14k', upTo(16)],
+      ['popn-5k', upTo(5)],
+      ['popn-9k', upTo(9)],
     ];
     // Measure + fraction as one number, since the output resolution rewrites the position denominators.
     const toChannels = (json: ReturnType<typeof parseBmson>) =>
       json.events.map((event) => `${event.measure + event.position[0] / event.position[1]}:${event.channel}`).sort();
 
-    test.each(laneCounts)('%s', (modeHint, laneCount) => {
-      const xs = Array.from({ length: laneCount }, (_, index) => index + 1);
+    test.each(laneXs)('%s', (modeHint, xs) => {
       const source = parseBmson(
         JSON.stringify({
           version: '1.0.0',
@@ -847,6 +849,25 @@ describe('stringifier', () => {
         .events.map((event) => event.channel)
         .sort(),
     ).toEqual(['11', '16', '18', '19']);
+  });
+
+  test.each([
+    ['beat-5k', ['11', '15', '16'], [1, 5, 8]],
+    ['beat-10k', ['11', '16', '21', '25', '26'], [1, 8, 9, 13, 16]],
+  ])('bmson stringify: writes a 5 KEY SP / DP BMS as %s with the scratch on x 8 / 16', (modeHint, lanes, xs) => {
+    const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
+    const output = JSON.parse(stringifyBmson(source)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe(modeHint);
+    expect(output.sound_channels[0]!.notes.map((note) => note.x).sort((a, b) => a - b)).toEqual(xs);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(lanes);
   });
 
   test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional beat-9k hint', () => {

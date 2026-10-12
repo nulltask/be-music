@@ -151,7 +151,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - `lines` が存在する場合、`lines` 区間を小節として `measure` と `position` を算出
 - `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
-  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。表は `@be-music/chart` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
+  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。bmson 仕様の正式な一覧や beatoraja と同じく、`beat-5k` もスクラッチを `x` 8 に置いて `x` 6 / 7 にはレーンを割り当てず、`beat-10k` は 2P の鍵を `x` 9〜13、2P のスクラッチを `x` 16 に置く。表は `@be-music/chart` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
   3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
   4. それ以外の hint では、`sound_channels`・`key_channels`・`mine_channels` の正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)

@@ -596,6 +596,37 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['11', '12', '13', '14', '15', '18', '19', '16']);
   });
 
+  test.each([
+    ['beat-5k', [1, 2, 3, 4, 5, 8], ['11', '12', '13', '14', '15', '16']],
+    [
+      'beat-10k',
+      [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16],
+      ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'],
+    ],
+  ])(
+    'bmson: mode_hint=%s puts the scratch on x 8 (and 16) like the bmson spec and beatoraja',
+    (modeHint, xs, channels) => {
+      // bmson spec "Canonical List of Mode Hints" (`doc/index.rst` L825 / L827) and jbms-parser BMSONDecoder's
+      // `keyassign`: each side spans 8 `x` values with the scratch last, so x 6 / 7 (14 / 15) have no lane.
+      const json = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [{ name: 'sample.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
+        }),
+      );
+
+      const sortedChannels = json.events
+        .slice()
+        .sort(
+          (left, right) =>
+            left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
+        )
+        .map((event) => event.channel);
+      expect(sortedChannels).toEqual(channels);
+    },
+  );
+
   test('bmson: mode_hint=popn-9k routes x=6..9 onto the PMS-STD 22..25 channels', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -803,6 +834,10 @@ describe('parser', () => {
 
   test.each([
     ['beat-7k', 9],
+    ['beat-5k', 6],
+    ['beat-5k', 7],
+    ['beat-10k', 14],
+    ['beat-10k', 17],
     ['popn-5k', 6],
     ['keyboard-24k', 27],
   ])('bmson: an x outside the %s lane table is a BGM note, as in beatoraja', (modeHint, outsideX) => {

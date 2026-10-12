@@ -1612,13 +1612,31 @@ const BMSON_VARIANT_MODE_HINTS: Partial<Record<ChartPlayVariant, string>> = {
 };
 
 /**
- * Lane channels of the bmson `mode_hint`s in `x` order (`x` = index + 1). Mirrors the parser's mode_hint lane maps, so a
- * chart written under one of these hints reads back onto the same lanes.
+ * Lane channels of the bmson `mode_hint`s in `x` order (`x` = index + 1; `undefined` is an `x` without a lane). Mirrors
+ * the parser's mode_hint lane maps, so a chart written under one of these hints reads back onto the same lanes.
+ * `beat-5k` / `beat-10k` keep the scratch on x 8 / 16 like the bmson spec and beatoraja.
  */
-const BMSON_MODE_HINT_LANE_CHANNELS: Record<string, readonly string[]> = {
-  'beat-5k': ['11', '12', '13', '14', '15', '16'],
+const BMSON_MODE_HINT_LANE_CHANNELS: Record<string, readonly (string | undefined)[]> = {
+  'beat-5k': ['11', '12', '13', '14', '15', undefined, undefined, '16'],
   'beat-7k': ['11', '12', '13', '14', '15', '18', '19', '16'],
-  'beat-10k': ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'],
+  'beat-10k': [
+    '11',
+    '12',
+    '13',
+    '14',
+    '15',
+    undefined,
+    undefined,
+    '16',
+    '21',
+    '22',
+    '23',
+    '24',
+    '25',
+    undefined,
+    undefined,
+    '26',
+  ],
   'beat-14k': ['11', '12', '13', '14', '15', '18', '19', '16', '21', '22', '23', '24', '25', '28', '29', '26'],
   'popn-5k': ['11', '12', '13', '14', '15'],
   'popn-9k': ['11', '12', '13', '14', '15', '22', '23', '24', '25'],

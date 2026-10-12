@@ -122,13 +122,15 @@ const BMSON_KEYBOARD_SIDE_LANES = 26;
  * follow the canonical IIDX / Pop'n / keyboard channel layout that LR2 / beatoraja ship default skins for.
  */
 const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
+  // `beat-5k` / `beat-10k` keep the 7-key spacing: the scratch stays on x 8 (16) and x 6 / 7 (14 / 15) have no lane —
+  // the bmson spec's canonical list (`doc/index.rst` L825 / L827) and jbms-parser BMSONDecoder's `keyassign`.
   'beat-5k': new Map([
     [1, '11'],
     [2, '12'],
     [3, '13'],
     [4, '14'],
     [5, '15'],
-    [6, '16'],
+    [8, '16'],
   ]),
   'beat-7k': new Map([
     [1, '11'],
@@ -146,13 +148,13 @@ const MODE_HINT_LANE_MAPS: Record<string, ReadonlyMap<number, string>> = {
     [3, '13'],
     [4, '14'],
     [5, '15'],
-    [6, '16'],
-    [7, '21'],
-    [8, '22'],
-    [9, '23'],
-    [10, '24'],
-    [11, '25'],
-    [12, '26'],
+    [8, '16'],
+    [9, '21'],
+    [10, '22'],
+    [11, '23'],
+    [12, '24'],
+    [13, '25'],
+    [16, '26'],
   ]),
   'beat-14k': new Map([
     [1, '11'],
