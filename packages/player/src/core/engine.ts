@@ -9,7 +9,6 @@ import {
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
   resolveChart,
-  sortEvents,
   usesMonophonicWavPlayback,
   type RandomDraws,
   type ResolvedChart,
@@ -42,7 +41,6 @@ import {
   type RenderResult,
   type TimedSampleTrigger,
   type TimingResolver,
-  createTimingResolver,
   renderSingleSample,
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
@@ -1806,27 +1804,9 @@ interface TimedAudioVolumeEvent {
   seconds: number;
 }
 
-function collectRealtimeAudioVolumeEvents(
-  json: BeMusicJson,
-  resolver: TimingResolver = createTimingResolver(json),
-): TimedAudioVolumeEvent[] {
-  if (json.sourceFormat !== 'bms') {
-    return [];
-  }
-  const events: TimedAudioVolumeEvent[] = [];
-  for (const event of sortEvents(json.events)) {
-    if (!isBmsDynamicVolumeChangeChannel(event.channel)) {
-      continue;
-    }
-    if (parseBmsDynamicVolumeGain(event.value) === undefined) {
-      continue;
-    }
-    events.push({
-      event,
-      seconds: Math.max(0, resolver.eventToSeconds(event)),
-    });
-  }
-  return events;
+/** The chart's dynamic volume changes as realtime audio events (times clamped to the chart start). */
+function collectRealtimeAudioVolumeEvents(resolved: ResolvedChart): TimedAudioVolumeEvent[] {
+  return resolved.volumeChanges.map((change) => ({ event: change.event, seconds: Math.max(0, change.seconds) }));
 }
 
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
@@ -1843,7 +1823,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const resolvedChart = resolveEngineChart(resolvedJson, options);
   const timingResolver = resolvedChart.timing;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   const realtimeAudioTriggers = collectRealtimeAudioTriggers(
     resolvedChart,
     (channel) => !isInvisiblePlayLaneSoundChannel(channel),
@@ -2486,7 +2466,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
   // non-LR2 rulesets keep their initial windows for the whole chart.
   const dynamicJudgeRankChanges = judgeRuleset === 'lr2' ? resolvedChart.judgeRank.changes : [];
-  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver);
+  const realtimeAudioVolumeEvents = collectRealtimeAudioVolumeEvents(resolvedChart);
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
