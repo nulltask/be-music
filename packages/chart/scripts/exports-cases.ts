@@ -297,4 +297,61 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       );
     },
   });
+  define('chart.createMeasureTimeline', {
+    run: (fixtures) => {
+      const json = fixtures.sampleBmsJson;
+      chartApi.createMeasureTimeline(json, chartApi.createTimingResolver(json), chartApi.createBeatResolver(json));
+    },
+  });
+  define('chart.createBpmTimeline', {
+    run: (fixtures) => {
+      chartApi.createBpmTimeline(fixtures.sampleBmsJson, chartApi.createTimingResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createScrollTimeline', {
+    run: (fixtures) => {
+      chartApi.createScrollTimeline(fixtures.sampleBmsJson, chartApi.createBeatResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createSpeedTimeline', {
+    run: (fixtures) => {
+      chartApi.createSpeedTimeline(fixtures.sampleBmsJson, chartApi.createBeatResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createStopBeatWindows', {
+    run: (fixtures) => {
+      chartApi.createStopBeatWindows(chartApi.createTimingResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createBeatAtSecondsResolver', {
+    run: (fixtures) => {
+      chartApi.createBeatAtSecondsResolver(fixtures.sampleBmsJson)(1.5);
+    },
+  });
+  define('chart.createBeatAtSecondsResolverFromTimingResolver', {
+    run: (fixtures) => {
+      chartApi.createBeatAtSecondsResolverFromTimingResolver(chartApi.createTimingResolver(fixtures.sampleBmsJson))(
+        1.5,
+      );
+    },
+  });
+  define('chart.createMeasureBoundariesBeats', {
+    run: (fixtures) => {
+      chartApi.createMeasureBoundariesBeats(
+        fixtures.sampleBmsJson,
+        chartApi.createBeatResolver(fixtures.sampleBmsJson),
+      );
+    },
+  });
+  define('chart.buildBgaTimelines', {
+    run: (fixtures) => {
+      chartApi.buildBgaTimelines(fixtures.sampleBmsJson, chartApi.createTimingResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.buildBmsBgaTimeline', {
+    run: (fixtures) => {
+      const json = fixtures.sampleBmsJson;
+      chartApi.buildBmsBgaTimeline(json.events, chartApi.createTimingResolver(json), '04');
+    },
+  });
 }

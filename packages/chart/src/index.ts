@@ -55,6 +55,30 @@ export {
   type TimedSampleTrigger,
 } from './sample-triggers.ts';
 
+export {
+  createBeatAtSecondsResolver,
+  createBeatAtSecondsResolverFromTimingResolver,
+  createBpmTimeline,
+  createMeasureBoundariesBeats,
+  createMeasureTimeline,
+  createScrollTimeline,
+  createSpeedTimeline,
+  createStopBeatWindows,
+  type BpmTimelinePoint,
+  type MeasureTimelinePoint,
+  type ScrollTimelinePoint,
+  type SpeedTimelinePoint,
+  type StopBeatWindow,
+} from './timelines.ts';
+
+export {
+  buildBgaTimelines,
+  buildBmsBgaTimeline,
+  type BgaCue,
+  type BgaTimelines,
+  type BgaTimingResolver,
+} from './bga.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;
