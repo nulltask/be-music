@@ -198,7 +198,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `backBmp`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
 - `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
-- `rank`: BMS `#RANK` or bmson `info.judge_rank`
+- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the stringifier converts between the two units when writing bmson
 - `total`: BMS `#TOTAL` or bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` or bmson `info.init_bpm`; BMS defaults to `130`, while bmson requires a positive `init_bpm`
