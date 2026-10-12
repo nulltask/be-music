@@ -96,16 +96,15 @@ describe('BMS → bmson conversion', () => {
     );
     const output = toBmson(source);
 
-    // Lanes 11 and 22 only: `51` sits on `11` and `62` on `22`, so they get no `x` of their own.
-    expect(output.info.mode_hint).toBe('beat-2k');
+    // Lanes 11 and 22 only: `51` sits on `11` and `62` on `22`, so they get no `x` of their own. That is PMS-STD
+    // content, written under the canonical `popn-9k` table (11 → x1, 22 → x6).
+    expect(output.info.mode_hint).toBe('popn-9k');
     expect(output.sound_channels[0]!.notes).toEqual([
       { x: 1, y: 960, l: 480, c: false },
-      { x: 2, y: 1440, l: 480, c: false },
+      { x: 6, y: 1440, l: 480, c: false },
       { x: 1, y: 1680, l: 0, c: false },
     ]);
-    // `beat-<lanes>k` renumbers the lanes in use on re-read (22 comes back as 12), so compare the timing only.
-    const timing = (notes: Array<[string, number, number]>) => notes.map(([, start, end]) => [start, end]);
-    expect(timing(bmsonLongNotes(parseBmson(JSON.stringify(output))))).toEqual(timing(bmsLongNotes(source)));
+    expect(bmsonLongNotes(parseBmson(JSON.stringify(output)))).toEqual(bmsLongNotes(source));
   });
 
   test('#LNTYPE 2 runs become a single long note each', () => {
