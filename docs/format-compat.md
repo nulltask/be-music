@@ -298,13 +298,14 @@ The spec (L366-386): default `100`, relative to the player's default gauge rate;
 
 ### 3.8 `bpm_events` and `stop_events`
 
-| Topic            | De jure                                                     | beatoraja                                                                   | be-music                                                                                                     |
-| ---------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `init_bpm`       | Required; missing is a fatal error (L326-329).              | Not validated [V]                                                           | Missing, zero or negative is a parse error ([`parser.ts`][bm-parser])                                        |
-| `bpm_events`     | The last event on a pulse wins (L490-496).                  | ≤ 0 is skipped with a warning [V] ([BMSONDecoder L146-176][j-bmson-events]) | ≤ 0 is skipped; the later event on a pulse wins                                                              |
-| `stop_events`    | `duration` in pulses; stops on one pulse add up (L498-503). | Pulses; a negative duration is skipped [V]                                  | Pulses, converted to `#STOP` units (`× 48 / resolution`); stops on one pulse add up; ≤ 0 is skipped          |
-| Order on a pulse | Notes and BGA, then BPM, then STOP (L505-542).              | Scroll, BPM, then stop [V]                                                  | A BPM change applies before a STOP at the same pulse; a note on the STOP's pulse is hit when the stop begins |
-| `scroll_events`  | Not in the spec.                                            | beatoraja extension [V]                                                     | Not read                                                                                                     |
+| Topic            | De jure                                                     | beatoraja                                                                   | be-music                                                                                                        |
+| ---------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `init_bpm`       | Required; missing is a fatal error (L326-329).              | Not validated [V]                                                           | Missing, zero or negative is a parse error ([`parser.ts`][bm-parser])                                           |
+| `bpm_events`     | The last event on a pulse wins (L490-496).                  | ≤ 0 is skipped with a warning [V] ([BMSONDecoder L146-176][j-bmson-events]) | ≤ 0 is skipped; the later event on a pulse wins                                                                 |
+| `stop_events`    | `duration` in pulses; stops on one pulse add up (L498-503). | Pulses; a negative duration is skipped [V]                                  | Pulses, converted to `#STOP` units (`× 48 / resolution`); stops on one pulse add up; ≤ 0 is skipped             |
+| Order on a pulse | Notes and BGA, then BPM, then STOP (L505-542).              | Scroll, BPM, then stop [V]                                                  | A BPM change applies before a STOP at the same pulse; a note on the STOP's pulse is hit when the stop begins    |
+| `scroll_events`  | Not in the spec.                                            | beatoraja extension [V]                                                     | Not read                                                                                                        |
+| Event count      | Unlimited.                                                  | Unlimited: each event sets its own timeline [V]                             | Unlimited: one IR key per distinct BPM / STOP value, base-62 keys past 1,295 ([`bmson-keys.ts`][bm-bmson-keys]) |
 
 ### 3.9 BGA and images
 
@@ -353,6 +354,7 @@ be-music's [`@be-music/stringifier`](../packages/stringifier/src/index.ts) write
 - Every control-flow command is supported, `#RANDOM` is drawn per play, and branch definitions apply in file order as in LR2 and beatoraja ([§2.14](#214-control-flow)).
 - `#VOLWAV` applies only in beatoraja's `0 < n < 200` range ([§2.15](#215-audio-commands-and-keysounds)).
 - bmson: the spec's defaults (`beat-7k`, `lines` absent vs `[]`, `total` 100, `judge_rank` 100, a negative `resolution` as its absolute value) and beatoraja's extensions and readings: `ln_type` / `t`, the keyboard hints, `mine_channels` / `key_channels`, an out-of-table `x` as BGM, an unknown `mode_hint` as `beat-7k` (but a chart with lanes past `x` 8 keeps them instead of losing them to BGM), and `total` as a percentage of the default with `0` meaning the default ([§3](#3-bmson)).
+- bmson BPM / STOP changes share one IR key per distinct value, moving to base-62 keys past 1,295, so charts with thousands of changes keep every value; past 3,843 distinct values (no known chart) a value bends to the nearest one ([§3.8](#38-bpm_events-and-stop_events)).
 - BMS ↔ bmson conversion keeps long notes, mine damage, invisible notes and judge rank, writes canonical `mode_hint`s, and leaves TOTAL to the target format's default ([§4](#4-converting-between-bms-and-bmson)).
 
 ## 6. Known open questions
@@ -368,6 +370,7 @@ These are points where be-music disagrees with a de facto implementation without
 [bm-decode]: ../packages/parser/src/core/bms-text-decode.ts
 [bm-charset]: ../packages/parser/src/core/bms-charset.ts
 [bm-bmson]: ../packages/parser/src/core/bmson.ts
+[bm-bmson-keys]: ../packages/parser/src/core/bmson-keys.ts
 [bm-chart]: ../packages/chart/src/index.ts
 [bm-timing]: ../packages/chart/src/timing.ts
 [bm-timelines]: ../packages/chart/src/timelines.ts

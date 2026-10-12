@@ -298,13 +298,14 @@ be-music も beatoraja と同じく読みます。`mine_channels` は `damage` �
 
 ### 3.8 `bpm_events` と `stop_events`
 
-| 項目               | de jure                                                     | beatoraja                                                                     | be-music                                                                                                  |
-| ------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `init_bpm`         | 必須。ないのは致命的なエラー（L326-329）                    | 検証しない [V]                                                                | ない、0、負の値はパースエラー（[`parser.ts`][bm-parser]）                                                 |
-| `bpm_events`       | 同じパルスでは最後のイベントが勝つ（L490-496）              | 0 以下は警告を出して読み飛ばす [V]（[BMSONDecoder L146-176][j-bmson-events]） | 0 以下は読み飛ばす。同じパルスでは後のイベントが勝つ                                                      |
-| `stop_events`      | `duration` はパルス単位。同じパルスの停止は加算（L498-503） | パルス単位。負の長さは読み飛ばす [V]                                          | パルス単位で、`#STOP` の単位へ換算する（`× 48 / resolution`）。同じパルスの停止は加算、0 以下は読み飛ばす |
-| 同じパルスでの順序 | ノートと BGA、BPM、STOP の順（L505-542）                    | スクロール、BPM、停止の順 [V]                                                 | 同じパルスの STOP より BPM 変化を先に適用する。STOP と同じパルスのノートは停止の始まりで叩く              |
-| `scroll_events`    | 仕様にはない                                                | beatoraja の拡張 [V]                                                          | 読まない                                                                                                  |
+| 項目               | de jure                                                     | beatoraja                                                                     | be-music                                                                                                                                  |
+| ------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `init_bpm`         | 必須。ないのは致命的なエラー（L326-329）                    | 検証しない [V]                                                                | ない、0、負の値はパースエラー（[`parser.ts`][bm-parser]）                                                                                 |
+| `bpm_events`       | 同じパルスでは最後のイベントが勝つ（L490-496）              | 0 以下は警告を出して読み飛ばす [V]（[BMSONDecoder L146-176][j-bmson-events]） | 0 以下は読み飛ばす。同じパルスでは後のイベントが勝つ                                                                                      |
+| `stop_events`      | `duration` はパルス単位。同じパルスの停止は加算（L498-503） | パルス単位。負の長さは読み飛ばす [V]                                          | パルス単位で、`#STOP` の単位へ換算する（`× 48 / resolution`）。同じパルスの停止は加算、0 以下は読み飛ばす                                 |
+| 同じパルスでの順序 | ノートと BGA、BPM、STOP の順（L505-542）                    | スクロール、BPM、停止の順 [V]                                                 | 同じパルスの STOP より BPM 変化を先に適用する。STOP と同じパルスのノートは停止の始まりで叩く                                              |
+| `scroll_events`    | 仕様にはない                                                | beatoraja の拡張 [V]                                                          | 読まない                                                                                                                                  |
+| イベント数         | 上限なし                                                    | 上限なし。イベントごとにタイムラインへ設定する [V]                            | 上限なし。BPM / STOP は異なる値ごとに IR のキーを 1 つ割り当て、1,295 を超えると base 62 のキーにする（[`bmson-keys.ts`][bm-bmson-keys]） |
 
 ### 3.9 BGA と画像
 
@@ -353,6 +354,7 @@ be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は
 - 制御構文はすべて対応し、`#RANDOM` はプレイごとに抽選する。分岐内の定義は LR2 や beatoraja と同じくファイル順に適用する（[§2.14](#214-制御構文)）。
 - `#VOLWAV` は beatoraja と同じ `0 < n < 200` の範囲でだけ適用する（[§2.15](#215-音声系コマンドとキー音)）。
 - bmson：仕様の既定値（`beat-7k`、`lines` がない場合と `[]` の区別、`total` 100、`judge_rank` 100、負の `resolution` は絶対値）と、beatoraja の拡張と解釈（`ln_type` / `t`、キーボード系の hint、`mine_channels` / `key_channels`、表にない `x` は BGM、未知の `mode_hint` は `beat-7k`（ただし `x` 8 より先のレーンがある譜面は BGM にせず残す）、`total` は既定値に対する百分率で `0` は既定値）に従う（[§3](#3-bmson)）。
+- bmson の BPM / STOP の変化は、異なる値ごとに IR のキーを 1 つ共有し、1,295 を超えると base 62 のキーに切り替える。変化が数千ある譜面でもすべての値を保つ。異なる値が 3,843 を超える場合（既知の譜面にはない）は最も近い値に寄せる（[§3.8](#38-bpm_events-と-stop_events)）。
 - BMS と bmson の相互変換では、ロングノート、地雷のダメージ、不可視ノート、判定ランクを引き継ぎ、正式な `mode_hint` を書き、TOTAL は変換先の既定値に委ねる（[§4](#4-bms-と-bmson-の相互変換)）。
 
 ## 6. 未解決の論点
@@ -368,6 +370,7 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 [bm-decode]: ../packages/parser/src/core/bms-text-decode.ts
 [bm-charset]: ../packages/parser/src/core/bms-charset.ts
 [bm-bmson]: ../packages/parser/src/core/bmson.ts
+[bm-bmson-keys]: ../packages/parser/src/core/bmson-keys.ts
 [bm-chart]: ../packages/chart/src/index.ts
 [bm-timing]: ../packages/chart/src/timing.ts
 [bm-timelines]: ../packages/chart/src/timelines.ts

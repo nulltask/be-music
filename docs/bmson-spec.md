@@ -144,7 +144,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - `info.total` is a percentage of the player's default TOTAL, not an absolute TOTAL. Every player ruleset (`lr2`, `beatoraja`, `iidx`) plays it as `total / 100 ×` its own default TOTAL, and a value ≤ 0 means 100 % — the beatoraja behaviour (`BMSPlayerRule.validate`) — so `total: 0` does not freeze the gauge even though the spec says the lifebar then does not increase. See [player-spec](./player-spec.md#initial-and-default-values-lr2).
 - Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into normalized metadata image fields.
 - Register `sound_channels[i].name` in `resources.wav[key]`
-- Convert `key = base36(i + 1)` to 2 digits
+- Each sound channel gets its own 2-char WAV key, numbered from `01` in channel order (`sound_channels`, then `key_channels`, then `mine_channels`)
 - Convert `notes[].y` to fractional position and turn it into an event
 - `notes[].l/c` is kept as `events[].bmson.l/c`
 - `notes[].t` (1 = LN, 2 = CN, 3 = HCN) is kept as `events[].bmson.t` on long notes (`l > 0`); `info.ln_type` is kept as `bmson.info.lnType`
@@ -173,6 +173,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - An out-of-table note on the same `y` as a playable note of the same sound channel is dropped, like an `x = 0` note.
 - `bpm_events` is converted to `resources.bpm` + channel `08`
 - `stop_events` is converted to `resources.stop` + channel `09`
+- BPM and STOP values get one key per distinct value, in order of first appearance, so a gimmick chart with thousands of changes that repeat a few values needs only a few keys. A 2-char key holds 1,295 slots in base 36 (`01`–`ZZ`); when the WAV channels or the distinct values of one table need more, the chart switches to base-62 keys (`bms.base = 62`, 3,843 slots), so no key wraps round onto an earlier value. Past 3,843, a BPM / STOP value takes the key of the nearest value that has one, and further WAV channels are dropped; beatoraja has no such limit, but no known chart reaches it
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
 - Original array of `stop_events` is kept in `preservation.bmson.stopEvents`
 - Original array of `sound_channels` is kept in `preservation.bmson.soundChannels`
