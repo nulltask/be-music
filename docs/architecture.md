@@ -1,6 +1,8 @@
 [Japanese version](./architecture.ja.md)
 
-# Architecture: the Source layer and the Resolved layer
+# Architecture
+
+This document covers how a chart becomes something to play (the Source and Resolved layers), how the engine judges a play (a deterministic judge core and the drivers around it), and the rules that keep these parts runtime-neutral and small.
 
 be-music reads a chart in two layers. The **Source layer** says what the file says. The **Resolved layer** says what the player plays. Exactly one function, `resolveChart`, turns the first into the second, and every format default and de facto reading is applied there or in a helper it calls. Consumers read the Resolved layer and do not interpret the format again.
 
@@ -87,3 +89,25 @@ The reasons behind each reading, and every place where be-music departs from a s
 ## Checking the layer
 
 `tests/regression/resolved-chart.test.ts` resolves every chart in `examples/test`, for each `#RANDOM` draw the regression corpus pins. It checks the result against the consumer helpers (`extractTimedNotes`, `collectSampleTriggers`, `createTimingResolver`) and against the pinned engine note list, triggers, tempo map and chart facts in `tests/regression/__expected__` (see the [regression corpus](../tests/regression/README.md)).
+
+## The engine: judge core and drivers
+
+`@be-music/player`'s engine ([`core/`](../packages/player/src/core)) is a deterministic judge core with drivers around it.
+
+```text
+            clock / key input / recorded play log
+                          │
+   manual-play.ts ────────┼──────── auto-play.ts                 drivers
+                          ▼
+      step(state, input) → effects                               judge core
+   judge-core.ts (+ judge-core-{types,score,advance,press}.ts)   (manual play)
+   auto-judge-core.ts                                            (AUTO play)
+                          │
+                          ▼
+   engine-effects.ts → audio session, UI buses, play log, no-TUI trace
+```
+
+- **The judge core** holds everything that decides a judgment in an explicit state object: note selection, the ruleset windows, long-note holds and tails, HCN gauge ticks, mines, auto-scratch, misses, combo, score and gauge. `runJudgeCoreStep(state, input, emit)` (or `stepJudgeCore(state, input)`, which returns the effects as an array) applies one input — `advance`, `press`, `hold`, `release` or `finish`, stamped with chart seconds — and reports what happened as effects: sounds and sound stops, gauge / combo / long-note changes, UI cues, play-log records and trace lines. The core reads no clock, sets no timer and does no I/O, so the same state and inputs always give the same effects. `auto-judge-core.ts` does the same for AUTO play.
+- **The drivers** (`manualPlay`, `autoPlay`) own the clock, the input runtimes, audio scheduling, pause and HIGH-SPEED, and map the core's effects onto the host through `engine-effects.ts`. Live play steps the core from the playback clock once per frame and on every key event. A replay (`PlayerOptions.replayInputs`) steps it with `advanceJudgeCoreReplay` on a fixed 1 ms chart-time grid merged with the recorded inputs, so a replay's judgments do not depend on tick timing or `speed`.
+- **Shared rules.** The rules both the judge core and the play-log simulator (`playlog/simulate.ts`) apply live in the ruleset: windows and classification (`ruleset/judge.ts`), candidate selection (`ruleset/selection.ts`), the gauge (`ruleset/gauge.ts`), and the long-note rules — the mode a ruleset plays, the missed-charge-tail POOR, LR2's late LN-head BAD and the multi-BAD pruning (`ruleset/long-note.ts`). The simulator keeps its own microsecond event queue, so `playlog/equivalence.test.ts` checks that the two reach the same judgments on the same input stream.
+- **Driver services** sit beside the drivers: `engine-preparation.ts` (chart resolution for play, load progress, runtime start-up), `engine-audio.ts` (the built-in Node audio session and mixing), `engine-clock.ts`, `engine-trace.ts` (no-TUI output) and `engine-types.ts` (the public types). `engine.ts` is the public facade; its exports did not change with the split.

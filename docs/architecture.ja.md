@@ -1,6 +1,8 @@
 [English version](./architecture.md)
 
-# アーキテクチャ: Source 層と Resolved 層
+# アーキテクチャ
+
+この文書では、譜面がどのように演奏できる形になるか（Source 層と Resolved 層）、エンジンがどのように判定するか（決定的な判定コアと、それを動かすドライバ）、そしてそれらを実行環境に依存させず小さく保つための規則を説明します。
 
 be-music は譜面を 2 つの層で読みます。**Source 層**はファイルに何が書いてあるかを表し、**Resolved 層**はプレイヤーが何を演奏するかを表します。前者を後者に変える関数は `resolveChart` の 1 つだけで、フォーマットの既定値と de facto の読み方は、すべてこの関数か、この関数が呼ぶヘルパーで適用します。利用側は Resolved 層を読み、フォーマットを解釈し直しません。
 
@@ -87,3 +89,25 @@ be-music は譜面を 2 つの層で読みます。**Source 層**はファイル
 ## 層の検証
 
 `tests/regression/resolved-chart.test.ts` は、`examples/test` のすべての譜面を、回帰コーパスが固定している `#RANDOM` の draw ごとに解決します。その結果を、利用側のヘルパー（`extractTimedNotes`、`collectSampleTriggers`、`createTimingResolver`）と、`tests/regression/__expected__` に固定されたエンジンのノート列、トリガ、テンポマップ、譜面の事実と照合します（[回帰コーパス](../tests/regression/README.ja.md) を参照）。
+
+## エンジン: 判定コアとドライバ
+
+`@be-music/player` のエンジン（[`core/`](../packages/player/src/core)）は、決定的な判定コアと、その周りのドライバでできています。
+
+```text
+            時計 / キー入力 / 記録済みのプレイログ
+                          │
+   manual-play.ts ────────┼──────── auto-play.ts                 ドライバ
+                          ▼
+      step(state, input) → effects                               判定コア
+   judge-core.ts (+ judge-core-{types,score,advance,press}.ts)   (手動プレイ)
+   auto-judge-core.ts                                            (AUTO プレイ)
+                          │
+                          ▼
+   engine-effects.ts → 音声セッション、UI のバス、プレイログ、TUI なしのトレース
+```
+
+- **判定コア**は、判定を決めるものすべてを明示的な状態オブジェクトに持ちます。ノートの選択、ルールセットの判定幅、ロングノートの保持と終端、HCN のゲージ増減、地雷、オートスクラッチ、見逃し、コンボ、スコア、ゲージです。`runJudgeCoreStep(state, input, emit)`（または effect を配列で返す `stepJudgeCore(state, input)`）は、譜面上の秒で時刻を付けた入力（`advance`、`press`、`hold`、`release`、`finish`）を 1 つ適用し、起きたことを effect として報告します。音の再生と停止、ゲージ・コンボ・ロングノートの変化、UI への合図、プレイログへの記録、トレースの行です。コアは時計を読まず、タイマーを設定せず、入出力もしません。そのため、同じ状態と同じ入力からは常に同じ effect が出ます。`auto-judge-core.ts` は AUTO プレイについて同じことをします。
+- **ドライバ**（`manualPlay`、`autoPlay`）は、時計、入力ランタイム、音声のスケジューリング、ポーズと HIGH-SPEED を受け持ち、コアの effect を `engine-effects.ts` を通してホストに伝えます。ライブのプレイでは、再生の時計からフレームごとと、キー入力のたびにコアを進めます。リプレイ（`PlayerOptions.replayInputs`）では、`advanceJudgeCoreReplay` が記録された入力と 1 ms 刻みの譜面時刻の格子を合わせてコアを進めます。そのため、リプレイの判定はティックのタイミングや `speed` に左右されません。
+- **共有する規則**：判定コアとプレイログのシミュレータ（`playlog/simulate.ts`）の両方が使う規則は、ルールセットに置いています。判定幅と分類（`ruleset/judge.ts`）、候補の選択（`ruleset/selection.ts`）、ゲージ（`ruleset/gauge.ts`）、ロングノートの規則（ルールセットが演奏するモード、見逃したチャージノート終端の POOR、LR2 の LN 始点の遅い BAD、マルチ BAD の絞り込み。`ruleset/long-note.ts`）です。シミュレータはマイクロ秒単位の独自のイベントキューを持つので、同じ入力列で両者が同じ判定になることは `playlog/equivalence.test.ts` が確かめます。
+- **ドライバ側のサービス**はドライバの横に置いています。`engine-preparation.ts`（演奏用の譜面の解決、読み込みの進捗、ランタイムの起動）、`engine-audio.ts`（組み込みの Node 用音声セッションとミックス）、`engine-clock.ts`、`engine-trace.ts`（TUI なしの出力）、`engine-types.ts`（公開する型）です。`engine.ts` は公開用の入口で、分割の前後で export は変わっていません。
