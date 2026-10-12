@@ -21,7 +21,7 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `chart.playFingerprint` covers the branches this play rolled. The two are equal for a chart without control
    flow. Lane options (RANDOM / MIRROR / S-RANDOM, DP FLIP) are part of neither — they are recorded in `play`.
    The recorder computes both from the source chart (`recordPlaylog.sourceChart`, the chart as loaded; the engine
-   uses the chart it was given when the host passes none) and `play.randomOutcomes`, with the chart's extension
+   uses the chart it was given when the host passes none) and `play.randomDraws`, with the chart's extension
    (`PlayerOptions.laneModeExtension`) as the lane-mode input. A host that resolves `#RANDOM` or rewrites lanes on
    the chart before handing it to the engine — the browser player resolves every chart and the beatoraja scene
    bakes DP FLIP into it — passes the source chart, or the chart fingerprint is omitted and the play fingerprint
@@ -33,16 +33,14 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
    lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
-   absent = `'lr2'`), the debug judge-window override, an ESC flag, and `randomOutcomes`: the value of every
-   `#RANDOM` / `#SWITCH` line of the chart in file order. With the chart file,
-   `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })` rebuilds the chart that was played, so a
-   verifier can recompute `chart.playFingerprint`. The engine fills it when it resolves the chart itself; a host that
-   resolves the chart before handing it over must pass the values of that same resolution in
-   `recordPlaylog.randomOutcomes` (collected with `resolveBmsControlFlow`'s `onOutcome`), or the log cannot name the
-   branches that were played. The browser player does this: both gameplay scenes resolve the chart once with
-   `resolvePlayChart` (`@be-music/player-web/chart`), which returns the chart together with its drawn values, play
-   that chart and record those values; a replay in the core gameplay scene resolves with the log's values, so it
-   plays the recorded branches. It is omitted for charts without control flow.
+   absent = `'lr2'`), the debug judge-window override, an ESC flag, and `randomDraws`: the play's `#RANDOM` /
+   `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes as a `RandomDraws` value (`@be-music/chart`), one
+   `{ command, range, value }` entry per such line of the chart in file order. They are the
+   `PlayerOptions.randomDraws` the engine played with: every host draws once per play (`resolvePlayChart` in
+   `@be-music/player`) and hands the same draws to the engine, which records them. With the chart file,
+   `resolveBmsControlFlowWithDraws(json, play.randomDraws)` rebuilds the chart that was played (it rejects draws that
+   were not drawn for that chart), so a verifier can recompute `chart.playFingerprint`. `parsePlaylog` rejects an
+   entry no control-flow line could have made. It is omitted for charts without control flow.
 
 Judgments, EX-SCORE, combo, and gauge values live only in **`results`** — a regenerable cache keyed by ruleset id
 (`native` holds the engine's own summary at record time). Because the canonical data is the input stream, a later
@@ -62,7 +60,8 @@ every judged press (`lane-input`) and release (`kitty-state` release) with `pres
 timestamps, counts empty POORs for the native cache, and hands the assembled `BeMusicPlaylog` to the callback right
 before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. `PlayerOptions.recordPlaylog` carries
 the host-declared settings the engine cannot know (selected gauge, lane-shuffle labels, DP flip, freeform
-`native` extras, and the `#RANDOM` outcomes of a chart the host resolved itself).
+`native` extras, and the source chart the fingerprints are computed from). The `#RANDOM` / `#SWITCH` draws come from
+`PlayerOptions.randomDraws`, which the engine needs anyway.
 
 Every log also carries a top-level **`recorder`** that identifies the software that recorded it:
 `{ name, version, build, engine, platform }`. The host declares the application fields through
@@ -122,12 +121,13 @@ Replay re-drives the recorded input stream deterministically inside the shared e
 input is ignored (ESC / pause / hi-speed keep working), and no new play-log is recorded for the run. Because the
 log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
 loaded chart (`applyPlaylogArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
-The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomOutcomes`, so a replay plays the
-recorded branches: the browser's core gameplay scene resolves with them itself, and a host that lets the engine
-resolve passes them as `PlayerOptions.replayRandomOutcomes` next to `replayInputs`. A log without the field (recorded
-before it existed) draws new values; when those roll differently from the recorded run the chart cannot be
-re-aligned, and the replay fails with a status message instead of playing a mismatched chart. Replay always runs on the LR2 / default
-gameplay path regardless of which skin family recorded the log.
+The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomDraws`, so a replay plays the
+recorded branches: the browser's core gameplay scene resolves with them itself (`resolvePlayChart(chart,
+{ randomDraws })`), and a host that lets the engine resolve the source chart passes them as
+`PlayerOptions.randomDraws` next to `replayInputs`. Draws that were not drawn for the loaded chart, and a log without
+them whose new draw rolls differently from the recorded run, cannot be re-aligned: the replay fails with a status
+message instead of playing a mismatched chart. Replay always runs on the LR2 / default gameplay path regardless of
+which skin family recorded the log.
 
 ## Re-deriving LR2 / beatoraja / IIDX results
 

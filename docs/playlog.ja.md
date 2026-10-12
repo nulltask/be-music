@@ -21,7 +21,7 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    （譜面ごとにプレイをまとめるキーです）。`chart.playFingerprint` はこのプレイで引いた枝を表します。制御構文の
    ない譜面では 2 つは等しくなります。レーンオプション（RANDOM / MIRROR / S-RANDOM、DP FLIP）はどちらにも
    含みません（これらは `play` に記録します）。記録処理はどちらも元の譜面（`recordPlaylog.sourceChart`、読み込んだ
-   ままの譜面。ホストが渡さなければエンジンは受け取った譜面を使います）と `play.randomOutcomes` から、譜面の
+   ままの譜面。ホストが渡さなければエンジンは受け取った譜面を使います）と `play.randomDraws` から、譜面の
    拡張子（`PlayerOptions.laneModeExtension`）をレーン構成の入力として求めます。エンジンに渡す前に `#RANDOM` を
    解決したりレーンを書き換えたりするホスト（ブラウザプレイヤーはすべての譜面を解決し、beatoraja シーンは DP FLIP
    を譜面に焼き込みます）は元の譜面を渡します。渡さなければ譜面 fingerprint は省かれ、プレイ fingerprint はホストの
@@ -33,15 +33,14 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    `(timeUs, seq)` で、`seq` が同時刻イベントの順序を確定します。
 3. **`play`** — スコアに影響する設定。モード（manual / auto）、オートスクラッチ、選択ゲージ、最終配置を
    生んだレーンオプションのラベル、ライブ判定幅ルールセット（`judgeRuleset`、省略時 `'lr2'`）、デバッグ用
-   判定幅オーバーライド、ESC 中断フラグ、`randomOutcomes`（譜面のすべての `#RANDOM` / `#SWITCH` 行の値を
-   ファイル順に並べたもの）です。譜面ファイルがあれば `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })`
-   で遊んだ譜面を組み立て直せるので、検証者は `chart.playFingerprint` を計算し直せます。エンジンが自分で譜面を解決
-   するときはエンジンが記録し、エンジンに渡す前に譜面を解決するホストは、その同じ解決の（`resolveBmsControlFlow`
-   の `onOutcome` で集めた）値を `recordPlaylog.randomOutcomes` で渡す必要があります。渡さなければ、ログは遊んだ
-   枝を特定できません。ブラウザプレイヤーはこれに従います。どちらのゲームプレイシーンも `resolvePlayChart`
-   （`@be-music/player-web/chart`）で譜面を 1 回だけ解決し、引いた値と一緒に受け取った譜面を遊び、その値を記録
-   します。コアのゲームプレイシーンのリプレイはログの値で解決するので、記録した枝を遊びます。制御構文のない譜面
-   では省きます。
+   判定幅オーバーライド、ESC 中断フラグ、`randomDraws` です。`randomDraws` はこのプレイの `#RANDOM` /
+   `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の結果を `RandomDraws`（`@be-music/chart`）として表したもので、
+   譜面のそうした行ごとにファイル順で `{ command, range, value }` を 1 つ持ちます。これはエンジンが遊んだ
+   `PlayerOptions.randomDraws` です。どのホストもプレイごとに 1 回だけ引き（`@be-music/player` の
+   `resolvePlayChart`）、同じ draws をエンジンに渡し、エンジンがそれを記録します。譜面ファイルがあれば
+   `resolveBmsControlFlowWithDraws(json, play.randomDraws)` で遊んだ譜面を組み立て直せる（その譜面のために
+   引かれていない draws は拒否します）ので、検証者は `chart.playFingerprint` を計算し直せます。どの制御行からも
+   作られえない項目は `parsePlaylog` が拒否します。制御構文のない譜面では省きます。
 
 判定数・EX スコア・コンボ・ゲージ値は **`results`**（ルールセット ID をキーとする再生成可能なキャッシュ。
 `native` は記録時のエンジン自身のサマリ）にのみ存在します。正本が入力列なので、後からルールセットを修正
@@ -60,9 +59,9 @@ TypeScript 型・シリアライザ・防御的パーサは
 スナップショットし、判定対象の押下（`lane-input`）と解放（`kitty-state` release）を `pressedAt` 補正済みの
 譜面相対時刻で記録し、空 POOR を native キャッシュ用にカウントし、`autoPlay` / `manualPlay` の解決直前
 （ESC 中断時を含む）に組み上がった `BeMusicPlaylog` をコールバックへ渡します。エンジンが知り得ない
-ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報、ホストが自分で
-解決した譜面の `#RANDOM` の結果）は
-`PlayerOptions.recordPlaylog` で渡します。
+ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報、fingerprint の
+計算元になる元の譜面）は `PlayerOptions.recordPlaylog` で渡します。`#RANDOM` / `#SWITCH` の draws は、エンジンが
+もともと必要とする `PlayerOptions.randomDraws` から取ります。
 
 各ログはトップレベルに、記録したソフトウェアを表す **`recorder`**（`{ name, version, build, engine, platform }`）
 を持ちます。アプリ側の項目はホストが `recordPlaylog.recorder` で宣言し（ブラウザプレイヤーは
@@ -120,10 +119,11 @@ TypeScript 型・シリアライザ・防御的パーサは
 有効）、リプレイ実行では新しいプレイログを記録しません。ログは解決済みの最終配置を保存しているため、譜面準備
 では RANDOM / MIRROR を引き直す代わりに記録済みチャンネルを再適用します（`applyPlaylogArrangement`）— つまり
 シャッフルされたプレイも正確にリプレイできます。譜面の `#RANDOM` / `#SWITCH` 行はログの
-`play.randomOutcomes` で解決するので、リプレイは記録時の枝を遊びます。ブラウザのコアゲームプレイシーンは自分で
-その値を使って解決し、エンジンに解決させるホストは `replayInputs` と一緒に `PlayerOptions.replayRandomOutcomes`
-として渡します。このフィールドのないログ（追加前に記録したもの）では新しく値を引き、記録時と異なる分岐になった
-譜面は再整列できないため、ステータス表示でエラーになります。リプレイは記録時のスキンファミリーに関わらず常に LR2 / default の
+`play.randomDraws` で解決するので、リプレイは記録時の枝を遊びます。ブラウザのコアゲームプレイシーンは自分で
+その draws を使って解決し（`resolvePlayChart(chart, { randomDraws })`）、元の譜面をエンジンに解決させるホストは
+`replayInputs` と一緒に `PlayerOptions.randomDraws` として渡します。読み込んだ譜面のために引かれていない draws や、
+draws のないログで新しく引いた分岐が記録時と異なる場合は再整列できないため、食い違った譜面を遊ぶ代わりに
+ステータス表示でエラーになります。リプレイは記録時のスキンファミリーに関わらず常に LR2 / default の
 ゲームプレイパスで実行されます。
 
 ## LR2 / beatoraja / IIDX リザルトの再現

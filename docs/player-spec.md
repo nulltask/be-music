@@ -125,6 +125,8 @@ A restart draws again, as LR2 and beatoraja re-roll each play.
 The engine (`autoPlay` / `manualPlay`) never draws: it plays a resolved chart as is, taking `PlayerOptions.randomDraws` only for the RANDOM summary.
 Handed a chart that still carries control flow together with `randomDraws` (for example a play log's draws against the source chart), it resolves the chart exactly once with them; handed one without draws, it throws a `TypeError` instead of rolling branches nobody outside the engine knows about.
 
+A play log records the draws as `play.randomDraws`, and a replay hands them back as `PlayerOptions.randomDraws` (see [Playlog](./playlog.md)).
+
 The RANDOM summary is derived from the draws.
 `#SETRANDOM` is shown as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3 #2 1/2` in the order of declaration.
 
