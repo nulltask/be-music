@@ -92,4 +92,3 @@ The reasons behind each reading, and every place where be-music departs from a s
 These consumers still read the Source layer with rules of their own:
 
 - The displayed judge rank (`resolveDisplayedJudgeRankValue` / `Label` in `@be-music/player/utils`) applies its own defaults.
-- The terminal UI worker draws bar lines with `createMeasureBoundariesBeats` and does not honour bmson `lines: []`.

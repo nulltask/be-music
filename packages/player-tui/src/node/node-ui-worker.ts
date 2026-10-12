@@ -1,12 +1,6 @@
 import { createAbortError, isAbortError } from '@be-music/utils/core';
 import type { LogLevel } from '@be-music/utils/log';
-import {
-  createBpmTimeline,
-  createMeasureBoundariesBeats,
-  createMeasureTimeline,
-  createStopBeatWindows,
-  resolveChart,
-} from '@be-music/chart';
+import { createBpmTimeline, createMeasureTimeline, createStopBeatWindows, resolveChart } from '@be-music/chart';
 import { parentPort, workerData, type MessagePort } from 'node:worker_threads';
 import { createBgaAnsiRenderer } from '../bga.ts';
 import {
@@ -88,7 +82,8 @@ async function bootstrap(): Promise<void> {
     startSeconds: window.startSeconds,
     endSeconds: window.endSeconds,
   }));
-  const measureBoundariesBeats = createMeasureBoundariesBeats(initData.json, beatResolver);
+  // The resolved chart's bar lines: none when a bmson chart suppresses them with `lines: []`.
+  const measureBoundariesBeats = [...resolvedChart.barLines];
 
   const tui = new PlayerTui({
     mode: initData.mode,
