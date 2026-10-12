@@ -609,6 +609,7 @@ export function resolveChartPlayVariant(song: BrowserSongEntry, chart: BeMusicJs
     chartPath: song.chartPath,
     events: chart.events,
     bms: chart.bms,
+    bmson: chart.bmson,
   });
   playVariantByChart.set(chart, { chartPath: song.chartPath, variant });
   return variant;

@@ -24,6 +24,7 @@ export interface Lr2PlaySkinSong {
   chart: {
     events: ReadonlyArray<{ channel: string }>;
     bms?: { player?: number };
+    bmson?: { info?: { modeHint?: string } };
   };
 }
 
@@ -409,6 +410,7 @@ export function pickLr2PlaySkin(playSkins: Lr2PlaySkinMap, song: Lr2PlaySkinSong
     chartPath: song.chartPath,
     events: song.chart.events,
     bms: song.chart.bms,
+    bmson: song.chart.bmson,
   });
   for (const variant of PLAY_SKIN_FALLBACKS[target]) {
     const candidate = playSkins[variant];

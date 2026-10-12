@@ -695,6 +695,36 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '1a']))).toBe('24');
   });
 
+  test('resolveChartPlayVariant reads the BMS wheel channels 1P / 1Q / 2P / 2Q as keyboard lanes', () => {
+    const chart = (channels: string[]) => ({ chartPath: 'main.bme', events: channels.map((channel) => ({ channel })) });
+
+    expect(resolveChartPlayVariant(chart(['11', '1P']))).toBe('24');
+    expect(resolveChartPlayVariant(chart(['11', '1Q']))).toBe('24');
+    expect(resolveChartPlayVariant(chart(['11', '1A', '2Q']))).toBe('48');
+  });
+
+  test('resolveChartPlayVariant takes the bmson keyboard mode_hint as authoritative', () => {
+    const bmson = (modeHint: string | undefined, channels: string[]) => ({
+      chartPath: 'song.bmson',
+      events: channels.map((channel) => ({ channel })),
+      bmson: { info: { modeHint } },
+    });
+
+    // A keyboard-24k chart that only touches x ≤ 9 lands on `11..19` alone, which the lane rules read as 9 KEY / 7 KEY.
+    expect(resolveChartPlayVariant(bmson('keyboard-24k', ['11', '12', '13', '14', '15', '16', '17', '18', '19']))).toBe(
+      '24',
+    );
+    expect(resolveChartPlayVariant(bmson('keyboard-24k', ['11', '18']))).toBe('24');
+    expect(resolveChartPlayVariant(bmson(' keyboard-24k ', ['11']))).toBe('24');
+    expect(resolveChartPlayVariant(bmson('keyboard-24k-double', ['11', '18']))).toBe('48');
+    expect(resolveChartPlayVariant(bmson('keyboard-24k-double', []))).toBe('48');
+    // Other hints are not authoritative: the lanes decide.
+    expect(resolveChartPlayVariant(bmson('beat-7k', ['11', '12', '13', '14', '15', '16', '17', '18', '19']))).toBe('9');
+    expect(resolveChartPlayVariant(bmson('keyboard-48k', ['11', '18']))).toBe('7');
+    expect(resolveChartPlayVariant(bmson('constructor', ['11']))).toBe('5');
+    expect(resolveChartPlayVariant(bmson(undefined, ['11', '1A']))).toBe('24');
+  });
+
   test('resolve long note helpers return empty results for non-BMS charts and missing LNOBJ markers', () => {
     const nonBms = createEmptyJson('json');
     const nonBmsLongNotes = resolveBmsLongNotes(nonBms);

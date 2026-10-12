@@ -108,5 +108,5 @@ export function resolveSongRowFacts(song: Pick<BrowserSongEntry, 'chart' | 'bpm'
 
 /** `'7K KEYS'`-style mode label for a song's play variant. */
 export function formatPlayVariantLabel(song: Pick<BrowserSongEntry, 'chartPath' | 'chart'>): string {
-  return `${resolveChartPlayVariant({ chartPath: song.chartPath, events: song.chart.events, bms: song.chart.bms })} KEYS`;
+  return `${resolveChartPlayVariant({ chartPath: song.chartPath, events: song.chart.events, bms: song.chart.bms, bmson: song.chart.bmson })} KEYS`;
 }
