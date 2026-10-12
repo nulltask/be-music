@@ -236,8 +236,8 @@ export type JudgeCoreEffect =
   | { kind: 'judge-combo'; judge: string; combo: number; channel?: string; signedDeltaMs?: number }
   /** A no-TUI trace line. */
   | { kind: 'trace'; name: string; seconds: number; fields: readonly JudgeTraceField[] }
-  /** The play state changed outside a frame tick (the final remaining-notes charge): republish the frame. */
-  | { kind: 'frame'; seconds: number };
+  /** The play state changed outside a frame tick: republish the frame (at `beat`, or the beat of `seconds`). */
+  | { kind: 'frame'; seconds: number; beat?: number };
 
 export type JudgeCoreEffectSink = (effect: JudgeCoreEffect) => void;
 

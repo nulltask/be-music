@@ -58,26 +58,19 @@ import {
   resolveHighSpeedMultiplier,
   type HighSpeedControlAction,
 } from './high-speed-control.ts';
-import {
-  createPlayerUiSignalBus,
-  type PlayerGaugeSummary,
-  type PlayerUiLongNoteMode,
-  type PlayerUiSignalBus,
-} from './ui-signal-bus.ts';
+import { createPlayerUiSignalBus, type PlayerGaugeSummary, type PlayerUiSignalBus } from './ui-signal-bus.ts';
 import { createPlayerInputSignalBus, type PlayerInputSignalBus } from './input-signal-bus.ts';
 import { createInputWakeUp } from './input-wakeup.ts';
 import {
-  applyGaugeJudgeWithLogging,
   applyPlaybackHighSpeedAction,
   consumePlaybackInputCommands,
   createNoopPlaybackStateLogger,
   createUiFramePublisher,
-  setLoggedComboValue,
   togglePlaybackPause,
   type PlaybackStateLogger,
 } from './playback-support.ts';
-import { IIDX_EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX, applyJudgeToSummary, createScoreTracker } from './scoring.ts';
-import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
+import { IIDX_EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX, createScoreTracker } from './scoring.ts';
+import { type GrooveGaugeType } from './groove-gauge.ts';
 
 import {
   resolveBmsJudgeWindowsMsForExRankValue,
@@ -86,7 +79,6 @@ import {
 } from './judge-window.ts';
 import {
   judgeWindowLateReachUs,
-  resolveEffectiveLongNoteMode,
   resolveRuleset,
   rulesetChartFactsFromChart,
   type JudgeWindowSetUs,
@@ -96,6 +88,7 @@ import {
   type RulesetWindowTables,
   type WindowPairUs,
 } from '../ruleset/index.ts';
+import { createAutoJudgeState, isAutoJudgeSettled, runAutoJudgeStep, type AutoJudgeInput } from './auto-judge-core.ts';
 import {
   advanceJudgeCoreReplay,
   createJudgeCoreReplay,
@@ -108,17 +101,8 @@ import {
   type JudgeCoreEffectSink,
   type JudgeCoreInput,
 } from './judge-core.ts';
-import {
-  insertPendingAutoLongNote,
-  longNoteScoresTail,
-  resolveLoggedLongNoteMode,
-  resolveLongNoteEndSeconds,
-  RULESET_JUDGE_KINDS,
-  toUiLongNoteMode,
-  type PendingAutoLongNoteState,
-  resolvePlayableLongNoteMode,
-} from './judge-rules.ts';
-import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
+import { RULESET_JUDGE_KINDS } from './judge-rules.ts';
+import { createPlaylogRecorder, type PlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import { createBeatAtSecondsResolverFromTimingResolver, createBpmTimeline, createStopBeatWindows } from './timeline.ts';
 import {
@@ -1618,6 +1602,149 @@ function collectRealtimeAudioVolumeEvents(resolved: ResolvedChart): TimedAudioVo
   return resolved.volumeChanges.map((change) => ({ event: change.event, seconds: Math.max(0, change.seconds) }));
 }
 
+/** What a driver hands {@link createJudgeEffectHandler}: the host side of every judge-core effect. */
+interface JudgeEffectHost {
+  uiEnabled: boolean;
+  writeOutput: (text: string) => void;
+  wavResources: Readonly<Record<string, string>>;
+  idBase: 36 | 62;
+  audioSession: AudioSession | undefined;
+  playbackStateLogger: PlaybackStateLogger;
+  playbackEventTracer: NoTuiPlaybackEventTracer;
+  uiSignals: PlayerUiSignalBus;
+  activeStateSignals: PlayerStateSignals | undefined;
+  playlogRecorder: PlaylogRecorder | undefined;
+  publishUiFrame: (seconds: number, beat: number) => void;
+  beatAtSeconds: (seconds: number) => number;
+}
+
+/**
+ * Interprets judge-core effects for one play: audio always, UI cues or the no-TUI trace depending on the mode, and
+ * the play log when one is being recorded. Shared by the manual and the auto drivers.
+ */
+function createJudgeEffectHandler(host: JudgeEffectHost): JudgeCoreEffectSink {
+  const {
+    uiEnabled,
+    writeOutput,
+    wavResources,
+    idBase,
+    audioSession,
+    playbackStateLogger,
+    playbackEventTracer,
+    uiSignals,
+    activeStateSignals,
+    playlogRecorder,
+    publishUiFrame,
+    beatAtSeconds,
+  } = host;
+  return (effect) => {
+    switch (effect.kind) {
+      case 'record-input':
+        playlogRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels);
+        return;
+      case 'record-empty-poor':
+        playlogRecorder?.recordEmptyPoor();
+        return;
+      case 'input-time':
+        playbackEventTracer.flushUntil(effect.seconds);
+        return;
+      case 'sound':
+        if (!uiEnabled) {
+          writePlayableSampleTriggerEventLog(
+            writeOutput,
+            effect.event,
+            effect.seconds,
+            wavResources,
+            effect.source,
+            effect.channel,
+            idBase,
+          );
+        }
+        audioSession?.triggerEvent?.(effect.event);
+        return;
+      case 'stop-sound':
+        if (!uiEnabled) {
+          writeSampleStopEventLog(
+            writeOutput,
+            effect.channel,
+            effect.seconds,
+            effect.reason,
+            effect.event,
+            wavResources,
+            idBase,
+          );
+        }
+        audioSession?.stopChannel?.(effect.channel);
+        return;
+      case 'gauge':
+        playbackStateLogger.logGaugeChange(effect.seconds, {
+          reason: effect.reason,
+          judge: effect.judge,
+          delta: effect.delta,
+        });
+        return;
+      case 'combo':
+        playbackStateLogger.logComboChange(effect.seconds, {
+          value: effect.value,
+          reason: effect.reason,
+          judge: effect.judge,
+          channel: effect.channel,
+        });
+        return;
+      case 'long-note':
+        playbackStateLogger.logLongNoteState(effect.seconds, {
+          channel: effect.channel,
+          state: effect.state,
+          mode: effect.mode,
+          event: effect.event,
+          resources: wavResources,
+          endSeconds: effect.endSeconds,
+        });
+        return;
+      case 'ui':
+        if (uiEnabled) {
+          uiSignals.pushCommand(effect.command);
+        }
+        return;
+      case 'poor-bga':
+        uiSignals.pushCommand(
+          effect.action === 'trigger'
+            ? { kind: 'trigger-poor-bga', seconds: effect.seconds }
+            : { kind: 'clear-poor-bga' },
+        );
+        return;
+      case 'poor-trace':
+        if (!uiEnabled) {
+          if (effect.action === 'trigger') {
+            playbackEventTracer.logPoorTriggered(effect.seconds);
+          } else {
+            playbackEventTracer.logPoorCleared(effect.seconds);
+          }
+        }
+        return;
+      case 'judge-combo':
+        activeStateSignals?.publishJudgeCombo(
+          effect.judge,
+          effect.combo,
+          effect.channel,
+          undefined,
+          effect.signedDeltaMs,
+        );
+        return;
+      case 'trace':
+        if (!uiEnabled) {
+          writeRuntimeEventLog(writeOutput, effect.name, [['time', formatSeconds(effect.seconds)], ...effect.fields]);
+        }
+        return;
+      case 'frame':
+        if (uiEnabled) {
+          publishUiFrame(effect.seconds, effect.beat ?? beatAtSeconds(effect.seconds));
+        }
+        return;
+    }
+  };
+}
+
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
@@ -1674,8 +1801,14 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     },
   );
   reportResolvedRuleset(options, autoRuleset);
-  const { summary, applyGaugeJudge } = createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount);
-  const scoreTracker = createScoreTracker({ moneyScore: autoRuleset.moneyScore });
+  const autoJudge = createAutoJudgeState(
+    { ruleset: autoRuleset, scorableNotes, landmineNotes, invisibleNotes, keyLabels: keyMap },
+    {
+      ...createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount),
+      scoreTracker: createScoreTracker({ moneyScore: autoRuleset.moneyScore }),
+    },
+  );
+  const summary: PlayerSummary = autoJudge.summary;
   // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
   // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
   // cached native result carries the actual AUTO outcome).
@@ -1697,7 +1830,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         });
       })()
     : undefined;
-  let combo = 0;
   let interruptedReason: PlayerInterruptReason | undefined;
   let highSpeed = resolveHighSpeedMultiplier(options.highSpeed);
   const stateSignals = createPlayerStateSignals(highSpeed);
@@ -1749,20 +1881,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   const playbackStateLogger = uiEnabled
     ? createNoopPlaybackStateLogger()
     : createNoTuiPlaybackStateLogger({ writeOutput, summary, base: idBase });
-  const applyLoggedGaugeJudge = (seconds: number, judge: GrooveGaugeJudgeKind, reason = 'judge'): void => {
-    applyGaugeJudgeWithLogging({
-      summary,
-      applyGaugeJudge,
-      playbackStateLogger,
-      seconds,
-      judge,
-      reason,
-    });
-  };
-  const setLoggedCombo = (seconds: number, value: number, reason: string, judge?: string, channel?: string): void => {
-    combo = setLoggedComboValue(playbackStateLogger, seconds, value, reason, judge, channel);
-  };
-
   throwIfAborted(options.signal);
   const audioBackendLabel = resolveAudioBackendLabel(options, audioSession);
   const autoDebugAudioEstimator = options.debugActiveAudio
@@ -1841,7 +1959,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   let playbackClock: PlaybackClock | undefined;
   let realtimeAudioVolumeEventIndex = 0;
   let realtimeAudioTriggerIndex = 0;
-  const pendingAutoLongNotes: PendingAutoLongNoteState[] = [];
   const resolveAutoCommandSeconds = (): number =>
     playbackClock ? elapsedMsToGameSeconds(playbackClock.nowMs(), speed) : 0;
   const resolveAutoInterruptSeconds = (): number | undefined =>
@@ -1939,62 +2056,23 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     }
   };
 
-  const applyAutoPerfectJudge = (note: TimedPlayableNote, judgeSeconds: number): void => {
-    applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
-    applyLoggedGaugeJudge(judgeSeconds, 'PERFECT');
-    setLoggedCombo(judgeSeconds, combo + 1, 'judge', 'PERFECT', note.channel);
-
-    const key = resolveNoteKeyLabel(note.channel, keyMap);
-    if (!uiEnabled) {
-      writeRuntimeEventLog(writeOutput, 'auto-judge', [
-        ['time', formatSeconds(judgeSeconds)],
-        ['result', 'PERFECT'],
-        ['channel', note.channel],
-        ['key', key],
-      ]);
-      return;
-    }
-    activeStateSignals?.publishJudgeCombo('PERFECT', combo, note.channel);
-    publishUiFrame(judgeSeconds, beatAtSeconds(judgeSeconds));
+  const applyJudgeEffect = createJudgeEffectHandler({
+    uiEnabled,
+    writeOutput,
+    wavResources,
+    idBase,
+    audioSession,
+    playbackStateLogger,
+    playbackEventTracer,
+    uiSignals,
+    activeStateSignals,
+    playlogRecorder: undefined,
+    publishUiFrame,
+    beatAtSeconds,
+  });
+  const stepAutoJudge = (input: AutoJudgeInput): void => {
+    runAutoJudgeStep(autoJudge, input, applyJudgeEffect);
   };
-
-  const drainPendingAutoLongNotes = (referenceSeconds: number): void => {
-    const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
-    while (pendingAutoLongNotes.length > 0) {
-      const pending = pendingAutoLongNotes[0]!;
-      if (pending.endSeconds > safeReferenceSeconds) {
-        break;
-      }
-      pendingAutoLongNotes.shift();
-      playbackStateLogger.logLongNoteState(pending.endSeconds, {
-        channel: pending.note.channel,
-        state: 'complete',
-        mode: resolveLoggedLongNoteMode(pending.note),
-        event: pending.note.event,
-        resources: wavResources,
-        endSeconds: pending.endSeconds,
-      });
-      applyAutoPerfectJudge(pending.note, pending.endSeconds);
-      if (longNoteScoresTail(autoRuleset.longNoteStyle, pending.note)) {
-        // Charge modes judge the head and the tail separately; auto play clears both as PGREAT.
-        applyAutoPerfectJudge(pending.note, pending.endSeconds);
-      }
-      // Pair the `hold-lane-until-beat` command emitted at the LN head (see `applyDueAutoPlayableJudgements` for the
-      // autoplay path / `applyAutoScratchJudgements` for the auto-scratch path) with an explicit release at the
-      // tail so the LR2 LN-hold timer (70..89) and the lane laser (100..117) actually fade out. Without this the
-      // sustain glow / scratch streak stay lit after the LN has visually cleared, and the surrounding LN-body
-      // sprite vanishes while the lane laser still reads as "held" — both regressions reported during Phase 4c
-      // shared-engine playthroughs.
-      if (uiEnabled) {
-        uiSignals.pushCommand({ kind: 'long-note-end', channel: pending.note.channel, outcome: 'complete' });
-        uiSignals.pushCommand({ kind: 'release-lane', channel: pending.note.channel });
-      }
-    }
-  };
-
-  /** UI-command mode of a long note under the active ruleset (`autoPlay` and `manualPlay` share the mapping). */
-  const autoUiLongNoteMode = (note: TimedPlayableNote): PlayerUiLongNoteMode =>
-    toUiLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, resolvePlayableLongNoteMode(note) ?? 2));
 
   inputRuntime?.start();
 
@@ -2026,42 +2104,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       );
       playbackClock = chartClock;
       playbackEventTracer.flushUntil(0);
-      // Autoplay never misses, so this is purely the horizon after which un-detonated mines and invisible notes
-      // are retired. The active ruleset's widest note reach is the right bound: nothing can act on them past it.
-      const badWindowSeconds = judgeWindowLateReachUs(autoRuleset.windows.note) / 1e6;
-      let landmineExpireCursor = 0;
-      let invisibleExpireCursor = 0;
       let autoPlayableAudioIndex = 0;
-      let autoPlayableJudgeIndex = 0;
-
-      const markExpiredLandmines = (referenceSeconds: number): void => {
-        while (landmineExpireCursor < landmineNotes.length) {
-          const landmine = landmineNotes[landmineExpireCursor]!;
-          if (landmine.judged) {
-            landmineExpireCursor += 1;
-            continue;
-          }
-          if (referenceSeconds - landmine.seconds <= badWindowSeconds) {
-            break;
-          }
-          landmine.judged = true;
-          landmineExpireCursor += 1;
-        }
-      };
-      const markExpiredInvisibleNotes = (referenceSeconds: number): void => {
-        while (invisibleExpireCursor < invisibleNotes.length) {
-          const invisible = invisibleNotes[invisibleExpireCursor]!;
-          if (invisible.judged) {
-            invisibleExpireCursor += 1;
-            continue;
-          }
-          if (referenceSeconds - invisible.seconds <= badWindowSeconds) {
-            break;
-          }
-          invisible.judged = true;
-          invisibleExpireCursor += 1;
-        }
-      };
 
       const triggerAutoPlayableNoteAudio = (referenceSeconds: number): void => {
         const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
@@ -2083,54 +2126,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           }
           audioSession?.triggerEvent?.(note.event);
           autoPlayableAudioIndex += 1;
-        }
-      };
-
-      const applyDueAutoPlayableJudgements = (referenceSeconds: number): void => {
-        const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
-        while (autoPlayableJudgeIndex < scorableNotes.length) {
-          const note = scorableNotes[autoPlayableJudgeIndex]!;
-          if (note.seconds > safeReferenceSeconds) {
-            break;
-          }
-          note.judged = true;
-          autoPlayableJudgeIndex += 1;
-
-          const endSeconds = resolveLongNoteEndSeconds(note);
-          if (uiEnabled) {
-            uiSignals.pushCommand({ kind: 'flash-lane', channel: note.channel });
-          }
-          if (typeof note.endBeat === 'number' && Number.isFinite(note.endBeat) && note.endBeat > note.beat) {
-            note.visibleUntilBeat = note.endBeat;
-            if (uiEnabled) {
-              uiSignals.pushCommand({ kind: 'hold-lane-until-beat', channel: note.channel, beat: note.endBeat });
-            }
-          }
-          if (endSeconds !== undefined) {
-            playbackStateLogger.logLongNoteState(note.seconds, {
-              channel: note.channel,
-              state: 'start',
-              mode: resolveLoggedLongNoteMode(note),
-              event: note.event,
-              resources: wavResources,
-              endSeconds,
-            });
-            insertPendingAutoLongNote(pendingAutoLongNotes, note, endSeconds);
-            if (uiEnabled) {
-              uiSignals.pushCommand({
-                kind: 'long-note-start',
-                channel: note.channel,
-                beat: note.beat,
-                mode: autoUiLongNoteMode(note),
-              });
-              publishUiFrame(note.seconds, note.beat);
-            }
-          } else {
-            applyAutoPerfectJudge(note, note.seconds);
-          }
-
-          markExpiredLandmines(note.seconds);
-          markExpiredInvisibleNotes(note.seconds);
         }
       };
 
@@ -2160,17 +2155,13 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         triggerRealtimeAudioVolumeEvents(scheduledSec);
         triggerRealtimeAudioEvents(scheduledSec);
         triggerAutoPlayableNoteAudio(scheduledSec);
-        applyDueAutoPlayableJudgements(nowSec);
-        drainPendingAutoLongNotes(nowSec);
-        markExpiredLandmines(nowSec);
-        markExpiredInvisibleNotes(nowSec);
+        stepAutoJudge({ kind: 'advance', nowSec });
         publishUiFrame(nowSec, beatAtSeconds(nowSec));
 
         const safeNowSeconds = Math.max(0, nowSec) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
         if (
           autoPlayableAudioIndex >= scorableNotes.length &&
-          autoPlayableJudgeIndex >= scorableNotes.length &&
-          pendingAutoLongNotes.length === 0 &&
+          isAutoJudgeSettled(autoJudge) &&
           safeNowSeconds >= totalSeconds
         ) {
           break;
@@ -2187,7 +2178,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         triggerRealtimeAudioVolumeEvents(totalSeconds);
         triggerRealtimeAudioEvents(totalSeconds);
         triggerAutoPlayableNoteAudio(totalSeconds);
-        applyDueAutoPlayableJudgements(totalSeconds);
+        stepAutoJudge({ kind: 'reach', nowSec: totalSeconds });
         const totalScheduledMs = (totalSeconds * 1000) / speed;
         const totalWaitMs = Math.max(0, totalScheduledMs - chartClock.nowMs());
         if (totalWaitMs > 0) {
@@ -2196,15 +2187,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           await waitPreciseOrInput(Math.min(totalWaitMs, TUI_FRAME_INTERVAL_MS), inputWakeUp);
         }
         playbackEventTracer.flushUntil(totalSeconds);
-        drainPendingAutoLongNotes(totalSeconds);
-        markExpiredLandmines(totalSeconds + badWindowSeconds);
-        markExpiredInvisibleNotes(totalSeconds + badWindowSeconds);
-        for (const landmine of landmineNotes) {
-          landmine.judged = true;
-        }
-        for (const invisible of invisibleNotes) {
-          invisible.judged = true;
-        }
+        stepAutoJudge({ kind: 'finish', totalSeconds });
         publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
       }
     }
@@ -2241,7 +2224,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     options.onPlaylogRecorded?.(
       playlogRecorder.finalize({
         summary,
-        maxCombo: scoreTracker.maxCombo,
+        maxCombo: autoJudge.scoreTracker.maxCombo,
         aborted: interruptedReason === 'escape',
       }),
     );
@@ -2449,113 +2432,20 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     resolveDebugActiveAudioState: () => resolveDebugActiveAudioState(),
   });
 
-  /** Interprets the judge core's effects for this host: audio always, UI cues or the no-TUI trace by mode. */
-  const applyJudgeEffect: JudgeCoreEffectSink = (effect) => {
-    switch (effect.kind) {
-      case 'record-input':
-        playlogRecorder?.recordInput(effect.action, effect.seconds, effect.tokens, effect.channels);
-        return;
-      case 'record-empty-poor':
-        playlogRecorder?.recordEmptyPoor();
-        return;
-      case 'input-time':
-        playbackEventTracer.flushUntil(effect.seconds);
-        return;
-      case 'sound':
-        if (!uiEnabled) {
-          writePlayableSampleTriggerEventLog(
-            writeOutput,
-            effect.event,
-            effect.seconds,
-            wavResources,
-            effect.source,
-            effect.channel,
-            idBase,
-          );
-        }
-        audioSession?.triggerEvent?.(effect.event);
-        return;
-      case 'stop-sound':
-        if (!uiEnabled) {
-          writeSampleStopEventLog(
-            writeOutput,
-            effect.channel,
-            effect.seconds,
-            effect.reason,
-            effect.event,
-            wavResources,
-            idBase,
-          );
-        }
-        audioSession?.stopChannel?.(effect.channel);
-        return;
-      case 'gauge':
-        playbackStateLogger.logGaugeChange(effect.seconds, {
-          reason: effect.reason,
-          judge: effect.judge,
-          delta: effect.delta,
-        });
-        return;
-      case 'combo':
-        playbackStateLogger.logComboChange(effect.seconds, {
-          value: effect.value,
-          reason: effect.reason,
-          judge: effect.judge,
-          channel: effect.channel,
-        });
-        return;
-      case 'long-note':
-        playbackStateLogger.logLongNoteState(effect.seconds, {
-          channel: effect.channel,
-          state: effect.state,
-          mode: effect.mode,
-          event: effect.event,
-          resources: wavResources,
-          endSeconds: effect.endSeconds,
-        });
-        return;
-      case 'ui':
-        if (uiEnabled) {
-          uiSignals.pushCommand(effect.command);
-        }
-        return;
-      case 'poor-bga':
-        uiSignals.pushCommand(
-          effect.action === 'trigger'
-            ? { kind: 'trigger-poor-bga', seconds: effect.seconds }
-            : { kind: 'clear-poor-bga' },
-        );
-        return;
-      case 'poor-trace':
-        if (!uiEnabled) {
-          if (effect.action === 'trigger') {
-            playbackEventTracer.logPoorTriggered(effect.seconds);
-          } else {
-            playbackEventTracer.logPoorCleared(effect.seconds);
-          }
-        }
-        return;
-      case 'judge-combo':
-        activeStateSignals?.publishJudgeCombo(
-          effect.judge,
-          effect.combo,
-          effect.channel,
-          undefined,
-          effect.signedDeltaMs,
-        );
-        return;
-      case 'trace':
-        if (!uiEnabled) {
-          writeRuntimeEventLog(writeOutput, effect.name, [['time', formatSeconds(effect.seconds)], ...effect.fields]);
-        }
-        return;
-      case 'frame':
-        if (uiEnabled) {
-          publishUiFrame(effect.seconds, beatAtSeconds(effect.seconds));
-        }
-        return;
-    }
-  };
+  const applyJudgeEffect = createJudgeEffectHandler({
+    uiEnabled,
+    writeOutput,
+    wavResources,
+    idBase,
+    audioSession,
+    playbackStateLogger,
+    playbackEventTracer,
+    uiSignals,
+    activeStateSignals,
+    playlogRecorder,
+    publishUiFrame,
+    beatAtSeconds,
+  });
   const stepJudge = (input: JudgeCoreInput): void => {
     runJudgeCoreStep(judgeCore, input, applyJudgeEffect);
   };
@@ -4102,20 +3992,6 @@ function printLaneMap(writeOutput: (text: string) => void, bindings: LaneBinding
   for (const binding of bindings) {
     writeOutput(`  ${binding.channel} => ${binding.keyLabel}\n`);
   }
-}
-
-function resolveNoteKeyLabel(channel: string, keyMap: ReadonlyMap<string, string>): string {
-  const normalized = normalizeChannel(channel);
-  if (keyMap.has(normalized)) {
-    return keyMap.get(normalized) ?? '?';
-  }
-  if (normalized === '17') {
-    return keyMap.get('16') ?? '?';
-  }
-  if (normalized === '27') {
-    return keyMap.get('26') ?? '?';
-  }
-  return '?';
 }
 
 function formatGrooveGaugeNumber(value: number): string {
