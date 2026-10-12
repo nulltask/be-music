@@ -37,7 +37,7 @@ import {
 } from '@be-music/player/core/engine';
 import type { GrooveGaugeType } from '@be-music/player/core/groove-gauge';
 import type { LongNoteStyle, PlayerRulesetInfo } from '@be-music/player/core/engine';
-import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
+import { type ChartPlayVariant, resolveLaneOptionChannels } from '@be-music/player/core/lane-layout';
 import type { PlayerInputSignalBus } from '@be-music/player/core/input-signal-bus';
 import type { PlayerJudgeComboSignalState, PlayerStateSignals } from '@be-music/player/state-signals';
 import type {
@@ -158,6 +158,7 @@ import {
   resolveGameplayLayout,
   resolveStageOrientation,
   type BeMusicJudgeWindows,
+  type BeMusicLaneKind,
   type BeMusicLongNote,
   type GameplayLayoutMode,
 } from '@be-music/skin-sdk';
@@ -824,7 +825,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /** Play-clock time of the last judgement / key impulse, for the be-music skin's reactive visuals. */
   private lastJudgeAt: number | undefined;
   private lastImpulseAt: number | undefined;
-  private lastImpulseKind: 'white' | 'black' | 'scratch' | undefined;
+  private lastImpulseKind: BeMusicLaneKind | undefined;
   private startTime = 0;
   /**
    * True while the chart's assets are still loading: from {@link prepare} until audio is decoded and the BGA preload
@@ -2200,13 +2201,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         }
       }
       // RANDOM / MIRROR / S-RANDOM / SCATTER — shuffle the 1P / 2P keyboard lanes independently. Scratch (channels 16 /
-      // 26) never moves. Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
+      // 26) and the 24 / 48 KEY wheel never move (`resolveLaneOptionChannels`). Per LR2 convention, the shuffle is drawn at chart-prepare time so a single play session has a
       // stable arrangement (F5-restart re-rolls it). Mine channels are included in the same shuffle pass so a mine on
       // lane 4 lands wherever the shuffle moved lane 4 — keeping the mine's visual relationship to the surrounding chord
       // intact.
       applyRandomMode(
         this.notes as Array<{ channel: string }>,
-        '1',
+        resolveLaneOptionChannels('1P', hostPlayVariant),
         this.options.random1P ?? 'OFF',
         Math.random,
         this.mineNotes as Array<{ channel: string }>,
@@ -2214,7 +2215,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       );
       applyRandomMode(
         this.notes as Array<{ channel: string }>,
-        '2',
+        resolveLaneOptionChannels('2P', hostPlayVariant),
         this.options.random2P ?? 'OFF',
         Math.random,
         this.mineNotes as Array<{ channel: string }>,
@@ -5249,15 +5250,9 @@ function isChannelOnSide(channel: string, side: '1P' | '2P'): boolean {
 }
 
 /**
- * 1P / 2P keyboard lane channels in lane-1..lane-7 order. Scratch (channel 16 / 26) is excluded — `applyRandomMode`
- * never touches it, matching LR2 where RANDOM/MIRROR shuffle the keyboard lanes only.
- */
-const ONE_P_KEYBOARD_LANES: readonly string[] = ['11', '12', '13', '14', '15', '18', '19'];
-const TWO_P_KEYBOARD_LANES: readonly string[] = ['21', '22', '23', '24', '25', '28', '29'];
-
-/**
- * Shuffles `notes` in place per the chosen arrangement mode. Only the keyboard lanes for `side` are touched — scratches
- * and the other side pass through untouched. The `usedLanes` filter trims the permutation domain to the lanes actually
+ * Shuffles `notes` in place per the chosen arrangement mode. Only `allLanes` — one side's keyboard lanes, from
+ * `resolveLaneOptionChannels` — are touched; scratches, the keyboard modes' wheel, and the other side pass through
+ * untouched, matching LR2 / beatoraja where the lane options shuffle the keys only. The `usedLanes` filter trims the permutation domain to the lanes actually
  * present in the chart so 5K charts (lanes 1..5 only) MIRROR / RANDOM cleanly inside that subset.
  *
  * - `MIRROR` — deterministic reversal of `usedLanes`
@@ -5268,7 +5263,7 @@ const TWO_P_KEYBOARD_LANES: readonly string[] = ['21', '22', '23', '24', '25', '
  */
 function applyRandomMode(
   notes: Array<{ channel: string }>,
-  side: '1' | '2',
+  allLanes: readonly string[],
   mode: 'OFF' | 'MIRROR' | 'RANDOM' | 'S-RANDOM' | 'SCATTER',
   rng: () => number,
   // Extra channel-bearing arrays (e.g. mine notes) that should follow the same lane shuffle as the playable notes. The
@@ -5278,7 +5273,6 @@ function applyRandomMode(
   ...secondary: Array<Array<{ channel: string }>>
 ): void {
   if (mode === 'OFF') return;
-  const allLanes = side === '1' ? ONE_P_KEYBOARD_LANES : TWO_P_KEYBOARD_LANES;
   const usedLanes = allLanes.filter((lane) => notes.some((note) => note.channel === lane));
   if (usedLanes.length < 2) return;
 

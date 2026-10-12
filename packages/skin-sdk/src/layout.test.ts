@@ -33,6 +33,31 @@ describe('resolveGameplayLayout', () => {
     expect(layout.bga!.x).toBeGreaterThan(layout.playfield.right);
   });
 
+  it('puts the 24 KEY wheel on the outer edge as wheel-up / wheel-down lanes, as wide as a scratch', () => {
+    const keys = Array.from('123456789ABCDEFGHIJKLMNO', (lane) => `1${lane}`);
+    // Channels arrive in any order; the layout places the wheel left of the 1P keys.
+    const layout = resolveGameplayLayout({ laneChannels: [...keys, '1P', '1Q'], playVariant: '24' }, wideStage);
+    const byX = [...layout.lanes].sort((a, b) => a.x - b.x);
+    expect(byX.slice(0, 3).map((lane) => [lane.channel, lane.kind])).toEqual([
+      ['1P', 'wheel-up'],
+      ['1Q', 'wheel-down'],
+      ['11', 'white'],
+    ]);
+    expect(byX[0]!.w).toBeGreaterThan(byX[2]!.w);
+    // Keys keep the piano colouring: C# (12) is black.
+    expect(layout.lanes.find((lane) => lane.channel === '12')!.kind).toBe('black');
+  });
+
+  it('puts the 48 KEY 2P wheel right of the 2P keys', () => {
+    const side = (prefix: string) => Array.from('123456789ABCDEFGHIJKLMNOPQ', (lane) => `${prefix}${lane}`);
+    const layout = resolveGameplayLayout({ laneChannels: [...side('1'), ...side('2')], playVariant: '48' }, wideStage);
+    const byX = [...layout.lanes].sort((a, b) => a.x - b.x);
+    expect(byX.map((lane) => lane.channel).slice(0, 2)).toEqual(['1P', '1Q']);
+    expect(byX.map((lane) => lane.channel).slice(-3)).toEqual(['2O', '2P', '2Q']);
+    expect(byX.at(-1)!.kind).toBe('wheel-down');
+    expect(layout.lanes.every((lane) => lane.kind !== 'scratch')).toBe(true);
+  });
+
   it('leaves the BGA out when the stage has no room for it', () => {
     const layout = resolveGameplayLayout(
       { laneChannels: SP, playVariant: '7' },

@@ -160,12 +160,18 @@ export const TIMER_LN_HOLD_EXT_BASE = 1200;
 export const TIMER_KEY_ON_EXT_BASE = 1400;
 export const TIMER_KEY_OFF_EXT_BASE = 1600;
 
+/**
+ * Offset of the 2P bank within each 1000-block extension: upstream `SkinPropertyMapper` adds `player * 100` to the
+ * `*_1P_KEY10` base, so 2P key 10 is `1110`, and the 48 KEY 2P wheel (lanes 25 / 26) `1125` / `1126`.
+ */
+const TIMER_EXT_2P_OFFSET = 100;
+
 /** Maximum lane index addressable by the 1P / 2P bases (inclusive). Above this falls into 1000+ space. */
 export const LR2_LANE_INDEX_MAX = 9;
 
 /**
  * Per-side base for a given timer category, returning the value to which a 0..N lane index is added.
- * Lanes 0..9 use the side-relative base; 10+ uses the 1000-block extension regardless of side.
+ * Lanes 0..9 use the side-relative base; 10+ uses the 1000-block extension, offset by 100 for 2P.
  *
  * Lane-timer banks only distinguish 1P / 2P (there is no per-plate `bomb_3p_keyN` bank in
  * upstream — POPN-9's bombs / key-on / LN-hold all share the 1P-side bank), so a `side === 3`
@@ -174,19 +180,20 @@ export const LR2_LANE_INDEX_MAX = 9;
  * meaningful for `judgeTimerId` / `comboTimerId` / `judgeOpForKind`.
  */
 function timerBase(category: 'bomb' | 'lnHold' | 'keyOn' | 'keyOff', side: BeatorajaSide, isExt: boolean): number {
+  const usePlayer2 = side === 2;
   if (isExt) {
+    const sideOffset = usePlayer2 ? TIMER_EXT_2P_OFFSET : 0;
     switch (category) {
       case 'bomb':
-        return TIMER_BOMB_EXT_BASE;
+        return TIMER_BOMB_EXT_BASE + sideOffset;
       case 'lnHold':
-        return TIMER_LN_HOLD_EXT_BASE;
+        return TIMER_LN_HOLD_EXT_BASE + sideOffset;
       case 'keyOn':
-        return TIMER_KEY_ON_EXT_BASE;
+        return TIMER_KEY_ON_EXT_BASE + sideOffset;
       case 'keyOff':
-        return TIMER_KEY_OFF_EXT_BASE;
+        return TIMER_KEY_OFF_EXT_BASE + sideOffset;
     }
   }
-  const usePlayer2 = side === 2;
   switch (category) {
     case 'bomb':
       return usePlayer2 ? TIMER_BOMB_2P_BASE : TIMER_BOMB_1P_BASE;

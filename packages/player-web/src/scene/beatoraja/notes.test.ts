@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { beatorajaPixelsPerBeat } from './notes.ts';
+import { beatorajaPixelsPerBeat, resolveBeatorajaNoteLane } from './notes.ts';
 
 // Mirrors upstream `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed` divided by
 // `getMeasureBeats(1.0) === 4` to convert "y-delta per measure" into "y-delta per beat".
@@ -36,5 +36,32 @@ describe('beatorajaPixelsPerBeat (upstream `rxhs / 4` for the beatoraja note lay
     expect(beatorajaPixelsPerBeat(Number.NaN, 1)).toBe(0);
     expect(beatorajaPixelsPerBeat(800, Number.NaN)).toBe(0);
     expect(beatorajaPixelsPerBeat(Number.POSITIVE_INFINITY, 1)).not.toBeNaN();
+  });
+});
+
+describe('resolveBeatorajaNoteLane', () => {
+  it('maps the 24 keys onto skin lanes 0..23 and the wheel up / down onto 24 / 25', () => {
+    expect(resolveBeatorajaNoteLane('11', '24')).toBe(0);
+    expect(resolveBeatorajaNoteLane('1O', '24')).toBe(23);
+    expect(resolveBeatorajaNoteLane('1P', '24')).toBe(24);
+    expect(resolveBeatorajaNoteLane('1Q', '24')).toBe(25);
+    expect(resolveBeatorajaNoteLane('1R', '24')).toBeUndefined();
+  });
+
+  it('puts the 48 KEY 2P side after the 1P wheel, its wheel on 50 / 51', () => {
+    expect(resolveBeatorajaNoteLane('1Q', '48')).toBe(25);
+    expect(resolveBeatorajaNoteLane('21', '48')).toBe(26);
+    expect(resolveBeatorajaNoteLane('2O', '48')).toBe(49);
+    expect(resolveBeatorajaNoteLane('2P', '48')).toBe(50);
+    expect(resolveBeatorajaNoteLane('2Q', '48')).toBe(51);
+  });
+
+  it('keeps the IIDX scratch after the keys of its side', () => {
+    expect(resolveBeatorajaNoteLane('11', '7')).toBe(0);
+    expect(resolveBeatorajaNoteLane('16', '7')).toBe(7);
+    expect(resolveBeatorajaNoteLane('21', '14')).toBe(8);
+    expect(resolveBeatorajaNoteLane('26', '14')).toBe(15);
+    expect(resolveBeatorajaNoteLane('16', '10')).toBe(5);
+    expect(resolveBeatorajaNoteLane('25', '9')).toBe(8);
   });
 });

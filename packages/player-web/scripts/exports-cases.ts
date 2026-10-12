@@ -179,6 +179,13 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       layer.dispose();
     },
   });
+  define('player-web.resolveBeatorajaNoteLane', {
+    run: () => {
+      playerWebCoreApi.resolveBeatorajaNoteLane('1Q', '24');
+      playerWebCoreApi.resolveBeatorajaNoteLane('2P', '48');
+      playerWebCoreApi.resolveBeatorajaNoteLane('16', '7');
+    },
+  });
   define('player-web.beatorajaPixelsPerBeat', {
     run: () => {
       playerWebCoreApi.beatorajaPixelsPerBeat(580, 2.5);

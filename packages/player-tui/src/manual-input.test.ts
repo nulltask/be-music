@@ -199,20 +199,27 @@ describe('manual input', () => {
 
   test('manual-input: builds full 24-key SP lanes when extended 1P channel is used', () => {
     const bindings = createLaneBindings(['1A']);
-    expect(bindings).toHaveLength(24);
-    expect(bindings[0]?.channel).toBe('11');
-    expect(bindings[23]?.channel).toBe('1O');
+    // The wheel up / down lanes lead (left of the keys), then the 24 keys.
+    expect(bindings).toHaveLength(26);
+    expect(bindings[0]?.channel).toBe('1P');
+    expect(bindings[1]?.channel).toBe('1Q');
+    expect(bindings[2]?.channel).toBe('11');
+    expect(bindings[25]?.channel).toBe('1O');
     expect(bindings.some((binding) => binding.channel === '21')).toBe(false);
     expect(bindings.find((binding) => binding.channel === '16')?.isScratch).toBe(false);
   });
 
   test('manual-input: builds full 48-key DP lanes when extended 2P channel is used', () => {
     const bindings = createLaneBindings(['2A']);
-    expect(bindings).toHaveLength(48);
-    expect(bindings[0]?.channel).toBe('11');
-    expect(bindings[23]?.channel).toBe('1O');
-    expect(bindings[24]?.channel).toBe('21');
-    expect(bindings[47]?.channel).toBe('2O');
+    // 1P wheel, 1P keys, 2P keys, 2P wheel — each wheel on its side's outer edge.
+    expect(bindings).toHaveLength(52);
+    expect(bindings[0]?.channel).toBe('1P');
+    expect(bindings[2]?.channel).toBe('11');
+    expect(bindings[25]?.channel).toBe('1O');
+    expect(bindings[26]?.channel).toBe('21');
+    expect(bindings[49]?.channel).toBe('2O');
+    expect(bindings[50]?.channel).toBe('2P');
+    expect(bindings[51]?.channel).toBe('2Q');
     expect(bindings.find((binding) => binding.channel === '26')?.isScratch).toBe(false);
   });
 

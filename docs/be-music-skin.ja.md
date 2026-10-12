@@ -165,7 +165,7 @@ export default defineBeMusicSkin({
   - `mode`: `'standard'` または `'touch'`（省略可。無ければ `'standard'`）。下のタッチレイアウトを参照してください。
   - `orientation`: `'landscape'` または `'portrait'`（省略可。無ければ `'landscape'`）。下の縦向きレイアウトを参照してください。
   - `stage`: 幅と高さ。
-  - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
+  - `lanes`: 全レーン。チャンネル、種類（`white` / `black` / `scratch`、24 / 48 KEY で各サイドの外側に置くホイールレーンは `wheel-up` / `wheel-down`）、サイド、x、幅を持ちます。譜面のプレイバリアント（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）の全レーンが、譜面で使われないレーンも含めて常に並びます。
   - `playfield`: `left`、`right`、`centerX`、`top`、`judgementY`、`sides`（1P と、DP なら 2P の水平範囲）。
   - `bga`: BGA の矩形。プレイフィールドに余地がなければ `undefined`。
 - **クロームの配置:** ジオメトリをハードコードせず、これらの値から配置してください。DP、鍵盤モード、新しいアスペクト比などホスト側のレイアウト変更が、そのままスキンにも反映されます。

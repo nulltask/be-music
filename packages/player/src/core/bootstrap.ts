@@ -148,6 +148,7 @@ export function preparePlaybackChartData(
       chartPath: options.laneModeExtension,
       events: resolvedJson.events,
       bms: resolvedJson.bms,
+      bmson: resolvedJson.bmson,
     });
   const extractedNotes = extractTimedNotes(resolvedJson, {
     // Same classification the lane bindings use — keeps `17` / `27` FREE ZONE on the IIDX families and an

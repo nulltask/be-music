@@ -15,7 +15,8 @@ export interface LaneBinding {
 
 /**
  * Mirrors `ChartPlayVariant` from `@be-music/chart`. `'24'` / `'48'` are the Keyboardmania keyboard modes, whose lanes
- * run onto the extended `1A..1O` / `2A..2O` channels and have no scratch column.
+ * run onto the extended `1A..1O` / `2A..2O` channels plus the wheel up / down on `1P` / `1Q` (`2P` / `2Q`), and have no
+ * scratch column.
  */
 export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
 
@@ -118,7 +119,8 @@ export function resolveKeyChannel(event: KeyboardCodeLike, channels: ReadonlyArr
 export function resolveSideKeySlot(channel: string, playVariant?: ChartPlayVariant): number {
   if (playVariant === '24' || playVariant === '48') {
     // Keyboard modes have no scratch, so slot `0` is never produced and `isScratchLaneForVariant` stays false for
-    // every channel. Lanes are the plain 1-based column index within the side (`11` → 1, `19` → 9, `1A` → 10, …).
+    // every channel. Lanes are the plain 1-based column index within the side (`11` → 1, `19` → 9, `1A` → 10, …,
+    // `1O` → 24), then the wheel: `1P` → 25 (up), `1Q` → 26 (down) — beatoraja's keyboard lane offsets.
     if (channel.length !== 2) return -1;
     if (channel[0] !== '1' && channel[0] !== '2') return -1;
     const laneIndex = resolveLaneIndex(channel[1]!);
@@ -163,7 +165,7 @@ export function resolveLr2LaneIndex(channel: string, playVariant?: ChartPlayVari
   if (slot < 0) return -1;
   // LR2 skins only define the 20 IIDX lane rects (`0`/`10` scratch + `1..9`/`11..19` keys) — there is no
   // `play_24.lr2skin`. Returning `-1` routes keyboard-mode charts through the caller's fallback playfield instead of
-  // squeezing 24 lanes into the 7-key rect table.
+  // squeezing 26 lanes into the 7-key rect table.
   if (playVariant === '24' || playVariant === '48') return -1;
   if (playVariant === '9') return slot;
   return channel.startsWith('2') ? 10 + slot : slot;
@@ -177,6 +179,39 @@ export function resolveSideRelativeLaneIndex(channel: string, playVariant?: Char
 export function isScratch(channel: string): boolean {
   return channel === '16' || channel === '26';
 }
+
+/**
+ * Which way a keyboard-mode wheel lane turns: `'up'` for `1P` / `2P`, `'down'` for `1Q` / `2Q`, `undefined` for every
+ * other lane and for every channel outside the 24 / 48 KEY modes. The wheel is judged like a key, but it sits on the
+ * outer edge of its side and the lane options leave it in place.
+ */
+export function resolveWheelLaneDirection(channel: string, playVariant?: ChartPlayVariant): 'up' | 'down' | undefined {
+  if (playVariant !== '24' && playVariant !== '48') return undefined;
+  if (channel.length !== 2) return undefined;
+  const side = channel.charCodeAt(0);
+  if (side !== 0x31 && (side !== 0x32 || playVariant !== '48')) return undefined;
+  const lane = channel.charCodeAt(1) & 0xdf;
+  if (lane === 0x50) return 'up';
+  if (lane === 0x51) return 'down';
+  return undefined;
+}
+
+/**
+ * The lanes of one side the lane options (MIRROR / RANDOM / S-RANDOM / …) permute, in lane order. The IIDX families
+ * move the keys `11..15` / `18` / `19` (`21..` on 2P) and leave the scratch alone; the keyboard modes move their 24 keys
+ * and leave the wheel alone. Lanes the chart does not use are the caller's to drop.
+ */
+export function resolveLaneOptionChannels(side: '1P' | '2P', playVariant?: ChartPlayVariant): readonly string[] {
+  if (playVariant === '24' || playVariant === '48') {
+    return side === '2P' && playVariant === '24' ? [] : KEYBOARD_MODE_KEY_CHANNELS[side];
+  }
+  return IIDX_LANE_OPTION_CHANNELS[side];
+}
+
+const IIDX_LANE_OPTION_CHANNELS: Record<'1P' | '2P', readonly string[]> = {
+  '1P': ['11', '12', '13', '14', '15', '18', '19'],
+  '2P': ['21', '22', '23', '24', '25', '28', '29'],
+};
 
 export function isPlayableInputChannel(channel: string): boolean {
   return channel.startsWith('1') || channel.startsWith('2');
@@ -292,31 +327,60 @@ const POPN_9KEY_PMS_BINDINGS: FixedLaneDefinition[] = [
 ];
 
 const EXTENDED_LANE_DIGITS = '123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-/** Lanes per side in the Keyboardmania modes — 24 columns (`11..19` + `1A..1O`), no scratch. */
-const KEYBOARD_MODE_SIDE_LANE_COUNT = 24;
-const KEYBOARDMANIA_SIDE_CHANNELS = EXTENDED_LANE_DIGITS.slice(0, KEYBOARD_MODE_SIDE_LANE_COUNT);
+/** Keys per side in the Keyboardmania modes — 24 columns (`11..19` + `1A..1O`), no scratch. */
+const KEYBOARD_MODE_SIDE_KEY_COUNT = 24;
+/** Lanes per side in the Keyboardmania modes — the 24 keys, then the wheel up / down (`1P` / `1Q`). */
+const KEYBOARD_MODE_SIDE_LANE_COUNT = 26;
+const KEYBOARDMANIA_SIDE_KEYS = EXTENDED_LANE_DIGITS.slice(0, KEYBOARD_MODE_SIDE_KEY_COUNT);
+
+const KEYBOARD_MODE_KEY_CHANNELS: Record<'1P' | '2P', readonly string[]> = {
+  '1P': Array.from(KEYBOARDMANIA_SIDE_KEYS, (lane) => `1${lane}`),
+  '2P': Array.from(KEYBOARDMANIA_SIDE_KEYS, (lane) => `2${lane}`),
+};
 
 /**
- * Left-to-right lane ordering for the keyboard modes. Unlike the IIDX families there is no scratch to hoist to the
- * outside edge, so the order is simply the side's columns in ascending lane index (`11`, `12`, …, `1O`), with the 2P
- * bank appended for `'48'`.
+ * Left-to-right lane ordering for the keyboard modes: the side's keys in ascending lane index (`11`, `12`, …, `1O`),
+ * with the wheel (up, then down) on the outer edge — left of the 1P keys, right of the 2P keys — where the IIDX
+ * families keep their scratch.
  */
 const KEYBOARD_MODE_PREFERRED_CHANNELS: Record<'24' | '48', string[]> = {
-  '24': Array.from(KEYBOARDMANIA_SIDE_CHANNELS, (lane) => `1${lane}`),
-  '48': [
-    ...Array.from(KEYBOARDMANIA_SIDE_CHANNELS, (lane) => `1${lane}`),
-    ...Array.from(KEYBOARDMANIA_SIDE_CHANNELS, (lane) => `2${lane}`),
+  '24': ['1P', '1Q', ...KEYBOARD_MODE_KEY_CHANNELS['1P']],
+  '48': ['1P', '1Q', ...KEYBOARD_MODE_KEY_CHANNELS['1P'], ...KEYBOARD_MODE_KEY_CHANNELS['2P'], '2P', '2Q'],
+};
+
+/**
+ * Default wheel keys. They sit on the outer edges of the keyboard, off the 24 / 48-key pool (`KEY_LAYOUT`, then
+ * `f1`…): Tab / Left Shift for the 1P wheel up / down, Enter / Right Shift for the 2P wheel. The arrow keys stay free
+ * for the in-play hi-speed controls.
+ */
+const KEYBOARD_MODE_WHEEL_BINDINGS: Record<'1P' | '2P', FixedLaneDefinition[]> = {
+  '1P': [
+    { channel: '1P', keyLabel: 'Tab', inputTokens: ['tab'], side: '1P' },
+    { channel: '1Q', keyLabel: 'LShift', inputTokens: ['shift-left'], side: '1P' },
+  ],
+  '2P': [
+    { channel: '2P', keyLabel: 'Enter', inputTokens: ['enter'], side: '2P' },
+    { channel: '2Q', keyLabel: 'RShift', inputTokens: ['shift-right'], side: '2P' },
   ],
 };
 
-const KBM_24KEY_SP_BINDINGS = createKeyboardModeBindings([['1', '1P']], KEYBOARDMANIA_SIDE_CHANNELS);
-const KBM_48KEY_DP_BINDINGS = createKeyboardModeBindings(
-  [
-    ['1', '1P'],
-    ['2', '2P'],
-  ],
-  KEYBOARDMANIA_SIDE_CHANNELS,
-);
+// Bindings run in lane order (the terminal player draws its lanes in this order): the 1P wheel, the keys, then the 2P
+// wheel. The keys take the pool in order across both sides, exactly as before the wheel lanes existed.
+const KBM_24KEY_SP_BINDINGS = [
+  ...KEYBOARD_MODE_WHEEL_BINDINGS['1P'],
+  ...createKeyboardModeBindings([['1', '1P']], KEYBOARDMANIA_SIDE_KEYS),
+];
+const KBM_48KEY_DP_BINDINGS = [
+  ...KEYBOARD_MODE_WHEEL_BINDINGS['1P'],
+  ...createKeyboardModeBindings(
+    [
+      ['1', '1P'],
+      ['2', '2P'],
+    ],
+    KEYBOARDMANIA_SIDE_KEYS,
+  ),
+  ...KEYBOARD_MODE_WHEEL_BINDINGS['2P'],
+];
 
 const FIXED_BINDINGS_BY_MODE: Record<LaneMode, FixedLaneDefinition[]> = {
   '5-key-sp': IIDX_5KEY_SP_BINDINGS,

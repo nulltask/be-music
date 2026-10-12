@@ -165,7 +165,7 @@ Every skin declares these fields. `defineBeMusicSkin` checks them and throws whe
   - `mode`: `'standard'` or `'touch'` (optional; absent means `'standard'`). See the touch layout below.
   - `orientation`: `'landscape'` or `'portrait'` (optional; absent means `'landscape'`). See the portrait layout below.
   - `stage`: width and height.
-  - `lanes`: every lane, with its channel, kind (`white` / `black` / `scratch`), side, x, and width. The full layout of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY) is always present, even for lanes the chart never uses.
+  - `lanes`: every lane, with its channel, kind (`white` / `black` / `scratch`, or `wheel-up` / `wheel-down` for the 24 / 48 KEY wheel lanes on each side's outer edge), side, x, and width. The full layout of the chart's play variant (5 / 7 / 9 / 10 / 14 / 24 / 48 KEY) is always present, even for lanes the chart never uses.
   - `playfield`: `left`, `right`, `centerX`, `top`, `judgementY`, and `sides` (the horizontal extent of 1P and, in double play, 2P).
   - `bga`: the BGA rect, or `undefined` when the playfield leaves no room.
 - **Placing chrome:** place your chrome from these values instead of hard-coding geometry. Host-side layout changes (double play, keyboard modes, new aspect ratios) then reach your skin for free.

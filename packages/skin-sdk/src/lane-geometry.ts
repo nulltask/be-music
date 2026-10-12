@@ -2,6 +2,7 @@ import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import {
   resolveSideKeySlot as resolveCoreSideKeySlot,
   resolveSideRelativeLaneIndex,
+  resolveWheelLaneDirection,
 } from '@be-music/player/core/lane-layout';
 import type { BeMusicLaneKind } from './types.ts';
 
@@ -36,7 +37,7 @@ export interface FixedLaneWidths {
 /** Left edge and per-side width of the skinless playfield, mirroring LR2's default 7K skin. */
 const FALLBACK_PLAYFIELD_SPAN = { x: 33, w: 194 } as const;
 /**
- * Keyboard modes run 24 lanes per side, which the 7K span squeezes to 8 px each. Like the keyboard cabinet, they take
+ * Keyboard modes run 26 lanes per side (24 keys and the wheel), which the 7K span squeezes to 7 px each. Like the keyboard cabinet, they take
  * the screen width instead: 24 KEY fills the column left of the BGA monitor (its frame still clears the rails), and
  * 48 KEY spreads both banks across the whole page.
  */
@@ -148,7 +149,13 @@ export function resolveFallbackLaneLayout(options: ResolveFallbackLaneLayoutOpti
   const displayOrder = resolveFallbackLaneDisplayOrder(channels, scratchFlags, options.playVariant);
   const hasBothSides = sideFlags.includes('1P') && sideFlags.includes('2P');
   const sideGap = Math.max(0, options.sideGap ?? (hasBothSides ? FALLBACK_DP_SIDE_GAP : 0));
-  const laneWeights = scratchFlags.map((isScratch) => (isScratch ? FALLBACK_SCRATCH_LANE_WEIGHT : 1));
+  // The keyboard modes' wheel lanes stand in for the scratch on the outer edge, so they are as wide as one.
+  const laneWeights = channels.map((channel, index) =>
+    scratchFlags[index] ||
+    (channel !== undefined && resolveWheelLaneDirection(channel, options.playVariant) !== undefined)
+      ? FALLBACK_SCRATCH_LANE_WEIGHT
+      : 1,
+  );
   const referenceLaneCount = options.preserveSideWidth ? Math.max(1, Math.ceil(channels.length / 2)) : channels.length;
   const referenceWeights = laneWeights.slice(0, referenceLaneCount);
   const referenceWeight = referenceWeights.reduce((sum, weight) => sum + weight, 0);
@@ -220,7 +227,13 @@ function resolveFallbackLaneDisplayOrder(
     .map((channel, index) => ({
       index,
       side: channel?.startsWith('2') === true ? 1 : 0,
-      scratchOrder: scratchFlags[index] ? (channel?.startsWith('2') === true ? 1 : -1) : 0,
+      // The scratch, and the keyboard modes' wheel, sit on the outer edge: left of the 1P keys, right of the 2P keys.
+      scratchOrder:
+        scratchFlags[index] || (channel !== undefined && resolveWheelLaneDirection(channel, playVariant) !== undefined)
+          ? channel?.startsWith('2') === true
+            ? 1
+            : -1
+          : 0,
       slot: channel === undefined ? index : resolveCoreSideKeySlot(channel, playVariant),
     }))
     .sort((a, b) => {
@@ -238,7 +251,8 @@ const KEYBOARD_BLACK_KEY_SEMITONES = new Set([1, 3, 6, 8, 10]);
 /**
  * Visual class of a lane. `laneIndex` is the LR2 lane id (0 / 10 = scratch, 1..9 / 11..19 = keys, -1 when the lane
  * has no LR2 rect). IIDX convention: odd keys white, even keys black. The 24 / 48-key keyboard modes colour by piano
- * key instead, repeating every octave.
+ * key instead, repeating every octave, and their wheel lanes (`1P` / `1Q`, `2P` / `2Q`) are `'wheel-up'` /
+ * `'wheel-down'`.
  */
 export function resolveBeMusicLaneKind(
   channel: string,
@@ -246,6 +260,8 @@ export function resolveBeMusicLaneKind(
   playVariant: ChartPlayVariant | undefined,
 ): BeMusicLaneKind {
   if (isScratchLaneForVariant(channel, playVariant)) return 'scratch';
+  const wheel = resolveWheelLaneDirection(channel, playVariant);
+  if (wheel !== undefined) return wheel === 'up' ? 'wheel-up' : 'wheel-down';
   if (playVariant === '24' || playVariant === '48') {
     const semitone = (resolveSideRelativeLaneIndex(channel, playVariant) - 1) % 12;
     return KEYBOARD_BLACK_KEY_SEMITONES.has(semitone) ? 'black' : 'white';
