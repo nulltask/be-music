@@ -58,3 +58,9 @@
 # Benchmark Rules
 
 - When exported functions are added or removed, update benchmarks accordingly (add or delete benchmark cases).
+
+# Layering Rules
+
+- `@be-music/chart`, `@be-music/json`, `@be-music/parser` and `@be-music/player`'s `core/`, `playlog/` and `ruleset/` must stay runtime-neutral: no Node built-in imports and no DOM / Node-only globals. Put runtime-specific code behind an adapter (`PlayerOptions.createAudioSession` and friends, `packages/parser/src/node-file.ts`). `pnpm run check` enforces this through the Oxlint overrides in `vite.config.ts`.
+- The judge core (`packages/player/src/core/judge-*.ts`, `auto-judge-core.ts`), `ruleset/` and `playlog/simulate.ts` must stay deterministic: take time and randomness as inputs, never read `Date` / `performance`, set timers or call `Math.random`.
+- See `docs/architecture.md` for the engine's judge-core / driver split and the reasons behind these rules.

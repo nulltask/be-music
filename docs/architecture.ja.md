@@ -111,3 +111,10 @@ be-music は譜面を 2 つの層で読みます。**Source 層**はファイル
 - **ドライバ**（`manualPlay`、`autoPlay`）は、時計、入力ランタイム、音声のスケジューリング、ポーズと HIGH-SPEED を受け持ち、コアの effect を `engine-effects.ts` を通してホストに伝えます。ライブのプレイでは、再生の時計からフレームごとと、キー入力のたびにコアを進めます。リプレイ（`PlayerOptions.replayInputs`）では、`advanceJudgeCoreReplay` が記録された入力と 1 ms 刻みの譜面時刻の格子を合わせてコアを進めます。そのため、リプレイの判定はティックのタイミングや `speed` に左右されません。
 - **共有する規則**：判定コアとプレイログのシミュレータ（`playlog/simulate.ts`）の両方が使う規則は、ルールセットに置いています。判定幅と分類（`ruleset/judge.ts`）、候補の選択（`ruleset/selection.ts`）、ゲージ（`ruleset/gauge.ts`）、ロングノートの規則（ルールセットが演奏するモード、見逃したチャージノート終端の POOR、LR2 の LN 始点の遅い BAD、マルチ BAD の絞り込み。`ruleset/long-note.ts`）です。シミュレータはマイクロ秒単位の独自のイベントキューを持つので、同じ入力列で両者が同じ判定になることは `playlog/equivalence.test.ts` が確かめます。
 - **ドライバ側のサービス**はドライバの横に置いています。`engine-preparation.ts`（演奏用の譜面の解決、読み込みの進捗、ランタイムの起動）、`engine-audio.ts`（組み込みの Node 用音声セッションとミックス）、`engine-clock.ts`、`engine-trace.ts`（TUI なしの出力）、`engine-types.ts`（公開する型）です。`engine.ts` は公開用の入口で、分割の前後で export は変わっていません。
+
+## 層の規則
+
+`pnpm run check` は、フォーマット・lint・型のほかに、構造に関する次の規則を検査します。
+
+- **実行環境に依存しないコード**：`@be-music/chart`、`@be-music/json`、`@be-music/parser` と、`@be-music/player` の `core/`、`playlog/`、`ruleset/` は、ブラウザでも Node でもそのまま動きます。そこでは Oxlint の `no-restricted-imports` と `no-restricted-globals`（[`vite.config.ts`](../vite.config.ts) で設定）が、Node の組み込みモジュールの import（`node:*` と接頭辞なしの名前）と、DOM や Node だけのグローバル（`window`、`document`、`process`、`Buffer` など）を拒否します。実行環境のサービスはアダプタを通して渡します。`PlayerOptions.createAudioSession` / `createUiRuntime` / `createInputRuntime`、Node の音声出力を読み込むオプショナルモジュールのローダー、parser の [`node-file.ts`](../packages/parser/src/node-file.ts)（`parseChartFile`）です。`node-file.ts` と parser の CLI、テストはこの規則の対象外です。
+- **決定的な判定**：`core/judge-*.ts`、`core/auto-judge-core.ts`、`ruleset/`、`playlog/simulate.ts` では、さらに `Date` と `performance` の読み取り、タイマーの設定、`Math.random` の呼び出しを禁止します。時刻と乱数は入力として受け取ります。
