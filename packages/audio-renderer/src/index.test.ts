@@ -815,6 +815,30 @@ describe('audio-renderer', () => {
     expect(mirrorBeatAtTempoReversal(undefined, 60, 40)).toBe(40); // no reversal armed
   });
 
+  test('audio-renderer: truncates a negative #BPMxx to an integer before arming the LR2 reversal', () => {
+    // LR2 converts the BPM to int before its `< 0` check (LR2body.exe 0x42b960 `__ftol`): -1 < BPM < 0 never
+    // reverses, but timing still integrates the full |BPM|. NOWBPM shows |trunc(BPM)|.
+    const fractional = createEmptyJson('bms');
+    fractional.metadata.bpm = 120;
+    fractional.resources.bpm['02'] = -0.5;
+    fractional.events = [{ measure: 1, channel: '08', position: [0, 1], value: '02' }];
+    const slow = createTimingResolver(fractional);
+    expect(slow.reversal).toBeUndefined();
+    expect(slow.bpmAtBeat(6)).toBeCloseTo(0.5, 9);
+    expect(slow.beatToSeconds(5)).toBeCloseTo(2 + 120, 9); // one beat at 0.5 BPM = 120 s
+    expect(slow.displayBpmAtBeat(6)).toBe(0);
+    expect(slow.displayBpmAtBeat(2)).toBe(120);
+
+    const truncated = createEmptyJson('bms');
+    truncated.metadata.bpm = 120;
+    truncated.resources.bpm['02'] = -65.5;
+    truncated.events = [{ measure: 1, channel: '08', position: [0, 1], value: '02' }];
+    const reversing = createTimingResolver(truncated);
+    expect(reversing.reversal?.beat).toBeCloseTo(4, 9);
+    expect(reversing.bpmAtBeat(6)).toBeCloseTo(65.5, 9);
+    expect(reversing.displayBpmAtBeat(6)).toBe(65);
+  });
+
   test('audio-renderer: keeps dropping zero and undefined #BPMxx references (no reversal)', () => {
     const json = createEmptyJson('bms');
     json.metadata.bpm = 120;

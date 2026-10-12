@@ -2389,13 +2389,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * The tempo the BPM readouts show at `seconds`. Past an LR2 negative-BPM reversal (issue #134) it holds the value at
-   * the reversal — LR2's frozen event pump never applies a later BPM event — rather than following the mirrored
-   * display scroll back through earlier tempo points.
+   * the reversal — LR2's frozen event pump never applies a later BPM event — even though the reverse scroll itself
+   * keeps following the forward tempo map.
    */
   protected nowBpm(seconds: number): number | undefined {
     const resolver = this.timingResolver;
     if (!resolver) return undefined;
-    return resolver.bpmAtBeat(
+    // `displayBpmAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
+    return resolver.displayBpmAtBeat(
       this.currentBeat(Math.min(seconds, resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY)),
     );
   }

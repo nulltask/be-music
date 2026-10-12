@@ -2180,6 +2180,32 @@ describe('BeatorajaRuntimeAdapter — resolveNumberValue BPM', () => {
     expect(adapter.resolveNumberValue(160)).toBe(240);
   });
 
+  it('holds NOWBPM (160) at the reversal value past an LR2 negative-BPM reversal', () => {
+    // Same chart as above, but the frame says an LR2 reversal is armed at 1 s: LR2's event pump froze there, so the
+    // later BPM 240 event never reaches the readout even though the true clock (2 s) is past it.
+    const adapter = new BeatorajaRuntimeAdapter({
+      chartPlayVariant: '7',
+      baseOps: new Set(),
+      getNowMs: () => 0,
+      chart: makeBpmChart({
+        bpm: 140,
+        events: [
+          { channel: '11', pos: [0, 1] },
+          { channel: '03', value: 'F0', pos: [0, 1], measure: 1 },
+          { channel: '11', pos: [0, 1], measure: 1 },
+        ],
+      }),
+    });
+    adapter.applyFrame({
+      currentSeconds: 2.0,
+      reversalSeconds: 1.0,
+      totalSeconds: 100,
+      summary: {} as unknown as import('@be-music/player/core/engine').PlayerSummary,
+      notes: [],
+    } as unknown as import('@be-music/player/core/ui-signal-bus').PlayerUiFramePayload);
+    expect(adapter.resolveNumberValue(160)).toBe(140);
+  });
+
   it('uses the most-frequent (note-weighted) BPM for MAINBPM (92)', () => {
     // Two BPM regions: 140 (3 notes worth of run-time) → 280 (1 note's worth). The
     // most-frequent BPM (= mainBpm) is 140 because it covers more notes. Upstream's

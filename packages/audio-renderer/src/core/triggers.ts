@@ -23,6 +23,11 @@ export interface TempoPoint {
   beat: number;
   bpm: number;
   seconds: number;
+  /**
+   * BPM the readouts show when it differs from `bpm`. Set for negative `#BPMxx` events: timing integrates the full
+   * |BPM|, but LR2 converts the value to int first (LR2body.exe 0x42b960 `__ftol`), so NOWBPM shows |trunc(BPM)|.
+   */
+  displayBpm?: number;
 }
 
 export interface StopPoint {
@@ -70,6 +75,8 @@ export interface TimingResolver {
   beatToSeconds: (beat: number) => number;
   eventToSeconds: (event: BeMusicEvent) => number;
   bpmAtBeat: (beat: number) => number;
+  /** BPM the readouts show at `beat` — `bpmAtBeat` except where a {@link TempoPoint.displayBpm} overrides it. */
+  displayBpmAtBeat: (beat: number) => number;
 }
 
 export interface TimedSampleTrigger {
@@ -129,6 +136,20 @@ export function createTimingResolverWithContext(json: BeMusicJson, context: Timi
     return tempoPoints[Math.max(0, index)]!.bpm;
   };
 
+  const displayBpmAtBeat = (beat: number): number => {
+    if (tempoPoints.length === 0) {
+      return json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
+    }
+    const point =
+      tempoPoints[
+        Math.max(
+          0,
+          findLastIndexAtOrBefore(tempoPoints, beat, (entry) => entry.beat),
+        )
+      ]!;
+    return point.displayBpm ?? point.bpm;
+  };
+
   const beatToSeconds = (beat: number): number => {
     const base = beatToSecondsWithoutStops(beat);
     if (stopPoints.length === 0) {
@@ -146,6 +167,7 @@ export function createTimingResolverWithContext(json: BeMusicJson, context: Timi
     stopPoints,
     reversal: reversalBeat === undefined ? undefined : { beat: reversalBeat, seconds: beatToSeconds(reversalBeat) },
     bpmAtBeat,
+    displayBpmAtBeat,
     beatToSeconds,
     eventToSeconds: (event) => beatToSeconds(beatResolver.eventToBeat(event)),
   };
@@ -325,12 +347,14 @@ function createTempoPoints(
       // like `#BPMxx -1`) — so neither is worth reproducing; see docs/bms-spec.md.
       continue;
     }
-    if (bpm < 0 && reversalBeat === undefined) {
+    // LR2 truncates the BPM to int before its `< 0` check (LR2body.exe 0x42b960 `__ftol`), so -1 < BPM < 0 never
+    // reverses — it only crawls at |BPM|.
+    if (Math.trunc(bpm) < 0 && reversalBeat === undefined) {
       reversalBeat = beat;
     }
     // LR2 integrates negative exBPM at |BPM| (LR2_bmsload.cpp:2841-2843) — the timeline never runs backwards; the
     // reversal is a presentation/judging gimmick anchored at the first negative event.
-    integrateTempoPoint(points, beat, Math.abs(bpm));
+    integrateTempoPoint(points, beat, Math.abs(bpm), bpm < 0 ? Math.abs(Math.trunc(bpm)) : undefined);
   }
 
   return { points, reversalBeat };
@@ -430,20 +454,25 @@ function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): numb
   return tempoPoints[Math.max(0, index)]!.bpm;
 }
 
-function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number): void {
+function integrateTempoPoint(points: TempoPoint[], beat: number, bpm: number, displayBpm?: number): void {
   const last = points[points.length - 1]!;
   if (beat < last.beat) {
     return;
   }
   if (Math.abs(beat - last.beat) < 1e-9) {
     last.bpm = bpm;
+    if (displayBpm === undefined) {
+      delete last.displayBpm;
+    } else {
+      last.displayBpm = displayBpm;
+    }
     return;
   }
 
   const seconds = last.seconds + ((beat - last.beat) * 60) / last.bpm;
-  points.push({
-    beat,
-    bpm,
-    seconds,
-  });
+  const point: TempoPoint = { beat, bpm, seconds };
+  if (displayBpm !== undefined) {
+    point.displayBpm = displayBpm;
+  }
+  points.push(point);
 }
