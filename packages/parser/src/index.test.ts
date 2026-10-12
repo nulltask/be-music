@@ -236,6 +236,41 @@ describe('parser', () => {
     expect(resolvedWhenBranchIsInactive.metadata.bpm).toBe(130);
   });
 
+  test('BMS: applies headers in file order across a taken branch, as LR2 and beatoraja do', () => {
+    const source = [
+      '#WAV01 top-before.wav',
+      '#BPM 120',
+      '#RANDOM 1',
+      '#IF 1',
+      '#WAV01 branch.wav',
+      '#WAV02 branch.wav',
+      '#BPM 150',
+      '#STP 001.000 100',
+      '#ENDIF',
+      '#ENDRANDOM',
+      '#WAV02 top-after.wav',
+      '#BPM 180',
+      '#STP 002.000 100',
+      '#00111:0102',
+      '',
+    ].join('\n');
+    const resolved = resolveBmsControlFlow(parseChart(source), { random: () => 0 });
+
+    // A branch line beats an earlier top-level line and loses to a later one, whatever the header.
+    expect(resolved.resources.wav['01']).toBe('branch.wav');
+    expect(resolved.resources.wav['02']).toBe('top-after.wav');
+    expect(resolved.metadata.bpm).toBe(180);
+    // Repeatable commands still add up.
+    expect([...resolved.bms.stp].sort()).toEqual(['001.000 100', '002.000 100']);
+
+    // The rule survives a round trip through the JSON IR.
+    const viaJson = resolveBmsControlFlow(parseChart(JSON.stringify(parseChart(source)), 'chart.json'), {
+      random: () => 0,
+    });
+    expect(viaJson.resources.wav['02']).toBe('top-after.wav');
+    expect(viaJson.metadata.bpm).toBe(180);
+  });
+
   test('BMS: parses extension headers into dedicated fields', async () => {
     const json = await parseChartFile(unifiedBmsChartPath);
 

@@ -177,7 +177,10 @@ function applyActiveControlFlowEntry(
   measureByIndex?: Map<number, MeasureLengthEntry>,
 ): void {
   if (entry.kind === 'header') {
-    applyHeader(json, entry.command, entry.commandRaw, entry.value);
+    // A later top-level line defines the same header and already won, as file order decides in LR2 and beatoraja.
+    if (entry.overriddenByLaterHeader !== true) {
+      applyHeader(json, entry.command, entry.commandRaw, entry.value);
+    }
     return;
   }
   if (entry.kind === 'object') {

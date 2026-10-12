@@ -398,3 +398,4 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - `#IF` chain branches at the current RANDOM selection value, `#ELSEIF` / `#ELSE` are invalid if there is a previously established branch
 - `#SWITCH` chain evaluates `#CASE` / `#DEF` and aborts at `#SKIP` until `#ENDSW`
 - `#SWITCH` falls through to subsequent `#CASE` / `#DEF` if `#SKIP` is missing
+- Header lines apply in file order, as in LR2 and beatoraja: a definition in a taken branch beats an earlier top-level line of the same header and loses to a later one. The parser marks a branch header that a later top-level line overrides (`overriddenByLaterHeader`) and resolution skips it; repeatable headers (`#STP`, `#WAVCMD`, `#LNOBJ`) add up

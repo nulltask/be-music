@@ -237,6 +237,7 @@
 - `charset`: `#CHARSET` の値
 - `controlFlow`: 制御構文 (`#RANDOM`/`#IF`/`#SWITCH` 系) と、その内側のヘッダ/オブジェクト行
 - `controlFlow.kind = "object"` は通常イベントと同じ `events` 形式（必要に応じて `measureLength`）で保持
+- `controlFlow.kind = "header"` は、ファイルの後のほうに同じヘッダのトップレベル行があるとき `overriddenByLaterHeader: true` を持つ。ヘッダ行はファイル順に適用するため、制御構文の解決ではこれを適用しない
 - パーサは制御構文をこの配列へ保持し、分岐の実行は再生/レンダリング時に行います
 - `scroll` の値は有限数を許可し、`0` および負値も保持対象です
 

@@ -878,7 +878,11 @@ function areControlFlowEntriesEqual(
       continue;
     }
     if (leftEntry.kind === 'header' && rightEntry.kind === 'header') {
-      if (leftEntry.command !== rightEntry.command || leftEntry.value !== rightEntry.value) {
+      if (
+        leftEntry.command !== rightEntry.command ||
+        leftEntry.value !== rightEntry.value ||
+        (leftEntry.overriddenByLaterHeader === true) !== (rightEntry.overriddenByLaterHeader === true)
+      ) {
         return false;
       }
       continue;
@@ -1121,6 +1125,11 @@ function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
       continue;
     }
     if (entry.kind === 'header') {
+      // This layout writes the top-level headers first, so a branch line that a later top-level line overrides would
+      // win again on re-parse. It never takes effect, so it is left out.
+      if (entry.overriddenByLaterHeader === true) {
+        continue;
+      }
       // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
       // chart.
       const commandText = entry.commandRaw ?? entry.command;

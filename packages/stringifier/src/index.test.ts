@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { parseBmson, parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
 import { resolveRuleset, rulesetChartFactsFromChart, type JudgeWindowSetUs } from '../../player/src/ruleset/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
@@ -868,6 +868,32 @@ describe('stringifier', () => {
         .events.map((event) => event.channel)
         .sort(),
     ).toEqual(lanes);
+  });
+
+  test('BMS stringify: drops a branch header that a later top-level line overrides, keeping the file-order result', () => {
+    const json = parseChart(
+      [
+        '#WAV01 top.wav',
+        '#RANDOM 1',
+        '#IF 1',
+        '#WAV01 branch-wins.wav',
+        '#WAV02 branch-loses.wav',
+        '#ENDIF',
+        '#ENDRANDOM',
+        '#WAV02 top-after.wav',
+        '#00111:0102',
+        '',
+      ].join('\n'),
+    );
+    // Force the re-generated layout, which writes every top-level header before the control flow.
+    json.preservation.bms.sourceLines = [];
+    json.preservation.bms.objectLines = [];
+    const output = stringifyBms(json);
+
+    expect(output).not.toContain('branch-loses.wav');
+    const resolved = resolveBmsControlFlow(parseChart(output), { random: () => 0 });
+    expect(resolved.resources.wav['01']).toBe('branch-wins.wav');
+    expect(resolved.resources.wav['02']).toBe('top-after.wav');
   });
 
   test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional generic-9keys hint', () => {

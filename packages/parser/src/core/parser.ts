@@ -3,6 +3,7 @@ import {
   type BmsControlFlowCommand,
   type BmsControlFlowEntry,
   type BmsObjectLineEntry,
+  type BmsControlFlowHeaderEntry,
   type BmsSourceLineEntry,
   type BmsonMineChannelEntry,
   type BeMusicEvent,
@@ -95,6 +96,8 @@ type MeasureLengthEntry = BeMusicJson['measures'][number];
 export function parseBms(input: string): BeMusicJson {
   const json = createEmptyJson('bms');
   const controlFlowCaptureStack: ControlFlowCaptureFrameType[] = [];
+  // Branch header lines by the header they define, until a later top-level line of the same header overrides them.
+  const capturedHeadersByKey = new Map<string, BmsControlFlowHeaderEntry[]>();
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   let hasValidMainBpmHeader = false;
   // Resolve the chart's object-ID radix BEFORE main parsing so that every `#WAVxx` / `#BMPxx` key + every
@@ -176,8 +179,9 @@ export function parseBms(input: string): BeMusicJson {
     // base-62 charts (`#BASE 62`) put lowercase letters in indexed-header keys (e.g. `#WAV0a`), so most charts skip
     // this entirely and the JSON stays compact.
     const commandCaseDiffers = command !== commandRaw;
+    const definitionKey = resolveHeaderDefinitionKey(command, commandRaw, base);
     if (controlFlowCaptureStack.length > 0) {
-      const headerEntry: BmsSourceLineEntry = {
+      const headerEntry: BmsControlFlowHeaderEntry = {
         kind: 'header',
         command,
         value,
@@ -185,7 +189,24 @@ export function parseBms(input: string): BeMusicJson {
       };
       json.bms.controlFlow.push(headerEntry);
       json.preservation.bms.sourceLines.push(headerEntry);
+      if (definitionKey !== undefined) {
+        const captured = capturedHeadersByKey.get(definitionKey);
+        if (captured) {
+          captured.push(headerEntry);
+        } else {
+          capturedHeadersByKey.set(definitionKey, [headerEntry]);
+        }
+      }
       return;
+    }
+
+    // LR2 and beatoraja apply header lines in file order: a top-level line overrides the same header in any branch
+    // above it, taken or not.
+    if (definitionKey !== undefined && value.length > 0) {
+      for (const entry of capturedHeadersByKey.get(definitionKey) ?? []) {
+        entry.overriddenByLaterHeader = true;
+      }
+      capturedHeadersByKey.delete(definitionKey);
     }
 
     json.preservation.bms.sourceLines.push({
@@ -748,6 +769,26 @@ function detectBmsBase(input: string): 36 | 62 {
     resolved = match[1] === '62' ? 62 : 36;
   }
   return resolved;
+}
+
+/** Header commands whose lines add up instead of replacing each other, so file order never makes one override another. */
+const REPEATABLE_HEADER_COMMANDS: ReadonlySet<string> = new Set(['STP', 'WAVCMD', 'LNOBJ']);
+
+/**
+ * Which definition a header line sets, for the file-order rule: the command, plus the normalized object key of an
+ * indexed header (`WAV01`). `undefined` for repeatable headers.
+ */
+function resolveHeaderDefinitionKey(command: string, commandRaw: string, base: 36 | 62): string | undefined {
+  if (REPEATABLE_HEADER_COMMANDS.has(command)) {
+    return undefined;
+  }
+  const indexed = command.match(INDEXED_HEADER_COMMAND);
+  if (indexed) {
+    const directive = indexed[1]!;
+    const keyRaw = base === 62 ? commandRaw.slice(directive.length) : indexed[2]!;
+    return `${directive}${normalizeObjectKey(keyRaw, base)}`;
+  }
+  return command;
 }
 
 function pushHeaderLine(json: BeMusicJson, command: string, commandRaw: string, value: string, base: 36 | 62): void {
@@ -1528,6 +1569,7 @@ function normalizeBmsControlFlowEntry(input: unknown): BmsControlFlowEntry | und
       command,
       value: typeof raw.value === 'string' ? raw.value : '',
       ...(commandRaw ? { commandRaw } : {}),
+      ...(raw.overriddenByLaterHeader === true ? { overriddenByLaterHeader: true as const } : {}),
     };
   }
   if (kind === 'object') {

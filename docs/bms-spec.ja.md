@@ -398,3 +398,4 @@ runtime と round-trip の扱い:
 - `#IF` チェーンは現在の RANDOM 選択値で分岐し、`#ELSEIF` / `#ELSE` は先に成立した枝がある場合は無効
 - `#SWITCH` チェーンは `#CASE` / `#DEF` を評価し、`#SKIP` で `#ENDSW` まで打ち切る
 - `#SWITCH` では `#SKIP` がない場合、後続 `#CASE` / `#DEF` にフォールスルーする
+- ヘッダ行は LR2 や beatoraja と同じくファイル順に適用する。選ばれた分岐内の定義は、前にある同じヘッダのトップレベル行に勝ち、後にあるものに負ける。パーサは後のトップレベル行に上書きされる分岐内のヘッダに印（`overriddenByLaterHeader`）を付け、解決時にはそれを適用しない。繰り返せるヘッダ（`#STP`、`#WAVCMD`、`#LNOBJ`）は加算する
