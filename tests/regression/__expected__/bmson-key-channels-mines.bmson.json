@@ -1,0 +1,455 @@
+{
+  "chart": "bmson-key-channels-mines.bmson",
+  "parse": {
+    "sourceFormat": "bmson",
+    "metadata": {
+      "bpm": 150,
+      "extras": {},
+      "title": "BMSON Key Channels Mines",
+      "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+      "artist": "be-music",
+      "genre": "TEST",
+      "playLevel": 4,
+      "rank": 100,
+      "total": 260
+    },
+    "resources": {
+      "wav": {
+        "01": "sample.wav",
+        "02": "branch.wav",
+        "03": "wrong.wav"
+      },
+      "bmp": {},
+      "bpm": {},
+      "stop": {},
+      "text": {}
+    },
+    "measures": [],
+    "bmson": {
+      "info": {
+        "title": "BMSON Key Channels Mines",
+        "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+        "artist": "be-music",
+        "genre": "TEST",
+        "modeHint": "beat-7k",
+        "level": 4,
+        "initBpm": 150,
+        "judgeRank": 100,
+        "total": 260,
+        "lnType": 2,
+        "resolution": 240
+      },
+      "bga": {
+        "header": [],
+        "events": [],
+        "layerEvents": [],
+        "poorEvents": []
+      },
+      "version": "1.0.0"
+    },
+    "controlFlow": [],
+    "events": [
+      "0:01@0/960=02 {\"l\":0,\"c\":false}",
+      "0:11@0/960=01 {\"l\":0,\"c\":false}",
+      "0:12@240/960=01 {\"l\":0,\"c\":false}",
+      "0:11@480/960=01 {\"l\":480,\"c\":false,\"t\":3}",
+      "1:01@0/960=02 {\"l\":0,\"c\":false}",
+      "1:18@0/960=01 {\"l\":240,\"c\":false,\"t\":1}",
+      "1:19@240/960=01 {\"l\":0,\"c\":false}",
+      "1:16@480/960=01 {\"l\":0,\"c\":false}",
+      "1:D1@720/960=03 {\"damage\":0}",
+      "1:D8@840/960=03 {\"damage\":50}",
+      "2:01@0/960=02 {\"l\":0,\"c\":false}",
+      "2:D6@0/960=03 {\"damage\":100}"
+    ]
+  },
+  "stringify": {
+    "format": "bmson",
+    "roundTripPlayableNotesEqual": true,
+    "lines": [
+      "{",
+      "  \"version\": \"1.0.0\",",
+      "  \"info\": {",
+      "    \"title\": \"BMSON Key Channels Mines\",",
+      "    \"subtitle\": \"beatoraja key_channels / ln_type / notes[].t extensions\",",
+      "    \"artist\": \"be-music\",",
+      "    \"genre\": \"TEST\",",
+      "    \"level\": 4,",
+      "    \"init_bpm\": 150,",
+      "    \"mode_hint\": \"beat-7k\",",
+      "    \"resolution\": 240,",
+      "    \"judge_rank\": 100,",
+      "    \"total\": 260",
+      "  },",
+      "  \"lines\": [",
+      "    {",
+      "      \"y\": 0",
+      "    },",
+      "    {",
+      "      \"y\": 960",
+      "    },",
+      "    {",
+      "      \"y\": 1920",
+      "    }",
+      "  ],",
+      "  \"bpm_events\": [],",
+      "  \"stop_events\": [],",
+      "  \"sound_channels\": [",
+      "    {",
+      "      \"name\": \"branch.wav\",",
+      "      \"notes\": [",
+      "        {",
+      "          \"x\": 0,",
+      "          \"y\": 0,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        },",
+      "        {",
+      "          \"x\": 0,",
+      "          \"y\": 960,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        },",
+      "        {",
+      "          \"x\": 0,",
+      "          \"y\": 1920,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        }",
+      "      ]",
+      "    },",
+      "    {",
+      "      \"name\": \"sample.wav\",",
+      "      \"notes\": [",
+      "        {",
+      "          \"x\": 1,",
+      "          \"y\": 0,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        },",
+      "        {",
+      "          \"x\": 2,",
+      "          \"y\": 240,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        },",
+      "        {",
+      "          \"x\": 1,",
+      "          \"y\": 480,",
+      "          \"l\": 480,",
+      "          \"c\": false,",
+      "          \"t\": 3",
+      "        },",
+      "        {",
+      "          \"x\": 6,",
+      "          \"y\": 960,",
+      "          \"l\": 240,",
+      "          \"c\": false,",
+      "          \"t\": 1",
+      "        },",
+      "        {",
+      "          \"x\": 7,",
+      "          \"y\": 1200,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        },",
+      "        {",
+      "          \"x\": 8,",
+      "          \"y\": 1440,",
+      "          \"l\": 0,",
+      "          \"c\": false",
+      "        }",
+      "      ]",
+      "    }",
+      "  ],",
+      "  \"key_channels\": [",
+      "    {",
+      "      \"name\": \"wrong.wav\",",
+      "      \"notes\": [",
+      "        {",
+      "          \"x\": 1,",
+      "          \"y\": 1680,",
+      "          \"damage\": 0",
+      "        },",
+      "        {",
+      "          \"x\": 6,",
+      "          \"y\": 1800,",
+      "          \"damage\": 50",
+      "        },",
+      "        {",
+      "          \"x\": 8,",
+      "          \"y\": 1920,",
+      "          \"damage\": 100",
+      "        }",
+      "      ]",
+      "    }",
+      "  ]",
+      "}",
+      ""
+    ]
+  },
+  "variants": {
+    "default": {
+      "randomPatterns": [],
+      "title": "BMSON Key Channels Mines",
+      "playVariant": "7",
+      "referenceBpm": 150,
+      "timing": {
+        "tempo": [
+          "0 150 0"
+        ],
+        "stops": []
+      },
+      "sampleTriggers": [
+        "0 01 02 ~1600000",
+        "0 11 01 ~400000",
+        "400000 12 01 ~400000",
+        "800000 11 01 ~800000",
+        "1600000 01 02 ~1600000",
+        "1600000 18 01 ~400000",
+        "2000000 19 01 ~400000",
+        "2400000 16 01",
+        "3200000 01 02"
+      ],
+      "playlogChart": {
+        "sourceFormat": "bmson",
+        "laneMode": "7 KEY SP",
+        "lnMode": 2,
+        "judgeRank": {
+          "percent": 75,
+          "sourceRank": 100,
+          "sourceExRank": 100
+        },
+        "noteCount": 6,
+        "title": "BMSON Key Channels Mines",
+        "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+        "artist": "be-music",
+        "genre": "TEST",
+        "total": 260
+      },
+      "notes": [
+        "0 11 normal",
+        "400000 12 normal",
+        "800000 11 long ->1600000 ln3",
+        "1600000 18 long ->2000000 ln1",
+        "2000000 19 normal",
+        "2400000 16 normal",
+        "2800000 11 mine dmg0",
+        "3000000 18 mine dmg50",
+        "3200000 16 mine dmg100"
+      ],
+      "play": {
+        "missed": {
+          "inputs": 0,
+          "lr2": {
+            "ruleset": "lr2/1",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 6,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 6,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "GROOVE",
+              "final": 2,
+              "cleared": false
+            },
+            "score": 0
+          },
+          "beatoraja": {
+            "ruleset": "beatoraja/1",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 7,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 7,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 2,
+              "cleared": false
+            }
+          },
+          "iidx": {
+            "ruleset": "iidx/1",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 6,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 8,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 0,
+              "cleared": false
+            }
+          }
+        },
+        "perfect": {
+          "inputs": 12,
+          "lr2": {
+            "ruleset": "lr2/1",
+            "judge": {
+              "pgreat": 6,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 12,
+            "noteCount": 6,
+            "maxCombo": 6,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "GROOVE",
+              "final": 100,
+              "cleared": true
+            },
+            "score": 200000
+          },
+          "beatoraja": {
+            "ruleset": "beatoraja/1",
+            "judge": {
+              "pgreat": 7,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 14,
+            "noteCount": 7,
+            "maxCombo": 7,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            }
+          },
+          "iidx": {
+            "ruleset": "iidx/1",
+            "judge": {
+              "pgreat": 8,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 16,
+            "noteCount": 8,
+            "maxCombo": 8,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            }
+          }
+        },
+        "offset": {
+          "inputs": 12,
+          "lr2": {
+            "ruleset": "lr2/1",
+            "judge": {
+              "pgreat": 3,
+              "great": 2,
+              "good": 1,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 1,
+            "slow": 2,
+            "exScore": 8,
+            "noteCount": 6,
+            "maxCombo": 6,
+            "djLevel": "A",
+            "gauge": {
+              "type": "GROOVE",
+              "final": 100,
+              "cleared": true
+            },
+            "score": 141666
+          },
+          "beatoraja": {
+            "ruleset": "beatoraja/1",
+            "judge": {
+              "pgreat": 4,
+              "great": 3,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 1,
+            "slow": 2,
+            "exScore": 11,
+            "noteCount": 7,
+            "maxCombo": 7,
+            "djLevel": "AA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            }
+          },
+          "iidx": {
+            "ruleset": "iidx/1",
+            "judge": {
+              "pgreat": 5,
+              "great": 2,
+              "good": 1,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 1,
+            "slow": 2,
+            "exScore": 12,
+            "noteCount": 8,
+            "maxCombo": 8,
+            "djLevel": "A",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

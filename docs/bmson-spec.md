@@ -185,8 +185,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - If `preservation.bmson.lines` is not present, `lines` will be automatically generated from the bar length of IR.
 - If `bmson.barlinesSuppressed` is `true`, output `lines: []`.
 - `sound_channels` outputs in `wav` keys
-- `info.mode_hint` is `bmson.info.modeHint` when set; otherwise `keyboard-24k` / `keyboard-24k-double` for a `24 KEY SP` / `48 KEY DP` chart, else `beat-<lanes>k`
-- Under a keyboard hint each lane gets its fixed `x` from the table above (wheel included), so the chart re-parses onto the same lanes; other hints number the lanes in use from `x = 1`
+- `info.mode_hint` is `bmson.info.modeHint` when set; otherwise `keyboard-24k` / `keyboard-24k-double` for a `24 KEY SP` / `48 KEY DP` chart, else the play variant's hint (`beat-5k` / `beat-7k` / `beat-10k` / `beat-14k` / `popn-9k`) when every lane in use is in its table, else `beat-<lanes>k`
+- Under every hint in the table above (keyboard layouts and wheel included) each lane gets its fixed `x` from that table, so the chart re-parses onto the same lanes; lanes outside the table follow after it, and unknown hints number the lanes in use from `x = 1`
 - Generate `bpm_events` from `03` / `08` channels
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)

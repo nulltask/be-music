@@ -714,6 +714,102 @@ describe('stringifier', () => {
     expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual(['15', '1Q', '2E', '2P']);
   });
 
+  describe('bmson stringify: keeps every lane of a non-keyboard mode_hint through parse → stringify → parse', () => {
+    const laneCounts: Array<[string, number]> = [
+      ['beat-5k', 6],
+      ['beat-7k', 8],
+      ['beat-10k', 12],
+      ['beat-14k', 16],
+      ['popn-5k', 5],
+      ['popn-9k', 9],
+    ];
+    // Measure + fraction as one number, since the output resolution rewrites the position denominators.
+    const toChannels = (json: ReturnType<typeof parseBmson>) =>
+      json.events.map((event) => `${event.measure + event.position[0] / event.position[1]}:${event.channel}`).sort();
+
+    test.each(laneCounts)('%s', (modeHint, laneCount) => {
+      const xs = Array.from({ length: laneCount }, (_, index) => index + 1);
+      const source = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { title: modeHint, init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [{ name: 'key.wav', notes: xs.map((x) => ({ x, y: x * 60 })) }],
+          key_channels: [{ name: 'mine.wav', notes: xs.map((x) => ({ x, y: x * 60 + 30 })) }],
+        }),
+      );
+      // A different resolution skips the preserved document, so the lanes go through the canonical writer.
+      const output = JSON.parse(stringifyBmson(source, { resolution: 480 })) as {
+        info: { mode_hint: string };
+        sound_channels: Array<{ notes: Array<{ x: number }> }>;
+      };
+
+      expect(output.info.mode_hint).toBe(modeHint);
+      expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual(xs);
+      expect(toChannels(parseBmson(JSON.stringify(output)))).toEqual(toChannels(source));
+    });
+
+    test('bmson-key-channels-mines.bmson (beat-7k, keys 6 / 7, scratch and mines)', async () => {
+      const source = parseBmson(
+        await readFile(resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson'), 'utf8'),
+      );
+      expect(toChannels(parseBmson(stringifyBmson(source)))).toEqual(toChannels(source));
+    });
+
+    test('an unknown hint numbers the lanes in use from 1', () => {
+      const source = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { title: 'Unknown', init_bpm: 120, resolution: 240, mode_hint: 'custom-3k' },
+          sound_channels: [
+            {
+              name: 'key.wav',
+              notes: [
+                { x: 4, y: 0 },
+                { x: 9, y: 240 },
+                { x: 20, y: 480 },
+              ],
+            },
+          ],
+        }),
+      );
+      const output = JSON.parse(stringifyBmson(source, { resolution: 480 })) as {
+        sound_channels: Array<{ notes: Array<{ x: number }> }>;
+      };
+      expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual([1, 2, 3]);
+    });
+  });
+
+  test('bmson stringify: writes a 7 KEY BMS with scratch and keys 6 / 7 as beat-7k on its fixed lanes', () => {
+    const source = parseChart(
+      ['#BPM 120', '#WAV01 key.wav', '#00111:01', '#00116:01', '#00118:01', '#00119:01', ''].join('\n'),
+    );
+    const output = JSON.parse(stringifyBmson(source)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe('beat-7k');
+    expect(output.sound_channels[0]!.notes.map((note) => note.x).sort((a, b) => a - b)).toEqual([1, 6, 7, 8]);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(['11', '16', '18', '19']);
+  });
+
+  test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional beat-9k hint', () => {
+    const lanes = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+    const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
+    const output = JSON.parse(stringifyBmson(source)) as { info: { mode_hint: string } };
+
+    expect(output.info.mode_hint).toBe('beat-9k');
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(lanes);
+  });
+
   test('bmson stringify: omits `key_channels` when the chart has no mines', () => {
     const source = parseBmson(
       JSON.stringify({
@@ -723,6 +819,25 @@ describe('stringifier', () => {
       }),
     );
     expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
+  });
+
+  test('bmson stringify: rescales preserved `lines` to the output resolution', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson');
+    const parsed = parseBmson(await readFile(chartPath, 'utf8'));
+
+    const output = JSON.parse(stringifyBmson(parsed, { resolution: 480 })) as {
+      info: { resolution: number };
+      lines: Array<{ y: number }>;
+    };
+    expect(output.info.resolution).toBe(480);
+    expect(output.lines.map((line) => line.y)).toEqual([0, 1920, 3840]);
+
+    const toTiming = (event: { measure: number; position: readonly [number, number] }) => ({
+      measure: event.measure,
+      fraction: event.position[0] / event.position[1],
+    });
+    const reparsed = parseBmson(JSON.stringify(output));
+    expect(reparsed.events.map(toTiming)).toEqual(parsed.events.map(toTiming));
   });
 
   test('bmson stringify: writes BMS STOP lengths as pulses at the output resolution', () => {

@@ -20,6 +20,9 @@ const BENCH_AUDIO_CONTEXT = {
   addEventListener: () => undefined,
 } as unknown as BaseAudioContext;
 
+/** Stand-in for `navigator` with an audio session (Node has none), so the session helpers take their applying path. */
+const BENCH_AUDIO_SESSION_HOST: playerWebCoreApi.SystemAudioSessionHost = { audioSession: { type: 'auto' } };
+
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
@@ -601,6 +604,34 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.masterOutput', {
     run: () => {
       playerWebCoreApi.masterOutput(BENCH_AUDIO_CONTEXT);
+    },
+  });
+  define('player-web.getSystemAudioSession', {
+    run: () => {
+      playerWebCoreApi.getSystemAudioSession(BENCH_AUDIO_SESSION_HOST);
+    },
+  });
+  define('player-web.supportsSystemAudioSession', {
+    run: () => {
+      playerWebCoreApi.supportsSystemAudioSession(BENCH_AUDIO_SESSION_HOST);
+    },
+  });
+  define('player-web.applySystemAudioSessionType', {
+    run: () => {
+      playerWebCoreApi.applySystemAudioSessionType('ambient', BENCH_AUDIO_SESSION_HOST);
+      playerWebCoreApi.applySystemAudioSessionType('auto', BENCH_AUDIO_SESSION_HOST);
+    },
+  });
+  define('player-web.resolveSilentModeAudioSessionType', {
+    run: () => {
+      playerWebCoreApi.resolveSilentModeAudioSessionType(true);
+      playerWebCoreApi.resolveSilentModeAudioSessionType(false);
+    },
+  });
+  define('player-web.applySilentModePlayback', {
+    run: () => {
+      playerWebCoreApi.applySilentModePlayback(true, BENCH_AUDIO_SESSION_HOST);
+      playerWebCoreApi.applySilentModePlayback(false, BENCH_AUDIO_SESSION_HOST);
     },
   });
   define('player-web.pickRecorderMimeType', {
