@@ -19,6 +19,7 @@
     "format:check": "vp fmt --check",
     "test": "vp test run",
     "test:coverage": "vp test run --coverage",
+    "test:regression": "vp test run --project regression",
     "bench": "node --conditions=source scripts/bench/exports.ts",
     "bench:aggregate": "node --conditions=source scripts/bench/aggregate-results.ts",
     "bench:compare": "node --conditions=source scripts/bench/compare-results.ts",

@@ -48,7 +48,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into unified `metadata.backBmp`, `metadata.banner`, and `metadata.stageFile`
 - [x] Treat an explicit `lines: []` as barline suppression and keep it in `bmson.barlinesSuppressed`
 - [x] Treat missing `lines` as the bmson 4/4 default model
-- [x] Treat missing / non-numeric `info.total` as the bmson default `100`, take the absolute value of a negative one, and keep `0` (the lifebar does not increase)
+- [x] Treat missing / non-numeric `info.total` as the bmson default `100`, take the absolute value of a negative one, and keep `0` as written
 - [x] Treat missing, zero, negative, or non-numeric `info.init_bpm` as a parse error
 - [ ] Validation of `version` (turning `null` into an error, treating legacy as unspecified)
 - [ ] Clarification of policy for determining compatibility of `version` with SemVer
@@ -137,6 +137,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Also read the root `resolution` for compatibility, and adopt it if `info.resolution` is not present.
 - Reject the document when `info.init_bpm` is missing or not a positive finite number.
 - Use `info.total` when finite (normalizing a negative value to its absolute value per the spec), otherwise apply the bmson default `100`.
+- `info.total` is a percentage of the player's default TOTAL, not an absolute TOTAL. Every player ruleset (`lr2`, `beatoraja`, `iidx`) plays it as `total / 100 ×` its own default TOTAL, and a value ≤ 0 means 100 % — the beatoraja behaviour (`BMSPlayerRule.validate`) — so `total: 0` does not freeze the gauge even though the spec says the lifebar then does not increase. See [player-spec](./player-spec.md#initial-and-default-values-lr2).
 - Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into normalized metadata image fields.
 - Register `sound_channels[i].name` in `resources.wav[key]`
 - Convert `key = base36(i + 1)` to 2 digits
@@ -188,8 +189,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - If `preservation.bmson.lines` is not present, `lines` will be automatically generated from the bar length of IR.
 - If `bmson.barlinesSuppressed` is `true`, output `lines: []`.
 - `sound_channels` outputs in `wav` keys
-- `info.mode_hint` is `bmson.info.modeHint` when set; otherwise `keyboard-24k` / `keyboard-24k-double` for a `24 KEY SP` / `48 KEY DP` chart, else `beat-<lanes>k`
-- Under a keyboard hint each lane gets its fixed `x` from the table above (wheel included), so the chart re-parses onto the same lanes; other hints number the lanes in use from `x = 1`
+- `info.mode_hint` is `bmson.info.modeHint` when set; otherwise `keyboard-24k` / `keyboard-24k-double` for a `24 KEY SP` / `48 KEY DP` chart, else the play variant's hint (`beat-5k` / `beat-7k` / `beat-10k` / `beat-14k` / `popn-9k`) when every lane in use is in its table, else `beat-<lanes>k`
+- Under every hint in the table above (keyboard layouts and wheel included) each lane gets its fixed `x` from that table, so the chart re-parses onto the same lanes; lanes outside the table follow after it, and unknown hints number the lanes in use from `x = 1`
 - Generate `bpm_events` from `03` / `08` channels
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)

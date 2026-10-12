@@ -98,7 +98,10 @@ export interface RulesetConfig {
   gauge: GaugeSpec;
   /** EX-SCORE denominator note count (longs count 1 for LN styles, 2 for charge styles). */
   noteCount: number;
-  /** Effective TOTAL after the ruleset's default formula. */
+  /**
+   * The TOTAL the gauge runs on: BMS `#TOTAL` as is, bmson `info.total` as a percentage of this ruleset's default, or
+   * the default itself when the chart names none (or a value ≤ 0).
+   */
   effectiveTotal: number;
   /** LR2 money score (`(4PG + 2GR + GD) × 50000 / notes`, floored). */
   moneyScore: boolean;
@@ -619,20 +622,29 @@ function countRulesetNotes(chart: RulesetChartFacts, style: LongNoteStyle): numb
   return count;
 }
 
+/**
+ * The TOTAL a ruleset falls back to when the chart names none: LR2's note-count curve for `lr2`, beatoraja's formula
+ * for `beatoraja`. The `iidx` gauge never reads TOTAL (its recovery comes from {@link resolveIidxGaugeUnit}), so its
+ * reported TOTAL follows the `lr2` curve.
+ */
+function resolveDefaultTotal(rulesetId: PlaylogRulesetId, baseNoteCount: number): number {
+  return rulesetId === 'beatoraja'
+    ? resolveBeatorajaDefaultTotal(baseNoteCount)
+    : resolveLr2DefaultTotal(baseNoteCount);
+}
+
+/**
+ * The TOTAL the gauge runs on. BMS `#TOTAL` is absolute; bmson `info.total` is a percentage of the ruleset's own
+ * default TOTAL (bmson 1.0.0; beatoraja `BMSPlayerRule.validate`: `total > 0 ? total / 100 × default : default`).
+ * Either way a value ≤ 0 means "use the default", so bmson `total: 0` does not freeze the gauge.
+ */
 function resolveEffectiveTotal(rulesetId: PlaylogRulesetId, chart: RulesetChartFacts, baseNoteCount: number): number {
+  const fallback = resolveDefaultTotal(rulesetId, baseNoteCount);
   const raw = chart.total;
-  if (rulesetId === 'beatoraja') {
-    const fallback = resolveBeatorajaDefaultTotal(baseNoteCount);
-    if (chart.sourceFormat === 'bmson') {
-      // bmson `info.total` is a percentage of the default TOTAL in beatoraja.
-      return typeof raw === 'number' && raw > 0 ? (raw / 100) * fallback : fallback;
-    }
-    return typeof raw === 'number' && raw > 0 ? raw : fallback;
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) {
+    return fallback;
   }
-  if (typeof raw === 'number' && raw > 0) {
-    return raw;
-  }
-  return resolveLr2DefaultTotal(baseNoteCount);
+  return chart.sourceFormat === 'bmson' ? (raw / 100) * fallback : raw;
 }
 
 /**
@@ -719,7 +731,7 @@ export function resolveRuleset(
   }
 
   const noteCount = countRulesetNotes(chart, 'charge');
-  const effectiveTotal = resolveEffectiveTotal('lr2', chart, baseNotes);
+  const effectiveTotal = resolveEffectiveTotal('iidx', chart, baseNotes);
   return {
     id: 'iidx/1',
     rulesetId: 'iidx',
