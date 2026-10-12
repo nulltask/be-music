@@ -179,7 +179,7 @@ How beatoraja and other players read the same fields is compared in [BMS / bmson
 - The beatoraja extensions are read as jbms-parser (beatoraja) reads them. Both go through the same `mode_hint` lane map as `sound_channels`; a note whose `x` has no lane is dropped. Their WAVs are registered after `sound_channels`, `key_channels` first, then `mine_channels`
   - `key_channels` are hidden notes: each note becomes a BMS invisible object (`3x` / `4x`, including the extended `3A`-`3Q` / `4A`-`4Q`) that plays its channel's sample as the lane's keysound and is never judged. Only `x` and `y` are read
   - `mine_channels` are mines: each note becomes a BMS landmine (`Dx` / `Ex`) and keeps `damage` in `events[].bmson.damage`. The event value is the WAV slot registered for the mine channel, so the player never reads it as damage: a mine without `damage` deals the default `4` (%), the same fallback as an invalid BMS mine value
-  - beatoraja drops a mine inside a long note or on a position a note already uses; be-music keeps it
+  - beatoraja drops a mine inside a long note or on a position a note already uses; be-music keeps it, as LR2 keeps such BMS mines (see [BMS / bmson compatibility notes §2.6](./format-compat.md#26-mines))
 - `bga` is kept in `bmson.bga`
 
 ## BMS/BMSON intermediate representation -> BMSON conversion (stringifier)
