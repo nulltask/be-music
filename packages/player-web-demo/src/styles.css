@@ -2068,3 +2068,78 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
     animation: none;
   }
 }
+
+/* One-line explanation under a Debug Menu setting (e.g. "Play in silent mode"). */
+.lil-gui .gui-note {
+  padding: 0 var(--padding) 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: rgb(210 217 228 / 0.75);
+}
+
+/*
+ * "No sound?" hint, shown once on an iPhone / iPad when sound first starts. Top-centre, clear of the Debug Menu
+ * (top-right), the search box (bottom-left) and Help (bottom-right); it never blocks the stage and leaves by itself.
+ */
+.silent-mode-hint {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(520px, calc(100vw - 32px));
+  padding: 6px 6px 6px 12px;
+  border: 1px solid rgb(255 209 102 / 0.35);
+  border-radius: 10px;
+  background: rgb(11 14 22 / 0.85);
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.35;
+  transform: translateX(-50%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: silent-mode-hint-in 0.25s ease-out;
+}
+
+.silent-mode-hint-text {
+  flex: 1 1 auto;
+}
+
+.silent-mode-hint-action,
+.silent-mode-hint-dismiss {
+  flex: none;
+  min-height: 32px;
+  border: 1px solid rgb(255 209 102 / 0.5);
+  border-radius: 7px;
+  background: transparent;
+  color: #ffd166;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.silent-mode-hint-action {
+  padding: 0 10px;
+}
+
+.silent-mode-hint-dismiss {
+  width: 32px;
+  border-color: transparent;
+  color: rgb(210 217 228 / 0.85);
+  font-size: 16px;
+}
+
+@keyframes silent-mode-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .silent-mode-hint {
+    animation: none;
+  }
+}
