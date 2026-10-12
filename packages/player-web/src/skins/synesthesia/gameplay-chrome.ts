@@ -64,6 +64,7 @@ import {
   loadingDots,
   type BeMusicGameplayLayout,
   type BeMusicGameplayRuntime,
+  type BeMusicLaneKind,
   STAGE_BGA_BAND,
   STAGE_HEIGHT as DESIGN_HEIGHT,
   STAGE_SIDE_COLUMN,
@@ -414,10 +415,12 @@ const NO_MONITOR: BeMusicRect = { x: 0, y: 0, w: 0, h: 0 };
 /** Horizontal centre of the stage — the space's vanishing point. */
 const CENTER_X = DESIGN_WIDTH / 2;
 
-const IMPULSE_COLORS: Record<'white' | 'black' | 'scratch', number> = {
+const IMPULSE_COLORS: Record<BeMusicLaneKind, number> = {
   white: SYN_EMBER,
   black: SYN_CYAN,
   scratch: SYN_MAGENTA,
+  'wheel-up': SYN_MAGENTA,
+  'wheel-down': SYN_MAGENTA,
 };
 
 /**

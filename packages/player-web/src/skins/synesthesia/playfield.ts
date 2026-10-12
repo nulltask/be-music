@@ -28,6 +28,7 @@ import {
   type PixiNoteContext,
   type ChildPool,
   keyBeamGradient,
+  wheelArrowPoints,
 } from '../pixi-kit/index.ts';
 
 /** Per-lane-class light: note body, glow hue (0..1), and the colour the lane beam / key cap light up in. */
@@ -43,10 +44,14 @@ interface LaneLight {
  * Lane lights. `body` colours the notes: they differ in lightness as well as hue (white, deep blue, hot magenta) so the
  * three lane kinds stay apart at a glance, even on a lit beam; `glow` colours beams, halos, and bursts.
  */
+const SCRATCH_LIGHT: LaneLight = { body: 0xff2b8a, glow: 0xff3d9e, hue: 0.92 };
+// The 24 / 48 KEY wheel stands where the scratch would, and burns the same magenta.
 const LIGHTS: Record<BeMusicLaneKind, LaneLight> = {
   white: { body: 0xffffff, glow: 0xff7a1e, hue: 0.07 },
   black: { body: 0x2f6dff, glow: 0x3fb4ff, hue: 0.57 },
-  scratch: { body: 0xff2b8a, glow: 0xff3d9e, hue: 0.92 },
+  scratch: SCRATCH_LIGHT,
+  'wheel-up': SCRATCH_LIGHT,
+  'wheel-down': SCRATCH_LIGHT,
 };
 
 const NOTE_HEIGHT = 8;
@@ -106,6 +111,9 @@ export function renderSynesthesiaLanes({
       .rect(x + 1, bottom + 4, Math.max(2, w - 2), 10)
       .fill({ color: pressed ? light.glow : 0x140804, alpha: 0.9 });
     graphics.rect(x + 1, bottom + 13, Math.max(2, w - 2), 1).fill({ color: light.glow, alpha: pressed ? 1 : 0.45 });
+    // A wheel lane's cap carries the way it turns.
+    const arrow = wheelArrowPoints(lane.kind, x + w / 2, bottom + 8.5, Math.min(3.5, (w - 2) / 3));
+    if (arrow) graphics.poly(arrow).fill({ color: pressed ? 0x140804 : light.glow, alpha: 0.95 });
   }
   if (lanes.length === 0) return;
   // Close each play side's grid on its right edge (each lane only draws its left hairline).
