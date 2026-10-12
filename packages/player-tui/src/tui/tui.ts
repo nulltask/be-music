@@ -80,7 +80,6 @@ interface TuiFrame {
   currentSeconds: number;
   /** Mirrored display clock past the LR2 negative-BPM reversal (#134) — the lane grid scrolls from it when set. */
   displayBeat?: number;
-  displaySeconds?: number;
   /** Chart time of the LR2 reversal, when the chart has one — the BGA and the BPM readout freeze there. */
   reversalSeconds?: number;
   totalSeconds: number;

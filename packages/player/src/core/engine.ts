@@ -1880,8 +1880,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     reversalSeconds === undefined
       ? seconds
       : Math.min(seconds, reversalSeconds - 2 * REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS);
-  const displayBeatAtSeconds =
-    reversalSeconds === undefined ? undefined : createBeatAtSecondsResolverFromTimingResolver(timingResolver);
   const realtimeAudioVolumeEvents = dropEventsAtOrAfterReversal(
     collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver),
     reversalSeconds,
@@ -2080,10 +2078,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     invisibleNotes,
     audioBackend: audioBackendLabel,
     resolveDebugActiveAudioState,
-    reversal:
-      reversalSeconds === undefined || displayBeatAtSeconds === undefined
-        ? undefined
-        : { seconds: reversalSeconds, beatAtSeconds: displayBeatAtSeconds },
+    reversal: timingResolver.reversal,
   });
 
   if (!uiEnabled) {
@@ -2568,10 +2563,6 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
-  // Dedicated instance for the mirrored display clock — the shared `beatAtSeconds` keeps a monotonic stop-window
-  // cursor that the decreasing mirrored input would thrash.
-  const displayBeatAtSeconds =
-    reversalSeconds === undefined ? undefined : createBeatAtSecondsResolverFromTimingResolver(timingResolver);
   const nonPlayableRealtimeAudioTriggers = dropEventsAtOrAfterReversal(
     collectRealtimeAudioTriggers(
       resolvedJson,
@@ -2799,10 +2790,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     invisibleNotes,
     audioBackend: audioBackendLabel,
     resolveDebugActiveAudioState: () => resolveDebugActiveAudioState(),
-    reversal:
-      reversalSeconds === undefined || displayBeatAtSeconds === undefined
-        ? undefined
-        : { seconds: reversalSeconds, beatAtSeconds: displayBeatAtSeconds },
+    reversal: timingResolver.reversal,
   });
 
   if (!uiEnabled) {

@@ -73,19 +73,17 @@ describe('player ui signal bus', () => {
       currentBeat: 12,
       currentSeconds: 6,
       displayBeat: 4,
-      displaySeconds: 2,
       reversalSeconds: 4,
       totalSeconds: 10,
       summary,
       notes: [],
     });
     expect(uiBus.getFrame().displayBeat).toBe(4);
-    expect(uiBus.getFrame().displaySeconds).toBe(2);
     expect(uiBus.getFrame().reversalSeconds).toBe(4);
 
     // The fields are per-frame: a frame published without them clears the previous ones.
     uiBus.publishFrame({ currentBeat: 13, currentSeconds: 6.5, totalSeconds: 10, summary, notes: [] });
     expect(uiBus.getFrame().displayBeat).toBeUndefined();
-    expect(uiBus.getFrame().displaySeconds).toBeUndefined();
+    expect(uiBus.getFrame().reversalSeconds).toBeUndefined();
   });
 });

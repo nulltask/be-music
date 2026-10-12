@@ -1,3 +1,4 @@
+import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/audio-renderer/triggers';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
 import { type PlayerInputCommand, type PlayerInputSignalBus } from './input-signal-bus.ts';
@@ -135,12 +136,12 @@ export function createUiFramePublisher(params: {
     seconds: number,
   ) => Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
   /**
-   * LR2 negative-BPM reversal anchor. Past `seconds`, frames carry a mirrored display clock
-   * (`displaySeconds = 2 * seconds - now`) so renderers scroll backwards while the true clock keeps advancing.
-   * `beatAtSeconds` must be a dedicated resolver instance — the mirrored input decreases every frame, and sharing
-   * the judge path's instance would thrash its monotonic stop-window cursor.
+   * LR2 negative-BPM reversal anchor. Past `seconds`, frames carry a display beat mirrored in chart-POSITION space —
+   * `displayBeat = 2 * beat - currentBeat` — exactly like LR2's `songtimer = 2 * bpmChangedBmstime - songtimer`
+   * (LR2body.exe 0x406d81). The forward beat keeps following the tempo map past the reversal, so the reverse scroll
+   * runs at the post-reversal |BPM| and a post-reversal STOP pauses it.
    */
-  reversal?: { seconds: number; beatAtSeconds: (seconds: number) => number };
+  reversal?: TempoReversalPoint;
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
@@ -159,19 +160,14 @@ export function createUiFramePublisher(params: {
       return;
     }
     const debugState = resolveDebugActiveAudioState(seconds);
-    let displayBeat: number | undefined;
-    let displaySeconds: number | undefined;
-    if (reversal !== undefined && seconds > reversal.seconds) {
-      // Once the mirror rewinds past the chart head the display pins there (a documented deviation — real LR2
-      // keeps receding into negative positions; see docs/bms-spec.md "Negative BPM").
-      displaySeconds = Math.max(0, reversal.seconds * 2 - seconds);
-      displayBeat = reversal.beatAtSeconds(displaySeconds);
-    }
+    const displayBeat =
+      reversal !== undefined && seconds > reversal.seconds
+        ? mirrorBeatAtTempoReversal(reversal, seconds, beat)
+        : undefined;
     uiSignals.publishFrame({
       currentBeat: beat,
       currentSeconds: seconds,
       displayBeat,
-      displaySeconds,
       reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,

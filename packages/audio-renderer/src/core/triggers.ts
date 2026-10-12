@@ -42,6 +42,26 @@ export interface TempoReversalPoint {
   seconds: number;
 }
 
+/**
+ * Display beat past an LR2 negative-BPM reversal. LR2 mirrors the chart POSITION, not the clock:
+ * `songtimer = 2 * bpmChangedBmstime - songtimer` on the forward position (OpenLR2 `LR2f.cpp:2185-2188`, LR2body.exe
+ * 0x406d81), so the chart recedes exactly as fast as the forward beat advances through the post-reversal tempo map —
+ * at the |BPM| of the negative value, following later tempo changes, and pausing during post-reversal STOPs.
+ *
+ * Returns `beat` unchanged at or before the reversal. Past it the mirrored beat pins at the chart head instead of
+ * receding into negative positions (a documented deviation — see docs/bms-spec.md "Negative BPM").
+ */
+export function mirrorBeatAtTempoReversal(
+  reversal: TempoReversalPoint | undefined,
+  seconds: number,
+  beat: number,
+): number {
+  if (reversal === undefined || seconds <= reversal.seconds) {
+    return beat;
+  }
+  return Math.max(0, reversal.beat * 2 - beat);
+}
+
 export interface TimingResolver {
   tempoPoints: TempoPoint[];
   stopPoints: StopPoint[];

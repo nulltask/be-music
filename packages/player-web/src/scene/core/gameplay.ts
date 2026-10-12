@@ -18,6 +18,7 @@ import {
   collectSampleTriggers,
   createBmsonSamplePlaybackMap,
   createTimingResolver,
+  mirrorBeatAtTempoReversal,
   type TimedSampleTrigger,
 } from '@be-music/audio-renderer/triggers';
 import {
@@ -2400,35 +2401,34 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   protected currentBeat(seconds: number): number {
+    // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls backwards.
+    // LR2 mirrors the chart POSITION around the reversal (`2 * pos(R) - pos(now)`), so the reverse scroll runs at the
+    // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
+    // lines, beatPhase — funnels through this method, so mirroring here covers them all; the forward beat underneath
+    // keeps `beatAtSeconds`'s monotonic stop-window cursor intact.
+    return mirrorBeatAtTempoReversal(this.timingResolver?.reversal, seconds, this.forwardBeat(seconds));
+  }
+
+  private forwardBeat(seconds: number): number {
     // Prefer the proper STOP-aware resolver (built once per song in `prepareSong`). Falls back to a flat-BPM
     // extrapolation when the resolver isn't ready yet (very early frames during mount).
     const resolver = this.timingResolver;
-    // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls
-    // backwards at |BPM| — the display clock mirrors around the reversal point while audio / judging stay on
-    // the true clock (the engine freezes them; see `TimingResolver.reversal`). Every display consumer —
-    // renderNotes, measure lines, beatPhase, NOWBPM — funnels through this method, so mirroring here covers
-    // them all. Note: `beatAtSeconds` keeps a monotonic stop-window cursor that resets on backwards input, so
-    // the shared instance gets reset every frame post-reversal — acceptable (a cheap re-scan per frame), not
-    // worth extra machinery to avoid.
-    const reversalSeconds = resolver?.reversal?.seconds;
-    const displaySeconds =
-      reversalSeconds !== undefined && seconds > reversalSeconds ? 2 * reversalSeconds - seconds : seconds;
     if (this.beatAtSeconds && resolver && resolver.tempoPoints.length > 0) {
-      return this.beatAtSeconds(displaySeconds);
+      return this.beatAtSeconds(seconds);
     }
     if (!resolver || resolver.tempoPoints.length === 0) {
       const bpm = this.song?.bpm ?? 130;
-      return Math.max(0, displaySeconds * (bpm / 60));
+      return Math.max(0, seconds * (bpm / 60));
     }
     let active = resolver.tempoPoints[0]!;
     for (const point of resolver.tempoPoints) {
-      if (point.seconds <= displaySeconds) {
+      if (point.seconds <= seconds) {
         active = point;
       } else {
         break;
       }
     }
-    return Math.max(0, active.beat + ((displaySeconds - active.seconds) * active.bpm) / 60);
+    return Math.max(0, active.beat + ((seconds - active.seconds) * active.bpm) / 60);
   }
 
   /**

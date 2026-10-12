@@ -35,7 +35,7 @@ const SUMMARY: PlayerUiFramePayload['summary'] = {
 };
 
 describe('createUiFramePublisher', () => {
-  test('mirrors the display clock past the LR2 reversal and pins it at the chart head', () => {
+  test('mirrors the display beat in chart-position space past the LR2 reversal and pins it at the chart head', () => {
     const { uiSignals, frames } = createCapturingUiSignals();
     const publish = createUiFramePublisher({
       uiEnabled: true,
@@ -45,30 +45,34 @@ describe('createUiFramePublisher', () => {
       notes: [],
       audioBackend: 'test-audio',
       resolveDebugActiveAudioState: () => ({}),
-      // BPM constant on the mirrored leg: 1 second = 2 beats.
-      reversal: { seconds: 2, beatAtSeconds: (seconds) => seconds * 2 },
+      // LR2 mirrors the chart POSITION (`display = 2 * pos(R) - pos(now)`), so the publisher needs only the
+      // reversal's beat — the forward beat it is handed already follows the post-reversal tempo map.
+      reversal: { seconds: 2, beat: 4 },
     });
 
-    // Before the reversal the true clock is the display clock — no mirrored fields.
+    // Before the reversal the true clock is the display clock — no mirrored field.
     publish(1, 2);
     // Exactly AT the reversal the mirror has not started yet (strictly past only).
     publish(2, 4);
-    // Past it the display clock recedes: displaySeconds = 2 * reversal - now.
-    publish(3, 6);
+    // Past it the display recedes by however far the FORWARD beat advanced — here 1.5 beats in a second (the
+    // post-reversal tempo), not the 2 beats a second the pre-reversal leg ran at.
+    publish(3, 5.5);
+    // A post-reversal STOP freezes the forward beat, so the mirrored display pauses with it.
+    publish(3.5, 5.5);
     // Once the mirror rewinds past the chart head the display pins at 0 instead of going negative.
-    publish(5, 10);
+    publish(9, 12);
 
-    expect(frames).toHaveLength(4);
+    expect(frames).toHaveLength(5);
     expect(frames[0]).toMatchObject({ currentSeconds: 1, currentBeat: 2, reversalSeconds: 2 });
-    expect(frames[0]?.displaySeconds).toBeUndefined();
     expect(frames[0]?.displayBeat).toBeUndefined();
-    expect(frames[1]?.displaySeconds).toBeUndefined();
     expect(frames[1]?.displayBeat).toBeUndefined();
-    expect(frames[2]).toMatchObject({ currentSeconds: 3, displaySeconds: 1, displayBeat: 2 });
-    expect(frames[3]).toMatchObject({ currentSeconds: 5, displaySeconds: 0, displayBeat: 0 });
+    expect(frames[2]).toMatchObject({ currentSeconds: 3, currentBeat: 5.5, displayBeat: 2.5 });
+    expect(frames[3]).toMatchObject({ currentSeconds: 3.5, currentBeat: 5.5, displayBeat: 2.5 });
+    expect(frames[4]).toMatchObject({ currentSeconds: 9, displayBeat: 0 });
     // The reversal anchor rides on EVERY frame while armed — renderers freeze BGA layers against it.
     for (const frame of frames) {
       expect(frame.reversalSeconds).toBe(2);
+      expect(frame).not.toHaveProperty('displaySeconds');
     }
   });
 
@@ -87,7 +91,6 @@ describe('createUiFramePublisher', () => {
     publish(3, 6);
 
     expect(frames).toHaveLength(1);
-    expect(frames[0]?.displaySeconds).toBeUndefined();
     expect(frames[0]?.displayBeat).toBeUndefined();
     expect(frames[0]?.reversalSeconds).toBeUndefined();
   });
