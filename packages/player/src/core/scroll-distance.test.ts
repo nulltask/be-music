@@ -18,17 +18,21 @@ describe('scroll distance', () => {
       ],
     );
 
-    // Before the first #SPEED keyframe its value (3) holds flat — Bemuse semantics — while #SCROLL stays at the
-    // implicit 1 until its first event: 3 × 1 × 4 beats.
-    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(12, 6);
+    // Before the first #SPEED keyframe the speed ramps from 1 at beat 0 to its value (3), as beatoraja ramps from 1.0
+    // at time 0, while #SCROLL stays at the implicit 1 until its first event: (1 + 3) / 2 × 4 beats.
+    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(8, 6);
     expect(mapper.distanceBetween(4, 8)).toBeCloseTo(16, 6);
   });
 
-  test('#SPEED holds the first keyframe value before its beat instead of ramping from 1', () => {
+  test('#SPEED ramps from 1 at beat 0 to the first keyframe, as beatoraja does', () => {
     const mapper = createScrollDistanceMapper(undefined, [{ beat: 4, speed: 2 }]);
 
-    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(8, 6);
-    // #SCROLL is genuinely 1 before its first event — the head seeding only applies to #SPEED.
+    // Speed 1 → 2 across beats 0..4: (1 + 2) / 2 × 4 beats; the value holds after the last keyframe.
+    expect(mapper.distanceBetween(0, 4)).toBeCloseTo(6, 6);
+    expect(mapper.distanceBetween(4, 6)).toBeCloseTo(4, 6);
+    // A keyframe on beat 0 applies from the start, with no ramp.
+    expect(createScrollDistanceMapper(undefined, [{ beat: 0, speed: 2 }]).distanceBetween(0, 4)).toBeCloseTo(8, 6);
+    // #SCROLL is a step: 1 until its first event.
     const scrollOnly = createScrollDistanceMapper([{ beat: 4, speed: 2 }], undefined);
     expect(scrollOnly.distanceBetween(0, 4)).toBeCloseTo(4, 6);
   });

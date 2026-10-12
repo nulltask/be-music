@@ -769,7 +769,7 @@ A playback progress indicator is displayed outside the lane, and the line closes
 
 Even on judged notes, drawing will remain until the judge line is crossed or the `visibleUntilBeat` expires.
 A long note is drawn as a single note with a body and tail lane, and the highlight continues while being held.
-The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the first keyframe's value holds flat (matching the Bemuse reference implementation). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
+The visual distance of a note is determined by the integral of the piecewise-constant coefficient of `#SCROLLxx` / `#xxxSC` multiplied by the piecewise-linear interpolation coefficient of `#SPEEDxx` / `#xxxSP`. If there is no `#SPEEDxx`, it is always `1`, and multiple keyframes with the same beat are the last to win. Before the first keyframe, the coefficient ramps linearly from `1` at beat 0 to the first keyframe's value, as beatoraja ramps from 1.0 at time 0 (a keyframe at beat 0 applies at once; Bemuse instead holds the first value). If the value of `#SPEEDxx` is a negative number, a non-number, or an undefined reference, that keyframe will be ignored from drawing calculations.
 
 ### Non-TUI output
 

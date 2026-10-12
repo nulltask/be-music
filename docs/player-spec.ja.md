@@ -749,7 +749,7 @@ TUI の描画上限はデフォルト `60fps` です。
 
 judge 済みノートでも、judge line を跨ぐまで、または `visibleUntilBeat` が切れるまでは描画を残します。
 long note は body と tail を持つ 1 本のノートとして描画し、保持中は lane highlight も継続します。
-ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。最初の keyframe より前の区間は、最初の keyframe の値で一定です（Bemuse 参照実装に準拠）。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
+ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。最初の keyframe より前の区間は、beatoraja が時刻 0 の 1.0 から変化させるのと同じく、beat 0 の `1` から最初の keyframe の値まで線形に変化します（beat 0 の keyframe はすぐに効きます。Bemuse は最初の値で一定にします）。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
 
 ### TUI 以外の出力
 
