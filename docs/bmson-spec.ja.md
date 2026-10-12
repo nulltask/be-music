@@ -184,8 +184,8 @@
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力
 - `sound_channels` は `wav` キー単位で出力
-- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、それ以外は `beat-<レーン数>k` を出力
-- キーボード系 hint ではホイールも含め各レーンに上の表の固定 `x` を与えるため、再パースで同じレーンに戻る。ほかの hint では使っているレーンを `x = 1` から採番
+- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、使用レーンがすべてプレイ種別の hint（`beat-5k` / `beat-7k` / `beat-10k` / `beat-14k` / `popn-9k`）の表に収まればその hint、それ以外は `beat-<レーン数>k` を出力
+- 上の表にある hint（キーボード系とホイールを含む）では各レーンに表の固定 `x` を与えるため、再パースで同じレーンに戻る。表にないレーンはその後ろに続け、未知の hint では使っているレーンを `x = 1` から採番
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
