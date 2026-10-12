@@ -93,6 +93,7 @@ export {
   type ResolvedChart,
   type ResolvedJudgeRank,
   type ResolvedTotal,
+  type ResolvedVolumeChange,
 } from './resolved-chart.ts';
 
 export { type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';

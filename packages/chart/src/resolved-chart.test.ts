@@ -133,4 +133,13 @@ describe('resolveChart', () => {
     expect(resolved.mines).toBe(resolved.mines);
     expect(resolveChart(json).notes).toEqual(resolved.notes);
   });
+  test('lists BMS dynamic volume changes per bus', () => {
+    const json = bmsChart([event(1, '97', '40'), event(2, '98', 'FF'), event(3, '97', 'ZZ')]);
+    const resolved = resolveChart(json);
+    expect(resolved.volumeChanges.map((change) => [change.seconds, change.bus])).toEqual([
+      [2, 'bgm'],
+      [4, 'play'],
+    ]);
+    expect(resolved.volumeChanges[1]!.gain).toBe(1);
+  });
 });

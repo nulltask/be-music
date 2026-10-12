@@ -8,7 +8,15 @@ import {
 } from '@be-music/json';
 import { buildBgaTimelines, type BgaTimelines } from './bga.ts';
 import { hasControlFlow, type RandomDraws } from './control-flow.ts';
-import { resolveChartPlayVariant, type BeatResolver, type ChartPlayVariant } from './index.ts';
+import {
+  isBmsBgmVolumeChangeChannel,
+  isBmsDynamicVolumeChangeChannel,
+  isBmsKeyVolumeChangeChannel,
+  parseBmsDynamicVolumeGain,
+  resolveChartPlayVariant,
+  type BeatResolver,
+  type ChartPlayVariant,
+} from './index.ts';
 import { resolveChartLongNoteMode, type LongNoteMode } from './note-rules.ts';
 import { getPlayModeLayouts, type PlayModeLayout } from './play-modes.ts';
 import {
@@ -55,6 +63,16 @@ export interface ResolvedJudgeRank {
   readonly exRank?: number;
   /** `#EXRANKxx` changes placed on channel `A0` (BMS), in time order, with the raw `#EXRANK` value (100 = NORMAL). */
   readonly changes: ReadonlyArray<{ readonly seconds: number; readonly exRankValue: number }>;
+}
+
+/** A BMS dynamic volume change (`#xxx97` BGM / `#xxx98` key sounds). */
+export interface ResolvedVolumeChange {
+  readonly seconds: number;
+  /** Which bus the change scales: `bgm` (channel `97`) or `play` (channel `98`, the key sounds). */
+  readonly bus: 'bgm' | 'play';
+  /** Linear gain (`parseBmsDynamicVolumeGain`). */
+  readonly gain: number;
+  readonly event: BeMusicEvent;
 }
 
 /** The chart's TOTAL as authored. */
@@ -109,6 +127,8 @@ export interface ResolvedChart {
    * `#LNOBJ` ends and suppressed `#LNTYPE` halves left out and bmson slices resolved. Mines are not included.
    */
   readonly sampleTriggers: ReadonlyArray<TimedSampleTrigger>;
+  /** BMS dynamic volume changes, in chart order (empty for bmson). */
+  readonly volumeChanges: ReadonlyArray<ResolvedVolumeChange>;
   /** BGA cues (base / layer / layer 2 / POOR), BMS channels and bmson `bga` alike. */
   readonly bga: BgaTimelines;
   readonly scroll: ReadonlyArray<ScrollTimelinePoint>;
@@ -151,6 +171,7 @@ class LazyResolvedChart implements ResolvedChart {
   private invisibleCache: ResolvedNote[] | undefined;
   private triggersCache: TimedSampleTrigger[] | undefined;
   private bgaCache: BgaTimelines | undefined;
+  private volumeCache: ResolvedVolumeChange[] | undefined;
   private scrollCache: ScrollTimelinePoint[] | undefined;
   private speedCache: SpeedTimelinePoint[] | undefined;
   private barLinesCache: number[] | undefined;
@@ -219,6 +240,11 @@ class LazyResolvedChart implements ResolvedChart {
     return this.triggersCache;
   }
 
+  get volumeChanges(): ReadonlyArray<ResolvedVolumeChange> {
+    this.volumeCache ??= resolveVolumeChanges(this.source, this.sortedEvents, this.timing);
+    return this.volumeCache;
+  }
+
   get bga(): BgaTimelines {
     this.bgaCache ??= buildBgaTimelines(this.source, this.timing);
     return this.bgaCache;
@@ -284,6 +310,34 @@ class LazyResolvedChart implements ResolvedChart {
       inferBmsLnTypeWhenMissing: this.inferBmsLnTypeWhenMissing,
     };
   }
+}
+
+function resolveVolumeChanges(
+  json: BeMusicJson,
+  sortedEvents: ReadonlyArray<BeMusicEvent>,
+  timing: TimingResolver,
+): ResolvedVolumeChange[] {
+  if (json.sourceFormat !== 'bms') {
+    return [];
+  }
+  const changes: ResolvedVolumeChange[] = [];
+  for (const event of sortedEvents) {
+    const channel = normalizeChannel(event.channel);
+    if (!isBmsDynamicVolumeChangeChannel(channel)) {
+      continue;
+    }
+    const gain = parseBmsDynamicVolumeGain(event.value);
+    if (gain === undefined) {
+      continue;
+    }
+    changes.push({
+      seconds: timing.eventToSeconds(event),
+      bus: isBmsBgmVolumeChangeChannel(channel) && !isBmsKeyVolumeChangeChannel(channel) ? 'bgm' : 'play',
+      gain,
+      event,
+    });
+  }
+  return changes;
 }
 
 function resolveJudgeRank(
