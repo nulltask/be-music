@@ -3,8 +3,11 @@ import {
   createBeatResolver,
   isLandmineChannel,
   isSampleTriggerChannel,
+  mapBmsLongNoteChannelToPlayable,
   parseBpmFrom03Token,
+  resolveBmsLongNotes,
   resolveChartPlayVariant,
+  resolveLnobjLongNotes,
   sortEvents,
 } from '@be-music/chart';
 import { parseBms, parseBmson } from '@be-music/parser';
@@ -91,6 +94,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   }
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
+  const bmsLongNotes = resolveBmsLongNotesForBmsonOutput(json);
 
   // Lanes get bmson `x` numbers from every playable channel in use, plus the lanes mines and invisible objects sit on (a
   // mine on `D3` or a hidden note on `33` sits on lane `13`), so they keep their lane even where no playable note
@@ -101,7 +105,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     if (channel === '01' || !isSampleTriggerChannel(channel)) {
       continue;
     }
-    const lane = laneExtensionChannelToPlayableChannel(channel) ?? channel;
+    const lane = laneExtensionChannelToPlayableChannel(channel) ?? mapBmsLongNoteChannelToPlayable(channel) ?? channel;
     playableChannelSet.add(lane);
   }
   const playableChannels = [...playableChannelSet].sort();
@@ -135,12 +139,12 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       const lane = landmineChannelToPlayableChannel(channel);
       const x = lane ? xMap.get(lane) : undefined;
       if (x !== undefined) {
-        const key = normalizeObjectKey(event.value, idBase);
-        const damage =
-          typeof event.bmson?.damage === 'number' && Number.isFinite(event.bmson.damage) && event.bmson.damage >= 0
-            ? event.bmson.damage
-            : undefined;
-        const slot = mineChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
+        const damage = resolveMineDamageForBmsonOutput(json, event, idBase);
+        // A BMS mine's value is its damage, not a WAV slot: every BMS mine explodes with `#WAV00`, so they share one
+        // channel named after it (no sample when the chart has none). bmson-sourced mines keep their WAV slot.
+        const key = json.sourceFormat === 'bmson' ? normalizeObjectKey(event.value, idBase) : BMS_MINE_SAMPLE_KEY;
+        const name = json.resources.wav[key] ?? (json.sourceFormat === 'bmson' ? key : '');
+        const slot = mineChannels.get(key) ?? { name, notes: [] };
         slot.notes.push({ x, y, ...(damage !== undefined ? { damage } : {}) });
         mineChannels.set(key, slot);
       }
@@ -158,13 +162,22 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       continue;
     }
     if (isSampleChannel) {
+      // The end of a BMS long note (`#LNOBJ` end object, `5x` / `6x` end or continuation) is part of the note that
+      // starts it, which carries the length as `l`.
+      if (bmsLongNotes.endEvents.has(event)) {
+        continue;
+      }
       const key = normalizeObjectKey(event.value, idBase);
       const fileName = json.resources.wav[key] ?? key;
-      const x = channel === '01' ? 0 : (xMap.get(channel) ?? 0);
+      const lane = mapBmsLongNoteChannelToPlayable(channel) ?? channel;
+      const x = channel === '01' ? 0 : (xMap.get(lane) ?? 0);
+      const longNoteEndBeat = bmsLongNotes.startToEndBeat.get(event);
       const length =
-        typeof event.bmson?.l === 'number' && Number.isFinite(event.bmson.l) && event.bmson.l >= 0
-          ? Math.floor(event.bmson.l)
-          : 0;
+        longNoteEndBeat !== undefined
+          ? Math.max(0, Math.round(longNoteEndBeat * resolution) - y)
+          : typeof event.bmson?.l === 'number' && Number.isFinite(event.bmson.l) && event.bmson.l >= 0
+            ? Math.floor(event.bmson.l)
+            : 0;
       const continuation = event.bmson?.c === true;
       // beatoraja bmson extension — per-note long-note type rides along only on actual long notes.
       const longNoteType =
@@ -1332,6 +1345,10 @@ function createBmsonInfoForOutput(json: BeMusicJson, resolution: number, modeHin
   if (typeof info.chartName === 'string') {
     output.chart_name = info.chartName;
   }
+  const lnType = resolveBmsonLnTypeForOutput(json);
+  if (lnType !== undefined) {
+    output.ln_type = lnType;
+  }
 
   const judgeRank = resolveBmsonJudgeRankForOutput(json);
   if (judgeRank !== undefined) {
@@ -1603,4 +1620,69 @@ function invisibleChannelToPlayableChannel(channel: string): string | undefined 
 function laneExtensionChannelToPlayableChannel(channel: string): string | undefined {
   if (isLandmineChannel(channel)) return landmineChannelToPlayableChannel(channel);
   return invisibleChannelToPlayableChannel(channel);
+}
+
+/** BMS mines explode with `#WAV00`; their object value is the damage. */
+const BMS_MINE_SAMPLE_KEY = '00';
+const BASE36_MINE_VALUE_PATTERN = /^[0-9A-Z]{2}$/;
+const BMSON_LONG_NOTE_TYPES: ReadonlySet<number> = new Set([1, 2, 3]);
+
+interface BmsLongNotesForBmsonOutput {
+  /** Start event → beat of its end. */
+  startToEndBeat: Map<BeMusicEvent, number>;
+  /** End objects and `#LNTYPE 2` continuations, which belong to the note that starts them. */
+  endEvents: Set<BeMusicEvent>;
+}
+
+/**
+ * The long notes of a BMS chart as be-music plays them — `#LNOBJ` pairs and `5x` / `6x` long notes (`#LNTYPE 1` /
+ * `2`, inferred like the web player when `#LNTYPE` is missing) — so bmson can write each as one note with `l`.
+ */
+function resolveBmsLongNotesForBmsonOutput(json: BeMusicJson): BmsLongNotesForBmsonOutput {
+  const lnobj = resolveLnobjLongNotes(json);
+  const startToEndBeat = new Map(lnobj.startToEndBeat);
+  const endEvents = new Set(lnobj.endEvents);
+  const legacy = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
+  for (const note of legacy.notes) {
+    if (note.endBeat !== undefined) {
+      startToEndBeat.set(note.event, note.endBeat);
+    }
+  }
+  for (const event of legacy.suppressedTriggerEvents) {
+    endEvents.add(event);
+  }
+  return { startToEndBeat, endEvents };
+}
+
+/**
+ * The bmson `damage` of a mine, as be-music's player resolves it: an authored `bmson.damage` wins; a BMS (or JSON)
+ * mine's value is its damage read in base 36 (LR2 / beatoraja, no halving); otherwise `damage` is left out, which
+ * deals the same default as an invalid BMS value.
+ */
+function resolveMineDamageForBmsonOutput(json: BeMusicJson, event: BeMusicEvent, idBase: 36 | 62): number | undefined {
+  const authored = event.bmson?.damage;
+  if (typeof authored === 'number' && Number.isFinite(authored) && authored >= 0) {
+    return authored;
+  }
+  if (json.sourceFormat === 'bmson') {
+    return undefined;
+  }
+  const value = normalizeObjectKey(event.value, idBase);
+  if (!BASE36_MINE_VALUE_PATTERN.test(value)) {
+    return undefined;
+  }
+  const damage = Number.parseInt(value, 36);
+  return damage > 0 ? damage : undefined;
+}
+
+/**
+ * bmson `info.ln_type`: the authored `bmson.info.lnType`, else BMS `#LNMODE` — both use 1 = LN, 2 = CN, 3 = HCN.
+ */
+function resolveBmsonLnTypeForOutput(json: BeMusicJson): number | undefined {
+  const authored = json.bmson.info.lnType;
+  if (typeof authored === 'number' && BMSON_LONG_NOTE_TYPES.has(authored)) {
+    return authored;
+  }
+  const lnMode = json.bms.lnMode;
+  return typeof lnMode === 'number' && BMSON_LONG_NOTE_TYPES.has(lnMode) ? lnMode : undefined;
 }
