@@ -1,6 +1,8 @@
 import {
   collectLnobjEndEvents,
   createBeatResolver,
+  drawRandomOutcomes,
+  hasControlFlow,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
@@ -8,6 +10,7 @@ import {
   parseBmsDynamicVolumeGain,
   sortEvents,
   usesMonophonicWavPlayback,
+  type RandomDraws,
 } from '@be-music/chart';
 // Hand-rolled polyfills replace what was previously imported from `node:path` / `node:timers/promises`. Keeping the
 // engine free of `node:`-prefixed imports lets the same module run unchanged in the browser (Phase 4 of the
@@ -27,11 +30,12 @@ import type { LogEntry, LogLevel } from '@be-music/utils/log';
 import {
   type BeMusicEvent,
   type BeMusicJson,
+  cloneJson,
   normalizeChannel,
   normalizeObjectKey,
   resolveBmsBase,
 } from '@be-music/json';
-import { resolveBmsControlFlow } from '@be-music/parser';
+import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
 import {
   type RenderResult,
   type TimedSampleTrigger,
@@ -270,6 +274,13 @@ export interface PlayerOptions {
    * through to the Node sink, which is what every existing TUI / test path already relies on.
    */
   createAudioSession?: (context: CreateAudioSessionContext) => Promise<AudioSession | undefined>;
+  /**
+   * The `#RANDOM` / `#SWITCH` outcomes of this play (`drawRandomOutcomes` from `@be-music/chart`). With a chart the
+   * host already resolved (`resolveBmsControlFlowWithDraws`), these are the draws it was resolved with and only feed the
+   * RANDOM summary. With a chart that still carries `bms.controlFlow` (e.g. replaying a play log against the source
+   * chart), the engine resolves it exactly once with these draws.
+   */
+  randomDraws?: RandomDraws;
   onResolvedChart?: (json: BeMusicJson) => void;
   onLog?: (entry: LogEntry) => void;
   writeOutput?: (text: string) => void;
@@ -1686,68 +1697,45 @@ async function initializePlaybackRuntimeResources(params: {
   }
 }
 
+/**
+ * Draws `json`'s `#RANDOM` / `#SWITCH` outcomes with `randomSource` and resolves the chart with them, reporting the
+ * `#RANDOM` / `#SETRANDOM` patterns for the summary. Shorthand for `drawRandomOutcomes` + `resolveBmsControlFlowWithDraws`.
+ */
 export function resolveBmsControlFlowForPlayback(
   json: BeMusicJson,
   randomSource: () => number = Math.random,
 ): ControlFlowResolutionResult {
-  const randomPatterns: RandomPatternSelection[] = [];
-  // Values drawn here are replayed, in order, into the parser's own `#RANDOM` / `#SWITCH` draws below. The parser only
-  // draws for a line with more than one outcome (`#RANDOM 1`, a missing or non-positive range, and `#SWITCH 1` resolve
-  // to 1 without touching the source), so drawing for those lines here would shift every later replayed value onto
-  // the previous line and play a different branch than the one reported in `randomPatterns`.
-  const runtimeRandomSequence: number[] = [];
-  const drawLikeParser = (total: number): number => {
-    if (total <= 1) {
-      return 1;
-    }
-    const randomValue = randomSource();
-    runtimeRandomSequence.push(randomValue);
-    return generateControlFlowRandomValue(total, randomValue);
-  };
+  return resolvePlaybackControlFlow(json, drawRandomOutcomes(json, randomSource));
+}
 
-  for (const entry of json.bms.controlFlow) {
-    if (entry.kind !== 'directive') {
-      continue;
-    }
-    if (entry.command === 'RANDOM') {
-      const total = parsePositiveInteger(entry.value) ?? 1;
-      randomPatterns.push({
-        index: randomPatterns.length + 1,
-        current: drawLikeParser(total),
-        total,
-      });
-      continue;
-    }
-    if (entry.command === 'SETRANDOM') {
-      const fixedValue = parsePositiveInteger(entry.value) ?? 1;
-      randomPatterns.push({
-        index: randomPatterns.length + 1,
-        current: fixedValue,
-        total: fixedValue,
-      });
-      continue;
-    }
-    if (entry.command === 'SWITCH') {
-      drawLikeParser(parsePositiveInteger(entry.value) ?? 1);
+/**
+ * The engine's single control-flow step: a chart that still carries control flow is resolved exactly once with
+ * `draws`; a resolved chart (no control flow) is played as is. `draws` also feed the RANDOM summary.
+ */
+function resolvePlaybackControlFlow(json: BeMusicJson, draws: RandomDraws): ControlFlowResolutionResult {
+  return {
+    resolvedJson: hasControlFlow(json) ? resolveBmsControlFlowWithDraws(json, draws) : cloneJson(json),
+    randomPatterns: randomPatternsFromDraws(draws),
+  };
+}
+
+function resolvePlayerChart(json: BeMusicJson, options: PlayerOptions): ControlFlowResolutionResult {
+  if (options.randomDraws !== undefined) {
+    return resolvePlaybackControlFlow(json, options.randomDraws);
+  }
+  return resolveBmsControlFlowForPlayback(json);
+}
+
+function randomPatternsFromDraws(draws: RandomDraws): RandomPatternSelection[] {
+  const patterns: RandomPatternSelection[] = [];
+  for (const draw of draws) {
+    if (draw.command === 'RANDOM') {
+      patterns.push({ index: patterns.length + 1, current: draw.value, total: draw.range });
+    } else if (draw.command === 'SETRANDOM') {
+      patterns.push({ index: patterns.length + 1, current: draw.value, total: draw.value });
     }
   }
-
-  let randomDrawIndex = 0;
-  const resolvedJson = resolveBmsControlFlow(json, {
-    random: () => {
-      const replayValue = runtimeRandomSequence[randomDrawIndex];
-      if (typeof replayValue === 'number') {
-        randomDrawIndex += 1;
-        return replayValue;
-      }
-      return randomSource();
-    },
-  });
-
-  return {
-    resolvedJson,
-    randomPatterns,
-  };
+  return patterns;
 }
 
 export function formatRandomPatternSummary(randomPatterns: ReadonlyArray<RandomPatternSelection>): string | undefined {
@@ -1831,35 +1819,11 @@ function collectRealtimeAudioVolumeEvents(
   return events;
 }
 
-function parsePositiveInteger(value?: string): number | undefined {
-  if (typeof value !== 'string' || value.length === 0) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  const normalized = Math.floor(parsed);
-  if (normalized <= 0) {
-    return undefined;
-  }
-  return normalized;
-}
-
-function generateControlFlowRandomValue(total: number, randomValue: number): number {
-  const safeTotal = Math.max(1, Math.floor(total));
-  if (safeTotal <= 1) {
-    return 1;
-  }
-  const clamped = Number.isFinite(randomValue) ? Math.max(0, Math.min(0.999999999, randomValue)) : 0;
-  return Math.floor(clamped * safeTotal) + 1;
-}
-
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
-  const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
+  const controlFlowResolution = resolvePlayerChart(json, options);
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
@@ -2512,7 +2476,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
-  const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
+  const controlFlowResolution = resolvePlayerChart(json, options);
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
