@@ -88,6 +88,7 @@ import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
+import { toEngineChart } from '../../runtime/engine-chart.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
@@ -4723,11 +4724,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `resolveControlFlow` to a clone-and-return on the engine side, which is exactly what we want.
    */
   private buildSharedEngineChart(): BeMusicJson {
-    const chart = this.resolvedChart ?? this.song!.chart;
-    if (chart.bms.controlFlow.length === 0) {
-      return chart;
-    }
-    return { ...chart, bms: { ...chart.bms, controlFlow: [] } };
+    return toEngineChart(this.resolvedChart ?? this.song!.chart);
   }
 
   private launchSharedEngine(): void {
