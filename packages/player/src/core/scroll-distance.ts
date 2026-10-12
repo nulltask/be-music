@@ -13,6 +13,7 @@ export interface ScrollDistanceMapperLike {
   hasBidirectionalScrollWithinLookahead: (fromBeat: number) => boolean;
   maxBeatWithinDistance: (fromBeat: number, distance: number) => number;
   firstBeatBeyondDistance: (fromBeat: number, distance: number) => number;
+  rateAt: (beat: number) => number;
 }
 
 interface ScrollSegment {
@@ -172,6 +173,16 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
       beat = Math.max(beat, nextStartBeat);
     }
     return Number.POSITIVE_INFINITY;
+  }
+
+  /**
+   * The scroll distance per beat at `beat`: the `#SCROLL` multiplier times the interpolated `#SPEED`. Negative while the
+   * chart scrolls backwards, 0 while it stands still.
+   */
+  rateAt(beat: number): number {
+    const safeBeat = Number.isFinite(beat) ? Math.max(0, beat) : 0;
+    const segment = this.segments[findLastSegmentIndexByBeat(this.segments, safeBeat)]!;
+    return segmentDistanceTerms(segment, safeBeat, segment.scrollSpeed).linear;
   }
 
   private distanceAt(beat: number): number {

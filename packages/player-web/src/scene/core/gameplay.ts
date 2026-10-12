@@ -4020,9 +4020,10 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         judgeSides.push({ side, judge: state.judge, combo: state.combo });
       }
     }
-    const bpm = this.timingResolver?.bpmAtBeat(this.currentBeat(seconds)) ?? this.song?.bpm;
+    const currentBeat = this.currentBeat(seconds);
+    const bpm = this.timingResolver?.bpmAtBeat(currentBeat) ?? this.song?.bpm;
     const laneCovers = this.resolveLaneCovers();
-    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm);
+    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt(currentBeat) ?? 1);
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
@@ -4119,16 +4120,27 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * How long a note stays visible below `cover` (the first play side's) at the current scroll and BPM, over the lanes
-   * laid out last frame. `undefined` until the lanes are laid out or while the BPM is unknown. `#SCROLL` / `#SPEED`
-   * changes are not taken into account.
+   * laid out last frame, divided by the `#SCROLL` × `#SPEED` rate at the playhead (0 while the chart scrolls backwards or
+   * stands still, as beatoraja shows it). `undefined` until the lanes are laid out or while the BPM is unknown.
    */
-  private resolveVisibleMs(cover: BeMusicLaneCover | undefined, bpm: number | undefined): number | undefined {
+  private resolveVisibleMs(
+    cover: BeMusicLaneCover | undefined,
+    bpm: number | undefined,
+    scrollRate: number,
+  ): number | undefined {
     if (this.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
     let laneHeight = 0;
     for (const lane of this.laneX.values()) {
       laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
     }
-    return resolveNoteVisibleMs(laneHeight, cover?.sudden ?? 0, cover?.lift ?? 0, PIXELS_PER_BEAT * this.hiSpeed, bpm);
+    return resolveNoteVisibleMs(
+      laneHeight,
+      cover?.sudden ?? 0,
+      cover?.lift ?? 0,
+      PIXELS_PER_BEAT * this.hiSpeed,
+      bpm,
+      scrollRate,
+    );
   }
 
   /**

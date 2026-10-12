@@ -107,6 +107,24 @@ describe('scroll distance', () => {
     expect(mapper.firstBeatBeyondDistance(0, 8)).toBeCloseTo(mapper.maxBeatWithinDistance(0, 8), 6);
   });
 
+  test('rateAt is the scroll distance per beat at a beat: #SCROLL times the interpolated #SPEED', () => {
+    const mapper = createScrollDistanceMapper(
+      [
+        { beat: 4, speed: -2 },
+        { beat: 8, speed: 0 },
+      ],
+      [
+        { beat: 0, speed: 1 },
+        { beat: 4, speed: 3 },
+      ],
+    );
+    expect(mapper.rateAt(0)).toBeCloseTo(1, 9);
+    expect(mapper.rateAt(2)).toBeCloseTo(2, 9);
+    expect(mapper.rateAt(5)).toBeCloseTo(-6, 9);
+    expect(mapper.rateAt(9)).toBe(0);
+    expect(createScrollDistanceMapper().rateAt(3)).toBe(1);
+  });
+
   test('invalidDistance option customizes invalid input fallback', () => {
     const mapper = createScrollDistanceMapper(undefined, undefined, { invalidDistance: 0 });
     expect(mapper.distanceBetween(Number.NaN, 2)).toBe(0);

@@ -305,7 +305,9 @@ export interface BeMusicGameplayRuntime {
   /** SUDDEN+ / HIDDEN+ / LIFT per play side, as fractions of the lane height. */
   laneCovers?: readonly BeMusicLaneCover[];
   /**
-   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed.
+   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed —
+   * BPM, hi-speed and the chart's `#SCROLL` × `#SPEED` at the playhead. 0 while the chart scrolls backwards or stands
+   * still, as beatoraja shows it.
    */
   visibleMs?: number;
   /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
