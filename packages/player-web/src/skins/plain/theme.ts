@@ -9,8 +9,21 @@ export const ACCENT = '#3d7bff';
 export const DANGER = '#ff4d5e';
 
 /** Lane backgrounds and note colours by lane kind. */
-export const LANE_FILL = { white: '#1d1d22', black: '#16161a', scratch: '#16161a' } as const;
-export const NOTE_FILL = { white: '#f2f2f2', black: '#5b8cff', scratch: '#ff4d5e' } as const;
+/** Per lane kind. The 24 / 48 KEY wheel lanes take the scratch colours: they are the side's outer, odd-one-out lane. */
+export const LANE_FILL = {
+  white: '#1d1d22',
+  black: '#16161a',
+  scratch: '#16161a',
+  'wheel-up': '#16161a',
+  'wheel-down': '#16161a',
+} as const;
+export const NOTE_FILL = {
+  white: '#f2f2f2',
+  black: '#5b8cff',
+  scratch: '#ff4d5e',
+  'wheel-up': '#ff4d5e',
+  'wheel-down': '#ff4d5e',
+} as const;
 
 /** Colours the PERFECT judgement (shown as GREAT) cycles through. */
 export const FLASHING_GREAT = [0xffffff, 0x5b8cff, 0xffd84d] as const;

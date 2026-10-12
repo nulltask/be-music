@@ -129,10 +129,11 @@ const HIGHLIGHT_R_BOOST = 56;
 const HIGHLIGHT_G_BOOST = 62;
 const HIGHLIGHT_B_BOOST = 74;
 const NOTE_ROW_HYSTERESIS_CELLS = 0.18;
-const RED_NOTE_CHANNELS = new Set(['16', '26']);
+// The keyboard modes' wheel lanes (`1P` / `1Q` / `2P` / `2Q`, which no other mode uses) take the scratch colours.
+const RED_NOTE_CHANNELS = new Set(['16', '26', '1P', '1Q', '2P', '2Q']);
 const WHITE_NOTE_CHANNELS = new Set(['11', '13', '15', '19', '21', '23', '25', '29']);
 const BLUE_NOTE_CHANNELS = new Set(['12', '14', '17', '18', '22', '24', '27', '28']);
-const SCRATCH_LANE_CHANNELS = new Set(['16', '26']);
+const SCRATCH_LANE_CHANNELS = new Set(['16', '26', '1P', '1Q', '2P', '2Q']);
 const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_HEAD_SYMBOL = '▲';
 const LONG_NOTE_BODY_SYMBOL = '■';

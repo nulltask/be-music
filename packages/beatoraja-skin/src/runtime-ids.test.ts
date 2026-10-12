@@ -66,10 +66,17 @@ describe('bombTimerId — scratch is lane 0', () => {
     expect(bombTimerId(2, 7)).toBe(TIMER_BOMB_2P_BASE + 7);
   });
 
-  it('switches to the 1000-block extension for lanes > 9 regardless of side', () => {
+  it('switches to the 1000-block extension for lanes > 9, the 2P bank 100 above the 1P one', () => {
     expect(bombTimerId(1, 10)).toBe(TIMER_BOMB_EXT_BASE + 10);
+    // 24 KEY wheel up / down (lanes 25 / 26).
+    expect(bombTimerId(1, 25)).toBe(1025);
     expect(bombTimerId(1, 26)).toBe(TIMER_BOMB_EXT_BASE + 26);
-    expect(bombTimerId(2, 24)).toBe(TIMER_BOMB_EXT_BASE + 24);
+    // Upstream `SkinPropertyMapper.bombTimerId`: `TIMER_BOMB_1P_KEY10 + key - 10 + player * 100`.
+    expect(bombTimerId(2, 24)).toBe(TIMER_BOMB_EXT_BASE + 100 + 24);
+    expect(bombTimerId(2, 26)).toBe(1126);
+    expect(lnHoldTimerId(2, 25)).toBe(1325);
+    expect(keyOnTimerId(2, 10)).toBe(1510);
+    expect(keyOffTimerId(1, 25)).toBe(1625);
   });
 
   it('returns undefined for negative / non-integer lanes', () => {

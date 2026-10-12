@@ -145,10 +145,24 @@
 - `lines` が存在する場合、`lines` 区間を小節として `measure` と `position` を算出
 - `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
-  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ）
+  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）
   3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
   4. それ以外の hint では、正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
+- キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない
+
+  | `mode_hint`           | `x`     | チャンネル            | レーン                     |
+  | --------------------- | ------- | --------------------- | -------------------------- |
+  | `keyboard-24k`        | 1〜9    | `11`〜`19`            | 鍵 1〜9（C から）          |
+  |                       | 10〜24  | `1A`〜`1O`            | 鍵 10〜24（B まで）        |
+  |                       | 25 / 26 | `1P` / `1Q`           | ホイール上 / ホイール下    |
+  | `keyboard-24k-double` | 1〜26   | `keyboard-24k` と同じ | 1P の鍵とホイール          |
+  |                       | 27〜35  | `21`〜`29`            | 2P 鍵 1〜9                 |
+  |                       | 36〜50  | `2A`〜`2O`            | 2P 鍵 10〜24               |
+  |                       | 51 / 52 | `2P` / `2Q`           | 2P ホイール上 / ホイール下 |
+
+  `keyboard-24k` / `keyboard-24k-double` の譜面は、使うレーンにかかわらず `24 KEY SP` / `48 KEY DP` として遊ぶ（プレイヤー仕様を参照）。BmsONE の `keyboard-48k` は 1 人用の 48 鍵レイアウトで 2 人用の `keyboard-24k-double` とは別物のため別名扱いせず、ほかの未知の hint と同じく手順 4 の位置ベースの採番になる
+
 - レーン表にない正の `x` は `11` にフォールバックするため、レーン 1 に重なる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
@@ -169,6 +183,8 @@
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力
 - `sound_channels` は `wav` キー単位で出力
+- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、それ以外は `beat-<レーン数>k` を出力
+- キーボード系 hint ではホイールも含め各レーンに上の表の固定 `x` を与えるため、再パースで同じレーンに戻る。ほかの hint では使っているレーンを `x = 1` から採番
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)

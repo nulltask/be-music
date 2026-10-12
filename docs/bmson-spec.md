@@ -145,10 +145,24 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - If `lines` exists, calculate `measure` and `position` using the `lines` interval as a measure.
 - Map `notes[].x` to BMS channels by `info.mode_hint`, in this order:
   1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
-  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, and `popn-9k` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`).
+  2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below).
   3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
   4. Any other hint numbers the unique positive `x` values in ascending order onto consecutive channels from `11`.
 - A note with `x` omitted or `x <= 0` becomes BGM (`01`).
+- The keyboard hints (Keyboardmania-style 24 keys plus the wheel, as beatoraja reads them) give every `x` a fixed lane, so a chart that leaves some keys empty never shifts onto the wrong ones:
+
+  | `mode_hint`           | `x`     | Channel           | Lane                     |
+  | --------------------- | ------- | ----------------- | ------------------------ |
+  | `keyboard-24k`        | 1-9     | `11`-`19`         | keys 1-9 (C up)          |
+  |                       | 10-24   | `1A`-`1O`         | keys 10-24 (up to B)     |
+  |                       | 25 / 26 | `1P` / `1Q`       | wheel up / wheel down    |
+  | `keyboard-24k-double` | 1-26    | as `keyboard-24k` | 1P keys and wheel        |
+  |                       | 27-35   | `21`-`29`         | 2P keys 1-9              |
+  |                       | 36-50   | `2A`-`2O`         | 2P keys 10-24            |
+  |                       | 51 / 52 | `2P` / `2Q`       | 2P wheel up / wheel down |
+
+  `keyboard-24k` / `keyboard-24k-double` charts play as `24 KEY SP` / `48 KEY DP` whatever lanes they use (see the player spec). BmsONE's `keyboard-48k` is a single-player 48-key layout, not the two-player `keyboard-24k-double`, so it is not aliased to it and takes the positional rule 4 like any other unknown hint.
+
 - A positive `x` that the lane table does not cover falls back to `11`, so it lands on lane 1.
 - `bpm_events` is converted to `resources.bpm` + channel `08`
 - `stop_events` is converted to `resources.stop` + channel `09`
@@ -169,6 +183,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - If `preservation.bmson.lines` is not present, `lines` will be automatically generated from the bar length of IR.
 - If `bmson.barlinesSuppressed` is `true`, output `lines: []`.
 - `sound_channels` outputs in `wav` keys
+- `info.mode_hint` is `bmson.info.modeHint` when set; otherwise `keyboard-24k` / `keyboard-24k-double` for a `24 KEY SP` / `48 KEY DP` chart, else `beat-<lanes>k`
+- Under a keyboard hint each lane gets its fixed `x` from the table above (wheel included), so the chart re-parses onto the same lanes; other hints number the lanes in use from `x = 1`
 - Generate `bpm_events` from `03` / `08` channels
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)

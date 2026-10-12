@@ -153,8 +153,12 @@ export type BeMusicSide = '1P' | '2P';
 /** An image the host hands a skin (song images, BGA layers): anything `drawImage` / `texImage2D` accepts. */
 export type BeMusicImage = CanvasImageSource;
 
-/** Visual class of a lane, resolved from its channel — skins pick colours per class. */
-export type BeMusicLaneKind = 'white' | 'black' | 'scratch';
+/**
+ * Visual class of a lane, resolved from its channel — skins pick colours per class. `'wheel-up'` / `'wheel-down'` are
+ * the 24 / 48 KEY modes' wheel lanes, on the outer edge of each side where the IIDX modes keep their scratch: draw them
+ * apart from the keys (like a scratch) and show which way each one turns.
+ */
+export type BeMusicLaneKind = 'white' | 'black' | 'scratch' | 'wheel-up' | 'wheel-down';
 
 /** One lane of the gameplay layout, in design pixels. */
 export interface BeMusicLayoutLane {

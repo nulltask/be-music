@@ -13,7 +13,8 @@ export interface BeatResolver {
 
 /**
  * LR2 / beatoraja play-skin lane family. `'24'` / `'48'` are the Keyboardmania-style keyboard modes whose lanes run
- * past the classic `11..19` / `21..29` bank onto the extended `1A..1O` / `2A..2O` channels.
+ * past the classic `11..19` / `21..29` bank onto the extended `1A..1O` / `2A..2O` channels, plus the wheel up / down
+ * on `1P` / `1Q` (`2P` / `2Q`).
  */
 export type ChartPlayVariant = '5' | '7' | '9' | '10' | '14' | '24' | '48';
 
@@ -23,7 +24,25 @@ export interface ChartPlayVariantInput {
   bms?: {
     player?: number;
   };
+  /**
+   * The bmson `mode_hint` (`json.bmson.info.modeHint`). Only the Keyboardmania hints are authoritative — see
+   * {@link resolveChartPlayVariant} — every other hint leaves the decision to the chart's lanes.
+   */
+  bmson?: {
+    info?: {
+      modeHint?: string;
+    };
+  };
 }
+
+/**
+ * bmson `mode_hint`s that name a play variant outright. The keyboard layouts are 26 lanes per side, but a chart can
+ * live entirely on the first nine keys (x ≤ 9 → `11..19`), which the lane rules would otherwise read as 7 / 9 KEY.
+ */
+const KEYBOARD_MODE_HINT_VARIANTS: ReadonlyMap<string, ChartPlayVariant> = new Map([
+  ['keyboard-24k', '24'],
+  ['keyboard-24k-double', '48'],
+]);
 
 /**
  * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
@@ -221,6 +240,10 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *
  * Detection order — first match wins:
  *
+ *  -1. **bmson keyboard `mode_hint`** — `keyboard-24k` → `'24'`, `keyboard-24k-double` → `'48'`, whatever lanes the
+ *      chart uses: its `x` values already went through the keyboard lane map, so a chart that only touches the first
+ *      nine keys is still a 24-key chart. Other hints are not authoritative (`beat-7k` is also the spec default for a
+ *      missing hint, and real charts mislabel their mode), so they fall through to the lane rules.
  *   0. **Extended lane channels (`1A..1Z` / `2A..2Z`)** — the 24-key (Keyboardmania) lane bank. Only these modes
  *      author lanes past the classic nine columns, so one extended channel decides it: `'48'` when the chart also
  *      uses the 2P side, `'24'` otherwise. Checked first because a 24-key chart fills all nine classic 1P columns
@@ -246,6 +269,11 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *      7-key format); every other extension stays `5` / `10`.
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
+  const modeHint = chart.bmson?.info?.modeHint;
+  const hintedVariant = typeof modeHint === 'string' ? KEYBOARD_MODE_HINT_VARIANTS.get(modeHint.trim()) : undefined;
+  if (hintedVariant !== undefined) {
+    return hintedVariant;
+  }
   const channels = new Set<string>();
   for (const event of chart.events) {
     const channel = normalizeChannel(event.channel);

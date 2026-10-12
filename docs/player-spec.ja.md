@@ -29,23 +29,24 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 
 ### 対応チャンネル
 
-| channel                                                             | player における扱い                                                                                                                                                          |
-| ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `#xxx01`                                                            | BGM / sample trigger として再生します。                                                                                                                                      |
-| `#xxx02`                                                            | 小節長として時間解決と beat 解決に反映します。                                                                                                                               |
-| `#xxx03`, `#xxx08`                                                  | BPM change として時間解決に反映します。                                                                                                                                      |
-| `#xxx04`, `#xxx07`, `#xxx0A`                                        | BGA base / layer / layer2 として描画します。                                                                                                                                 |
-| `#xxx06`                                                            | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                                                                         |
-| `#xxx09`                                                            | STOP として時間解決に反映します。                                                                                                                                            |
-| `#xxx11-19`, `#xxx21-29`                                            | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY / 24KEY 以外では FREE ZONE、9KEY / 24KEY では通常ノートです。                                      |
-| `#xxx1A-1O`, `#xxx2A-2O`                                            | 可視演奏ノートとして扱います。24 key (Keyboardmania) バンクのレーン 10..24 です。これらのチャンネルが 1 つでもあれば `24 KEY SP` / `48 KEY DP` と判定します。                |
-| `#xxx31-39`, `#xxx41-49`（拡張の `#xxx3A-3O` / `#xxx4A-4O` を含む） | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。 |
-| `#xxx51-59`, `#xxx61-69`（拡張の `#xxx5A-5O` / `#xxx6A-6O` を含む） | BMS legacy long note として扱います。                                                                                                                                        |
-| `#xxx97`, `#xxx98`                                                  | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                                                                           |
-| `#xxxA0`                                                            | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                                                                         |
-| `#xxxSC`                                                            | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。                                                                                                               |
-| `#xxxSP`                                                            | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。                                                                                                                |
-| `#xxxD1-D9`, `#xxxE1-E9`（拡張の `#xxxDA-DO` / `#xxxEA-EO` を含む） | 地雷として扱います。                                                                                                                                                         |
+| channel                                                             | player における扱い                                                                                                                                                                                                                                      |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `#xxx01`                                                            | BGM / sample trigger として再生します。                                                                                                                                                                                                                  |
+| `#xxx02`                                                            | 小節長として時間解決と beat 解決に反映します。                                                                                                                                                                                                           |
+| `#xxx03`, `#xxx08`                                                  | BPM change として時間解決に反映します。                                                                                                                                                                                                                  |
+| `#xxx04`, `#xxx07`, `#xxx0A`                                        | BGA base / layer / layer2 として描画します。                                                                                                                                                                                                             |
+| `#xxx06`                                                            | POOR BGA cue として扱います。`#POORBGA` 未指定時は `#BMP00` を fallback に使います。                                                                                                                                                                     |
+| `#xxx09`                                                            | STOP として時間解決に反映します。                                                                                                                                                                                                                        |
+| `#xxx11-19`, `#xxx21-29`                                            | 可視演奏ノートとして扱います。`16` / `26` は scratch、`17` / `27` は 9KEY / 24KEY 以外では FREE ZONE、9KEY / 24KEY では通常ノートです。                                                                                                                  |
+| `#xxx1A-1O`, `#xxx2A-2O`                                            | 可視演奏ノートとして扱います。24 key (Keyboardmania) バンクのレーン 10..24 です。これらのチャンネルが 1 つでもあれば `24 KEY SP` / `48 KEY DP` と判定します。                                                                                            |
+| `#xxx1P`, `#xxx1Q`, `#xxx2P`, `#xxx2Q`                              | 24 / 48 KEY のホイールの可視演奏ノートとして扱います。`1P` / `2P` が上、`1Q` / `2Q` が下です（bmson `keyboard-24k` のホイール `x` = 25 / 26 に対応する be-music 独自の BMS 規約）。ほかの拡張チャンネルと同じく `24 KEY SP` / `48 KEY DP` と判定します。 |
+| `#xxx31-39`, `#xxx41-49`（拡張の `#xxx3A-3O` / `#xxx4A-4O` を含む） | 不可視ノートとして扱います。可視ノートと同じく対応レーンの manual keysound state を更新し、表示補助にも使えますが、`summary.total` には含めません。`AUTO` では発音しません。                                                                             |
+| `#xxx51-59`, `#xxx61-69`（拡張の `#xxx5A-5O` / `#xxx6A-6O` を含む） | BMS legacy long note として扱います。                                                                                                                                                                                                                    |
+| `#xxx97`, `#xxx98`                                                  | 以後に鳴る BGM / playable sound の初期 gain を変更する動的音量変更として扱います。                                                                                                                                                                       |
+| `#xxxA0`                                                            | `#EXRANKxx` を参照する動的判定幅変更として扱います。                                                                                                                                                                                                     |
+| `#xxxSC`                                                            | `#SCROLLxx` 参照の scroll segment として描画距離へ反映します。                                                                                                                                                                                           |
+| `#xxxSP`                                                            | `#SPEEDxx` 参照の speed keyframe として描画距離へ反映します。                                                                                                                                                                                            |
+| `#xxxD1-D9`, `#xxxE1-E9`（拡張の `#xxxDA-DO` / `#xxxEA-EO` を含む） | 地雷として扱います。                                                                                                                                                                                                                                     |
 
 ### 対応コマンド
 
@@ -161,7 +162,9 @@ FREE ZONE (`17` / `27`) は 1 beat の終端を持つノートとして扱いま
 ## レーンモードと入力
 
 レーンモードは、すべての host が共有するひとつのルール `@be-music/chart` の `resolveChartPlayVariant` で決めます。
-入力は分岐後の譜面のイベント、`bms.player`、譜面の拡張子 (`PlayerOptions.laneModeExtension`) です。variant をすでに
+入力は分岐後の譜面のイベント、`bms.player`、bmson の `mode_hint`、譜面の拡張子 (`PlayerOptions.laneModeExtension`) です。
+bmson の `keyboard-24k` / `keyboard-24k-double` は `24 KEY SP` / `48 KEY DP` をそのまま選ぶため、最初の 9 鍵しか使わない
+キーボード譜面も 7 / 9 KEY とは判定しません。ほかの hint はレーンによる判定に任せます。variant をすでに
 知っている host は `PlayerOptions.playVariant` で明示できます。レーン使用は `1x` / `2x` のレーンチャンネルと `5x` / `6x` の
 `#LNTYPE` ロングノートチャンネルで数え、地雷と不可視オブジェはレーンモードを変えません。そのため、これらが beatoraja
 ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。判定順は
@@ -180,7 +183,9 @@ ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。
 既知の固定レイアウトに存在しないチャンネルは、未使用キーへ順番にフォールバック割り当てします。
 FREE ZONE は、対応する scratch レーン (`17 -> 16`, `27 -> 26`) の入力トークンも共有します。
 
-`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 24 レーンをチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に持ち、scratch 列はなく、チャンネル昇順に左から右へ並べます。判定は内容ベースで、拡張レーンチャンネルが 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選びます。SP の 24 レーンは fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。48 レーンの DP は印字キーの数を超えるため末尾がファンクションキーに落ちますが、48 レーンは AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
+`24 KEY SP` / `48 KEY DP` は Keyboardmania 系の keyboard mode です。片側 26 レーンで、24 鍵をチャンネル `11..19` + `1A..1O`（2P 側は `21..29` + `2A..2O`）に、ホイールを `1P`（上）/ `1Q`（下）（2P 側は `2P` / `2Q`）に持ちます。scratch 列はありません。鍵はチャンネル昇順に左から右へ並べ、ホイールは IIDX 系が scratch を置く外側（1P の鍵の左、2P の鍵の右）に置きます。判定は内容ベースで、拡張レーンチャンネル（ホイールを含む）が 1 つでもあれば `.pms` 拡張子や `#PLAYER 3` + `17` の POPN-9 シグネチャよりも優先してこのモードを選び、bmson のキーボード系 `mode_hint` はそのままこのモードを選びます。
+
+ホイールは鍵とまったく同じに判定し（beatoraja ruleset の keyboard 判定幅で、scratch 固有の扱いはありません）、FREE ZONE にもなりません。レーンオプション（MIRROR / RANDOM / S-RANDOM）は片側の 24 鍵を入れ替え、ホイールは scratch と同じく動かしません。SP の 24 鍵は fallback キー配置を順に消費します (`a s d f g h j k l ; q w e r u i o p z x c v b n`)。ホイールはその割り当てとも、web player がハイスピード変更に使う矢印キーとも重ならない、キーボードの端のキーを使います。1P のホイール上 / 下は `Tab` / 左 `Shift`、2P は `Enter` / 右 `Shift` です（beatoraja は MIDI コントローラのピッチベンドでホイールを操作しますが、be-music には MIDI 入力がありません）。48 鍵の DP は印字キーの数を超えるため鍵の末尾がファンクションキーに落ちますが、48 鍵は AUTO PLAY と描画の検証対象であって手で押す対象ではないため、意図的な割り切りです。
 
 IIDX 系の既定キーボード配置は、1P を `Z S X D C F V`、2P を `B H N J M K ,` とします。
 scratch は 1P が左 `Shift`、2P が右 `Shift` です。

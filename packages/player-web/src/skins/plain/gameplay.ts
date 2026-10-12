@@ -81,12 +81,27 @@ function drawLanes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
       ctx.fillRect(lane.x, lane.top, lane.w, lane.bottom - lane.top);
       ctx.globalAlpha = 1;
     }
+    if (lane.kind === 'wheel-up' || lane.kind === 'wheel-down') {
+      drawWheelArrow(ctx, lane.x + lane.w / 2, lane.bottom - 12, Math.min(4, lane.w / 3), lane.kind === 'wheel-up');
+    }
   }
   // One judgement line per play side, so it never crosses the gap between the double-play banks.
   ctx.fillStyle = DANGER;
   for (const run of resolveLaneRuns(frame.lanes)) {
     ctx.fillRect(run.left, frame.layout.playfield.judgementY, run.right - run.left, 2);
   }
+}
+
+/** A small triangle under a wheel lane's notes, pointing the way that lane turns the wheel. */
+function drawWheelArrow(ctx: CanvasRenderingContext2D, x: number, y: number, size: number, up: boolean): void {
+  const tip = up ? -size : size;
+  ctx.fillStyle = MUTED;
+  ctx.beginPath();
+  ctx.moveTo(x, y + tip);
+  ctx.lineTo(x - size, y - tip);
+  ctx.lineTo(x + size, y - tip);
+  ctx.closePath();
+  ctx.fill();
 }
 
 const BEAM_GRADIENTS = new WeakMap<
