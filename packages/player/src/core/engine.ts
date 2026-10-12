@@ -568,6 +568,8 @@ const AUTO_AUDIO_TARGET_LEAD_MS = MANUAL_AUDIO_TARGET_LEAD_MS;
 const TUI_FRAME_INTERVAL_MS = 1000 / 60;
 const LONG_NOTE_INITIAL_HOLD_GRACE_MS = 380;
 const LONG_NOTE_REPEAT_HOLD_GRACE_MS = 120;
+/** Chart-time grid a replay advances its judge state on, between and alongside the replayed inputs. */
+const REPLAY_JUDGE_STEP_SECONDS = 0.001;
 /**
  * Per-second gauge drain rate while a Hell-Charge LN (mode 3) is being held UNHELD (= the
  * player isn't actively pressing the key during the body of the LN).
@@ -2562,6 +2564,15 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     inputTokenToChannels,
   } = playbackChart;
   let { totalSeconds } = playbackChart;
+  // A duplicate note that lost its lane and position to another note is not judged, but its keysound still sounds, as
+  // background audio at its own time (auto play already sounds every play-lane trigger).
+  appendShadowedNoteTriggers(
+    nonPlayableRealtimeAudioTriggers,
+    resolvedJson,
+    playbackChart.shadowedNotes,
+    inferBmsLnTypeWhenMissing,
+    timingResolver,
+  );
   // Hoisted constants — see the matching block in `autoPlay`. Same rationale: the manual-play loop touches both heavily
   // per tick / per input event, and these don't change across the play session.
   const idBase = resolveBmsBase(resolvedJson);
@@ -2803,6 +2814,14 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     Math.max(maxJudgeReachSeconds(0), ...dynamicJudgeRankChanges.map((change) => maxJudgeReachSeconds(change.seconds)));
   const horizon = (totalSeconds * 1000) / speed + leadInMs + maxBadWindowMs + 1000;
   let interruptedReason: PlayerInterruptReason | undefined;
+  const replayMode = options.replayInputs !== undefined;
+  /**
+   * Scale of the engine's millisecond domain (`nowMs`, hold-grace deadlines, last-press stamps) per chart second.
+   * Live play runs on the playback clock, so the grace windows are wall-clock milliseconds. A replay has no wall
+   * clock to honour: its millisecond domain is chart time, which keeps every grace window — and therefore every
+   * judgment — independent of `speed`.
+   */
+  const judgeMsPerChartSecond = replayMode ? 1000 : 1000 / speed;
   const longHoldUntilMsByChannel = new Map<string, number>();
   /**
    * Chart second at which each held long note was RELEASED. The tail is judged against the release instant, not
@@ -2971,7 +2990,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // behind a mine, detonate if the lane was held at the moment the mine crossed the judge line — a kitty key
       // that is still down counts, as does a non-kitty press within the hold-grace window BEFORE the crossing.
       // A press AFTER the crossing never detonates here: that is the press leg, and it already missed PGREAT.
-      const crossingMs = nowMs - ((nowSec - landmine.seconds) * 1000) / speed;
+      const crossingMs = nowMs - (nowSec - landmine.seconds) * judgeMsPerChartSecond;
       const lastPressMs = lastLanePressMsByChannel.get(landmine.channel);
       const pressedBeforeCrossing = lastPressMs !== undefined && lastPressMs <= crossingMs;
       const heldAtCrossing = pressedBeforeCrossing
@@ -3299,9 +3318,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         note.seconds < nowSec &&
         typeof note.endSeconds === 'number' &&
         note.endSeconds > note.seconds &&
-        resolvePlayableLongNoteMode(note) === 1
+        resolvedLongNoteModeOf(note) === 1
       ) {
-        // LR2: a long-note head has no LATE bad — the press falls through to whatever else is in reach.
+        // LR2: a long-note head has no LATE bad — the press falls through to whatever else is in reach. The mode is
+        // the one the ruleset plays, not the chart's `#LNMODE`: LR2 plays a `#LNMODE 2` note as a plain LN too.
         continue;
       }
       const selection: JudgeSelectionCandidate = {
@@ -3432,15 +3452,19 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const longNoteOwesTailMiss = (note: TimedPlayableNote): boolean =>
     !ruleset.headBadSkipsTail && longNoteScoresTail(note);
 
+  /** The long-note mode the active ruleset plays this note as, or `undefined` for a note without one. */
+  const resolvedLongNoteModeOf = (note: TimedPlayableNote): LongNoteMode | undefined => {
+    const chartMode = resolvePlayableLongNoteMode(note);
+    return chartMode === undefined ? undefined : resolveEffectiveLongNoteMode(ruleset.longNoteStyle, chartMode);
+  };
+
   /** True when the active ruleset scores this long note's tail as a judgment of its own (charge modes). */
   const longNoteScoresTail = (note: TimedPlayableNote): boolean => {
     if (!isLongPlayableNote(note)) {
       return false;
     }
-    const chartMode = resolvePlayableLongNoteMode(note);
-    return (
-      chartMode !== undefined && isChargeLongNoteMode(resolveEffectiveLongNoteMode(ruleset.longNoteStyle, chartMode))
-    );
+    const mode = resolvedLongNoteModeOf(note);
+    return mode !== undefined && isChargeLongNoteMode(mode);
   };
 
   const triggerRealtimeAudioVolumeEvents = (referenceSeconds: number): void => {
@@ -3888,12 +3912,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     });
   };
 
-  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps. Events are
-  // processed at each tick boundary but judged with THEIR OWN chart seconds, so the replayed judgments are
-  // deterministic and independent of tick timing. Presses maintain `activeKittyPressedChannels` so long-note holds
-  // work exactly like the recorded run's key-state stream did.
+  // Replay playback — recorded play-log inputs re-driven at their exact chart-relative timestamps. Each event is
+  // judged at THEIR OWN chart seconds, after the judge state has been advanced to that instant (see
+  // `advanceReplayUntil`), so the replayed judgments are deterministic and independent of tick timing. Presses
+  // maintain `activeKittyPressedChannels` so long-note holds work exactly like the recorded run's key-state stream
+  // did.
   const replayEvents =
-    options.replayInputs !== undefined && options.replayInputs.length > 0
+    options.replayInputs !== undefined
       ? [...options.replayInputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq)
       : undefined;
   let replayCursor = 0;
@@ -3913,7 +3938,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
       if (channels.size === 0) continue;
-      const eventMs = (eventSec * 1000) / speed;
+      const eventMs = eventSec * judgeMsPerChartSecond;
       if (event.action === 'down') {
         for (const channel of channels) {
           activeKittyPressedChannels.add(channel);
@@ -3940,6 +3965,252 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
   };
 
+  let replayJudgeStepIndex = 0;
+  let replayJudgedThroughSeconds = Number.NEGATIVE_INFINITY;
+  /**
+   * Advances a replay's judge state up to `untilSec` on a fixed chart-time grid ({@link REPLAY_JUDGE_STEP_SECONDS})
+   * merged with the replay events' own timestamps. The state is stepped to each event's instant BEFORE the event
+   * is applied, so a release resolves its long note before a later press on that lane can refresh the hold, and
+   * misses, tails and presses reach the gauge in chart-time order — the gauge clamps at its bounds, so the order
+   * of judgments is part of the result. Steps past the last grid point at or before `untilSec` wait for the next
+   * call, keeping the step times (and with them every judgment) independent of the tick cadence and `speed`.
+   */
+  const advanceReplayUntil = (untilSec: number): void => {
+    for (;;) {
+      const nextEvent = replayEvents?.[replayCursor];
+      const nextEventSec = nextEvent === undefined ? Number.POSITIVE_INFINITY : nextEvent.timeUs / 1_000_000;
+      const nextGridSec = (replayJudgeStepIndex + 1) * REPLAY_JUDGE_STEP_SECONDS;
+      const stepSec = Math.min(nextEventSec, nextGridSec);
+      if (stepSec > untilSec) {
+        return;
+      }
+      if (nextGridSec <= nextEventSec) {
+        replayJudgeStepIndex += 1;
+      }
+      advanceJudgeState(stepSec, stepSec * judgeMsPerChartSecond);
+      replayJudgedThroughSeconds = stepSec;
+      if (nextEventSec <= stepSec) {
+        processReplayEventsUntil(stepSec);
+      }
+    }
+  };
+
+  /**
+   * One judgment step at a single chart instant: long-note hold / tail resolution, auto-scratch, misses, mines and
+   * invisible-note expiry. Live play runs it once per frame tick; a replay runs it on a fixed chart-time grid and at
+   * every replayed input instead, so nothing it decides depends on when the wall-clock ticks happened to land.
+   */
+  const advanceJudgeState = (nowSec: number, nowMs: number): void => {
+    for (const channel of activeKittyPressedChannels) {
+      if (!activeLongNotesByChannel.has(channel)) {
+        continue;
+      }
+      longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
+    }
+
+    for (const [channel, hold] of activeLongNotesByChannel.entries()) {
+      const holdUntilMs = longHoldUntilMsByChannel.get(channel);
+      const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
+      // The tail is judged against the release instant when there was one — a frame can be hundreds of chart
+      // milliseconds wide at high `speed`, and quantizing to it would turn a clean release into a GOOD.
+      const releaseSeconds = longHoldReleaseSecondsByChannel.get(channel);
+      const tailJudgeSeconds = releaseSeconds ?? nowSec;
+      if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs && tailJudgeSeconds < hold.endSeconds) {
+        if (!hold.audioStopped) {
+          playbackStateLogger.logLongNoteState(nowSec, {
+            channel,
+            state: 'release',
+            mode: hold.mode,
+            event: hold.note.event,
+            resources: wavResources,
+            endSeconds: hold.endSeconds,
+          });
+          if (!uiEnabled) {
+            writeSampleStopEventLog(
+              writeOutput,
+              channel,
+              nowSec,
+              'long-note-release',
+              hold.note.event,
+              wavResources,
+              idBase,
+            );
+          }
+          audioSession?.stopChannel?.(channel);
+          hold.audioStopped = true;
+        }
+        finalizeActiveLongNote(
+          channel,
+          hold,
+          { kind: 'BAD', signedDeltaMs: (tailJudgeSeconds - hold.endSeconds) * 1000 },
+          tailJudgeSeconds,
+        );
+        continue;
+      }
+      if (hold.mode === 3) {
+        const accumulateUntilSeconds = Math.min(nowSec, hold.endSeconds);
+        if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
+          const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
+          if (isHolding) {
+            // HCN GAIN — held cleanly through this frame. Mirrors upstream
+            // `JudgeManager.java:324-329`'s `gauge.update(1, 0.5f)` per 200 ms tick under
+            // the gain branch. Continuous integration produces the same total gauge gain
+            // over the same elapsed duration. Without this branch HCNs were one-shot
+            // gauge sinks — once a player broke a hold, the only recovery path was
+            // through subsequent normal-note PERFECTs.
+            applyLoggedGaugeDelta(nowSec, elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND, 'hold-gain');
+          } else {
+            // HCN DRAIN — hold broken during this frame. Mirrors upstream
+            // `JudgeManager.java:341-344`'s `gauge.update(3, 0.5f)` per 200 ms tick.
+            applyLoggedGaugeDelta(nowSec, -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND, 'hold-drain');
+          }
+        }
+        hold.gaugeDrainCursorSeconds = accumulateUntilSeconds;
+        if (!isHolding && !hold.audioStopped) {
+          playbackStateLogger.logLongNoteState(nowSec, {
+            channel,
+            state: 'break',
+            mode: hold.mode,
+            event: hold.note.event,
+            resources: wavResources,
+            endSeconds: hold.endSeconds,
+          });
+          if (!uiEnabled) {
+            writeSampleStopEventLog(
+              writeOutput,
+              channel,
+              nowSec,
+              'long-note-break',
+              hold.note.event,
+              wavResources,
+              idBase,
+            );
+          }
+          audioSession?.stopChannel?.(channel);
+          hold.audioStopped = true;
+        }
+      }
+
+      if (nowSec >= hold.endSeconds) {
+        if (
+          isChargeLongNoteMode(hold.mode) &&
+          isHolding &&
+          nowSec < hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(channel, hold.endSeconds, true)) / 1e6
+        ) {
+          // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the
+          // player has until the tail's late window closes to let go, exactly as the play-log simulator models it.
+          continue;
+        }
+        if (hold.mode === 1) {
+          playbackStateLogger.logLongNoteState(nowSec, {
+            channel,
+            state: 'complete',
+            mode: hold.mode,
+            event: hold.note.event,
+            resources: wavResources,
+            endSeconds: hold.endSeconds,
+          });
+          finalizeActiveLongNote(channel, hold, hold.headJudge, nowSec);
+          continue;
+        }
+        if (hold.mode === 3 && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
+          // Catch up the gauge accumulator to the tail mark. The per-frame loop above
+          // (line ~3358) clamps to `Math.min(nowSec, endSeconds)`, so when the frame's
+          // `nowSec` exceeds `endSeconds` (= the tail has just passed) there's still a
+          // residual `[cursor, endSeconds]` slice unaccounted for. Direction picks gain
+          // vs drain based on the player's hold state DURING that slice; we approximate
+          // it with the current frame's `isHolding` since the engine doesn't track
+          // hold-state samples per-tick (the slice is bounded by 1 frame ≈ 16ms at 60Hz
+          // so the approximation error is at most ~0.04% gauge — negligible vs the 2.5%
+          // /sec rate).
+          const elapsedSeconds = hold.endSeconds - hold.gaugeDrainCursorSeconds;
+          applyLoggedGaugeDelta(
+            nowSec,
+            isHolding
+              ? elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND
+              : -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
+            isHolding ? 'hold-gain' : 'hold-drain',
+          );
+          hold.gaugeDrainCursorSeconds = hold.endSeconds;
+        }
+        playbackStateLogger.logLongNoteState(nowSec, {
+          channel,
+          state: 'complete',
+          mode: hold.mode,
+          event: hold.note.event,
+          resources: wavResources,
+          endSeconds: hold.endSeconds,
+        });
+        const finalJudge =
+          hold.mode === 3 && !isHolding && releaseSeconds === undefined
+            ? resolveLongNoteTailJudge(hold, {
+                kind: 'POOR',
+                signedDeltaMs: (nowSec - hold.endSeconds) * 1000,
+              } satisfies TimedManualJudge)
+            : resolveLongNoteTailJudge(
+                hold,
+                resolveManualTimedJudge(
+                  (tailJudgeSeconds - hold.endSeconds) * 1000,
+                  judgeWindowsFor(channel, hold.endSeconds, true),
+                ),
+              );
+        finalizeActiveLongNote(channel, hold, finalJudge, tailJudgeSeconds);
+        continue;
+      }
+
+      if (hold.mode === 2 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
+        if (!hold.audioStopped) {
+          playbackStateLogger.logLongNoteState(nowSec, {
+            channel,
+            state: 'release',
+            mode: hold.mode,
+            event: hold.note.event,
+            resources: wavResources,
+            endSeconds: hold.endSeconds,
+          });
+          if (!uiEnabled) {
+            writeSampleStopEventLog(
+              writeOutput,
+              channel,
+              nowSec,
+              'long-note-release',
+              hold.note.event,
+              wavResources,
+              idBase,
+            );
+          }
+          audioSession?.stopChannel?.(channel);
+          hold.audioStopped = true;
+        }
+        finalizeActiveLongNote(
+          channel,
+          hold,
+          resolveLongNoteTailJudge(
+            hold,
+            resolveManualTimedJudge(
+              (tailJudgeSeconds - hold.endSeconds) * 1000,
+              judgeWindowsFor(channel, hold.endSeconds, true),
+            ),
+          ),
+          tailJudgeSeconds,
+        );
+      }
+    }
+
+    drainPendingAutoScratchLongNotes(nowSec);
+    for (const [channel, suppressUntil] of longNoteSuppressUntilSecondsByChannel.entries()) {
+      if (nowSec >= suppressUntil) {
+        longNoteSuppressUntilSecondsByChannel.delete(channel);
+      }
+    }
+
+    applyAutoScratchJudgements(nowSec);
+    applyExpiredScorableJudgements(nowSec);
+
+    processLandminePassage(nowSec, nowMs);
+    markExpiredInvisibleNotes(nowSec);
+  };
+
   try {
     while (playbackClock.nowMs() < horizon) {
       consumeInputCommands();
@@ -3959,223 +4230,22 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const nowSec = elapsedMsToGameSeconds(nowMs, speed);
       const scheduledSec = elapsedMsToGameSeconds(scheduledMs, speed);
       const nowBeat = beatAtSeconds(nowSec);
-      processReplayEventsUntil(nowSec);
+      if (replayMode) {
+        advanceReplayUntil(nowSec);
+      }
       playbackEventTracer.flushUntil(nowSec);
 
       triggerRealtimeAudioVolumeEvents(scheduledSec);
       triggerNonPlayableRealtimeAudioEvents(scheduledSec);
 
-      for (const channel of activeKittyPressedChannels) {
-        if (!activeLongNotesByChannel.has(channel)) {
-          continue;
-        }
-        longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
+      if (!replayMode) {
+        advanceJudgeState(nowSec, nowMs);
       }
-
-      for (const [channel, hold] of activeLongNotesByChannel.entries()) {
-        const holdUntilMs = longHoldUntilMsByChannel.get(channel);
-        const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
-        // The tail is judged against the release instant when there was one — a frame can be hundreds of chart
-        // milliseconds wide at high `speed`, and quantizing to it would turn a clean release into a GOOD.
-        const releaseSeconds = longHoldReleaseSecondsByChannel.get(channel);
-        const tailJudgeSeconds = releaseSeconds ?? nowSec;
-        if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs && tailJudgeSeconds < hold.endSeconds) {
-          if (!hold.audioStopped) {
-            playbackStateLogger.logLongNoteState(nowSec, {
-              channel,
-              state: 'release',
-              mode: hold.mode,
-              event: hold.note.event,
-              resources: wavResources,
-              endSeconds: hold.endSeconds,
-            });
-            if (!uiEnabled) {
-              writeSampleStopEventLog(
-                writeOutput,
-                channel,
-                nowSec,
-                'long-note-release',
-                hold.note.event,
-                wavResources,
-                idBase,
-              );
-            }
-            audioSession?.stopChannel?.(channel);
-            hold.audioStopped = true;
-          }
-          finalizeActiveLongNote(
-            channel,
-            hold,
-            { kind: 'BAD', signedDeltaMs: (tailJudgeSeconds - hold.endSeconds) * 1000 },
-            tailJudgeSeconds,
-          );
-          continue;
-        }
-        if (hold.mode === 3) {
-          const accumulateUntilSeconds = Math.min(nowSec, hold.endSeconds);
-          if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
-            const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
-            if (isHolding) {
-              // HCN GAIN — held cleanly through this frame. Mirrors upstream
-              // `JudgeManager.java:324-329`'s `gauge.update(1, 0.5f)` per 200 ms tick under
-              // the gain branch. Continuous integration produces the same total gauge gain
-              // over the same elapsed duration. Without this branch HCNs were one-shot
-              // gauge sinks — once a player broke a hold, the only recovery path was
-              // through subsequent normal-note PERFECTs.
-              applyLoggedGaugeDelta(nowSec, elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND, 'hold-gain');
-            } else {
-              // HCN DRAIN — hold broken during this frame. Mirrors upstream
-              // `JudgeManager.java:341-344`'s `gauge.update(3, 0.5f)` per 200 ms tick.
-              applyLoggedGaugeDelta(nowSec, -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND, 'hold-drain');
-            }
-          }
-          hold.gaugeDrainCursorSeconds = accumulateUntilSeconds;
-          if (!isHolding && !hold.audioStopped) {
-            playbackStateLogger.logLongNoteState(nowSec, {
-              channel,
-              state: 'break',
-              mode: hold.mode,
-              event: hold.note.event,
-              resources: wavResources,
-              endSeconds: hold.endSeconds,
-            });
-            if (!uiEnabled) {
-              writeSampleStopEventLog(
-                writeOutput,
-                channel,
-                nowSec,
-                'long-note-break',
-                hold.note.event,
-                wavResources,
-                idBase,
-              );
-            }
-            audioSession?.stopChannel?.(channel);
-            hold.audioStopped = true;
-          }
-        }
-
-        if (nowSec >= hold.endSeconds) {
-          if (
-            isChargeLongNoteMode(hold.mode) &&
-            isHolding &&
-            nowSec < hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(channel, hold.endSeconds, true)) / 1e6
-          ) {
-            // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the
-            // player has until the tail's late window closes to let go, exactly as the play-log simulator models it.
-            continue;
-          }
-          if (hold.mode === 1) {
-            playbackStateLogger.logLongNoteState(nowSec, {
-              channel,
-              state: 'complete',
-              mode: hold.mode,
-              event: hold.note.event,
-              resources: wavResources,
-              endSeconds: hold.endSeconds,
-            });
-            finalizeActiveLongNote(channel, hold, hold.headJudge, nowSec);
-            continue;
-          }
-          if (hold.mode === 3 && hold.endSeconds > hold.gaugeDrainCursorSeconds) {
-            // Catch up the gauge accumulator to the tail mark. The per-frame loop above
-            // (line ~3358) clamps to `Math.min(nowSec, endSeconds)`, so when the frame's
-            // `nowSec` exceeds `endSeconds` (= the tail has just passed) there's still a
-            // residual `[cursor, endSeconds]` slice unaccounted for. Direction picks gain
-            // vs drain based on the player's hold state DURING that slice; we approximate
-            // it with the current frame's `isHolding` since the engine doesn't track
-            // hold-state samples per-tick (the slice is bounded by 1 frame ≈ 16ms at 60Hz
-            // so the approximation error is at most ~0.04% gauge — negligible vs the 2.5%
-            // /sec rate).
-            const elapsedSeconds = hold.endSeconds - hold.gaugeDrainCursorSeconds;
-            applyLoggedGaugeDelta(
-              nowSec,
-              isHolding
-                ? elapsedSeconds * HELL_CHARGE_GAUGE_GAIN_PER_SECOND
-                : -elapsedSeconds * HELL_CHARGE_GAUGE_DRAIN_PER_SECOND,
-              isHolding ? 'hold-gain' : 'hold-drain',
-            );
-            hold.gaugeDrainCursorSeconds = hold.endSeconds;
-          }
-          playbackStateLogger.logLongNoteState(nowSec, {
-            channel,
-            state: 'complete',
-            mode: hold.mode,
-            event: hold.note.event,
-            resources: wavResources,
-            endSeconds: hold.endSeconds,
-          });
-          const finalJudge =
-            hold.mode === 3 && !isHolding && releaseSeconds === undefined
-              ? resolveLongNoteTailJudge(hold, {
-                  kind: 'POOR',
-                  signedDeltaMs: (nowSec - hold.endSeconds) * 1000,
-                } satisfies TimedManualJudge)
-              : resolveLongNoteTailJudge(
-                  hold,
-                  resolveManualTimedJudge(
-                    (tailJudgeSeconds - hold.endSeconds) * 1000,
-                    judgeWindowsFor(channel, hold.endSeconds, true),
-                  ),
-                );
-          finalizeActiveLongNote(channel, hold, finalJudge, tailJudgeSeconds);
-          continue;
-        }
-
-        if (hold.mode === 2 && holdUntilMs !== undefined && nowMs > holdUntilMs) {
-          if (!hold.audioStopped) {
-            playbackStateLogger.logLongNoteState(nowSec, {
-              channel,
-              state: 'release',
-              mode: hold.mode,
-              event: hold.note.event,
-              resources: wavResources,
-              endSeconds: hold.endSeconds,
-            });
-            if (!uiEnabled) {
-              writeSampleStopEventLog(
-                writeOutput,
-                channel,
-                nowSec,
-                'long-note-release',
-                hold.note.event,
-                wavResources,
-                idBase,
-              );
-            }
-            audioSession?.stopChannel?.(channel);
-            hold.audioStopped = true;
-          }
-          finalizeActiveLongNote(
-            channel,
-            hold,
-            resolveLongNoteTailJudge(
-              hold,
-              resolveManualTimedJudge(
-                (tailJudgeSeconds - hold.endSeconds) * 1000,
-                judgeWindowsFor(channel, hold.endSeconds, true),
-              ),
-            ),
-            tailJudgeSeconds,
-          );
-        }
-      }
-
-      drainPendingAutoScratchLongNotes(nowSec);
-      for (const [channel, suppressUntil] of longNoteSuppressUntilSecondsByChannel.entries()) {
-        if (nowSec >= suppressUntil) {
-          longNoteSuppressUntilSecondsByChannel.delete(channel);
-        }
-      }
-
-      applyAutoScratchJudgements(nowSec);
-      applyExpiredScorableJudgements(nowSec);
       publishUiFrame(nowSec, nowBeat);
 
-      processLandminePassage(nowSec, nowMs);
-      markExpiredInvisibleNotes(nowSec);
-
-      const safeNowSeconds = Math.max(0, nowSec) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+      // A replay has only judged up to its last chart-time step, which can trail the tick by up to one step.
+      const judgedThroughSeconds = replayMode ? replayJudgedThroughSeconds : nowSec;
+      const safeNowSeconds = Math.max(0, judgedThroughSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
       if (
         remainingScorableNotes === 0 &&
         remainingLandmineNotes === 0 &&
@@ -4196,6 +4266,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
 
     if (!interruptedReason) {
+      if (replayEvents && replayEvents.length > 0) {
+        // The loop can end once every note is judged while inputs are still queued — typically the release that
+        // follows the last note. Drain them so the re-recorded play log carries the whole input stream no matter
+        // how far the final tick overshot.
+        advanceReplayUntil(replayEvents[replayEvents.length - 1]!.timeUs / 1_000_000);
+      }
       playbackEventTracer.flushUntil(totalSeconds);
       // Safety net for notes the per-frame sweep never reached (an audio tail that outran the loop, a hold still
       // open at the end). Counted from the notes themselves rather than from `summary.total`: the total is the
@@ -5191,6 +5267,51 @@ function collectRealtimeAudioTriggers(
   return filtered;
 }
 
+/**
+ * Adds the play-lane triggers of `shadowedNotes` to `target` (kept sorted by time). Notes are matched to triggers by
+ * channel, position and value rather than by identity, because a host-prepared chart may come from another resolution
+ * of the same chart than the one the engine collects triggers from.
+ */
+function appendShadowedNoteTriggers(
+  target: Array<TimedSampleTrigger & RealtimeAudioTrigger>,
+  json: BeMusicJson,
+  shadowedNotes: readonly TimedPlayableNote[] | undefined,
+  inferBmsLnTypeWhenMissing: boolean,
+  resolver: TimingResolver,
+): void {
+  if (!shadowedNotes || shadowedNotes.length === 0) {
+    return;
+  }
+  const pendingByKey = new Map<string, number>();
+  for (const note of shadowedNotes) {
+    const key = createEventMatchKey(note.event);
+    pendingByKey.set(key, (pendingByKey.get(key) ?? 0) + 1);
+  }
+  let appended = false;
+  for (const trigger of collectRealtimeAudioTriggers(
+    json,
+    inferBmsLnTypeWhenMissing,
+    isPlayLaneSoundChannel,
+    resolver,
+  )) {
+    const key = createEventMatchKey(trigger.event);
+    const pending = pendingByKey.get(key) ?? 0;
+    if (pending === 0) {
+      continue;
+    }
+    pendingByKey.set(key, pending - 1);
+    target.push(trigger);
+    appended = true;
+  }
+  if (appended) {
+    target.sort((left, right) => left.seconds - right.seconds);
+  }
+}
+
+function createEventMatchKey(event: BeMusicEvent): string {
+  return `${normalizeChannel(event.channel)}:${event.measure}:${event.position[0]}/${event.position[1]}:${event.value}`;
+}
+
 function collectRealtimeAudioSampleKeys(json: BeMusicJson, inferBmsLnTypeWhenMissing: boolean): string[] {
   const resolver = createTimingResolver(json);
   const keys = new Set<string>();
@@ -5222,7 +5343,8 @@ function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
   }
   const high = normalized.charCodeAt(0);
   const low = normalized.charCodeAt(1);
-  return (high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39;
+  // Lane codes cover the classic `1`-`9` columns and the extended `A`-`Z` ones (24 / 48 KEY, bmson `keyboard-24k`).
+  return (high === 0x33 || high === 0x34) && ((low >= 0x31 && low <= 0x39) || (low >= 0x41 && low <= 0x5a));
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {

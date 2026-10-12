@@ -7,6 +7,7 @@ import {
   isPlayLaneSoundChannel,
   parseBmsDynamicVolumeGain,
   usesMonophonicWavPlayback,
+  volWavToLinearGain,
 } from '@be-music/chart';
 // `node:fs/promises` and `node:path` are loaded lazily inside the Node-only entry points (`renderChartFile`,
 // `writeAudioFile`, `getOrCreateSample`) so that bundling this module into a browser build doesn't statically
@@ -120,14 +121,6 @@ const DEFAULT_TAIL_SECONDS = 2;
 const DEFAULT_GAIN = 0.9;
 const FALLBACK_SAMPLE_CACHE = new Map<string, StereoSample>();
 
-function resolveChartVolWavGain(json: BeMusicJson): number {
-  const volWav = json.bms.volWav;
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
-    return 1;
-  }
-  return volWav / 100;
-}
-
 function collectDynamicVolumeChanges(
   json: BeMusicJson,
   resolver: TimingResolver,
@@ -175,7 +168,7 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const sampleRate = options.sampleRate ?? DEFAULT_SAMPLE_RATE;
   const normalize = options.normalize ?? true;
   const tailSeconds = options.tailSeconds ?? DEFAULT_TAIL_SECONDS;
-  const gain = (options.gain ?? DEFAULT_GAIN) * resolveChartVolWavGain(json);
+  const gain = (options.gain ?? DEFAULT_GAIN) * volWavToLinearGain(json.bms.volWav);
   const startSeconds = Number.isFinite(options.startSeconds) ? Math.max(0, options.startSeconds ?? 0) : 0;
   // BMS spec — an undefined / missing / undecodable `#WAVxx` reference is SILENT (LR2 / beatoraja both skip it).
   // `fallbackToneSeconds` exists as an opt-in debug aid; 0 renders a 1-frame silent placeholder so every downstream

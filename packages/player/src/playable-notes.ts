@@ -54,6 +54,12 @@ export interface ExtractTimedNotesResult {
   playableNotes: TimedPlayableNote[];
   landmineNotes: TimedLandmineNote[];
   invisibleNotes: TimedPlayableNote[];
+  /**
+   * Playable notes that start on the same lane and position as a note in `playableNotes`, with a different keysound.
+   * Only one note per lane and position is judged (see {@link extractTimedNotes}); these are not judged or drawn, but
+   * their keysound still belongs to the chart, so a manual-play host sounds them as background audio at their time.
+   */
+  shadowedNotes: TimedPlayableNote[];
 }
 
 export interface ExtractPlayableNotesOptions {
@@ -79,6 +85,14 @@ interface TimedEventChannels {
   invisible?: string;
 }
 
+/**
+ * Extracts the chart's timed notes.
+ *
+ * Each lane and position holds at most one playable note, as in beatoraja, whose timeline keeps one note per lane: a
+ * long note wins over a tap, and otherwise the first note in event order (lowest object ID; for bmson, the first sound
+ * channel) is kept. The others are returned in `shadowedNotes` when their keysound differs from the kept note's.
+ * Landmines and invisible objects are not collapsed.
+ */
 export function extractTimedNotes(json: BeMusicJson, options: ExtractTimedNotesOptions = {}): ExtractTimedNotesResult {
   const context = createTimedExtractionContext(json, options.playVariant);
   const { playableNotes, landmineNotes, invisibleNotes } = collectTimedNotes(context, {
@@ -87,11 +101,12 @@ export function extractTimedNotes(json: BeMusicJson, options: ExtractTimedNotesO
     includeInvisible: Boolean(options.includeInvisible),
   });
 
-  finalizePlayableNotes(json, playableNotes, context.resolver, options);
+  const shadowedNotes = finalizePlayableNotes(json, playableNotes, context.resolver, options);
   return {
     playableNotes,
     landmineNotes,
     invisibleNotes,
+    shadowedNotes,
   };
 }
 
@@ -225,6 +240,7 @@ function collectTimedNotes(
     playableNotes,
     landmineNotes,
     invisibleNotes,
+    shadowedNotes: [],
   };
 }
 
@@ -274,11 +290,66 @@ function finalizePlayableNotes(
   notes: TimedPlayableNote[],
   resolver: ReturnType<typeof createTimingResolver>,
   options: Pick<ExtractTimedNotesOptions, 'inferBmsLnTypeWhenMissing'>,
-): void {
+): TimedPlayableNote[] {
   const bmsLongNoteMode = resolveBmsLongNoteMode(json);
   applyLnobjEndBeatIfNeeded(json, notes, resolver, bmsLongNoteMode);
   appendLegacyLongNotesIfNeeded(json, notes, resolver, options, bmsLongNoteMode);
   notes.sort(comparePlayableNotes);
+  return collapseSamePositionNotes(notes);
+}
+
+/**
+ * Keeps one note per lane and position in `notes` (sorted by {@link comparePlayableNotes}) and returns the dropped notes
+ * whose keysound differs from every note kept or returned before them at that position.
+ *
+ * Long notes are resolved first, so a `5x` / `6x` or `#LNOBJ` long note and a tap on its start compete here and the
+ * long note wins — beatoraja also replaces a tap at a `5x` start with the long note. Between notes of the same kind the
+ * first in sort order wins: beatoraja keeps the later line of a BMS file, but the IR no longer records line order, so
+ * the lowest object ID stands in; for bmson this is the first sound channel, which is the note beatoraja judges.
+ */
+function collapseSamePositionNotes(notes: TimedPlayableNote[]): TimedPlayableNote[] {
+  const shadowed: TimedPlayableNote[] = [];
+  let writeIndex = 0;
+  let groupStart = 0;
+  while (groupStart < notes.length) {
+    const first = notes[groupStart]!;
+    let groupEnd = groupStart + 1;
+    while (
+      groupEnd < notes.length &&
+      notes[groupEnd]!.beat === first.beat &&
+      notes[groupEnd]!.channel === first.channel
+    ) {
+      groupEnd += 1;
+    }
+    if (groupEnd - groupStart === 1) {
+      notes[writeIndex] = first;
+      writeIndex += 1;
+      groupStart = groupEnd;
+      continue;
+    }
+    let keptIndex = groupStart;
+    for (let index = groupStart; index < groupEnd; index += 1) {
+      if (notes[index]!.endBeat !== undefined) {
+        keptIndex = index;
+        break;
+      }
+    }
+    const kept = notes[keptIndex]!;
+    const soundedValues = new Set<string>([kept.event.value]);
+    for (let index = groupStart; index < groupEnd; index += 1) {
+      const note = notes[index]!;
+      if (index === keptIndex || soundedValues.has(note.event.value)) {
+        continue;
+      }
+      soundedValues.add(note.event.value);
+      shadowed.push(note);
+    }
+    notes[writeIndex] = kept;
+    writeIndex += 1;
+    groupStart = groupEnd;
+  }
+  notes.length = writeIndex;
+  return shadowed;
 }
 
 function comparePlayableNotes(left: TimedPlayableNote, right: TimedPlayableNote): number {

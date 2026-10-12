@@ -58,6 +58,11 @@ export interface PreparedPlaybackChartData {
   activeFreeZoneChannels: ReadonlySet<string>;
   scorableNotes: TimedPlayableNote[];
   inputTokenToChannels: ReadonlyMap<string, readonly string[]>;
+  /**
+   * Duplicate notes that lost their lane and position to a note in `notes` but carry a different keysound (see
+   * `extractTimedNotes`). Manual play sounds them as background audio. Omitted means none.
+   */
+  shadowedNotes?: TimedPlayableNote[];
 }
 
 export interface InitializedPlayerUiRuntime {
@@ -196,6 +201,7 @@ export function preparePlaybackChartData(
     activeFreeZoneChannels,
     scorableNotes,
     inputTokenToChannels,
+    shadowedNotes: extractedNotes.shadowedNotes,
   };
 }
 

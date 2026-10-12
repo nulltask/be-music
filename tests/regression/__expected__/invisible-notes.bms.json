@@ -1,0 +1,433 @@
+{
+  "chart": "invisible-notes.bms",
+  "parse": {
+    "sourceFormat": "bms",
+    "metadata": {
+      "bpm": 120,
+      "extras": {},
+      "title": "Invisible Keysound Channels",
+      "subtitle": "Channels 3x / 4x sound without being drawn or judged",
+      "artist": "be-music",
+      "genre": "TEST",
+      "playLevel": 2,
+      "total": 250,
+      "difficulty": 2
+    },
+    "resources": {
+      "wav": {
+        "01": "sample.wav",
+        "02": "branch.wav",
+        "03": "right.wav"
+      },
+      "bmp": {},
+      "bpm": {},
+      "stop": {},
+      "text": {}
+    },
+    "measures": [],
+    "bms": {
+      "lnObjs": [],
+      "exRank": {},
+      "argb": {},
+      "stp": [],
+      "wavCmds": [],
+      "changeOption": {},
+      "exWav": {},
+      "exBmp": {},
+      "bga": {},
+      "scroll": {},
+      "speed": {},
+      "swBga": {},
+      "player": 1,
+      "lnType": 1
+    },
+    "controlFlow": [],
+    "events": [
+      "0:11@0/4=01",
+      "0:19@0/4=02",
+      "0:11@1/4=01",
+      "0:18@1/4=02",
+      "0:11@2/4=01",
+      "0:19@2/4=02",
+      "0:11@3/4=01",
+      "0:18@3/4=02",
+      "1:11@0/4=01",
+      "1:32@0/4=03",
+      "1:18@1/4=02",
+      "1:31@1/4=03",
+      "1:32@1/4=03",
+      "1:11@2/4=01",
+      "1:32@2/4=03",
+      "1:33@2/4=03",
+      "1:19@3/4=02",
+      "1:31@3/4=03",
+      "1:32@3/4=03",
+      "1:33@3/4=03",
+      "2:11@0/4=01",
+      "2:41@0/4=03",
+      "2:11@1/4=01",
+      "2:41@1/4=03",
+      "2:42@1/4=03",
+      "2:11@2/4=01",
+      "2:41@2/4=03",
+      "2:11@3/4=01",
+      "2:41@3/4=03",
+      "2:42@3/4=03",
+      "3:31@0/4=03",
+      "3:31@1/4=03",
+      "3:41@1/4=03",
+      "3:31@2/4=03",
+      "3:31@3/4=03",
+      "3:41@3/4=03"
+    ]
+  },
+  "stringify": {
+    "format": "bms",
+    "roundTripPlayableNotesEqual": true,
+    "lines": [
+      "#TITLE Invisible Keysound Channels",
+      "#SUBTITLE Channels 3x / 4x sound without being drawn or judged",
+      "#ARTIST be-music",
+      "#GENRE TEST",
+      "#BPM 120",
+      "#PLAYLEVEL 2",
+      "#TOTAL 250",
+      "#DIFFICULTY 2",
+      "#PLAYER 1",
+      "#LNTYPE 1",
+      "#WAV01 sample.wav",
+      "#WAV02 branch.wav",
+      "#WAV03 right.wav",
+      "#00011:01010101",
+      "#00018:00020002",
+      "#00019:0202",
+      "#00111:0101",
+      "#00131:00030003",
+      "#00132:03030303",
+      "#00133:00000303",
+      "#00118:00020000",
+      "#00119:00000002",
+      "#00241:03030303",
+      "#00242:00030003",
+      "#00211:01010101",
+      "#00331:03030303",
+      "#00341:00030003"
+    ]
+  },
+  "variants": {
+    "default": {
+      "randomPatterns": [],
+      "title": "Invisible Keysound Channels",
+      "playVariant": "7",
+      "referenceBpm": 120,
+      "timing": {
+        "tempo": [
+          "0 120 0"
+        ],
+        "stops": []
+      },
+      "sampleTriggers": [
+        "0 11 01",
+        "0 19 02",
+        "500000 11 01",
+        "500000 18 02",
+        "1000000 11 01",
+        "1000000 19 02",
+        "1500000 11 01",
+        "1500000 18 02",
+        "2000000 11 01",
+        "2000000 32 03",
+        "2500000 18 02",
+        "2500000 31 03",
+        "2500000 32 03",
+        "3000000 11 01",
+        "3000000 32 03",
+        "3000000 33 03",
+        "3500000 19 02",
+        "3500000 31 03",
+        "3500000 32 03",
+        "3500000 33 03",
+        "4000000 11 01",
+        "4000000 41 03",
+        "4500000 11 01",
+        "4500000 41 03",
+        "4500000 42 03",
+        "5000000 11 01",
+        "5000000 41 03",
+        "5500000 11 01",
+        "5500000 41 03",
+        "5500000 42 03",
+        "6000000 31 03",
+        "6500000 31 03",
+        "6500000 41 03",
+        "7000000 31 03",
+        "7500000 31 03",
+        "7500000 41 03"
+      ],
+      "playlogChart": {
+        "sourceFormat": "bms",
+        "laneMode": "7 KEY SP",
+        "lnMode": 1,
+        "judgeRank": {
+          "percent": 75
+        },
+        "noteCount": 16,
+        "title": "Invisible Keysound Channels",
+        "subtitle": "Channels 3x / 4x sound without being drawn or judged",
+        "artist": "be-music",
+        "genre": "TEST",
+        "total": 250
+      },
+      "notes": [
+        "0 11 normal",
+        "0 19 normal",
+        "500000 11 normal",
+        "500000 18 normal",
+        "1000000 11 normal",
+        "1000000 19 normal",
+        "1500000 11 normal",
+        "1500000 18 normal",
+        "2000000 11 normal",
+        "2000000 12 invisible",
+        "2500000 11 invisible",
+        "2500000 12 invisible",
+        "2500000 18 normal",
+        "3000000 11 normal",
+        "3000000 12 invisible",
+        "3000000 13 invisible",
+        "3500000 11 invisible",
+        "3500000 12 invisible",
+        "3500000 13 invisible",
+        "3500000 19 normal",
+        "4000000 11 normal",
+        "4000000 21 invisible",
+        "4500000 11 normal",
+        "4500000 21 invisible",
+        "4500000 22 invisible",
+        "5000000 11 normal",
+        "5000000 21 invisible",
+        "5500000 11 normal",
+        "5500000 21 invisible",
+        "5500000 22 invisible",
+        "6000000 11 invisible",
+        "6500000 11 invisible",
+        "6500000 21 invisible",
+        "7000000 11 invisible",
+        "7500000 11 invisible",
+        "7500000 21 invisible"
+      ],
+      "play": {
+        "missed": {
+          "inputs": 0,
+          "lr2": {
+            "ruleset": "lr2/1",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 16,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 16,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "GROOVE",
+              "final": 2,
+              "cleared": false
+            },
+            "score": 0
+          },
+          "beatoraja": {
+            "ruleset": "beatoraja/1",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 16,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 16,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 2,
+              "cleared": false
+            }
+          },
+          "iidx": {
+            "ruleset": "iidx/1",
+            "judge": {
+              "pgreat": 0,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 16,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 0,
+            "noteCount": 16,
+            "maxCombo": 0,
+            "djLevel": "F",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 0,
+              "cleared": false
+            }
+          }
+        },
+        "perfect": {
+          "inputs": 32,
+          "lr2": {
+            "ruleset": "lr2/1",
+            "judge": {
+              "pgreat": 16,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 32,
+            "noteCount": 16,
+            "maxCombo": 16,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "GROOVE",
+              "final": 100,
+              "cleared": true
+            },
+            "score": 200000
+          },
+          "beatoraja": {
+            "ruleset": "beatoraja/1",
+            "judge": {
+              "pgreat": 16,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 32,
+            "noteCount": 16,
+            "maxCombo": 16,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            }
+          },
+          "iidx": {
+            "ruleset": "iidx/1",
+            "judge": {
+              "pgreat": 16,
+              "great": 0,
+              "good": 0,
+              "bad": 0,
+              "poor": 0,
+              "emptyPoor": 0
+            },
+            "fast": 0,
+            "slow": 0,
+            "exScore": 32,
+            "noteCount": 16,
+            "maxCombo": 16,
+            "djLevel": "AAA",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 100,
+              "cleared": true
+            }
+          }
+        },
+        "offset": {
+          "inputs": 28,
+          "lr2": {
+            "ruleset": "lr2/1",
+            "judge": {
+              "pgreat": 6,
+              "great": 4,
+              "good": 2,
+              "bad": 2,
+              "poor": 2,
+              "emptyPoor": 0
+            },
+            "fast": 3,
+            "slow": 3,
+            "exScore": 16,
+            "noteCount": 16,
+            "maxCombo": 6,
+            "djLevel": "C",
+            "gauge": {
+              "type": "GROOVE",
+              "final": 96,
+              "cleared": true
+            },
+            "score": 106250
+          },
+          "beatoraja": {
+            "ruleset": "beatoraja/1",
+            "judge": {
+              "pgreat": 6,
+              "great": 4,
+              "good": 2,
+              "bad": 2,
+              "poor": 2,
+              "emptyPoor": 0
+            },
+            "fast": 3,
+            "slow": 3,
+            "exScore": 16,
+            "noteCount": 16,
+            "maxCombo": 6,
+            "djLevel": "C",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 97,
+              "cleared": true
+            }
+          },
+          "iidx": {
+            "ruleset": "iidx/1",
+            "judge": {
+              "pgreat": 6,
+              "great": 4,
+              "good": 2,
+              "bad": 2,
+              "poor": 2,
+              "emptyPoor": 0
+            },
+            "fast": 3,
+            "slow": 3,
+            "exScore": 16,
+            "noteCount": 16,
+            "maxCombo": 6,
+            "djLevel": "C",
+            "gauge": {
+              "type": "NORMAL",
+              "final": 98,
+              "cleared": true
+            }
+          }
+        }
+      }
+    }
+  }
+}

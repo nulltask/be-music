@@ -255,7 +255,7 @@ function normalizeEventBmsonExtension(value: unknown): BeMusicEvent['bmson'] | u
   if (raw.t === 1 || raw.t === 2 || raw.t === 3) {
     extension.t = raw.t;
   }
-  // Per-mine gauge damage — sourced from bmson `key_channels[].notes[].damage`. 0 is a valid value (the chart authored
+  // Per-mine gauge damage — sourced from bmson `mine_channels[].notes[].damage`. 0 is a valid value (the chart authored
   // a no-damage decoration mine), so the guard checks `Number.isFinite` rather than truthiness.
   if (typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
     extension.damage = raw.damage;

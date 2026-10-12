@@ -90,7 +90,7 @@ The semantics helper of the score is separated into `@be-music/chart`, and `@be-
 - Interpret BMSON's `info` / `lines` / `sound_channels` / `bpm_events` / `stop_events` / `bga`
 - BMS text character code guessing (`Shift_JIS`, `UTF-8`, `EUC-JP`, `latin1`, etc.)
 - BMSON `info.init_bpm` is required by the parser; missing or invalid values fail early instead of falling back to `130`
-- BMSON `key_channels` mine notes are mapped through the `mode_hint` lane resolver and preserve per-mine `damage`
+- The beatoraja BMSON extensions are mapped through the `mode_hint` lane resolver as beatoraja reads them: `mine_channels` become mines that preserve per-mine `damage`, and `key_channels` become hidden (invisible) notes
 
 ### stringifier (`@be-music/stringifier`)
 
