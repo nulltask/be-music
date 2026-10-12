@@ -3,126 +3,170 @@
  * bytes. The normative definition is `docs/fingerprint-spec.md`; this module is its reference implementation.
  */
 import {
-  cloneJson,
-  DEFAULT_BPM,
   normalizeChannel,
   normalizeObjectKey,
   resolveBmsBase,
   type BeMusicEvent,
   type BeMusicJson,
-  type BmsControlFlowCommand,
   type BmsControlFlowEntry,
   type BmsControlFlowHeaderEntry,
-  type BmsControlFlowObjectEntry,
 } from '@be-music/json';
+import type { ChartPlayVariant } from './index.ts';
+import { formatRational, isRationalEqual, type Rational } from './fingerprint-rational.ts';
 import {
-  createBeatResolver,
-  isLandmineChannel,
-  isPlayableChannel,
-  parseBpmFrom03Token,
-  resolveBmsLongNotes,
-  resolveChartPlayVariant,
-  resolveLnobjLongNotes,
-  sortEvents,
-  type ChartPlayVariant,
-} from './index.ts';
+  analyzeControlFlow,
+  classOfValue,
+  classValueRanges,
+  countOutcomePaths,
+  type ControlFlowAnalysis,
+  type ControlFlowVariable,
+  type OutcomeNode,
+} from './fingerprint-control-flow.ts';
 import {
-  compareRational,
-  createRational,
-  divideRational,
-  formatRational,
-  isRationalEqual,
-  MEASURE_GRID_EPSILON,
-  parseDecimalRational,
-  parseLeadingDecimalRational,
-  RATIONAL_ONE,
-  RATIONAL_ZERO,
-  rationalFromNumber,
-  snapToMeasureGrid,
-  snapValue,
-  type Rational,
-} from './fingerprint-rational.ts';
+  bucketEvents,
+  bucketOfChannel,
+  canonicalizeItems,
+  compareMineItems,
+  compareNoteItems,
+  compareTime,
+  compareTimelineItems,
+  computeChartItems,
+  dropNoOpChanges,
+  eventTime,
+  flattenItems,
+  formatJudge,
+  formatLengths,
+  formatMine,
+  formatNote,
+  formatTimeline,
+  formatTotal,
+  HEADER_BUCKET,
+  LENGTHS_BUCKET,
+  MINES_BUCKET,
+  parseJudge,
+  parseMine,
+  parseNote,
+  parseRational,
+  parseTimeline,
+  parseTotal,
+  resolveLaneModeExtension,
+  TIMELINE_TYPES,
+  usesInferredLongNoteType,
+  type ChartItems,
+  type FingerprintJudge,
+  type FingerprintLength,
+  type FingerprintMine,
+  type FingerprintNote,
+  type FingerprintTimelineEvent,
+  type FingerprintTimelineType,
+  type FingerprintTotal,
+  type FlatItems,
+  type FpTime,
+  type HeaderItems,
+  type LaneModeExtension,
+  type MineItem,
+  type NoteItem,
+  type TimelineItem,
+} from './fingerprint-items.ts';
 import { sha256Hex } from './sha256.ts';
+
+export type {
+  FingerprintJudge,
+  FingerprintLength,
+  FingerprintMine,
+  FingerprintNote,
+  FingerprintTime,
+  FingerprintTimelineEvent,
+  FingerprintTimelineType,
+  FingerprintTotal,
+} from './fingerprint-items.ts';
 
 const FINGERPRINT_VERSION = 'bmfp1';
 
+/**
+ * Most outcome classes one control-flow factor may have (the product of its segments' path counts). A factor with more
+ * is fingerprinted by its source lines instead (spec 3.7).
+ */
+export const FINGERPRINT_FACTOR_OUTCOME_LIMIT = 1024;
+
+/** The lane-mode inputs that are not part of the parsed chart (spec 3.5). */
 export interface BeMusicFingerprintOptions {
   /**
-   * Path or file name of the chart. Only its extension is read: `.pms` selects the 9-key lane mode, exactly as in
-   * {@link resolveChartPlayVariant}.
+   * Path, file name, or bare extension of the chart, or `undefined` when unknown. Only its extension is read, exactly
+   * as in `resolveChartPlayVariant`: `.pms` makes the chart 9 KEY, and `.bme` makes a chart without a 6 / 7 key
+   * column 7 / 14 KEY. Part of the fingerprint's input, so it is required.
    */
-  chartPath?: string;
-}
-
-export interface FingerprintTime {
-  m: string;
-  p: string;
-}
-
-export interface FingerprintNote {
-  m: string;
-  p: string;
-  lane: string;
-  end?: FingerprintTime;
-  /** Long-note mode: `"1"` LN, `"2"` CN, `"3"` HCN. Only on long notes. */
-  ln?: string;
-}
-
-export interface FingerprintMine {
-  m: string;
-  p: string;
-  lane: string;
-  damage: string;
-}
-
-export type FingerprintTimelineType = 'bpm' | 'stop' | 'stp' | 'scroll' | 'speed' | 'exrank';
-
-export interface FingerprintTimelineEvent {
-  m: string;
-  p: string;
-  type: FingerprintTimelineType;
-  v: string;
+  chartPath: string | undefined;
 }
 
 export interface FingerprintMeasures {
   count: string;
-  lengths: Array<[measure: string, length: string]>;
+  lengths: FingerprintLength[];
+  /** `false` when the chart draws no bar lines (bmson `lines: []`). Omitted otherwise. */
+  barLines?: false;
 }
 
-/** Header values a control-flow branch sets itself (`#BPM`, `#BASEBPM`, `#RANK`, `#DEFEXRANK`, `#TOTAL`). */
-export interface FingerprintBranchHeader {
-  bpm?: string;
-  baseBpm?: string;
-  rank?: string;
-  defExRank?: string;
-  total?: string;
-}
-
-export interface FingerprintBranch {
-  when?: string;
-  default?: true;
-  header?: FingerprintBranchHeader;
-  measures: { lengths: Array<[measure: string, length: string]> };
+/** Document of a chart with one outcome: the play fingerprint, and the chart fingerprint of a chart without `#RANDOM`. */
+export interface BeMusicPlayFingerprintDocument {
+  v: typeof FINGERPRINT_VERSION;
+  laneMode: ChartPlayVariant;
+  bpm: string;
+  baseBpm: string | null;
+  judge: FingerprintJudge;
+  total: FingerprintTotal;
+  measures: FingerprintMeasures;
   notes: FingerprintNote[];
   mines: FingerprintMine[];
   timeline: FingerprintTimelineEvent[];
-  random: FingerprintControlFlowNode[];
 }
 
-export interface FingerprintControlFlowNode {
-  random?: string;
-  switch?: string;
+export interface FingerprintLaneModeInputs {
+  /** `".pms"`, `".bme"`, or `null` for any other or unknown extension. */
+  extension: LaneModeExtension;
+  player3: boolean;
+}
+
+export interface FingerprintDeltaLists {
+  notes?: FingerprintNote[];
+  mines?: FingerprintMine[];
+  timeline?: FingerprintTimelineEvent[];
+  lengths?: FingerprintLength[];
+}
+
+export interface FingerprintHeaderChange {
+  bpm?: string;
+  baseBpm?: string | null;
+  judge?: FingerprintJudge;
+  total?: FingerprintTotal;
+  player3?: boolean;
+}
+
+export interface FingerprintBranch {
+  /** The values of the variable this branch stands for: `"n"` or an inclusive range `"low-high"`, ascending. */
+  values: string[];
+  add?: FingerprintDeltaLists;
+  remove?: FingerprintDeltaLists;
+  header?: FingerprintHeaderChange;
+  /** A later variable the outcome also depends on. */
+  next?: FingerprintRandomNode;
+}
+
+export interface FingerprintRandomNode {
+  random: string;
   branches: FingerprintBranch[];
 }
 
-export type FingerprintJudge = { rank: string } | { exRank: string };
+/** A control-flow factor over the evaluation budget, identified by the SHA-256 of its source lines. */
+export interface FingerprintOpaqueNode {
+  opaque: string;
+}
 
-export type FingerprintTotal = { bms: string } | { bmson: string } | null;
+export type FingerprintControlFlowNode = FingerprintRandomNode | FingerprintOpaqueNode;
 
-/** The canonical document of `docs/fingerprint-spec.md` section 4. Every number is a string. */
-export interface BeMusicFingerprintDocument {
+/** Document of a chart whose outcome depends on `#RANDOM` / `#SWITCH`. */
+export interface BeMusicChartFingerprintDocument {
   v: typeof FINGERPRINT_VERSION;
-  laneMode: ChartPlayVariant;
+  lanes: FingerprintLaneModeInputs;
   bpm: string;
   baseBpm: string | null;
   judge: FingerprintJudge;
@@ -134,58 +178,34 @@ export interface BeMusicFingerprintDocument {
   random: FingerprintControlFlowNode[];
 }
 
+export type BeMusicFingerprintDocument = BeMusicPlayFingerprintDocument | BeMusicChartFingerprintDocument;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------------------------------------------------
+
 /**
  * Builds the canonical document of the **play fingerprint**: the chart exactly as given, i.e. after
- * `resolveBmsControlFlow` chose every `#RANDOM` / `#SWITCH` branch. `json.bms.controlFlow` is ignored, so the
- * document's `random` list is always empty.
+ * `resolveBmsControlFlow` chose every `#RANDOM` / `#SWITCH` branch. `json.bms.controlFlow` is ignored.
  */
 export function createPlayFingerprintDocument(
   json: BeMusicJson,
-  options: BeMusicFingerprintOptions = {},
-): BeMusicFingerprintDocument {
-  const lists = collectFingerprintLists(json, true);
-  return assembleDocument(json, json.events, options, lists, []);
+  options: BeMusicFingerprintOptions,
+): BeMusicPlayFingerprintDocument {
+  const items = flattenItems(computeChartItems(json, bucketEvents(json.events)));
+  return assemblePlayDocument(items, resolveLaneModeExtension(options.chartPath));
 }
 
 /**
- * Builds the canonical document of the **chart fingerprint**: the chart with its `#RANDOM` / `#SWITCH` structure kept
- * as a tree. Pass the parser's unresolved output (`parseBms` / `parseChart`), whose `events` hold only the content
- * outside control flow; the branches are rebuilt from `json.bms.controlFlow`. For a chart without control flow this
- * equals {@link createPlayFingerprintDocument}.
+ * Builds the canonical document of the **chart fingerprint** from the parser's unresolved output (`parseBms` /
+ * `parseChart`), whose `events` hold only the content outside control flow and whose `bms.controlFlow` holds the rest.
+ * A chart whose every outcome plays the same (in particular one without control flow) gets its play document.
  */
 export function createChartFingerprintDocument(
   json: BeMusicJson,
-  options: BeMusicFingerprintOptions = {},
+  options: BeMusicFingerprintOptions,
 ): BeMusicFingerprintDocument {
-  if (json.bms.controlFlow.length === 0) {
-    return createPlayFingerprintDocument(json, options);
-  }
-
-  const base = resolveBmsBase(json);
-  const tree = buildControlFlowTree(json.bms.controlFlow);
-  const topScope = createScope();
-  evaluateControlFlowItems(tree, undefined, undefined, topScope, topScope);
-
-  const top = cloneJson(json);
-  for (const header of topScope.headers) {
-    applyFingerprintHeader(top, header, base);
-  }
-  applyScopeObjects(top, topScope.objects, base);
-
-  const context: ChartDocumentContext = { base, maxMeasure: -1 };
-  const nodes = buildControlFlowNodes(topScope.blocks, top, context);
-  // State-dependent drops (a BPM / SCROLL / SPEED change to the value in effect, a repeated `#EXRANK`) are only sound
-  // when no branch can change that state in between.
-  const lists = collectFingerprintLists(top, nodes.length === 0);
-  lists.maxMeasure = Math.max(lists.maxMeasure, context.maxMeasure);
-
-  const laneEvents: Array<{ channel: string }> = [...top.events];
-  for (const entry of json.bms.controlFlow) {
-    if (entry.kind === 'object') {
-      laneEvents.push(...entry.events.map(() => ({ channel: entry.channel })));
-    }
-  }
-  return assembleDocument(top, laneEvents, options, lists, nodes);
+  return buildChartModel(json, resolveLaneModeExtension(options.chartPath)).document;
 }
 
 /**
@@ -197,12 +217,12 @@ export function canonicalizeFingerprintDocument(document: BeMusicFingerprintDocu
 }
 
 /** `bmfp1:<sha256>` of the chart fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
-export function computeChartFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions = {}): string {
+export function computeChartFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions): string {
   return hashFingerprintDocument(createChartFingerprintDocument(json, options));
 }
 
 /** `bmfp1:<sha256>` of the play fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
-export function computePlayFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions = {}): string {
+export function computePlayFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions): string {
   return hashFingerprintDocument(createPlayFingerprintDocument(json, options));
 }
 
@@ -237,887 +257,256 @@ function canonicalizeJsonValue(value: unknown): string {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Document assembly
+// Play document
 // ---------------------------------------------------------------------------------------------------------------------
 
-interface Time {
-  m: number;
-  p: Rational;
-}
-
-interface NoteRecord {
-  time: Time;
-  lane: string;
-  end?: Time;
-  ln?: number;
-}
-
-interface MineRecord {
-  time: Time;
-  lane: string;
-  damage: Rational;
-}
-
-interface TimelineRecord {
-  time: Time;
-  type: FingerprintTimelineType;
-  v: Rational;
-}
-
-interface FingerprintLists {
-  notes: FingerprintNote[];
-  mines: FingerprintMine[];
-  timeline: FingerprintTimelineEvent[];
-  /** Last measure holding an included event (note start / end, mine, timeline event); `-1` when there is none. */
-  maxMeasure: number;
-}
-
-function assembleDocument(
-  json: BeMusicJson,
-  laneEvents: ReadonlyArray<{ channel: string }>,
-  options: BeMusicFingerprintOptions,
-  lists: FingerprintLists,
-  random: FingerprintControlFlowNode[],
-): BeMusicFingerprintDocument {
+function assemblePlayDocument(items: FlatItems, extension: LaneModeExtension): BeMusicPlayFingerprintDocument {
+  const lists = canonicalizeItems(items, extension);
   const count = lists.maxMeasure + 1;
-  const lengths = collectMeasureLengths(json)
-    .filter(([measure, length]) => measure < count && !isRationalEqual(length, RATIONAL_ONE))
-    .map(([measure, length]): [string, string] => [String(measure), formatRational(length)]);
+  const { header } = items;
+  const measures: FingerprintMeasures = { count: String(count), lengths: formatLengths(items.lengths, count) };
+  if (!header.barLines) {
+    measures.barLines = false;
+  }
   return {
     v: FINGERPRINT_VERSION,
-    laneMode: resolveChartPlayVariant({ chartPath: options.chartPath, events: laneEvents, bms: json.bms }),
-    bpm: formatRational(snapValue(rationalFromNumber(json.metadata.bpm) ?? createRational(BigInt(DEFAULT_BPM)))),
-    baseBpm: formatOptionalPositiveValue(json.bms.baseBpm) ?? null,
-    judge: resolveFingerprintJudge(json),
-    total: resolveFingerprintTotal(json),
-    measures: { count: String(count), lengths },
+    laneMode: lists.laneMode,
+    bpm: formatRational(header.bpm),
+    baseBpm:
+      header.baseBpm === null || isRationalEqual(header.baseBpm, header.bpm) ? null : formatRational(header.baseBpm),
+    judge: formatJudge(header.judge),
+    total: formatTotal(header.total),
+    measures,
     notes: lists.notes,
     mines: lists.mines,
     timeline: lists.timeline,
-    random,
   };
-}
-
-function resolveFingerprintJudge(json: BeMusicJson): FingerprintJudge {
-  if (json.sourceFormat === 'bmson') {
-    return { exRank: formatOptionalPositiveValue(json.bmson.info.judgeRank) ?? '100' };
-  }
-  const exRank = formatOptionalPositiveValue(json.bms.defExRank);
-  if (exRank !== undefined) {
-    return { exRank };
-  }
-  return { rank: formatOptionalValue(json.metadata.rank) ?? '2' };
-}
-
-function resolveFingerprintTotal(json: BeMusicJson): FingerprintTotal {
-  if (json.sourceFormat === 'bmson') {
-    const total = formatOptionalValue(json.bmson.info.total);
-    return total === undefined ? null : { bmson: total };
-  }
-  const total = formatOptionalValue(json.metadata.total);
-  return total === undefined ? null : { bms: total };
-}
-
-function formatOptionalValue(value: number | undefined): string | undefined {
-  if (typeof value !== 'number') {
-    return undefined;
-  }
-  const rational = rationalFromNumber(value);
-  return rational === undefined ? undefined : formatRational(snapValue(rational));
-}
-
-function formatOptionalPositiveValue(value: number | undefined): string | undefined {
-  return typeof value === 'number' && value > 0 ? formatOptionalValue(value) : undefined;
-}
-
-/** `[measure, snapped length]` for every measure the chart sets, ordered by measure. */
-function collectMeasureLengths(json: BeMusicJson): Array<[number, Rational]> {
-  const byMeasure = new Map<number, Rational>();
-  for (const measure of json.measures) {
-    const length = snapMeasureLength(measure.length);
-    if (length !== undefined) {
-      byMeasure.set(Math.max(0, Math.floor(measure.index)), length);
-    }
-  }
-  return [...byMeasure.entries()].sort((left, right) => left[0] - right[0]);
-}
-
-/**
- * Lengths of at most ε stay exact: their snapping interval would reach 0, which is not a measure length. (Gimmick
- * charts do use such tiny measures.)
- */
-function snapMeasureLength(length: number): Rational | undefined {
-  if (!(length > 0)) {
-    return undefined;
-  }
-  const rational = rationalFromNumber(length);
-  if (rational === undefined) {
-    return undefined;
-  }
-  return compareRational(rational, MEASURE_GRID_EPSILON) <= 0 ? rational : snapToMeasureGrid(rational);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Notes, mines, timeline
+// Deltas: what one outcome of a factor changes in the content outside control flow
 // ---------------------------------------------------------------------------------------------------------------------
 
-const STP_PATTERN = /^\s*(\d{3})(?:\.(\d{3}))?(?:[ \t　]{1,6})([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:[^0-9].*)?$/u;
-const BASE36_OBJECT_KEY_PATTERN = /^[0-9A-Z]{2}$/;
-const DEFAULT_MINE_DAMAGE = 4;
-const STOP_UNITS_PER_BEAT = createRational(48n);
-const TIMELINE_CHANGE_TYPES: ReadonlyArray<FingerprintTimelineType> = ['bpm', 'scroll', 'speed', 'exrank'];
-
-/**
- * Collects the notes, mines, and timeline of `json.events` (plus `#STP`) in canonical, sorted form. `applyStateDrops`
- * enables the drops that depend on the state in effect (a change to the current BPM / SCROLL / SPEED, a repeated
- * `#EXRANK`).
- */
-function collectFingerprintLists(json: BeMusicJson, applyStateDrops: boolean): FingerprintLists {
-  const idBase = resolveBmsBase(json);
-  const sortedEvents = sortEvents(json.events);
-  const beatResolver = createBeatResolver(json);
-  const beatToTime = createBeatToTimeResolver(json);
-  const lnobj = resolveLnobjLongNotes(json);
-  const legacyLongNotes = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: true });
-  const bmsonResolution = json.sourceFormat === 'bmson' ? Math.max(1, json.bmson.info.resolution || 240) : undefined;
-
-  const notes: NoteRecord[] = [];
-  const mines: MineRecord[] = [];
-  const changes = new Map<FingerprintTimelineType, Array<{ time: Time; v: Rational }>>();
-  const timeline: TimelineRecord[] = [];
-
-  const pushNote = (event: BeMusicEvent, lane: string, endBeat: number | undefined): void => {
-    const time = eventToTime(event);
-    const note: NoteRecord = { time, lane };
-    if (endBeat !== undefined && Number.isFinite(endBeat)) {
-      const end = beatToTime(endBeat);
-      if (compareTime(end, time) > 0) {
-        note.end = end;
-        note.ln = resolveLongNoteMode(json, event);
-      }
-    }
-    notes.push(note);
-  };
-  const pushChange = (type: FingerprintTimelineType, event: BeMusicEvent, value: Rational | undefined): void => {
-    if (value === undefined) {
-      return;
-    }
-    let list = changes.get(type);
-    if (!list) {
-      list = [];
-      changes.set(type, list);
-    }
-    list.push({ time: eventToTime(event), v: snapValue(value) });
-  };
-
-  for (const event of sortedEvents) {
-    const channel = normalizeChannel(event.channel);
-    if (isPlayableChannel(channel)) {
-      if (lnobj.endEvents.has(event)) {
-        continue;
-      }
-      const length = event.bmson?.l;
-      const endBeat =
-        bmsonResolution !== undefined && typeof length === 'number' && length > 0
-          ? beatResolver.eventToBeat(event) + length / bmsonResolution
-          : lnobj.startToEndBeat.get(event);
-      pushNote(event, channel, endBeat);
-      continue;
-    }
-    if (isLandmineChannel(channel)) {
-      mines.push({
-        time: eventToTime(event),
-        lane: `${channel.charCodeAt(0) === 0x44 ? '1' : '2'}${channel[1]}`,
-        damage: resolveMineDamage(event, idBase),
-      });
-      continue;
-    }
-    const key = normalizeObjectKey(event.value, idBase);
-    switch (channel) {
-      case '03': {
-        const bpm = parseBpmFrom03Token(event.value);
-        pushChange('bpm', event, bpm > 0 ? rationalFromNumber(bpm) : undefined);
-        break;
-      }
-      case '08': {
-        const bpm = json.resources.bpm[key];
-        pushChange('bpm', event, typeof bpm === 'number' && bpm > 0 ? rationalFromNumber(bpm) : undefined);
-        break;
-      }
-      case '09': {
-        const stop = json.resources.stop[key];
-        const units = typeof stop === 'number' && stop > 0 ? rationalFromNumber(stop) : undefined;
-        if (units !== undefined) {
-          timeline.push({
-            time: eventToTime(event),
-            type: 'stop',
-            v: snapValue(divideRational(units, STOP_UNITS_PER_BEAT)),
-          });
-        }
-        break;
-      }
-      case 'SC': {
-        const scroll = Object.hasOwn(json.bms.scroll, key) ? json.bms.scroll[key] : undefined;
-        pushChange('scroll', event, typeof scroll === 'number' ? rationalFromNumber(scroll) : undefined);
-        break;
-      }
-      case 'SP': {
-        const speed = Object.hasOwn(json.bms.speed, key) ? json.bms.speed[key] : undefined;
-        pushChange('speed', event, typeof speed === 'number' && speed >= 0 ? rationalFromNumber(speed) : undefined);
-        break;
-      }
-      case 'A0': {
-        if (json.sourceFormat !== 'bms') {
-          break;
-        }
-        const raw = json.bms.exRank[key];
-        const parsed = Number.parseFloat(raw ?? '');
-        pushChange(
-          'exrank',
-          event,
-          Number.isFinite(parsed) && parsed > 0 ? parseLeadingDecimalRational(raw!) : undefined,
-        );
-        break;
-      }
-      default:
-        break;
-    }
-  }
-
-  for (const longNote of legacyLongNotes.notes) {
-    const endBeat =
-      typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat ? longNote.endBeat : undefined;
-    pushNote(longNote.event, longNote.channel, endBeat);
-  }
-
-  for (const raw of json.bms.stp) {
-    const stp = parseStp(raw);
-    if (stp) {
-      timeline.push(stp);
-    }
-  }
-
-  const initialState: Record<FingerprintTimelineType, Rational | undefined> = {
-    bpm: snapValue(rationalFromNumber(json.metadata.bpm) ?? createRational(BigInt(DEFAULT_BPM))),
-    scroll: RATIONAL_ONE,
-    speed: RATIONAL_ONE,
-    exrank: undefined,
-    stop: undefined,
-    stp: undefined,
-  };
-  for (const type of TIMELINE_CHANGE_TYPES) {
-    timeline.push(
-      ...collapseChanges(
-        type,
-        changes.get(type) ?? [],
-        applyStateDrops ? initialState[type] : undefined,
-        applyStateDrops,
-      ),
-    );
-  }
-
-  notes.sort(compareNoteRecords);
-  mines.sort(compareMineRecords);
-  timeline.sort(compareTimelineRecords);
-
-  let maxMeasure = -1;
-  for (const note of notes) {
-    maxMeasure = Math.max(maxMeasure, note.time.m, note.end?.m ?? -1);
-  }
-  for (const item of [...mines, ...timeline]) {
-    maxMeasure = Math.max(maxMeasure, item.time.m);
-  }
-
-  return {
-    notes: notes.map(formatNoteRecord),
-    mines: mines.map((mine) => ({ ...formatTime(mine.time), lane: mine.lane, damage: formatRational(mine.damage) })),
-    timeline: timeline.map((item) => ({ ...formatTime(item.time), type: item.type, v: formatRational(item.v) })),
-    maxMeasure,
-  };
+interface Keyed<T> {
+  key: string;
+  item: T;
 }
 
-/**
- * Keeps the last change of a time (the one be-music applies), then — when `applyStateDrops` — drops changes to the
- * value already in effect. `initial` is the state before the first change (`undefined` for `#EXRANK`, whose first
- * change is always kept).
- */
-function collapseChanges(
-  type: FingerprintTimelineType,
-  changes: ReadonlyArray<{ time: Time; v: Rational }>,
-  initial: Rational | undefined,
-  applyStateDrops: boolean,
-): TimelineRecord[] {
-  const lastByTime = new Map<string, { time: Time; v: Rational }>();
-  for (const change of changes) {
-    const key = `${change.time.m}:${formatRational(change.time.p)}`;
-    lastByTime.delete(key);
-    lastByTime.set(key, change);
-  }
-  const ordered = [...lastByTime.values()].sort((left, right) => compareTime(left.time, right.time));
-  const records: TimelineRecord[] = [];
-  let current = initial;
-  for (const change of ordered) {
-    if (applyStateDrops && current !== undefined && isRationalEqual(current, change.v)) {
-      continue;
-    }
-    current = change.v;
-    records.push({ time: change.time, type, v: change.v });
-  }
-  return records;
+interface DeltaLists {
+  notes: Array<Keyed<NoteItem>>;
+  mines: Array<Keyed<MineItem>>;
+  timeline: Array<Keyed<TimelineItem>>;
+  lengths: Array<Keyed<[number, Rational]>>;
 }
 
-function parseStp(raw: string): TimelineRecord | undefined {
-  const match = STP_PATTERN.exec(raw);
-  if (!match) {
-    return undefined;
-  }
-  const durationMs = Number.parseFloat(match[3]!);
-  const duration = parseDecimalRational(match[3]!);
-  if (!Number.isFinite(durationMs) || durationMs <= 0 || duration === undefined) {
-    return undefined;
-  }
-  const position = snapToMeasureGrid(createRational(BigInt(Number.parseInt(match[2] ?? '000', 10)), 1000n));
-  return {
-    time: normalizeTime(Number.parseInt(match[1]!, 10), position),
-    type: 'stp',
-    v: snapValue(duration),
-  };
+type HeaderField = 'bpm' | 'baseBpm' | 'judge' | 'total' | 'player3';
+const HEADER_FIELDS: ReadonlyArray<HeaderField> = ['bpm', 'baseBpm', 'judge', 'total', 'player3'];
+
+interface ItemDelta {
+  add: DeltaLists;
+  remove: DeltaLists;
+  header: Partial<HeaderItems>;
 }
 
-/** Mine damage: bmson `damage`, else the object value read in base 36, else 4 (`00` / not a base-36 pair). */
-function resolveMineDamage(event: BeMusicEvent, idBase: 36 | 62): Rational {
-  const bmsonDamage = event.bmson?.damage;
-  if (typeof bmsonDamage === 'number' && Number.isFinite(bmsonDamage) && bmsonDamage >= 0) {
-    return snapValue(rationalFromNumber(bmsonDamage) ?? RATIONAL_ZERO);
-  }
-  const key = normalizeObjectKey(event.value, idBase);
-  const parsed = BASE36_OBJECT_KEY_PATTERN.test(key) ? Number.parseInt(key, 36) : Number.NaN;
-  return createRational(BigInt(Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MINE_DAMAGE));
+function emptyLists(): DeltaLists {
+  return { notes: [], mines: [], timeline: [], lengths: [] };
 }
 
-/** Per-note long-note mode: bmson per-note `t`, else bmson `info.ln_type`, else `#LNMODE`, else 1 (LN). */
-function resolveLongNoteMode(json: BeMusicJson, event: BeMusicEvent): number {
-  for (const candidate of [event.bmson?.t, json.bmson.info.lnType, json.bms.lnMode]) {
-    if (candidate === 1 || candidate === 2 || candidate === 3) {
-      return candidate;
-    }
-  }
-  return 1;
+function timeKey(time: FpTime): string {
+  return `${time.m}:${time.n}/${time.d}`;
 }
 
-function eventToTime(event: BeMusicEvent): Time {
-  const measure = Number.isFinite(event.measure) ? Math.max(0, Math.floor(event.measure)) : 0;
-  const rawDenominator = event.position[1];
-  const denominator =
-    Number.isFinite(rawDenominator) && rawDenominator > 0 ? Math.max(1, Math.floor(rawDenominator)) : 1;
-  const rawNumerator = Number.isFinite(event.position[0]) ? Math.floor(event.position[0]) : 0;
-  const numerator = Math.max(0, Math.min(denominator - 1, rawNumerator));
-  return normalizeTime(measure, snapToMeasureGrid(createRational(BigInt(numerator), BigInt(denominator))));
+function noteKey(note: NoteItem): string {
+  return `${timeKey(note.t)}|${note.lane}|${note.end ? timeKey(note.end) : ''}|${note.ln ?? ''}|${note.fz ?? ''}`;
 }
 
-/** A position that snapped to exactly `1` is position `0` of the next measure. */
-function normalizeTime(measure: number, position: Rational): Time {
-  if (compareRational(position, RATIONAL_ONE) >= 0) {
-    return { m: measure + 1, p: RATIONAL_ZERO };
-  }
-  return { m: measure, p: compareRational(position, RATIONAL_ZERO) < 0 ? RATIONAL_ZERO : position };
+function mineKey(mine: MineItem): string {
+  return `${timeKey(mine.t)}|${mine.lane}|${formatRational(mine.damage)}`;
 }
 
-/**
- * Inverse of `createBeatResolver`: maps a beat back to `(measure, snapped position)`. Long-note ends are only known as
- * beats (`resolveBmsLongNotes`, `resolveLnobjLongNotes`, bmson `l`), so they come back to the measure grid here.
- */
-function createBeatToTimeResolver(json: BeMusicJson): (beat: number) => Time {
-  const lengths: number[] = [];
-  let maxDefined = -1;
-  for (const measure of json.measures) {
-    const index = Math.max(0, Math.floor(measure.index));
-    lengths[index] = Number.isFinite(measure.length) && measure.length > 0 ? measure.length : 1;
-    maxDefined = Math.max(maxDefined, index);
-  }
-  const starts: number[] = [];
-  let total = 0;
-  for (let measure = 0; measure <= maxDefined; measure += 1) {
-    starts.push(total);
-    total += 4 * (lengths[measure] ?? 1);
-  }
-  const denseLimit = maxDefined + 1;
-
-  return (beat: number): Time => {
-    if (!(beat > 0)) {
-      return { m: 0, p: RATIONAL_ZERO };
-    }
-    let measure: number;
-    let fraction: number;
-    if (beat >= total) {
-      const offset = beat - total;
-      const measureOffset = Math.floor(offset / 4);
-      measure = denseLimit + measureOffset;
-      fraction = (offset - measureOffset * 4) / 4;
-    } else {
-      let low = 0;
-      let high = starts.length - 1;
-      while (low < high) {
-        const middle = (low + high + 1) >> 1;
-        if (starts[middle]! <= beat) {
-          low = middle;
-        } else {
-          high = middle - 1;
-        }
-      }
-      measure = low;
-      fraction = (beat - starts[low]!) / (4 * (lengths[low] ?? 1));
-    }
-    const position = rationalFromNumber(Math.max(0, fraction)) ?? RATIONAL_ZERO;
-    return normalizeTime(measure, snapToMeasureGrid(position));
-  };
+function timelineKey(item: TimelineItem): string {
+  return `${item.type}|${timeKey(item.t)}|${formatRational(item.v)}`;
 }
 
-function compareTime(left: Time, right: Time): number {
-  return left.m !== right.m ? left.m - right.m : compareRational(left.p, right.p);
+function headerFieldText(header: Partial<HeaderItems>, field: HeaderField): string {
+  return canonicalizeJsonValue(formatHeaderField(header, field));
 }
 
-function compareStrings(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
-}
-
-function compareNoteRecords(left: NoteRecord, right: NoteRecord): number {
-  const byTime = compareTime(left.time, right.time);
-  if (byTime !== 0) {
-    return byTime;
-  }
-  const byLane = compareStrings(left.lane, right.lane);
-  if (byLane !== 0) {
-    return byLane;
-  }
-  if (left.end === undefined || right.end === undefined) {
-    return (left.end === undefined ? 0 : 1) - (right.end === undefined ? 0 : 1);
-  }
-  return compareTime(left.end, right.end) || (left.ln ?? 0) - (right.ln ?? 0);
-}
-
-function compareMineRecords(left: MineRecord, right: MineRecord): number {
-  return (
-    compareTime(left.time, right.time) ||
-    compareStrings(left.lane, right.lane) ||
-    compareRational(left.damage, right.damage)
-  );
-}
-
-function compareTimelineRecords(left: TimelineRecord, right: TimelineRecord): number {
-  return (
-    compareTime(left.time, right.time) || compareStrings(left.type, right.type) || compareRational(left.v, right.v)
-  );
-}
-
-function formatTime(time: Time): FingerprintTime {
-  return { m: String(time.m), p: formatRational(time.p) };
-}
-
-function formatNoteRecord(note: NoteRecord): FingerprintNote {
-  const formatted: FingerprintNote = { ...formatTime(note.time), lane: note.lane };
-  if (note.end !== undefined && note.ln !== undefined) {
-    formatted.end = formatTime(note.end);
-    formatted.ln = String(note.ln);
-  }
-  return formatted;
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Control flow (`#RANDOM` / `#SWITCH`) for the chart fingerprint
-// ---------------------------------------------------------------------------------------------------------------------
-
-type ControlFlowContentEntry = BmsControlFlowHeaderEntry | BmsControlFlowObjectEntry;
-
-type ControlFlowItem =
-  | { kind: 'content'; entry: ControlFlowContentEntry }
-  | { kind: 'directive'; command: BmsControlFlowCommand; value?: string }
-  | { kind: 'block'; block: ControlFlowBlock };
-
-interface ControlFlowBlock {
-  type: 'random' | 'switch';
-  /** `#RANDOM n` / `#SWITCH n` range. */
-  max: number;
-  /** Set when only one outcome is possible (`#SETRANDOM n`, `#SETSWITCH n`, `#RANDOM 1`, `#SWITCH 1`). */
-  fixedValue?: number;
-  items: ControlFlowItem[];
-}
-
-interface ControlFlowScope {
-  objects: BmsControlFlowObjectEntry[];
-  headers: BmsControlFlowHeaderEntry[];
-  /** Blocks with more than one outcome, with the `#RANDOM` value `#IF`s inside a `#SWITCH` block compare against. */
-  blocks: Array<{ block: ControlFlowBlock; randomValue: number | undefined }>;
-}
-
-interface ChartDocumentContext {
-  base: 36 | 62;
-  maxMeasure: number;
-}
-
-function createScope(): ControlFlowScope {
-  return { objects: [], headers: [], blocks: [] };
-}
-
-/** Nests the flat `json.bms.controlFlow` capture into `#RANDOM` / `#SWITCH` blocks. */
-function buildControlFlowTree(entries: ReadonlyArray<BmsControlFlowEntry>): ControlFlowItem[] {
-  const root: ControlFlowItem[] = [];
-  const stack: ControlFlowBlock[] = [];
-  const currentItems = (): ControlFlowItem[] => (stack.length > 0 ? stack[stack.length - 1]!.items : root);
-
-  for (const entry of entries) {
-    if (entry.kind !== 'directive') {
-      currentItems().push({ kind: 'content', entry });
-      continue;
-    }
-    const { command, value } = entry;
-    if (command === 'RANDOM' || command === 'SWITCH' || command === 'SETRANDOM' || command === 'SETSWITCH') {
-      const parsed = parsePositiveInteger(value);
-      const isSet = command === 'SETRANDOM' || command === 'SETSWITCH';
-      const max = parsed ?? 1;
-      const block: ControlFlowBlock = {
-        type: command === 'RANDOM' || command === 'SETRANDOM' ? 'random' : 'switch',
-        max,
-        fixedValue: isSet ? max : max <= 1 ? 1 : undefined,
-        items: [],
-      };
-      currentItems().push({ kind: 'block', block });
-      stack.push(block);
-      continue;
-    }
-    if (command === 'ENDRANDOM' || command === 'ENDSW') {
-      const type = command === 'ENDRANDOM' ? 'random' : 'switch';
-      for (let index = stack.length - 1; index >= 0; index -= 1) {
-        if (stack[index]!.type === type) {
-          stack.length = index;
-          break;
-        }
-      }
-      continue;
-    }
-    currentItems().push({ kind: 'directive', command, value });
-  }
-  return root;
-}
-
-interface IfFrame {
-  active: boolean;
-  matched: boolean;
-  hasElse: boolean;
-}
-
-interface SwitchFrame {
-  value: number;
-  active: boolean;
-  matched: boolean;
-  fallthrough: boolean;
-  terminated: boolean;
-}
-
-/**
- * Walks one block's items for one outcome with the same frame rules as the parser's `resolveControlFlow`. Active
- * content inside an `#IF` / `#CASE` goes to `conditional`; active content outside any of them (always played, whatever
- * the outcome) goes to `unconditional`. Blocks with one possible outcome are resolved in place.
- */
-function evaluateControlFlowItems(
-  items: ReadonlyArray<ControlFlowItem>,
-  randomValue: number | undefined,
-  switchValue: number | undefined,
-  conditional: ControlFlowScope,
-  unconditional: ControlFlowScope,
-): void {
-  const ifFrames: IfFrame[] = [];
-  const switchFrame: SwitchFrame | undefined =
-    switchValue === undefined
-      ? undefined
-      : { value: switchValue, active: false, matched: false, fallthrough: false, terminated: false };
-
-  for (const item of items) {
-    if (item.kind === 'directive') {
-      applyControlFlowDirective(item.command, item.value, randomValue, ifFrames, switchFrame);
-      continue;
-    }
-    if ((switchFrame && !switchFrame.active) || ifFrames.some((frame) => !frame.active)) {
-      continue;
-    }
-    const target = switchFrame || ifFrames.length > 0 ? conditional : unconditional;
-    if (item.kind === 'content') {
-      if (item.entry.kind === 'header') {
-        target.headers.push(item.entry);
-      } else {
-        target.objects.push(item.entry);
-      }
-      continue;
-    }
-    const { block } = item;
-    if (block.fixedValue !== undefined) {
-      if (block.type === 'random') {
-        evaluateControlFlowItems(block.items, block.fixedValue, undefined, target, target);
-      } else {
-        evaluateControlFlowItems(block.items, randomValue, block.fixedValue, target, target);
-      }
-      continue;
-    }
-    target.blocks.push({ block, randomValue });
-    if (block.type === 'random') {
-      // Content of a `#RANDOM` block outside every `#IF` plays whatever the roll, so it belongs to the enclosing scope.
-      // `0` matches no `#IF` label.
-      evaluateControlFlowItems(block.items, 0, undefined, createScope(), target);
-    }
-  }
-}
-
-function applyControlFlowDirective(
-  command: BmsControlFlowCommand,
-  rawValue: string | undefined,
-  randomValue: number | undefined,
-  ifFrames: IfFrame[],
-  switchFrame: SwitchFrame | undefined,
-): void {
-  const label = parsePositiveInteger(rawValue);
-  const currentIf = ifFrames[ifFrames.length - 1];
-  switch (command) {
-    case 'IF': {
-      const matched = label !== undefined && randomValue !== undefined && label === randomValue;
-      ifFrames.push({ active: matched, matched, hasElse: false });
-      return;
-    }
-    case 'ELSEIF': {
-      if (!currentIf || currentIf.hasElse || currentIf.matched) {
-        if (currentIf) {
-          currentIf.active = false;
-        }
-        return;
-      }
-      const matched = label !== undefined && randomValue !== undefined && label === randomValue;
-      currentIf.active = matched;
-      currentIf.matched ||= matched;
-      return;
-    }
-    case 'ELSE': {
-      if (!currentIf || currentIf.hasElse) {
-        if (currentIf) {
-          currentIf.active = false;
-        }
-        return;
-      }
-      currentIf.hasElse = true;
-      currentIf.active = !currentIf.matched;
-      currentIf.matched = true;
-      return;
-    }
-    case 'ENDIF':
-      ifFrames.pop();
-      return;
-    case 'CASE':
-    case 'DEF': {
-      if (!switchFrame) {
-        return;
-      }
-      if (switchFrame.terminated) {
-        switchFrame.active = false;
-        switchFrame.fallthrough = false;
-        return;
-      }
-      if (switchFrame.fallthrough) {
-        switchFrame.active = true;
-        return;
-      }
-      const matched = command === 'CASE' ? label !== undefined && label === switchFrame.value : !switchFrame.matched;
-      switchFrame.active = matched;
-      switchFrame.fallthrough = matched;
-      switchFrame.matched ||= matched;
-      return;
-    }
-    case 'SKIP':
-      if (switchFrame?.active) {
-        switchFrame.terminated = true;
-        switchFrame.active = false;
-        switchFrame.fallthrough = false;
-      }
-      return;
+function formatHeaderField(header: Partial<HeaderItems>, field: HeaderField): unknown {
+  switch (field) {
+    case 'bpm':
+      return header.bpm === undefined ? undefined : formatRational(header.bpm);
+    case 'baseBpm':
+      return header.baseBpm === undefined ? undefined : header.baseBpm === null ? null : formatRational(header.baseBpm);
+    case 'judge':
+      return header.judge === undefined ? undefined : formatJudge(header.judge);
+    case 'total':
+      return header.total === undefined ? undefined : formatTotal(header.total);
+    case 'player3':
+      return header.player3;
     default:
-      return;
+      return undefined;
   }
 }
 
-function buildControlFlowNodes(
-  blocks: ControlFlowScope['blocks'],
-  parent: BeMusicJson,
-  context: ChartDocumentContext,
-): FingerprintControlFlowNode[] {
-  const nodes: FingerprintControlFlowNode[] = [];
-  for (const { block, randomValue } of blocks) {
-    const node = buildControlFlowNode(block, randomValue, parent, context);
-    if (node) {
-      nodes.push(node);
+/** Multiset difference `after - before` and `before - after` of two keyed lists. */
+function diffKeyed<T>(
+  before: ReadonlyArray<T>,
+  after: ReadonlyArray<T>,
+  key: (item: T) => string,
+  add: Array<Keyed<T>>,
+  remove: Array<Keyed<T>>,
+): void {
+  const counts = new Map<string, { item: T; count: number }>();
+  for (const item of before) {
+    const k = key(item);
+    const entry = counts.get(k);
+    if (entry) {
+      entry.count -= 1;
+    } else {
+      counts.set(k, { item, count: -1 });
     }
   }
-  return sortByCanonicalText(nodes);
+  for (const item of after) {
+    const k = key(item);
+    const entry = counts.get(k);
+    if (entry) {
+      entry.count += 1;
+    } else {
+      counts.set(k, { item, count: 1 });
+    }
+  }
+  for (const [k, entry] of counts) {
+    for (let index = 0; index < entry.count; index += 1) {
+      add.push({ key: k, item: entry.item });
+    }
+    for (let index = 0; index > entry.count; index -= 1) {
+      remove.push({ key: k, item: entry.item });
+    }
+  }
+}
+
+function isEmptyLists(lists: DeltaLists): boolean {
+  return (
+    lists.notes.length === 0 && lists.mines.length === 0 && lists.timeline.length === 0 && lists.lengths.length === 0
+  );
+}
+
+function isEmptyDelta(delta: ItemDelta): boolean {
+  return isEmptyLists(delta.add) && isEmptyLists(delta.remove) && Object.keys(delta.header).length === 0;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Replaying captured lines onto the content outside control flow
+// ---------------------------------------------------------------------------------------------------------------------
+
+const INDEXED_DEFINITION_PATTERN = /^(BPM|STOP|EXRANK|SCROLL|SPEED)([0-9A-Za-z]{2})$/;
+const ALL_LANES = '*lanes';
+
+interface ReplayContext {
+  /** Measures at or after this are past every included event of every outcome (spec 3.6.6). */
+  measureLimit: number;
+  top: BeMusicJson;
+  topBuckets: Map<string, BeMusicEvent[]>;
+  topItems: ChartItems;
+  base: 36 | 62;
 }
 
 /**
- * One node per `#RANDOM` / `#SWITCH` block: a branch per label the block tests (`#IF` / `#ELSEIF` / `#CASE` values
- * within `1..max`), plus a default branch standing for every other value when some are left. Evaluating per value
- * merges sibling `#IF`s with the same label, and gives `#ELSE` / `#DEF` / fall-through content to exactly the values
- * that reach it.
+ * The chart for one outcome, as the parser's `resolveControlFlow` builds it: the content outside control flow, then the
+ * applied lines in file order (headers re-applied with the parser's rules, objects appended). Returns the buckets the
+ * lines touch.
  */
-function buildControlFlowNode(
-  block: ControlFlowBlock,
-  outerRandomValue: number | undefined,
-  parent: BeMusicJson,
-  context: ChartDocumentContext,
-): FingerprintControlFlowNode | undefined {
-  const labels = new Set<number>();
-  for (const item of block.items) {
-    if (item.kind !== 'directive') {
+function replayEntries(
+  context: ReplayContext,
+  entries: ReadonlyArray<BmsControlFlowEntry>,
+  applied: ReadonlyArray<number>,
+): { json: BeMusicJson; buckets: Map<string, BeMusicEvent[]>; touched: Set<string> } {
+  const { top, base } = context;
+  const json: BeMusicJson = {
+    ...top,
+    metadata: { ...top.metadata },
+    resources: { ...top.resources, bpm: { ...top.resources.bpm }, stop: { ...top.resources.stop } },
+    measures: top.measures.map((measure) => ({ index: measure.index, length: measure.length })),
+    bms: {
+      ...top.bms,
+      lnObjs: [...(top.bms.lnObjs ?? [])],
+      exRank: { ...top.bms.exRank },
+      scroll: { ...top.bms.scroll },
+      speed: { ...top.bms.speed },
+      stp: [...top.bms.stp],
+    },
+  };
+  const touched = new Set<string>();
+  const added = new Map<string, BeMusicEvent[]>();
+  for (const index of applied) {
+    const entry = entries[index]!;
+    if (entry.kind === 'header') {
+      applyFingerprintHeader(json, entry, base, touched);
       continue;
     }
-    const isLabel =
-      block.type === 'random' ? item.command === 'IF' || item.command === 'ELSEIF' : item.command === 'CASE';
-    const label = isLabel ? parsePositiveInteger(item.value) : undefined;
-    if (label !== undefined && label <= block.max) {
-      labels.add(label);
+    if (entry.kind !== 'object') {
+      continue;
     }
-  }
-  const outcomes: Array<{ value: number; isDefault: boolean }> = [...labels]
-    .sort((left, right) => left - right)
-    .map((value) => ({ value, isDefault: false }));
-  if (labels.size < block.max) {
-    let representative = 1;
-    while (labels.has(representative)) {
-      representative += 1;
-    }
-    outcomes.push({ value: representative, isDefault: true });
-  }
-
-  const branches: FingerprintBranch[] = [];
-  for (const outcome of outcomes) {
-    const scope = createScope();
-    if (block.type === 'random') {
-      evaluateControlFlowItems(block.items, outcome.value, undefined, scope, createScope());
-    } else {
-      evaluateControlFlowItems(block.items, outerRandomValue, outcome.value, scope, createScope());
-    }
-    const branch = buildBranch(scope, parent, context);
-    if (branch) {
-      branches.push(outcome.isDefault ? { default: true, ...branch } : { when: String(outcome.value), ...branch });
-    }
-  }
-  if (branches.length === 0) {
-    return undefined;
-  }
-  return block.type === 'random' ? { random: String(block.max), branches } : { switch: String(block.max), branches };
-}
-
-/**
- * A branch holds only its own content. Definitions it makes (`#BPMxx`, `#STOPxx`, `#LNOBJ`, `#LNTYPE`, …) apply to its
- * own objects and nested branches on top of the enclosing scope's; header values it sets are listed in `header`.
- */
-function buildBranch(
-  scope: ControlFlowScope,
-  parent: BeMusicJson,
-  context: ChartDocumentContext,
-): Omit<FingerprintBranch, 'when' | 'default'> | undefined {
-  const json = forkScopeJson(parent);
-  const header: FingerprintBranchHeader = {};
-  for (const entry of scope.headers) {
-    applyFingerprintHeader(json, entry, context.base, header);
-  }
-  const lengths = applyScopeObjects(json, scope.objects, context.base);
-  const lists = collectFingerprintLists(json, false);
-  context.maxMeasure = Math.max(context.maxMeasure, lists.maxMeasure);
-  const random = buildControlFlowNodes(scope.blocks, json, context);
-
-  const hasHeader = Object.keys(header).length > 0;
-  if (
-    !hasHeader &&
-    lengths.length === 0 &&
-    lists.notes.length === 0 &&
-    lists.mines.length === 0 &&
-    lists.timeline.length === 0 &&
-    random.length === 0
-  ) {
-    return undefined;
-  }
-  return {
-    ...(hasHeader ? { header } : {}),
-    measures: {
-      lengths: lengths.map(([measure, length]): [string, string] => [String(measure), formatRational(length)]),
-    },
-    notes: lists.notes,
-    mines: lists.mines,
-    timeline: lists.timeline,
-    random,
-  };
-}
-
-/** Copy of `parent` with its definitions but none of its content (`events`, `#STP`), for one branch. */
-function forkScopeJson(parent: BeMusicJson): BeMusicJson {
-  return {
-    ...parent,
-    metadata: { ...parent.metadata },
-    resources: { ...parent.resources, bpm: { ...parent.resources.bpm }, stop: { ...parent.resources.stop } },
-    measures: parent.measures.map((measure) => ({ index: measure.index, length: measure.length })),
-    events: [],
-    bms: {
-      ...parent.bms,
-      lnObjs: [...(parent.bms.lnObjs ?? [])],
-      exRank: { ...parent.bms.exRank },
-      scroll: { ...parent.bms.scroll },
-      speed: { ...parent.bms.speed },
-      stp: [],
-    },
-  };
-}
-
-/**
- * Appends captured object lines to `json` the way `resolveControlFlow` replays them. Returns the snapped measure
- * lengths the lines set, ordered by measure (the last line of a measure wins).
- */
-function applyScopeObjects(
-  json: BeMusicJson,
-  objects: ReadonlyArray<BmsControlFlowObjectEntry>,
-  base: 36 | 62,
-): Array<[number, Rational]> {
-  const lengths = new Map<number, Rational>();
-  for (const object of objects) {
-    if (typeof object.measureLength === 'number' && object.measureLength > 0) {
-      const existing = json.measures.find((measure) => measure.index === object.measure);
+    if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
+      const existing = json.measures.find((measure) => measure.index === entry.measure);
       if (existing) {
-        existing.length = object.measureLength;
+        existing.length = entry.measureLength;
       } else {
-        json.measures.push({ index: object.measure, length: object.measureLength });
+        json.measures.push({ index: entry.measure, length: entry.measureLength });
       }
-      const snapped = snapMeasureLength(object.measureLength);
-      if (snapped !== undefined) {
-        lengths.set(object.measure, snapped);
-      }
+      touched.add(LENGTHS_BUCKET);
     }
-    for (const event of object.events) {
-      json.events.push({
-        measure: object.measure,
-        channel: normalizeChannel(object.channel),
+    const channel = normalizeChannel(entry.channel);
+    const bucket = bucketOfChannel(channel);
+    if (bucket === undefined) {
+      continue;
+    }
+    for (const event of entry.events) {
+      const replayed: BeMusicEvent = {
+        measure: entry.measure,
+        channel,
         position: event.position,
         value: normalizeObjectKey(event.value, base),
         ...(event.bmson ? { bmson: event.bmson } : {}),
-      });
+      };
+      const list = added.get(bucket);
+      if (list) {
+        list.push(replayed);
+      } else {
+        added.set(bucket, [replayed]);
+      }
+      touched.add(bucket);
+      if (bucket.startsWith('lane:') && usesInferredLongNoteType(json)) {
+        const side = channel.charCodeAt(0);
+        if (side === 0x35 || side === 0x36) {
+          touched.add(ALL_LANES);
+        }
+      }
     }
   }
-  return [...lengths.entries()].sort((left, right) => left[0] - right[0]);
+  if (touched.has(ALL_LANES)) {
+    touched.delete(ALL_LANES);
+    for (const bucket of [...context.topBuckets.keys(), ...added.keys()]) {
+      if (bucket.startsWith('lane:')) {
+        touched.add(bucket);
+      }
+    }
+  }
+  const buckets = new Map(context.topBuckets);
+  for (const [bucket, events] of added) {
+    const merged = [...(buckets.get(bucket) ?? []), ...events];
+    buckets.set(bucket, bucketEvents(merged).get(bucket) ?? []);
+  }
+  return { json, buckets, touched };
 }
 
-const INDEXED_DEFINITION_PATTERN = /^(BPM|STOP|EXRANK|SCROLL|SPEED)([0-9A-Za-z]{2})$/;
-
-/**
- * Re-applies a captured header line, limited to the headers the fingerprint reads, with the parser's rules
- * (`pushHeaderLine`). Header values are also recorded in `record` for a branch's `header`.
- */
+/** Re-applies a captured header line, limited to the headers the fingerprint reads, with the parser's rules. */
 function applyFingerprintHeader(
   json: BeMusicJson,
   entry: BmsControlFlowHeaderEntry,
   base: 36 | 62,
-  record?: FingerprintBranchHeader,
+  touched: Set<string>,
 ): void {
   const { command, value } = entry;
   const numeric = Number.parseFloat(value);
@@ -1129,73 +518,92 @@ function applyFingerprintHeader(
     if (directive === 'EXRANK') {
       if (value.length > 0) {
         json.bms.exRank[key] = value;
+        touched.add('tl:exrank');
       }
       return;
     }
     if (!Number.isFinite(numeric)) {
       return;
     }
-    const target =
-      directive === 'BPM'
-        ? json.resources.bpm
-        : directive === 'STOP'
-          ? json.resources.stop
-          : directive === 'SCROLL'
-            ? json.bms.scroll
-            : json.bms.speed;
-    target[key] = numeric;
-    return;
+    switch (directive) {
+      case 'BPM':
+        json.resources.bpm[key] = numeric;
+        touched.add('tl:bpm');
+        return;
+      case 'STOP':
+        json.resources.stop[key] = numeric;
+        touched.add('tl:stop');
+        return;
+      case 'SCROLL':
+        json.bms.scroll[key] = numeric;
+        touched.add('tl:scroll');
+        return;
+      default:
+        json.bms.speed[key] = numeric;
+        touched.add('tl:speed');
+        return;
+    }
   }
 
   switch (command) {
     case 'BPM':
       if (Number.isFinite(numeric) && numeric > 0) {
         json.metadata.bpm = numeric;
-        recordValue(record, 'bpm', numeric);
+        touched.add(HEADER_BUCKET);
       }
       return;
     case 'BASEBPM':
       if (Number.isFinite(numeric) && numeric > 0) {
         json.bms.baseBpm = numeric;
-        recordValue(record, 'baseBpm', numeric);
+        touched.add(HEADER_BUCKET);
       }
       return;
     case 'RANK':
       if (Number.isFinite(numeric)) {
         json.metadata.rank = numeric;
-        recordValue(record, 'rank', numeric);
+        touched.add(HEADER_BUCKET);
       }
       return;
     case 'DEFEXRANK':
       if (Number.isFinite(numeric)) {
         json.bms.defExRank = numeric;
-        recordValue(record, 'defExRank', numeric);
+        touched.add(HEADER_BUCKET);
       }
       return;
     case 'TOTAL':
       if (Number.isFinite(numeric)) {
         json.metadata.total = numeric;
-        recordValue(record, 'total', numeric);
+        touched.add(HEADER_BUCKET);
+      }
+      return;
+    case 'PLAYER':
+      if (Number.isFinite(numeric) && numeric > 0) {
+        json.bms.player = Math.floor(numeric);
+        touched.add(HEADER_BUCKET);
       }
       return;
     case 'LNTYPE':
       if (Number.isFinite(numeric) && numeric > 0) {
         json.bms.lnType = Math.floor(numeric);
+        touched.add(ALL_LANES);
       }
       return;
     case 'LNMODE':
       if (Number.isFinite(numeric) && numeric > 0) {
         json.bms.lnMode = Math.floor(numeric);
+        touched.add(ALL_LANES);
       }
       return;
     case 'LNOBJ':
       if (value.length > 0) {
         json.bms.lnObjs = [...(json.bms.lnObjs ?? []), normalizeObjectKey(value, base)];
+        touched.add(ALL_LANES);
       }
       return;
     case 'STP':
       if (value.length > 0) {
         json.bms.stp.push(value);
+        touched.add('tl:stp');
       }
       return;
     default:
@@ -1203,31 +611,1098 @@ function applyFingerprintHeader(
   }
 }
 
-function recordValue(
-  record: FingerprintBranchHeader | undefined,
-  key: keyof FingerprintBranchHeader,
-  value: number,
+/** What the lines `applied` change in the content outside control flow. */
+function computeDelta(
+  context: ReplayContext,
+  entries: ReadonlyArray<BmsControlFlowEntry>,
+  applied: ReadonlyArray<number>,
+): ItemDelta {
+  const delta: ItemDelta = { add: emptyLists(), remove: emptyLists(), header: {} };
+  if (applied.length === 0) {
+    return delta;
+  }
+  const { json, buckets, touched } = replayEntries(context, entries, applied);
+  if (touched.size === 0) {
+    return delta;
+  }
+  const items = computeChartItems(json, buckets, touched, context.topItems);
+  const top = context.topItems;
+  for (const bucket of touched) {
+    if (bucket.startsWith('lane:')) {
+      diffKeyed(
+        top.lanes.get(bucket) ?? [],
+        items.lanes.get(bucket) ?? [],
+        noteKey,
+        delta.add.notes,
+        delta.remove.notes,
+      );
+    } else if (bucket === MINES_BUCKET) {
+      diffKeyed(top.mines, items.mines, mineKey, delta.add.mines, delta.remove.mines);
+    } else if (bucket.startsWith('tl:')) {
+      const type = bucket.slice(3) as FingerprintTimelineType;
+      diffKeyed(
+        top.timeline.get(type) ?? [],
+        items.timeline.get(type) ?? [],
+        timelineKey,
+        delta.add.timeline,
+        delta.remove.timeline,
+      );
+    } else if (bucket === LENGTHS_BUCKET) {
+      const lengthKey = ([measure, length]: [number, Rational]): string => `${measure}|${formatRational(length)}`;
+      const below = ([measure]: [number, Rational]): boolean => measure < context.measureLimit;
+      diffKeyed(
+        [...top.lengths.entries()].filter(below),
+        [...items.lengths.entries()].filter(below),
+        lengthKey,
+        delta.add.lengths,
+        delta.remove.lengths,
+      );
+    } else if (bucket === HEADER_BUCKET) {
+      for (const field of HEADER_FIELDS) {
+        if (headerFieldText(items.header, field) !== headerFieldText(top.header, field)) {
+          (delta.header as Record<string, unknown>)[field] = items.header[field];
+        }
+      }
+    }
+  }
+  return delta;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Chart model: segments, factors, decision trees
+// ---------------------------------------------------------------------------------------------------------------------
+
+interface SegmentPath {
+  /** Variable index → classes this path takes. Variables not listed take any value. */
+  classes: Map<number, number[]>;
+  entries: number[];
+}
+
+interface SegmentModel {
+  index: number;
+  start: number;
+  end: number;
+  variables: number[];
+  /** Paths and their deltas, or `undefined` for an opaque segment (over budget). */
+  paths?: SegmentPath[];
+  deltas?: ItemDelta[];
+  sets: Set<string>;
+  uses: Set<string>;
+  timeKeys: Set<string>;
+  /** Lane → [low, high] of the times the segment can affect in that lane (only lanes where long notes pair). */
+  hulls: Map<string, [FpTime | null, FpTime | null]>;
+}
+
+/** A decision tree over the factor's variables in file order, reduced; leaves are deltas. */
+type DeltaTree =
+  | { kind: 'leaf'; delta: ItemDelta; text: string }
+  | { kind: 'node'; variable: number; branches: Array<{ classes: number[]; tree: DeltaTree }>; text: string };
+
+interface FactorModel {
+  segments: SegmentModel[];
+  tree?: DeltaTree;
+  opaque?: string;
+}
+
+interface ChartModel {
+  document: BeMusicFingerprintDocument;
+  analysis?: ControlFlowAnalysis;
+  /** Content every outcome plays, after hoisting, before the state-dependent drops. */
+  topFlat?: FlatItems;
+  factors: FactorModel[];
+  extension: LaneModeExtension;
+}
+
+function buildChartModel(json: BeMusicJson, extension: LaneModeExtension): ChartModel {
+  const entries = json.bms.controlFlow;
+  const topBuckets = bucketEvents(json.events);
+  const topItems = computeChartItems(json, topBuckets);
+  if (entries.length === 0) {
+    return { document: assemblePlayDocument(flattenItems(topItems), extension), factors: [], extension };
+  }
+
+  const analysis = analyzeControlFlow(entries);
+  const context: ReplayContext = {
+    measureLimit: resolveMeasureLimit(topItems, entries, json),
+    top: json,
+    topBuckets,
+    topItems,
+    base: resolveBmsBase(json),
+  };
+  const pairing = resolvePairingStreams(json, entries, topBuckets);
+  const segments: SegmentModel[] = [];
+  for (const segment of analysis.segments) {
+    if (!segment.hasContent) {
+      continue;
+    }
+    const model: SegmentModel = {
+      index: segments.length,
+      start: segment.start,
+      end: segment.end,
+      variables: segment.variables,
+      sets: new Set(),
+      uses: new Set(),
+      timeKeys: new Set(),
+      hulls: new Map(),
+    };
+    collectStaticKeys(model, entries, context.base, usesInferredLongNoteType(json));
+    if (
+      segment.root &&
+      countOutcomePaths(segment.root, FINGERPRINT_FACTOR_OUTCOME_LIMIT) <= FINGERPRINT_FACTOR_OUTCOME_LIMIT
+    ) {
+      model.paths = enumeratePaths(segment.root);
+      model.deltas = model.paths.map((path) => computeDelta(context, entries, path.entries));
+    }
+    collectDynamicKeys(model, entries, pairing);
+    segments.push(model);
+  }
+
+  // Factors: segments whose outcomes interact are evaluated together.
+  const parent = segments.map((_, index) => index);
+  const find = (index: number): number => {
+    let root = index;
+    while (parent[root] !== root) {
+      root = parent[root]!;
+    }
+    parent[index] = root;
+    return root;
+  };
+  for (let left = 0; left < segments.length; left += 1) {
+    for (let right = left + 1; right < segments.length; right += 1) {
+      if (segmentsInteract(segments[left]!, segments[right]!)) {
+        const a = find(left);
+        const b = find(right);
+        if (a !== b) {
+          parent[Math.max(a, b)] = Math.min(a, b);
+        }
+      }
+    }
+  }
+  const groups = new Map<number, SegmentModel[]>();
+  for (const segment of segments) {
+    const root = find(segment.index);
+    const group = groups.get(root);
+    if (group) {
+      group.push(segment);
+    } else {
+      groups.set(root, [segment]);
+    }
+  }
+
+  const factors: FactorModel[] = [];
+  for (const group of groups.values()) {
+    factors.push(buildFactor(group, entries, context, analysis));
+  }
+
+  // Hoist what every outcome of a factor does into the content outside control flow.
+  const topFlat = flattenItems(topItems);
+  for (const factor of factors) {
+    if (factor.tree) {
+      factor.tree = hoistCommon(factor.tree, topFlat);
+    }
+  }
+  const liveFactors = factors.filter(
+    (factor) => factor.opaque !== undefined || (factor.tree && !isEmptyTree(factor.tree)),
+  );
+  if (liveFactors.length === 0) {
+    return { document: assemblePlayDocument(topFlat, extension), analysis, topFlat, factors: [], extension };
+  }
+  const document = assembleChartDocument(topFlat, liveFactors, extension, analysis, context.measureLimit);
+  return { document, analysis, topFlat, factors: liveFactors, extension };
+}
+
+const STP_MEASURE_PATTERN = /^\s*(\d{3})/;
+
+/**
+ * One more than the last measure any outcome can hold an included event in: the events outside control flow, and every
+ * object of an included channel and every `#STP` in control-flow lines (plus the measure after a `5x` / `6x` object,
+ * where an `#LNTYPE 2` run can end). Spec 3.6.6.
+ */
+function resolveMeasureLimit(top: ChartItems, entries: ReadonlyArray<BmsControlFlowEntry>, json: BeMusicJson): number {
+  let last = -1;
+  const flat = flattenItems(top);
+  for (const note of flat.notes) {
+    last = Math.max(last, note.t.m, note.end?.m ?? -1);
+  }
+  for (const item of [...flat.mines, ...flat.timeline]) {
+    last = Math.max(last, item.t.m);
+  }
+  for (const raw of json.bms.stp) {
+    const match = STP_MEASURE_PATTERN.exec(raw);
+    if (match) {
+      last = Math.max(last, Number.parseInt(match[1]!, 10));
+    }
+  }
+  for (const entry of entries) {
+    if (entry.kind === 'header' && entry.command === 'STP') {
+      const match = STP_MEASURE_PATTERN.exec(entry.value);
+      if (match) {
+        last = Math.max(last, Number.parseInt(match[1]!, 10));
+      }
+      continue;
+    }
+    if (entry.kind !== 'object' || entry.events.length === 0) {
+      continue;
+    }
+    const channel = normalizeChannel(entry.channel);
+    if (bucketOfChannel(channel) === undefined) {
+      continue;
+    }
+    const legacy = streamOfChannel(channel)?.legacy === true;
+    last = Math.max(last, entry.measure + (legacy ? 1 : 0));
+  }
+  return last + 1;
+}
+
+/**
+ * Pairing streams (spec 3.6.3): the sequences of objects whose order decides which objects pair into long notes. Per
+ * lane, `obj:<lane>` holds the `1x` / `2x` objects (`#LNOBJ` ends pair with the object before them) and `ln:<lane>`
+ * the `5x` / `6x` objects (`#LNTYPE` pairs them by order). A stream counts only when it can pair at all: `obj:` when
+ * some `#LNOBJ` exists, `ln:` when the lane has `5x` / `6x` objects anywhere. Each stream lists the times of its
+ * objects outside control flow.
+ */
+interface PairingStreams {
+  obj: boolean;
+  lnLanes: Set<string>;
+  topTimes: Map<string, FpTime[]>;
+}
+
+function streamOfChannel(channel: string): { stream: string; legacy: boolean } | undefined {
+  const side = channel.charCodeAt(0);
+  if (side === 0x31 || side === 0x32) {
+    return { stream: `obj:${channel}`, legacy: false };
+  }
+  if (side === 0x35 || side === 0x36) {
+    return { stream: `ln:${side === 0x35 ? '1' : '2'}${channel[1]}`, legacy: true };
+  }
+  return undefined;
+}
+
+function resolvePairingStreams(
+  json: BeMusicJson,
+  entries: ReadonlyArray<BmsControlFlowEntry>,
+  topBuckets: Map<string, BeMusicEvent[]>,
+): PairingStreams {
+  let obj = json.sourceFormat === 'bms' && (json.bms.lnObjs ?? []).length > 0;
+  const lnLanes = new Set<string>();
+  const topTimes = new Map<string, FpTime[]>();
+  for (const [bucket, events] of topBuckets) {
+    if (!bucket.startsWith('lane:')) {
+      continue;
+    }
+    for (const event of events) {
+      const target = streamOfChannel(normalizeChannel(event.channel));
+      if (!target) {
+        continue;
+      }
+      if (target.legacy) {
+        lnLanes.add(target.stream.slice(3));
+      }
+      const list = topTimes.get(target.stream);
+      if (list) {
+        list.push(eventTime(event));
+      } else {
+        topTimes.set(target.stream, [eventTime(event)]);
+      }
+    }
+  }
+  for (const list of topTimes.values()) {
+    list.sort(compareTime);
+  }
+  for (const entry of entries) {
+    if (entry.kind === 'header' && entry.command === 'LNOBJ' && entry.value.length > 0) {
+      obj = true;
+    } else if (entry.kind === 'object') {
+      const target = streamOfChannel(normalizeChannel(entry.channel));
+      if (target?.legacy) {
+        lnLanes.add(target.stream.slice(3));
+      }
+    }
+  }
+  return { obj, lnLanes, topTimes };
+}
+
+/** Definitions a segment sets and uses, from every line it holds (whatever the outcome). */
+function collectStaticKeys(
+  model: SegmentModel,
+  entries: ReadonlyArray<BmsControlFlowEntry>,
+  base: 36 | 62,
+  inferredLnType: boolean,
 ): void {
-  if (!record) {
-    return;
+  for (let index = model.start; index < model.end; index += 1) {
+    const entry = entries[index]!;
+    if (entry.kind === 'header') {
+      const indexed = INDEXED_DEFINITION_PATTERN.exec(entry.command);
+      if (indexed) {
+        const keyRaw = base === 62 ? (entry.commandRaw ?? entry.command).slice(indexed[1]!.length) : indexed[2]!;
+        model.sets.add(`D:${indexed[1]}:${normalizeObjectKey(keyRaw, base)}`);
+        continue;
+      }
+      switch (entry.command) {
+        case 'BPM':
+        case 'BASEBPM':
+        case 'TOTAL':
+        case 'PLAYER':
+          model.sets.add(`H:${entry.command}`);
+          break;
+        case 'RANK':
+        case 'DEFEXRANK':
+          model.sets.add('H:JUDGE');
+          break;
+        case 'LNOBJ':
+        case 'LNTYPE':
+        case 'LNMODE':
+          model.sets.add('D:LN');
+          break;
+        default:
+          break;
+      }
+      continue;
+    }
+    if (entry.kind !== 'object') {
+      continue;
+    }
+    if (typeof entry.measureLength === 'number' && entry.measureLength > 0) {
+      model.sets.add(`M:${entry.measure}`);
+    }
+    const channel = normalizeChannel(entry.channel);
+    const bucket = bucketOfChannel(channel);
+    if (bucket === undefined) {
+      continue;
+    }
+    if (bucket.startsWith('lane:')) {
+      model.uses.add('D:LN');
+      const side = channel.charCodeAt(0);
+      if (inferredLnType && (side === 0x35 || side === 0x36)) {
+        model.sets.add('D:LNTYPE?');
+      }
+      continue;
+    }
+    const definition =
+      channel === '08'
+        ? 'BPM'
+        : channel === '09'
+          ? 'STOP'
+          : channel === 'SC'
+            ? 'SCROLL'
+            : channel === 'SP'
+              ? 'SPEED'
+              : channel === 'A0'
+                ? 'EXRANK'
+                : undefined;
+    for (const event of entry.events) {
+      if (definition !== undefined) {
+        model.uses.add(`D:${definition}:${normalizeObjectKey(event.value, base)}`);
+      }
+      if (bucket.startsWith('tl:')) {
+        model.timeKeys.add(`${bucket}|${timeKey(eventTime({ ...event, measure: entry.measure }))}`);
+      }
+    }
   }
-  const rational = rationalFromNumber(value);
-  if (rational !== undefined) {
-    record[key] = formatRational(snapValue(rational));
+  if (model.sets.has('D:LNTYPE?')) {
+    model.uses.add('D:LNTYPE?');
   }
+}
+
+/**
+ * Times a segment touches: the timeline times of its deltas, and for each pairing stream the stretch it can affect —
+ * from the last object of the stream outside control flow before the segment's first object (or the deltas' first
+ * note) to the first one after its last (spec 3.6.3).
+ */
+function collectDynamicKeys(
+  model: SegmentModel,
+  entries: ReadonlyArray<BmsControlFlowEntry>,
+  pairing: PairingStreams,
+): void {
+  const raw = new Map<string, [FpTime, FpTime]>();
+  const widen = (stream: string, time: FpTime): void => {
+    const hull = raw.get(stream);
+    if (!hull) {
+      raw.set(stream, [time, time]);
+      return;
+    }
+    if (compareTime(time, hull[0]) < 0) {
+      hull[0] = time;
+    }
+    if (compareTime(time, hull[1]) > 0) {
+      hull[1] = time;
+    }
+  };
+  for (let index = model.start; index < model.end; index += 1) {
+    const entry = entries[index]!;
+    if (entry.kind !== 'object') {
+      continue;
+    }
+    const target = streamOfChannel(normalizeChannel(entry.channel));
+    if (!target) {
+      continue;
+    }
+    for (const event of entry.events) {
+      const time = eventTime({ ...event, measure: entry.measure });
+      widen(target.stream, time);
+      if (target.legacy) {
+        // A `5x` / `6x` object also resets `#LNOBJ` pairing at its tick.
+        widen(`obj:${target.stream.slice(3)}`, time);
+      }
+    }
+  }
+  for (const delta of model.deltas ?? []) {
+    for (const lists of [delta.add, delta.remove]) {
+      for (const { item } of lists.timeline) {
+        model.timeKeys.add(`tl:${item.type}|${timeKey(item.t)}`);
+      }
+      for (const { item } of lists.notes) {
+        for (const stream of [`obj:${item.lane}`, `ln:${item.lane}`]) {
+          widen(stream, item.t);
+          if (item.end) {
+            widen(stream, item.end);
+          }
+        }
+      }
+    }
+  }
+  for (const [stream, [low, high]] of raw) {
+    const pairs = stream.startsWith('obj:') ? pairing.obj : pairing.lnLanes.has(stream.slice(3));
+    if (!pairs) {
+      continue;
+    }
+    if (!model.deltas) {
+      model.hulls.set(stream, [null, null]);
+      continue;
+    }
+    let before: FpTime | null = null;
+    let after: FpTime | null = null;
+    for (const time of pairing.topTimes.get(stream) ?? []) {
+      if (compareTime(time, low) < 0) {
+        before = time;
+      } else if (compareTime(time, high) > 0) {
+        after = time;
+        break;
+      }
+    }
+    model.hulls.set(stream, [before, after]);
+  }
+}
+
+function hullsOverlap(left: [FpTime | null, FpTime | null], right: [FpTime | null, FpTime | null]): boolean {
+  // Closed intervals; `null` is −∞ for a low end and +∞ for a high end.
+  const leftLowBeforeRightHigh = left[0] === null || right[1] === null || compareTime(left[0], right[1]) <= 0;
+  const rightLowBeforeLeftHigh = right[0] === null || left[1] === null || compareTime(right[0], left[1]) <= 0;
+  return leftLowBeforeRightHigh && rightLowBeforeLeftHigh;
+}
+
+function intersects(left: Set<string>, right: Set<string>): boolean {
+  const [small, large] = left.size <= right.size ? [left, right] : [right, left];
+  for (const key of small) {
+    if (large.has(key)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Spec 3.6.3: two segments interact when one's outcome can change how the other's content plays. */
+function segmentsInteract(left: SegmentModel, right: SegmentModel): boolean {
+  if (intersects(left.sets, right.sets) || intersects(left.sets, right.uses) || intersects(right.sets, left.uses)) {
+    return true;
+  }
+  if (intersects(left.timeKeys, right.timeKeys)) {
+    return true;
+  }
+  for (const [bucket, hull] of left.hulls) {
+    const other = right.hulls.get(bucket);
+    if (other && hullsOverlap(hull, other)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** All paths of a segment's diagram, iteratively. */
+function enumeratePaths(root: OutcomeNode): SegmentPath[] {
+  const paths: SegmentPath[] = [];
+  const stack: Array<{ node: OutcomeNode; classes: Map<number, number[]>; entries: number[] }> = [
+    { node: root, classes: new Map(), entries: [] },
+  ];
+  while (stack.length > 0) {
+    let { node, classes, entries } = stack.pop()!;
+    while (node.kind === 'emit') {
+      entries = [...entries, node.entry];
+      node = node.next;
+    }
+    if (node.kind === 'end') {
+      paths.push({ classes, entries });
+      continue;
+    }
+    for (let index = node.branches.length - 1; index >= 0; index -= 1) {
+      const branch = node.branches[index]!;
+      const next = new Map(classes);
+      next.set(node.variable, branch.classes);
+      stack.push({ node: branch.node, classes: next, entries });
+    }
+  }
+  return paths;
+}
+
+function buildFactor(
+  segments: SegmentModel[],
+  entries: ReadonlyArray<BmsControlFlowEntry>,
+  context: ReplayContext,
+  analysis: ControlFlowAnalysis,
+): FactorModel {
+  const opaque = (): FactorModel => {
+    const lines: BmsControlFlowEntry[] = [];
+    for (const segment of segments) {
+      lines.push(...entries.slice(segment.start, segment.end));
+    }
+    return { segments, opaque: sha256Hex(canonicalizeJsonValue(lines)) };
+  };
+  if (segments.some((segment) => segment.paths === undefined)) {
+    return opaque();
+  }
+  let joint: Array<{ classes: Map<number, number[]>; delta: ItemDelta }>;
+  if (segments.length === 1) {
+    const [segment] = segments;
+    joint = segment!.paths!.map((path, index) => ({ classes: path.classes, delta: segment!.deltas![index]! }));
+  } else {
+    let total = 1;
+    for (const segment of segments) {
+      total *= segment.paths!.length;
+      if (total > FINGERPRINT_FACTOR_OUTCOME_LIMIT) {
+        return opaque();
+      }
+    }
+    let combos: SegmentPath[] = [{ classes: new Map(), entries: [] }];
+    for (const segment of segments) {
+      const next: SegmentPath[] = [];
+      for (const combo of combos) {
+        for (const path of segment.paths!) {
+          next.push({
+            classes: new Map([...combo.classes, ...path.classes]),
+            entries: [...combo.entries, ...path.entries],
+          });
+        }
+      }
+      combos = next;
+    }
+    joint = combos.map((combo) => ({ classes: combo.classes, delta: computeDelta(context, entries, combo.entries) }));
+  }
+  const variables = segments.flatMap((segment) => segment.variables).map((index) => analysis.variables[index]!);
+  return { segments, tree: buildDeltaTree(variables, 0, joint) };
+}
+
+/**
+ * Reduced ordered decision tree over `variables[from..]` for paths that partition the outcomes (spec 3.6.4). Subtrees
+ * are compared by a text that includes the variables they test, so the tree maps every outcome to its own delta;
+ * {@link formatTree} later merges branches whose documents are equal.
+ */
+function buildDeltaTree(
+  variables: ReadonlyArray<ControlFlowVariable>,
+  from: number,
+  paths: ReadonlyArray<{ classes: Map<number, number[]>; delta: ItemDelta }>,
+  memo: Map<string, DeltaTree> = new Map(),
+  indices: ReadonlyArray<number> = paths.map((_, index) => index),
+): DeltaTree {
+  const memoKey = `${from}|${indices.join(',')}`;
+  const known = memo.get(memoKey);
+  if (known) {
+    return known;
+  }
+  let tree: DeltaTree;
+  let level = from;
+  while (level < variables.length && !indices.some((index) => paths[index]!.classes.has(variables[level]!.index))) {
+    level += 1;
+  }
+  if (level >= variables.length) {
+    if (indices.length !== 1) {
+      throw new Error('fingerprint: control-flow paths do not partition the outcomes');
+    }
+    const delta = paths[indices[0]!]!.delta;
+    tree = { kind: 'leaf', delta, text: canonicalizeJsonValue(formatDelta(delta)) };
+  } else {
+    const variable = variables[level]!;
+    const groups = new Map<string, { classes: number[]; tree: DeltaTree }>();
+    for (const value of variable.classes) {
+      const matching = indices.filter((index) => {
+        const classes = paths[index]!.classes.get(variable.index);
+        return classes === undefined || classes.includes(value);
+      });
+      const child = buildDeltaTree(variables, level + 1, paths, memo, matching);
+      const group = groups.get(child.text);
+      if (group) {
+        group.classes.push(value);
+      } else {
+        groups.set(child.text, { classes: [value], tree: child });
+      }
+    }
+    tree = groups.size === 1 ? [...groups.values()][0]!.tree : createNode(variable.index, [...groups.values()]);
+  }
+  memo.set(memoKey, tree);
+  return tree;
+}
+
+function createNode(variable: number, branches: Array<{ classes: number[]; tree: DeltaTree }>): DeltaTree {
+  const text = `{${variable}:${branches.map((branch) => `${branch.classes.join(',')}=${branch.tree.text}`).join(';')}}`;
+  return { kind: 'node', variable, branches, text };
+}
+
+function isEmptyTree(tree: DeltaTree): boolean {
+  return tree.kind === 'leaf' && isEmptyDelta(tree.delta);
+}
+
+function treeLeaves(tree: DeltaTree, out: ItemDelta[] = []): ItemDelta[] {
+  if (tree.kind === 'leaf') {
+    out.push(tree.delta);
+  } else {
+    for (const branch of tree.branches) {
+      treeLeaves(branch.tree, out);
+    }
+  }
+  return out;
+}
+
+function commonKeyed<T>(lists: ReadonlyArray<ReadonlyArray<Keyed<T>>>): Array<Keyed<T>> {
+  let counts: Map<string, { item: Keyed<T>; count: number }> | undefined;
+  for (const list of lists) {
+    const local = new Map<string, { item: Keyed<T>; count: number }>();
+    for (const entry of list) {
+      const existing = local.get(entry.key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        local.set(entry.key, { item: entry, count: 1 });
+      }
+    }
+    if (counts === undefined) {
+      counts = local;
+    } else {
+      for (const [key, value] of counts) {
+        value.count = Math.min(value.count, local.get(key)?.count ?? 0);
+      }
+    }
+  }
+  const common: Array<Keyed<T>> = [];
+  for (const { item, count } of counts?.values() ?? []) {
+    for (let index = 0; index < count; index += 1) {
+      common.push(item);
+    }
+  }
+  return common;
+}
+
+function subtractKeyed<T>(list: ReadonlyArray<Keyed<T>>, remove: ReadonlyArray<Keyed<T>>): Array<Keyed<T>> {
+  const counts = new Map<string, number>();
+  for (const entry of remove) {
+    counts.set(entry.key, (counts.get(entry.key) ?? 0) + 1);
+  }
+  const kept: Array<Keyed<T>> = [];
+  for (const entry of list) {
+    const count = counts.get(entry.key) ?? 0;
+    if (count > 0) {
+      counts.set(entry.key, count - 1);
+    } else {
+      kept.push(entry);
+    }
+  }
+  return kept;
+}
+
+/**
+ * Moves what every leaf of a factor does into `top` (spec 3.6.5) and rebuilds the factor's tree without it. A factor
+ * whose leaves are then all empty plays the same for every outcome.
+ */
+function hoistCommon(tree: DeltaTree, top: FlatItems): DeltaTree {
+  const leaves = treeLeaves(tree);
+  const common: ItemDelta = { add: emptyLists(), remove: emptyLists(), header: {} };
+  for (const side of ['add', 'remove'] as const) {
+    common[side] = {
+      notes: commonKeyed(leaves.map((leaf) => leaf[side].notes)),
+      mines: commonKeyed(leaves.map((leaf) => leaf[side].mines)),
+      timeline: commonKeyed(leaves.map((leaf) => leaf[side].timeline)),
+      lengths: commonKeyed(leaves.map((leaf) => leaf[side].lengths)),
+    };
+  }
+  for (const field of HEADER_FIELDS) {
+    const first = leaves[0]!.header;
+    if (!(field in first)) {
+      continue;
+    }
+    const text = headerFieldText(first, field);
+    if (leaves.every((leaf) => field in leaf.header && headerFieldText(leaf.header, field) === text)) {
+      (common.header as Record<string, unknown>)[field] = first[field];
+    }
+  }
+  if (isEmptyDelta(common)) {
+    return tree;
+  }
+  applyDelta(top, common);
+  return mapTree(tree, (delta) => ({
+    add: {
+      notes: subtractKeyed(delta.add.notes, common.add.notes),
+      mines: subtractKeyed(delta.add.mines, common.add.mines),
+      timeline: subtractKeyed(delta.add.timeline, common.add.timeline),
+      lengths: subtractKeyed(delta.add.lengths, common.add.lengths),
+    },
+    remove: {
+      notes: subtractKeyed(delta.remove.notes, common.remove.notes),
+      mines: subtractKeyed(delta.remove.mines, common.remove.mines),
+      timeline: subtractKeyed(delta.remove.timeline, common.remove.timeline),
+      lengths: subtractKeyed(delta.remove.lengths, common.remove.lengths),
+    },
+    header: Object.fromEntries(
+      Object.entries(delta.header).filter(([field]) => !(field in common.header)),
+    ) as Partial<HeaderItems>,
+  }));
+}
+
+/** Rebuilds a tree with every leaf transformed, re-reducing it (leaves that became equal merge). */
+function mapTree(tree: DeltaTree, transform: (delta: ItemDelta) => ItemDelta): DeltaTree {
+  if (tree.kind === 'leaf') {
+    const delta = transform(tree.delta);
+    return { kind: 'leaf', delta, text: canonicalizeJsonValue(formatDelta(delta)) };
+  }
+  const groups = new Map<string, { classes: number[]; tree: DeltaTree }>();
+  for (const branch of tree.branches) {
+    const mapped = mapTree(branch.tree, transform);
+    const group = groups.get(mapped.text);
+    if (group) {
+      group.classes.push(...branch.classes);
+    } else {
+      groups.set(mapped.text, { classes: [...branch.classes], tree: mapped });
+    }
+  }
+  return groups.size === 1 ? [...groups.values()][0]!.tree : createNode(tree.variable, [...groups.values()]);
+}
+
+/** `top - delta.remove + delta.add`, header fields overridden. */
+function applyDelta(top: FlatItems, delta: ItemDelta): void {
+  top.notes = applyKeyed(top.notes, noteKey, delta.remove.notes, delta.add.notes);
+  top.mines = applyKeyed(top.mines, mineKey, delta.remove.mines, delta.add.mines);
+  top.timeline = applyKeyed(top.timeline, timelineKey, delta.remove.timeline, delta.add.timeline);
+  const lengths = new Map(top.lengths);
+  for (const { item } of delta.remove.lengths) {
+    lengths.delete(item[0]);
+  }
+  for (const { item } of delta.add.lengths) {
+    lengths.set(item[0], item[1]);
+  }
+  top.lengths = lengths;
+  top.header = { ...top.header, ...delta.header };
+}
+
+function applyKeyed<T>(
+  list: ReadonlyArray<T>,
+  key: (item: T) => string,
+  remove: ReadonlyArray<Keyed<T>>,
+  add: ReadonlyArray<Keyed<T>>,
+): T[] {
+  const keyed = list.map((item) => ({ key: key(item), item }));
+  const kept = subtractKeyed(keyed, remove);
+  if (kept.length + remove.length !== keyed.length) {
+    throw new Error('fingerprint: a removed item is not present');
+  }
+  return [...kept.map((entry) => entry.item), ...add.map((entry) => entry.item)];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Chart document assembly
+// ---------------------------------------------------------------------------------------------------------------------
+
+function formatDeltaLists(lists: DeltaLists): FingerprintDeltaLists {
+  const formatted: FingerprintDeltaLists = {};
+  if (lists.notes.length > 0) {
+    formatted.notes = lists.notes
+      .map((entry) => entry.item)
+      .sort(compareNoteItems)
+      .map((note) => formatNote(note, 'raw'));
+  }
+  if (lists.mines.length > 0) {
+    formatted.mines = lists.mines
+      .map((entry) => entry.item)
+      .sort(compareMineItems)
+      .map(formatMine);
+  }
+  if (lists.timeline.length > 0) {
+    formatted.timeline = lists.timeline
+      .map((entry) => entry.item)
+      .sort(compareTimelineItems)
+      .map(formatTimeline);
+  }
+  if (lists.lengths.length > 0) {
+    formatted.lengths = lists.lengths
+      .map((entry) => entry.item)
+      .sort((left, right) => left[0] - right[0])
+      .map(([measure, length]): FingerprintLength => [String(measure), formatRational(length)]);
+  }
+  return formatted;
+}
+
+function formatDelta(delta: ItemDelta): Omit<FingerprintBranch, 'values' | 'next'> {
+  const formatted: Omit<FingerprintBranch, 'values' | 'next'> = {};
+  const add = formatDeltaLists(delta.add);
+  const remove = formatDeltaLists(delta.remove);
+  if (Object.keys(add).length > 0) {
+    formatted.add = add;
+  }
+  if (Object.keys(remove).length > 0) {
+    formatted.remove = remove;
+  }
+  const header: FingerprintHeaderChange = {};
+  for (const field of HEADER_FIELDS) {
+    if (field in delta.header) {
+      (header as Record<string, unknown>)[field] = formatHeaderField(delta.header, field);
+    }
+  }
+  if (Object.keys(header).length > 0) {
+    formatted.header = header;
+  }
+  return formatted;
+}
+
+function formatValueRanges(ranges: ReadonlyArray<[number, number]>): string[] {
+  return ranges.map(([low, high]) => (low === high ? String(low) : `${low}-${high}`));
+}
+
+/**
+ * The document node of a tree. Branches whose documents are equal merge (their outcomes play alike, whichever later
+ * variable decides them), and a node left with one branch is that branch's nested node.
+ */
+function formatTree(tree: DeltaTree & { kind: 'node' }, analysis: ControlFlowAnalysis): FingerprintRandomNode {
+  const variable = analysis.variables[tree.variable]!;
+  const groups = new Map<string, { classes: number[]; content: Omit<FingerprintBranch, 'values'> }>();
+  for (const branch of tree.branches) {
+    const content: Omit<FingerprintBranch, 'values'> =
+      branch.tree.kind === 'node' ? { next: formatTree(branch.tree, analysis) } : formatDelta(branch.tree.delta);
+    const text = canonicalizeJsonValue(content);
+    const group = groups.get(text);
+    if (group) {
+      group.classes.push(...branch.classes);
+    } else {
+      groups.set(text, { classes: [...branch.classes], content });
+    }
+  }
+  if (groups.size === 1) {
+    const only = [...groups.values()][0]!.content;
+    if (only.next) {
+      return only.next;
+    }
+  }
+  const branches = [...groups.values()].map(({ classes, content }) => {
+    const ranges = classValueRanges(variable, classes);
+    return { first: ranges[0]![0], branch: { values: formatValueRanges(ranges), ...content } as FingerprintBranch };
+  });
+  branches.sort((left, right) => left.first - right.first);
+  return { random: String(variable.max), branches: branches.map((entry) => entry.branch) };
+}
+
+function assembleChartDocument(
+  top: FlatItems,
+  factors: ReadonlyArray<FactorModel>,
+  extension: LaneModeExtension,
+  analysis: ControlFlowAnalysis,
+  count: number,
+): BeMusicChartFingerprintDocument {
+  // State kinds some factor can change: their no-op drops depend on the outcome (spec 3.4).
+  const touched = new Set<string>();
+  let anyOpaque = false;
+  for (const factor of factors) {
+    if (factor.opaque !== undefined || !factor.tree) {
+      anyOpaque = true;
+      continue;
+    }
+    for (const leaf of treeLeaves(factor.tree)) {
+      for (const lists of [leaf.add, leaf.remove]) {
+        for (const { item } of lists.timeline) {
+          touched.add(item.type);
+        }
+      }
+      if ('bpm' in leaf.header) {
+        touched.add('bpm');
+      }
+      if ('bpm' in leaf.header || 'baseBpm' in leaf.header) {
+        touched.add('baseBpm');
+      }
+    }
+  }
+
+  const timeline: TimelineItem[] = [];
+  for (const type of TIMELINE_TYPES) {
+    const items = top.timeline.filter((item) => item.type === type);
+    timeline.push(...(anyOpaque || touched.has(type) ? items : dropNoOpChanges(type, items, top.header.bpm)));
+  }
+  timeline.sort(compareTimelineItems);
+
+  const random = factors.map((factor): FingerprintControlFlowNode => {
+    if (factor.opaque !== undefined || !factor.tree || factor.tree.kind !== 'node') {
+      return { opaque: factor.opaque ?? '' };
+    }
+    return formatTree(factor.tree, analysis);
+  });
+  const { header } = top;
+  const baseBpmIsBpm = header.baseBpm !== null && isRationalEqual(header.baseBpm, header.bpm);
+  return {
+    v: FINGERPRINT_VERSION,
+    lanes: { extension, player3: header.player3 },
+    bpm: formatRational(header.bpm),
+    baseBpm:
+      header.baseBpm === null || (baseBpmIsBpm && !anyOpaque && !touched.has('baseBpm'))
+        ? null
+        : formatRational(header.baseBpm),
+    judge: formatJudge(header.judge),
+    total: formatTotal(header.total),
+    measures: { count: String(count), lengths: formatLengths(top.lengths, count) },
+    notes: [...top.notes].sort(compareNoteItems).map((note) => formatNote(note, 'raw')),
+    mines: [...top.mines].sort(compareMineItems).map(formatMine),
+    timeline: timeline.map(formatTimeline),
+    random: sortByCanonicalText(random),
+  };
 }
 
 function sortByCanonicalText<T>(values: T[]): T[] {
   return values
     .map((value) => ({ value, text: canonicalizeJsonValue(value) }))
-    .sort((left, right) => compareStrings(left.text, right.text))
+    .sort((left, right) => (left.text < right.text ? -1 : left.text > right.text ? 1 : 0))
     .map((entry) => entry.value);
 }
 
-function parsePositiveInteger(value: string | undefined): number | undefined {
-  if (!value) {
-    return undefined;
+// ---------------------------------------------------------------------------------------------------------------------
+// Composition (used by tests and by verifiers): the play document of one outcome
+// ---------------------------------------------------------------------------------------------------------------------
+
+/**
+ * A function from an outcome (the value of every `#RANDOM` / `#SWITCH` line in file order, as a play log's
+ * `randomOutcomes` records it) to its play document, composed from the chart model rather than by resolving the chart.
+ * The function throws for an outcome of an opaque factor. Not part of the package API; used to check the model against
+ * the parser.
+ */
+export function createOutcomeComposer(
+  json: BeMusicJson,
+  options: BeMusicFingerprintOptions,
+): (outcomes: ReadonlyArray<number>) => BeMusicPlayFingerprintDocument {
+  const model = buildChartModel(json, resolveLaneModeExtension(options.chartPath));
+  return (outcomes) => {
+    if (!model.topFlat || !model.analysis) {
+      return model.document as BeMusicPlayFingerprintDocument;
+    }
+    const analysis = model.analysis;
+    const items: FlatItems = { ...model.topFlat };
+    for (const factor of model.factors) {
+      if (!factor.tree) {
+        throw new Error('fingerprint: an opaque factor has no per-outcome content');
+      }
+      let tree = factor.tree;
+      while (tree.kind === 'node') {
+        const variable = analysis.variables[tree.variable]!;
+        const valueClass = classOfValue(variable, outcomes[variable.line] ?? 1);
+        tree = tree.branches.find((branch) => branch.classes.includes(valueClass))!.tree;
+      }
+      applyDelta(items, tree.delta);
+    }
+    return assemblePlayDocument(items, model.extension);
+  };
+}
+
+/**
+ * Every outcome a chart document stands for, with its probability, composed from the document alone: one entry per
+ * combination of branch paths of its `random` nodes. Not part of the package API; used to check documents in tests.
+ */
+export function expandChartFingerprintDocument(
+  document: BeMusicFingerprintDocument,
+): Array<{ probability: Rational; document: BeMusicPlayFingerprintDocument }> {
+  if (!('random' in document)) {
+    return [{ probability: { n: 1n, d: 1n }, document }];
   }
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  const top: FlatItems = {
+    notes: document.notes.map(parseNote),
+    mines: document.mines.map(parseMine),
+    timeline: document.timeline.map(parseTimeline),
+    lengths: new Map(document.measures.lengths.map(([measure, length]) => [Number(measure), parseRational(length)])),
+    header: {
+      bpm: parseRational(document.bpm),
+      baseBpm: document.baseBpm === null ? null : parseRational(document.baseBpm),
+      judge: parseJudge(document.judge),
+      total: parseTotal(document.total),
+      player3: document.lanes.player3,
+      barLines: true,
+    },
+  };
+  let combos: Array<{ probability: Rational; deltas: ItemDelta[] }> = [{ probability: { n: 1n, d: 1n }, deltas: [] }];
+  for (const node of document.random) {
+    if ('opaque' in node) {
+      throw new Error('fingerprint: an opaque node has no per-outcome content');
+    }
+    const leaves = expandNode(node);
+    const next: typeof combos = [];
+    for (const combo of combos) {
+      for (const leaf of leaves) {
+        next.push({
+          probability: { n: combo.probability.n * leaf.probability.n, d: combo.probability.d * leaf.probability.d },
+          deltas: [...combo.deltas, leaf.delta],
+        });
+      }
+    }
+    combos = next;
+  }
+  return combos.map((combo) => {
+    const items: FlatItems = { ...top };
+    for (const delta of combo.deltas) {
+      applyDelta(items, delta);
+    }
+    return { probability: combo.probability, document: assemblePlayDocument(items, document.lanes.extension) };
+  });
+}
+
+function expandNode(node: FingerprintRandomNode): Array<{ probability: Rational; delta: ItemDelta }> {
+  const max = BigInt(node.random);
+  const result: Array<{ probability: Rational; delta: ItemDelta }> = [];
+  for (const branch of node.branches) {
+    let count = 0n;
+    for (const range of branch.values) {
+      const dash = range.indexOf('-');
+      count += dash < 0 ? 1n : BigInt(range.slice(dash + 1)) - BigInt(range.slice(0, dash)) + 1n;
+    }
+    const children = branch.next
+      ? expandNode(branch.next)
+      : [{ probability: { n: 1n, d: 1n }, delta: parseDelta(branch) }];
+    for (const child of children) {
+      result.push({
+        probability: { n: count * child.probability.n, d: max * child.probability.d },
+        delta: child.delta,
+      });
+    }
+  }
+  return result;
+}
+
+function parseDeltaLists(lists: FingerprintDeltaLists | undefined): DeltaLists {
+  return {
+    notes: (lists?.notes ?? []).map(parseNote).map((item) => ({ key: noteKey(item), item })),
+    mines: (lists?.mines ?? []).map(parseMine).map((item) => ({ key: mineKey(item), item })),
+    timeline: (lists?.timeline ?? []).map(parseTimeline).map((item) => ({ key: timelineKey(item), item })),
+    lengths: (lists?.lengths ?? []).map(([measure, length]) => {
+      const item: [number, Rational] = [Number(measure), parseRational(length)];
+      return { key: `${item[0]}|${length}`, item };
+    }),
+  };
+}
+
+function parseDelta(branch: FingerprintBranch): ItemDelta {
+  const header: Partial<HeaderItems> = {};
+  const change = branch.header ?? {};
+  if (change.bpm !== undefined) {
+    header.bpm = parseRational(change.bpm);
+  }
+  if (change.baseBpm !== undefined) {
+    header.baseBpm = change.baseBpm === null ? null : parseRational(change.baseBpm);
+  }
+  if (change.judge !== undefined) {
+    header.judge = parseJudge(change.judge);
+  }
+  if (change.total !== undefined) {
+    header.total = parseTotal(change.total);
+  }
+  if (change.player3 !== undefined) {
+    header.player3 = change.player3;
+  }
+  return { add: parseDeltaLists(branch.add), remove: parseDeltaLists(branch.remove), header };
 }

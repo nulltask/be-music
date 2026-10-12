@@ -1,5 +1,5 @@
 /**
- * Exact rational arithmetic for the Be-Music Fingerprint (`docs/fingerprint-spec.md`, sections 3.1 / 3.2).
+ * Exact rational arithmetic and snapping for the Be-Music Fingerprint (`docs/fingerprint-spec.md`, sections 3.1 / 3.2).
  *
  * Values are `{ n, d }` BigInt pairs kept in lowest terms with a positive denominator, so two equal rationals always
  * share one representation and one canonical text.
@@ -12,10 +12,21 @@ export interface Rational {
 export const RATIONAL_ZERO: Rational = { n: 0n, d: 1n };
 export const RATIONAL_ONE: Rational = { n: 1n, d: 1n };
 
-/** Measure-grid tolerance: half a pulse of bmson resolution 240 (one 4/4 measure is 960 pulses). */
-export const MEASURE_GRID_EPSILON: Rational = { n: 1n, d: 1920n };
-/** Relative tolerance for snapped values (BPM, STOP, SCROLL, …). */
-export const VALUE_RELATIVE_TOLERANCE: Rational = { n: 1n, d: 1_000_000n };
+/**
+ * Measure lengths snap to a rational whose length **in beats** has a denominator of at most this
+ * (`docs/fingerprint-spec.md` section 3.2). 48 covers every measure written in 1/192 of a 4/4 measure, plus thirds,
+ * fifths, sevenths, and ninths of a beat.
+ */
+export const MEASURE_BEAT_DENOMINATOR_LIMIT = 48;
+/**
+ * Snapping tolerance for measure lengths, in beats: `1/4608 = 1/(2 * 48^2)`. Two distinct candidates are at least
+ * `1/(48 * 47) = 1/2256` beat apart, so no value is ever within the tolerance of two candidates.
+ */
+export const MEASURE_BEAT_TOLERANCE: Rational = { n: 1n, d: 4608n };
+/** Values snap to a rational with a denominator of at most this (halves, thirds, … twelfths). */
+export const VALUE_DENOMINATOR_LIMIT = 12;
+/** Relative tolerance for snapped values (BPM, STOP, SCROLL, SPEED, …). */
+export const VALUE_RELATIVE_TOLERANCE: Rational = { n: 1n, d: 100_000n };
 
 const DECIMAL_TEXT_PATTERN = /^([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/;
 const LEADING_DECIMAL_PATTERN = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/;
@@ -120,103 +131,77 @@ export function formatRational(value: Rational): string {
   return value.d === 1n ? value.n.toString() : `${value.n.toString()}/${value.d.toString()}`;
 }
 
-function floorDiv(numerator: bigint, denominator: bigint): bigint {
-  const quotient = numerator / denominator;
-  return numerator % denominator !== 0n && numerator < 0n !== denominator < 0n ? quotient - 1n : quotient;
+function absBigInt(value: bigint): bigint {
+  return value < 0n ? -value : value;
 }
 
-function ceilRational(value: Rational): bigint {
-  return -floorDiv(-value.n, value.d);
+/** `round(n / d)` with halves rounded down (toward negative infinity), `d > 0`. */
+function roundHalfDown(numerator: bigint, denominator: bigint): bigint {
+  // ceil(x - 1/2) = -floor(1/2 - x) = -floor((d - 2n) / 2d)
+  const twice = 2n * denominator;
+  const shifted = denominator - 2n * numerator;
+  const quotient = shifted / twice;
+  const floor = shifted % twice !== 0n && shifted < 0n ? quotient - 1n : quotient;
+  return -floor;
 }
 
 /**
- * The simplest rational in the closed interval `[low, high]`: the one with the smallest denominator, found by walking
- * the Stern–Brocot tree along the continued-fraction expansion (O(log) steps, not a search over denominators). Only
- * integers can tie on the denominator; when the interval holds several, the one nearest its centre wins (nearer zero
- * on a tie).
+ * The rational `a/q` nearest to `value` with `1 <= q <= maxDenominator` and `|a/q - value| <= tolerance`, or `value`
+ * itself when there is none. Ties go to the smaller denominator, then the smaller value. With `positiveOnly`, only
+ * `a >= 1` is considered (measure lengths, where 0 is not a length). Exact candidates (`value` already has a small
+ * denominator) are fixed points.
  */
-export function simplestRationalInInterval(low: Rational, high: Rational): Rational {
-  if (compareRational(low, high) > 0) {
-    throw new RangeError('simplestRationalInInterval: low must not exceed high');
-  }
-  if (low.n <= 0n && high.n >= 0n) {
-    return RATIONAL_ZERO;
-  }
-  if (high.n < 0n) {
-    const mirrored = simplestPositiveRationalInInterval(negateRational(high), negateRational(low));
-    return negateRational(mirrored);
-  }
-  return simplestPositiveRationalInInterval(low, high);
-}
-
-function negateRational(value: Rational): Rational {
-  return { n: -value.n, d: value.d };
-}
-
-/** `0 < low <= high`. Iterative continued-fraction walk; the terms are folded back into a convergent at the end. */
-function simplestPositiveRationalInInterval(low: Rational, high: Rational): Rational {
-  const terms: bigint[] = [];
-  let lo = low;
-  let hi = high;
-  for (;;) {
-    const ceiling = ceilRational(lo);
-    if (compareRational({ n: ceiling, d: 1n }, hi) <= 0) {
-      // At the top level every integer has denominator 1, so several can tie: take the one nearest the centre. Deeper
-      // down a larger term means a larger denominator, so the smallest term (the ceiling) is the unique choice.
-      terms.push(terms.length === 0 ? nearestIntegerInInterval(lo, hi, ceiling) : ceiling);
-      break;
+export function snapToSmallDenominator(
+  value: Rational,
+  maxDenominator: number,
+  tolerance: Rational,
+  positiveOnly = false,
+): Rational {
+  let best: Rational | undefined;
+  // Distance kept as an unreduced fraction `distN / distD` for cheap comparison.
+  let bestDistN = 0n;
+  let bestDistD = 1n;
+  for (let q = 1n; q <= BigInt(maxDenominator); q += 1n) {
+    let a = roundHalfDown(value.n * q, value.d);
+    if (positiveOnly && a < 1n) {
+      a = 1n;
     }
-    // No integer in [lo, hi]: both sit strictly inside (a, a + 1). Recurse on the reciprocals of the fractional parts.
-    const integerPart = floorDiv(lo.n, lo.d);
-    terms.push(integerPart);
-    const nextLow = createRational(hi.d, hi.n - integerPart * hi.d);
-    const nextHigh = createRational(lo.d, lo.n - integerPart * lo.d);
-    lo = nextLow;
-    hi = nextHigh;
+    const distN = absBigInt(a * value.d - value.n * q);
+    const distD = q * value.d;
+    // within tolerance: distN / distD <= tolerance.n / tolerance.d
+    if (distN * tolerance.d > tolerance.n * distD) {
+      continue;
+    }
+    if (best === undefined || distN * bestDistD < bestDistN * distD) {
+      best = createRational(a, q);
+      bestDistN = distN;
+      bestDistD = distD;
+    }
   }
-  // Fold [a0; a1, …, ak] into p/q.
-  let numerator = 1n;
-  let denominator = 0n;
-  for (let index = terms.length - 1; index >= 0; index -= 1) {
-    const nextNumerator = terms[index]! * numerator + denominator;
-    denominator = numerator;
-    numerator = nextNumerator;
-  }
-  return createRational(numerator, denominator);
+  return best ?? value;
 }
 
 /**
- * Integer nearest the centre of `[low, high]` (the snapped value itself, since snapping intervals are symmetric), the
- * one nearer zero on a tie. `ceiling` is `ceil(low)`, already known to be inside the interval.
+ * Snaps a positive measure length (in 4/4 measures) per spec 3.2: to the nearest length whose beat count `4x` has a
+ * denominator of at most 48, when within 1/4608 beat; otherwise the exact value.
  */
-function nearestIntegerInInterval(low: Rational, high: Rational, ceiling: bigint): bigint {
-  const floorHigh = floorDiv(high.n, high.d);
-  if (floorHigh === ceiling) {
-    return ceiling;
-  }
-  const doubledCentre = addRational(low, high);
-  // round-half-down(centre) = ceil(centre - 1/2) = ceil((2·centre - 1) / 2)
-  const nearest = ceilRational(createRational(doubledCentre.n - doubledCentre.d, 2n * doubledCentre.d));
-  return nearest < ceiling ? ceiling : nearest > floorHigh ? floorHigh : nearest;
+export function snapMeasureLength(length: Rational): Rational {
+  const beats = multiplyRational(length, { n: 4n, d: 1n });
+  const snapped = snapToSmallDenominator(beats, MEASURE_BEAT_DENOMINATOR_LIMIT, MEASURE_BEAT_TOLERANCE, true);
+  return divideRational(snapped, { n: 4n, d: 1n });
 }
 
-/** Snaps a measure length or an in-measure position to the simplest rational within `±1/1920`. */
-export function snapToMeasureGrid(value: Rational): Rational {
-  return simplestRationalInInterval(
-    subtractRational(value, MEASURE_GRID_EPSILON),
-    addRational(value, MEASURE_GRID_EPSILON),
-  );
-}
-
-/** Snaps a value to the simplest rational within a relative `1e-6` of it. `0` stays `0`. */
+/**
+ * Snaps a value per spec 3.2: to the nearest rational with a denominator of at most 12 within a relative `1e-5` of it;
+ * otherwise the exact value. `0` stays `0`.
+ */
 export function snapValue(value: Rational): Rational {
   if (value.n === 0n) {
     return RATIONAL_ZERO;
   }
-  const delta = multiplyRational(value, VALUE_RELATIVE_TOLERANCE);
-  const first = subtractRational(value, delta);
-  const second = addRational(value, delta);
-  return compareRational(first, second) <= 0
-    ? simplestRationalInInterval(first, second)
-    : simplestRationalInInterval(second, first);
+  const tolerance = createRational(
+    absBigInt(value.n) * VALUE_RELATIVE_TOLERANCE.n,
+    value.d * VALUE_RELATIVE_TOLERANCE.d,
+  );
+  return snapToSmallDenominator(value, VALUE_DENOMINATOR_LIMIT, tolerance);
 }

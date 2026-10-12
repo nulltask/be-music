@@ -230,7 +230,7 @@ describe('playlog recorder', () => {
     );
     const playlog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
 
-    expect(playlog.chart.fingerprint).toBe(computePlayFingerprint(json));
+    expect(playlog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
     expect(playlog.chart.fingerprint).toMatch(/^bmfp1:[0-9a-f]{64}$/);
   });
 
@@ -243,7 +243,7 @@ describe('playlog recorder', () => {
       makeRecorderOptions({ json, chart: { ...makeChartData(), laneDisplayMode } }),
     ).finalize({ summary: makeSummary() });
 
-    expect(keysLog.chart.fingerprint).toBe(computePlayFingerprint(json));
+    expect(keysLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
     expect(pmsLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.pms' }));
     expect(pmsLog.chart.fingerprint).not.toBe(keysLog.chart.fingerprint);
   });

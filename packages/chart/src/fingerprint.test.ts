@@ -8,8 +8,11 @@ import {
   computePlayFingerprint,
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
+  type BeMusicChartFingerprintDocument,
+  type BeMusicPlayFingerprintDocument,
 } from './index.ts';
 
+const NO_PATH = { chartPath: undefined };
 const BASE_HEADER = ['#PLAYER 1', '#TITLE Fingerprint', '#ARTIST someone', '#BPM 150', '#WAV01 a.wav', '#WAV02 b.wav'];
 
 /** A small 7-key chart; `extra` lines are appended. */
@@ -25,37 +28,40 @@ function chart(...extra: string[]): string {
   ].join('\n');
 }
 
+function playDocument(text: string, chartPath?: string): BeMusicPlayFingerprintDocument {
+  return createPlayFingerprintDocument(parseBms(text), { chartPath });
+}
+
 function playFingerprint(text: string, chartPath?: string): string {
   return computePlayFingerprint(parseBms(text), { chartPath });
 }
 
 function chartFingerprint(text: string): string {
-  return computeChartFingerprint(parseBms(text));
+  return computeChartFingerprint(parseBms(text), NO_PATH);
 }
 
-function firstRandom(random: unknown[]): unknown {
-  expect(random).toHaveLength(1);
-  return random[0];
+function chartDocument(text: string): BeMusicChartFingerprintDocument {
+  const document = createChartFingerprintDocument(parseBms(text), NO_PATH);
+  expect('random' in document).toBe(true);
+  return document as BeMusicChartFingerprintDocument;
 }
 
 describe('fingerprint document', () => {
   test('builds the canonical document of a chart', () => {
-    const document = createPlayFingerprintDocument(
-      parseBms(
-        chart(
-          '#TOTAL 300',
-          '#LNOBJ ZZ',
-          '#BPM01 133.333333',
-          '#STOP01 96',
-          '#STP 002.500 250',
-          '#SCROLL01 0.5',
-          '#00102:0.75',
-          '#00316:01ZZ',
-          '#001D3:0A',
-          '#00208:01',
-          '#00209:01',
-          '#002SC:0001',
-        ),
+    const document = playDocument(
+      chart(
+        '#TOTAL 300',
+        '#LNOBJ ZZ',
+        '#BPM01 133.333333',
+        '#STOP01 96',
+        '#STP 002.500 250',
+        '#SCROLL01 0.5',
+        '#00102:0.75',
+        '#00316:01ZZ',
+        '#001D3:0A',
+        '#00208:01',
+        '#00209:01',
+        '#002SC:0001',
       ),
     );
     expect(document).toEqual({
@@ -84,19 +90,18 @@ describe('fingerprint document', () => {
         { m: '2', p: '1/2', type: 'scroll', v: '1/2' },
         { m: '2', p: '1/2', type: 'stp', v: '250' },
       ],
-      random: [],
     });
   });
 
   test('serializes with RFC 8785 and hashes the UTF-8 bytes with SHA-256', () => {
     const json = parseBms(chart());
-    const canonical = canonicalizeFingerprintDocument(createPlayFingerprintDocument(json));
+    const canonical = canonicalizeFingerprintDocument(createPlayFingerprintDocument(json, NO_PATH));
     expect(canonical.startsWith('{"baseBpm":null,"bpm":"150","judge":{"rank":"2"},"laneMode":"7","measures":')).toBe(
       true,
     );
     expect(canonical).not.toMatch(/\s/);
     const expected = createHash('sha256').update(Buffer.from(canonical, 'utf8')).digest('hex');
-    expect(computePlayFingerprint(json)).toBe(`bmfp1:${expected}`);
+    expect(computePlayFingerprint(json, NO_PATH)).toBe(`bmfp1:${expected}`);
   });
 });
 
@@ -124,17 +129,12 @@ describe('fingerprint invariance', () => {
 
   test('ignores the decimal precision of measure lengths, BPMs and STOPs', () => {
     const precise = chart('#00102:0.333333', '#BPM01 133.333333', '#00208:01', '#00116:0001', '#00216:01', '#LNOBJ 01');
-    const rounded = chart(
-      '#00102:0.3333',
-      '#BPM01 133.3333333333',
-      '#00208:01',
-      '#00116:0001',
-      '#00216:01',
-      '#LNOBJ 01',
-    );
-    const document = createPlayFingerprintDocument(parseBms(precise));
-    expect(document.measures.lengths).toEqual([['1', '1/3']]);
+    const rounded = chart('#00102:0.3333', '#BPM01 133.333', '#00208:01', '#00116:0001', '#00216:01', '#LNOBJ 01');
+    expect(playDocument(precise).measures.lengths).toEqual([['1', '1/3']]);
     expect(playFingerprint(rounded)).toBe(playFingerprint(precise));
+    expect(playFingerprint(chart('#STOP01 33.3333', '#00209:01'))).toBe(
+      playFingerprint(chart('#STOP01 33.333333', '#00209:01')),
+    );
   });
 
   test('absorbs float noise in values', () => {
@@ -143,7 +143,7 @@ describe('fingerprint invariance', () => {
     );
   });
 
-  test('ignores BGA, BGM, keysounds, invisible notes and metadata', () => {
+  test('ignores BGA, BGM, keysounds, invisible notes, #CHANGEOPTION and metadata', () => {
     const base = playFingerprint(chart());
     const variants = [
       chart('#BMP01 bg.bmp', '#00104:01', '#00107:01', '#00106:01'),
@@ -152,6 +152,7 @@ describe('fingerprint invariance', () => {
       chart('#00131:01', '#00241:02'),
       chart('#GENRE other', '#PLAYLEVEL 12', '#DIFFICULTY 4', '#STAGEFILE s.png', '#BANNER b.png', '#COMMENT hi'),
       chart('#WAV03 c.wav', '#VOLWAV 50', '#00197:80'),
+      chart('#CHANGEOPTION01 MIRROR', '#OPTION HRAN'),
     ];
     for (const variant of variants) {
       expect(playFingerprint(variant)).toBe(base);
@@ -177,7 +178,7 @@ describe('fingerprint invariance', () => {
       '#SCROLL01 1',
       '#002SC:01', // SCROLL change to 1
       '#SPEED01 1',
-      '#002SP:01', // SPEED change to 1
+      '#002SP:01', // SPEED keyframe of 1 alone: the curve stays 1
     );
     expect(playFingerprint(noOps)).toBe(base);
   });
@@ -186,6 +187,8 @@ describe('fingerprint invariance', () => {
     const both = chart('#BPM01 180', '#BPM02 200', '#00308:01', '#00308:02');
     const last = chart('#BPM02 200', '#00308:02');
     expect(playFingerprint(both)).toBe(playFingerprint(last));
+    // Channel 08 wins over 03 at one time.
+    expect(playFingerprint(chart('#BPM01 200', '#00303:B4', '#00308:01'))).toBe(playFingerprint(last));
   });
 
   test('drops an #EXRANK change to the value of the previous one', () => {
@@ -197,7 +200,7 @@ describe('fingerprint invariance', () => {
   test('ignores measures after the last included event', () => {
     const base = playFingerprint(chart());
     expect(playFingerprint(chart('#01002:0.5', '#02001:01', '#03004:01'))).toBe(base);
-    expect(createPlayFingerprintDocument(parseBms(chart('#01002:0.5'))).measures.count).toBe('3');
+    expect(playDocument(chart('#01002:0.5')).measures.count).toBe('3');
   });
 });
 
@@ -215,7 +218,7 @@ describe('fingerprint sensitivity', () => {
     ['a SCROLL change', chart('#SCROLL01 0.5', '#002SC:01')],
     ['a SPEED change', chart('#SPEED01 0.5', '#002SP:01')],
     ['an #EXRANK change', chart('#EXRANK01 50', '#002A0:01')],
-    ['#BASEBPM', chart('#BASEBPM 150')],
+    ['#BASEBPM', chart('#BASEBPM 160')],
     ['#RANK', chart('#RANK 3')],
     ['#DEFEXRANK', chart('#DEFEXRANK 100')],
     ['#TOTAL', chart('#TOTAL 300')],
@@ -233,7 +236,7 @@ describe('fingerprint sensitivity', () => {
     ['the SCROLL value', '#SCROLL01 0.5', '#SCROLL01 0.25'],
     ['the SPEED value', '#SPEED01 0.5', '#SPEED01 0.25'],
     ['the #EXRANK value', '#EXRANK01 50', '#EXRANK01 60'],
-    ['the #BASEBPM value', '#BASEBPM 150', '#BASEBPM 200'],
+    ['the #BASEBPM value', '#BASEBPM 160', '#BASEBPM 200'],
     ['the #RANK value', '#RANK 1', '#RANK 3'],
     ['the #DEFEXRANK value', '#DEFEXRANK 100', '#DEFEXRANK 120'],
     ['the #TOTAL value', '#TOTAL 300', '#TOTAL 301'],
@@ -257,23 +260,222 @@ describe('fingerprint sensitivity', () => {
   });
 
   test('changes with #TOTAL present against absent', () => {
-    const json = parseBms(chart());
-    expect(createPlayFingerprintDocument(json).total).toBeNull();
-    expect(createPlayFingerprintDocument(parseBms(chart('#TOTAL 160'))).total).toEqual({ bms: '160' });
+    expect(playDocument(chart()).total).toBeNull();
+    expect(playDocument(chart('#TOTAL 160')).total).toEqual({ bms: '160' });
   });
 
   test('keeps #RANK and #DEFEXRANK on separate axes', () => {
-    expect(createPlayFingerprintDocument(parseBms(chart('#RANK 2'))).judge).toEqual({ rank: '2' });
-    expect(createPlayFingerprintDocument(parseBms(chart('#RANK 2', '#DEFEXRANK 100'))).judge).toEqual({
-      exRank: '100',
+    expect(playDocument(chart('#RANK 2')).judge).toEqual({ rank: '2' });
+    expect(playDocument(chart('#RANK 2', '#DEFEXRANK 100')).judge).toEqual({ exRank: '100' });
+  });
+
+  test('takes the file extension as a lane-mode input', () => {
+    const text = chart();
+    expect(playDocument(text, 'song.pms').laneMode).toBe('9');
+    expect(playFingerprint(text, 'song.pms')).not.toBe(playFingerprint(text, 'song.bms'));
+    expect(playFingerprint(text, 'song.bme')).toBe(playFingerprint(text, undefined));
+    expect(playDocument(chart('#00221:01')).laneMode).toBe('14');
+    // `.bme` names the 7-key format: a chart without a 6 / 7 key column is still 7 KEY.
+    const fiveKeys = ['#BPM 150', '#00111:01', '#00115:01'].join('\n');
+    expect(playDocument(fiveKeys).laneMode).toBe('5');
+    expect(playDocument(fiveKeys, 'dir.v2/song.BME').laneMode).toBe('7');
+    expect(playDocument(fiveKeys, 'song.bme.bak').laneMode).toBe('5');
+  });
+
+  test('counts long-note channels for the lane mode', () => {
+    // Lane 18 only through a 5x long note still makes the chart 7 KEY.
+    const text = ['#BPM 150', '#LNTYPE 1', '#00111:01', '#00158:0101'].join('\n');
+    expect(playDocument(text).laneMode).toBe('7');
+  });
+});
+
+describe('SPEED (finding A1)', () => {
+  const speeds = ['#SPEED01 1', '#SPEED02 2', '#00411:01'];
+
+  test('keeps a keyframe that starts a ramp even when it repeats the default', () => {
+    // A ramps 1 → 2 over measures 1..3; B jumps to 2 (held from the start) at measure 3.
+    const ramp = chart(...speeds, '#001SP:01', '#003SP:02');
+    const single = chart(...speeds, '#003SP:02');
+    expect(playFingerprint(ramp)).not.toBe(playFingerprint(single));
+    expect(playDocument(ramp).timeline.filter((event) => event.type === 'speed')).toEqual([
+      { m: '1', p: '0', type: 'speed', v: '1' },
+      { m: '3', p: '0', type: 'speed', v: '2' },
+    ]);
+  });
+
+  test('a single keyframe is a constant curve wherever it is', () => {
+    expect(playFingerprint(chart(...speeds, '#003SP:02'))).toBe(playFingerprint(chart(...speeds, '#000SP:02')));
+    expect(playDocument(chart(...speeds, '#003SP:02')).timeline).toEqual([{ m: '0', p: '0', type: 'speed', v: '2' }]);
+  });
+
+  test('drops keyframes inside a run of equal values and at its outer ends', () => {
+    const full = chart(...speeds, '#SPEED03 3', '#001SP:02', '#002SP:02', '#003SP:02', '#004SP:03', '#005SP:03');
+    const reduced = chart(...speeds, '#SPEED03 3', '#003SP:02', '#004SP:03');
+    expect(playFingerprint(full)).toBe(playFingerprint(reduced));
+    // A middle run keeps both of its ends.
+    const middle = chart(...speeds, '#SPEED03 3', '#001SP:01', '#002SP:02', '#003SP:02', '#004SP:03');
+    expect(playDocument(middle).timeline.map((event) => event.m)).toEqual(['1', '2', '3', '4']);
+  });
+});
+
+describe('positions are exact (findings A2 – A5)', () => {
+  /** BMS with one note at cell `k` of `n` in measure 1, and its bmson conversion at `resolution`. */
+  function pair(k: number, n: number, resolution: number): { bms: string; bmson: string } {
+    const cells = Array.from({ length: n }, (_, index) => (index === k ? '01' : '00')).join('');
+    const bms = ['#BPM 150', '#DEFEXRANK 100', '#WAV01 a.wav', '#00111:01', `#00112:${cells}`].join('\n');
+    const perMeasure = 4 * resolution;
+    const bmson = JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 150, mode_hint: 'beat-7k', resolution, total: 0 },
+      sound_channels: [
+        {
+          name: 'a.wav',
+          notes: [
+            { x: 1, y: perMeasure, l: 0, c: false },
+            { x: 2, y: perMeasure + Math.round((perMeasure * k) / n), l: 0, c: false },
+          ],
+        },
+      ],
+    });
+    return { bms, bmson };
+  }
+
+  test.each([
+    [1, 16, 240],
+    [1, 3, 240],
+    [1, 192, 240],
+    [1, 48, 960],
+    [5, 96, 960],
+  ])('cell %i/%i is exact at bmson resolution %i, so BMS and bmson match', (k, n, resolution) => {
+    const { bms, bmson } = pair(k, n, resolution);
+    expect(computePlayFingerprint(parseBmson(bmson), NO_PATH)).toBe(playFingerprint(bms));
+  });
+
+  test.each([
+    [1, 7, 240],
+    [1, 36, 240],
+    [1, 128, 240],
+    [5, 72, 960],
+    [1, 144, 960],
+  ])('cell %i/%i is not representable at bmson resolution %i, so they differ', (k, n, resolution) => {
+    const { bms, bmson } = pair(k, n, resolution);
+    expect(computePlayFingerprint(parseBmson(bmson), NO_PATH)).not.toBe(playFingerprint(bms));
+  });
+
+  test('keeps neighbouring cells of a long measure apart', () => {
+    const cells = (index: number): string =>
+      Array.from({ length: 1024 }, (_, at) => (at === index ? '01' : '00')).join('');
+    const left = playDocument(chart('#00102:16', `#00113:${cells(44)}`));
+    const right = playDocument(chart('#00102:16', `#00113:${cells(45)}`));
+    expect(left.notes).toContainEqual({ m: '1', p: '11/256', lane: '13' });
+    expect(right.notes).toContainEqual({ m: '1', p: '45/1024', lane: '13' });
+  });
+
+  test('never merges a STOP and a note one cell apart', () => {
+    const stop = Array.from({ length: 1000 }, (_, at) => (at === 333 ? '01' : '00')).join('');
+    const document = playDocument(chart('#STOP01 96', `#00309:${stop}`, '#00313:000100'));
+    expect(document.timeline).toEqual([{ m: '3', p: '333/1000', type: 'stop', v: '2' }]);
+    expect(document.notes).toContainEqual({ m: '3', p: '1/3', lane: '13' });
+  });
+
+  test('takes long-note ends exactly', () => {
+    const cells = Array.from({ length: 384 }, (_, at) => (at === 19 ? 'ZZ' : at === 0 ? '01' : '00')).join('');
+    const document = playDocument(chart('#LNOBJ ZZ', `#00314:${cells}`));
+    expect(document.notes).toContainEqual({ m: '3', p: '0', lane: '14', end: { m: '3', p: '19/384' }, ln: '1' });
+    // The same long note from bmson at resolution 480: 19/384 of a measure is 95 pulses.
+    const bmson = JSON.stringify({
+      version: '1.0.0',
+      info: { init_bpm: 150, mode_hint: 'beat-7k', resolution: 480, total: 0 },
+      sound_channels: [{ name: 'a.wav', notes: [{ x: 4, y: 3 * 1920, l: 95, c: false }] }],
+    });
+    expect(createPlayFingerprintDocument(parseBmson(bmson), NO_PATH).notes).toEqual([
+      { m: '3', p: '0', lane: '14', end: { m: '3', p: '19/384' }, ln: '1' },
+    ]);
+  });
+});
+
+describe('engine fallbacks (findings A10 – A13)', () => {
+  test('adds up STOPs and #STPs of one time', () => {
+    expect(playFingerprint(chart('#STOP01 48', '#00209:01', '#00209:01'))).toBe(
+      playFingerprint(chart('#STOP02 96', '#00209:02')),
+    );
+    expect(playFingerprint(chart('#STP 002.000 100', '#STP 002.000 150'))).toBe(
+      playFingerprint(chart('#STP 002.000 250')),
+    );
+  });
+
+  test('treats a #TOTAL of 0 or below as absent', () => {
+    expect(playFingerprint(chart('#TOTAL 0'))).toBe(playFingerprint(chart()));
+    expect(playFingerprint(chart('#TOTAL -5'))).toBe(playFingerprint(chart()));
+  });
+
+  test.each([
+    ['5', '2'],
+    ['-1', '2'],
+    ['2.5', '2'],
+    ['7.5', '2'],
+    ['4', '4'],
+    ['3.5', '7/2'],
+    ['-0.5', '-1/2'],
+  ])('reads #RANK %s as %s', (rank, expected) => {
+    expect(playDocument(chart(`#RANK ${rank}`)).judge).toEqual({ rank: expected });
+  });
+
+  test('treats #BASEBPM equal to the initial BPM as absent', () => {
+    expect(playFingerprint(chart('#BASEBPM 150'))).toBe(playFingerprint(chart()));
+  });
+
+  test('keeps an #EXRANK change at the start apart from #DEFEXRANK', () => {
+    expect(playFingerprint(chart('#EXRANK01 100', '#000A0:01'))).not.toBe(playFingerprint(chart('#DEFEXRANK 100')));
+  });
+
+  test('plays lane 17 as FREE ZONE outside 9 KEY', () => {
+    const lnobj = chart('#LNOBJ ZZ', '#00317:01ZZ');
+    const tap = chart('#LNOBJ ZZ', '#00317:01');
+    expect(playFingerprint(lnobj)).toBe(playFingerprint(tap));
+    expect(playDocument(tap).notes).toContainEqual({ m: '3', p: '0', lane: '17', fz: true, ln: '1' });
+    // In 9 KEY lane 17 is a key and the #LNOBJ end counts.
+    expect(playFingerprint(lnobj, 'x.pms')).not.toBe(playFingerprint(tap, 'x.pms'));
+    // A 57 long note keeps its own end.
+    expect(playDocument(chart('#LNTYPE 1', '#00357:0101')).notes).toContainEqual({
+      m: '3',
+      p: '0',
+      lane: '17',
+      end: { m: '3', p: '1/2' },
+      ln: '1',
     });
   });
 
-  test('changes with the lane mode', () => {
-    const text = chart();
-    expect(createPlayFingerprintDocument(parseBms(text), { chartPath: 'song.pms' }).laneMode).toBe('9');
-    expect(playFingerprint(text, 'song.pms')).not.toBe(playFingerprint(text, 'song.bms'));
-    expect(createPlayFingerprintDocument(parseBms(chart('#00221:01'))).laneMode).toBe('14');
+  test('reads bmson total, judge_rank, mine damage and lines like the engine', () => {
+    const bmson = (info: Record<string, unknown>, extra: Record<string, unknown> = {}): string =>
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 150, mode_hint: 'beat-7k', resolution: 240, ...info },
+        sound_channels: [{ name: 'a.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }],
+        ...extra,
+      });
+    const document = (text: string): BeMusicPlayFingerprintDocument =>
+      createPlayFingerprintDocument(parseBmson(text), NO_PATH);
+    expect(document(bmson({})).total).toEqual({ bmson: '100' });
+    expect(computePlayFingerprint(parseBmson(bmson({})), NO_PATH)).toBe(
+      computePlayFingerprint(parseBmson(bmson({ total: 100 })), NO_PATH),
+    );
+    expect(document(bmson({ total: 0 })).total).toBeNull();
+    expect(document(bmson({})).judge).toEqual({ exRank: '100' });
+    const mines = { key_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }] };
+    expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '4' }]);
+    // Adding sound channels does not move the default damage.
+    const more = {
+      ...mines,
+      sound_channels: [
+        { name: 'a.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] },
+        { name: 'b.wav', notes: [] },
+      ],
+    };
+    expect(document(bmson({}, more)).mines).toEqual(document(bmson({}, mines)).mines);
+    const barless = document(bmson({}, { lines: [] }));
+    expect(barless.measures.barLines).toBe(false);
+    expect(document(bmson({})).measures.barLines).toBeUndefined();
   });
 });
 
@@ -297,34 +499,47 @@ describe('BMS against bmson', () => {
     '#00208:0001',
   ].join('\n');
 
-  const bmson = JSON.stringify({
-    version: '1.0.0',
-    info: { title: 'other title', init_bpm: 150, mode_hint: 'beat-7k', resolution: 240 },
-    sound_channels: [
-      {
-        name: 'piano.wav',
-        notes: [
-          { x: 1, y: 960, l: 0, c: false },
-          { x: 1, y: 1440, l: 0, c: false },
-          { x: 2, y: 1440, l: 0, c: false },
-          { x: 6, y: 1680, l: 0, c: false },
-          { x: 3, y: 1440, l: 480, c: false },
-          { x: 0, y: 0, l: 0, c: false },
-        ],
+  const bmson = (total?: number): string =>
+    JSON.stringify({
+      version: '1.0.0',
+      info: {
+        title: 'other title',
+        init_bpm: 150,
+        mode_hint: 'beat-7k',
+        resolution: 240,
+        ...(total === undefined ? {} : { total }),
       },
-    ],
-    key_channels: [{ name: 'mine.wav', notes: [{ x: 4, y: 960, damage: 10 }] }],
-    bpm_events: [{ y: 2400, bpm: 180 }],
-    stop_events: [{ y: 1920, duration: 240 }],
-  });
+      sound_channels: [
+        {
+          name: 'piano.wav',
+          notes: [
+            { x: 1, y: 960, l: 0, c: false },
+            { x: 1, y: 1440, l: 0, c: false },
+            { x: 2, y: 1440, l: 0, c: false },
+            { x: 6, y: 1680, l: 0, c: false },
+            { x: 3, y: 1440, l: 480, c: false },
+            { x: 0, y: 0, l: 0, c: false },
+          ],
+        },
+      ],
+      key_channels: [{ name: 'mine.wav', notes: [{ x: 4, y: 960, damage: 10 }] }],
+      bpm_events: [{ y: 2400, bpm: 180 }],
+      stop_events: [{ y: 1920, duration: 240 }],
+    });
 
   test('gives the same play fingerprint', () => {
-    const fromBms = createPlayFingerprintDocument(parseBms(bms));
-    const fromBmson = createPlayFingerprintDocument(parseBmson(bmson));
+    // bmson `total: 0` makes the rulesets compute their default, like a BMS chart without #TOTAL.
+    const fromBms = createPlayFingerprintDocument(parseBms(bms), NO_PATH);
+    const fromBmson = createPlayFingerprintDocument(parseBmson(bmson(0)), NO_PATH);
     expect(fromBmson).toEqual(fromBms);
     expect(fromBms.notes).toContainEqual({ m: '1', p: '1/2', lane: '13', end: { m: '2', p: '0' }, ln: '1' });
     expect(fromBms.mines).toEqual([{ m: '1', p: '0', lane: '14', damage: '10' }]);
-    expect(computePlayFingerprint(parseBmson(bmson))).toBe(computePlayFingerprint(parseBms(bms)));
+    expect(computePlayFingerprint(parseBmson(bmson(0)), NO_PATH)).toBe(computePlayFingerprint(parseBms(bms), NO_PATH));
+    // Without `total`, bmson means 100 % of the default gauge, which plays differently from a BMS without #TOTAL.
+    expect(createPlayFingerprintDocument(parseBmson(bmson()), NO_PATH)).toEqual({
+      ...fromBms,
+      total: { bmson: '100' },
+    });
   });
 
   // STOPs are left out: `stringifyBmson` writes `stop_events[].duration` in BMS STOP units instead of pulses.
@@ -348,7 +563,11 @@ describe('BMS against bmson', () => {
     ].join('\n');
     const original = parseBms(text);
     const converted = parseBmson(stringifyBmson(original));
-    expect(createPlayFingerprintDocument(converted)).toEqual(createPlayFingerprintDocument(original));
+    // The stringifier leaves out `total`, which bmson reads as 100.
+    expect(createPlayFingerprintDocument(converted, NO_PATH)).toEqual({
+      ...createPlayFingerprintDocument(original, NO_PATH),
+      total: { bmson: '100' },
+    });
   });
 });
 
@@ -357,8 +576,8 @@ describe('control flow', () => {
 
   test('a chart without control flow has equal chart and play fingerprints', () => {
     const json = parseBms(chart());
-    expect(createChartFingerprintDocument(json)).toEqual(createPlayFingerprintDocument(json));
-    expect(computeChartFingerprint(json)).toBe(computePlayFingerprint(json));
+    expect(createChartFingerprintDocument(json, NO_PATH)).toEqual(createPlayFingerprintDocument(json, NO_PATH));
+    expect(computeChartFingerprint(json, NO_PATH)).toBe(computePlayFingerprint(json, NO_PATH));
   });
 
   test('keeps the chart fingerprint across branch selections while the play fingerprint follows the branch', () => {
@@ -366,34 +585,23 @@ describe('control flow', () => {
     const first = resolveBmsControlFlow(json, { random: () => 0 });
     const second = resolveBmsControlFlow(json, { random: () => 0.99 });
     const swapped = randomChart('#IF 2', '#00314:01', '#ENDIF', '#IF 1', '#00313:01', '#ENDIF');
-    expect(computeChartFingerprint(json)).toBe(chartFingerprint(swapped));
-    expect(computePlayFingerprint(first)).not.toBe(computePlayFingerprint(second));
-    expect(computePlayFingerprint(first)).toBe(playFingerprint(chart('#00313:01')));
-    expect(computePlayFingerprint(second)).toBe(playFingerprint(chart('#00314:01')));
-    expect(computeChartFingerprint(json)).not.toBe(computePlayFingerprint(first));
+    expect(computeChartFingerprint(json, NO_PATH)).toBe(chartFingerprint(swapped));
+    expect(computePlayFingerprint(first, NO_PATH)).not.toBe(computePlayFingerprint(second, NO_PATH));
+    expect(computePlayFingerprint(first, NO_PATH)).toBe(playFingerprint(chart('#00313:01')));
+    expect(computePlayFingerprint(second, NO_PATH)).toBe(playFingerprint(chart('#00314:01')));
+    expect(computeChartFingerprint(json, NO_PATH)).not.toBe(computePlayFingerprint(first, NO_PATH));
 
-    const document = createChartFingerprintDocument(json);
-    expect(firstRandom(document.random)).toEqual({
-      random: '2',
-      branches: [
-        {
-          when: '1',
-          measures: { lengths: [] },
-          notes: [{ m: '3', p: '0', lane: '13' }],
-          mines: [],
-          timeline: [],
-          random: [],
-        },
-        {
-          when: '2',
-          measures: { lengths: [] },
-          notes: [{ m: '3', p: '0', lane: '14' }],
-          mines: [],
-          timeline: [],
-          random: [],
-        },
-      ],
-    });
+    const document = chartDocument(randomChart('#IF 1', '#00313:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF'));
+    expect(document.random).toEqual([
+      {
+        random: '2',
+        branches: [
+          { values: ['1'], add: { notes: [{ m: '3', p: '0', lane: '13' }] } },
+          { values: ['2'], add: { notes: [{ m: '3', p: '0', lane: '14' }] } },
+        ],
+      },
+    ]);
+    expect(document.lanes).toEqual({ extension: null, player3: false });
     expect(document.measures.count).toBe('4');
   });
 
@@ -404,9 +612,9 @@ describe('control flow', () => {
       chart('#RANDOM 1', '#IF 1', '#00314:01', '#ENDIF', '#IF 2', '#00313:01', '#ENDIF', '#ENDRANDOM'),
     ]) {
       const json = parseBms(text);
-      expect(createChartFingerprintDocument(json).random).toEqual([]);
-      expect(computeChartFingerprint(json)).toBe(inline);
-      expect(computePlayFingerprint(resolveBmsControlFlow(json))).toBe(inline);
+      expect('random' in createChartFingerprintDocument(json, NO_PATH)).toBe(false);
+      expect(computeChartFingerprint(json, NO_PATH)).toBe(inline);
+      expect(computePlayFingerprint(resolveBmsControlFlow(json), NO_PATH)).toBe(inline);
     }
   });
 
@@ -426,34 +634,74 @@ describe('control flow', () => {
     expect(chartFingerprint(split)).toBe(chartFingerprint(merged));
   });
 
-  test('turns #ELSE into the default branch and drops empty branches', () => {
-    const json = parseBms(
-      chart(
-        '#RANDOM 3',
-        '#IF 1',
-        '#00313:01',
-        '#ELSE',
-        '#00314:01',
-        '#ENDIF',
-        '#IF 2',
-        '#WAV03 c.wav',
-        '#ENDIF',
-        '#ENDRANDOM',
-      ),
+  test('keys branches by value sets, so #ELSE equals listing the other values (finding A8)', () => {
+    const withElse = chart('#RANDOM 3', '#IF 1', '#00313:01', '#ELSE', '#00314:01', '#ENDIF', '#ENDRANDOM');
+    const listed = chart(
+      '#RANDOM 3',
+      '#IF 1',
+      '#00313:01',
+      '#ENDIF',
+      '#IF 2',
+      '#00314:01',
+      '#ENDIF',
+      '#IF 3',
+      '#00314:01',
+      '#ENDIF',
+      '#ENDRANDOM',
     );
-    const node = firstRandom(createChartFingerprintDocument(json).random) as {
-      branches: Array<Record<string, unknown>>;
-    };
-    expect(node.branches.map((branch) => branch.when ?? (branch.default ? 'default' : '?'))).toEqual([
-      '1',
-      '2',
-      'default',
+    expect(chartFingerprint(listed)).toBe(chartFingerprint(withElse));
+    expect(chartDocument(withElse).random).toEqual([
+      {
+        random: '3',
+        branches: [
+          { values: ['1'], add: { notes: [{ m: '3', p: '0', lane: '13' }] } },
+          { values: ['2-3'], add: { notes: [{ m: '3', p: '0', lane: '14' }] } },
+        ],
+      },
     ]);
-    // `#IF 2` only defines a sound, but `#ELSE` of the first block still plays for 2.
-    expect(node.branches[1]!.notes).toEqual([{ m: '3', p: '0', lane: '14' }]);
   });
 
-  test('lists content outside every #IF at the top level', () => {
+  test('gives #SWITCH and the equivalent #RANDOM one node type (finding A8)', () => {
+    const switched = chart('#SWITCH 3', '#CASE 1', '#00313:01', '#SKIP', '#DEF', '#00314:01', '#ENDSW');
+    const random = chart('#RANDOM 3', '#IF 1', '#00313:01', '#ELSE', '#00314:01', '#ENDIF', '#ENDRANDOM');
+    expect(chartFingerprint(switched)).toBe(chartFingerprint(random));
+  });
+
+  test('builds #SWITCH branches with fall-through and #DEF', () => {
+    const document = chartDocument(
+      chart('#SWITCH 3', '#CASE 1', '#00313:01', '#CASE 2', '#00314:01', '#SKIP', '#DEF', '#00315:01', '#ENDSW'),
+    );
+    expect(document.random).toEqual([
+      {
+        random: '3',
+        branches: [
+          {
+            values: ['1'],
+            add: {
+              notes: [
+                { m: '3', p: '0', lane: '13' },
+                { m: '3', p: '0', lane: '14' },
+              ],
+            },
+          },
+          { values: ['2'], add: { notes: [{ m: '3', p: '0', lane: '14' }] } },
+          { values: ['3'], add: { notes: [{ m: '3', p: '0', lane: '15' }] } },
+        ],
+      },
+    ]);
+  });
+
+  test('hoists content every outcome plays, so a block that plays alike for every value disappears', () => {
+    const plain = playFingerprint(chart('#00315:01'));
+    for (const text of [
+      chart('#RANDOM 2', '#00315:01', '#ENDRANDOM'),
+      chart('#RANDOM 2', '#IF 1', '#00315:01', '#ENDIF', '#IF 2', '#00315:01', '#ENDIF', '#ENDRANDOM'),
+      chart('#RANDOM 2', '#IF 1', '#00315:01', '#ELSE', '#00315:01', '#ENDIF', '#ENDRANDOM'),
+      chart('#00315:01', '#RANDOM 2', '#IF 1', '#WAV03 c.wav', '#ENDIF', '#ENDRANDOM'),
+    ]) {
+      expect(chartFingerprint(text)).toBe(plain);
+    }
+    // Content outside every #IF goes to the top, with or without #ENDRANDOM.
     const inside = chart('#RANDOM 2', '#00315:01', '#IF 1', '#00313:01', '#ENDIF', '#ENDRANDOM');
     const outside = chart('#00315:01', '#RANDOM 2', '#IF 1', '#00313:01', '#ENDIF', '#ENDRANDOM');
     const withoutEnd = chart('#RANDOM 2', '#00315:01', '#IF 1', '#00313:01', '#ENDIF');
@@ -461,49 +709,75 @@ describe('control flow', () => {
     expect(chartFingerprint(withoutEnd)).toBe(chartFingerprint(outside));
   });
 
-  test('applies definitions and header values made inside a branch', () => {
-    const json = parseBms(
-      randomChart(
-        '#IF 1',
-        '#BPM02 200',
-        '#00308:02',
-        '#TOTAL 400',
-        '#00302:0.5',
-        '#ENDIF',
-        '#IF 2',
-        '#00313:01',
-        '#ENDIF',
-      ),
-    );
-    const node = firstRandom(createChartFingerprintDocument(json).random) as {
-      branches: Array<Record<string, unknown>>;
-    };
-    expect(node.branches[0]).toMatchObject({
-      when: '1',
-      header: { total: '400' },
-      measures: { lengths: [['3', '1/2']] },
-      timeline: [{ m: '3', p: '0', type: 'bpm', v: '200' }],
-    });
+  test('applies definitions and header values made inside a branch to the whole chart (finding A6)', () => {
+    const redefine = (bpm: number): string =>
+      chart('#BPM01 300', '#00208:01', '#RANDOM 2', '#IF 1', `#BPM01 ${bpm}`, '#ENDIF', '#ENDRANDOM');
+    expect(chartFingerprint(redefine(200))).not.toBe(chartFingerprint(redefine(250)));
+    expect(chartDocument(redefine(200)).random).toEqual([
+      {
+        random: '2',
+        branches: [
+          {
+            values: ['1'],
+            add: { timeline: [{ m: '2', p: '0', type: 'bpm', v: '200' }] },
+            remove: { timeline: [{ m: '2', p: '0', type: 'bpm', v: '300' }] },
+          },
+          { values: ['2'] },
+        ],
+      },
+    ]);
+    const document = chartDocument(randomChart('#IF 1', '#TOTAL 400', '#00202:0.5', '#ENDIF'));
+    expect(document.random).toEqual([
+      {
+        random: '2',
+        branches: [
+          { values: ['1'], add: { lengths: [['2', '1/2']] }, header: { total: { bms: '400' } } },
+          { values: ['2'] },
+        ],
+      },
+    ]);
   });
 
-  test('builds #SWITCH branches with fall-through and #DEF', () => {
-    const json = parseBms(
-      chart('#SWITCH 3', '#CASE 1', '#00313:01', '#CASE 2', '#00314:01', '#SKIP', '#DEF', '#00315:01', '#ENDSW'),
+  test('pairs long-note halves across a branch boundary (finding A6)', () => {
+    const halves = chart('#LNOBJ ZZ', '#00313:01', '#RANDOM 2', '#IF 1', '#00413:ZZ', '#ENDIF', '#ENDRANDOM');
+    const taps = chart('#LNOBJ ZZ', '#00313:01', '#RANDOM 2', '#IF 1', '#00413:01', '#ENDIF', '#ENDRANDOM');
+    expect(chartFingerprint(halves)).not.toBe(chartFingerprint(taps));
+    expect(chartDocument(halves).random).toEqual([
+      {
+        random: '2',
+        branches: [
+          {
+            values: ['1'],
+            add: { notes: [{ m: '3', p: '0', lane: '13', end: { m: '4', p: '0' }, ln: '1' }] },
+            remove: { notes: [{ m: '3', p: '0', lane: '13' }] },
+          },
+          { values: ['2'] },
+        ],
+      },
+    ]);
+  });
+
+  test('keeps a no-op drop only for state no branch changes (finding A9)', () => {
+    const block = ['#RANDOM 2', '#IF 1', '#00313:01', '#ENDIF', '#ENDRANDOM'];
+    // The BPM change to the BPM in effect is dropped: no branch changes the BPM.
+    expect(chartFingerprint(chart('#BPM01 150', '#00208:01', ...block))).toBe(chartFingerprint(chart(...block)));
+    // A branch that changes the BPM keeps the outside change: whether it is a no-op depends on the outcome.
+    const bpmBlock = ['#BPM02 180', '#RANDOM 2', '#IF 1', '#00108:02', '#ENDIF', '#ENDRANDOM'];
+    expect(chartFingerprint(chart('#BPM01 150', '#00208:01', ...bpmBlock))).not.toBe(
+      chartFingerprint(chart(...bpmBlock)),
     );
-    const node = firstRandom(createChartFingerprintDocument(json).random) as {
-      switch: string;
-      branches: Array<{ notes: unknown[] }>;
-    };
-    expect(node.switch).toBe('3');
-    expect(node.branches.map((branch) => branch.notes.length)).toEqual([2, 1, 1]);
   });
 
   test('changes the chart fingerprint with the branch content', () => {
     expect(chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF'))).not.toBe(
       chartFingerprint(randomChart('#IF 1', '#00314:01', '#ENDIF')),
     );
+    // The values that play a branch are part of the document.
     expect(chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF'))).not.toBe(
       chartFingerprint(randomChart('#IF 2', '#00313:01', '#ENDIF')),
+    );
+    expect(chartFingerprint(chart('#RANDOM 3', '#IF 1', '#00313:01', '#ENDIF', '#ENDRANDOM'))).not.toBe(
+      chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF')),
     );
   });
 });

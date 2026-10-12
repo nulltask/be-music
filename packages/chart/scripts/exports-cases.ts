@@ -2,6 +2,7 @@ import * as chartApi from '@be-music/chart';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
+const BENCH_FINGERPRINT_OPTIONS: chartApi.BeMusicFingerprintOptions = { chartPath: 'sample.bme' };
 const BENCH_FINGERPRINT_DOCUMENTS = new WeakMap<object, chartApi.BeMusicFingerprintDocument>();
 
 function getBenchFingerprintDocument(
@@ -9,7 +10,7 @@ function getBenchFingerprintDocument(
 ): chartApi.BeMusicFingerprintDocument {
   let document = BENCH_FINGERPRINT_DOCUMENTS.get(json);
   if (!document) {
-    document = chartApi.createChartFingerprintDocument(json);
+    document = chartApi.createChartFingerprintDocument(json, BENCH_FINGERPRINT_OPTIONS);
     BENCH_FINGERPRINT_DOCUMENTS.set(json, document);
   }
   return document;
@@ -217,12 +218,12 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart.createChartFingerprintDocument', {
     run: (fixtures) => {
-      chartApi.createChartFingerprintDocument(fixtures.sampleBmsJson);
+      chartApi.createChartFingerprintDocument(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
     },
   });
   define('chart.createPlayFingerprintDocument', {
     run: (fixtures) => {
-      chartApi.createPlayFingerprintDocument(fixtures.sampleBmsJson);
+      chartApi.createPlayFingerprintDocument(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
     },
   });
   define('chart.canonicalizeFingerprintDocument', {
@@ -232,12 +233,12 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   });
   define('chart.computeChartFingerprint', {
     run: (fixtures) => {
-      chartApi.computeChartFingerprint(fixtures.sampleBmsJson);
+      chartApi.computeChartFingerprint(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
     },
   });
   define('chart.computePlayFingerprint', {
     run: (fixtures) => {
-      chartApi.computePlayFingerprint(fixtures.sampleBmsJson);
+      chartApi.computePlayFingerprint(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
     },
   });
 }

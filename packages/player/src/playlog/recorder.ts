@@ -242,7 +242,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
  */
 function computePlaylogChartFingerprint(json: BeMusicJson, laneDisplayMode: string): string | undefined {
   try {
-    return computePlayFingerprint(json, laneDisplayMode.startsWith('9 KEY') ? { chartPath: '.pms' } : {});
+    return computePlayFingerprint(json, { chartPath: laneDisplayMode.startsWith('9 KEY') ? '.pms' : undefined });
   } catch {
     return undefined;
   }
