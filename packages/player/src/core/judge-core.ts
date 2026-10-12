@@ -13,7 +13,12 @@ import {
   selectJudgeWindowSet,
   type RulesetJudgeIndex,
 } from '../ruleset/judge.ts';
-import { isChargeLongNoteMode, isMultiBadCollectorTarget } from '../ruleset/long-note.ts';
+import {
+  ignoresLateLongNoteHeadBad,
+  isChargeLongNoteMode,
+  isMultiBadCollectorTarget,
+  longNoteOwesTailMiss,
+} from '../ruleset/long-note.ts';
 import { preferJudgeCandidate, type JudgeSelectionCandidate } from '../ruleset/selection.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import {
@@ -517,8 +522,11 @@ function markInvisibleJudged(state: JudgeCoreState, note: TimedPlayableNote): bo
  * tail separately, so a note missed at the head owes two POORs — except under IIDX, where a broken head cancels the
  * tail outright (`headBadSkipsTail`).
  */
-export function longNoteOwesTailMiss(ruleset: RulesetConfig, note: TimedPlayableNote): boolean {
-  return !ruleset.headBadSkipsTail && longNoteScoresTail(ruleset.longNoteStyle, note);
+export function noteOwesTailMiss(ruleset: RulesetConfig, note: TimedPlayableNote): boolean {
+  return longNoteOwesTailMiss(
+    ruleset,
+    isLongPlayableNote(note) ? resolveRulesetLongNoteMode(ruleset.longNoteStyle, note) : undefined,
+  );
 }
 
 function applyResolvedManualJudge(
@@ -880,7 +888,7 @@ function applyExpiredScorableJudgements(
       channel: note.channel,
       signedDeltaMs: (referenceSeconds - note.seconds) * 1000,
     });
-    if (longNoteOwesTailMiss(config.ruleset, note)) {
+    if (noteOwesTailMiss(config.ruleset, note)) {
       applyTailMissPoor(state, referenceSeconds, emit);
       emit({
         kind: 'trace',
@@ -934,14 +942,11 @@ function selectPressCandidate(
     if (judge === RULESET_JUDGE_NONE) {
       continue;
     }
-    if (
-      ruleset.ignoreLateBadOnLnHead &&
-      judge === 3 &&
-      note.seconds < nowSec &&
-      typeof note.endSeconds === 'number' &&
-      note.endSeconds > note.seconds &&
-      resolveRulesetLongNoteMode(ruleset.longNoteStyle, note) === 1
-    ) {
+    const playedMode =
+      typeof note.endSeconds === 'number' && note.endSeconds > note.seconds
+        ? resolveRulesetLongNoteMode(ruleset.longNoteStyle, note)
+        : undefined;
+    if (ignoresLateLongNoteHeadBad(ruleset, judge, note.seconds < nowSec, playedMode)) {
       // LR2: a long-note head has no LATE bad — the press falls through to whatever else is in reach. The mode is the
       // one the ruleset plays, not the chart's `#LNMODE`: LR2 plays a `#LNMODE 2` note as a plain LN too.
       continue;
@@ -1019,7 +1024,7 @@ function applyMultiBadCollector(
       nowSec,
       emit,
     );
-    if (longNoteOwesTailMiss(config.ruleset, note)) {
+    if (noteOwesTailMiss(config.ruleset, note)) {
       applyTailMissPoor(state, nowSec, emit);
     }
   }
@@ -1504,7 +1509,7 @@ function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: Jud
     }
     note.judged = true;
     missingCount += 1;
-    if (longNoteOwesTailMiss(ruleset, note)) {
+    if (noteOwesTailMiss(ruleset, note)) {
       missingCount += 1;
     }
   }

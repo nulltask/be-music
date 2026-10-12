@@ -1,4 +1,4 @@
-import type { LongNoteStyle } from './definitions.ts';
+import type { LongNoteStyle, RulesetConfig } from './definitions.ts';
 import type { RulesetJudgeIndex } from './judge.ts';
 
 /**
@@ -34,6 +34,32 @@ export function resolveEffectiveLongNoteMode(
 /** True for the modes that score the head on the press and the tail on the release (two judgments per note). */
 export function isChargeLongNoteMode(mode: RulesetLongNoteMode): boolean {
   return mode === 2 || mode === 3;
+}
+
+/**
+ * True when a long note the player never held owes a SECOND miss for its tail. Charge modes score head and tail
+ * separately, so a note missed at the head owes two POORs — except under IIDX, where a broken head cancels the tail
+ * outright (`headBadSkipsTail`). `playedMode` is the mode the ruleset plays the note as, `undefined` for a tap.
+ */
+export function longNoteOwesTailMiss(
+  ruleset: Pick<RulesetConfig, 'headBadSkipsTail'>,
+  playedMode: RulesetLongNoteMode | undefined,
+): boolean {
+  return !ruleset.headBadSkipsTail && playedMode !== undefined && isChargeLongNoteMode(playedMode);
+}
+
+/**
+ * LR2: a long-note head has no LATE BAD — a press that would judge an LN head as a late BAD falls through to whatever
+ * else is in reach instead. `judge` is a best-to-worst judge index (3 = BAD), `late` is true when the note lies
+ * before the press, and `playedMode` is as above.
+ */
+export function ignoresLateLongNoteHeadBad(
+  ruleset: Pick<RulesetConfig, 'ignoreLateBadOnLnHead'>,
+  judge: number,
+  late: boolean,
+  playedMode: RulesetLongNoteMode | undefined,
+): boolean {
+  return ruleset.ignoreLateBadOnLnHead && judge === 3 && late && playedMode === 1;
 }
 
 /** The note a press consumed, as the multi-BAD collector sees it. Times are in any one unit, compared only. */

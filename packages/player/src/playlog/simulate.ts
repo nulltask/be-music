@@ -2,8 +2,10 @@ import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
+  ignoresLateLongNoteHeadBad,
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
+  longNoteOwesTailMiss,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
   RULESET_JUDGE_NONE,
@@ -319,7 +321,7 @@ class PlaylogSimulation {
         if (note.judged || note.holding) continue;
         note.judged = true;
         this.applyJudge(JUDGE_MISS_POOR, undefined);
-        if (note.isLong && note.longStyle !== 1 && !this.config.headBadSkipsTail) {
+        if (longNoteOwesTailMiss(this.config, note.isLong ? note.longStyle : undefined)) {
           // beatoraja: a missed CN/HCN head also POORs the tail. IIDX (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
@@ -535,11 +537,7 @@ class PlaylogSimulation {
             judge = JUDGE_MISS_POOR;
           }
           if (
-            this.config.ignoreLateBadOnLnHead &&
-            judge === JUDGE_BAD &&
-            dmUs < 0 &&
-            note.isLong &&
-            (note.longStyle ?? 1) === 1
+            ignoresLateLongNoteHeadBad(this.config, judge, dmUs < 0, note.isLong ? (note.longStyle ?? 1) : undefined)
           ) {
             // LR2: long-note heads have no late BAD — the press falls through.
             judge = JUDGE_NONE;
@@ -630,7 +628,7 @@ class PlaylogSimulation {
     for (const { note } of filtered) {
       note.judged = true;
       this.applyJudge(JUDGE_BAD, undefined);
-      if (note.isLong && (note.longStyle ?? 1) !== 1 && !this.config.headBadSkipsTail) {
+      if (longNoteOwesTailMiss(this.config, note.isLong ? (note.longStyle ?? 1) : undefined)) {
         this.applyJudge(JUDGE_MISS_POOR, undefined);
       }
     }
