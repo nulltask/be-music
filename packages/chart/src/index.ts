@@ -26,6 +26,17 @@ export {
   type PlaySide,
 } from './play-modes.ts';
 
+export {
+  drawRandomOutcomes,
+  evaluateControlFlow,
+  hasControlFlow,
+  type ActiveControlFlowEntry,
+  type ControlFlowSource,
+  type RandomDraw,
+  type RandomDrawCommand,
+  type RandomDraws,
+} from './control-flow.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;

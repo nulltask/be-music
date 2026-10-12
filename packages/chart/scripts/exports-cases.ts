@@ -1,6 +1,17 @@
 import * as chartApi from '@be-music/chart';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+const BENCH_RANDOM_DRAWS_CACHE = new WeakMap<object, chartApi.RandomDraws>();
+
+function benchRandomDraws(source: chartApi.ControlFlowSource): chartApi.RandomDraws {
+  let draws = BENCH_RANDOM_DRAWS_CACHE.get(source);
+  if (draws === undefined) {
+    draws = chartApi.drawRandomOutcomes(source, () => 0.25);
+    BENCH_RANDOM_DRAWS_CACHE.set(source, draws);
+  }
+  return draws;
+}
+
 const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
@@ -226,6 +237,21 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.resolveLnobjLongNotes', {
     run: (fixtures) => {
       chartApi.resolveLnobjLongNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.drawRandomOutcomes', {
+    run: (fixtures) => {
+      chartApi.drawRandomOutcomes(fixtures.controlFlowJson, () => 0.25);
+    },
+  });
+  define('chart.evaluateControlFlow', {
+    run: (fixtures) => {
+      chartApi.evaluateControlFlow(fixtures.controlFlowJson, benchRandomDraws(fixtures.controlFlowJson));
+    },
+  });
+  define('chart.hasControlFlow', {
+    run: (fixtures) => {
+      chartApi.hasControlFlow(fixtures.controlFlowJson);
     },
   });
 }
