@@ -194,6 +194,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)
 - Reflect `events[].bmson.t` to `notes[].t` on long notes, and `bmson.info.lnType` to `info.ln_type`
+- Write mines (`Dx` / `Ex`) to `mine_channels`, keeping `events[].bmson.damage` as `damage`, and invisible objects (`3x` / `4x`) to `key_channels`, both grouped by WAV key and placed on the `x` of the lane they sit on. Neither array is written when the chart has no such objects
+- A chart with mines or invisible objects always takes the canonical output, because the preserved arrays do not hold them
 - If `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` are consistent with the current IR, re-output them in favor of their array structure.
 - Output `bga` if `bmson.bga` exists
 

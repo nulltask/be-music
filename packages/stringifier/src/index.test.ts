@@ -614,13 +614,14 @@ describe('stringifier', () => {
     ).toEqual(['#WAVCMD 00 01 48']);
   });
 
-  test('bmson stringify: writes mines back to `key_channels` with their damage instead of as sound notes', () => {
+  test('bmson stringify: writes mines to `mine_channels` with their damage and hidden notes to `key_channels`', () => {
     const source = parseBmson(
       JSON.stringify({
         version: '1.0.0',
         info: { title: 'Mines', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
         sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
-        key_channels: [
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }],
+        mine_channels: [
           {
             name: 'mine.wav',
             notes: [
@@ -633,12 +634,14 @@ describe('stringifier', () => {
     );
     const output = JSON.parse(stringifyBmson(source)) as {
       sound_channels: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
-      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
+      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+      mine_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
     };
 
     expect(output.sound_channels.map((channel) => channel.name)).toEqual(['key.wav']);
     expect(output.sound_channels[0]!.notes).toEqual([expect.objectContaining({ x: 1, y: 0 })]);
-    expect(output.key_channels).toEqual([
+    expect(output.key_channels).toEqual([{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }]);
+    expect(output.mine_channels).toEqual([
       {
         name: 'mine.wav',
         notes: [
@@ -649,11 +652,60 @@ describe('stringifier', () => {
     ]);
 
     const reparsed = parseBmson(JSON.stringify(output));
-    const mines = reparsed.events.filter((event) => /^[DE]/i.test(event.channel));
-    expect(mines.map((event) => [event.channel, event.bmson?.damage])).toEqual([
+    const extensionEvents = reparsed.events.filter((event) => /^[34DE]/i.test(event.channel));
+    expect(extensionEvents.map((event) => [event.channel, event.bmson?.damage])).toEqual([
+      ['32', undefined],
       ['D2', 10],
       ['D1', undefined],
     ]);
+  });
+
+  test('bmson stringify: keeps mines and hidden notes when the preserved document is trusted', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'Mines', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }],
+        mine_channels: [{ name: 'mine.wav', notes: [{ x: 3, y: 480, damage: 12 }] }],
+      }),
+    );
+    const output = JSON.parse(stringifyBmson(source, { skipPreservationValidation: true })) as {
+      key_channels?: unknown;
+      mine_channels?: unknown;
+    };
+
+    expect(output.key_channels).toEqual([{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }]);
+    expect(output.mine_channels).toEqual([{ name: 'mine.wav', notes: [{ x: 3, y: 480, damage: 12 }] }]);
+  });
+
+  test('bmson stringify: BMS invisible objects become `key_channels` notes on their own lanes, not extra keys', () => {
+    const json = parseChart(
+      ['#BPM 120', '#WAV01 key.wav', '#WAV02 hidden.wav', '#00111:01', '#00131:0002', '#00143:02', ''].join('\n'),
+    );
+    const output = JSON.parse(stringifyBmson(json)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+    };
+
+    // Lanes 11 and 23 are numbered `x` 1 / 2; the hidden notes take those lanes instead of new ones.
+    expect(output.info.mode_hint).toBe('beat-2k');
+    expect(output.sound_channels).toEqual([{ name: 'key.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }]);
+    expect(output.key_channels).toEqual([
+      {
+        name: 'hidden.wav',
+        notes: [
+          { x: 2, y: 960 },
+          { x: 1, y: 1440 },
+        ],
+      },
+    ]);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.filter((event) => /^[34]/.test(event.channel))
+        .map((event) => event.channel),
+    ).toEqual(['32', '31']);
   });
 
   test('bmson stringify: writes a 24 KEY chart as keyboard-24k with fixed x lanes, wheel included', () => {
@@ -669,12 +721,12 @@ describe('stringifier', () => {
     const output = JSON.parse(stringifyBmson(json)) as {
       info: { mode_hint: string };
       sound_channels: Array<{ notes: Array<{ x: number }> }>;
-      key_channels?: Array<{ notes: Array<{ x: number }> }>;
+      mine_channels?: Array<{ notes: Array<{ x: number }> }>;
     };
 
     expect(output.info.mode_hint).toBe('keyboard-24k');
     expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual([1, 10, 24, 25, 26]);
-    expect(output.key_channels?.[0]!.notes.map((note) => note.x)).toEqual([26]);
+    expect(output.mine_channels?.[0]!.notes.map((note) => note.x)).toEqual([26]);
     expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual([
       '11',
       '1A',
@@ -714,7 +766,7 @@ describe('stringifier', () => {
     expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual(['15', '1Q', '2E', '2P']);
   });
 
-  test('bmson stringify: omits `key_channels` when the chart has no mines', () => {
+  test('bmson stringify: omits `key_channels` / `mine_channels` when the chart has no hidden notes or mines', () => {
     const source = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -722,7 +774,9 @@ describe('stringifier', () => {
         sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
       }),
     );
-    expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
+    const output = JSON.parse(stringifyBmson(source)) as Record<string, unknown>;
+    expect(output).not.toHaveProperty('key_channels');
+    expect(output).not.toHaveProperty('mine_channels');
   });
 
   test('bmson stringify: writes BMS STOP lengths as pulses at the output resolution', () => {
