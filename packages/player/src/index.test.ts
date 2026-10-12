@@ -2747,8 +2747,12 @@ describe('player', () => {
     defaultChart.bms.volWav = 100;
     expect(resolveChartVolWavGain(defaultChart)).toBe(1);
 
+    defaultChart.bms.volWav = 150;
+    expect(resolveChartVolWavGain(defaultChart)).toBe(1.5);
+
+    // beatoraja applies #VOLWAV only for 0 < n < 200, so 200 plays at the original volume.
     defaultChart.bms.volWav = 200;
-    expect(resolveChartVolWavGain(defaultChart)).toBe(2);
+    expect(resolveChartVolWavGain(defaultChart)).toBe(1);
   });
 
   test('player: narrows judge windows for bms RANK=0 (LR2 VERY HARD)', () => {

@@ -609,11 +609,11 @@ Clamp the playback time so that it does not become negative.
 ### `#VOLWAV`
 
 BMS's `#VOLWAV` is treated as the volume multiplier for the entire score.
-If omitted, the default value is `100`, and the effective gain is `bms.volWav / 100`.
+If omitted, the default value is `100`. The effective gain is `bms.volWav / 100` when `0 < bms.volWav < 200` and `1` otherwise, as in beatoraja (LR2 ignores `#VOLWAV`).
 
 - `#VOLWAV 100`: Keep the original volume
-- `#VOLWAV 200`: `2` times the original volume
-- `#VOLWAV 0`: Silence
+- `#VOLWAV 150`: `1.5` times the original volume
+- `#VOLWAV 0`, `#VOLWAV 200` or above: Keep the original volume
 
 This scaling factor applies to keysound for real-time playback, song selection screen preview, and offline audio rendering using `renderJson()`.
 The actual device applies only linear gain and does not reproduce player- or hardware-dependent volume differences.

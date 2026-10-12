@@ -589,11 +589,11 @@ pause 中は playback clock と audio session を同時に止め、resume で両
 ### `#VOLWAV`
 
 BMS の `#VOLWAV` は譜面全体の音量倍率として扱います。
-省略時は `100` を既定値とし、実効ゲインは `bms.volWav / 100` です。
+省略時は `100` を既定値とします。実効ゲインは、beatoraja と同じく `0 < bms.volWav < 200` のとき `bms.volWav / 100`、それ以外では `1` です（LR2 は `#VOLWAV` を無視します）。
 
 - `#VOLWAV 100`: 原音量のまま
-- `#VOLWAV 200`: 原音量の `2` 倍
-- `#VOLWAV 0`: 無音
+- `#VOLWAV 150`: 原音量の `1.5` 倍
+- `#VOLWAV 0`、`#VOLWAV 200` 以上: 原音量のまま
 
 この倍率は、リアルタイム再生の keysound、選曲画面プレビュー、`renderJson()` を使うオフライン音声レンダリングに適用します。
 現実装は線形 gain のみを適用し、player やハードウェアに依存する音量差までは再現しません。

@@ -103,6 +103,11 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.parseBmsArgb('FF112233');
     },
   });
+  define('chart.volWavToLinearGain', {
+    run: () => {
+      chartApi.volWavToLinearGain(80);
+    },
+  });
   define('chart.wavCmdVolumeByteToLinearGain', {
     run: () => {
       chartApi.wavCmdVolumeByteToLinearGain(64);

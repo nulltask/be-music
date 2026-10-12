@@ -225,11 +225,14 @@ Without `#BASE 62`, both keys fold into the same base-36 ID and the later defini
 `stringifier` outputs the value of `bms.volWav` as is if it exists, as `#VOLWAV n`.
 
 During playback and rendering, `#VOLWAV` is treated as a linear gain applied to the entire score.
-If omitted, the default value is `100` and the effective magnification is `n / 100`.
+If omitted, the default value is `100`. A value with `0 < n < 200` gives the magnification `n / 100`; any other value plays at the original volume.
 
 - `#VOLWAV 100`: Original volume
-- `#VOLWAV 200`: `2` times the original volume
-- `#VOLWAV 0`: Silence
+- `#VOLWAV 50`: Half the original volume
+- `#VOLWAV 150`: `1.5` times the original volume
+- `#VOLWAV 0`, `#VOLWAV 200` or above: Original volume
+
+The range is beatoraja's (it applies `#VOLWAV` only for `0 < n < 200`); LR2 ignores `#VOLWAV`. Following beatoraja keeps `#VOLWAV 0` from muting a chart and large values from amplifying it into clipping. `@be-music/chart`'s `volWavToLinearGain` implements the rule.
 
 This magnification applies to real-time playback of `player`, song selection screen preview, and `renderJson()` / `renderChartFile()` of `audio-renderer`.
 It does not reproduce player- or hardware-specific volume differences, and is treated as a simple gain multiplication factor in actual equipment.

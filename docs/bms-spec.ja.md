@@ -225,11 +225,14 @@ runtime と round-trip の扱い:
 `stringifier` は `bms.volWav` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
 
 再生時とレンダリング時は、`#VOLWAV` を譜面全体へ掛かる線形 gain として扱います。
-省略時は `100` を既定値とし、実効倍率は `n / 100` です。
+省略時は `100` を既定値とします。`0 < n < 200` の値では実効倍率が `n / 100` になり、それ以外の値では原音量で鳴らします。
 
 - `#VOLWAV 100`: 原音量
-- `#VOLWAV 200`: 原音量の `2` 倍
-- `#VOLWAV 0`: 無音
+- `#VOLWAV 50`: 原音量の半分
+- `#VOLWAV 150`: 原音量の `1.5` 倍
+- `#VOLWAV 0`、`#VOLWAV 200` 以上: 原音量
+
+この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart` の `volWavToLinearGain` が実装しています。
 
 この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJson()` / `renderChartFile()` に適用します。
 各 player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
