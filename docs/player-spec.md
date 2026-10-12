@@ -152,6 +152,7 @@ Mines follow the LR2 detonation model (LR2's own changelog; the damage model is 
 Invisible notes are kept separate from the normal playing target.
 They update the same-lane keysound fallback state using the same timing rule as visible notes: once the invisible object's early `BAD` window opens, that WAV becomes the lane's current fallback sound until a later visible or invisible object takes over.
 They are included in the UI drawing target only when `showInvisibleNotes` is enabled, but are not included in the number of judgments or `summary.total`.
+bmson `key_channels` (beatoraja's hidden notes) are read as invisible notes, and `AUTO` and the select-screen preview stay silent on them on every lane, the extended 24 / 48 KEY lanes included.
 
 ### FREE ZONE
 

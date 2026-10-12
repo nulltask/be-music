@@ -5222,7 +5222,8 @@ function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
   }
   const high = normalized.charCodeAt(0);
   const low = normalized.charCodeAt(1);
-  return (high === 0x33 || high === 0x34) && low >= 0x31 && low <= 0x39;
+  // Lane codes cover the classic `1`-`9` columns and the extended `A`-`Z` ones (24 / 48 KEY, bmson `keyboard-24k`).
+  return (high === 0x33 || high === 0x34) && ((low >= 0x31 && low <= 0x39) || (low >= 0x41 && low <= 0x5a));
 }
 
 function createSilentRenderResult(sampleRate: number): RenderResult {

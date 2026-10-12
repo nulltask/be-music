@@ -152,6 +152,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 不可視ノートは通常の演奏対象とは別に保持します。
 可視ノートと同じタイミングルールで同レーンの keysound fallback state を更新します。不可視オブジェクトの early `BAD` 窓が開いた時点で、その WAV が後続の可視または不可視オブジェクトに置き換わるまで、そのレーンの現在 fallback 音になります。
 `showInvisibleNotes` が有効な場合だけ UI 描画対象へ含めますが、判定数や `summary.total` には含めません。
+bmson の `key_channels`（beatoraja の隠しノート）は不可視ノートとして読み、`AUTO` と選曲画面のプレビューは 24 / 48 KEY の拡張レーンを含むどのレーンでも発音しません。
 
 ### FREE ZONE
 
