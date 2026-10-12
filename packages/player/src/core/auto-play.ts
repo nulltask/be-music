@@ -138,11 +138,12 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // cached native result carries the actual AUTO outcome).
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSha256, recorder, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
+          recorder,
           dynamicJudgeRankChanges: resolvedChart.judgeRank.changes,
           play: {
             mode: 'auto',

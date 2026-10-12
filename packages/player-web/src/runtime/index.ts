@@ -23,4 +23,5 @@ export {
   resolvePlaylogFilename,
   PLAYLOG_FILE_SUFFIX,
   type BeMusicPlaylog,
+  type PlaylogRecorderInfo,
 } from '@be-music/player/playlog';

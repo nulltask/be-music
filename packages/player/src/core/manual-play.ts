@@ -178,11 +178,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const summary: PlayerSummary = judgeCore.summary;
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSha256, recorder, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
+          recorder,
           dynamicJudgeRankChanges,
           play: {
             mode: 'manual',
