@@ -196,8 +196,9 @@ The default is `36`, which uses `0-9A-Z` and folds lowercase ASCII letters to up
 `#BASE 62` switches indexed headers and object-stream tokens to case-sensitive `0-9A-Za-z`, so `0a` and `0A` are different IDs.
 
 The parser pre-scans the BMS source for `#BASE 36` / `#BASE 62` before normal parsing starts.
-The scan stops at the first object line (`#mmmcc:data`), so a late `#BASE 62` after object data is ignored for compatibility with players that require `#BASE` to be declared before objects.
-Unsupported values are ignored and fall back to the current/default base.
+The scan covers the whole file, as beatoraja's does, so `#BASE` may appear anywhere, even after object data, and control-flow blocks are not evaluated for it.
+When the file has several `#BASE 36` / `#BASE 62` lines, the last one wins.
+Unsupported values are ignored.
 
 Runtime and round-trip behavior:
 

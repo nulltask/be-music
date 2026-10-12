@@ -53,7 +53,8 @@ const INDEXED_HEADER_COMMAND =
  * or `#BASE 36` are recognized. We do a one-pass forward scan and stop at the first object data line, mirroring real
  * implementations that require `#BASE` to come before any objects.
  */
-const BASE_DIRECTIVE_REGEX = /^#BASE\s+(36|62)\b/i;
+// A whole `#BASE 36` / `#BASE 62` line, with the leading / separating whitespace `parseBms` trims (never a line break).
+const BASE_DIRECTIVE_REGEX = /^[^\S\r\n]*#BASE[^\S\r\n]+(36|62)\b/gim;
 const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
   'RANDOM',
   'SETRANDOM',
@@ -725,32 +726,17 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
 }
 
 /**
- * Pre-scans the BMS source for the `#BASE` directive (the beatoraja base-62 extension switch). Returns 62 if `#BASE 62`
- * appears before the first object data line, otherwise 36.
+ * Pre-scans the BMS source for the `#BASE` directive (the beatoraja base-62 extension switch). Returns 62 when the last
+ * `#BASE 36` / `#BASE 62` line in the file is `#BASE 62`, otherwise 36.
  *
- * We bail out at the first non-header (object) line because real implementations require `#BASE` to come before any
- * object references — applying it retroactively would change which IDs get folded vs. preserved AFTER they were already
- * normalized in earlier headers.
+ * Like beatoraja's BMSDecoder, the scan covers the whole file before anything is decoded, so the directive's position
+ * does not matter (it may follow object data) and control-flow blocks are not evaluated. Other values are ignored.
  */
 function detectBmsBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
-  let stop = false;
-  forEachLine(input, (rawLine) => {
-    if (stop) return;
-    const line = rawLine.trim();
-    if (!line.startsWith('#')) return;
-    const second = line.charCodeAt(1);
-    if (second >= 0x30 && second <= 0x39) {
-      // Hit the first `#xxxYY:...` object line — `#BASE` after this point is too late to take effect.
-      stop = true;
-      return;
-    }
-    const match = line.match(BASE_DIRECTIVE_REGEX);
-    if (match) {
-      resolved = match[1] === '62' ? 62 : 36;
-      stop = true;
-    }
-  });
+  for (const match of input.matchAll(BASE_DIRECTIVE_REGEX)) {
+    resolved = match[1] === '62' ? 62 : 36;
+  }
   return resolved;
 }
 

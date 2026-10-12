@@ -196,8 +196,9 @@
 `#BASE 62` は indexed header と object stream token を case-sensitive な `0-9A-Za-z` として扱い、`0a` と `0A` を別 ID にします。
 
 parser は通常 parse の前に BMS source を pre-scan し、`#BASE 36` / `#BASE 62` を探します。
-scan は最初の object line (`#mmmcc:data`) で止めます。そのため object data より後ろにある `#BASE 62` は、`#BASE` を object より前に置くことを要求する player との互換を優先して無視します。
-未対応値は無視し、現在値または既定の base に fallback します。
+scan は beatoraja と同じくファイル全体を対象にするため、`#BASE` は object data の後ろを含めてどこに書いてもよく、制御構文のブロックもこの scan では評価しません。
+`#BASE 36` / `#BASE 62` の行が複数ある場合は最後の行を採用します。
+未対応値は無視します。
 
 runtime と round-trip の扱い:
 

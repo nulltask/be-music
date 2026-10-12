@@ -1506,13 +1506,21 @@ describe('parser', () => {
     expect(parsed.resources.wav['0A']).toBe('lower.wav');
   });
 
-  test('BMS: `#BASE 62` after the first object line is ignored', () => {
+  test('BMS: `#BASE 62` after the first object line still applies to the whole file, as in beatoraja', () => {
     const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
 
-    // Pre-scan stops at the first object line; the late `#BASE 62` doesn't take effect, so case is folded as in default
-    // base-36.
-    expect(parsed.bms.base).toBeUndefined();
-    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+    // beatoraja's BMSDecoder reads `#BASE` in a separate pass over the whole file before decoding, so its position does
+    // not matter.
+    expect(parsed.bms.base).toBe(62);
+    expect(parsed.resources.wav['0a']).toBe('lower.wav');
+    expect(parsed.events.map((event) => event.value)).toEqual(['0a']);
+  });
+
+  test('BMS: the last `#BASE` in the file wins, as in beatoraja', () => {
+    expect(parseChart(['#BASE 62', '#00111:0a', '#BASE 36', ''].join('\n')).bms.base).toBeUndefined();
+    expect(parseChart(['#BASE 36', '#00111:0a', '#BASE 62', ''].join('\n')).bms.base).toBe(62);
+    // A `#BASE` line inside a control-flow block counts too: beatoraja's pre-pass does not evaluate `#IF`.
+    expect(parseChart(['#RANDOM 2', '#IF 2', '#BASE 62', '#ENDIF', '#00111:0a', ''].join('\n')).bms.base).toBe(62);
   });
 
   test('BMS: `#BASE 62` preserves case for indexed-headers inside #RANDOM / #IF blocks', () => {
