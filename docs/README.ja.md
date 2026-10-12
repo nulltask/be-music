@@ -4,6 +4,7 @@
 
 このディレクトリは、`be-music` リポジトリで使う仕様を Markdown でまとめたものです。
 
+- [アーキテクチャ: Source 層と Resolved 層](architecture.ja.md)
 - [BMS 実装仕様](bms-spec.ja.md)
 - [BMSON 実装仕様](bmson-spec.ja.md)
 - [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)
@@ -23,6 +24,6 @@
 - 公式仕様そのものではなく、**このリポジトリの実装がどう解釈するか**を優先して記述しています。
 - 公式仕様と齟齬が出る場合は、まず実装方針を決めてからこのドキュメントを更新してください。
 - これらの文書は現在の実装に集中させます。過去の判断は pull request、commit message、changelog に残してください。
-- `@be-music/json` は pure IR、`@be-music/chart` は beat 解決やイベント順序などの譜面意味論を担当します。
+- `@be-music/json` は pure IR（Source 層）、`@be-music/chart` は beat 解決やイベント順序などの譜面意味論を担当します。プレイヤー側のすべてのパッケージが読む Resolved 層へ変える唯一の関数 `resolveChart` も `@be-music/chart` にあります（[アーキテクチャ](architecture.ja.md) を参照）。
 - `@be-music/player` は共有 engine package です。terminal 固有の挙動は `@be-music/player-tui` と [Terminal player 実装メモ](player-tui.ja.md)、browser 固有の挙動は `@be-music/player-web` と [Browser player 実装メモ](player-web.ja.md) に置きます。
 - `@be-music/lr2-skin` と `@be-music/beatoraja-skin` は skin parsing を renderer 非依存に保ちます。browser PixiJS rendering は `@be-music/player-web` 側に記述します。

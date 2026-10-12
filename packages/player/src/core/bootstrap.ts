@@ -1,5 +1,5 @@
 import { throwIfAborted } from '@be-music/utils/core';
-import { resolveChartPlayVariant } from '@be-music/chart';
+import { resolveChart, type ResolvedChart } from '@be-music/chart';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import {
@@ -21,7 +21,13 @@ import type {
   PlayerSummary,
   PlayerUiRuntime,
 } from './engine.ts';
-import { extractTimedNotes, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
+import {
+  toTimedInvisibleNote,
+  toTimedLandmineNote,
+  toTimedPlayableNote,
+  type TimedLandmineNote,
+  type TimedPlayableNote,
+} from '../playable-notes.ts';
 import {
   appendFreeZoneInputChannels,
   createInputTokenToChannelsMap,
@@ -41,7 +47,7 @@ import { DEFAULT_TUI_NOTE_HEIGHT } from './ui-options.ts';
  * land via the asset-source closure inside the host (drag-dropped File handles), not via Node fs reads, so the
  * `baseDir` field is essentially a label here.
  */
-function resolveDefaultBaseDir(): string {
+export function resolveDefaultBaseDir(): string {
   const proc = (globalThis as { process?: { cwd?: () => string } }).process;
   return proc?.cwd?.() ?? '.';
 }
@@ -63,6 +69,8 @@ export interface PreparedPlaybackChartData {
    * `extractTimedNotes`). Manual play sounds them as background audio. Omitted means none.
    */
   shadowedNotes?: TimedPlayableNote[];
+  /** The resolved chart the notes were prepared from (`resolveChart`): its tempo map, triggers and chart facts. */
+  resolvedChart: ResolvedChart;
 }
 
 export interface InitializedPlayerUiRuntime {
@@ -138,47 +146,28 @@ const GROOVE_GAUGE_JUDGE_TO_RULESET_INDEX: Record<GrooveGaugeJudgeKind, GaugeJud
   EMPTY_POOR: GAUGE_JUDGE_EMPTY_POOR,
 };
 
-export function preparePlaybackChartData(
-  resolvedJson: BeMusicJson,
-  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension' | 'playVariant'>,
-  inferBmsLnTypeWhenMissing: boolean,
-  auxiliaryPlaybackEndSeconds: number,
+/**
+ * Prepares a play from a resolved chart (`resolveChart` in `@be-music/chart`): fresh mutable note arrays for the engine
+ * and the renderer, the lane bindings for the chart's play variant, and the scorable notes (FREE ZONE columns the
+ * layout does not bind are left out).
+ */
+export function preparePlaybackChart(
+  resolved: ResolvedChart,
+  options: Pick<PlayerOptions, 'laneModeExtension'> = {},
+  auxiliaryPlaybackEndSeconds = 0,
 ): PreparedPlaybackChartData {
-  // The single lane-mode source: the host-declared variant, else the shared `resolveChartPlayVariant` rule over the
-  // resolved chart's events (post `#RANDOM`) and extension. Deriving it from events rather than from the extracted
-  // note channels keeps mines and invisible objects from deciding the lane mode.
-  const playVariant =
-    options.playVariant ??
-    resolveChartPlayVariant({
-      chartPath: options.laneModeExtension,
-      events: resolvedJson.events,
-      bms: resolvedJson.bms,
-      bmson: resolvedJson.bmson,
-    });
-  const extractedNotes = extractTimedNotes(resolvedJson, {
-    // Same classification the lane bindings use — keeps `17` / `27` FREE ZONE on the IIDX families and an
-    // ordinary key column on POPN-9 / the 24-key keyboard modes.
-    playVariant,
-    includeLandmine: true,
-    // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
-    // Keep extraction independent from the debug overlay option so audio semantics never depend on rendering settings.
-    includeInvisible: true,
-    inferBmsLnTypeWhenMissing,
-  });
-  const notes = extractedNotes.playableNotes;
-  const landmineNotes = extractedNotes.landmineNotes;
-  const invisibleNotes = extractedNotes.invisibleNotes;
+  const playVariant = resolved.playVariant;
+  const notes = resolved.notes.map(toTimedPlayableNote);
+  // Invisible 3x/4x objects are not score targets, but they do update the lane's current keysound in manual play.
+  // They are always prepared, independently of the debug overlay option, so audio never depends on rendering settings.
+  const landmineNotes = resolved.mines.map(toTimedLandmineNote);
+  const invisibleNotes = resolved.invisibleNotes.map(toTimedInvisibleNote);
   const laneSoundNotes = [...notes, ...invisibleNotes].sort(compareLaneSoundNotes);
   const renderNotes = notes;
-  const totalSeconds = Math.max(
-    resolvePlayableNotesTailSeconds(notes),
-    landmineNotes.at(-1)?.seconds ?? 0,
-    invisibleNotes.at(-1)?.seconds ?? 0,
-    auxiliaryPlaybackEndSeconds,
-  );
+  const totalSeconds = Math.max(resolved.lastNoteSeconds, auxiliaryPlaybackEndSeconds);
   const channels = collectUniqueNoteChannels(notes, landmineNotes, invisibleNotes);
   const laneModeOptions = {
-    player: resolvedJson.bms.player,
+    player: resolved.source.bms.player,
     chartExtension: options.laneModeExtension,
     playVariant,
   };
@@ -201,8 +190,31 @@ export function preparePlaybackChartData(
     activeFreeZoneChannels,
     scorableNotes,
     inputTokenToChannels,
-    shadowedNotes: extractedNotes.shadowedNotes,
+    shadowedNotes: resolved.shadowedNotes.map(toTimedPlayableNote),
+    resolvedChart: resolved,
   };
+}
+
+/**
+ * Resolves `resolvedJson` (a chart without control flow) with `resolveChart` and prepares it with
+ * {@link preparePlaybackChart}. The play variant is the host-declared one, else the shared `resolveChartPlayVariant`
+ * rule over the chart's events and `laneModeExtension`.
+ */
+export function preparePlaybackChartData(
+  resolvedJson: BeMusicJson,
+  options: Pick<PlayerOptions, 'showInvisibleNotes' | 'laneModeExtension' | 'playVariant'>,
+  inferBmsLnTypeWhenMissing: boolean,
+  auxiliaryPlaybackEndSeconds: number,
+): PreparedPlaybackChartData {
+  return preparePlaybackChart(
+    resolveChart(resolvedJson, {
+      chartPath: options.laneModeExtension,
+      playVariant: options.playVariant,
+      inferBmsLnTypeWhenMissing,
+    }),
+    options,
+    auxiliaryPlaybackEndSeconds,
+  );
 }
 
 export async function initializePlayerUiRuntime({
@@ -269,20 +281,6 @@ export async function initializePlayerUiRuntime({
     uiEnabled,
     activeStateSignals: uiEnabled ? stateSignals : undefined,
   };
-}
-
-function resolvePlayableNotesTailSeconds(notes: ReadonlyArray<TimedPlayableNote>): number {
-  let tailSeconds = 0;
-  for (const note of notes) {
-    const endSeconds =
-      typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds
-        ? note.endSeconds
-        : note.seconds;
-    if (endSeconds > tailSeconds) {
-      tailSeconds = endSeconds;
-    }
-  }
-  return tailSeconds;
 }
 
 function compareLaneSoundNotes(left: TimedPlayableNote, right: TimedPlayableNote): number {

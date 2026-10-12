@@ -41,6 +41,7 @@ import {
 import { clampFontSize, isDestinationVisible, makeLr2TextSprite } from '../../skin/lr2/scene-render.ts';
 import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
+import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
 import type { BrowserBrowseEntry, BrowserSongEntry } from '../../collection/types.ts';
 import { LR2_TEXT_FALLBACK_FONT } from './fonts.ts';
 import {
@@ -1530,8 +1531,7 @@ function resolveSelectNumber(
     case 88: // best bad %
     case 89: // best poor %
       return 0;
-    // BPM range (90/91). Computed by scanning channel-03 / channel-08 events; charts without BPM changes get the
-    // initial BPM for both.
+    // BPM range (90/91), from the chart's tempo map; charts without BPM changes get the initial BPM for both.
     case 90:
       return resolveBpmRange(song).max;
     case 91:
@@ -1560,35 +1560,10 @@ function resolveSelectNumber(
   }
 }
 
-/**
- * Computes the focused chart's BPM range. Scans BPM-change events (channel 03 = inline hex BPM, channel 08 = lookup via
- * `resources.bpm`) plus the initial BPM. Cheap because it only runs when a num=90 / num=91 slot is rendered (i.e. once
- * per cursor move).
- */
+/** The focused chart's BPM range, rounded for the LR2 number slots, from the chart's tempo map. */
 function resolveBpmRange(song: BrowserSongEntry): { min: number; max: number } {
-  // `BrowserSongEntry.bpm` is optional; fall back to the chart's metadata BPM (which is non-optional in the json type)
-  // before scanning events so the range never starts as `undefined`.
-  const initial = song.bpm ?? song.chart.metadata.bpm;
-  let min = initial;
-  let max = initial;
-  for (const event of song.chart.events) {
-    if (event.channel === '03') {
-      // Inline hex (base-16) BPM. Two-digit value, 0..255.
-      const value = Number.parseInt(event.value, 16);
-      if (Number.isFinite(value) && value > 0) {
-        if (value < min) min = value;
-        if (value > max) max = value;
-      }
-    } else if (event.channel === '08') {
-      // Lookup via `#BPMxx` table.
-      const bpm = song.chart.resources.bpm[event.value];
-      if (typeof bpm === 'number' && bpm > 0) {
-        if (bpm < min) min = bpm;
-        if (bpm > max) max = bpm;
-      }
-    }
-  }
-  return { min: Math.round(min), max: Math.round(max) };
+  const range = resolveChartBpmRange(song.chart);
+  return { min: Math.round(range.min), max: Math.round(range.max) };
 }
 
 /**

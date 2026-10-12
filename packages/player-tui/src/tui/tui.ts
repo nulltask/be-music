@@ -1,4 +1,5 @@
 import { effect, effectScope } from 'alien-signals';
+import { PLAY_MODE_LAYOUTS } from '@be-music/chart';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { clamp } from '@be-music/utils/core';
 import type { BgaKittyImage } from '../bga.ts';
@@ -129,11 +130,22 @@ const HIGHLIGHT_R_BOOST = 56;
 const HIGHLIGHT_G_BOOST = 62;
 const HIGHLIGHT_B_BOOST = 74;
 const NOTE_ROW_HYSTERESIS_CELLS = 0.18;
-// The keyboard modes' wheel lanes (`1P` / `1Q` / `2P` / `2Q`, which no other mode uses) take the scratch colours.
-const RED_NOTE_CHANNELS = new Set(['16', '26', '1P', '1Q', '2P', '2Q']);
-const WHITE_NOTE_CHANNELS = new Set(['11', '13', '15', '19', '21', '23', '25', '29']);
-const BLUE_NOTE_CHANNELS = new Set(['12', '14', '17', '18', '22', '24', '27', '28']);
-const SCRATCH_LANE_CHANNELS = new Set(['16', '26', '1P', '1Q', '2P', '2Q']);
+// Lane colours come from the play-mode table, by channel and whatever the mode: the IIDX scratches and the keyboard
+// modes' wheel lanes (`1P` / `1Q` / `2P` / `2Q`, which no other mode uses) are red, the 14 KEY layout's white keys
+// white, and its black keys plus the FREE ZONE channels (`17` / `27`) blue.
+const SCRATCH_LANE_CHANNELS: ReadonlySet<string> = new Set(
+  [PLAY_MODE_LAYOUTS['14'], PLAY_MODE_LAYOUTS['48']].flatMap((layout) =>
+    layout.lanes.filter((lane) => lane.kind !== 'key').map((lane) => lane.channel),
+  ),
+);
+const RED_NOTE_CHANNELS = SCRATCH_LANE_CHANNELS;
+const WHITE_NOTE_CHANNELS: ReadonlySet<string> = new Set(
+  PLAY_MODE_LAYOUTS['14'].lanes.filter((lane) => lane.tone === 'white').map((lane) => lane.channel),
+);
+const BLUE_NOTE_CHANNELS: ReadonlySet<string> = new Set([
+  ...PLAY_MODE_LAYOUTS['14'].lanes.filter((lane) => lane.tone === 'black').map((lane) => lane.channel),
+  ...PLAY_MODE_LAYOUTS['14'].freeZones.map((zone) => zone.channel),
+]);
 const NOTE_HEAD_SYMBOL = '●';
 const LONG_NOTE_HEAD_SYMBOL = '▲';
 const LONG_NOTE_BODY_SYMBOL = '■';

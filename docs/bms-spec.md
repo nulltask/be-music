@@ -328,7 +328,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - be-music-specific: channels `1P` / `1Q` (`2P` / `2Q` on the 2P side) are the 24 / 48 KEY wheel, up / down — the BMS spelling of the bmson `keyboard-24k` wheel lanes (`x` = 25 / 26). Other BMS players do not define these channels. They count as extended lanes, so they select the keyboard modes too
 - A `.pms` chart is `9 KEY` regardless of its channels; this is checked right after the extended-lane rule, before the content rules
 - `9 KEY` is also detected from content: `#PLAYER 3` with channel `17` (when the IIDX 2P side `21` / `26..29` is absent; with it the chart is IIDX DP with a FREE ZONE), a 1P chart that uses every channel `11..19`, and a chart that uses `22..25` without `21` / `26..29` (PMS-STD written as `.bms` / `.bme`)
-- Otherwise the IIDX families apply: a 6 / 7 key column (`18` / `19` / `28` / `29`) means `7 KEY SP` / `14 KEY DP`. Without one the extension completes the mode: `.bme` is `7 KEY SP` / `14 KEY DP` (the extension names the 7-key format), any other extension is `5 KEY SP` / `5 KEY DP`
+- Otherwise the IIDX families apply: a 6 / 7 key column (`18` / `19` / `28` / `29`) means `7 KEY SP` / `14 KEY DP`, otherwise `5 KEY SP` / `5 KEY DP`. The lanes in use decide, whatever the extension: a `.bme` chart without a 6 / 7 key column is `5 KEY SP` / `5 KEY DP`, as in beatoraja (be-music decision; see [format-compat §5](./format-compat.md#5-be-music-decisions-in-short))
 - `.pms` The 9KEY of the musical score is estimated from the standard array (`PMS-STD`) / compatible array (`PMS-COMPAT`) from the channel distribution and reflected in the `LANE` display.
 - FREE ZONE (`17` / `27`) does not create an independent lane and draws on the scratch lane (`16` / `26`); under `9 KEY` and the `24 KEY` / `48 KEY` keyboard modes those channels are ordinary lanes instead
 - FREE ZONE Note length is fixed at quarter note
@@ -362,7 +362,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-tui/src/tui/tui.ts`)
 - Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
 - Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
-- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/player/src/core/timeline.test.ts`, `packages/player-tui/src/bga.test.ts`
+- Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/chart/src/timelines.test.ts`, `packages/player-tui/src/bga.test.ts`
 
 ## Handling of event location
 
@@ -379,6 +379,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - If there is no BOM, resolve the `#CHARSET` declaration (only when it canonicalizes to a supported encoding)
 - ASCII-only files are treated as UTF-8
 - A buffer that passes strict UTF-8 validation (fatal decode succeeds with multibyte sequences present) is UTF-8
+- A buffer whose every non-ASCII byte pairs up as KS X 1001 (`0xA1`–`0xFE` lead and trail, beatoraja's EUC-KR probe) and whose non-ASCII text is at least 90 % Hangul syllables is Korean `euc-kr`
 - Otherwise infer by scoring `shift_jis`, `utf8`, `euc-jp`, `latin1`
 - This detection is unified in `@be-music/parser`'s `decodeBmsText`, so CLI / TUI / Web all produce the same result
 
@@ -392,9 +393,10 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 ## Evaluation rules for control constructs
 
 - `parser` retains control syntax as `bms.controlFlow` and does not commit branches when parsing
-- `player` / `audio-renderer` evaluate `bms.controlFlow` and expand valid blocks at runtime
+- Branches are decided once per play by explicit draws (`RandomDraws`, drawn with `drawRandomOutcomes`); `evaluateControlFlow` in `@be-music/chart` is the only evaluator, and the parser's `resolveBmsControlFlowWithDraws` expands the active blocks into a resolved chart without `bms.controlFlow`. Hosts resolve before playback or rendering and hand the engine the resolved chart with its draws ([Player spec — Handling control syntax](./player-spec.md#handling-control-syntax))
 - `#RANDOM n` / `#SWITCH n` generate integers of `1..n` and use them as selection values
 - `#SETRANDOM n` / `#SETSWITCH n` fix the selection value
 - `#IF` chain branches at the current RANDOM selection value, `#ELSEIF` / `#ELSE` are invalid if there is a previously established branch
 - `#SWITCH` chain evaluates `#CASE` / `#DEF` and aborts at `#SKIP` until `#ENDSW`
 - `#SWITCH` falls through to subsequent `#CASE` / `#DEF` if `#SKIP` is missing
+- Header lines apply in file order, as in LR2 and beatoraja: a definition in a taken branch beats an earlier top-level line of the same header and loses to a later one. The parser marks a branch header that a later top-level line overrides (`overriddenByLaterHeader`) and resolution skips it; repeatable headers (`#STP`, `#WAVCMD`, `#LNOBJ`) add up

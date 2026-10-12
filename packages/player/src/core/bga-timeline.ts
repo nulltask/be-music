@@ -1,11 +1,14 @@
-import { sortEvents } from '@be-music/chart';
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  resolveBmsBase,
-  type BeMusicEvent,
-  type BeMusicJson,
-} from '@be-music/json';
+import { type BgaCue } from '@be-music/chart';
+
+// The BGA cue builders live in `@be-music/chart` (the resolved-chart layer); re-exported so
+// `@be-music/player/core/bga-timeline` keeps its public API.
+export {
+  buildBgaTimelines,
+  buildBmsBgaTimeline,
+  type BgaCue,
+  type BgaTimelines,
+  type BgaTimingResolver,
+} from '@be-music/chart';
 
 /**
  * How long a POOR / miss BGA layer stays visible after a miss before the normal base/layer composite returns.
@@ -15,78 +18,6 @@ import {
  * The beatoraja web scene instead holds its miss layer until the next non-POOR judge, as beatoraja skins expect.
  */
 export const DEFAULT_POOR_BGA_DISPLAY_SECONDS = 0.5;
-
-export interface BgaCue {
-  seconds: number;
-  key?: string;
-}
-
-export interface BgaTimelines {
-  base: BgaCue[];
-  layer: BgaCue[];
-  layer2: BgaCue[];
-  poor: BgaCue[];
-}
-
-export interface BgaTimingResolver {
-  eventToSeconds: (event: BeMusicEvent) => number;
-  beatToSeconds: (beat: number) => number;
-}
-
-const BGA_BASE_CHANNEL = '04';
-const BGA_POOR_CHANNEL = '06';
-const BGA_LAYER_CHANNEL = '07';
-const BGA_LAYER2_CHANNEL = '0A';
-
-export function buildBgaTimelines(chart: BeMusicJson, resolver: BgaTimingResolver): BgaTimelines {
-  const idBase = resolveBmsBase(chart);
-  const sortedEvents = sortEvents(chart.events);
-  const timelines: BgaTimelines = {
-    base: buildBmsBgaTimeline(sortedEvents, resolver, BGA_BASE_CHANNEL, idBase),
-    poor: buildBmsBgaTimeline(sortedEvents, resolver, BGA_POOR_CHANNEL, idBase),
-    layer: buildBmsBgaTimeline(sortedEvents, resolver, BGA_LAYER_CHANNEL, idBase),
-    layer2: buildBmsBgaTimeline(sortedEvents, resolver, BGA_LAYER2_CHANNEL, idBase),
-  };
-
-  const bgaSection = chart.bmson.bga;
-  if (bgaSection.events.length > 0 || bgaSection.layerEvents.length > 0 || bgaSection.poorEvents.length > 0) {
-    const headerById = new Map(bgaSection.header.map((entry) => [entry.id, entry.name]));
-    const resolution =
-      chart.bmson.info?.resolution && chart.bmson.info.resolution > 0 ? chart.bmson.info.resolution : 240;
-    const toCue = (entry: { y: number; id: number }): BgaCue => {
-      const beat = entry.y / resolution;
-      const seconds = resolver.beatToSeconds(beat);
-      return { seconds, key: entry.id === 0 ? undefined : headerById.get(entry.id) };
-    };
-    for (const event of bgaSection.events) timelines.base.push(toCue(event));
-    for (const event of bgaSection.layerEvents) timelines.layer.push(toCue(event));
-    for (const event of bgaSection.poorEvents) timelines.poor.push(toCue(event));
-  }
-
-  sortBgaTimelines(timelines);
-  return timelines;
-}
-
-export function buildBmsBgaTimeline(
-  events: ReadonlyArray<BeMusicEvent>,
-  resolver: Pick<BgaTimingResolver, 'eventToSeconds'>,
-  channel: string,
-  base: 36 | 62 = 36,
-): BgaCue[] {
-  const normalized = normalizeChannel(channel);
-  const timeline: BgaCue[] = [];
-  for (const event of events) {
-    if (normalizeChannel(event.channel) !== normalized) {
-      continue;
-    }
-    const key = normalizeObjectKey(event.value, base);
-    timeline.push({
-      seconds: resolver.eventToSeconds(event),
-      key: key === '00' ? undefined : key,
-    });
-  }
-  return timeline;
-}
 
 export function pickActiveBgaCue<T extends { seconds: number }>(
   cues: ReadonlyArray<T>,
@@ -111,12 +42,4 @@ export function pickActiveBgaCue<T extends { seconds: number }>(
 
 export function pickActiveBgaKey(cues: ReadonlyArray<BgaCue>, seconds: number): string | undefined {
   return pickActiveBgaCue(cues, seconds)?.key;
-}
-
-function sortBgaTimelines(timelines: BgaTimelines): void {
-  const sortBySeconds = (left: BgaCue, right: BgaCue): number => left.seconds - right.seconds;
-  timelines.base.sort(sortBySeconds);
-  timelines.layer.sort(sortBySeconds);
-  timelines.layer2.sort(sortBySeconds);
-  timelines.poor.sort(sortBySeconds);
 }

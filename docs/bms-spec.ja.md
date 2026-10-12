@@ -328,7 +328,7 @@ runtime と round-trip の扱い:
 - be-music 独自: チャンネル `1P` / `1Q`（2P 側は `2P` / `2Q`）は 24 / 48 KEY のホイールの上 / 下で、bmson `keyboard-24k` のホイールレーン（`x` = 25 / 26）の BMS 表記です。ほかの BMS プレイヤーはこれらのチャンネルを定義していません。拡張レーンとして数えるため、これらもキーボードモードを選びます
 - `.pms` 譜面はチャンネルにかかわらず `9 KEY` です。この判定は拡張レーンの次、内容による判定より前に行います
 - `9 KEY` は内容からも判定します: `#PLAYER 3` でチャンネル `17` を使う譜面（IIDX の 2P 側 `21` / `26..29` がない場合。ある場合は FREE ZONE 付きの IIDX DP 譜面）、`11..19` をすべて使う 1P 譜面、`21` / `26..29` を使わずに `22..25` を使う譜面（`.bms` / `.bme` で書かれた PMS-STD）
-- それ以外は IIDX 系として判定します: 6 / 7 鍵の列 (`18` / `19` / `28` / `29`) があれば `7 KEY SP` / `14 KEY DP`。ない場合は拡張子で補完し、`.bme` は `7 KEY SP` / `14 KEY DP`（7 鍵形式を表す拡張子のため）、それ以外の拡張子は `5 KEY SP` / `5 KEY DP` です
+- それ以外は IIDX 系として判定します: 6 / 7 鍵の列 (`18` / `19` / `28` / `29`) があれば `7 KEY SP` / `14 KEY DP`、なければ `5 KEY SP` / `5 KEY DP` です。拡張子にかかわらず使われているレーンで決め、6 / 7 鍵の列がない `.bme` 譜面も beatoraja と同じく `5 KEY SP` / `5 KEY DP` です（be-music の判断。[format-compat §5](./format-compat.ja.md#5-be-music-の判断のまとめ) を参照）
 - `.pms` 譜面の 9KEY は標準配列 (`PMS-STD`) / 互換配列 (`PMS-COMPAT`) をチャンネル分布から推定し、`LANE` 表示に反映
 - FREE ZONE (`17` / `27`) は独立レーンを作らずスクラッチレーン (`16` / `26`) 上に描画。`9 KEY` と `24 KEY` / `48 KEY` の keyboard mode では通常レーンとして扱う
 - FREE ZONE ノート長は 4 分音符固定
@@ -362,7 +362,7 @@ runtime と round-trip の扱い:
 - `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-tui/src/tui/tui.ts`）で上限を設ける
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
-- 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/player/src/core/timeline.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する
+- 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/chart/src/timelines.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する
 
 ## イベント位置の扱い
 
@@ -379,6 +379,7 @@ runtime と round-trip の扱い:
 - BOM がない場合は `#CHARSET` 宣言を解決（対応エンコーディングに正規化できた場合のみ）
 - ASCII のみのファイルは UTF-8 として扱う
 - 厳密 UTF-8 検証（マルチバイト列を含み fatal デコードに成功）を通れば UTF-8 とみなす
+- 非 ASCII のバイトがすべて KS X 1001 の 2 バイトの組（先頭・後続とも `0xA1`〜`0xFE`。beatoraja の EUC-KR 判定と同じ）になり、非 ASCII の文字の 90 % 以上がハングル音節なら韓国語の `euc-kr`
 - 上記以外は `shift_jis`, `utf8`, `euc-jp`, `latin1` をスコアリングして推測
 - この判定は `@be-music/parser` の `decodeBmsText` に一本化されており、CLI / TUI / Web のすべてが同じ結果になる
 
@@ -392,9 +393,10 @@ runtime と round-trip の扱い:
 ## 制御構文の評価ルール
 
 - `parser` は制御構文を `bms.controlFlow` として保持し、パース時には分岐を確定しない
-- `player` / `audio-renderer` は実行時に `bms.controlFlow` を評価して有効ブロックを展開する
+- 分岐はプレイごとに 1 回、明示的な draws（`drawRandomOutcomes` で引いた `RandomDraws`）で決める。評価器は `@be-music/chart` の `evaluateControlFlow` だけで、parser の `resolveBmsControlFlowWithDraws` が有効ブロックを展開し、`bms.controlFlow` を持たない解決済みの譜面を作る。ホストは再生や描画の前に解決し、解決済みの譜面と draws をエンジンに渡す（[プレイヤー仕様 — 制御構文の扱い](./player-spec.ja.md#制御構文の扱い)）
 - `#RANDOM n` / `#SWITCH n` は `1..n` の整数を生成して選択値にする
 - `#SETRANDOM n` / `#SETSWITCH n` は選択値を固定する
 - `#IF` チェーンは現在の RANDOM 選択値で分岐し、`#ELSEIF` / `#ELSE` は先に成立した枝がある場合は無効
 - `#SWITCH` チェーンは `#CASE` / `#DEF` を評価し、`#SKIP` で `#ENDSW` まで打ち切る
 - `#SWITCH` では `#SKIP` がない場合、後続 `#CASE` / `#DEF` にフォールスルーする
+- ヘッダ行は LR2 や beatoraja と同じくファイル順に適用する。選ばれた分岐内の定義は、前にある同じヘッダのトップレベル行に勝ち、後にあるものに負ける。パーサは後のトップレベル行に上書きされる分岐内のヘッダに印（`overriddenByLaterHeader`）を付け、解決時にはそれを適用しない。繰り返せるヘッダ（`#STP`、`#WAVCMD`、`#LNOBJ`）は加算する

@@ -17,6 +17,7 @@ interface SongOverrides {
   player?: number;
   difficulty?: number;
   channels?: string[];
+  chartPath?: string;
 }
 
 interface ResultOverrides extends SongOverrides {
@@ -72,7 +73,7 @@ function makeResult(overrides: ResultOverrides = {}): PixiGameplayResultData {
       sourceId: 'test',
       sourceLabel: 'test',
       sourceKind: 'files',
-      chartPath: 'test/song.bms',
+      chartPath: overrides.chartPath ?? 'test/song.bms',
       directoryLabel: 'test',
       fileLabel: 'song.bms',
       title: 'Test',
@@ -249,6 +250,30 @@ describe('computeResultOps', () => {
       const ops = computeResultOps(makeResult({ player: 3, channels: ['11', '21'] }), makeSkin());
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_10)).toBe(true);
       expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_5_10)).toBe(true);
+    });
+
+    it('sets 164 (9K) and 401 for a .pms chart, whose 2x lanes are 9 KEY buttons', () => {
+      const ops = computeResultOps(
+        makeResult({ chartPath: 'test/song.pms', channels: ['11', '12', '13', '14', '15', '22', '23', '24', '25'] }),
+        makeSkin(),
+      );
+      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_9)).toBe(true);
+      expect(ops.has(RESULT_DYNAMIC_OPS.KEYCONFIG_9)).toBe(true);
+      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_10)).toBe(false);
+    });
+
+    it('reads the key mode from the lanes, not from mines or invisible notes', () => {
+      const ops = computeResultOps(
+        makeResult({ channels: ['11', '12', '13', '14', '15', '16', 'D8', '39'] }),
+        makeSkin(),
+      );
+      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_5)).toBe(true);
+      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_7)).toBe(false);
+    });
+
+    it('counts #LNTYPE long-note lanes toward the key mode', () => {
+      const ops = computeResultOps(makeResult({ channels: ['11', '12', '13', '14', '15', '58'] }), makeSkin());
+      expect(ops.has(RESULT_DYNAMIC_OPS.KEYS_7)).toBe(true);
     });
 
     it('honors bmson modeHint over channel detection', () => {

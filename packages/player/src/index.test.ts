@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveChart } from '@be-music/chart';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { parseChart, parseChartFile } from '../../parser/src/index.ts';
@@ -94,6 +95,7 @@ import {
   preparePlaybackChartData,
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
+  resolvePlayChart,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
@@ -337,9 +339,11 @@ beforeEach(() => {
 
 describe('player', () => {
   test('player: auto play finishes successfully', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    // The chart has `#RANDOM` blocks; the host resolves it once and hands the engine the result with its draws.
+    const { chart: json, randomDraws } = resolvePlayChart(await parseChartFile(unifiedBmsChartPath));
 
     const summary = await autoPlay(json, {
+      randomDraws,
       auto: true,
       speed: 48,
       leadInMs: 0,
@@ -1583,9 +1587,9 @@ describe('player', () => {
     expect(laneMode(withMineAndInvisible)).toBe('5 KEY SP');
     expect(preparePlaybackChartData(withMineAndInvisible, {}, true, 0).landmineNotes).toHaveLength(1);
 
-    // The documented `.bme` completion applies through the same rule, mines or not.
-    expect(laneMode(plain, '.bme')).toBe('7 KEY SP');
-    expect(laneMode(withMineAndInvisible, '.bme')).toBe('7 KEY SP');
+    // The `.bme` extension does not complete the mode: the lanes in use decide, as in beatoraja.
+    expect(laneMode(plain, '.bme')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bme')).toBe('5 KEY SP');
 
     // `#LNOBJ` and `#LNTYPE 1` spellings of the same long note on lane 8 resolve to the same lane mode.
     expect(laneMode(chart('#LNOBJ ZZ', '#WAVZZ z.wav', '#00111:01', '#00118:01', '#00218:ZZ'), '.bms')).toBe(
@@ -2114,6 +2118,33 @@ describe('player', () => {
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(true);
+  });
+
+  test.each(['D1', 'DA', 'EO'])('player: a mine on lane %s preloads #WAV00', async (channel) => {
+    const json = createLandmineOnlyChart();
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel, position: [0, 1] as const, value: '10' },
+    ];
+    const details: Array<string | undefined> = [];
+    await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      tui: false,
+      writeOutput: () => undefined,
+      onLoadProgress: (progress) => {
+        details.push(progress.detail);
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 50, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(details).toContain('explode.wav');
   });
 
   test('player: missing #WAVxx files are silent by default (no fallback tone)', async () => {
@@ -2937,6 +2968,21 @@ describe('player', () => {
   test('player: shows RANDOM label when dynamic EXRANK changes exist', () => {
     const json = createDynamicExRankChart();
     expect(resolveDisplayedJudgeRankLabel(json)).toBe('RANDOM');
+  });
+
+  test('player: reads the displayed judge rank from a resolved chart', () => {
+    const json = createDynamicExRankChart();
+    const resolved = resolveChart(json);
+    expect(resolveDisplayedJudgeRankValue(resolved)).toBe(2);
+    expect(resolveDisplayedJudgeRankLabel(resolved)).toBe('RANDOM');
+
+    json.bms.exRank['AA'] = '0';
+    json.bms.exRank['CC'] = '-5';
+    json.bms.defExRank = 120;
+    expect(resolveDisplayedJudgeRankLabel(resolveChart(json))).toBe('120');
+
+    const bmson = createEmptyJson('bmson');
+    expect(resolveDisplayedJudgeRankLabel(resolveChart(bmson))).toBe('100');
   });
 
   test('player: resolves displayed judge rank from bmson judge rank', () => {

@@ -18,6 +18,7 @@ export interface BrowserSongEntry {
   genre?: string;
   playLevel?: number | string;
   bpm?: number;
+  /** The notes a play scores: judged notes without FREE ZONE tails; mines and invisible objects are not notes. */
   totalNotes: number;
   chart: BeMusicJson;
 }

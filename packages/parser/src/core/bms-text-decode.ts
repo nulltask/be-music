@@ -14,7 +14,10 @@
  * 3. ASCII-only buffers decode as UTF-8 (identical for every candidate, so skip the scoring walk).
  * 4. Strict UTF-8 — a buffer that validates as UTF-8 with multibyte sequences present is UTF-8; real Shift_JIS /
  *    EUC-JP text is statistically never valid multibyte UTF-8.
- * 5. Scoring — decode with shift_jis / utf-8 / euc-jp / iso-8859-1 candidates and pick the highest-scoring text
+ * 5. Korean EUC-KR — a buffer whose every non-ASCII byte pairs up as KS X 1001 (`0xA1`–`0xFE` twice) and decodes to
+ *    Hangul syllables is EUC-KR. beatoraja probes EUC-KR before MS932 the same way; Japanese Shift_JIS text has lead
+ *    or trail bytes outside that range almost always.
+ * 6. Scoring — decode with shift_jis / utf-8 / euc-jp / iso-8859-1 candidates and pick the highest-scoring text
  *    (replacement characters and control bytes penalize, BMS-shaped lines and Japanese text reward).
  *
  * Built exclusively on the WHATWG `TextDecoder` so the same code runs in Node and the browser.
@@ -27,7 +30,7 @@ const BMS_KNOWN_COMMAND_LINE =
   /^#(?:TITLE|SUBTITLE|ARTIST|GENRE|COMMENT|BPM|PLAYLEVEL|RANK|TOTAL|DIFFICULTY|STAGEFILE|BACKBMP|BANNER|PREVIEW|LNTYPE|LNMODE|LNOBJ|VOLWAV|DEFEXRANK|PLAYER|PATH_WAV|BASEBPM|STP|OPTION|WAVCMD|POORBGA|VIDEOFILE|MIDIFILE|MATERIALS|DIVIDEPROP|CHARSET|WAV[0-9A-Z]{2}|BMP[0-9A-Z]{2}|BPM[0-9A-Z]{2}|STOP[0-9A-Z]{2}|TEXT[0-9A-Z]{2}|EXRANK[0-9A-Z]{2}|ARGB[0-9A-Z]{2}|CHANGEOPTION[0-9A-Z]{2}|EXWAV[0-9A-Z]{2}|EXBMP[0-9A-Z]{2}|BGA[0-9A-Z]{2}|SCROLL[0-9A-Z]{2}|SPEED[0-9A-Z]{2}|SWBGA[0-9A-Z]{2}|RANDOM\s+\d+|SETRANDOM\s+\d+|ENDRANDOM|IF\s+\d+|ELSEIF\s+\d+|ELSE|ENDIF|SWITCH\s+\d+|SETSWITCH\s+\d+|CASE\s+\d+|DEF|SKIP|ENDSW|[0-9]{3}[0-9A-Z]{2}\s*:)/i;
 
 export interface DecodedBmsText {
-  encoding: 'utf8' | 'shift_jis' | 'euc-jp' | 'utf-16le' | 'utf-16be' | 'iso-8859-1';
+  encoding: 'utf8' | 'shift_jis' | 'euc-jp' | 'euc-kr' | 'utf-16le' | 'utf-16be' | 'iso-8859-1';
   text: string;
 }
 
@@ -77,7 +80,56 @@ export function decodeBmsText(buffer: Uint8Array): DecodedBmsText {
       text: strictUtf8,
     };
   }
+  const eucKr = tryDecodeKoreanEucKr(buffer);
+  if (eucKr !== undefined) {
+    return {
+      encoding: 'euc-kr',
+      text: eucKr,
+    };
+  }
   return decodeByScoring(buffer);
+}
+
+/** Share of the non-ASCII characters that must be Hangul syllables before a KS X 1001-shaped buffer counts as Korean. */
+const KOREAN_HANGUL_SHARE = 0.9;
+
+/**
+ * Decodes `buffer` as EUC-KR when it looks like Korean text: every byte `>= 0x80` pairs up as a KS X 1001 character
+ * (lead and trail both `0xA1`–`0xFE`), as beatoraja's EUC-KR round-trip probe requires, and at least
+ * {@link KOREAN_HANGUL_SHARE} of the decoded non-ASCII characters are Hangul syllables. The share keeps out Shift_JIS
+ * half-width katakana, whose byte pairs also fit KS X 1001 but land on symbols and Hanja as often as on Hangul.
+ */
+function tryDecodeKoreanEucKr(buffer: Uint8Array): string | undefined {
+  let index = 0;
+  while (index < buffer.length) {
+    const lead = buffer[index]!;
+    if (lead < 0x80) {
+      index += 1;
+      continue;
+    }
+    const trail = buffer[index + 1];
+    if (lead < 0xa1 || lead > 0xfe || trail === undefined || trail < 0xa1 || trail > 0xfe) {
+      return undefined;
+    }
+    index += 2;
+  }
+  let text: string;
+  try {
+    text = new TextDecoder('euc-kr', { fatal: true }).decode(buffer);
+  } catch {
+    return undefined;
+  }
+  let nonAscii = 0;
+  let hangul = 0;
+  for (let position = 0; position < text.length; position += 1) {
+    const code = text.charCodeAt(position);
+    if (code < 0x80) continue;
+    nonAscii += 1;
+    if (code >= 0xac00 && code <= 0xd7a3) {
+      hangul += 1;
+    }
+  }
+  return nonAscii > 0 && hangul >= nonAscii * KOREAN_HANGUL_SHARE ? text : undefined;
 }
 
 function decodeLatin1Text(buffer: Uint8Array): string {
@@ -99,6 +151,8 @@ function decodeWithDeclaredCharset(buffer: Uint8Array, charset: string): Decoded
         return { encoding: 'shift_jis', text: new TextDecoder('shift_jis').decode(buffer) };
       case 'euc-jp':
         return { encoding: 'euc-jp', text: new TextDecoder('euc-jp').decode(buffer) };
+      case 'euc-kr':
+        return { encoding: 'euc-kr', text: new TextDecoder('euc-kr').decode(buffer) };
       case 'utf-16le':
         return { encoding: 'utf-16le', text: new TextDecoder('utf-16le').decode(buffer).replace(/^\ufeff/u, '') };
       case 'utf-16be':

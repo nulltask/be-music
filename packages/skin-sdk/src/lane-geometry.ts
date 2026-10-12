@@ -1,3 +1,4 @@
+import { PLAY_MODE_LAYOUTS, findPlayModeLane, type PlayKeyTone } from '@be-music/chart';
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import {
   resolveSideKeySlot as resolveCoreSideKeySlot,
@@ -245,14 +246,11 @@ function resolveFallbackLaneDisplayOrder(
     .map((entry) => entry.index);
 }
 
-/** Chromatic offsets of the black keys within an octave (C# D# F# G# A#). */
-const KEYBOARD_BLACK_KEY_SEMITONES = new Set([1, 3, 6, 8, 10]);
-
 /**
- * Visual class of a lane. `laneIndex` is the LR2 lane id (0 / 10 = scratch, 1..9 / 11..19 = keys, -1 when the lane
- * has no LR2 rect). IIDX convention: odd keys white, even keys black. The 24 / 48-key keyboard modes colour by piano
- * key instead, repeating every octave, and their wheel lanes (`1P` / `1Q`, `2P` / `2Q`) are `'wheel-up'` /
- * `'wheel-down'`.
+ * Visual class of a lane. `laneIndex` is the LR2 lane id (0 / 10 = scratch, 1..9 / 11..19 = keys, -1 when the lane has
+ * no LR2 rect): IIDX / pop'n keys alternate by it, odd keys white and even keys black, as the play-mode table's key
+ * tones do. The 24 / 48-key keyboard modes take the table's piano colours instead, repeating every octave, and their
+ * wheel lanes (`1P` / `1Q`, `2P` / `2Q`) are `'wheel-up'` / `'wheel-down'`.
  */
 export function resolveBeMusicLaneKind(
   channel: string,
@@ -260,11 +258,17 @@ export function resolveBeMusicLaneKind(
   playVariant: ChartPlayVariant | undefined,
 ): BeMusicLaneKind {
   if (isScratchLaneForVariant(channel, playVariant)) return 'scratch';
-  const wheel = resolveWheelLaneDirection(channel, playVariant);
-  if (wheel !== undefined) return wheel === 'up' ? 'wheel-up' : 'wheel-down';
   if (playVariant === '24' || playVariant === '48') {
-    const semitone = (resolveSideRelativeLaneIndex(channel, playVariant) - 1) % 12;
-    return KEYBOARD_BLACK_KEY_SEMITONES.has(semitone) ? 'black' : 'white';
+    const lane = findPlayModeLane(playVariant, channel);
+    if (lane?.kind === 'wheel-up' || lane?.kind === 'wheel-down') return lane.kind;
+    // A key's colour repeats every octave (12 keys), so a lane outside the layout takes that of its octave twin.
+    const slot = resolveSideRelativeLaneIndex(channel, playVariant);
+    return KEYBOARD_KEY_TONES_BY_SLOT.get(((((slot - 1) % 12) + 12) % 12) + 1) ?? 'white';
   }
   return (laneIndex % 10) % 2 === 0 ? 'black' : 'white';
 }
+
+/** Piano colour of each keyboard-mode key number (1..24), from the play-mode table. */
+const KEYBOARD_KEY_TONES_BY_SLOT: ReadonlyMap<number, PlayKeyTone> = new Map(
+  PLAY_MODE_LAYOUTS['24'].lanes.flatMap((lane) => (lane.tone === undefined ? [] : [[lane.slot, lane.tone] as const])),
+);

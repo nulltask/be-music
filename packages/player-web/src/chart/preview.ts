@@ -1,9 +1,10 @@
-// IMPORTANT: import from `/triggers` (the pure / browser-safe subpath), NOT the package root. The root entry pulls in
-// Node-only modules (fs / path / fluent-ffmpeg) that Vite can't bundle for the demo target — see
-// `packages/player-web-demo/vite.config.ts` which explicitly drops the root alias for that reason.
-import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import { usesMonophonicWavPlayback } from '@be-music/chart';
-import { normalizeChannel, type BeMusicJson } from '@be-music/json';
+import {
+  isInvisibleNoteChannel,
+  resolveChart,
+  usesMonophonicWavPlayback,
+  type TimedSampleTrigger,
+} from '@be-music/chart';
+import type { BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../collection/types.ts';
 
@@ -507,25 +508,11 @@ export class ChartPreviewEngine {
  *
  * `cutoffSeconds <= 0` returns an empty array — the engine skips the in-place fallback entirely in that case.
  */
-export function collectChartPreviewTriggers(
-  chart: BeMusicJson,
-  cutoffSeconds: number,
-): ReturnType<typeof collectSampleTriggers> {
+export function collectChartPreviewTriggers(chart: BeMusicJson, cutoffSeconds: number): TimedSampleTrigger[] {
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
-  const resolver = createTimingResolver(chart);
-  const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  return all
-    .filter((trigger) => !isInvisiblePlayLaneSoundChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
+  return resolveChart(chart, { inferBmsLnTypeWhenMissing: true })
+    .sampleTriggers.filter((trigger) => !isInvisibleNoteChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
     .sort((left, right) => left.seconds - right.seconds);
-}
-
-function isInvisiblePlayLaneSoundChannel(channel: string): boolean {
-  const normalized = normalizeChannel(channel);
-  if (normalized.length !== 2) return false;
-  const high = normalized.charCodeAt(0);
-  const low = normalized.charCodeAt(1);
-  // Lane codes cover the classic `1`-`9` columns and the extended `A`-`Z` ones (24 / 48 KEY, bmson `keyboard-24k`).
-  return (high === 0x33 || high === 0x34) && ((low >= 0x31 && low <= 0x39) || (low >= 0x41 && low <= 0x5a));
 }
 
 function sameTarget(a: ChartPreviewTarget | undefined, b: ChartPreviewTarget | undefined): boolean {

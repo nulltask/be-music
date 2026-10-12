@@ -2,8 +2,12 @@ import { resolveIidxRankLabel } from '../core/scoring.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent, PlaylogRulesetResult } from './format.ts';
 import {
   classifyRulesetJudge,
+  ignoresLateLongNoteHeadBad,
+  isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
+  longNoteOwesTailMiss,
   preferJudgeCandidate,
+  resolveEffectiveLongNoteMode,
   RULESET_JUDGE_NONE,
   RulesetGauge,
   selectJudgeWindowSet,
@@ -257,14 +261,7 @@ class PlaylogSimulation {
   }
 
   private resolveLongStyle(chartMode: SimLongStyle): SimLongStyle {
-    switch (this.config.longNoteStyle) {
-      case 'ln':
-        return 1;
-      case 'charge':
-        return chartMode === 3 ? 3 : 2;
-      default:
-        return chartMode;
-    }
+    return resolveEffectiveLongNoteMode(this.config.longNoteStyle, chartMode);
   }
 
   // ---- time advancement --------------------------------------------------------------------------------------
@@ -324,7 +321,7 @@ class PlaylogSimulation {
         if (note.judged || note.holding) continue;
         note.judged = true;
         this.applyJudge(JUDGE_MISS_POOR, undefined);
-        if (note.isLong && note.longStyle !== 1 && !this.config.headBadSkipsTail) {
+        if (longNoteOwesTailMiss(this.config, note.isLong ? note.longStyle : undefined)) {
           // beatoraja: a missed CN/HCN head also POORs the tail. IIDX (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
@@ -436,7 +433,8 @@ class PlaylogSimulation {
       this.applyJudge(selected.judge, dmUs);
     }
     if (this.config.multiBad) {
-      this.applyMultiBad(lanes, timeUs, windows, note, selected.judge);
+      // Only scoreable judgments (PGREAT..BAD) consume a note, so the judge is a real window index here.
+      this.applyMultiBad(lanes, timeUs, windows, note, selected.judge as RulesetJudgeIndex);
     }
   }
 
@@ -539,11 +537,7 @@ class PlaylogSimulation {
             judge = JUDGE_MISS_POOR;
           }
           if (
-            this.config.ignoreLateBadOnLnHead &&
-            judge === JUDGE_BAD &&
-            dmUs < 0 &&
-            note.isLong &&
-            (note.longStyle ?? 1) === 1
+            ignoresLateLongNoteHeadBad(this.config, judge, dmUs < 0, note.isLong ? (note.longStyle ?? 1) : undefined)
           ) {
             // LR2: long-note heads have no late BAD — the press falls through.
             judge = JUDGE_NONE;
@@ -609,7 +603,7 @@ class PlaylogSimulation {
     timeUs: number,
     windows: RulesetWindowTables,
     tnote: SimNote,
-    tnoteJudge: number,
+    tnoteJudge: RulesetJudgeIndex,
   ): void {
     const extras: Array<{ note: SimNote }> = [];
     for (const lane of lanes) {
@@ -627,16 +621,14 @@ class PlaylogSimulation {
     }
     if (extras.length === 0) return;
     extras.sort((left, right) => left.note.timeUs - right.note.timeUs);
-    const tnoteIsBad = tnoteJudge === JUDGE_BAD;
-    const filtered = extras.filter(({ note }) => {
-      if ((!tnoteIsBad || tnote.isLong) && note.timeUs > tnote.timeUs) return false;
-      if (note.isLong && note.timeUs < tnote.timeUs) return false;
-      return true;
-    });
+    const consumed = { time: tnote.timeUs, isLong: tnote.isLong, judge: tnoteJudge };
+    const filtered = extras.filter(({ note }) =>
+      isMultiBadCollectorTarget(consumed, { time: note.timeUs, isLong: note.isLong }),
+    );
     for (const { note } of filtered) {
       note.judged = true;
       this.applyJudge(JUDGE_BAD, undefined);
-      if (note.isLong && (note.longStyle ?? 1) !== 1 && !this.config.headBadSkipsTail) {
+      if (longNoteOwesTailMiss(this.config, note.isLong ? (note.longStyle ?? 1) : undefined)) {
         this.applyJudge(JUDGE_MISS_POOR, undefined);
       }
     }

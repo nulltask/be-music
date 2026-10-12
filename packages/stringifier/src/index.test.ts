@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { parseBmson, parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
 import { resolveRuleset, rulesetChartFactsFromChart, type JudgeWindowSetUs } from '../../player/src/ruleset/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
@@ -535,7 +535,7 @@ describe('stringifier', () => {
       genre: 'Genre',
       level: 7,
       init_bpm: 150,
-      mode_hint: 'beat-2k',
+      mode_hint: 'generic-2keys',
       resolution: 480,
     });
     // `metadata.rank` of a non-bmson chart is a BMS `#RANK` index (0..4); 75 is out of range, which judges as NORMAL, so
@@ -690,7 +690,7 @@ describe('stringifier', () => {
     };
 
     // Lanes 11 and 23 are numbered `x` 1 / 2; the hidden notes take those lanes instead of new ones.
-    expect(output.info.mode_hint).toBe('beat-2k');
+    expect(output.info.mode_hint).toBe('generic-2keys');
     expect(output.sound_channels).toEqual([{ name: 'key.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }]);
     expect(output.key_channels).toEqual([
       {
@@ -767,20 +767,22 @@ describe('stringifier', () => {
   });
 
   describe('bmson stringify: keeps every lane of a non-keyboard mode_hint through parse → stringify → parse', () => {
-    const laneCounts: Array<[string, number]> = [
-      ['beat-5k', 6],
-      ['beat-7k', 8],
-      ['beat-10k', 12],
-      ['beat-14k', 16],
-      ['popn-5k', 5],
-      ['popn-9k', 9],
+    const upTo = (count: number) => Array.from({ length: count }, (_, index) => index + 1);
+    // The lane `x` values of each hint. `beat-5k` / `beat-10k` keep the scratch on x 8 / 16 like the bmson spec and
+    // beatoraja, leaving x 6 / 7 / 14 / 15 without a lane.
+    const laneXs: Array<[string, number[]]> = [
+      ['beat-5k', [1, 2, 3, 4, 5, 8]],
+      ['beat-7k', upTo(8)],
+      ['beat-10k', [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16]],
+      ['beat-14k', upTo(16)],
+      ['popn-5k', upTo(5)],
+      ['popn-9k', upTo(9)],
     ];
     // Measure + fraction as one number, since the output resolution rewrites the position denominators.
     const toChannels = (json: ReturnType<typeof parseBmson>) =>
       json.events.map((event) => `${event.measure + event.position[0] / event.position[1]}:${event.channel}`).sort();
 
-    test.each(laneCounts)('%s', (modeHint, laneCount) => {
-      const xs = Array.from({ length: laneCount }, (_, index) => index + 1);
+    test.each(laneXs)('%s', (modeHint, xs) => {
       const source = parseBmson(
         JSON.stringify({
           version: '1.0.0',
@@ -849,12 +851,59 @@ describe('stringifier', () => {
     ).toEqual(['11', '16', '18', '19']);
   });
 
-  test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional beat-9k hint', () => {
+  test.each([
+    ['beat-5k', ['11', '15', '16'], [1, 5, 8]],
+    ['beat-10k', ['11', '16', '21', '25', '26'], [1, 8, 9, 13, 16]],
+  ])('bmson stringify: writes a 5 KEY SP / DP BMS as %s with the scratch on x 8 / 16', (modeHint, lanes, xs) => {
+    const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
+    const output = JSON.parse(stringifyBmson(source)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe(modeHint);
+    expect(output.sound_channels[0]!.notes.map((note) => note.x).sort((a, b) => a - b)).toEqual(xs);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(lanes);
+  });
+
+  test('BMS stringify: drops a branch header that a later top-level line overrides, keeping the file-order result', () => {
+    const json = parseChart(
+      [
+        '#WAV01 top.wav',
+        '#RANDOM 1',
+        '#IF 1',
+        '#WAV01 branch-wins.wav',
+        '#WAV02 branch-loses.wav',
+        '#ENDIF',
+        '#ENDRANDOM',
+        '#WAV02 top-after.wav',
+        '#00111:0102',
+        '',
+      ].join('\n'),
+    );
+    // Force the re-generated layout, which writes every top-level header before the control flow.
+    json.preservation.bms.sourceLines = [];
+    json.preservation.bms.objectLines = [];
+    const output = stringifyBms(json);
+
+    expect(output).not.toContain('branch-loses.wav');
+    const resolved = resolveBmsControlFlow(parseChart(output), { random: () => 0 });
+    expect(resolved.resources.wav['01']).toBe('branch-wins.wav');
+    expect(resolved.resources.wav['02']).toBe('top-after.wav');
+  });
+
+  test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional generic-9keys hint', () => {
     const lanes = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
     const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
     const output = JSON.parse(stringifyBmson(source)) as { info: { mode_hint: string } };
 
-    expect(output.info.mode_hint).toBe('beat-9k');
+    // The spec's `generic-Nkeys` names a layout ordered left to right; a made-up `beat-9k` would be an unknown hint,
+    // which players read as `beat-7k`.
+    expect(output.info.mode_hint).toBe('generic-9keys');
     expect(
       parseBmson(JSON.stringify(output))
         .events.map((event) => event.channel)
