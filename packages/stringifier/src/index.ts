@@ -1318,8 +1318,8 @@ function createBmsonInfoForOutput(
   if (typeof judgeRank === 'number' && Number.isFinite(judgeRank)) {
     output.judge_rank = judgeRank;
   }
-  const total = typeof info.total === 'number' ? info.total : json.metadata.total;
-  if (typeof total === 'number' && Number.isFinite(total)) {
+  const total = resolveBmsonTotalForOutput(json);
+  if (total !== undefined) {
     output.total = total;
   }
 
@@ -1337,6 +1337,26 @@ function createBmsonInfoForOutput(
   }
 
   return output;
+}
+
+/**
+ * bmson `info.total` is a percentage of the player's default TOTAL (beatoraja scales it by the note-count-based
+ * default), while BMS `#TOTAL` — and `metadata.total` on any non-bmson chart — is the absolute gauge TOTAL. Writing the
+ * absolute value would make e.g. `#TOTAL 300` mean 300% of the default, and there is no exact conversion here: the
+ * default depends on the ruleset and on how it counts long notes. So only a value already in bmson terms is written —
+ * `bmson.info.total`, or `metadata.total` of a bmson source (the parser mirrors `info.total` there) — and a BMS / JSON
+ * chart's absolute TOTAL is left out, letting the bmson default (100%) apply.
+ */
+function resolveBmsonTotalForOutput(json: BeMusicJson): number | undefined {
+  const authored = json.bmson.info.total;
+  if (typeof authored === 'number' && Number.isFinite(authored)) {
+    return authored;
+  }
+  const total = json.metadata.total;
+  if (json.sourceFormat === 'bmson' && typeof total === 'number' && Number.isFinite(total)) {
+    return total;
+  }
+  return undefined;
 }
 
 function resolveBmsonCompatiblePlayLevel(value: BeMusicJson['metadata']['playLevel']): number | undefined {

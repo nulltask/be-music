@@ -164,6 +164,7 @@
 - `bmson.version` を `version` に出力 (未指定時は `1.0.0`)
 - `bmson.info.resolution` を `info.resolution` に出力 (未指定時は `240`)
 - `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
+- `info.total` は `bmson.info.total`、bmson ソースなら `metadata.total` から出力する。BMS / JSON 譜面の `metadata.total` はゲージの絶対 TOTAL であり、bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とルールセットに依存）に対する百分率なので出力せず、bmson 既定値 `100` に委ねる
 - `preservation.bmson.lines` があれば `lines[].y` として出力
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力

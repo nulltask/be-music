@@ -63,6 +63,7 @@ import {
   type EngineDriverAudioContext,
   type EngineDriverResult,
 } from '../../runtime/engine-driver.ts';
+import { toEngineChart } from '../../runtime/engine-chart.ts';
 import { BeatorajaRuntimeAdapter } from '../../skin/beatoraja/runtime-adapter.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
@@ -88,6 +89,11 @@ export interface PixiBeatorajaGameplayViewOptions {
   variant: BeatorajaPlayableVariant;
 
   // Engine driver inputs
+  /**
+   * Chart already resolved with `resolveBmsControlFlow` (e.g. `prepareBeatorajaGameplayChart`'s `chart`). The view
+   * feeds this one resolution to the skin graphs, markers and the engine alike; the engine gets it through
+   * {@link toEngineChart} so it does not roll `#RANDOM` / `#SWITCH` again.
+   */
   chart: BeMusicJson;
   audio: EngineDriverAudioContext;
   mode: 'manual' | 'auto';
@@ -476,7 +482,10 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
 
     this.enginePromise = runEngineDriver({
-      chart: this.options.chart,
+      // The chart is already resolved (the decide screen / prep rolled `#RANDOM` once, and the skin graphs, markers
+      // and BGA cues were built from that roll); clear its control flow so the engine plays that resolution instead
+      // of rolling again and stacking a second branch on top.
+      chart: toEngineChart(this.options.chart),
       audio: this.options.audio,
       mode: this.options.mode,
       inputTarget: this.options.inputTarget,
