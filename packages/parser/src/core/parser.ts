@@ -304,13 +304,16 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
       }
       const pulse = Math.round(note.y);
       const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
-      const isBgmNote = lane <= 0;
+      // An `x` the lane map has no lane for (x <= 0, missing, or outside the hint's table) is a BGM note: the spec makes
+      // x = 0 BGM, and beatoraja plays any x outside the hint's key table in the background too.
+      const playableChannel = lane > 0 ? laneMap.get(lane) : undefined;
+      const isBgmNote = playableChannel === undefined;
       if (!isBgmNote) {
         playableTicks.add(pulse);
       }
 
       const { measure, position } = positionResolver(note.y);
-      const channel = isBgmNote ? '01' : (laneMap.get(lane) ?? '11');
+      const channel = playableChannel ?? '01';
       const event: BeMusicEvent = {
         measure,
         position,

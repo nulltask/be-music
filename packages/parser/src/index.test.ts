@@ -758,6 +758,50 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['13', '11', '12']);
   });
 
+  test.each([
+    ['beat-7k', 9],
+    ['popn-5k', 6],
+    ['keyboard-24k', 27],
+  ])('bmson: an x outside the %s lane table is a BGM note, as in beatoraja', (modeHint, outsideX) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+        sound_channels: [
+          { name: 'key.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'outside.wav', notes: [{ x: outsideX, y: 240 }] },
+        ],
+      }),
+    );
+
+    // beatoraja's BMSONDecoder maps `x` through the hint's key table and plays anything outside it as a background
+    // note, so the sound still plays but no lane receives a note.
+    expect(json.events.map((event) => [event.channel, event.value])).toEqual([
+      ['11', '01'],
+      ['01', '02'],
+    ]);
+  });
+
+  test('bmson: an out-of-table x on the same pulse as a playable note of its sound channel is dropped like x = 0', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 9, y: 0 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(json.events.map((event) => event.channel)).toEqual(['11']);
+  });
+
   test('bmson: generic-Nkeys mode_hint generates a left-to-right positional map', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -777,8 +821,8 @@ describe('parser', () => {
       }),
     );
 
-    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map so the parser routes it to the
-    // channel-11 default (consumers see one playable note at lane 1 plus three at the explicit slots).
+    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map, so it is a BGM note (01), as
+    // beatoraja plays an x outside the key table.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -786,7 +830,7 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['11', '12', '13', '11']);
+    expect(sortedChannels).toEqual(['11', '12', '13', '01']);
   });
 
   test('bmson: missing info.total defaults to 100 per the 1.0.0 spec', () => {

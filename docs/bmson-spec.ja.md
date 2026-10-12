@@ -50,6 +50,7 @@
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
 - [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` は保持（ライフバーが増えない）として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
+- [x] `mode_hint` のレーン表にない `x` の note を、beatoraja と同じく BGM (`01`) として解釈
 - [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
 - [ ] `version` の互換判定を SemVer で行う方針の明文化
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
@@ -163,7 +164,8 @@
 
   `keyboard-24k` / `keyboard-24k-double` の譜面は、使うレーンにかかわらず `24 KEY SP` / `48 KEY DP` として遊ぶ（プレイヤー仕様を参照）。BmsONE の `keyboard-48k` は 1 人用の 48 鍵レイアウトで 2 人用の `keyboard-24k-double` とは別物のため別名扱いせず、ほかの未知の hint と同じく手順 4 の位置ベースの採番になる
 
-- レーン表にない正の `x` は `11` にフォールバックするため、レーン 1 に重なる
+- 固定レーン表の hint や `generic-Nkeys` で、レーン表にない正の `x` は BGM ノート (`01`) になる。音は鳴るが、どのレーンにもノートは置かない。beatoraja も hint の鍵盤表にない `x` を同じく扱う。手順 4 の位置ベースの採番ではすべての正の `x` にレーンがあるため、表にない `x` は生じない
+- 表にないノートが同じ sound channel の playable ノートと同じ `y` にある場合は、`x = 0` のノートと同じく捨てる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
