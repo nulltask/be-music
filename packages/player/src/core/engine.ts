@@ -47,7 +47,7 @@ import {
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
 import { findLaneSoundCandidate, lowerBoundBySeconds } from '../judging.ts';
 import { type ChartPlayVariant, type LaneBinding } from './lane-layout.ts';
-import { type LongNoteMode, type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
+import { type TimedLandmineNote, type TimedPlayableNote } from '../playable-notes.ts';
 import { type ImageResizeAlgorithm } from '../image-resize-algorithm.ts';
 import { type TuiNoteHeight } from './ui-options.ts';
 import { formatSeconds, resolveAltModifierLabel, resolveChartVolWavGain } from '../utils.ts';
@@ -77,13 +77,7 @@ import {
   togglePlaybackPause,
   type PlaybackStateLogger,
 } from './playback-support.ts';
-import {
-  IIDX_EX_SCORE_PER_PGREAT,
-  LR2_MONEY_SCORE_MAX,
-  applyJudgeToSummary,
-  createScoreTracker,
-  type JudgeKind,
-} from './scoring.ts';
+import { IIDX_EX_SCORE_PER_PGREAT, LR2_MONEY_SCORE_MAX, applyJudgeToSummary, createScoreTracker } from './scoring.ts';
 import { type GrooveGaugeJudgeKind, type GrooveGaugeType } from './groove-gauge.ts';
 import { resolveLandmineGaugeEffect } from './landmine.ts';
 import {
@@ -113,6 +107,21 @@ import {
   type RulesetWindowTables,
   type WindowPairUs,
 } from '../ruleset/index.ts';
+import {
+  combineLongNoteJudges,
+  insertPendingAutoLongNote,
+  isLongPlayableNote,
+  longNoteScoresTail,
+  resolveLoggedLongNoteMode,
+  resolveLongNoteEndSeconds,
+  resolveManualTimedJudge,
+  resolvePlayableLongNoteMode,
+  resolveRulesetLongNoteMode,
+  RULESET_JUDGE_KINDS,
+  toUiLongNoteMode,
+  type PendingAutoLongNoteState,
+  type TimedManualJudge,
+} from './judge-rules.ts';
 import { createPlaylogRecorder, type PlaylogRecordingOptions } from '../playlog/recorder.ts';
 import type { BeMusicPlaylog, PlaylogInputEvent } from '../playlog/format.ts';
 import { createBeatAtSecondsResolverFromTimingResolver, createBpmTimeline, createStopBeatWindows } from './timeline.ts';
@@ -539,11 +548,6 @@ interface NoTuiPlaybackEventTracer {
   logPoorCleared: (seconds: number) => void;
 }
 
-interface TimedManualJudge {
-  kind: JudgeKind;
-  signedDeltaMs: number;
-}
-
 interface ActiveLongNoteState {
   endSeconds: number;
   note: TimedPlayableNote;
@@ -564,11 +568,6 @@ interface ActiveLongNoteState {
    * tail then stands alone; LN mode instead defers, and resolves head and tail into one combined judgment.
    */
   headScored: boolean;
-}
-
-interface PendingAutoLongNoteState {
-  endSeconds: number;
-  note: TimedPlayableNote;
 }
 
 const AUTO_AUDIO_CHUNK_FRAMES = 256;
@@ -649,96 +648,6 @@ function formatJudgeWindowSet(windows: JudgeWindowSetUs): string {
     const [lateBoundUs, earlyBoundUs] = windows.judges[index]!;
     return `${kind} -${(earlyBoundUs / 1000).toFixed(1)}/+${(-lateBoundUs / 1000).toFixed(1)}ms`;
   }).join(' ');
-}
-
-/** True when a playable note carries a tail — a long / charge note rather than a single hit. */
-function isLongPlayableNote(note: TimedPlayableNote): boolean {
-  return typeof note.endSeconds === 'number' && Number.isFinite(note.endSeconds) && note.endSeconds > note.seconds;
-}
-
-/** Judge indices, best to worst, in the order the ruleset window sets use. */
-const RULESET_JUDGE_KINDS: readonly [JudgeKind, JudgeKind, JudgeKind, JudgeKind] = ['PERFECT', 'GREAT', 'GOOD', 'BAD'];
-
-/**
- * Classify a signed timing delta against one ruleset window set, or `undefined` when the press cannot reach the
- * note at all. Both legs of every window matter: beatoraja's seven-key BAD window reaches 280 ms late but only
- * 220 ms early, so "within the BAD width" is not a question that can be asked of an absolute delta.
- *
- * `signedDeltaMs` is the engine's convention (positive = the press was LATE); the window tables use beatoraja's
- * (`noteTime - inputTime`, positive = EARLY), hence the negation.
- */
-function resolveManualJudgeKind(signedDeltaMs: number, windows: JudgeWindowSetUs): JudgeKind | undefined {
-  const judge = classifyRulesetJudge(-signedDeltaMs * 1000, windows);
-  return judge === RULESET_JUDGE_NONE ? undefined : RULESET_JUDGE_KINDS[judge];
-}
-
-/**
- * Same classification, for contexts where "out of reach" is itself a miss — a long-note end that the player never
- * released inside its window is a POOR, not a non-event.
- */
-function resolveManualTimedJudge(signedDeltaMs: number, windows: JudgeWindowSetUs): TimedManualJudge {
-  return {
-    kind: resolveManualJudgeKind(signedDeltaMs, windows) ?? 'POOR',
-    signedDeltaMs,
-  };
-}
-
-function resolveJudgeSeverity(judge: JudgeKind): number {
-  switch (judge) {
-    case 'PERFECT':
-      return 0;
-    case 'GREAT':
-      return 1;
-    case 'GOOD':
-      return 2;
-    case 'BAD':
-      return 3;
-    case 'POOR':
-      return 4;
-  }
-}
-
-function combineLongNoteJudges(head: TimedManualJudge, tail: TimedManualJudge): TimedManualJudge {
-  const headSeverity = resolveJudgeSeverity(head.kind);
-  const tailSeverity = resolveJudgeSeverity(tail.kind);
-  if (headSeverity > tailSeverity) {
-    return head;
-  }
-  if (tailSeverity > headSeverity) {
-    return tail;
-  }
-  return Math.abs(head.signedDeltaMs) >= Math.abs(tail.signedDeltaMs) ? head : tail;
-}
-
-function resolveLongNoteEndSeconds(note: TimedPlayableNote): number | undefined {
-  if (typeof note.endSeconds !== 'number' || !Number.isFinite(note.endSeconds) || note.endSeconds <= note.seconds) {
-    return undefined;
-  }
-  return note.endSeconds;
-}
-
-function resolvePlayableLongNoteMode(note: TimedPlayableNote): LongNoteMode | undefined {
-  if (resolveLongNoteEndSeconds(note) === undefined) {
-    return undefined;
-  }
-  return note.longNoteMode ?? 2;
-}
-
-/** The UI-command spelling of an effective long-note mode. */
-function toUiLongNoteMode(mode: LongNoteMode): PlayerUiLongNoteMode {
-  return mode === 3 ? 'hcn' : mode === 2 ? 'cn' : 'ln';
-}
-
-function insertPendingAutoLongNote(
-  pendingNotes: PendingAutoLongNoteState[],
-  note: TimedPlayableNote,
-  endSeconds: number,
-): void {
-  let insertIndex = pendingNotes.length;
-  while (insertIndex > 0 && pendingNotes[insertIndex - 1]!.endSeconds > endSeconds) {
-    insertIndex -= 1;
-  }
-  pendingNotes.splice(insertIndex, 0, { endSeconds, note });
 }
 
 export {
@@ -1114,11 +1023,6 @@ function formatLoggedNumericValue(value: number, maximumFractionDigits = 3): str
 
 function normalizeLoggedResourcePath(resourcePath: string): string {
   return resourcePath.replaceAll('\\', '/');
-}
-
-function resolveLoggedLongNoteMode(note: TimedPlayableNote): 1 | 2 | 3 {
-  const mode = resolvePlayableLongNoteMode(note);
-  return mode === 2 || mode === 3 ? mode : 1;
 }
 
 function resolveLoggedMeasureLengthTimeline(
@@ -2128,15 +2032,6 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     publishUiFrame(judgeSeconds, beatAtSeconds(judgeSeconds));
   };
 
-  /** True when the active ruleset scores a long note's tail as a judgment of its own (charge modes). */
-  const autoLongNoteScoresTail = (note: TimedPlayableNote): boolean => {
-    const chartMode = resolvePlayableLongNoteMode(note);
-    return (
-      chartMode !== undefined &&
-      isChargeLongNoteMode(resolveEffectiveLongNoteMode(autoRuleset.longNoteStyle, chartMode))
-    );
-  };
-
   const drainPendingAutoLongNotes = (referenceSeconds: number): void => {
     const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
     while (pendingAutoLongNotes.length > 0) {
@@ -2154,7 +2049,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         endSeconds: pending.endSeconds,
       });
       applyAutoPerfectJudge(pending.note, pending.endSeconds);
-      if (autoLongNoteScoresTail(pending.note)) {
+      if (longNoteScoresTail(autoRuleset.longNoteStyle, pending.note)) {
         // Charge modes judge the head and the tail separately; auto play clears both as PGREAT.
         applyAutoPerfectJudge(pending.note, pending.endSeconds);
       }
@@ -3047,7 +2942,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         ]);
       }
       activeStateSignals?.publishJudgeCombo('PERFECT', combo, pending.note.channel);
-      if (longNoteScoresTail(pending.note)) {
+      if (longNoteScoresTail(ruleset.longNoteStyle, pending.note)) {
         // Charge modes judge the head and the tail separately; the turntable's auto-scratch clears both.
         applyJudgeToSummary(summary, 'PERFECT', scoreTracker);
         applyLoggedGaugeJudge(referenceSeconds, 'PERFECT');
@@ -3225,7 +3120,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         note.seconds < nowSec &&
         typeof note.endSeconds === 'number' &&
         note.endSeconds > note.seconds &&
-        resolvedLongNoteModeOf(note) === 1
+        resolveRulesetLongNoteMode(ruleset.longNoteStyle, note) === 1
       ) {
         // LR2: a long-note head has no LATE bad — the press falls through to whatever else is in reach. The mode is
         // the one the ruleset plays, not the chart's `#LNMODE`: LR2 plays a `#LNMODE 2` note as a plain LN too.
@@ -3353,22 +3248,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
    * cancels the tail outright (`headBadSkipsTail`).
    */
   const longNoteOwesTailMiss = (note: TimedPlayableNote): boolean =>
-    !ruleset.headBadSkipsTail && longNoteScoresTail(note);
-
-  /** The long-note mode the active ruleset plays this note as, or `undefined` for a note without one. */
-  const resolvedLongNoteModeOf = (note: TimedPlayableNote): LongNoteMode | undefined => {
-    const chartMode = resolvePlayableLongNoteMode(note);
-    return chartMode === undefined ? undefined : resolveEffectiveLongNoteMode(ruleset.longNoteStyle, chartMode);
-  };
-
-  /** True when the active ruleset scores this long note's tail as a judgment of its own (charge modes). */
-  const longNoteScoresTail = (note: TimedPlayableNote): boolean => {
-    if (!isLongPlayableNote(note)) {
-      return false;
-    }
-    const mode = resolvedLongNoteModeOf(note);
-    return mode !== undefined && isChargeLongNoteMode(mode);
-  };
+    !ruleset.headBadSkipsTail && longNoteScoresTail(ruleset.longNoteStyle, note);
 
   const triggerRealtimeAudioVolumeEvents = (referenceSeconds: number): void => {
     const triggerEvent = audioSession?.triggerEvent;
