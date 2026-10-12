@@ -275,9 +275,7 @@ class LazyResolvedChart implements ResolvedChart {
   }
 
   get total(): ResolvedTotal {
-    const value = this.source.metadata.total;
-    const unit = this.sourceFormat === 'bmson' ? 'percent' : 'absolute';
-    return typeof value === 'number' && Number.isFinite(value) ? { value, unit } : { unit };
+    return resolveTotalFacts(this.source);
   }
 
   get lastNoteSeconds(): number {
@@ -346,27 +344,72 @@ function resolveJudgeRank(
   timing: TimingResolver,
   idBase: 36 | 62,
 ): ResolvedJudgeRank {
-  const changes: Array<{ seconds: number; exRankValue: number }> = [];
-  if (json.sourceFormat === 'bms') {
-    for (const event of sortedEvents) {
-      if (normalizeChannel(event.channel) !== 'A0') {
-        continue;
-      }
-      const parsed = Number.parseFloat(json.bms.exRank[normalizeObjectKey(event.value, idBase)] ?? '');
-      if (!Number.isFinite(parsed) || parsed <= 0) {
-        continue;
-      }
-      changes.push({ seconds: timing.eventToSeconds(event), exRankValue: parsed });
-    }
-  }
-  const judgeRank: { rank?: number; exRank?: number; changes: typeof changes } = { changes };
+  const changes = collectExRankChanges(json, sortedEvents, idBase).map((change) => ({
+    seconds: timing.eventToSeconds(change.event),
+    exRankValue: change.exRankValue,
+  }));
+  return { ...resolveJudgeRankFacts(json), changes };
+}
+
+/**
+ * The chart's own judge-rank values: `#RANK` (or the parsed rank) and `#DEFEXRANK` / bmson `judge_rank`, each only when
+ * the chart has a finite one. Not part of the package API; {@link ResolvedChart.judgeRank} and the chart fingerprint
+ * read them.
+ */
+export function resolveJudgeRankFacts(json: BeMusicJson): { rank?: number; exRank?: number } {
+  const facts: { rank?: number; exRank?: number } = {};
   const rank = json.metadata.rank;
   if (typeof rank === 'number' && Number.isFinite(rank)) {
-    judgeRank.rank = rank;
+    facts.rank = rank;
   }
   const exRank = json.sourceFormat === 'bmson' ? json.bmson.info.judgeRank : json.bms.defExRank;
   if (typeof exRank === 'number' && Number.isFinite(exRank)) {
-    judgeRank.exRank = exRank;
+    facts.exRank = exRank;
   }
-  return judgeRank;
+  return facts;
+}
+
+/** An `#EXRANKxx` change (BMS channel `A0`) with a positive value; `raw` is the definition as written. */
+export interface ExRankChange {
+  readonly event: BeMusicEvent;
+  readonly raw: string;
+  readonly exRankValue: number;
+}
+
+/**
+ * The `#EXRANKxx` changes of a BMS chart in chart order (none for bmson): `A0` objects whose `#EXRANKxx` reads as a
+ * positive number. Not part of the package API.
+ */
+export function collectExRankChanges(
+  json: BeMusicJson,
+  sortedEvents: ReadonlyArray<BeMusicEvent>,
+  idBase: 36 | 62,
+): ExRankChange[] {
+  const changes: ExRankChange[] = [];
+  if (json.sourceFormat !== 'bms') {
+    return changes;
+  }
+  for (const event of sortedEvents) {
+    if (normalizeChannel(event.channel) !== 'A0') {
+      continue;
+    }
+    const raw = json.bms.exRank[normalizeObjectKey(event.value, idBase)];
+    const parsed = Number.parseFloat(raw ?? '');
+    if (raw === undefined || !Number.isFinite(parsed) || parsed <= 0) {
+      continue;
+    }
+    changes.push({ event, raw, exRankValue: parsed });
+  }
+  return changes;
+}
+
+/**
+ * The chart's TOTAL as authored: `#TOTAL` (absolute) or bmson `info.total` (a percentage of the ruleset's default),
+ * with `value` only when it is finite. Not part of the package API; {@link ResolvedChart.total} and the chart
+ * fingerprint read it.
+ */
+export function resolveTotalFacts(json: BeMusicJson): ResolvedTotal {
+  const value = json.metadata.total;
+  const unit = json.sourceFormat === 'bmson' ? 'percent' : 'absolute';
+  return typeof value === 'number' && Number.isFinite(value) ? { value, unit } : { unit };
 }

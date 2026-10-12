@@ -16,8 +16,31 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
-import { compareEvents, parseBpmFrom03Token, resolveChartPlayVariant, type ChartPlayVariant } from './index.ts';
+import {
+  compareEvents,
+  createBeatResolver,
+  mapBmsLongNoteChannelToPlayable,
+  resolveBmsLongNotes,
+  resolveChartPlayVariant,
+  type ChartPlayVariant,
+} from './index.ts';
 import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
+import { collectExRankChanges, resolveJudgeRankFacts, resolveTotalFacts } from './resolved-chart.ts';
+import {
+  resolveBmsonLongNoteMode,
+  resolveJudgedNoteEntries,
+  resolveMineNotes,
+  type JudgedNoteEntry,
+  type ResolvedNoteContext,
+} from './resolved-notes.ts';
+import { collectScrollChanges, collectSpeedChanges } from './timelines.ts';
+import {
+  collectStopChanges,
+  collectTempoChanges,
+  createTimingBuildContext,
+  createTimingResolverWithContext,
+  parseStpStop,
+} from './timing.ts';
 import {
   addRational,
   compareRational,
@@ -253,21 +276,22 @@ function sortEventsInPlace(events: BeMusicEvent[]): void {
 // ---------------------------------------------------------------------------------------------------------------------
 // Item computation
 // ---------------------------------------------------------------------------------------------------------------------
+//
+// The items are read with the resolvers the Resolved layer (`resolveChart`) is built from, so the fingerprint follows
+// be-music's interpretation instead of repeating it: judged notes, long-note pairing, FREE ZONE and one note per lane
+// and position (`resolved-notes.ts`), mine damage (`note-rules.ts`), BPM / STOP / `#STP` (`timing.ts`), SCROLL / SPEED
+// (`timelines.ts`), and the judge-rank / TOTAL facts (`resolved-chart.ts`). Only the coordinates are the
+// fingerprint's own: positions are read exactly from the source events instead of as beats.
 
-const STP_PATTERN = /^\s*(\d{3})(?:\.(\d{3}))?(?:[ \t　]{1,6})([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:[^0-9].*)?$/u;
-const BASE36_OBJECT_KEY_PATTERN = /^[0-9A-Z]{2}$/;
-const DEFAULT_MINE_DAMAGE = 4;
+const DEFAULT_LONG_NOTE_TYPE = 1;
 const STOP_UNITS_PER_BEAT: Rational = { n: 48n, d: 1n };
 
 /** Context shared by every bucket of one chart. */
 interface ItemContext {
   json: BeMusicJson;
   base: 36 | 62;
-  lnObjValues: Set<string>;
-  /** `#LNTYPE` as be-music resolves it (explicit, else inferred from the `5x` / `6x` objects). */
+  /** `#LNTYPE` as be-music resolves it for the whole chart (explicit, else inferred from the `5x` / `6x` objects). */
   lnType: 1 | 2;
-  /** Long-note mode of BMS long notes (`#LNMODE` 2 / 3, else 1). */
-  bmsLnMode: number;
   bmson?: BmsonGeometry;
 }
 
@@ -290,25 +314,17 @@ export function computeChartItems(
   const wants = (bucket: string): boolean => only === undefined || only.has(bucket);
   const context = createItemContext(json, bucketed);
 
+  // Lanes are independent once `#LNTYPE` is fixed for the whole chart, so the requested lanes resolve together.
   const lanes = new Map<string, NoteItem[]>(only === undefined ? [] : reuse!.lanes);
-  if (only === undefined) {
-    for (const [bucket, events] of bucketed) {
-      if (bucket.startsWith('lane:')) {
-        lanes.set(bucket, computeLaneNotes(context, events));
-      }
-    }
-  } else {
-    for (const bucket of only) {
-      if (!bucket.startsWith('lane:')) {
-        continue;
-      }
-      const events = bucketed.get(bucket);
-      if (events && events.length > 0) {
-        lanes.set(bucket, computeLaneNotes(context, events));
-      } else {
-        lanes.delete(bucket);
-      }
-    }
+  const laneBuckets = [...(only ?? bucketed.keys())].filter((bucket) => bucket.startsWith('lane:'));
+  for (const bucket of laneBuckets) {
+    lanes.delete(bucket);
+  }
+  for (const [bucket, notes] of computeLaneNotes(
+    context,
+    laneBuckets.flatMap((bucket) => bucketed.get(bucket) ?? []),
+  )) {
+    lanes.set(bucket, notes);
   }
 
   const timeline = new Map<FingerprintTimelineType, TimelineItem[]>(only === undefined ? [] : reuse!.timeline);
@@ -328,13 +344,6 @@ export function computeChartItems(
 }
 
 function createItemContext(json: BeMusicJson, bucketed: Map<string, BeMusicEvent[]>): ItemContext {
-  const base = resolveBmsBase(json);
-  const lnObjValues = new Set<string>();
-  for (const candidate of json.bms.lnObjs ?? []) {
-    if (typeof candidate === 'string' && candidate.length > 0) {
-      lnObjValues.add(normalizeObjectKey(candidate, base));
-    }
-  }
   let bmson: BmsonGeometry | undefined;
   if (json.sourceFormat === 'bmson') {
     const resolution = Math.max(1, json.bmson.info.resolution || 240);
@@ -344,14 +353,7 @@ function createItemContext(json: BeMusicJson, bucketed: Map<string, BeMusicEvent
       lines: json.preservation.bmson.lines,
     };
   }
-  return {
-    json,
-    base,
-    lnObjValues,
-    lnType: json.bms.lnType === 1 || json.bms.lnType === 2 ? json.bms.lnType : inferLongNoteType(bucketed, base),
-    bmsLnMode: json.bms.lnMode === 2 || json.bms.lnMode === 3 ? json.bms.lnMode : 1,
-    bmson,
-  };
+  return { json, base: resolveBmsBase(json), lnType: resolveChartLongNoteType(json, bucketed), bmson };
 }
 
 /** `true` when `#LNTYPE` is not set, so the `5x` / `6x` objects of every lane decide it together. */
@@ -359,60 +361,50 @@ export function usesInferredLongNoteType(json: BeMusicJson): boolean {
   return json.bms.lnType !== 1 && json.bms.lnType !== 2;
 }
 
-/** be-music's `#LNTYPE` inference: 2 when some `5x` / `6x` channel runs the same value over 3 consecutive cells. */
-function inferLongNoteType(bucketed: Map<string, BeMusicEvent[]>, base: 36 | 62): 1 | 2 {
+/** The chart's `#LNTYPE`: its own, else what be-music infers from every lane's `5x` / `6x` objects. */
+function resolveChartLongNoteType(json: BeMusicJson, bucketed: Map<string, BeMusicEvent[]>): 1 | 2 {
+  if (!usesInferredLongNoteType(json)) {
+    return json.bms.lnType as 1 | 2;
+  }
+  if (json.sourceFormat !== 'bms') {
+    return DEFAULT_LONG_NOTE_TYPE;
+  }
+  const longNoteEvents: BeMusicEvent[] = [];
   for (const [bucket, events] of bucketed) {
-    if (!bucket.startsWith('lane:')) {
-      continue;
-    }
-    const byChannel = new Map<string, BeMusicEvent[]>();
-    for (const event of events) {
-      const channel = normalizeChannel(event.channel);
-      const side = channel.charCodeAt(0);
-      if (side !== 0x35 && side !== 0x36) {
-        continue;
-      }
-      const list = byChannel.get(channel);
-      if (list) {
-        list.push(event);
-      } else {
-        byChannel.set(channel, [event]);
-      }
-    }
-    for (const channelEvents of byChannel.values()) {
-      let previous: BeMusicEvent | undefined;
-      let previousValue: string | undefined;
-      let continuationCount = 0;
-      for (const event of channelEvents) {
-        const value = normalizeObjectKey(event.value, base);
-        if (previous && previousValue === value && isType2Continuation(previous, event)) {
-          continuationCount += 1;
-          if (continuationCount >= 2) {
-            return 2;
-          }
-        } else {
-          continuationCount = 0;
+    if (bucket.startsWith('lane:')) {
+      for (const event of events) {
+        if (mapBmsLongNoteChannelToPlayable(event.channel) !== undefined) {
+          longNoteEvents.push(event);
         }
-        previous = event;
-        previousValue = value;
       }
     }
   }
-  return 1;
+  if (longNoteEvents.length === 0) {
+    return DEFAULT_LONG_NOTE_TYPE;
+  }
+  return resolveBmsLongNotes({ ...json, events: longNoteEvents }, { inferLnTypeWhenMissing: true }).lnType;
 }
 
-function isType2Continuation(previous: BeMusicEvent, current: BeMusicEvent): boolean {
-  const previousDenominator = normalizePositionDenominator(previous.position[1]);
-  const previousNumerator = normalizePositionNumerator(previous.position[0], previousDenominator);
-  const currentDenominator = normalizePositionDenominator(current.position[1]);
-  const currentNumerator = normalizePositionNumerator(current.position[0], currentDenominator);
-  if (current.measure === previous.measure) {
-    return current.position[1] === previous.position[1] && currentNumerator === previousNumerator + 1;
-  }
-  if (current.measure !== previous.measure + 1) {
-    return false;
-  }
-  return previousNumerator + 1 === previousDenominator && currentNumerator === 0;
+/** `json` reduced to `events`, sharing everything else (the resolvers only read it). */
+function withEvents(context: ItemContext, events: BeMusicEvent[]): BeMusicJson {
+  const { json } = context;
+  return { ...json, events, bms: { ...json.bms, lnType: context.lnType } };
+}
+
+function noteContext(json: BeMusicJson, freeZone: boolean): ResolvedNoteContext {
+  const timingContext = createTimingBuildContext(json);
+  return {
+    json,
+    timing: createTimingResolverWithContext(json, timingContext),
+    beatResolver: timingContext.beatResolver,
+    sortedEvents: timingContext.sortedEvents,
+    idBase: resolveBmsBase(json),
+    // FREE ZONE depends on the lane mode, which a chart document only knows per outcome: the notes are read without
+    // it and `canonicalizeItems` applies it (see `NoteItem.fz`).
+    resolvePlayVariant: () => '9',
+    freeZone,
+    inferBmsLnTypeWhenMissing: true,
+  };
 }
 
 /** The cell right after an object: where an `#LNTYPE 2` run that ends on it stops. */
@@ -423,164 +415,55 @@ function nextCellTime(event: BeMusicEvent): FpTime {
   return createTime(measure, numerator + 1, denominator);
 }
 
-/** Raw tick key as the engine compares LNOBJ starts against `5x` objects (`measure:numerator/denominator`). */
-function rawTickKey(event: BeMusicEvent): string {
-  const measure = Math.max(0, Math.floor(event.measure));
-  const denominator = normalizePositionDenominator(event.position[1]);
-  return `${measure}:${normalizePositionNumerator(event.position[0], denominator)}/${denominator}`;
-}
-
 /**
- * Notes of one lane: the `1x` / `2x` objects (with `#LNOBJ` ends and bmson `l` lengths) and the `5x` / `6x` long notes
- * mapped onto the lane, following `extractPlayableNotes` in `@be-music/player`.
+ * The judged notes of the given lane events, by lane bucket: `resolveJudgedNoteEntries` (the Resolved layer's notes)
+ * without FREE ZONE, with exact start and end positions.
  */
-function computeLaneNotes(context: ItemContext, events: ReadonlyArray<BeMusicEvent>): NoteItem[] {
-  const { json } = context;
-  const notes: NoteItem[] = [];
-  const playable: BeMusicEvent[] = [];
-  const legacy: BeMusicEvent[] = [];
-  for (const event of events) {
-    const side = normalizeChannel(event.channel).charCodeAt(0);
-    if (side === 0x31 || side === 0x32) {
-      playable.push(event);
-    } else {
-      legacy.push(event);
-    }
+function computeLaneNotes(context: ItemContext, events: BeMusicEvent[]): Map<string, NoteItem[]> {
+  const lanes = new Map<string, NoteItem[]>();
+  if (events.length === 0) {
+    return lanes;
   }
-
-  // `1x` / `2x`: LNOBJ pairing per lane, skipping (and resetting at) ticks that hold a `5x` / `6x` object.
-  const lnobjEnds = new Map<BeMusicEvent, BeMusicEvent>();
-  const consumedEnds = new Set<BeMusicEvent>();
-  if (json.sourceFormat === 'bms' && context.lnObjValues.size > 0 && playable.length > 0) {
-    const legacyTicks = new Set<string>();
-    for (const event of legacy) {
-      legacyTicks.add(rawTickKey(event));
+  const json = withEvents(context, events);
+  const lnType = json.bmson.info.lnType;
+  const chartLongNoteType = lnType === 1 || lnType === 2 || lnType === 3 ? lnType : undefined;
+  for (const entry of resolveJudgedNoteEntries(noteContext(json, false)).notes) {
+    const time = eventTime(entry.event);
+    const note: NoteItem = { t: time, lane: entry.channel };
+    const sourceChannel = normalizeChannel(entry.event.channel);
+    if (sourceChannel === '17' || sourceChannel === '27') {
+      note.fz = resolveBmsonLongNoteMode(entry.event, chartLongNoteType);
     }
-    let pending: BeMusicEvent | undefined;
-    for (const event of playable) {
-      if (legacyTicks.has(rawTickKey(event))) {
-        pending = undefined;
-        continue;
-      }
-      if (context.lnObjValues.has(normalizeObjectKey(event.value, context.base))) {
-        if (pending && compareTime(eventTime(event), eventTime(pending)) > 0) {
-          lnobjEnds.set(pending, event);
-          consumedEnds.add(event);
-        }
-        pending = undefined;
-        continue;
-      }
-      pending = event;
-    }
-  }
-
-  for (const event of playable) {
-    if (consumedEnds.has(event)) {
-      continue;
-    }
-    const channel = normalizeChannel(event.channel);
-    const time = eventTime(event);
-    const note: NoteItem = { t: time, lane: channel };
-    const bmsonMode = resolveBmsonLongNoteMode(json, event);
-    if (channel === '17' || channel === '27') {
-      note.fz = bmsonMode;
-    }
-    let end: FpTime | undefined;
-    let mode = context.bmsLnMode;
-    const length = event.bmson?.l;
-    if (context.bmson && typeof length === 'number' && length > 0) {
-      end = bmsonPulseToTime(context.bmson, bmsonEventPulse(context.bmson, event) + Math.round(length));
-      mode = bmsonMode;
-    } else {
-      const lnobjEnd = lnobjEnds.get(event);
-      if (lnobjEnd) {
-        end = eventTime(lnobjEnd);
-      }
-    }
-    if (end !== undefined && compareTime(end, time) > 0) {
+    const end = resolveTailTime(context, entry);
+    if (end !== undefined && entry.lnMode !== undefined && compareTime(end, time) > 0) {
       note.end = end;
-      note.ln = mode;
+      note.ln = entry.lnMode;
     }
-    notes.push(note);
-  }
-
-  if (json.sourceFormat === 'bms' && legacy.length > 0) {
-    const bySource = new Map<string, BeMusicEvent[]>();
-    for (const event of legacy) {
-      const channel = normalizeChannel(event.channel);
-      const list = bySource.get(channel);
-      if (list) {
-        list.push(event);
-      } else {
-        bySource.set(channel, [event]);
-      }
-    }
-    const lane = events.length > 0 ? laneOfBucketEvents(legacy[0]!) : '';
-    for (const sourceEvents of bySource.values()) {
-      if (context.lnType === 2) {
-        appendType2LongNotes(sourceEvents, lane, context.bmsLnMode, notes);
-      } else {
-        appendType1LongNotes(sourceEvents, lane, context.bmsLnMode, notes);
-      }
+    const bucket = `lane:${entry.channel}`;
+    const list = lanes.get(bucket);
+    if (list) {
+      list.push(note);
+    } else {
+      lanes.set(bucket, [note]);
     }
   }
-  return notes;
+  return lanes;
 }
 
-function laneOfBucketEvents(event: BeMusicEvent): string {
-  const channel = normalizeChannel(event.channel);
-  return `${channel.charCodeAt(0) === 0x35 ? '1' : '2'}${channel[1]}`;
-}
-
-function appendType1LongNotes(events: ReadonlyArray<BeMusicEvent>, lane: string, mode: number, out: NoteItem[]): void {
-  let pending: NoteItem | undefined;
-  for (const event of events) {
-    const time = eventTime(event);
-    if (pending && compareTime(time, pending.t) > 0) {
-      pending.end = time;
-      pending.ln = mode;
-      pending = undefined;
-      continue;
-    }
-    const note: NoteItem = { t: time, lane };
-    out.push(note);
-    pending = note;
+function resolveTailTime(context: ItemContext, entry: JudgedNoteEntry): FpTime | undefined {
+  const tail = entry.tail;
+  switch (tail?.kind) {
+    case 'event':
+      return eventTime(tail.event);
+    case 'after-event':
+      return nextCellTime(tail.event);
+    case 'pulses':
+      return context.bmson === undefined
+        ? undefined
+        : bmsonPulseToTime(context.bmson, bmsonEventPulse(context.bmson, entry.event) + Math.round(tail.pulses));
+    default:
+      return undefined;
   }
-}
-
-function appendType2LongNotes(events: ReadonlyArray<BeMusicEvent>, lane: string, mode: number, out: NoteItem[]): void {
-  let run: NoteItem | undefined;
-  let previous: BeMusicEvent | undefined;
-  const close = (): void => {
-    if (run && previous) {
-      const end = nextCellTime(previous);
-      if (compareTime(end, run.t) > 0) {
-        run.end = end;
-        run.ln = mode;
-      }
-    }
-  };
-  for (const event of events) {
-    if (run && previous && isType2Continuation(previous, event)) {
-      previous = event;
-      continue;
-    }
-    close();
-    run = { t: eventTime(event), lane };
-    out.push(run);
-    previous = event;
-  }
-  close();
-}
-
-/** Per-note long-note mode of a bmson note: per-note `t`, else `info.ln_type`, else 1 (LN). */
-function resolveBmsonLongNoteMode(json: BeMusicJson, event: BeMusicEvent): number {
-  for (const candidate of [event.bmson?.t, json.bmson.info.lnType]) {
-    if (candidate === 1 || candidate === 2 || candidate === 3) {
-      return candidate;
-    }
-  }
-  return 1;
 }
 
 function bmsonEventPulse(geometry: BmsonGeometry, event: BeMusicEvent): number {
@@ -628,52 +511,60 @@ export function bmsonPulseToTime(geometry: BmsonGeometry, pulse: number): FpTime
   return createTime(last + measureOffset, offset - measureOffset * ticksPerMeasure, ticksPerMeasure);
 }
 
-function computeMines(context: ItemContext, events: ReadonlyArray<BeMusicEvent>): MineItem[] {
-  const mines: MineItem[] = [];
-  for (const event of events) {
-    const channel = normalizeChannel(event.channel);
-    mines.push({
-      t: eventTime(event),
-      lane: `${channel.charCodeAt(0) === 0x44 ? '1' : '2'}${channel[1]}`,
-      damage: resolveMineDamage(context, event),
-    });
+/** Mines with their damage (`resolveMineNotes`: bmson `damage`, else the BMS value in base 36, else 4). */
+function computeMines(context: ItemContext, events: BeMusicEvent[]): MineItem[] {
+  if (events.length === 0) {
+    return [];
   }
-  return mines;
+  return resolveMineNotes(noteContext(withEvents(context, events), false)).map((mine) => ({
+    t: eventTime(mine.event),
+    lane: mine.channel,
+    damage: snapValue(rationalFromNumber(mine.damage ?? 0) ?? RATIONAL_ZERO),
+  }));
 }
 
-/** bmson `damage`, else 4 for bmson; BMS: the object value read in base 36, else 4. */
-function resolveMineDamage(context: ItemContext, event: BeMusicEvent): Rational {
-  const bmsonDamage = event.bmson?.damage;
-  if (typeof bmsonDamage === 'number' && Number.isFinite(bmsonDamage) && bmsonDamage >= 0) {
-    return snapValue(rationalFromNumber(bmsonDamage) ?? RATIONAL_ZERO);
+function computeTimeline(context: ItemContext, type: FingerprintTimelineType, events: BeMusicEvent[]): TimelineItem[] {
+  const { json } = context;
+  switch (type) {
+    case 'stp':
+      return computeStp(json);
+    case 'stop':
+      return computeStops(context, events);
+    case 'bpm':
+      return lastChangePerTime(
+        type,
+        collectTempoChanges(json, events).map((change) => ({ event: change.event, value: change.bpm })),
+      );
+    case 'scroll':
+      return lastChangePerTime(type, collectScrollChanges(json, events));
+    case 'speed':
+      return lastChangePerTime(type, collectSpeedChanges(json, events));
+    case 'exrank':
+      return lastChangePerTime(
+        type,
+        collectExRankChanges(json, events, context.base).map((change) => ({
+          event: change.event,
+          value: parseLeadingDecimalRational(change.raw),
+        })),
+      );
+    default:
+      return [];
   }
-  if (context.json.sourceFormat === 'bmson') {
-    return createRational(BigInt(DEFAULT_MINE_DAMAGE));
-  }
-  const key = normalizeObjectKey(event.value, context.base);
-  const parsed = BASE36_OBJECT_KEY_PATTERN.test(key) ? Number.parseInt(key, 36) : Number.NaN;
-  return createRational(BigInt(Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_MINE_DAMAGE));
 }
 
-function computeTimeline(
-  context: ItemContext,
+/** Changes of one type in chart order; of several at one time the last one is the one be-music applies. */
+function lastChangePerTime(
   type: FingerprintTimelineType,
-  events: ReadonlyArray<BeMusicEvent>,
+  changes: ReadonlyArray<{ event: BeMusicEvent; value: number | Rational | undefined }>,
 ): TimelineItem[] {
-  if (type === 'stp') {
-    return computeStp(context.json);
-  }
-  if (type === 'stop') {
-    return computeStops(context, events);
-  }
-  // A change of one time: the last one in the engine's event order wins.
   const items: TimelineItem[] = [];
-  for (const event of events) {
-    const value = resolveChangeValue(context, type, event);
-    if (value === undefined) {
+  for (const change of changes) {
+    const exact = typeof change.value === 'number' ? rationalFromNumber(change.value) : change.value;
+    if (exact === undefined) {
       continue;
     }
-    const time = eventTime(event);
+    const value = snapValue(exact);
+    const time = eventTime(change.event);
     const last = items[items.length - 1];
     if (last && compareTime(last.t, time) === 0) {
       last.v = value;
@@ -684,67 +575,30 @@ function computeTimeline(
   return items;
 }
 
-function resolveChangeValue(
-  context: ItemContext,
-  type: FingerprintTimelineType,
-  event: BeMusicEvent,
-): Rational | undefined {
-  const { json } = context;
-  const channel = normalizeChannel(event.channel);
-  const key = normalizeObjectKey(event.value, context.base);
-  let value: Rational | undefined;
-  switch (type) {
-    case 'bpm': {
-      const bpm = channel === '03' ? parseBpmFrom03Token(event.value) : json.resources.bpm[key];
-      value = typeof bpm === 'number' && bpm > 0 ? rationalFromNumber(bpm) : undefined;
-      break;
-    }
-    case 'scroll': {
-      const scroll = Object.hasOwn(json.bms.scroll, key) ? json.bms.scroll[key] : undefined;
-      value = typeof scroll === 'number' ? rationalFromNumber(scroll) : undefined;
-      break;
-    }
-    case 'speed': {
-      const speed = Object.hasOwn(json.bms.speed, key) ? json.bms.speed[key] : undefined;
-      value = typeof speed === 'number' && speed >= 0 ? rationalFromNumber(speed) : undefined;
-      break;
-    }
-    case 'exrank': {
-      if (json.sourceFormat !== 'bms') {
-        return undefined;
-      }
-      const raw = json.bms.exRank[key];
-      const parsed = Number.parseFloat(raw ?? '');
-      value = Number.isFinite(parsed) && parsed > 0 ? parseLeadingDecimalRational(raw!) : undefined;
-      break;
-    }
-    default:
-      return undefined;
-  }
-  return value === undefined ? undefined : snapValue(value);
-}
-
-/** STOPs in beats; several at one time add up, as in the engine. */
-function computeStops(context: ItemContext, events: ReadonlyArray<BeMusicEvent>): TimelineItem[] {
-  const { json } = context;
+/**
+ * STOPs in beats (`collectStopChanges`: of several BMS `#STOPxx` at one position the last wins, bmson stops on one pulse
+ * add up). A bmson stop's length is read exactly from its `duration` in pulses.
+ */
+function computeStops(context: ItemContext, events: BeMusicEvent[]): TimelineItem[] {
+  const { json, bmson } = context;
   const items: TimelineItem[] = [];
-  for (const event of events) {
-    const key = normalizeObjectKey(event.value, context.base);
+  const beatResolver = createBeatResolver(json);
+  for (const stop of collectStopChanges(json, events, beatResolver)) {
     let beats: Rational | undefined;
-    const bmsonIndex = context.bmson ? Number.parseInt(key, 36) - 1 : -1;
-    const bmsonStop = context.bmson ? json.preservation.bmson.stopEvents[bmsonIndex] : undefined;
-    if (context.bmson && bmsonStop && bmsonStop.duration > 0) {
+    const bmsonStop = bmson
+      ? json.preservation.bmson.stopEvents[Number.parseInt(normalizeObjectKey(stop.event.value, context.base), 36) - 1]
+      : undefined;
+    if (bmson && bmsonStop && bmsonStop.duration > 0) {
       const pulses = rationalFromNumber(bmsonStop.duration);
-      beats = pulses && divideRational(snapValue(pulses), createRational(BigInt(context.bmson.resolution)));
+      beats = pulses && divideRational(snapValue(pulses), createRational(BigInt(bmson.resolution)));
     } else {
-      const stop = json.resources.stop[key];
-      const units = typeof stop === 'number' && stop > 0 ? rationalFromNumber(stop) : undefined;
+      const units = rationalFromNumber(stop.duration);
       beats = units && divideRational(snapValue(units), STOP_UNITS_PER_BEAT);
     }
     if (beats === undefined || beats.n <= 0n) {
       continue;
     }
-    const time = eventTime(event);
+    const time = eventTime(stop.event);
     const last = items[items.length - 1];
     if (last && compareTime(last.t, time) === 0) {
       last.v = addRational(last.v, beats);
@@ -755,20 +609,16 @@ function computeStops(context: ItemContext, events: ReadonlyArray<BeMusicEvent>)
   return items;
 }
 
-/** `#STP xxx.yyy ms`: at position yyy/1000 of measure xxx, in milliseconds; several at one time add up. */
+/** `#STP xxx.yyy ms` (`parseStpStop`): at position yyy/1000 of measure xxx, in milliseconds; several at one time add up. */
 function computeStp(json: BeMusicJson): TimelineItem[] {
   const byTime = new Map<string, TimelineItem>();
   for (const raw of json.bms.stp) {
-    const match = STP_PATTERN.exec(raw);
-    if (!match) {
+    const stop = parseStpStop(raw);
+    const duration = stop && parseDecimalRational(stop.durationText);
+    if (stop === undefined || duration === undefined) {
       continue;
     }
-    const durationMs = Number.parseFloat(match[3]!);
-    const duration = parseDecimalRational(match[3]!);
-    if (!Number.isFinite(durationMs) || durationMs <= 0 || duration === undefined) {
-      continue;
-    }
-    const time = createTime(Number.parseInt(match[1]!, 10), Number.parseInt(match[2] ?? '000', 10), 1000);
+    const time = createTime(stop.measure, stop.position, 1000);
     const key = `${time.m}:${time.n}/${time.d}`;
     const existing = byTime.get(key);
     if (existing) {
@@ -821,6 +671,7 @@ function optionalSnapped(value: number | undefined): Rational | undefined {
   return rational === undefined ? undefined : snapValue(rational);
 }
 
+/** Header values, from the same chart facts the Resolved layer exposes (`judgeRank`, `total`, `barLinesSuppressed`). */
 function computeHeader(json: BeMusicJson): HeaderItems {
   const bpm = optionalSnapped(json.metadata.bpm);
   return {
@@ -831,23 +682,25 @@ function computeHeader(json: BeMusicJson): HeaderItems {
     total: resolveTotal(json),
     player3: json.bms.player === 3,
     modeHint: resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null,
-    barLines: !(json.sourceFormat === 'bmson' && json.bmson.barlinesSuppressed === true),
+    barLines: json.bmson.barlinesSuppressed !== true,
   };
 }
 
+/**
+ * The judge axis: bmson `judge_rank` (100 when absent or not positive); otherwise a positive `#DEFEXRANK`; otherwise
+ * `#RANK` (NORMAL when absent), from `resolveJudgeRankFacts`.
+ */
 function resolveJudge(json: BeMusicJson): JudgeItem {
+  const { rank, exRank } = resolveJudgeRankFacts(json);
+  const positiveExRank = exRank !== undefined && exRank > 0 ? optionalSnapped(exRank) : undefined;
   if (json.sourceFormat === 'bmson') {
-    const judgeRank = json.bmson.info.judgeRank;
-    const value = typeof judgeRank === 'number' && judgeRank > 0 ? optionalSnapped(judgeRank) : undefined;
-    return { kind: 'exRank', v: value ?? createRational(100n) };
+    return { kind: 'exRank', v: positiveExRank ?? createRational(100n) };
   }
-  const defExRank = json.bms.defExRank;
-  const exRank = typeof defExRank === 'number' && defExRank > 0 ? optionalSnapped(defExRank) : undefined;
-  if (exRank !== undefined) {
-    return { kind: 'exRank', v: exRank };
+  if (positiveExRank !== undefined) {
+    return { kind: 'exRank', v: positiveExRank };
   }
-  const rank = optionalSnapped(json.metadata.rank);
-  return { kind: 'rank', v: rank === undefined ? createRational(2n) : normalizeRank(rank) };
+  const snappedRank = optionalSnapped(rank);
+  return { kind: 'rank', v: snappedRank === undefined ? createRational(2n) : normalizeRank(snappedRank) };
 }
 
 /**
@@ -871,17 +724,14 @@ export function normalizeRank(rank: Rational): Rational {
   return rank;
 }
 
+/** TOTAL from `resolveTotalFacts`: a positive `#TOTAL` / bmson `total` on its own axis, else `null`. */
 function resolveTotal(json: BeMusicJson): TotalItem {
-  if (json.sourceFormat === 'bmson') {
-    const total = json.bmson.info.total;
-    if (typeof total !== 'number' || !Number.isFinite(total)) {
-      return { kind: 'bmson', v: createRational(100n) };
-    }
-    const value = optionalSnapped(total);
-    return value !== undefined && value.n > 0n ? { kind: 'bmson', v: value } : null;
+  const { value, unit } = resolveTotalFacts(json);
+  const snapped = optionalSnapped(value);
+  if (snapped === undefined || snapped.n <= 0n) {
+    return null;
   }
-  const value = optionalSnapped(json.metadata.total);
-  return value !== undefined && value.n > 0n ? { kind: 'bms', v: value } : null;
+  return unit === 'percent' ? { kind: 'bmson', v: snapped } : { kind: 'bms', v: snapped };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

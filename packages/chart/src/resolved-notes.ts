@@ -51,6 +51,32 @@ export interface ResolvedNoteContext {
   /** The play variant (only judged notes need it, for FREE ZONE), resolved on demand. */
   resolvePlayVariant: () => ChartPlayVariant;
   inferBmsLnTypeWhenMissing: boolean;
+  /**
+   * Overrides whether `17` / `27` are FREE ZONE instead of reading it from the play variant. The chart fingerprint
+   * resolves with `false` and applies FREE ZONE itself once an outcome's lane mode is known.
+   */
+  freeZone?: boolean;
+}
+
+/**
+ * Where a judged long note's tail comes from, exactly: the `#LNOBJ` end object or the closing `#LNTYPE 1` object
+ * (`event`), one cell after the last object of an `#LNTYPE 2` run (`after-event`), a bmson length in pulses
+ * (`pulses`), or the fixed one-beat FREE ZONE tail (`free-zone`).
+ */
+export type JudgedNoteTail =
+  | { readonly kind: 'event'; readonly event: BeMusicEvent }
+  | { readonly kind: 'after-event'; readonly event: BeMusicEvent }
+  | { readonly kind: 'pulses'; readonly pulses: number }
+  | { readonly kind: 'free-zone' };
+
+/** A judged note before freezing: what {@link resolveJudgedNotes} keeps, plus the exact source of its tail. */
+export interface JudgedNoteEntry {
+  readonly event: BeMusicEvent;
+  readonly channel: string;
+  readonly beat: number;
+  readonly lnMode?: LongNoteMode;
+  /** Set exactly when the note is a long note. */
+  readonly tail?: JudgedNoteTail;
 }
 
 /** A FREE ZONE note's fixed tail, in beats. */
@@ -65,6 +91,7 @@ interface MutableNote {
   endSeconds?: number;
   lnMode?: LongNoteMode;
   freeZone?: true;
+  tail?: JudgedNoteTail;
 }
 
 /**
@@ -75,8 +102,27 @@ interface MutableNote {
  * channel) is kept. The others are returned in `shadowedNotes` when their keysound differs from the kept note's.
  */
 export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLists {
+  const { notes, shadowed } = resolveMutableJudgedNotes(context);
+  return {
+    notes: notes.map((note) => freezeJudgedNote(note, context.idBase)),
+    shadowedNotes: shadowed.map((note) => freezeJudgedNote(note, context.idBase)),
+  };
+}
+
+/**
+ * {@link resolveJudgedNotes} before freezing: the judged and shadowed notes with the exact source of each long note's
+ * tail. Not part of the package API; the chart fingerprint reads exact positions from it.
+ */
+export function resolveJudgedNoteEntries(context: ResolvedNoteContext): {
+  notes: JudgedNoteEntry[];
+  shadowed: JudgedNoteEntry[];
+} {
+  return resolveMutableJudgedNotes(context);
+}
+
+function resolveMutableJudgedNotes(context: ResolvedNoteContext): { notes: MutableNote[]; shadowed: MutableNote[] } {
   const { json, timing, beatResolver } = context;
-  const freeZoneActive = variantUsesFreeZone(context.resolvePlayVariant());
+  const freeZoneActive = context.freeZone ?? variantUsesFreeZone(context.resolvePlayVariant());
   const bmsonResolution = json.sourceFormat === 'bmson' ? Math.max(1, json.bmson.info.resolution || 240) : undefined;
   const lnType = json.bmson.info.lnType;
   const chartLongNoteType: LongNoteMode | undefined = lnType === 1 || lnType === 2 || lnType === 3 ? lnType : undefined;
@@ -92,8 +138,10 @@ export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLi
     if (freeZoneActive && (channel === '17' || channel === '27')) {
       note.endBeat = beat + FREE_ZONE_BEAT_LENGTH;
       note.freeZone = true;
+      note.tail = { kind: 'free-zone' };
     } else if (event.bmson?.l && event.bmson.l > 0 && bmsonResolution !== undefined) {
       note.endBeat = beat + event.bmson.l / bmsonResolution;
+      note.tail = { kind: 'pulses', pulses: event.bmson.l };
     }
     if (note.endBeat !== undefined) {
       note.endSeconds = timing.beatToSeconds(note.endBeat);
@@ -107,10 +155,7 @@ export function resolveJudgedNotes(context: ResolvedNoteContext): ResolvedNoteLi
   appendLnTypeLongNotes(context, withLnobj, bmsLongNoteMode);
   withLnobj.sort(compareNotes);
   const shadowed = collapseSamePositionNotes(withLnobj);
-  return {
-    notes: withLnobj.map((note) => freezeJudgedNote(note, context.idBase)),
-    shadowedNotes: shadowed.map((note) => freezeJudgedNote(note, context.idBase)),
-  };
+  return { notes: withLnobj, shadowed };
 }
 
 /** Resolves the landmines (`Dx` / `Ex`), on the lane they sit on, with their gauge damage. */
@@ -307,10 +352,12 @@ function applyLnobjLongNotes(
       continue;
     }
     const endBeat = resolved.startToEndBeat.get(note.event);
-    if (typeof endBeat === 'number' && Number.isFinite(endBeat) && endBeat > note.beat) {
+    const endEvent = resolved.startToEndEvent.get(note.event);
+    if (typeof endBeat === 'number' && Number.isFinite(endBeat) && endBeat > note.beat && endEvent !== undefined) {
       note.endBeat = endBeat;
       note.endSeconds = timing.beatToSeconds(endBeat);
       note.lnMode = longNoteMode;
+      note.tail = { kind: 'event', event: endEvent };
     }
     kept.push(note);
   }
@@ -326,7 +373,9 @@ function appendLnTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[
   const resolved = resolveBmsLongNotes(json, { inferLnTypeWhenMissing: context.inferBmsLnTypeWhenMissing });
   for (const longNote of resolved.notes) {
     const endBeat =
-      typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat ? longNote.endBeat : undefined;
+      typeof longNote.endBeat === 'number' && longNote.endBeat > longNote.beat && longNote.endEvent !== undefined
+        ? longNote.endBeat
+        : undefined;
     notes.push({
       event: longNote.event,
       channel: longNote.channel,
@@ -335,6 +384,10 @@ function appendLnTypeLongNotes(context: ResolvedNoteContext, notes: MutableNote[
       endBeat,
       endSeconds: endBeat !== undefined ? timing.beatToSeconds(endBeat) : undefined,
       lnMode: endBeat !== undefined ? longNoteMode : undefined,
+      tail:
+        endBeat !== undefined
+          ? { kind: resolved.lnType === 2 ? 'after-event' : 'event', event: longNote.endEvent! }
+          : undefined,
     });
   }
 }
@@ -351,7 +404,10 @@ function resolveBmsLongNoteMode(json: BeMusicJson): LongNoteMode {
  * Long-note mode for a bmson-style long note (and a FREE ZONE tail), per the beatoraja bmson extension precedence:
  * per-note `t` > chart-level `info.ln_type` > default (LN).
  */
-function resolveBmsonLongNoteMode(event: BeMusicEvent, chartLongNoteType: LongNoteMode | undefined): LongNoteMode {
+export function resolveBmsonLongNoteMode(
+  event: BeMusicEvent,
+  chartLongNoteType: LongNoteMode | undefined,
+): LongNoteMode {
   const noteType = event.bmson?.t;
   if (noteType === 1 || noteType === 2 || noteType === 3) {
     return noteType;

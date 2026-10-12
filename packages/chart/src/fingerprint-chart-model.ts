@@ -386,6 +386,10 @@ function collectStaticKeys(
       if (inferredLnType && (side === 0x35 || side === 0x36)) {
         model.sets.add('D:LNTYPE?');
       }
+      // A lane keeps one judged note per position, so notes of two segments at one position compete.
+      for (const event of entry.events) {
+        model.timeKeys.add(`${bucket}|${timeKey(eventTime({ ...event, measure: entry.measure }))}`);
+      }
       continue;
     }
     const definition =
@@ -462,6 +466,7 @@ function collectDynamicKeys(
         model.timeKeys.add(`tl:${item.type}|${timeKey(item.t)}`);
       }
       for (const { item } of lists.notes) {
+        model.timeKeys.add(`lane:${item.lane}|${timeKey(item.t)}`);
         for (const stream of [`obj:${item.lane}`, `ln:${item.lane}`]) {
           widen(stream, item.t);
           if (item.end) {

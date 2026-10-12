@@ -460,13 +460,49 @@ describe('positions are exact (findings A2 – A5)', () => {
 });
 
 describe('engine fallbacks (findings A10 – A13)', () => {
-  test('adds up STOPs and #STPs of one time', () => {
-    expect(playFingerprint(chart('#STOP01 48', '#00209:01', '#00209:01'))).toBe(
+  test('keeps the last BMS #STOP of one time and adds up #STPs and bmson stops', () => {
+    // Of several `#STOPxx` at one position the last in event order (here `#STOP02`) wins, as in the engine.
+    expect(playFingerprint(chart('#STOP01 48', '#STOP02 96', '#00209:01', '#00209:02'))).toBe(
       playFingerprint(chart('#STOP02 96', '#00209:02')),
+    );
+    expect(playFingerprint(chart('#STOP01 48', '#00209:01', '#00209:01'))).toBe(
+      playFingerprint(chart('#STOP01 48', '#00209:01')),
     );
     expect(playFingerprint(chart('#STP 002.000 100', '#STP 002.000 150'))).toBe(
       playFingerprint(chart('#STP 002.000 250')),
     );
+    const bmson = (stops: Array<{ y: number; duration: number }>): string =>
+      computePlayFingerprint(
+        parseBmson(
+          JSON.stringify({
+            version: '1.0.0',
+            info: { init_bpm: 150, mode_hint: 'beat-7k', resolution: 240 },
+            sound_channels: [{ name: 'a.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }],
+            stop_events: stops,
+          }),
+        ),
+        NO_PATH,
+      );
+    expect(
+      bmson([
+        { y: 960, duration: 120 },
+        { y: 960, duration: 240 },
+      ]),
+    ).toBe(bmson([{ y: 960, duration: 360 }]));
+  });
+
+  test('keeps one judged note per lane and position, a long note over a tap', () => {
+    expect(playFingerprint(chart('#00311:01', '#00311:02'))).toBe(playFingerprint(chart('#00311:01')));
+    // `#LNOBJ` turns the first `11` object of measure 3 into a long note; the tap on its start is dropped.
+    const withTap = chart('#LNOBJ ZZ', '#00311:0100ZZ00', '#00311:02');
+    expect(playFingerprint(withTap)).toBe(playFingerprint(chart('#LNOBJ ZZ', '#00311:0100ZZ00')));
+    expect(playDocument(withTap).notes).toContainEqual({
+      m: '3',
+      p: '0',
+      lane: '11',
+      end: { m: '3', p: '1/2' },
+      ln: '1',
+    });
   });
 
   test('treats a #TOTAL of 0 or below as absent', () => {

@@ -1160,11 +1160,18 @@ export interface BmsLongNote {
   channel: string;
   beat: number;
   endBeat?: number;
+  /**
+   * The object the tail is read from: the closing object of an `#LNTYPE 1` pair, or the last object of an `#LNTYPE 2`
+   * run, whose tail is one cell after it. Set together with {@link endBeat}.
+   */
+  endEvent?: BeMusicEvent;
 }
 
 export interface BmsLongNoteResolution {
   notes: BmsLongNote[];
   suppressedTriggerEvents: Set<BeMusicEvent>;
+  /** The `#LNTYPE` the `5x` / `6x` objects were read with: the chart's own, else inferred or 1. */
+  lnType: 1 | 2;
 }
 
 export interface ResolveBmsLongNotesOptions {
@@ -1187,10 +1194,12 @@ export function resolveBmsLongNotes(
   json: BeMusicJson,
   options: ResolveBmsLongNotesOptions = {},
 ): BmsLongNoteResolution {
+  const declaredLnType = json.bms.lnType === 1 || json.bms.lnType === 2 ? json.bms.lnType : 1;
   if (json.sourceFormat !== 'bms') {
     return {
       notes: [],
       suppressedTriggerEvents: new Set(),
+      lnType: declaredLnType,
     };
   }
 
@@ -1199,14 +1208,17 @@ export function resolveBmsLongNotes(
     return {
       notes: [],
       suppressedTriggerEvents: new Set(),
+      lnType: declaredLnType,
     };
   }
 
   const beatResolver = createBeatResolver(json);
   const lnType = resolveBmsLongNoteType(json, longNoteEvents, options);
-  return lnType === 2
-    ? resolveBmsLongNotesType2(longNoteEvents, beatResolver)
-    : resolveBmsLongNotesType1(longNoteEvents, beatResolver);
+  const resolved =
+    lnType === 2
+      ? resolveBmsLongNotesType2(longNoteEvents, beatResolver)
+      : resolveBmsLongNotesType1(longNoteEvents, beatResolver);
+  return { ...resolved, lnType };
 }
 
 export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
@@ -1215,6 +1227,8 @@ export function collectLnobjEndEvents(json: BeMusicJson): Set<BeMusicEvent> {
 
 export interface LnobjLongNoteResolution {
   startToEndBeat: Map<BeMusicEvent, number>;
+  /** The end object each long-note start pairs with (the same pairs as {@link startToEndBeat}). */
+  startToEndEvent: Map<BeMusicEvent, BeMusicEvent>;
   endEvents: Set<BeMusicEvent>;
 }
 
@@ -1222,6 +1236,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
   if (json.sourceFormat !== 'bms') {
     return {
       startToEndBeat: new Map(),
+      startToEndEvent: new Map(),
       endEvents: new Set(),
     };
   }
@@ -1231,6 +1246,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
   if (lnObjValues.size === 0) {
     return {
       startToEndBeat: new Map(),
+      startToEndEvent: new Map(),
       endEvents: new Set(),
     };
   }
@@ -1240,6 +1256,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
   const legacyLongNoteTicks = collectLegacyLongNoteTickKeysFromPreparedEvents(preparedEvents);
   const pendingStartByChannel = new Map<string, { event: BeMusicEvent; beat: number }>();
   const startToEndBeat = new Map<BeMusicEvent, number>();
+  const startToEndEvent = new Map<BeMusicEvent, BeMusicEvent>();
   const endEvents = new Set<BeMusicEvent>();
 
   for (const item of preparedEvents) {
@@ -1259,6 +1276,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
       const start = pendingStartByChannel.get(normalizedChannel);
       if (start && beat > start.beat) {
         startToEndBeat.set(start.event, beat);
+        startToEndEvent.set(start.event, event);
         endEvents.add(event);
       }
       pendingStartByChannel.delete(normalizedChannel);
@@ -1270,6 +1288,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
 
   return {
     startToEndBeat,
+    startToEndEvent,
     endEvents,
   };
 }
@@ -1277,7 +1296,7 @@ export function resolveLnobjLongNotes(json: BeMusicJson): LnobjLongNoteResolutio
 function resolveBmsLongNotesType1(
   events: ResolvedBmsLongNoteEvent[],
   beatResolver: BeatResolver,
-): BmsLongNoteResolution {
+): Omit<BmsLongNoteResolution, 'lnType'> {
   const notes: BmsLongNote[] = [];
   const suppressedTriggerEvents = new Set<BeMusicEvent>();
   const pendingByChannel = new Map<string, BmsLongNote>();
@@ -1287,6 +1306,7 @@ function resolveBmsLongNotesType1(
     const pending = pendingByChannel.get(item.sourceChannel);
     if (pending && beat > pending.beat) {
       pending.endBeat = beat;
+      pending.endEvent = item.event;
       suppressedTriggerEvents.add(item.event);
       pendingByChannel.delete(item.sourceChannel);
       continue;
@@ -1372,7 +1392,7 @@ function createEventTickKey(event: BeMusicEvent): string {
 function resolveBmsLongNotesType2(
   events: ResolvedBmsLongNoteEvent[],
   beatResolver: BeatResolver,
-): BmsLongNoteResolution {
+): Omit<BmsLongNoteResolution, 'lnType'> {
   const notes: BmsLongNote[] = [];
   const suppressedTriggerEvents = new Set<BeMusicEvent>();
   const eventsByChannel = groupResolvedLongNoteEventsBySourceChannel(events);
@@ -1405,6 +1425,7 @@ function resolveBmsLongNotesType2(
         const endBeat = resolveBmsLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
         if (endBeat > runNote.beat) {
           runNote.endBeat = endBeat;
+          runNote.endEvent = previousEvent;
         }
       }
       runNote = {
@@ -1421,6 +1442,7 @@ function resolveBmsLongNotesType2(
       const endBeat = resolveBmsLongNoteType2SegmentEndBeat(previousEvent, beatResolver);
       if (endBeat > runNote.beat) {
         runNote.endBeat = endBeat;
+        runNote.endEvent = previousEvent;
       }
     }
   }

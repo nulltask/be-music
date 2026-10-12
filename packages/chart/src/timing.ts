@@ -92,28 +92,109 @@ export function createTimingResolverWithContext(json: BeMusicJson, context: Timi
 function createTempoPoints(json: BeMusicJson, sortedEvents: BeMusicEvent[], beatResolver: BeatResolver): TempoPoint[] {
   const baseBpm = json.metadata.bpm > 0 ? json.metadata.bpm : DEFAULT_BPM;
   const points: TempoPoint[] = [{ beat: 0, bpm: baseBpm, seconds: 0 }];
-  const idBase = resolveBmsBase(json);
+  for (const change of collectTempoChanges(json, sortedEvents)) {
+    // Of several changes at one beat the last in chart order wins.
+    integrateTempoPoint(points, beatResolver.eventToBeat(change.event), change.bpm);
+  }
+  return points;
+}
 
+/** A BPM change object (`03`, or `08` with `#BPMxx`) that sets a positive BPM. */
+export interface TempoChange {
+  readonly event: BeMusicEvent;
+  readonly bpm: number;
+}
+
+/**
+ * The BPM changes of a chart, in chart order: channel `03` read as hex, channel `08` through `#BPMxx`, values of 0 or
+ * below ignored. Several at one position all appear; the last one wins. Not part of the package API (the chart
+ * fingerprint reads exact positions from the events).
+ */
+export function collectTempoChanges(json: BeMusicJson, sortedEvents: ReadonlyArray<BeMusicEvent>): TempoChange[] {
+  const changes: TempoChange[] = [];
+  const idBase = resolveBmsBase(json);
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     if (channel !== '03' && channel !== '08') {
       continue;
     }
-    const beat = beatResolver.eventToBeat(event);
-    if (channel === '03') {
-      const bpm = parseBpmFrom03Token(event.value);
-      if (bpm > 0) {
-        integrateTempoPoint(points, beat, bpm);
-      }
-      continue;
-    }
-    const bpm = json.resources.bpm[normalizeObjectKey(event.value, idBase)];
+    const bpm =
+      channel === '03' ? parseBpmFrom03Token(event.value) : json.resources.bpm[normalizeObjectKey(event.value, idBase)];
     if (typeof bpm === 'number' && bpm > 0) {
-      integrateTempoPoint(points, beat, bpm);
+      changes.push({ event, bpm });
     }
   }
+  return changes;
+}
 
-  return points;
+/** A `#STOPxx` object (BMS) or bmson stop with a positive length, in 1/192 of a 4/4 measure. */
+export interface StopChange {
+  readonly event: BeMusicEvent;
+  readonly beat: number;
+  readonly duration: number;
+}
+
+/**
+ * The STOP objects that take effect, in chart order. BMS keeps one `#STOPxx` per position and the last one wins, as LR2
+ * (OpenLR2 L26666-26670) and beatoraja (one STOP per timeline) read it; bmson stops on one pulse all stay and add up,
+ * as its spec says. Not part of the package API (the chart fingerprint reads exact positions from the events).
+ */
+export function collectStopChanges(
+  json: BeMusicJson,
+  sortedEvents: ReadonlyArray<BeMusicEvent>,
+  beatResolver: BeatResolver,
+): StopChange[] {
+  const idBase = resolveBmsBase(json);
+  const lastStopWins = json.sourceFormat === 'bms';
+  const changes: StopChange[] = [];
+  const indexByBeat = new Map<number, number>();
+  for (const event of sortedEvents) {
+    if (!isStopChannel(normalizeChannel(event.channel))) {
+      continue;
+    }
+    const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
+    if (typeof duration !== 'number' || duration <= 0) {
+      continue;
+    }
+    const beat = beatResolver.eventToBeat(event);
+    const replaced = lastStopWins ? indexByBeat.get(beat) : undefined;
+    if (replaced !== undefined) {
+      changes[replaced] = { event, beat, duration };
+      continue;
+    }
+    if (lastStopWins) {
+      indexByBeat.set(beat, changes.length);
+    }
+    changes.push({ event, beat, duration });
+  }
+  return changes;
+}
+
+/** A parsed `#STP xxx.yyy ms` line (BEMANIA DX STOP): measure `xxx`, position `yyy / 1000`, a positive length in ms. */
+export interface StpStop {
+  readonly measure: number;
+  /** Thousandths of the measure, `0..999`. */
+  readonly position: number;
+  readonly durationMs: number;
+  /** The length as written, for consumers that read it exactly. */
+  readonly durationText: string;
+}
+
+const STP_PATTERN = /^\s*(\d{3})(?:\.(\d{3}))?(?:[ \t　]{1,6})([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:[^0-9].*)?$/u;
+
+/** Parses a `#STP` value, or `undefined` when it is malformed or its length is not positive. */
+export function parseStpStop(rawValue: string): StpStop | undefined {
+  const match = STP_PATTERN.exec(rawValue);
+  if (!match) {
+    return undefined;
+  }
+  const measure = Number.parseInt(match[1]!, 10);
+  const position = Number.parseInt(match[2] ?? '000', 10);
+  const durationMs = Number.parseFloat(match[3]!);
+  if (!Number.isFinite(measure) || !Number.isFinite(position) || !Number.isFinite(durationMs) || durationMs <= 0) {
+    return undefined;
+  }
+  return { measure, position, durationMs, durationText: match[3]! };
 }
 
 function createStopPoints(
@@ -137,34 +218,12 @@ function createStopPoints(
     order += 1;
   }
 
-  const idBase = resolveBmsBase(json);
-  // BMS keeps one `#STOPxx` per position and the last one wins, as LR2 (OpenLR2 L26666-26670) and beatoraja (one STOP
-  // per timeline) read it. bmson stops on one pulse add up, as its spec says; so do `#STP` lines.
-  const lastStopWins = json.sourceFormat === 'bms';
-  const stopIndexByBeat = new Map<number, number>();
-  for (const event of sortedEvents) {
-    const normalizedChannel = normalizeChannel(event.channel);
-    if (!isStopChannel(normalizedChannel)) {
-      continue;
-    }
-    const beat = beatResolver.eventToBeat(event);
-    const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
-    if (typeof duration !== 'number' || duration <= 0) {
-      continue;
-    }
-    const bpm = bpmAtBeatFromTempoPoints(tempoPoints, beat);
-    const seconds = (duration / 192) * (240 / bpm);
-    const replaced = lastStopWins ? stopIndexByBeat.get(beat) : undefined;
-    if (replaced !== undefined) {
-      rawPoints[replaced]!.seconds = seconds;
-      continue;
-    }
-    if (lastStopWins) {
-      stopIndexByBeat.set(beat, rawPoints.length);
-    }
+  // `#STP` lines at one position add up, as do bmson stops; of several BMS `#STOPxx` at one position the last wins.
+  for (const stop of collectStopChanges(json, sortedEvents, beatResolver)) {
+    const bpm = bpmAtBeatFromTempoPoints(tempoPoints, stop.beat);
     rawPoints.push({
-      beat,
-      seconds,
+      beat: stop.beat,
+      seconds: (stop.duration / 192) * (240 / bpm),
       order,
     });
     order += 1;
@@ -196,22 +255,10 @@ function parseBemaniaDxStpStopPoint(
   rawValue: string,
   beatResolver: BeatResolver,
 ): { beat: number; seconds: number } | undefined {
-  const match = /^\s*(\d{3})(?:\.(\d{3}))?(?:[ \t　]{1,6})([+-]?(?:\d+(?:\.\d+)?|\.\d+))(?:[^0-9].*)?$/u.exec(rawValue);
-  if (!match) {
-    return undefined;
-  }
-
-  const measure = Number.parseInt(match[1]!, 10);
-  const position = Number.parseInt(match[2] ?? '000', 10);
-  const durationMs = Number.parseFloat(match[3]!);
-  if (!Number.isFinite(measure) || !Number.isFinite(position) || !Number.isFinite(durationMs) || durationMs <= 0) {
-    return undefined;
-  }
-
-  return {
-    beat: beatResolver.measureToBeat(measure, position / 1000),
-    seconds: durationMs / 1000,
-  };
+  const stop = parseStpStop(rawValue);
+  return stop === undefined
+    ? undefined
+    : { beat: beatResolver.measureToBeat(stop.measure, stop.position / 1000), seconds: stop.durationMs / 1000 };
 }
 
 function bpmAtBeatFromTempoPoints(tempoPoints: TempoPoint[], beat: number): number {

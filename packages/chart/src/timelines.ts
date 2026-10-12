@@ -1,5 +1,11 @@
 import { findLastIndexAtOrBefore } from '@be-music/utils/core';
-import { normalizeChannel, normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
+import {
+  normalizeChannel,
+  normalizeObjectKey,
+  resolveBmsBase,
+  type BeMusicEvent,
+  type BeMusicJson,
+} from '@be-music/json';
 import { isScrollChannel, sortEvents, type BeatResolver } from './index.ts';
 import { createTimingResolver, type TimingResolver } from './timing.ts';
 
@@ -78,68 +84,80 @@ export function createBpmTimeline(json: BeMusicJson, resolver: TimingResolver): 
 }
 
 export function createScrollTimeline(json: BeMusicJson, beatResolver: BeatResolver): ScrollTimelinePoint[] {
-  const timeline: ScrollTimelinePoint[] = [];
-  const scrollMap = json.bms.scroll;
-  if (Object.keys(scrollMap).length === 0) {
-    return timeline;
+  if (Object.keys(json.bms.scroll).length === 0) {
+    return [];
   }
-  const idBase = resolveBmsBase(json);
-
-  for (const event of sortEvents(json.events)) {
-    if (!isScrollChannel(event.channel)) {
-      continue;
-    }
-    const key = normalizeObjectKey(event.value, idBase);
-    if (!Object.hasOwn(scrollMap, key)) {
-      continue;
-    }
-    const speed = scrollMap[key];
-    if (typeof speed !== 'number' || !Number.isFinite(speed)) {
-      continue;
-    }
-    const beat = beatResolver.eventToBeat(event);
-    if (!Number.isFinite(beat) || beat < 0) {
-      continue;
-    }
-    timeline.push({
-      beat,
-      speed,
-    });
-  }
-
-  return timeline;
+  return toBeatTimeline(collectScrollChanges(json, sortEvents(json.events)), beatResolver);
 }
 
 export function createSpeedTimeline(json: BeMusicJson, beatResolver: BeatResolver): SpeedTimelinePoint[] {
-  const timeline: SpeedTimelinePoint[] = [];
-  const speedMap = json.bms.speed;
-  if (Object.keys(speedMap).length === 0) {
-    return timeline;
+  if (Object.keys(json.bms.speed).length === 0) {
+    return [];
   }
-  const idBase = resolveBmsBase(json);
+  return toBeatTimeline(collectSpeedChanges(json, sortEvents(json.events)), beatResolver);
+}
 
-  for (const event of sortEvents(json.events)) {
-    if (normalizeChannel(event.channel) !== 'SP') {
+/** A SCROLL (`SC` + `#SCROLLxx`) or SPEED (`SP` + `#SPEEDxx`) keyframe object and the value it sets. */
+export interface KeyframeChange {
+  readonly event: BeMusicEvent;
+  readonly value: number;
+}
+
+/**
+ * The SCROLL keyframes of a chart, in chart order: `SC` objects whose `#SCROLLxx` is a finite number (negative values
+ * included). Not part of the package API (the chart fingerprint reads exact positions from the events).
+ */
+export function collectScrollChanges(json: BeMusicJson, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
+  return collectKeyframeChanges(json.bms.scroll, resolveBmsBase(json), sortedEvents, isScrollChannel, true);
+}
+
+/**
+ * The SPEED keyframes of a chart, in chart order: `SP` objects whose `#SPEEDxx` is a finite number of at least 0. Not
+ * part of the package API (the chart fingerprint reads exact positions from the events).
+ */
+export function collectSpeedChanges(json: BeMusicJson, sortedEvents: ReadonlyArray<BeMusicEvent>): KeyframeChange[] {
+  return collectKeyframeChanges(
+    json.bms.speed,
+    resolveBmsBase(json),
+    sortedEvents,
+    (channel) => normalizeChannel(channel) === 'SP',
+    false,
+  );
+}
+
+function collectKeyframeChanges(
+  values: Readonly<Record<string, number>>,
+  idBase: 36 | 62,
+  sortedEvents: ReadonlyArray<BeMusicEvent>,
+  isChannel: (channel: string) => boolean,
+  allowNegative: boolean,
+): KeyframeChange[] {
+  const changes: KeyframeChange[] = [];
+  for (const event of sortedEvents) {
+    if (!isChannel(event.channel)) {
       continue;
     }
     const key = normalizeObjectKey(event.value, idBase);
-    if (!Object.hasOwn(speedMap, key)) {
+    if (!Object.hasOwn(values, key)) {
       continue;
     }
-    const speed = speedMap[key];
-    if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0) {
+    const value = values[key];
+    if (typeof value !== 'number' || !Number.isFinite(value) || (!allowNegative && value < 0)) {
       continue;
     }
-    const beat = beatResolver.eventToBeat(event);
-    if (!Number.isFinite(beat) || beat < 0) {
-      continue;
-    }
-    timeline.push({
-      beat,
-      speed,
-    });
+    changes.push({ event, value });
   }
+  return changes;
+}
 
+function toBeatTimeline(changes: ReadonlyArray<KeyframeChange>, beatResolver: BeatResolver): ScrollTimelinePoint[] {
+  const timeline: ScrollTimelinePoint[] = [];
+  for (const change of changes) {
+    const beat = beatResolver.eventToBeat(change.event);
+    if (Number.isFinite(beat) && beat >= 0) {
+      timeline.push({ beat, speed: change.value });
+    }
+  }
   return timeline;
 }
 
