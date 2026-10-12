@@ -393,7 +393,7 @@
             "djLevel": "B",
             "gauge": {
               "type": "GROOVE",
-              "final": 89.17,
+              "final": 100,
               "cleared": true
             },
             "score": 129166
