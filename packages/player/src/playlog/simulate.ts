@@ -6,6 +6,7 @@ import {
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
+  pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
   RULESET_JUDGE_NONE,
@@ -100,6 +101,7 @@ interface SimNote {
 interface SimMine {
   timeUs: number;
   damage: number;
+  /** Settled: detonated, or past the point where it no longer can (see {@link PlaylogSimulation.mineSettleUs}). */
   applied: boolean;
 }
 
@@ -269,7 +271,7 @@ class PlaylogSimulation {
   private advanceTime(untilUs: number): void {
     interface TimedEvent {
       timeUs: number;
-      kind: 'miss' | 'mine' | 'hold-deadline' | 'auto';
+      kind: 'miss' | 'mine-enter' | 'mine' | 'mine-settle' | 'hold-deadline' | 'auto';
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
@@ -300,8 +302,19 @@ class PlaylogSimulation {
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
-        if (mine.timeUs >= untilUs) break;
-        events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
+        if (mine.timeUs - earlyUs >= untilUs) break;
+        if (mine.applied) continue;
+        // Each point is visited once: in the advance whose span [lastAdvanceUs, untilUs) holds it.
+        const due = (timeUs: number): boolean => timeUs >= this.lastAdvanceUs && timeUs < untilUs;
+        const enterUs = mine.timeUs - earlyUs;
+        if (this.config.mineTrigger === 'press-or-hold' && due(enterUs)) {
+          // LR2: a key already down as the mine enters the PGREAT window detonates it there.
+          events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
+        }
+        if (due(mine.timeUs)) events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        const settleUs = this.config.mineTrigger === 'press-or-hold' ? mine.timeUs + lateUs : mine.timeUs;
+        if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
     events.sort((left, right) => left.timeUs - right.timeUs);
@@ -325,13 +338,11 @@ class PlaylogSimulation {
           // beatoraja: a missed CN/HCN head also POORs the tail. IIDX (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
-      } else if (event.kind === 'mine') {
-        const mine = event.mine!;
-        if (mine.applied) continue;
-        mine.applied = true;
-        if (event.lane.held && mine.damage > 0) {
-          this.gauge.applyRawDelta(-mine.damage);
-        }
+      } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
+        // Held as it enters the window (LR2) or as it crosses the line (every ruleset).
+        if (event.lane.held) this.detonateMine(event.mine!);
+      } else if (event.kind === 'mine-settle') {
+        event.mine!.applied = true;
       } else {
         // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
         const lane = event.lane;
@@ -378,6 +389,32 @@ class PlaylogSimulation {
     this.lastAdvanceUs = untilUs;
   }
 
+  /** The PGREAT window's `[late, early]` reach (µs) around a mine, which bounds LR2's press-or-hold detonation. */
+  private minePgreatReachUs(mine: SimMine): readonly [number, number] {
+    return pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note);
+  }
+
+  private detonateMine(mine: SimMine): void {
+    if (mine.applied) return;
+    mine.applied = true;
+    if (mine.damage > 0) {
+      this.gauge.applyRawDelta(-mine.damage);
+    }
+  }
+
+  /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
+  private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
+    if (this.config.mineTrigger !== 'press-or-hold') return;
+    for (const lane of lanes) {
+      for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
+        const mine = lane.mines[index]!;
+        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
+        if (mine.timeUs - earlyUs > timeUs) break;
+        if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
+      }
+    }
+  }
+
   /** Integrates the beatoraja-model HCN hold ticks for a lane up to `untilUs`. */
   private integrateHcn(lane: SimLane, untilUs: number): void {
     const hold = lane.hold;
@@ -414,6 +451,7 @@ class PlaylogSimulation {
     if (lanes.length === 0) {
       return;
     }
+    this.detonateMinesOnPress(lanes, timeUs);
 
     const selected = this.selectCandidate(lanes, timeUs, windows);
     if (!selected) {

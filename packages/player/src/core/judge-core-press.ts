@@ -231,9 +231,10 @@ export function handleLanePress(
     refreshedHold = true;
   }
 
-  // LR2 mine model — the press itself counts as "key ON": record the press instant for the non-kitty hold
-  // approximation, then detonate any mine currently inside the PGREAT window on these lanes. Detonation never
-  // consumes the press: the regular note judgment below still runs.
+  // Mines — record the press instant for the non-kitty hold approximation, then settle the mines on these lanes: under
+  // LR2's model (`mineTrigger: 'press-or-hold'`) the press itself counts as "key ON" and detonates any mine inside the
+  // PGREAT window; under beatoraja's (`'hold'`) only a key down as a mine crosses counts. Detonation never consumes the
+  // press: the regular note judgment below still runs.
   for (const channel of candidateChannels) {
     state.lastLanePressMs.set(channel, nowMs);
   }

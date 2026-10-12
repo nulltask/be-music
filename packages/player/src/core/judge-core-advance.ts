@@ -111,10 +111,11 @@ function detonateLandmine(
 }
 
 /**
- * LR2 mine model (LR2's own changelog, 080114 entry): a mine explodes when its lane's key is held as the mine crosses
- * the judge line ("キー押したまま地雷通過"), or on a press within the PGREAT window of the judge line ("ピカグレ範囲内で
- * キーを押す"). Mines that cross with the key up are retired silently once the PGREAT window closes behind them.
- * Runs on every advance and on every press.
+ * Mines, by the ruleset's `mineTrigger`. LR2 (`'press-or-hold'`, LR2's own changelog, 080114
+ * entry): a mine explodes when its lane's key is held as the mine crosses the judge line ("キー押したまま地雷通過"), or
+ * on a press within the PGREAT window of the judge line ("ピカグレ範囲内でキーを押す"); mines that cross with the key up
+ * are retired silently once the PGREAT window closes behind them. beatoraja (`'hold'`, `JudgeManager` L244): only the
+ * key being down as the mine crosses counts, settled the moment it crosses. Runs on every advance and on every press.
  */
 export function processLandminePassage(
   state: JudgeCoreState,
@@ -126,7 +127,9 @@ export function processLandminePassage(
   const landmineNotes = config.landmineNotes;
   // Reach form keeps the early / late legs separate — nothing guarantees a ruleset's window table is symmetric.
   const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
-  const pgreatLateSeconds = pgreatLateUs / 1e6;
+  const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
+  // Under the hold-only rule a mine is settled as soon as it crosses; LR2 waits for the PGREAT window to close.
+  const settleAfterSeconds = pressDetonates ? pgreatLateUs / 1e6 : 0;
   const pgreatEarlySeconds = pgreatEarlyUs / 1e6;
   while (state.landmineExpireCursor < landmineNotes.length) {
     const landmine = landmineNotes[state.landmineExpireCursor]!;
@@ -134,7 +137,7 @@ export function processLandminePassage(
       state.landmineExpireCursor += 1;
       continue;
     }
-    if (nowSec - landmine.seconds <= pgreatLateSeconds) {
+    if (pressDetonates ? nowSec - landmine.seconds <= settleAfterSeconds : nowSec < landmine.seconds) {
       break;
     }
     // The PGREAT window can be narrower than a step, so a held-through mine may enter AND leave it between two
@@ -154,6 +157,9 @@ export function processLandminePassage(
       markLandmineJudged(state, landmine);
     }
     state.landmineExpireCursor += 1;
+  }
+  if (!pressDetonates) {
+    return;
   }
   for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
     const landmine = landmineNotes[index]!;

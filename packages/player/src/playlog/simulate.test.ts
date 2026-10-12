@@ -62,6 +62,42 @@ function simulateSingleNote(ruleset: PlaylogRulesetId, dmUs: number) {
   return simulatePlaylog(makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000 - dmUs)] }), { ruleset });
 }
 
+describe('simulatePlaylog mines', () => {
+  // A note at 0.5 s (its PGREAT fills the gauge), then a mine at 1 s on the same lane.
+  const filler = note(500_000);
+  const mine = note(1_000_000, { type: 'mine', damage: 10 });
+  /** How much the mine took off the final gauge: the run with it against the same run without it. */
+  function mineDamage(ruleset: PlaylogRulesetId, inputs: Array<Omit<PlaylogInputEvent, 'seq'>>): number {
+    const all = [down(500_000), up(510_000), ...inputs];
+    const withMine = simulatePlaylog(makePlaylog({ notes: [filler, mine], inputs: all }), { ruleset });
+    const without = simulatePlaylog(makePlaylog({ notes: [filler], inputs: all }), { ruleset });
+    return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
+  }
+
+  test('a press inside the PGREAT window detonates a mine under LR2 (and IIDX), not under beatoraja', () => {
+    // Pressed 3 ms after the crossing: beatoraja damages only a key that is down as the mine crosses the line.
+    const late = [down(1_003_000), up(1_020_000)];
+    expect(mineDamage('lr2', late)).toBe(10);
+    expect(mineDamage('iidx', late)).toBeGreaterThan(0);
+    expect(mineDamage('beatoraja', late)).toBe(0);
+    // Pressed 3 ms before and let go before the crossing: the same.
+    const early = [down(997_000), up(999_000)];
+    expect(mineDamage('lr2', early)).toBe(10);
+    expect(mineDamage('beatoraja', early)).toBe(0);
+  });
+
+  test('a key held through the crossing detonates a mine under every ruleset, once', () => {
+    const held = [down(900_000), up(1_100_000)];
+    expect(mineDamage('lr2', held)).toBe(10);
+    expect(mineDamage('beatoraja', held)).toBe(10);
+    expect(mineDamage('iidx', held)).toBeGreaterThan(0);
+  });
+
+  test('a press outside the PGREAT window leaves the mine alone', () => {
+    expect(mineDamage('lr2', [down(1_100_000), up(1_120_000)])).toBe(0);
+  });
+});
+
 describe('simulatePlaylog', () => {
   test('a single note hit dead-on scores PGREAT on every ruleset', () => {
     const playlog = makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });

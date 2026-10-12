@@ -428,8 +428,9 @@ export interface BeMusicNote {
 
 /**
  * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at (below the judgement line
- * when a negative `#SCROLL` puts it there, as for {@link BeMusicNote}). Pressing the lane as it
- * passes the judgement line costs a BAD, so draw it as something to avoid. Only handed to skins that set
+ * when a negative `#SCROLL` puts it there, as for {@link BeMusicNote}). A mine detonates when its lane
+ * is held as it crosses the judgement line (under the LR2 ruleset also on a press inside the PGREAT window) and drains
+ * the gauge, so draw it as something to avoid. Only handed to skins that set
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
 export interface BeMusicMine {

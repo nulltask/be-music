@@ -48,6 +48,16 @@ export type LongNoteStyle =
   /** IIDX: every long note is a CN (HCN when the chart says mode 3) — head and tail judged separately. */
   | 'charge';
 
+/**
+ * When a mine detonates.
+ *
+ * - `'press-or-hold'` — LR2 (its changelog, 080114): the lane's key is held as the mine crosses the judge line, or
+ *   pressed while the mine is inside the PGREAT window.
+ * - `'hold'` — beatoraja (`JudgeManager` L244): the key is down at the moment the mine crosses the line; a press
+ *   shortly before or after does nothing.
+ */
+export type MineTrigger = 'press-or-hold' | 'hold';
+
 export interface GaugeGutsStep {
   /** Gauge value below (or at, when `inclusive`) which the damage multiplier applies. */
   threshold: number;
@@ -92,6 +102,8 @@ export interface RulesetConfig {
   /** IIDX: a BAD / POOR on a charge-note head skips the tail judgment entirely. */
   headBadSkipsTail: boolean;
   comboBreaksOnEmptyPoor: boolean;
+  /** When a mine detonates (see {@link MineTrigger}). */
+  mineTrigger: MineTrigger;
   /** HCN hold-state gauge tick interval (µs). */
   hcnTickUs: number;
   /** HCN tick deltas as `[heldJudgeIndex, heldRate, releasedJudgeIndex, releasedRate]` (beatoraja model). */
@@ -692,6 +704,7 @@ export function resolveRuleset(
       longNoteStyle: 'ln',
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor: false,
+      mineTrigger: 'press-or-hold',
       hcnTickUs: 200_000,
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: resolveLr2Gauge(gaugeId, effectiveTotal, baseNotes),
@@ -720,6 +733,7 @@ export function resolveRuleset(
       longNoteStyle: 'per-note',
       headBadSkipsTail: false,
       comboBreaksOnEmptyPoor,
+      mineTrigger: 'hold',
       hcnTickUs: 200_000,
       hcnTick: { heldJudge: 1, heldRate: 0.5, releasedJudge: 3, releasedRate: 0.5 },
       gauge: resolveBeatorajaGauge(gaugeId, effectiveTotal, baseNotes),
@@ -743,6 +757,8 @@ export function resolveRuleset(
     longNoteStyle: 'charge',
     headBadSkipsTail: true,
     comboBreaksOnEmptyPoor: false,
+    // IIDX has no mines; LR2's model stands in until there is evidence otherwise.
+    mineTrigger: 'press-or-hold',
     hcnTickUs: 200_000,
     hcnTick: { heldJudge: 0, heldRate: 1, releasedJudge: 5, releasedRate: 1 },
     gauge: resolveIidxGauge(gaugeId, noteCount),

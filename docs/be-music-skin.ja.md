@@ -221,7 +221,7 @@ export default defineBeMusicSkin({
 - `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。`pressedAtMs` / `releasedAtMs` はそのレーンを最後に押した・離したプレイクロック時刻、`holding` と `holdStartedAtMs` はそのレーンでロングノーツを押し続けているかと、その開始時刻です。
 - `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。
 - `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。
-- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、PGREAT 窓内で押すと地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
+- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
 - `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBga` を設定したとき以外は `undefined` です。

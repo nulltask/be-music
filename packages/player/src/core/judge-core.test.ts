@@ -197,6 +197,37 @@ describe('judge core', () => {
     expect(state.summary.bad + state.summary.poor).toBe(1); // only the LN head missed meanwhile
   });
 
+  test.each(['lr2', 'beatoraja', 'iidx'] as const)('%s: a lane held through a mine detonates it', (ruleset) => {
+    const state = createCore(LONG_AND_MINE, ruleset);
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+    const effects = [...stepJudgeCore(state, advance(2.49)), ...stepJudgeCore(state, advance(2.6))];
+    expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(1);
+  });
+
+  test.each([
+    ['lr2', 1],
+    ['iidx', 1],
+    ['beatoraja', 0],
+  ] as const)('%s: a press just after a mine crossed, inside PGREAT, detonates it %i time(s)', (ruleset, hits) => {
+    // LR2 also detonates a mine on a press within the PGREAT window (its changelog); beatoraja only damages when the
+    // key is down as the mine crosses the line (JudgeManager L244). IIDX keeps LR2's model.
+    const state = createCore(LONG_AND_MINE, ruleset);
+    const effects = [...stepJudgeCore(state, advance(2.501)), ...stepJudgeCore(state, press(2.505, '12'))];
+    effects.push(...stepJudgeCore(state, advance(2.6)));
+    expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(hits);
+  });
+
+  test('beatoraja: a mine held through detonates the moment it crosses the line', () => {
+    const state = createCore(LONG_AND_MINE, 'beatoraja');
+    stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
+    expect(
+      stepJudgeCore(state, advance(2.499)).some((effect) => effect.kind === 'trace' && effect.name === 'mine-hit'),
+    ).toBe(false);
+    expect(
+      stepJudgeCore(state, advance(2.5)).some((effect) => effect.kind === 'trace' && effect.name === 'mine-hit'),
+    ).toBe(true);
+  });
+
   test('auto scratch plays the scratch lane and ignores input on it', () => {
     const state = createCore(NOTES, 'lr2', { autoScratch: true });
     const buffer = new Set<string>();

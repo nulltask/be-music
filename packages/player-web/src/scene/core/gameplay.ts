@@ -215,9 +215,9 @@ type RuntimeNote = TimedPlayableNote;
  * `RuntimeNote`: the engine mutates `judged` on the same `TimedLandmineNote` instance the renderer's
  * `this.mineNotes` array already references, so there is no separate `hit` flag for the view to keep in sync.
  *
- * On a key press inside the BAD window we trigger a BAD verdict, play the mine explosion sample (`#WAV 00`), drain the
- * gauge by the chart-encoded damage value, and reset combo to zero. The underlying `playableNotes` array stays
- * untouched so a regular note in the same window past / future the mine can still be judged on the next press.
+ * The engine decides when a mine detonates (by the judge ruleset, see docs/player-spec.md#landmines): it plays the
+ * explosion sample (`#WAV00`) and drains the gauge by the mine's damage, without a verdict or a combo change. The
+ * playable notes are untouched, so a regular note near the mine is judged as usual.
  */
 type RuntimeMineNote = TimedLandmineNote;
 

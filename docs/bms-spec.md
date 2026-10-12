@@ -97,7 +97,7 @@ However, the exact specification of control syntax compatibility for files conta
 - [x] `#PLAYER=4` (BATTLE) will be retained as meta information, and dedicated two-player competitive play will not be implemented at this time.
 - [x] Interpret channel `D1-D9` (mine)
 - [x] Interpret channel `E1-E9` (mine)
-- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior)
+- [x] Detonate mines in MANUAL mode on a held crossing of the judge line or a press within the `PGREAT` window (LR2 behavior; the `lr2` and `iidx` rulesets), or on a held crossing only (beatoraja behavior; the `beatoraja` ruleset)
 - [x] Apply the mine object value (upper-case base36) directly as the gauge-damage percentage, with no effect on judgments or combo (LR2 / beatoraja behavior)
 - [x] Fall back to a default damage of `4%` when the mine object value is not a two-character upper-case base36 ID or is `00` (under `#BASE 62`, lower-case values also take this default)
 - [x] When `#WAV00` is defined, use it as the landmine explosion sound on manual mine hit
