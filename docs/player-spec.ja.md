@@ -181,8 +181,9 @@ bmson の `keyboard-24k` / `keyboard-24k-double` は `24 KEY SP` / `48 KEY DP` �
 知っている host は `PlayerOptions.playVariant` で明示できます。レーン使用は `1x` / `2x` のレーンチャンネルと `5x` / `6x` の
 `#LNTYPE` ロングノートチャンネルで数え、地雷と不可視オブジェはレーンモードを変えません。そのため、これらが beatoraja
 ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。判定順は
-[BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあり、文書化済みの `.bme` 補完（6 / 7 鍵の列がない `.bme`
-譜面は `7 KEY SP` / `14 KEY DP`）も含みます。
+[BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあります。モードを表す拡張子は `.pms` だけで、それ以外の
+拡張子では使われているレーンで決めます。そのため 6 / 7 鍵の列がない `.bme` 譜面は、beatoraja と同じく `5 KEY SP` /
+`5 KEY DP` です。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`

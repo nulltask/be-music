@@ -158,43 +158,22 @@ describe('manual input', () => {
     expect(battleBindings.map((binding) => binding.channel)).toEqual(['16', '11', '12', '13', '14', '15']);
   });
 
-  test('manual-input: falls back to extension mode when channels alone are ambiguous', () => {
-    expect(createLaneBindings(['11'], { chartExtension: '.bms' }).map((binding) => binding.channel)).toEqual([
-      '16',
-      '11',
-      '12',
-      '13',
-      '14',
-      '15',
-    ]);
-    expect(createLaneBindings(['11'], { chartExtension: '.bme' }).map((binding) => binding.channel)).toEqual([
-      '16',
-      '11',
-      '12',
-      '13',
-      '14',
-      '15',
-      '18',
-      '19',
-    ]);
+  test('manual-input: takes the lane mode from the lanes in use, not the `.bme` extension', () => {
+    const fiveKeySp = ['16', '11', '12', '13', '14', '15'];
+    expect(createLaneBindings(['11'], { chartExtension: '.bms' }).map((binding) => binding.channel)).toEqual(fiveKeySp);
+    // A `.bme` chart without a 6 / 7 key column is 5 KEY like beatoraja reads it, not 7 KEY.
+    expect(createLaneBindings(['11'], { chartExtension: '.bme' }).map((binding) => binding.channel)).toEqual(fiveKeySp);
     expect(createLaneBindings(['11', '21'], { chartExtension: '.bme' }).map((binding) => binding.channel)).toEqual([
-      '16',
-      '11',
-      '12',
-      '13',
-      '14',
-      '15',
-      '18',
-      '19',
+      ...fiveKeySp,
       '21',
       '22',
       '23',
       '24',
       '25',
-      '28',
-      '29',
       '26',
     ]);
+    // `.pms` still names 9 KEY.
+    expect(createLaneBindings(['11'], { chartExtension: '.pms' })).toHaveLength(9);
   });
 
   test('manual-input: builds full 24-key SP lanes when extended 1P channel is used', () => {
@@ -407,9 +386,9 @@ describe('manual input', () => {
 
   test('manual-input: resolves lane display mode labels', () => {
     expect(resolveLaneDisplayMode(['11'])).toBe('5 KEY SP');
-    expect(resolveLaneDisplayMode(['11'], { chartExtension: '.bme' })).toBe('7 KEY SP');
+    expect(resolveLaneDisplayMode(['11'], { chartExtension: '.bme' })).toBe('5 KEY SP');
     expect(resolveLaneDisplayMode(['11', '21'])).toBe('5 KEY DP');
-    expect(resolveLaneDisplayMode(['11', '21'], { chartExtension: '.bme' })).toBe('14 KEY DP');
+    expect(resolveLaneDisplayMode(['11', '21'], { chartExtension: '.bme' })).toBe('5 KEY DP');
     // Bare `22..25` without `21` / `26..29` is PMS-STD content: 9 KEY whatever the extension, the same as the web
     // host's `resolveChartPlayVariant` (the CLI used to call it 5 KEY DP / 14 KEY DP).
     expect(resolveLaneDisplayMode(['11', '22'])).toBe('9 KEY (PMS-STD)');

@@ -596,7 +596,7 @@ function isScoreTargetChannel(channel: string): boolean {
 /**
  * Reports a song's play variant (`5` / `7` / `9` / `10` / `14` / `24` / `48`), which picks the play skin and lane
  * layout. A thin cached wrapper over `@be-music/chart`'s `resolveChartPlayVariant` — the lane-mode rule the engine and
- * the CLI use too — fed with the song's chart path (for the `.pms` / `.bme` extension rules), events, and `#PLAYER`.
+ * the CLI use too — fed with the song's chart path (for the `.pms` extension rule), events, and `#PLAYER`.
  *
  * `chart` defaults to the song's parsed chart, which is what song select sees before any `#RANDOM` roll. A gameplay
  * scene passes the chart it resolved for the play instead, so lanes added by the chosen `#RANDOM` / `#SWITCH` branch

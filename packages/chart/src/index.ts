@@ -227,12 +227,12 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 /**
- * Resolves the LR2/play-skin lane family for a chart from its extension, `#PLAYER`, and playable lane usage.
+ * Resolves the LR2/play-skin lane family for a chart from its playable lane usage, `#PLAYER`, and the `.pms` extension.
  *
  * This is the single lane-mode rule every host shares: the engine derives its lane mode from it (unless the host
  * declares a variant explicitly), and the web / skin hosts pick play skins with it. Pass the RESOLVED chart (after
  * `#RANDOM` / `#SWITCH`) when classifying a play, so lanes a chosen branch adds are counted. `chartPath` may be a full
- * path or a bare extension (`.pms` / `.bme`).
+ * path or a bare extension (`.pms`).
  *
  * Lane usage counts the `1x` / `2x` lane channels plus the `5x` / `6x` `#LNTYPE` long-note channels mapped to their
  * lanes, so `#LNOBJ` and `#LNTYPE` notations of the same chart classify alike. Mines (`Dx` / `Ex`) and invisible
@@ -265,8 +265,8 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *      usage. Catches PMS-STD authored as `.bme` / `.bms` (common when chart authors export PMS charts
  *      to `.bme` for table-friendly tooling) without requiring an explicit `.pms` extension.
  *   5. **IIDX fallback** — classify by `2X` presence (`usesPlayer2`) and `18/19/28/29` (`uses6or7`) as IIDX
- *      `5/7/10/14`. A `.bme` chart without a 6 / 7 key column is completed to `7` / `14` (the extension names the
- *      7-key format); every other extension stays `5` / `10`.
+ *      `5/7/10/14`. The lanes in use decide, whatever the extension: a `.bme` chart without a 6 / 7 key column is
+ *      `5` / `10` like beatoraja reads it (be-music decision, see docs/format-compat.md §5).
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
   const modeHint = chart.bmson?.info?.modeHint;
@@ -327,9 +327,9 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
     return '9';
   }
 
-  // Rule 5 — IIDX families. A 6 / 7 key column decides 7 / 14 KEY; without one, a `.bme` file is still 7 / 14 KEY
-  // (the extension that names the 7-key format), and anything else is 5 / 10 KEY.
-  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel)) || isBmeExtension(chart.chartPath);
+  // Rule 5 — IIDX families. A 6 / 7 key column decides 7 / 14 KEY, anything else is 5 / 10 KEY. The `.bme` extension
+  // does not complete the mode: beatoraja reads the mode from the lanes in use, and so do we.
+  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
   if (usesPlayer2) {
     return uses6or7 ? '14' : '10';
   }
@@ -1509,13 +1509,9 @@ function isPmsExtension(chartPath: string | undefined): boolean {
   return resolveChartPathExtension(chartPath) === '.pms';
 }
 
-function isBmeExtension(chartPath: string | undefined): boolean {
-  return resolveChartPathExtension(chartPath) === '.bme';
-}
-
 /**
- * Lowercased extension (with its dot) of a chart path or of a bare extension such as `.bme`. Only the last path segment
- * counts, so a dotted directory name (`Song.bme/main`) is not mistaken for the chart's own extension.
+ * Lowercased extension (with its dot) of a chart path or of a bare extension such as `.pms`. Only the last path segment
+ * counts, so a dotted directory name (`Song.pms/main`) is not mistaken for the chart's own extension.
  */
 function resolveChartPathExtension(chartPath: string | undefined): string | undefined {
   if (typeof chartPath !== 'string' || chartPath.length === 0) {

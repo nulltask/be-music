@@ -270,9 +270,9 @@ describe('resolveChartPlayVariant', () => {
     expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '21', '25'] }))).toBe('10');
   });
 
-  test('a `.bme` chart without a 6 / 7 key column is completed to 7 / 14 KEY, as the engine and CLI do', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('14');
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('7');
+  test('a `.bme` chart without a 6 / 7 key column is 5 / 10 KEY, as the engine and CLI read it', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('5');
   });
 
   test('classifies the play from the resolved chart when one is given (lanes added by a `#RANDOM` branch count)', () => {

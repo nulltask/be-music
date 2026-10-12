@@ -1583,9 +1583,9 @@ describe('player', () => {
     expect(laneMode(withMineAndInvisible)).toBe('5 KEY SP');
     expect(preparePlaybackChartData(withMineAndInvisible, {}, true, 0).landmineNotes).toHaveLength(1);
 
-    // The documented `.bme` completion applies through the same rule, mines or not.
-    expect(laneMode(plain, '.bme')).toBe('7 KEY SP');
-    expect(laneMode(withMineAndInvisible, '.bme')).toBe('7 KEY SP');
+    // The `.bme` extension does not complete the mode: the lanes in use decide, as in beatoraja.
+    expect(laneMode(plain, '.bme')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bme')).toBe('5 KEY SP');
 
     // `#LNOBJ` and `#LNTYPE 1` spellings of the same long note on lane 8 resolve to the same lane mode.
     expect(laneMode(chart('#LNOBJ ZZ', '#WAVZZ z.wav', '#00111:01', '#00118:01', '#00218:ZZ'), '.bms')).toBe(

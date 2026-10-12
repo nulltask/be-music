@@ -214,8 +214,8 @@ export interface PlayerOptions {
   onHighSpeedChange?: (highSpeed: number) => void;
   /**
    * The chart file's extension (`.bms` / `.bme` / `.pms` / ...). Feeds the extension rules of the shared lane-mode rule
-   * (`resolveChartPlayVariant` from `@be-music/chart`): `.pms` is 9 KEY, and a `.bme` chart without a 6 / 7 key column
-   * is completed to 7 / 14 KEY.
+   * (`resolveChartPlayVariant` from `@be-music/chart`): `.pms` is 9 KEY. Every other extension leaves the decision to the
+   * lanes in use (a `.bme` chart without a 6 / 7 key column is 5 / 10 KEY, as in beatoraja).
    */
   laneModeExtension?: string;
   /**

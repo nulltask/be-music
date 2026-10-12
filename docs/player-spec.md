@@ -182,8 +182,9 @@ only uses its first nine keys is not read as 7 / 9 KEY; every other hint leaves 
 knows the variant can declare it with `PlayerOptions.playVariant`. Lane usage counts the `1x` / `2x` lane channels and
 the `5x` / `6x` `#LNTYPE` long-note channels; mines and invisible objects never change the lane mode, so they cannot
 switch the beatoraja ruleset between its 5 KEY and 7 KEY judge windows. The detection order is listed in
-[BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior); it includes the documented `.bme`
-completion (a `.bme` chart without a 6 / 7 key column is `7 KEY SP` / `14 KEY DP`).
+[BMS spec — Player-Specific Behavior](./bms-spec.md#player-specific-behavior). Only `.pms` names a mode; every other
+extension leaves the decision to the lanes in use, so a `.bme` chart without a 6 / 7 key column is `5 KEY SP` /
+`5 KEY DP`, as in beatoraja.
 The main modes that can be automatically determined with real equipment are as follows.
 
 - `5 KEY SP`
