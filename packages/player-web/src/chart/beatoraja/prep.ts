@@ -43,14 +43,13 @@ import { runWithConcurrency } from '@be-music/utils/core';
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
-  createBeatResolver,
+  resolveChart,
   volWavToLinearGain,
 } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import type { RandomDraws } from '@be-music/chart';
 import { resolvePlayChart, type ResolvedPlayChart } from '@be-music/player/core/engine';
-import { createBmsonSamplePlaybackMap, createTimingResolver } from '@be-music/audio-renderer/triggers';
-import { buildBgaTimelines, type BgaTimelines } from '@be-music/player/core/bga-timeline';
+import { createBmsonSamplePlaybackMap } from '@be-music/audio-renderer/triggers';
 import {
   buildAudioBus,
   type AudioBusHandle,
@@ -62,7 +61,7 @@ import { loadAssetBytes, resolveChartAudioAsset } from '../../collection/collect
 import { loadVideoTextureFromBytes } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
-import { isVideoExtension } from '../../scene/core/gameplay-bga.ts';
+import { isVideoExtension, toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import type { WebAudioSessionSlicePlayback } from '../../runtime/web-audio-session.ts';
 
@@ -168,22 +167,16 @@ export async function prepareBeatorajaGameplayChart(
   }
 
   // 5. bmson 1.0 sample-slice playback map (skipped for BMS / json charts that don't slice).
-  const timingResolver = createTimingResolver(chart);
-  const beatResolver = createBeatResolver(chart);
+  const resolved = resolveChart(chart, { randomDraws, chartPath: song.chartPath, inferBmsLnTypeWhenMissing: true });
+  const timingResolver = resolved.timing;
+  const beatResolver = resolved.beatResolver;
   const bmsonSlicePlayback: ReadonlyMap<BeMusicEvent, WebAudioSessionSlicePlayback> | undefined =
     chart.sourceFormat === 'bmson'
       ? createBmsonSamplePlaybackMap(chart, timingResolver, chart.events.slice(), beatResolver)
       : undefined;
 
   // 6. BGA timeline.
-  const bgaTimelines: BgaTimelines = buildBgaTimelines(chart, timingResolver);
-  const cues = {
-    base: bgaTimelines.base.map(toBrowserCue),
-    layer: [...bgaTimelines.layer, ...bgaTimelines.layer2]
-      .sort((left, right) => left.seconds - right.seconds)
-      .map(toBrowserCue),
-    poor: bgaTimelines.poor.map(toBrowserCue),
-  };
+  const cues = toBrowserBgaTimeline(resolved.bga);
 
   // 7. BGA bitmap decode. Skips video extensions (we'd need WebCodecs / MSE plumbing to play them and
   // the LR2 path's video pipeline isn't shared here yet).
@@ -304,10 +297,6 @@ export async function prepareBeatorajaGameplayChart(
     bga: { textures: bgaTextures, cues, videoElements: bgaVideoElements },
     dispose,
   };
-}
-
-function toBrowserCue(cue: { seconds: number; key?: string }): BgaCue {
-  return { seconds: cue.seconds, bmpKey: cue.key };
 }
 
 /**

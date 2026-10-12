@@ -15,10 +15,9 @@ import {
 // expects `renderer.prepare` to exist.
 import 'pixi.js/prepare';
 import {
-  collectSampleTriggers,
   createBmsonSamplePlaybackMap,
-  createTimingResolver,
   type TimedSampleTrigger,
+  type TimingResolver,
 } from '@be-music/audio-renderer/triggers';
 import {
   createEmptyScore,
@@ -31,7 +30,7 @@ import {
 } from '@be-music/player/core/scoring';
 import {
   PlayerInterruptedError,
-  preparePlaybackChartData,
+  preparePlaybackChart,
   resolvePlayChart,
   type PreparedPlaybackChartData,
   type PlayerSummary,
@@ -48,11 +47,7 @@ import type {
   PlayerUiSignalBus,
 } from '@be-music/player/core/ui-signal-bus';
 import { DEFAULT_POOR_BGA_DISPLAY_SECONDS } from '@be-music/player/core/bga-timeline';
-import {
-  createBeatAtSecondsResolverFromTimingResolver,
-  createScrollTimeline,
-  createSpeedTimeline,
-} from '@be-music/player/core/timeline';
+import { createBeatAtSecondsResolverFromTimingResolver } from '@be-music/player/core/timeline';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
@@ -96,15 +91,16 @@ import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
-  createBeatResolver,
   parseBmsBga,
   parseBmsSwBga,
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
+  resolveChart,
   resolveChartReferenceBpm,
   volWavToLinearGain,
   type BmsSwitchingBga,
   type RandomDraws,
+  type ResolvedChart,
 } from '@be-music/chart';
 import {
   BG,
@@ -121,12 +117,12 @@ import {
   PLAYFIELD,
 } from '../gameplay-constants.ts';
 import {
-  buildBgaTimeline,
   buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
   isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
+  toBrowserBgaTimeline,
   type BgaCue,
 } from './gameplay-bga.ts';
 import {
@@ -750,6 +746,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * include them all (depending on parser default), neither of which matches LR2 behavior.
    */
   private resolvedChart: BeMusicJson | undefined;
+  /**
+   * The Resolved layer of {@link resolvedChart} (`resolveChart`): its notes, tempo map, triggers, SCROLL / SPEED
+   * keyframes, bar lines and BGA cues are what this scene and the engine play.
+   */
+  private resolvedPlayChart: ResolvedChart | undefined;
   /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
   private randomDraws: RandomDraws | undefined;
   /**
@@ -1126,7 +1127,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * correctly across `#BPM` change events; the previous hand-rolled `beatAtSeconds` only saw the initial BPM, which
    * made notes drift through tempo transitions.
    */
-  protected timingResolver: ReturnType<typeof createTimingResolver> | undefined;
+  protected timingResolver: TimingResolver | undefined;
   /**
    * Per-layer BGA cue lists, sorted by chart-time seconds. Each cue's `bmpKey` is the resource key our texture cache is
    * keyed by (BMS id like "01" for BMS charts, header.name like "base.png" for bmson). `bmpKey === undefined` is the
@@ -2075,6 +2076,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.preparedChart = undefined;
     this.touchTokenByChannel = undefined;
     this.resolvedChart = undefined;
+    this.resolvedPlayChart = undefined;
     this.randomDraws = undefined;
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
@@ -2149,19 +2151,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // re-running its own heuristic. Classify the RESOLVED chart: lanes that only a chosen `#RANDOM` / `#SWITCH`
     // branch adds are not in `song.chart.events`, and missing them would lay out (and judge) a 7 KEY play as 5 KEY.
     const hostPlayVariant = resolveChartPlayVariant(song, resolved);
-    const prepared = preparePlaybackChartData(
-      resolved,
-      {
-        // Always extract the invisible / keysound array even when the overlay is off — so the lil-gui toggle
-        // can flip the visualization on mid-song without a chart restart. The cost is purely memory (one
-        // sorted array of 3x / 4x events); the per-frame render loop is gated on `showInvisibleNotes` and
-        // bails immediately when the flag is off.
-        showInvisibleNotes: true,
-        laneModeExtension: extractChartExtension(this.song?.chartPath),
-        playVariant: hostPlayVariant,
-      },
-      true /* inferBmsLnTypeWhenMissing */,
-      0 /* auxiliaryPlaybackEndSeconds — engine recomputes its own audio horizon from realtime triggers */,
+    const resolvedPlay = resolveChart(resolved, {
+      randomDraws,
+      playVariant: hostPlayVariant,
+      inferBmsLnTypeWhenMissing: true,
+    });
+    this.resolvedPlayChart = resolvedPlay;
+    // The invisible / keysound array is always prepared even when the overlay is off — so the lil-gui toggle can flip
+    // the visualization on mid-song without a chart restart; the per-frame render loop is gated on
+    // `showInvisibleNotes`. The audio horizon is left at 0: the engine recomputes its own from realtime triggers.
+    const prepared = preparePlaybackChart(
+      resolvedPlay,
+      { laneModeExtension: extractChartExtension(this.song?.chartPath) },
+      0,
     );
     this.preparedChart = prepared;
     this.touchTokenByChannel = undefined;
@@ -2257,20 +2259,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // we'd still be reading the **previous** play's gauge value.
     this.gaugeHistory = [];
     this.scoreHistory = [];
-    const resolver = createTimingResolver(resolved);
+    const resolver = resolvedPlay.timing;
     this.timingResolver = resolver;
     // Build a STOP-aware seconds→beat resolver for `currentBeat`.
     this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
     // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, so the common case
     // stays on the plain beat-diff path with no extra cost.
-    const beatResolver = createBeatResolver(resolved);
-    const scrollTimeline = createScrollTimeline(resolved, beatResolver);
-    const speedTimeline = createSpeedTimeline(resolved, beatResolver);
+    const beatResolver = resolvedPlay.beatResolver;
+    const scrollTimeline = resolvedPlay.scroll;
+    const speedTimeline = resolvedPlay.speed;
     this.scrollMapper =
       scrollTimeline.length > 0 || speedTimeline.length > 0
         ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
         : undefined;
-    this.autoSampleTriggers = collectSampleTriggers(resolved, resolver, { inferBmsLnTypeWhenMissing: true })
+    this.autoSampleTriggers = resolvedPlay.sampleTriggers
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
     // bmson 1.0.0 slicing — for bmson charts, each `sound_channels[]` entry is a single audio file that gets sliced at
@@ -2328,7 +2330,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.autoScratchChannels = this.resolveAutoScratchEnabled()
       ? new Set(prepared.laneBindings.filter((binding) => binding.isScratch).map((binding) => binding.channel))
       : new Set();
-    this.bgaTimeline = buildBgaTimeline(resolved, resolver);
+    this.bgaTimeline = toBrowserBgaTimeline(resolvedPlay.bga);
     // BMS spec — when `#POORBGA` is unset but `#BMP00` exists, BMP00 becomes the implicit POOR placeholder until an
     // explicit `#xxx06` cue fires. Mirrors the TUI BGA renderer's `poorFallbackKey` so the web side stops showing a
     // black POOR plate on misses for charts that rely on this convention.
@@ -2884,7 +2886,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Skipped when there are no tempo points (defensive — the resolver can be constructed empty during edge-case mounts)
    * or the chart has no BPM info.
    */
-  private applyHsFix(resolver: ReturnType<typeof createTimingResolver>, mainBpmCandidate: number | undefined): void {
+  private applyHsFix(resolver: TimingResolver, mainBpmCandidate: number | undefined): void {
     const mode = this.options.hsFix ?? 'OFF';
     if (mode === 'OFF') return;
     const mainBpm = typeof mainBpmCandidate === 'number' && mainBpmCandidate > 0 ? mainBpmCandidate : undefined;
@@ -4457,42 +4459,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.measureBeatCache.songId === song.id) {
       return this.measureBeatCache.beats;
     }
-    const beats: number[] = [];
-    let cumulative = 0;
-    // BMS measure length is the relative size of the measure, where 1.0 is a full 4/4 measure (= 4 beats). Walk the
-    // chart's measure list and record the beat at the start of each measure. Use the resolved chart so #IF-gated #xx02
-    // (measure-length) declarations match the chosen #RANDOM branch.
-    const chart = this.resolvedChart ?? song.chart;
-    // bmson 1.0.0 spec — `lines: []` (explicit empty array) is the author opting out of barlines entirely (the "100 %
-    // minimoo-G effect"). Honor the suppress flag the parser sets and short-circuit before we'd otherwise derive
-    // 4/4-default barlines from the event stream.
-    if (chart.bmson.barlinesSuppressed === true) {
-      this.measureBeatCache = { songId: song.id, beats };
-      return beats;
-    }
-    const measures = chart.measures;
-    // The chart's `measures` array only carries measures with an EXPLICIT length declaration (`#xx02`). A typical
-    // 4/4-only chart has no entries at all, so falling out at "length === 0" skipped every measure line for those
-    // songs. Derive the chart's last measure from event data instead — measure lines need to render at every measure
-    // boundary regardless of whether the author bothered to declare the time signature.
-    let maxMeasureIndex = -1;
-    for (const measure of measures) {
-      if (measure.index > maxMeasureIndex) maxMeasureIndex = measure.index;
-    }
-    for (const event of chart.events) {
-      if (event.measure > maxMeasureIndex) maxMeasureIndex = event.measure;
-    }
-    if (maxMeasureIndex < 0) {
-      this.measureBeatCache = { songId: song.id, beats };
-      return beats;
-    }
-    const lengthByIndex = new Map(measures.map((m) => [m.index, m.length]));
-    for (let i = 0; i <= maxMeasureIndex + 1; i += 1) {
-      beats.push(cumulative);
-      // Default length 1 = full 4/4 measure. Only declared measures override this.
-      const length = lengthByIndex.get(i) ?? 1;
-      cumulative += length * 4;
-    }
+    // The resolved chart's bar lines: one per measure start through the measure after the last object, using the chosen
+    // `#RANDOM` branch's `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
+    const beats = [...(this.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
     this.measureBeatCache = { songId: song.id, beats };
     return beats;
   }

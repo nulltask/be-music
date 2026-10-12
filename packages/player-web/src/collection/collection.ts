@@ -2,11 +2,11 @@ import { unzipSync } from 'fflate';
 import {
   type ChartPlayVariant,
   isPlayableChannel,
+  resolveChart,
   resolveChartPlayVariant as resolveChartPlayVariantForChart,
 } from '@be-music/chart';
 import { decodeBmsText, decodeUtf8Text, parseBms, parseBmson } from '@be-music/parser';
 import type { BeMusicJson } from '@be-music/json';
-import { extractPlayableNotes } from '@be-music/player/playable-notes';
 import { basename, dirname, normalizePath, readFilesIntoEntryMap, runWithConcurrency } from '@be-music/utils/core';
 import type {
   BrowserFolderNode,
@@ -474,7 +474,7 @@ export async function loadSongCollectionFromFiles(
           throw new Error(`chart bytes missing for ${path}`);
         }
         const chart = parseChart(path, chartBytes);
-        const notes = extractPlayableNotes(chart, { inferBmsLnTypeWhenMissing: true });
+        const notes = resolveChart(chart, { inferBmsLnTypeWhenMissing: true }).notes;
         const song: BrowserSongEntry = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
