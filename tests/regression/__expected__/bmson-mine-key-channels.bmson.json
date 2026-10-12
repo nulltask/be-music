@@ -81,6 +81,7 @@
       "    \"init_bpm\": 150,",
       "    \"mode_hint\": \"beat-7k\",",
       "    \"resolution\": 240,",
+      "    \"ln_type\": 2,",
       "    \"judge_rank\": 100,",
       "    \"total\": 260",
       "  },",
