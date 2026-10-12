@@ -574,11 +574,12 @@ describe('engine fallbacks (findings A10 – A13)', () => {
       });
     const document = (text: string): BeMusicPlayFingerprintDocument =>
       createPlayFingerprintDocument(parseBmson(text), NO_PATH);
-    expect(document(bmson({})).total).toEqual({ bmson: '100' });
+    expect(document(bmson({})).total).toBeNull();
     expect(computePlayFingerprint(parseBmson(bmson({})), NO_PATH)).toBe(
       computePlayFingerprint(parseBmson(bmson({ total: 100 })), NO_PATH),
     );
     expect(document(bmson({ total: 0 })).total).toBeNull();
+    expect(document(bmson({ total: 120 })).total).toEqual({ bmson: '120' });
     expect(document(bmson({})).judge).toEqual({ exRank: '100' });
     const mines = { mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }] };
     expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '4' }]);
@@ -646,17 +647,19 @@ describe('BMS against bmson', () => {
     });
 
   test('gives the same play fingerprint', () => {
-    // bmson `total: 0` makes the rulesets compute their default, like a BMS chart without #TOTAL.
+    // bmson `total` 0, absent or 100 all mean 100 % of the ruleset's default TOTAL, like a BMS chart without #TOTAL.
     const fromBms = createPlayFingerprintDocument(parseBms(bms), NO_PATH);
     const fromBmson = createPlayFingerprintDocument(parseBmson(bmson(0)), NO_PATH);
     expect(fromBmson).toEqual(fromBms);
     expect(fromBms.notes).toContainEqual({ m: '1', p: '1/2', lane: '13', end: { m: '2', p: '0' }, ln: '1' });
     expect(fromBms.mines).toEqual([{ m: '1', p: '0', lane: '14', damage: '10' }]);
     expect(computePlayFingerprint(parseBmson(bmson(0)), NO_PATH)).toBe(computePlayFingerprint(parseBms(bms), NO_PATH));
-    // Without `total`, bmson means 100 % of the default gauge, which plays differently from a BMS without #TOTAL.
-    expect(createPlayFingerprintDocument(parseBmson(bmson()), NO_PATH)).toEqual({
+    expect(createPlayFingerprintDocument(parseBmson(bmson()), NO_PATH)).toEqual(fromBms);
+    expect(createPlayFingerprintDocument(parseBmson(bmson(100)), NO_PATH)).toEqual(fromBms);
+    // Any other percentage scales the default, which no BMS #TOTAL matches.
+    expect(createPlayFingerprintDocument(parseBmson(bmson(150)), NO_PATH)).toEqual({
       ...fromBms,
-      total: { bmson: '100' },
+      total: { bmson: '150' },
     });
   });
 
@@ -681,11 +684,8 @@ describe('BMS against bmson', () => {
     ].join('\n');
     const original = parseBms(text);
     const converted = parseBmson(stringifyBmson(original));
-    // The stringifier leaves out `total`, which bmson reads as 100.
-    expect(createPlayFingerprintDocument(converted, NO_PATH)).toEqual({
-      ...createPlayFingerprintDocument(original, NO_PATH),
-      total: { bmson: '100' },
-    });
+    // The stringifier leaves out `total`, which bmson reads as 100 % of the default TOTAL, like a BMS without #TOTAL.
+    expect(createPlayFingerprintDocument(converted, NO_PATH)).toEqual(createPlayFingerprintDocument(original, NO_PATH));
   });
 });
 

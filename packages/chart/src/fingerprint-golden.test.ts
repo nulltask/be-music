@@ -159,7 +159,7 @@ describe('golden fingerprints (bmfp1)', () => {
     [
       'bmson',
       () => computePlayFingerprint(parseBmson(BMSON), { chartPath: 'golden.bmson' }),
-      'bmfp1:4bd4c981e34422646a48741b0e6606fedab05528abc296b6a1bc2f1b9221b29f',
+      'bmfp1:7355094b6844f4050a5ad7f4647522f284b4c9ef08570688f451172c4635e1f2',
     ],
     [
       'PMS',
@@ -192,7 +192,7 @@ describe('golden fingerprints (bmfp1)', () => {
     [
       'bmson keyboard-24k with wheel notes',
       () => computePlayFingerprint(parseBmson(KEYBOARD_24K), { chartPath: 'golden.bmson' }),
-      'bmfp1:21034fde8cb8feabb43c997b13cee40cc3ad650d4bd0542847b50373f64010cd',
+      'bmfp1:9cf3f393bf7fdd98e5173a636387d3bc48ef973eb97179b22bd461a6a9300ec8',
     ],
   ])('%s', (_label, compute, expected) => {
     expect(compute()).toBe(expected);

@@ -724,14 +724,21 @@ export function normalizeRank(rank: Rational): Rational {
   return rank;
 }
 
-/** TOTAL from `resolveTotalFacts`: a positive `#TOTAL` / bmson `total` on its own axis, else `null`. */
+/**
+ * TOTAL from `resolveTotalFacts`, on its own axis: a positive `#TOTAL` (absolute), or a positive bmson `total` other
+ * than 100 (a percentage of the ruleset's default). Everything the rulesets read as their default TOTAL is `null`: a
+ * BMS chart without a positive `#TOTAL`, and a bmson chart whose `total` is absent, 0 or below, or 100 (100 %).
+ */
 function resolveTotal(json: BeMusicJson): TotalItem {
   const { value, unit } = resolveTotalFacts(json);
   const snapped = optionalSnapped(value);
   if (snapped === undefined || snapped.n <= 0n) {
     return null;
   }
-  return unit === 'percent' ? { kind: 'bmson', v: snapped } : { kind: 'bms', v: snapped };
+  if (unit === 'percent') {
+    return isRationalEqual(snapped, createRational(100n)) ? null : { kind: 'bmson', v: snapped };
+  }
+  return { kind: 'bms', v: snapped };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
