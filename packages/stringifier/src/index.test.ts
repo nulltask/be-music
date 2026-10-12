@@ -535,7 +535,7 @@ describe('stringifier', () => {
       genre: 'Genre',
       level: 7,
       init_bpm: 150,
-      mode_hint: 'beat-2k',
+      mode_hint: 'generic-2keys',
       resolution: 480,
     });
     // `metadata.rank` of a non-bmson chart is a BMS `#RANK` index (0..4); 75 is out of range, which judges as NORMAL, so
@@ -690,7 +690,7 @@ describe('stringifier', () => {
     };
 
     // Lanes 11 and 23 are numbered `x` 1 / 2; the hidden notes take those lanes instead of new ones.
-    expect(output.info.mode_hint).toBe('beat-2k');
+    expect(output.info.mode_hint).toBe('generic-2keys');
     expect(output.sound_channels).toEqual([{ name: 'key.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }]);
     expect(output.key_channels).toEqual([
       {
@@ -870,12 +870,14 @@ describe('stringifier', () => {
     ).toEqual(lanes);
   });
 
-  test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional beat-9k hint', () => {
+  test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional generic-9keys hint', () => {
     const lanes = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
     const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
     const output = JSON.parse(stringifyBmson(source)) as { info: { mode_hint: string } };
 
-    expect(output.info.mode_hint).toBe('beat-9k');
+    // The spec's `generic-Nkeys` names a layout ordered left to right; a made-up `beat-9k` would be an unknown hint,
+    // which players read as `beat-7k`.
+    expect(output.info.mode_hint).toBe('generic-9keys');
     expect(
       parseBmson(JSON.stringify(output))
         .events.map((event) => event.channel)

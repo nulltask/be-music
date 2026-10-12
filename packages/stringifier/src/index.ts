@@ -1585,7 +1585,8 @@ function normalizeBmsonBgaEventEntries(
  * The `mode_hint` a bmson rendering of `json` declares: the chart's own hint when it has one, else the hint of the chart's
  * play-mode layout (from the play-mode table in `@be-music/chart`) — always for the 24 / 48 KEY keyboard layouts, whose
  * wheel and extended lanes only have a home there, and for the other layouts when every lane in use has a place in the
- * hint's table — else `beat-<lanes>k`.
+ * hint's table — else the spec's `generic-<lanes>keys`, a layout ordered left to right. (A made-up `beat-<lanes>k` would be
+ * an unknown hint, which beatoraja, Qwilight and Bemuse read as `beat-7k`.)
  */
 function resolveBmsonModeHintForOutput(json: BeMusicJson, playableChannels: readonly string[]): string {
   if (json.bmson.info.modeHint !== undefined) {
@@ -1601,7 +1602,7 @@ function resolveBmsonModeHintForOutput(json: BeMusicJson, playableChannels: read
       return hint;
     }
   }
-  return `beat-${Math.max(1, playableChannels.length)}k`;
+  return `generic-${Math.max(1, playableChannels.length)}keys`;
 }
 
 /**
