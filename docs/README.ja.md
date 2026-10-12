@@ -11,6 +11,7 @@
 - [Terminal player 実装メモ](player-tui.ja.md)
 - [Browser player 実装メモ](player-web.ja.md)
 - [プレイログ（プレイ履歴）仕様](playlog.ja.md)
+- [Be-Music Fingerprint 仕様](fingerprint-spec.ja.md)（草案）
 - [LR2 skin 実装メモ](lr2-skin.ja.md)
 - [beatoraja skin 実装メモ](beatoraja-skin.ja.md)
 - [be-music スキンの作り方](be-music-skin.ja.md)
