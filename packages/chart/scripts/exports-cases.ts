@@ -2,6 +2,18 @@ import * as chartApi from '@be-music/chart';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
 const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
+const BENCH_FINGERPRINT_DOCUMENTS = new WeakMap<object, chartApi.BeMusicFingerprintDocument>();
+
+function getBenchFingerprintDocument(
+  json: Parameters<typeof chartApi.createChartFingerprintDocument>[0],
+): chartApi.BeMusicFingerprintDocument {
+  let document = BENCH_FINGERPRINT_DOCUMENTS.get(json);
+  if (!document) {
+    document = chartApi.createChartFingerprintDocument(json);
+    BENCH_FINGERPRINT_DOCUMENTS.set(json, document);
+  }
+  return document;
+}
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.parseBpmFrom03Token', {
@@ -201,6 +213,31 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.resolveLnobjLongNotes', {
     run: (fixtures) => {
       chartApi.resolveLnobjLongNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createChartFingerprintDocument', {
+    run: (fixtures) => {
+      chartApi.createChartFingerprintDocument(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createPlayFingerprintDocument', {
+    run: (fixtures) => {
+      chartApi.createPlayFingerprintDocument(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.canonicalizeFingerprintDocument', {
+    run: (fixtures) => {
+      chartApi.canonicalizeFingerprintDocument(getBenchFingerprintDocument(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.computeChartFingerprint', {
+    run: async (fixtures) => {
+      await chartApi.computeChartFingerprint(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.computePlayFingerprint', {
+    run: async (fixtures) => {
+      await chartApi.computePlayFingerprint(fixtures.sampleBmsJson);
     },
   });
 }

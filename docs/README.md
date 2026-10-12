@@ -11,7 +11,7 @@ This directory is a Markdown collection of specifications used in the `be-music`
 - [Terminal player implementation notes](./player-tui.md)
 - [Browser player implementation notes](./player-web.md)
 - [Play log (play history) specification](./playlog.md)
-- [Be-Music Fingerprint specification](./fingerprint-spec.md) (draft)
+- [Be-Music Fingerprint specification](./fingerprint-spec.md)
 - [LR2 skin implementation notes](./lr2-skin.md)
 - [beatoraja skin implementation notes](./beatoraja-skin.md)
 - [Writing a be-music skin](./be-music-skin.md)

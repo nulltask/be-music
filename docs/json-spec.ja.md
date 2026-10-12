@@ -15,7 +15,7 @@
 
 - `@be-music/json` は純粋な IR パッケージです
 - `@be-music/json` が提供するのは、型、正規化済みのデータ構造、clone / 初期化 / 基本的な整形 helper に限られます
-- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart` が担当します
+- beat 変換、イベント順序、ロングノート解決、sample trigger 判定などの譜面意味論は `@be-music/chart` が担当します。譜面の [Be-Music Fingerprint](fingerprint-spec.ja.md) も `@be-music/chart` が求めます（`computeChartFingerprint` / `computePlayFingerprint`）
 - round-trip のための source-level 情報は IR の一部として保持しますが、正規化済みの譜面意味論とは `preservation` 層で分離します
 
 ## 設計原則

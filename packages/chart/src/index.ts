@@ -6,6 +6,27 @@ import {
   type BeMusicJson,
 } from '@be-music/json';
 
+export {
+  canonicalizeFingerprintDocument,
+  computeChartFingerprint,
+  computePlayFingerprint,
+  createChartFingerprintDocument,
+  createPlayFingerprintDocument,
+  type BeMusicFingerprintDocument,
+  type BeMusicFingerprintOptions,
+  type FingerprintBranch,
+  type FingerprintBranchHeader,
+  type FingerprintControlFlowNode,
+  type FingerprintJudge,
+  type FingerprintMeasures,
+  type FingerprintMine,
+  type FingerprintNote,
+  type FingerprintTime,
+  type FingerprintTimelineEvent,
+  type FingerprintTimelineType,
+  type FingerprintTotal,
+} from './fingerprint.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;
