@@ -87,6 +87,16 @@ export {
   type LongNoteMode,
 } from './note-rules.ts';
 
+export {
+  resolveChart,
+  type ResolveChartOptions,
+  type ResolvedChart,
+  type ResolvedJudgeRank,
+  type ResolvedTotal,
+} from './resolved-chart.ts';
+
+export { type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;

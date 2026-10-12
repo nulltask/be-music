@@ -364,4 +364,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.resolveLandmineDamage({ value: '0A' }, 36, 'bms');
     },
   });
+  define('chart.resolveChart', {
+    run: (fixtures) => {
+      const resolved = chartApi.resolveChart(fixtures.sampleBmsJson, { chartPath: 'sample.bms' });
+      void resolved.notes;
+      void resolved.mines;
+      void resolved.invisibleNotes;
+      void resolved.sampleTriggers;
+    },
+  });
 }
