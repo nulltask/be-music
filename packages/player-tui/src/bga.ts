@@ -7,13 +7,8 @@ import { resolveFirstExistingPath } from '@be-music/utils/path';
 // (the implementation file statically imports `node:sea`).
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
 import type { BeMusicJson } from '@be-music/json';
-import { createTimingResolver } from '@be-music/audio-renderer';
-import {
-  buildBgaTimelines,
-  DEFAULT_POOR_BGA_DISPLAY_SECONDS,
-  pickActiveBgaCue,
-  type BgaCue,
-} from '@be-music/player/core/bga-timeline';
+import { resolveChart } from '@be-music/chart';
+import { DEFAULT_POOR_BGA_DISPLAY_SECONDS, pickActiveBgaCue, type BgaCue } from '@be-music/player/core/bga-timeline';
 import { decode as decodeBmpFast } from 'fast-bmp';
 import { decode as decodePngFast } from 'fast-png';
 import jpeg from 'jpeg-js';
@@ -613,13 +608,8 @@ export async function createBgaAnsiRenderer(
   throwIfAborted(options.signal);
   const displaySize = normalizeDisplaySize(options.width, options.height);
   const resizeAlgorithm = options.imageResizeAlgorithm ?? DEFAULT_IMAGE_RESIZE_ALGORITHM;
-  const resolver = createTimingResolver(json);
-  const {
-    base: baseTimeline,
-    poor: poorTimeline,
-    layer: layerTimeline,
-    layer2: layer2Timeline,
-  } = buildBgaTimelines(json, resolver);
+  const resolved = resolveChart(json);
+  const { base: baseTimeline, poor: poorTimeline, layer: layerTimeline, layer2: layer2Timeline } = resolved.bga;
 
   const baseKeys = new Set(baseTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));
   const poorKeys = new Set(poorTimeline.flatMap((cue) => (cue.key ? [cue.key] : [])));

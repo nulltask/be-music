@@ -6,8 +6,7 @@ import { isAbortError, throwIfAborted } from '@be-music/utils/core';
 import { invokeWorkerizedFunction, workerize } from '@be-music/utils/workerize';
 import { type BeMusicJson, type BeMusicPlayLevel } from '@be-music/json';
 import { decodeBmsText, parseChart, resolveBmsControlFlow } from '@be-music/parser';
-import { createTimingResolver } from '@be-music/audio-renderer';
-import { extractPlayableNotes } from '@be-music/player';
+import { resolveChart, type ResolvedChart } from '@be-music/chart';
 import {
   resolveDisplayedDifficultyValue,
   resolveDisplayedJudgeRankLabel,
@@ -468,6 +467,7 @@ async function buildChartSummary(
       : await parseChartFileWithCacheMiss(filePath, signal);
     throwIfAborted(signal);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
+    const resolved = resolveChart(resolvedChart);
     throwIfAborted(signal);
     title = sanitizeChartSelectionMetadataText(chart.metadata.title);
     subtitle = sanitizeChartSelectionMetadataText(chart.metadata.subtitle);
@@ -476,13 +476,13 @@ async function buildChartSummary(
     genre = sanitizeChartSelectionMetadataText(chart.metadata.genre);
     comment = sanitizeChartSelectionMetadataText(chart.metadata.comment);
     bannerPath = resolveChartSelectionBannerPath(chart);
-    totalNotes = extractPlayableNotes(resolvedChart).length;
+    totalNotes = resolved.notes.length;
     player = chart.bms.player;
     difficulty = resolveDisplayedDifficultyValue(chart);
     rank = resolveDisplayedJudgeRankValue(resolvedChart);
     rankLabel = resolveDisplayedJudgeRankLabel(resolvedChart);
     playLevel = resolveDisplayedPlayLevelValue(chart);
-    const bpmSummary = extractChartBpmSummary(resolvedChart);
+    const bpmSummary = extractChartBpmSummary(resolved);
     bpmInitial = bpmSummary?.initial;
     bpmMin = bpmSummary?.min;
     bpmMax = bpmSummary?.max;
@@ -665,9 +665,8 @@ function resolveChartSelectionBannerPath(json: BeMusicJson): string | undefined 
   return sanitizeChartSelectionMetadataText(json.metadata.extras.BANNER);
 }
 
-function extractChartBpmSummary(json: BeMusicJson): { initial: number; min: number; max: number } | undefined {
-  const resolver = createTimingResolver(json);
-  const bpmValues = resolver.tempoPoints
+function extractChartBpmSummary(resolved: ResolvedChart): { initial: number; min: number; max: number } | undefined {
+  const bpmValues = resolved.timing.tempoPoints
     .map((point) => point.bpm)
     .filter((value) => Number.isFinite(value) && value > 0);
   if (bpmValues.length === 0) {
