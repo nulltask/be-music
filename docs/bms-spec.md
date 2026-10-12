@@ -25,6 +25,7 @@ This document defines how `packages/parser` / `packages/stringifier` / `packages
 - `bms benchmark` (implementation comparison): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
 - `bmsplayer data` (compatibility check): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
 - Numuther: BMS Scroll gimmick explanation (SCROLL/BPM/STOP example): https://note.com/numuther/n/n57bf895e7969
+- How LR2, beatoraja and other players treat the same commands, and where be-music departs from them: [BMS / bmson compatibility notes](./format-compat.md)
 
 ## Compliance Status Summary
 

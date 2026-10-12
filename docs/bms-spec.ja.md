@@ -25,6 +25,7 @@
 - `bms benchmark` (実装比較): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
 - `bmsplayer data` (互換性調査): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
 - Numuther: BMS Scroll ギミック解説（SCROLL/BPM/STOP 実例）: https://note.com/numuther/n/n57bf895e7969
+- LR2・beatoraja など他のプレイヤーが同じコマンドをどう扱うか、be-music がどこで異なるか: [BMS / bmson 互換性ノート](./format-compat.ja.md)
 
 ## 対応状況の要約
 

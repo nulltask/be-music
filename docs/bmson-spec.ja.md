@@ -3,6 +3,7 @@
 # BMSON 実装仕様
 
 この文書は、`packages/parser` / `packages/stringifier` が BMSON をどう扱うかを定義します。
+beatoraja など他のプレイヤーが同じフィールドをどう読むかは [BMS / bmson 互換性ノート](./format-compat.ja.md) で比較しています。
 
 ## 一次参照
 

@@ -3,6 +3,7 @@
 # BMSON implementation specification
 
 This document defines how `packages/parser` / `packages/stringifier` handles BMSON.
+How beatoraja and other players read the same fields is compared in [BMS / bmson compatibility notes](./format-compat.md).
 
 ## Primary reference
 
