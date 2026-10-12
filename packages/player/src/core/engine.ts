@@ -1942,7 +1942,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     },
   );
   reportResolvedRuleset(options, autoRuleset);
-  const { summary, applyGaugeJudge } = createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount);
+  const { summary, applyGaugeJudge, drainGaugeToZero } = createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount);
   const scoreTracker = createScoreTracker({ moneyScore: autoRuleset.moneyScore });
   // AUTO plays never have manual inputs, but recording still snapshots the resolved chart + play settings so an
   // auto run produces a structurally complete playlog (simulators treat an empty input stream as all-miss; the
@@ -2486,6 +2486,17 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
         for (const invisible of invisibleNotes) {
           invisible.judged = true;
         }
+        if (
+          reversalSeconds !== undefined &&
+          (autoPlayableJudgeIndex < scorableNotes.length || pendingAutoLongNotes.length > 0)
+        ) {
+          // LR2 zeroes HP when a play ends with notes outstanding (OpenLR2 `LR2f.cpp:12980-12982`), autoplay
+          // included: the notes past a negative-BPM reversal were never reached, so the run is FAILED.
+          drainGaugeToZero();
+          if (!uiEnabled) {
+            writeReversalGaugeDrainLog(writeOutput, totalSeconds);
+          }
+        }
         publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
       }
     }
@@ -2673,7 +2684,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const badWindowMs = judgeWindowLateReachUs(ruleset.windows.note) / 1000;
   const badWindowSeconds = badWindowMs / 1000;
 
-  const { summary, applyGaugeJudge, applyGaugeDelta } = createInitialPlayerSummary(ruleset, ruleset.noteCount);
+  const { summary, applyGaugeJudge, applyGaugeDelta, drainGaugeToZero } = createInitialPlayerSummary(
+    ruleset,
+    ruleset.noteCount,
+  );
   const scoreTracker = createScoreTracker({ moneyScore: ruleset.moneyScore });
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
@@ -4350,15 +4364,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // ruleset's EX-SCORE denominator, and under IIDX a missed charge note owes only ONE judgment even though it
       // counts for two, so topping the tally up to the denominator would invent a POOR.
       let missingCount = 0;
+      // Notes the LR2 negative-BPM reversal left unreachable (#134). LR2 never misses them — its mirrored judge clock
+      // recedes before their deadline — and zeroes HP when the play ends with them outstanding.
+      let outstandingPastReversal = false;
       for (const note of scorableNotes) {
         if (note.judged) {
           continue;
         }
         note.judged = true;
         if (reversalSeconds !== undefined && note.seconds + resolveMissDeadlineSeconds(note) >= reversalSeconds) {
-          // Notes whose miss deadline lies behind the LR2 reversal are unreachable by design (#134): the run ends
-          // with them unjudged — LR2 never misses them either (its mirrored judge clock recedes before the
-          // deadline) — instead of sweeping them into POORs.
+          outstandingPastReversal = true;
           continue;
         }
         missingCount += 1;
@@ -4367,6 +4382,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
       for (const hold of activeLongNotesByChannel.values()) {
+        if (reversalSeconds !== undefined) {
+          // A hold still open at the end of a reversed run spans the reversal: the mirrored clock never reaches its
+          // tail, so LR2 never judges it.
+          outstandingPastReversal = true;
+          continue;
+        }
         // The head already scored; only the unresolved tail is outstanding.
         if (hold.headScored) {
           missingCount += 1;
@@ -4391,6 +4412,17 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         setLoggedCombo(totalSeconds, 0, 'remaining-notes', 'POOR');
         if (uiEnabled) {
           activeStateSignals?.publishJudgeCombo('POOR', combo);
+          publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
+        }
+      }
+      if (outstandingPastReversal) {
+        // LR2 sets HP = 0 when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`, LR2body.exe
+        // 0x42c525), so a reversed run that leaves notes behind is always FAILED. be-music still ends the song at its
+        // precomputed end instead of waiting for ESC (documented deviation), but reports the same result.
+        drainGaugeToZero();
+        if (!uiEnabled) {
+          writeReversalGaugeDrainLog(writeOutput, totalSeconds);
+        } else {
           publishUiFrame(totalSeconds, beatAtSeconds(totalSeconds));
         }
       }
@@ -5566,6 +5598,14 @@ function createPlaybackClock(source: PlaybackClockSource, startOffsetMs = 0): Pl
 
 function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
   return Math.max(0, (elapsedMs / 1000) * speed);
+}
+
+function writeReversalGaugeDrainLog(writeOutput: (text: string) => void, totalSeconds: number): void {
+  writeRuntimeEventLog(writeOutput, 'gauge', [
+    ['time', formatSeconds(totalSeconds)],
+    ['value', 0],
+    ['reason', 'notes-outstanding-past-reversal'],
+  ]);
 }
 
 /**

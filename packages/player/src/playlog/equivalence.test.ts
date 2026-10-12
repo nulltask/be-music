@@ -349,6 +349,28 @@ describe('engine / simulator equivalence', () => {
       emptyPoor: summary.emptyPoor,
     });
     expect(simulated.exScore).toBe(summary.exScore);
+    // Scorable notes were left unjudged past R, so the run is FAILED with the gauge at 0 — LR2 zeroes HP on leaving
+    // a play with notes outstanding (OpenLR2 `LR2f.cpp:12980-12982`) — on both sides.
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.cleared).toBe(false);
+    expect(simulated.gauge.final).toBe(0);
+    expect(simulated.gauge.cleared).toBe(false);
+  });
+
+  test('lr2: a reversal run that judged every note before the reversal keeps its clear', async () => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+    ]);
+    json.resources.bpm['02'] = -240;
+
+    const { summary, playlog } = await replay(json, [down(0, 1_000_000, '11'), up(1, 1_050_000, '11')], 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.perfect).toBe(1);
+    expect(summary.gauge?.cleared).toBe(true);
+    expect(simulated.gauge.cleared).toBe(true);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
   });
 
   test.each(RULESETS)('%s: an untouched chart misses every note on both sides', async (ruleset) => {

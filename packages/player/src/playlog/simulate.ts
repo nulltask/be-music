@@ -172,6 +172,11 @@ class PlaylogSimulation {
       }
     }
     this.advanceTime(Number.POSITIVE_INFINITY);
+    if (reversalUs !== undefined && this.hasOutstandingNotes()) {
+      // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
+      // leaves notes past the reversal behind — open holds included — is always FAILED.
+      this.gauge.drainToZero();
+    }
 
     const result: PlaylogRulesetResult = {
       ruleset: this.config.id,
@@ -205,6 +210,15 @@ class PlaylogSimulation {
       );
     }
     return result;
+  }
+
+  private hasOutstandingNotes(): boolean {
+    for (const lane of this.lanes.values()) {
+      if (lane.notes.some((note) => !note.judged)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private buildLanes(): void {

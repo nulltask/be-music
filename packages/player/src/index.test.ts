@@ -2054,6 +2054,9 @@ describe('player', () => {
     expect(summary.poor).toBe(1);
     expect(summary.total).toBe(2);
     expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
+    // ...which leaves the run FAILED with the gauge at 0 (LR2 zeroes HP when a play ends with notes outstanding).
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.cleared).toBe(false);
   });
 
   test('player: LR2 negative BPM freezes autoplay judging and audio at the reversal', async () => {
@@ -2099,6 +2102,9 @@ describe('player', () => {
     expect(summary.perfect).toBe(1);
     expect(summary.poor).toBe(0);
     expect(summary.total).toBe(2);
+    // LR2's HP-zeroing on exit does not care about autoplay: a note left outstanding fails the run.
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.cleared).toBe(false);
   });
 
   test('player: LR2 negative BPM orders the reversal tick by op — BGM fires, the lane note freezes', async () => {
@@ -2147,9 +2153,11 @@ describe('player', () => {
     expect(summary.perfect).toBe(1);
     expect(summary.total).toBe(2);
     expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
+    // The outstanding boundary note fails the run (LR2 zeroes HP on leaving with notes unjudged).
+    expect(summary.gauge?.cleared).toBe(false);
   });
 
-  test('player: an LN held across the LR2 reversal is never judged (no POOR, run completes)', async () => {
+  test('player: an LN held across the LR2 reversal is never judged (no POOR) and fails the run', async () => {
     // BPM 240 → measure = 1 s. A legacy LNOBJ long note spans the reversal: head at 1 s, `#BPM02 -240` via
     // channel 08 at 2 s, tail at 3 s (|−240| keeps one measure per second). Past the reversal LR2 judges the hold on
     // the mirrored clock t' = 2R - now, which never reaches the tail, so a hold that is never released is never
@@ -2181,9 +2189,10 @@ describe('player', () => {
     // The hold gets no judgment at all — not even the head's verdict at the tail (that would be the normal
     // completion path, which the mirrored clock never reaches).
     expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(0);
-    // ...and it costs nothing: the gauge sits exactly where it started, nowhere near the GROOVE floor.
-    expect(summary.gauge?.current).toBe(summary.gauge?.initial);
-    expect(summary.gauge?.current ?? 0).toBeGreaterThan(2);
+    // The open hold is an outstanding note, though: like LR2 (HP = 0 on leaving with notes unjudged), the run is
+    // FAILED with the gauge at 0.
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.cleared).toBe(false);
   });
 
   test('player: routes audio through createAudioSession factory when supplied', async () => {
