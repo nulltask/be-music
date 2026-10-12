@@ -4,6 +4,7 @@ import {
   type BmsControlFlowEntry,
   type BmsObjectLineEntry,
   type BmsSourceLineEntry,
+  type BmsonMineChannelEntry,
   type BeMusicEvent,
   type BeMusicJson,
   createEmptyJson,
@@ -21,6 +22,7 @@ import {
   upsertMeasureLength,
 } from './event-utils.ts';
 import {
+  bmsPlayableChannelToInvisibleChannel,
   bmsPlayableChannelToLandmineChannel,
   buildBmsonLaneMap,
   createBmsonPositionResolver,
@@ -31,6 +33,7 @@ import {
   normalizeBmsonExtensions,
   normalizeBmsonInfoForIr,
   normalizeBmsonKeyChannels,
+  normalizeBmsonMineChannels,
   normalizeBmsonLines,
   normalizeBmsonSoundChannels,
   normalizeBmsonStopEvents,
@@ -53,7 +56,8 @@ const INDEXED_HEADER_COMMAND =
  * or `#BASE 36` are recognized. We do a one-pass forward scan and stop at the first object data line, mirroring real
  * implementations that require `#BASE` to come before any objects.
  */
-const BASE_DIRECTIVE_REGEX = /^#BASE\s+(36|62)\b/i;
+// A whole `#BASE 36` / `#BASE 62` line, with the leading / separating whitespace `parseBms` trims (never a line break).
+const BASE_DIRECTIVE_REGEX = /^[^\S\r\n]*#BASE[^\S\r\n]+(36|62)\b/gim;
 const CONTROL_FLOW_COMMANDS: ReadonlySet<BmsControlFlowCommand> = new Set([
   'RANDOM',
   'SETRANDOM',
@@ -289,7 +293,11 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   // Lane mapping honors `mode_hint` so canonical IIDX / Pop'n bmson dialects route the right keys onto the right BMS
   // channels — the legacy positional fallback would mis-route `beat-7k` x=6/7 onto scratch (`16`) / FREE ZONE (`17`)
   // because those channel digits come next in numeric order.
-  const laneMap = buildBmsonLaneMap(soundChannels, json.bmson.info.modeHint);
+  // The positional fallback numbers every lane in use, so the beatoraja lane extensions (hidden notes and mines) count
+  // too: a mine on a lane no playable note uses still gets that lane instead of being dropped.
+  const keyChannels = normalizeBmsonKeyChannels(document.key_channels);
+  const mineChannels = normalizeBmsonMineChannels(document.mine_channels);
+  const laneMap = buildBmsonLaneMap([...soundChannels, ...keyChannels, ...mineChannels], json.bmson.info.modeHint);
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
     const key = intToBase36(index + 1, 2);
@@ -304,13 +312,16 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
       }
       const pulse = Math.round(note.y);
       const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
-      const isBgmNote = lane <= 0;
+      // An `x` the lane map has no lane for (x <= 0, missing, or outside the hint's table) is a BGM note: the spec makes
+      // x = 0 BGM, and beatoraja plays any x outside the hint's key table in the background too.
+      const playableChannel = lane > 0 ? laneMap.get(lane) : undefined;
+      const isBgmNote = playableChannel === undefined;
       if (!isBgmNote) {
         playableTicks.add(pulse);
       }
 
       const { measure, position } = positionResolver(note.y);
-      const channel = isBgmNote ? '01' : (laneMap.get(lane) ?? '11');
+      const channel = playableChannel ?? '01';
       const event: BeMusicEvent = {
         measure,
         position,
@@ -351,54 +362,40 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     }
   }
 
-  // beatoraja `key_channels` extension — mine notes. Each channel is a WAV bound to one or more `(x, y, damage)`
-  // entries; the sample plays on contact and `damage` (0..100 gauge percent) bleeds the gauge. We register the WAV
-  // after the sound-channels block so the WAV ID space stays contiguous, route notes through the same `mode_hint`-aware
-  // lane map, and emit them on BMS landmine channels (`Dx` / `Ex`) so the downstream `extractTimedNotes` landmine
-  // extractor sees them. The bmson per-mine `damage` is preserved on `event.bmson.damage` so consumers can opt into
-  // custom damage; players that don't read it fall through to the BMS-side default.
-  const keyChannels = normalizeBmsonKeyChannels(document.key_channels);
-  for (let index = 0; index < keyChannels.length; index += 1) {
-    const keyChannel = keyChannels[index]!;
-    const wavKey = intToBase36(soundChannels.length + index + 1, 2);
-    json.resources.wav[wavKey] = keyChannel.name;
-    for (const note of keyChannel.notes) {
-      if (!Number.isFinite(note.y)) {
-        continue;
+  // beatoraja's two lane extensions, read as jbms-parser's BMSONDecoder does: `key_channels` are hidden notes (keysounds
+  // that are never judged → BMS invisible `3x` / `4x`) and `mine_channels` are mines (→ BMS landmine `Dx` / `Ex`, each
+  // keeping its gauge `damage` on `event.bmson.damage`). Both read only `x`, `y` (and `damage` on mines), go through
+  // the same `mode_hint`-aware lane map as the playable notes, and drop a note without a lane. Their WAVs are
+  // registered after the sound channels in beatoraja's order — `key_channels`, then `mine_channels` — so the WAV ID
+  // space stays contiguous.
+  let nextWavIndex = soundChannels.length + 1;
+  const pushBmsonExtensionNotes = (
+    channels: readonly BmsonMineChannelEntry[],
+    toChannel: (playableChannel: string) => string | undefined,
+    keepDamage: boolean,
+  ): void => {
+    for (const extensionChannel of channels) {
+      const wavKey = intToBase36(nextWavIndex, 2);
+      nextWavIndex += 1;
+      json.resources.wav[wavKey] = extensionChannel.name;
+      for (const note of extensionChannel.notes) {
+        const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
+        const playableChannel = lane > 0 ? laneMap.get(lane) : undefined;
+        const channel = playableChannel ? toChannel(playableChannel) : undefined;
+        if (!channel) {
+          continue;
+        }
+        const { measure, position } = positionResolver(note.y);
+        const event: BeMusicEvent = { measure, position, channel, value: wavKey };
+        if (keepDamage && note.damage !== undefined) {
+          event.bmson = { damage: note.damage };
+        }
+        json.events.push(event);
       }
-      const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
-      if (lane <= 0) {
-        // Lane 0 / missing `x` would map onto a BGM channel which makes no sense for a mine — skip rather than silently
-        // emit a malformed event.
-        continue;
-      }
-      const playableChannel = laneMap.get(lane);
-      if (!playableChannel) {
-        continue;
-      }
-      const landmineChannel = bmsPlayableChannelToLandmineChannel(playableChannel);
-      if (!landmineChannel) {
-        continue;
-      }
-      const { measure, position } = positionResolver(note.y);
-      const event: BeMusicEvent = {
-        measure,
-        position,
-        channel: landmineChannel,
-        value: wavKey,
-      };
-      const noteContinue = typeof note.c === 'boolean' ? note.c : undefined;
-      const noteLength =
-        typeof note.l === 'number' && Number.isFinite(note.l) && note.l >= 0 ? Math.floor(note.l) : undefined;
-      if (noteLength !== undefined || noteContinue !== undefined || note.damage !== undefined) {
-        event.bmson = {};
-        if (noteLength !== undefined) event.bmson.l = noteLength;
-        if (noteContinue !== undefined) event.bmson.c = noteContinue;
-        if (note.damage !== undefined) event.bmson.damage = note.damage;
-      }
-      json.events.push(event);
     }
-  }
+  };
+  pushBmsonExtensionNotes(keyChannels, bmsPlayableChannelToInvisibleChannel, false);
+  pushBmsonExtensionNotes(mineChannels, bmsPlayableChannelToLandmineChannel, true);
 
   const bpmEvents = normalizeBmsonBpmEvents(document.bpm_events);
   json.preservation.bmson.bpmEvents = bpmEvents;
@@ -722,32 +719,17 @@ function forEachLine(input: string, visitor: (line: string) => void): void {
 }
 
 /**
- * Pre-scans the BMS source for the `#BASE` directive (the beatoraja base-62 extension switch). Returns 62 if `#BASE 62`
- * appears before the first object data line, otherwise 36.
+ * Pre-scans the BMS source for the `#BASE` directive (the beatoraja base-62 extension switch). Returns 62 when the last
+ * `#BASE 36` / `#BASE 62` line in the file is `#BASE 62`, otherwise 36.
  *
- * We bail out at the first non-header (object) line because real implementations require `#BASE` to come before any
- * object references — applying it retroactively would change which IDs get folded vs. preserved AFTER they were already
- * normalized in earlier headers.
+ * Like beatoraja's BMSDecoder, the scan covers the whole file before anything is decoded, so the directive's position
+ * does not matter (it may follow object data) and control-flow blocks are not evaluated. Other values are ignored.
  */
 function detectBmsBase(input: string): 36 | 62 {
   let resolved: 36 | 62 = 36;
-  let stop = false;
-  forEachLine(input, (rawLine) => {
-    if (stop) return;
-    const line = rawLine.trim();
-    if (!line.startsWith('#')) return;
-    const second = line.charCodeAt(1);
-    if (second >= 0x30 && second <= 0x39) {
-      // Hit the first `#xxxYY:...` object line — `#BASE` after this point is too late to take effect.
-      stop = true;
-      return;
-    }
-    const match = line.match(BASE_DIRECTIVE_REGEX);
-    if (match) {
-      resolved = match[1] === '62' ? 62 : 36;
-      stop = true;
-    }
-  });
+  for (const match of input.matchAll(BASE_DIRECTIVE_REGEX)) {
+    resolved = match[1] === '62' ? 62 : 36;
+  }
   return resolved;
 }
 

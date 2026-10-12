@@ -502,7 +502,7 @@ List every face you draw with in `fontLoads`. The host loads them with `document
   - Skins that fail validation, for example because of an unsupported `apiVersion`, are left out instead of breaking the host.
 
 - **Built-in skins:** `BUILT_IN_BE_MUSIC_SKINS` contains Synesthesia (the default), Phantom, and Plain. Lattice ships as `latticeSkin` for hosts to add.
-- **Demo:** the demo's Debug Menu can add a skin from a module URL (_Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the demo asks for confirmation first. Only load skins you trust.
+- **Demo:** the demo's Debug Menu can add a skin from a module URL (_Skin & display_ → _Add skin_ → _Skin module URL_). A skin runs with the page's full access, so the demo asks for confirmation first. Only load skins you trust.
 
 ## Versioning
 

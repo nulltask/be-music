@@ -251,7 +251,7 @@ test('audio-renderer: ignores non-volume #WAVCMD bytes (pitch / loop)', async ()
 
 test('audio-renderer: scales rendered chart audio with #VOLWAV', async () => {
   const normal = createSingleTriggerBmsChart('not-found.wav', 100);
-  const boosted = createSingleTriggerBmsChart('not-found.wav', 200);
+  const boosted = createSingleTriggerBmsChart('not-found.wav', 150);
   const [normalRendered, boostedRendered] = await Promise.all([
     renderJson(normal, {
       sampleRate: 44_100,
@@ -271,19 +271,29 @@ test('audio-renderer: scales rendered chart audio with #VOLWAV', async () => {
 
   expect(boostedRendered.left.length).toBe(normalRendered.left.length);
   expect(boostedRendered.right.length).toBe(normalRendered.right.length);
-  expect(boostedRendered.peak).toBeCloseTo(normalRendered.peak * 2, 6);
+  expect(boostedRendered.peak).toBeCloseTo(normalRendered.peak * 1.5, 6);
   expect(
     maxDeltaBetweenResults(
       boostedRendered,
       {
         ...normalRendered,
-        left: Float32Array.from(normalRendered.left, (value) => value * 2),
-        right: Float32Array.from(normalRendered.right, (value) => value * 2),
+        left: Float32Array.from(normalRendered.left, (value) => value * 1.5),
+        right: Float32Array.from(normalRendered.right, (value) => value * 1.5),
       },
       0,
       normalRendered.left.length,
     ),
   ).toBeLessThan(1e-7);
+});
+
+test('audio-renderer: renders #VOLWAV outside 0 < n < 200 at the original volume, like beatoraja', async () => {
+  const options = { sampleRate: 44_100, gain: 1, normalize: false, tailSeconds: 0, fallbackToneSeconds: 0.05 };
+  const [normalRendered, ...outOfRange] = await Promise.all(
+    [100, 200, 400, 0].map((volWav) => renderJson(createSingleTriggerBmsChart('not-found.wav', volWav), options)),
+  );
+  for (const rendered of outOfRange) {
+    expect(rendered.peak).toBeCloseTo(normalRendered.peak, 6);
+  }
 });
 
 test('audio-renderer: channel 97 does not change already-playing BGM samples', async () => {

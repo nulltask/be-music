@@ -787,6 +787,21 @@ export interface BmsWavCmdEntry {
 }
 
 /**
+ * Maps a BMS `#VOLWAV n` value (`bms.volWav`) to the chart-wide linear gain: `n / 100` for `0 < n < 200`, unity for
+ * anything else, including a missing value.
+ *
+ * This is beatoraja's range (`AbstractAudioDriver` applies `#VOLWAV` only when `0 < n < 200`). LR2 ignores `#VOLWAV`,
+ * so a chart tuned for it plays at full volume there; following beatoraja keeps `#VOLWAV 0` from muting a chart and
+ * keeps values of 200 and above from amplifying it into clipping.
+ */
+export function volWavToLinearGain(volWav: number | undefined): number {
+  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav <= 0 || volWav >= 200) {
+    return 1;
+  }
+  return volWav / 100;
+}
+
+/**
  * Maps a `#WAVCMD 01 xx vv` volume byte (0..127) to a 0..1 linear gain multiplier. `127 = 1.0` (unity), `0 = 0.0`
  * (mute), linear in between. Out-of-range bytes are clamped.
  *

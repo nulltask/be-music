@@ -44,6 +44,7 @@ import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
   createBeatResolver,
+  volWavToLinearGain,
 } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
@@ -135,11 +136,9 @@ export async function prepareBeatorajaGameplayChart(
   // the first `node.start()` would otherwise pay a one-time ramp-up tax.
   void audioContext.resume().catch(() => undefined);
   const audioBus = buildAudioBus(audioContext, options.audioCompressorMode ?? 'split', options.audioBusOptions);
-  // `#VOLWAV` master volume scaling; charts that omit the directive stay at unity.
-  const volWav = chart.bms.volWav;
-  if (typeof volWav === 'number' && Number.isFinite(volWav) && volWav >= 0) {
-    audioBus.setMasterGain(volWav / 100);
-  }
+  // `#VOLWAV` master volume scaling; charts that omit the directive, or set it outside beatoraja's 0 < n < 200 range,
+  // stay at unity.
+  audioBus.setMasterGain(volWavToLinearGain(chart.bms.volWav));
 
   // 3. Decode every `#WAVxx` slot in parallel. Audio entries are stored as lazy `File` references in the
   // dropped-source map — `loadAssetBytes` does the on-demand `arrayBuffer()` unwrap.

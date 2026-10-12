@@ -77,7 +77,10 @@ export interface PlaylogChart {
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
-  /** Raw `#TOTAL` / bmson `info.total`. Omitted when the chart did not specify one — each ruleset applies its own default. */
+  /**
+   * Raw `#TOTAL` / bmson `info.total` as the chart wrote it — not the effective TOTAL, which each ruleset resolves on
+   * replay (bmson `total` is a percentage of the ruleset's default). Omitted when the chart did not specify one.
+   */
   total?: number;
   /** Chart-level long-note mode (1: LN / 2: CN / 3: HCN) after `#LNMODE` / `info.ln_type` resolution. */
   lnMode: LongNoteMode;

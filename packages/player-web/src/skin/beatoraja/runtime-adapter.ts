@@ -28,7 +28,7 @@ import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './render.ts';
-import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
+import { extractChartSubartist, resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
 import {
   computeBeatorajaChartNoteDistribution,
@@ -2290,13 +2290,11 @@ export class BeatorajaRuntimeAdapter {
         if (last === undefined) return 0;
         return Math.trunc(last.deltaMs);
       }
-      // BMS `#TOTAL` header value (gauge total). Same code (368) as the select scene's
-      // chart-summary readout — ModernChic / GdbG_Skin author it on play too. Returns 0 when
-      // the chart didn't author the directive (legacy / minimal BMS).
-      case BEATORAJA_NUM.BMS_TOTAL: {
-        const total = this.chart?.metadata?.total;
-        return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : 0;
-      }
+      // Chart TOTAL (368). Same code as the select scene's chart-summary readout — ModernChic /
+      // GdbG_Skin author it on play too. Shows the gauge's effective TOTAL once the engine
+      // reports one, else the chart header; 0 when neither exists.
+      case BEATORAJA_NUM.BMS_TOTAL:
+        return resolveChartTotalReadout(this.chart, summary?.gauge) ?? 0;
       // Target / rival diff slots — no IR / DB layer, return 0 so the readout shows zero rather
       // than garbage. (Authors gate these behind `if[ir_loaded]` / similar so the zero is benign.)
       case BEATORAJA_NUM.DIFF_EXSCORE:

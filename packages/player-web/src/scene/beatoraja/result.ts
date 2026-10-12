@@ -36,6 +36,7 @@ import type { BeMusicJson } from '@be-music/json';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import { computeBeatorajaBpmCurve, type BpmCurvePoint } from '../../chart/beatoraja/bpm-curve.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
+import { resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
 import type { BeatorajaSceneTransition } from '../../skin/beatoraja/scene-transition.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { BeatorajaFontCache } from '../../skin/beatoraja/fonts.ts';
@@ -374,6 +375,9 @@ export class PixiBeatorajaResultScene implements PixiScene {
         return summary.total;
 
       // ─── Gauge ────────────────────────────────────────────────────────────────────────────
+      // Chart TOTAL (368): the effective TOTAL the run's gauge used, as the play scene shows it.
+      case BEATORAJA_NUM.BMS_TOTAL:
+        return resolveChartTotalReadout(this.options.chart, summary.gauge) ?? 0;
       case BEATORAJA_NUM.GROOVEGAUGE:
         return Math.floor(gaugePct);
       case BEATORAJA_NUM.GROOVEGAUGE_AFTERDOT:

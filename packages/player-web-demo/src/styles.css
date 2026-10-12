@@ -45,12 +45,14 @@ body {
  * background colours therefore drop to fairly low alpha values;
  * widget / row backgrounds keep slightly more opacity for
  * legibility against busy chart graphics. `-webkit-backdrop-filter`
- * is paired in for Safari / iOS WebKit support.
+ * is paired in for Safari / iOS WebKit support. Declare the prefixed form FIRST everywhere in this file: the build's
+ * CSS minifier folds a prefixed declaration that follows the standard one into the prefixed form only, which Chromium
+ * ignores, so the blur silently disappeared in production.
  */
-.lil-gui.root {
-  --background-color: rgb(17 22 32 / 0.45);
+.lil-gui.lil-root {
+  --background-color: rgb(17 22 32 / 0.62);
   --text-color: #f8fafc;
-  --title-background-color: rgb(11 14 22 / 0.55);
+  --title-background-color: rgb(11 14 22 / 0.72);
   --title-text-color: #f8fafc;
   --widget-color: rgb(27 34 48 / 0.7);
   --hover-color: #ffd166;
@@ -59,17 +61,32 @@ body {
   --string-color: #ffd166;
   --font-family: 'LINE Seed JP', system-ui, sans-serif;
   z-index: 10;
-  backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
 }
 
 /*
  * Folder children inherit the root's `--background-color` (transparent),
- * so blur applied to .lil-gui.root covers the whole panel. We
+ * so blur applied to .lil-gui.lil-root covers the whole panel. We
  * deliberately don't add a separate `backdrop-filter` to the
  * folder, otherwise stacked filters would re-blur an already
  * blurred image and over-soften the chart visuals.
+ *
+ * lil-gui's own stylesheet re-declares its palette on every
+ * `.lil-gui`, folders included, so without this rule only the
+ * root's own rows would pick up the demo palette.
  */
+.lil-gui.lil-root .lil-gui {
+  --text-color: inherit;
+  --title-background-color: inherit;
+  --title-text-color: inherit;
+  --widget-color: inherit;
+  --hover-color: inherit;
+  --focus-color: inherit;
+  --number-color: inherit;
+  --string-color: inherit;
+  --font-family: inherit;
+}
 
 /*
  * Record-button accent. lil-gui paints function controllers as
@@ -78,13 +95,13 @@ body {
  * and pulse the box-shadow so it stays visible without dominating
  * gameplay rendered behind it.
  */
-.lil-gui .controller.recording {
+.lil-gui .lil-controller.recording {
   background: #c33b3b;
   animation: record-pulse 1.4s ease-in-out infinite;
 }
 
-.lil-gui .controller.recording .name,
-.lil-gui .controller.recording .widget {
+.lil-gui .lil-controller.recording .lil-name,
+.lil-gui .lil-controller.recording .lil-widget {
   color: #fff;
 }
 
@@ -95,13 +112,13 @@ body {
  * takes over. We use a softer amber + slower pulse so it reads
  * as "ready, but not yet capturing".
  */
-.lil-gui .controller.arming {
+.lil-gui .lil-controller.arming {
   background: #b8841d;
   animation: record-arming 2s ease-in-out infinite;
 }
 
-.lil-gui .controller.arming .name,
-.lil-gui .controller.arming .widget {
+.lil-gui .lil-controller.arming .lil-name,
+.lil-gui .lil-controller.arming .lil-widget {
   color: #fff;
 }
 
@@ -307,8 +324,8 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 18px;
   background: linear-gradient(180deg, rgb(20 24 34 / 0.78), rgb(11 14 22 / 0.78));
-  backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
+  backdrop-filter: blur(18px) saturate(160%);
   box-shadow:
     0 24px 60px rgb(0 0 0 / 0.45),
     0 0 0 1px rgb(255 255 255 / 0.04) inset;
@@ -445,8 +462,8 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 14px;
   background: rgb(11 14 22 / 0.7);
-  backdrop-filter: blur(14px) saturate(150%);
   -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   box-shadow:
     0 18px 36px rgb(0 0 0 / 0.4),
     0 0 0 1px rgb(255 255 255 / 0.03) inset;
@@ -1095,8 +1112,8 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 999px;
   background: rgb(11 14 22 / 0.7);
-  backdrop-filter: blur(10px) saturate(140%);
   -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
   color: #d2d9e4;
   font-family: 'LINE Seed JP', system-ui, sans-serif;
   font-size: 11px;
@@ -1188,8 +1205,8 @@ body {
   position: absolute;
   inset: 0;
   background: rgb(4 6 10 / 0.65);
-  backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 .help-modal-card {
@@ -1203,8 +1220,8 @@ body {
   border: 1px solid rgb(255 255 255 / 0.08);
   border-radius: 18px;
   background: rgb(11 14 22 / 0.96);
-  backdrop-filter: blur(20px) saturate(150%);
   -webkit-backdrop-filter: blur(20px) saturate(150%);
+  backdrop-filter: blur(20px) saturate(150%);
   box-shadow: 0 28px 80px rgb(0 0 0 / 0.55);
   /*
    * Slide-in entry that reads as "the dialog rose into focus"
@@ -2098,8 +2115,8 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   font-size: 12px;
   line-height: 1.35;
   transform: translateX(-50%);
-  backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
   animation: silent-mode-hint-in 0.25s ease-out;
 }
 

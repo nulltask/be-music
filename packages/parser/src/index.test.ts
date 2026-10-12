@@ -483,6 +483,23 @@ describe('parser', () => {
     ).toBe(true);
   });
 
+  test.each([
+    ['info.resolution', { info: { init_bpm: 120, resolution: -480 } }],
+    ['root resolution', { info: { init_bpm: 120 }, resolution: -480 }],
+  ])('bmson: a negative %s is read as its absolute value per the 1.0.0 spec', (_label, document) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        ...document,
+        sound_channels: [{ name: 'sample.wav', notes: [{ x: 1, y: 960 }] }],
+      }),
+    );
+
+    // Spec: "If negative, take the absolute value." At 480 pulses per quarter note, y = 960 is beat 2 of measure 0.
+    expect(json.bmson.info.resolution).toBe(480);
+    expect(json.events).toEqual([{ measure: 0, channel: '11', position: [960, 1920], value: '01' }]);
+  });
+
   test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
     const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
     const input = await readFile(chartPath, 'utf8');
@@ -616,7 +633,7 @@ describe('parser', () => {
         version: '1.0.0',
         info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k' },
         sound_channels: [{ name: 'key.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
-        key_channels: [
+        mine_channels: [
           {
             name: 'mine.wav',
             notes: [
@@ -625,6 +642,7 @@ describe('parser', () => {
             ],
           },
         ],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 24, y: 480 }] }],
       }),
     );
 
@@ -636,8 +654,9 @@ describe('parser', () => {
       '1P',
       '1Q',
     ]);
-    // Mines take the same lanes on the landmine bank.
+    // Mines and hidden notes take the same lanes on the landmine and invisible banks.
     expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('D')))).toEqual(['DA', 'DQ']);
+    expect(sortEventsByTime(json.events.filter((event) => event.channel.startsWith('3')))).toEqual(['3O']);
   });
 
   test('bmson: mode_hint=keyboard-24k keeps a sparse chart on its own lanes (no positional compaction)', () => {
@@ -667,7 +686,8 @@ describe('parser', () => {
         version: '1.0.0',
         info: { init_bpm: 120, resolution: 240, mode_hint: 'keyboard-24k-double' },
         sound_channels: [{ name: 'key.wav', notes: xs.map((x, index) => ({ x, y: index * 240 })) }],
-        key_channels: [{ name: 'mine.wav', notes: [{ x: 52, y: 0 }] }],
+        mine_channels: [{ name: 'mine.wav', notes: [{ x: 52, y: 0 }] }],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 36, y: 0 }] }],
       }),
     );
 
@@ -675,6 +695,29 @@ describe('parser', () => {
       sortEventsByTime(json.events.filter((event) => event.channel.startsWith('1') || event.channel.startsWith('2'))),
     ).toEqual(['11', '1P', '1Q', '21', '29', '2A', '2O', '2P', '2Q']);
     expect(json.events.filter((event) => event.channel.startsWith('E')).map((event) => event.channel)).toEqual(['EQ']);
+    expect(json.events.filter((event) => event.channel.startsWith('4')).map((event) => event.channel)).toEqual(['4A']);
+  });
+
+  test('bmson: an unknown mode_hint numbers the lanes hidden notes and mines use along with the playable ones', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-3k' },
+        sound_channels: [
+          {
+            name: 'key.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 4, y: 240 },
+            ],
+          },
+        ],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 480 }] }],
+        mine_channels: [{ name: 'mine.wav', notes: [{ x: 3, y: 720 }] }],
+      }),
+    );
+
+    expect(sortEventsByTime(json.events)).toEqual(['11', '14', '32', 'D3']);
   });
 
   test('bmson: mode_hint=keyboard-48k (BmsONE single-player 48 keys) is not aliased to keyboard-24k-double', () => {
@@ -758,6 +801,50 @@ describe('parser', () => {
     expect(sortedChannels).toEqual(['13', '11', '12']);
   });
 
+  test.each([
+    ['beat-7k', 9],
+    ['popn-5k', 6],
+    ['keyboard-24k', 27],
+  ])('bmson: an x outside the %s lane table is a BGM note, as in beatoraja', (modeHint, outsideX) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: modeHint },
+        sound_channels: [
+          { name: 'key.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'outside.wav', notes: [{ x: outsideX, y: 240 }] },
+        ],
+      }),
+    );
+
+    // beatoraja's BMSONDecoder maps `x` through the hint's key table and plays anything outside it as a background
+    // note, so the sound still plays but no lane receives a note.
+    expect(json.events.map((event) => [event.channel, event.value])).toEqual([
+      ['11', '01'],
+      ['01', '02'],
+    ]);
+  });
+
+  test('bmson: an out-of-table x on the same pulse as a playable note of its sound channel is dropped like x = 0', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          {
+            name: 'sample.wav',
+            notes: [
+              { x: 1, y: 0 },
+              { x: 9, y: 0 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(json.events.map((event) => event.channel)).toEqual(['11']);
+  });
+
   test('bmson: generic-Nkeys mode_hint generates a left-to-right positional map', () => {
     const json = parseBmson(
       JSON.stringify({
@@ -777,8 +864,8 @@ describe('parser', () => {
       }),
     );
 
-    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map so the parser routes it to the
-    // channel-11 default (consumers see one playable note at lane 1 plus three at the explicit slots).
+    // x=1..3 within the declared key count map to 11/12/13; x=4 falls outside the map, so it is a BGM note (01), as
+    // beatoraja plays an x outside the key table.
     const sortedChannels = json.events
       .slice()
       .sort(
@@ -786,7 +873,7 @@ describe('parser', () => {
           left.measure - right.measure || left.position[0] / left.position[1] - right.position[0] / right.position[1],
       )
       .map((event) => event.channel);
-    expect(sortedChannels).toEqual(['11', '12', '13', '11']);
+    expect(sortedChannels).toEqual(['11', '12', '13', '01']);
   });
 
   test('bmson: missing info.total defaults to 100 per the 1.0.0 spec', () => {
@@ -1090,8 +1177,8 @@ describe('parser', () => {
     expect(reparsed.events.find((event) => event.channel === '11')?.bmson?.t).toBe(3);
   });
 
-  test('bmson: key_channels mines route through the same mode_hint lane map onto Dx / Ex channels', async () => {
-    const json = await parseChartFile(resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson'));
+  test('bmson: mine_channels become mines and key_channels become invisible notes through the mode_hint lane map', async () => {
+    const json = await parseChartFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'));
 
     const mineEvents = json.events.filter((event) => event.channel.startsWith('D') || event.channel.startsWith('E'));
     expect(mineEvents).toHaveLength(3);
@@ -1104,8 +1191,48 @@ describe('parser', () => {
     // x=8 → 16 (1P scratch) → mine D6
     expect(mineEvents[2].channel).toBe('D6');
     expect(mineEvents[2].bmson?.damage).toBe(100);
-    // The mine WAV is registered after the sound_channels block.
-    expect(json.resources.wav['03']).toBe('wrong.wav');
+    // The mine WAV is registered after the sound_channels and key_channels blocks.
+    expect(json.resources.wav['04']).toBe('wrong.wav');
+    expect(mineEvents.every((event) => event.value === '04')).toBe(true);
+
+    // key_channels are beatoraja's hidden notes: invisible objects on the same lanes, never mines.
+    const invisibleEvents = json.events.filter((event) => /^[34]/.test(event.channel));
+    expect(invisibleEvents.map((event) => event.channel)).toEqual(['32', '36']);
+    expect(json.resources.wav['03']).toBe('hidden.wav');
+  });
+
+  test('bmson: key_channels only carry x / y — damage, l and c are ignored like beatoraja does', () => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
+        key_channels: [
+          {
+            name: 'hidden.wav',
+            notes: [
+              { x: 1, y: 240, l: 240, c: true, damage: 30 },
+              { x: 0, y: 480 },
+            ],
+          },
+        ],
+        mine_channels: [
+          {
+            name: 'mine.wav',
+            notes: [
+              { x: 2, y: 480, l: 240, c: true },
+              { x: 0, y: 720 },
+            ],
+          },
+        ],
+      }),
+    );
+
+    // A lane-less (`x` 0) hidden note or mine has nowhere to go and is dropped, as in beatoraja.
+    expect(json.events.filter((event) => event.channel !== '11')).toEqual([
+      { measure: 0, channel: '31', position: [240, 960], value: '02' },
+      { measure: 0, channel: 'D2', position: [480, 960], value: '03' },
+    ]);
   });
 
   test('JSON: normalizes bms/bmson extensions, ignores deprecated bms.lnObj, and rejects invalid positions', () => {
@@ -1462,13 +1589,21 @@ describe('parser', () => {
     expect(parsed.resources.wav['0A']).toBe('lower.wav');
   });
 
-  test('BMS: `#BASE 62` after the first object line is ignored', () => {
+  test('BMS: `#BASE 62` after the first object line still applies to the whole file, as in beatoraja', () => {
     const parsed = parseChart(['#WAV0a lower.wav', '#00111:0a', '#BASE 62', ''].join('\n'));
 
-    // Pre-scan stops at the first object line; the late `#BASE 62` doesn't take effect, so case is folded as in default
-    // base-36.
-    expect(parsed.bms.base).toBeUndefined();
-    expect(parsed.resources.wav['0A']).toBe('lower.wav');
+    // beatoraja's BMSDecoder reads `#BASE` in a separate pass over the whole file before decoding, so its position does
+    // not matter.
+    expect(parsed.bms.base).toBe(62);
+    expect(parsed.resources.wav['0a']).toBe('lower.wav');
+    expect(parsed.events.map((event) => event.value)).toEqual(['0a']);
+  });
+
+  test('BMS: the last `#BASE` in the file wins, as in beatoraja', () => {
+    expect(parseChart(['#BASE 62', '#00111:0a', '#BASE 36', ''].join('\n')).bms.base).toBeUndefined();
+    expect(parseChart(['#BASE 36', '#00111:0a', '#BASE 62', ''].join('\n')).bms.base).toBe(62);
+    // A `#BASE` line inside a control-flow block counts too: beatoraja's pre-pass does not evaluate `#IF`.
+    expect(parseChart(['#RANDOM 2', '#IF 2', '#BASE 62', '#ENDIF', '#00111:0a', ''].join('\n')).bms.base).toBe(62);
   });
 
   test('BMS: `#BASE 62` preserves case for indexed-headers inside #RANDOM / #IF blocks', () => {

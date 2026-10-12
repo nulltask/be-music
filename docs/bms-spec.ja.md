@@ -25,6 +25,7 @@
 - `bms benchmark` (実装比較): https://hitkey.nekokan.dyndns.info/bmsbench.shtml
 - `bmsplayer data` (互換性調査): https://hitkey.nekokan.dyndns.info/bmsplayer_data2010.shtml
 - Numuther: BMS Scroll ギミック解説（SCROLL/BPM/STOP 実例）: https://note.com/numuther/n/n57bf895e7969
+- LR2・beatoraja など他のプレイヤーが同じコマンドをどう扱うか、be-music がどこで異なるか: [BMS / bmson 互換性ノート](./format-compat.ja.md)
 
 ## 対応状況の要約
 
@@ -42,6 +43,8 @@
 - [x] `CR` 単独改行を行終端として受理
 - [x] 未知ヘッダを `metadata.extras` に保持
 - [x] 既知/未知を問わず `#mmmcc` をイベントとして保持
+- [x] 各行の前後の空白を除去するので、行頭インデント付きコマンドも受理
+- [x] 制御構文の別表記 `#ELSE IF n` / `#END IF` / 値なし `#END` を `#ELSEIF n` / `#ENDIF` として受理（保存・出力時は正規形へ正規化、`#END <他の値>` は未知ヘッダのまま）
 
 ### 行終端
 
@@ -180,6 +183,25 @@
 - [x] `#EXWAVxx` を parse し、`v` volume parameter を audio-renderer と browser WebAudio で反映
 - [x] `#BASEBPM` を `@be-music/chart` 経由で browser HS-FIX calibration の reference BPM として使用
 - [x] Browser player で `#BGAxx` sub-region BGA、`#SWBGAxx` switching BGA、`#ARGBxx` / `#EXBMPxx` tint/alpha を反映
+- [x] チャンネル `51-59` / `61-69`（拡張の `5A-5O` / `6A-6O` を含む）をロングノートとして解釈。`#LNTYPE` 省略時の既定である `#LNTYPE 1` はオブジェクトを始点 / 終点の組にし、`#LNTYPE 2`（MGQ）は `00` 以外が連続するセルの並びを 1 本のロングノートにする
+- [x] `#LNOBJ`: すべての宣言が有効で、宣言順に `bms.lnObjs` へ保持する。このオブジェクトは同じレーンの直前のノートから始まるロングノートを終わらせ、発音しない（HDX の Keyup 発音は採用しない）。直前にノートのない `#LNOBJ` オブジェクトは通常ノートになる
+- [x] `51-69` と `#LNOBJ` のロングノートが同じレーン・同じ位置から始まる場合は `51-69` を優先
+- [x] player はレーン・位置ごとに 1 ノートだけを残す。ロングノートがタップより優先し、それ以外は最小のオブジェクト ID を採用する。残りのノートのキー音は BGM として鳴らす（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
+- [x] チャンネル `06` を POOR BGA として再生する。ミス時に表示し、表示中は `04` / `07` / `0A` より優先する
+- [x] `#POORBGA` 未指定時は、最初の `06` オブジェクトまで `#BMP00` を POOR 画像として使う
+- [x] `#STP xxx[.yyy] zzzz`（`.000` として読む省略形 `xxx zzzz` を含む）を時刻解決で `zzzz` ms の停止として反映し、同じ位置の停止は加算する
+
+### 負の BPM（channel 08 経由の `#BPMxx`）の根拠
+
+LR2 を基準とします（issue #134。LR2body.exe beta3 のデコンパイル OpenLR2、hitkey command memo、LR2 同梱 `history.txt` で検証）。
+
+- LR2 は `#BPMxx` を符号付きのままパースし、ロード時のタイミング事前計算では **|BPM|** で積分します（`LR2_bmsload.cpp:2841-2843`）— 時間軸は決して逆行しません。本実装も同じで、timing resolver は `Math.abs(bpm)` で積分し、最初の負イベント位置を `TimingResolver.reversal` として公開します。
+- その時点で LR2 は片道のミラーを起動します。描画・判定クロックが反転点を中心に鏡映され（譜面は |BPM| 速度で永久に逆スクロール）、イベントポンプが凍結して以後の BGM キー音・BGA・BPM イベントは一切発火せず、ヒットもミスも発生せず、ステージは自力では終わりません（`Scene04_Play.cpp:1267-1269`、`:1375-1382`）。本実装はミラー（レンダラーは鏡映された display クロックでスクロール）と凍結（反転点で判定・リアルタイム音声を停止、BGA は最後の画像を保持）を再現し、反転以降のノートは POOR 掃きせず未判定のまま残します。
+- LR2 からの意図的な逸脱（いずれも退化ケース）: (1) ステージは ESC 待ちでハングせず譜面末尾で自然終了する。(2) 判定は反転点ちょうどで停止する（LR2 の鏡映クロックは厳密には反転直後に判定窓 1 つぶんのヒット余地がある）。(3) `#BPMxx 0` は従来どおりドロップ（直前テンポ継続）— 実機 LR2 はゼロ除算で退化（時刻テーブルに +inf、スクロール停止）。(4) 未定義 `#BPMxx` 参照は従来どおりドロップ — 実機 LR2 はスロットのセンチネル `-1.0` を踏み「`#BPMxx -1`」と同一挙動（1 BPM で逆走）。(5) 負の `#BPM` ヘッダはデフォルト 130 にフォールバック — 実機 LR2 は無ガードでタイミングテーブルが退化。(6) 鏡映表示がチャート先頭まで巻き戻った後は先頭で固定 — 実機 LR2 は負の位置へ後退し続ける。
+- ルールセットの適用範囲: この LR2 モデルは判定ルールセット（`lr2` / `beatoraja` / `iidx`）に関わらず常に適用します（意図的）。負の `#BPMxx` は LR2 固有の作法で、これを使う譜面（Sofa $15 → $1、U9 など）は LR2 の逆スクロールを前提に作られ調整されています。beatoraja 本体はパース時に負の `#BPMxx` 定義を拒否し（`BMSDecoder`:「#negative BPMはサポートされていません」）、ギミックは単なるテンポ継続になってしまいますが、本実装は譜面が想定する事実上の挙動を優先します。判定ルールセットが選ぶのは判定幅・ゲージ・スコアリングのみで、譜面タイミングの解釈は共通です。ルールセットを持たないオフラインレンダラーと選曲プレビューもゲームプレイと一致します。
+- channel 03（inline hex `01`–`FF`）はゼロも負も表現できません。`00` ペアは休符です。
+
+フィクスチャ: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms)、[`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms)、[`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms)
 
 ### `#BASE`
 
@@ -188,8 +210,9 @@
 `#BASE 62` は indexed header と object stream token を case-sensitive な `0-9A-Za-z` として扱い、`0a` と `0A` を別 ID にします。
 
 parser は通常 parse の前に BMS source を pre-scan し、`#BASE 36` / `#BASE 62` を探します。
-scan は最初の object line (`#mmmcc:data`) で止めます。そのため object data より後ろにある `#BASE 62` は、`#BASE` を object より前に置くことを要求する player との互換を優先して無視します。
-未対応値は無視し、現在値または既定の base に fallback します。
+scan は beatoraja と同じくファイル全体を対象にするため、`#BASE` は object data の後ろを含めてどこに書いてもよく、制御構文のブロックもこの scan では評価しません。
+`#BASE 36` / `#BASE 62` の行が複数ある場合は最後の行を採用します。
+未対応値は無視します。
 
 runtime と round-trip の扱い:
 
@@ -217,11 +240,14 @@ runtime と round-trip の扱い:
 `stringifier` は `bms.volWav` が存在する場合、その値を `#VOLWAV n` としてそのまま出力します。
 
 再生時とレンダリング時は、`#VOLWAV` を譜面全体へ掛かる線形 gain として扱います。
-省略時は `100` を既定値とし、実効倍率は `n / 100` です。
+省略時は `100` を既定値とします。`0 < n < 200` の値では実効倍率が `n / 100` になり、それ以外の値では原音量で鳴らします。
 
 - `#VOLWAV 100`: 原音量
-- `#VOLWAV 200`: 原音量の `2` 倍
-- `#VOLWAV 0`: 無音
+- `#VOLWAV 50`: 原音量の半分
+- `#VOLWAV 150`: 原音量の `1.5` 倍
+- `#VOLWAV 0`、`#VOLWAV 200` 以上: 原音量
+
+この範囲は beatoraja に合わせたものです（beatoraja は `0 < n < 200` のときだけ `#VOLWAV` を適用します）。LR2 は `#VOLWAV` を無視します。beatoraja に合わせることで、`#VOLWAV 0` で譜面が無音になったり、大きな値で増幅されて音割れしたりすることを防ぎます。この規則は `@be-music/chart` の `volWavToLinearGain` が実装しています。
 
 この倍率は `player` のリアルタイム再生、選曲画面プレビュー、`audio-renderer` の `renderJson()` / `renderChartFile()` に適用します。
 各 player やハードウェア固有の音量差は再現せず、現実装では単純な gain 倍率としてのみ扱います。
@@ -243,17 +269,7 @@ runtime と round-trip の扱い:
 
 ## 未対応 (一次参照に対する差分)
 
-- [x] 拡張チャンネル `#mmm51-59` (LN: `LNTYPE=1`) の専用挙動
-- [x] 拡張チャンネル `#mmm61-69` (LN: `LNTYPE=2`) の専用挙動
-- [x] ヘッダ `#MIDIFILE` の専用解釈（`bms.midiFile` に保持。再生はしない）
-- [x] チャンネル `06` (POOR-BMP/BGA 切替) の再生時挙動
-- [x] `#POORBGA` 未指定時に `#BMP00` を POOR 画像として扱う既定挙動
-- [x] `#BPM` 未指定時の既定値 `130` を互換動作として扱う方針整理（IR 既定値 `130` に統一）
-- [x] `#PLAYER` の仕様値 `1-4`（特に `2` / `4`）に対する互換方針の明文化
-- [x] `#LNTYPE` 未指定時の既定値 `1` を前提にした LN 解釈規則の定義（`51-69` 実装時）
-- [x] `#LNOBJ` 複数宣言時の扱い（`bms.lnObjs` に宣言順保持）
-- [x] `#LNOBJ` 終端での Keyup 発音拡張の互換方針（HDX Keyup は非採用、終端トリガは抑止）
-- [x] `#xxx51-69` と `#LNOBJ` が競合する譜面での優先順位定義（同一レーン・同一位置は `#xxx51-69` 優先）
+- [ ] `#MIDIFILE` の再生（`bms.midiFile` に保持。再生はしない）
 - [ ] ヘッダ `#MAKER` の専用解釈
 - [ ] `#SUBTITLE` / `#SUBARTIST` / `#COMMENT` の複数行定義（Multiplex）の解釈
 - [ ] 旧式互換ヘッダ `#SONGxx` を `#TEXTxx` 相当として扱う規則
@@ -262,7 +278,6 @@ runtime と round-trip の扱い:
 - [ ] ヘッダ `#CDDA` の扱い（無視・保持・再生反映の方針）
 - [ ] 旧動画系ヘッダ `#VIDEOFPS` / `#VIDEODLY` / `#VIDEOCOLORS` / `#SEEK` 系の扱い
 - [ ] 素材分離ヘッダ `#MATERIALSBMP` / `#MATERIALSWAV` の扱い
-- [x] `#STP` の実時間反映
 - [ ] `#WAVCMD` の pitch / loop 実行。現状の runtime support は audio-renderer と browser WebAudio の `01` volume parameter のみです。
 - [ ] `#OPTION` 複数行の同時適用ルール（現状は単一値保持）
 - [ ] オブジェクトチャンネル `#xxxA6`（`#CHANGEOPTIONxx`）の実行時反映
@@ -273,32 +288,12 @@ runtime と round-trip の扱い:
 - [ ] `#WAVxx` / `#BMPxx` のインデックス範囲（`01-FF` / `01-ZZ` / `00` を含む運用差）と大文字小文字の扱い
 - [ ] 同一タイムラインでの `#xxx03` と `#xxx08` の競合時優先順位
 - [ ] 同一タイムラインでの `#xxx08` と `#xxx09` の競合時優先順位
-- [x] `#BPMxx` の不正値（負数/ゼロ/文字列/指数表記など）入力時の互換挙動
-
-#### 負の BPM（channel 08 経由の `#BPMxx`）の根拠
-
-LR2 を基準とします（issue #134。LR2body.exe beta3 のデコンパイル OpenLR2、hitkey command memo、LR2 同梱 `history.txt` で検証）。
-
-- LR2 は `#BPMxx` を符号付きのままパースし、ロード時のタイミング事前計算では **|BPM|** で積分します（`LR2_bmsload.cpp:2841-2843`）— 時間軸は決して逆行しません。本実装も同じで、timing resolver は `Math.abs(bpm)` で積分し、最初の負イベント位置を `TimingResolver.reversal` として公開します。
-- その時点で LR2 は片道のミラーを起動します。描画・判定クロックが反転点を中心に鏡映され（譜面は |BPM| 速度で永久に逆スクロール）、イベントポンプが凍結して以後の BGM キー音・BGA・BPM イベントは一切発火せず、ヒットもミスも発生せず、ステージは自力では終わりません（`Scene04_Play.cpp:1267-1269`、`:1375-1382`）。本実装はミラー（レンダラーは鏡映された display クロックでスクロール）と凍結（反転点で判定・リアルタイム音声を停止、BGA は最後の画像を保持）を再現し、反転以降のノートは POOR 掃きせず未判定のまま残します。
-- LR2 からの意図的な逸脱（いずれも退化ケース）: (1) ステージは ESC 待ちでハングせず譜面末尾で自然終了する。(2) 判定は反転点ちょうどで停止する（LR2 の鏡映クロックは厳密には反転直後に判定窓 1 つぶんのヒット余地がある）。(3) `#BPMxx 0` は従来どおりドロップ（直前テンポ継続）— 実機 LR2 はゼロ除算で退化（時刻テーブルに +inf、スクロール停止）。(4) 未定義 `#BPMxx` 参照は従来どおりドロップ — 実機 LR2 はスロットのセンチネル `-1.0` を踏み「`#BPMxx -1`」と同一挙動（1 BPM で逆走）。(5) 負の `#BPM` ヘッダはデフォルト 130 にフォールバック — 実機 LR2 は無ガードでタイミングテーブルが退化。(6) 鏡映表示がチャート先頭まで巻き戻った後は先頭で固定 — 実機 LR2 は負の位置へ後退し続ける。
-- ルールセットの適用範囲: この LR2 モデルは判定ルールセット（`lr2` / `beatoraja` / `iidx`）に関わらず常に適用します（意図的）。負の `#BPMxx` は LR2 固有の作法で、これを使う譜面（Sofa $15 → $1、U9 など）は LR2 の逆スクロールを前提に作られ調整されています。beatoraja 本体はパース時に負の `#BPMxx` 定義を拒否し（`BMSDecoder`:「#negative BPMはサポートされていません」）、ギミックは単なるテンポ継続になってしまいますが、本実装は譜面が想定する事実上の挙動を優先します。判定ルールセットが選ぶのは判定幅・ゲージ・スコアリングのみで、譜面タイミングの解釈は共通です。ルールセットを持たないオフラインレンダラーと選曲プレビューもゲームプレイと一致します。
-- channel 03（inline hex `01`–`FF`）はゼロも負も表現できません。`00` ペアは休符です。
-
-フィクスチャ: [`examples/test/negative-bpm-reverse.bms`](../examples/test/negative-bpm-reverse.bms)、[`negative-bpm-zero.bms`](../examples/test/negative-bpm-zero.bms)、[`negative-bpm-undefined-slot.bms`](../examples/test/negative-bpm-undefined-slot.bms)
-
-- [x] `#STP` 書式 `xxx[.yyy] zzzz` と省略形 `xxx zzzz` の timing 解釈
-- [x] Browser player: `#BGAxx` の sub-region 切り出し/配置パラメータ解釈
 - [ ] `#@BGAxx` の実行時反映（分岐/条件付き BGA 定義）
-- [x] Browser player: `#SWBGAxx` の実行時反映（条件に応じた BGA 切替）
-- [x] Browser player: `#ARGBxx` / `#EXBMPxx` の実行時反映（透過・合成パラメータ）
 - [ ] CLI/TUI での `#BGAxx`、`#SWBGAxx`、`#ARGBxx`、`#EXBMPxx` 反映
 - [ ] `#DEFEXRANK 0` を含む境界値の判定幅解釈
-- [ ] `#PATH_WAV` を再生/レンダリング時の実ファイル解決に適用
-- [x] チャンネル `0A` (BGA LAYER2) の描画対応
+- [ ] ターミナル版 player がプレイ用にサンプルを読み込むときの `#PATH_WAV` 適用（browser gameplay、オフラインレンダラー、選曲画面プレビューはすでにディレクトリ接頭辞として試す）
 - [ ] 互換ディレクティブ `#RONDAM` / `#SETRONDAM` / `#IFEND` の受理方針
 - [ ] 全角コマンド・全角スペース混在入力の受理方針
-- [ ] オブジェクトデータ文字列が奇数長の場合の末尾トークン処理方針
 - [ ] CRLF+LF 混在ファイルの制御構文評価互換（行終端揺れ）
 - [ ] 末尾改行なしファイルの厳密互換（パーサ/制御構文）
 - [ ] 大量/入れ子 `#RANDOM`・`#SWITCH` を含む譜面の評価安定性
@@ -306,23 +301,15 @@ LR2 を基準とします（issue #134。LR2body.exe beta3 のデコンパイル
 - [ ] `#000` 小節の演奏オブジェクトを含む譜面の時刻/判定互換
 - [ ] 高分解能譜面（例: 小節分解能 4032 以上）の精度検証と上限方針
 - [ ] 小節番号上限（`#999` 近傍）および `#1000` 以降入力時の取り扱い
-- [x] `#STOPxx` / `#BPMxx` のマルチ定義時は EOF 側の行を採用
-- [x] `#WAVxx` / `#BMPxx` のマルチ定義時は EOF 側の行を採用
-- [x] 一般ヘッダ・索引付き拡張ヘッダ・`#mmm02` の重複定義は原則 EOF 側優先
 - [ ] 音声フォーマット互換（μ-law WAV など）に対する対応方針
 - [ ] 地雷再生以外で `00` オブジェクトを通常の `#WAV00` 参照として扱う互換方針
 - [ ] `#WAVxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
 - [ ] `#BMPxx` の拡張子省略/不一致時における代替ファイル探索（拡張子フォールバック）
 - [ ] 未定義 `#BPMxx` / `#STOPxx` 参照時の互換挙動（無視・既定値・エラー）
 - [ ] `#STOPxx` 空定義参照（例: `#05209:` の未定義トークン）時の互換挙動
-- [x] 行頭インデント付きコマンド（先頭空白 + `#COMMAND`）の受理方針: 前後の空白を除去して受理する
-- [x] 制御構文の別表記 `#ELSE IF n` / `#END IF` / 値なし `#END` を `#ELSEIF n` / `#ENDIF` として受理（保存・出力時は正規形へ正規化、`#END <他の値>` は未知ヘッダのまま）
 - [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
-- [x] Bemuse 拡張ヘッダ `#SPEEDxx` の受理と実行時反映
-- [x] Bemuse 拡張チャンネル `#xxxSP`（spacing factor）の受理と描画反映
 - [ ] Bemuse 拡張行 `#EXT #xxxyy:...` の受理規則（通常オブジェクトとの差分）
 - [ ] 256x256 超過 BGA（oversize BGA）の描画方針（切り抜き・縮小・配置）
-- [x] BGA 合成の最大レイヤ数と優先順位（通常時は 3 層: `04` < `07` < `0A`、POOR 表示中は POOR を最優先）
 - [ ] 動画 BGA に対する `#ARGBxx` / `#BGAxx` パラメータ適用の有無
 - [ ] `#BASEBPM` の core time-resolution 反映方針。browser HS-FIX は視覚上の reference BPM として使いますが、内部 chart timing は BPM event に従います。
 - [ ] player: `#PLAYER` 未指定時の既定値 `1` を選曲画面・TUI・結果表示へ反映
@@ -392,6 +379,7 @@ LR2 を基準とします（issue #134。LR2body.exe beta3 のデコンパイル
 
 - `data` は 2文字単位で分割し、`00` は空イベント
 - `data` は最初の空白文字で打ち切り、それ以降の文字列は無視する
+- ID の文字種に含まれない文字は枠を消費せずに読み飛ばし、奇数個目の末尾の 1 文字は捨てる
 - 位置は `position: [numerator, denominator]` として保持
 - `denominator = トークン数`
 - `numerator = トークンの0始まりインデックス`
@@ -410,6 +398,7 @@ LR2 を基準とします（issue #134。LR2body.exe beta3 のデコンパイル
 - `position` の分母情報から小節内解像度を決定
 - 同一小節・同一チャンネルでは分母の最小公倍数を採用
 - `--maxResolution` 指定時は上限で打ち切り
+- bmson から読んだ譜面は、BMS で書き方が異なる部分を変換する: ロングノートは `5x` / `6x` 上の `#LNTYPE 1` のペアにして `ln_type` / `t` から `#LNMODE` を出力し、地雷の値は base36 のダメージに（サンプルは `#WAV00` に）、`judge_rank` は `#DEFEXRANK` にし、百分率の `total` は `#TOTAL` として出力しない。詳細は [BMSON 仕様 — BMS と bmson の相互変換](./bmson-spec.ja.md#bms-と-bmson-の相互変換)
 
 ## 制御構文の評価ルール
 
