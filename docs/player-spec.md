@@ -280,6 +280,8 @@ bmson determines the judgment width using the following priority order.
 
 bmson's `judgeRank` shares the `100 = NORMAL` percentage unit with `#DEFEXRANK` and converts through the same LR2 anchor interpolation.
 Therefore `judgeRank=100` is exactly `NORMAL` (`±18/±40/±100/±200ms`).
+The `beatoraja` ruleset uses `judge_rank` as the judgerank directly, and a bmson chart without it judges like
+`judge_rank: 100` (the bmson default; PGREAT `±20ms` in 7 KEY), never like BMS `#RANK 2`.
 
 In the current implementation, bmson does not have dynamic judgment width change equivalent to BMS's `#EXRANKxx`.
 

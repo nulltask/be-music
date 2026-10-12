@@ -273,6 +273,8 @@ bmson では次の優先順位で判定幅を決めます。
 
 bmson の `judgeRank` は `#DEFEXRANK` と同じ「`100` = `NORMAL`」基準の百分率として扱い、同じ LR2 アンカー補間で判定幅へ換算します。
 そのため `judgeRank=100` は `NORMAL`（`±18/±40/±100/±200ms`）そのままです。
+`beatoraja` ruleset は `judge_rank` をそのまま judgerank として使い、`judge_rank` のない bmson 譜面は
+`judge_rank: 100`（bmson の既定値。7 KEY の PGREAT は `±20ms`）として判定します。BMS の `#RANK 2` 扱いにはなりません。
 
 現在の実装では、bmson に BMS の `#EXRANKxx` 相当の動的判定幅変更はありません。
 
