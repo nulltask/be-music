@@ -5,6 +5,7 @@ import { resolveJudgeRankPercent } from '../core/judge-window.ts';
 import { resolveChartLongNoteMode } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import packageJson from '../../package.json' with { type: 'json' };
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
   BE_MUSIC_PLAYLOG_VERSION,
@@ -14,11 +15,15 @@ import {
   type PlaylogInputEvent,
   type PlaylogNote,
   type PlaylogPlay,
+  type PlaylogRecorderInfo,
   type PlaylogRulesetResult,
 } from './format.ts';
 
 /** Ruleset id used for the engine's own summary cached into `results` at record time. */
 export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
+
+/** `@be-music/player` version stamped into `recorder.engine` of every log this engine records. */
+const ENGINE_VERSION: string = packageJson.version;
 
 /**
  * Chart data the recorder snapshots — structurally a subset of the engine's `PreparedPlaybackChartData`, so the
@@ -46,12 +51,14 @@ export interface PlaylogRecorderPlaySettings {
  * Host-declared subset of the recording inputs — the fields the engine cannot know by itself. Passed through
  * `PlayerOptions.recordPlaylog`. `chartSha256` is the SHA-256 (lowercase hex) of the source chart FILE bytes;
  * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content.
+ * `recorder` identifies the host application; the engine version is added by the recorder itself.
  */
 export type PlaylogRecordingOptions = Pick<
   PlaylogRecorderPlaySettings,
   'gauge' | 'randomLane' | 'dpFlip' | 'native'
 > & {
   chartSha256?: string;
+  recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
 };
 
 export interface PlaylogRecorderOptions {
@@ -61,6 +68,8 @@ export interface PlaylogRecorderOptions {
   /** SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. */
   chartSha256?: string;
   play: PlaylogRecorderPlaySettings;
+  /** Host application that records the play. `engine` is always overwritten with this package's version. */
+  recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
@@ -131,6 +140,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         format: BE_MUSIC_PLAYLOG_FORMAT,
         version: BE_MUSIC_PLAYLOG_VERSION,
         createdAt,
+        recorder: { ...options.recorder, engine: ENGINE_VERSION },
         clock: { unit: 'us', origin: 'chart-zero' },
         chart,
         inputs,

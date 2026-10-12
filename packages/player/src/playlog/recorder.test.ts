@@ -1,3 +1,4 @@
+import packageJson from '../../package.json' with { type: 'json' };
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerSummary } from '../core/engine.ts';
@@ -101,6 +102,34 @@ describe('playlog recorder', () => {
 
     const mineNote = playlog.chart.notes.find((note) => note.type === 'mine');
     expect(mineNote?.damage).toBe(resolveLandmineGaugeEffect({ value: '0A' }).damage);
+  });
+
+  test('stamps the engine version and keeps the host-declared recorder fields', () => {
+    const bare = createPlaylogRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() });
+    expect(bare.recorder).toEqual({ engine: packageJson.version });
+
+    const declared = createPlaylogRecorder(
+      makeRecorderOptions({
+        recorder: { name: 'be-music-web', version: '0.5.0', build: '6471cd16', platform: 'web' },
+      }),
+    ).finalize({ summary: makeSummary() });
+    expect(declared.recorder).toEqual({
+      name: 'be-music-web',
+      version: '0.5.0',
+      build: '6471cd16',
+      engine: packageJson.version,
+      platform: 'web',
+    });
+  });
+
+  test('never lets the host override the engine version', () => {
+    const playlog = createPlaylogRecorder(
+      makeRecorderOptions({
+        // Untyped hosts (plain JS) can still smuggle the field in; the recorder's own value wins.
+        recorder: { name: 'host', engine: '9.9.9' } as PlaylogRecorderOptions['recorder'],
+      }),
+    ).finalize({ summary: makeSummary() });
+    expect(playlog.recorder?.engine).toBe(packageJson.version);
   });
 
   test('captures chart metadata, noteCount, TOTAL, judge rank, and lnMode from the JSON', () => {

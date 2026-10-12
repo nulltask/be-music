@@ -71,6 +71,7 @@ import {
   supportsSystemAudioSession,
   applySilentModePlayback,
   type BeMusicPlaylog,
+  type PlaylogRecorderInfo,
   type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
@@ -127,10 +128,19 @@ import {
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlow } from '@be-music/parser';
 import type { PlayerSummary } from '@be-music/player/core/engine';
+import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
+
+/** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
+const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
+  name: 'be-music-web',
+  version: demoPackageJson.version,
+  ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
+  platform: 'web',
+};
 // lil-gui auto-injects its stylesheet at construction time (see `injectStyles` option, default `true`), so we don't
 // import its CSS explicitly — its package.json doesn't expose the file via `exports` anyway.
 import GUI, { type Controller } from 'lil-gui';
@@ -2452,6 +2462,7 @@ class PlayerWebDemoApp {
         recordPlaylog: {
           gauge: this.guiState.gauge,
           ...(chartSha256 !== undefined ? { chartSha256 } : {}),
+          recorder: PLAYLOG_RECORDER,
         },
       },
       bgaTextures: prep.bga.textures,
@@ -3827,6 +3838,7 @@ class PlayerWebDemoApp {
       gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartSha256 !== undefined ? { chartSha256: overrides.chartSha256 } : {}),
+      playlogRecorder: PLAYLOG_RECORDER,
       replay,
       audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
       audioCompressorParams: this.resolveCompressorParamOverrides(),
