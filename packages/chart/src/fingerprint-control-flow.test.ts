@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, resolveBmsControlFlow } from '../../parser/src/index.ts';
+import { parseBms, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
+import { drawRandomOutcomes, type RandomDraws } from './control-flow.ts';
 import {
   canonicalizeFingerprintDocument,
   computeChartFingerprint,
@@ -146,16 +147,17 @@ function enumerateOutcomes(text: string, limit = 256): number[][] | undefined {
   return vectors;
 }
 
-function resolveWith(text: string, outcomes: ReadonlyArray<number>) {
+/** The draws of `text` whose `#RANDOM` / `#SWITCH` lines take the values of `vector`, in file order. */
+function drawsFor(text: string, vector: ReadonlyArray<number>): RandomDraws {
   const maxes = [...text.matchAll(/^#(?:RANDOM|SWITCH) (\d+)$/gm)].map((match) => Number.parseInt(match[1]!, 10));
-  const draws: number[] = [];
-  outcomes.forEach((value, index) => {
+  const values: number[] = [];
+  vector.forEach((value, index) => {
     if (maxes[index]! >= 2) {
-      draws.push((value - 0.5) / maxes[index]!);
+      values.push((value - 0.5) / maxes[index]!);
     }
   });
   let cursor = 0;
-  return resolveBmsControlFlow(parseBms(text), { random: () => draws[cursor++] ?? 0 });
+  return drawRandomOutcomes(parseBms(text), () => values[cursor++] ?? 0);
 }
 
 /** Checks every outcome of `text` against the parser and the document's distribution; returns the outcomes checked. */
@@ -168,8 +170,9 @@ function checkAgainstParser(text: string, label: string): number {
   const distribution = new Map<string, bigint>();
   const compose = createOutcomeComposer(json, OPTIONS);
   for (const vector of outcomes) {
-    const expected = createPlayFingerprintDocument(resolveWith(text, vector), OPTIONS);
-    const composed = compose(vector);
+    const draws = drawsFor(text, vector);
+    const expected = createPlayFingerprintDocument(resolveBmsControlFlowWithDraws(json, draws), OPTIONS);
+    const composed = compose(draws);
     expect(composed, `${label}, outcome ${vector.join(',')}\n${text}`).toEqual(expected);
     const key = canonicalizeFingerprintDocument(expected);
     distribution.set(key, (distribution.get(key) ?? 0n) + 1n);
@@ -314,8 +317,8 @@ describe('reviewer repros (finding A6)', () => {
       '#00511:01',
     ].join('\n');
     const compose = createOutcomeComposer(parseBms(text), OPTIONS);
-    expect(compose([1]).notes).toContainEqual({ m: '5', p: '0', lane: '11' });
-    expect(compose([2]).notes).not.toContainEqual({ m: '5', p: '0', lane: '11' });
+    expect(compose(drawsFor(text, [1])).notes).toContainEqual({ m: '5', p: '0', lane: '11' });
+    expect(compose(drawsFor(text, [2])).notes).not.toContainEqual({ m: '5', p: '0', lane: '11' });
   });
 
   test('a label tested only in a nested block still splits the default values', () => {

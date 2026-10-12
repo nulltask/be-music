@@ -1,19 +1,32 @@
 /**
  * `#RANDOM` / `#SWITCH` evaluation for the chart fingerprint (`docs/fingerprint-spec.md`, section 3.6).
  *
- * The parser resolves control flow with one shared frame stack (`resolveControlFlow` in `@be-music/parser`): every
- * `#RANDOM n` / `#SWITCH n` line draws a value whether or not it sits in an active branch, `#IF` / `#ELSEIF` compare
- * against the innermost random frame, `#ELSE` / `#ELSEIF` / `#ENDIF` act on the innermost `#IF` frame anywhere on
- * the stack, and a line is applied when every `#IF` and `#SWITCH` frame on the stack is active. This module follows
- * exactly those rules, but for every outcome at once: it builds, per **segment** (a stretch of the capture from an
- * empty stack back to an empty stack), a reduced ordered decision diagram whose paths are the outcomes and whose leaves
- * are the lines applied for them.
+ * `evaluateControlFlow` (`control-flow.ts`) is the one evaluator of the branch semantics: one shared frame stack,
+ * every `#RANDOM n` / `#SWITCH n` line drawing a value whether or not it sits in an active branch, `#IF` / `#ELSEIF`
+ * comparing with the innermost random frame, `#ELSE` / `#ELSEIF` / `#ENDIF` acting on the innermost `#IF` frame
+ * anywhere on the stack, and a line applied when every `#IF` and `#SWITCH` frame on the stack is active. It evaluates
+ * one set of draws. This module drives the same frame operations (`pushValueFrame`, `applyBranchCommand`,
+ * `isControlFlowActive`) for every outcome at once: it builds, per **segment** (a stretch of the capture from an empty
+ * stack back to an empty stack), a reduced ordered decision diagram whose paths are the outcomes and whose leaves are
+ * the lines applied for them.
  *
  * Every variable (a `#RANDOM` / `#SWITCH` line with at least two values) is split into **value classes**: one per
  * label some `#IF` / `#ELSEIF` (random) or `#CASE` (switch) line compares it with, within `1..max`, plus one class
  * `0` for all the values no line names. Values of one class behave identically.
  */
-import type { BmsControlFlowCommand, BmsControlFlowEntry } from '@be-music/json';
+import type { BmsControlFlowEntry } from '@be-music/json';
+import {
+  applyBranchCommand,
+  drawRange,
+  fixedDrawValue,
+  getCurrentFrame,
+  isControlFlowActive,
+  isRandomDrawCommand,
+  parseControlFlowInteger,
+  pushValueFrame,
+  type ControlFlowFrame,
+  type RandomDraws,
+} from './control-flow.ts';
 
 /**
  * Evaluation budget of one segment, in steps: each line processed in one evaluation state costs one step plus the
@@ -24,7 +37,7 @@ export const CONTROL_FLOW_STEP_LIMIT = 1 << 20;
 export interface ControlFlowVariable {
   /** Index among the variables of the chart, in file order. */
   index: number;
-  /** Index among all `#RANDOM` / `#SWITCH` lines of the chart (including those with a single value), in file order. */
+  /** Index of the line's entry in the chart's `RandomDraws` (every `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH`). */
   line: number;
   /** Index of the directive in `bms.controlFlow`. */
   entry: number;
@@ -54,53 +67,8 @@ export interface ControlFlowSegment {
 export interface ControlFlowAnalysis {
   variables: ControlFlowVariable[];
   segments: ControlFlowSegment[];
-  /** Number of `#RANDOM` / `#SWITCH` lines (the length of a play log's `randomOutcomes`). */
+  /** Number of `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` lines (the length of the chart's `RandomDraws`). */
   drawLines: number;
-}
-
-type FrameType = 'random' | 'switch' | 'if';
-
-interface DynamicFrame {
-  /** Index of the directive that pushed the frame. */
-  id: number;
-  type: FrameType;
-  value: number;
-  active: boolean;
-  matched: boolean;
-  hasElse: boolean;
-  fallthrough: boolean;
-  terminated: boolean;
-}
-
-/** Same parsing as the parser's `parsePositiveInteger`. */
-export function parseControlFlowInteger(value: string | undefined): number | undefined {
-  if (!value || value.length === 0) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  const normalized = Math.floor(parsed);
-  return normalized <= 0 ? undefined : normalized;
-}
-
-function findInnermost<T extends { type: FrameType }>(stack: ReadonlyArray<T>, type: FrameType): T | undefined {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    if (stack[index]!.type === type) {
-      return stack[index];
-    }
-  }
-  return undefined;
-}
-
-function removeInnermost<T extends { type: FrameType }>(stack: T[], type: FrameType): void {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    if (stack[index]!.type === type) {
-      stack.splice(index, 1);
-      return;
-    }
-  }
 }
 
 /** Static information per directive, from a pass that tracks only the shape of the stack. */
@@ -123,7 +91,8 @@ export function analyzeControlFlow(
   /** frame id → label → last position that tests it. */
   const lastTests = new Map<number, Map<number, number>>();
   const segments: ControlFlowSegment[] = [];
-  const stack: Array<{ id: number; type: FrameType }> = [];
+  // Only the shape of this stack matters (which frame a line acts on); the values are placeholders.
+  const stack: ControlFlowFrame[] = [];
   let drawLines = 0;
   let segmentStart = 0;
   let hasContent = false;
@@ -151,57 +120,31 @@ export function analyzeControlFlow(
     } else {
       const info: DirectiveInfo = { mergePoint: false };
       directives.set(index, info);
-      const command: BmsControlFlowCommand = entry.command;
-      switch (command) {
-        case 'RANDOM':
-        case 'SWITCH':
-        case 'SETRANDOM':
-        case 'SETSWITCH': {
-          const type = command === 'RANDOM' || command === 'SETRANDOM' ? 'random' : 'switch';
-          if (command === 'RANDOM' || command === 'SWITCH') {
-            const max = parseControlFlowInteger(entry.value) ?? 1;
-            if (max >= 2) {
-              const variable: ControlFlowVariable = {
-                index: variables.length,
-                line: drawLines,
-                entry: index,
-                type,
-                max,
-                classes: [],
-              };
-              variables.push(variable);
-              info.variable = variable;
-              info.mergePoint = true;
-            }
-            drawLines += 1;
-          }
-          stack.push({ id: index, type });
-          break;
+      const { command } = entry;
+      if (isRandomDrawCommand(command)) {
+        if (fixedDrawValue(command, entry.value) === undefined) {
+          const variable: ControlFlowVariable = {
+            index: variables.length,
+            line: drawLines,
+            entry: index,
+            type: command === 'RANDOM' ? 'random' : 'switch',
+            max: drawRange(command, entry.value),
+            classes: [],
+          };
+          variables.push(variable);
+          info.variable = variable;
+          info.mergePoint = true;
         }
-        case 'IF':
-        case 'ELSEIF':
-          recordTest(findInnermost(stack, 'random')?.id, parseControlFlowInteger(entry.value), index);
-          if (command === 'IF') {
-            stack.push({ id: index, type: 'if' });
-          }
-          break;
-        case 'CASE':
-          recordTest(findInnermost(stack, 'switch')?.id, parseControlFlowInteger(entry.value), index);
-          break;
-        case 'ENDIF':
-          removeInnermost(stack, 'if');
-          info.mergePoint = true;
-          break;
-        case 'ENDRANDOM':
-          removeInnermost(stack, 'random');
-          info.mergePoint = true;
-          break;
-        case 'ENDSW':
-          removeInnermost(stack, 'switch');
-          info.mergePoint = true;
-          break;
-        default:
-          break;
+        drawLines += 1;
+        pushValueFrame(stack, command, 0, index);
+      } else {
+        if (command === 'IF' || command === 'ELSEIF') {
+          recordTest(getCurrentFrame(stack, 'random')?.origin, parseControlFlowInteger(entry.value), index);
+        } else if (command === 'CASE') {
+          recordTest(getCurrentFrame(stack, 'switch')?.origin, parseControlFlowInteger(entry.value), index);
+        }
+        info.mergePoint = command === 'ENDIF' || command === 'ENDRANDOM' || command === 'ENDSW';
+        applyBranchCommand(stack, command, entry.value, index);
       }
     }
     if (stack.length === 0) {
@@ -231,14 +174,14 @@ export function analyzeControlFlow(
 }
 
 interface Walk {
-  frames: DynamicFrame[];
+  frames: ControlFlowFrame[];
   position: number;
   emitted: number[];
   mergeKeys: Array<{ key: string; at: number }>;
   fork?: {
     variable: ControlFlowVariable;
     position: number;
-    framesBefore: DynamicFrame[];
+    framesBefore: ControlFlowFrame[];
     next: number;
     children: OutcomeNode[];
   };
@@ -291,7 +234,8 @@ class SegmentEvaluator {
             return undefined;
           }
           const frames = fork.framesBefore.map((frame) => ({ ...frame }));
-          frames.push(createFrame(fork.position, fork.variable.type, value));
+          // Class 0 stands for the values no line tests: no `#IF` / `#CASE` label is 0, so it matches none of them.
+          pushValueFrame(frames, fork.variable.type === 'random' ? 'RANDOM' : 'SWITCH', value, fork.position);
           stack.push({ frames, position: fork.position + 1, emitted: [], mergeKeys: [] });
           continue;
         }
@@ -334,8 +278,13 @@ class SegmentEvaluator {
             };
             break;
           }
-          applyDirective(walk.frames, entry.command, entry.value, walk.position);
-        } else if (isActive(walk.frames)) {
+          if (isRandomDrawCommand(entry.command)) {
+            // Only single-outcome draws and the `#SET…` lines get here.
+            pushValueFrame(walk.frames, entry.command, fixedDrawValue(entry.command, entry.value)!, walk.position);
+          } else {
+            applyBranchCommand(walk.frames, entry.command, entry.value, walk.position);
+          }
+        } else if (isControlFlowActive(walk.frames)) {
           walk.emitted.push(walk.position);
         }
         walk.position += 1;
@@ -407,14 +356,14 @@ class SegmentEvaluator {
    * Abstract state at a merge point: each frame's flags, and each random / switch value only when some later line still
    * compares that frame with it (otherwise it behaves like any untested value).
    */
-  #stateKey(position: number, frames: ReadonlyArray<DynamicFrame>): string {
+  #stateKey(position: number, frames: ReadonlyArray<ControlFlowFrame>): string {
     let key = `${position}`;
     for (const frame of frames) {
       if (frame.type === 'if') {
         key += `|i${frame.active ? 1 : 0}${frame.matched ? 1 : 0}${frame.hasElse ? 1 : 0}`;
         continue;
       }
-      const last = this.#lastTests.get(frame.id)?.get(frame.value);
+      const last = this.#lastTests.get(frame.origin)?.get(frame.value);
       const value = last !== undefined && last >= position ? String(frame.value) : 'o';
       key +=
         frame.type === 'random'
@@ -422,125 +371,6 @@ class SegmentEvaluator {
           : `|s${value}${frame.active ? 1 : 0}${frame.matched ? 1 : 0}${frame.fallthrough ? 1 : 0}${frame.terminated ? 1 : 0}`;
     }
     return key;
-  }
-}
-
-function createFrame(id: number, type: FrameType, value: number): DynamicFrame {
-  return { id, type, value, active: false, matched: false, hasElse: false, fallthrough: false, terminated: false };
-}
-
-function isActive(frames: ReadonlyArray<DynamicFrame>): boolean {
-  for (const frame of frames) {
-    if (frame.type !== 'random' && !frame.active) {
-      return false;
-    }
-  }
-  return true;
-}
-
-/** The parser's `applyControlFlowCommand` for every directive but a variable draw. */
-function applyDirective(
-  stack: DynamicFrame[],
-  command: BmsControlFlowCommand,
-  rawValue: string | undefined,
-  position: number,
-): void {
-  switch (command) {
-    case 'RANDOM':
-    case 'SWITCH':
-      // Only single-value draws get here.
-      stack.push(createFrame(position, command === 'RANDOM' ? 'random' : 'switch', 1));
-      return;
-    case 'SETRANDOM':
-    case 'SETSWITCH':
-      stack.push(
-        createFrame(position, command === 'SETRANDOM' ? 'random' : 'switch', parseControlFlowInteger(rawValue) ?? 1),
-      );
-      return;
-    case 'IF': {
-      const label = parseControlFlowInteger(rawValue);
-      const random = findInnermost(stack, 'random');
-      const matched = label !== undefined && random !== undefined && label === random.value;
-      const frame = createFrame(position, 'if', 0);
-      frame.active = matched;
-      frame.matched = matched;
-      stack.push(frame);
-      return;
-    }
-    case 'ELSEIF': {
-      const frame = findInnermost(stack, 'if');
-      if (!frame || frame.hasElse || frame.matched) {
-        if (frame) {
-          frame.active = false;
-        }
-        return;
-      }
-      const label = parseControlFlowInteger(rawValue);
-      const random = findInnermost(stack, 'random');
-      const matched = label !== undefined && random !== undefined && label === random.value;
-      frame.active = matched;
-      if (matched) {
-        frame.matched = true;
-      }
-      return;
-    }
-    case 'ELSE': {
-      const frame = findInnermost(stack, 'if');
-      if (!frame || frame.hasElse) {
-        if (frame) {
-          frame.active = false;
-        }
-        return;
-      }
-      frame.hasElse = true;
-      frame.active = !frame.matched;
-      frame.matched = true;
-      return;
-    }
-    case 'ENDIF':
-      removeInnermost(stack, 'if');
-      return;
-    case 'ENDRANDOM':
-      removeInnermost(stack, 'random');
-      return;
-    case 'CASE':
-    case 'DEF': {
-      const frame = findInnermost(stack, 'switch');
-      if (!frame) {
-        return;
-      }
-      if (frame.terminated) {
-        frame.active = false;
-        frame.fallthrough = false;
-        return;
-      }
-      if (frame.fallthrough) {
-        frame.active = true;
-        return;
-      }
-      const label = parseControlFlowInteger(rawValue);
-      const matched = command === 'CASE' ? label !== undefined && label === frame.value : !frame.matched;
-      frame.active = matched;
-      frame.fallthrough = matched;
-      if (matched) {
-        frame.matched = true;
-      }
-      return;
-    }
-    case 'SKIP': {
-      const frame = findInnermost(stack, 'switch');
-      if (frame?.active) {
-        frame.terminated = true;
-        frame.active = false;
-        frame.fallthrough = false;
-      }
-      return;
-    }
-    case 'ENDSW':
-      removeInnermost(stack, 'switch');
-      return;
-    default:
-      return;
   }
 }
 
@@ -621,4 +451,9 @@ export function classValueRanges(
 /** The class a drawn value falls into. */
 export function classOfValue(variable: ControlFlowVariable, value: number): number {
   return variable.classes.includes(value) && value !== 0 ? value : 0;
+}
+
+/** The class `draws` take for `variable` (a missing draw counts as value 1). */
+export function classOfDraws(variable: ControlFlowVariable, draws: RandomDraws): number {
+  return classOfValue(variable, draws[variable.line]?.value ?? 1);
 }

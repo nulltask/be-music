@@ -11,11 +11,12 @@ import {
   type BmsControlFlowEntry,
   type BmsControlFlowHeaderEntry,
 } from '@be-music/json';
+import type { RandomDraws } from './control-flow.ts';
 import type { ChartPlayVariant } from './index.ts';
 import { formatRational, isRationalEqual, type Rational } from './fingerprint-rational.ts';
 import {
   analyzeControlFlow,
-  classOfValue,
+  classOfDraws,
   classValueRanges,
   countOutcomePaths,
   type ControlFlowAnalysis,
@@ -1573,17 +1574,16 @@ function sortByCanonicalText<T>(values: T[]): T[] {
 // ---------------------------------------------------------------------------------------------------------------------
 
 /**
- * A function from an outcome (the value of every `#RANDOM` / `#SWITCH` line in file order, as a play log's
- * `randomOutcomes` records it) to its play document, composed from the chart model rather than by resolving the chart.
- * The function throws for an outcome of an opaque factor. Not part of the package API; used to check the model against
- * the parser.
+ * A function from an outcome (the chart's `RandomDraws`, as a play log records them) to its play document, composed
+ * from the chart model rather than by resolving the chart. The function throws for an outcome of an opaque factor. Not
+ * part of the package API; used to check the model against the parser.
  */
 export function createOutcomeComposer(
   json: BeMusicJson,
   options: BeMusicFingerprintOptions,
-): (outcomes: ReadonlyArray<number>) => BeMusicPlayFingerprintDocument {
+): (draws: RandomDraws) => BeMusicPlayFingerprintDocument {
   const model = buildChartModel(json, resolveLaneModeExtension(options.chartPath));
-  return (outcomes) => {
+  return (draws) => {
     if (!model.topFlat || !model.analysis) {
       return model.document as BeMusicPlayFingerprintDocument;
     }
@@ -1596,7 +1596,7 @@ export function createOutcomeComposer(
       let tree = factor.tree;
       while (tree.kind === 'node') {
         const variable = analysis.variables[tree.variable]!;
-        const valueClass = classOfValue(variable, outcomes[variable.line] ?? 1);
+        const valueClass = classOfDraws(variable, draws);
         tree = tree.branches.find((branch) => branch.classes.includes(valueClass))!.tree;
       }
       applyDelta(items, tree.delta);
