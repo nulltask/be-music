@@ -6,6 +6,7 @@
 
 - [BMS 実装仕様](bms-spec.ja.md)
 - [BMSON 実装仕様](bmson-spec.ja.md)
+- [BMS / bmson 互換性ノート（de jure と de facto）](format-compat.ja.md)
 - [Bemuse 実装仕様](bemuse-spec.ja.md)
 - [Player 実装仕様](player-spec.ja.md)
 - [Terminal player 実装メモ](player-tui.ja.md)
