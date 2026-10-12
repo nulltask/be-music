@@ -112,7 +112,7 @@ export interface ListChartFilesOptions {
 }
 
 const SELECTABLE_CHART_EXTENSIONS = new Set(['.bms', '.bme', '.bml', '.pms', '.bmson']);
-const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/6';
+const CHART_SELECTION_CACHE_FORMAT = 'be-music-player-chart-selection-cache/7';
 const CHART_SELECTION_BUILD_CONCURRENCY = Math.max(1, Math.min(8, availableParallelism()));
 let buildChartSelectionEntriesWorker = createBuildChartSelectionEntriesWorker();
 
@@ -467,7 +467,7 @@ async function buildChartSummary(
       : await parseChartFileWithCacheMiss(filePath, signal);
     throwIfAborted(signal);
     const resolvedChart = resolveBmsControlFlow(chart, { random: () => 0 });
-    const resolved = resolveChart(resolvedChart);
+    const resolved = resolveChart(resolvedChart, { chartPath: filePath });
     throwIfAborted(signal);
     title = sanitizeChartSelectionMetadataText(chart.metadata.title);
     subtitle = sanitizeChartSelectionMetadataText(chart.metadata.subtitle);
@@ -476,7 +476,8 @@ async function buildChartSummary(
     genre = sanitizeChartSelectionMetadataText(chart.metadata.genre);
     comment = sanitizeChartSelectionMetadataText(chart.metadata.comment);
     bannerPath = resolveChartSelectionBannerPath(chart);
-    totalNotes = resolved.notes.length;
+    // The notes a play scores: FREE ZONE tails are judged by nobody (mines and invisible objects are not notes).
+    totalNotes = resolved.notes.filter((note) => note.freeZone !== true).length;
     player = chart.bms.player;
     difficulty = resolveDisplayedDifficultyValue(chart);
     rank = resolveDisplayedJudgeRankValue(resolved);
