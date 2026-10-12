@@ -1,3 +1,4 @@
+import { evaluateControlFlow, type ActiveControlFlowEntry, type RandomDraws } from '@be-music/chart';
 import {
   cloneJson,
   type BmsControlFlowCommand,
@@ -12,32 +13,9 @@ type ControlFlowCommand = BmsControlFlowCommand;
 
 export type ControlFlowCaptureFrameType = 'random' | 'if' | 'switch';
 
-interface RandomControlFrame {
-  type: 'random';
-  value: number;
-}
-
-interface IfControlFrame {
-  type: 'if';
-  active: boolean;
-  matched: boolean;
-  hasElse: boolean;
-}
-
-interface SwitchControlFrame {
-  type: 'switch';
-  value: number;
-  active: boolean;
-  matched: boolean;
-  fallthrough: boolean;
-  terminated: boolean;
-}
-
-type ControlFlowFrame = RandomControlFrame | IfControlFrame | SwitchControlFrame;
 type MeasureLengthEntry = BeMusicJson['measures'][number];
 
 export interface ResolveControlFlowOptions {
-  random?: () => number;
   /**
    * Re-applies a captured `#xxx ...` header entry against `json`.
    *
@@ -49,27 +27,28 @@ export interface ResolveControlFlowOptions {
   applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void;
 }
 
-export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFlowOptions): BeMusicJson {
-  if (input.bms.controlFlow.length === 0) {
-    return cloneJson(input);
+/**
+ * Builds the chart `input`'s control flow resolves to under `draws`: the header and object lines
+ * `evaluateControlFlow` (`@be-music/chart`) reports active are applied on a copy of `input`, in file order.
+ */
+export function resolveControlFlow(
+  input: BeMusicJson,
+  draws: RandomDraws,
+  options: ResolveControlFlowOptions,
+): BeMusicJson {
+  const json = cloneJson(input);
+  // Evaluated on the copy so the applied events never share `position` / `bmson` objects with `input`. Draws that do
+  // not belong to this chart throw here, including for a chart without control flow handed non-empty draws.
+  const activeEntries = evaluateControlFlow(json, draws);
+  if (json.bms.controlFlow.length === 0) {
+    return json;
   }
 
-  const random = options.random ?? Math.random;
-  const json = cloneJson(input);
-  const stack: ControlFlowFrame[] = [];
   const measureByIndex = new Map<number, MeasureLengthEntry>();
   for (const measure of json.measures) {
     measureByIndex.set(measure.index, measure);
   }
-
-  for (const entry of json.bms.controlFlow) {
-    if (entry.kind === 'directive') {
-      applyControlFlowCommand(stack, entry.command, entry.value, random);
-      continue;
-    }
-    if (!isControlFlowActive(stack)) {
-      continue;
-    }
+  for (const entry of activeEntries) {
     applyActiveControlFlowEntry(json, entry, options.applyHeader, measureByIndex);
   }
 
@@ -189,7 +168,7 @@ function removeCurrentCaptureFrame(stack: ControlFlowCaptureFrameType[], type: C
 
 function applyActiveControlFlowEntry(
   json: BeMusicJson,
-  entry: BmsControlFlowEntry,
+  entry: ActiveControlFlowEntry,
   applyHeader: (json: BeMusicJson, command: string, commandRaw: string | undefined, value: string) => void,
   measureByIndex?: Map<number, MeasureLengthEntry>,
 ): void {
@@ -210,259 +189,6 @@ function applyActiveControlFlowEntry(
         value: normalizeObjectKey(event.value, replayBase),
         ...(event.bmson ? { bmson: event.bmson } : {}),
       });
-    }
-  }
-}
-
-function applyControlFlowCommand(
-  stack: ControlFlowFrame[],
-  command: ControlFlowCommand,
-  rawValue?: string,
-  random: () => number = Math.random,
-): void {
-  if (command === 'RANDOM') {
-    const max = parsePositiveInteger(rawValue) ?? 1;
-    stack.push({
-      type: 'random',
-      value: generateRandomValue(max, random),
-    });
-    return;
-  }
-
-  if (command === 'SETRANDOM') {
-    stack.push({
-      type: 'random',
-      value: parsePositiveInteger(rawValue) ?? 1,
-    });
-    return;
-  }
-
-  if (command === 'IF') {
-    const label = parsePositiveInteger(rawValue);
-    const randomValue = getCurrentRandomValue(stack);
-    const matched = label !== undefined && randomValue !== undefined && label === randomValue;
-    stack.push({
-      type: 'if',
-      active: matched,
-      matched,
-      hasElse: false,
-    });
-    return;
-  }
-
-  if (command === 'ELSEIF') {
-    const frame = getCurrentIfFrame(stack);
-    if (!frame || frame.hasElse || frame.matched) {
-      if (frame) {
-        frame.active = false;
-      }
-      return;
-    }
-
-    const label = parsePositiveInteger(rawValue);
-    const randomValue = getCurrentRandomValue(stack);
-    const matched = label !== undefined && randomValue !== undefined && label === randomValue;
-    frame.active = matched;
-    if (matched) {
-      frame.matched = true;
-    }
-    return;
-  }
-
-  if (command === 'ELSE') {
-    const frame = getCurrentIfFrame(stack);
-    if (!frame || frame.hasElse) {
-      if (frame) {
-        frame.active = false;
-      }
-      return;
-    }
-
-    frame.hasElse = true;
-    if (frame.matched) {
-      frame.active = false;
-      return;
-    }
-    frame.active = true;
-    frame.matched = true;
-    return;
-  }
-
-  if (command === 'ENDIF') {
-    removeCurrentFrame(stack, 'if');
-    return;
-  }
-
-  if (command === 'ENDRANDOM') {
-    removeCurrentFrame(stack, 'random');
-    return;
-  }
-
-  if (command === 'SWITCH') {
-    const max = parsePositiveInteger(rawValue) ?? 1;
-    stack.push({
-      type: 'switch',
-      value: generateRandomValue(max, random),
-      active: false,
-      matched: false,
-      fallthrough: false,
-      terminated: false,
-    });
-    return;
-  }
-
-  if (command === 'SETSWITCH') {
-    stack.push({
-      type: 'switch',
-      value: parsePositiveInteger(rawValue) ?? 1,
-      active: false,
-      matched: false,
-      fallthrough: false,
-      terminated: false,
-    });
-    return;
-  }
-
-  if (command === 'CASE') {
-    const frame = getCurrentSwitchFrame(stack);
-    if (!frame) {
-      return;
-    }
-    if (frame.terminated) {
-      frame.active = false;
-      frame.fallthrough = false;
-      return;
-    }
-    if (frame.fallthrough) {
-      frame.active = true;
-      return;
-    }
-
-    const label = parsePositiveInteger(rawValue);
-    const matched = label !== undefined && label === frame.value;
-    frame.active = matched;
-    frame.fallthrough = matched;
-    if (matched) {
-      frame.matched = true;
-    }
-    return;
-  }
-
-  if (command === 'DEF') {
-    const frame = getCurrentSwitchFrame(stack);
-    if (!frame) {
-      return;
-    }
-    if (frame.terminated) {
-      frame.active = false;
-      frame.fallthrough = false;
-      return;
-    }
-    if (frame.fallthrough) {
-      frame.active = true;
-      return;
-    }
-
-    const shouldActivate = !frame.matched;
-    frame.active = shouldActivate;
-    frame.fallthrough = shouldActivate;
-    if (shouldActivate) {
-      frame.matched = true;
-    }
-    return;
-  }
-
-  if (command === 'SKIP') {
-    const frame = getCurrentSwitchFrame(stack);
-    if (!frame) {
-      return;
-    }
-    if (!frame.active) {
-      return;
-    }
-    frame.terminated = true;
-    frame.active = false;
-    frame.fallthrough = false;
-    return;
-  }
-
-  if (command === 'ENDSW') {
-    removeCurrentFrame(stack, 'switch');
-  }
-}
-
-function parsePositiveInteger(value?: string): number | undefined {
-  if (!value || value.length === 0) {
-    return undefined;
-  }
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-  const normalized = Math.floor(parsed);
-  if (normalized <= 0) {
-    return undefined;
-  }
-  return normalized;
-}
-
-function generateRandomValue(max: number, random: () => number): number {
-  const normalized = Math.max(1, Math.floor(max));
-  if (normalized <= 1) {
-    return 1;
-  }
-  const value = random();
-  const clamped = Number.isFinite(value) ? Math.max(0, Math.min(0.999999999, value)) : 0;
-  return Math.floor(clamped * normalized) + 1;
-}
-
-function isControlFlowActive(stack: ControlFlowFrame[]): boolean {
-  for (const frame of stack) {
-    if (frame.type === 'if' && !frame.active) {
-      return false;
-    }
-    if (frame.type === 'switch' && !frame.active) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function getCurrentRandomValue(stack: ControlFlowFrame[]): number | undefined {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const frame = stack[index];
-    if (frame.type === 'random') {
-      return frame.value;
-    }
-  }
-  return undefined;
-}
-
-function getCurrentIfFrame(stack: ControlFlowFrame[]): IfControlFrame | undefined {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const frame = stack[index];
-    if (frame.type === 'if') {
-      return frame;
-    }
-  }
-  return undefined;
-}
-
-function getCurrentSwitchFrame(stack: ControlFlowFrame[]): SwitchControlFrame | undefined {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const frame = stack[index];
-    if (frame.type === 'switch') {
-      return frame;
-    }
-  }
-  return undefined;
-}
-
-function removeCurrentFrame(stack: ControlFlowFrame[], type: ControlFlowFrame['type']): void {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    if (stack[index].type === type) {
-      stack.splice(index, 1);
-      return;
     }
   }
 }

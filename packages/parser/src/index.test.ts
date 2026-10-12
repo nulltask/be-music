@@ -10,7 +10,9 @@ import {
   parseChart,
   parseChartFile,
   resolveBmsControlFlow,
+  resolveBmsControlFlowWithDraws,
 } from './index.ts';
+import { drawRandomOutcomes } from '../../chart/src/index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const unifiedBmsChartPath = resolve(rootDir, 'examples/test/four-measure-command-combo-test.bms');
@@ -453,6 +455,32 @@ describe('parser', () => {
     expect(parsed.metadata.extras.SWITCH).toBeUndefined();
     expect(parsed.metadata.extras.SETRANDOM).toBeUndefined();
     expect(parsed.metadata.extras.SETSWITCH).toBeUndefined();
+  });
+
+  test('BMS: resolves control flow with explicit draws, the same draws always giving the same chart', async () => {
+    const parsed = await parseChartFile(unifiedBmsChartPath);
+    for (const roll of [0, 0.5, 0.9999999]) {
+      const draws = drawRandomOutcomes(parsed, () => roll);
+      const resolved = resolveBmsControlFlowWithDraws(parsed, draws);
+      expect(resolveBmsControlFlowWithDraws(parsed, draws)).toEqual(resolved);
+      // `resolveBmsControlFlow` is the same resolution with draws it makes itself.
+      expect(resolveBmsControlFlow(parsed, { random: () => roll })).toEqual(resolved);
+    }
+    // Resolving does not touch the source chart.
+    expect(parsed.events.some((event) => event.measure === 20 && event.channel === '12')).toBe(false);
+  });
+
+  test('BMS: rejects draws that were not drawn for the chart', () => {
+    const parsed = parseChart(['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#ENDRANDOM'].join('\n'), 'bms');
+    expect(() => resolveBmsControlFlowWithDraws(parsed, [])).toThrow(RangeError);
+    expect(() => resolveBmsControlFlowWithDraws(parsed, [{ command: 'RANDOM', range: 2, value: 3 }])).toThrow(
+      RangeError,
+    );
+    const plain = parseChart('#00111:01', 'bms');
+    expect(() => resolveBmsControlFlowWithDraws(plain, [{ command: 'RANDOM', range: 2, value: 1 }])).toThrow(
+      RangeError,
+    );
+    expect(resolveBmsControlFlowWithDraws(plain, [])).toEqual(plain);
   });
 
   test('bmson: maps version/lines/info.resolution into IR', async () => {

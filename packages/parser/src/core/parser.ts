@@ -13,6 +13,7 @@ import {
   normalizeObjectKey,
   resolveBmsBase,
 } from '@be-music/json';
+import { drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
 import {
   buildBmsObjectLineEntry,
@@ -543,12 +544,28 @@ export async function parseChartFile(filePath: string, options: ParseChartFileOp
 }
 
 export interface ResolveBmsControlFlowOptions {
+  /** Random source for the draws, in `[0, 1)`. Defaults to `Math.random`. */
   random?: () => number;
 }
 
+/**
+ * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with freshly drawn outcomes: shorthand for
+ * `resolveBmsControlFlowWithDraws(input, drawRandomOutcomes(input, random))`. A host that needs to know which branches
+ * it played (the play log, the RANDOM summary, a second scene showing the same chart) draws once with
+ * `drawRandomOutcomes` (`@be-music/chart`) and resolves with {@link resolveBmsControlFlowWithDraws} instead.
+ */
 export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsControlFlowOptions = {}): BeMusicJson {
-  return resolveControlFlow(input, {
-    random: options.random,
+  return resolveBmsControlFlowWithDraws(input, drawRandomOutcomes(input, options.random ?? Math.random));
+}
+
+/**
+ * Resolves `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow with explicit outcomes — the draws made once for a play
+ * with `drawRandomOutcomes`, or the ones a play log recorded. The same chart and draws always give the same result.
+ *
+ * @throws RangeError when `draws` was not drawn for `input`'s control flow.
+ */
+export function resolveBmsControlFlowWithDraws(input: BeMusicJson, draws: RandomDraws): BeMusicJson {
+  return resolveControlFlow(input, draws, {
     applyHeader: (json, command, commandRaw, value) => {
       // Replay path: prefer the case-preserved `commandRaw` when available so a `#WAV0a` captured inside a `#RANDOM` /
       // `#IF` block on a `#BASE 62` chart still registers under the lowercase key. Falls back to the uppercased
