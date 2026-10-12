@@ -1000,17 +1000,20 @@ export function dropNoOpChanges(
 }
 
 /**
- * SPEED is interpolated linearly (in beats) between keyframes, holds the first keyframe's value before it and the last
- * one's after it, and is 1 without keyframes. Within each maximal run of equal consecutive values only the run's first
- * and last keyframes matter; a leading run keeps only its last, a trailing run only its first. A curve that is one
- * constant value is a single keyframe at measure 0, position 0, or nothing when that value is 1.
+ * SPEED is interpolated linearly (in beats) between keyframes and holds the last one's value after it. Before the first
+ * keyframe it ramps from 1 at measure 0, position 0, as beatoraja ramps from 1.0 at time 0; a keyframe at that position
+ * applies at once instead. So the curve runs through a head keyframe (0, 1), replaced by a keyframe at 0, and the
+ * keyframes. Within each maximal run of equal consecutive values (head included) only the run's first and last
+ * keyframes matter, and the trailing run only its first. The head is written only when a keyframe at 0 sets a value
+ * other than 1, so a curve that is 1 throughout has no keyframes.
  */
 function dropRedundantSpeedKeyframes(sorted: ReadonlyArray<TimelineItem>): TimelineItem[] {
-  if (sorted.length === 0) {
-    return [];
-  }
+  const origin: FpTime = { m: 0, n: 0, d: 1 };
+  const explicitHead = sorted[0] !== undefined && compareTime(sorted[0].t, origin) === 0 ? sorted[0] : undefined;
+  const head: TimelineItem = explicitHead ?? { t: origin, type: 'speed', v: RATIONAL_ONE };
+  const points = explicitHead ? sorted : [head, ...sorted];
   const runs: Array<{ first: TimelineItem; last: TimelineItem }> = [];
-  for (const item of sorted) {
+  for (const item of points) {
     const run = runs[runs.length - 1];
     if (run && isRationalEqual(run.last.v, item.v)) {
       run.last = item;
@@ -1018,24 +1021,14 @@ function dropRedundantSpeedKeyframes(sorted: ReadonlyArray<TimelineItem>): Timel
       runs.push({ first: item, last: item });
     }
   }
-  if (runs.length === 1) {
-    const value = runs[0]!.first.v;
-    return isRationalEqual(value, RATIONAL_ONE) ? [] : [{ t: { m: 0, n: 0, d: 1 }, type: 'speed', v: value }];
-  }
   const kept: TimelineItem[] = [];
   runs.forEach((run, index) => {
-    const isLeading = index === 0;
-    const isTrailing = index === runs.length - 1;
-    if (!isLeading) {
-      kept.push(run.first);
-    }
-    if (!isTrailing && run.last !== run.first) {
-      kept.push(run.last);
-    } else if (isLeading && !isTrailing) {
+    kept.push(run.first);
+    if (index < runs.length - 1 && run.last !== run.first) {
       kept.push(run.last);
     }
   });
-  return kept;
+  return isRationalEqual(head.v, RATIONAL_ONE) ? kept.filter((item) => item !== head) : kept;
 }
 
 export interface CanonicalLists {

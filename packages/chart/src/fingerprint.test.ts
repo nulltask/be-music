@@ -368,18 +368,27 @@ describe('SPEED (finding A1)', () => {
     ]);
   });
 
-  test('a single keyframe is a constant curve wherever it is', () => {
-    expect(playFingerprint(chart(...speeds, '#003SP:02'))).toBe(playFingerprint(chart(...speeds, '#000SP:02')));
-    expect(playDocument(chart(...speeds, '#003SP:02')).timeline).toEqual([{ m: '0', p: '0', type: 'speed', v: '2' }]);
+  test('ramps from 1 at the chart start to the first keyframe', () => {
+    // A keyframe after the start is reached by a ramp from 1, so where it sits matters.
+    expect(playFingerprint(chart(...speeds, '#003SP:02'))).not.toBe(playFingerprint(chart(...speeds, '#002SP:02')));
+    expect(playDocument(chart(...speeds, '#003SP:02')).timeline).toEqual([{ m: '3', p: '0', type: 'speed', v: '2' }]);
+    // A keyframe at the start applies at once: the curve is the constant 2.
+    expect(playDocument(chart(...speeds, '#000SP:02', '#003SP:02')).timeline).toEqual([
+      { m: '0', p: '0', type: 'speed', v: '2' },
+    ]);
+    // Keyframes of 1 only, wherever they are, leave the speed at 1 throughout.
+    expect(playFingerprint(chart(...speeds, '#000SP:01', '#003SP:01'))).toBe(playFingerprint(chart(...speeds)));
   });
 
   test('drops keyframes inside a run of equal values and at its outer ends', () => {
     const full = chart(...speeds, '#SPEED03 3', '#001SP:02', '#002SP:02', '#003SP:02', '#004SP:03', '#005SP:03');
-    const reduced = chart(...speeds, '#SPEED03 3', '#003SP:02', '#004SP:03');
+    const reduced = chart(...speeds, '#SPEED03 3', '#001SP:02', '#003SP:02', '#004SP:03');
     expect(playFingerprint(full)).toBe(playFingerprint(reduced));
-    // A middle run keeps both of its ends.
+    // A middle run keeps both of its ends; a leading run of 1 joins the ramp's head and keeps only its last keyframe.
     const middle = chart(...speeds, '#SPEED03 3', '#001SP:01', '#002SP:02', '#003SP:02', '#004SP:03');
     expect(playDocument(middle).timeline.map((event) => event.m)).toEqual(['1', '2', '3', '4']);
+    const leading = chart(...speeds, '#SPEED03 3', '#000SP:01', '#001SP:01', '#002SP:03');
+    expect(playDocument(leading).timeline.map((event) => event.m)).toEqual(['1', '2']);
   });
 });
 
