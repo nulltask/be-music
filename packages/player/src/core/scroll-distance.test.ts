@@ -67,6 +67,46 @@ describe('scroll distance', () => {
     expect(mapper.maxBeatWithinDistance(0, 8)).toBeCloseTo(4 + (-2 + 2 * Math.sqrt(5)), 6);
   });
 
+  test('firstBeatBeyondDistance finds where the lane is first overrun, through negative and zero scroll', () => {
+    // Up 2 beats of distance, back down with SCROLL -1, flat with SCROLL 0, then up again.
+    const mapper = createScrollDistanceMapper([
+      { beat: 2, speed: -1 },
+      { beat: 4, speed: 0 },
+      { beat: 6, speed: 1 },
+    ]);
+
+    // A 3-beat lane is never overrun before beat 6 (peak distance 2), then at beat 6 + 3.
+    expect(mapper.firstBeatBeyondDistance(0, 3)).toBeCloseTo(9, 6);
+    // A 1.5-beat lane is overrun on the way up: everything after beat 1.5 lies beyond the lane top, even the notes the
+    // negative scroll brings back down — beatoraja stops walking the chart there.
+    expect(mapper.firstBeatBeyondDistance(0, 1.5)).toBeCloseTo(1.5, 6);
+    // From inside the falling segment the distance first goes negative, so the overrun comes after the climb.
+    expect(mapper.firstBeatBeyondDistance(3, 1)).toBeCloseTo(6 + 2, 6);
+  });
+
+  test('firstBeatBeyondDistance is infinite when the lane is never overrun', () => {
+    expect(createScrollDistanceMapper([{ beat: 2, speed: 0 }]).firstBeatBeyondDistance(0, 4)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    expect(createScrollDistanceMapper([{ beat: 2, speed: -1 }]).firstBeatBeyondDistance(0, 4)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    // #SPEED 0 holds the notes still for good.
+    expect(createScrollDistanceMapper(undefined, [{ beat: 0, speed: 0 }]).firstBeatBeyondDistance(0, 4)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    // Plain scroll: the lane ends `distance` beats ahead.
+    expect(createScrollDistanceMapper().firstBeatBeyondDistance(5, 4)).toBeCloseTo(9, 6);
+  });
+
+  test('firstBeatBeyondDistance solves within interpolated #SPEED segments', () => {
+    const mapper = createScrollDistanceMapper(undefined, [
+      { beat: 4, speed: 1 },
+      { beat: 8, speed: 3 },
+    ]);
+    expect(mapper.firstBeatBeyondDistance(0, 8)).toBeCloseTo(mapper.maxBeatWithinDistance(0, 8), 6);
+  });
+
   test('invalidDistance option customizes invalid input fallback', () => {
     const mapper = createScrollDistanceMapper(undefined, undefined, { invalidDistance: 0 });
     expect(mapper.distanceBetween(Number.NaN, 2)).toBe(0);

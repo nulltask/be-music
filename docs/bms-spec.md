@@ -360,6 +360,7 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - In `SCROLL 0`, when multiple notes overlap in the same lane and same drawing cell, the preceding note is placed at the reference position, and the subsequent notes are stacked in order toward the side (upward) away from the judgment line.
 - `SCROLL < 0` prioritizes "maintaining note approach display" rather than "faithful reproduction of backward running display", and drawing distance is handled by `abs(distance)`
 - Visible search for `SCROLL` is capped at `MAX_SCROLL_LOOKAHEAD_BEATS` (`4 * 64` beat, in `packages/player-tui/src/tui/tui.ts`)
+- As in beatoraja's `LaneRenderer`, the search ends at the first point where the chart runs past the top of the lane: notes a later negative `SCROLL` brings back into the lane are not drawn until the playhead reaches them (web player and terminal player; see [Browser player — Note visibility](./player-web.md#note-visibility))
 - Even with gimmicks that include BPM×`100001` + `STOP` correction, the BPM display uses the value used in internal time calculation as is.
 - Beatoraja-specific drawing bug-dependent scores are not compatible, and a reproduction mode is not implemented at this time.
 - Verify regression of the above policy with `packages/player-tui/src/tui/lane-stacking.test.ts`, `packages/chart/src/timelines.test.ts`, `packages/player-tui/src/bga.test.ts`

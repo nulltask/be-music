@@ -167,6 +167,15 @@ select, gameplay, and result shape without a decide scene:
 Scenes implement `enter()`, `exit()`, and `dispose()`.
 `exit()` detaches transient listeners and ticker work for transitions, while `dispose()` permanently releases scene-owned resources.
 
+## Note visibility
+
+The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):
+
+- **LR2 rules** — charts without `#SCROLL` / `#SPEED` judged under the `lr2` or `iidx` ruleset. An object draws while its position lies between the lane top and the judgement line.
+- **beatoraja rules** — every chart with `#SCROLL` or `#SPEED` (LR2 plays neither, so beatoraja is the reference) and every chart judged under the `beatoraja` ruleset. As in beatoraja's `LaneRenderer`, the view walks the chart in order from the playhead and stops at the first point that runs past the lane top: nothing beyond it is drawn, not even notes a later negative `#SCROLL` brings back into the lane.
+
+The terminal player stops its walk at the same point when a chart scrolls both ways.
+
 ## Renderer and performance controls
 
 - PixiJS defaults to a WebGPU preference and falls back through PixiJS when the browser cannot initialize it.

@@ -1,0 +1,62 @@
+import { describe, expect, it } from 'vite-plus/test';
+import { createScrollDistanceMapper } from '@be-music/player/core/scroll-distance';
+import { isPastDrawWindow, resolveNoteDrawRules, resolveNoteDrawWindow } from './note-draw-window.ts';
+
+// A gimmick-chart shape: plain scroll, then a negative #SCROLL that pulls the chart back down, a frozen stretch with
+// #SCROLL 0, and plain scroll again.
+const GIMMICK_SCROLL = [
+  { beat: 8, speed: -4 },
+  { beat: 10, speed: 0 },
+  { beat: 12, speed: 1 },
+];
+
+/** The beats the walk visits from `currentBeat`, of beat-sorted `beats`, and whose position lies inside the lane. */
+function drawnBeats(beats: readonly number[], currentBeat: number, laneBeats: number): number[] {
+  const mapper = createScrollDistanceMapper(GIMMICK_SCROLL);
+  const window = resolveNoteDrawWindow({ rules: 'beatoraja', currentBeat, mapper, laneBeats, overscanBeats: 1 });
+  const drawn: number[] = [];
+  for (const beat of beats) {
+    if (beat < currentBeat) continue;
+    if (isPastDrawWindow(window, beat)) break;
+    const distance = mapper.distanceBetween(currentBeat, beat);
+    if (distance >= 0 && distance <= laneBeats) drawn.push(beat);
+  }
+  return drawn;
+}
+
+describe('resolveNoteDrawRules', () => {
+  it('follows beatoraja whenever the chart scrolls (LR2 has no #SCROLL) or the beatoraja ruleset judges', () => {
+    expect(resolveNoteDrawRules(true, 'lr2')).toBe('beatoraja');
+    expect(resolveNoteDrawRules(false, 'beatoraja')).toBe('beatoraja');
+    expect(resolveNoteDrawRules(false, 'lr2')).toBe('lr2');
+    expect(resolveNoteDrawRules(false, 'iidx')).toBe('lr2');
+  });
+});
+
+describe('resolveNoteDrawWindow', () => {
+  it('stops the walk where the chart first overruns the lane, hiding what a negative scroll brings back', () => {
+    // From beat 2 a 4-beat lane is overrun at beat 6; the negative scroll at beat 8 brings beat 9.5 back down onto the
+    // judgement line, inside the lane, but beatoraja's walk never reaches it.
+    const beats = [3, 5, 7, 9.5, 11, 12.5];
+    expect(drawnBeats(beats, 2, 4)).toEqual([3, 5]);
+    // Once the playhead is past the climb they come into reach.
+    expect(drawnBeats(beats, 10.5, 4)).toEqual([11, 12.5]);
+  });
+
+  it('keeps everything a tall lane holds, through zero and negative scroll', () => {
+    // A 9-beat lane is never overrun before beat 12 + (9 - 0): every note on screen is drawn.
+    expect(drawnBeats([3, 7, 8.5, 11, 13], 0, 9)).toEqual([3, 7, 8.5, 11, 13]);
+  });
+
+  it('matches the plain lane end when nothing scrolls', () => {
+    const window = resolveNoteDrawWindow({ rules: 'beatoraja', currentBeat: 4, laneBeats: 2, overscanBeats: 1 });
+    expect(window.lastBeat).toBe(6);
+    expect(isPastDrawWindow(window, 6)).toBe(false);
+    expect(isPastDrawWindow(window, 6.01)).toBe(true);
+  });
+
+  it('keeps the LR2 window (lane plus overscan) for charts without scroll events', () => {
+    const window = resolveNoteDrawWindow({ rules: 'lr2', currentBeat: 4, laneBeats: 2, overscanBeats: 1 });
+    expect(window.lastBeat).toBe(7);
+  });
+});

@@ -12,6 +12,7 @@ export interface ScrollDistanceMapperLike {
   distanceBetween: (fromBeat: number, toBeat: number) => number;
   hasBidirectionalScrollWithinLookahead: (fromBeat: number) => boolean;
   maxBeatWithinDistance: (fromBeat: number, distance: number) => number;
+  firstBeatBeyondDistance: (fromBeat: number, distance: number) => number;
 }
 
 interface ScrollSegment {
@@ -134,6 +135,43 @@ export class ScrollDistanceMapper implements ScrollDistanceMapperLike {
     }
 
     return capBeat;
+  }
+
+  /**
+   * The first beat at or after `fromBeat` whose signed scroll distance from `fromBeat` exceeds `distance` — where the
+   * chart first runs past a lane `distance` beats tall — or `+Infinity` when it never does. Negative and zero
+   * `#SCROLL` segments only bring the distance down or hold it, so the walk carries on through them; unlike
+   * {@link maxBeatWithinDistance} it neither takes absolute distances nor stops at the lookahead cap.
+   *
+   * beatoraja's `LaneRenderer` walks the chart's timelines from the playhead and stops after the first one past the lane
+   * top, so nothing beyond this beat is drawn, even what a later negative `#SCROLL` brings back into the lane.
+   */
+  firstBeatBeyondDistance(fromBeat: number, distance: number): number {
+    const safeFromBeat = Number.isFinite(fromBeat) ? Math.max(0, fromBeat) : 0;
+    const limit = Number.isFinite(distance) ? Math.max(0, distance) : 0;
+    let beat = safeFromBeat;
+    let travelled = 0;
+    for (let index = findLastSegmentIndexByBeat(this.segments, beat); index < this.segments.length; index += 1) {
+      const segment = this.segments[index]!;
+      const nextStartBeat = this.segments[index + 1]?.startBeat ?? Number.POSITIVE_INFINITY;
+      if (segment.scrollSpeed > 0) {
+        // The last segment runs forever: it overruns any lane unless `#SPEED` holds it at 0.
+        const segmentDistance = Number.isFinite(nextStartBeat)
+          ? integratedSignedSegmentDistance(segment, beat, nextStartBeat)
+          : segmentDistanceTerms(segment, beat, segment.scrollSpeed).linear > BEAT_EPSILON
+            ? Number.POSITIVE_INFINITY
+            : 0;
+        if (travelled + segmentDistance > limit) {
+          const delta = solveBeatDeltaWithinSegment(segment, beat, limit - travelled);
+          return Number.isFinite(nextStartBeat) ? Math.min(nextStartBeat, beat + delta) : beat + delta;
+        }
+        travelled += segmentDistance;
+      } else if (Number.isFinite(nextStartBeat)) {
+        travelled += integratedSignedSegmentDistance(segment, beat, nextStartBeat);
+      }
+      beat = Math.max(beat, nextStartBeat);
+    }
+    return Number.POSITIVE_INFINITY;
   }
 
   private distanceAt(beat: number): number {

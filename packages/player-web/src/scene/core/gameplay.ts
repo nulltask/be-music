@@ -52,6 +52,12 @@ import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-m
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
+import {
+  isPastDrawWindow,
+  resolveNoteDrawRules,
+  resolveNoteDrawWindow,
+  type NoteDrawWindow,
+} from './note-draw-window.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
@@ -313,7 +319,10 @@ export interface GameplayMeasureLineFrame {
   beats: readonly number[];
   /** First index into `beats` worth visiting. */
   firstBeatIndex: number;
-  /** Walk stops past this beat (`+Infinity` while a `#SCROLL` / `#SPEED` mapper is active). */
+  /**
+   * Walk stops past this beat. Under beatoraja's rules (see `note-draw-window.ts`) it is where the chart first runs
+   * past the lane top, so a line a negative `#SCROLL` brings back into the lane after that is not drawn.
+   */
   maxBeat: number;
   pixelsPerBeat: number;
   /** Scroll distance in beats from the current playhead to `beat`. */
@@ -4291,7 +4300,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     const currentBeat = this.currentBeat(seconds);
     const pixelsPerBeat = PIXELS_PER_BEAT * this.hiSpeed;
-    this.renderMeasureLines(currentBeat, pixelsPerBeat);
+    let laneHeight = 1;
+    for (const lane of this.laneX.values()) {
+      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    }
+    const drawWindow = resolveNoteDrawWindow({
+      rules: resolveNoteDrawRules(this.scrollMapper !== undefined, this.resolveJudgeRuleset()),
+      currentBeat,
+      mapper: this.scrollMapper,
+      laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
+      overscanBeats: 48 / Math.max(1, pixelsPerBeat),
+    });
+    this.renderMeasureLines(drawWindow, pixelsPerBeat);
     // Note: the lane-bottom beat-pulse glow is drawn by the LR2 skin itself — the "rhythm timer" `#DST_IMAGE` at SRC y=2007
     // in the default 7-keys skin, anchored to timer 140. `elapsedSinceTimer(140)` remaps the chart's current fractional
     // beat to the 0..1000 ms keyframe window the LR2 skin's keyframe chain authored, so the glow flashes on every beat
@@ -4301,11 +4321,6 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
-    let laneHeight = 1;
-    for (const lane of this.laneX.values()) {
-      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
-    }
-    const maxVisibleBeat = currentBeat + (laneHeight + 48) / Math.max(1, pixelsPerBeat);
     // Debug visualization — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
     // entirely (and the array stays empty) when the option is off.
     if (this.options.showInvisibleNotes && this.invisibleNotes.length > 0) {
@@ -4316,7 +4331,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         : findFirstIndexAtOrAfter(this.invisibleNotes, currentBeat, (note) => note.beat);
       for (let invIndex = firstInvisibleIndex; invIndex < this.invisibleNotes.length; invIndex += 1) {
         const invisible = this.invisibleNotes[invIndex]!;
-        if (!this.scrollMapper && invisible.beat > maxVisibleBeat) {
+        if (isPastDrawWindow(drawWindow, invisible.beat)) {
           break;
         }
         const lane = this.laneX.get(invisible.channel);
@@ -4347,7 +4362,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       : findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
     for (let noteIndex = firstNoteIndex; noteIndex < this.notes.length; noteIndex += 1) {
       const note = this.notes[noteIndex]!;
-      if (!this.scrollMapper && note.beat > maxVisibleBeat) {
+      if (isPastDrawWindow(drawWindow, note.beat)) {
         break;
       }
       // Judged notes (hit / auto-missed) intentionally stay on screen and continue scrolling — only their *position*
@@ -4398,7 +4413,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       : findFirstIndexAtOrAfter(this.mineNotes, currentBeat, (note) => note.beat);
     for (let mineIndex = firstMineIndex; mineIndex < this.mineNotes.length; mineIndex += 1) {
       const mine = this.mineNotes[mineIndex]!;
-      if (!this.scrollMapper && mine.beat > maxVisibleBeat) {
+      if (isPastDrawWindow(drawWindow, mine.beat)) {
         break;
       }
       if (mine.judged) continue;
@@ -4471,7 +4486,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * ({@link renderThemeMeasureLines}; the LR2 family uses `#SRC_LINE` / `#DST_LINE`); otherwise we fall back to a thin
    * bar across each run of adjacent lanes, so double play's banks get one each and the gap between them stays clear.
    */
-  private renderMeasureLines(currentBeat: number, pixelsPerBeat: number): void {
+  private renderMeasureLines(drawWindow: NoteDrawWindow, pixelsPerBeat: number): void {
+    const { currentBeat } = drawWindow;
     const beats = this.resolveMeasureBeats();
     if (beats.length === 0 || this.laneChannels.length === 0) {
       return;
@@ -4488,9 +4504,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const firstBeatIndex = this.scrollMapper
       ? 0
       : findFirstIndexNumberAtOrAfter(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
-    const maxBeat = this.scrollMapper
-      ? Number.POSITIVE_INFINITY
-      : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
+    // beatoraja's rules end the walk where the notes' walk ends (bar lines are timelines like any other).
+    const maxBeat =
+      drawWindow.rules === 'beatoraja'
+        ? drawWindow.lastBeat
+        : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
@@ -4503,7 +4521,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const runs = this.resolveMeasureLineRuns();
       for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
         const beat = beats[beatIndex]!;
-        if (!this.scrollMapper && beat > maxBeat) {
+        if (beat > maxBeat) {
           break;
         }
         const y = bottom - beatDistance(beat) * pixelsPerBeat;
@@ -4523,7 +4541,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const graphic = this.noteLayerPool.acquireGraphics();
     for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
       const beat = beats[beatIndex]!;
-      if (!this.scrollMapper && beat > maxBeat) {
+      if (beat > maxBeat) {
         break;
       }
       const y = bottom - beatDistance(beat) * pixelsPerBeat;

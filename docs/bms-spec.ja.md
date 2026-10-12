@@ -360,6 +360,7 @@ runtime と round-trip の扱い:
 - `SCROLL 0` で同一レーン・同一描画セルに複数ノートが重なる場合、先行ノートを基準位置に置き、後続ノートは判定ラインから遠ざかる側（上方向）へ順に積み上げる
 - `SCROLL < 0` は「逆走表示の忠実再現」ではなく「ノート接近表示の維持」を優先し、描画距離は `abs(distance)` で扱う
 - `SCROLL` の可視探索は `MAX_SCROLL_LOOKAHEAD_BEATS`（`4 * 64` beat、`packages/player-tui/src/tui/tui.ts`）で上限を設ける
+- beatoraja の `LaneRenderer` と同じく、可視探索は譜面が最初にレーン上端を越えた位置で打ち切る。後の負の `SCROLL` でレーン内に戻ってくるノートは、判定ラインの位置がそこへ進むまで描かない（web player と terminal player。[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）
 - BPM×`100001` + `STOP` 補正を含むギミックでも、BPM 表示は内部時刻計算で使用する値をそのまま採用する
 - beatoraja 固有の描画バグ依存譜面は互換対象外とし、現時点では再現モードを実装しない
 - 上記ポリシーの回帰は `packages/player-tui/src/tui/lane-stacking.test.ts`・`packages/chart/src/timelines.test.ts`・`packages/player-tui/src/bga.test.ts` で検証する

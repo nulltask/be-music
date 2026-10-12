@@ -159,6 +159,15 @@ LR2 と beatoraja は同じ high-level scene set をそれぞれ持ちます。d
 scene は `enter()`, `exit()`, `dispose()` を実装します。
 `exit()` は transition 向けに一時的な listener と ticker work を外し、`dispose()` は scene 所有 resource を恒久的に解放します。
 
+## ノートの表示範囲
+
+gameplay view は、描くノート・地雷・小節線を 2 つの規則のどちらかで決めます（[`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)）。
+
+- **LR2 の規則** — `#SCROLL` / `#SPEED` を含まず、`lr2` / `iidx` ruleset で判定する譜面。位置がレーン上端と判定ラインの間にあるオブジェクトを描きます。
+- **beatoraja の規則** — `#SCROLL` か `#SPEED` を含むすべての譜面（LR2 はどちらも扱わないため beatoraja を基準にします）と、`beatoraja` ruleset で判定するすべての譜面。beatoraja の `LaneRenderer` と同じく、判定ラインの位置から譜面を順にたどり、最初にレーン上端を越えた位置で打ち切ります。その先は、後の負の `#SCROLL` でレーン内に戻ってくるノートも描きません。
+
+terminal player も、双方向にスクロールする譜面では同じ位置でたどるのを打ち切ります。
+
 ## Renderer と performance control
 
 - PixiJS は既定で WebGPU preference を使い、browser が初期化できない場合は PixiJS 側で fallback します。
