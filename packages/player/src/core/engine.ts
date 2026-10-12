@@ -1689,7 +1689,19 @@ export function resolveBmsControlFlowForPlayback(
   randomSource: () => number = Math.random,
 ): ControlFlowResolutionResult {
   const randomPatterns: RandomPatternSelection[] = [];
+  // Values drawn here are replayed, in order, into the parser's own `#RANDOM` / `#SWITCH` draws below. The parser only
+  // draws for a line with more than one outcome (`#RANDOM 1`, a missing or non-positive range, and `#SWITCH 1` resolve
+  // to 1 without touching the source), so drawing for those lines here would shift every later replayed value onto
+  // the previous line and play a different branch than the one reported in `randomPatterns`.
   const runtimeRandomSequence: number[] = [];
+  const drawLikeParser = (total: number): number => {
+    if (total <= 1) {
+      return 1;
+    }
+    const randomValue = randomSource();
+    runtimeRandomSequence.push(randomValue);
+    return generateControlFlowRandomValue(total, randomValue);
+  };
 
   for (const entry of json.bms.controlFlow) {
     if (entry.kind !== 'directive') {
@@ -1697,11 +1709,9 @@ export function resolveBmsControlFlowForPlayback(
     }
     if (entry.command === 'RANDOM') {
       const total = parsePositiveInteger(entry.value) ?? 1;
-      const randomValue = randomSource();
-      runtimeRandomSequence.push(randomValue);
       randomPatterns.push({
         index: randomPatterns.length + 1,
-        current: generateControlFlowRandomValue(total, randomValue),
+        current: drawLikeParser(total),
         total,
       });
       continue;
@@ -1716,7 +1726,7 @@ export function resolveBmsControlFlowForPlayback(
       continue;
     }
     if (entry.command === 'SWITCH') {
-      runtimeRandomSequence.push(randomSource());
+      drawLikeParser(parsePositiveInteger(entry.value) ?? 1);
     }
   }
 
