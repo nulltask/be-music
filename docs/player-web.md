@@ -174,6 +174,8 @@ The gameplay view picks one of two rule sets for which notes, mines and bar line
 - **LR2 rules** — charts without `#SCROLL` / `#SPEED` judged under the `lr2` or `iidx` ruleset. An object draws while its position lies between the lane top and the judgement line.
 - **beatoraja rules** — every chart with `#SCROLL` or `#SPEED` (LR2 plays neither, so beatoraja is the reference) and every chart judged under the `beatoraja` ruleset. As in beatoraja's `LaneRenderer`, the view walks the chart in order from the playhead and stops at the first point that runs past the lane top: nothing beyond it is drawn, not even notes a later negative `#SCROLL` brings back into the lane.
 
+The two also part on objects whose time has come. Under LR2's rules a late note the player has not hit yet stays until it reaches the judgement line or is judged, so it can sit on the line through a STOP that began on it. Under beatoraja's rules a note, mine or bar line disappears the moment its time comes, judged or not (`LaneRenderer` draws one only while its time is still ahead); a long note stays while its end is still ahead, held or not, with its head drawn on the judgement line once the head has passed. In charts that only scroll forward the two rule sets look the same except under such a STOP.
+
 The terminal player stops its walk at the same point when a chart scrolls both ways.
 
 ## Renderer and performance controls

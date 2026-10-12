@@ -344,6 +344,7 @@ be-music's [`@be-music/stringifier`](../packages/stringifier/src/index.ts) write
 - A chart without `#BPM` plays at BM98's 130, where LR2 does not scroll and beatoraja refuses the chart ([§2.8](#28-bpm)).
 - Non-positive BPM and STOP values are ignored; of several BMS `#STOP`s at one position the last wins (LR2, beatoraja), while bmson stops and `#STP` lines add up; notes at a STOP are hit before it ([§2.8](#28-bpm), [§2.9](#29-stop-and-stp)).
 - Charts with SCROLL or SPEED are drawn by beatoraja's `LaneRenderer` rules, since LR2 plays neither: the lane is walked from the playhead and nothing past the first point beyond its top is drawn ([§2.10](#210-scroll-and-speed)).
+- Under those rules (and for every chart judged by the `beatoraja` ruleset) a note, mine or bar line disappears once its time has come, judged or not, as in beatoraja; under LR2's rules a late note stays until it reaches the judgement line or is judged ([Browser player — Note visibility](./player-web.md#note-visibility)).
 - SPEED follows Bemuse's spacing model, but ramps from 1.0 before the first keyframe as beatoraja does, where Bemuse holds the first value ([§2.10](#210-scroll-and-speed)).
 - Every control-flow command is supported, `#RANDOM` is drawn per play, and branch definitions apply in file order as in LR2 and beatoraja ([§2.14](#214-control-flow)).
 - `#VOLWAV` applies only in beatoraja's `0 < n < 200` range ([§2.15](#215-audio-commands-and-keysounds)).

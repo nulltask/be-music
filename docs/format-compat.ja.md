@@ -344,6 +344,7 @@ be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は
 - `#BPM` のない譜面は BM98 の 130 で遊ぶ。LR2 はスクロールせず、beatoraja は譜面を読まない（[§2.8](#28-bpm)）。
 - 0 以下の BPM と STOP は無視する。同じ位置に BMS の `#STOP` が複数あれば最後のものが勝ち（LR2、beatoraja と同じ）、bmson の停止と `#STP` の行は加算する。STOP と同じ位置のノートは停止の前に叩く（[§2.8](#28-bpm)、[§2.9](#29-stop-と-stp)）。
 - SCROLL / SPEED を含む譜面は、どちらも持たない LR2 ではなく beatoraja の `LaneRenderer` の規則で描く。判定ラインの位置からレーンをたどり、最初に上端を越えた位置より先は描かない（[§2.10](#210-scroll-と-speed)）。
+- その規則で描く譜面（と `beatoraja` ruleset で判定するすべての譜面）では、beatoraja と同じく、ノート・地雷・小節線は判定の有無にかかわらず時刻になったら消える。LR2 の規則では、遅れたノートは判定ラインに達するか判定されるまで残る（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。
 - SPEED は Bemuse の間隔モデルに従う。ただし最初のキーフレームより前は、最初の値を保つ Bemuse ではなく beatoraja と同じく 1.0 から変化させる（[§2.10](#210-scroll-と-speed)）。
 - 制御構文はすべて対応し、`#RANDOM` はプレイごとに抽選する。分岐内の定義は LR2 や beatoraja と同じくファイル順に適用する（[§2.14](#214-制御構文)）。
 - `#VOLWAV` は beatoraja と同じ `0 < n < 200` の範囲でだけ適用する（[§2.15](#215-音声系コマンドとキー音)）。

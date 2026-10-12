@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { createScrollDistanceMapper } from '@be-music/player/core/scroll-distance';
-import { isPastDrawWindow, resolveNoteDrawRules, resolveNoteDrawWindow } from './note-draw-window.ts';
+import {
+  isDrawnAtTime,
+  isLongNoteDrawnAtTime,
+  isPastDrawWindow,
+  resolveNoteDrawRules,
+  resolveNoteDrawWindow,
+} from './note-draw-window.ts';
 
 // A gimmick-chart shape: plain scroll, then a negative #SCROLL that pulls the chart back down, a frozen stretch with
 // #SCROLL 0, and plain scroll again.
@@ -13,7 +19,14 @@ const GIMMICK_SCROLL = [
 /** The beats the walk visits from `currentBeat`, of beat-sorted `beats`, and whose position lies inside the lane. */
 function drawnBeats(beats: readonly number[], currentBeat: number, laneBeats: number): number[] {
   const mapper = createScrollDistanceMapper(GIMMICK_SCROLL);
-  const window = resolveNoteDrawWindow({ rules: 'beatoraja', currentBeat, mapper, laneBeats, overscanBeats: 1 });
+  const window = resolveNoteDrawWindow({
+    rules: 'beatoraja',
+    currentBeat,
+    nowSeconds: 0,
+    mapper,
+    laneBeats,
+    overscanBeats: 1,
+  });
   const drawn: number[] = [];
   for (const beat of beats) {
     if (beat < currentBeat) continue;
@@ -49,14 +62,50 @@ describe('resolveNoteDrawWindow', () => {
   });
 
   it('matches the plain lane end when nothing scrolls', () => {
-    const window = resolveNoteDrawWindow({ rules: 'beatoraja', currentBeat: 4, laneBeats: 2, overscanBeats: 1 });
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 4,
+      nowSeconds: 0,
+      laneBeats: 2,
+      overscanBeats: 1,
+    });
     expect(window.lastBeat).toBe(6);
     expect(isPastDrawWindow(window, 6)).toBe(false);
     expect(isPastDrawWindow(window, 6.01)).toBe(true);
   });
 
   it('keeps the LR2 window (lane plus overscan) for charts without scroll events', () => {
-    const window = resolveNoteDrawWindow({ rules: 'lr2', currentBeat: 4, laneBeats: 2, overscanBeats: 1 });
+    const window = resolveNoteDrawWindow({
+      rules: 'lr2',
+      currentBeat: 4,
+      nowSeconds: 0,
+      laneBeats: 2,
+      overscanBeats: 1,
+    });
     expect(window.lastBeat).toBe(7);
+  });
+});
+
+describe('isDrawnAtTime / isLongNoteDrawnAtTime', () => {
+  const at = (rules: 'lr2' | 'beatoraja', nowSeconds: number) =>
+    resolveNoteDrawWindow({ rules, currentBeat: 0, nowSeconds, laneBeats: 4, overscanBeats: 1 });
+
+  it('drops a note under beatoraja rules the moment its time has come, judged or not', () => {
+    // beatoraja draws a NormalNote / MineNote only while `tl.getMicroTime() >= microtime`: a note the player has not
+    // hit yet (still inside its late window) is already gone, and so is one under a STOP that started at its beat.
+    expect(isDrawnAtTime(at('beatoraja', 10), 10)).toBe(true);
+    expect(isDrawnAtTime(at('beatoraja', 10), 10.001)).toBe(true);
+    expect(isDrawnAtTime(at('beatoraja', 10), 9.999)).toBe(false);
+  });
+
+  it('leaves LR2 rules to the position (a late, unjudged note keeps drawing until it scrolls past the line)', () => {
+    expect(isDrawnAtTime(at('lr2', 10), 9.9)).toBe(true);
+  });
+
+  it('keeps a long note under beatoraja rules while its end is still ahead (held or pending)', () => {
+    expect(isLongNoteDrawnAtTime(at('beatoraja', 10), 12)).toBe(true);
+    expect(isLongNoteDrawnAtTime(at('beatoraja', 10), 10)).toBe(true);
+    expect(isLongNoteDrawnAtTime(at('beatoraja', 10), 9.5)).toBe(false);
+    expect(isLongNoteDrawnAtTime(at('lr2', 10), 9.5)).toBe(true);
   });
 });
