@@ -286,23 +286,20 @@ export function bmsPlayableChannelToLandmineChannel(channel: string): string | u
 }
 
 export function resolveBmsonResolution(document: BmsonDocument): number {
-  const infoResolution =
-    typeof document.info?.resolution === 'number' && Number.isFinite(document.info.resolution)
-      ? Math.floor(document.info.resolution)
-      : undefined;
-  if (infoResolution && infoResolution > 0) {
-    return infoResolution;
-  }
+  // `info.resolution`, else the root-level `resolution` older writers emit, else the spec default 240.
+  return normalizeBmsonResolution(document.info?.resolution) ?? normalizeBmsonResolution(document.resolution) ?? 240;
+}
 
-  const rootResolution =
-    typeof document.resolution === 'number' && Number.isFinite(document.resolution)
-      ? Math.floor(document.resolution)
-      : undefined;
-  if (rootResolution && rootResolution > 0) {
-    return rootResolution;
+/**
+ * Per the bmson 1.0.0 spec, 0 / `null` / missing means the default (`undefined` here) and a negative resolution is read
+ * as its absolute value (beatoraja uses 240 for any value <= 0 instead).
+ */
+function normalizeBmsonResolution(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined;
   }
-
-  return 240;
+  const resolution = Math.floor(Math.abs(value));
+  return resolution > 0 ? resolution : undefined;
 }
 
 export function normalizeBmsonLines(lines: unknown): number[] {

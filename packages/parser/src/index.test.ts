@@ -483,6 +483,23 @@ describe('parser', () => {
     ).toBe(true);
   });
 
+  test.each([
+    ['info.resolution', { info: { init_bpm: 120, resolution: -480 } }],
+    ['root resolution', { info: { init_bpm: 120 }, resolution: -480 }],
+  ])('bmson: a negative %s is read as its absolute value per the 1.0.0 spec', (_label, document) => {
+    const json = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        ...document,
+        sound_channels: [{ name: 'sample.wav', notes: [{ x: 1, y: 960 }] }],
+      }),
+    );
+
+    // Spec: "If negative, take the absolute value." At 480 pulses per quarter note, y = 960 is beat 2 of measure 0.
+    expect(json.bmson.info.resolution).toBe(480);
+    expect(json.events).toEqual([{ measure: 0, channel: '11', position: [960, 1920], value: '01' }]);
+  });
+
   test('bmson: preserves bga/info extensions and notes.l/c in IR', async () => {
     const chartPath = resolve(rootDir, 'examples/test/bmson-strict-features.bmson');
     const input = await readFile(chartPath, 'utf8');
