@@ -73,6 +73,16 @@ describe('json', () => {
     expect(cloned.bmson.info.subartists).toBeUndefined();
   });
 
+  test('json: cloneJson deep-copies preserved bmson scroll_events and leaves them out when absent', () => {
+    const source = createEmptyJson('bmson');
+    expect(cloneJson(source).preservation.bmson.scrollEvents).toBeUndefined();
+
+    source.preservation.bmson.scrollEvents = [{ y: 240, rate: 0.5 }];
+    const cloned = cloneJson(source);
+    cloned.preservation.bmson.scrollEvents![0]!.rate = 2;
+    expect(source.preservation.bmson.scrollEvents).toEqual([{ y: 240, rate: 0.5 }]);
+  });
+
   test('json: normalizeObjectKey / normalizeChannel', () => {
     expect(normalizeObjectKey('')).toBe('00');
     expect(normalizeObjectKey('a')).toBe('0A');
