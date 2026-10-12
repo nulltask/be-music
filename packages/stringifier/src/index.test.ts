@@ -519,7 +519,7 @@ describe('stringifier', () => {
         mode_hint: string;
         resolution: number;
         judge_rank: number;
-        total: number;
+        total?: number;
         subartists?: string[];
       };
       bpm_events: Array<{ y: number; bpm: number }>;
@@ -537,8 +537,9 @@ describe('stringifier', () => {
       mode_hint: 'beat-2k',
       resolution: 480,
       judge_rank: 75,
-      total: 320,
     });
+    // `metadata.total` of a non-bmson chart is an absolute gauge TOTAL, not bmson's percentage, so it is not written.
+    expect(document.info).not.toHaveProperty('total');
     expect(document.info.subartists).toEqual(['A', 'B', '']);
     expect(document.bpm_events.map((event) => event.bpm)).toEqual([120, 180]);
     // 96 STOP units = 2 beats = 960 pulses at resolution 480.
@@ -675,5 +676,45 @@ describe('stringifier', () => {
     expect(output.stop_events.map((event) => event.duration)).toEqual([resolution / 2, resolution * 4]);
     const reparsed = parseBmson(JSON.stringify(output));
     expect(Object.values(reparsed.resources.stop).sort((left, right) => left - right)).toEqual([24, 192]);
+  });
+
+  test("bmson stringify: keeps a bmson source's `info.total` as authored on both output paths", () => {
+    const document = {
+      version: '1.0.0',
+      info: { title: 'Total', artist: 'A', genre: 'G', init_bpm: 120, total: 250, resolution: 240 },
+      sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+    };
+    // Preserved-document path: the parsed `sound_channels` are written back verbatim.
+    const preserved = parseBmson(JSON.stringify(document));
+    expect(preserved.preservation.bmson.soundChannels).toHaveLength(1);
+    expect((JSON.parse(stringifyBmson(preserved)) as { info: { total?: number } }).info.total).toBe(250);
+
+    // Regenerated path: a moved note no longer matches the preserved channels, so the document is rebuilt.
+    const edited = parseBmson(JSON.stringify(document));
+    edited.events[0]!.position = [1, 2];
+    const regenerated = JSON.parse(stringifyBmson(edited)) as { info: { total?: number }; lines?: unknown };
+    expect(regenerated.lines).toBeDefined();
+    expect(regenerated.info.total).toBe(250);
+    expect(parseBmson(JSON.stringify(regenerated)).metadata.total).toBe(250);
+  });
+
+  test('bmson stringify: does not write a BMS `#TOTAL` into the percentage-based bmson `total`', () => {
+    // BMS `#TOTAL 300` is an absolute gauge TOTAL; bmson `total` is a percentage of the player's default TOTAL, so
+    // writing 300 would turn it into 300% of the default. The note-count-dependent default has no exact conversion
+    // here, so the field is left out and the bmson default (100%) applies.
+    const parsed = parseChart(['#BPM 120', '#TOTAL 300', '#WAV01 key.wav', '#00111:01', ''].join('\n'));
+    expect(parsed.metadata.total).toBe(300);
+
+    const output = JSON.parse(stringifyBmson(parsed)) as { info: Record<string, unknown> };
+    expect(output.info).not.toHaveProperty('total');
+    expect(parseBmson(JSON.stringify(output)).metadata.total).toBe(100);
+  });
+
+  test('bmson stringify: writes an explicit `bmson.info.total` on a BMS-sourced chart', () => {
+    const parsed = parseChart(['#BPM 120', '#TOTAL 300', '#WAV01 key.wav', '#00111:01', ''].join('\n'));
+    parsed.bmson.info.total = 120;
+
+    const output = JSON.parse(stringifyBmson(parsed)) as { info: { total?: number } };
+    expect(output.info.total).toBe(120);
   });
 });

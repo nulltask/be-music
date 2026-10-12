@@ -164,6 +164,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Output `bmson.version` to `version` (`1.0.0` if not specified)
 - Output `bmson.info.resolution` to `info.resolution` (`240` if not specified)
 - Output extended items of `bmson.info` (`subartists`, `chart_name`, `judge_rank`, `total`, image/preview etc.)
+- Write `info.total` from `bmson.info.total`, or from `metadata.total` for a bmson source. A BMS / JSON chart's `metadata.total` is an absolute gauge TOTAL while bmson `total` is a percentage of the player's default TOTAL (which depends on the note count and the ruleset), so it is not written and the bmson default `100` applies
 - If `preservation.bmson.lines` exists, output as `lines[].y`
 - If `preservation.bmson.lines` is not present, `lines` will be automatically generated from the bar length of IR.
 - If `bmson.barlinesSuppressed` is `true`, output `lines: []`.
