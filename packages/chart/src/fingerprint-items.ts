@@ -19,6 +19,11 @@ import {
 import {
   compareEvents,
   createBeatResolver,
+  isLandmineChannel,
+  isPlayableChannel,
+  isScrollChannel,
+  isStopChannel,
+  isTempoChannel,
   mapBmsLongNoteChannelToPlayable,
   resolveBmsLongNotes,
   resolveChartPlayVariant,
@@ -32,6 +37,7 @@ import {
   resolveMineNotes,
   type JudgedNoteEntry,
   type ResolvedNoteContext,
+  variantUsesFreeZone,
 } from './resolved-notes.ts';
 import { collectScrollChanges, collectSpeedChanges } from './timelines.ts';
 import {
@@ -207,40 +213,35 @@ export const MINES_BUCKET = 'mines';
 export const LENGTHS_BUCKET = 'lengths';
 export const HEADER_BUCKET = 'header';
 
-/** The bucket an event of the given normalized channel feeds, or `undefined` for channels the fingerprint ignores. */
+/**
+ * The bucket an event of the given normalized channel feeds, or `undefined` for channels the fingerprint ignores. The
+ * channel families are the chart's own (`isPlayableChannel`, `mapBmsLongNoteChannelToPlayable`, `isLandmineChannel`,
+ * …), so the fingerprint reads exactly the objects the Resolved layer plays.
+ */
 export function bucketOfChannel(channel: string): string | undefined {
-  if (channel.length !== 2) {
-    return undefined;
+  if (isPlayableChannel(channel)) {
+    return `lane:${channel}`;
   }
-  const side = channel.charCodeAt(0);
-  const lane = channel.charCodeAt(1);
-  const isLaneCode = (lane >= 0x31 && lane <= 0x39) || (lane >= 0x41 && lane <= 0x5a);
-  if (isLaneCode) {
-    if (side === 0x31 || side === 0x32) {
-      return `lane:${channel}`;
-    }
-    if (side === 0x35 || side === 0x36) {
-      return `lane:${side === 0x35 ? '1' : '2'}${channel[1]}`;
-    }
-    if (side === 0x44 || side === 0x45) {
-      return MINES_BUCKET;
-    }
+  const longNoteLane = mapBmsLongNoteChannelToPlayable(channel);
+  if (longNoteLane !== undefined) {
+    return `lane:${longNoteLane}`;
   }
-  switch (channel) {
-    case '03':
-    case '08':
-      return 'tl:bpm';
-    case '09':
-      return 'tl:stop';
-    case 'SC':
-      return 'tl:scroll';
-    case 'SP':
-      return 'tl:speed';
-    case 'A0':
-      return 'tl:exrank';
-    default:
-      return undefined;
+  if (isLandmineChannel(channel)) {
+    return MINES_BUCKET;
   }
+  if (isTempoChannel(channel)) {
+    return 'tl:bpm';
+  }
+  if (isStopChannel(channel)) {
+    return 'tl:stop';
+  }
+  if (isScrollChannel(channel)) {
+    return 'tl:scroll';
+  }
+  if (channel === 'SP') {
+    return 'tl:speed';
+  }
+  return channel === 'A0' ? 'tl:exrank' : undefined;
 }
 
 /** Events of a chart grouped by bucket, each bucket in the engine's event order. */
@@ -973,10 +974,6 @@ export function resolveFingerprintLaneMode(
   });
 }
 
-export function usesFreeZone(laneMode: ChartPlayVariant): boolean {
-  return laneMode !== '9' && laneMode !== '24' && laneMode !== '48';
-}
-
 /**
  * Applies the drops that depend on the state in effect (spec 3.4) to one timeline type, in time order: a BPM change to
  * the BPM in effect, a SCROLL change to the SCROLL in effect, an `#EXRANK` change to the previous `#EXRANK`, and the
@@ -1052,7 +1049,7 @@ export interface CanonicalLists {
  */
 export function canonicalizeItems(items: FlatItems, extension: LaneModeExtension): CanonicalLists {
   const laneMode = resolveFingerprintLaneMode(items.notes, extension, items.header.player3, items.header.modeHint);
-  const freeZone = usesFreeZone(laneMode) ? 'apply' : 'drop';
+  const freeZone = variantUsesFreeZone(laneMode) ? 'apply' : 'drop';
   const notes = [...items.notes].sort(compareNoteItems);
   const mines = [...items.mines].sort(compareMineItems);
   const byType = new Map<FingerprintTimelineType, TimelineItem[]>();
