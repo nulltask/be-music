@@ -14,9 +14,10 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `timeUs` / `endTimeUs` pair, mines carry their resolved gauge damage, and the raw `#TOTAL` / `#RANK` /
    `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults. `chart.sha256` stamps the
    SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content.
-   `chart.reversalTimeUs` (present only for charts with a negative `#BPMxx`) records the LR2 reverse-scroll
-   reversal instant: judging froze there during the run, so the simulator ignores later inputs and clamps its judge
-   clock to it (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
+   `chart.reversalTimeUs` (present only for charts whose negative `#BPMxx` reverses the scroll) records the LR2
+   reverse-scroll reversal instant R: the simulator judges later inputs on the mirrored clock `2R - timeUs`, never
+   sweeps misses past R, and ends a run that leaves scorable notes unjudged with the gauge at 0, exactly as the
+   engine did (see [`bms-spec.md`](./bms-spec.md) "Negative BPM").
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
    `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always

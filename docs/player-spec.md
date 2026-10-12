@@ -736,13 +736,13 @@ The visual distance of a note is determined by the integral of the piecewise-con
 
 ### Negative BPM — LR2 reverse scroll
 
-A negative `#BPMxx` referenced through channel 08 arms LR2's one-way reverse-scroll gimmick (issue #134; the LR2 basis and the documented deviations live in [`bms-spec.md`](./bms-spec.md)):
+A negative `#BPMxx` referenced through channel 08 (truncated to an integer first, so `-1 < BPM < 0` does not count) arms LR2's one-way reverse-scroll gimmick (issue #134; the LR2 basis and the documented deviations live in [`bms-spec.md`](./bms-spec.md)):
 
 - Timing stays monotonic: the resolver integrates |BPM|, so every note keeps a forward `seconds` and audio scheduling is unaffected before the reversal.
-- From the reversal on, the engine publishes a mirrored display clock (`displaySeconds = 2 × reversal − now`, plus the matching `displayBeat`) on the UI frame; the TUI grid and the web scenes scroll from it, so the chart visibly runs backwards at |BPM| (pinning at the chart head if the mirror rewinds past the start) while the status clock and summary stay on the true clock.
-- Judging freezes at the reversal: no press judgments, no empty POORs, no miss sweeps, no mine detonations past it. Holds spanning the reversal resolve silently (no tail judgment, no POOR). Post-reversal notes end the run **unjudged** — they are not swept into POORs — and the gauge holds its value.
-- Realtime audio freezes with it: BGM/keysound triggers at or behind the reversal never fire (presses still replay the latest lane keysound, as LR2 does), and the BGA holds the image it showed at the reversal.
-- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). Playlogs record `chart.reversalTimeUs` so re-simulations apply the same cutoff.
+- From the reversal on, the engine publishes `displayBeat = 2 × beat(reversal) − beat(now)` on the UI frame — a mirror in chart-position space, as LR2 draws it. The TUI grid and the web scenes scroll from it, so the chart visibly runs backwards at the post-reversal tempo (pausing through post-reversal STOPs, following later BPM changes, pinning at the chart head if it rewinds past the start) while the status clock and summary stay on the true clock.
+- Presses keep being judged on the mirrored clock `t' = 2 × reversal − now`: notes around the reversal stay hittable just after it, empty POORs fire while the lane's next note is within the ruleset's empty-POOR reach of `t'`, and there is no miss sweep past the reversal. A hold spanning the reversal BADs on release and stays open otherwise. Mines freeze at the reversal.
+- Realtime audio freezes with LR2's event pump: BGM / keysound triggers behind the reversal never fire, while BGM and BGA on the reversal tick itself still do (LR2's op order). BGA cues stop changing; a movie that is already playing keeps running. NOWBPM holds `|trunc(BPM)|` of the negative value.
+- The run ends at the chart's precomputed end time (a documented deviation — real LR2 soft-locks until ESC). If scorable notes are left unjudged — post-reversal notes, open holds — the gauge drops to 0 and the run is FAILED, as LR2 zeroes HP when such a play is left. Playlogs record `chart.reversalTimeUs` so re-simulations apply the same mirrored clock and result.
 
 ### Non-TUI output
 
