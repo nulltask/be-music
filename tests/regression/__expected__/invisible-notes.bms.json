@@ -172,6 +172,8 @@
           "percent": 75
         },
         "noteCount": 16,
+        "chartFingerprint": "bmfp1:7c970bfb51cc69af6171f9bab262065599c828a09a9b79a6940ae92230b195d3",
+        "playFingerprint": "bmfp1:7c970bfb51cc69af6171f9bab262065599c828a09a9b79a6940ae92230b195d3",
         "title": "Invisible Keysound Channels",
         "subtitle": "Channels 3x / 4x sound without being drawn or judged",
         "artist": "be-music",

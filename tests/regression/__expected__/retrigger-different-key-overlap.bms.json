@@ -81,6 +81,8 @@
           "percent": 75
         },
         "noteCount": 3,
+        "chartFingerprint": "bmfp1:5623578c2add4c0b955b3d5b6509779969a6646fd5ad02159ca43e096887bf82",
+        "playFingerprint": "bmfp1:5623578c2add4c0b955b3d5b6509779969a6646fd5ad02159ca43e096887bf82",
         "title": "Retrigger Different Key Overlap",
         "artist": "Codex"
       },

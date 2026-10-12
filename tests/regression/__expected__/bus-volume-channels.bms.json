@@ -172,6 +172,8 @@
           "percent": 75
         },
         "noteCount": 16,
+        "chartFingerprint": "bmfp1:8ffe0e3867efba08b4c8c2acecf0911a602079a89600af78a86f9056ddc4e63d",
+        "playFingerprint": "bmfp1:8ffe0e3867efba08b4c8c2acecf0911a602079a89600af78a86f9056ddc4e63d",
         "title": "Dynamic Bus Volume Channels",
         "subtitle": "Channel 97 (BGM bus) and channel 98 (key bus)",
         "artist": "be-music",

@@ -167,6 +167,7 @@
           "percent": 75
         },
         "noteCount": 17,
+        "playFingerprint": "bmfp1:eceb2f0b7e35a4625fdbcb4464fb3388d3019c67ecb3454f47d6507c379537f3",
         "title": "Control Flow Random Demo [A]",
         "artist": "Codex"
       },
@@ -434,6 +435,7 @@
           "percent": 75
         },
         "noteCount": 7,
+        "playFingerprint": "bmfp1:876599f5f3b4a33e3852763bbbb018b5884cdd35ef51188ad17105950698a8a5",
         "title": "Control Flow Random Demo [B]",
         "artist": "Codex"
       },

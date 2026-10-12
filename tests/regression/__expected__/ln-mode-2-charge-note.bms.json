@@ -129,6 +129,8 @@
           "percent": 75
         },
         "noteCount": 12,
+        "chartFingerprint": "bmfp1:7adc02dd0022f7dfc393ae6d016d824d7e57257c4b0ff7d74f9f8e1aeeda1f54",
+        "playFingerprint": "bmfp1:7adc02dd0022f7dfc393ae6d016d824d7e57257c4b0ff7d74f9f8e1aeeda1f54",
         "title": "LN Mode 2 Test (CN)",
         "subtitle": "Charge Note — held continuously to tail; release-before-tail is NOT BAD",
         "artist": "be-music",

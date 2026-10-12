@@ -242,6 +242,8 @@
           "sourceExRank": 100
         },
         "noteCount": 6,
+        "chartFingerprint": "bmfp1:e40d601621ddb9879b2ebce289375c1330e70b3bd4ad2f6fef9d5ded5cee570d",
+        "playFingerprint": "bmfp1:e40d601621ddb9879b2ebce289375c1330e70b3bd4ad2f6fef9d5ded5cee570d",
         "title": "BMSON Mine / Key Channels",
         "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
         "artist": "be-music",
