@@ -34,10 +34,12 @@ import {
 import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   type RenderResult,
+  type TempoReversalPoint,
   type TimedSampleTrigger,
   type TimingResolver,
   collectSampleTriggers,
   createTimingResolver,
+  firesBeforeTempoReversal,
   renderSingleSample,
 } from '@be-music/audio-renderer';
 import { createPlayerStateSignals, type PlayerStateSignals } from '../state-signals.ts';
@@ -1873,25 +1875,26 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // no audio, mirrored display clock past the reversal.
   const reversalSeconds = timingResolver.reversal?.seconds;
   // Clamp a judge/audio pump reference strictly BELOW the reversal: the cursor pumps are inclusive at their
-  // reference (some add the realtime-audio epsilon on top), while every one-shot path — the pre-filtered trigger
-  // streams, the offline render, the web preview, and the playlog simulator — treats the reversal itself as frozen
-  // (`seconds < reversal`). Without the guard a note exactly AT the reversal would sound and judge here only.
+  // reference (some add the realtime-audio epsilon on top), while LR2 orders lane notes (op 10+) AFTER the negative
+  // BPM (op 8) on the reversal tick, so a note exactly AT the reversal is frozen — matching the offline render, the
+  // web preview, and the BGM streams (pre-filtered with `firesBeforeTempoReversal`, which lets the BGM on the tick
+  // through).
   const clampToReversal = (seconds: number): number =>
     reversalSeconds === undefined
       ? seconds
       : Math.min(seconds, reversalSeconds - 2 * REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS);
-  const realtimeAudioVolumeEvents = dropEventsAtOrAfterReversal(
+  const realtimeAudioVolumeEvents = keepEventsFiringBeforeReversal(
     collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver),
-    reversalSeconds,
+    timingResolver.reversal,
   );
-  const realtimeAudioTriggers = dropEventsAtOrAfterReversal(
+  const realtimeAudioTriggers = keepEventsFiringBeforeReversal(
     collectRealtimeAudioTriggers(
       resolvedJson,
       inferBmsLnTypeWhenMissing,
       (channel) => !isInvisiblePlayLaneSoundChannel(channel),
       timingResolver,
     ),
-    reversalSeconds,
+    timingResolver.reversal,
   );
   const realtimeAudioEndSeconds =
     options.audio === false
@@ -2545,9 +2548,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // time on LR2's event pump freezes — judging and realtime audio stop — and the display clock mirrors around it.
   const reversalSeconds = timingResolver.reversal?.seconds;
   // Clamp a judge/audio pump reference strictly BELOW the reversal: the cursor pumps are inclusive at their
-  // reference (some add the realtime-audio epsilon on top), while every one-shot path — the pre-filtered trigger
-  // streams, the offline render, the web preview, and the playlog simulator — treats the reversal itself as frozen
-  // (`seconds < reversal`). Without the guard a note exactly AT the reversal would sound and judge here only.
+  // reference (some add the realtime-audio epsilon on top), while LR2 orders lane notes (op 10+) AFTER the negative
+  // BPM (op 8) on the reversal tick, so a note exactly AT the reversal is frozen — matching the offline render, the
+  // web preview, and the BGM streams (pre-filtered with `firesBeforeTempoReversal`, which lets the BGM on the tick
+  // through).
   const clampToReversal = (seconds: number): number =>
     reversalSeconds === undefined
       ? seconds
@@ -2556,21 +2560,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // non-LR2 rulesets keep their initial windows for the whole chart.
   const dynamicJudgeRankChanges =
     judgeRuleset === 'lr2' ? collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver) : [];
-  const realtimeAudioVolumeEvents = dropEventsAtOrAfterReversal(
+  const realtimeAudioVolumeEvents = keepEventsFiringBeforeReversal(
     collectRealtimeAudioVolumeEvents(resolvedJson, timingResolver),
-    reversalSeconds,
+    timingResolver.reversal,
   );
   const leadInMs = options.leadInMs ?? 1500;
   const audioOffsetMs = options.audioOffsetMs ?? 0;
   const beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(timingResolver);
-  const nonPlayableRealtimeAudioTriggers = dropEventsAtOrAfterReversal(
+  const nonPlayableRealtimeAudioTriggers = keepEventsFiringBeforeReversal(
     collectRealtimeAudioTriggers(
       resolvedJson,
       inferBmsLnTypeWhenMissing,
       (channel) => !isPlayLaneSoundChannel(channel),
       timingResolver,
     ),
-    reversalSeconds,
+    timingResolver.reversal,
   );
   const nonPlayableRealtimeAudioEndSeconds =
     options.audio === false
@@ -5581,17 +5585,18 @@ function elapsedMsToGameSeconds(elapsedMs: number, speed: number): number {
 }
 
 /**
- * LR2's event pump freezes at the negative-BPM reversal (#134): nothing at or behind the reversal ever sounds.
- * Realtime trigger/volume streams are pre-filtered with this so no cursor loop can reach past it.
+ * LR2's event pump freezes at the negative-BPM reversal (#134): nothing behind the reversal ever sounds, and on the
+ * reversal tick only what LR2 orders before the negative BPM (BGM, BGA) does. Realtime trigger / volume streams are
+ * pre-filtered with this so no cursor loop can reach past it.
  */
-function dropEventsAtOrAfterReversal<T extends { seconds: number }>(
+function keepEventsFiringBeforeReversal<T extends { seconds: number; event: BeMusicEvent }>(
   items: T[],
-  reversalSeconds: number | undefined,
+  reversal: TempoReversalPoint | undefined,
 ): T[] {
-  if (reversalSeconds === undefined) {
+  if (reversal === undefined) {
     return items;
   }
-  return items.filter((item) => item.seconds < reversalSeconds);
+  return items.filter((item) => firesBeforeTempoReversal(reversal, item.seconds, item.event.channel));
 }
 
 /**

@@ -31,6 +31,7 @@ import {
   collectSampleTriggersWithContext,
   createTimingBuildContext,
   createTimingResolverWithContext,
+  firesBeforeTempoReversal,
   type TimedSampleTrigger,
   type TimingBuildContext,
   type TimingResolver,
@@ -188,13 +189,14 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
   const collectedTriggers = collectSampleTriggersWithContext(json, resolver, timingContext, {
     inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true,
   });
-  // LR2's event pump freezes at a negative-BPM reversal: nothing at or behind the reversal ever sounds
-  // (Scene04_Play.cpp:1267-1269). Match that audibility in the offline render.
-  const reversalSeconds = resolver.reversal?.seconds;
+  // LR2's event pump freezes at a negative-BPM reversal: nothing behind the reversal ever sounds, and on the reversal
+  // tick only the BGM ordered before the negative BPM does (Scene04_Play.cpp:1267-1269). Match that audibility in the
+  // offline render.
+  const reversal = resolver.reversal;
   const triggers =
-    reversalSeconds === undefined
+    reversal === undefined
       ? collectedTriggers
-      : collectedTriggers.filter((trigger) => trigger.seconds < reversalSeconds);
+      : collectedTriggers.filter((trigger) => firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel));
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();

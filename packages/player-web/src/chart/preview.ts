@@ -1,7 +1,11 @@
 // IMPORTANT: import from `/triggers` (the pure / browser-safe subpath), NOT the package root. The root entry pulls in
 // Node-only modules (fs / path / fluent-ffmpeg) that Vite can't bundle for the demo target — see
 // `packages/player-web-demo/vite.config.ts` which explicitly drops the root alias for that reason.
-import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-renderer/triggers';
+import {
+  collectSampleTriggers,
+  createTimingResolver,
+  firesBeforeTempoReversal,
+} from '@be-music/audio-renderer/triggers';
 import { usesMonophonicWavPlayback } from '@be-music/chart';
 import { normalizeChannel, type BeMusicJson } from '@be-music/json';
 import { loadAssetBytes, resolveChartAudioAsset } from '../collection/collection.ts';
@@ -514,15 +518,16 @@ export function collectChartPreviewTriggers(
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
   const resolver = createTimingResolver(chart);
   const all = collectSampleTriggers(chart, resolver, { inferBmsLnTypeWhenMissing: true });
-  // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing at or past
-  // it ever sounds — so the select-scene preview drops those triggers too.
-  const reversalSeconds = resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY;
+  // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing past it ever
+  // sounds, and on the reversal tick only the BGM LR2 orders before the negative BPM does — so the select-scene
+  // preview drops the same triggers.
+  const reversal = resolver.reversal;
   return all
     .filter(
       (trigger) =>
         !isInvisiblePlayLaneSoundChannel(trigger.channel) &&
         trigger.seconds < cutoffSeconds &&
-        trigger.seconds < reversalSeconds,
+        firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
     )
     .sort((left, right) => left.seconds - right.seconds);
 }

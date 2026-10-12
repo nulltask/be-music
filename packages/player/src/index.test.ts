@@ -2101,18 +2101,20 @@ describe('player', () => {
     expect(summary.total).toBe(2);
   });
 
-  test('player: LR2 negative BPM freezes a note exactly AT the reversal boundary', async () => {
-    // BPM 240 → measure = 1 s. The reversal (#BPM02 -240 via channel 08) AND a note share measure 2 [0,1]
-    // (chart 2 s exactly). The pump freeze is `seconds < reversal` — inclusive of the boundary — so the boundary
-    // note must neither sound nor judge, exactly like a note strictly behind the reversal.
+  test('player: LR2 negative BPM orders the reversal tick by op — BGM fires, the lane note freezes', async () => {
+    // BPM 240 → measure = 1 s. The reversal (#BPM02 -240 via channel 08), a note, and a BGM share measure 2 [0,1]
+    // (chart 2 s exactly). LR2 sorts same-tick events by op (`CMP_NotesByRealTimingOp`): the BGM (op 1) fires before
+    // the negative BPM (op 8), the lane note (op 11) after it — so the BGM sounds and the boundary note neither
+    // sounds nor judges, exactly like a note strictly behind the reversal.
     const json = createEmptyJson('bms');
     json.metadata.bpm = 240;
     json.resources.bpm['02'] = -240;
-    json.resources.wav = { '01': 'a.wav', '02': 'b.wav' };
+    json.resources.wav = { '01': 'a.wav', '02': 'b.wav', '03': 'bgm.wav' };
     json.events = [
       { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
       { measure: 2, channel: '08', position: [0, 1] as const, value: '02' },
       { measure: 2, channel: '11', position: [0, 1] as const, value: '02' },
+      { measure: 2, channel: '01', position: [0, 1] as const, value: '03' },
     ];
 
     const triggeredEvents: string[] = [];
@@ -2137,8 +2139,9 @@ describe('player', () => {
       createInputRuntime: createScheduledInputRuntime([]),
     });
 
-    // Only the 1 s note's keysound fired; the boundary note's never did.
+    // The 1 s note's keysound and the boundary BGM fired; the boundary note's keysound never did.
     expect(triggeredEvents).toContain('01');
+    expect(triggeredEvents).toContain('03');
     expect(triggeredEvents).not.toContain('02');
     // Autoplay PGREATs the pre-reversal note only; the boundary note ends the run unjudged (total still counts it).
     expect(summary.perfect).toBe(1);

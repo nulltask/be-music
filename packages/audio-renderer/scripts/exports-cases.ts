@@ -26,6 +26,15 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
       audioRendererApi.mirrorBeatAtTempoReversal(undefined, 9, 17.5);
     },
   });
+  define('audio-renderer.firesBeforeTempoReversal', {
+    run: () => {
+      const reversal = { beat: 16, seconds: 7.5 };
+      audioRendererApi.firesBeforeTempoReversal(reversal, 5, '01');
+      audioRendererApi.firesBeforeTempoReversal(reversal, 7.5, '01');
+      audioRendererApi.firesBeforeTempoReversal(reversal, 7.5, '11');
+      audioRendererApi.firesBeforeTempoReversal(undefined, 9, '11');
+    },
+  });
   define('audio-renderer.collectSampleTriggers', {
     run: (fixtures) => {
       const resolver = audioRendererApi.createTimingResolver(fixtures.sampleBmsJson);

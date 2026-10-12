@@ -67,6 +67,39 @@ export function mirrorBeatAtTempoReversal(
   return Math.max(0, reversal.beat * 2 - beat);
 }
 
+/**
+ * Channels LR2 fires BEFORE the negative-BPM event when they share its tick. LR2 sorts same-tick events by op
+ * (`CMP_NotesByRealTimingOp`, OpenLR2 `LR2f.cpp:24013`): BGM (op 1), BPM (op 3), and the BGA layers (ops 4 / 6 / 7)
+ * precede the exBPM (op 8) that arms the reversal, while STOP (op 9), lane sounds (10–29), and invisible objects
+ * (30+) come after it and freeze with the pump. `0A` (BGA layer 2) is grouped with the other BGA layers.
+ */
+const CHANNELS_FIRING_BEFORE_REVERSAL: ReadonlySet<string> = new Set(['01', '03', '04', '06', '07', '0A']);
+
+/** Same-tick tolerance: both sides come from the same `beatToSeconds`, so equal positions agree to the last bit. */
+const REVERSAL_TICK_EPSILON_SECONDS = 1e-9;
+
+/**
+ * Whether an event at `seconds` on `channel` still fires under LR2's negative-BPM reversal. LR2's event pump freezes
+ * at the reversal: everything strictly before it fires, everything after it never does, and on the reversal tick
+ * itself only the channels LR2 orders before the negative BPM (BGM, BPM, BGA) fire. Always `true` without a reversal.
+ */
+export function firesBeforeTempoReversal(
+  reversal: TempoReversalPoint | undefined,
+  seconds: number,
+  channel: string,
+): boolean {
+  if (reversal === undefined) {
+    return true;
+  }
+  if (seconds < reversal.seconds - REVERSAL_TICK_EPSILON_SECONDS) {
+    return true;
+  }
+  if (seconds > reversal.seconds + REVERSAL_TICK_EPSILON_SECONDS) {
+    return false;
+  }
+  return CHANNELS_FIRING_BEFORE_REVERSAL.has(normalizeChannel(channel));
+}
+
 export interface TimingResolver {
   tempoPoints: TempoPoint[];
   stopPoints: StopPoint[];
