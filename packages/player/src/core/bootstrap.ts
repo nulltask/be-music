@@ -47,7 +47,7 @@ import { DEFAULT_TUI_NOTE_HEIGHT } from './ui-options.ts';
  * land via the asset-source closure inside the host (drag-dropped File handles), not via Node fs reads, so the
  * `baseDir` field is essentially a label here.
  */
-function resolveDefaultBaseDir(): string {
+export function resolveDefaultBaseDir(): string {
   const proc = (globalThis as { process?: { cwd?: () => string } }).process;
   return proc?.cwd?.() ?? '.';
 }

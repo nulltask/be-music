@@ -18,6 +18,7 @@ import { LANDMINE_EXPLOSION_SAMPLE_KEY } from './judge-core.ts';
 import { delay, PAUSE_POLL_INTERVAL_MS } from './engine-clock.ts';
 import { resolveOutputWriter } from './engine-trace.ts';
 import { type AudioSession, type AudioSessionLoadProgress, type PlayerOptions } from './engine-types.ts';
+import { resolveDefaultBaseDir } from './bootstrap.ts';
 
 /**
  * The built-in audio path: the Node audio session, sample loading, realtime triggers and output mixing.
@@ -503,7 +504,7 @@ async function buildDebugSampleDurationSecondsMap(
   for (const trigger of uniqueTriggers.values()) {
     throwIfAborted(signal);
     const rendered = await renderSingleSample(trigger.sampleKey, trigger.samplePath, {
-      baseDir: baseDir ?? process.cwd(),
+      baseDir: baseDir ?? resolveDefaultBaseDir(),
       sampleRate: DEBUG_ACTIVE_AUDIO_SAMPLE_RATE,
       gain: 1,
       fallbackToneSeconds: DEBUG_ACTIVE_AUDIO_FALLBACK_SECONDS,
@@ -876,7 +877,7 @@ async function buildRuntimeSampleMap(
     const key = keys[index];
     const sourcePath = json.resources.wav[key];
     const rendered = await renderSingleSample(key, sourcePath, {
-      baseDir: options.audioBaseDir ?? process.cwd(),
+      baseDir: options.audioBaseDir ?? resolveDefaultBaseDir(),
       sampleRate,
       gain: chartWavGain,
       fallbackToneSeconds:
