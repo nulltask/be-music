@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '../../json/src/index.ts';
+import { createTimingResolver } from '../../chart/src/index.ts';
 import { parseBmson } from './index.ts';
 
 // Charts without `lines` keep 4/4 measures, so a pulse at resolution 240 is `(measure + position) × 4 × 240`.
@@ -45,6 +46,34 @@ describe('bmson key space', () => {
       const authored = bpmEvents[eventPulse(event) / 60]!;
       expect(lookup(json, json.resources.bpm, event)).toBe(authored.bpm);
     }
+  });
+
+  test('of several BPM changes on one pulse, the later one in the list wins', () => {
+    // 200 is keyed first, so ordering the events on a pulse by key would let 150 lose to the earlier-listed 200.
+    const json = parse({
+      bpm_events: [
+        { y: 0, bpm: 200 },
+        { y: 960, bpm: 150 },
+        { y: 960, bpm: 200 },
+      ],
+    });
+    const timing = createTimingResolver(json);
+    expect(timing.bpmAtBeat(4)).toBe(200);
+    expect(timing.bpmAtBeat(5)).toBe(200);
+  });
+
+  test('STOPs on one pulse still add up', () => {
+    const json = parse({
+      stop_events: [
+        { y: 960, duration: 240 },
+        { y: 960, duration: 480 },
+      ],
+    });
+    // Three beats at 150 BPM in all.
+    expect(createTimingResolver(json).beatToSeconds(4.5) - 0.5 * (60 / 150)).toBeCloseTo(
+      4 * (60 / 150) + 3 * (60 / 150),
+      9,
+    );
   });
 
   test('keeps every STOP length past 1,295 stop_events', () => {

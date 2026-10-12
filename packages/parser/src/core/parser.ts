@@ -333,7 +333,14 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   // `(48 / 192) × (240/bpm) = 60/bpm` seconds — exactly one beat. Without this conversion bmson stops were ~5× longer
   // than authored at the default resolution.
   const stopUnits = stopEvents.map((stopEvent) => (stopEvent.duration * 48) / resolution);
-  const bpmValues = bpmEvents.map((bpmEvent) => bpmEvent.bpm);
+  // Of several BPM changes on one pulse the last one in the list wins (jbms-parser sets the timeline's BPM event by
+  // event). Collapse them here, since `08` events on one position are ordered by key, and keys go by value.
+  const bpmByPulse = new Map<number, number>();
+  for (const bpmEvent of bpmEvents) {
+    bpmByPulse.delete(bpmEvent.y);
+    bpmByPulse.set(bpmEvent.y, bpmEvent.bpm);
+  }
+  const bpmValues = [...bpmByPulse.values()];
   // beatoraja extension: `scroll_events` set the lane's scroll rate from `y` on, as BMS `#SCROLLxx` on channel `SC`,
   // and the rate holds until the next event, as in BMS. jbms-parser sets the rate on the timeline at `y`, so of several
   // events on one pulse the last one in the list wins; collapse them here, since `SC` events on one position are
@@ -467,11 +474,12 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   json.preservation.bmson.bpmEvents = bpmEvents;
   const bpmKeys = createBmsonValueKeyTable(bpmValues, keyBase);
   Object.assign(json.resources.bpm, bpmKeys.table);
-  bpmEvents.forEach((bpmEvent, index) => {
-    const { measure, position } = positionResolver(bpmEvent.y);
+  [...bpmByPulse.keys()].forEach((y, index) => {
+    const { measure, position } = positionResolver(y);
     json.events.push({ measure, position, channel: '08', value: bpmKeys.keys[index]! });
   });
 
+  // STOPs on one pulse add up (bmson spec), so their order on the pulse does not matter.
   json.preservation.bmson.stopEvents = stopEvents;
   const stopKeys = createBmsonValueKeyTable(stopUnits, keyBase);
   Object.assign(json.resources.stop, stopKeys.table);
