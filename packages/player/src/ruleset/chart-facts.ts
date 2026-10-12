@@ -1,3 +1,4 @@
+import { resolveChartLongNoteMode } from '@be-music/chart';
 import { type BeMusicJson } from '@be-music/json';
 import { resolveJudgeRankPercent } from '../core/judge-window.ts';
 import type { LongNoteMode, TimedPlayableNote } from '../playable-notes.ts';
@@ -14,14 +15,8 @@ export interface EngineRulesetChartInput {
   laneDisplayMode: string;
 }
 
-/** Chart-level long-note mode after `#LNMODE` / bmson `info.ln_type` resolution. */
-export function resolveChartLongNoteMode(json: BeMusicJson): LongNoteMode {
-  if (json.sourceFormat === 'bms') {
-    return json.bms.lnMode === 2 || json.bms.lnMode === 3 ? json.bms.lnMode : 1;
-  }
-  const lnType = json.bmson.info.lnType;
-  return lnType === 2 || lnType === 3 ? lnType : 1;
-}
+/** Chart-level long-note mode after `#LNMODE` / bmson `info.ln_type` resolution (`@be-music/chart`). */
+export { resolveChartLongNoteMode };
 
 /**
  * Derives the ruleset's chart facts from the engine's own representation. The play-log side has a matching adapter

@@ -354,4 +354,14 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.buildBmsBgaTimeline(json.events, chartApi.createTimingResolver(json), '04');
     },
   });
+  define('chart.resolveChartLongNoteMode', {
+    run: (fixtures) => {
+      chartApi.resolveChartLongNoteMode(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.resolveLandmineDamage', {
+    run: () => {
+      chartApi.resolveLandmineDamage({ value: '0A' }, 36, 'bms');
+    },
+  });
 }

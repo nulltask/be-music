@@ -1,5 +1,6 @@
 import {
   type ChartPlayVariant,
+  type LongNoteMode,
   createBeatResolver,
   resolveBmsLongNotes,
   resolveChartPlayVariant,
@@ -14,7 +15,7 @@ const DEFAULT_BMS_LONG_NOTE_MODE = 1;
 // LR2-aligned default is LN (no tail release judgment) — the same default the BMS side uses for a missing #LNMODE.
 const DEFAULT_BMSON_LONG_NOTE_MODE = 1;
 
-export type LongNoteMode = 1 | 2 | 3;
+export type { LongNoteMode };
 
 export interface TimedPlayableNote {
   event: BeMusicEvent;

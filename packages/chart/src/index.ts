@@ -79,6 +79,14 @@ export {
   type BgaTimingResolver,
 } from './bga.ts';
 
+export {
+  DEFAULT_LANDMINE_DAMAGE,
+  DEFAULT_LONG_NOTE_MODE,
+  resolveChartLongNoteMode,
+  resolveLandmineDamage,
+  type LongNoteMode,
+} from './note-rules.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;
