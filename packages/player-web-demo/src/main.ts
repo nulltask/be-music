@@ -68,6 +68,8 @@ import {
   PLAYLOG_FILE_SUFFIX,
   DEFAULT_COMPRESSOR_PARAMS,
   setMasterVolume,
+  supportsSystemAudioSession,
+  applySilentModePlayback,
   type BeMusicPlaylog,
   type CompressorMode,
   type CompressorParams,
@@ -151,6 +153,17 @@ import {
   resolveDefaultSkinEffects,
   resolveDeviceProfile,
 } from './device-profile.ts';
+import {
+  SILENT_MODE_STRINGS,
+  installSilentModePlayback,
+  mountSilentModeHint,
+  readPlayInSilentMode,
+  readSilentModeHintSeen,
+  resolveSilentModeLanguage,
+  shouldShowSilentModeHint,
+  storePlayInSilentMode,
+  storeSilentModeHintSeen,
+} from './silent-mode-playback.ts';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
@@ -576,6 +589,8 @@ class PlayerWebDemoApp {
    * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
    */
   private autoRecordArmed = false;
+  /** The Debug Menu's "Play in silent mode" checkbox, when the browser offers the setting. */
+  private silentModeController: Controller | undefined;
   private readonly elements: PlayerWebDemoElements;
   public constructor(elements: PlayerWebDemoElements) {
     this.elements = elements;
@@ -587,6 +602,7 @@ class PlayerWebDemoApp {
       // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
       // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
       ...readStoredVolumes(),
+      playInSilentMode: readPlayInSilentMode(),
       compressor: true,
       compressorKey: true,
       compressorBgm: true,
@@ -640,6 +656,14 @@ class PlayerWebDemoApp {
     };
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
+    // Set the platform audio session before any scene creates an AudioContext, and again on the first gesture (which
+    // is when the scenes resume their contexts) — see `silent-mode-playback.ts`.
+    installSilentModePlayback({
+      enabled: () => this.guiState.playInSilentMode,
+      target: window,
+      visibility: document,
+      onFirstGesture: () => this.maybeShowSilentModeHint(),
+    });
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
     // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
@@ -656,6 +680,35 @@ class PlayerWebDemoApp {
     } else if (flag === 'off') {
       this.guiState.compressor = false;
     }
+  }
+
+  /** Applies and remembers the "Play in silent mode" setting (Debug Menu checkbox or the hint's button). */
+  private setPlayInSilentMode(value: boolean): void {
+    this.guiState.playInSilentMode = value;
+    storePlayInSilentMode(value);
+    applySilentModePlayback(value);
+    this.silentModeController?.updateDisplay();
+    // Once the user has found the setting, the hint has nothing left to say.
+    storeSilentModeHintSeen();
+  }
+
+  /**
+   * The first time sound can start on an iPhone / iPad, point at the setting: the silent switch mutes web audio there
+   * and nothing on screen says why. Shown once per browser, only while the setting is off.
+   */
+  private maybeShowSilentModeHint(): void {
+    const show = shouldShowSilentModeHint({
+      supported: supportsSystemAudioSession(),
+      enabled: this.guiState.playInSilentMode,
+      seen: readSilentModeHintSeen(),
+      touchFirst: deviceProfile.touchFirst,
+    });
+    if (!show) return;
+    storeSilentModeHintSeen();
+    mountSilentModeHint({
+      strings: SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)],
+      onEnable: () => this.setPlayInSilentMode(true),
+    });
   }
 
   public start(): void {
@@ -1119,6 +1172,19 @@ class PlayerWebDemoApp {
       });
     audio.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
     audio.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
+    // Safari / iOS only (`navigator.audioSession`): elsewhere web audio has no silent switch to get past, so the row is
+    // left out rather than shown disabled.
+    if (supportsSystemAudioSession()) {
+      const strings = SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)];
+      this.silentModeController = audio
+        .add(this.guiState, 'playInSilentMode')
+        .name(strings.label)
+        .onChange((value: boolean) => this.setPlayInSilentMode(value));
+      const note = document.createElement('div');
+      note.className = 'gui-note';
+      note.textContent = strings.note;
+      audio.$children.append(note);
+    }
     const compressor = addFolder(audio, DEBUG_MENU_FOLDERS.compressor);
     compressor
       .add(this.guiState, 'compressor')

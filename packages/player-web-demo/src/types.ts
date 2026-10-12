@@ -74,6 +74,11 @@ export interface DemoGuiState {
   keyVolume: number;
   /** BGM bus volume in percent (0..100), pushed live to gameplay and remembered across reloads. */
   bgmVolume: number;
+  /**
+   * Ask the platform audio session for `'playback'` so sound plays with the iPhone / iPad silent switch on (pausing other
+   * apps' music). Off by default; only offered where `navigator.audioSession` exists. Remembered across reloads.
+   */
+  playInSilentMode: boolean;
   compressor: boolean;
   compressorKey: boolean;
   compressorBgm: boolean;
