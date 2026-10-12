@@ -1,7 +1,6 @@
 import { unzipSync } from 'fflate';
 import {
   type ChartPlayVariant,
-  isPlayableChannel,
   resolveChart,
   resolveChartPlayVariant as resolveChartPlayVariantForChart,
 } from '@be-music/chart';
@@ -474,7 +473,7 @@ export async function loadSongCollectionFromFiles(
           throw new Error(`chart bytes missing for ${path}`);
         }
         const chart = parseChart(path, chartBytes);
-        const notes = resolveChart(chart, { inferBmsLnTypeWhenMissing: true }).notes;
+        const notes = resolveChart(chart, { chartPath: path, inferBmsLnTypeWhenMissing: true }).notes;
         const song: BrowserSongEntry = {
           id: `${source.id}:${path}`,
           sourceId: source.id,
@@ -489,7 +488,9 @@ export async function loadSongCollectionFromFiles(
           genre: chart.metadata.genre,
           playLevel: chart.metadata.playLevel,
           bpm: chart.metadata.bpm,
-          totalNotes: notes.filter((note) => isScoreTargetChannel(note.channel)).length,
+          // The notes the engine scores: FREE ZONE tails are judged by nobody, and mines / invisible objects are not
+          // notes at all. A long note counts once.
+          totalNotes: notes.filter((note) => note.freeZone !== true).length,
           chart,
         };
         songs.push(song);
@@ -587,10 +588,6 @@ function parseChart(path: string, bytes: Uint8Array) {
   // Single canonical decode pipeline (`@be-music/parser`'s `decodeBmsText`) so the web player resolves a chart's
   // encoding exactly like the CLI / TUI do \u2014 BOM, `#CHARSET`, and the shift_jis fallback all live in one module.
   return parseBms(decodeBmsText(bytes).text);
-}
-
-function isScoreTargetChannel(channel: string): boolean {
-  return isPlayableChannel(channel);
 }
 
 /**
