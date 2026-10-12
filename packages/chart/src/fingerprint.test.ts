@@ -25,11 +25,11 @@ function chart(...extra: string[]): string {
   ].join('\n');
 }
 
-async function playFingerprint(text: string, chartPath?: string): Promise<string> {
+function playFingerprint(text: string, chartPath?: string): string {
   return computePlayFingerprint(parseBms(text), { chartPath });
 }
 
-async function chartFingerprint(text: string): Promise<string> {
+function chartFingerprint(text: string): string {
   return computeChartFingerprint(parseBms(text));
 }
 
@@ -88,7 +88,7 @@ describe('fingerprint document', () => {
     });
   });
 
-  test('serializes with RFC 8785 and hashes the UTF-8 bytes with SHA-256', async () => {
+  test('serializes with RFC 8785 and hashes the UTF-8 bytes with SHA-256', () => {
     const json = parseBms(chart());
     const canonical = canonicalizeFingerprintDocument(createPlayFingerprintDocument(json));
     expect(canonical.startsWith('{"baseBpm":null,"bpm":"150","judge":{"rank":"2"},"laneMode":"7","measures":')).toBe(
@@ -96,33 +96,33 @@ describe('fingerprint document', () => {
     );
     expect(canonical).not.toMatch(/\s/);
     const expected = createHash('sha256').update(Buffer.from(canonical, 'utf8')).digest('hex');
-    expect(await computePlayFingerprint(json)).toBe(`bmfp1:${expected}`);
+    expect(computePlayFingerprint(json)).toBe(`bmfp1:${expected}`);
   });
 });
 
 describe('fingerprint invariance', () => {
-  test('ignores line order', async () => {
+  test('ignores line order', () => {
     const lines = chart('#BPM01 180', '#00308:01', '#001D3:0A').split('\n');
     const reordered = [...lines].reverse();
-    expect(await playFingerprint(reordered.join('\n'))).toBe(await playFingerprint(lines.join('\n')));
+    expect(playFingerprint(reordered.join('\n'))).toBe(playFingerprint(lines.join('\n')));
   });
 
-  test('ignores #WAV numbering', async () => {
+  test('ignores #WAV numbering', () => {
     const original = chart('#00311:0201');
     const renumbered = original
       .replace('#WAV01 a.wav', '#WAV0Z a.wav')
       .replaceAll(/(#\d{3}1[1-9]:)(\w+)/g, (_m, head: string, data: string) => `${head}${data.replace(/01/g, '0Z')}`);
     expect(renumbered).not.toBe(original);
-    expect(await playFingerprint(renumbered)).toBe(await playFingerprint(original));
+    expect(playFingerprint(renumbered)).toBe(playFingerprint(original));
   });
 
-  test('ignores the measure-position resolution', async () => {
+  test('ignores the measure-position resolution', () => {
     const coarse = chart('#00311:01', '#00312:0001');
     const fine = chart('#00311:0100', '#00312:00000100');
-    expect(await playFingerprint(fine)).toBe(await playFingerprint(coarse));
+    expect(playFingerprint(fine)).toBe(playFingerprint(coarse));
   });
 
-  test('ignores the decimal precision of measure lengths, BPMs and STOPs', async () => {
+  test('ignores the decimal precision of measure lengths, BPMs and STOPs', () => {
     const precise = chart('#00102:0.333333', '#BPM01 133.333333', '#00208:01', '#00116:0001', '#00216:01', '#LNOBJ 01');
     const rounded = chart(
       '#00102:0.3333',
@@ -134,17 +134,17 @@ describe('fingerprint invariance', () => {
     );
     const document = createPlayFingerprintDocument(parseBms(precise));
     expect(document.measures.lengths).toEqual([['1', '1/3']]);
-    expect(await playFingerprint(rounded)).toBe(await playFingerprint(precise));
+    expect(playFingerprint(rounded)).toBe(playFingerprint(precise));
   });
 
-  test('absorbs float noise in values', async () => {
-    expect(await playFingerprint(chart('#BPM01 149.99999999', '#00308:01'))).toBe(
-      await playFingerprint(chart('#BPM01 150', '#00308:01')),
+  test('absorbs float noise in values', () => {
+    expect(playFingerprint(chart('#BPM01 149.99999999', '#00308:01'))).toBe(
+      playFingerprint(chart('#BPM01 150', '#00308:01')),
     );
   });
 
-  test('ignores BGA, BGM, keysounds, invisible notes and metadata', async () => {
-    const base = await playFingerprint(chart());
+  test('ignores BGA, BGM, keysounds, invisible notes and metadata', () => {
+    const base = playFingerprint(chart());
     const variants = [
       chart('#BMP01 bg.bmp', '#00104:01', '#00107:01', '#00106:01'),
       chart('#00101:0102', '#00201:02'),
@@ -154,18 +154,18 @@ describe('fingerprint invariance', () => {
       chart('#WAV03 c.wav', '#VOLWAV 50', '#00197:80'),
     ];
     for (const variant of variants) {
-      expect(await playFingerprint(variant)).toBe(base);
+      expect(playFingerprint(variant)).toBe(base);
     }
   });
 
-  test('treats LNOBJ and channel 5x long notes alike', async () => {
+  test('treats LNOBJ and channel 5x long notes alike', () => {
     const lnobj = chart('#LNOBJ ZZ', '#00316:000100ZZ');
     const legacy = chart('#LNTYPE 1', '#00356:00010001');
-    expect(await playFingerprint(legacy)).toBe(await playFingerprint(lnobj));
+    expect(playFingerprint(legacy)).toBe(playFingerprint(lnobj));
   });
 
-  test('drops events that change nothing', async () => {
-    const base = await playFingerprint(chart('#BPM01 180', '#00308:01'));
+  test('drops events that change nothing', () => {
+    const base = playFingerprint(chart('#BPM01 180', '#00308:01'));
     const noOps = chart(
       '#BPM01 180',
       '#BPM02 150',
@@ -179,24 +179,24 @@ describe('fingerprint invariance', () => {
       '#SPEED01 1',
       '#002SP:01', // SPEED change to 1
     );
-    expect(await playFingerprint(noOps)).toBe(base);
+    expect(playFingerprint(noOps)).toBe(base);
   });
 
-  test('keeps the last change of one kind at one time', async () => {
+  test('keeps the last change of one kind at one time', () => {
     const both = chart('#BPM01 180', '#BPM02 200', '#00308:01', '#00308:02');
     const last = chart('#BPM02 200', '#00308:02');
-    expect(await playFingerprint(both)).toBe(await playFingerprint(last));
+    expect(playFingerprint(both)).toBe(playFingerprint(last));
   });
 
-  test('drops an #EXRANK change to the value of the previous one', async () => {
+  test('drops an #EXRANK change to the value of the previous one', () => {
     const twice = chart('#EXRANK01 50', '#EXRANK02 50', '#002A0:01', '#003A0:02');
     const once = chart('#EXRANK01 50', '#002A0:01');
-    expect(await playFingerprint(twice)).toBe(await playFingerprint(once));
+    expect(playFingerprint(twice)).toBe(playFingerprint(once));
   });
 
-  test('ignores measures after the last included event', async () => {
-    const base = await playFingerprint(chart());
-    expect(await playFingerprint(chart('#01002:0.5', '#02001:01', '#03004:01'))).toBe(base);
+  test('ignores measures after the last included event', () => {
+    const base = playFingerprint(chart());
+    expect(playFingerprint(chart('#01002:0.5', '#02001:01', '#03004:01'))).toBe(base);
     expect(createPlayFingerprintDocument(parseBms(chart('#01002:0.5'))).measures.count).toBe('3');
   });
 });
@@ -220,8 +220,8 @@ describe('fingerprint sensitivity', () => {
     ['#DEFEXRANK', chart('#DEFEXRANK 100')],
     ['#TOTAL', chart('#TOTAL 300')],
     ['a measure length', chart('#00102:0.75')],
-  ])('changes with %s', async (_label, variant) => {
-    expect(await playFingerprint(variant)).not.toBe(await playFingerprint(chart()));
+  ])('changes with %s', (_label, variant) => {
+    expect(playFingerprint(variant)).not.toBe(playFingerprint(chart()));
   });
 
   test.each([
@@ -238,7 +238,7 @@ describe('fingerprint sensitivity', () => {
     ['the #DEFEXRANK value', '#DEFEXRANK 100', '#DEFEXRANK 120'],
     ['the #TOTAL value', '#TOTAL 300', '#TOTAL 301'],
     ['the measure length', '#00102:0.75', '#00102:0.5'],
-  ])('changes with %s', async (_label, left, right) => {
+  ])('changes with %s', (_label, left, right) => {
     const shared = [
       '#LNOBJ ZZ',
       '#00316:01ZZ',
@@ -253,10 +253,10 @@ describe('fingerprint sensitivity', () => {
       '#SPEED01 0.5',
       '#EXRANK01 50',
     ];
-    expect(await playFingerprint(chart(...shared, left))).not.toBe(await playFingerprint(chart(...shared, right)));
+    expect(playFingerprint(chart(...shared, left))).not.toBe(playFingerprint(chart(...shared, right)));
   });
 
-  test('changes with #TOTAL present against absent', async () => {
+  test('changes with #TOTAL present against absent', () => {
     const json = parseBms(chart());
     expect(createPlayFingerprintDocument(json).total).toBeNull();
     expect(createPlayFingerprintDocument(parseBms(chart('#TOTAL 160'))).total).toEqual({ bms: '160' });
@@ -269,10 +269,10 @@ describe('fingerprint sensitivity', () => {
     });
   });
 
-  test('changes with the lane mode', async () => {
+  test('changes with the lane mode', () => {
     const text = chart();
     expect(createPlayFingerprintDocument(parseBms(text), { chartPath: 'song.pms' }).laneMode).toBe('9');
-    expect(await playFingerprint(text, 'song.pms')).not.toBe(await playFingerprint(text, 'song.bms'));
+    expect(playFingerprint(text, 'song.pms')).not.toBe(playFingerprint(text, 'song.bms'));
     expect(createPlayFingerprintDocument(parseBms(chart('#00221:01'))).laneMode).toBe('14');
   });
 });
@@ -318,13 +318,13 @@ describe('BMS against bmson', () => {
     stop_events: [{ y: 1920, duration: 240 }],
   });
 
-  test('gives the same play fingerprint', async () => {
+  test('gives the same play fingerprint', () => {
     const fromBms = createPlayFingerprintDocument(parseBms(bms));
     const fromBmson = createPlayFingerprintDocument(parseBmson(bmson));
     expect(fromBmson).toEqual(fromBms);
     expect(fromBms.notes).toContainEqual({ m: '1', p: '1/2', lane: '13', end: { m: '2', p: '0' }, ln: '1' });
     expect(fromBms.mines).toEqual([{ m: '1', p: '0', lane: '14', damage: '10' }]);
-    expect(await computePlayFingerprint(parseBmson(bmson))).toBe(await computePlayFingerprint(parseBms(bms)));
+    expect(computePlayFingerprint(parseBmson(bmson))).toBe(computePlayFingerprint(parseBms(bms)));
   });
 
   // STOPs are left out: `stringifyBmson` writes `stop_events[].duration` in BMS STOP units instead of pulses.
@@ -355,22 +355,22 @@ describe('BMS against bmson', () => {
 describe('control flow', () => {
   const randomChart = (...blocks: string[]): string => chart('#RANDOM 2', ...blocks, '#ENDRANDOM');
 
-  test('a chart without control flow has equal chart and play fingerprints', async () => {
+  test('a chart without control flow has equal chart and play fingerprints', () => {
     const json = parseBms(chart());
     expect(createChartFingerprintDocument(json)).toEqual(createPlayFingerprintDocument(json));
-    expect(await computeChartFingerprint(json)).toBe(await computePlayFingerprint(json));
+    expect(computeChartFingerprint(json)).toBe(computePlayFingerprint(json));
   });
 
-  test('keeps the chart fingerprint across branch selections while the play fingerprint follows the branch', async () => {
+  test('keeps the chart fingerprint across branch selections while the play fingerprint follows the branch', () => {
     const json = parseBms(randomChart('#IF 1', '#00313:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF'));
     const first = resolveBmsControlFlow(json, { random: () => 0 });
     const second = resolveBmsControlFlow(json, { random: () => 0.99 });
     const swapped = randomChart('#IF 2', '#00314:01', '#ENDIF', '#IF 1', '#00313:01', '#ENDIF');
-    expect(await computeChartFingerprint(json)).toBe(await chartFingerprint(swapped));
-    expect(await computePlayFingerprint(first)).not.toBe(await computePlayFingerprint(second));
-    expect(await computePlayFingerprint(first)).toBe(await playFingerprint(chart('#00313:01')));
-    expect(await computePlayFingerprint(second)).toBe(await playFingerprint(chart('#00314:01')));
-    expect(await computeChartFingerprint(json)).not.toBe(await computePlayFingerprint(first));
+    expect(computeChartFingerprint(json)).toBe(chartFingerprint(swapped));
+    expect(computePlayFingerprint(first)).not.toBe(computePlayFingerprint(second));
+    expect(computePlayFingerprint(first)).toBe(playFingerprint(chart('#00313:01')));
+    expect(computePlayFingerprint(second)).toBe(playFingerprint(chart('#00314:01')));
+    expect(computeChartFingerprint(json)).not.toBe(computePlayFingerprint(first));
 
     const document = createChartFingerprintDocument(json);
     expect(firstRandom(document.random)).toEqual({
@@ -397,20 +397,20 @@ describe('control flow', () => {
     expect(document.measures.count).toBe('4');
   });
 
-  test('resolves #SETRANDOM and #RANDOM 1 in place', async () => {
-    const inline = await playFingerprint(chart('#00314:01'));
+  test('resolves #SETRANDOM and #RANDOM 1 in place', () => {
+    const inline = playFingerprint(chart('#00314:01'));
     for (const text of [
       chart('#SETRANDOM 2', '#IF 1', '#00313:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF', '#ENDRANDOM'),
       chart('#RANDOM 1', '#IF 1', '#00314:01', '#ENDIF', '#IF 2', '#00313:01', '#ENDIF', '#ENDRANDOM'),
     ]) {
       const json = parseBms(text);
       expect(createChartFingerprintDocument(json).random).toEqual([]);
-      expect(await computeChartFingerprint(json)).toBe(inline);
-      expect(await computePlayFingerprint(resolveBmsControlFlow(json))).toBe(inline);
+      expect(computeChartFingerprint(json)).toBe(inline);
+      expect(computePlayFingerprint(resolveBmsControlFlow(json))).toBe(inline);
     }
   });
 
-  test('merges sibling #IF blocks with the same value', async () => {
+  test('merges sibling #IF blocks with the same value', () => {
     const split = randomChart(
       '#IF 1',
       '#00313:01',
@@ -423,7 +423,7 @@ describe('control flow', () => {
       '#ENDIF',
     );
     const merged = randomChart('#IF 1', '#00313:01', '#00315:01', '#ENDIF', '#IF 2', '#00314:01', '#ENDIF');
-    expect(await chartFingerprint(split)).toBe(await chartFingerprint(merged));
+    expect(chartFingerprint(split)).toBe(chartFingerprint(merged));
   });
 
   test('turns #ELSE into the default branch and drops empty branches', () => {
@@ -453,12 +453,12 @@ describe('control flow', () => {
     expect(node.branches[1]!.notes).toEqual([{ m: '3', p: '0', lane: '14' }]);
   });
 
-  test('lists content outside every #IF at the top level', async () => {
+  test('lists content outside every #IF at the top level', () => {
     const inside = chart('#RANDOM 2', '#00315:01', '#IF 1', '#00313:01', '#ENDIF', '#ENDRANDOM');
     const outside = chart('#00315:01', '#RANDOM 2', '#IF 1', '#00313:01', '#ENDIF', '#ENDRANDOM');
     const withoutEnd = chart('#RANDOM 2', '#00315:01', '#IF 1', '#00313:01', '#ENDIF');
-    expect(await chartFingerprint(inside)).toBe(await chartFingerprint(outside));
-    expect(await chartFingerprint(withoutEnd)).toBe(await chartFingerprint(outside));
+    expect(chartFingerprint(inside)).toBe(chartFingerprint(outside));
+    expect(chartFingerprint(withoutEnd)).toBe(chartFingerprint(outside));
   });
 
   test('applies definitions and header values made inside a branch', () => {
@@ -498,12 +498,12 @@ describe('control flow', () => {
     expect(node.branches.map((branch) => branch.notes.length)).toEqual([2, 1, 1]);
   });
 
-  test('changes the chart fingerprint with the branch content', async () => {
-    expect(await chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF'))).not.toBe(
-      await chartFingerprint(randomChart('#IF 1', '#00314:01', '#ENDIF')),
+  test('changes the chart fingerprint with the branch content', () => {
+    expect(chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF'))).not.toBe(
+      chartFingerprint(randomChart('#IF 1', '#00314:01', '#ENDIF')),
     );
-    expect(await chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF'))).not.toBe(
-      await chartFingerprint(randomChart('#IF 2', '#00313:01', '#ENDIF')),
+    expect(chartFingerprint(randomChart('#IF 1', '#00313:01', '#ENDIF'))).not.toBe(
+      chartFingerprint(randomChart('#IF 2', '#00313:01', '#ENDIF')),
     );
   });
 });

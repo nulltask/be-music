@@ -169,7 +169,7 @@ bmfp1:<正規化 JSON のバイト列の SHA-256（小文字の 16 進）>
 ## 6. 実装メモ
 
 - `@be-music/chart` がこの仕様を実装しています（`packages/chart/src/fingerprint.ts`）。
-  - `computeChartFingerprint(json, options?)` / `computePlayFingerprint(json, options?)` は `Promise<string>`（`bmfp1:…`）を返します。ハッシュは Web Crypto（`crypto.subtle`）で求めるので、Node でもブラウザでも動きます。
+  - `computeChartFingerprint(json, options?)` / `computePlayFingerprint(json, options?)` は `string`（`bmfp1:…`）を同期的に返します。ハッシュは非同期でしか使えない Web Crypto の `crypto.subtle.digest` ではなく、内蔵の小さな SHA-256（`packages/chart/src/sha256.ts`）で求めるので、Node でもブラウザでも動き、プレイログの記録処理のような同期的な呼び出し側からも使えます。
   - `createChartFingerprintDocument(json, options?)` / `createPlayFingerprintDocument(json, options?)` は正規化ドキュメントを同期的に組み立て、`canonicalizeFingerprintDocument(document)` はその RFC 8785 の文字列を返します。
   - `computePlayFingerprint` は `resolveBmsControlFlow` を通した後の譜面を受け取り、`json.bms.controlFlow` は見ません。`computeChartFingerprint` はパーサーが解決前に返す譜面（`events` は制御構文の外の内容だけ）を受け取り、`json.bms.controlFlow` から分岐を組み立て直します。
   - `options.chartPath` は譜面のファイル名をレーン構成の判定に渡します。判定は拡張子を見ます（`.pms` は常に 9 KEY）。

@@ -169,7 +169,7 @@ The `bmfp1` prefix names the algorithm version. Any change to what is included o
 ## 6. Implementation notes
 
 - `@be-music/chart` implements this specification (`packages/chart/src/fingerprint.ts`):
-  - `computeChartFingerprint(json, options?)` / `computePlayFingerprint(json, options?)` return `Promise<string>` (`bmfp1:…`). They hash with Web Crypto (`crypto.subtle`), so they run in Node and browsers alike.
+  - `computeChartFingerprint(json, options?)` / `computePlayFingerprint(json, options?)` return `string` (`bmfp1:…`) synchronously. They hash with a small built-in SHA-256 (`packages/chart/src/sha256.ts`) instead of Web Crypto, whose `crypto.subtle.digest` is async only, so they run in Node and browsers alike and synchronous callers such as the play-log recorder can use them.
   - `createChartFingerprintDocument(json, options?)` / `createPlayFingerprintDocument(json, options?)` build the canonical document synchronously, and `canonicalizeFingerprintDocument(document)` returns its RFC 8785 text.
   - `computePlayFingerprint` takes the chart after `resolveBmsControlFlow` and ignores `json.bms.controlFlow`. `computeChartFingerprint` takes the parser's unresolved output, whose `events` hold only the content outside control flow, and rebuilds the branches from `json.bms.controlFlow`.
   - `options.chartPath` passes the chart's file name to the lane-mode detection, which reads its extension (`.pms` is always 9 KEY).

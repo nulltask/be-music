@@ -42,6 +42,7 @@ import {
   snapValue,
   type Rational,
 } from './fingerprint-rational.ts';
+import { sha256Hex } from './sha256.ts';
 
 const FINGERPRINT_VERSION = 'bmfp1';
 
@@ -195,30 +196,18 @@ export function canonicalizeFingerprintDocument(document: BeMusicFingerprintDocu
   return canonicalizeJsonValue(document);
 }
 
-/** `bmfp1:<sha256>` of the chart fingerprint document. Uses Web Crypto, so it works in Node and browsers alike. */
-export async function computeChartFingerprint(
-  json: BeMusicJson,
-  options: BeMusicFingerprintOptions = {},
-): Promise<string> {
+/** `bmfp1:<sha256>` of the chart fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
+export function computeChartFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions = {}): string {
   return hashFingerprintDocument(createChartFingerprintDocument(json, options));
 }
 
-/** `bmfp1:<sha256>` of the play fingerprint document. Uses Web Crypto, so it works in Node and browsers alike. */
-export async function computePlayFingerprint(
-  json: BeMusicJson,
-  options: BeMusicFingerprintOptions = {},
-): Promise<string> {
+/** `bmfp1:<sha256>` of the play fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
+export function computePlayFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions = {}): string {
   return hashFingerprintDocument(createPlayFingerprintDocument(json, options));
 }
 
-async function hashFingerprintDocument(document: BeMusicFingerprintDocument): Promise<string> {
-  const bytes = new TextEncoder().encode(canonicalizeFingerprintDocument(document));
-  const digest = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes));
-  let hex = '';
-  for (const byte of digest) {
-    hex += byte.toString(16).padStart(2, '0');
-  }
-  return `${FINGERPRINT_VERSION}:${hex}`;
+function hashFingerprintDocument(document: BeMusicFingerprintDocument): string {
+  return `${FINGERPRINT_VERSION}:${sha256Hex(canonicalizeFingerprintDocument(document))}`;
 }
 
 function canonicalizeJsonValue(value: unknown): string {

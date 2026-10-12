@@ -231,13 +231,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   define('chart.computeChartFingerprint', {
-    run: async (fixtures) => {
-      await chartApi.computeChartFingerprint(fixtures.sampleBmsJson);
+    run: (fixtures) => {
+      chartApi.computeChartFingerprint(fixtures.sampleBmsJson);
     },
   });
   define('chart.computePlayFingerprint', {
-    run: async (fixtures) => {
-      await chartApi.computePlayFingerprint(fixtures.sampleBmsJson);
+    run: (fixtures) => {
+      chartApi.computePlayFingerprint(fixtures.sampleBmsJson);
     },
   });
 }
