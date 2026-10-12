@@ -49,7 +49,6 @@ import {
   type ControlFlowCaptureFrameType,
   updateControlFlowCaptureStack,
 } from './control-flow.ts';
-import { decodeBmsText, decodeUtf8Text } from './bms-text-decode.ts';
 
 const INDEXED_HEADER_COMMAND =
   /^(WAV|BMP|BPM|STOP|TEXT|EXRANK|ARGB|CHANGEOPTION|EXWAV|EXBMP|BGA|SCROLL|SPEED|SWBGA)([0-9A-Za-z]{2})$/;
@@ -542,26 +541,6 @@ export function parseChart(input: string, formatHint?: string): BeMusicJson {
   }
 
   return parseBms(input);
-}
-
-export interface ParseChartFileOptions {
-  signal?: AbortSignal;
-}
-
-export async function parseChartFile(filePath: string, options: ParseChartFileOptions = {}): Promise<BeMusicJson> {
-  const [{ readFile }, { extname }] = await Promise.all([import('node:fs/promises'), import('node:path')]);
-  const buffer = await readFile(filePath, {
-    signal: options.signal,
-  });
-  const extension = extname(filePath).toLowerCase();
-  if (extension === '.bmson') {
-    return parseBmson(decodeUtf8Text(buffer));
-  }
-  if (extension === '.json') {
-    return parseChart(decodeUtf8Text(buffer), 'json');
-  }
-  const decoded = decodeBmsText(buffer);
-  return parseBms(decoded.text);
 }
 
 export interface ResolveBmsControlFlowOptions {
