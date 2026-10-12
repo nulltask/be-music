@@ -179,9 +179,10 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       continue;
     }
     if (channel === '09') {
-      const duration = json.resources.stop[normalizeObjectKey(event.value, idBase)];
-      if (typeof duration === 'number' && duration > 0) {
-        stopEvents.push({ y, duration });
+      // `#STOPxx` counts 1/192 of a 4/4 measure (48 per beat); bmson `duration` counts pulses at `resolution`.
+      const stopUnits = json.resources.stop[normalizeObjectKey(event.value, idBase)];
+      if (typeof stopUnits === 'number' && stopUnits > 0) {
+        stopEvents.push({ y, duration: Math.round((stopUnits * resolution) / 48) });
       }
     }
   }
