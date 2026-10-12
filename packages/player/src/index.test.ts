@@ -801,6 +801,53 @@ describe('player', () => {
     ).toBe(true);
   });
 
+  describe('player: replays each #RANDOM / #SWITCH draw into the branch it reported', () => {
+    // The final `#RANDOM 2` block puts a note on lane 11 for branch 1 and on lane 12 for branch 2, so the played
+    // branch can be read back from the resolved events and compared with the reported pattern.
+    const finalBlock = ['#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'];
+    const cases: Array<{ name: string; prefix: string[]; draws: number[]; expected: number }> = [
+      { name: '#RANDOM 1', prefix: ['#RANDOM 1', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#RANDOM without a value', prefix: ['#RANDOM', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#RANDOM 0', prefix: ['#RANDOM 0', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#SWITCH 1', prefix: ['#SWITCH 1', '#ENDSW'], draws: [0.9], expected: 2 },
+      { name: '#SETRANDOM', prefix: ['#SETRANDOM 2', '#ENDRANDOM'], draws: [0.9], expected: 2 },
+      { name: '#SETSWITCH', prefix: ['#SETSWITCH 2', '#ENDSW'], draws: [0.9], expected: 2 },
+      { name: '#SWITCH 3', prefix: ['#SWITCH 3', '#ENDSW'], draws: [0.9, 0], expected: 1 },
+      { name: '#RANDOM 3', prefix: ['#RANDOM 3', '#ENDRANDOM'], draws: [0, 0.9], expected: 2 },
+      {
+        name: 'a #RANDOM 1 nested in an inactive branch',
+        prefix: ['#RANDOM 2', '#IF 1', '#RANDOM 1', '#ENDRANDOM', '#ENDIF', '#ENDRANDOM'],
+        draws: [0.9, 0],
+        expected: 1,
+      },
+      {
+        name: 'a #RANDOM 2 nested in an inactive branch',
+        prefix: ['#RANDOM 2', '#IF 1', '#RANDOM 2', '#ENDRANDOM', '#ENDIF', '#ENDRANDOM'],
+        draws: [0.9, 0, 0.9],
+        expected: 2,
+      },
+    ];
+
+    for (const { name, prefix, draws, expected } of cases) {
+      test(`after ${name}`, () => {
+        const json = parseChart(['#BPM 120', ...prefix, ...finalBlock].join('\n'), 'bms');
+        let drawn = 0;
+        const resolved = resolveBmsControlFlowForPlayback(json, () => {
+          const value = draws[drawn] ?? 0;
+          drawn += 1;
+          return value;
+        });
+
+        const playedBranches = resolved.resolvedJson.events
+          .filter((event) => event.channel === '11' || event.channel === '12')
+          .map((event) => (event.channel === '11' ? 1 : 2));
+        expect(playedBranches).toEqual([expected]);
+        expect(resolved.randomPatterns.at(-1)).toMatchObject({ current: expected, total: 2 });
+        expect(drawn).toBe(draws.length);
+      });
+    }
+  });
+
   test('player: formats multiple RANDOM pattern summaries in declaration order', () => {
     const summary = formatRandomPatternSummary([
       { index: 1, current: 2, total: 3 },
