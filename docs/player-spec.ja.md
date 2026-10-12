@@ -106,7 +106,7 @@ player は次の順序で譜面を実行します。
 ## 制御構文の扱い
 
 BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に解決します。
-`#RANDOM` は実行時に乱数を 1 回引き、その値を `resolveBmsControlFlow()` へ再注入して分岐を再現します。
+`#RANDOM` は実行時に `resolveBmsControlFlow()` を 1 回だけ通して解決し、RANDOM パターン表示はその解決が `onOutcome` で報告した値から作るので、常に遊ぶ枝を示します。
 
 player は UI 表示用に、今回の再生で選ばれた RANDOM パターンも保持します。
 `#SETRANDOM` は固定値として記録し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。

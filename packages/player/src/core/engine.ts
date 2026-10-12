@@ -1690,32 +1690,27 @@ export function resolveBmsControlFlowForPlayback(
   json: BeMusicJson,
   randomSource: () => number = Math.random,
 ): ControlFlowResolutionResult {
-  const randomPatterns: RandomPatternSelection[] = [];
-  // Values drawn here are replayed, in order, into the parser's own `#RANDOM` / `#SWITCH` draws below. The parser only
-  // draws for a line with more than one outcome (`#RANDOM 1`, a missing or non-positive range, and `#SWITCH 1` resolve
-  // to 1 without touching the source), so drawing for those lines here would shift every later replayed value onto
-  // the previous line and play a different branch than the one reported in `randomPatterns`.
-  const runtimeRandomSequence: number[] = [];
-  const drawLikeParser = (total: number): number => {
-    if (total <= 1) {
-      return 1;
-    }
-    const randomValue = randomSource();
-    runtimeRandomSequence.push(randomValue);
-    return generateControlFlowRandomValue(total, randomValue);
-  };
+  // One parser pass draws every `#RANDOM` / `#SWITCH` line and reports its value; the random patterns are read back
+  // from those values, so the summary always describes the branches that were actually resolved.
+  const randomOutcomes: number[] = [];
+  const resolvedJson = resolveBmsControlFlow(json, {
+    random: randomSource,
+    onOutcome: (value) => randomOutcomes.push(value),
+  });
 
+  const randomPatterns: RandomPatternSelection[] = [];
+  let outcomeIndex = 0;
   for (const entry of json.bms.controlFlow) {
     if (entry.kind !== 'directive') {
       continue;
     }
     if (entry.command === 'RANDOM') {
-      const total = parsePositiveInteger(entry.value) ?? 1;
       randomPatterns.push({
         index: randomPatterns.length + 1,
-        current: drawLikeParser(total),
-        total,
+        current: randomOutcomes[outcomeIndex] ?? 1,
+        total: parsePositiveInteger(entry.value) ?? 1,
       });
+      outcomeIndex += 1;
       continue;
     }
     if (entry.command === 'SETRANDOM') {
@@ -1728,23 +1723,9 @@ export function resolveBmsControlFlowForPlayback(
       continue;
     }
     if (entry.command === 'SWITCH') {
-      drawLikeParser(parsePositiveInteger(entry.value) ?? 1);
+      outcomeIndex += 1;
     }
   }
-
-  let randomDrawIndex = 0;
-  const randomOutcomes: number[] = [];
-  const resolvedJson = resolveBmsControlFlow(json, {
-    onOutcome: (value) => randomOutcomes.push(value),
-    random: () => {
-      const replayValue = runtimeRandomSequence[randomDrawIndex];
-      if (typeof replayValue === 'number') {
-        randomDrawIndex += 1;
-        return replayValue;
-      }
-      return randomSource();
-    },
-  });
 
   return {
     resolvedJson,
@@ -1847,15 +1828,6 @@ function parsePositiveInteger(value?: string): number | undefined {
     return undefined;
   }
   return normalized;
-}
-
-function generateControlFlowRandomValue(total: number, randomValue: number): number {
-  const safeTotal = Math.max(1, Math.floor(total));
-  if (safeTotal <= 1) {
-    return 1;
-  }
-  const clamped = Number.isFinite(randomValue) ? Math.max(0, Math.min(0.999999999, randomValue)) : 0;
-  return Math.floor(clamped * safeTotal) + 1;
 }
 
 export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): Promise<PlayerSummary> {

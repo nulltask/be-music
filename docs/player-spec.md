@@ -106,7 +106,7 @@ In addition to the regular `#STOPxx`, time resolution also treats the BMS extens
 ## Handling control syntax
 
 BMS's `#RANDOM` / `#SETRANDOM` / `#SWITCH` control syntax is resolved before playback starts.
-`#RANDOM` draws a random number once at runtime and reinjects that value into `resolveBmsControlFlow()` to reproduce the branch.
+`#RANDOM` is resolved by a single `resolveBmsControlFlow()` pass at runtime, and the random pattern summary is read from the values that pass reports through `onOutcome`, so it always names the branches that play.
 
 The player also maintains the RANDOM pattern selected for this playback for UI display.
 `#SETRANDOM` is recorded as a fixed value, and if there are multiple RANDOM types, they are formatted as `RANDOM #1 2/3 #2 1/2` in the order of declaration.
