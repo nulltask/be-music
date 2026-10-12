@@ -1,13 +1,12 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { parseBms, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
 import { drawRandomOutcomes, type RandomDraws } from './control-flow.ts';
+import { createOutcomeComposer, expandChartFingerprintDocument } from './fingerprint-compose.ts';
 import {
   canonicalizeFingerprintDocument,
   computeChartFingerprint,
   createChartFingerprintDocument,
-  createOutcomeComposer,
   createPlayFingerprintDocument,
-  expandChartFingerprintDocument,
 } from './fingerprint.ts';
 
 const OPTIONS = { chartPath: undefined };
