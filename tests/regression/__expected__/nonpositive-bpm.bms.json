@@ -273,67 +273,67 @@
           "lr2": {
             "ruleset": "lr2/1",
             "judge": {
-              "pgreat": 16,
+              "pgreat": 17,
               "great": 0,
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 7
             },
             "fast": 0,
             "slow": 0,
-            "exScore": 32,
+            "exScore": 34,
             "noteCount": 24,
-            "maxCombo": 16,
+            "maxCombo": 17,
             "djLevel": "A",
             "gauge": {
               "type": "GROOVE",
-              "final": 100,
+              "final": 86,
               "cleared": true
             },
-            "score": 133333
+            "score": 141666
           },
           "beatoraja": {
             "ruleset": "beatoraja/1",
             "judge": {
-              "pgreat": 16,
+              "pgreat": 17,
               "great": 0,
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 7
             },
             "fast": 0,
             "slow": 0,
-            "exScore": 32,
+            "exScore": 34,
             "noteCount": 24,
-            "maxCombo": 16,
+            "maxCombo": 17,
             "djLevel": "A",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
+              "final": 86,
               "cleared": true
             }
           },
           "iidx": {
             "ruleset": "iidx/1",
             "judge": {
-              "pgreat": 16,
+              "pgreat": 17,
               "great": 0,
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 7
             },
             "fast": 0,
             "slow": 0,
-            "exScore": 32,
+            "exScore": 34,
             "noteCount": 24,
-            "maxCombo": 16,
+            "maxCombo": 17,
             "djLevel": "A",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
+              "final": 86,
               "cleared": true
             }
           }
@@ -343,67 +343,67 @@
           "lr2": {
             "ruleset": "lr2/1",
             "judge": {
-              "pgreat": 6,
+              "pgreat": 7,
               "great": 4,
               "good": 2,
               "bad": 2,
               "poor": 2,
-              "emptyPoor": 0
+              "emptyPoor": 6
             },
             "fast": 3,
             "slow": 3,
-            "exScore": 16,
+            "exScore": 18,
             "noteCount": 24,
             "maxCombo": 6,
             "djLevel": "D",
             "gauge": {
               "type": "GROOVE",
-              "final": 96,
+              "final": 88,
               "cleared": true
             },
-            "score": 70833
+            "score": 79166
           },
           "beatoraja": {
             "ruleset": "beatoraja/1",
             "judge": {
-              "pgreat": 6,
+              "pgreat": 7,
               "great": 4,
               "good": 2,
               "bad": 0,
               "poor": 4,
-              "emptyPoor": 2
+              "emptyPoor": 8
             },
             "fast": 3,
             "slow": 3,
-            "exScore": 16,
+            "exScore": 18,
             "noteCount": 24,
             "maxCombo": 6,
             "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 92,
+              "final": 88,
               "cleared": true
             }
           },
           "iidx": {
             "ruleset": "iidx/1",
             "judge": {
-              "pgreat": 6,
+              "pgreat": 7,
               "great": 4,
               "good": 2,
               "bad": 2,
               "poor": 2,
-              "emptyPoor": 0
+              "emptyPoor": 6
             },
             "fast": 3,
             "slow": 3,
-            "exScore": 16,
+            "exScore": 18,
             "noteCount": 24,
             "maxCombo": 6,
             "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 97.42,
+              "final": 88,
               "cleared": true
             }
           }

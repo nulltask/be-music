@@ -2556,6 +2556,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     reversalSeconds === undefined
       ? seconds
       : Math.min(seconds, reversalSeconds - 2 * REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS);
+  // LR2 keeps judging presses past the reversal on the MIRRORED clock t' = 2R - now (OpenLR2 `LR2f.cpp:12624,12931`,
+  // LR2body.exe 0x42c25b / 0x42c788): notes around the reversal stay hittable just after it, empty POORs keep firing
+  // while the lane's next note is within reach of t', and an LN spanning the reversal BADs on release. t' never
+  // passes R, so nothing past it is ever swept into a miss. Pure in the true chart time, so replays reproduce it.
+  const toJudgeClock = (seconds: number): number =>
+    reversalSeconds !== undefined && seconds > reversalSeconds ? 2 * reversalSeconds - seconds : seconds;
   // Dynamic `#EXRANKxx` is an LR2 concept — beatoraja ignores it and IIDX has no BMS rank axis at all, so the
   // non-LR2 rulesets keep their initial windows for the whole chart.
   const dynamicJudgeRankChanges =
@@ -3410,6 +3416,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     candidateChannels: ReadonlySet<string>,
     consumed: TimedPlayableNote,
     consumedJudge: RulesetJudgeIndex,
+    // When the judgments land on the true clock — differs from `nowSec` only past an LR2 reversal (mirrored clock).
+    atSeconds = nowSec,
   ): void => {
     const reachSeconds = maxJudgeReachSeconds(nowSec);
     const consumedIsLong = isLongPlayableNote(consumed);
@@ -3452,20 +3460,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       if (!markScorableJudged(note)) {
         continue;
       }
-      applyResolvedManualJudge(note.channel, { kind: 'BAD', signedDeltaMs: (nowSec - note.seconds) * 1000 }, nowSec);
+      applyResolvedManualJudge(note.channel, { kind: 'BAD', signedDeltaMs: (nowSec - note.seconds) * 1000 }, atSeconds);
       if (longNoteOwesTailMiss(note)) {
         applyJudgeToSummary(summary, 'POOR', scoreTracker);
-        applyLoggedGaugeJudge(nowSec, 'POOR', 'miss');
+        applyLoggedGaugeJudge(atSeconds, 'POOR', 'miss');
       }
     }
-  };
-
-  const applyManualTimingJudge = (channel: string, signedDeltaMs: number, atSeconds: number): void => {
-    applyResolvedManualJudge(
-      channel,
-      resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, atSeconds)),
-      atSeconds,
-    );
   };
 
   const finalizeActiveLongNote = (
@@ -3644,14 +3644,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     }
     processLandminePassage(nowSec, nowMs);
 
-    // Past the LR2 negative-BPM reversal the judge clock is dead (#134): a press still replays the latest lane
-    // keysound below (frozen at the reversal, matching LR2's stalled lane-sound assignments), but no note is
-    // consumed and no empty POOR fires.
-    const judgingFrozen = reversalSeconds !== undefined && nowSec >= reversalSeconds;
-    // The lane-sound table freezes with the pump: a frozen-era press must replay the latest PRE-reversal sample,
-    // never a note keysound authored behind the reversal.
-    const laneSoundReferenceSec = clampToReversal(nowSec);
-    const selected = judgingFrozen ? undefined : selectPressCandidate(nowSec, candidateChannels);
+    // Past an LR2 negative-BPM reversal the press is judged on the mirrored clock (#134; see `toJudgeClock`): note
+    // selection, timing deltas, windows, the lane keysound, and the empty-POOR reach all read `judgeSec`, while
+    // logs, gauge history, and UI cues keep the true `nowSec`.
+    const judgeSec = toJudgeClock(nowSec);
+    const selected = selectPressCandidate(judgeSec, candidateChannels);
 
     if (!selected) {
       if (refreshedHold) {
@@ -3665,8 +3662,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       const fallback = findLaneSoundCandidate(
         laneSoundNotes,
         candidateChannels,
-        laneSoundReferenceSec,
-        maxJudgeEarlyReachSeconds(laneSoundReferenceSec),
+        judgeSec,
+        maxJudgeEarlyReachSeconds(judgeSec),
       );
       if (fallback) {
         if (!uiEnabled) {
@@ -3686,9 +3683,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           return;
         }
       }
-      if (judgingFrozen || !hasEmptyPoorReferenceNote(candidateChannels, nowSec)) {
-        // No note in the ruleset's miss window (or the run is past the reversal) — the press is harmless: the lane
-        // keysound (fallback above) plays and nothing else happens.
+      if (!hasEmptyPoorReferenceNote(candidateChannels, judgeSec)) {
+        // No note in the ruleset's miss window — the press is harmless: the lane keysound (fallback above) plays and
+        // nothing else happens.
         return;
       }
       // Empty POOR (kara-poor / 空POOR): a phantom press near a note but outside every judgable window. It costs
@@ -3721,9 +3718,9 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       return;
     }
     const channel = candidate.channel;
-    const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
+    const signedDeltaMs = (judgeSec - candidate.seconds) * 1000;
     const collectMultiBad = ruleset.multiBad
-      ? () => applyMultiBadCollector(nowSec, candidateChannels, candidate, selected.judge)
+      ? () => applyMultiBadCollector(judgeSec, candidateChannels, candidate, selected.judge, nowSec)
       : () => {};
     if (uiEnabled) {
       uiSignals.pushCommand({ kind: 'flash-lane', channel });
@@ -3775,7 +3772,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           mode: toUiLongNoteMode(longNoteMode),
         });
       }
-      const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, nowSec));
+      const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, judgeSec));
       if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
         // Charge modes score the head right here — it is a judgment of its own, not half of a deferred one.
         applyResolvedManualJudge(channel, headJudge, nowSec);
@@ -3796,7 +3793,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           mode: longNoteMode,
           headJudge,
           headScored: true,
-          gaugeDrainCursorSeconds: nowSec,
+          gaugeDrainCursorSeconds: judgeSec,
           audioStopped: false,
         });
         longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
@@ -3811,7 +3808,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           mode: 1,
           headJudge,
           headScored: false,
-          gaugeDrainCursorSeconds: nowSec,
+          gaugeDrainCursorSeconds: judgeSec,
           audioStopped: false,
         });
         longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
@@ -3828,7 +3825,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       longHoldUntilMsByChannel.delete(channel);
     }
 
-    applyManualTimingJudge(channel, signedDeltaMs, nowSec);
+    applyResolvedManualJudge(
+      channel,
+      resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(channel, judgeSec)),
+      nowSec,
+    );
     collectMultiBad();
   };
 
@@ -4071,36 +4072,19 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       longHoldUntilMsByChannel.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
     }
 
-    if (reversalSeconds !== undefined && nowSec >= reversalSeconds && activeLongNotesByChannel.size > 0) {
-      // The judge clock dies at the LR2 reversal (#134). Holds whose resolution instant landed strictly BEFORE
-      // it — a release recorded pre-reversal, or a mode-1 LN whose end lies before it — still resolve through
-      // the normal per-hold pass below (their judge instant is the pre-reversal release/end time, so frame
-      // quantization must not swallow them). Holds genuinely still open at the reversal resolve silently: no
-      // tail judgment, no POOR, and their keysounds play out (LR2 lets already-scheduled audio ring).
-      for (const [channel, hold] of activeLongNotesByChannel) {
-        const releaseSeconds = longHoldReleaseSecondsByChannel.get(channel);
-        const resolvesBeforeReversal =
-          (releaseSeconds !== undefined && releaseSeconds < reversalSeconds) ||
-          (hold.mode === 1 && hold.endSeconds < reversalSeconds);
-        if (resolvesBeforeReversal) {
-          continue;
-        }
-        if (uiEnabled) {
-          uiSignals.pushCommand({ kind: 'release-lane', channel });
-        }
-        activeLongNotesByChannel.delete(channel);
-        longHoldUntilMsByChannel.delete(channel);
-        longHoldReleaseSecondsByChannel.delete(channel);
-      }
-    }
-
+    // Holds are judged on the judge clock: past an LR2 reversal it is the mirrored `t' = 2R - now`, which never
+    // reaches a tail beyond R — a hold spanning the reversal stays open while held and BADs on release, as in LR2
+    // (`LR2f.cpp:7613-7616`). Logs and UI cues keep the true clock.
+    const judgeSec = toJudgeClock(nowSec);
     for (const [channel, hold] of activeLongNotesByChannel.entries()) {
       const holdUntilMs = longHoldUntilMsByChannel.get(channel);
       const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
       // The tail is judged against the release instant when there was one — a frame can be hundreds of chart
       // milliseconds wide at high `speed`, and quantizing to it would turn a clean release into a GOOD.
       const releaseSeconds = longHoldReleaseSecondsByChannel.get(channel);
-      const tailJudgeSeconds = releaseSeconds ?? nowSec;
+      const tailJudgeSeconds = releaseSeconds === undefined ? judgeSec : toJudgeClock(releaseSeconds);
+      // When the tail resolves on the true clock (the release instant, or this step).
+      const tailAtSeconds = releaseSeconds ?? nowSec;
       if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs && tailJudgeSeconds < hold.endSeconds) {
         if (!hold.audioStopped) {
           playbackStateLogger.logLongNoteState(nowSec, {
@@ -4129,12 +4113,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           channel,
           hold,
           { kind: 'BAD', signedDeltaMs: (tailJudgeSeconds - hold.endSeconds) * 1000 },
-          tailJudgeSeconds,
+          tailAtSeconds,
         );
         continue;
       }
       if (hold.mode === 3) {
-        const accumulateUntilSeconds = Math.min(nowSec, hold.endSeconds);
+        const accumulateUntilSeconds = Math.min(judgeSec, hold.endSeconds);
         if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
           const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
           if (isHolding) {
@@ -4177,11 +4161,11 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
         }
       }
 
-      if (nowSec >= hold.endSeconds) {
+      if (judgeSec >= hold.endSeconds) {
         if (
           isChargeLongNoteMode(hold.mode) &&
           isHolding &&
-          nowSec < hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(channel, hold.endSeconds, true)) / 1e6
+          judgeSec < hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(channel, hold.endSeconds, true)) / 1e6
         ) {
           // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the
           // player has until the tail's late window closes to let go, exactly as the play-log simulator models it.
@@ -4231,7 +4215,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           hold.mode === 3 && !isHolding && releaseSeconds === undefined
             ? resolveLongNoteTailJudge(hold, {
                 kind: 'POOR',
-                signedDeltaMs: (nowSec - hold.endSeconds) * 1000,
+                signedDeltaMs: (judgeSec - hold.endSeconds) * 1000,
               } satisfies TimedManualJudge)
             : resolveLongNoteTailJudge(
                 hold,
@@ -4240,7 +4224,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
                   judgeWindowsFor(channel, hold.endSeconds, true),
                 ),
               );
-        finalizeActiveLongNote(channel, hold, finalJudge, tailJudgeSeconds);
+        finalizeActiveLongNote(channel, hold, finalJudge, tailAtSeconds);
         continue;
       }
 
@@ -4278,7 +4262,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
               judgeWindowsFor(channel, hold.endSeconds, true),
             ),
           ),
-          tailJudgeSeconds,
+          tailAtSeconds,
         );
       }
     }

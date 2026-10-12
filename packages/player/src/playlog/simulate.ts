@@ -157,16 +157,18 @@ class PlaylogSimulation {
     const reversalUs = this.playlog.chart.reversalTimeUs;
     const inputs = [...this.playlog.inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq);
     for (const input of inputs) {
-      if (reversalUs !== undefined && input.timeUs >= reversalUs) {
-        // LR2 negative-BPM reversal (#134): the judge clock died here during the recorded run — later inputs only
-        // replayed keysounds. `advanceTime` is clamped to the same point, so the remaining chart stays unjudged.
-        continue;
-      }
       this.advanceTime(input.timeUs);
+      // LR2 negative-BPM reversal (#134): past the reversal R presses and releases are judged on the mirrored clock
+      // t' = 2R - now (OpenLR2 `LR2f.cpp:12624,12931`), exactly as the engine does. `advanceTime` stays clamped to R,
+      // so nothing past it is ever swept into a miss.
+      const judged =
+        reversalUs !== undefined && input.timeUs > reversalUs
+          ? { ...input, timeUs: 2 * reversalUs - input.timeUs }
+          : input;
       if (input.action === 'down') {
-        this.handleDown(input);
+        this.handleDown(judged);
       } else {
-        this.handleUp(input);
+        this.handleUp(judged);
       }
     }
     this.advanceTime(Number.POSITIVE_INFINITY);
@@ -278,7 +280,8 @@ class PlaylogSimulation {
   private advanceTime(untilUs: number): void {
     const reversalUs = this.playlog.chart.reversalTimeUs;
     if (reversalUs !== undefined && untilUs > reversalUs) {
-      // Judging froze at the LR2 reversal: misses, mines, holds, and auto judgements past it never happen.
+      // The LR2 event pump froze at the reversal and the mirrored judge clock never passes it: misses, mines, hold
+      // deadlines, and auto judgements past it never happen.
       untilUs = reversalUs;
     }
     interface TimedEvent {

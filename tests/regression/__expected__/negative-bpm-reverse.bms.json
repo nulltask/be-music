@@ -270,7 +270,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 4
             },
             "fast": 0,
             "slow": 0,
@@ -280,7 +280,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "GROOVE",
-              "final": 100,
+              "final": 92,
               "cleared": true
             },
             "score": 104347
@@ -293,7 +293,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 3
             },
             "fast": 0,
             "slow": 0,
@@ -303,7 +303,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
+              "final": 94,
               "cleared": true
             }
           },
@@ -315,7 +315,7 @@
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 3
             },
             "fast": 0,
             "slow": 0,
@@ -325,7 +325,7 @@
             "djLevel": "C",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
+              "final": 94,
               "cleared": true
             }
           }
@@ -340,7 +340,7 @@
               "good": 1,
               "bad": 1,
               "poor": 1,
-              "emptyPoor": 0
+              "emptyPoor": 4
             },
             "fast": 1,
             "slow": 3,
@@ -350,7 +350,7 @@
             "djLevel": "E",
             "gauge": {
               "type": "GROOVE",
-              "final": 100,
+              "final": 92,
               "cleared": true
             },
             "score": 67391
@@ -363,7 +363,7 @@
               "good": 1,
               "bad": 0,
               "poor": 2,
-              "emptyPoor": 1
+              "emptyPoor": 4
             },
             "fast": 1,
             "slow": 3,
@@ -373,7 +373,7 @@
             "djLevel": "E",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
+              "final": 94,
               "cleared": true
             }
           },
@@ -385,7 +385,7 @@
               "good": 1,
               "bad": 1,
               "poor": 1,
-              "emptyPoor": 0
+              "emptyPoor": 3
             },
             "fast": 1,
             "slow": 3,
@@ -395,7 +395,7 @@
             "djLevel": "E",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
+              "final": 94,
               "cleared": true
             }
           }

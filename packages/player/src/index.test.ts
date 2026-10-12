@@ -2149,12 +2149,12 @@ describe('player', () => {
     expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(1);
   });
 
-  test('player: an LN held across the LR2 reversal resolves silently (no POOR, run completes)', async () => {
+  test('player: an LN held across the LR2 reversal is never judged (no POOR, run completes)', async () => {
     // BPM 240 → measure = 1 s. A legacy LNOBJ long note spans the reversal: head at 1 s, `#BPM02 -240` via
-    // channel 08 at 2 s, tail at 3 s (|−240| keeps one measure per second). The hold is genuinely open when the
-    // judge clock dies at 2 s, so it must resolve silently — no tail judgment, no POOR — and the run must still
-    // complete with the gauge untouched. Replay input keeps the press deterministic (exact chart microseconds)
-    // and, with no matching `up`, holds the lane's kitty press state through the end of the run.
+    // channel 08 at 2 s, tail at 3 s (|−240| keeps one measure per second). Past the reversal LR2 judges the hold on
+    // the mirrored clock t' = 2R - now, which never reaches the tail, so a hold that is never released is never
+    // judged: no tail judgment, no POOR, and the run still completes. Replay input keeps the press deterministic
+    // (exact chart microseconds) and, with no matching `up`, holds the lane's kitty press state through the end.
     const json = createEmptyJson('bms');
     json.metadata.bpm = 240;
     json.metadata.rank = 2;
@@ -2178,8 +2178,8 @@ describe('player', () => {
     expect(summary.total).toBe(1);
     expect(summary.poor).toBe(0);
     expect(summary.bad).toBe(0);
-    // Silent means SILENT: the hold gets no judgment at all — not even the head's verdict at the tail (that
-    // would be the normal completion path, which must not run for a hold still open at the reversal).
+    // The hold gets no judgment at all — not even the head's verdict at the tail (that would be the normal
+    // completion path, which the mirrored clock never reaches).
     expect(summary.perfect + summary.great + summary.good + summary.bad + summary.poor).toBe(0);
     // ...and it costs nothing: the gauge sits exactly where it started, nowhere near the GROOVE floor.
     expect(summary.gauge?.current).toBe(summary.gauge?.initial);
