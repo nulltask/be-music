@@ -12,8 +12,16 @@ export interface ScrollDistanceMapperLike {
   distanceBetween: (fromBeat: number, toBeat: number) => number;
   hasBidirectionalScrollWithinLookahead: (fromBeat: number) => boolean;
   maxBeatWithinDistance: (fromBeat: number, distance: number) => number;
-  firstBeatBeyondDistance: (fromBeat: number, distance: number) => number;
-  rateAt: (beat: number) => number;
+  /**
+   * Where the chart first runs past a lane `distance` beats tall ({@link ScrollDistanceMapper.firstBeatBeyondDistance}).
+   * Optional so implementations written before it keep type-checking; callers then walk without an early exit.
+   */
+  firstBeatBeyondDistance?: (fromBeat: number, distance: number) => number;
+  /**
+   * The scroll distance per beat at a beat ({@link ScrollDistanceMapper.rateAt}). Optional so implementations written
+   * before it keep type-checking; callers then assume a rate of 1.
+   */
+  rateAt?: (beat: number) => number;
 }
 
 interface ScrollSegment {

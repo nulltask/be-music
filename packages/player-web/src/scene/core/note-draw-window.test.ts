@@ -75,6 +75,19 @@ describe('resolveNoteDrawWindow', () => {
     expect(isPastDrawWindow(window, 6.01)).toBe(true);
   });
 
+  it('walks without an early exit when the mapper cannot tell where the lane is overrun', () => {
+    // A `ScrollDistanceMapperLike` written before `firstBeatBeyondDistance` existed leaves the member out.
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 4,
+      nowSeconds: 0,
+      mapper: {},
+      laneBeats: 2,
+      overscanBeats: 1,
+    });
+    expect(window.lastBeat).toBe(Number.POSITIVE_INFINITY);
+  });
+
   it('keeps the LR2 window (lane plus overscan) for charts without scroll events', () => {
     const window = resolveNoteDrawWindow({
       rules: 'lr2',

@@ -35,7 +35,10 @@ export interface NoteDrawWindowInput {
   rules: NoteDrawRules;
   currentBeat: number;
   nowSeconds: number;
-  /** The `#SCROLL` / `#SPEED` distance integrator, when the chart has either. */
+  /**
+   * The `#SCROLL` / `#SPEED` distance integrator, when the chart has either. One without `firstBeatBeyondDistance`
+   * gives the walk no early exit.
+   */
   mapper?: Pick<ScrollDistanceMapperLike, 'firstBeatBeyondDistance'>;
   /** The lane's height in beats of scroll distance (lane pixels over pixels per beat). */
   laneBeats: number;
@@ -52,7 +55,9 @@ export function resolveNoteDrawWindow(input: NoteDrawWindowInput): NoteDrawWindo
     // `LaneRenderer` stops after the first timeline whose y passed the lane top (`y <= hu` guards the loop). Between
     // two timelines the position moves monotonically, so stopping at the first beat that overruns the lane draws the
     // same notes: whatever lies between that beat and the next timeline is above the lane top anyway.
-    lastBeat = mapper ? mapper.firstBeatBeyondDistance(currentBeat, laneBeats) : currentBeat + laneBeats;
+    lastBeat = mapper
+      ? (mapper.firstBeatBeyondDistance?.(currentBeat, laneBeats) ?? Number.POSITIVE_INFINITY)
+      : currentBeat + laneBeats;
   } else {
     lastBeat = mapper ? Number.POSITIVE_INFINITY : currentBeat + laneBeats + overscanBeats;
   }

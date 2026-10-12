@@ -4012,7 +4012,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const currentBeat = this.currentBeat(seconds);
     const bpm = this.timingResolver?.bpmAtBeat(currentBeat) ?? this.song?.bpm;
     const laneCovers = this.resolveLaneCovers();
-    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt(currentBeat) ?? 1);
+    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt?.(currentBeat) ?? 1);
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
