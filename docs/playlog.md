@@ -108,8 +108,11 @@ Replay re-drives the recorded input stream deterministically inside the shared e
 input is ignored (ESC / pause / hi-speed keep working), and no new play-log is recorded for the run. Because the
 log stores the resolved note arrangement, the chart prepare re-applies the recorded channels onto the freshly
 loaded chart (`applyPlaylogArrangement`) instead of re-rolling RANDOM / MIRROR — so shuffled plays replay exactly.
-A chart whose `#RANDOM` control flow rolls differently from the recorded run cannot be re-aligned; the replay
-fails with a status message instead of playing a mismatched chart. Replay always runs on the LR2 / default
+The chart's `#RANDOM` / `#SWITCH` lines are resolved with the log's `play.randomOutcomes`, so a replay plays the
+recorded branches: the browser's core gameplay scene resolves with them itself, and a host that lets the engine
+resolve passes them as `PlayerOptions.replayRandomOutcomes` next to `replayInputs`. A log without the field (recorded
+before it existed) draws new values; when those roll differently from the recorded run the chart cannot be
+re-aligned, and the replay fails with a status message instead of playing a mismatched chart. Replay always runs on the LR2 / default
 gameplay path regardless of which skin family recorded the log.
 
 ## Re-deriving LR2 / beatoraja / IIDX results

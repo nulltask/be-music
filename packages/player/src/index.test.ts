@@ -95,6 +95,7 @@ import {
   preparePlaybackChartData,
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
+  type PlayerSummary,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
@@ -797,6 +798,13 @@ describe('player', () => {
     const resolution = resolveBmsControlFlowForPlayback(json, () => 0.6);
     expect(resolution.randomOutcomes).toEqual([1, 3, 2]);
     expect(resolveBmsControlFlowForPlayback(createEmptyJson('bms')).randomOutcomes).toEqual([]);
+    // Preset outcomes (a replayed log's `randomOutcomes`) win over the random source; the patterns follow them.
+    const preset = resolveBmsControlFlowForPlayback(json, () => 0, [1, 4, 1]);
+    expect(preset.randomOutcomes).toEqual([1, 4, 1]);
+    expect(preset.randomPatterns.map((pattern) => pattern.current)).toEqual([1, 4]);
+    expect(preset.resolvedJson.events.some((event) => event.channel === '11')).toBe(false);
+    // An out-of-range preset is drawn from the random source instead.
+    expect(resolveBmsControlFlowForPlayback(json, () => 0.6, [1, 9, 7]).randomOutcomes).toEqual([1, 3, 2]);
   });
 
   test('player: resolves RANDOM pattern summary for control-flow playback', () => {
@@ -1417,6 +1425,72 @@ describe('player', () => {
     ).toEqual(
       recorded!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
     );
+  });
+
+  test('player: a replay resolves #RANDOM with the recorded randomOutcomes', async () => {
+    // BPM 240: branch 1 puts a note on lane 11 at 1.0 s, branch 2 on lane 12 at the same time.
+    const json = parseChart(
+      ['#BPM 240', '#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join(
+        '\n',
+      ),
+      'bms',
+    );
+    const random = vi.spyOn(Math, 'random');
+    try {
+      // Record a play of branch 2 with a press on lane 12 (`s`).
+      random.mockReturnValue(0.9);
+      let recorded: BeMusicPlaylog | undefined;
+      const original = await manualPlay(json, {
+        speed: 1,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        onPlaylogRecorded: (playlog) => {
+          recorded = playlog;
+        },
+        createInputRuntime: createScheduledInputRuntime([
+          { delayMs: 1000, command: { kind: 'lane-input', tokens: ['s'] } },
+        ]),
+      });
+      expect(recorded!.play.randomOutcomes).toEqual([2]);
+      expect(original.perfect + original.great).toBe(1);
+
+      // Replay while the random source would now draw branch 1.
+      random.mockReturnValue(0);
+      const replay = async (
+        replayRandomOutcomes: readonly number[] | undefined,
+      ): Promise<{ summary: PlayerSummary; playlog: BeMusicPlaylog }> => {
+        let playlog: BeMusicPlaylog | undefined;
+        const summary = await manualPlay(json, {
+          speed: 8,
+          leadInMs: 0,
+          audio: false,
+          tui: false,
+          replayInputs: recorded!.inputs,
+          ...(replayRandomOutcomes !== undefined ? { replayRandomOutcomes } : {}),
+          onPlaylogRecorded: (log) => {
+            playlog = log;
+          },
+        });
+        return { summary, playlog: playlog! };
+      };
+
+      const withOutcomes = await replay(recorded!.play.randomOutcomes);
+      expect(withOutcomes.playlog.play.randomOutcomes).toEqual([2]);
+      expect(withOutcomes.playlog.chart.notes.map((note) => note.channel)).toEqual(['12']);
+      expect(withOutcomes.playlog.chart.fingerprint).toBe(recorded!.chart.fingerprint);
+      expect(withOutcomes.summary.exScore).toBe(original.exScore);
+      expect(withOutcomes.summary.perfect).toBe(original.perfect);
+      expect(withOutcomes.summary.great).toBe(original.great);
+
+      // Without the field (an older log) the engine draws as before: branch 1, where the recorded press misses.
+      const withoutOutcomes = await replay(undefined);
+      expect(withoutOutcomes.playlog.play.randomOutcomes).toEqual([1]);
+      expect(withoutOutcomes.playlog.chart.notes.map((note) => note.channel)).toEqual(['11']);
+      expect(withoutOutcomes.summary.exScore).toBe(0);
+    } finally {
+      random.mockRestore();
+    }
   });
 
   test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / IIDX)', async () => {

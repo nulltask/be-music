@@ -314,6 +314,13 @@ export interface PlayerOptions {
    */
   replayInputs?: readonly PlaylogInputEvent[];
   /**
+   * Replay playback: the recorded play-log's `play.randomOutcomes`, the values its chart's `#RANDOM` / `#SWITCH` lines
+   * were resolved with. `manualPlay` resolves the chart's control flow with them instead of drawing new values, so a
+   * replay of a `#RANDOM` chart plays the recorded branches; a missing or out-of-range value is drawn as usual. Without
+   * it (logs recorded before the field existed, or charts without control flow) every line is drawn as before.
+   */
+  replayRandomOutcomes?: readonly number[];
+  /**
    * Called once, before playback starts, with the ruleset the play is judged under — after `judgeRuleset`,
    * `judgeWindowMs`, and (for a replay) the recorded settings were applied. Lets a host show the windows the engine
    * actually uses instead of re-deriving them. Under LR2 a mid-chart `#EXRANKxx` can narrow or widen the windows
@@ -1689,12 +1696,15 @@ async function initializePlaybackRuntimeResources(params: {
 export function resolveBmsControlFlowForPlayback(
   json: BeMusicJson,
   randomSource: () => number = Math.random,
+  presetOutcomes?: ReadonlyArray<number>,
 ): ControlFlowResolutionResult {
-  // One parser pass draws every `#RANDOM` / `#SWITCH` line and reports its value; the random patterns are read back
-  // from those values, so the summary always describes the branches that were actually resolved.
+  // One parser pass draws every `#RANDOM` / `#SWITCH` line (or takes its preset value, e.g. a replayed play log's
+  // `randomOutcomes`) and reports its value; the random patterns are read back from those values, so the summary
+  // always describes the branches that were actually resolved.
   const randomOutcomes: number[] = [];
   const resolvedJson = resolveBmsControlFlow(json, {
     random: randomSource,
+    ...(presetOutcomes !== undefined ? { outcomes: presetOutcomes } : {}),
     onOutcome: (value) => randomOutcomes.push(value),
   });
 
@@ -2491,7 +2501,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   throwIfAborted(options.signal);
   const writeOutput = resolveOutputWriter(options);
   reportLoadProgress(options, 0.02, 'Resolving chart...');
-  const controlFlowResolution = resolveBmsControlFlowForPlayback(json);
+  // A replay resolves `#RANDOM` / `#SWITCH` with the values its log recorded, so it plays the recorded branches.
+  const controlFlowResolution = resolveBmsControlFlowForPlayback(json, Math.random, options.replayRandomOutcomes);
   const resolvedJson = controlFlowResolution.resolvedJson;
   options.onResolvedChart?.(resolvedJson);
   const randomPatternSummary = formatRandomPatternSummary(controlFlowResolution.randomPatterns);
