@@ -91,6 +91,5 @@ The reasons behind each reading, and every place where be-music departs from a s
 
 These consumers still read the Source layer with rules of their own:
 
-- The LR2 select scene scans `03` / `08` for its BPM range (`scene/lr2/select.ts`).
 - The displayed judge rank (`resolveDisplayedJudgeRankValue` / `Label` in `@be-music/player/utils`) applies its own defaults.
 - The terminal UI worker draws bar lines with `createMeasureBoundariesBeats` and does not honour bmson `lines: []`.
