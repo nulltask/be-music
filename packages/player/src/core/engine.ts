@@ -5229,18 +5229,12 @@ function collectRealtimeAudioSampleKeys(resolved: ResolvedChart): string[] {
   for (const trigger of resolved.sampleTriggers) {
     keys.add(trigger.sampleKey);
   }
+  // `#WAV00` sounds when a mine detonates: preload it when the chart has a mine on any lane, the extended 24 / 48 KEY
+  // lanes (`DA`–`DO` / `EA`–`EO`) and bmson `mine_channels` included.
   if (
     typeof json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY] === 'string' &&
     json.resources.wav[LANDMINE_EXPLOSION_SAMPLE_KEY].length > 0 &&
-    json.events.some((event) => {
-      const normalized = normalizeChannel(event.channel);
-      if (normalized.length !== 2) {
-        return false;
-      }
-      const side = normalized.charCodeAt(0);
-      const lane = normalized.charCodeAt(1);
-      return (side === 0x44 || side === 0x45) && lane >= 0x31 && lane <= 0x39;
-    })
+    resolved.mines.length > 0
   ) {
     keys.add(LANDMINE_EXPLOSION_SAMPLE_KEY);
   }

@@ -2120,6 +2120,33 @@ describe('player', () => {
     expect(hasAnyNonSilentAudioWrite()).toBe(true);
   });
 
+  test.each(['D1', 'DA', 'EO'])('player: a mine on lane %s preloads #WAV00', async (channel) => {
+    const json = createLandmineOnlyChart();
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel, position: [0, 1] as const, value: '10' },
+    ];
+    const details: Array<string | undefined> = [];
+    await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      tui: false,
+      writeOutput: () => undefined,
+      onLoadProgress: (progress) => {
+        details.push(progress.detail);
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 50, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(details).toContain('explode.wav');
+  });
+
   test('player: missing #WAVxx files are silent by default (no fallback tone)', async () => {
     await manualPlay(createLandmineOnlyChart(), {
       speed: 1,
