@@ -1,7 +1,14 @@
 import { resolveChart } from '@be-music/chart';
 import { createEmptyJson, resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
-import type { PlaylogInputEvent } from '../playlog/format.ts';
+import {
+  BE_MUSIC_PLAYLOG_FORMAT,
+  BE_MUSIC_PLAYLOG_VERSION,
+  type BeMusicPlaylog,
+  type PlaylogInputEvent,
+  type PlaylogNote,
+} from '../playlog/format.ts';
+import { simulatePlaylog } from '../playlog/simulate.ts';
 import { resolveRuleset, rulesetChartFactsFromChart, type PlaylogRulesetId } from '../ruleset/index.ts';
 import { createInitialPlayerSummary, preparePlaybackChart } from './bootstrap.ts';
 import {
@@ -217,15 +224,197 @@ describe('judge core', () => {
     expect(effects.filter((effect) => effect.kind === 'trace' && effect.name === 'mine-hit')).toHaveLength(hits);
   });
 
-  test('beatoraja: a mine held through detonates the moment it crosses the line', () => {
+  test('beatoraja: a mine held through detonates as soon as time moves past the crossing', () => {
     const state = createCore(LONG_AND_MINE, 'beatoraja');
     stepJudgeCore(state, { kind: 'hold', channels: new Set(['12']) });
     expect(
       stepJudgeCore(state, advance(2.499)).some((effect) => effect.kind === 'trace' && effect.name === 'mine-hit'),
     ).toBe(false);
+    // At the crossing's very instant an input at that instant may still come (inputs come first at a tie).
     expect(
       stepJudgeCore(state, advance(2.5)).some((effect) => effect.kind === 'trace' && effect.name === 'mine-hit'),
+    ).toBe(false);
+    expect(
+      stepJudgeCore(state, advance(2.501)).some((effect) => effect.kind === 'trace' && effect.name === 'mine-hit'),
     ).toBe(true);
+  });
+
+  describe('mines under each ruleset: live play, replay and the simulator agree', () => {
+    /** A mine on `12` at 2.5 s (10 % damage) and a tap on `12` at 3.0 s. */
+    const MINE_LANE = chart([
+      { measure: 2, channel: 'D2', position: [1, 2], value: '0A' },
+      { measure: 3, channel: '12', position: [0, 1], value: '01' },
+    ]);
+    /** `[ms, action, token]`: a key on lane `12`. */
+    type KeyEvent = readonly [ms: number, action: 'down' | 'up', token?: string];
+    const FRAME_MS = 1000 / 60;
+    const isMineHit = (effect: JudgeCoreEffect): boolean => effect.kind === 'trace' && effect.name === 'mine-hit';
+
+    /** Live play: each 60 Hz frame first applies the key events up to it (at their own instants), then advances. */
+    function liveMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[], keyState = true): number {
+      const state = createCore(MINE_LANE, ruleset);
+      let hits = 0;
+      const sink = (effect: JudgeCoreEffect): void => {
+        if (isMineHit(effect)) hits += 1;
+      };
+      let cursor = 0;
+      for (let frame = 0; frame * FRAME_MS <= 3200; frame += 1) {
+        const frameMs = frame * FRAME_MS;
+        while (cursor < events.length && events[cursor]![0] <= frameMs) {
+          const [ms, action, token] = events[cursor]!;
+          const tokens = token === undefined ? [] : [token];
+          cursor += 1;
+          const channels = new Set(['12']);
+          if (action === 'down') {
+            if (keyState) runJudgeCoreStep(state, { kind: 'hold', channels }, sink);
+            runJudgeCoreStep(state, { kind: 'press', channels, tokens, nowSec: ms / 1000, nowMs: ms }, sink);
+          } else if (keyState) {
+            // A release is drained at the frame; the play log keeps its own instant.
+            const release = { kind: 'release', channels, tokens, nowSec: frameMs / 1000, nowMs: frameMs } as const;
+            runJudgeCoreStep(state, { ...release, recordSec: ms / 1000 }, sink);
+          }
+        }
+        runJudgeCoreStep(state, advance(frameMs / 1000), sink);
+      }
+      return hits;
+    }
+
+    function toPlaylogInputs(events: readonly KeyEvent[]): PlaylogInputEvent[] {
+      return events.map(([ms, action, token], seq) => ({
+        seq,
+        timeUs: Math.round(ms * 1000),
+        action,
+        channels: ['12'],
+        ...(token === undefined ? {} : { tokens: [token] }),
+      }));
+    }
+
+    function replayMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number {
+      const state = createCore(MINE_LANE, ruleset);
+      const run = createJudgeCoreReplay(toPlaylogInputs(events));
+      let hits = 0;
+      for (let frame = 0; frame * FRAME_MS <= 3200; frame += 1) {
+        advanceJudgeCoreReplay(state, run, (frame * FRAME_MS) / 1000, (effect) => {
+          if (isMineHit(effect)) hits += 1;
+        });
+      }
+      return hits;
+    }
+
+    function simulatedMineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number {
+      const tap: PlaylogNote = { id: 0, channel: '12', type: 'normal', timeUs: 3_000_000 };
+      const mine: PlaylogNote = { id: 1, channel: '12', type: 'mine', timeUs: 2_500_000, damage: 10 };
+      const playlog = (notes: PlaylogNote[]): BeMusicPlaylog => ({
+        format: BE_MUSIC_PLAYLOG_FORMAT,
+        version: BE_MUSIC_PLAYLOG_VERSION,
+        clock: { unit: 'us', origin: 'chart-zero' },
+        chart: {
+          sourceFormat: 'bms',
+          laneMode: '7keys',
+          lnMode: 1,
+          judgeRank: { percent: 75, sourceRank: 2 },
+          noteCount: 1,
+          notes,
+        },
+        inputs: toPlaylogInputs(events),
+        play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' },
+      });
+      const withMine = simulatePlaylog(playlog([tap, mine]), { ruleset });
+      const without = simulatePlaylog(playlog([tap]), { ruleset });
+      return withMine.gauge.final < without.gauge.final ? 1 : 0;
+    }
+
+    function mineHits(ruleset: PlaylogRulesetId, events: readonly KeyEvent[]): number[] {
+      return [liveMineHits(ruleset, events), replayMineHits(ruleset, events), simulatedMineHits(ruleset, events)];
+    }
+
+    test.each([
+      ['lr2', 1],
+      ['beatoraja', 0],
+    ] as const)('%s: a tap pressed and released just before the crossing detonates %i time(s)', (ruleset, hits) => {
+      // Down 3 ms before the mine, up 1 ms before it. LR2 detonates on a press inside PGREAT; beatoraja only when the
+      // key is down as the mine crosses, so the key already being up must count even within the 120 ms hold grace.
+      expect(
+        mineHits(ruleset, [
+          [2497, 'down'],
+          [2499, 'up'],
+        ]),
+      ).toEqual([hits, hits, hits]);
+    });
+
+    test.each(['lr2', 'beatoraja'] as const)(
+      '%s: a key let go in the frame right after the crossing detonates',
+      (r) => {
+        expect(
+          mineHits(r, [
+            [2300, 'down'],
+            [2505, 'up'],
+          ]),
+        ).toEqual([1, 1, 1]);
+      },
+    );
+
+    test.each(['lr2', 'beatoraja'] as const)('%s: at the same µs, the input comes before the crossing', (ruleset) => {
+      // Down exactly at the crossing is down as it crosses.
+      expect(
+        mineHits(ruleset, [
+          [2500, 'down'],
+          [2600, 'up'],
+        ]),
+      ).toEqual([1, 1, 1]);
+    });
+
+    test('beatoraja: a key let go at the very µs of the crossing is up as it crosses', () => {
+      // (LR2 would still detonate: the key was down as the mine entered the PGREAT window.)
+      expect(
+        mineHits('beatoraja', [
+          [2300, 'down'],
+          [2500, 'up'],
+        ]),
+      ).toEqual([0, 0, 0]);
+      expect(
+        mineHits('lr2', [
+          [2300, 'down'],
+          [2500, 'up'],
+        ]),
+      ).toEqual([1, 1, 1]);
+    });
+
+    test.each(['lr2', 'beatoraja'] as const)('%s: a second key on a held lane keeps the hold through', (ruleset) => {
+      // Two keys on one lane (a scratch): the first is held through the crossing, the second goes down after it and
+      // comes up first.
+      const events: KeyEvent[] = [
+        [2300, 'down', 'a'],
+        [2505, 'down', 'b'],
+        [2510, 'up', 'b'],
+        [2700, 'up', 'a'],
+      ];
+      expect(mineHits(ruleset, events)).toEqual([1, 1, 1]);
+    });
+
+    test('beatoraja without release events: a repeat press after the crossing keeps a press inside the grace', () => {
+      // Hosts that send no releases count a lane as held for 120 ms after a press.
+      expect(
+        liveMineHits(
+          'beatoraja',
+          [
+            [2400, 'down'],
+            [2505, 'down'],
+          ],
+          false,
+        ),
+      ).toBe(1);
+      expect(
+        liveMineHits(
+          'beatoraja',
+          [
+            [2300, 'down'],
+            [2505, 'down'],
+          ],
+          false,
+        ),
+      ).toBe(0);
+    });
   });
 
   test('auto scratch plays the scratch lane and ignores input on it', () => {

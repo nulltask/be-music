@@ -93,6 +93,12 @@ describe('simulatePlaylog mines', () => {
     expect(mineDamage('iidx', held)).toBeGreaterThan(0);
   });
 
+  test('at the same µs the input comes before the crossing', () => {
+    // Down at the crossing's very µs is down as the mine crosses; up at that µs is not (beatoraja's hold-only rule).
+    expect(mineDamage('beatoraja', [down(1_000_000), up(1_100_000)])).toBe(10);
+    expect(mineDamage('beatoraja', [down(900_000), up(1_000_000)])).toBe(0);
+  });
+
   test('a press outside the PGREAT window leaves the mine alone', () => {
     expect(mineDamage('lr2', [down(1_100_000), up(1_120_000)])).toBe(0);
   });

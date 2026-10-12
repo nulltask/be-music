@@ -40,6 +40,7 @@ import {
   LANDMINE_EXPLOSION_SAMPLE_KEY,
   LONG_NOTE_REPEAT_HOLD_GRACE_MS,
 } from './judge-core-types.ts';
+import { createLaneHoldHistory, type LaneHoldHistory, wasLaneDownAt, wasLanePressedWithin } from './lane-hold.ts';
 
 /**
  * Judge-core time steps: long-note holds and tails, HCN ticks, mines, auto-scratch, misses
@@ -48,14 +49,30 @@ import {
 
 // ---- mines ----------------------------------------------------------------------------------------------------
 
-function isLandmineChannelHeld(state: JudgeCoreState, channel: string, nowMs: number): boolean {
-  if (state.heldChannels.has(channel)) {
-    return true;
+/** The press / release history of `channel`, created on first use. */
+export function laneHoldHistory(state: JudgeCoreState, channel: string): LaneHoldHistory {
+  let history = state.laneHolds.get(channel);
+  if (history === undefined) {
+    history = createLaneHoldHistory();
+    state.laneHolds.set(channel, history);
   }
-  // Non-kitty input carries no release events, so "held" is approximated with the same short grace window the LN
-  // hold logic uses for terminal key repeat.
-  const lastPressMs = state.lastLanePressMs.get(channel);
-  return lastPressMs !== undefined && nowMs - lastPressMs <= LONG_NOTE_REPEAT_HOLD_GRACE_MS;
+  return history;
+}
+
+/**
+ * Whether `channel`'s key was down at `atMs`. With release events (key-state input, replays) that is read off the
+ * recorded presses and releases, so it does not matter when the question is asked or in what order the driver applied
+ * the inputs around `atMs`; an input at `atMs` itself comes first. Without them a press counts as held for the same
+ * short grace window the long-note hold logic uses for terminal key repeat.
+ */
+function wasLaneDownAtMs(state: JudgeCoreState, channel: string, atMs: number): boolean {
+  const history = state.laneHolds.get(channel);
+  if (state.keyStateInput) {
+    // A key-state hold that came without a press is only known to be down now.
+    if (history === undefined || history.spans.length === 0) return state.heldChannels.has(channel);
+    return wasLaneDownAt(history, atMs);
+  }
+  return history !== undefined && wasLanePressedWithin(history, atMs - LONG_NOTE_REPEAT_HOLD_GRACE_MS, atMs);
 }
 
 /** The explosion sample event of a mine, or `undefined` when the chart has no `#WAV00`. */
@@ -115,7 +132,7 @@ function detonateLandmine(
  * entry): a mine explodes when its lane's key is held as the mine crosses the judge line ("キー押したまま地雷通過"), or
  * on a press within the PGREAT window of the judge line ("ピカグレ範囲内でキーを押す"); mines that cross with the key up
  * are retired silently once the PGREAT window closes behind them. beatoraja (`'hold'`, `JudgeManager` L244): only the
- * key being down as the mine crosses counts, settled the moment it crosses. Runs on every advance and on every press.
+ * key being down as the mine crosses counts, settled as soon as time has moved past the crossing. Runs on every advance and on every press.
  */
 export function processLandminePassage(
   state: JudgeCoreState,
@@ -137,21 +154,17 @@ export function processLandminePassage(
       state.landmineExpireCursor += 1;
       continue;
     }
-    if (pressDetonates ? nowSec - landmine.seconds <= settleAfterSeconds : nowSec < landmine.seconds) {
+    // Settled only once time has moved past the crossing (`<=` under the hold rule), so an input at the crossing's
+    // very instant is in, whichever order the driver applies it and the advance to that instant.
+    if (nowSec - landmine.seconds <= settleAfterSeconds) {
       break;
     }
     // The PGREAT window can be narrower than a step, so a held-through mine may enter AND leave it between two
-    // passage calls. The hold-through leg therefore anchors to the crossing itself: when the window closes behind a
-    // mine, detonate if the lane was held at the moment the mine crossed the judge line — a kitty key that is still
-    // down counts, as does a non-kitty press within the hold-grace window BEFORE the crossing. A press AFTER the
-    // crossing never detonates here: that is the press leg, and it already missed PGREAT.
+    // passage calls. The hold-through leg therefore anchors to the crossing itself: once the mine is settled, detonate
+    // if the lane was down at the moment the mine crossed the judge line. A press AFTER the crossing never counts here:
+    // that is the press leg, and it already missed PGREAT.
     const crossingMs = nowMs - (nowSec - landmine.seconds) * config.judgeMsPerChartSecond;
-    const lastPressMs = state.lastLanePressMs.get(landmine.channel);
-    const pressedBeforeCrossing = lastPressMs !== undefined && lastPressMs <= crossingMs;
-    const heldAtCrossing = pressedBeforeCrossing
-      ? crossingMs - lastPressMs <= LONG_NOTE_REPEAT_HOLD_GRACE_MS || state.heldChannels.has(landmine.channel)
-      : lastPressMs === undefined && state.heldChannels.has(landmine.channel);
-    if (heldAtCrossing) {
+    if (wasLaneDownAtMs(state, landmine.channel, crossingMs)) {
       detonateLandmine(state, landmine, nowSec, emit);
     } else {
       markLandmineJudged(state, landmine);
@@ -169,7 +182,12 @@ export function processLandminePassage(
     if (landmine.judged) {
       continue;
     }
-    if (!isLandmineChannelHeld(state, landmine.channel, nowMs)) {
+    // Held as the mine entered the PGREAT window, or held now (a press inside the window is the press leg).
+    const enterMs = nowMs - (nowSec - landmine.seconds + pgreatEarlySeconds) * config.judgeMsPerChartSecond;
+    if (
+      !wasLaneDownAtMs(state, landmine.channel, Math.min(enterMs, nowMs)) &&
+      !wasLaneDownAtMs(state, landmine.channel, nowMs)
+    ) {
       continue;
     }
     detonateLandmine(state, landmine, nowSec, emit);
