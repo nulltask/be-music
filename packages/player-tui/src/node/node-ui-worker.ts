@@ -251,11 +251,10 @@ async function bootstrap(): Promise<void> {
       if (!latestFrame) {
         return;
       }
-      // LR2 negative-BPM reversal: the BGA freezes on whatever was showing at the reversal (LR2's event pump stops
-      // firing BGA cues there) — it neither advances nor rewinds with the mirrored scroll.
-      const bgaSeconds = Math.min(latestFrame.currentSeconds, latestFrame.reversalSeconds ?? Number.POSITIVE_INFINITY);
-      const bgaAnsiLines = useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(bgaSeconds);
-      const bgaKittyImage = useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(bgaSeconds) : undefined;
+      // The BGA renderer itself stops cue changes at an LR2 negative-BPM reversal (a playing movie keeps running), so
+      // it is driven by the true clock.
+      const bgaAnsiLines = useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds);
+      const bgaKittyImage = useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined;
       if (useKittyGraphicsForBga) {
         if (bgaKittyImage && !loggedFirstKittyImageReady) {
           loggedFirstKittyImageReady = true;

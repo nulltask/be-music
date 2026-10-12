@@ -3542,12 +3542,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.applyExitFadeAlpha();
     this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
     this.perf.time('renderSkin', () => this.renderThemeLayer(designWidth, designHeight));
-    // LR2 negative-BPM reversal: BGA cues freeze on whatever was displayed at the reversal — clamp the cue
-    // clock (freeze, not rewind). All other `seconds` readers here (progress ratio, time readouts, judge-until
-    // comparisons) stay on the true clock.
+    // LR2 negative-BPM reversal: the event pump stops firing BGA cues there, so the cue clock is clamped (freeze, not
+    // rewind) while an already-playing movie keeps running on the true clock. All other `seconds` readers here
+    // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
     const reversalSeconds = this.timingResolver?.reversal?.seconds;
-    const bgaSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
-    this.perf.time('renderBga', () => this.renderBga(bgaSeconds));
+    const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
+    this.perf.time('renderBga', () => this.renderBga(seconds, bgaCueSeconds));
     this.perf.time('renderLanes', () => this.renderLanes(designWidth, designHeight));
     this.perf.time('renderNotes', () => this.renderNotes(seconds, designHeight));
     this.perf.time('renderShutter', () => this.renderShutter());
@@ -3757,7 +3757,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The renderer is idempotent per frame — it tears down any existing sprites and rebuilds from the active cues, so cue
    * switches show up the next frame without explicit dirty tracking.
    */
-  private renderBga(seconds: number): void {
+  /**
+   * `cueSeconds` picks which BGA cue is active; `seconds` is the true clock that plays the cue (movie offsets, SWBGA
+   * frames). They differ only past an LR2 negative-BPM reversal, where the event pump stops firing new BGA cues but a
+   * movie that is already playing keeps running.
+   */
+  private renderBga(seconds: number, cueSeconds = seconds): void {
     this.bgaLayerPool.begin();
     this.bgaTargetsScratch.length = 0;
     // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
@@ -3787,14 +3792,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
     // per-rect would still get a consistent global playback state from this single sync point.
     const controllingBga = visibleBgas[0]!;
-    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, seconds);
-    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, seconds);
+    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, cueSeconds);
+    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, cueSeconds);
     const baseKey = baseCue?.bmpKey;
     const layerKey = layerCue?.bmpKey;
     const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
     const inPoorWindow =
       !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
-    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
+    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, cueSeconds) : undefined;
     // BMP00 fallback: when no explicit POOR cue is active but the chart left `#POORBGA` blank with a `#BMP00` defined,
     // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
     // eventually author POOR isn't permanently stuck on the placeholder.
@@ -3802,7 +3807,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       inPoorWindow &&
       poorKey === undefined &&
       this.poorBgaFallbackKey !== undefined &&
-      seconds < this.poorBgaFallbackUntilSeconds
+      cueSeconds < this.poorBgaFallbackUntilSeconds
     ) {
       poorKey = this.poorBgaFallbackKey;
     }

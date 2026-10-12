@@ -271,6 +271,13 @@ export class BgaAnsiRenderer {
 
   private poorActiveUntilSeconds = Number.NEGATIVE_INFINITY;
 
+  /**
+   * LR2 negative-BPM reversal: its event pump stops firing BGA cues there, so cue selection never looks past this
+   * chart time. Elapsed time inside a cue (a movie that is already playing) and the POOR window stay on the true
+   * clock. `+Infinity` when the chart has no reversal.
+   */
+  private readonly cueFreezeSeconds: number;
+
   constructor(params: {
     baseTimeline: BgaCue[];
     poorTimeline: BgaCue[];
@@ -286,6 +293,8 @@ export class BgaAnsiRenderer {
     poorFallbackKey?: string;
     poorFallbackUntilSeconds: number;
     playbackEndSeconds: number;
+    /** Chart time at which BGA cues stop changing (the LR2 negative-BPM reversal). Defaults to never. */
+    cueFreezeSeconds?: number;
     width: number;
     height: number;
     resizeAlgorithm: ImageResizeAlgorithm;
@@ -304,6 +313,7 @@ export class BgaAnsiRenderer {
     this.poorFallbackKey = params.poorFallbackKey;
     this.poorFallbackUntilSeconds = params.poorFallbackUntilSeconds;
     this.playbackEndSeconds = params.playbackEndSeconds;
+    this.cueFreezeSeconds = params.cueFreezeSeconds ?? Number.POSITIVE_INFINITY;
     this.displayWidth = params.width;
     this.displayHeight = params.height;
     this.resizeAlgorithm = params.resizeAlgorithm;
@@ -565,10 +575,11 @@ export class BgaAnsiRenderer {
     poorSeconds: number;
     poorActive: boolean;
   } {
-    const baseCue = pickActiveBgaCue(this.baseTimeline, currentSeconds);
-    const layerCue = pickActiveBgaCue(this.layerTimeline, currentSeconds);
-    const layer2Cue = pickActiveBgaCue(this.layer2Timeline, currentSeconds);
-    const poorCue = pickActiveBgaCue(this.poorTimeline, currentSeconds);
+    const cueSeconds = Math.min(currentSeconds, this.cueFreezeSeconds);
+    const baseCue = pickActiveBgaCue(this.baseTimeline, cueSeconds);
+    const layerCue = pickActiveBgaCue(this.layerTimeline, cueSeconds);
+    const layer2Cue = pickActiveBgaCue(this.layer2Timeline, cueSeconds);
+    const poorCue = pickActiveBgaCue(this.poorTimeline, cueSeconds);
     const poorActive = currentSeconds < this.poorActiveUntilSeconds;
     return {
       baseKey: baseCue?.key ?? '',
@@ -749,6 +760,8 @@ export async function createBgaAnsiRenderer(
       resolveTimelinePlaybackEndSeconds(layerTimeline, layerSourceFramesByKey),
       resolveTimelinePlaybackEndSeconds(layer2Timeline, layer2SourceFramesByKey),
     ),
+    // BGA cues on the LR2 reversal tick still fire (ops 4/6/7 precede the negative BPM's op 8); later ones never do.
+    cueFreezeSeconds: resolver.reversal?.seconds,
     width: displaySize.width,
     height: displaySize.height,
     resizeAlgorithm,
