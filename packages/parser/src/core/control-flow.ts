@@ -39,6 +39,13 @@ type MeasureLengthEntry = BeMusicJson['measures'][number];
 export interface ResolveControlFlowOptions {
   random?: () => number;
   /**
+   * Values to use for the `#RANDOM` / `#SWITCH` lines, in file order (one per line, including lines with a single
+   * value). A missing entry, or one that is not an integer in `1..max`, falls back to `random`.
+   */
+  outcomes?: ReadonlyArray<number>;
+  /** Called with the value of every `#RANDOM` / `#SWITCH` line, in file order. */
+  onOutcome?: (value: number) => void;
+  /**
    * Re-applies a captured `#xxx ...` header entry against `json`.
    *
    * `command` is the uppercased canonical form used for keyword dispatch. `commandRaw` is the case-preserved original —
@@ -62,9 +69,20 @@ export function resolveControlFlow(input: BeMusicJson, options: ResolveControlFl
     measureByIndex.set(measure.index, measure);
   }
 
+  let drawLine = 0;
+  const draw = (max: number): number => {
+    const preset = options.outcomes?.[drawLine];
+    drawLine += 1;
+    const value =
+      typeof preset === 'number' && Number.isInteger(preset) && preset >= 1 && preset <= Math.max(1, Math.floor(max))
+        ? preset
+        : generateRandomValue(max, random);
+    options.onOutcome?.(value);
+    return value;
+  };
   for (const entry of json.bms.controlFlow) {
     if (entry.kind === 'directive') {
-      applyControlFlowCommand(stack, entry.command, entry.value, random);
+      applyControlFlowCommand(stack, entry.command, entry.value, draw);
       continue;
     }
     if (!isControlFlowActive(stack)) {
@@ -217,14 +235,14 @@ function applyActiveControlFlowEntry(
 function applyControlFlowCommand(
   stack: ControlFlowFrame[],
   command: ControlFlowCommand,
-  rawValue?: string,
-  random: () => number = Math.random,
+  rawValue: string | undefined,
+  draw: (max: number) => number,
 ): void {
   if (command === 'RANDOM') {
     const max = parsePositiveInteger(rawValue) ?? 1;
     stack.push({
       type: 'random',
-      value: generateRandomValue(max, random),
+      value: draw(max),
     });
     return;
   }
@@ -302,7 +320,7 @@ function applyControlFlowCommand(
     const max = parsePositiveInteger(rawValue) ?? 1;
     stack.push({
       type: 'switch',
-      value: generateRandomValue(max, random),
+      value: draw(max),
       active: false,
       matched: false,
       fallthrough: false,

@@ -126,6 +126,48 @@ describe('parser', () => {
     expect(parsed.metadata.bpm).toBe(120);
   });
 
+  test('BMS: reports and replays the value of every #RANDOM / #SWITCH line', () => {
+    const source = [
+      '#BPM 120',
+      '#RANDOM 1',
+      '#ENDRANDOM',
+      '#RANDOM 3',
+      '#IF 2',
+      '#00111:01',
+      '#ENDIF',
+      '#ENDRANDOM',
+      '#SETRANDOM 2',
+      '#ENDRANDOM',
+      '#SWITCH 4',
+      '#CASE 4',
+      '#00211:01',
+      '#ENDSW',
+    ].join('\n');
+    const parsed = parseChart(source);
+    const reported: number[] = [];
+    const rolled = resolveBmsControlFlow(parsed, { random: () => 0.5, onOutcome: (value) => reported.push(value) });
+    // One value per #RANDOM / #SWITCH line (#SETRANDOM is not one), including the single-value #RANDOM 1.
+    expect(reported).toEqual([1, 2, 3]);
+    expect(rolled.events.filter((event) => event.channel === '11').map((event) => event.measure)).toEqual([1]);
+
+    let draws = 0;
+    const replayed = resolveBmsControlFlow(parsed, {
+      outcomes: [1, 3, 4],
+      random: () => {
+        draws += 1;
+        return 0;
+      },
+    });
+    expect(draws).toBe(0);
+    expect(replayed.events.filter((event) => event.channel === '11')).toHaveLength(1);
+    expect(replayed.events.some((event) => event.measure === 2 && event.channel === '11')).toBe(true);
+
+    // Values outside 1..max (or missing) fall back to `random`.
+    const fallback: number[] = [];
+    resolveBmsControlFlow(parsed, { outcomes: [1, 9], random: () => 0, onOutcome: (value) => fallback.push(value) });
+    expect(fallback).toEqual([1, 1, 1]);
+  });
+
   test('BMS: accepts #END IF / #END / #ELSE IF control-flow spelling variants', () => {
     // These misspellings exist in released charts. Without the aliases the #IF block never closes, so a
     // non-matching #RANDOM roll silently dropped every line down to EOF.

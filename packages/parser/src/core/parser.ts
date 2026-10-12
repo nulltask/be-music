@@ -547,11 +547,20 @@ export async function parseChartFile(filePath: string, options: ParseChartFileOp
 
 export interface ResolveBmsControlFlowOptions {
   random?: () => number;
+  /**
+   * Values for the `#RANDOM` / `#SWITCH` lines in file order, one per line (a play log's `randomOutcomes`). Lines
+   * without a valid value draw from `random`.
+   */
+  outcomes?: ReadonlyArray<number>;
+  /** Receives the value of every `#RANDOM` / `#SWITCH` line in file order, for recording. */
+  onOutcome?: (value: number) => void;
 }
 
 export function resolveBmsControlFlow(input: BeMusicJson, options: ResolveBmsControlFlowOptions = {}): BeMusicJson {
   return resolveControlFlow(input, {
     random: options.random,
+    outcomes: options.outcomes,
+    onOutcome: options.onOutcome,
     applyHeader: (json, command, commandRaw, value) => {
       // Replay path: prefer the case-preserved `commandRaw` when available so a `#WAV0a` captured inside a `#RANDOM` /
       // `#IF` block on a `#BASE 62` chart still registers under the lowercase key. Falls back to the uppercased
