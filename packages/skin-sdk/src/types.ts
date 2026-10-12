@@ -410,7 +410,11 @@ export interface BeMusicLaneFrame {
   holdStartedAtMs?: number;
 }
 
-/** A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. */
+/**
+ * A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. In a chart with a negative `#SCROLL`
+ * a note still ahead can sit below the judgement line, down to the bottom of the stage (the player draws such charts
+ * the way beatoraja does); clip to the lane's `bottom` to keep nothing below the line.
+ */
 export interface BeMusicNote {
   kind: BeMusicLaneKind;
   x: number;
@@ -421,7 +425,8 @@ export interface BeMusicNote {
 }
 
 /**
- * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at. Pressing the lane as it
+ * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at (below the judgement line
+ * when a negative `#SCROLL` puts it there, as for {@link BeMusicNote}). Pressing the lane as it
  * passes the judgement line costs a BAD, so draw it as something to avoid. Only handed to skins that set
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
@@ -432,7 +437,10 @@ export interface BeMusicMine {
   y: number;
 }
 
-/** A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). */
+/**
+ * A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). Like
+ * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
+ */
 export interface BeMusicLongNote {
   kind: BeMusicLaneKind;
   x: number;
@@ -469,7 +477,10 @@ export interface BeMusicBomb {
   judge?: BeMusicJudge;
 }
 
-/** A measure (bar) line crossing one lane run, as drawn this frame. */
+/**
+ * A measure (bar) line crossing one lane run, as drawn this frame. Like {@link BeMusicNote}, it can sit below the
+ * judgement line when a negative `#SCROLL` puts it there.
+ */
 export interface BeMusicMeasureLine {
   side: BeMusicSide;
   /** Left edge and width of the lane run it crosses. */

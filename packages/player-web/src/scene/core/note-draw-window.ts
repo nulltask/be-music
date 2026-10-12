@@ -27,6 +27,8 @@ export interface NoteDrawWindow {
   nowSeconds: number;
   /** The walk over the beat-sorted notes, mines and bar lines stops past this beat. */
   lastBeat: number;
+  /** Bottom edge of the stage, in the lanes' coordinates (y grows downward). */
+  stageBottomY: number;
 }
 
 export interface NoteDrawWindowInput {
@@ -39,10 +41,12 @@ export interface NoteDrawWindowInput {
   laneBeats: number;
   /** How far above the lane top the LR2 rules still visit, in beats of scroll distance. */
   overscanBeats: number;
+  /** Bottom edge of the stage, in the lanes' coordinates (y grows downward). Omitted: the judgement line. */
+  stageBottomY?: number;
 }
 
 export function resolveNoteDrawWindow(input: NoteDrawWindowInput): NoteDrawWindow {
-  const { rules, currentBeat, nowSeconds, mapper, laneBeats, overscanBeats } = input;
+  const { rules, currentBeat, nowSeconds, mapper, laneBeats, overscanBeats, stageBottomY = 0 } = input;
   let lastBeat: number;
   if (rules === 'beatoraja') {
     // `LaneRenderer` stops after the first timeline whose y passed the lane top (`y <= hu` guards the loop). Between
@@ -52,7 +56,7 @@ export function resolveNoteDrawWindow(input: NoteDrawWindowInput): NoteDrawWindo
   } else {
     lastBeat = mapper ? Number.POSITIVE_INFINITY : currentBeat + laneBeats + overscanBeats;
   }
-  return { rules, currentBeat, nowSeconds, lastBeat };
+  return { rules, currentBeat, nowSeconds, lastBeat, stageBottomY };
 }
 
 /** Whether the walk over beat-sorted objects has gone past the frame's window (and can stop). */
@@ -76,4 +80,13 @@ export function isDrawnAtTime(window: NoteDrawWindow, seconds: number): boolean 
  */
 export function isLongNoteDrawnAtTime(window: NoteDrawWindow, endSeconds: number): boolean {
   return window.rules !== 'beatoraja' || endSeconds >= window.nowSeconds;
+}
+
+/**
+ * The lowest y (largest value) an object in a lane whose judgement line is at `judgementY` may be drawn at. LR2's
+ * rules stop at the line. beatoraja's `LaneRenderer` does not clip, so a note a negative `#SCROLL` puts below the line
+ * while its time is still ahead is drawn there; beatoraja's rules let it run down to the bottom of the stage.
+ */
+export function resolveDrawBottom(window: NoteDrawWindow, judgementY: number): number {
+  return window.rules === 'beatoraja' ? Math.max(judgementY, window.stageBottomY) : judgementY;
 }

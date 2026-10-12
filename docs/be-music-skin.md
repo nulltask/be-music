@@ -229,6 +229,8 @@ export default defineBeMusicSkin({
 - `beatPhase`, `nowMs`, `effects`, and `audio`.
 - `settings` and `songImage`: see [Skin settings](#skin-settings) and [Song images](#song-images).
 
+In a chart with a negative `#SCROLL`, a note, mine, long note or measure line that is still ahead can sit below the judgement line, down to the bottom of the stage, because the player draws such charts the way beatoraja does (see [Browser player — Note visibility](./player-web.md#note-visibility)). Draw it where it is, or clip to the lane's `bottom` if the skin wants nothing below the line.
+
 `gameplay.bombDurationMs` (default 300) sets how long a hit effect lives.
 
 #### Drawing it yourself

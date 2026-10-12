@@ -229,6 +229,8 @@ export default defineBeMusicSkin({
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
 
+負の `#SCROLL` を含む譜面では、まだ先にあるノーツ・地雷・ロングノート・小節線が判定ラインより下（ステージの下端まで）に来ることがあります。プレイヤーはそうした譜面を beatoraja と同じように描くためです（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。その位置に描くか、ライン下に何も描きたくないスキンはレーンの `bottom` で切り取ってください。
+
 `gameplay.bombDurationMs`（既定 300）でヒットエフェクトの寿命を指定します。
 
 #### 自分で描く

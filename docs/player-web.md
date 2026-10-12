@@ -176,6 +176,8 @@ The gameplay view picks one of two rule sets for which notes, mines and bar line
 
 The two also part on objects whose time has come. Under LR2's rules a late note the player has not hit yet stays until it reaches the judgement line or is judged, so it can sit on the line through a STOP that began on it. Under beatoraja's rules a note, mine or bar line disappears the moment its time comes, judged or not (`LaneRenderer` draws one only while its time is still ahead); a long note stays while its end is still ahead, held or not, with its head drawn on the judgement line once the head has passed. In charts that only scroll forward the two rule sets look the same except under such a STOP.
 
+beatoraja's renderer does not clip notes at the judgement line, so a note a negative `#SCROLL` puts below the line while its time is still ahead is drawn there. Under beatoraja's rules be-music draws such notes, mines, long notes and bar lines down to the bottom of the stage; under LR2's rules nothing is drawn below the line. Skins receive these objects with a `y` below the lane's `bottom` ([be-music skins](./be-music-skin.md)).
+
 The terminal player stops its walk at the same point when a chart scrolls both ways.
 
 ## Renderer and performance controls

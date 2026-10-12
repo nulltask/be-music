@@ -507,7 +507,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     if (skinLines.length === 0) {
       return false;
     }
-    const { beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom } = frame;
+    const { beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom, drawBottom } = frame;
     for (const skinLine of skinLines) {
       const baseTexture = this.textures.get(skinLine.source.imagePath);
       if (!baseTexture) continue;
@@ -521,7 +521,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
           break;
         }
         const y = bottom - beatDistance(beat) * pixelsPerBeat;
-        if (y < top - 1 || y > bottom + 1) {
+        if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }
         const sprite = this.noteLayerPool.acquireSprite();

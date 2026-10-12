@@ -56,6 +56,7 @@ import {
   isDrawnAtTime,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
+  resolveDrawBottom,
   resolveNoteDrawRules,
   resolveNoteDrawWindow,
   type NoteDrawWindow,
@@ -332,6 +333,11 @@ export interface GameplayMeasureLineFrame {
   /** Lane area top / judgement-line bottom in design pixels. */
   top: number;
   bottom: number;
+  /**
+   * Lowest y a line may be drawn at: `bottom`, or under beatoraja's rules the bottom of the stage, where a negative
+   * `#SCROLL` can put a line that is still ahead.
+   */
+  drawBottom: number;
 }
 
 /** Scene timing a theme authors: the intro gates before chart start and the exit fade / close lengths, in ms. */
@@ -4290,7 +4296,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return Math.max(0, 1 - elapsed / fadeMs);
   }
 
-  private renderNotes(seconds: number, _height: number): void {
+  private renderNotes(seconds: number, height: number): void {
     const overscan = this.noteOverscan;
     this.noteLayerPool.begin();
     if (this.isIntroPlaying()) {
@@ -4313,6 +4319,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       mapper: this.scrollMapper,
       laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
       overscanBeats: 48 / Math.max(1, pixelsPerBeat),
+      stageBottomY: height,
     });
     this.renderMeasureLines(drawWindow, pixelsPerBeat);
     // Note: the lane-bottom beat-pulse glow is drawn by the LR2 skin itself — the "rhythm timer" `#DST_IMAGE` at SRC y=2007
@@ -4339,7 +4346,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         const lane = this.laneX.get(invisible.channel);
         if (!lane) continue;
         const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
-        if (y < lane.top - overscan || y > lane.bottom) continue;
+        if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
         const cell = this.resolveThemeNoteCell(
           'invisible',
           resolveLr2LaneIndex(invisible.channel, this.chartPlayVariant),
@@ -4389,7 +4396,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // yEnd is *above* y (smaller value, since beats grow upward visually). Hide the LN once its tail (yEnd) has
         // visually crossed the judgement-line bottom — at that point every part of the long note is below the line and
         // shouldn't paint over the keys area. Also clip when the head is still off-screen above the playfield.
-        if (yEnd > lane.bottom || y < lane.top - overscan) {
+        const drawBottom = resolveDrawBottom(drawWindow, lane.bottom);
+        if (yEnd > drawBottom || y < lane.top - overscan) {
           continue;
         }
         // beatoraja draws a long note whose head has passed with the head on the judgement line (the walk does not
@@ -4398,14 +4406,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         if (drawWindow.rules === 'beatoraja' && yEnd >= headY) {
           continue;
         }
-        this.renderLongNote(laneIndex, note, lane, headY, yEnd);
+        this.renderLongNote(laneIndex, note, lane, headY, yEnd, drawBottom);
         continue;
       }
       // Single notes hide the moment their bottom edge passes the judgement-line bottom (= `lane.bottom`). Until then
       // the note's visibility depends on `judgedNoteDisplay`: - `'HIDE'` (default) — judged notes disappear the instant
       // they were judged (LR2 / beatoraja default behavior). - `'KEEP_SCROLLING'` — judged notes keep scrolling until
       // their position passes the line (≈ beatoraja's LANEEFFECT ON).
-      if (y < lane.top - overscan || y > lane.bottom || !isDrawnAtTime(drawWindow, note.seconds)) {
+      if (
+        y < lane.top - overscan ||
+        y > resolveDrawBottom(drawWindow, lane.bottom) ||
+        !isDrawnAtTime(drawWindow, note.seconds)
+      ) {
         continue;
       }
       // Read the engine's `judged` flag directly off the shared `TimedPlayableNote` instance — the engine
@@ -4431,7 +4443,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const lane = this.laneX.get(mine.channel);
       if (!lane) continue;
       const y = lane.bottom - beatDistance(mine.beat) * pixelsPerBeat;
-      if (y < lane.top - overscan || y > lane.bottom) continue;
+      if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
       const laneIndex = resolveLr2LaneIndex(mine.channel, this.chartPlayVariant);
       this.renderMineNote(laneIndex, mine.channel, lane, y);
     }
@@ -4535,7 +4547,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
-    if (this.renderThemeMeasureLines({ beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom })) {
+    const drawBottom = resolveDrawBottom(drawWindow, bottom);
+    if (
+      this.renderThemeMeasureLines({
+        beats,
+        firstBeatIndex,
+        maxBeat,
+        pixelsPerBeat,
+        beatDistance,
+        top,
+        bottom,
+        drawBottom,
+      })
+    ) {
       return;
     }
     const binding = this.skinBinding;
@@ -4548,7 +4572,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           break;
         }
         const y = bottom - beatDistance(beat) * pixelsPerBeat;
-        if (y < top - 1 || y > bottom + 1) {
+        if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }
         for (const run of runs) {
@@ -4568,7 +4592,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         break;
       }
       const y = bottom - beatDistance(beat) * pixelsPerBeat;
-      if (y < top - 1 || y > bottom + 1) {
+      if (y < top - 1 || y > drawBottom + 1) {
         continue;
       }
       for (const run of runs) {
@@ -4627,15 +4651,17 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     lane: GameplayLaneRect,
     yStart: number,
     yEnd: number,
+    drawBottom: number = lane.bottom,
   ): void {
     const channel = note.channel;
     // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
     // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
     // *bottom edge* sits at `yEnd` (just-timing of the tail) The body fills the band between them; we clamp the bottom
-    // to the judgement-line bottom (= `lane.bottom`) so the body never paints over the keys area below the line — even
-    // mid-LN where the head has already passed but the tail is still above.
+    // to `drawBottom` — the judgement-line bottom (= `lane.bottom`) unless beatoraja's rules let a long note a negative
+    // `#SCROLL` puts below the line draw there — so the body never paints over the keys area below the line, even mid-LN
+    // where the head has already passed but the tail is still above.
     const top = Math.max(lane.top - this.noteOverscan, Math.min(yStart, yEnd));
-    const bottom = Math.min(lane.bottom, Math.max(yStart, yEnd));
+    const bottom = Math.min(drawBottom, Math.max(yStart, yEnd));
     const bodyCell = this.resolveThemeNoteCell('lnbody', laneIndex);
     if (bodyCell) {
       if (bodyCell.texture) {
@@ -4682,8 +4708,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       sprite.height = endCell.height;
     }
     // Hide the LN head once it has visually passed the judgement-line bottom. The body+end keep showing until the tail
-    // crosses (handled by the caller's `yEnd > lane.bottom` early-out).
-    if (yStart <= lane.bottom) {
+    // crosses (handled by the caller's `yEnd > drawBottom` early-out).
+    if (yStart <= drawBottom) {
       const startCell = this.resolveThemeNoteCell('lnstart', laneIndex);
       if (startCell?.texture) {
         const sprite = this.noteLayerPool.acquireSprite();

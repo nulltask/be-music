@@ -4,6 +4,7 @@ import {
   isDrawnAtTime,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
+  resolveDrawBottom,
   resolveNoteDrawRules,
   resolveNoteDrawWindow,
 } from './note-draw-window.ts';
@@ -107,5 +108,23 @@ describe('isDrawnAtTime / isLongNoteDrawnAtTime', () => {
     expect(isLongNoteDrawnAtTime(at('beatoraja', 10), 10)).toBe(true);
     expect(isLongNoteDrawnAtTime(at('beatoraja', 10), 9.5)).toBe(false);
     expect(isLongNoteDrawnAtTime(at('lr2', 10), 9.5)).toBe(true);
+  });
+});
+
+describe('resolveDrawBottom', () => {
+  const window = (rules: 'lr2' | 'beatoraja') =>
+    resolveNoteDrawWindow({ rules, currentBeat: 0, nowSeconds: 0, laneBeats: 4, overscanBeats: 1, stageBottomY: 720 });
+
+  it('lets beatoraja rules draw below the judgement line down to the bottom of the stage', () => {
+    // `LaneRenderer` does not clip: a note a negative #SCROLL puts below the line (still ahead in time) is drawn there.
+    expect(resolveDrawBottom(window('beatoraja'), 600)).toBe(720);
+  });
+
+  it('stops LR2 rules at the judgement line', () => {
+    expect(resolveDrawBottom(window('lr2'), 600)).toBe(600);
+  });
+
+  it('never lifts the bottom above the judgement line', () => {
+    expect(resolveDrawBottom(window('beatoraja'), 760)).toBe(760);
   });
 });
