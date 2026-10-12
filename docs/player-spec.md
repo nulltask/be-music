@@ -133,6 +133,18 @@ bmson's `l`, FREE ZONE (`17` / `27`), BMS's `#LNOBJ`, and BMS legacy LN (`#mmm51
 The terminal object of `#LNOBJ` itself is not left in the performance note string.
 Therefore, both LNs derived from `#LNOBJ` and LNs derived from `#mmm51-69` are worth 1 note per book on the player.
 
+### Duplicate notes
+
+A lane holds at most one note per position, as in beatoraja, whose timeline keeps one note per lane.
+When several notes start on the same lane and position (two BMS object lines writing the same cell, a tap on the start of a `#mmm51-69` / `#LNOBJ` long note, or layered bmson notes with the same `x` and `y`), only one is played and judged:
+
+- A long note wins over a tap. beatoraja also replaces a tap with a `5x` / `6x` long note that starts on it.
+- Otherwise the first note in event order wins: the lowest object ID for BMS, the first sound channel for bmson. For bmson this is the note beatoraja judges. For BMS, beatoraja keeps the later line of the file instead, but the IR does not record line order. LR2's choice is not known.
+
+The other notes are not judged, drawn, or counted in `summary.total`. Their keysound still plays, at their own time, as background audio in manual play (auto play already sounds every play-lane object), unless it is the same `#WAVxx` / sound channel as the kept note's.
+`extractTimedNotes` returns these notes as `shadowedNotes`.
+Landmines and invisible notes are not collapsed.
+
 ### Landmines
 
 Mine channels are mapped to their corresponding playable lane and kept in a separate array.

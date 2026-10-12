@@ -2351,6 +2351,122 @@ describe('player', () => {
     expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['1E']);
   });
 
+  test('player: two notes on one lane and position become one judged note; the other keysound is shadowed', () => {
+    const json = parseChart(['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', ''].join('\n'));
+
+    const timed = extractTimedNotes(json);
+    expect(timed.playableNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '01']]);
+    expect(timed.shadowedNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
+    expect(extractPlayableNotes(json)).toHaveLength(1);
+  });
+
+  test('player: a duplicate with the same keysound is dropped without a shadowed sound', () => {
+    const json = parseChart(['#BPM 120', '#WAV01 a.wav', '#00111:0101', '#00111:01', ''].join('\n'));
+
+    const timed = extractTimedNotes(json);
+    expect(timed.playableNotes.map((note) => note.event.position)).toEqual([
+      [0, 2],
+      [1, 2],
+    ]);
+    expect(timed.shadowedNotes).toEqual([]);
+  });
+
+  test('player: a long note wins over a tap on the same lane and position (5x and #LNOBJ)', () => {
+    const legacy = parseChart(
+      ['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:02', '#00151:01', '#00251:01', ''].join('\n'),
+    );
+    const legacyTimed = extractTimedNotes(legacy);
+    expect(legacyTimed.playableNotes).toHaveLength(1);
+    expect(legacyTimed.playableNotes[0]?.event.value).toBe('01');
+    expect(legacyTimed.playableNotes[0]?.endBeat).toBeCloseTo(8, 6);
+    expect(legacyTimed.shadowedNotes.map((note) => note.event.value)).toEqual(['02']);
+
+    const lnobj = parseChart(
+      ['#BPM 120', '#LNOBJ ZZ', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', '#00211:ZZ', ''].join('\n'),
+    );
+    const lnobjTimed = extractTimedNotes(lnobj);
+    expect(lnobjTimed.playableNotes).toHaveLength(1);
+    expect(lnobjTimed.playableNotes[0]?.endBeat).toBeCloseTo(8, 6);
+    expect(lnobjTimed.shadowedNotes).toHaveLength(1);
+    expect(lnobjTimed.shadowedNotes[0]?.event.value).not.toBe(lnobjTimed.playableNotes[0]?.event.value);
+  });
+
+  test('player: layered bmson notes on one x and y are one judged note, the first sound channel', () => {
+    const json = parseChart(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          { name: 'piano.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'bass.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'pad.wav', notes: [{ x: 2, y: 0 }] },
+        ],
+      }),
+      'bmson',
+    );
+
+    const timed = extractTimedNotes(json);
+    expect(timed.playableNotes.map((note) => [note.channel, note.event.value])).toEqual([
+      ['11', '01'],
+      ['12', '03'],
+    ]);
+    expect(timed.shadowedNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
+  });
+
+  test('player: mines and invisible objects on a duplicated note position are untouched', () => {
+    const json = parseChart(
+      ['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', '#00131:01', '#001D1:10', ''].join('\n'),
+    );
+
+    const timed = extractTimedNotes(json, { includeLandmine: true, includeInvisible: true });
+    expect(timed.playableNotes).toHaveLength(1);
+    expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['11']);
+    expect(timed.landmineNotes.map((note) => note.channel)).toEqual(['11']);
+  });
+
+  test('player: manual play sounds a shadowed duplicate keysound as background and judges one note', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = { '01': 'a.wav', '02': 'b.wav' };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '02' },
+    ];
+    const preparedChart = preparePlaybackChartData(json, {}, false, 0);
+    expect(preparedChart.scorableNotes).toHaveLength(1);
+
+    const triggeredEvents: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      judgeWindowMs: 50,
+      preparedChart,
+      writeOutput: () => undefined,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1000, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1150, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect([...triggeredEvents].sort()).toEqual(['01', '02']);
+    expect(summary.total).toBe(1);
+  });
+
   test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
     const createChart = (channels: string[]) => {
       const json = createEmptyJson('bms');

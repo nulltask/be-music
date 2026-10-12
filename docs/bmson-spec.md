@@ -119,6 +119,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [ ] Add and apply `stop_events` of the same `y`
 - [ ] Playback based on sound channel slicing rules (`c` and restart)
 - [x] BGM discard when a playable note and a BGM note share the same `y` in one sound channel (applied at parse time; the BGM note is dropped)
+- [x] Layered notes (several sound channels with a note on the same `x` and `y`) are one judged note in the player, the first sound channel's, as in beatoraja; the other sound channels still sound at that time ([player spec — Duplicate notes](./player-spec.md#duplicate-notes))
 - [ ] Composite playback of the same `(x,y)` notes from different sound channels as Layered Notes
 
 ## Fields read by implementation (parser)
