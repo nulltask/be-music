@@ -32,6 +32,7 @@ import {
 import {
   PlayerInterruptedError,
   preparePlaybackChartData,
+  resolvePlayChart,
   type PreparedPlaybackChartData,
   type PlayerSummary,
 } from '@be-music/player/core/engine';
@@ -88,12 +89,10 @@ import { PerfTracker } from '../perf.ts';
 import { type PixiSceneHost } from '../host.ts';
 import { ChildPool, staggerDestroyTextures } from '../pixi-utils.ts';
 import { AudioAnalyzer, type AudioFeatures } from '../../runtime/audio-analysis.ts';
-import { toEngineChart } from '../../runtime/engine-chart.ts';
 import { runEngineDriver } from '../../runtime/engine-driver.ts';
 import { createWebAudioSession, type WebAudioSession } from '../../runtime/web-audio-session.ts';
 import { drainWebUiSignals, type WebUiRuntimeCallbacks } from '../../runtime/web-ui-runtime.ts';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { resolveBmsControlFlow } from '@be-music/parser';
 import {
   collectBmsExWavVolumeMultipliers,
   collectBmsWavCmdVolumeMultipliers,
@@ -105,6 +104,7 @@ import {
   resolveChartReferenceBpm,
   volWavToLinearGain,
   type BmsSwitchingBga,
+  type RandomDraws,
 } from '@be-music/chart';
 import {
   BG,
@@ -750,6 +750,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * include them all (depending on parser default), neither of which matches LR2 behavior.
    */
   private resolvedChart: BeMusicJson | undefined;
+  /** The `#RANDOM` / `#SWITCH` draws {@link resolvedChart} was resolved with; handed to the engine with it. */
+  private randomDraws: RandomDraws | undefined;
   /**
    * `seconds → beat` resolver that properly accounts for `#STOP` windows. During a STOP, this returns the same beat
    * across the window's duration so the playfield freezes in place. Without it the previous hand-rolled `currentBeat`
@@ -2073,6 +2075,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.preparedChart = undefined;
     this.touchTokenByChannel = undefined;
     this.resolvedChart = undefined;
+    this.randomDraws = undefined;
     this.beatAtSeconds = undefined;
     this.scrollMapper = undefined;
     this.timingResolver = undefined;
@@ -2090,11 +2093,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   private prepareSong(song: BrowserSongEntry): void {
-    // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow first so every play-time consumer below sees the same
-    // chosen branches. `Math.random` is the random source (LR2 re-rolls each play) — for deterministic playback
-    // (replays, tests) the host can swap this for a seeded PRNG later.
-    const resolved = resolveBmsControlFlow(song.chart, { random: Math.random });
+    // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
+    // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay can hand
+    // the recorded draws to `resolvePlayChart` instead.
+    const { chart: resolved, randomDraws } = resolvePlayChart(song.chart);
     this.resolvedChart = resolved;
+    this.randomDraws = randomDraws;
     // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides (0..127 byte). Collect once now so every
     // subsequent `playSample{,ByKey}` is a single Map lookup; slots without an entry fall through to the unity-gain
     // fast path. Pitch / loop bytes are skipped — the helper only emits volume multipliers.
@@ -4703,26 +4707,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * route to the host's `onExit` / `onRestart` callbacks the same way the legacy DOM keyhandler did.
    */
   /**
-   * Builds the `BeMusicJson` snapshot the engine sees in shared-engine mode. Since the renderer now hands the
-   * engine its own `PreparedPlaybackChartData` instance (which already encodes shuffle / DP-flip via the
-   * post-`applyRandomMode` channel mutations on each `TimedPlayableNote`), the engine never re-runs
-   * `extractTimedNotes`, and the chart events handed in here are only consumed by engine-internal helpers
-   * (control-flow resolve fast path, timing resolver, BGM / BGA / dynamic-volume realtime audio scheduling).
-   * Those helpers all operate on non-playable channels — none of them care about the shuffled lane channels —
-   * so the renderer no longer needs to remap playable-channel events to match the view's shuffle.
-   *
-   * The one transformation we still need is to clear `bms.controlFlow` before handing the chart to the engine.
-   * `CoreGameplayView.prepareSong` already ran `resolveBmsControlFlow` once and pushed every active
-   * `#xxx` header / object entry into `json.events`, but the resolver does NOT clear `controlFlow` afterwards —
-   * the array stays populated on the resolved chart. Without zeroing it out here, the engine's own
-   * `resolveBmsControlFlowForPlayback` would walk the same array a second time and
-   * `applyActiveControlFlowEntry` would duplicate every `kind: 'object'` entry into `json.events`. The engine
-   * doesn't extract notes from those duplicated events any more, but the realtime-audio collectors (BGM / BGA
-   * cues) would still pick them up and trigger duplicate sample plays. The empty `controlFlow` short-circuits
-   * `resolveControlFlow` to a clone-and-return on the engine side, which is exactly what we want.
+   * The chart the engine plays in shared-engine mode: the one `prepareSong` resolved. Since the renderer hands the
+   * engine its own `PreparedPlaybackChartData` instance (which already encodes shuffle / DP-flip), the chart events
+   * here only feed engine-internal helpers (timing resolver, BGM / BGA / dynamic-volume realtime audio scheduling),
+   * none of which care about the shuffled lane channels. The resolved chart carries no control flow, so the engine
+   * plays it as is; {@link randomDraws} travel with it for the RANDOM summary.
    */
   private buildSharedEngineChart(): BeMusicJson {
-    return toEngineChart(this.resolvedChart ?? this.song!.chart);
+    return this.resolvedChart ?? this.song!.chart;
   }
 
   private launchSharedEngine(): void {
@@ -4780,6 +4772,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         return false;
       },
       engineOptions: {
+        // The draws `resolvedChart` was resolved with; the engine plays that chart as is and names them in its summary.
+        ...(this.randomDraws !== undefined ? { randomDraws: this.randomDraws } : {}),
         // The view's own intro timing already gated the chart to PLAYSTART; tell the engine to start its chart
         // immediately so its t=0 lines up with our `audioContextStartTime` anchor instead of imposing the
         // engine's default 1.5 s lead-in on top.
