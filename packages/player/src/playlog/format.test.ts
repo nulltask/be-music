@@ -53,6 +53,7 @@ function makePlaylog(): BeMusicPlaylog {
       randomLane: { p1: 'MIRROR', p2: 'RANDOM' },
       dpFlip: true,
       judgeWindowOverrideMs: 500,
+      randomOutcomes: [2, 1, 3],
       aborted: true,
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
@@ -108,6 +109,14 @@ describe('playlog format', () => {
     expect(parsed.results).toBeUndefined();
     expect(parsed.chart).not.toHaveProperty('sha256');
     expect(parsed.chart).not.toHaveProperty('fingerprint');
+  });
+
+  test('rejects #RANDOM outcomes that are not positive integers', () => {
+    for (const randomOutcomes of [[0], [1.5], ['2'], 3]) {
+      const log = makePlaylog() as unknown as { play: Record<string, unknown> };
+      log.play.randomOutcomes = randomOutcomes;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.randomOutcomes/);
+    }
   });
 
   test('rejects invalid JSON and wrong format / version / clock markers', () => {

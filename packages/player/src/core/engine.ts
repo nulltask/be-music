@@ -456,6 +456,8 @@ export interface RandomPatternSelection {
 interface ControlFlowResolutionResult {
   resolvedJson: BeMusicJson;
   randomPatterns: RandomPatternSelection[];
+  /** Value of every `#RANDOM` / `#SWITCH` line in file order (empty without control flow), for the play log. */
+  randomOutcomes: number[];
 }
 
 interface AudioLeadTuning {
@@ -1721,7 +1723,9 @@ export function resolveBmsControlFlowForPlayback(
   }
 
   let randomDrawIndex = 0;
+  const randomOutcomes: number[] = [];
   const resolvedJson = resolveBmsControlFlow(json, {
+    onOutcome: (value) => randomOutcomes.push(value),
     random: () => {
       const replayValue = runtimeRandomSequence[randomDrawIndex];
       if (typeof replayValue === 'number') {
@@ -1735,6 +1739,7 @@ export function resolveBmsControlFlowForPlayback(
   return {
     resolvedJson,
     randomPatterns,
+    randomOutcomes,
   };
 }
 
@@ -1922,12 +1927,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
+          laneModeExtension: options.laneModeExtension,
           dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
           play: {
             mode: 'auto',
             autoScratch: false,
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
+            ...(controlFlowResolution.randomOutcomes.length > 0
+              ? { randomOutcomes: controlFlowResolution.randomOutcomes }
+              : {}),
             ...hostPlaySettings,
           },
         });
@@ -2614,12 +2623,16 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
+          laneModeExtension: options.laneModeExtension,
           dynamicJudgeRankChanges,
           play: {
             mode: 'manual',
             autoScratch: autoScratchEnabled,
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
+            ...(controlFlowResolution.randomOutcomes.length > 0
+              ? { randomOutcomes: controlFlowResolution.randomOutcomes }
+              : {}),
             ...hostPlaySettings,
           },
         });

@@ -248,6 +248,23 @@ describe('playlog recorder', () => {
     expect(pmsLog.chart.fingerprint).not.toBe(keysLog.chart.fingerprint);
   });
 
+  test('fingerprints with the chart extension the engine passes', () => {
+    const json = parseBms(['#BPM 150', '#00111:01', '#00115:01'].join('\n'));
+    const bmeLog = createPlaylogRecorder(makeRecorderOptions({ json, laneModeExtension: '.bme' })).finalize({
+      summary: makeSummary(),
+    });
+    expect(bmeLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.bme' }));
+    expect(bmeLog.chart.fingerprint).not.toBe(computePlayFingerprint(json, { chartPath: undefined }));
+  });
+
+  test('records the #RANDOM outcomes it is given', () => {
+    const options = makeRecorderOptions();
+    const withOutcomes = createPlaylogRecorder({ ...options, play: { ...options.play, randomOutcomes: [2, 1] } });
+    expect(withOutcomes.finalize({ summary: makeSummary() }).play.randomOutcomes).toEqual([2, 1]);
+    const empty = createPlaylogRecorder({ ...options, play: { ...options.play, randomOutcomes: [] } });
+    expect(empty.finalize({ summary: makeSummary() }).play).not.toHaveProperty('randomOutcomes');
+  });
+
   test('omits the fingerprint instead of failing when it cannot be computed', () => {
     const json = makeJson();
     Object.defineProperty(json, 'events', {

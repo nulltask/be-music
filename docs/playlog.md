@@ -18,15 +18,21 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    of the post-`#RANDOM` chart. Unlike `sha256` it identifies what the player played rather than the file bytes,
    so logs of one chart still match after keysound / BGA / metadata edits, re-saves, or a BMS ↔ bmson conversion.
    It is computed before the lane options are applied, so RANDOM / MIRROR / S-RANDOM and DP FLIP never change it —
-   they are recorded in `play` instead. The recorder computes it from the chart it is given (hosts need no change)
-   and omits the field when it cannot; logs without it still parse.
+   they are recorded in `play` instead. The recorder computes it from the chart it is given, with the chart's
+   extension (`PlayerOptions.laneModeExtension`) as the lane-mode input, and omits the field when it cannot; logs
+   without it still parse.
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
    `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
    `(timeUs, seq)` — `seq` disambiguates same-microsecond events.
 3. **`play`** — the settings that affect scoring: mode (manual / auto), auto scratch, the selected gauge, the
    lane-arrangement options that produced the resolved chart, the live judge-window ruleset (`judgeRuleset`,
-   absent = `'lr2'`), the debug judge-window override, and an ESC flag.
+   absent = `'lr2'`), the debug judge-window override, an ESC flag, and `randomOutcomes`: the value of every
+   `#RANDOM` / `#SWITCH` line of the chart in file order. With the chart file,
+   `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })` rebuilds the chart that was played, so a
+   verifier can recompute `chart.fingerprint`. The engine fills it when it resolves the chart itself; a host that
+   resolves the chart before handing it over passes the values in `recordPlaylog.randomOutcomes` (collected with
+   `resolveBmsControlFlow`'s `onOutcome`). It is omitted for charts without control flow.
 
 Judgments, EX-SCORE, combo, and gauge values live only in **`results`** — a regenerable cache keyed by ruleset id
 (`native` holds the engine's own summary at record time). Because the canonical data is the input stream, a later
@@ -46,7 +52,7 @@ every judged press (`lane-input`) and release (`kitty-state` release) with `pres
 timestamps, counts empty POORs for the native cache, and hands the assembled `BeMusicPlaylog` to the callback right
 before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. `PlayerOptions.recordPlaylog` carries
 the host-declared settings the engine cannot know (selected gauge, lane-shuffle labels, DP flip, freeform
-`native` extras).
+`native` extras, and the `#RANDOM` outcomes of a chart the host resolved itself).
 
 In the browser player:
 

@@ -40,6 +40,11 @@ export interface PlaylogRecorderPlaySettings {
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  /**
+   * Value of every `#RANDOM` / `#SWITCH` line of the chart in file order (`resolveBmsControlFlow`'s `onOutcome`). The
+   * engine fills it when it resolves the chart itself; a host that resolves the chart beforehand passes it.
+   */
+  randomOutcomes?: number[];
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -50,7 +55,7 @@ export interface PlaylogRecorderPlaySettings {
  */
 export type PlaylogRecordingOptions = Pick<
   PlaylogRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'native'
+  'gauge' | 'randomLane' | 'dpFlip' | 'native' | 'randomOutcomes'
 > & {
   chartSha256?: string;
 };
@@ -61,6 +66,11 @@ export interface PlaylogRecorderOptions {
   chart: PlaylogRecorderChartData;
   /** SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. */
   chartSha256?: string;
+  /**
+   * The chart file's extension (`PlayerOptions.laneModeExtension`), the fingerprint's lane-mode input. Without it the
+   * recorder infers `.pms` from a 9 KEY lane mode.
+   */
+  laneModeExtension?: string;
   play: PlaylogRecorderPlaySettings;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
@@ -124,6 +134,9 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         play.judgeWindowOverrideMs = options.play.judgeWindowOverrideMs;
       }
       if (options.play.judgeRuleset !== undefined) play.judgeRuleset = options.play.judgeRuleset;
+      if (options.play.randomOutcomes !== undefined && options.play.randomOutcomes.length > 0) {
+        play.randomOutcomes = [...options.play.randomOutcomes];
+      }
       if (aborted === true) play.aborted = true;
       if (options.play.native !== undefined) play.native = options.play.native;
 
@@ -220,7 +233,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   if (typeof options.chartSha256 === 'string' && options.chartSha256.length > 0) {
     result.sha256 = options.chartSha256.toLowerCase();
   }
-  const fingerprint = computePlaylogChartFingerprint(json, chart.laneDisplayMode);
+  const fingerprint = computePlaylogChartFingerprint(json, options.laneModeExtension, chart.laneDisplayMode);
   if (fingerprint !== undefined) result.fingerprint = fingerprint;
   if (typeof json.metadata.title === 'string' && json.metadata.title.length > 0) result.title = json.metadata.title;
   if (typeof json.metadata.subtitle === 'string' && json.metadata.subtitle.length > 0) {
@@ -235,14 +248,18 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
 }
 
 /**
- * Play fingerprint (`bmfp1:…`) of the resolved chart. The recorder never sees the chart's file name, so the `.pms`
- * hint the fingerprint's lane-mode detection reads comes from the lane mode the engine actually played: it plays 9 KEY
- * exactly when the chart is `.pms`, the host classified it as 9 KEY, or its content says so, and the hint resolves
- * all three to the fingerprint's `'9'`. A failure only drops the field — it must never break recording.
+ * Play fingerprint (`bmfp1:…`) of the resolved chart. Its lane-mode input is the chart's extension, which the engine
+ * passes as `laneModeExtension`; without it, a 9 KEY play stands in for `.pms` (it is 9 KEY exactly when the chart is
+ * `.pms` or its content says so). A failure only drops the field — it must never break recording.
  */
-function computePlaylogChartFingerprint(json: BeMusicJson, laneDisplayMode: string): string | undefined {
+function computePlaylogChartFingerprint(
+  json: BeMusicJson,
+  laneModeExtension: string | undefined,
+  laneDisplayMode: string,
+): string | undefined {
   try {
-    return computePlayFingerprint(json, { chartPath: laneDisplayMode.startsWith('9 KEY') ? '.pms' : undefined });
+    const chartPath = laneModeExtension ?? (laneDisplayMode.startsWith('9 KEY') ? '.pms' : undefined);
+    return computePlayFingerprint(json, { chartPath });
   } catch {
     return undefined;
   }

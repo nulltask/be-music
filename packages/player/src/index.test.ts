@@ -2,7 +2,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { computePlayFingerprint } from '../../chart/src/index.ts';
+import { parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
@@ -777,6 +778,27 @@ describe('player', () => {
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
   });
 
+  test('player: reports the value of every #RANDOM / #SWITCH line it resolved', () => {
+    const json = parseChart(
+      [
+        '#BPM 150',
+        '#RANDOM 1',
+        '#ENDRANDOM',
+        '#RANDOM 4',
+        '#IF 3',
+        '#00111:01',
+        '#ENDIF',
+        '#ENDRANDOM',
+        '#SWITCH 2',
+        '#ENDSW',
+      ].join('\n'),
+      'bms',
+    );
+    const resolution = resolveBmsControlFlowForPlayback(json, () => 0.6);
+    expect(resolution.randomOutcomes).toEqual([1, 3, 2]);
+    expect(resolveBmsControlFlowForPlayback(createEmptyJson('bms')).randomOutcomes).toEqual([]);
+  });
+
   test('player: resolves RANDOM pattern summary for control-flow playback', () => {
     const json = createEmptyJson('bms');
     json.bms.controlFlow = [
@@ -1202,6 +1224,40 @@ describe('player', () => {
     expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
   });
 
+  test('player: records the #RANDOM outcomes and the extension-aware fingerprint in the play log', async () => {
+    const json = parseChart(
+      [
+        '#BPM 240',
+        '#00111:01',
+        '#RANDOM 2',
+        '#IF 1',
+        '#00113:01',
+        '#ENDIF',
+        '#IF 2',
+        '#00114:01',
+        '#ENDIF',
+        '#ENDRANDOM',
+      ].join('\n'),
+      'bms',
+    );
+    let playlog: BeMusicPlaylog | undefined;
+    await autoPlay(json, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      laneModeExtension: '.bme',
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+    });
+    const outcomes = playlog!.play.randomOutcomes;
+    expect(outcomes).toHaveLength(1);
+    const replayed = resolveBmsControlFlow(json, { outcomes });
+    expect(playlog!.chart.fingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.bme' }));
+    expect(playlog!.chart.fingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
+  });
+
   test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
     // BPM 240 → measure 1 starts at chart 1.0 s. One press near the note, then natural chart end.
     const json = createEmptyJson('bms');
@@ -1236,6 +1292,7 @@ describe('player', () => {
     expect(playlog!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
     expect(playlog!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
     expect(playlog!.play.randomLane).toEqual({ p1: 'MIRROR' });
+    expect(playlog!.play.randomOutcomes).toBeUndefined();
     expect(playlog!.play.aborted).toBeUndefined();
     // The single scheduled press resolves against lane channel 11 with a chart-relative µs timestamp near the note.
     expect(playlog!.inputs).toHaveLength(1);

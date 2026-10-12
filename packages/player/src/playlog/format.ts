@@ -105,6 +105,12 @@ export interface PlaylogPlay {
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the live engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'` (the default). */
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  /**
+   * Value of every `#RANDOM` / `#SWITCH` line of the chart in file order — what the play rolled. With the chart file,
+   * `resolveBmsControlFlow(json, { outcomes: randomOutcomes })` rebuilds the chart that was played, so a verifier can
+   * recompute `chart.fingerprint`. Absent for charts without control flow and when the host did not supply it.
+   */
+  randomOutcomes?: number[];
   /** True when the play ended early (ESC). The input stream stops at the abort point. */
   aborted?: boolean;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
@@ -390,6 +396,15 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
       throw new PlaylogParseError(`play.judgeRuleset: expected 'lr2' | 'beatoraja' | 'iidx'`);
     }
     parsed.judgeRuleset = play.judgeRuleset;
+  }
+  if (play.randomOutcomes !== undefined) {
+    if (
+      !Array.isArray(play.randomOutcomes) ||
+      !play.randomOutcomes.every((value) => typeof value === 'number' && Number.isInteger(value) && value >= 1)
+    ) {
+      throw new PlaylogParseError('play.randomOutcomes: expected an array of positive integers');
+    }
+    parsed.randomOutcomes = [...(play.randomOutcomes as number[])];
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.native !== undefined) {

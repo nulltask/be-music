@@ -18,16 +18,20 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    [fingerprint-spec.ja.md](./fingerprint-spec.ja.md) を参照）を刻印します。`sha256` と違ってファイルのバイト列
    ではなくプレイヤーが遊んだ内容を識別するので、キー音 / BGA / メタデータの編集、保存し直し、BMS ↔ bmson の
    変換を経ても同じ譜面のログどうしが一致します。レーンオプションを適用する前の譜面から求めるので、RANDOM /
-   MIRROR / S-RANDOM や DP FLIP では変わりません（これらは `play` に記録します）。記録処理が受け取った譜面から
-   自分で求めるのでホスト側の変更は不要で、求められなかったときはこのフィールドを省きます。このフィールドの
-   無いログもそのまま読み込めます。
+   MIRROR / S-RANDOM や DP FLIP では変わりません（これらは `play` に記録します）。記録処理が受け取った譜面から、
+   譜面の拡張子（`PlayerOptions.laneModeExtension`）をレーン構成の入力として求め、求められなかったときはこの
+   フィールドを省きます。このフィールドの無いログもそのまま読み込めます。
 2. **`inputs`** — プレイアブルレーンに届いた全ての生のキー押下・解放
    （`{ seq, timeUs, action: 'down' | 'up', channels }`）。入力は判定へ変換せず、ノート ID への割り当ても
    行わず、空 POOR の原因になる「ノートに対応しない入力」もすべて残します。ソートキーは常に
    `(timeUs, seq)` で、`seq` が同時刻イベントの順序を確定します。
 3. **`play`** — スコアに影響する設定。モード（manual / auto）、オートスクラッチ、選択ゲージ、最終配置を
    生んだレーンオプションのラベル、ライブ判定幅ルールセット（`judgeRuleset`、省略時 `'lr2'`）、デバッグ用
-   判定幅オーバーライド、ESC 中断フラグです。
+   判定幅オーバーライド、ESC 中断フラグ、`randomOutcomes`（譜面のすべての `#RANDOM` / `#SWITCH` 行の値を
+   ファイル順に並べたもの）です。譜面ファイルがあれば `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })`
+   で遊んだ譜面を組み立て直せるので、検証者は `chart.fingerprint` を計算し直せます。エンジンが自分で譜面を解決
+   するときはエンジンが記録し、エンジンに渡す前に譜面を解決するホストは（`resolveBmsControlFlow` の `onOutcome`
+   で集めた）値を `recordPlaylog.randomOutcomes` で渡します。制御構文のない譜面では省きます。
 
 判定数・EX スコア・コンボ・ゲージ値は **`results`**（ルールセット ID をキーとする再生成可能なキャッシュ。
 `native` は記録時のエンジン自身のサマリ）にのみ存在します。正本が入力列なので、後からルールセットを修正
@@ -46,7 +50,8 @@ TypeScript 型・シリアライザ・防御的パーサは
 スナップショットし、判定対象の押下（`lane-input`）と解放（`kitty-state` release）を `pressedAt` 補正済みの
 譜面相対時刻で記録し、空 POOR を native キャッシュ用にカウントし、`autoPlay` / `manualPlay` の解決直前
 （ESC 中断時を含む）に組み上がった `BeMusicPlaylog` をコールバックへ渡します。エンジンが知り得ない
-ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報）は
+ホスト側設定（選択ゲージ、レーンオプションのラベル、DP FLIP、自由形式の `native` 追加情報、ホストが自分で
+解決した譜面の `#RANDOM` の結果）は
 `PlayerOptions.recordPlaylog` で渡します。
 
 ブラウザプレイヤーでは:
