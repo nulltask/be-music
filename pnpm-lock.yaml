@@ -340,9 +340,6 @@ importers:
 
   packages/skin-sdk:
     dependencies:
-      '@be-music/audio-renderer':
-        specifier: workspace:*
-        version: link:../audio-renderer
       '@be-music/chart':
         specifier: workspace:*
         version: link:../chart
