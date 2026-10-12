@@ -205,6 +205,21 @@ describe('collectChartPreviewTriggers', () => {
     expect(triggers.map((trigger) => trigger.channel)).toEqual(['01', '11', '51']);
     expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'DD']);
   });
+
+  test('excludes invisible objects on the extended 24-key lanes too', () => {
+    // bmson `keyboard-24k` hidden notes (`key_channels`) become invisible objects on `3A`-`3Q` / `4A`-`4Q`.
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [{ index: 0, length: 1 }];
+    chart.events = [
+      { measure: 0, channel: '1A', position: [0, 1], value: 'BB' },
+      { measure: 0, channel: '3A', position: [1, 4], value: 'CC' },
+      { measure: 0, channel: '4Q', position: [1, 2], value: 'CC' },
+    ];
+    chart.resources.wav = { BB: 'visible.wav', CC: 'invisible.wav' };
+
+    expect(collectChartPreviewTriggers(chart, 3).map((trigger) => trigger.channel)).toEqual(['1A']);
+  });
 });
 
 describe('ChartPreviewEngine', () => {
