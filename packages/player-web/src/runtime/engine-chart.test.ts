@@ -147,8 +147,8 @@ describe('play-log random outcomes on the web paths', () => {
     const rebuilt = resolveBmsControlFlow(SOURCE, { outcomes: playlog.play.randomOutcomes });
     expect(rebuilt).toEqual(played);
     // ... and recomputes the play fingerprint the log carries.
-    expect(playlog.chart.fingerprint).toBe(computePlayFingerprint(played, { chartPath: CHART_PATH }));
-    expect(computePlayFingerprint(rebuilt, { chartPath: CHART_PATH })).toBe(playlog.chart.fingerprint);
+    expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(played, { chartPath: CHART_PATH }));
+    expect(computePlayFingerprint(rebuilt, { chartPath: CHART_PATH })).toBe(playlog.chart.playFingerprint);
   }
 
   for (const [draws, expected, lanes] of [

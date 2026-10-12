@@ -22,7 +22,8 @@ function makePlaylog(): BeMusicPlaylog {
       artist: 'composer',
       genre: 'genre',
       sha256: 'a'.repeat(64),
-      fingerprint: `bmfp1:${'b'.repeat(64)}`,
+      chartFingerprint: `bmfp1:${'a'.repeat(64)}`,
+      playFingerprint: `bmfp1:${'b'.repeat(64)}`,
       sourceFormat: 'bms',
       laneMode: '7keys',
       total: 300,
@@ -108,7 +109,8 @@ describe('playlog format', () => {
     expect(parsed).toEqual(minimal);
     expect(parsed.results).toBeUndefined();
     expect(parsed.chart).not.toHaveProperty('sha256');
-    expect(parsed.chart).not.toHaveProperty('fingerprint');
+    expect(parsed.chart).not.toHaveProperty('chartFingerprint');
+    expect(parsed.chart).not.toHaveProperty('playFingerprint');
   });
 
   test('rejects #RANDOM outcomes that are not positive integers', () => {
@@ -198,10 +200,17 @@ describe('playlog format', () => {
     expect(() =>
       parsePlaylog(
         corrupt((value) => {
-          value.chart.fingerprint = 42;
+          value.chart.chartFingerprint = 42;
         }),
       ),
-    ).toThrow(/chart\.fingerprint/);
+    ).toThrow('chart.chartFingerprint: expected a string');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.chart.playFingerprint = 42;
+        }),
+      ),
+    ).toThrow('chart.playFingerprint: expected a string');
     expect(() =>
       parsePlaylog(
         corrupt((value) => {

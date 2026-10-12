@@ -75,11 +75,17 @@ export interface PlaylogChart {
   /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
   sha256?: string;
   /**
-   * Play fingerprint (`bmfp1:…`, docs/fingerprint-spec.md) of the resolved chart that was played — identifies what
-   * the player played regardless of file bytes, keysounds, BGA or metadata. Lane options (MIRROR / RANDOM / FLIP)
-   * are not part of it; they live in `play`.
+   * Chart fingerprint (`bmfp1:…`, docs/fingerprint-spec.md) of the source chart, every `#RANDOM` / `#SWITCH` branch
+   * included — identifies the chart regardless of file bytes, keysounds, BGA, metadata or which branches this play
+   * rolled, so plays of one chart share it. Equal to {@link playFingerprint} for a chart without control flow. Omitted
+   * when the recorder did not have the source chart (a host resolved `#RANDOM` itself without passing it).
    */
-  fingerprint?: string;
+  chartFingerprint?: string;
+  /**
+   * Play fingerprint (`bmfp1:…`) of the chart after this play's `#RANDOM` / `#SWITCH` outcomes — identifies what
+   * the player played. Lane options (MIRROR / RANDOM / FLIP) are part of neither fingerprint; they live in `play`.
+   */
+  playFingerprint?: string;
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
@@ -108,7 +114,7 @@ export interface PlaylogPlay {
   /**
    * Value of every `#RANDOM` / `#SWITCH` line of the chart in file order — what the play rolled. With the chart file,
    * `resolveBmsControlFlow(json, { outcomes: randomOutcomes })` rebuilds the chart that was played, so a verifier can
-   * recompute `chart.fingerprint`. Absent for charts without control flow and when the host did not supply it.
+   * recompute `chart.playFingerprint`. Absent for charts without control flow and when the host did not supply it.
    */
   randomOutcomes?: number[];
   /** True when the play ended early (ESC). The input stream stops at the abort point. */
@@ -278,7 +284,8 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     artist: optionalString(chart.artist, 'chart.artist'),
     genre: optionalString(chart.genre, 'chart.genre'),
     sha256: optionalString(chart.sha256, 'chart.sha256'),
-    fingerprint: optionalString(chart.fingerprint, 'chart.fingerprint'),
+    chartFingerprint: optionalString(chart.chartFingerprint, 'chart.chartFingerprint'),
+    playFingerprint: optionalString(chart.playFingerprint, 'chart.playFingerprint'),
     sourceFormat,
     laneMode: expectString(chart.laneMode, 'chart.laneMode'),
     total: optionalFiniteNumber(chart.total, 'chart.total'),
@@ -287,7 +294,16 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
     notes,
   };
-  for (const key of ['title', 'subtitle', 'artist', 'genre', 'sha256', 'fingerprint', 'total'] as const) {
+  for (const key of [
+    'title',
+    'subtitle',
+    'artist',
+    'genre',
+    'sha256',
+    'chartFingerprint',
+    'playFingerprint',
+    'total',
+  ] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }
   return parsed;

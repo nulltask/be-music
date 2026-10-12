@@ -1,6 +1,6 @@
-import { computePlayFingerprint } from '@be-music/chart';
+import { computeChartFingerprint, computePlayFingerprint } from '@be-music/chart';
 import { createEmptyJson, type BeMusicEvent, type BeMusicJson } from '@be-music/json';
-import { parseBms } from '@be-music/parser';
+import { parseBms, resolveBmsControlFlow } from '@be-music/parser';
 import { describe, expect, test } from 'vite-plus/test';
 import type { PlayerSummary } from '../core/engine.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
@@ -230,8 +230,75 @@ describe('playlog recorder', () => {
     );
     const playlog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
 
-    expect(playlog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
-    expect(playlog.chart.fingerprint).toMatch(/^bmfp1:[0-9a-f]{64}$/);
+    expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
+    expect(playlog.chart.playFingerprint).toMatch(/^bmfp1:[0-9a-f]{64}$/);
+  });
+
+  test('records one fingerprint as both chart and play fingerprint for a chart without control flow', () => {
+    const json = parseBms(['#BPM 150', '#00111:01', '#00113:01'].join('\n'));
+    const playlog = createPlaylogRecorder(makeRecorderOptions({ json, sourceChart: json })).finalize({
+      summary: makeSummary(),
+    });
+
+    expect(playlog.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: undefined }));
+    expect(playlog.chart.chartFingerprint).toBe(playlog.chart.playFingerprint);
+  });
+
+  test('fingerprints a #RANDOM chart from its source chart and the recorded outcomes', () => {
+    const source = parseBms(
+      ['#BPM 150', '#00111:01', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF', '#IF 2', '#00114:01', '#ENDIF'].join('\n'),
+    );
+    const played = resolveBmsControlFlow(source, { outcomes: [2] });
+    const record = (sourceChart: BeMusicJson | undefined, randomOutcomes?: number[]) =>
+      createPlaylogRecorder(
+        makeRecorderOptions({
+          json: played,
+          ...(sourceChart !== undefined ? { sourceChart } : {}),
+          play: { mode: 'manual', autoScratch: false, ...(randomOutcomes !== undefined ? { randomOutcomes } : {}) },
+        }),
+      ).finalize({ summary: makeSummary() });
+
+    const playlog = record(source, [2]);
+    expect(playlog.chart.chartFingerprint).toBe(computeChartFingerprint(source, { chartPath: undefined }));
+    expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(played, { chartPath: undefined }));
+    expect(playlog.chart.chartFingerprint).not.toBe(playlog.chart.playFingerprint);
+
+    // Both branches belong to one chart: the chart fingerprint does not depend on the outcome.
+    const other = record(source, [1]);
+    expect(other.chart.chartFingerprint).toBe(playlog.chart.chartFingerprint);
+    expect(other.chart.playFingerprint).toBe(
+      computePlayFingerprint(resolveBmsControlFlow(source, { outcomes: [1] }), { chartPath: undefined }),
+    );
+  });
+
+  test('takes the fingerprints from the source chart, not a working copy whose lanes the host rewrote', () => {
+    const source = parseBms(['#BPM 150', '#00111:01', '#00122:01'].join('\n'));
+    // A DP flip baked into the chart the engine plays (`1x` ↔ `2x`) — a lane option, part of neither fingerprint.
+    const flipped = parseBms(['#BPM 150', '#00121:01', '#00112:01'].join('\n'));
+    const playlog = createPlaylogRecorder(makeRecorderOptions({ json: flipped, sourceChart: source })).finalize({
+      summary: makeSummary(),
+    });
+
+    expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(source, { chartPath: undefined }));
+    expect(playlog.chart.chartFingerprint).toBe(computeChartFingerprint(source, { chartPath: undefined }));
+    expect(playlog.chart.playFingerprint).not.toBe(computePlayFingerprint(flipped, { chartPath: undefined }));
+  });
+
+  test('omits the chart fingerprint when outcomes were recorded but no source chart can be resolved with them', () => {
+    const source = parseBms(['#BPM 150', '#RANDOM 2', '#IF 1', '#00113:01', '#ENDIF'].join('\n'));
+    const played = resolveBmsControlFlow(source, { outcomes: [1] });
+    // A host resolved `#RANDOM` itself and handed the engine the result with `controlFlow` cleared.
+    const engineChart = { ...played, bms: { ...played.bms, controlFlow: [] } };
+    const playlog = createPlaylogRecorder(
+      makeRecorderOptions({
+        json: engineChart,
+        sourceChart: engineChart,
+        play: { mode: 'manual', autoScratch: false, randomOutcomes: [1] },
+      }),
+    ).finalize({ summary: makeSummary() });
+
+    expect(playlog.chart.chartFingerprint).toBeUndefined();
+    expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(engineChart, { chartPath: undefined }));
   });
 
   test('fingerprints a chart played as 9 KEY with the .pms lane mode', () => {
@@ -243,9 +310,9 @@ describe('playlog recorder', () => {
       makeRecorderOptions({ json, chart: { ...makeChartData(), laneDisplayMode } }),
     ).finalize({ summary: makeSummary() });
 
-    expect(keysLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
-    expect(pmsLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.pms' }));
-    expect(pmsLog.chart.fingerprint).not.toBe(keysLog.chart.fingerprint);
+    expect(keysLog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
+    expect(pmsLog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.pms' }));
+    expect(pmsLog.chart.playFingerprint).not.toBe(keysLog.chart.playFingerprint);
   });
 
   test('fingerprints with the chart extension the engine passes', () => {
@@ -253,8 +320,8 @@ describe('playlog recorder', () => {
     const bmeLog = createPlaylogRecorder(makeRecorderOptions({ json, laneModeExtension: '.bme' })).finalize({
       summary: makeSummary(),
     });
-    expect(bmeLog.chart.fingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.bme' }));
-    expect(bmeLog.chart.fingerprint).not.toBe(computePlayFingerprint(json, { chartPath: undefined }));
+    expect(bmeLog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: 'song.bme' }));
+    expect(bmeLog.chart.playFingerprint).not.toBe(computePlayFingerprint(json, { chartPath: undefined }));
   });
 
   test('records the #RANDOM outcomes it is given', () => {

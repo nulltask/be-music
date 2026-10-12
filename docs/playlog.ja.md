@@ -14,13 +14,19 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    を持つ 1 オブジェクトとして保存し、地雷は解決済みのゲージダメージを持ち、`#TOTAL` / `#RANK` /
    `#DEFEXRANK` は生の値のまま保持します（各ルールセットが自分のデフォルト式を適用できるように）。
    `chart.sha256` には譜面**ファイル**の SHA-256 を刻印し、ログを内容ベースで元譜面と照合できます。
-   `chart.fingerprint` には `#RANDOM` 解決後の譜面のプレイ fingerprint（`bmfp1:…`、
-   [fingerprint-spec.ja.md](./fingerprint-spec.ja.md) を参照）を刻印します。`sha256` と違ってファイルのバイト列
-   ではなくプレイヤーが遊んだ内容を識別するので、キー音 / BGA / メタデータの編集、保存し直し、BMS ↔ bmson の
-   変換を経ても同じ譜面のログどうしが一致します。レーンオプションを適用する前の譜面から求めるので、RANDOM /
-   MIRROR / S-RANDOM や DP FLIP では変わりません（これらは `play` に記録します）。記録処理が受け取った譜面から、
-   譜面の拡張子（`PlayerOptions.laneModeExtension`）をレーン構成の入力として求め、求められなかったときはこの
-   フィールドを省きます。このフィールドの無いログもそのまま読み込めます。
+   2 つの Be-Music Fingerprint（`bmfp1:…`、[fingerprint-spec.ja.md](./fingerprint-spec.ja.md) を参照）は、
+   ファイルのバイト列ではなく遊ぶ内容で譜面を識別するので、キー音 / BGA / メタデータの編集、保存し直し、
+   BMS ↔ bmson の変換を経ても同じ譜面のログどうしが一致します。`chart.chartFingerprint` はすべての
+   `#RANDOM` / `#SWITCH` の枝を含むので、どの枝を引いたかに関わらず同じ譜面のプレイはすべて同じ値を持ちます
+   （譜面ごとにプレイをまとめるキーです）。`chart.playFingerprint` はこのプレイで引いた枝を表します。制御構文の
+   ない譜面では 2 つは等しくなります。レーンオプション（RANDOM / MIRROR / S-RANDOM、DP FLIP）はどちらにも
+   含みません（これらは `play` に記録します）。記録処理はどちらも元の譜面（`recordPlaylog.sourceChart`、読み込んだ
+   ままの譜面。ホストが渡さなければエンジンは受け取った譜面を使います）と `play.randomOutcomes` から、譜面の
+   拡張子（`PlayerOptions.laneModeExtension`）をレーン構成の入力として求めます。エンジンに渡す前に `#RANDOM` を
+   解決したりレーンを書き換えたりするホスト（ブラウザプレイヤーはすべての譜面を解決し、beatoraja シーンは DP FLIP
+   を譜面に焼き込みます）は元の譜面を渡します。渡さなければ譜面 fingerprint は省かれ、プレイ fingerprint はホストの
+   作業用コピーを表してしまいます。求められなかったフィールドは省きます。これらのフィールドの無いログもそのまま
+   読み込めます。
 2. **`inputs`** — プレイアブルレーンに届いた全ての生のキー押下・解放
    （`{ seq, timeUs, action: 'down' | 'up', channels }`）。入力は判定へ変換せず、ノート ID への割り当ても
    行わず、空 POOR の原因になる「ノートに対応しない入力」もすべて残します。ソートキーは常に
@@ -29,7 +35,7 @@ LR2 / beatoraja / IIDX のリザルトを再現するツールについて説明
    生んだレーンオプションのラベル、ライブ判定幅ルールセット（`judgeRuleset`、省略時 `'lr2'`）、デバッグ用
    判定幅オーバーライド、ESC 中断フラグ、`randomOutcomes`（譜面のすべての `#RANDOM` / `#SWITCH` 行の値を
    ファイル順に並べたもの）です。譜面ファイルがあれば `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })`
-   で遊んだ譜面を組み立て直せるので、検証者は `chart.fingerprint` を計算し直せます。エンジンが自分で譜面を解決
+   で遊んだ譜面を組み立て直せるので、検証者は `chart.playFingerprint` を計算し直せます。エンジンが自分で譜面を解決
    するときはエンジンが記録し、エンジンに渡す前に譜面を解決するホストは、その同じ解決の（`resolveBmsControlFlow`
    の `onOutcome` で集めた）値を `recordPlaylog.randomOutcomes` で渡す必要があります。渡さなければ、ログは遊んだ
    枝を特定できません。ブラウザプレイヤーはこれに従います。どちらのゲームプレイシーンも `resolvePlayChart`

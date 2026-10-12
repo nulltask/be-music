@@ -1914,12 +1914,13 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // cached native result carries the actual AUTO outcome).
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSha256, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
           laneModeExtension: options.laneModeExtension,
+          sourceChart: sourceChart ?? json,
           dynamicJudgeRankChanges: collectDynamicBmsJudgeRankChanges(resolvedJson, timingResolver),
           play: {
             mode: 'auto',
@@ -2611,12 +2612,13 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const scoreTracker = createScoreTracker({ moneyScore: ruleset.moneyScore });
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSha256, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
           laneModeExtension: options.laneModeExtension,
+          sourceChart: sourceChart ?? json,
           dynamicJudgeRankChanges,
           play: {
             mode: 'manual',

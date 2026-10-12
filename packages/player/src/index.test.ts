@@ -2,7 +2,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { computePlayFingerprint } from '../../chart/src/index.ts';
+import { computeChartFingerprint, computePlayFingerprint } from '../../chart/src/index.ts';
 import { parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
@@ -1309,8 +1309,10 @@ describe('player', () => {
     const outcomes = playlog!.play.randomOutcomes;
     expect(outcomes).toHaveLength(1);
     const replayed = resolveBmsControlFlow(json, { outcomes });
-    expect(playlog!.chart.fingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.bme' }));
-    expect(playlog!.chart.fingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
+    expect(playlog!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.bme' }));
+    expect(playlog!.chart.playFingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
+    // The engine resolved `#RANDOM` itself, so its input is the source chart the chart fingerprint describes.
+    expect(playlog!.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: '.bme' }));
   });
 
   test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
@@ -1478,7 +1480,8 @@ describe('player', () => {
       const withOutcomes = await replay(recorded!.play.randomOutcomes);
       expect(withOutcomes.playlog.play.randomOutcomes).toEqual([2]);
       expect(withOutcomes.playlog.chart.notes.map((note) => note.channel)).toEqual(['12']);
-      expect(withOutcomes.playlog.chart.fingerprint).toBe(recorded!.chart.fingerprint);
+      expect(withOutcomes.playlog.chart.playFingerprint).toBe(recorded!.chart.playFingerprint);
+      expect(withOutcomes.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
       expect(withOutcomes.summary.exScore).toBe(original.exScore);
       expect(withOutcomes.summary.perfect).toBe(original.perfect);
       expect(withOutcomes.summary.great).toBe(original.great);

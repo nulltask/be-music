@@ -14,13 +14,19 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `timeUs` / `endTimeUs` pair, mines carry their resolved gauge damage, and the raw `#TOTAL` / `#RANK` /
    `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults. `chart.sha256` stamps the
    SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content.
-   `chart.fingerprint` stamps the play fingerprint (`bmfp1:…`, see [fingerprint-spec.md](./fingerprint-spec.md))
-   of the post-`#RANDOM` chart. Unlike `sha256` it identifies what the player played rather than the file bytes,
-   so logs of one chart still match after keysound / BGA / metadata edits, re-saves, or a BMS ↔ bmson conversion.
-   It is computed before the lane options are applied, so RANDOM / MIRROR / S-RANDOM and DP FLIP never change it —
-   they are recorded in `play` instead. The recorder computes it from the chart it is given, with the chart's
-   extension (`PlayerOptions.laneModeExtension`) as the lane-mode input, and omits the field when it cannot; logs
-   without it still parse.
+   Two Be-Music Fingerprints (`bmfp1:…`, see [fingerprint-spec.md](./fingerprint-spec.md)) identify the chart by
+   what is played rather than by the file bytes, so logs of one chart still match after keysound / BGA / metadata
+   edits, re-saves, or a BMS ↔ bmson conversion. `chart.chartFingerprint` covers every `#RANDOM` / `#SWITCH`
+   branch, so every play of one chart shares it whatever it rolled — the key to group plays of a chart.
+   `chart.playFingerprint` covers the branches this play rolled. The two are equal for a chart without control
+   flow. Lane options (RANDOM / MIRROR / S-RANDOM, DP FLIP) are part of neither — they are recorded in `play`.
+   The recorder computes both from the source chart (`recordPlaylog.sourceChart`, the chart as loaded; the engine
+   uses the chart it was given when the host passes none) and `play.randomOutcomes`, with the chart's extension
+   (`PlayerOptions.laneModeExtension`) as the lane-mode input. A host that resolves `#RANDOM` or rewrites lanes on
+   the chart before handing it to the engine — the browser player resolves every chart and the beatoraja scene
+   bakes DP FLIP into it — passes the source chart, or the chart fingerprint is omitted and the play fingerprint
+   would describe the host's working copy. Either field is omitted when it cannot be computed; logs without them
+   still parse.
 2. **`inputs`** — every raw key press / release that reached a playable lane, as
    `{ seq, timeUs, action: 'down' | 'up', channels }`. Inputs are never converted into judgments, never assigned
    to a note id, and phantom presses (the ones that fire LR2 empty POORs) are kept. The sort key is always
@@ -30,7 +36,7 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    absent = `'lr2'`), the debug judge-window override, an ESC flag, and `randomOutcomes`: the value of every
    `#RANDOM` / `#SWITCH` line of the chart in file order. With the chart file,
    `resolveBmsControlFlow(json, { outcomes: play.randomOutcomes })` rebuilds the chart that was played, so a
-   verifier can recompute `chart.fingerprint`. The engine fills it when it resolves the chart itself; a host that
+   verifier can recompute `chart.playFingerprint`. The engine fills it when it resolves the chart itself; a host that
    resolves the chart before handing it over must pass the values of that same resolution in
    `recordPlaylog.randomOutcomes` (collected with `resolveBmsControlFlow`'s `onOutcome`), or the log cannot name the
    branches that were played. The browser player does this: both gameplay scenes resolve the chart once with
