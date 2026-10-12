@@ -725,6 +725,25 @@ describe('stringifier', () => {
     expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
   });
 
+  test('bmson stringify: rescales preserved `lines` to the output resolution', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/bmson-key-channels-mines.bmson');
+    const parsed = parseBmson(await readFile(chartPath, 'utf8'));
+
+    const output = JSON.parse(stringifyBmson(parsed, { resolution: 480 })) as {
+      info: { resolution: number };
+      lines: Array<{ y: number }>;
+    };
+    expect(output.info.resolution).toBe(480);
+    expect(output.lines.map((line) => line.y)).toEqual([0, 1920, 3840]);
+
+    const toTiming = (event: { measure: number; position: readonly [number, number] }) => ({
+      measure: event.measure,
+      fraction: event.position[0] / event.position[1],
+    });
+    const reparsed = parseBmson(JSON.stringify(output));
+    expect(reparsed.events.map(toTiming)).toEqual(parsed.events.map(toTiming));
+  });
+
   test('bmson stringify: writes BMS STOP lengths as pulses at the output resolution', () => {
     const parsed = parseChart(['#BPM 120', '#STOP01 24', '#STOP02 192', '#00109:0102', '#00111:01', ''].join('\n'));
 
