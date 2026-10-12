@@ -594,26 +594,23 @@ function isScoreTargetChannel(channel: string): boolean {
 }
 
 /**
- * Inspects a chart entry's playable note channels and reports which `play_<variant>.lr2skin` should be loaded for it.
- * Mapping:
+ * Reports a song's play variant (`5` / `7` / `9` / `10` / `14` / `24` / `48`), which picks the play skin and lane
+ * layout. A thin cached wrapper over `@be-music/chart`'s `resolveChartPlayVariant` — the lane-mode rule the engine and
+ * the CLI use too — fed with the song's chart path (for the `.pms` / `.bme` extension rules), events, and `#PLAYER`.
  *
- * - - PMS / 9 KEY (Pop'n) - `.pms` extension OR `#PLAYER=3` paired with channel `17` → `'9'` - any `2X` channel → DP -
- *   any 6/7 key (18 / 19 / 28 / 29) → `'14'` - otherwise → `'10'` - SP only - any 6/7 key → `'7'` - otherwise → `'5'`
- *
- * Mirrors the CLI's `resolveLaneMode` decision (see `packages/player/src/manual-input.ts`) so the web player picks the
- * same `play_9.lr2skin` variant the CLI would for a Pop'n chart. The `22..25` PMS-STD channel signature is NOT used
- * here because real DP charts also drop notes there — the CLI treats that signature only as a layout disambiguator
- * (standard vs. compat) AFTER the 9KEY mode has been decided by extension or `#PLAYER=3 + 17`.
+ * `chart` defaults to the song's parsed chart, which is what song select sees before any `#RANDOM` roll. A gameplay
+ * scene passes the chart it resolved for the play instead, so lanes added by the chosen `#RANDOM` / `#SWITCH` branch
+ * count toward the variant.
  */
-export function resolveChartPlayVariant(song: BrowserSongEntry): ChartPlayVariant {
-  const cached = playVariantByChart.get(song.chart);
+export function resolveChartPlayVariant(song: BrowserSongEntry, chart: BeMusicJson = song.chart): ChartPlayVariant {
+  const cached = playVariantByChart.get(chart);
   if (cached !== undefined && cached.chartPath === song.chartPath) return cached.variant;
   const variant = resolveChartPlayVariantForChart({
     chartPath: song.chartPath,
-    events: song.chart.events,
-    bms: song.chart.bms,
+    events: chart.events,
+    bms: chart.bms,
   });
-  playVariantByChart.set(song.chart, { chartPath: song.chartPath, variant });
+  playVariantByChart.set(chart, { chartPath: song.chartPath, variant });
   return variant;
 }
 

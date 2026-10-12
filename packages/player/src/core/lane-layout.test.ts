@@ -212,11 +212,18 @@ describe('lane mode `playVariant` host override (PlayerOptions.playVariant)', ()
     expect(ch19?.keyLabel).toBe('b');
     expect(ch16?.isScratch).toBe(false);
 
-    // Without the override, the same chart hits the 7-key-sp fallback — channel 16 becomes
-    // scratch and channels 17/18/19 lose the POPN-9 f/v/g/b bindings entirely.
+    // Without the override the lane mode comes from the shared `resolveChartPlayVariant` rule, which reads a full
+    // `11..19` 1P keyboard as POPN-9 too — the engine no longer falls back to 7-key-sp (16 as scratch) here.
     const withoutOverride = createLaneBindings(channels, { player: 1, chartExtension: '.bme' });
     const ch16NoOverride = withoutOverride.find((b) => b.channel === '16');
-    expect(ch16NoOverride?.isScratch).toBe(true);
+    expect(ch16NoOverride?.isScratch).toBe(false);
+    expect(ch16NoOverride?.keyLabel).toBe('f');
+    // A real 7 KEY chart (no `17`) keeps `16` as the scratch.
+    const sevenKey = createLaneBindings(['11', '12', '13', '14', '15', '16', '18', '19'], {
+      player: 1,
+      chartExtension: '.bme',
+    });
+    expect(sevenKey.find((b) => b.channel === '16')?.isScratch).toBe(true);
   });
 
   test('respects the override even when chart channels are inconsistent with the variant', () => {

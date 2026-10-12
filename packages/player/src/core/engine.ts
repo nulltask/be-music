@@ -212,25 +212,23 @@ export interface PlayerOptions {
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;
+  /**
+   * The chart file's extension (`.bms` / `.bme` / `.pms` / ...). Feeds the extension rules of the shared lane-mode rule
+   * (`resolveChartPlayVariant` from `@be-music/chart`): `.pms` is 9 KEY, and a `.bme` chart without a 6 / 7 key column
+   * is completed to 7 / 14 KEY.
+   */
   laneModeExtension?: string;
   /**
-   * Direct lane-mode override. When set, the engine's `resolveLaneMode` skips its content-based
-   * heuristic and routes straight to the corresponding `LaneMode`:
+   * The chart's play variant, when the host declares it. Routes straight to the corresponding lane mode:
    *
    *   - `'5'`  → `5-key-sp`     - `'10'` → `5-key-dp`
    *   - `'7'`  → `7-key-sp`     - `'14'` → `14-key-dp`
-   *   - `'9'`  → `9-key`        - `'24'` → `24-key-sp` / `48-key-dp` (resolved against 2P presence)
+   *   - `'9'`  → `9-key`        - `'24'` → `24-key-sp`    - `'48'` → `48-key-dp`
    *
-   * Mirrors the renderer-side `chartVariant` the host has already classified the chart as. The
-   * engine's own heuristic only escalates to `9-key` when the chart is `.pms` OR `#PLAYER=3`
-   * with channel `17`, which under-classifies BME-format POPN-9 charts that author `#PLAYER 1`
-   * + channels 16/17/18/19. Without this override, those charts mounted on a 9-key skin /
-   * adapter (via the host) had their `f/v/g/b` inputs dropped because the engine's lane
-   * bindings followed `7-key-sp` (channel 16 → scratch, channel 17 → FREE ZONE, etc.).
-   *
-   * User report: 9 KEY laser and bomb sprites failed to appear. The previous
-   * `laneModeExtension`-only inference (c0da7b5) only worked for charts the heuristic could
-   * classify; this override lets the host force the engine into the variant it already decided on.
+   * When omitted, the engine resolves it with `resolveChartPlayVariant` over the resolved chart's events (after
+   * `#RANDOM`), `laneModeExtension`, and `#PLAYER` — the same rule the web hosts use to pick play skins — so the lane
+   * mode (and the beatoraja per-mode judge windows that follow from it) never depends on mines, invisible objects, or
+   * which long-note notation the chart uses.
    */
   playVariant?: ChartPlayVariant;
   /**
