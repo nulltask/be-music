@@ -243,13 +243,14 @@ be-music は往復変換のために保持しますが検証はしないので�
 
 ### 3.3 `lines` と `resolution` と `y`
 
-| 項目                  | de jure                                                                             | beatoraja                                                                         | be-music                                                                                                                                      |
-| --------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lines` がない        | 4/4 とみなし、4 拍ごとに小節線（L440-454）                                          | 小節線なし [V]（[BMSONDecoder L456-458][j-bmson-lines]）                          | 4/4 の小節線                                                                                                                                  |
-| `lines: []`           | 小節線をまったく引かない                                                            | 小節線なし [V]                                                                    | 小節線なし（`bmson.barlinesSuppressed`）                                                                                                      |
-| `y: 0` のない `lines` | 0 の小節線は省略してよい                                                            | —                                                                                 | 0 の小節線を補う                                                                                                                              |
-| `resolution`          | 既定値は 4 分音符あたり 240 パルス。0 / `null` は既定値、負の値は絶対値（L419-427） | 0 以下なら 240 [V]（[BMSONDecoder L139][j-bmson-res]）                            | `info.resolution`、ルート直下の `resolution`、240 の順。負の値は仕様どおり絶対値として読む（[`bmson.ts`][bm-bmson] `resolveBmsonResolution`） |
-| 整数でない `y`        | `y` は符号なし整数（L72、L83）                                                      | `int` のフィールド。Jackson の型変換は確認していない。負の `y` は譜面ごと無効 [V] | 最も近いパルスに丸める                                                                                                                        |
+| 項目                  | de jure                                                                             | beatoraja                                                                         | be-music                                                                                                                                                                                                           |
+| --------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `lines` がない        | 4/4 とみなし、4 拍ごとに小節線（L440-454）                                          | 小節線なし [V]（[BMSONDecoder L456-458][j-bmson-lines]）                          | 4/4 の小節線                                                                                                                                                                                                       |
+| `lines: []`           | 小節線をまったく引かない                                                            | 小節線なし [V]                                                                    | 小節線なし（`bmson.barlinesSuppressed`）                                                                                                                                                                           |
+| `y: 0` のない `lines` | 0 の小節線は省略してよい                                                            | —                                                                                 | 0 の小節線を補う                                                                                                                                                                                                   |
+| `lines` がある        | 各 `y` に小節線                                                                     | その小節線だけ [V]（[BMSONDecoder L177-185][j-bmson-lines-draw]）                 | その小節線だけを引き、最後の後には足さない（[`timelines.ts`][bm-timelines] `createMeasureBoundariesBeats`）。BMS も beatoraja のセクション `0..maxsec` と同じく各小節の頭に 1 本ずつで、最後の小節の後には引かない |
+| `resolution`          | 既定値は 4 分音符あたり 240 パルス。0 / `null` は既定値、負の値は絶対値（L419-427） | 0 以下なら 240 [V]（[BMSONDecoder L139][j-bmson-res]）                            | `info.resolution`、ルート直下の `resolution`、240 の順。負の値は仕様どおり絶対値として読む（[`bmson.ts`][bm-bmson] `resolveBmsonResolution`）                                                                      |
+| 整数でない `y`        | `y` は符号なし整数（L72、L83）                                                      | `int` のフィールド。Jackson の型変換は確認していない。負の `y` は譜面ごと無効 [V] | 最も近いパルスに丸める                                                                                                                                                                                             |
 
 ### 3.4 ロングノート：`l`、`c`、`ln_type`、`t`、`up`
 
@@ -343,6 +344,7 @@ be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は
 - ロングノートのスタイル、判定幅、TOTAL の既定値、ゲージの曲線は、譜面のパーサではなく選んだルールセット（`lr2`、`beatoraja`、`iidx`）が決める（[§2.5](#25-ロングノート)、[§2.12](#212-判定ランク)、[§2.13](#213-total)）。
 - 地雷：ダメージは 36 進の値そのもの（LR2 / beatoraja と同じで、nanasi の半分にする規則ではない）、爆発は LR2 のモデル、既定値は 4 %。ノートと同じ位置や LN の中の地雷は、beatoraja は捨てるが LR2 と同じく残す（BMS でも bmson でも）（[§2.6](#26-地雷)、[§3.5](#35-地雷と隠しノート)）。
 - HS-FIX の `AVERAGE` は、BPM × N + STOP のギミックで偏る時間平均ではなく、beatoraja の `MAINBPM` と同じメイン BPM（最も多くのノートが置かれた BPM）に合わせる。同数のときは先に現れる BPM を選ぶ（beatoraja はハッシュマップの順序）（[ブラウザプレイヤー — HS-FIX](./player-web.ja.md#hs-fix)）。
+- 小節線は beatoraja と同じく最後の小節まで各小節の頭に引き、その後には足さない。bmson の `lines` はそのまま引く（[§3.3](#33-lines-と-resolution-と-y)）。
 - `#BPM` のない譜面は BM98 の 130 で遊ぶ。LR2 はスクロールせず、beatoraja は譜面を読まない（[§2.8](#28-bpm)）。
 - 0 以下の BPM と STOP は無視する。同じ位置に BMS の `#STOP` が複数あれば最後のものが勝ち（LR2、beatoraja と同じ）、bmson の停止と `#STP` の行は加算する。STOP と同じ位置のノートは停止の前に叩く。STOP の長さは正確な値を保つ（beatoraja は停止ごとに整数マイクロ秒へ切り捨てるため、停止が数千ある譜面ではノートの時刻が数 ms 早くずれる）（[§2.8](#28-bpm)、[§2.9](#29-stop-と-stp)）。
 - SCROLL / SPEED を含む譜面は、どちらも持たない LR2 ではなく beatoraja の `LaneRenderer` の規則で描く。判定ラインの位置からレーンをたどり、最初に上端を越えた位置より先は描かない（[§2.10](#210-scroll-と-speed)）。
@@ -368,6 +370,7 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 [bm-bmson]: ../packages/parser/src/core/bmson.ts
 [bm-chart]: ../packages/chart/src/index.ts
 [bm-timing]: ../packages/chart/src/timing.ts
+[bm-timelines]: ../packages/chart/src/timelines.ts
 [bm-sample-triggers]: ../packages/chart/src/sample-triggers.ts
 [bm-resolved-notes]: ../packages/chart/src/resolved-notes.ts
 [bm-note-rules]: ../packages/chart/src/note-rules.ts
@@ -464,6 +467,7 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 [j-bmson-mine]: https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L317-L366
 [j-bmson-bga]: https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L369-L438
 [j-bmson-lines]: https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L456-L458
+[j-bmson-lines-draw]: https://github.com/exch-bms2/jbms-parser/blob/8108cd54a19275810e1f5d2c9586f008eb6db95e/src/bms/model/BMSONDecoder.java#L177-L185
 [b-rule]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayerRule.java#L57-L88
 [b-judge-ln]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L233-L275
 [b-judge-mine]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/JudgeManager.java#L244-L249

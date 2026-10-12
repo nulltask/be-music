@@ -109,7 +109,7 @@ describe('timeline', () => {
     ]);
   });
 
-  test('createMeasureTimeline and createMeasureBoundariesBeats include trailing boundary and skip invalid points', () => {
+  test('createMeasureTimeline includes the trailing boundary, bar lines stop at the last measure, invalid points skipped', () => {
     const json = createEmptyJson('bms');
     json.events = [{ measure: 2, channel: '11', position: [0, 1], value: '01' }];
     json.measures = [
@@ -132,7 +132,20 @@ describe('timeline', () => {
       { measure: 4, seconds: 4 },
       { measure: 5, seconds: 4 },
     ]);
+    // Bar lines start measures 0..4 (the last one with data); measures 3 and 4 collapse onto beat 8. No line after the
+    // last measure: beatoraja (jbms-parser `BMSDecoder`) builds sections 0..maxsec, each starting with its bar line.
     expect(createMeasureBoundariesBeats(json, beatResolver)).toEqual([0, 4, 8]);
+    expect(createMeasureBoundariesBeats(json, { measureToBeat: (measure: number) => measure * 4 } as never)).toEqual([
+      0, 4, 8, 12, 16,
+    ]);
+  });
+
+  test('createMeasureBoundariesBeats draws exactly the lines a bmson chart authors', () => {
+    const json = createEmptyJson('bmson');
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+    json.preservation.bmson.lines = [0, 960, 1920, 2880];
+    const beatResolver = { measureToBeat: (measure: number) => measure * 4 } as never;
+    expect(createMeasureBoundariesBeats(json, beatResolver)).toEqual([0, 4, 8, 12]);
   });
 
   test('createBpmTimeline deduplicates identical points and falls back to metadata/default BPM', () => {
