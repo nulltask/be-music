@@ -198,7 +198,7 @@
 - `backBmp`: BMS `#BACKBMP`。bmson では `info.back_image` が存在する場合にここへ mirror します
 - `banner`: BMS `#BANNER`。bmson では `info.banner_image` が存在する場合にここへ mirror します
 - `playLevel`: BMS `#PLAYLEVEL` または bmson `info.level`。number または string を保持できます
-- `rank`: BMS `#RANK` または bmson `info.judge_rank`
+- `rank`: BMS `#RANK`（`0`〜`4` のランク番号）または bmson `info.judge_rank`（`100` = NORMAL の百分率）。単位が異なるため、stringifier は bmson 出力時に換算します
 - `total`: BMS `#TOTAL` または bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` または bmson `info.init_bpm`。BMS は `130` を既定値にしますが、bmson は正の `init_bpm` を必須にします
