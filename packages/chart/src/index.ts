@@ -5,6 +5,7 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
+import { PLAY_MODE_LAYOUTS } from './play-modes.ts';
 
 export {
   BMSON_MODE_HINT_LAYOUTS,
@@ -62,6 +63,22 @@ const KEYBOARD_MODE_HINT_VARIANTS: ReadonlyMap<string, ChartPlayVariant> = new M
   ['keyboard-24k', '24'],
   ['keyboard-24k-double', '48'],
 ]);
+
+const laneChannelsOf = (layout: keyof typeof PLAY_MODE_LAYOUTS): string[] =>
+  PLAY_MODE_LAYOUTS[layout].lanes.map((lane) => lane.channel);
+/** The BME-type 9 KEY layout: every one of `11..19`. */
+const BME_NINE_KEY_CHANNELS: readonly string[] = laneChannelsOf('9-bme');
+/** PMS-STD keys 6..9, authored on the 2P bank (`22..25`). */
+const PMS_STD_2P_CHANNELS: readonly string[] = laneChannelsOf('9-pms').filter((channel) => channel.startsWith('2'));
+/** The IIDX 2P side PMS-STD never uses: `21`, the 6 / 7 keys `28` / `29`, the scratch `26` and the FREE ZONE `27`. */
+const IIDX_ONLY_2P_CHANNELS: readonly string[] = [
+  ...laneChannelsOf('14'),
+  ...PLAY_MODE_LAYOUTS['14'].freeZones.map((zone) => zone.channel),
+].filter((channel) => channel.startsWith('2') && !PMS_STD_2P_CHANNELS.includes(channel));
+/** The 6 / 7 key columns (`18` / `19` / `28` / `29`): the lanes 14 KEY has and 10 KEY lacks. */
+const IIDX_SIX_SEVEN_KEY_CHANNELS: readonly string[] = laneChannelsOf('14').filter(
+  (channel) => !laneChannelsOf('10').includes(channel),
+);
 
 /**
  * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
@@ -321,16 +338,14 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   }
   // `#PLAYER 3` is "DP or 9-key", so the POPN-9 reading needs the IIDX 2P side (`21` / `26..29`) to be absent: a
   // double-play chart with a FREE ZONE on `17` stays IIDX DP.
-  const usesOther2P = ['21', '26', '27', '28', '29'].some((c) => channels.has(c));
+  const usesOther2P = IIDX_ONLY_2P_CHANNELS.some((c) => channels.has(c));
   if (chart.bms?.player === 3 && channels.has('17') && !usesOther2P) {
     return '9';
   }
 
   // Rule 3 — BME POPN-9: 1P chart that authors every one of `11..19`. The IIDX 7K format never populates all
   // nine, so a full 1P keyboard is a strong POPN-9 signal regardless of `#PLAYER` or filename extension.
-  const p1NineKeyChannels = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
-  const p1Count = p1NineKeyChannels.reduce((n, c) => (channels.has(c) ? n + 1 : n), 0);
-  if (p1Count === 9 && !usesPlayer2) {
+  if (BME_NINE_KEY_CHANNELS.every((c) => channels.has(c)) && !usesPlayer2) {
     return '9';
   }
 
@@ -341,14 +356,14 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   // WITHOUT `21` / `26..29` is a reliable PMS-STD signal regardless of 1P-side scratch (`16`) or 6/7K
   // column (`18` / `19`) use. (A chart that combines `22..25` with 1P scratch is a non-standard hybrid
   // — we resolve it as POPN-9 since `22..25` is the POPN-specific signature.)
-  const usesPmsStd2P = ['22', '23', '24', '25'].some((c) => channels.has(c));
+  const usesPmsStd2P = PMS_STD_2P_CHANNELS.some((c) => channels.has(c));
   if (usesPmsStd2P && !usesOther2P) {
     return '9';
   }
 
   // Rule 5 — IIDX families. A 6 / 7 key column decides 7 / 14 KEY, anything else is 5 / 10 KEY. The `.bme` extension
   // does not complete the mode: beatoraja reads the mode from the lanes in use, and so do we.
-  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel));
+  const uses6or7 = IIDX_SIX_SEVEN_KEY_CHANNELS.some((channel) => channels.has(channel));
   if (usesPlayer2) {
     return uses6or7 ? '14' : '10';
   }
