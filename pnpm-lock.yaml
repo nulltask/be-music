@@ -132,6 +132,9 @@ importers:
       '@be-music/json':
         specifier: workspace:*
         version: link:../json
+      '@be-music/utils':
+        specifier: workspace:*
+        version: link:../utils
 
   packages/editor:
     dependencies:

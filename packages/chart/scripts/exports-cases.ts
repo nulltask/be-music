@@ -254,4 +254,47 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.hasControlFlow(fixtures.controlFlowJson);
     },
   });
+  define('chart.createTimingResolver', {
+    run: (fixtures) => {
+      chartApi.createTimingResolver(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createTimingBuildContext', {
+    run: (fixtures) => {
+      chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createTimingResolverWithContext', {
+    run: (fixtures) => {
+      const context = chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
+      chartApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
+    },
+  });
+  define('chart.collectSampleTriggers', {
+    run: (fixtures) => {
+      const resolver = chartApi.createTimingResolver(fixtures.sampleBmsJson);
+      chartApi.collectSampleTriggers(fixtures.sampleBmsJson, resolver, { inferBmsLnTypeWhenMissing: true });
+    },
+  });
+  define('chart.collectSampleTriggersWithContext', {
+    run: (fixtures) => {
+      const context = chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
+      const resolver = chartApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
+      chartApi.collectSampleTriggersWithContext(fixtures.sampleBmsJson, resolver, context, {
+        inferBmsLnTypeWhenMissing: true,
+      });
+    },
+  });
+  define('chart.createBmsonSamplePlaybackMap', {
+    run: (fixtures) => {
+      const context = chartApi.createTimingBuildContext(fixtures.sampleBmsonJson);
+      const resolver = chartApi.createTimingResolverWithContext(fixtures.sampleBmsonJson, context);
+      chartApi.createBmsonSamplePlaybackMap(
+        fixtures.sampleBmsonJson,
+        resolver,
+        fixtures.sampleBmsonJson.events,
+        context.beatResolver,
+      );
+    },
+  });
 }

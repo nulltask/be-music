@@ -37,6 +37,24 @@ export {
   type RandomDraws,
 } from './control-flow.ts';
 
+export {
+  createTimingBuildContext,
+  createTimingResolver,
+  createTimingResolverWithContext,
+  type StopPoint,
+  type TempoPoint,
+  type TimingBuildContext,
+  type TimingResolver,
+} from './timing.ts';
+
+export {
+  collectSampleTriggers,
+  collectSampleTriggersWithContext,
+  createBmsonSamplePlaybackMap,
+  type CollectSampleTriggersOptions,
+  type TimedSampleTrigger,
+} from './sample-triggers.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;
