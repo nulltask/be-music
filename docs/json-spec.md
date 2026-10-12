@@ -293,8 +293,8 @@ interface BeMusicEvent {
 }
 ```
 
-`bmson.damage` is used for beatoraja-style bmson `key_channels` mine notes.
-It stores the authored gauge damage as a non-negative number and is absent on ordinary `sound_channels` notes.
+`bmson.damage` is used for mines from the beatoraja bmson extension `mine_channels`.
+It stores the authored gauge damage as a non-negative number and is absent on every other event, including the invisible objects read from `key_channels` (beatoraja's hidden notes).
 `bmson.t` is the beatoraja per-note long-note type (`notes[].t`: `1` = LN, `2` = CN, `3` = HCN). It is kept only on long notes (`l > 0`) and overrides `bmson.info.lnType`.
 
 ## Meaning of `position`

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
   "info": {
-    "title": "BMSON Key Channels Mines",
-    "subtitle": "beatoraja key_channels / ln_type / notes[].t extensions",
+    "title": "BMSON Mine / Key Channels",
+    "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
     "artist": "be-music",
     "genre": "TEST",
     "level": 4,
@@ -38,6 +38,15 @@
     }
   ],
   "key_channels": [
+    {
+      "name": "hidden.wav",
+      "notes": [
+        { "x": 2, "y": 1560 },
+        { "x": 8, "y": 1620 }
+      ]
+    }
+  ],
+  "mine_channels": [
     {
       "name": "wrong.wav",
       "notes": [

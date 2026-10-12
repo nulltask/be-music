@@ -20,11 +20,11 @@ export interface LandmineGaugeEffect {
  * NOT what LR2 does. `ZZ` (= 1295) therefore wipes any gauge: survival gauges die instantly, GROOVE / EASY hit
  * their 2 % floor.
  *
- * bmson `key_channels[].notes[].damage` is an explicit per-mine gauge percentage; when present it wins over the BMS
+ * bmson `mine_channels[].notes[].damage` (beatoraja extension) is an explicit per-mine gauge percentage; when present it wins over the BMS
  * value rule because the event value there is the WAV slot, not a damage encoding. `damage: 0` is a valid
  * authored value (a no-damage decoration mine), so the guard checks finiteness rather than truthiness.
  *
- * For a bmson chart (`sourceFormat: 'bmson'`) the value rule never applies: the parser numbers each `key_channels`
+ * For a bmson chart (`sourceFormat: 'bmson'`) the value rule never applies: the parser numbers each `mine_channels`
  * WAV slot after the sound channels, so reading it as damage would make the damage depend on how many sound channels
  * the chart has. A bmson mine without a usable `damage` deals {@link DEFAULT_LANDMINE_GAUGE_DAMAGE}, the same fallback
  * as an invalid BMS mine value.
