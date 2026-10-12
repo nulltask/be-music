@@ -180,6 +180,8 @@ beatoraja's renderer does not clip notes at the judgement line, so a note a nega
 
 The terminal player stops its walk at the same point when a chart scrolls both ways.
 
+beatoraja play skins place notes and bar lines with the same `#SCROLL` / `#SPEED` distances and, on a chart with either, draw notes by beatoraja's rules ([`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)); on other charts they keep their beat-distance placement.
+
 ## HS-FIX
 
 The play option's HS-FIX modes keep LR2's buttons and follow beatoraja's fixed hi-speed modes (`LaneRenderer.init`). The hi-speed the player sets is the one they want at the chart's reference BPM (`#BASEBPM`, else the start BPM); HS-FIX rescales it so that the scroll at another BPM feels like that.

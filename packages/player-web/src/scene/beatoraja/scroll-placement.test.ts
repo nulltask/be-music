@@ -1,0 +1,49 @@
+import { describe, expect, it } from 'vite-plus/test';
+import { parseBms } from '@be-music/parser';
+import { createBeatorajaScrollMapper, resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
+
+const SCROLL_CHART = parseBms(
+  ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 0.5', '#00111:01', '#001SC:01', '#00211:01'].join('\n'),
+);
+
+describe('createBeatorajaScrollMapper', () => {
+  it('builds a distance mapper from the chart #SCROLL', () => {
+    const mapper = createBeatorajaScrollMapper(SCROLL_CHART);
+    expect(mapper).toBeDefined();
+    // Measure 1 (beats 4..8) scrolls at half speed.
+    expect(mapper!.distanceBetween(0, 4)).toBeCloseTo(4, 9);
+    expect(mapper!.distanceBetween(4, 8)).toBeCloseTo(2, 9);
+  });
+
+  it('is undefined for a chart without #SCROLL or #SPEED, so plain charts keep the beat-difference path', () => {
+    expect(createBeatorajaScrollMapper(parseBms(['#BPM 120', '#00111:01'].join('\n')))).toBeUndefined();
+  });
+});
+
+describe('resolveBeatorajaScrollPlacement', () => {
+  it('without a mapper places objects by beat difference and has no draw window', () => {
+    const placement = resolveBeatorajaScrollPlacement({
+      currentBeat: 2,
+      nowSeconds: 1,
+      mapper: undefined,
+      laneBeats: 4,
+      stageBottomY: 720,
+    });
+    expect(placement.window).toBeUndefined();
+    expect(placement.distance(5)).toBe(3);
+  });
+
+  it('with a mapper follows SCROLL and walks the lane by beatoraja LaneRenderer rules', () => {
+    const placement = resolveBeatorajaScrollPlacement({
+      currentBeat: 4,
+      nowSeconds: 2,
+      mapper: createBeatorajaScrollMapper(SCROLL_CHART),
+      laneBeats: 2,
+      stageBottomY: 720,
+    });
+    expect(placement.distance(6)).toBeCloseTo(1, 9);
+    // Two beats of lane distance reach four chart beats ahead at half speed.
+    expect(placement.window).toMatchObject({ rules: 'beatoraja', currentBeat: 4, nowSeconds: 2, stageBottomY: 720 });
+    expect(placement.window!.lastBeat).toBeGreaterThanOrEqual(8);
+  });
+});

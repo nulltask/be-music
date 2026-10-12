@@ -136,7 +136,13 @@ export class BeatorajaMarkerLayer {
     laneTopY: number;
     pixelsPerBeat: number;
     markers: BeatorajaMarkerBeats;
+    /**
+     * Lane distance from the playhead to a beat, in beats at scroll rate 1 — the note layer's `#SCROLL` / `#SPEED`
+     * integrator, so bar lines move with the notes. Defaults to the beat difference.
+     */
+    distance?: (beat: number) => number;
   }): void {
+    const distance = args.distance ?? ((beat: number): number => beat - args.currentBeat);
     let used = 0;
     const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number> }> = [
       { kind: this.kindData.group, beats: args.markers.group },
@@ -156,7 +162,7 @@ export class BeatorajaMarkerLayer {
       for (const proto of kind) {
         if (proto.texture === undefined) continue;
         for (const beat of beats) {
-          const scrollY = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
+          const scrollY = args.judgementY - distance(beat) * args.pixelsPerBeat;
           // Apply the authored bottom offset relative to the lane's authored bottom — mirrors
           // upstream's `line.draw(..., 0, y - hl)` (`LaneRenderer.java:373`). Without this the
           // barline lands at the lane's BOTTOM EDGE instead of the authored bar position
