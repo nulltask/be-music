@@ -128,6 +128,27 @@ const RANDOM = [
   '#ENDRANDOM',
 ].join('\n');
 
+// bmson keyboard-24k: keys on x = 1..24 (`11..19`, `1A..1O`), the wheel up / down on x = 25 / 26 (`1P` / `1Q`).
+const KEYBOARD_24K = JSON.stringify({
+  version: '1.0.0',
+  info: { title: 'golden 24K', init_bpm: 145, mode_hint: 'keyboard-24k', resolution: 240 },
+  lines: [{ y: 0 }, { y: 960 }, { y: 1920 }],
+  bpm_events: [{ y: 1440, bpm: 290 }],
+  sound_channels: [
+    {
+      name: 'key.wav',
+      notes: [
+        { x: 1, y: 960, l: 0, c: false },
+        { x: 9, y: 1080, l: 0, c: false },
+        { x: 10, y: 1200, l: 480, c: false },
+        { x: 24, y: 1320, l: 0, c: false },
+        { x: 25, y: 1440, l: 0, c: false },
+        { x: 26, y: 1680, l: 120, c: false },
+      ],
+    },
+  ],
+});
+
 describe('golden fingerprints (bmfp1)', () => {
   test.each([
     [
@@ -162,6 +183,11 @@ describe('golden fingerprints (bmfp1)', () => {
           chartPath: 'golden.bms',
         }),
       'bmfp1:5904cce29cbd00ee7f411b093dae2960c1ce2b67cba2eb25c4f9dbdb2b227654',
+    ],
+    [
+      'bmson keyboard-24k with wheel notes',
+      () => computePlayFingerprint(parseBmson(KEYBOARD_24K), { chartPath: 'golden.bmson' }),
+      'bmfp1:21034fde8cb8feabb43c997b13cee40cc3ad650d4bd0542847b50373f64010cd',
     ],
   ])('%s', (_label, compute, expected) => {
     expect(compute()).toBe(expected);

@@ -1,3 +1,4 @@
+import { KEYBOARD_MODE_HINT_VARIANTS, resolveKeyboardModeHint } from './keyboard-mode-hint.ts';
 import {
   normalizeChannel,
   normalizeObjectKey,
@@ -62,15 +63,6 @@ export interface ChartPlayVariantInput {
     };
   };
 }
-
-/**
- * bmson `mode_hint`s that name a play variant outright. The keyboard layouts are 26 lanes per side, but a chart can
- * live entirely on the first nine keys (x ≤ 9 → `11..19`), which the lane rules would otherwise read as 7 / 9 KEY.
- */
-const KEYBOARD_MODE_HINT_VARIANTS: ReadonlyMap<string, ChartPlayVariant> = new Map([
-  ['keyboard-24k', '24'],
-  ['keyboard-24k-double', '48'],
-]);
 
 /**
  * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
@@ -297,8 +289,8 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *      7-key format); every other extension stays `5` / `10`.
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
-  const modeHint = chart.bmson?.info?.modeHint;
-  const hintedVariant = typeof modeHint === 'string' ? KEYBOARD_MODE_HINT_VARIANTS.get(modeHint.trim()) : undefined;
+  const keyboardHint = resolveKeyboardModeHint(chart.bmson?.info?.modeHint);
+  const hintedVariant = keyboardHint !== undefined ? KEYBOARD_MODE_HINT_VARIANTS.get(keyboardHint) : undefined;
   if (hintedVariant !== undefined) {
     return hintedVariant;
   }

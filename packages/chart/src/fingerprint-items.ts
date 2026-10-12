@@ -17,6 +17,7 @@ import {
   type BeMusicJson,
 } from '@be-music/json';
 import { compareEvents, parseBpmFrom03Token, resolveChartPlayVariant, type ChartPlayVariant } from './index.ts';
+import { resolveKeyboardModeHint, type KeyboardModeHint } from './keyboard-mode-hint.ts';
 import {
   addRational,
   compareRational,
@@ -83,6 +84,8 @@ export interface HeaderItems {
   total: TotalItem;
   /** `#PLAYER 3`, one of the lane-mode inputs. */
   player3: boolean;
+  /** The bmson keyboard `mode_hint` (`keyboard-24k` / `keyboard-24k-double`), one of the lane-mode inputs. */
+  modeHint: KeyboardModeHint | null;
   /** `false` only for a bmson chart with an explicit `lines: []` (no bar lines drawn). */
   barLines: boolean;
 }
@@ -827,6 +830,7 @@ function computeHeader(json: BeMusicJson): HeaderItems {
     judge: resolveJudge(json),
     total: resolveTotal(json),
     player3: json.bms.player === 3,
+    modeHint: resolveKeyboardModeHint(json.bmson?.info?.modeHint) ?? null,
     barLines: !(json.sourceFormat === 'bmson' && json.bmson.barlinesSuppressed === true),
   };
 }
@@ -1090,11 +1094,15 @@ export function resolveLaneModeExtension(chartPath: string | undefined): LaneMod
   return extension === '.pms' || extension === '.bme' ? extension : null;
 }
 
-/** Lane mode from the lane-mode inputs: the lanes that hold notes, the extension, and `#PLAYER 3` (spec 3.5). */
+/**
+ * Lane mode from the lane-mode inputs: the lanes that hold notes, the extension, `#PLAYER 3`, and the bmson keyboard
+ * `mode_hint` (spec 3.5).
+ */
 export function resolveFingerprintLaneMode(
   notes: ReadonlyArray<NoteItem>,
   extension: LaneModeExtension,
   player3: boolean,
+  modeHint: KeyboardModeHint | null,
 ): ChartPlayVariant {
   const lanes = new Set<string>();
   for (const note of notes) {
@@ -1104,6 +1112,7 @@ export function resolveFingerprintLaneMode(
     chartPath: extension ?? undefined,
     events: [...lanes].map((channel) => ({ channel })),
     bms: { player: player3 ? 3 : 1 },
+    ...(modeHint !== null ? { bmson: { info: { modeHint } } } : {}),
   });
 }
 
@@ -1192,7 +1201,7 @@ export interface CanonicalLists {
  * Canonical play lists of a fully resolved outcome: lane mode, FREE ZONE, the state-dependent drops, and sorting.
  */
 export function canonicalizeItems(items: FlatItems, extension: LaneModeExtension): CanonicalLists {
-  const laneMode = resolveFingerprintLaneMode(items.notes, extension, items.header.player3);
+  const laneMode = resolveFingerprintLaneMode(items.notes, extension, items.header.player3, items.header.modeHint);
   const freeZone = usesFreeZone(laneMode) ? 'apply' : 'drop';
   const notes = [...items.notes].sort(compareNoteItems);
   const mines = [...items.mines].sort(compareMineItems);

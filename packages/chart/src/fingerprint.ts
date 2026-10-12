@@ -68,6 +68,7 @@ import {
   type NoteItem,
   type TimelineItem,
 } from './fingerprint-items.ts';
+import type { KeyboardModeHint } from './keyboard-mode-hint.ts';
 import { sha256Hex } from './sha256.ts';
 
 export type {
@@ -124,6 +125,8 @@ export interface FingerprintLaneModeInputs {
   /** `".pms"`, `".bme"`, or `null` for any other or unknown extension. */
   extension: LaneModeExtension;
   player3: boolean;
+  /** The bmson keyboard `mode_hint`; omitted when the chart has none (any other hint is not a lane-mode input). */
+  modeHint?: KeyboardModeHint;
 }
 
 export interface FingerprintDeltaLists {
@@ -1542,7 +1545,7 @@ function assembleChartDocument(
   const baseBpmIsBpm = header.baseBpm !== null && isRationalEqual(header.baseBpm, header.bpm);
   return {
     v: FINGERPRINT_VERSION,
-    lanes: { extension, player3: header.player3 },
+    lanes: { extension, player3: header.player3, ...(header.modeHint !== null ? { modeHint: header.modeHint } : {}) },
     bpm: formatRational(header.bpm),
     baseBpm:
       header.baseBpm === null || (baseBpmIsBpm && !anyOpaque && !touched.has('baseBpm'))
@@ -1623,6 +1626,7 @@ export function expandChartFingerprintDocument(
       judge: parseJudge(document.judge),
       total: parseTotal(document.total),
       player3: document.lanes.player3,
+      modeHint: document.lanes.modeHint ?? null,
       barLines: true,
     },
   };

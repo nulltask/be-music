@@ -10,6 +10,7 @@ import {
   createPlayFingerprintDocument,
   type BeMusicChartFingerprintDocument,
   type BeMusicPlayFingerprintDocument,
+  resolveChartPlayVariant,
 } from './index.ts';
 
 const NO_PATH = { chartPath: undefined };
@@ -286,6 +287,71 @@ describe('fingerprint sensitivity', () => {
     // Lane 18 only through a 5x long note still makes the chart 7 KEY.
     const text = ['#BPM 150', '#LNTYPE 1', '#00111:01', '#00158:0101'].join('\n');
     expect(playDocument(text).laneMode).toBe('7');
+  });
+});
+
+describe('keyboard lane mode (bmson keyboard-24k)', () => {
+  function keyboardBmson(modeHint: string, notes: Array<{ x: number; y: number; l?: number }>): string {
+    return JSON.stringify({
+      version: '1.0.0',
+      info: { title: 'keyboard', init_bpm: 150, mode_hint: modeHint, resolution: 240 },
+      sound_channels: [{ name: 'a.wav', notes: notes.map((note) => ({ l: 0, c: false, ...note })) }],
+    });
+  }
+  const FIRST_NINE_KEYS = [
+    { x: 1, y: 960 },
+    { x: 5, y: 1200 },
+    { x: 9, y: 1440 },
+  ];
+
+  test('takes the keyboard mode_hint as a lane-mode input, as resolveChartPlayVariant does', () => {
+    // Only x <= 9 (lanes 11..19): the lane rules alone would read this as 9 / 7 KEY, the hint makes it 24 KEY.
+    const keyboard = parseBmson(keyboardBmson('keyboard-24k', FIRST_NINE_KEYS));
+    const document = createPlayFingerprintDocument(keyboard, NO_PATH);
+    expect(document.laneMode).toBe('24');
+    expect(document.laneMode).toBe(resolveChartPlayVariant(keyboard));
+    expect(document.notes.map((note) => note.lane)).toEqual(['11', '15', '19']);
+
+    const beat = parseBmson(keyboardBmson('beat-7k', FIRST_NINE_KEYS));
+    expect(createPlayFingerprintDocument(beat, NO_PATH).laneMode).toBe(resolveChartPlayVariant(beat));
+    expect(createPlayFingerprintDocument(beat, NO_PATH).laneMode).not.toBe('24');
+    expect(computePlayFingerprint(keyboard, NO_PATH)).not.toBe(computePlayFingerprint(beat, NO_PATH));
+
+    const double = parseBmson(keyboardBmson('keyboard-24k-double', FIRST_NINE_KEYS));
+    expect(createPlayFingerprintDocument(double, NO_PATH).laneMode).toBe('48');
+    expect(createPlayFingerprintDocument(double, NO_PATH).laneMode).toBe(resolveChartPlayVariant(double));
+  });
+
+  test('ignores every other mode_hint, as resolveChartPlayVariant does', () => {
+    const plain = computePlayFingerprint(parseBmson(keyboardBmson('beat-7k', FIRST_NINE_KEYS)), NO_PATH);
+    for (const hint of ['beat-5k', 'popn-9k', 'keyboard-48k', 'unknown']) {
+      const json = parseBmson(keyboardBmson(hint, FIRST_NINE_KEYS));
+      expect(createPlayFingerprintDocument(json, NO_PATH).laneMode).toBe(resolveChartPlayVariant(json));
+    }
+    // `popn-9k` maps x onto other lanes; the plain beat hints leave the document unchanged.
+    expect(computePlayFingerprint(parseBmson(keyboardBmson('beat-5k', FIRST_NINE_KEYS)), NO_PATH)).toBe(plain);
+  });
+
+  test('records wheel notes as ordinary lanes', () => {
+    // x = 25 / 26 are the wheel up / down (`1P` / `1Q`); x = 10 is the first extended key (`1A`).
+    const keyboard = parseBmson(
+      keyboardBmson('keyboard-24k', [
+        { x: 1, y: 960 },
+        { x: 10, y: 960 },
+        { x: 25, y: 1200 },
+        { x: 26, y: 1440, l: 240 },
+      ]),
+    );
+    const document = createPlayFingerprintDocument(keyboard, NO_PATH);
+    expect(document.laneMode).toBe('24');
+    expect(document.notes.map((note) => note.lane)).toEqual(['11', '1A', '1P', '1Q']);
+    // A wheel note alone makes a BMS chart 24 KEY, like any other extended lane.
+    const bms = ['#BPM 150', '#WAV01 a.wav', '#00111:01', '#0011P:01', '#0021Q:01'].join('\n');
+    expect(playDocument(bms).laneMode).toBe('24');
+    expect(playDocument(bms).laneMode).toBe(resolveChartPlayVariant(parseBms(bms)));
+    expect(playDocument(bms).notes.map((note) => note.lane)).toEqual(['11', '1P', '1Q']);
+    // Moving a wheel note changes the fingerprint.
+    expect(playFingerprint(bms)).not.toBe(playFingerprint(bms.replace('#0021Q:01', '#0012P:01')));
   });
 });
 
