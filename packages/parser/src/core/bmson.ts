@@ -3,7 +3,8 @@ import type {
   BeMusicPosition,
   BmsonBpmEventEntry,
   BmsonKeyChannelEntry,
-  BmsonKeyNoteEntry,
+  BmsonMineChannelEntry,
+  BmsonMineNoteEntry,
   BmsonSoundChannelEntry,
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
@@ -57,21 +58,19 @@ export interface BmsonSoundChannel {
 }
 
 /**
- * beatoraja's bmson extension for mine notes. Each note carries a gauge `damage` value (0..100) alongside the same lane
- * / timing fields a regular `sound_channels` note has. The channel `name` is the WAV played on contact (the "explosion
- * sample").
+ * beatoraja's bmson extensions `key_channels` (hidden notes) and `mine_channels` (mines) share one note shape: a lane
+ * `x`, a pulse `y` and, read on mines only, a gauge `damage` (0..100). The channel `name` is the sample the note plays
+ * — the hidden note's keysound, or the mine's explosion.
  */
-export interface BmsonKeyNote {
+export interface BmsonExtensionNote {
   x?: number;
   y: number;
-  l?: number;
-  c?: boolean;
   damage?: number;
 }
 
-export interface BmsonKeyChannel {
+export interface BmsonExtensionChannel {
   name: string;
-  notes?: BmsonKeyNote[];
+  notes?: BmsonExtensionNote[];
 }
 
 export interface BmsonDocument {
@@ -83,10 +82,15 @@ export interface BmsonDocument {
   stop_events?: BmsonStopEvent[];
   sound_channels?: BmsonSoundChannel[];
   /**
-   * beatoraja extension — mine note channels. Each channel maps onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P)
-   * using the same `mode_hint` lane convention `sound_channels` uses for playable lanes.
+   * beatoraja extension — hidden (invisible) note channels. Each note maps onto a BMS invisible channel (`3x` for 1P,
+   * `4x` for 2P) using the same `mode_hint` lane convention `sound_channels` uses for playable lanes.
    */
-  key_channels?: BmsonKeyChannel[];
+  key_channels?: BmsonExtensionChannel[];
+  /**
+   * beatoraja extension — mine channels. Each note maps onto a BMS landmine channel (`Dx` for 1P, `Ex` for 2P) the
+   * same way, keeping its `damage`.
+   */
+  mine_channels?: BmsonExtensionChannel[];
   bga?: {
     bga_header?: Array<{ id: number; name: string }>;
     bga_events?: Array<{ y: number; id: number }>;
@@ -273,7 +277,7 @@ export function buildBmsonLaneMap(soundChannels: BmsonSoundChannel[], modeHint?:
 
 /**
  * Converts a BMS playable lane channel into its matching BMS landmine channel — `Dx` for 1P (`1X` keys) and `Ex` for 2P
- * (`2X` keys). Used to route bmson `key_channels` notes through the same lane resolver as playable notes while keeping
+ * (`2X` keys). Used to route bmson `mine_channels` notes through the same lane resolver as playable notes while keeping
  * them tagged as mines downstream.
  */
 export function bmsPlayableChannelToLandmineChannel(channel: string): string | undefined {
@@ -282,6 +286,19 @@ export function bmsPlayableChannelToLandmineChannel(channel: string): string | u
   const lane = channel[1];
   if (side === '1') return `D${lane}`;
   if (side === '2') return `E${lane}`;
+  return undefined;
+}
+
+/**
+ * Converts a BMS playable lane channel into its matching BMS invisible channel — `3x` for 1P (`1X` keys) and `4x` for
+ * 2P (`2X` keys). Used to route bmson `key_channels` (hidden notes) through the same lane resolver as playable notes.
+ */
+export function bmsPlayableChannelToInvisibleChannel(channel: string): string | undefined {
+  if (channel.length !== 2) return undefined;
+  const side = channel[0];
+  const lane = channel[1];
+  if (side === '1') return `3${lane}`;
+  if (side === '2') return `4${lane}`;
   return undefined;
 }
 
@@ -418,11 +435,19 @@ export function normalizeBmsonSoundChannels(input: unknown): BmsonSoundChannelEn
 }
 
 export function normalizeBmsonKeyChannels(input: unknown): BmsonKeyChannelEntry[] {
+  return normalizeBmsonExtensionChannels(input, false);
+}
+
+export function normalizeBmsonMineChannels(input: unknown): BmsonMineChannelEntry[] {
+  return normalizeBmsonExtensionChannels(input, true);
+}
+
+function normalizeBmsonExtensionChannels(input: unknown, keepDamage: boolean): BmsonMineChannelEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  const channels: BmsonKeyChannelEntry[] = [];
+  const channels: BmsonMineChannelEntry[] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -433,7 +458,7 @@ export function normalizeBmsonKeyChannels(input: unknown): BmsonKeyChannelEntry[
     }
     channels.push({
       name: raw.name,
-      notes: normalizeBmsonKeyNotes(raw.notes),
+      notes: normalizeBmsonExtensionNotes(raw.notes, keepDamage),
     });
   }
   return channels;
@@ -737,12 +762,12 @@ function normalizeBmsonSoundNotes(input: unknown): BmsonSoundNoteEntry[] {
   return notes;
 }
 
-function normalizeBmsonKeyNotes(input: unknown): BmsonKeyNoteEntry[] {
+function normalizeBmsonExtensionNotes(input: unknown, keepDamage: boolean): BmsonMineNoteEntry[] {
   if (!Array.isArray(input)) {
     return [];
   }
 
-  const notes: BmsonKeyNoteEntry[] = [];
+  const notes: BmsonMineNoteEntry[] = [];
   for (const item of input) {
     if (!item || typeof item !== 'object') {
       continue;
@@ -752,19 +777,13 @@ function normalizeBmsonKeyNotes(input: unknown): BmsonKeyNoteEntry[] {
       continue;
     }
 
-    const note: BmsonKeyNoteEntry = {
+    const note: BmsonMineNoteEntry = {
       y: Math.max(0, Math.round(raw.y)),
     };
     if (typeof raw.x === 'number' && Number.isFinite(raw.x)) {
       note.x = Math.floor(raw.x);
     }
-    if (typeof raw.l === 'number' && Number.isFinite(raw.l) && raw.l >= 0) {
-      note.l = Math.floor(raw.l);
-    }
-    if (typeof raw.c === 'boolean') {
-      note.c = raw.c;
-    }
-    if (typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
+    if (keepDamage && typeof raw.damage === 'number' && Number.isFinite(raw.damage) && raw.damage >= 0) {
       note.damage = raw.damage;
     }
     notes.push(note);

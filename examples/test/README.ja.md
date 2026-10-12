@@ -83,7 +83,7 @@ be-music のテストスイートが共有する譜面・音声フィクスチ�
 | ----------------------------------- | --------------------------------------------------------------------------------------------- |
 | `bmson-strict-features.bmson`       | `info` ブロック一式、`bga` のヘッダとイベント、`lines`、`notes[].l` / `.c`。                    |
 | `bmson-lines-resolution-test.bmson` | 不均等な `lines` と、解像度に依存する `stop_events.duration` の換算。                           |
-| `bmson-key-channels-mines.bmson`    | beatoraja 拡張。`mode_hint` のレーンマップ経由で `Dx` / `Ex` に載る `key_channels` 地雷、`info.ln_type`、`notes[].t`。 |
+| `bmson-mine-key-channels.bmson`     | beatoraja 拡張。`mode_hint` のレーンマップ経由で `Dx` / `Ex` に載る `mine_channels` 地雷（`damage` 付き）と `3x` / `4x` に載る `key_channels` 隠しノート、`info.ln_type`、`notes[].t`。 |
 
 ### フォーマット間ラウンドトリップ
 

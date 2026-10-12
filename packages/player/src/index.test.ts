@@ -144,11 +144,11 @@ function createDynamicExRankChart() {
   return json;
 }
 
-function createInvisibleOnlyChart() {
+function createInvisibleOnlyChart(channel = '31') {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
-  json.events = [{ measure: 0, channel: '31', position: [0, 1] as const, value: '01' }];
+  json.events = [{ measure: 0, channel, position: [0, 1] as const, value: '01' }];
   return json;
 }
 
@@ -430,6 +430,24 @@ describe('player', () => {
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(false);
+  });
+
+  test.each(['31', '3A', '4Q'])('player: auto play does not trigger the invisible object on %s', async (channel) => {
+    // bmson `keyboard-24k` hidden notes (`key_channels`) land on the extended invisible lanes `3A`-`3Q` / `4A`-`4Q`,
+    // which must stay as silent in AUTO as the classic `31`-`49`.
+    const output: string[] = [];
+    await autoPlay(createInvisibleOnlyChart(channel), {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      tui: false,
+      audio: true,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    expect(output.filter((line) => line.includes('kind:sample-trigger'))).toEqual([]);
   });
 
   test('player: logs real-time triggered events when running without TUI', async () => {
@@ -1847,7 +1865,7 @@ describe('player', () => {
   });
 
   test('player: bmson per-mine damage overrides the BMS value/2 rule', async () => {
-    // bmson `key_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
+    // bmson `mine_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
     // present it wins over the BMS raw-value interpretation: value '08' alone would deal 8 %, the authored damage
     // of 7 must deal exactly 7 % (gauge 20 → 13).
     const json = createLandmineOnlyChart({ value: '08' });

@@ -93,18 +93,17 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const sortedEvents = sortEvents(json.events);
   const beatResolver = createBeatResolver(json);
 
-  // Lanes get bmson `x` numbers from every playable channel in use, plus the lanes mines sit on (a mine on `D3` sits on
-  // lane `13`), so a mine keeps its lane even where no playable note shares it.
+  // Lanes get bmson `x` numbers from every playable channel in use, plus the lanes mines and invisible objects sit on (a
+  // mine on `D3` or a hidden note on `33` sits on lane `13`), so they keep their lane even where no playable note
+  // shares it.
   const playableChannelSet = new Set<string>();
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     if (channel === '01' || !isSampleTriggerChannel(channel)) {
       continue;
     }
-    const lane = isLandmineChannel(channel) ? landmineChannelToPlayableChannel(channel) : channel;
-    if (lane) {
-      playableChannelSet.add(lane);
-    }
+    const lane = laneExtensionChannelToPlayableChannel(channel) ?? channel;
+    playableChannelSet.add(lane);
   }
   const playableChannels = [...playableChannelSet].sort();
 
@@ -115,8 +114,10 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     string,
     { name: string; notes: Array<{ x: number; y: number; l: number; c: boolean; t?: number }> }
   >();
-  // beatoraja's `key_channels` extension: mines, grouped by sample like `sound_channels`, each keeping its `damage`.
-  const keyChannels = new Map<string, { name: string; notes: Array<{ x: number; y: number; damage?: number }> }>();
+  // beatoraja's lane extensions, grouped by sample like `sound_channels`: `key_channels` hold hidden notes (BMS
+  // invisible objects) and `mine_channels` hold mines, each keeping its `damage`.
+  const keyChannels = new Map<string, { name: string; notes: Array<{ x: number; y: number }> }>();
+  const mineChannels = new Map<string, { name: string; notes: Array<{ x: number; y: number; damage?: number }> }>();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
   // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
@@ -140,8 +141,19 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
           typeof event.bmson?.damage === 'number' && Number.isFinite(event.bmson.damage) && event.bmson.damage >= 0
             ? event.bmson.damage
             : undefined;
-        const slot = keyChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
+        const slot = mineChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
         slot.notes.push({ x, y, ...(damage !== undefined ? { damage } : {}) });
+        mineChannels.set(key, slot);
+      }
+      continue;
+    }
+    if (isSampleChannel && isInvisibleChannel(channel)) {
+      const lane = invisibleChannelToPlayableChannel(channel);
+      const x = lane ? xMap.get(lane) : undefined;
+      if (x !== undefined) {
+        const key = normalizeObjectKey(event.value, idBase);
+        const slot = keyChannels.get(key) ?? { name: json.resources.wav[key] ?? key, notes: [] };
+        slot.notes.push({ x, y });
         keyChannels.set(key, slot);
       }
       continue;
@@ -199,6 +211,9 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   };
   if (keyChannels.size > 0) {
     bmson.key_channels = [...keyChannels.values()];
+  }
+  if (mineChannels.size > 0) {
+    bmson.mine_channels = [...mineChannels.values()];
   }
   const bga = createBmsonBgaForOutput(json);
   if (bga) {
@@ -266,6 +281,13 @@ function resolvePreservedBmsonDocumentForOutput(
     json.preservation.bmson.soundChannels.length === 0 &&
     json.preservation.bmson.bpmEvents.length === 0 &&
     json.preservation.bmson.stopEvents.length === 0
+  ) {
+    return undefined;
+  }
+  // The preserved arrays hold no `key_channels` / `mine_channels`, so a chart with hidden notes or mines always takes
+  // the canonical path; otherwise a trusted (unvalidated) re-output would silently drop them.
+  if (
+    json.events.some((event) => laneExtensionChannelToPlayableChannel(normalizeChannel(event.channel)) !== undefined)
   ) {
     return undefined;
   }
@@ -1619,4 +1641,20 @@ function landmineChannelToPlayableChannel(channel: string): string | undefined {
   if (side === 'D') return `1${channel[1]}`;
   if (side === 'E') return `2${channel[1]}`;
   return undefined;
+}
+
+/** `3x` / `4x` — BMS invisible objects, written as bmson `key_channels` (beatoraja's hidden notes). */
+function isInvisibleChannel(channel: string): boolean {
+  return channel.length === 2 && (channel[0] === '3' || channel[0] === '4');
+}
+
+function invisibleChannelToPlayableChannel(channel: string): string | undefined {
+  if (!isInvisibleChannel(channel)) return undefined;
+  return `${channel[0] === '3' ? '1' : '2'}${channel[1]}`;
+}
+
+/** The playable lane (`1x` / `2x`) a mine or invisible object sits on, or `undefined` for any other channel. */
+function laneExtensionChannelToPlayableChannel(channel: string): string | undefined {
+  if (isLandmineChannel(channel)) return landmineChannelToPlayableChannel(channel);
+  return invisibleChannelToPlayableChannel(channel);
 }

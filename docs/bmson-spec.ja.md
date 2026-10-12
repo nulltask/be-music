@@ -44,7 +44,7 @@
 - [x] `sound_channels[].notes[]` の `c`
 - [x] `lines` を使った `measure` / `position` 解決
 - [x] `x <= 0` または `x` 未指定の note を BGM (`01`) として解釈
-- [x] beatoraja `key_channels` extension を landmine channel として読み、note ごとの `damage` を保持
+- [x] beatoraja 拡張を beatoraja と同じく読む: `mine_channels` は note ごとの `damage` を保持した landmine channel、`key_channels` は隠し（不可視）ノート
 - [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBmp`, `metadata.banner`, `metadata.stageFile` へ mirror
 - [x] 明示的な `lines: []` を barline suppression として扱い、`bmson.barlinesSuppressed` に保持
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
@@ -122,10 +122,11 @@
 
 ## 実装が読み込むフィールド (parser)
 
-- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
+- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
-- `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
+- `key_channels[].notes[]`: `x`, `y`
+- `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
 ## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
@@ -148,7 +149,7 @@
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
   2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）
   3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
-  4. それ以外の hint では、正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番
+  4. それ以外の hint では、`sound_channels`・`key_channels`・`mine_channels` の正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
 - キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない
 
@@ -170,7 +171,10 @@
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
-- `key_channels` entry は `sound_channels` の後に登録し、同じ `mode_hint` lane map で BMS landmine channel へ変換し、`events[].bmson.damage` を保持。event の値は key channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷は既定の `4`（%）を与えます（不正な BMS 地雷値と同じフォールバック）
+- beatoraja 拡張は jbms-parser（beatoraja）と同じく読む。どちらも `sound_channels` と同じ `mode_hint` lane map を通り、`x` に対応するレーンがないノートは捨てる。WAV は `sound_channels` の後に `key_channels`、`mine_channels` の順で登録する
+  - `key_channels` は隠しノート: 各ノートは BMS 不可視オブジェクト（`3x` / `4x`。拡張の `3A`〜`3Q` / `4A`〜`4Q` を含む）になり、チャンネルのサンプルをそのレーンの keysound として鳴らし、判定はしない。読むのは `x` と `y` だけ
+  - `mine_channels` は地雷: 各ノートは BMS 地雷（`Dx` / `Ex`）になり、`damage` を `events[].bmson.damage` に保持。event の値は mine channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷は既定の `4`（%）を与える（不正な BMS 地雷値と同じフォールバック）
+  - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、be-music は残す
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)
@@ -191,6 +195,8 @@
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
 - ロングノートの `events[].bmson.t` を `notes[].t` へ、`bmson.info.lnType` を `info.ln_type` へ反映
+- 地雷（`Dx` / `Ex`）は `events[].bmson.damage` を `damage` として保ったまま `mine_channels` へ、不可視オブジェクト（`3x` / `4x`）は `key_channels` へ、どちらも WAV キーごとにまとめ、載っているレーンの `x` で出力。該当オブジェクトがなければどちらの配列も出力しない
+- 地雷や不可視オブジェクトを含む譜面は、保持配列がそれらを持たないため常に正規化出力を使う
 - `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
 - `bmson.bga` が存在すれば `bga` を出力
 

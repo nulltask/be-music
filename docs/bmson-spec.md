@@ -44,7 +44,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - [x] `c` in `sound_channels[].notes[]`
 - [x] `measure` / `position` resolution using `lines`
 - [x] Interpret `x <= 0` or omitted `x` as background music (`01`)
-- [x] Read the beatoraja `key_channels` extension as landmine channels and keep per-note `damage`
+- [x] Read the beatoraja extensions as beatoraja does: `mine_channels` as landmine channels keeping per-note `damage`, and `key_channels` as hidden (invisible) notes
 - [x] Mirror `info.back_image`, `info.banner_image`, and `info.eyecatch_image` into unified `metadata.backBmp`, `metadata.banner`, and `metadata.stageFile`
 - [x] Treat an explicit `lines: []` as barline suppression and keep it in `bmson.barlinesSuppressed`
 - [x] Treat missing `lines` as the bmson 4/4 default model
@@ -122,10 +122,11 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 
 ## Fields read by implementation (parser)
 
-- Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `key_channels` (beatoraja extension), `bpm_events`, `stop_events`, `bga`
+- Root: `version`, `lines`, `resolution`(compatible), `info`, `sound_channels`, `key_channels` / `mine_channels` (beatoraja extensions), `bpm_events`, `stop_events`, `bga`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
-- `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
+- `key_channels[].notes[]`: `x`, `y`
+- `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
 ## bmson -> BMS/BMSON intermediate representation (`@be-music/json`) conversion
@@ -148,7 +149,7 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
   1. A blank or missing `mode_hint` is treated as `beat-7k` (the bmson 1.0.0 default).
   2. `beat-5k`, `beat-7k`, `beat-10k`, `beat-14k`, `popn-5k`, `popn-9k`, `keyboard-24k`, and `keyboard-24k-double` use a fixed lane table (for example `beat-7k` maps `x` 1-5 to `11`-`15`, 6-7 to `18`-`19`, and 8 to the scratch `16`; the keyboard tables are below).
   3. `generic-Nkeys` maps `x = 1..N` left to right onto consecutive channels from `11`.
-  4. Any other hint numbers the unique positive `x` values in ascending order onto consecutive channels from `11`.
+  4. Any other hint numbers the unique positive `x` values of `sound_channels`, `key_channels` and `mine_channels` in ascending order onto consecutive channels from `11`.
 - A note with `x` omitted or `x <= 0` becomes BGM (`01`).
 - The keyboard hints (Keyboardmania-style 24 keys plus the wheel, as beatoraja reads them) give every `x` a fixed lane, so a chart that leaves some keys empty never shifts onto the wrong ones:
 
@@ -170,7 +171,10 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Original array of `bpm_events` is kept in `preservation.bmson.bpmEvents`
 - Original array of `stop_events` is kept in `preservation.bmson.stopEvents`
 - Original array of `sound_channels` is kept in `preservation.bmson.soundChannels`
-- `key_channels` entries are registered after `sound_channels`, routed through the same `mode_hint` lane map, converted to BMS landmine channels, and keep `events[].bmson.damage`. The event value is the WAV slot registered for the key channel, so the player never reads it as damage: a mine without `damage` deals the default `4` (%), the same fallback as an invalid BMS mine value
+- The beatoraja extensions are read as jbms-parser (beatoraja) reads them. Both go through the same `mode_hint` lane map as `sound_channels`; a note whose `x` has no lane is dropped. Their WAVs are registered after `sound_channels`, `key_channels` first, then `mine_channels`
+  - `key_channels` are hidden notes: each note becomes a BMS invisible object (`3x` / `4x`, including the extended `3A`-`3Q` / `4A`-`4Q`) that plays its channel's sample as the lane's keysound and is never judged. Only `x` and `y` are read
+  - `mine_channels` are mines: each note becomes a BMS landmine (`Dx` / `Ex`) and keeps `damage` in `events[].bmson.damage`. The event value is the WAV slot registered for the mine channel, so the player never reads it as damage: a mine without `damage` deals the default `4` (%), the same fallback as an invalid BMS mine value
+  - beatoraja drops a mine inside a long note or on a position a note already uses; be-music keeps it
 - `bga` is kept in `bmson.bga`
 
 ## BMS/BMSON intermediate representation -> BMSON conversion (stringifier)
@@ -191,6 +195,8 @@ This document defines how `packages/parser` / `packages/stringifier` handles BMS
 - Generate `stop_events` from `09` channel
 - Reflect `events[].bmson.l/c` to `sound_channels.notes[].l/c` (if not specified, `l=0`, `c=false`)
 - Reflect `events[].bmson.t` to `notes[].t` on long notes, and `bmson.info.lnType` to `info.ln_type`
+- Write mines (`Dx` / `Ex`) to `mine_channels`, keeping `events[].bmson.damage` as `damage`, and invisible objects (`3x` / `4x`) to `key_channels`, both grouped by WAV key and placed on the `x` of the lane they sit on. Neither array is written when the chart has no such objects
+- A chart with mines or invisible objects always takes the canonical output, because the preserved arrays do not hold them
 - If `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` are consistent with the current IR, re-output them in favor of their array structure.
 - Output `bga` if `bmson.bga` exists
 

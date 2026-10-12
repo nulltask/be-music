@@ -50,10 +50,10 @@ export interface BmsonEventExtensions {
    */
   t?: number;
   /**
-   * Per-mine gauge damage in 0..100, sourced from a bmson `key_channels[].notes[].damage` entry. Only set on mine
-   * events emitted from `key_channels`; absent on regular `sound_channels`-derived note events. A bmson mine without it
-   * deals the default 4: its object value is the parser-assigned WAV slot, so the BMS-side rule (the object value read
-   * in base 36 is the damage) does not apply to it.
+   * Per-mine gauge damage in 0..100, sourced from a bmson `mine_channels[].notes[].damage` entry (beatoraja
+   * extension). Only set on mine events emitted from `mine_channels`; absent on every other event. A bmson mine without
+   * it deals the default 4: its object value is the parser-assigned WAV slot, so the BMS-side rule (the object value
+   * read in base 36 is the damage) does not apply to it.
    */
   damage?: number;
 }
@@ -137,20 +137,42 @@ export interface BmsonSoundChannelEntry {
 }
 
 /**
- * beatoraja extension — `key_channels[].notes[]` shape. Same timing / lane / continuation fields as a regular
- * sound-channel note, plus a `damage` value (0..100 gauge percent) that carries the per-mine damage authoring intent.
+ * beatoraja extension — `key_channels[].notes[]` shape. `key_channels` hold hidden (invisible) notes: keysounds placed
+ * on a lane that are never judged, which the parser turns into BMS invisible objects (`3x` / `4x`). beatoraja reads
+ * only `x` and `y` from them.
  */
 export interface BmsonKeyNoteEntry {
   x?: number;
   y: number;
+  /** @deprecated Not read: hidden notes have no length. Kept so older IR producers still type-check. */
   l?: number;
+  /** @deprecated Not read: hidden notes do not slice their sample. Kept so older IR producers still type-check. */
   c?: boolean;
+  /**
+   * @deprecated Not read: `key_channels` are hidden notes, not mines. Mine damage lives on
+   * {@link BmsonMineNoteEntry.damage}.
+   */
   damage?: number;
 }
 
 export interface BmsonKeyChannelEntry {
   name: string;
   notes: BmsonKeyNoteEntry[];
+}
+
+/**
+ * beatoraja extension — `mine_channels[].notes[]` shape. Each note is a mine on lane `x` at pulse `y`, with a gauge
+ * `damage` (0..100 percent). The channel `name` is the sample played when the mine explodes.
+ */
+export interface BmsonMineNoteEntry {
+  x?: number;
+  y: number;
+  damage?: number;
+}
+
+export interface BmsonMineChannelEntry {
+  name: string;
+  notes: BmsonMineNoteEntry[];
 }
 
 export interface BmsonExtensions {
