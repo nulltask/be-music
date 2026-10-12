@@ -267,7 +267,12 @@ describe('resolveChartPlayVariant', () => {
   });
 
   test('classifies DP 10K (2P-side keyboard, no 6 / 7)', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '21', '25'] }))).toBe('10');
+  });
+
+  test('a `.bme` chart without a 6 / 7 key column is completed to 7 / 14 KEY, as the engine and CLI do', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('14');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('7');
   });
 
   test('PMS / 9 KEY: `.pms` extension wins regardless of channel layout', () => {

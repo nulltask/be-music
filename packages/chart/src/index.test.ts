@@ -618,6 +618,58 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '15', '16', '21', '22', '25', '26']))).toBe('10');
   });
 
+  test('resolveChartPlayVariant counts long-note channels on the lanes they map to', () => {
+    const chart = (chartPath: string, channels: string[], player?: number) => ({
+      chartPath,
+      events: channels.map((channel) => ({ channel })),
+      bms: { player },
+    });
+
+    // `#LNTYPE 1` long notes on `58` sit on lane `18` exactly like an `#LNOBJ` long note authored on `18`, so both
+    // notations of the same chart resolve to the same lane mode.
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '18']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '58']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '61']))).toBe('10');
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '61', '69']))).toBe('14');
+    expect(resolveChartPlayVariant(chart('main.bms', ['5a']))).toBe('24');
+    // Mines (`D*` / `E*`) and invisible objects (`3*` / `4*`) are not lanes the player presses, so they never
+    // decide the lane mode.
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', 'D8', '39', 'E1', '41']))).toBe('5');
+  });
+
+  test('resolveChartPlayVariant completes 7 / 14 KEY from the `.bme` extension when no 6 / 7 key column is used', () => {
+    const chart = (chartPath: string | undefined, channels: string[], player?: number) => ({
+      chartPath,
+      events: channels.map((channel) => ({ channel })),
+      bms: { player },
+    });
+
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '16']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('Song.dir/MAIN.BME', ['11', '16']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '21', '26']))).toBe('14');
+    // A bare extension (what the engine's `laneModeExtension` carries) works the same as a full path.
+    expect(resolveChartPlayVariant(chart('.bme', ['11']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '16']))).toBe('5');
+    expect(resolveChartPlayVariant(chart(undefined, ['11', '16']))).toBe('5');
+    // A dotted directory name is not the chart's extension.
+    expect(resolveChartPlayVariant(chart('Song.bme/main', ['11']))).toBe('5');
+    // The content rules still come first: PMS-STD content in a `.bme` file stays POPN-9.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '22']))).toBe('9');
+  });
+
+  test('resolveChartPlayVariant keeps `#PLAYER 3` double-play charts with a FREE ZONE on `17` as IIDX DP', () => {
+    const chart = (channels: string[]) => ({
+      chartPath: 'main.bms',
+      events: channels.map((channel) => ({ channel })),
+      bms: { player: 3 },
+    });
+
+    expect(resolveChartPlayVariant(chart(['11', '17', '21', '26']))).toBe('10');
+    expect(resolveChartPlayVariant(chart(['11', '17', '18', '21', '28']))).toBe('14');
+    // Without the IIDX 2P side `#PLAYER 3` + `17` is still POPN-9.
+    expect(resolveChartPlayVariant(chart(['11', '17']))).toBe('9');
+  });
+
   test('resolveChartPlayVariant classifies the 24-key keyboard families from extended lane channels', () => {
     const chart = (chartPath: string, channels: string[], player?: number) => ({
       chartPath,
