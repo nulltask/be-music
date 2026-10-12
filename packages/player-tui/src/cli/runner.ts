@@ -7,13 +7,14 @@ import { createFileLogger, createNoopLogger, type LogEntry, type Logger, type Lo
 import readline from 'node:readline';
 import type { BeMusicPlayLevel } from '@be-music/json';
 import { parseChartFile } from '@be-music/parser';
-import { resolvePlayChart, type ResolvedPlayChart } from './play-chart.ts';
 import { renderJson, writeAudioFile } from '@be-music/audio-renderer';
 import {
   PlayerInterruptedError,
   type PlayerLoadComponentStatus,
   type PlayerLoadProgress,
   type PlayerSummary,
+  resolvePlayChart,
+  type ResolvedPlayChart,
 } from '@be-music/player';
 import {
   loadStageFileAnsiImage,
@@ -890,7 +891,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
         message: 'Rendering preview audio...',
       });
       const outputPath = resolveCliPath(args.renderAudioPath);
-      const audioRendered = await renderJson(playChart.json, {
+      const audioRendered = await renderJson(playChart.chart, {
         baseDir: dirname(chartPath),
         inferBmsLnTypeWhenMissing: args.inferBmsLnTypeWhenMissing,
         signal: chartLoadingAbortCapture?.signal,
@@ -929,7 +930,7 @@ async function playChartOnce(chartPath: string, args: CliArgs): Promise<PlayedCh
     };
     try {
       summary = await runNodeGameplayRuntime({
-        json: playChart.json,
+        json: playChart.chart,
         randomDraws: playChart.randomDraws,
         mode: effectivePlayMode === 'auto' ? 'auto' : 'manual',
         autoScratch: effectivePlayMode === 'auto-scratch',

@@ -1697,6 +1697,31 @@ async function initializePlaybackRuntimeResources(params: {
   }
 }
 
+/** A chart resolved for one play, with the `#RANDOM` / `#SWITCH` draws it was resolved with. */
+export interface ResolvedPlayChart {
+  /** The chart with the drawn branches applied; it carries no control flow. */
+  chart: BeMusicJson;
+  /** The draws `chart` was resolved with: hand them to the engine (`PlayerOptions.randomDraws`) and the play log. */
+  randomDraws: RandomDraws;
+}
+
+export interface ResolvePlayChartOptions {
+  /** Random source for the draws, in `[0, 1)`. Defaults to `Math.random`. */
+  random?: () => number;
+  /** Draws to resolve with instead of drawing, e.g. the ones a play log recorded. */
+  randomDraws?: RandomDraws;
+}
+
+/**
+ * The hosts' single control-flow step: draws `source`'s `#RANDOM` / `#SWITCH` outcomes once (or takes
+ * `options.randomDraws`) and resolves the chart with them. Every consumer of the play — the scene, the engine, the
+ * result screen, the play log — then works from the returned chart and draws, so nothing rolls `#RANDOM` again.
+ */
+export function resolvePlayChart(source: BeMusicJson, options: ResolvePlayChartOptions = {}): ResolvedPlayChart {
+  const randomDraws = options.randomDraws ?? drawRandomOutcomes(source, options.random ?? Math.random);
+  return { chart: resolveBmsControlFlowWithDraws(source, randomDraws), randomDraws };
+}
+
 /**
  * Draws `json`'s `#RANDOM` / `#SWITCH` outcomes with `randomSource` and resolves the chart with them, reporting the
  * `#RANDOM` / `#SETRANDOM` patterns for the summary. Shorthand for `drawRandomOutcomes` + `resolveBmsControlFlowWithDraws`.

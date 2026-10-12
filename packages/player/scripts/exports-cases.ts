@@ -80,6 +80,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);
     },
   });
+  define('player.resolvePlayChart', {
+    run: (fixtures) => {
+      playerApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
+    },
+  });
   define('player.preparePlaybackChartData', {
     run: (fixtures) => {
       playerApi.preparePlaybackChartData(
