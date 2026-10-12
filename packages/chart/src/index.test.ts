@@ -37,6 +37,7 @@ import {
   resolveLnobjLongNotes,
   sortEvents,
   usesMonophonicWavPlayback,
+  volWavToLinearGain,
 } from './index.ts';
 import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
 
@@ -213,6 +214,22 @@ describe('chart', () => {
     // Missing the params or the filename token.
     expect(parseBmsExWav('pvf')).toBeUndefined();
     expect(parseBmsExWav('pvf 100,200,300')).toBeUndefined();
+  });
+
+  test("volWavToLinearGain scales by n / 100 inside beatoraja's 0 < n < 200 range", () => {
+    expect(volWavToLinearGain(100)).toBe(1);
+    expect(volWavToLinearGain(50)).toBe(0.5);
+    expect(volWavToLinearGain(150)).toBe(1.5);
+    expect(volWavToLinearGain(199)).toBeCloseTo(1.99, 10);
+  });
+
+  test('volWavToLinearGain plays a missing or out-of-range #VOLWAV at unity, as beatoraja does', () => {
+    expect(volWavToLinearGain(undefined)).toBe(1);
+    expect(volWavToLinearGain(0)).toBe(1);
+    expect(volWavToLinearGain(200)).toBe(1);
+    expect(volWavToLinearGain(500)).toBe(1);
+    expect(volWavToLinearGain(-20)).toBe(1);
+    expect(volWavToLinearGain(Number.NaN)).toBe(1);
   });
 
   test('exWavVolumeCentibelsToLinearGain treats 0 cB as unity', () => {
@@ -637,24 +654,29 @@ describe('chart', () => {
     expect(resolveChartPlayVariant(chart('main.bms', ['11', 'D8', '39', 'E1', '41']))).toBe('5');
   });
 
-  test('resolveChartPlayVariant completes 7 / 14 KEY from the `.bme` extension when no 6 / 7 key column is used', () => {
+  test('resolveChartPlayVariant takes 5 / 10 KEY vs 7 / 14 KEY from the lanes in use, not the `.bme` extension', () => {
     const chart = (chartPath: string | undefined, channels: string[], player?: number) => ({
       chartPath,
       events: channels.map((channel) => ({ channel })),
       bms: { player },
     });
 
-    expect(resolveChartPlayVariant(chart('main.bme', ['11', '16']))).toBe('7');
-    expect(resolveChartPlayVariant(chart('Song.dir/MAIN.BME', ['11', '16']))).toBe('7');
-    expect(resolveChartPlayVariant(chart('main.bme', ['11', '21', '26']))).toBe('14');
-    // A bare extension (what the engine's `laneModeExtension` carries) works the same as a full path.
-    expect(resolveChartPlayVariant(chart('.bme', ['11']))).toBe('7');
+    // beatoraja decides the mode from the lanes the chart uses; a `.bme` chart without a 6 / 7 key column is 5 / 10
+    // KEY exactly like its `.bms` twin.
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '16']))).toBe('5');
+    expect(resolveChartPlayVariant(chart('Song.dir/MAIN.BME', ['11', '16']))).toBe('5');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '21', '26']))).toBe('10');
+    expect(resolveChartPlayVariant(chart('.bme', ['11']))).toBe('5');
     expect(resolveChartPlayVariant(chart('main.bms', ['11', '16']))).toBe('5');
     expect(resolveChartPlayVariant(chart(undefined, ['11', '16']))).toBe('5');
-    // A dotted directory name is not the chart's extension.
-    expect(resolveChartPlayVariant(chart('Song.bme/main', ['11']))).toBe('5');
-    // The content rules still come first: PMS-STD content in a `.bme` file stays POPN-9.
+    // A 6 / 7 key column still decides 7 / 14 KEY whatever the extension.
+    expect(resolveChartPlayVariant(chart('main.bms', ['11', '19']))).toBe('7');
+    expect(resolveChartPlayVariant(chart('main.bme', ['11', '21', '28']))).toBe('14');
+    // PMS-STD content in a `.bme` file stays POPN-9.
     expect(resolveChartPlayVariant(chart('main.bme', ['11', '22']))).toBe('9');
+    // A dotted directory name is not the chart's extension.
+    expect(resolveChartPlayVariant(chart('Song.pms/main', ['11']))).toBe('5');
+    expect(resolveChartPlayVariant(chart('.pms', ['11']))).toBe('9');
   });
 
   test('resolveChartPlayVariant keeps `#PLAYER 3` double-play charts with a FREE ZONE on `17` as IIDX DP', () => {

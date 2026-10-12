@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { resolveAltModifierLabel, resolveDisplayedDifficultyValue, resolveDisplayedPlayLevelValue } from './utils.ts';
+import {
+  resolveAltModifierLabel,
+  resolveChartVolWavGain,
+  resolveDisplayedDifficultyValue,
+  resolveDisplayedPlayLevelValue,
+} from './utils.ts';
 
 describe('player utils', () => {
   test('player-utils: uses Option label on macOS', () => {
@@ -10,6 +15,17 @@ describe('player utils', () => {
   test('player-utils: uses Alt label on non-macOS platforms', () => {
     expect(resolveAltModifierLabel('win32')).toBe('Alt');
     expect(resolveAltModifierLabel('linux')).toBe('Alt');
+  });
+
+  test('player-utils: applies #VOLWAV only inside 0 < n < 200, like beatoraja', () => {
+    const json = createEmptyJson('bms');
+    expect(resolveChartVolWavGain(json)).toBe(1);
+    json.bms.volWav = 80;
+    expect(resolveChartVolWavGain(json)).toBeCloseTo(0.8, 10);
+    json.bms.volWav = 200;
+    expect(resolveChartVolWavGain(json)).toBe(1);
+    json.bms.volWav = 0;
+    expect(resolveChartVolWavGain(json)).toBe(1);
   });
 
   test('player-utils: defaults missing BMS PLAYLEVEL to 3 for display', () => {

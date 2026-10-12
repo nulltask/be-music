@@ -14,14 +14,16 @@
 export const DEMO_APP_HTML = `
   <div class="shell empty">
     <!--
-      Hidden file input — triggered by the GUI's "Open folder /
-      ZIP" button. lil-gui has no native file controller, so we
+      Hidden file input — triggered by the GUI's "Open folder"
+      button. lil-gui has no native file controller, so we
       forward a synthetic click to this hidden input from the
       function controller's handler. \`webkitdirectory\` makes the
-      browser show a folder picker on Chromium / Safari; multiple
-      ZIPs / charts can also be selected via the same input.
+      browser show a folder picker on Chromium / Safari. ZIPs and
+      play logs go through the "Open files" picker below.
     -->
     <input id="songs" type="file" webkitdirectory multiple class="hidden-file-input" />
+    <!-- The "Open files" button's picker: ZIP archives and play logs (\`*.bmplay.json\`). -->
+    <input id="files" type="file" multiple accept=".zip,.json" class="hidden-file-input" />
     <input id="search" class="search-input" type="search" placeholder="Search title / artist / genre..." />
     <div class="stage" id="stage">
       <!--
@@ -341,9 +343,10 @@ export const DEMO_APP_HTML = `
                 (or their contents), to apply a skin theme.
               </li>
               <li>
-                Or click <strong>Open Folder</strong> in the lil-gui panel (top-right) to use the native
-                file picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
+                Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
+                folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
                 theme and BMS charts loads both in one shot. Press the button again to add another folder.
+                <strong>Open files</strong> picks ZIP archives or a play log (<code>*.bmplay.json</code>) to replay.
               </li>
               <li>Subsequent drops add to the library and keep the current theme.</li>
               <li>
@@ -390,7 +393,10 @@ export const DEMO_APP_HTML = `
 
             <h3 class="help-section-title">Options &amp; recording</h3>
             <ul class="help-list">
-              <li>The lil-gui panel (top-right) holds auto-play, compressor, BGA transcode, and recording controls.</li>
+              <li>
+                The Debug Menu (top-right) holds loading, skin, play option, audio, and recording controls; rarely used
+                and developer settings sit in its collapsed folders, which remember whether you left them open.
+              </li>
               <li>
                 Click <strong>Record</strong> to capture the next play as a downloadable WebM (requires
                 MediaRecorder support — see Open source / browser checks).
@@ -445,9 +451,10 @@ export const DEMO_APP_HTML = `
               <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
               <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
               <li>
-                右上 lil-gui パネルの <strong>Open Folder</strong> ボタンからネイティブのファイル選択ダイアログも使えます。
+                右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
                 ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
+                <strong>Open files</strong> では ZIP アーカイブやリプレイするプレイログ (<code>*.bmplay.json</code>) を選べます。
               </li>
               <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
             </ul>
@@ -488,7 +495,9 @@ export const DEMO_APP_HTML = `
 
             <h3 class="help-section-title">オプションと録画</h3>
             <ul class="help-list">
-              <li>右上 lil-gui パネルにオートプレイ / コンプレッサー / BGA トランスコード / 録画コントロールがあります。</li>
+              <li>
+                右上 Debug Menu に読み込み / スキン / プレイオプション / オーディオ / 録画のコントロールがあります。あまり使わない設定や開発者向けの設定は折りたたまれたフォルダにあり、フォルダの開閉状態は記憶されます。
+              </li>
               <li>
                 <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
               </li>

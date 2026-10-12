@@ -8,7 +8,6 @@ import type {
   BeatorajaSourceBundle,
 } from '@be-music/beatoraja-skin';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
-import { parseChart } from '@be-music/parser';
 import type { Lr2Skin } from '@be-music/lr2-skin';
 import { Container } from 'pixi.js';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
@@ -21,6 +20,9 @@ const BENCH_AUDIO_CONTEXT = {
   addEventListener: () => undefined,
 } as unknown as BaseAudioContext;
 
+/** Stand-in for `navigator` with an audio session (Node has none), so the session helpers take their applying path. */
+const BENCH_AUDIO_SESSION_HOST: playerWebCoreApi.SystemAudioSessionHost = { audioSession: { type: 'auto' } };
+
 const BENCH_BYTES = new Uint8Array([35, 84, 73, 84, 76, 69, 32, 66, 101, 110, 99, 104, 10]);
 const BENCH_BMS_FILE = makeBenchFile('Songs/Bench/main.bms', '#TITLE Bench\n#BPM 130\n#00111:0100\n');
 const BENCH_APPEND_BMS_FILE = makeBenchFile('Songs/BenchExtra/main.bms', '#TITLE Bench Extra\n#BPM 130\n#00111:0100\n');
@@ -30,29 +32,6 @@ const BENCH_DROPPED_ENTRY = {
   file: (resolve: (file: File) => void) => resolve(BENCH_WAV_FILE),
 };
 const BENCH_SOURCE = makeBenchSource();
-const BENCH_RANDOM_CHART: BeMusicJson = parseChart(
-  [
-    '#BPM 120',
-    '#WAV01 kick.wav',
-    '#RANDOM 2',
-    '#IF 1',
-    '#00111:0101',
-    '#ENDIF',
-    '#IF 2',
-    '#00112:0101',
-    '#ENDIF',
-    '#ENDRANDOM',
-    '#SWITCH 2',
-    '#CASE 1',
-    '#00213:01',
-    '#SKIP',
-    '#DEF',
-    '#00214:01',
-    '#ENDSW',
-  ].join('\n'),
-  'bms',
-);
-
 const BENCH_SONG = makeBenchSong();
 const BENCH_PLAYLOG = makeBenchPlaylog();
 const BENCH_PLAYLOG_JSON = JSON.stringify(BENCH_PLAYLOG);
@@ -627,6 +606,34 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.masterOutput(BENCH_AUDIO_CONTEXT);
     },
   });
+  define('player-web.getSystemAudioSession', {
+    run: () => {
+      playerWebCoreApi.getSystemAudioSession(BENCH_AUDIO_SESSION_HOST);
+    },
+  });
+  define('player-web.supportsSystemAudioSession', {
+    run: () => {
+      playerWebCoreApi.supportsSystemAudioSession(BENCH_AUDIO_SESSION_HOST);
+    },
+  });
+  define('player-web.applySystemAudioSessionType', {
+    run: () => {
+      playerWebCoreApi.applySystemAudioSessionType('ambient', BENCH_AUDIO_SESSION_HOST);
+      playerWebCoreApi.applySystemAudioSessionType('auto', BENCH_AUDIO_SESSION_HOST);
+    },
+  });
+  define('player-web.resolveSilentModeAudioSessionType', {
+    run: () => {
+      playerWebCoreApi.resolveSilentModeAudioSessionType(true);
+      playerWebCoreApi.resolveSilentModeAudioSessionType(false);
+    },
+  });
+  define('player-web.applySilentModePlayback', {
+    run: () => {
+      playerWebCoreApi.applySilentModePlayback(true, BENCH_AUDIO_SESSION_HOST);
+      playerWebCoreApi.applySilentModePlayback(false, BENCH_AUDIO_SESSION_HOST);
+    },
+  });
   define('player-web.pickRecorderMimeType', {
     run: () => {
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');
@@ -759,11 +766,6 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
   define('player-web.resolveDropFilePath', {
     run: () => {
       playerWebCoreApi.resolveDropFilePath(BENCH_BMS_FILE);
-    },
-  });
-  define('player-web.resolvePlayChart', {
-    run: () => {
-      playerWebCoreApi.resolvePlayChart(BENCH_RANDOM_CHART, { random: () => 0.5 });
     },
   });
   define('player-web.resolveRendererPreference', {

@@ -44,12 +44,7 @@ import {
   type BeatorajaThemeBgm,
   type BeatorajaThemeBundle,
 } from '@be-music/player-web/skin';
-import {
-  prepareBeatorajaGameplayChart,
-  resolvePlayChart,
-  type PreparedBeatorajaGameplayChart,
-  type ResolvedPlayChart,
-} from '@be-music/player-web/chart';
+import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } from '@be-music/player-web/chart';
 import {
   BrowserSongCollectionStore,
   checkBrowserCompat,
@@ -73,7 +68,10 @@ import {
   PLAYLOG_FILE_SUFFIX,
   DEFAULT_COMPRESSOR_PARAMS,
   setMasterVolume,
+  supportsSystemAudioSession,
+  applySilentModePlayback,
   type BeMusicPlaylog,
+  type PlaylogRecorderInfo,
   type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
@@ -127,11 +125,20 @@ import {
   setStoredSkinSetting,
   storeSkinSettings,
 } from './skin-settings.ts';
-import type { PlayerSummary } from '@be-music/player/core/engine';
+import { resolvePlayChart, type PlayerSummary, type ResolvedPlayChart } from '@be-music/player/core/engine';
+import demoPackageJson from '../package.json' with { type: 'json' };
 
 const dropLog = logger('drop');
 const recordLog = logger('record');
 const gameplayLog = logger('gameplay');
+
+/** This app as the recorder of its play-logs (`recorder` in `*.bmplay.json`); the engine adds its own version. */
+const PLAYLOG_RECORDER: Omit<PlaylogRecorderInfo, 'engine'> = {
+  name: 'be-music-web',
+  version: demoPackageJson.version,
+  ...(__BE_MUSIC_BUILD__.length > 0 ? { build: __BE_MUSIC_BUILD__ } : {}),
+  platform: 'web',
+};
 // lil-gui auto-injects its stylesheet at construction time (see `injectStyles` option, default `true`), so we don't
 // import its CSS explicitly — its package.json doesn't expose the file via `exports` anyway.
 import GUI, { type Controller } from 'lil-gui';
@@ -144,6 +151,7 @@ import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
 import { hasAnyLr2Skin, pickActiveFamilyForScene, type FamilyDispatchState } from './family-dispatch.ts';
 import { applyLoadProgress, hideLoadingOverlay, showLoadingOverlay } from './loading-overlay.ts';
 import { fetchZipAsFile, fetchZipAsFiles, parseUrlMediaParams } from './url-load.ts';
+import { DEBUG_MENU_FOLDERS, clearDemoSettings, rememberFolderOpenStates, type DebugMenuFolder } from './debug-menu.ts';
 import { enterTouchFullscreen, exitFullscreen, shouldCaptureFullscreenEscape, toggleFullscreen } from './fullscreen.ts';
 import {
   type PlayLayoutChoice,
@@ -153,6 +161,17 @@ import {
   resolveDefaultSkinEffects,
   resolveDeviceProfile,
 } from './device-profile.ts';
+import {
+  SILENT_MODE_STRINGS,
+  installSilentModePlayback,
+  mountSilentModeHint,
+  readPlayInSilentMode,
+  readSilentModeHintSeen,
+  resolveSilentModeLanguage,
+  shouldShowSilentModeHint,
+  storePlayInSilentMode,
+  storeSilentModeHintSeen,
+} from './silent-mode-playback.ts';
 import {
   captureScreenshot,
   finalizeRecordingIfActive,
@@ -409,20 +428,20 @@ class PlayerWebDemoApp {
   /** The current chart's prepared assets (audio + BGA). Disposed alongside the gameplay view. */
   private beatorajaGameplayPrep: PreparedBeatorajaGameplayChart | undefined;
   /**
-   * The most recently resolved chart for a beatoraja run (with the values its `#RANDOM` / `#SWITCH` lines were
-   * resolved with, for the play log), paired with the song's `chartPath` so
+   * The most recently resolved chart for a beatoraja run, paired with the song's `chartPath` so
    * subsequent stages can verify the cached chart still matches the song they're handling.
    *
    * Lifecycle:
    *   1. The decide scene resolves `#IF` / `#RANDOM` once at entry and stores the result here so
    *      the bpmgraph (and the gameplay prep that follows) sees the SAME branches.
-   *   2. `playSongBeatoraja` reads it via `preResolved` — only when `chartPath` matches the
+   *   2. `playSongBeatoraja` hands it to the prep as `preResolved` — only when `chartPath` matches the
    *      song being played. Mismatched paths fall back to a fresh resolve (= the user reached
    *      gameplay without going through decide; rare but possible via debug paths).
-   *   3. `disposeBeatorajaGameplay` re-stamps it from `prep.chart` / `prep.randomOutcomes` so the result scene gets the
-   *      same chart for its bpmgraph.
+   *   3. `disposeBeatorajaGameplay` re-stamps it from `prep.chart` / `prep.randomDraws` so the result scene gets
+   *      the same chart for its bpmgraph.
    *
-   * `chart` is a plain JSON object so retaining the reference is cheap.
+   * `resolved` holds the chart together with the `#RANDOM` / `#SWITCH` draws it was resolved with; both are plain
+   * JSON, so retaining them is cheap.
    */
   private lastBeatorajaChart: { resolved: ResolvedPlayChart; chartPath: string } | undefined;
   /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
@@ -536,6 +555,8 @@ class PlayerWebDemoApp {
   private readonly skinSettings = readStoredSkinSettings();
   /** Debug Menu folder holding the active be-music skin's settings; hidden for a skin that declares none. */
   private skinSettingsFolder: GUI | undefined;
+  /** The Debug Menu's "Skin & display" folder, which hosts the LR2 theme picker once a drop discovers themes. */
+  private skinFolder: GUI | undefined;
   /**
    * Record key of the play in flight when it counts towards the chart's best record, latched at song start. `undefined`
    * for autoplay and replay plays, which never touch the records.
@@ -577,6 +598,8 @@ class PlayerWebDemoApp {
    * disarmAutoRecord} so the flag doesn't survive into a future session that shouldn't be auto-captured.
    */
   private autoRecordArmed = false;
+  /** The Debug Menu's "Play in silent mode" checkbox, when the browser offers the setting. */
+  private silentModeController: Controller | undefined;
   private readonly elements: PlayerWebDemoElements;
   public constructor(elements: PlayerWebDemoElements) {
     this.elements = elements;
@@ -588,6 +611,7 @@ class PlayerWebDemoApp {
       // headroom but the master limiter is what reliably prevents audible clipping on dense charts. Power users wanting
       // an unprocessed signal path can still flip it via `?compressor=off` or the GUI.
       ...readStoredVolumes(),
+      playInSilentMode: readPlayInSilentMode(),
       compressor: true,
       compressorKey: true,
       compressorBgm: true,
@@ -631,6 +655,7 @@ class PlayerWebDemoApp {
       playLayout: readStoredPlayLayout(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
+      openFiles: () => this.elements.filesInput.click(),
       record: () => {
         void toggleRecording(this.recordingDeps());
       },
@@ -640,6 +665,14 @@ class PlayerWebDemoApp {
     };
     // Every sound plays through the master volume; start from the remembered level.
     setMasterVolume(this.guiState.masterVolume / 100);
+    // Set the platform audio session before any scene creates an AudioContext, and again on the first gesture (which
+    // is when the scenes resume their contexts) — see `silent-mode-playback.ts`.
+    installSilentModePlayback({
+      enabled: () => this.guiState.playInSilentMode,
+      target: window,
+      visibility: document,
+      onFirstGesture: () => this.maybeShowSilentModeHint(),
+    });
     // Pick up the `?compressor=split|legacy|off` URL flag once at boot. We resolve it through `parseCompressorMode`
     // (the same helper exported from `audio-bus.ts`) so the recognized values stay synced with the runtime API.
     // Unrecognized / missing flag → fall through to defaults: architecture `'split'`, GUI checkbox checked (compressor
@@ -658,14 +691,43 @@ class PlayerWebDemoApp {
     }
   }
 
+  /** Applies and remembers the "Play in silent mode" setting (Debug Menu checkbox or the hint's button). */
+  private setPlayInSilentMode(value: boolean): void {
+    this.guiState.playInSilentMode = value;
+    storePlayInSilentMode(value);
+    applySilentModePlayback(value);
+    this.silentModeController?.updateDisplay();
+    // Once the user has found the setting, the hint has nothing left to say.
+    storeSilentModeHintSeen();
+  }
+
+  /**
+   * The first time sound can start on an iPhone / iPad, point at the setting: the silent switch mutes web audio there
+   * and nothing on screen says why. Shown once per browser, only while the setting is off.
+   */
+  private maybeShowSilentModeHint(): void {
+    const show = shouldShowSilentModeHint({
+      supported: supportsSystemAudioSession(),
+      enabled: this.guiState.playInSilentMode,
+      seen: readSilentModeHintSeen(),
+      touchFirst: deviceProfile.touchFirst,
+    });
+    if (!show) return;
+    storeSilentModeHintSeen();
+    mountSilentModeHint({
+      strings: SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)],
+      onEnable: () => this.setPlayInSilentMode(true),
+    });
+  }
+
   public start(): void {
     this.buildGui();
     // Keep the initial mount's promise so URL auto-load (below) can wait for the Pixi host to finish initializing
     // before it drives its own `showSelect` — two concurrent first-mounts race and read the renderer before it exists.
     const initialSelectReady = this.showSelect();
 
-    this.elements.songInput.addEventListener('change', () => {
-      const files = this.elements.songInput.files;
+    const onFilesPicked = (input: HTMLInputElement, load: (files: File[]) => Promise<void>) => {
+      const files = input.files;
       if (!files || files.length === 0) {
         return;
       }
@@ -673,7 +735,7 @@ class PlayerWebDemoApp {
       // Reset the input value immediately so picking the SAME folder a second time still fires `change`. Browsers
       // suppress repeat `change` events when the new selection matches the previous value — without this, a user
       // re-picking after a misclick or an interrupted load would see the input silently ignore them.
-      this.elements.songInput.value = '';
+      input.value = '';
       void (async () => {
         // Browser file-picker drops go through the same loading overlay as drag-drop so a folder picked via the GUI
         // shows progress too. Hide the select scene up-front so its rendering / BGM stays paused while we read + parse
@@ -684,12 +746,18 @@ class PlayerWebDemoApp {
           // Route through the same post-enumeration pipeline as drag-drop so the picker's selection produces a theme +
           // songs split (handy when a user hand-picks a folder whose root carries both an LR2 theme and a BMS pack),
           // instead of the previous `loadSongs`-only path that quietly skipped any LR2 assets in the selection.
-          await this.processIncomingFiles(fileList);
+          await load(fileList);
         } finally {
           hideLoadingOverlay(this.elements);
         }
       })();
-    });
+    };
+    this.elements.songInput.addEventListener('change', () =>
+      onFilesPicked(this.elements.songInput, (files) => this.processIncomingFiles(files)),
+    );
+    this.elements.filesInput.addEventListener('change', () =>
+      onFilesPicked(this.elements.filesInput, (files) => this.loadPickedFiles(files)),
+    );
 
     // Global `/` shortcut focuses the search input. Standard editor convention — same as GitHub / Slack / Discord. We
     // suppress the actual `/` character so it doesn't end up in the input field.
@@ -962,25 +1030,29 @@ class PlayerWebDemoApp {
    * this in one method lets us bind handles to specific controllers (`recordController`, `compressorStageFolder`)
    * up-front, so runtime code can address them by name (renaming the record button when capture starts, hiding the
    * per-stage folder on compressor mode change) without re-querying the DOM.
+   *
+   * Layout (folder titles and default open states live in `debug-menu.ts`): the everyday controls sit at the top level
+   * — status, loading, skin pick, capture — followed by the Play options and Audio folders (open by default), then the
+   * skin detail, library, and developer folders (closed by default). Every folder remembers whether it was left open.
    */
   private buildGui(): void {
     // Start the panel itself collapsed so it doesn't cover the select-screen / gameplay canvas the moment a user lands
-    // on the demo. The nested folders (Compressor stages / BGA video transcode) stay open by default — once the user
-    // opens the top-level panel, every controller is one click away rather than hidden behind another folder header.
+    // on the demo.
     const gui = new GUI({ title: 'Debug Menu', width: 280 });
     gui.close();
     this.gui = gui;
+    const addFolder = (parent: GUI, folder: DebugMenuFolder): GUI => parent.addFolder(folder.title).open(folder.open);
     // Status row pinned to the top of the panel — first thing the user sees, so a glance at the GUI is enough to tell
     // whether a load is in flight, what's currently playing, or where a saved recording landed. Disabled so the field
     // reads as a passive read-out instead of an editable input. Updates are pushed explicitly via `setStatus`; cheaper
     // than lil-gui's `.listen()` polling and the only writer is this class anyway.
     this.statusController = gui.add(this.guiState, 'status').name('Status').disable();
     this.statusController.domElement.classList.add('status-row');
-    gui.add(this.guiState, 'openFolder').name('Open Folder');
+    gui.add(this.guiState, 'openFolder').name('Open folder');
+    gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
     // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
     // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
-    // in place once a theme drop adds LR2 / beatoraja to the pool. Parked here (right after Open Folder) so the
-    // family pick reads as a top-level navigation control, above per-family detail folders.
+    // in place once a theme drop adds LR2 / beatoraja to the pool.
     this.rebuildSkinFamilyPicker();
     // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
     // scene. Persisted so a reload keeps the pick.
@@ -993,70 +1065,102 @@ class PlayerWebDemoApp {
       });
     // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
     BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
-    const addSkins = gui.addFolder('Add skin');
-    const skinSource = {
-      url: '',
-      addLattice: () => this.addBeMusicSkin(latticeSkin),
-      addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
+    this.recordController = gui.add(this.guiState, 'record').name('● Record');
+    // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
+    // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
+    gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
+
+    this.buildPlayOptionsFolder(addFolder(gui, DEBUG_MENU_FOLDERS.playOptions));
+    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
+    this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
+    this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
+    this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
+    this.refreshCompressorStageVisibility();
+    rememberFolderOpenStates(gui);
+  }
+
+  /**
+   * Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the play-log.
+   * Two-way synced with the LR2 select scene's PLAY OPTION panel where a counterpart exists (the panel pushes user
+   * edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All of them are latched
+   * at song start and DISABLED during a play — mid-song changes never apply.
+   */
+  private buildPlayOptionsFolder(folder: GUI): void {
+    const trackPlayOption = (controller: Controller): Controller => {
+      this.playOptionControllers.push(controller);
+      return controller;
     };
-    addSkins.add(skinSource, 'addLattice').name('Add Lattice');
-    addSkins.add(skinSource, 'url').name('Skin module URL');
-    addSkins.add(skinSource, 'addFromUrl').name('Add from URL');
-    addSkins.close();
-    gui
-      .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
-      .name('Skin effects')
-      .onChange((level: 'full' | 'reduced' | 'off') => {
-        try {
-          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
-        } catch {
-          // Private windows / blocked storage: the pick still applies for this session.
-        }
-        this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
-      });
-    // Auto picks the touch layout on phones / tablets; applies from the next play.
-    gui
-      .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
-      .name('Play layout')
-      .onChange((choice: PlayLayoutChoice) => {
-        try {
-          window.localStorage.setItem(PLAY_LAYOUT_STORAGE_KEY, choice);
-        } catch {
-          // Private windows / blocked storage: the pick still applies for this session.
-        }
-      });
-    // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
-    this.skinSettingsFolder = gui.addFolder('Skin settings');
-    this.rebuildSkinSettingsFolder();
-    // LR2 theme picker — visible only when the most recent drop covered multiple themes (e.g. someone dropped the
-    // entire `LR2files/Theme/` parent). Single-theme drops keep this hidden so the panel doesn't grow a useless
-    // 1-option dropdown.
-    this.rebuildLr2ThemePicker();
-    // Per-scene skin picker. Empty (= no controllers visible) until a beatoraja theme is
-    // dropped — `rebuildBeatorajaSkinPickers()` re-populates it on each load. Selecting a
-    // non-default entry for a scene records it on `beatorajaSkinOverridesByType`; the next
-    // mount picks it up via `pickBeatorajaSkinEntryWithOverride`. The folder is OPEN by
-    // default so the picker dropdowns are visible the moment a theme finishes loading
-    // — having the user hunt through a collapsed panel for a control they need on every
-    // theme drop didn't justify the extra click.
-    this.beatorajaSkinPickerFolder = gui.addFolder('Beatoraja skins').open();
-    // Auto play used to be a lil-gui checkbox here too, but the in-scene PLAY OPTIONS panel (LR2 button_type 33 / 32 on
-    // the select skin) already exposes it — the duplicate toolbar controller just added another surface to keep in
-    // sync. The `guiState.autoPlay` field stays as the seed/fallback value until the select panel publishes its own
-    // choice.
-    gui
-      .add(this.guiState, 'autoPauseOnBlur')
-      .name('Auto pause on blur')
-      .onChange((value: boolean) => {
-        this.guiState.autoPauseOnBlur = value;
-        // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
-        // without forcing the user to restart the song.
-        this.gameplayView?.setAutoPauseOnBlur(value);
-      });
-    // Master volume over every sound, then the keysound / BGM balance. All three apply live and are remembered for the
-    // next visit.
-    const volume = gui.addFolder('Volume');
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'autoPlay')
+        .name('Auto play')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ autoPlay: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
+        .name('Gauge')
+        .onChange((value: DemoGuiState['gauge']) => {
+          this.selectView?.setPlayOptions({ gauge1P: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
+        .name('Random 1P')
+        .onChange((value: DemoGuiState['random1P']) => {
+          this.selectView?.setPlayOptions({ random1P: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
+        .name('Random 2P')
+        .onChange((value: DemoGuiState['random2P']) => {
+          this.selectView?.setPlayOptions({ random2P: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'dpFlip')
+        .name('DP flip')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ dpFlip: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'autoScratch1P')
+        .name('Auto scratch 1P')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ autoScratch1P: value });
+        }),
+    );
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'autoScratch2P')
+        .name('Auto scratch 2P')
+        .onChange((value: boolean) => {
+          this.selectView?.setPlayOptions({ autoScratch2P: value });
+        }),
+    );
+    // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
+    // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
+    trackPlayOption(
+      folder
+        .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
+        .name('Judge windows'),
+    );
+  }
+
+  /**
+   * Volumes (master over every sound, then the keysound / BGM balance; all three apply live and are remembered for the
+   * next visit), then the compressor: the master switch, the split-mode stage toggles, and every compressor's
+   * parameters.
+   */
+  private buildAudioFolder(audio: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
     const rememberVolumes = () =>
       storeVolumes({
         masterVolume: this.guiState.masterVolume,
@@ -1068,17 +1172,29 @@ class PlayerWebDemoApp {
       this.beatorajaGameplayPrep?.audioBus.setBusVolume(channel, value / 100);
       rememberVolumes();
     };
-    volume
+    audio
       .add(this.guiState, 'masterVolume', 0, 100, 1)
       .name('Master (%)')
       .onChange((value: number) => {
         setMasterVolume(value / 100);
         rememberVolumes();
       });
-    volume.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
-    volume.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
-    // Compressor: the master switch, the split-mode stage toggles, and every compressor's parameters.
-    const compressor = gui.addFolder('Compressor');
+    audio.add(this.guiState, 'keyVolume', 0, 100, 1).name('Key sound (%)').onChange(onVolumeChange('key'));
+    audio.add(this.guiState, 'bgmVolume', 0, 100, 1).name('BGM (%)').onChange(onVolumeChange('bgm'));
+    // Safari / iOS only (`navigator.audioSession`): elsewhere web audio has no silent switch to get past, so the row is
+    // left out rather than shown disabled.
+    if (supportsSystemAudioSession()) {
+      const strings = SILENT_MODE_STRINGS[resolveSilentModeLanguage(navigator.language)];
+      this.silentModeController = audio
+        .add(this.guiState, 'playInSilentMode')
+        .name(strings.label)
+        .onChange((value: boolean) => this.setPlayInSilentMode(value));
+      const note = document.createElement('div');
+      note.className = 'gui-note';
+      note.textContent = strings.note;
+      audio.$children.append(note);
+    }
+    const compressor = addFolder(audio, DEBUG_MENU_FOLDERS.compressor);
     compressor
       .add(this.guiState, 'compressor')
       .name('Enabled')
@@ -1086,7 +1202,7 @@ class PlayerWebDemoApp {
         this.gameplayView?.setAudioCompressor(value);
         this.refreshCompressorStageVisibility();
       });
-    const stages = compressor.addFolder('Stages');
+    const stages = addFolder(compressor, DEBUG_MENU_FOLDERS.compressorStages);
     this.compressorStageFolder = stages;
     stages
       .add(this.guiState, 'compressorKey')
@@ -1107,6 +1223,124 @@ class PlayerWebDemoApp {
         this.gameplayView?.setAudioCompressorStageEnabled('master', value);
       });
     this.buildCompressorTuningGui(compressor);
+  }
+
+  /** How the skins look and lay out, the loaded themes' pickers, the be-music skin's settings, and adding skins. */
+  private buildSkinFolder(skin: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
+    this.skinFolder = skin;
+    skin
+      .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
+      .name('Skin effects')
+      .onChange((level: 'full' | 'reduced' | 'off') => {
+        try {
+          window.localStorage.setItem(SKIN_EFFECTS_STORAGE_KEY, level);
+        } catch {
+          // Private windows / blocked storage: the pick still applies for this session.
+        }
+        this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+      });
+    // Auto picks the touch layout on phones / tablets; applies from the next play.
+    skin
+      .add(this.guiState, 'playLayout', { Auto: 'auto', Desktop: 'standard', Touch: 'touch' })
+      .name('Play layout')
+      .onChange((choice: PlayLayoutChoice) => {
+        try {
+          window.localStorage.setItem(PLAY_LAYOUT_STORAGE_KEY, choice);
+        } catch {
+          // Private windows / blocked storage: the pick still applies for this session.
+        }
+      });
+    // Picks between LR2-faithful "judged note disappears at the judge line" and our historical "keep scrolling past it"
+    // behavior. Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint —
+    // the visibility check is a single per-frame branch with no backing state to rebuild.
+    skin
+      .add(this.guiState, 'judgedNoteDisplay', {
+        'Keep scrolling (LANEEFFECT ON)': 'KEEP_SCROLLING',
+        'Hide on judge (LR2 default)': 'HIDE',
+      })
+      .name('Judged notes')
+      .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {
+        this.guiState.judgedNoteDisplay = value;
+        this.gameplayView?.setJudgedNoteDisplay(value);
+      });
+    // The same toggle as double-clicking the playfield, for pointers where a double click is awkward.
+    skin.add({ fullscreen: () => void toggleFullscreen(this.elements.shell) }, 'fullscreen').name('Toggle fullscreen');
+    // "LR2 theme" (see `rebuildLr2ThemePicker`) slots in here, above the beatoraja pickers, once a drop carries themes.
+    // Per-scene beatoraja skin picker, hidden until a beatoraja theme is dropped — `rebuildBeatorajaSkinPickers()`
+    // re-populates it on each load. Selecting a non-default entry for a scene records it on
+    // `beatorajaSkinOverridesByType`; the next mount picks it up via `pickBeatorajaSkinEntryWithOverride`.
+    this.beatorajaSkinPickerFolder = addFolder(skin, DEBUG_MENU_FOLDERS.beatorajaSkins).hide();
+    // The active be-music skin's own settings, built from its `settings` schema (rebuilt when the skin changes).
+    this.skinSettingsFolder = addFolder(skin, DEBUG_MENU_FOLDERS.skinSettings);
+    this.rebuildSkinSettingsFolder();
+    // LR2 theme picker — added once a drop discovers a theme (see `rebuildLr2ThemePicker`).
+    this.rebuildLr2ThemePicker();
+    // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
+    const addSkins = addFolder(skin, DEBUG_MENU_FOLDERS.addSkin);
+    const skinSource = {
+      url: '',
+      addLattice: () => this.addBeMusicSkin(latticeSkin),
+      addFromUrl: () => void this.addBeMusicSkinFromUrl(skinSource.url),
+    };
+    addSkins.add(skinSource, 'addLattice').name('Add Lattice');
+    addSkins.add(skinSource, 'url').name('Skin module URL');
+    addSkins.add(skinSource, 'addFromUrl').name('Add from URL');
+  }
+
+  /**
+   * Loading from URLs (the same path as the `?music=` / `?skin=` parameters), the play-history and best-record stores,
+   * and the BGA transcode settings that apply while charts load.
+   */
+  private buildLibraryFolder(library: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
+    const urlParams = parseUrlMediaParams(window.location.href);
+    const urls = {
+      music: urlParams.musicUrl ?? '',
+      skin: urlParams.skinUrl ?? '',
+      load: () => {
+        const musicUrl = urls.music.trim() || undefined;
+        const skinUrl = urls.skin.trim() || undefined;
+        if (!musicUrl && !skinUrl) {
+          this.setStatus('Enter a music or skin ZIP URL first');
+          return;
+        }
+        void this.loadFromUrl({ musicUrl, skinUrl });
+      },
+    };
+    library.add(urls, 'music').name('Music ZIP URL');
+    library.add(urls, 'skin').name('Skin ZIP URL');
+    library.add(urls, 'load').name('Load from URLs');
+    // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
+    // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
+    // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
+    // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song
+    // is playing — playlog options cannot change mid-play.
+    this.playlogSaveController = library
+      .add(this.guiState, 'autoSavePlaylog')
+      .name('Auto-save play history')
+      .onChange((value: boolean) => {
+        this.guiState.autoSavePlaylog = value;
+      });
+    library
+      .add(
+        {
+          clear: () => {
+            if (this.songRecords.size === 0) {
+              this.setStatus('No best records to clear');
+              return;
+            }
+            if (
+              !window.confirm(`Clear the best records of ${this.songRecords.size} chart(s)? This cannot be undone.`)
+            ) {
+              return;
+            }
+            this.songRecords.clear();
+            storeSongRecords(this.songRecords);
+            this.setStatus('Best records cleared');
+          },
+        },
+        'clear',
+      )
+      .name('Clear best records');
     // BGA video transcode controls. Both settings are seeded into the next `PixiGameplayView` constructor (see
     // `preloadGameplay` / `playSong` for the wiring), so changing them mid-session takes effect on the next chart mount
     // — no need to rebuild gameplay if the user is between songs. We don't push live into the running gameplay because
@@ -1118,7 +1352,7 @@ class PlayerWebDemoApp {
     // the consumer treats anything `≤ 0` as "preserve resolution". Earlier iterations split resize into a checkbox +
     // size pair, but users would change the size without realizing they also had to flip the checkbox — the resize was
     // silently a no-op. Folding both into one control with an explicit `Off` row removes that footgun.
-    const transcode = gui.addFolder('BGA video transcode');
+    const transcode = addFolder(library, DEBUG_MENU_FOLDERS.bgaTranscode);
     // WebCodecs `VideoEncoder` is a browser feature; gate the checkbox on its existence so the user can't toggle a
     // state the runtime can't honor. On unsupported browsers (Safari < 17, older Firefox builds) the controller is
     // disabled and the seed value stays at `false`.
@@ -1148,120 +1382,55 @@ class PlayerWebDemoApp {
       .onChange((value: number) => {
         this.guiState.bgaResizeMaxEdgePx = value;
       });
+  }
+
+  /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
+  private buildDeveloperFolder(developer: GUI): void {
+    developer
+      .add(this.guiState, 'autoPauseOnBlur')
+      .name('Auto pause on blur')
+      .onChange((value: boolean) => {
+        this.guiState.autoPauseOnBlur = value;
+        // Push live so a chart already in flight starts honoring the new policy on its next visibility / blur event,
+        // without forcing the user to restart the song.
+        this.gameplayView?.setAutoPauseOnBlur(value);
+      });
     // Chart-authoring debug overlay — paints invisible / keysound notes (BMS channels `3x` / `4x`) as thin green bars
-    // in their playable lane. Seeded into the next `PixiGameplayView` constructor; toggling mid-song waits until the
-    // next chart load to take effect (the invisible-note array is built once at chart-prepare time). Live-toggleable —
-    // the gameplay view always extracts the invisible-note array and preloads the green sprite, so flipping this flag
-    // flips the per-frame render branch on the very next paint.
-    gui
+    // in their playable lane. Live-toggleable — the gameplay view always extracts the invisible-note array and preloads
+    // the green sprite, so flipping this flag flips the per-frame render branch on the very next paint.
+    developer
       .add(this.guiState, 'showInvisibleNotes')
       .name('Show invisible notes')
       .onChange((value: boolean) => {
         this.guiState.showInvisibleNotes = value;
         this.gameplayView?.setShowInvisibleNotes(value);
       });
-    // Picks between LR2-faithful "judged note disappears at the judge line" and our historical "keep scrolling past it"
-    // behavior. Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint —
-    // the visibility check is a single per-frame branch with no backing state to rebuild.
-    gui
-      .add(this.guiState, 'judgedNoteDisplay', {
-        'Keep scrolling (LANEEFFECT ON)': 'KEEP_SCROLLING',
-        'Hide on judge (LR2 default)': 'HIDE',
-      })
-      .name('Judged notes')
-      .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {
-        this.guiState.judgedNoteDisplay = value;
-        this.gameplayView?.setJudgedNoteDisplay(value);
-      });
-    // Play options — the playMode / chartOptions / assists / judge / gauge settings that get recorded into the
-    // play-log. Two-way synced with the LR2 select scene's PLAY OPTION panel where a counterpart exists (the panel
-    // pushes user edits back through `onPlayOptionsChange`; these controllers push through `setPlayOptions`). All
-    // of them are latched at song start and DISABLED during a play — mid-song changes never apply.
-    const playOptionsFolder = gui.addFolder('Play options');
-    const trackPlayOption = (controller: Controller): Controller => {
-      this.playOptionControllers.push(controller);
-      return controller;
-    };
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'autoPlay')
-        .name('Auto play')
-        .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoPlay: value });
-        }),
-    );
-    // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
-    // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'judgeRuleset', { LR2: 'lr2', beatoraja: 'beatoraja', IIDX: 'iidx' })
-        .name('Judge windows'),
-    );
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'gauge', ['GROOVE', 'EASY', 'HARD', 'DEATH'])
-        .name('Gauge')
-        .onChange((value: DemoGuiState['gauge']) => {
-          this.selectView?.setPlayOptions({ gauge1P: value });
-        }),
-    );
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'random1P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
-        .name('Random 1P')
-        .onChange((value: DemoGuiState['random1P']) => {
-          this.selectView?.setPlayOptions({ random1P: value });
-        }),
-    );
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'random2P', ['OFF', 'MIRROR', 'RANDOM', 'S-RANDOM', 'SCATTER'])
-        .name('Random 2P')
-        .onChange((value: DemoGuiState['random2P']) => {
-          this.selectView?.setPlayOptions({ random2P: value });
-        }),
-    );
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'dpFlip')
-        .name('DP flip')
-        .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ dpFlip: value });
-        }),
-    );
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'autoScratch1P')
-        .name('Auto scratch 1P')
-        .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoScratch1P: value });
-        }),
-    );
-    trackPlayOption(
-      playOptionsFolder
-        .add(this.guiState, 'autoScratch2P')
-        .name('Auto scratch 2P')
-        .onChange((value: boolean) => {
-          this.selectView?.setPlayOptions({ autoScratch2P: value });
-        }),
-    );
-    // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
-    // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
-    // mounts. The file feeds the `bms-playlog` CLI, which re-derives LR2 / beatoraja / IIDX scores from the replay.
-    // The value is LATCHED at song start (`lockPlaylogOptionsForPlay`) and the controller is disabled while a song
-    // is playing — playlog options cannot change mid-play.
-    this.playlogSaveController = gui
-      .add(this.guiState, 'autoSavePlaylog')
-      .name('Auto-save play history')
-      .onChange((value: boolean) => {
-        this.guiState.autoSavePlaylog = value;
-      });
-    this.recordController = gui.add(this.guiState, 'record').name('● Record');
-    // Screenshot button — captures the Pixi stage at its native size (= the renderer's
-    // current screen dimensions; matches what the user sees in the canvas, downloaded as
-    // PNG). See `captureScreenshot` for the extract pipeline.
-    gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
-    this.refreshCompressorStageVisibility();
+    // Renderer frame rate, sampled twice a second while the folder is on screen (no work while it's closed).
+    const stats = { fps: '—' };
+    const fpsController = developer.add(stats, 'fps').name('FPS').disable();
+    window.setInterval(() => {
+      if (!this.hostMounted || developer._closed || this.gui?._closed) return;
+      stats.fps = this.sceneHost.app.ticker.FPS.toFixed(0);
+      fpsController.updateDisplay();
+    }, 500);
+    developer
+      .add(
+        {
+          reset: () => {
+            if (
+              !window.confirm(
+                'Reset every Debug Menu setting (volumes, skins, skin settings, compressor tuning, folders) to its default and reload? Best records are kept.',
+              )
+            ) {
+              return;
+            }
+            clearDemoSettings();
+            window.location.reload();
+          },
+        },
+        'reset',
+      )
+      .name('Reset settings and reload');
   }
 
   /**
@@ -1333,7 +1502,7 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * Shared post-enumeration pipeline for both drag-drop and the Debug Menu's "Open Folder" picker. Routes the incoming
+   * Shared post-enumeration pipeline for both drag-drop and the Debug Menu's "Open folder" / "Open files" pickers. Routes the incoming
    * file list through {@link splitDroppedSongAndThemeFiles}, dispatches theme + song loaders in parallel, then mounts
    * the freshly populated select view.
    *
@@ -1341,7 +1510,7 @@ class PlayerWebDemoApp {
    * handle that around their own enumeration phase.
    *
    * `loadSongs` appends to the existing collection so a second / third invocation of this routine accumulates entries
-   * rather than wiping the previous pack — the host can call this multiple times in succession (e.g. Open Folder
+   * rather than wiping the previous pack — the host can call this multiple times in succession (e.g. Open folder
    * pressed twice with two different folders) and every drop's charts stay uniquely addressable through the collection
    * per-source prefixing.
    */
@@ -1423,6 +1592,27 @@ class PlayerWebDemoApp {
     await this.showSelect();
     if (playlogFiles.length > 0) {
       await this.startPlaylogReplayFromFile(playlogFiles[0]!);
+    }
+  }
+
+  /**
+   * Loads what the Debug Menu's "Open files" picker returned: chart archives (`.zip`) go to the song collection whole,
+   * the way `?music=` archives do (the collection expands them itself), and anything else — play logs — takes the
+   * drop pipeline, which starts the replay once the archives are listed.
+   */
+  private async loadPickedFiles(files: File[]): Promise<void> {
+    const isZip = (file: File) => file.name.toLowerCase().endsWith('.zip');
+    const archives = files.filter(isZip);
+    const others = files.filter((file) => !isZip(file));
+    if (archives.length > 0) {
+      await this.loadSongs(archives);
+      await this.showSelect();
+      if (this.collection.songs.length > 0) {
+        this.setStatus(describeSongCollection(this.collection));
+      }
+    }
+    if (others.length > 0) {
+      await this.processIncomingFiles(others);
     }
   }
 
@@ -1719,8 +1909,8 @@ class PlayerWebDemoApp {
    * pattern the skin-family picker uses — keeps the controller's position in the panel stable across rebuilds.
    */
   private rebuildLr2ThemePicker(): void {
-    const gui = this.gui;
-    if (gui === undefined) return;
+    const folder = this.skinFolder;
+    if (folder === undefined) return;
     const themes = this.availableLr2Themes;
     if (themes.length === 0) {
       // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
@@ -1740,7 +1930,7 @@ class PlayerWebDemoApp {
       return;
     }
     const proxy = { lr2Theme: this.activeLr2ThemeName ?? themes[0]!.name };
-    this.lr2ThemeController = gui
+    this.lr2ThemeController = folder
       .add(proxy, 'lr2Theme', options)
       .name('LR2 theme')
       .onChange((value: string) => {
@@ -1751,6 +1941,11 @@ class PlayerWebDemoApp {
         // hypothetical future code path that observes the picker change has a single chokepoint to subscribe to.
         void this.applyLr2ThemeByName(value);
       });
+    // lil-gui appends; move the row up next to the beatoraja pickers so the theme pickers read as one group.
+    const beatorajaFolder = this.beatorajaSkinPickerFolder?.domElement;
+    if (beatorajaFolder?.parentElement === folder.$children) {
+      folder.$children.insertBefore(this.lr2ThemeController.domElement, beatorajaFolder);
+    }
   }
 
   /**
@@ -1871,7 +2066,7 @@ class PlayerWebDemoApp {
    * Implementation detail: lil-gui's `Controller#options(values)` destroys the underlying controller and
    * recreates it in place — same approach the beatoraja per-scene skin picker uses, see
    * `rebuildBeatorajaSkinPickers`. The replacement preserves insertion order, so the dropdown stays where
-   * `buildGui` parked it (right after `Open Folder`).
+   * `buildGui` parked it (right after the `Open files` button).
    */
   private rebuildSkinFamilyPicker(): void {
     const gui = this.gui;
@@ -2207,11 +2402,9 @@ class PlayerWebDemoApp {
     }
     let prep: PreparedBeatorajaGameplayChart;
     try {
-      // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play
-      // — `#RANDOM` rolls fresh per `resolvePlayChart` call, so resolving twice would pick
-      // different branches between decide and gameplay. When the cached chart is for a
-      // different `chartPath` (= the player reached gameplay via a path that bypassed decide),
-      // we fall through to a fresh resolve inside `prepareBeatorajaGameplayChart`.
+      // Reuse the chart the decide scene resolved IFF it belongs to the song we're about to play, so decide and
+      // gameplay show and play the same `#RANDOM` branches. When the cached chart is for a different `chartPath`
+      // (= the player reached gameplay via a path that bypassed decide), the prep resolves the chart itself.
       const preResolved =
         this.lastBeatorajaChart?.chartPath === song.chartPath ? this.lastBeatorajaChart.resolved : undefined;
       prep = await prepareBeatorajaGameplayChart({
@@ -2222,7 +2415,7 @@ class PlayerWebDemoApp {
           initialVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
           initialCompressorParams: this.resolveCompressorParamOverrides(),
         },
-        preResolved,
+        ...(preResolved !== undefined ? { preResolved } : {}),
       });
     } catch (error) {
       gameplayLog.warn('beatoraja prep failed', error);
@@ -2251,8 +2444,6 @@ class PlayerWebDemoApp {
       // on 9-key POPN charts even when the loaded skin chrome is a 7-key fallback.
       variant: chartVariant,
       chart: prep.chart,
-      // The values `prep.chart` was resolved with — recorded as the play log's `play.randomOutcomes`.
-      randomOutcomes: prep.randomOutcomes,
       // The unresolved chart the play log's fingerprints describe (`prep.chart` is resolved and may be DP-flipped).
       sourceChart: song.chart,
       audio: prep.audio,
@@ -2265,11 +2456,14 @@ class PlayerWebDemoApp {
       // Judge-window ruleset + auto scratch + play-log extras ride the engine-options passthrough — the beatoraja
       // scene forwards them onto the shared engine and merges `recordPlaylog` with its own fields.
       engineOptions: {
+        // The draws `prep.chart` was resolved with: the engine plays that chart as is and names them in its summary.
+        randomDraws: prep.randomDraws,
         judgeRuleset: this.guiState.judgeRuleset,
         autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
         recordPlaylog: {
           gauge: this.guiState.gauge,
           ...(chartSha256 !== undefined ? { chartSha256 } : {}),
+          recorder: PLAYLOG_RECORDER,
         },
       },
       bgaTextures: prep.bga.textures,
@@ -2813,14 +3007,12 @@ class PlayerWebDemoApp {
     this.beatorajaSelectScene = undefined;
     this.beatorajaDecideScene?.dispose();
 
-    // Resolve `#IF` / `#RANDOM` once at decide entry so the decide skin's bpmgraph plots the
-    // SAME branches the gameplay scene will play. `resolvePlayChart` rolls each `#RANDOM`
-    // fresh per call; resolving twice (here + inside `prepareBeatorajaGameplayChart`) would yield
-    // different branches between decide and gameplay. The resolved chart is cached on the demo
-    // and reused by `playSongBeatoraja` via `preResolved`, together with the drawn values the play log records.
-    const resolvedPlayChart = resolvePlayChart(song.chart);
-    const resolvedChart = resolvedPlayChart.chart;
-    this.lastBeatorajaChart = { resolved: resolvedPlayChart, chartPath: song.chartPath };
+    // Resolve `#IF` / `#RANDOM` once at decide entry so the decide skin's bpmgraph plots the SAME branches the
+    // gameplay scene will play. The resolution (chart + draws) is cached on the demo and handed to
+    // `prepareBeatorajaGameplayChart` as `preResolved` by `playSongBeatoraja`, so nothing draws a second time.
+    const resolved = resolvePlayChart(song.chart);
+    const resolvedChart = resolved.chart;
+    this.lastBeatorajaChart = { resolved, chartPath: song.chartPath };
 
     // Idempotency gate — `onContinue` and the auto-advance timer can race in theory; whichever
     // lands first wins. Same pattern as the LR2 decide path.
@@ -3088,6 +3280,8 @@ class PlayerWebDemoApp {
     }
     this.beatorajaSkinPickerControllers.clear();
     const theme = this.beatorajaTheme?.theme;
+    // Shown only while a beatoraja theme is loaded; an empty folder header would just be noise.
+    folder.show(theme !== undefined);
     if (theme === undefined) return;
     // Order matters here — the folder lays controllers out in insertion order, so we keep the
     // play-variant types together (clustered by key count), then chrome scenes (select / decide
@@ -3344,8 +3538,8 @@ class PlayerWebDemoApp {
       // resources owned by `prep` still get released by `dispose()`.
       const chartPath = this.lastBeatorajaChart?.chartPath;
       if (chartPath !== undefined) {
-        const { chart, randomOutcomes } = this.beatorajaGameplayPrep;
-        this.lastBeatorajaChart = { resolved: { chart, randomOutcomes }, chartPath };
+        const { chart, randomDraws } = this.beatorajaGameplayPrep;
+        this.lastBeatorajaChart = { resolved: { chart, randomDraws }, chartPath };
       }
       void this.beatorajaGameplayPrep.dispose();
       this.beatorajaGameplayPrep = undefined;
@@ -3645,6 +3839,7 @@ class PlayerWebDemoApp {
       gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
       ...(overrides.chartSha256 !== undefined ? { chartSha256: overrides.chartSha256 } : {}),
+      playlogRecorder: PLAYLOG_RECORDER,
       replay,
       audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
       audioCompressorParams: this.resolveCompressorParamOverrides(),
@@ -3914,6 +4109,7 @@ void waitForDefaultUiFonts().finally(() => {
     stage: document.querySelector<HTMLDivElement>('#stage')!,
     shell: document.querySelector<HTMLDivElement>('.shell')!,
     songInput: document.querySelector<HTMLInputElement>('#songs')!,
+    filesInput: document.querySelector<HTMLInputElement>('#files')!,
     searchInput: document.querySelector<HTMLInputElement>('#search')!,
     loadingOverlay: document.querySelector<HTMLDivElement>('#loading-overlay')!,
     loadingLabel: document.querySelector<HTMLDivElement>('#loading-label')!,

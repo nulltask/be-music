@@ -4,7 +4,7 @@
  * update of the expected value.
  */
 import { describe, expect, test } from 'vite-plus/test';
-import { parseBms, parseBmson, resolveBmsControlFlow } from '../../parser/src/index.ts';
+import { parseBms, parseBmson, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
 import { computeChartFingerprint, computePlayFingerprint } from './index.ts';
 
 const SP7 = [
@@ -59,7 +59,7 @@ const BMSON = JSON.stringify({
       ],
     },
   ],
-  key_channels: [
+  mine_channels: [
     {
       name: 'mine.wav',
       notes: [
@@ -179,9 +179,14 @@ describe('golden fingerprints (bmfp1)', () => {
     [
       '#RANDOM play',
       () =>
-        computePlayFingerprint(resolveBmsControlFlow(parseBms(RANDOM), { outcomes: [3, 2, 1] }), {
-          chartPath: 'golden.bms',
-        }),
+        computePlayFingerprint(
+          resolveBmsControlFlowWithDraws(parseBms(RANDOM), [
+            { command: 'RANDOM', range: 3, value: 3 },
+            { command: 'SWITCH', range: 2, value: 2 },
+            { command: 'RANDOM', range: 2, value: 1 },
+          ]),
+          { chartPath: 'golden.bms' },
+        ),
       'bmfp1:5904cce29cbd00ee7f411b093dae2960c1ce2b67cba2eb25c4f9dbdb2b227654',
     ],
     [

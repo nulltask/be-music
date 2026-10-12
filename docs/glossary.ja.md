@@ -50,11 +50,13 @@
 - **groove gauge**: クリア判定に使うゲージです。shared core の既定は LR2 互換の `GROOVE` (`NORMAL`) で、export された helper は browser play option 向けに `HARD`、`DEATH`、`EASY` も扱います。
 - **HIGH-SPEED**: ノート表示密度を変えるユーザー設定です。譜面の時刻自体は変えません。
 - **MANUAL / AUTO SCRATCH / AUTO**: 再生モードです。`MANUAL` は手動、`AUTO SCRATCH` は scratch だけ自動、`AUTO` は全自動です。
-- **制御構文 (control flow)**: BMS の `#RANDOM`、`#IF`、`#SWITCH` などの分岐命令です。parser は保持し、player や audio-renderer が再生/レンダリング前に評価します。
+- **制御構文 (control flow)**: BMS の `#RANDOM`、`#IF`、`#SWITCH` などの分岐命令です。parser は保持し、ホストが再生/レンダリング前に、明示的な `RandomDraws` でプレイごとに 1 回解決します。
+- **RandomDraws**: 1 回のプレイでの譜面の制御構文の結果です。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目（コマンド、range、value）を持ちます。`drawRandomOutcomes` で 1 回引き、resolver、エンジン、プレイログで共有します。
+- **Source 層 / Resolved 層**: 譜面を読む 2 つの層です。Source 層（`BeMusicJson`）はファイルに書いてあること、Resolved 層（`@be-music/chart` の `resolveChart` が作る `ResolvedChart`）は、フォーマットの既定値と de facto の規則をすべて適用した、プレイヤーが演奏するものです。[アーキテクチャ](./architecture.ja.md) を参照してください。
 
 ## Runtime Package
 
-- **player core**: `@be-music/player` の共有 engine と helper surface です。timing、note extraction、judgment、scoring、gauge helper、BGA timeline、UI/audio adapter 契約を担当します。
+- **player core**: `@be-music/player` の共有 engine と helper surface です。解決済みの譜面からプレイを準備し、judgment、scoring、gauge helper、UI/audio adapter 契約を担当します。timing、ノートの解決、timeline は `@be-music/chart` にあります。
 - **terminal player**: `@be-music/player-tui` の CLI / TUI frontend です。core engine の上に Music Select、terminal gameplay、terminal BGA、loading screen、SEA build を提供します。
 - **browser player**: `@be-music/player-web` の PixiJS/WebAudio runtime と `@be-music/player-web-demo` の Vite host です。browser drop、LR2 / beatoraja skin rendering、browser gameplay、result scene、recording を扱います。
 - **skin family**: browser player が読み込み済み theme 状態から選ぶ scene family です。現在は LR2、beatoraja、built-in default family があります。
@@ -77,7 +79,7 @@
 - **event**: 正規化後の譜面イベントです。`measure`、`channel`、`position`、`value` を持ちます。
 - **position**: IR のイベント位置です。`[numerator, denominator]` で小節内相対位置を表します。
 - **chart semantics (`@be-music/chart`)**: IR の上にある譜面意味論です。beat 解決、イベント順序、long note 解決、sample trigger、BGA timeline、reference BPM などを含みます。
-- **bms.controlFlow**: parser が保持する BMS 制御構文配列です。parse 時には分岐を確定しません。
+- **bms.controlFlow**: parser が保持する BMS 制御構文配列です。parse 時には分岐を確定しません。解決済みの譜面では空配列です。
 
 ## 実行時と表示
 

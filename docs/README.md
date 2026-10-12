@@ -4,8 +4,10 @@
 
 This directory is a Markdown collection of specifications used in the `be-music` repository.
 
+- [Architecture: the Source layer and the Resolved layer](./architecture.md)
 - [BMS implementation specification](./bms-spec.md)
 - [BMSON implementation specification](./bmson-spec.md)
+- [BMS / bmson compatibility notes (de jure vs de facto)](./format-compat.md)
 - [Bemuse implementation specification](./bemuse-spec.md)
 - [Player implementation specification](./player-spec.md)
 - [Terminal player implementation notes](./player-tui.md)
@@ -23,6 +25,6 @@ Supplement:
 - These documents prioritize how this repository implements and interprets the formats over the original specifications themselves.
 - If there is a discrepancy with the official specifications, please first decide on an implementation policy and then update this document.
 - Keep these documents focused on the current implementation. Put past decisions in pull requests, commit messages, and changelogs.
-- `@be-music/json` is responsible for pure IR, and `@be-music/chart` is responsible for score semantics such as beat resolution and event order.
+- `@be-music/json` is responsible for pure IR (the Source layer), and `@be-music/chart` is responsible for score semantics such as beat resolution and event order, including `resolveChart`, the single step to the Resolved layer every player-side package reads (see [Architecture](./architecture.md)).
 - `@be-music/player` is the shared engine package. Terminal-specific behavior lives in `@be-music/player-tui` and [Terminal player implementation notes](./player-tui.md), while browser-specific behavior lives in `@be-music/player-web` and [Browser player implementation notes](./player-web.md).
 - `@be-music/lr2-skin` and `@be-music/beatoraja-skin` keep skin parsing renderer-independent. Browser PixiJS rendering is documented under `@be-music/player-web`.

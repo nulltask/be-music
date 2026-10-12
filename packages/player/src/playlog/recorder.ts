@@ -1,12 +1,18 @@
-import { computeChartFingerprint, computePlayFingerprint } from '@be-music/chart';
-import { resolveBmsControlFlow } from '@be-music/parser';
+import {
+  computeChartFingerprint,
+  computePlayFingerprint,
+  hasControlFlow,
+  resolveChart,
+  type RandomDraws,
+} from '@be-music/chart';
+import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
 import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
-import { resolveJudgeRankPercent } from '../core/judge-window.ts';
-import { resolveChartLongNoteMode } from '../ruleset/index.ts';
+import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import packageJson from '../../package.json' with { type: 'json' };
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
   BE_MUSIC_PLAYLOG_VERSION,
@@ -16,11 +22,15 @@ import {
   type PlaylogInputEvent,
   type PlaylogNote,
   type PlaylogPlay,
+  type PlaylogRecorderInfo,
   type PlaylogRulesetResult,
 } from './format.ts';
 
 /** Ruleset id used for the engine's own summary cached into `results` at record time. */
 export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
+
+/** `@be-music/player` version stamped into `recorder.engine` of every log this engine records. */
+const ENGINE_VERSION: string = packageJson.version;
 
 /**
  * Chart data the recorder snapshots — structurally a subset of the engine's `PreparedPlaybackChartData`, so the
@@ -29,7 +39,8 @@ export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
 export type PlaylogRecorderChartData = Pick<
   PreparedPlaybackChartData,
   'notes' | 'landmineNotes' | 'invisibleNotes' | 'activeFreeZoneChannels' | 'scorableNotes' | 'laneDisplayMode'
->;
+> &
+  Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
@@ -41,11 +52,8 @@ export interface PlaylogRecorderPlaySettings {
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'`. */
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
-  /**
-   * Value of every `#RANDOM` / `#SWITCH` line of the chart in file order (`resolveBmsControlFlow`'s `onOutcome`). The
-   * engine fills it when it resolves the chart itself; a host that resolves the chart beforehand passes it.
-   */
-  randomOutcomes?: number[];
+  /** The play's `#RANDOM` / `#SWITCH` outcomes (`PlayerOptions.randomDraws`). Recorded when non-empty. */
+  randomDraws?: RandomDraws;
   native?: Record<string, string | number | boolean | null>;
 }
 
@@ -55,14 +63,16 @@ export interface PlaylogRecorderPlaySettings {
  * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content.
  * `sourceChart` is the chart as loaded, before `#RANDOM` / `#SWITCH` resolution and before any lane option; hosts that
  * resolve control flow or rewrite lanes on the chart themselves pass it so the fingerprints describe the chart, not
- * their working copy. Without it the engine uses the chart it was given.
+ * their working copy. Without it the engine uses the chart it was given. `recorder` identifies the host application;
+ * the engine version is added by the recorder itself.
  */
 export type PlaylogRecordingOptions = Pick<
   PlaylogRecorderPlaySettings,
-  'gauge' | 'randomLane' | 'dpFlip' | 'native' | 'randomOutcomes'
+  'gauge' | 'randomLane' | 'dpFlip' | 'native'
 > & {
   chartSha256?: string;
   sourceChart?: BeMusicJson;
+  recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
 };
 
 export interface PlaylogRecorderOptions {
@@ -78,10 +88,12 @@ export interface PlaylogRecorderOptions {
   laneModeExtension?: string;
   /**
    * The chart before `#RANDOM` / `#SWITCH` resolution and before any lane option — the fingerprint source. Used when
-   * its control-flow lines match `play.randomOutcomes`; otherwise the fingerprints fall back to {@link json}.
+   * `play.randomDraws` were drawn for its control flow; otherwise the fingerprints fall back to {@link json}.
    */
   sourceChart?: BeMusicJson;
   play: PlaylogRecorderPlaySettings;
+  /** Host application that records the play. `engine` is always overwritten with this package's version. */
+  recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** Clock source for `createdAt` — injectable for tests. Defaults to `Date`. */
@@ -144,8 +156,8 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         play.judgeWindowOverrideMs = options.play.judgeWindowOverrideMs;
       }
       if (options.play.judgeRuleset !== undefined) play.judgeRuleset = options.play.judgeRuleset;
-      if (options.play.randomOutcomes !== undefined && options.play.randomOutcomes.length > 0) {
-        play.randomOutcomes = [...options.play.randomOutcomes];
+      if (options.play.randomDraws !== undefined && options.play.randomDraws.length > 0) {
+        play.randomDraws = options.play.randomDraws.map((draw) => ({ ...draw }));
       }
       if (aborted === true) play.aborted = true;
       if (options.play.native !== undefined) play.native = options.play.native;
@@ -155,6 +167,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         format: BE_MUSIC_PLAYLOG_FORMAT,
         version: BE_MUSIC_PLAYLOG_VERSION,
         createdAt,
+        recorder: { ...options.recorder, engine: ENGINE_VERSION },
         clock: { unit: 'us', origin: 'chart-zero' },
         chart,
         inputs,
@@ -170,7 +183,8 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
 function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   const { json, chart } = options;
   const idBase = resolveBmsBase(json);
-  const chartLnMode = resolveChartLongNoteMode(json);
+  const resolved = chart.resolvedChart ?? resolveChart(json);
+  const chartLnMode = resolved.lnMode;
   const notes: PlaylogNote[] = [];
 
   for (const note of chart.notes) {
@@ -213,17 +227,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     notes[index]!.id = index;
   }
 
-  const judgeRank: PlaylogChart['judgeRank'] = {
-    percent: resolveJudgeRankPercent(json),
-  };
-  const sourceRank = json.metadata.rank;
-  if (typeof sourceRank === 'number' && Number.isFinite(sourceRank)) {
-    judgeRank.sourceRank = sourceRank;
-  }
-  const sourceExRank = json.sourceFormat === 'bmson' ? json.bmson.info.judgeRank : json.bms.defExRank;
-  if (typeof sourceExRank === 'number' && Number.isFinite(sourceExRank)) {
-    judgeRank.sourceExRank = sourceExRank;
-  }
+  const judgeRank: PlaylogChart['judgeRank'] = resolveChartJudgeRankFacts(json, resolved);
   const timelineSource = options.dynamicJudgeRankChanges ?? [];
   if (timelineSource.length > 0) {
     judgeRank.timeline = timelineSource.map((change) => ({
@@ -252,8 +256,8 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   }
   if (typeof json.metadata.artist === 'string' && json.metadata.artist.length > 0) result.artist = json.metadata.artist;
   if (typeof json.metadata.genre === 'string' && json.metadata.genre.length > 0) result.genre = json.metadata.genre;
-  if (typeof json.metadata.total === 'number' && Number.isFinite(json.metadata.total)) {
-    result.total = json.metadata.total;
+  if (resolved.total.value !== undefined) {
+    result.total = resolved.total.value;
   }
   return result;
 }
@@ -263,11 +267,11 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
  * engine passes as `laneModeExtension`; without it, a 9 KEY play stands in for `.pms` (it is 9 KEY exactly when the
  * chart is `.pms` or its content says so).
  *
- * The source chart rebuilds both whatever the host did to its working copy (a DP flip baked into the chart JSON, a
- * `controlFlow` cleared after resolving it), provided it has one `#RANDOM` / `#SWITCH` line per recorded outcome. Without
- * a usable source the engine's chart gives the play fingerprint, and the chart fingerprint only when no outcome was
- * recorded — a chart with control flow has none to resolve there, so its chart fingerprint is unknown and omitted.
- * A failure only drops a field — it must never break recording.
+ * The source chart rebuilds both whatever the host did to its working copy (a DP flip baked into the chart JSON, the
+ * control flow resolved away), provided `play.randomDraws` were drawn for its control flow. Without a usable source the
+ * engine's chart gives the play fingerprint, and the chart fingerprint only when the play has no draws — a chart with
+ * control flow has none to resolve there, so its chart fingerprint is unknown and omitted. A failure only drops a
+ * field — it must never break recording.
  */
 function computePlaylogFingerprints(options: PlaylogRecorderOptions): {
   chartFingerprint?: string;
@@ -275,26 +279,29 @@ function computePlaylogFingerprints(options: PlaylogRecorderOptions): {
 } {
   const chartPath =
     options.laneModeExtension ?? (options.chart.laneDisplayMode.startsWith('9 KEY') ? '.pms' : undefined);
-  const outcomes = options.play.randomOutcomes ?? [];
+  const draws = options.play.randomDraws ?? [];
   const source = options.sourceChart;
-  if (source !== undefined && countControlFlowDraws(source) === outcomes.length) {
-    const played = outcomes.length > 0 ? resolveBmsControlFlow(source, { outcomes }) : source;
+  const played = source !== undefined ? tryResolveSource(source, draws) : undefined;
+  if (source !== undefined && played !== undefined) {
     return {
       chartFingerprint: tryFingerprint(() => computeChartFingerprint(source, { chartPath })),
       playFingerprint: tryFingerprint(() => computePlayFingerprint(played, { chartPath })),
     };
   }
   const playFingerprint = tryFingerprint(() => computePlayFingerprint(options.json, { chartPath }));
-  return outcomes.length === 0 ? { chartFingerprint: playFingerprint, playFingerprint } : { playFingerprint };
+  return draws.length === 0 ? { chartFingerprint: playFingerprint, playFingerprint } : { playFingerprint };
 }
 
-/** Number of `#RANDOM` / `#SWITCH` lines — the parser draws (and reports) one outcome per line, active or not. */
-function countControlFlowDraws(json: BeMusicJson): number {
-  let count = 0;
-  for (const entry of json.bms.controlFlow) {
-    if (entry.kind === 'directive' && (entry.command === 'RANDOM' || entry.command === 'SWITCH')) count += 1;
+/** The source chart resolved with the play's draws, or `undefined` when they were not drawn for its control flow. */
+function tryResolveSource(source: BeMusicJson, draws: RandomDraws): BeMusicJson | undefined {
+  if (!hasControlFlow(source)) {
+    return draws.length === 0 ? source : undefined;
   }
-  return count;
+  try {
+    return resolveBmsControlFlowWithDraws(source, draws);
+  } catch {
+    return undefined;
+  }
 }
 
 function tryFingerprint(compute: () => string): string | undefined {

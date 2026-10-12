@@ -38,6 +38,14 @@ export function canonicalizeBmsCharset(raw: string | undefined): string | undefi
     case 'eucjp':
     case 'cseucpkdfmtjapanese':
       return 'euc-jp';
+    case 'euckr':
+    case 'cp949':
+    case 'ms949':
+    case 'uhc':
+    case 'windows949':
+    case 'ksc56011987':
+    case 'cseuckr':
+      return 'euc-kr';
     case 'iso88591':
     case 'latin1':
     case 'cp1252':

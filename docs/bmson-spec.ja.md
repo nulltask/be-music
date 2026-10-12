@@ -3,6 +3,7 @@
 # BMSON 実装仕様
 
 この文書は、`packages/parser` / `packages/stringifier` が BMSON をどう扱うかを定義します。
+beatoraja など他のプレイヤーが同じフィールドをどう読むかは [BMS / bmson 互換性ノート](./format-compat.ja.md) で比較しています。
 
 ## 一次参照
 
@@ -44,12 +45,13 @@
 - [x] `sound_channels[].notes[]` の `c`
 - [x] `lines` を使った `measure` / `position` 解決
 - [x] `x <= 0` または `x` 未指定の note を BGM (`01`) として解釈
-- [x] beatoraja `key_channels` extension を landmine channel として読み、note ごとの `damage` を保持
+- [x] beatoraja 拡張を beatoraja と同じく読む: `mine_channels` は note ごとの `damage` を保持した landmine channel、`key_channels` は隠し（不可視）ノート
 - [x] `info.back_image`, `info.banner_image`, `info.eyecatch_image` を unified `metadata.backBmp`, `metadata.banner`, `metadata.stageFile` へ mirror
 - [x] 明示的な `lines: []` を barline suppression として扱い、`bmson.barlinesSuppressed` に保持
 - [x] `lines` 欠落時は bmson 既定の 4/4 model として扱う
-- [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` は保持（ライフバーが増えない）として扱う
+- [x] `info.total` 欠落・非数は bmson 既定値 `100`、負値は仕様どおり絶対値、`0` はそのまま保持として扱う
 - [x] `info.init_bpm` 欠落、0、負値、非数値は parse error として扱う
+- [x] `mode_hint` のレーン表にない `x` の note を、beatoraja と同じく BGM (`01`) として解釈
 - [ ] `version` の妥当性検証（`null` のエラー化、未指定時の legacy 扱い方針）
 - [ ] `version` の互換判定を SemVer で行う方針の明文化
 - [ ] `info.title` / `artist` / `genre` など必須情報の欠損時エラー方針
@@ -118,14 +120,16 @@
 - [ ] 同一 `y` の `stop_events` を加算して適用
 - [ ] sound channel スライス規則（`c` と restart）に基づく再生
 - [x] 同じ sound channel 内で playable ノートと BGM ノートが同じ `y` にある場合の BGM 破棄（parse 時に BGM ノートを捨てる）
+- [x] レイヤーノート（複数の sound channel が同じ `x` と `y` にノートを持つ場合）は、beatoraja と同じく player では最初の sound channel のノート 1 つとして判定し、ほかの sound channel もその時刻に鳴らす（[player 仕様 — 重複ノート](./player-spec.ja.md#重複ノート)）
 - [ ] 異なる sound channel の同一 `(x,y)` ノートを Layered Note として合成再生
 
 ## 実装が読み込むフィールド (parser)
 
-- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
+- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
-- `key_channels[].notes[]`: `x`, `y`, `l`, `c`, `damage`
+- `key_channels[].notes[]`: `x`, `y`
+- `mine_channels[].notes[]`: `x`, `y`, `damage`
 - `bga`: `bga_header`, `bga_events`, `layer_events`, `poor_events`
 
 ## bmson -> BMS/BMSON 中間表現 (`@be-music/json`) 変換
@@ -134,8 +138,10 @@
 - `lines[].y` を `preservation.bmson.lines` に保持
 - `info.resolution` を `bmson.info.resolution` に保持
 - 互換としてルート `resolution` も読み取り、`info.resolution` がなければ採用
+- resolution が `0` や `null` なら既定値 `240` を使い、負の値は仕様のとおり絶対値として読む（beatoraja は `0` 以下の値をすべて `240` として扱う）。整数でない値は切り捨てる
 - `info.init_bpm` が欠落、または正の有限数ではない場合は document を reject
 - `info.total` が有限数なら使い（負値は仕様どおり絶対値へ正規化）、それ以外は bmson 既定値 `100` を適用
+- `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`iidx`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
 - `key = base36(i + 1)` を2桁化
@@ -145,9 +151,9 @@
 - `lines` が存在する場合、`lines` 区間を小節として `measure` と `position` を算出
 - `notes[].x` は `info.mode_hint` に従って次の順で BMS チャンネルへ写像
   1. `mode_hint` が空または未指定なら `beat-7k`（bmson 1.0.0 の既定値）として扱う
-  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）
+  2. `beat-5k`、`beat-7k`、`beat-10k`、`beat-14k`、`popn-5k`、`popn-9k`、`keyboard-24k`、`keyboard-24k-double` は固定のレーン表を使う（たとえば `beat-7k` は `x` 1〜5 を `11`〜`15`、6〜7 を `18`〜`19`、8 をスクラッチ `16` へ。キーボードの表は後述）。bmson 仕様の正式な一覧や beatoraja と同じく、`beat-5k` もスクラッチを `x` 8 に置いて `x` 6 / 7 にはレーンを割り当てず、`beat-10k` は 2P の鍵を `x` 9〜13、2P のスクラッチを `x` 16 に置く。表は `@be-music/chart` の `BMSON_MODE_HINT_LAYOUTS` で、プレイモード表から作る（[Player 仕様 — プレイモード表](./player-spec.ja.md#プレイモード表) を参照）
   3. `generic-Nkeys` は `x = 1..N` を左から順に `11` からの連続チャンネルへ写像
-  4. それ以外の hint では、正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番
+  4. それ以外の hint は未知の hint とする。`sound_channels`・`key_channels`・`mine_channels` の正の `x` がすべて `beat-7k` の表（1〜8）に収まれば、beatoraja（警告つき）、Qwilight、Bemuse と同じく `beat-7k` として読む。収まらなければ正の `x` のユニーク値を昇順に `11` からの連続チャンネルへ採番する。beatoraja では `x` 8 より先のレーンが BGM になるが、残すのが作者の意図だからである（be-music の判断）
 - `x` が未指定、または `x <= 0` のノートは BGM (`01`)
 - キーボード系 hint（beatoraja が読む Keyboardmania 風の 24 鍵 + ホイール）はすべての `x` に固定のレーンを与えるため、使わない鍵がある譜面でも別の鍵へずれない
 
@@ -161,15 +167,19 @@
   |                       | 36〜50  | `2A`〜`2O`            | 2P 鍵 10〜24               |
   |                       | 51 / 52 | `2P` / `2Q`           | 2P ホイール上 / ホイール下 |
 
-  `keyboard-24k` / `keyboard-24k-double` の譜面は、使うレーンにかかわらず `24 KEY SP` / `48 KEY DP` として遊ぶ（プレイヤー仕様を参照）。BmsONE の `keyboard-48k` は 1 人用の 48 鍵レイアウトで 2 人用の `keyboard-24k-double` とは別物のため別名扱いせず、ほかの未知の hint と同じく手順 4 の位置ベースの採番になる
+  `keyboard-24k` / `keyboard-24k-double` の譜面は、使うレーンにかかわらず `24 KEY SP` / `48 KEY DP` として遊ぶ（プレイヤー仕様を参照）。BmsONE の `keyboard-48k` は 1 人用の 48 鍵レイアウトで 2 人用の `keyboard-24k-double` とは別物のため別名扱いせず、ほかの未知の hint と同じく手順 4 に従う
 
-- レーン表にない正の `x` は `11` にフォールバックするため、レーン 1 に重なる
+- 固定レーン表の hint や `generic-Nkeys` で、レーン表にない正の `x` は BGM ノート (`01`) になる。音は鳴るが、どのレーンにもノートは置かない。beatoraja も hint の鍵盤表にない `x` を同じく扱う。手順 4 ではすべての正の `x` にレーンがあるため、表にない `x` は生じない
+- 表にないノートが同じ sound channel の playable ノートと同じ `y` にある場合は、`x = 0` のノートと同じく捨てる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
 - `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
-- `key_channels` entry は `sound_channels` の後に登録し、同じ `mode_hint` lane map で BMS landmine channel へ変換し、`events[].bmson.damage` を保持。event の値は key channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷は既定の `4`（%）を与えます（不正な BMS 地雷値と同じフォールバック）
+- beatoraja 拡張は jbms-parser（beatoraja）と同じく読む。どちらも `sound_channels` と同じ `mode_hint` lane map を通り、`x` に対応するレーンがないノートは捨てる。WAV は `sound_channels` の後に `key_channels`、`mine_channels` の順で登録する
+  - `key_channels` は隠しノート: 各ノートは BMS 不可視オブジェクト（`3x` / `4x`。拡張の `3A`〜`3Q` / `4A`〜`4Q` を含む）になり、チャンネルのサンプルをそのレーンの keysound として鳴らし、判定はしない。読むのは `x` と `y` だけ
+  - `mine_channels` は地雷: 各ノートは BMS 地雷（`Dx` / `Ex`）になり、`damage` を `events[].bmson.damage` に保持。event の値は mine channel 用に登録した WAV スロットなので player はダメージとして読まず、`damage` のない地雷は既定の `4`（%）を与える（不正な BMS 地雷値と同じフォールバック）
+  - beatoraja はロングノート内やノートのある位置の地雷を捨てるが、be-music は LR2 が BMS のそうした地雷を残すのと同じく残す（[BMS / bmson 互換性ノート §2.6](./format-compat.ja.md#26-地雷) を参照）
 - `bga` は `bmson.bga` へ保持
 
 ## BMS/BMSON 中間表現 -> BMSON 変換 (stringifier)
@@ -179,18 +189,54 @@
 - `bmson.info.resolution` を `info.resolution` に出力 (未指定時は `240`)
 - `bmson.info` の拡張項目 (`subartists`, `chart_name`, `judge_rank`, `total`, 画像/プレビュー系など) を出力
 - `info.total` は `bmson.info.total`、bmson ソースなら `metadata.total` から出力する。BMS / JSON 譜面の `metadata.total` はゲージの絶対 TOTAL であり、bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とルールセットに依存）に対する百分率なので出力せず、bmson 既定値 `100` に委ねる
+- `info.judge_rank` は `bmson.info.judge_rank`、bmson ソースなら `metadata.rank` から出力する。BMS / JSON 譜面では、bmson の `judge_rank` が `#DEFEXRANK` と同じ単位（`100` = NORMAL）なので正の `#DEFEXRANK` をそのまま出力し、なければ整数の `#RANK 0`〜`4`（`metadata.rank`、ランク番号）を `33` / `67` / `100` / `133` / `167`（そのランクと同じ判定幅になる `#DEFEXRANK` 値。VERY EASY は beatoraja の judgerank `125` に合わせる。LR2 は NORMAL 扱い）へ変換する。それ以外の `#RANK`（範囲外や小数）は NORMAL 判定なので出力せず、bmson 既定値 `100` に委ねる。be-music の ruleset では、IIDX の判定幅は一致し、LR2 は NORMAL と `#DEFEXRANK` で一致（`#RANK 0`・`1`・`3` は `0.4ms` 以内、`#RANK 4` は広くなる）、beatoraja は bmson の `judge_rank` を `#DEFEXRANK` のように換算せず judgerank として直接使うため、どのランクも約 4/3 倍広くなる
 - `preservation.bmson.lines` があれば `lines[].y` として出力
 - `preservation.bmson.lines` がない場合は IR の小節長から `lines` を自動生成
 - `bmson.barlinesSuppressed` が `true` の場合は `lines: []` を出力
 - `sound_channels` は `wav` キー単位で出力
-- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、それ以外は `beat-<レーン数>k` を出力
-- キーボード系 hint ではホイールも含め各レーンに上の表の固定 `x` を与えるため、再パースで同じレーンに戻る。ほかの hint では使っているレーンを `x = 1` から採番
+- `info.mode_hint` は `bmson.info.modeHint` があればそれを、なければ `24 KEY SP` / `48 KEY DP` の譜面は `keyboard-24k` / `keyboard-24k-double`、使用レーンがすべてプレイ種別の hint（`beat-5k` / `beat-7k` / `beat-10k` / `beat-14k` / `popn-9k`）の表に収まればその hint、それ以外は仕様の左から右へ並べる `generic-<レーン数>keys` を出力（`beat-<レーン数>k` のような独自の hint は未知の hint となり、ほかのプレイヤーは `beat-7k` として読む）
+- 上の表にある hint（キーボード系とホイールを含む）では各レーンに表の固定 `x` を与えるため、再パースで同じレーンに戻る。表にないレーンはその後ろに続け、どの正式な hint にも収まらない配置は `generic-<レーン数>keys` として使っているレーンを `x = 1` から採番
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
-- ロングノートの `events[].bmson.t` を `notes[].t` へ、`bmson.info.lnType` を `info.ln_type` へ反映
+- BMS のロングノート（`#LNOBJ` のペア、または `5x` / `6x` のロングノート。`#LNTYPE 1` / `2`、`#LNTYPE` がなければ Web プレイヤーと同じく推定）は、演奏レーン上の 1 つのノートとして終端までの `l` 付きで出力し、終端オブジェクト（と `#LNTYPE 2` の継続）はノートとして出力しない。終端のない `5x` / `6x` の始点はそのレーンの通常ノートのまま
+- ロングノートの `events[].bmson.t` を `notes[].t` へ、`bmson.info.lnType`（なければ BMS の `#LNMODE` `1`〜`3`。LN / CN / HCN の番号は同じ）を `info.ln_type` へ反映
+- 地雷（`Dx` / `Ex`）は `events[].bmson.damage` を `damage` として保ったまま（ない場合、BMS / JSON の地雷はオブジェクト値を base36 で読んだ値。値が大文字 base36 のダメージでなければ出力せず、どちらでも既定の `4` になる） `mine_channels` へ出力。BMS の地雷はすべて `#WAV00` で爆発するため、その名前の 1 チャンネルにまとめる（`#WAV00` がなければ名前は空）。bmson の地雷はそれぞれのサンプルを保つ。不可視オブジェクト（`3x` / `4x`）は WAV キーごとにまとめて `key_channels` へ出力。どちらの配列も各ノートを載っているレーンの `x` で出力し、該当オブジェクトがなければ出力しない
+- 地雷や不可視オブジェクトを含む譜面は、保持配列がそれらを持たないため常に正規化出力を使う
 - `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
 - `bmson.bga` が存在すれば `bga` を出力
+
+### BMS と bmson の相互変換
+
+`stringifyBms` は bmson 由来の譜面を次のように変換して出力します（通常の BMS 譜面はそのまま出力します）。
+
+| bmson                | BMS                                                                                                                                                                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `l > 0` のノート     | `5x` / `6x` 上の `#LNTYPE 1` のペア（ノート自身の WAV を持つ始点と終点）。`#LNTYPE` がなければ `#LNTYPE 1` を出力。`#LNOBJ` は使わない: すべてのロングノートで共有する終端オブジェクトのスロットが必要で、終端をそのレーンの直前のノートと組にしてしまうが、`5x` / `6x` のペアは自分自身としか組にならない |
+| `t` / `info.ln_type` | ロングノートの種別（`t`、なければ `info.ln_type`）がすべて同じならそれを、そうでなければ `info.ln_type` を `#LNMODE` に出力。それと異なるノート単位の種別は BMS で表せず失われる                                                                                                                           |
+| 地雷の `damage`      | 地雷のオブジェクト値（base36）。整数に丸め、`01`〜`ZZ` に収める（`00` はオブジェクトなしなので `0` は `01` = 1 %、`1295` 超は `ZZ`）。`damage` のない地雷は be-music の既定値 `04`。`#WAV00` がなければ最初の地雷のサンプルを爆発音 `#WAV00` にする                                                        |
+| `judge_rank`         | 正の値なら同じ値の `#DEFEXRANK`（単位が同じで `100` = NORMAL）。`#RANK` は出力しない                                                                                                                                                                                                                       |
+| `total`              | 出力しない。bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とプレイヤーに依存）に対する百分率で、正確な絶対値の `#TOTAL` はないため。BMS の既定値が適用され、これは bmson の既定値 `100` の意味と同じ                                                                                                    |
+| `c`、`up`            | 失われる: BMS にはサンプルの分割や LN 終端音がない                                                                                                                                                                                                                                                         |
+
+逆方向（BMS → bmson）は上の一覧のとおりです。ロングノートは `l` に、`#LNMODE` は `info.ln_type` に、地雷の base36 値は `damage` になり、`#TOTAL` は出力しません。BMS → bmson → BMS と変換した譜面は、ロングノート（`#LNTYPE 1` のペアとして）と地雷のダメージを保ちます。
+
+### プレイヤーと変換ツールでの `judge_rank` の扱い
+
+bmson 仕様は `judge_rank` の判定幅をプレイヤーに委ねています（既定値 `100` = プレイヤー自身の既定の判定幅）。仕様の説明例は LR2 の `#RANK 2`（NORMAL）の判定幅を使っています。プレイヤーと変換ツールの解釈は 2 つに割れており、どのプレイヤーでも同じ判定幅になる値はありません。
+
+| `judge_rank: 100` の解釈          | プレイヤー                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NORMAL（`#RANK 2`）               | [Bemuse](https://github.com/bemusic/bemuse/blob/4bf3e7d98a44841b323741cc403ecb7b41618ade/packages/bemuse-notechart/src/loader/BmsonNotechartLoader.ts#L35-L43)、[Qwilight](https://github.com/thenist/Qwilight/blob/6d3887f6688a1f97c1fbe2bffd28feaedc9920b6/Qwilight/Compiler/BMSONCompiler.cs#L375)、[raindrop](https://github.com/zardoru/raindrop/blob/662dd11f05994f6f36493575b04ecb64b04dcd7b/src/NoteLoaderBMSON.cpp#L200-L215)、be-music の LR2 / IIDX ルールセット |
+| EASY（`#RANK 3`。NORMAL は `75`） | [beatoraja](https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/BMSPlayerRule.java#L59-L66)（`judge_rank` を judgerank の割合としてそのまま使う。`#DEFEXRANK` は 0.7.3 から `100` = NORMAL になるよう換算している）、LR2oraja、bmz-player、be-music の beatoraja ルールセット                                                                                                                                |
+
+| 変換ツール（BMS → bmson）                                                                                                                  | `#RANK 0`〜`4` の書き出し                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| [BmsONE](https://github.com/excln/BmsONE/blob/bb3406eeb8f45d79350241f09bb897dd229ce3af/src/document/DocumentInfo.cpp#L119-L135)            | `40` / `60` / `80` / `100` / `120`（`#DEFEXRANK` は読まない） |
+| [bms2bmson-python](https://github.com/bemusicscript/bms2bmson-python/blob/c83df681b6cd9d28f5dfccc9ee302e389e417b7b/bmx2bmson.py#L108-L122) | 書き出さない（既定値 `100`）                                  |
+| be-music（`stringifyBmson`）                                                                                                               | `33` / `67` / `100` / `133` / `167`。`#DEFEXRANK` はそのまま  |
+
+be-music は NORMAL の解釈（`100` = NORMAL）に従います。仕様の説明例と多くのプレイヤーに沿い、be-music で bmson に変換して読み直したときに判定幅が保たれるためです。その代わり、変換した譜面は beatoraja では約 4/3 倍広い判定になります。配布されている bmson 譜面は、ほぼすべて既定値 `100` のままです。
 
 ## 一次参照に対する未対応/非互換
 

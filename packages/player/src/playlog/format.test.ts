@@ -15,6 +15,7 @@ function makePlaylog(): BeMusicPlaylog {
     format: BE_MUSIC_PLAYLOG_FORMAT,
     version: BE_MUSIC_PLAYLOG_VERSION,
     createdAt: '2026-08-17T01:02:03.456Z',
+    recorder: { name: 'be-music-web', version: '0.5.0', build: '6471cd16', engine: '0.8.0', platform: 'web' },
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
       title: 'Song / Title: Test',
@@ -54,7 +55,11 @@ function makePlaylog(): BeMusicPlaylog {
       randomLane: { p1: 'MIRROR', p2: 'RANDOM' },
       dpFlip: true,
       judgeWindowOverrideMs: 500,
-      randomOutcomes: [2, 1, 3],
+      randomDraws: [
+        { command: 'RANDOM', range: 3, value: 2 },
+        { command: 'SETRANDOM', range: 1, value: 4 },
+        { command: 'SWITCH', range: 2, value: 1 },
+      ],
       aborted: true,
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
@@ -113,11 +118,20 @@ describe('playlog format', () => {
     expect(parsed.chart).not.toHaveProperty('playFingerprint');
   });
 
-  test('rejects #RANDOM outcomes that are not positive integers', () => {
-    for (const randomOutcomes of [[0], [1.5], ['2'], 3]) {
+  test('rejects #RANDOM draws that no control-flow line could have made', () => {
+    for (const randomDraws of [
+      3,
+      [2],
+      [{ command: 'IF', range: 2, value: 1 }],
+      [{ command: 'RANDOM', range: 0, value: 1 }],
+      [{ command: 'RANDOM', range: 2, value: 3 }],
+      [{ command: 'RANDOM', range: 2, value: 1.5 }],
+      [{ command: 'SETRANDOM', range: 2, value: 1 }],
+      [{ command: 'SWITCH', range: 2, value: '1' }],
+    ]) {
       const log = makePlaylog() as unknown as { play: Record<string, unknown> };
-      log.play.randomOutcomes = randomOutcomes;
-      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.randomOutcomes/);
+      log.play.randomDraws = randomDraws;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.randomDraws/);
     }
   });
 
@@ -225,6 +239,29 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('results.native.judge.pgreat: expected a finite number');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.recorder = 'be-music-web';
+        }),
+      ),
+    ).toThrow('recorder: expected an object');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.recorder.version = 5;
+        }),
+      ),
+    ).toThrow('recorder.version: expected a string');
+  });
+
+  test('keeps only the recorder fields that are present', () => {
+    const parsed = parsePlaylog(
+      corrupt((value) => {
+        value.recorder = { engine: '0.8.0' };
+      }),
+    );
+    expect(parsed.recorder).toEqual({ engine: '0.8.0' });
   });
 
   test('ignores unknown fields for forward compatibility', () => {
@@ -236,6 +273,7 @@ describe('playlog format', () => {
         value.inputs[0].futureInputField = 1;
         value.play.futurePlayField = 1;
         value.results.native.futureResultField = 1;
+        value.recorder.futureRecorderField = 'x';
       }),
     );
     expect(parsed).toEqual(makePlaylog());

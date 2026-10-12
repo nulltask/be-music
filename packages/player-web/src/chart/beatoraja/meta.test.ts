@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeMusicJson } from '@be-music/json';
-import { extractChartSubartist } from './meta.ts';
+import { extractChartSubartist, resolveChartTotalReadout } from './meta.ts';
 
 function makeChart(opts: { extras?: Record<string, string>; subartists?: string[] }): BeMusicJson {
   return {
@@ -56,5 +56,25 @@ describe('extractChartSubartist', () => {
   it('falls back to extras when bmson subartists is empty', () => {
     const chart = makeChart({ subartists: [], extras: { SUBARTIST: 'mov:bms' } });
     expect(extractChartSubartist(chart)).toBe('mov:bms');
+  });
+});
+
+describe('resolveChartTotalReadout', () => {
+  const chart = (total?: number) => ({ metadata: total === undefined ? {} : { total } }) as unknown as BeMusicJson;
+
+  it('prefers the effective TOTAL the gauge runs on', () => {
+    // A bmson `total: 100` is a percentage; the readout shows the resolved TOTAL, as beatoraja does after
+    // `BMSPlayerRule.validate`.
+    expect(resolveChartTotalReadout(chart(100), { effectiveTotal: 176.8 })).toBe(176);
+  });
+
+  it('falls back to the chart header without a resolved gauge', () => {
+    expect(resolveChartTotalReadout(chart(320), undefined)).toBe(320);
+    expect(resolveChartTotalReadout(chart(320), { effectiveTotal: 0 })).toBe(320);
+  });
+
+  it('is undefined with neither a gauge nor a header', () => {
+    expect(resolveChartTotalReadout(chart(), undefined)).toBeUndefined();
+    expect(resolveChartTotalReadout(undefined, undefined)).toBeUndefined();
   });
 });

@@ -63,7 +63,6 @@ import {
   type EngineDriverAudioContext,
   type EngineDriverResult,
 } from '../../runtime/engine-driver.ts';
-import { toEngineChart } from '../../runtime/engine-chart.ts';
 import { composeBeatorajaEngineOptions } from './engine-options.ts';
 import { BeatorajaRuntimeAdapter } from '../../skin/beatoraja/runtime-adapter.ts';
 import { BeatorajaPlaySkinView } from './skin-view.ts';
@@ -91,17 +90,11 @@ export interface PixiBeatorajaGameplayViewOptions {
 
   // Engine driver inputs
   /**
-   * Chart already resolved with `resolvePlayChart` (e.g. `prepareBeatorajaGameplayChart`'s `chart`). The view
-   * feeds this one resolution to the skin graphs, markers and the engine alike; the engine gets it through
-   * {@link toEngineChart} so it does not roll `#RANDOM` / `#SWITCH` again.
+   * Chart already resolved for this play (e.g. `prepareBeatorajaGameplayChart`'s `chart`). The view feeds this one
+   * resolution to the skin graphs, markers and the engine alike; pass its draws (`prep.randomDraws`) as
+   * `engineOptions.randomDraws`.
    */
   chart: BeMusicJson;
-  /**
-   * Values `chart`'s `#RANDOM` / `#SWITCH` lines were resolved with, in file order (`resolvePlayChart`'s /
-   * `prepareBeatorajaGameplayChart`'s `randomOutcomes`). Recorded as the play log's `play.randomOutcomes`, so the log
-   * names the branches that were played. Omit (or pass an empty array) for a chart without control flow.
-   */
-  randomOutcomes?: ReadonlyArray<number>;
   /**
    * The song's chart as loaded — before `#RANDOM` / `#SWITCH` resolution and the DP flip. The play log's chart and play
    * fingerprints are computed from it, since {@link chart} is a resolved copy the view may flip further.
@@ -495,9 +488,9 @@ export class PixiBeatorajaGameplayView implements PixiScene {
 
     this.enginePromise = runEngineDriver({
       // The chart is already resolved (the decide screen / prep rolled `#RANDOM` once, and the skin graphs, markers
-      // and BGA cues were built from that roll); clear its control flow so the engine plays that resolution instead
-      // of rolling again and stacking a second branch on top.
-      chart: toEngineChart(this.options.chart),
+      // and BGA cues were built from that roll) and carries no control flow, so the engine plays it as is. The host
+      // passes the draws it was resolved with as `engineOptions.randomDraws`.
+      chart: this.options.chart,
       audio: this.options.audio,
       mode: this.options.mode,
       inputTarget: this.options.inputTarget,

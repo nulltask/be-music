@@ -1,54 +1,50 @@
-import {
-  normalizeChannel,
-  normalizeObjectKey,
-  resolveBmsBase,
-  type BeMusicJson,
-  type BeMusicPlayLevel,
-} from '@be-music/json';
+import { resolveChart, volWavToLinearGain, type ResolvedChart } from '@be-music/chart';
+import type { BeMusicJson, BeMusicPlayLevel } from '@be-music/json';
 
 const BMS_DEFAULT_DISPLAY_RANK = 2;
 const BMS_DEFAULT_DISPLAY_PLAY_LEVEL = 3;
 const BMSON_DEFAULT_DISPLAY_JUDGE_RANK = 100;
 
+/** The chart-wide `#VOLWAV` gain; see {@link volWavToLinearGain} for the accepted range. */
 export function resolveChartVolWavGain(chart: BeMusicJson): number {
-  const volWav = chart.bms.volWav;
-  if (typeof volWav !== 'number' || !Number.isFinite(volWav) || volWav < 0) {
-    return 1;
-  }
-  return volWav / 100;
+  return volWavToLinearGain(chart.bms.volWav);
 }
 
-export function resolveDisplayedJudgeRankValue(chart: BeMusicJson): number {
-  if (chart.sourceFormat === 'bmson') {
-    const judgeRank = chart.bmson.info.judgeRank;
-    if (typeof judgeRank === 'number' && Number.isFinite(judgeRank) && judgeRank > 0) {
-      return judgeRank;
-    }
-    const metadataRank = chart.metadata.rank;
-    if (typeof metadataRank === 'number' && Number.isFinite(metadataRank) && metadataRank > 0) {
-      return metadataRank;
-    }
-    return BMSON_DEFAULT_DISPLAY_JUDGE_RANK;
+/**
+ * The judge rank a song screen shows: bmson `judge_rank` (100 when the chart has none), or BMS `#DEFEXRANK` when it is
+ * above 0, else `#RANK 0`–`4` (truncated), else NORMAL (`2`).
+ *
+ * Reads the resolved chart's judge-rank facts (`ResolvedChart.judgeRank`); a source chart is resolved first. The facts
+ * are the raw chart values, so the format defaults are filled here for display, as each ruleset fills them for play:
+ * a play log records only what the chart sets and must replay to the same windows.
+ */
+export function resolveDisplayedJudgeRankValue(chart: BeMusicJson | ResolvedChart): number {
+  const resolved = toResolvedChart(chart);
+  const { rank, exRank } = resolved.judgeRank;
+  if (resolved.sourceFormat === 'bmson') {
+    return exRank !== undefined && exRank > 0 ? exRank : BMSON_DEFAULT_DISPLAY_JUDGE_RANK;
   }
-
-  const defExRank = chart.bms.defExRank;
-  if (typeof defExRank === 'number' && Number.isFinite(defExRank) && defExRank > 0) {
-    return defExRank;
+  if (exRank !== undefined && exRank > 0) {
+    return exRank;
   }
-
-  const rankValue = Number.isFinite(chart.metadata.rank) ? Math.trunc(chart.metadata.rank!) : Number.NaN;
-  if (Number.isFinite(rankValue) && rankValue >= 0 && rankValue <= 4) {
+  const rankValue = rank !== undefined ? Math.trunc(rank) : Number.NaN;
+  if (rankValue >= 0 && rankValue <= 4) {
     return rankValue;
   }
-
   return BMS_DEFAULT_DISPLAY_RANK;
 }
 
-export function resolveDisplayedJudgeRankLabel(chart: BeMusicJson): string {
-  if (hasDynamicJudgeRankChanges(chart)) {
+/** {@link resolveDisplayedJudgeRankValue} as a label (`NORMAL`, `120` …); `RANDOM` when `#EXRANKxx` changes it mid-play. */
+export function resolveDisplayedJudgeRankLabel(chart: BeMusicJson | ResolvedChart): string {
+  const resolved = toResolvedChart(chart);
+  if (resolved.judgeRank.changes.length > 0) {
     return 'RANDOM';
   }
-  return formatDisplayedJudgeRankValue(resolveDisplayedJudgeRankValue(chart));
+  return formatDisplayedJudgeRankValue(resolveDisplayedJudgeRankValue(resolved));
+}
+
+function toResolvedChart(chart: BeMusicJson | ResolvedChart): ResolvedChart {
+  return 'judgeRank' in chart ? chart : resolveChart(chart);
 }
 
 export function resolveDisplayedPlayLevelValue(chart: BeMusicJson): BeMusicPlayLevel | undefined {
@@ -73,33 +69,6 @@ export function resolveDisplayedDifficultyValue(chart: BeMusicJson): number | un
     return normalized;
   }
   return undefined;
-}
-
-function hasDynamicJudgeRankChanges(chart: BeMusicJson): boolean {
-  if (chart.sourceFormat !== 'bms') {
-    return false;
-  }
-  const idBase = resolveBmsBase(chart);
-  for (const event of chart.events) {
-    if (normalizeChannel(event.channel) !== 'A0') {
-      continue;
-    }
-    if (parseDynamicJudgeRankPercent(chart.bms.exRank[normalizeObjectKey(event.value, idBase)]) !== undefined) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function parseDynamicJudgeRankPercent(raw: string | undefined): number | undefined {
-  if (typeof raw !== 'string') {
-    return undefined;
-  }
-  const parsed = Number.parseFloat(raw);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return undefined;
-  }
-  return parsed;
 }
 
 function formatDisplayedJudgeRankValue(value: number): string {

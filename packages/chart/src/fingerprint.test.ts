@@ -276,11 +276,10 @@ describe('fingerprint sensitivity', () => {
     expect(playFingerprint(text, 'song.pms')).not.toBe(playFingerprint(text, 'song.bms'));
     expect(playFingerprint(text, 'song.bme')).toBe(playFingerprint(text, undefined));
     expect(playDocument(chart('#00221:01')).laneMode).toBe('14');
-    // `.bme` names the 7-key format: a chart without a 6 / 7 key column is still 7 KEY.
+    // The lanes in use decide the IIDX modes whatever the extension: a `.bme` chart without a 6 / 7 key column is 5 KEY.
     const fiveKeys = ['#BPM 150', '#00111:01', '#00115:01'].join('\n');
     expect(playDocument(fiveKeys).laneMode).toBe('5');
-    expect(playDocument(fiveKeys, 'dir.v2/song.BME').laneMode).toBe('7');
-    expect(playDocument(fiveKeys, 'song.bme.bak').laneMode).toBe('5');
+    expect(playDocument(fiveKeys, 'dir.v2/song.BME').laneMode).toBe('5');
   });
 
   test('counts long-note channels for the lane mode', () => {
@@ -528,7 +527,7 @@ describe('engine fallbacks (findings A10 – A13)', () => {
     );
     expect(document(bmson({ total: 0 })).total).toBeNull();
     expect(document(bmson({})).judge).toEqual({ exRank: '100' });
-    const mines = { key_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }] };
+    const mines = { mine_channels: [{ name: 'mine.wav', notes: [{ x: 2, y: 960 }] }] };
     expect(document(bmson({}, mines)).mines).toEqual([{ m: '1', p: '0', lane: '12', damage: '4' }]);
     // Adding sound channels does not move the default damage.
     const more = {
@@ -588,7 +587,7 @@ describe('BMS against bmson', () => {
           ],
         },
       ],
-      key_channels: [{ name: 'mine.wav', notes: [{ x: 4, y: 960, damage: 10 }] }],
+      mine_channels: [{ name: 'mine.wav', notes: [{ x: 4, y: 960, damage: 10 }] }],
       bpm_events: [{ y: 2400, bpm: 180 }],
       stop_events: [{ y: 1920, duration: 240 }],
     });

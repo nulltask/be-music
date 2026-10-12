@@ -28,8 +28,9 @@ import { resolveJudgeWindowsMs } from '@be-music/player/core/judge-window';
 import type { PlayerJudgeComboSignalState } from '@be-music/player/state-signals';
 import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
 import type { BeatorajaRenderContext } from './render.ts';
-import { extractChartSubartist } from '../../chart/beatoraja/meta.ts';
+import { extractChartSubartist, resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
+import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
 import {
   computeBeatorajaChartNoteDistribution,
   type BeatorajaBpmSegment,
@@ -1744,43 +1745,10 @@ export class BeatorajaRuntimeAdapter {
     return this.currentBpmAtMs(this.frame.currentSeconds * 1000);
   }
 
-  /**
-   * Min / max BPM across the chart's BPM-change events. Cached on first call (the events list
-   * is static for the chart's lifetime). Both fall back to the chart's main BPM when the chart
-   * is constant-tempo (no `03` / `08` events).
-   */
+  /** Min / max BPM of the chart's tempo map (`resolveChartBpmRange`); both are the main BPM for a constant tempo. */
   private cachedBpmRange(): { min: number; max: number } {
-    if (this.bpmRangeCache !== undefined) return this.bpmRangeCache;
-    const chart = this.chart;
-    const initial = chart?.metadata.bpm ?? 0;
-    let min = initial > 0 ? initial : Number.POSITIVE_INFINITY;
-    let max = initial;
-    const bpmTable = chart?.resources?.bpm ?? {};
-    for (const event of chart?.events ?? []) {
-      if (event.value === '00' || event.value === '') continue;
-      let bpm: number | undefined;
-      if (event.channel === '03') {
-        const parsed = parseInt(event.value, 16);
-        if (Number.isFinite(parsed) && parsed > 0) bpm = parsed;
-      } else if (event.channel === '08') {
-        const looked =
-          bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
-        if (typeof looked === 'number') bpm = looked;
-        else if (typeof looked === 'string') {
-          const parsed = Number.parseFloat(looked);
-          bpm = Number.isFinite(parsed) ? parsed : undefined;
-        }
-      }
-      if (bpm !== undefined && bpm > 0) {
-        if (bpm < min) min = bpm;
-        if (bpm > max) max = bpm;
-      }
-    }
-    if (!Number.isFinite(min)) min = max > 0 ? max : 0;
-    this.bpmRangeCache = { min, max };
-    return this.bpmRangeCache;
+    return this.chart === undefined ? { min: 0, max: 0 } : resolveChartBpmRange(this.chart);
   }
-  private bpmRangeCache: { min: number; max: number } | undefined;
 
   /**
    * Resolve recent judgement timings for `timingvisualizer[]` rendering. Returns oldest-first
@@ -2287,13 +2255,11 @@ export class BeatorajaRuntimeAdapter {
         if (last === undefined) return 0;
         return Math.trunc(last.deltaMs);
       }
-      // BMS `#TOTAL` header value (gauge total). Same code (368) as the select scene's
-      // chart-summary readout — ModernChic / GdbG_Skin author it on play too. Returns 0 when
-      // the chart didn't author the directive (legacy / minimal BMS).
-      case BEATORAJA_NUM.BMS_TOTAL: {
-        const total = this.chart?.metadata?.total;
-        return typeof total === 'number' && Number.isFinite(total) ? Math.floor(total) : 0;
-      }
+      // Chart TOTAL (368). Same code as the select scene's chart-summary readout — ModernChic /
+      // GdbG_Skin author it on play too. Shows the gauge's effective TOTAL once the engine
+      // reports one, else the chart header; 0 when neither exists.
+      case BEATORAJA_NUM.BMS_TOTAL:
+        return resolveChartTotalReadout(this.chart, summary?.gauge) ?? 0;
       // Target / rival diff slots — no IR / DB layer, return 0 so the readout shows zero rather
       // than garbage. (Authors gate these behind `if[ir_loaded]` / similar so the zero is benign.)
       case BEATORAJA_NUM.DIFF_EXSCORE:

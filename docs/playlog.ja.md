@@ -64,12 +64,19 @@ TypeScript 型・シリアライザ・防御的パーサは
 解決した譜面の `#RANDOM` の結果）は
 `PlayerOptions.recordPlaylog` で渡します。
 
+各ログはトップレベルに、記録したソフトウェアを表す **`recorder`**（`{ name, version, build, engine, platform }`）
+を持ちます。アプリ側の項目はホストが `recordPlaylog.recorder` で宣言し（ブラウザプレイヤーは
+`name: 'be-music-web'`、デモのパッケージバージョン、短縮したソースコミットを `build`、`platform: 'web'` として
+渡します）、`engine` にはプレイを実行した `@be-music/player` のバージョンを recorder が必ず書き込みます。値は
+自己申告であり、記録側のバグが見つかったときにどのビルドが書いたログかを判別するための情報で、ログを信頼する
+根拠にはしません。このフィールドが追加される前に書かれたログには含まれません。
+
 ブラウザプレイヤーでは:
 
 - LR2 / default ゲームプレイシーンは `PixiGameplayResultData.playlog` として公開します。
 - beatoraja ゲームプレイシーンは `PixiBeatorajaGameplayView.getPlaylog()` として公開します。
 - デモはリザルトシーンのマウント時に `<タイトル>-<タイムスタンプ>.bmplay.json` を自動ダウンロードします。
-  Debug Menu の **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。プレイログ関連
+  Debug Menu の **Library & records** フォルダにある **Auto-save play history** チェックボックス（デフォルト OFF）で制御します。プレイログ関連
   オプションは曲の開始時にラッチされ、曲の途中では変更できません — プレイ中はコントロールが disabled
   になり、曲開始時点の値がそのプレイに適用されます。
 - Debug Menu の **Play options** フォルダが記録対象のプレイ設定（オートプレイ、判定幅

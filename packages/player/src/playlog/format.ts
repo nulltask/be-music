@@ -1,3 +1,4 @@
+import type { RandomDraw } from '@be-music/chart';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
 
@@ -89,7 +90,10 @@ export interface PlaylogChart {
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
-  /** Raw `#TOTAL` / bmson `info.total`. Omitted when the chart did not specify one — each ruleset applies its own default. */
+  /**
+   * Raw `#TOTAL` / bmson `info.total` as the chart wrote it — not the effective TOTAL, which each ruleset resolves on
+   * replay (bmson `total` is a percentage of the ruleset's default). Omitted when the chart did not specify one.
+   */
   total?: number;
   /** Chart-level long-note mode (1: LN / 2: CN / 3: HCN) after `#LNMODE` / `info.ln_type` resolution. */
   lnMode: LongNoteMode;
@@ -112,11 +116,12 @@ export interface PlaylogPlay {
   /** Judge-window ruleset the live engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'` (the default). */
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
   /**
-   * Value of every `#RANDOM` / `#SWITCH` line of the chart in file order — what the play rolled. With the chart file,
-   * `resolveBmsControlFlow(json, { outcomes: randomOutcomes })` rebuilds the chart that was played, so a verifier can
-   * recompute `chart.playFingerprint`. Absent for charts without control flow and when the host did not supply it.
+   * The play's `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes (`RandomDraws` from `@be-music/chart`): one
+   * entry per such line of the chart, in file order. With the chart file, `resolveBmsControlFlowWithDraws(json,
+   * randomDraws)` rebuilds the chart that was played (so a verifier can recompute `chart.playFingerprint`), and a
+   * replay passes them back as `PlayerOptions.randomDraws`. Absent for charts without control flow.
    */
-  randomOutcomes?: number[];
+  randomDraws?: RandomDraw[];
   /** True when the play ended early (ESC). The input stream stops at the abort point. */
   aborted?: boolean;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
@@ -163,11 +168,30 @@ export interface PlaylogRulesetResult {
   gauge: PlaylogGaugeResult;
 }
 
+/**
+ * Software that recorded the play — self-reported, so it identifies builds for compatibility and bug triage, never
+ * for trust. Every field is optional: a log from a host that declared nothing still carries the engine version.
+ */
+export interface PlaylogRecorderInfo {
+  /** Recording application id (`'be-music-web'`, `'be-music-tui'`, ...). */
+  name?: string;
+  /** Recording application version. */
+  version?: string;
+  /** Build identifier of the application, e.g. the source commit. */
+  build?: string;
+  /** `@be-music/player` version whose engine ran the play — filled by the recorder, not the host. */
+  engine?: string;
+  /** Coarse platform label (`'web'`, `'node'`, ...). Never a full user-agent string. */
+  platform?: string;
+}
+
 export interface BeMusicPlaylog {
   format: typeof BE_MUSIC_PLAYLOG_FORMAT;
   version: typeof BE_MUSIC_PLAYLOG_VERSION;
   /** ISO 8601 timestamp of the recording, when the recorder had a clock available. */
   createdAt?: string;
+  /** Software that recorded the play. Absent in logs written before the field existed. */
+  recorder?: PlaylogRecorderInfo;
   clock: { unit: 'us'; origin: 'chart-zero' };
   chart: PlaylogChart;
   inputs: PlaylogInputEvent[];
@@ -238,17 +262,30 @@ export function parsePlaylog(source: unknown): BeMusicPlaylog {
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
   const results = root.results === undefined ? undefined : parseResults(expectRecord(root.results, 'results'));
+  const recorder = root.recorder === undefined ? undefined : parseRecorder(expectRecord(root.recorder, 'recorder'));
 
   return {
     format: BE_MUSIC_PLAYLOG_FORMAT,
     version: BE_MUSIC_PLAYLOG_VERSION,
     createdAt: optionalString(root.createdAt, 'createdAt'),
+    ...(recorder !== undefined ? { recorder } : {}),
     clock: { unit: 'us', origin: 'chart-zero' },
     chart,
     inputs,
     play,
     ...(results !== undefined ? { results } : {}),
   };
+}
+
+const RECORDER_KEYS = ['name', 'version', 'build', 'engine', 'platform'] as const;
+
+function parseRecorder(recorder: Record<string, unknown>): PlaylogRecorderInfo {
+  const parsed: PlaylogRecorderInfo = {};
+  for (const key of RECORDER_KEYS) {
+    const value = optionalString(recorder[key], `recorder.${key}`);
+    if (value !== undefined) parsed[key] = value;
+  }
+  return parsed;
 }
 
 function parseChart(chart: Record<string, unknown>): PlaylogChart {
@@ -413,14 +450,8 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     }
     parsed.judgeRuleset = play.judgeRuleset;
   }
-  if (play.randomOutcomes !== undefined) {
-    if (
-      !Array.isArray(play.randomOutcomes) ||
-      !play.randomOutcomes.every((value) => typeof value === 'number' && Number.isInteger(value) && value >= 1)
-    ) {
-      throw new PlaylogParseError('play.randomOutcomes: expected an array of positive integers');
-    }
-    parsed.randomOutcomes = [...(play.randomOutcomes as number[])];
+  if (play.randomDraws !== undefined) {
+    parsed.randomDraws = parseRandomDraws(play.randomDraws);
   }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.native !== undefined) {
@@ -434,6 +465,30 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.native = copied;
   }
   return parsed;
+}
+
+const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
+
+function parseRandomDraws(value: unknown): RandomDraw[] {
+  if (!Array.isArray(value)) {
+    throw new PlaylogParseError('play.randomDraws: expected an array');
+  }
+  return value.map((entry: unknown, index): RandomDraw => {
+    const path = `play.randomDraws[${index}]`;
+    const draw = expectRecord(entry, path);
+    const { command, range, value: drawn } = draw;
+    if (typeof command !== 'string' || !RANDOM_DRAW_COMMANDS.has(command)) {
+      throw new PlaylogParseError(`${path}.command: expected 'RANDOM' | 'SETRANDOM' | 'SWITCH' | 'SETSWITCH'`);
+    }
+    if (typeof range !== 'number' || !Number.isInteger(range) || range < 1) {
+      throw new PlaylogParseError(`${path}.range: expected a positive integer`);
+    }
+    const fixed = command === 'SETRANDOM' || command === 'SETSWITCH';
+    if (typeof drawn !== 'number' || !Number.isInteger(drawn) || drawn < 1 || (fixed ? range !== 1 : drawn > range)) {
+      throw new PlaylogParseError(`${path}.value: expected an integer in 1..range (range 1 for a #SET… line)`);
+    }
+    return { command: command as RandomDraw['command'], range, value: drawn };
+  });
 }
 
 function parseResults(results: Record<string, unknown>): Record<string, PlaylogRulesetResult> {

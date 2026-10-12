@@ -3,7 +3,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vite-plus/test';
 import { createEmptyJson } from '../../json/src/index.ts';
-import { parseBmson, parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { parseBmson, parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
+import { resolveRuleset, rulesetChartFactsFromChart, type JudgeWindowSetUs } from '../../player/src/ruleset/index.ts';
 import { stringifyBms, stringifyBmson } from './index.ts';
 
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -518,7 +519,7 @@ describe('stringifier', () => {
         init_bpm: number;
         mode_hint: string;
         resolution: number;
-        judge_rank: number;
+        judge_rank?: number;
         total?: number;
         subartists?: string[];
       };
@@ -534,10 +535,12 @@ describe('stringifier', () => {
       genre: 'Genre',
       level: 7,
       init_bpm: 150,
-      mode_hint: 'beat-2k',
+      mode_hint: 'generic-2keys',
       resolution: 480,
-      judge_rank: 75,
     });
+    // `metadata.rank` of a non-bmson chart is a BMS `#RANK` index (0..4); 75 is out of range, which judges as NORMAL, so
+    // `judge_rank` is left out and the bmson default (100 = NORMAL) applies.
+    expect(document.info).not.toHaveProperty('judge_rank');
     // `metadata.total` of a non-bmson chart is an absolute gauge TOTAL, not bmson's percentage, so it is not written.
     expect(document.info).not.toHaveProperty('total');
     expect(document.info.subartists).toEqual(['A', 'B', '']);
@@ -611,13 +614,14 @@ describe('stringifier', () => {
     ).toEqual(['#WAVCMD 00 01 48']);
   });
 
-  test('bmson stringify: writes mines back to `key_channels` with their damage instead of as sound notes', () => {
+  test('bmson stringify: writes mines to `mine_channels` with their damage and hidden notes to `key_channels`', () => {
     const source = parseBmson(
       JSON.stringify({
         version: '1.0.0',
         info: { title: 'Mines', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
         sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
-        key_channels: [
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }],
+        mine_channels: [
           {
             name: 'mine.wav',
             notes: [
@@ -630,12 +634,14 @@ describe('stringifier', () => {
     );
     const output = JSON.parse(stringifyBmson(source)) as {
       sound_channels: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
-      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
+      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+      mine_channels?: Array<{ name: string; notes: Array<{ x: number; y: number; damage?: number }> }>;
     };
 
     expect(output.sound_channels.map((channel) => channel.name)).toEqual(['key.wav']);
     expect(output.sound_channels[0]!.notes).toEqual([expect.objectContaining({ x: 1, y: 0 })]);
-    expect(output.key_channels).toEqual([
+    expect(output.key_channels).toEqual([{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }]);
+    expect(output.mine_channels).toEqual([
       {
         name: 'mine.wav',
         notes: [
@@ -646,11 +652,60 @@ describe('stringifier', () => {
     ]);
 
     const reparsed = parseBmson(JSON.stringify(output));
-    const mines = reparsed.events.filter((event) => /^[DE]/i.test(event.channel));
-    expect(mines.map((event) => [event.channel, event.bmson?.damage])).toEqual([
+    const extensionEvents = reparsed.events.filter((event) => /^[34DE]/i.test(event.channel));
+    expect(extensionEvents.map((event) => [event.channel, event.bmson?.damage])).toEqual([
+      ['32', undefined],
       ['D2', 10],
       ['D1', undefined],
     ]);
+  });
+
+  test('bmson stringify: keeps mines and hidden notes when the preserved document is trusted', () => {
+    const source = parseBmson(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { title: 'Mines', init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+        key_channels: [{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }],
+        mine_channels: [{ name: 'mine.wav', notes: [{ x: 3, y: 480, damage: 12 }] }],
+      }),
+    );
+    const output = JSON.parse(stringifyBmson(source, { skipPreservationValidation: true })) as {
+      key_channels?: unknown;
+      mine_channels?: unknown;
+    };
+
+    expect(output.key_channels).toEqual([{ name: 'hidden.wav', notes: [{ x: 2, y: 240 }] }]);
+    expect(output.mine_channels).toEqual([{ name: 'mine.wav', notes: [{ x: 3, y: 480, damage: 12 }] }]);
+  });
+
+  test('bmson stringify: BMS invisible objects become `key_channels` notes on their own lanes, not extra keys', () => {
+    const json = parseChart(
+      ['#BPM 120', '#WAV01 key.wav', '#WAV02 hidden.wav', '#00111:01', '#00131:0002', '#00143:02', ''].join('\n'),
+    );
+    const output = JSON.parse(stringifyBmson(json)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+      key_channels?: Array<{ name: string; notes: Array<{ x: number; y: number }> }>;
+    };
+
+    // Lanes 11 and 23 are numbered `x` 1 / 2; the hidden notes take those lanes instead of new ones.
+    expect(output.info.mode_hint).toBe('generic-2keys');
+    expect(output.sound_channels).toEqual([{ name: 'key.wav', notes: [{ x: 1, y: 960, l: 0, c: false }] }]);
+    expect(output.key_channels).toEqual([
+      {
+        name: 'hidden.wav',
+        notes: [
+          { x: 2, y: 960 },
+          { x: 1, y: 1440 },
+        ],
+      },
+    ]);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.filter((event) => /^[34]/.test(event.channel))
+        .map((event) => event.channel),
+    ).toEqual(['32', '31']);
   });
 
   test('bmson stringify: writes a 24 KEY chart as keyboard-24k with fixed x lanes, wheel included', () => {
@@ -666,12 +721,12 @@ describe('stringifier', () => {
     const output = JSON.parse(stringifyBmson(json)) as {
       info: { mode_hint: string };
       sound_channels: Array<{ notes: Array<{ x: number }> }>;
-      key_channels?: Array<{ notes: Array<{ x: number }> }>;
+      mine_channels?: Array<{ notes: Array<{ x: number }> }>;
     };
 
     expect(output.info.mode_hint).toBe('keyboard-24k');
     expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual([1, 10, 24, 25, 26]);
-    expect(output.key_channels?.[0]!.notes.map((note) => note.x)).toEqual([26]);
+    expect(output.mine_channels?.[0]!.notes.map((note) => note.x)).toEqual([26]);
     expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual([
       '11',
       '1A',
@@ -711,7 +766,152 @@ describe('stringifier', () => {
     expect(parseBmson(JSON.stringify(output)).events.map((event) => event.channel)).toEqual(['15', '1Q', '2E', '2P']);
   });
 
-  test('bmson stringify: omits `key_channels` when the chart has no mines', () => {
+  describe('bmson stringify: keeps every lane of a non-keyboard mode_hint through parse → stringify → parse', () => {
+    const upTo = (count: number) => Array.from({ length: count }, (_, index) => index + 1);
+    // The lane `x` values of each hint. `beat-5k` / `beat-10k` keep the scratch on x 8 / 16 like the bmson spec and
+    // beatoraja, leaving x 6 / 7 / 14 / 15 without a lane.
+    const laneXs: Array<[string, number[]]> = [
+      ['beat-5k', [1, 2, 3, 4, 5, 8]],
+      ['beat-7k', upTo(8)],
+      ['beat-10k', [1, 2, 3, 4, 5, 8, 9, 10, 11, 12, 13, 16]],
+      ['beat-14k', upTo(16)],
+      ['popn-5k', upTo(5)],
+      ['popn-9k', upTo(9)],
+    ];
+    // Measure + fraction as one number, since the output resolution rewrites the position denominators.
+    const toChannels = (json: ReturnType<typeof parseBmson>) =>
+      json.events.map((event) => `${event.measure + event.position[0] / event.position[1]}:${event.channel}`).sort();
+
+    test.each(laneXs)('%s', (modeHint, xs) => {
+      const source = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { title: modeHint, init_bpm: 120, resolution: 240, mode_hint: modeHint },
+          sound_channels: [{ name: 'key.wav', notes: xs.map((x) => ({ x, y: x * 60 })) }],
+          key_channels: [{ name: 'mine.wav', notes: xs.map((x) => ({ x, y: x * 60 + 30 })) }],
+        }),
+      );
+      // A different resolution skips the preserved document, so the lanes go through the canonical writer.
+      const output = JSON.parse(stringifyBmson(source, { resolution: 480 })) as {
+        info: { mode_hint: string };
+        sound_channels: Array<{ notes: Array<{ x: number }> }>;
+      };
+
+      expect(output.info.mode_hint).toBe(modeHint);
+      expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual(xs);
+      expect(toChannels(parseBmson(JSON.stringify(output)))).toEqual(toChannels(source));
+    });
+
+    test('bmson-mine-key-channels.bmson (beat-7k, keys 6 / 7, scratch and mines)', async () => {
+      const source = parseBmson(
+        await readFile(resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson'), 'utf8'),
+      );
+      expect(toChannels(parseBmson(stringifyBmson(source)))).toEqual(toChannels(source));
+    });
+
+    test('an unknown hint numbers the lanes in use from 1', () => {
+      const source = parseBmson(
+        JSON.stringify({
+          version: '1.0.0',
+          info: { title: 'Unknown', init_bpm: 120, resolution: 240, mode_hint: 'custom-3k' },
+          sound_channels: [
+            {
+              name: 'key.wav',
+              notes: [
+                { x: 4, y: 0 },
+                { x: 9, y: 240 },
+                { x: 20, y: 480 },
+              ],
+            },
+          ],
+        }),
+      );
+      const output = JSON.parse(stringifyBmson(source, { resolution: 480 })) as {
+        sound_channels: Array<{ notes: Array<{ x: number }> }>;
+      };
+      expect(output.sound_channels[0]!.notes.map((note) => note.x)).toEqual([1, 2, 3]);
+    });
+  });
+
+  test('bmson stringify: writes a 7 KEY BMS with scratch and keys 6 / 7 as beat-7k on its fixed lanes', () => {
+    const source = parseChart(
+      ['#BPM 120', '#WAV01 key.wav', '#00111:01', '#00116:01', '#00118:01', '#00119:01', ''].join('\n'),
+    );
+    const output = JSON.parse(stringifyBmson(source)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe('beat-7k');
+    expect(output.sound_channels[0]!.notes.map((note) => note.x).sort((a, b) => a - b)).toEqual([1, 6, 7, 8]);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(['11', '16', '18', '19']);
+  });
+
+  test.each([
+    ['beat-5k', ['11', '15', '16'], [1, 5, 8]],
+    ['beat-10k', ['11', '16', '21', '25', '26'], [1, 8, 9, 13, 16]],
+  ])('bmson stringify: writes a 5 KEY SP / DP BMS as %s with the scratch on x 8 / 16', (modeHint, lanes, xs) => {
+    const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
+    const output = JSON.parse(stringifyBmson(source)) as {
+      info: { mode_hint: string };
+      sound_channels: Array<{ notes: Array<{ x: number }> }>;
+    };
+
+    expect(output.info.mode_hint).toBe(modeHint);
+    expect(output.sound_channels[0]!.notes.map((note) => note.x).sort((a, b) => a - b)).toEqual(xs);
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(lanes);
+  });
+
+  test('BMS stringify: drops a branch header that a later top-level line overrides, keeping the file-order result', () => {
+    const json = parseChart(
+      [
+        '#WAV01 top.wav',
+        '#RANDOM 1',
+        '#IF 1',
+        '#WAV01 branch-wins.wav',
+        '#WAV02 branch-loses.wav',
+        '#ENDIF',
+        '#ENDRANDOM',
+        '#WAV02 top-after.wav',
+        '#00111:0102',
+        '',
+      ].join('\n'),
+    );
+    // Force the re-generated layout, which writes every top-level header before the control flow.
+    json.preservation.bms.sourceLines = [];
+    json.preservation.bms.objectLines = [];
+    const output = stringifyBms(json);
+
+    expect(output).not.toContain('branch-loses.wav');
+    const resolved = resolveBmsControlFlow(parseChart(output), { random: () => 0 });
+    expect(resolved.resources.wav['01']).toBe('branch-wins.wav');
+    expect(resolved.resources.wav['02']).toBe('top-after.wav');
+  });
+
+  test('bmson stringify: keeps a BME POPN-9 chart on 11..19 under the positional generic-9keys hint', () => {
+    const lanes = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
+    const source = parseChart(['#BPM 120', '#WAV01 key.wav', ...lanes.map((lane) => `#001${lane}:01`), ''].join('\n'));
+    const output = JSON.parse(stringifyBmson(source)) as { info: { mode_hint: string } };
+
+    // The spec's `generic-Nkeys` names a layout ordered left to right; a made-up `beat-9k` would be an unknown hint,
+    // which players read as `beat-7k`.
+    expect(output.info.mode_hint).toBe('generic-9keys');
+    expect(
+      parseBmson(JSON.stringify(output))
+        .events.map((event) => event.channel)
+        .sort(),
+    ).toEqual(lanes);
+  });
+
+  test('bmson stringify: omits `key_channels` / `mine_channels` when the chart has no hidden notes or mines', () => {
     const source = parseBmson(
       JSON.stringify({
         version: '1.0.0',
@@ -719,7 +919,28 @@ describe('stringifier', () => {
         sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0 }] }],
       }),
     );
-    expect(JSON.parse(stringifyBmson(source))).not.toHaveProperty('key_channels');
+    const output = JSON.parse(stringifyBmson(source)) as Record<string, unknown>;
+    expect(output).not.toHaveProperty('key_channels');
+    expect(output).not.toHaveProperty('mine_channels');
+  });
+
+  test('bmson stringify: rescales preserved `lines` to the output resolution', async () => {
+    const chartPath = resolve(rootDir, 'examples/test/bmson-mine-key-channels.bmson');
+    const parsed = parseBmson(await readFile(chartPath, 'utf8'));
+
+    const output = JSON.parse(stringifyBmson(parsed, { resolution: 480 })) as {
+      info: { resolution: number };
+      lines: Array<{ y: number }>;
+    };
+    expect(output.info.resolution).toBe(480);
+    expect(output.lines.map((line) => line.y)).toEqual([0, 1920, 3840]);
+
+    const toTiming = (event: { measure: number; position: readonly [number, number] }) => ({
+      measure: event.measure,
+      fraction: event.position[0] / event.position[1],
+    });
+    const reparsed = parseBmson(JSON.stringify(output));
+    expect(reparsed.events.map(toTiming)).toEqual(parsed.events.map(toTiming));
   });
 
   test('bmson stringify: writes BMS STOP lengths as pulses at the output resolution', () => {
@@ -774,5 +995,127 @@ describe('stringifier', () => {
 
     const output = JSON.parse(stringifyBmson(parsed)) as { info: { total?: number } };
     expect(output.info.total).toBe(120);
+  });
+  describe('bmson stringify: BMS judge rank → `judge_rank`', () => {
+    const bmsChart = (...headers: string[]): string =>
+      ['#BPM 120', ...headers, '#WAV01 key.wav', '#00111:01', ''].join('\n');
+    const judgeRankOf = (source: string): number | undefined =>
+      (JSON.parse(stringifyBmson(parseChart(source))) as { info: { judge_rank?: number } }).info.judge_rank;
+
+    // bmson `judge_rank` is on the `#DEFEXRANK` axis (100 = NORMAL); `#RANK` is a 0..4 index and used to be written
+    // verbatim, so `#RANK 2` became a 2 % window. Each rank maps to the `#DEFEXRANK` value that judges like it.
+    test.each([
+      [0, 33],
+      [1, 67],
+      [2, 100],
+      [3, 133],
+      [4, 167],
+    ])('#RANK %i → judge_rank %i', (rank, expected) => {
+      expect(judgeRankOf(bmsChart(`#RANK ${rank}`))).toBe(expected);
+    });
+
+    test.each(['5', '75', '-1', '3.5'])(
+      'leaves `judge_rank` out for #RANK %s, which judges as NORMAL (the bmson default)',
+      (rank) => {
+        expect(judgeRankOf(bmsChart(`#RANK ${rank}`))).toBeUndefined();
+      },
+    );
+
+    test('a chart without #RANK / #DEFEXRANK leaves `judge_rank` out', () => {
+      expect(judgeRankOf(bmsChart())).toBeUndefined();
+    });
+
+    test('#DEFEXRANK takes precedence and is written verbatim (same unit as `judge_rank`)', () => {
+      expect(judgeRankOf(bmsChart('#RANK 0', '#DEFEXRANK 120'))).toBe(120);
+      expect(judgeRankOf(bmsChart('#DEFEXRANK 87.5'))).toBe(87.5);
+      // A non-positive #DEFEXRANK is ignored by the engine, so #RANK still decides.
+      expect(judgeRankOf(bmsChart('#RANK 1', '#DEFEXRANK 0'))).toBe(67);
+    });
+
+    test('an explicit `bmson.info.judgeRank` on a BMS-sourced chart wins over #RANK / #DEFEXRANK', () => {
+      const parsed = parseChart(bmsChart('#RANK 0', '#DEFEXRANK 120'));
+      parsed.bmson.info.judgeRank = 90;
+      expect((JSON.parse(stringifyBmson(parsed)) as { info: { judge_rank?: number } }).info.judge_rank).toBe(90);
+    });
+
+    test("keeps a bmson source's `judge_rank` as authored on both output paths", () => {
+      const document = {
+        version: '1.0.0',
+        info: { title: 'Rank', artist: 'A', genre: 'G', init_bpm: 120, judge_rank: 3, resolution: 240 },
+        sound_channels: [{ name: 'key.wav', notes: [{ x: 1, y: 0, l: 0, c: false }] }],
+      };
+      // A bmson `judge_rank: 3` is already in bmson units; it must not go through the #RANK table.
+      const preserved = parseBmson(JSON.stringify(document));
+      expect(preserved.preservation.bmson.soundChannels).toHaveLength(1);
+      expect((JSON.parse(stringifyBmson(preserved)) as { info: { judge_rank?: number } }).info.judge_rank).toBe(3);
+
+      const edited = parseBmson(JSON.stringify(document));
+      edited.events[0]!.position = [1, 2];
+      const regenerated = JSON.parse(stringifyBmson(edited)) as { info: { judge_rank?: number }; lines?: unknown };
+      expect(regenerated.lines).toBeDefined();
+      expect(regenerated.info.judge_rank).toBe(3);
+
+      // A bmson source without `judge_rank` stays without it (no #RANK fallback).
+      const { judge_rank: _omitted, ...withoutRank } = document.info;
+      const bare = parseBmson(JSON.stringify({ ...document, info: withoutRank }));
+      bare.events[0]!.position = [1, 2];
+      expect(JSON.parse(stringifyBmson(bare)).info).not.toHaveProperty('judge_rank');
+    });
+
+    describe("be-music's judge windows for the BMS and its bmson conversion", () => {
+      const chart = { scorableNotes: [], laneDisplayMode: '7 KEY SP' };
+      const windowsOf = (
+        json: ReturnType<typeof parseChart>,
+        ruleset: 'lr2' | 'beatoraja' | 'iidx',
+      ): JudgeWindowSetUs => resolveRuleset(rulesetChartFactsFromChart(json, chart), ruleset).windows.note;
+      const convert = (source: string) => {
+        const bms = parseChart(source);
+        return { bms, bmson: parseBmson(stringifyBmson(bms)) };
+      };
+      const lateEdges = (set: JudgeWindowSetUs): number[] => set.judges.map((pair) => pair[1]);
+
+      test.each(['#RANK 0', '#RANK 1', '#RANK 2', '#RANK 3', '#RANK 4', '#DEFEXRANK 120', '#RANK 7'])(
+        'IIDX (rank-independent windows) matches for %s',
+        (header) => {
+          const { bms, bmson } = convert(bmsChart(header));
+          expect(windowsOf(bmson, 'iidx')).toEqual(windowsOf(bms, 'iidx'));
+        },
+      );
+
+      test.each(['#RANK 2', '#DEFEXRANK 120', '#DEFEXRANK 64', '#RANK 7'])('LR2 matches exactly for %s', (header) => {
+        const { bms, bmson } = convert(bmsChart(header));
+        expect(windowsOf(bmson, 'lr2')).toEqual(windowsOf(bms, 'lr2'));
+      });
+
+      test.each(['#RANK 0', '#RANK 1', '#RANK 3'])(
+        'LR2 matches %s within 0.4 ms (judge_rank is rounded to a whole percent)',
+        (header) => {
+          const { bms, bmson } = convert(bmsChart(header));
+          const expected = lateEdges(windowsOf(bms, 'lr2'));
+          const actual = lateEdges(windowsOf(bmson, 'lr2'));
+          for (const [index, edge] of actual.entries()) {
+            expect(Math.abs(edge - expected[index]!)).toBeLessThanOrEqual(400);
+          }
+        },
+      );
+
+      test('LR2 #RANK 4 differs: LR2 plays VERY EASY as NORMAL, the conversion follows beatoraja (judgerank 125)', () => {
+        const { bms, bmson } = convert(bmsChart('#RANK 4'));
+        expect(lateEdges(windowsOf(bms, 'lr2'))).toEqual([18_000, 40_000, 100_000, 200_000]);
+        expect(lateEdges(windowsOf(bmson, 'lr2'))).toEqual([24_030, 80_200, 140_200, 200_000]);
+      });
+
+      test.each(['#RANK 0', '#RANK 1', '#RANK 2', '#RANK 3', '#RANK 4', '#DEFEXRANK 120'])(
+        'beatoraja keeps the rank order but judges %s about 4/3 wider (it reads bmson judge_rank unscaled)',
+        (header) => {
+          const { bms, bmson } = convert(bmsChart(header));
+          // PGREAT is never clamped by the BAD leg, so its ratio is the judgerank ratio: bmson `judge_rank` is used as
+          // the judgerank itself, while BMS #RANK / #DEFEXRANK sit at 75 % of it (NORMAL = judgerank 75).
+          const ratio = windowsOf(bmson, 'beatoraja').judges[0][1] / windowsOf(bms, 'beatoraja').judges[0][1];
+          expect(ratio).toBeGreaterThanOrEqual(1.32);
+          expect(ratio).toBeLessThanOrEqual(1.34);
+        },
+      );
+    });
   });
 });

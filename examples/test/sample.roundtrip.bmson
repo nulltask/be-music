@@ -7,7 +7,7 @@
     "genre": "",
     "level": 0,
     "init_bpm": 120,
-    "mode_hint": "beat-1k",
+    "mode_hint": "beat-5k",
     "resolution": 240
   },
   "lines": [

@@ -28,6 +28,7 @@ import { loadSkinBitmapFonts } from '../../skin/lr2/font-loader.ts';
 import type { Lr2LoadedFont } from '../../skin/lr2/bitmap-text.ts';
 import type { PixiGameplayResultData } from '../core/result-data.ts';
 import { CoreResultView, type CoreResultViewOptions } from '../core/result.ts';
+import { resolveKeyModeOp } from '../select-ops.ts';
 
 /**
  * LR2 result scene. Layers LR2's result-skin rendering on top of {@link CoreResultView}, which owns the mount / ticker /
@@ -660,29 +661,9 @@ export function computeResultOps(data: PixiGameplayResultData, skin: Lr2Skin): R
  * gate either way and the two ranges aren't redundant gating-wise (KEYCONFIG groups 7+14 / 5+10 together).
  */
 function resolveKeyModeOps(data: PixiGameplayResultData): number[] {
-  const modeHint = data.song.chart.bmson.info?.modeHint?.toLowerCase() ?? '';
-  let selectOp: number;
-  if (modeHint.includes('14k')) selectOp = RESULT_DYNAMIC_OPS.KEYS_14;
-  else if (modeHint.includes('10k')) selectOp = RESULT_DYNAMIC_OPS.KEYS_10;
-  else if (modeHint.includes('9k')) selectOp = RESULT_DYNAMIC_OPS.KEYS_9;
-  else if (modeHint.includes('7k')) selectOp = RESULT_DYNAMIC_OPS.KEYS_7;
-  else if (modeHint.includes('5k')) selectOp = RESULT_DYNAMIC_OPS.KEYS_5;
-  else {
-    let usesPlayer2 = false;
-    let uses6or7 = false;
-    for (const event of data.song.chart.events) {
-      const ch = event.channel;
-      if (!ch || ch.length !== 2) continue;
-      if (ch[0] === '2') usesPlayer2 = true;
-      if (ch === '18' || ch === '19' || ch === '28' || ch === '29') uses6or7 = true;
-      if (usesPlayer2 && uses6or7) break;
-    }
-    if (usesPlayer2 || data.song.chart.bms.player === 3) {
-      selectOp = uses6or7 ? RESULT_DYNAMIC_OPS.KEYS_14 : RESULT_DYNAMIC_OPS.KEYS_10;
-    } else {
-      selectOp = uses6or7 ? RESULT_DYNAMIC_OPS.KEYS_7 : RESULT_DYNAMIC_OPS.KEYS_5;
-    }
-  }
+  // The same key-mode op the select and decide screens light: the chart's play variant (`resolveChartPlayVariant`),
+  // so `.pms` / 9 KEY, `#LNTYPE` lanes and the extended modes read the way the gameplay scene lays the chart out.
+  const selectOp = resolveKeyModeOp(data.song);
   // Map the select-range op onto the KEYCONFIG range. 7K + 14K share op 400 because the LR2 default skin doesn't draw a
   // separate 14K layout. Likewise 5K + 10K share 402.
   let keyConfigOp: number;

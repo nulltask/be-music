@@ -304,20 +304,27 @@ describe('examples/test corpus', () => {
     }
   });
 
-  test('bmson-key-channels-mines.bmson routes key_channels mines and keeps the LN extensions', async () => {
-    const json = await parseChartFile(fixture('bmson-key-channels-mines.bmson'));
+  test('bmson-mine-key-channels.bmson reads mine_channels as mines, key_channels as invisible notes, and keeps the LN extensions', async () => {
+    const json = await parseChartFile(fixture('bmson-mine-key-channels.bmson'));
 
     expect(json.bmson.info.lnType).toBe(2);
     expect(json.bmson.info.modeHint).toBe('beat-7k');
 
-    // `key_channels` notes become landmines on the `Dx` / `Ex` channels via the same `mode_hint` lane map the playable
-    // notes use: x=1 → 11 → D1, x=6 → 18 → D8, x=8 → scratch 16 → D6.
+    // beatoraja semantics: `mine_channels` notes are mines (`Dx` / `Ex`) with a per-note `damage`, and `key_channels`
+    // notes are hidden notes (`3x` / `4x`), both through the `mode_hint` lane map the playable notes use:
+    // x=1 → 11, x=2 → 12, x=6 → 18, x=8 → scratch 16.
     const mines = json.events.filter((event) => /^[DE]/.test(event.channel));
     expect(mines.map((event) => event.channel)).toEqual(['D1', 'D8', 'D6']);
     expect(mines.map((event) => event.bmson?.damage)).toEqual([0, 50, 100]);
+    const invisible = json.events.filter((event) => /^[34]/.test(event.channel));
+    expect(invisible.map((event) => [event.channel, event.value, event.bmson])).toEqual([
+      ['32', '03', undefined],
+      ['36', '03', undefined],
+    ]);
 
-    // The mine WAV is registered after the `sound_channels` block, keeping the WAV ID space contiguous.
-    expect(json.resources.wav['03']).toBe('wrong.wav');
+    // WAV slots follow beatoraja's order: `sound_channels`, then `key_channels`, then `mine_channels`.
+    expect(json.resources.wav['03']).toBe('hidden.wav');
+    expect(json.resources.wav['04']).toBe('wrong.wav');
 
     // `notes[].t` survives only on long notes (`l > 0`).
     const withNoteType = json.events.filter((event) => event.bmson?.t !== undefined);

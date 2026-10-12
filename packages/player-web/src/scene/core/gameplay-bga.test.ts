@@ -8,6 +8,7 @@ import {
   isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
+  toBrowserBgaTimeline,
 } from './gameplay-bga.ts';
 
 const resolver = {
@@ -162,6 +163,27 @@ describe('buildSkinBgaFrame', () => {
     expect(buildSkinBgaFrame({ base: '01', layer: undefined, poor: 'ZZ' }, resolve)).toEqual({
       base: 'base-01',
       poorActive: false,
+    });
+  });
+});
+
+describe('toBrowserBgaTimeline', () => {
+  it('keeps base and POOR cues and merges both layer channels in time order', () => {
+    expect(
+      toBrowserBgaTimeline({
+        base: [{ seconds: 0, key: '01' }],
+        layer: [{ seconds: 2, key: 'AA' }],
+        layer2: [{ seconds: 1, key: 'BB' }, { seconds: 3 }],
+        poor: [{ seconds: 4, key: 'CC' }],
+      }),
+    ).toEqual({
+      base: [{ seconds: 0, bmpKey: '01' }],
+      layer: [
+        { seconds: 1, bmpKey: 'BB' },
+        { seconds: 2, bmpKey: 'AA' },
+        { seconds: 3, bmpKey: undefined },
+      ],
+      poor: [{ seconds: 4, bmpKey: 'CC' }],
     });
   });
 });

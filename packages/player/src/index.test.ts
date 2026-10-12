@@ -1,9 +1,15 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  computeChartFingerprint,
+  computePlayFingerprint,
+  drawRandomOutcomes,
+  resolveChart,
+  type RandomDraws,
+} from '@be-music/chart';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { computeChartFingerprint, computePlayFingerprint } from '../../chart/src/index.ts';
-import { parseChart, parseChartFile, resolveBmsControlFlow } from '../../parser/src/index.ts';
+import { parseChart, parseChartFile, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
@@ -95,6 +101,7 @@ import {
   preparePlaybackChartData,
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
+  resolvePlayChart,
   type PlayerSummary,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
@@ -146,11 +153,11 @@ function createDynamicExRankChart() {
   return json;
 }
 
-function createInvisibleOnlyChart() {
+function createInvisibleOnlyChart(channel = '31') {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;
   json.resources.wav['01'] = 'not-found.wav';
-  json.events = [{ measure: 0, channel: '31', position: [0, 1] as const, value: '01' }];
+  json.events = [{ measure: 0, channel, position: [0, 1] as const, value: '01' }];
   return json;
 }
 
@@ -339,9 +346,11 @@ beforeEach(() => {
 
 describe('player', () => {
   test('player: auto play finishes successfully', async () => {
-    const json = await parseChartFile(unifiedBmsChartPath);
+    // The chart has `#RANDOM` blocks; the host resolves it once and hands the engine the result with its draws.
+    const { chart: json, randomDraws } = resolvePlayChart(await parseChartFile(unifiedBmsChartPath));
 
     const summary = await autoPlay(json, {
+      randomDraws,
       auto: true,
       speed: 48,
       leadInMs: 0,
@@ -432,6 +441,24 @@ describe('player', () => {
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(false);
+  });
+
+  test.each(['31', '3A', '4Q'])('player: auto play does not trigger the invisible object on %s', async (channel) => {
+    // bmson `keyboard-24k` hidden notes (`key_channels`) land on the extended invisible lanes `3A`-`3Q` / `4A`-`4Q`,
+    // which must stay as silent in AUTO as the classic `31`-`49`.
+    const output: string[] = [];
+    await autoPlay(createInvisibleOnlyChart(channel), {
+      auto: true,
+      speed: 240,
+      leadInMs: 0,
+      tui: false,
+      audio: true,
+      writeOutput: (text) => {
+        output.push(text);
+      },
+    });
+
+    expect(output.filter((line) => line.includes('kind:sample-trigger'))).toEqual([]);
   });
 
   test('player: logs real-time triggered events when running without TUI', async () => {
@@ -777,34 +804,6 @@ describe('player', () => {
     const resolvedWhenRandomIs2 = resolveBmsControlFlowForPlayback(json, () => 0.9999999).resolvedJson;
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '23')).toBe(false);
     expect(resolvedWhenRandomIs2.events.some((event) => event.measure === 23 && event.channel === '24')).toBe(true);
-  });
-
-  test('player: reports the value of every #RANDOM / #SWITCH line it resolved', () => {
-    const json = parseChart(
-      [
-        '#BPM 150',
-        '#RANDOM 1',
-        '#ENDRANDOM',
-        '#RANDOM 4',
-        '#IF 3',
-        '#00111:01',
-        '#ENDIF',
-        '#ENDRANDOM',
-        '#SWITCH 2',
-        '#ENDSW',
-      ].join('\n'),
-      'bms',
-    );
-    const resolution = resolveBmsControlFlowForPlayback(json, () => 0.6);
-    expect(resolution.randomOutcomes).toEqual([1, 3, 2]);
-    expect(resolveBmsControlFlowForPlayback(createEmptyJson('bms')).randomOutcomes).toEqual([]);
-    // Preset outcomes (a replayed log's `randomOutcomes`) win over the random source; the patterns follow them.
-    const preset = resolveBmsControlFlowForPlayback(json, () => 0, [1, 4, 1]);
-    expect(preset.randomOutcomes).toEqual([1, 4, 1]);
-    expect(preset.randomPatterns.map((pattern) => pattern.current)).toEqual([1, 4]);
-    expect(preset.resolvedJson.events.some((event) => event.channel === '11')).toBe(false);
-    // An out-of-range preset is drawn from the random source instead.
-    expect(resolveBmsControlFlowForPlayback(json, () => 0.6, [1, 9, 7]).randomOutcomes).toEqual([1, 3, 2]);
   });
 
   test('player: resolves RANDOM pattern summary for control-flow playback', () => {
@@ -1279,7 +1278,7 @@ describe('player', () => {
     expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
   });
 
-  test('player: records the #RANDOM outcomes and the extension-aware fingerprint in the play log', async () => {
+  test('player: records the #RANDOM draws and the extension-aware fingerprints in the play log', async () => {
     const json = parseChart(
       [
         '#BPM 240',
@@ -1295,24 +1294,25 @@ describe('player', () => {
       ].join('\n'),
       'bms',
     );
+    const randomDraws = drawRandomOutcomes(json, () => 0.9);
     let playlog: BeMusicPlaylog | undefined;
     await autoPlay(json, {
       speed: 64,
       leadInMs: 0,
       audio: false,
       tui: false,
-      laneModeExtension: '.bme',
+      laneModeExtension: '.pms',
+      randomDraws,
       onPlaylogRecorded: (recorded) => {
         playlog = recorded;
       },
     });
-    const outcomes = playlog!.play.randomOutcomes;
-    expect(outcomes).toHaveLength(1);
-    const replayed = resolveBmsControlFlow(json, { outcomes });
-    expect(playlog!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.bme' }));
+    expect(playlog!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
+    const replayed = resolveBmsControlFlowWithDraws(json, playlog!.play.randomDraws!);
+    expect(playlog!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.pms' }));
     expect(playlog!.chart.playFingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
     // The engine resolved `#RANDOM` itself, so its input is the source chart the chart fingerprint describes.
-    expect(playlog!.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: '.bme' }));
+    expect(playlog!.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: '.pms' }));
   });
 
   test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
@@ -1349,7 +1349,7 @@ describe('player', () => {
     expect(playlog!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
     expect(playlog!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
     expect(playlog!.play.randomLane).toEqual({ p1: 'MIRROR' });
-    expect(playlog!.play.randomOutcomes).toBeUndefined();
+    expect(playlog!.play.randomDraws).toBeUndefined();
     expect(playlog!.play.aborted).toBeUndefined();
     // The single scheduled press resolves against lane channel 11 with a chart-relative µs timestamp near the note.
     expect(playlog!.inputs).toHaveLength(1);
@@ -1429,7 +1429,7 @@ describe('player', () => {
     );
   });
 
-  test('player: a replay resolves #RANDOM with the recorded randomOutcomes', async () => {
+  test('player: a replay resolves #RANDOM with the recorded randomDraws', async () => {
     // BPM 240: branch 1 puts a note on lane 11 at 1.0 s, branch 2 on lane 12 at the same time.
     const json = parseChart(
       ['#BPM 240', '#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join(
@@ -1437,63 +1437,55 @@ describe('player', () => {
       ),
       'bms',
     );
-    const random = vi.spyOn(Math, 'random');
-    try {
-      // Record a play of branch 2 with a press on lane 12 (`s`).
-      random.mockReturnValue(0.9);
-      let recorded: BeMusicPlaylog | undefined;
-      const original = await manualPlay(json, {
-        speed: 1,
+    // Record a play of branch 2 with a press on lane 12 (`s`).
+    let recorded: BeMusicPlaylog | undefined;
+    const original = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      randomDraws: drawRandomOutcomes(json, () => 0.9),
+      onPlaylogRecorded: (playlog) => {
+        recorded = playlog;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1000, command: { kind: 'lane-input', tokens: ['s'] } },
+      ]),
+    });
+    expect(recorded!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
+    expect(original.perfect + original.great).toBe(1);
+
+    const replay = async (randomDraws: RandomDraws): Promise<{ summary: PlayerSummary; playlog: BeMusicPlaylog }> => {
+      let playlog: BeMusicPlaylog | undefined;
+      const summary = await manualPlay(json, {
+        speed: 8,
         leadInMs: 0,
         audio: false,
         tui: false,
-        onPlaylogRecorded: (playlog) => {
-          recorded = playlog;
+        replayInputs: recorded!.inputs,
+        randomDraws,
+        onPlaylogRecorded: (log) => {
+          playlog = log;
         },
-        createInputRuntime: createScheduledInputRuntime([
-          { delayMs: 1000, command: { kind: 'lane-input', tokens: ['s'] } },
-        ]),
       });
-      expect(recorded!.play.randomOutcomes).toEqual([2]);
-      expect(original.perfect + original.great).toBe(1);
+      return { summary, playlog: playlog! };
+    };
 
-      // Replay while the random source would now draw branch 1.
-      random.mockReturnValue(0);
-      const replay = async (
-        replayRandomOutcomes: readonly number[] | undefined,
-      ): Promise<{ summary: PlayerSummary; playlog: BeMusicPlaylog }> => {
-        let playlog: BeMusicPlaylog | undefined;
-        const summary = await manualPlay(json, {
-          speed: 8,
-          leadInMs: 0,
-          audio: false,
-          tui: false,
-          replayInputs: recorded!.inputs,
-          ...(replayRandomOutcomes !== undefined ? { replayRandomOutcomes } : {}),
-          onPlaylogRecorded: (log) => {
-            playlog = log;
-          },
-        });
-        return { summary, playlog: playlog! };
-      };
+    const withRecordedDraws = await replay(recorded!.play.randomDraws!);
+    expect(withRecordedDraws.playlog.play.randomDraws).toEqual(recorded!.play.randomDraws);
+    expect(withRecordedDraws.playlog.chart.notes.map((note) => note.channel)).toEqual(['12']);
+    expect(withRecordedDraws.playlog.chart.playFingerprint).toBe(recorded!.chart.playFingerprint);
+    expect(withRecordedDraws.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
+    expect(withRecordedDraws.summary.exScore).toBe(original.exScore);
+    expect(withRecordedDraws.summary.perfect).toBe(original.perfect);
+    expect(withRecordedDraws.summary.great).toBe(original.great);
 
-      const withOutcomes = await replay(recorded!.play.randomOutcomes);
-      expect(withOutcomes.playlog.play.randomOutcomes).toEqual([2]);
-      expect(withOutcomes.playlog.chart.notes.map((note) => note.channel)).toEqual(['12']);
-      expect(withOutcomes.playlog.chart.playFingerprint).toBe(recorded!.chart.playFingerprint);
-      expect(withOutcomes.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
-      expect(withOutcomes.summary.exScore).toBe(original.exScore);
-      expect(withOutcomes.summary.perfect).toBe(original.perfect);
-      expect(withOutcomes.summary.great).toBe(original.great);
-
-      // Without the field (an older log) the engine draws as before: branch 1, where the recorded press misses.
-      const withoutOutcomes = await replay(undefined);
-      expect(withoutOutcomes.playlog.play.randomOutcomes).toEqual([1]);
-      expect(withoutOutcomes.playlog.chart.notes.map((note) => note.channel)).toEqual(['11']);
-      expect(withoutOutcomes.summary.exScore).toBe(0);
-    } finally {
-      random.mockRestore();
-    }
+    // Other draws play branch 1, where the recorded press misses; the chart fingerprint stays the same.
+    const otherDraws = await replay(drawRandomOutcomes(json, () => 0));
+    expect(otherDraws.playlog.chart.notes.map((note) => note.channel)).toEqual(['11']);
+    expect(otherDraws.playlog.chart.playFingerprint).not.toBe(recorded!.chart.playFingerprint);
+    expect(otherDraws.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
+    expect(otherDraws.summary.exScore).toBe(0);
   });
 
   test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / IIDX)', async () => {
@@ -1699,9 +1691,9 @@ describe('player', () => {
     expect(laneMode(withMineAndInvisible)).toBe('5 KEY SP');
     expect(preparePlaybackChartData(withMineAndInvisible, {}, true, 0).landmineNotes).toHaveLength(1);
 
-    // The documented `.bme` completion applies through the same rule, mines or not.
-    expect(laneMode(plain, '.bme')).toBe('7 KEY SP');
-    expect(laneMode(withMineAndInvisible, '.bme')).toBe('7 KEY SP');
+    // The `.bme` extension does not complete the mode: the lanes in use decide, as in beatoraja.
+    expect(laneMode(plain, '.bme')).toBe('5 KEY SP');
+    expect(laneMode(withMineAndInvisible, '.bme')).toBe('5 KEY SP');
 
     // `#LNOBJ` and `#LNTYPE 1` spellings of the same long note on lane 8 resolve to the same lane mode.
     expect(laneMode(chart('#LNOBJ ZZ', '#WAVZZ z.wav', '#00111:01', '#00118:01', '#00218:ZZ'), '.bms')).toBe(
@@ -1981,7 +1973,7 @@ describe('player', () => {
   });
 
   test('player: bmson per-mine damage overrides the BMS value/2 rule', async () => {
-    // bmson `key_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
+    // bmson `mine_channels[].notes[].damage` is an explicit gauge percentage carried on `event.bmson.damage`. When
     // present it wins over the BMS raw-value interpretation: value '08' alone would deal 8 %, the authored damage
     // of 7 must deal exactly 7 % (gauge 20 → 13).
     const json = createLandmineOnlyChart({ value: '08' });
@@ -2230,6 +2222,33 @@ describe('player', () => {
     });
 
     expect(hasAnyNonSilentAudioWrite()).toBe(true);
+  });
+
+  test.each(['D1', 'DA', 'EO'])('player: a mine on lane %s preloads #WAV00', async (channel) => {
+    const json = createLandmineOnlyChart();
+    json.events = [
+      { measure: 0, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel, position: [0, 1] as const, value: '10' },
+    ];
+    const details: Array<string | undefined> = [];
+    await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      audioHeadPaddingMs: 0,
+      audioLeadMs: 0,
+      audioLeadMaxMs: 0,
+      tui: false,
+      writeOutput: () => undefined,
+      onLoadProgress: (progress) => {
+        details.push(progress.detail);
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 50, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect(details).toContain('explode.wav');
   });
 
   test('player: missing #WAVxx files are silent by default (no fallback tone)', async () => {
@@ -2483,6 +2502,122 @@ describe('player', () => {
     ]);
     expect(timed.landmineNotes.map((note) => note.channel)).toEqual(['1D']);
     expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['1E']);
+  });
+
+  test('player: two notes on one lane and position become one judged note; the other keysound is shadowed', () => {
+    const json = parseChart(['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', ''].join('\n'));
+
+    const timed = extractTimedNotes(json);
+    expect(timed.playableNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '01']]);
+    expect(timed.shadowedNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
+    expect(extractPlayableNotes(json)).toHaveLength(1);
+  });
+
+  test('player: a duplicate with the same keysound is dropped without a shadowed sound', () => {
+    const json = parseChart(['#BPM 120', '#WAV01 a.wav', '#00111:0101', '#00111:01', ''].join('\n'));
+
+    const timed = extractTimedNotes(json);
+    expect(timed.playableNotes.map((note) => note.event.position)).toEqual([
+      [0, 2],
+      [1, 2],
+    ]);
+    expect(timed.shadowedNotes).toEqual([]);
+  });
+
+  test('player: a long note wins over a tap on the same lane and position (5x and #LNOBJ)', () => {
+    const legacy = parseChart(
+      ['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:02', '#00151:01', '#00251:01', ''].join('\n'),
+    );
+    const legacyTimed = extractTimedNotes(legacy);
+    expect(legacyTimed.playableNotes).toHaveLength(1);
+    expect(legacyTimed.playableNotes[0]?.event.value).toBe('01');
+    expect(legacyTimed.playableNotes[0]?.endBeat).toBeCloseTo(8, 6);
+    expect(legacyTimed.shadowedNotes.map((note) => note.event.value)).toEqual(['02']);
+
+    const lnobj = parseChart(
+      ['#BPM 120', '#LNOBJ ZZ', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', '#00211:ZZ', ''].join('\n'),
+    );
+    const lnobjTimed = extractTimedNotes(lnobj);
+    expect(lnobjTimed.playableNotes).toHaveLength(1);
+    expect(lnobjTimed.playableNotes[0]?.endBeat).toBeCloseTo(8, 6);
+    expect(lnobjTimed.shadowedNotes).toHaveLength(1);
+    expect(lnobjTimed.shadowedNotes[0]?.event.value).not.toBe(lnobjTimed.playableNotes[0]?.event.value);
+  });
+
+  test('player: layered bmson notes on one x and y are one judged note, the first sound channel', () => {
+    const json = parseChart(
+      JSON.stringify({
+        version: '1.0.0',
+        info: { init_bpm: 120, resolution: 240, mode_hint: 'beat-7k' },
+        sound_channels: [
+          { name: 'piano.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'bass.wav', notes: [{ x: 1, y: 0 }] },
+          { name: 'pad.wav', notes: [{ x: 2, y: 0 }] },
+        ],
+      }),
+      'bmson',
+    );
+
+    const timed = extractTimedNotes(json);
+    expect(timed.playableNotes.map((note) => [note.channel, note.event.value])).toEqual([
+      ['11', '01'],
+      ['12', '03'],
+    ]);
+    expect(timed.shadowedNotes.map((note) => [note.channel, note.event.value])).toEqual([['11', '02']]);
+  });
+
+  test('player: mines and invisible objects on a duplicated note position are untouched', () => {
+    const json = parseChart(
+      ['#BPM 120', '#WAV01 a.wav', '#WAV02 b.wav', '#00111:01', '#00111:02', '#00131:01', '#001D1:10', ''].join('\n'),
+    );
+
+    const timed = extractTimedNotes(json, { includeLandmine: true, includeInvisible: true });
+    expect(timed.playableNotes).toHaveLength(1);
+    expect(timed.invisibleNotes.map((note) => note.channel)).toEqual(['11']);
+    expect(timed.landmineNotes.map((note) => note.channel)).toEqual(['11']);
+  });
+
+  test('player: manual play sounds a shadowed duplicate keysound as background and judges one note', async () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 240;
+    json.resources.wav = { '01': 'a.wav', '02': 'b.wav' };
+    json.events = [
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '01' },
+      { measure: 1, channel: '11', position: [0, 1] as const, value: '02' },
+    ];
+    const preparedChart = preparePlaybackChartData(json, {}, false, 0);
+    expect(preparedChart.scorableNotes).toHaveLength(1);
+
+    const triggeredEvents: string[] = [];
+    const summary = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      judgeWindowMs: 50,
+      preparedChart,
+      writeOutput: () => undefined,
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggeredEvents.push(event.value);
+        },
+        stopChannel: () => undefined,
+      }),
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1000, command: { kind: 'lane-input', tokens: ['z'] } },
+        { delayMs: 1150, command: { kind: 'interrupt', reason: 'escape' } },
+      ]),
+    });
+
+    expect([...triggeredEvents].sort()).toEqual(['01', '02']);
+    expect(summary.total).toBe(1);
   });
 
   test('player: FREE ZONE (17 / 27) only applies to the IIDX families', () => {
@@ -2881,8 +3016,12 @@ describe('player', () => {
     defaultChart.bms.volWav = 100;
     expect(resolveChartVolWavGain(defaultChart)).toBe(1);
 
+    defaultChart.bms.volWav = 150;
+    expect(resolveChartVolWavGain(defaultChart)).toBe(1.5);
+
+    // beatoraja applies #VOLWAV only for 0 < n < 200, so 200 plays at the original volume.
     defaultChart.bms.volWav = 200;
-    expect(resolveChartVolWavGain(defaultChart)).toBe(2);
+    expect(resolveChartVolWavGain(defaultChart)).toBe(1);
   });
 
   test('player: narrows judge windows for bms RANK=0 (LR2 VERY HARD)', () => {
@@ -2933,6 +3072,21 @@ describe('player', () => {
   test('player: shows RANDOM label when dynamic EXRANK changes exist', () => {
     const json = createDynamicExRankChart();
     expect(resolveDisplayedJudgeRankLabel(json)).toBe('RANDOM');
+  });
+
+  test('player: reads the displayed judge rank from a resolved chart', () => {
+    const json = createDynamicExRankChart();
+    const resolved = resolveChart(json);
+    expect(resolveDisplayedJudgeRankValue(resolved)).toBe(2);
+    expect(resolveDisplayedJudgeRankLabel(resolved)).toBe('RANDOM');
+
+    json.bms.exRank['AA'] = '0';
+    json.bms.exRank['CC'] = '-5';
+    json.bms.defExRank = 120;
+    expect(resolveDisplayedJudgeRankLabel(resolveChart(json))).toBe('120');
+
+    const bmson = createEmptyJson('bmson');
+    expect(resolveDisplayedJudgeRankLabel(resolveChart(bmson))).toBe('100');
   });
 
   test('player: resolves displayed judge rank from bmson judge rank', () => {

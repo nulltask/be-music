@@ -64,12 +64,20 @@ before `autoPlay` / `manualPlay` resolves — including the ESC (aborted) exit. 
 the host-declared settings the engine cannot know (selected gauge, lane-shuffle labels, DP flip, freeform
 `native` extras, and the `#RANDOM` outcomes of a chart the host resolved itself).
 
+Every log also carries a top-level **`recorder`** that identifies the software that recorded it:
+`{ name, version, build, engine, platform }`. The host declares the application fields through
+`recordPlaylog.recorder` (the browser player sends `name: 'be-music-web'`, the demo's package version, the short
+source commit as `build`, and `platform: 'web'`), and the recorder always fills `engine` with the
+`@be-music/player` version that ran the play. The values are self-reported: they help tell which build wrote a log
+when a recording bug turns up, and are never a basis for trusting a log. Logs written before the field existed omit
+it.
+
 In the browser player:
 
 - The LR2 / default gameplay scene exposes the recorded log through `PixiGameplayResultData.playlog`.
 - The beatoraja gameplay scene exposes it through `PixiBeatorajaGameplayView.getPlaylog()`.
 - The demo auto-downloads the log as `<title>-<timestamp>.bmplay.json` when the result scene mounts, controlled by
-  the Debug Menu's **Auto-save play history** checkbox (OFF by default). Play-log options are latched at song start
+  the **Auto-save play history** checkbox in the Debug Menu's **Library & records** folder (OFF by default). Play-log options are latched at song start
   and cannot change mid-play — the controls are disabled while a song is playing, and the values in effect when
   the song started govern that play.
 - The Debug Menu's **Play options** folder covers the recorded play settings: auto play, judge windows

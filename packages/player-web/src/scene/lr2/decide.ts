@@ -9,6 +9,7 @@ import {
 } from '@be-music/lr2-skin';
 import { type PixiSceneHost } from '../host.ts';
 import { disposeChildren } from '../pixi-utils.ts';
+import { resolveKeyModeOp } from '../select-ops.ts';
 import {
   Lr2ChartGraphicTextureStore,
   Lr2SkinTextureStore,
@@ -589,27 +590,12 @@ function computeDecideOps(target: PixiDecideTarget, skin: Lr2Skin): ReadonlySet<
       ops.add(DECIDE_DYNAMIC_OPS.DIFFICULTY_UNDEFINED);
       break;
   }
-  // Key mode — same flag IDs the select scene uses (160..164). Walk the chart's events to detect 14 / 10 / 9 / 7 / 5
-  // keys since `metadata.modeHint` is bmson-only.
-  ops.add(detectKeyModeOp(target.song));
+  // Key mode — the select scene's op (160..164), from the chart's play variant.
+  ops.add(resolveKeyModeOp(target.song));
   // Suppress the `Lr2Skin` argument linter — keeps the parser signature future-proof if we later need to peek at the
   // skin's authored op declarations to filter the active set.
   void skin;
   return ops;
-}
-
-function detectKeyModeOp(song: BrowserSongEntry): number {
-  // Inspect playable channels in the chart to pick the right key-mode flag. Mirrors the heuristic the select scene uses
-  // for its bar-list `BAR_LEVEL` plate.
-  let usesPlayer2 = false;
-  let uses6or7 = false;
-  for (const event of song.chart.events) {
-    const ch = event.channel;
-    if (ch.startsWith('2')) usesPlayer2 = true;
-    if (ch === '18' || ch === '19' || ch === '28' || ch === '29') uses6or7 = true;
-  }
-  if (usesPlayer2) return uses6or7 ? DECIDE_DYNAMIC_OPS.KEYS_14 : DECIDE_DYNAMIC_OPS.KEYS_10;
-  return uses6or7 ? DECIDE_DYNAMIC_OPS.KEYS_7 : DECIDE_DYNAMIC_OPS.KEYS_5;
 }
 
 function resolveDecideText(st: number, song: BrowserSongEntry): string | undefined {

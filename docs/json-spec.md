@@ -198,7 +198,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `backBmp`: BMS `#BACKBMP`; bmson mirrors `info.back_image` here when present
 - `banner`: BMS `#BANNER`; bmson mirrors `info.banner_image` here when present
 - `playLevel`: BMS `#PLAYLEVEL` or bmson `info.level`; can be a number or a string
-- `rank`: BMS `#RANK` or bmson `info.judge_rank`
+- `rank`: BMS `#RANK` (a `0`–`4` rank index) or bmson `info.judge_rank` (a percentage, `100` = NORMAL); the stringifier converts between the two units when writing bmson
 - `total`: BMS `#TOTAL` or bmson `info.total`
 - `difficulty`: BMS `#DIFFICULTY`
 - `bpm`: BMS `#BPM` or bmson `info.init_bpm`; BMS defaults to `130`, while bmson requires a positive `init_bpm`
@@ -237,6 +237,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `charset`: value of `#CHARSET`
 - `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it
 - `controlFlow.kind = "object"` is kept in the same `events` format as normal events (with `measureLength` if necessary)
+- `controlFlow.kind = "header"` has `overriddenByLaterHeader: true` when a top-level line later in the file defines the same header; header lines apply in file order, so resolving the control flow skips it
 - Parser keeps control syntax in this array and branches are executed at playback/render time
 - `scroll` values ​​allow finite numbers, `0` and negative values ​​are also retained
 
@@ -293,8 +294,8 @@ interface BeMusicEvent {
 }
 ```
 
-`bmson.damage` is used for beatoraja-style bmson `key_channels` mine notes.
-It stores the authored gauge damage as a non-negative number and is absent on ordinary `sound_channels` notes.
+`bmson.damage` is used for mines from the beatoraja bmson extension `mine_channels`.
+It stores the authored gauge damage as a non-negative number and is absent on every other event, including the invisible objects read from `key_channels` (beatoraja's hidden notes).
 `bmson.t` is the beatoraja per-note long-note type (`notes[].t`: `1` = LN, `2` = CN, `3` = HCN). It is kept only on long notes (`l > 0`) and overrides `bmson.info.lnType`.
 
 ## Meaning of `position`

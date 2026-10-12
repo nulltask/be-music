@@ -13,7 +13,6 @@ export interface BeatorajaEngineOptionsInput {
   variant?: BeatorajaPlayableVariant;
   chartPath?: string;
   dpFlip?: boolean;
-  randomOutcomes?: ReadonlyArray<number>;
   sourceChart?: BeMusicJson;
   engineOptions?: BeatorajaEngineOptions;
 }
@@ -33,10 +32,10 @@ export interface BeatorajaEngineOptionsInput {
  * Host-set values win so explicit overrides keep working.
  *
  * Play-log recording: host-supplied `engineOptions.recordPlaylog` fields (gauge pick, chart hash, ...) are preserved;
- * the view adds what it owns: the DP-flip intent it applied to the chart, the values the chart's `#RANDOM` /
- * `#SWITCH` lines were resolved with (`play.randomOutcomes`, so a verifier can rebuild the played chart), the source
- * chart the fingerprints are computed from (the engine plays a resolved, possibly DP-flipped copy), and the chart path
- * in `native` so a dropped play-log can be matched back to its song.
+ * the view adds what it owns: the DP-flip intent it applied to the chart, the source chart the fingerprints are
+ * computed from (the engine plays a resolved, possibly DP-flipped copy), and the chart path in `native` so a dropped
+ * play-log can be matched back to its song. The draws the chart was resolved with travel in
+ * `engineOptions.randomDraws`, which the engine records as `play.randomDraws`.
  */
 export function composeBeatorajaEngineOptions(options: BeatorajaEngineOptionsInput): BeatorajaEngineOptions {
   const supplied = options.engineOptions;
@@ -59,9 +58,6 @@ export function composeBeatorajaEngineOptions(options: BeatorajaEngineOptionsInp
   result.recordPlaylog = {
     ...supplied?.recordPlaylog,
     ...(options.dpFlip !== undefined ? { dpFlip: options.dpFlip } : {}),
-    ...(options.randomOutcomes !== undefined && options.randomOutcomes.length > 0
-      ? { randomOutcomes: [...options.randomOutcomes] }
-      : {}),
     ...(options.sourceChart !== undefined ? { sourceChart: options.sourceChart } : {}),
     ...(options.chartPath !== undefined
       ? { native: { ...supplied?.recordPlaylog?.native, chartPath: options.chartPath } }
