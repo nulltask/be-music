@@ -59,6 +59,7 @@ The demo treats a device whose primary pointer is a finger (`(pointer: coarse)`,
 - **Select screen:** tap rows and buttons as with a mouse; swipe the list up or down to scroll it.
 - **Effects:** the skin effect level starts at Reduced unless one was picked in the Debug Menu before.
 - **Screen:** the page chrome steps off the stage (the search box only shows while typing, Help shrinks to an icon), the first tap on a phone asks for fullscreen in landscape where the browser allows it, and a phone held upright shows a prompt to rotate it.
+- **Sound in silent mode:** iOS / iPadOS Safari treats web audio as ambient sound by default: it mixes with music from other apps, and the Ring / Silent switch mutes it. Where the browser has the [Audio Session API](https://w3c.github.io/audio-session/) (`navigator.audioSession`, Safari 16.4+), the Debug Menu's **Volume** folder offers **Play in silent mode**. On, the demo sets the audio session type to `'playback'`, so sound plays with the silent switch on, but music playing in other apps pauses (and the system may show Now Playing controls). Off (the default) it restores the browser default `'auto'`, which keeps web audio mixing with other apps and obeying the switch. The choice is remembered across reloads and applied before any audio starts, again on the first tap or key press (when the scenes start their audio), and when the page comes back into view. Other browsers have no such switch for web audio and do not show the setting. The first time sound starts on a phone or tablet with the setting off, a small dismissible hint at the top of the screen offers to turn it on; it shows once per browser and leaves by itself.
 
 ## Browser loading model
 
@@ -174,6 +175,7 @@ pnpm bench -- --packages player-web
 ## Audio, BGA, and recording
 
 - Chart preview and gameplay audio use WebAudio.
+- `@be-music/player-web/runtime` exports the platform audio session helpers (unrelated to the engine's internal `WebAudioSession`): `supportsSystemAudioSession`, `getSystemAudioSession`, and `applySystemAudioSessionType` feature-detect and set `navigator.audioSession.type`; `applySilentModePlayback(on)` sets `'playback'` (on) or `'auto'` (off). They swallow errors and are no-ops where the API is missing. Call them before creating or resuming an `AudioContext`, and again from the gesture that unlocks audio.
 - Gameplay audio separates key, BGM, and master compressor stages in the default split topology.
 - `?compressor=legacy` keeps the old single-compressor shape for comparison.
 - `?compressor=off` disables compressor construction in the demo.
