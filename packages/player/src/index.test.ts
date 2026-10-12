@@ -1,5 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveChart } from '@be-music/chart';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { parseChart, parseChartFile } from '../../parser/src/index.ts';
@@ -2940,6 +2941,21 @@ describe('player', () => {
   test('player: shows RANDOM label when dynamic EXRANK changes exist', () => {
     const json = createDynamicExRankChart();
     expect(resolveDisplayedJudgeRankLabel(json)).toBe('RANDOM');
+  });
+
+  test('player: reads the displayed judge rank from a resolved chart', () => {
+    const json = createDynamicExRankChart();
+    const resolved = resolveChart(json);
+    expect(resolveDisplayedJudgeRankValue(resolved)).toBe(2);
+    expect(resolveDisplayedJudgeRankLabel(resolved)).toBe('RANDOM');
+
+    json.bms.exRank['AA'] = '0';
+    json.bms.exRank['CC'] = '-5';
+    json.bms.defExRank = 120;
+    expect(resolveDisplayedJudgeRankLabel(resolveChart(json))).toBe('120');
+
+    const bmson = createEmptyJson('bmson');
+    expect(resolveDisplayedJudgeRankLabel(resolveChart(bmson))).toBe('100');
   });
 
   test('player: resolves displayed judge rank from bmson judge rank', () => {

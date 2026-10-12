@@ -479,8 +479,8 @@ async function buildChartSummary(
     totalNotes = resolved.notes.length;
     player = chart.bms.player;
     difficulty = resolveDisplayedDifficultyValue(chart);
-    rank = resolveDisplayedJudgeRankValue(resolvedChart);
-    rankLabel = resolveDisplayedJudgeRankLabel(resolvedChart);
+    rank = resolveDisplayedJudgeRankValue(resolved);
+    rankLabel = resolveDisplayedJudgeRankLabel(resolved);
     playLevel = resolveDisplayedPlayLevelValue(chart);
     const bpmSummary = extractChartBpmSummary(resolved);
     bpmInitial = bpmSummary?.initial;
