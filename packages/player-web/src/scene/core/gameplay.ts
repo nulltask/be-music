@@ -4846,6 +4846,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               recordPlaylog: {
                 gauge: this.options.gauge,
                 ...(this.options.chartSha256 !== undefined ? { chartSha256: this.options.chartSha256 } : {}),
+                // The engine plays the chart this view resolved; the song's chart is the source both fingerprints
+                // describe (`#RANDOM` unresolved, no lane option applied).
+                ...(this.song !== undefined ? { sourceChart: this.song.chart } : {}),
                 ...(this.options.random1P !== undefined || this.options.random2P !== undefined
                   ? {
                       randomLane: {

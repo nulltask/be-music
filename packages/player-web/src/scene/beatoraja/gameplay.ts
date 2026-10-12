@@ -102,6 +102,11 @@ export interface PixiBeatorajaGameplayViewOptions {
    * names the branches that were played. Omit (or pass an empty array) for a chart without control flow.
    */
   randomOutcomes?: ReadonlyArray<number>;
+  /**
+   * The song's chart as loaded — before `#RANDOM` / `#SWITCH` resolution and the DP flip. The play log's chart and play
+   * fingerprints are computed from it, since {@link chart} is a resolved copy the view may flip further.
+   */
+  sourceChart?: BeMusicJson;
   audio: EngineDriverAudioContext;
   mode: 'manual' | 'auto';
   /**

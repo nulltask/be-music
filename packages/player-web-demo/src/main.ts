@@ -2253,6 +2253,8 @@ class PlayerWebDemoApp {
       chart: prep.chart,
       // The values `prep.chart` was resolved with — recorded as the play log's `play.randomOutcomes`.
       randomOutcomes: prep.randomOutcomes,
+      // The unresolved chart the play log's fingerprints describe (`prep.chart` is resolved and may be DP-flipped).
+      sourceChart: song.chart,
       audio: prep.audio,
       skinAudio: this.beatorajaSkinAudio,
       mode: (overrides.autoPlay ?? this.guiState.autoPlay) ? 'auto' : 'manual',

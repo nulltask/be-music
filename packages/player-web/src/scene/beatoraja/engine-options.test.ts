@@ -1,3 +1,4 @@
+import { createEmptyJson } from '@be-music/json';
 import { describe, expect, test } from 'vite-plus/test';
 import { composeBeatorajaEngineOptions } from './engine-options.ts';
 
@@ -31,6 +32,13 @@ describe('composeBeatorajaEngineOptions', () => {
       randomOutcomes: [2, 1],
       native: { skin: 'x', chartPath: 'song/chart.bms' },
     });
+  });
+
+  test('passes the source chart through for the fingerprints', () => {
+    const sourceChart = createEmptyJson('bms');
+    const options = composeBeatorajaEngineOptions({ sourceChart, randomOutcomes: [1] });
+    expect(options.recordPlaylog?.sourceChart).toBe(sourceChart);
+    expect(options.recordPlaylog?.randomOutcomes).toEqual([1]);
   });
 
   test('records no outcomes for a chart resolved without control flow', () => {
