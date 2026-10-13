@@ -199,11 +199,11 @@ export function ResultsTable(props: {
   );
 }
 
-/** Links to the same chart elsewhere: other Internet Rankings (one per file the chart is known by) and BMS Search. */
+/** Links to the same chart on other Internet Rankings and BMS Search, one set per file the chart is known by. */
 export function Elsewhere(props: { links: ExternalLink[] }) {
   if (props.links.length === 0) return null;
-  const rankings = props.links.filter((link) => link.kind === 'ranking');
-  const many = rankings.length > 1;
+  const files = new Set(props.links.flatMap((link) => (link.hash !== undefined ? [link.hash] : [])));
+  const many = files.size > 1;
   return (
     <section class="elsewhere">
       <h2>Elsewhere</h2>

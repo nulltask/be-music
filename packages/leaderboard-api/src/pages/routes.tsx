@@ -188,11 +188,10 @@ export function mountPages(app: Hono<AppEnv>): void {
     const ruleset = displayRuleset(c);
     const assisted = isOn(c.req.query('assisted'));
     const includeAnonymous = isOn(c.req.query('anonymous'));
-    const playedHereOnly = isOn(c.req.query('played'));
-    const filter = { chartFingerprint, ruleset, assisted, includeAnonymous, playedHereOnly };
+    const filter = { chartFingerprint, ruleset, assisted, includeAnonymous, playedHereOnly: false };
     const ranking = await loadRanking(db, filter, { offset: 0, limit: RANKING_LIMIT });
     const title = chartTitle(found.title, chartFingerprint);
-    const everyone = await countPlayers(db, { ...filter, includeAnonymous: true, playedHereOnly: false });
+    const everyone = await countPlayers(db, { ...filter, includeAnonymous: true });
     const elsewhere = externalLinks(found, await loadChartAliases(db, chartFingerprint));
     c.header('cache-control', PAGE_CACHE);
     return c.html(
@@ -209,11 +208,6 @@ export function mountPages(app: Hono<AppEnv>): void {
             label="Anonymous players"
             on={includeAnonymous}
             href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
-          />
-          <FilterChip
-            label={`Played under ${RULESET_LABELS[ruleset]}`}
-            on={playedHereOnly}
-            href={withQuery(c, 'played', playedHereOnly ? undefined : '1')}
           />
         </div>
         <RankingTable entries={ranking.entries} noteCount={found.noteCount} />

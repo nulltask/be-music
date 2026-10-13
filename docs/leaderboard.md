@@ -311,8 +311,9 @@ Every page shows its figures under one **display ruleset** (LR2, beatoraja or II
 cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL
 (`/leaderboard/ruleset/:id?next=…`, which only returns to Leaderboard pages), so page URLs stay shareable without
 changing the setting of whoever opens them. Since a page depends on that cookie, pages are `Cache-Control: private,
-max-age=0`. The chart page links to the chart elsewhere: Mocha-Repository for each file SHA-256 the chart is known by
-(LR2IR needs the MD5, not recorded yet), and a title search on BMS Search, which has no lookup by hash. Interactive parts (the rival button and similar) are
+max-age=0`. The chart page links to the chart elsewhere, once per file it is known by, in the formats BMS Search itself
+uses: Mocha-Repository, MinIR and BMS Search (`/patterns/{sha256}`) by the file SHA-256, and LR2IR by the MD5 once it
+is recorded. A chart with no known hash gets a title search on BMS Search. Interactive parts (the rival button and similar) are
 small `hono/jsx/dom` islands. If the site grows into an
 application, HonoX or Nuxt can take over; the shared data-access functions keep that move cheap.
 
