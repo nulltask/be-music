@@ -167,6 +167,8 @@
         "subtitle": "The .bml extension - 7 keys plus scratch with #LNOBJ long notes",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "5",
+        "difficulty": 3,
         "total": 300
       },
       "notes": [

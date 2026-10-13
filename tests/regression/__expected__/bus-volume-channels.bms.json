@@ -178,6 +178,8 @@
         "subtitle": "Channel 97 (BGM bus) and channel 98 (key bus)",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "1",
+        "difficulty": 1,
         "total": 200
       },
       "notes": [
