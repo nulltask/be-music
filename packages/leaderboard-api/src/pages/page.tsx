@@ -64,6 +64,7 @@ export function meta(c: Context, title: string, description: string, crumbs: Cru
     url: c.req.url,
     path: `${url.pathname}${url.search}`,
     ruleset: resolveDisplayRuleset(getCookie(c, RULESET_COOKIE)),
+    viewer: (c as Context<AppEnv>).get('viewer') ?? null,
   };
 }
 

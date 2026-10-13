@@ -17,7 +17,8 @@
     "db:migrate:production": "cf d1 migrations apply d3791c87-75f0-4d6b-8fd9-9013f0492006 --dir migrations",
     "clean": "rimraf .wrangler .cloudflare",
     "build:css": "node scripts/build-css.ts",
-    "build:icons": "node scripts/build-icons.ts"
+    "build:icons": "node scripts/build-icons.ts",
+    "build:client": "node scripts/build-client.ts"
   },
   "dependencies": {
     "@be-music/chart": "workspace:*",
@@ -40,6 +41,7 @@
     "basecoat-css": "^1.0.2",
     "cf": "1.0.0-beta.14",
     "drizzle-kit": "^0.31.11",
+    "esbuild": "0.28.2",
     "miniflare": "5.20261006.1-alpha",
     "tailwindcss": "^4.3.3",
     "wrangler": "^4.149.0"

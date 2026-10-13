@@ -3,7 +3,10 @@ import type { Child } from 'hono/jsx';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { RULESET_LABELS } from './format.ts';
 import { RULESET_IDS } from '../rulesets.ts';
+import { CLIENT_SCRIPT_PATH } from './client-script.ts';
+import { Avatar, playerHref } from './components/basics.tsx';
 import { ICON_LINKS } from './icons.ts';
+import type { Viewer } from './viewer.ts';
 import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
 
@@ -99,6 +102,40 @@ export interface PageMeta {
   path: string;
   /** The viewer's display ruleset, highlighted in the switch. */
   ruleset: PlaylogRulesetId;
+  /** The signed-in player, or null. */
+  viewer: Viewer | null;
+}
+
+/**
+ * The header's account area. Signed out: a passkey sign-in button. Signed in: the player's icon and handle (their page),
+ * Settings, and Sign out. The buttons are wired by the client script (client/main.ts); `data-account-status` shows
+ * what went wrong.
+ */
+function AccountMenu(props: { viewer: Viewer | null }) {
+  const viewer = props.viewer;
+  if (viewer === null) {
+    return (
+      <div class="flex items-center gap-2">
+        <button type="button" class="btn" data-size="sm" data-variant="outline" data-account-action="sign-in">
+          Sign in
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div class="flex items-center gap-1 text-sm">
+      <a class="hover:text-foreground me-1 inline-flex items-center gap-2" href={playerHref(viewer.handle)}>
+        <Avatar src={viewer.avatarUrl} size={24} />
+        <span class="max-w-[12ch] truncate">@{viewer.handle}</span>
+      </a>
+      <a class="btn" data-size="sm" data-variant="ghost" href="/leaderboard/settings">
+        Settings
+      </a>
+      <button type="button" class="btn" data-size="sm" data-variant="ghost" data-account-action="sign-out">
+        Sign out
+      </button>
+    </div>
+  );
 }
 
 /** Header switch of the display ruleset; it applies to every page. */
@@ -186,6 +223,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <script dangerouslySetInnerHTML={{ __html: TOOLTIP_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: LOCAL_TIME_SCRIPT }} />
         <link rel="stylesheet" href={STYLESHEET_PATH} />
+        <script src={CLIENT_SCRIPT_PATH} defer />
         <link rel="icon" type="image/svg+xml" href={ICON_LINKS.favicon} />
         <link rel="apple-touch-icon" href={ICON_LINKS.appleTouch} />
         <link rel="manifest" href={ICON_LINKS.manifest} />
@@ -209,7 +247,9 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               </a>
             </nav>
             <RulesetSwitch current={props.meta.ruleset} path={props.meta.path} />
+            <AccountMenu viewer={props.meta.viewer} />
           </div>
+          <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
         </header>
         <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">
           <Breadcrumbs crumbs={props.meta.crumbs} />
