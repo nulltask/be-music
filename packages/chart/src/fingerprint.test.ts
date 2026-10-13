@@ -5,6 +5,7 @@ import { stringifyBmson } from '../../stringifier/src/index.ts';
 import {
   canonicalizeFingerprintDocument,
   computeChartFingerprint,
+  computeFingerprintOfDocument,
   computePlayFingerprint,
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
@@ -103,6 +104,27 @@ describe('fingerprint document', () => {
     expect(canonical).not.toMatch(/\s/);
     const expected = createHash('sha256').update(Buffer.from(canonical, 'utf8')).digest('hex');
     expect(computePlayFingerprint(json, NO_PATH)).toBe(`bmfp0:${expected}`);
+  });
+
+  test('fingerprints a document built elsewhere like the chart it came from', () => {
+    const json = parseBms(chart('#RANDOM 2', '#IF 1', '#00213:01', '#ENDIF'));
+    const playDocument = createPlayFingerprintDocument(json, NO_PATH);
+    const chartDocument = createChartFingerprintDocument(json, NO_PATH);
+    expect(computeFingerprintOfDocument(playDocument)).toBe(computePlayFingerprint(json, NO_PATH));
+    expect(computeFingerprintOfDocument(chartDocument)).toBe(computeChartFingerprint(json, NO_PATH));
+    // A document that went through JSON (as one sent over the wire does) hashes the same, key order notwithstanding.
+    const reverseKeys = (value: unknown): unknown =>
+      Array.isArray(value)
+        ? value.map(reverseKeys)
+        : value !== null && typeof value === 'object'
+          ? Object.fromEntries(Object.entries(value).reverse().map(([key, entry]) => [key, reverseKeys(entry)]))
+          : value;
+    const roundTripped = JSON.parse(JSON.stringify(reverseKeys(playDocument))) as typeof playDocument;
+    expect(computeFingerprintOfDocument(roundTripped)).toBe(computePlayFingerprint(json, NO_PATH));
+    // Any edit to the document changes it.
+    expect(computeFingerprintOfDocument({ ...playDocument, bpm: '151' })).not.toBe(
+      computePlayFingerprint(json, NO_PATH),
+    );
   });
 });
 
