@@ -6,7 +6,9 @@ import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
 import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
+import { CARD_HEIGHT, CARD_WIDTH } from '../cards.ts';
 import { ICON_LINKS } from './icons.ts';
+import { ICONS } from './icons.generated.ts';
 import type { Viewer } from './viewer.ts';
 import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
@@ -107,6 +109,8 @@ export interface PageMeta {
   ruleset: PlaylogRulesetId;
   /** The signed-in player, or null. */
   viewer: Viewer | null;
+  /** The picture link previews show (a path on this site); the site's default card when absent. */
+  image?: { path: string; alt: string };
 }
 
 /**
@@ -218,6 +222,11 @@ export function PageHeader(props: { title: Child; kind?: EntityKind; children?: 
 /** The shell of every Leaderboard page: head with sharing tags, header, and the page body. */
 export function Layout(props: { meta: PageMeta; children: Child }) {
   const fullTitle = `${props.meta.title} · be-music Leaderboard`;
+  // Link previews need an absolute image URL.
+  const image = {
+    url: new URL(props.meta.image?.path ?? ICONS.ogDefault.path, props.meta.url).href,
+    alt: props.meta.image?.alt ?? 'be-music Leaderboard: rankings, replays and rivals for BMS players',
+  };
   return (
     <html lang="en">
       <head>
@@ -230,7 +239,15 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <meta property="og:title" content={fullTitle} />
         <meta property="og:description" content={props.meta.description} />
         <meta property="og:url" content={props.meta.url} />
-        <meta name="twitter:card" content="summary" />
+        <meta property="og:image" content={image.url} />
+        <meta property="og:image:width" content={String(CARD_WIDTH)} />
+        <meta property="og:image:height" content={String(CARD_HEIGHT)} />
+        <meta property="og:image:alt" content={image.alt} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={fullTitle} />
+        <meta name="twitter:description" content={props.meta.description} />
+        <meta name="twitter:image" content={image.url} />
+        <meta name="twitter:image:alt" content={image.alt} />
         <script dangerouslySetInnerHTML={{ __html: COLOR_SCHEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: TOOLTIP_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: LOCAL_TIME_SCRIPT }} />

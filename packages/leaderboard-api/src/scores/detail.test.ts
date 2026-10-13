@@ -35,13 +35,14 @@ const detail = (player: ScoreDetail['player']) =>
 
 describe('toScoreResponse', () => {
   test('answers the play, its player and its figures without internal keys', () => {
-    const response = toScoreResponse(detail({ handle: 'h', displayName: 'D', anonymous: true }));
+    const response = toScoreResponse(detail({ handle: 'h', displayName: 'D', anonymous: true, avatarKey: null }));
     expect(response).toMatchObject({
       id: 's1',
       player: { handle: 'h', displayName: 'D' },
       createdAt: Date.UTC(2026, 9, 13),
     });
     expect(response.player).not.toHaveProperty('anonymous');
+    expect(response.player).not.toHaveProperty('avatarKey');
     expect(response.results.map((entry) => entry.ruleset)).toEqual(['lr2', 'iidx']);
     expect(response.results[0]).not.toHaveProperty('scoreId');
   });

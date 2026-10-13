@@ -6,9 +6,13 @@
 import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
+import type { ScoreCardData } from '../src/pages/score-card-data.ts';
 import { centerSquare, describeAccountError } from './profile.ts';
+import { CARD_HEIGHT, CARD_WIDTH, drawScoreCard } from './score-card.ts';
 
 const AVATAR_SIZE = 256;
+/** The server's limit for a share card (src/cards.ts). */
+const CARD_UPLOAD_LIMIT = 512 * 1024;
 
 let client: ReturnType<typeof createClient> | undefined;
 function createClient() {
@@ -146,3 +150,86 @@ document.addEventListener('change', (event) => {
       input.value = '';
     });
 });
+
+/** Draws the play's share card and returns it as an image, PNG unless that is too large for the upload limit. */
+async function renderScoreCard(data: ScoreCardData): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = CARD_WIDTH;
+  canvas.height = CARD_HEIGHT;
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('This browser cannot draw the card.');
+  const avatar = await loadImage(data.avatarUrl).catch(() => null);
+  if (document.fonts !== undefined) await document.fonts.ready;
+  const playedOn = new Date(data.playedAt).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  drawScoreCard(context, data, avatar, playedOn);
+  const encode = (type: string, quality?: number) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+  const png = await encode('image/png');
+  if (png !== null && png.size <= CARD_UPLOAD_LIMIT) return png;
+  // WebP keeps the text sharper than JPEG at the same size; browsers that cannot write it hand back PNG.
+  const webp = await encode('image/webp', 0.92);
+  if (webp !== null && webp.type === 'image/webp' && webp.size <= CARD_UPLOAD_LIMIT) return webp;
+  const jpeg = await encode('image/jpeg', 0.9);
+  if (jpeg === null) throw new Error('This browser cannot encode the card.');
+  return jpeg;
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`cannot load ${src}`));
+    image.src = src;
+  });
+}
+
+/** The play's own player: draw the card and upload it when the play has none yet. */
+async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
+  const upload = source.dataset.upload;
+  if (upload === undefined || source.dataset.hasCard === 'true') return;
+  const data = JSON.parse(source.textContent ?? '{}') as ScoreCardData;
+  const blob = await renderScoreCard(data);
+  const response = await fetch(upload, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'content-type': blob.type },
+    body: blob,
+  });
+  if (!response.ok) throw new Error(`the card upload answered ${response.status}`);
+  const { cardUrl } = (await response.json()) as { cardUrl: string };
+  source.dataset.hasCard = 'true';
+  const preview = document.querySelector<HTMLImageElement>('[data-card-preview]');
+  if (preview !== null) preview.src = cardUrl;
+  say('Your share card is ready.', '[data-share-status]');
+}
+
+function setUpSharing(): void {
+  const source = document.querySelector<HTMLScriptElement>('script[data-score-card]');
+  if (source === null) return;
+  const native = document.querySelector<HTMLButtonElement>('[data-share-native]');
+  if (native !== null && typeof navigator.share === 'function') native.hidden = false;
+  native?.addEventListener('click', () => {
+    void navigator
+      .share({ title: document.title, text: source.dataset.shareText, url: location.href })
+      .catch(() => undefined);
+  });
+  document.querySelector('[data-share-copy]')?.addEventListener('click', () => {
+    void navigator.clipboard
+      .writeText(location.href)
+      .then(() => say('Link copied.', '[data-share-status]'))
+      .catch(() => say('Copying is not allowed here; copy the address bar instead.', '[data-share-status]'));
+  });
+  void ensureScoreCard(source).catch((error: unknown) =>
+    say(
+      `The share card could not be made: ${error instanceof Error ? error.message : String(error)}`,
+      '[data-share-status]',
+    ),
+  );
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setUpSharing);
+else setUpSharing();

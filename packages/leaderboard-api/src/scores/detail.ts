@@ -12,6 +12,7 @@ export async function loadScoreDetail(db: Database, scoreId: string) {
       handle: profile.handle,
       displayName: profile.displayName,
       anonymous: user.isAnonymous,
+      avatarKey: profile.avatarKey,
     })
     .from(score)
     .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
@@ -22,7 +23,12 @@ export async function loadScoreDetail(db: Database, scoreId: string) {
   const results = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId));
   const player =
     row.handle !== null && row.displayName !== null
-      ? { handle: row.handle, displayName: row.displayName, anonymous: row.anonymous === true }
+      ? {
+          handle: row.handle,
+          displayName: row.displayName,
+          anonymous: row.anonymous === true,
+          avatarKey: row.avatarKey,
+        }
       : null;
   return { score: row.score, chart: row.chart, player, results: results.sort(byRulesetOrder) };
 }
