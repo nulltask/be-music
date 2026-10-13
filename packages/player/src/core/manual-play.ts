@@ -182,11 +182,12 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   const summary: PlayerSummary = judgeCore.summary;
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSha256, chartMd5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
+          chartMd5,
           recorder,
           laneModeExtension: options.laneModeExtension,
           // The chart the engine was handed is the source when it resolved the control flow itself.

@@ -82,3 +82,39 @@ export function describeLeaderboardAccount(account: LeaderboardAccount | undefin
 function describeError(error: { message?: string; statusText?: string; status?: number }): string {
   return error.message || error.statusText || `HTTP ${error.status ?? '?'}`;
 }
+
+/** What the account chip on the select screens shows: the sign-in state at a glance. */
+export interface AccountChip {
+  state: 'signed-in' | 'anonymous' | 'signed-out';
+  label: string;
+  /** Longer explanation for the tooltip. */
+  title: string;
+  /** The player's Leaderboard page, when there is an account. */
+  href: string | undefined;
+}
+
+export function describeAccountChip(account: LeaderboardAccount | undefined): AccountChip {
+  if (account === undefined) {
+    return {
+      state: 'signed-out',
+      label: 'Not signed in',
+      title: 'Not signed in to the Leaderboard. Open the Debug Menu’s Leaderboard folder to sign in with a passkey.',
+      href: undefined,
+    };
+  }
+  const href = `/leaderboard/players/${encodeURIComponent(account.handle)}`;
+  if (account.anonymous) {
+    return {
+      state: 'anonymous',
+      label: `@${account.handle} · anonymous`,
+      title: 'Signed in anonymously: create a passkey to keep this account and show its plays on the Leaderboard.',
+      href,
+    };
+  }
+  return {
+    state: 'signed-in',
+    label: `@${account.handle}`,
+    title: `Signed in as ${account.displayName} (@${account.handle}). Opens your Leaderboard page.`,
+    href,
+  };
+}

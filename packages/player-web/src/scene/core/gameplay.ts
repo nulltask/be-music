@@ -548,6 +548,8 @@ export interface CoreGameplayViewOptions {
    * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
    */
   chartSha256?: string;
+  /** MD5 (lowercase hex) of the same bytes, stamped as `chart.md5` (the key LR2 and LR2IR use). */
+  chartMd5?: string;
   /** Host application stamped into the recorded play-log's `recorder` (the engine adds its own version). */
   playlogRecorder?: PlaylogRecordingOptions['recorder'];
   /**
@@ -4989,6 +4991,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               recordPlaylog: {
                 gauge: this.options.gauge,
                 ...(this.options.chartSha256 !== undefined ? { chartSha256: this.options.chartSha256 } : {}),
+                ...(this.options.chartMd5 !== undefined ? { chartMd5: this.options.chartMd5 } : {}),
                 ...(this.options.playlogRecorder !== undefined ? { recorder: this.options.playlogRecorder } : {}),
                 // The engine plays the chart this view resolved; the song's chart is the source both fingerprints
                 // describe (`#RANDOM` unresolved, no lane option applied).

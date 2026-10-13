@@ -1881,6 +1881,81 @@ body {
 }
 
 /*
+ * Leaderboard account chip, bottom-right. Same glass pill as the Help button; the dot carries the state (green signed
+ * in, amber anonymous, grey signed out) so it reads at a glance without the label.
+ */
+.account-chip {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 8;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(40vw, 260px);
+  padding: 8px 14px 8px 12px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 999px;
+  background: rgb(11 14 22 / 0.7);
+  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: blur(10px) saturate(140%);
+  color: #d2d9e4;
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 8px 22px rgb(0 0 0 / 0.35);
+  transition:
+    color 180ms ease-out,
+    border-color 180ms ease-out,
+    opacity 180ms ease-out;
+}
+
+.account-chip:hover,
+.account-chip:focus-visible {
+  color: #ffd166;
+  border-color: rgb(255 209 102 / 0.4);
+  outline: none;
+}
+
+.account-chip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6b7280;
+}
+
+.account-chip[data-state='signed-in'] .account-chip-dot {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgb(63 185 80 / 0.7);
+}
+
+.account-chip[data-state='anonymous'] .account-chip-dot {
+  background: #f5a524;
+}
+
+.account-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .account-chip-label {
+    display: none;
+  }
+  .account-chip {
+    padding: 11px;
+  }
+}
+
+.shell.in-gameplay .account-chip {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
  * During play the select-screen overlays step aside so they never cover the skin's track plate; the Help button stays
  * reachable by hovering where it sits.
  */

@@ -27,7 +27,7 @@ export interface RankingEntry {
   achievedAt: number;
 }
 
-function filterConditions(filter: RankingFilter): SQL[] {
+export function filterConditions(filter: RankingFilter): SQL[] {
   const conditions: SQL[] = [
     eq(bestScore.chartFingerprint, filter.chartFingerprint),
     eq(bestScore.ruleset, filter.ruleset),

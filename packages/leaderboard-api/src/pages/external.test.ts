@@ -19,7 +19,7 @@ describe('externalLinks', () => {
     ]);
   });
 
-  test('links an MD5 to LR2IR', () => {
+  test('links an MD5 to LR2IR and its archive', () => {
     expect(externalLinks(titled, [{ kind: 'md5', hash: MD5 }])).toEqual([
       {
         name: 'LR2IR',
@@ -27,6 +27,7 @@ describe('externalLinks', () => {
         kind: 'chart',
         hash: MD5,
       },
+      { name: 'LR2IR Archive', url: `https://lr2ir.com/charts/${MD5}`, kind: 'chart', hash: MD5 },
     ]);
   });
 

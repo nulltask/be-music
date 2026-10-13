@@ -79,3 +79,39 @@ export function formatExScore(exScore: number, noteCount: number): string {
   if (noteCount <= 0) return String(exScore);
   return `${exScore} / ${noteCount * 2} (${formatScoreRate(exScore, noteCount)})`;
 }
+
+/** `7keys` → `7 KEYS`, `popn-9k` → `POPN-9K`: a play log's lane mode as players name it. */
+export function formatLaneMode(laneMode: string | null): string {
+  if (laneMode === null || laneMode.length === 0) return '-';
+  const keys = /^(\d+)keys?$/i.exec(laneMode);
+  return keys !== null ? `${keys[1]} KEYS` : laneMode.toUpperCase();
+}
+
+const RANK_NAMES = ['VERY HARD', 'HARD', 'NORMAL', 'EASY', 'VERY EASY'];
+
+/**
+ * The judge rank as the chart wrote it, then the window it gives: `#RANK 2 (NORMAL) · 75%`, `#DEFEXRANK 120 · 90%`,
+ * or the percentage alone (bmson `judge_rank`, or no rank written).
+ */
+export function formatJudgeRank(
+  judgeRank: { percent: number; sourceRank?: number; sourceExRank?: number } | null,
+): string {
+  if (judgeRank === null) return '-';
+  const percent = `${Number(judgeRank.percent.toFixed(2))}%`;
+  if (judgeRank.sourceExRank !== undefined) return `#DEFEXRANK ${judgeRank.sourceExRank} · ${percent}`;
+  if (judgeRank.sourceRank !== undefined) {
+    const name = RANK_NAMES[judgeRank.sourceRank];
+    return `#RANK ${judgeRank.sourceRank}${name !== undefined ? ` (${name})` : ''} · ${percent}`;
+  }
+  return percent;
+}
+
+/** Long-note mode: 1 LN, 2 CN (charge note), 3 HCN (hell charge note). */
+export function formatLnMode(lnMode: number | null): string {
+  return lnMode === 1 ? 'LN' : lnMode === 2 ? 'CN' : lnMode === 3 ? 'HCN' : '-';
+}
+
+/** A 0–1 rate as `77.88%`, or `-`. */
+export function formatPercent(rate: number | null): string {
+  return rate === null ? '-' : `${(rate * 100).toFixed(2)}%`;
+}
