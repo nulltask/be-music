@@ -14,6 +14,9 @@ import { setTextResolution } from './resolution.ts';
 import { collectHitAreas, type PixiHitArea } from './skin-text.ts';
 import type { PixiSelectFrame, PixiSelectRenderer, PixiSkinDefinition } from './types.ts';
 
+/** LR2's opacity for a dropped long note (`0x80` of `0xff`). */
+const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
+
 /**
  * Turns a {@link PixiSkinDefinition} into a be-music skin. Every surface the player hands the skin gets its own Pixi
  * `WebGLRenderer` on the surface's WebGL 2 context; each frame replays the player's plain frame data into the skin's
@@ -138,6 +141,11 @@ class GameplayScreen {
   private readonly lanes = new Graphics();
   /** Every note and long note this frame, drawn into one Graphics (they only add geometry, in draw order). */
   private readonly notes = new Graphics();
+  /**
+   * Long notes missed at the head or let go early (`state: 'dropped'`), drawn under the rest at LR2's half alpha
+   * (`0x80` of `0xff`) until they go.
+   */
+  private readonly droppedLongNotes = new Graphics({ alpha: DROPPED_LONG_NOTE_ALPHA });
   private readonly bombs = new Container();
   private readonly overlayLayer = new Container();
   private readonly layerPool = new ChildPool(this.layer);
@@ -146,7 +154,7 @@ class GameplayScreen {
 
   constructor(definition: PixiSkinDefinition) {
     this.definition = definition;
-    this.root.addChild(this.layer, this.lanes, this.notes, this.bombs, this.overlayLayer);
+    this.root.addChild(this.layer, this.lanes, this.droppedLongNotes, this.notes, this.bombs, this.overlayLayer);
   }
 
   build(frame: BeMusicGameplayFrame): Container {
@@ -188,9 +196,10 @@ class GameplayScreen {
 
     const notes = this.notes;
     notes.clear();
+    this.droppedLongNotes.clear();
     for (const note of frame.longNotes) {
       skin.renderLongNote({
-        graphics: notes,
+        graphics: note.state === 'dropped' ? this.droppedLongNotes : notes,
         kind: note.kind,
         x: note.x,
         w: note.w,

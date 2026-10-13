@@ -101,6 +101,8 @@ export {
 
 export { isInvisibleNoteChannel, type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';
 
+export { resolveChartMainBpm, type MainBpmChart } from './main-bpm.ts';
+
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
   eventToBeat: (event: BeMusicEvent) => number;

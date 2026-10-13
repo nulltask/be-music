@@ -122,6 +122,15 @@ export interface BmsonStopEventEntry {
   duration: number;
 }
 
+/**
+ * beatoraja extension — `scroll_events[]` shape. From pulse `y` on, the lane scrolls at `rate` times its normal speed
+ * (BMS `#SCROLLxx`), until the next scroll event.
+ */
+export interface BmsonScrollEventEntry {
+  y: number;
+  rate: number;
+}
+
 export interface BmsonSoundNoteEntry {
   x?: number;
   y: number;
@@ -303,6 +312,8 @@ export interface BmsonPreservation {
   lines: number[];
   bpmEvents: BmsonBpmEventEntry[];
   stopEvents: BmsonStopEventEntry[];
+  /** The beatoraja extension `scroll_events`, as authored; left out when the chart has none. */
+  scrollEvents?: BmsonScrollEventEntry[];
   soundChannels: BmsonSoundChannelEntry[];
 }
 
@@ -399,6 +410,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
   const lines = [...json.preservation.bmson.lines];
   const bpmEvents = json.preservation.bmson.bpmEvents.map((event) => ({ y: event.y, bpm: event.bpm }));
   const stopEvents = json.preservation.bmson.stopEvents.map((event) => ({ y: event.y, duration: event.duration }));
+  const scrollEvents = json.preservation.bmson.scrollEvents?.map((event) => ({ y: event.y, rate: event.rate }));
   const soundChannels = json.preservation.bmson.soundChannels.map((channel) => ({
     name: channel.name,
     notes: channel.notes.map((note) => ({ ...note })),
@@ -462,6 +474,7 @@ export function cloneJson(json: BeMusicJson): BeMusicJson {
         lines,
         bpmEvents,
         stopEvents,
+        ...(scrollEvents ? { scrollEvents } : {}),
         soundChannels,
       },
     },

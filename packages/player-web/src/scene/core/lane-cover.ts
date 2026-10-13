@@ -28,7 +28,10 @@ export function fillLaneCover(
  * current scroll: `laneHeightPx` scaled by the uncovered part (`1 - suddenRatio - liftRatio`), travelled at
  * `pixelsPerBeat`, one beat lasting `60000 / bpm` ms. This is beatoraja's white number (`240000 / bpm / hispeed ×
  * (1 - lanecover)` for a lane one measure tall) expressed in the core view's pixel scroll. HIDDEN+ is not subtracted:
- * like beatoraja, the duration runs to the judgement line. Returns 0 when the scroll or BPM is not positive.
+ * like beatoraja, the duration runs to the judgement line. `scrollRate` is the chart's `#SCROLL` × `#SPEED` at the
+ * playhead: beatoraja divides by it (`region = nscroll > 0 ? (240000 / nbpm / hispeed / speed) / nscroll : 0`), so
+ * the duration is 0 while the chart scrolls backwards or stands still. Returns 0 when the scroll or BPM is not
+ * positive.
  */
 export function resolveNoteVisibleMs(
   laneHeightPx: number,
@@ -36,10 +39,11 @@ export function resolveNoteVisibleMs(
   liftRatio: number,
   pixelsPerBeat: number,
   bpm: number,
+  scrollRate = 1,
 ): number {
-  if (!(pixelsPerBeat > 0) || !(bpm > 0) || !(laneHeightPx > 0)) return 0;
+  if (!(pixelsPerBeat > 0) || !(bpm > 0) || !(laneHeightPx > 0) || !(scrollRate > 0)) return 0;
   const uncovered = Math.max(0, 1 - Math.max(0, suddenRatio) - Math.max(0, liftRatio));
-  return ((laneHeightPx * uncovered) / pixelsPerBeat) * (60_000 / bpm);
+  return ((laneHeightPx * uncovered) / pixelsPerBeat / scrollRate) * (60_000 / bpm);
 }
 
 /** IIDX-style green number for a visible duration: `visibleMs × 3 / 5`, rounded (beatoraja's `duration_green`). */

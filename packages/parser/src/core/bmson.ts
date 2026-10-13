@@ -5,6 +5,7 @@ import type {
   BmsonKeyChannelEntry,
   BmsonMineChannelEntry,
   BmsonMineNoteEntry,
+  BmsonScrollEventEntry,
   BmsonSoundChannelEntry,
   BmsonSoundNoteEntry,
   BmsonStopEventEntry,
@@ -46,6 +47,12 @@ export interface BmsonStopEvent {
   duration: number;
 }
 
+/** beatoraja extension — from pulse `y` on, the lane scrolls at `rate` times its normal speed. */
+export interface BmsonScrollEvent {
+  y: number;
+  rate: number;
+}
+
 export interface BmsonSoundNote {
   x?: number;
   y: number;
@@ -81,6 +88,8 @@ export interface BmsonDocument {
   resolution?: number;
   bpm_events?: BmsonBpmEvent[];
   stop_events?: BmsonStopEvent[];
+  /** beatoraja extension — scroll speed changes, read as BMS `#SCROLLxx` on channel `SC`. */
+  scroll_events?: BmsonScrollEvent[];
   sound_channels?: BmsonSoundChannel[];
   /**
    * beatoraja extension — hidden (invisible) note channels. Each note maps onto a BMS invisible channel (`3x` for 1P,
@@ -307,6 +316,37 @@ export function normalizeBmsonStopEvents(input: unknown): BmsonStopEventEntry[] 
     events.push({
       y: Math.max(0, Math.round(raw.y)),
       duration: raw.duration,
+    });
+  }
+  return events;
+}
+
+/**
+ * beatoraja extension `scroll_events`. jbms-parser accepts any `rate` (a zero rate stops the lane, a negative one
+ * reverses it), so only entries without a finite `y` or `rate` are dropped.
+ */
+export function normalizeBmsonScrollEvents(input: unknown): BmsonScrollEventEntry[] {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  const events: BmsonScrollEventEntry[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const raw = item as Record<string, unknown>;
+    if (
+      typeof raw.y !== 'number' ||
+      !Number.isFinite(raw.y) ||
+      typeof raw.rate !== 'number' ||
+      !Number.isFinite(raw.rate)
+    ) {
+      continue;
+    }
+    events.push({
+      y: Math.max(0, Math.round(raw.y)),
+      rate: raw.rate,
     });
   }
   return events;

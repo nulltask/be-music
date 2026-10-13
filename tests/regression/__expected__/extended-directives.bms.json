@@ -225,7 +225,7 @@
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/2",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -248,7 +248,7 @@
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/2",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -270,7 +270,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/2",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -295,7 +295,7 @@
         "perfect": {
           "inputs": 24,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/2",
             "judge": {
               "pgreat": 12,
               "great": 0,
@@ -318,7 +318,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/2",
             "judge": {
               "pgreat": 12,
               "great": 0,
@@ -340,7 +340,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/2",
             "judge": {
               "pgreat": 12,
               "great": 0,
@@ -365,7 +365,7 @@
         "offset": {
           "inputs": 22,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/2",
             "judge": {
               "pgreat": 6,
               "great": 3,
@@ -388,7 +388,7 @@
             "score": 125000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/2",
             "judge": {
               "pgreat": 6,
               "great": 3,
@@ -410,7 +410,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/2",
             "judge": {
               "pgreat": 6,
               "great": 3,

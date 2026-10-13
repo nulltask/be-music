@@ -57,7 +57,8 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     longHoldUntilMs: new Map(),
     longHoldReleaseSeconds: new Map(),
     longNoteSuppressUntilSeconds: new Map(),
-    lastLanePressMs: new Map(),
+    laneHolds: new Map(),
+    keyStateInput: false,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
       ? config.scorableNotes.filter((note) => config.scratchChannels.has(note.channel))
@@ -83,6 +84,7 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit);
       return;
     case 'hold':
+      state.keyStateInput = true;
       for (const channel of input.channels) {
         state.heldChannels.add(channel);
         emit({ kind: 'ui', command: { kind: 'press-lane', channel } });

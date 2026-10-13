@@ -203,12 +203,19 @@ export function createStopBeatWindows(resolver: TimingResolver): StopBeatWindow[
     });
 }
 
+/**
+ * The beats bar lines sit at: the start of every measure from 0 to the last one with data, as beatoraja builds its
+ * sections (jbms-parser `BMSDecoder`: sections `0..maxsec`, each opening with a bar line) — no line after the last
+ * measure. A bmson chart that authors `lines` gets exactly those (one per measure start), as beatoraja's
+ * `BMSONDecoder` draws them; without `lines` the spec's line every 4 beats applies over the chart's measures.
+ */
 export function createMeasureBoundariesBeats(json: BeMusicJson, beatResolver: BeatResolver): number[] {
-  const maxMeasure = resolveMaxMeasureIndex(json);
+  const bmsonLines = json.sourceFormat === 'bmson' ? json.preservation.bmson.lines : [];
+  const lastMeasure = bmsonLines.length > 0 ? bmsonLines.length - 1 : resolveMaxMeasureIndex(json);
   const boundaries: number[] = [];
   let previous = Number.NaN;
 
-  for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
+  for (let measure = 0; measure <= lastMeasure; measure += 1) {
     const beat = beatResolver.measureToBeat(measure, 0);
     if (!Number.isFinite(beat)) {
       continue;

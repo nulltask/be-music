@@ -219,15 +219,17 @@ export default defineBeMusicSkin({
 
 - `layout`: [ステージとレイアウト](#ステージとレイアウト)を参照。
 - `lanes`: 各レーンの矩形（`x`、`w`、`top`、判定ライン位置の `bottom`）、`kind`、`beam`（キービーム強度。押下中は 1、離すと減衰）。`pressedAtMs` / `releasedAtMs` はそのレーンを最後に押した・離したプレイクロック時刻、`holding` と `holdStartedAtMs` はそのレーンでロングノーツを押し続けているかと、その開始時刻です。
-- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。
-- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、押下中は判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。
-- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、PGREAT 窓内で押すと地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
+- `notes`: タップノーツ `{ kind, x, w, y }`。`y` はノーツの下端です。オートプレイやオートスクラッチが叩くノーツには `autoplay` が付きます。LR2 と同じく、まだ打っていないノーツは見逃しと判定されるまで判定ライン上（`y` がレーンの `bottom`）で待ち、早く打ったノーツもその時刻までは渡されます。
+- `longNotes`: ロングノーツ `{ kind, x, w, top, bottom }`。`top` が終端、`bottom` が始端で、始端の時刻を過ぎると判定ラインに張り付きます。`mode`（`'ln'` / `'cn'` / `'hcn'`）は判定方式、`state`（`'pending'` / `'held'` / `'dropped'` / `'done'`）は進行状態、`autoplay` はオートプレイが処理するかを表します。LR2 と組み込みスキンは、`'dropped'`（始端を見逃した、または早く離した）のロングノーツを消えるまで半透明で描きます。
+- `mines`: 地雷ノーツ `{ kind, x, w, y }`。`y` は下端です。レーンを押したまま判定ラインを通過するか、LR2 ruleset では PGREAT 窓内で押しても地雷が爆発してゲージが減ります（判定にはなりません）。スキンが `gameplay.drawsMines`（後述）を設定したときだけ中身が入ります。
 - `bombs`: 生きているヒットエフェクト。`elapsedMs`、固定の `seed`、発生させた判定 `judge` を持ちます。
 - `measureLines`: 小節線 `{ side, x, w, y }`。横切るレーンランごとに 1 本です。スキンが `gameplay.drawsMeasureLines` を設定したときだけ中身が入ります。
 - `bga`: 合成する BGA のレイヤー（`{ base?, layer?, poor?, poorActive }`）。スキンが `gameplay.drawsBga` を設定したとき以外は `undefined` です。
 - `runtime`: HUD の値（下記）。
 - `beatPhase`、`nowMs`、`effects`、`audio`。
 - `settings` と `songImage`: [スキン設定](#スキン設定)と[曲の画像](#曲の画像)を参照。
+
+負の `#SCROLL` を含む譜面では、まだ先にあるノーツ・地雷・ロングノート・小節線が判定ラインより下（ステージの下端まで）に来ることがあります。プレイヤーはそうした譜面を beatoraja と同じように描くためです。それ以外の譜面ではラインより下に来ません（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。その位置に描くか、ライン下に何も描きたくないスキンはレーンの `bottom` で切り取ってください。
 
 `gameplay.bombDurationMs`（既定 300）でヒットエフェクトの寿命を指定します。
 
@@ -258,7 +260,7 @@ export default defineBeMusicSkin({
 - **快適性とサウンド:** `effects`、`audio`
 - **譜面:** `song`（プレイ中の `BrowserSongEntry`。レベル、難易度、`#RANK`、`#TOTAL` は `song.chart.metadata` にあります）、`minBpm`、`maxBpm`、`mainBpm`、`playVariant`（5 / 7 / 9 / 10 / 14 / 24 / 48 KEY）、`laneCount`、`laneChannels`（表示順のレーンチャンネル）
 - **タイミング:** `lastJudgeDeltaMs` と `judgeTimings`（タイミング付きの直近 64 判定、古い順）。[判定タイミング](#判定タイミング)を参照。`judgeWindows` はルールセットの判定幅をノーツの種類（`note`、`scratch`、`longNoteEnd`）ごとに ms で表します。プレイ開始時に `#RANK` から決まり、途中の `#EXRANK` の変更は反映されません。
-- **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（ノーツが画面に見えている時間）、`greenNumber`（`visibleMs × 0.6`）
+- **レーンカバー:** `laneCovers`（サイドごとの `sudden`、`hidden`、`lift`。レーンの高さに対する割合）、`visibleMs`（現在の BPM・ハイスピード・`#SCROLL` × `#SPEED` でノーツが画面に見えている時間。beatoraja と同じく、逆向きのスクロール中や停止中は 0）、`greenNumber`（`visibleMs × 0.6`）
 - **曲の時計:** `songLengthMs` と `songElapsedMs`。オーディオの時計で、曲の開始とともに 0 から進み、ポーズ中は止まります。残り時間は `songLengthMs - songElapsedMs` です。`chartMs` は譜面の最初の拍から測り、カウントイン中は負になる点が異なります。
 - **1 プレイに 1 度の瞬間:** `failedAtMs`（プレイ中にゲージが尽きた）、`allNotesDoneAtMs`（最後のノーツが判定された）、`outroAtMs`（譜面が終わった）、`gaugeRiseAtMs`（ゲージが初めて上がった）、`gaugeMaxAtMs`（初めて最大に達した）。どれもその瞬間に固定されるプレイクロック時刻で、それまでは `undefined` です。
 - **推移:** `scoreHistory` と `gaugeHistory`。リザルト画面が受け取るのと同じサンプルです。ホストが更新中の配列そのものなので、読むだけにして変更しないでください。

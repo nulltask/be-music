@@ -53,6 +53,21 @@ import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-m
 import { type TimedLandmineNote, type TimedPlayableNote } from '@be-music/player/playable-notes';
 import type { BeMusicPlaylog, PlaylogRecordingOptions } from '@be-music/player/playlog';
 import { applyPlaylogArrangement } from '../../chart/playlog-arrangement.ts';
+import {
+  advanceDrawCursor,
+  changesScrollRate,
+  collectResolvedLaneTimelineBeats,
+  isDrawnAtTime,
+  isDrawnUntilJudged,
+  isLongNoteDrawnAtTime,
+  isPastDrawWindow,
+  resolveDrawBottom,
+  resolveDrawY,
+  resolveLongNoteAlpha,
+  resolveNoteDrawRules,
+  resolveNoteDrawWindow,
+  type NoteDrawWindow,
+} from './note-draw-window.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
 import type { BrowserSongAssetSource, BrowserSongEntry } from '../../collection/types.ts';
 import {
@@ -97,6 +112,7 @@ import {
   pickSwitchingBgaFrame,
   resolveBmsBmpArgb,
   resolveChart,
+  resolveChartMainBpm,
   resolveChartReferenceBpm,
   volWavToLinearGain,
   type BmsSwitchingBga,
@@ -206,9 +222,9 @@ type RuntimeNote = TimedPlayableNote;
  * `RuntimeNote`: the engine mutates `judged` on the same `TimedLandmineNote` instance the renderer's
  * `this.mineNotes` array already references, so there is no separate `hit` flag for the view to keep in sync.
  *
- * On a key press inside the BAD window we trigger a BAD verdict, play the mine explosion sample (`#WAV 00`), drain the
- * gauge by the chart-encoded damage value, and reset combo to zero. The underlying `playableNotes` array stays
- * untouched so a regular note in the same window past / future the mine can still be judged on the next press.
+ * The engine decides when a mine detonates (by the judge ruleset, see docs/player-spec.md#landmines): it plays the
+ * explosion sample (`#WAV00`) and drains the gauge by the mine's damage, without a verdict or a combo change. The
+ * playable notes are untouched, so a regular note near the mine is judged as usual.
  */
 type RuntimeMineNote = TimedLandmineNote;
 
@@ -314,14 +330,27 @@ export interface GameplayMeasureLineFrame {
   beats: readonly number[];
   /** First index into `beats` worth visiting. */
   firstBeatIndex: number;
-  /** Walk stops past this beat (`+Infinity` while a `#SCROLL` / `#SPEED` mapper is active). */
+  /**
+   * Walk stops past this beat. Under beatoraja's rules (see `note-draw-window.ts`) it is where the chart first runs
+   * past the lane top, so a line a negative `#SCROLL` brings back into the lane after that is not drawn.
+   */
   maxBeat: number;
   pixelsPerBeat: number;
   /** Scroll distance in beats from the current playhead to `beat`. */
   beatDistance: (beat: number) => number;
+  /**
+   * Where the line at `beat` draws: `bottom - beatDistance(beat) * pixelsPerBeat`, held on the judgement line once
+   * passed under LR2's rules (see `note-draw-window.ts`).
+   */
+  lineY: (beat: number) => number;
   /** Lane area top / judgement-line bottom in design pixels. */
   top: number;
   bottom: number;
+  /**
+   * Lowest y a line may be drawn at: `bottom`, or under beatoraja's rules the bottom of the stage, where a negative
+   * `#SCROLL` can put a line that is still ahead.
+   */
+  drawBottom: number;
 }
 
 /** Scene timing a theme authors: the intro gates before chart start and the exit fade / close lengths, in ms. */
@@ -596,14 +625,13 @@ export interface CoreGameplayViewOptions {
   /**
    * Single-note visibility after judgement.
    *
-   * - `'HIDE'` (default) — judged notes vanish at the judgement instant. Matches the LR2 / beatoraja default behavior
-   *   and keeps the playfield visually clean during dense passages.
-   * - `'KEEP_SCROLLING'` — judged notes stay on screen and keep scrolling until their position crosses the judgement
-   *   line. Equivalent to beatoraja's `LANEEFFECT ON` mode; useful as a timing-learning aid because the player can see
-   *   *where* a press landed relative to the line.
+   * - `'KEEP_SCROLLING'` (default) — a judged note stays on screen until its own time: one hit early keeps scrolling
+   *   down to the judgement line and goes when it reaches it. This is what LR2 (`DrawNotes` draws a hit note until the
+   *   playhead reaches it) and beatoraja (`LaneRenderer` draws a note while its time is ahead, judged or not) both do.
+   * - `'HIDE'` — a judged note goes the moment it is judged, which neither player does; kept as a preference for a
+   *   cleaner playfield in dense passages.
    *
-   * Only single notes are gated. Long-note bodies are always positionally clipped (the body persists until the tail
-   * passes the line regardless of head-hit state) so this option doesn't disturb LN visuals.
+   * Only tap notes are gated. Long notes stay until their end either way, so this option doesn't disturb them.
    */
   judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
 }
@@ -771,6 +799,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * points. Falls back to plain beat-difference math when no scroll/speed events are present.
    */
   private scrollMapper: ScrollDistanceMapperLike | undefined;
+  /** Beats of the chart's lane timelines, for the last timeline beatoraja's rules draw past the lane top. */
+  private laneTimelineBeats: Float64Array = new Float64Array(0);
   /**
    * Engine's `preparePlaybackChartData` result, computed once during {@link prepareSong} and forwarded to the
    * shared engine via `engineOptions.preparedChart`. Holds the canonical `notes` / `landmineNotes` /
@@ -799,6 +829,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private invisibleNotes: TimedPlayableNote[] = [];
   private maxLongNoteBeatSpan = 0;
+  /**
+   * LR2's `draw_count` for {@link notes} and {@link mineNotes} under LR2's drawing rules: the first of each not gone yet
+   * ({@link advanceDrawCursor}), kept between frames. Rebuilt when the arrays change or the playhead moves back.
+   */
+  private drawCursor:
+    | { notes: readonly RuntimeNote[]; mines: readonly TimedLandmineNote[]; beat: number; note: number; mine: number }
+    | undefined;
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
   protected laneChannels: string[] = [];
@@ -2266,15 +2303,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.timingResolver = resolver;
     // Build a STOP-aware seconds→beat resolver for `currentBeat`.
     this.beatAtSeconds = createBeatAtSecondsResolverFromTimingResolver(resolver);
-    // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, so the common case
-    // stays on the plain beat-diff path with no extra cost.
+    // Build the #SCROLL / #SPEED distance integrator. Skipped when the chart has no such events, or only ones at 1, so
+    // the common case stays on the plain beat-diff path with no extra cost (and on its ruleset's drawing rules).
     const beatResolver = resolvedPlay.beatResolver;
     const scrollTimeline = resolvedPlay.scroll;
     const speedTimeline = resolvedPlay.speed;
-    this.scrollMapper =
-      scrollTimeline.length > 0 || speedTimeline.length > 0
-        ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
-        : undefined;
+    this.scrollMapper = changesScrollRate(scrollTimeline, speedTimeline)
+      ? createScrollDistanceMapper(scrollTimeline, speedTimeline, { invalidDistance: 0 })
+      : undefined;
+    this.laneTimelineBeats = collectResolvedLaneTimelineBeats(resolvedPlay);
     this.autoSampleTriggers = resolvedPlay.sampleTriggers
       .filter((trigger) => !isPlayableInputChannel(trigger.channel))
       .sort((left, right) => left.seconds - right.seconds);
@@ -2307,7 +2344,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // `resolveChartReferenceBpm` helper prefers `#BASEBPM` over the chart's initial `#BPM` so a chart whose `#BPM` is
     // its peak / average rather than its scroll-feel reference still calibrates at the speed the author intended; falls
     // back to the parsed `metadata.bpm` and finally the song-list BPM hint when neither is present.
-    this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm));
+    this.applyHsFix(resolver, resolveChartReferenceBpm(resolved, this.song?.bpm), resolveChartMainBpm(resolvedPlay));
     // Initialize gauge with the actual playable-note count and the chart's #TOTAL value so PG/GR gain matches LR2: a
     // long chart with TOTAL=300 and 1000 notes gets +0.3 per PG/GR, while a short TOTAL=160 100-note chart gets +1.6
     // per PG/GR.
@@ -2899,65 +2936,51 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   }
 
   /**
-   * Applies the LR2 HS-FIX multiplier to {@link hiSpeed} once `prepareSong` has installed the timing resolver. Pegs the
-   * user's chosen HS to a chosen BPM so the visual scroll feels uniform across BPM changes:
+   * Applies the HS-FIX multiplier to {@link hiSpeed} once `prepareSong` has installed the timing resolver. The player's
+   * hi-speed is the one they want at `referenceBpm` (`#BASEBPM`, else the start BPM); HS-FIX rescales it so the scroll
+   * at another BPM of the chart feels like that, as beatoraja's fixed hi-speed modes do (`LaneRenderer.init`):
    *
-   * - `OFF` — leave HS as-is.
-   * - `MAXBPM` — scale by `mainBPM / maxBPM` (slow sections feel proportionally slower).
-   * - `MINBPM` — scale by `mainBPM / minBPM` (fast sections feel proportionally faster).
-   * - `AVERAGE` — scale by `mainBPM / avgBPM` where avgBPM is the time-weighted mean.
-   * - `CONSTANT` — true per-frame "constant scroll" needs a render- pipeline change that hasn't landed; falls through
+   * - `OFF` — leave HS as-is (beatoraja `OFF`; its `STARTBPM` is the same here, since the reference is the start BPM).
+   * - `MAXBPM` — scale by `referenceBpm / maxBPM` (beatoraja `MAXBPM`).
+   * - `MINBPM` — scale by `referenceBpm / minBPM` (beatoraja `MINBPM`).
+   * - `AVERAGE` — scale by `referenceBpm / mainBPM`, the BPM the most notes sit at ({@link resolveChartMainBpm},
+   *   beatoraja `MAINBPM`). A time average is skewed by the split-second BPM spikes and STOPs of BPM × N + STOP
+   *   gimmicks (an average of ~810 on a 145 BPM chart), the main BPM is not.
+   * - `CONSTANT` — true per-frame "constant scroll" needs a render-pipeline change that hasn't landed; falls through
    *   to the `AVERAGE` multiplier so the option still produces a sensible shift instead of doing nothing.
    *
    * Skipped when there are no tempo points (defensive — the resolver can be constructed empty during edge-case mounts)
    * or the chart has no BPM info.
    */
-  private applyHsFix(resolver: TimingResolver, mainBpmCandidate: number | undefined): void {
+  private applyHsFix(
+    resolver: TimingResolver,
+    referenceBpmCandidate: number | undefined,
+    mainBpm: number | undefined,
+  ): void {
     const mode = this.options.hsFix ?? 'OFF';
     if (mode === 'OFF') return;
-    const mainBpm = typeof mainBpmCandidate === 'number' && mainBpmCandidate > 0 ? mainBpmCandidate : undefined;
-    if (mainBpm === undefined) return;
+    const referenceBpm =
+      typeof referenceBpmCandidate === 'number' && referenceBpmCandidate > 0 ? referenceBpmCandidate : undefined;
+    if (referenceBpm === undefined) return;
     const tempoPoints = resolver.tempoPoints;
     if (tempoPoints.length === 0) return;
     // |BPM| — a negative `#BPMxx` (LR2 reverse-scroll gimmick) integrates at its magnitude, so the HS-fix range
     // math uses the magnitude too. Zero / non-finite points still drop out via the `> 0` filter.
     const bpms = tempoPoints.map((point) => Math.abs(point.bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
     if (bpms.length === 0) return;
-    const maxBpm = Math.max(...bpms);
-    const minBpm = Math.min(...bpms);
-    let multiplier = 1;
+    let targetBpm: number;
     switch (mode) {
       case 'MAXBPM':
-        multiplier = mainBpm / maxBpm;
+        targetBpm = Math.max(...bpms);
         break;
       case 'MINBPM':
-        multiplier = mainBpm / minBpm;
+        targetBpm = Math.min(...bpms);
         break;
-      case 'AVERAGE':
-      case 'CONSTANT': {
-        // Time-weighted average — each tempo segment runs from `point.seconds` to the next point's `seconds` (or the
-        // chart's last note for the final segment). Using a flat arithmetic mean would over-weight a tiny BPM-change
-        // blip relative to a long segment at the surrounding BPM.
-        const finalSeconds = Math.max(this.songDurationSeconds, tempoPoints.at(-1)?.seconds ?? 0);
-        let weightedSum = 0;
-        let totalDuration = 0;
-        for (let index = 0; index < tempoPoints.length; index += 1) {
-          const point = tempoPoints[index]!;
-          const next = tempoPoints[index + 1];
-          const start = Math.max(0, point.seconds);
-          const end = Math.max(start, next ? next.seconds : finalSeconds);
-          const duration = end - start;
-          // |BPM| for the same reason as the min / max scan above — only the sign is forgiven, zero still skips.
-          const bpm = Math.abs(point.bpm);
-          if (duration <= 0 || !Number.isFinite(bpm) || bpm === 0) continue;
-          weightedSum += bpm * duration;
-          totalDuration += duration;
-        }
-        const average = totalDuration > 0 ? weightedSum / totalDuration : mainBpm;
-        multiplier = mainBpm / Math.max(1, average);
+      default:
+        targetBpm = mainBpm ?? referenceBpm;
         break;
-      }
     }
+    const multiplier = referenceBpm / targetBpm;
     if (!Number.isFinite(multiplier) || multiplier <= 0) return;
     const next = Math.round(this.hiSpeed * multiplier * 1000) / 1000;
     this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));
@@ -4043,11 +4066,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         judgeSides.push({ side, judge: state.judge, combo: state.combo });
       }
     }
+    const currentBeat = this.currentBeat(seconds);
     // The BPM readout freezes at the reversal value (LR2's frozen pump holds |BPM| there) instead of following the
     // mirrored scroll back through earlier tempo points — see `nowBpm`.
     const bpm = this.nowBpm(seconds) ?? this.song?.bpm;
     const laneCovers = this.resolveLaneCovers();
-    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm);
+    const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt?.(currentBeat) ?? 1);
     return {
       songTitle: this.song?.title,
       songArtist: this.song?.artist,
@@ -4144,16 +4168,27 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * How long a note stays visible below `cover` (the first play side's) at the current scroll and BPM, over the lanes
-   * laid out last frame. `undefined` until the lanes are laid out or while the BPM is unknown. `#SCROLL` / `#SPEED`
-   * changes are not taken into account.
+   * laid out last frame, divided by the `#SCROLL` × `#SPEED` rate at the playhead (0 while the chart scrolls backwards or
+   * stands still, as beatoraja shows it). `undefined` until the lanes are laid out or while the BPM is unknown.
    */
-  private resolveVisibleMs(cover: BeMusicLaneCover | undefined, bpm: number | undefined): number | undefined {
+  private resolveVisibleMs(
+    cover: BeMusicLaneCover | undefined,
+    bpm: number | undefined,
+    scrollRate: number,
+  ): number | undefined {
     if (this.laneX.size === 0 || bpm === undefined || !(bpm > 0)) return undefined;
     let laneHeight = 0;
     for (const lane of this.laneX.values()) {
       laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
     }
-    return resolveNoteVisibleMs(laneHeight, cover?.sudden ?? 0, cover?.lift ?? 0, PIXELS_PER_BEAT * this.hiSpeed, bpm);
+    return resolveNoteVisibleMs(
+      laneHeight,
+      cover?.sudden ?? 0,
+      cover?.lift ?? 0,
+      PIXELS_PER_BEAT * this.hiSpeed,
+      bpm,
+      scrollRate,
+    );
   }
 
   /**
@@ -4321,7 +4356,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return Math.max(0, 1 - elapsed / fadeMs);
   }
 
-  private renderNotes(seconds: number, _height: number): void {
+  private renderNotes(seconds: number, height: number): void {
     const overscan = this.noteOverscan;
     this.noteLayerPool.begin();
     if (this.isIntroPlaying()) {
@@ -4333,7 +4368,21 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     const currentBeat = this.currentBeat(seconds);
     const pixelsPerBeat = PIXELS_PER_BEAT * this.hiSpeed;
-    this.renderMeasureLines(currentBeat, pixelsPerBeat);
+    let laneHeight = 1;
+    for (const lane of this.laneX.values()) {
+      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
+    }
+    const drawWindow = resolveNoteDrawWindow({
+      rules: resolveNoteDrawRules(this.scrollMapper !== undefined),
+      currentBeat,
+      nowSeconds: seconds,
+      mapper: this.scrollMapper,
+      laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
+      timelineBeats: this.laneTimelineBeats,
+      overscanBeats: 48 / Math.max(1, pixelsPerBeat),
+      stageBottomY: height,
+    });
+    this.renderMeasureLines(drawWindow, pixelsPerBeat);
     // Note: the lane-bottom beat-pulse glow is drawn by the LR2 skin itself — the "rhythm timer" `#DST_IMAGE` at SRC y=2007
     // in the default 7-keys skin, anchored to timer 140. `elapsedSinceTimer(140)` remaps the chart's current fractional
     // beat to the 0..1000 ms keyframe window the LR2 skin's keyframe chain authored, so the glow flashes on every beat
@@ -4343,28 +4392,22 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
-    let laneHeight = 1;
-    for (const lane of this.laneX.values()) {
-      laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
-    }
-    const maxVisibleBeat = currentBeat + (laneHeight + 48) / Math.max(1, pixelsPerBeat);
     // Debug visualization — paint invisible / keysound notes FIRST so playable notes + mines paint over them. Skipped
     // entirely (and the array stays empty) when the option is off.
     if (this.options.showInvisibleNotes && this.invisibleNotes.length > 0) {
       // Themes can supply a sprite for the overlay (the LR2 family uses the Pop'n green wide note of its 9-keys play
       // skin). When unavailable we fall through to a flat green rectangle so the overlay still reads.
-      const firstInvisibleIndex = this.scrollMapper
-        ? 0
-        : findFirstIndexAtOrAfter(this.invisibleNotes, currentBeat, (note) => note.beat);
+      const firstInvisibleIndex = findFirstIndexAtOrAfter(this.invisibleNotes, currentBeat, (note) => note.beat);
       for (let invIndex = firstInvisibleIndex; invIndex < this.invisibleNotes.length; invIndex += 1) {
         const invisible = this.invisibleNotes[invIndex]!;
-        if (!this.scrollMapper && invisible.beat > maxVisibleBeat) {
+        if (isPastDrawWindow(drawWindow, invisible.beat)) {
           break;
         }
+        if (!isDrawnAtTime(drawWindow, invisible.seconds)) continue;
         const lane = this.laneX.get(invisible.channel);
         if (!lane) continue;
         const y = lane.bottom - beatDistance(invisible.beat) * pixelsPerBeat;
-        if (y < lane.top - overscan || y > lane.bottom) continue;
+        if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
         const cell = this.resolveThemeNoteCell(
           'invisible',
           resolveLr2LaneIndex(invisible.channel, this.chartPlayVariant),
@@ -4384,50 +4427,68 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         graphic.rect(lane.x + 2, y - 4, Math.max(4, lane.w - 4), 4).fill({ color: 0x33dd66, alpha: 0.7 });
       }
     }
-    const firstNoteIndex = this.scrollMapper
-      ? 0
-      : findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
+    // Under LR2's rules a note stays until it is judged and its beat has passed, so the walk starts from LR2's
+    // `draw_count` (the first note not gone yet); beatoraja's rules start from the notes whose time can still be ahead.
+    const cursor = drawWindow.rules === 'lr2' ? this.advanceDrawCursor(drawWindow) : undefined;
+    const firstNoteIndex =
+      cursor?.note ?? findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
+    const hideJudgedNotes = this.options.judgedNoteDisplay === 'HIDE';
     for (let noteIndex = firstNoteIndex; noteIndex < this.notes.length; noteIndex += 1) {
       const note = this.notes[noteIndex]!;
-      if (!this.scrollMapper && note.beat > maxVisibleBeat) {
+      if (isPastDrawWindow(drawWindow, note.beat)) {
         break;
       }
-      // Judged notes (hit / auto-missed) intentionally stay on screen and continue scrolling — only their *position*
-      // governs visibility.
+      // LR2's rules: a note stays until it is judged and its beat (a long note's end) has passed — on the judgement line
+      // once its beat has. beatoraja's rules go by time below.
+      if (!isDrawnUntilJudged(drawWindow, note, this.isAutoplayedChannel(note.channel))) {
+        continue;
+      }
       const lane = this.laneX.get(note.channel);
       if (!lane) {
         continue;
       }
-      const y = lane.bottom - beatDistance(note.beat) * pixelsPerBeat;
+      const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(note.beat) * pixelsPerBeat, lane.bottom);
       // Use the LR2-spec lane index for theme note lookups (LR2 `#SRC_NOTE,...,index`): 2P side notes need to read
       // `skin.notes[kind][10..17]`, not the position-based `[8..15]` that `resolveLaneIndex` would give.
       const laneIndex = resolveLr2LaneIndex(note.channel, this.chartPlayVariant);
       // Long-note render: draw LN_BODY between start and end beats, capped with LN_START / LN_END sprites. Falls
       // through to single-note render if the chart has no long-note end-beat for this entry.
       if (note.endBeat !== undefined) {
-        const yEnd = lane.bottom - beatDistance(note.endBeat) * pixelsPerBeat;
-        // yEnd is *above* y (smaller value, since beats grow upward visually). Hide the LN once its tail (yEnd) has
-        // visually crossed the judgement-line bottom — at that point every part of the long note is below the line and
-        // shouldn't paint over the keys area. Also clip when the head is still off-screen above the playfield.
-        if (yEnd > lane.bottom || y < lane.top - overscan) {
+        if (!isLongNoteDrawnAtTime(drawWindow, note.endSeconds ?? note.seconds)) {
           continue;
         }
-        this.renderLongNote(laneIndex, note, lane, y, yEnd);
+        const yEnd = resolveDrawY(drawWindow, lane.bottom - beatDistance(note.endBeat) * pixelsPerBeat, lane.bottom);
+        // yEnd is *above* y (smaller value, since beats grow upward visually). Under beatoraja's rules a tail below the
+        // stage bottom has nothing left to draw (LR2's rules hold it on the line until the note goes). Also clip when the
+        // head is still off-screen above the playfield.
+        const drawBottom = resolveDrawBottom(drawWindow, lane.bottom);
+        if (yEnd > drawBottom || y < lane.top - overscan) {
+          continue;
+        }
+        // beatoraja draws a long note whose head has passed with the head on the judgement line (the walk does not
+        // advance past the playhead), and skips one whose tail does not sit above its head.
+        const headY = drawWindow.rules === 'beatoraja' && note.seconds < seconds ? lane.bottom : y;
+        if (drawWindow.rules === 'beatoraja' && yEnd >= headY) {
+          continue;
+        }
+        this.renderLongNote(laneIndex, note, lane, headY, yEnd, drawBottom);
         continue;
       }
-      // Single notes hide the moment their bottom edge passes the judgement-line bottom (= `lane.bottom`). Until then
-      // the note's visibility depends on `judgedNoteDisplay`: - `'HIDE'` (default) — judged notes disappear the instant
-      // they were judged (LR2 / beatoraja default behavior). - `'KEEP_SCROLLING'` — judged notes keep scrolling until
-      // their position passes the line (≈ beatoraja's LANEEFFECT ON).
-      if (y < lane.top - overscan || y > lane.bottom) {
+      // A tap note draws while it is above the stage's bottom edge and (beatoraja's rules) its time is still ahead; LR2's
+      // rules hold it on the line until it goes.
+      if (
+        y < lane.top - overscan ||
+        y > resolveDrawBottom(drawWindow, lane.bottom) ||
+        !isDrawnAtTime(drawWindow, note.seconds)
+      ) {
         continue;
       }
       // Read the engine's `judged` flag directly off the shared `TimedPlayableNote` instance — the engine
       // mutates it the moment it resolves the note's verdict, and because the renderer and the engine
       // hold the same array (handed in via `engineOptions.preparedChart`), there is no parallel `hit` flag
-      // to keep in sync. HIDE-on-judge mode uses this to clip the note immediately at the judgment moment;
-      // KEEP_SCROLLING leaves it on screen until its position passes the line.
-      if (note.judged && this.options.judgedNoteDisplay !== 'KEEP_SCROLLING') {
+      // to keep in sync. `judgedNoteDisplay: 'HIDE'` drops a judged note at once; by default (as in LR2 and
+      // beatoraja) it stays until its time.
+      if (note.judged && hideJudgedNotes) {
         continue;
       }
       this.renderSingleNote(laneIndex, note.channel, lane, y);
@@ -4435,23 +4496,44 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // Landmine notes — same scroll math, separate sprite. Drawn after regular notes so a mine sitting at the same beat
     // as a playable note paints on top (LR2 default skin's mine sprites carry their own outline so the visual hierarchy
     // reads correctly).
-    const firstMineIndex = this.scrollMapper
-      ? 0
-      : findFirstIndexAtOrAfter(this.mineNotes, currentBeat, (note) => note.beat);
+    // A mine is judged once it has passed or exploded: LR2's rules hold it on the line until then (one set off early
+    // keeps scrolling to the line); beatoraja's rules drop it at its time, or once judged.
+    const firstMineIndex = cursor?.mine ?? findFirstIndexAtOrAfter(this.mineNotes, currentBeat, (note) => note.beat);
     for (let mineIndex = firstMineIndex; mineIndex < this.mineNotes.length; mineIndex += 1) {
       const mine = this.mineNotes[mineIndex]!;
-      if (!this.scrollMapper && mine.beat > maxVisibleBeat) {
+      if (isPastDrawWindow(drawWindow, mine.beat)) {
         break;
       }
-      if (mine.judged) continue;
+      if (drawWindow.rules === 'lr2') {
+        if (!isDrawnUntilJudged(drawWindow, mine, this.isAutoplayedChannel(mine.channel))) continue;
+      } else if (mine.judged || !isDrawnAtTime(drawWindow, mine.seconds)) continue;
       const lane = this.laneX.get(mine.channel);
       if (!lane) continue;
-      const y = lane.bottom - beatDistance(mine.beat) * pixelsPerBeat;
-      if (y < lane.top - overscan || y > lane.bottom) continue;
+      const y = resolveDrawY(drawWindow, lane.bottom - beatDistance(mine.beat) * pixelsPerBeat, lane.bottom);
+      if (y < lane.top - overscan || y > resolveDrawBottom(drawWindow, lane.bottom)) continue;
       const laneIndex = resolveLr2LaneIndex(mine.channel, this.chartPlayVariant);
       this.renderMineNote(laneIndex, mine.channel, lane, y);
     }
     this.noteLayerPool.end();
+  }
+
+  /**
+   * Moves LR2's `draw_count` ({@link drawCursor}) past the notes and mines gone by this frame and returns it. Starts
+   * over when the chart's arrays change or the playhead moves back.
+   */
+  private advanceDrawCursor(drawWindow: NoteDrawWindow): { note: number; mine: number } {
+    const { currentBeat } = drawWindow;
+    let cursor = this.drawCursor;
+    if (!cursor || cursor.notes !== this.notes || cursor.mines !== this.mineNotes || currentBeat < cursor.beat) {
+      cursor = { notes: this.notes, mines: this.mineNotes, beat: currentBeat, note: 0, mine: 0 };
+      this.drawCursor = cursor;
+    }
+    cursor.beat = currentBeat;
+    const isGone = (object: RuntimeNote | TimedLandmineNote): boolean =>
+      !isDrawnUntilJudged(drawWindow, object, this.isAutoplayedChannel(object.channel));
+    cursor.note = advanceDrawCursor(this.notes, cursor.note, isGone);
+    cursor.mine = advanceDrawCursor(this.mineNotes, cursor.mine, isGone);
+    return cursor;
   }
 
   /**
@@ -4501,8 +4583,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (this.measureBeatCache.songId === song.id) {
       return this.measureBeatCache.beats;
     }
-    // The resolved chart's bar lines: one per measure start through the measure after the last object, using the chosen
-    // `#RANDOM` branch's `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
+    // The resolved chart's bar lines: one per measure start up to the last measure, using the chosen `#RANDOM` branch's
+    // `#xxx02` lengths, and none when a bmson chart opts out with `lines: []`.
     const beats = [...(this.resolvedPlayChart ?? resolveChart(song.chart)).barLines];
     this.measureBeatCache = { songId: song.id, beats };
     return beats;
@@ -4513,7 +4595,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * ({@link renderThemeMeasureLines}; the LR2 family uses `#SRC_LINE` / `#DST_LINE`); otherwise we fall back to a thin
    * bar across each run of adjacent lanes, so double play's banks get one each and the gap between them stays clear.
    */
-  private renderMeasureLines(currentBeat: number, pixelsPerBeat: number): void {
+  private renderMeasureLines(drawWindow: NoteDrawWindow, pixelsPerBeat: number): void {
+    const { currentBeat } = drawWindow;
     const beats = this.resolveMeasureBeats();
     if (beats.length === 0 || this.laneChannels.length === 0) {
       return;
@@ -4527,16 +4610,48 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     const top = left.top;
     const bottom = left.bottom;
-    const firstBeatIndex = this.scrollMapper
-      ? 0
-      : findFirstIndexNumberAtOrAfter(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
-    const maxBeat = this.scrollMapper
-      ? Number.POSITIVE_INFINITY
-      : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
+    let firstBeatIndex: number;
+    if (drawWindow.rules === 'beatoraja') {
+      // A bar line is a timeline like any other: gone once its time has come (a STOP on it included).
+      firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, currentBeat);
+      const timing = this.timingResolver;
+      while (
+        timing &&
+        firstBeatIndex < beats.length &&
+        !isDrawnAtTime(drawWindow, timing.beatToSeconds(beats[firstBeatIndex]!))
+      ) {
+        firstBeatIndex += 1;
+      }
+    } else {
+      // LR2 drops a bar line once the playhead has passed it (`DrawNotes` 0x40703d-0x40705b), so one under a STOP that
+      // began on it stays on the judgement line for the STOP. A pixel of slack keeps the line just crossed for a frame,
+      // as LR2 draws it once more on the line before dropping it.
+      firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
+    }
+    // beatoraja's rules end the walk where the notes' walk ends (bar lines are timelines like any other).
+    const maxBeat =
+      drawWindow.rules === 'beatoraja'
+        ? drawWindow.lastBeat
+        : currentBeat + (bottom - top + 1) / Math.max(1, pixelsPerBeat);
     const beatDistance = this.scrollMapper
       ? (toBeat: number): number => this.scrollMapper!.distanceBetween(currentBeat, toBeat)
       : (toBeat: number): number => toBeat - currentBeat;
-    if (this.renderThemeMeasureLines({ beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom })) {
+    const drawBottom = resolveDrawBottom(drawWindow, bottom);
+    const lineY = (beat: number): number =>
+      resolveDrawY(drawWindow, bottom - beatDistance(beat) * pixelsPerBeat, bottom);
+    if (
+      this.renderThemeMeasureLines({
+        beats,
+        firstBeatIndex,
+        maxBeat,
+        pixelsPerBeat,
+        beatDistance,
+        lineY,
+        top,
+        bottom,
+        drawBottom,
+      })
+    ) {
       return;
     }
     const binding = this.skinBinding;
@@ -4545,11 +4660,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       const runs = this.resolveMeasureLineRuns();
       for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
         const beat = beats[beatIndex]!;
-        if (!this.scrollMapper && beat > maxBeat) {
+        if (beat > maxBeat) {
           break;
         }
-        const y = bottom - beatDistance(beat) * pixelsPerBeat;
-        if (y < top - 1 || y > bottom + 1) {
+        const y = lineY(beat);
+        if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }
         for (const run of runs) {
@@ -4565,11 +4680,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const graphic = this.noteLayerPool.acquireGraphics();
     for (let beatIndex = firstBeatIndex; beatIndex < beats.length; beatIndex += 1) {
       const beat = beats[beatIndex]!;
-      if (!this.scrollMapper && beat > maxBeat) {
+      if (beat > maxBeat) {
         break;
       }
-      const y = bottom - beatDistance(beat) * pixelsPerBeat;
-      if (y < top - 1 || y > bottom + 1) {
+      const y = lineY(beat);
+      if (y < top - 1 || y > drawBottom + 1) {
         continue;
       }
       for (const run of runs) {
@@ -4620,7 +4735,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   /**
    * Renders a long note as a vertical band: LN_BODY tiled (or stretched) between LN_START (lower) and LN_END (upper).
    * The body / caps come from the theme per lane index when available ({@link resolveThemeNoteCell}); otherwise the
-   * body falls back to the be-music skin's long-note drawing.
+   * body falls back to the be-music skin's long-note drawing. A long note missed at the head or let go early draws at
+   * half alpha until it goes, as in LR2 ({@link resolveLongNoteAlpha}); a be-music skin gets its `state` and dims it
+   * itself.
    */
   private renderLongNote(
     laneIndex: number,
@@ -4628,15 +4745,19 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     lane: GameplayLaneRect,
     yStart: number,
     yEnd: number,
+    drawBottom: number,
   ): void {
     const channel = note.channel;
+    const state = this.longNotes.stateOf(channel, note.beat, note.judged);
+    const alpha = resolveLongNoteAlpha(state);
     // `yStart` / `yEnd` are the chart-time intersections with the judgement line. With the bottom-edge anchor
     // convention (matching LR2 / BMS): - LN_START's *bottom edge* sits at `yStart` (just-timing of the head) - LN_END's
     // *bottom edge* sits at `yEnd` (just-timing of the tail) The body fills the band between them; we clamp the bottom
-    // to the judgement-line bottom (= `lane.bottom`) so the body never paints over the keys area below the line — even
-    // mid-LN where the head has already passed but the tail is still above.
+    // to `drawBottom` — the judgement-line bottom (= `lane.bottom`) unless beatoraja's rules let a long note a negative
+    // `#SCROLL` puts below the line draw there — so the body never paints over the keys area below the line, even mid-LN
+    // where the head has already passed but the tail is still above.
     const top = Math.max(lane.top - this.noteOverscan, Math.min(yStart, yEnd));
-    const bottom = Math.min(lane.bottom, Math.max(yStart, yEnd));
+    const bottom = Math.min(drawBottom, Math.max(yStart, yEnd));
     const bodyCell = this.resolveThemeNoteCell('lnbody', laneIndex);
     if (bodyCell) {
       if (bodyCell.texture) {
@@ -4650,6 +4771,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         sprite.y = top - bodyCell.height;
         sprite.width = bodyCell.width;
         sprite.height = Math.max(1, bottom - top);
+        sprite.alpha = alpha;
       }
     } else {
       const kind = resolveBeMusicLaneKind(channel, laneIndex, this.chartPlayVariant);
@@ -4662,13 +4784,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
           top,
           bottom,
           mode: this.resolveLongNoteMode(note),
-          state: this.longNotes.stateOf(channel, note.beat, note.judged),
+          state,
           autoplay: this.isAutoplayedChannel(channel),
         });
       } else {
         const graphic = this.noteLayerPool.acquireGraphics();
         graphic.label = `ln-body-fallback[lane=${laneIndex},ch=${channel}]`;
         renderPhantomLongNote({ graphics: graphic, kind, x: lane.x, w: lane.w, top, bottom, nowMs: this.playClock() });
+        graphic.alpha = alpha;
       }
     }
     // LN_END at the top (yEnd), LN_START at the bottom (yStart).
@@ -4681,10 +4804,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       sprite.y = yEnd - endCell.height;
       sprite.width = endCell.width;
       sprite.height = endCell.height;
+      sprite.alpha = alpha;
     }
-    // Hide the LN head once it has visually passed the judgement-line bottom. The body+end keep showing until the tail
-    // crosses (handled by the caller's `yEnd > lane.bottom` early-out).
-    if (yStart <= lane.bottom) {
+    // The head draws wherever it is above the draw bottom: on the judgement line once passed (both rule sets hold it
+    // there), and under beatoraja's rules skipped while a negative `#SCROLL` has it below the stage.
+    if (yStart <= drawBottom) {
       const startCell = this.resolveThemeNoteCell('lnstart', laneIndex);
       if (startCell?.texture) {
         const sprite = this.noteLayerPool.acquireSprite();
@@ -4694,6 +4818,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         sprite.y = yStart - startCell.height;
         sprite.width = startCell.width;
         sprite.height = startCell.height;
+        sprite.alpha = alpha;
       }
     }
   }

@@ -10,7 +10,8 @@ import {
   resolveRulesetLongNoteMode,
   toUiLongNoteMode,
 } from './judge-rules.ts';
-import { processLandminePassage } from './judge-core-advance.ts';
+import { laneHoldHistory, processLandminePassage } from './judge-core-advance.ts';
+import { recordLaneDown, recordLaneUp } from './lane-hold.ts';
 import {
   applyGaugeJudge,
   applyResolvedManualJudge,
@@ -234,11 +235,12 @@ export function handleLanePress(
     refreshedHold = true;
   }
 
-  // LR2 mine model — the press itself counts as "key ON": record the press instant for the non-kitty hold
-  // approximation, then detonate any mine currently inside the PGREAT window on these lanes. Detonation never
-  // consumes the press: the regular note judgment below still runs.
+  // Mines — record the press instant (when the mine crossing is settled later, the lane is asked whether it was down
+  // then), then settle the mines on these lanes: under LR2's model (`mineTrigger: 'press-or-hold'`) the press itself
+  // counts as "key ON" and detonates any mine inside the PGREAT window; under beatoraja's (`'hold'`) only a key down as
+  // a mine crosses counts. Detonation never consumes the press: the regular note judgment below still runs.
   for (const channel of candidateChannels) {
-    state.lastLanePressMs.set(channel, nowMs);
+    recordLaneDown(laneHoldHistory(state, channel), tokens, nowMs);
   }
   processLandminePassage(state, nowSec, nowMs, emit);
 
@@ -419,7 +421,11 @@ export function handleLaneRelease(
       channels: input.channels,
     });
   }
+  state.keyStateInput = true;
+  // The release's own instant (a live driver drains it later than it happened; the play log records the instant).
+  const releaseMs = input.nowMs - (input.nowSec - input.recordSec) * state.config.judgeMsPerChartSecond;
   for (const channel of input.channels) {
+    recordLaneUp(laneHoldHistory(state, channel), input.tokens, releaseMs);
     state.heldChannels.delete(channel);
     emit({ kind: 'ui', command: { kind: 'release-lane', channel } });
     if (state.activeLongNotes.has(channel)) {

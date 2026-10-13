@@ -5,6 +5,8 @@ import {
   type BeMusicPlaylog,
   type PlaylogInputEvent,
   type PlaylogNote,
+  parsePlaylog,
+  serializePlaylog,
 } from './format.ts';
 import {
   resolveBeatorajaDefaultTotal,
@@ -62,6 +64,48 @@ function simulateSingleNote(ruleset: PlaylogRulesetId, dmUs: number) {
   return simulatePlaylog(makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000 - dmUs)] }), { ruleset });
 }
 
+describe('simulatePlaylog mines', () => {
+  // A note at 0.5 s (its PGREAT fills the gauge), then a mine at 1 s on the same lane.
+  const filler = note(500_000);
+  const mine = note(1_000_000, { type: 'mine', damage: 10 });
+  /** How much the mine took off the final gauge: the run with it against the same run without it. */
+  function mineDamage(ruleset: PlaylogRulesetId, inputs: Array<Omit<PlaylogInputEvent, 'seq'>>): number {
+    const all = [down(500_000), up(510_000), ...inputs];
+    const withMine = simulatePlaylog(makePlaylog({ notes: [filler, mine], inputs: all }), { ruleset });
+    const without = simulatePlaylog(makePlaylog({ notes: [filler], inputs: all }), { ruleset });
+    return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
+  }
+
+  test('a press inside the PGREAT window detonates a mine under LR2 (and IIDX), not under beatoraja', () => {
+    // Pressed 3 ms after the crossing: beatoraja damages only a key that is down as the mine crosses the line.
+    const late = [down(1_003_000), up(1_020_000)];
+    expect(mineDamage('lr2', late)).toBe(10);
+    expect(mineDamage('iidx', late)).toBeGreaterThan(0);
+    expect(mineDamage('beatoraja', late)).toBe(0);
+    // Pressed 3 ms before and let go before the crossing: the same.
+    const early = [down(997_000), up(999_000)];
+    expect(mineDamage('lr2', early)).toBe(10);
+    expect(mineDamage('beatoraja', early)).toBe(0);
+  });
+
+  test('a key held through the crossing detonates a mine under every ruleset, once', () => {
+    const held = [down(900_000), up(1_100_000)];
+    expect(mineDamage('lr2', held)).toBe(10);
+    expect(mineDamage('beatoraja', held)).toBe(10);
+    expect(mineDamage('iidx', held)).toBeGreaterThan(0);
+  });
+
+  test('at the same µs the input comes before the crossing', () => {
+    // Down at the crossing's very µs is down as the mine crosses; up at that µs is not (beatoraja's hold-only rule).
+    expect(mineDamage('beatoraja', [down(1_000_000), up(1_100_000)])).toBe(10);
+    expect(mineDamage('beatoraja', [down(900_000), up(1_000_000)])).toBe(0);
+  });
+
+  test('a press outside the PGREAT window leaves the mine alone', () => {
+    expect(mineDamage('lr2', [down(1_100_000), up(1_120_000)])).toBe(0);
+  });
+});
+
 describe('simulatePlaylog', () => {
   test('a single note hit dead-on scores PGREAT on every ruleset', () => {
     const playlog = makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
@@ -76,12 +120,21 @@ describe('simulatePlaylog', () => {
       expect(result.gauge.final, ruleset).toBe(100);
       expect(result.gauge.cleared, ruleset).toBe(true);
     }
-    expect(results.lr2!.ruleset).toBe('lr2/1');
-    expect(results.beatoraja!.ruleset).toBe('beatoraja/1');
-    expect(results.iidx!.ruleset).toBe('iidx/1');
+    // Revision 2: the mine rules changed (LR2's press and window-entry legs, beatoraja's hold-only rule).
+    expect(results.lr2!.ruleset).toBe('lr2/2');
+    expect(results.beatoraja!.ruleset).toBe('beatoraja/2');
+    expect(results.iidx!.ruleset).toBe('iidx/2');
     expect(results.lr2!.score).toBe(200000); // (4 PG × 50000) / 1 note
     expect(results.lr2!.djLevel).toBe('AAA');
     expect(results.beatoraja!.score).toBeUndefined(); // money score is LR2-only
+  });
+
+  test('a log whose cached results carry an older revision still parses and re-simulates under the current one', () => {
+    const playlog = makePlaylog({ notes: [note(1_000_000)], inputs: [down(1_000_000)] });
+    const stale = { ...simulatePlaylog(playlog, { ruleset: 'lr2' }), ruleset: 'lr2/1' };
+    const parsed = parsePlaylog(serializePlaylog({ ...playlog, results: { lr2: stale } }));
+    expect(parsed.results!.lr2!.ruleset).toBe('lr2/1');
+    expect(simulatePlaylog(parsed, { ruleset: 'lr2' }).ruleset).toBe('lr2/2');
   });
 
   test('LR2 RANK 2 windows: PGREAT ±18ms / GREAT ±40ms / GOOD ±100ms / BAD ±200ms, inclusive', () => {
