@@ -302,12 +302,8 @@ export const DEMO_APP_HTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 A browser-based BMS player. Drop in a folder containing BMS / BMSON charts and
-                play them straight from the page. Reads <strong>Lunatic Rave 2</strong> skins
-                (<code>.lr2skin</code>) and <strong>beatoraja</strong> skins
-                (<code>.json</code> / <code>.luaskin</code>) — drop your
-                <code>LR2files</code> folder, or your beatoraja <code>skin/</code> folder, onto
-                the page (alongside or before the chart drop) and the theme is applied
-                automatically.
+                play them straight from the page. It comes with two skins, Synesthesia and Plain
+                (Debug Menu → Built-in skin).
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -338,14 +334,6 @@ export const DEMO_APP_HTML = `
                   <strong>Best records stay in this browser.</strong> The Leaderboard (off by
                   default, Debug Menu → Leaderboard) is a beta: its rankings may be reset.
                 </li>
-                <li>
-                  <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the
-                  beatoraja default skin (<code>skin/default</code>),
-                  <code>ModernChic</code>, and <code>GdbG Original Skin</code>. Other LR2 /
-                  beatoraja skins parse and load, but their layout is unverified — expect element
-                  overlap, off-by-a-few-pixels positioning, or missing animation frames on
-                  third-party themes.
-                </li>
                 <li>Use at your own risk. No warranty is provided.</li>
               </ul>
             </section>
@@ -353,21 +341,15 @@ export const DEMO_APP_HTML = `
             <ul class="help-list">
               <li>Drop a BMS folder anywhere on the page to register its charts.</li>
               <li>
-                Drop an <code>LR2files</code> folder, or a beatoraja <code>skin/</code> folder
-                (or their contents), to apply a skin theme.
-              </li>
-              <li>
                 Or click <strong>Open folder</strong> in the Debug Menu (top-right) to use the native
-                folder picker — same handling as a drag-drop, so a folder containing both an LR2 / beatoraja
-                theme and BMS charts loads both in one shot. Press the button again to add another folder.
+                folder picker — same handling as a drag-drop. Press the button again to add another folder.
                 <strong>Open files</strong> picks ZIP archives or a play log (<code>*.bmplay.json</code>) to replay.
               </li>
-              <li>Subsequent drops add to the library and keep the current theme.</li>
+              <li>Subsequent drops add to the library.</li>
               <li>
                 Or link straight to a pack: open the page with
-                <code>?music=https://…/song.zip</code> to auto-load a chart archive, and/or
-                <code>?skin=https://…/theme.zip</code> to apply a skin — the charts are listed in this select
-                screen. Cross-origin archive links are fetched through the demo proxy and must use HTTPS.
+                <code>?music=https://…/song.zip</code> to auto-load a chart archive — the charts are listed in
+                this select screen. Cross-origin archive links are fetched through the demo proxy and must use HTTPS.
               </li>
             </ul>
 
@@ -425,7 +407,7 @@ export const DEMO_APP_HTML = `
             <section class="help-about">
               <p class="help-about-summary">
                 ブラウザ上で動作する BMS プレイヤーです。BMS / BMSON が入ったフォルダをドロップするだけでそのまま再生できます。
-                <strong>Lunatic Rave 2</strong> のスキン (<code>.lr2skin</code>) と <strong>beatoraja</strong> のスキン (<code>.json</code> / <code>.luaskin</code>) を解釈するので、<code>LR2files</code> フォルダや beatoraja の <code>skin/</code> フォルダをページにドロップすれば既存のスキンをそのまま適用できます。
+                スキンはシナスタジア (Synesthesia) とプレーン (Plain) の 2 種類です (Debug Menu → Built-in skin)。
               </p>
               <ul class="help-about-meta">
                 <li>
@@ -447,15 +429,12 @@ export const DEMO_APP_HTML = `
                 <li>
                   ドロップしたファイルはブラウザ内でのみ処理され、譜面・音声・BGA データを
                   <strong>サーバへ送信することは一切ありません</strong>。
+                  <strong>Submit to Leaderboard</strong> をオンにしたときだけ、プレイ終了時にプレイログ (キー入力と譜面のノーツ配置) と譜面のフィンガープリントを Leaderboard に送ります。
                 </li>
                 <li>一部の機能はまだ実装されていません。動作が不完全な箇所があります。</li>
                 <li>
-                  <strong>スコアは保存されません。</strong>
-                  永続化やランキング機能は未実装で、ページをリロード / 再訪するとリザルトはすべて失われます。
-                </li>
-                <li>
-                  <strong>動作確認済みのスキン:</strong> Lunatic Rave 2 デフォルトスキンに加え、beatoraja デフォルトスキン (<code>skin/default</code>)、<code>ModernChic</code>、<code>GdbG Original Skin</code> の四種類です。
-                  これら以外の LR2 / beatoraja スキンも読み込み自体は可能ですが、レイアウトは未検証です。要素の重なり / 数ピクセル単位のズレ / 一部アニメーションの欠落などが残っている可能性があります。
+                  <strong>ベスト記録はこのブラウザに保存されます。</strong>
+                  Leaderboard (初期状態はオフ、Debug Menu → Leaderboard) はベータ版で、ランキングはリセットされることがあります。
                 </li>
                 <li>利用は自己責任でお願いします。本ソフトウェアは無保証で提供されます。</li>
               </ul>
@@ -463,14 +442,13 @@ export const DEMO_APP_HTML = `
             <h3 class="help-section-title">楽曲の読み込み</h3>
             <ul class="help-list">
               <li>BMS フォルダをページ上にドロップすると、その中のチャートが登録されます。</li>
-              <li><code>LR2files</code> フォルダか beatoraja の <code>skin/</code> フォルダ (またはその中身) をドロップするとスキンが適用されます。</li>
               <li>
                 右上 Debug Menu の <strong>Open folder</strong> ボタンからネイティブのフォルダ選択ダイアログも使えます。
-                ドラッグ&ドロップと同じ処理経路を通るので、LR2 / beatoraja のテーマとチャートが同居したフォルダもまとめて読み込めます。
+                ドラッグ&ドロップと同じ処理経路を通ります。
                 ボタンを押し直せば別フォルダを追加で読み込めます。
                 <strong>Open files</strong> では ZIP アーカイブやリプレイするプレイログ (<code>*.bmplay.json</code>) を選べます。
               </li>
-              <li>追加でドロップした場合、既存のライブラリに追加され、テーマも維持されます。</li>
+              <li>追加でドロップした場合、既存のライブラリに追加されます。</li>
             </ul>
 
             <h3 class="help-section-title">選曲画面</h3>

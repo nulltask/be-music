@@ -206,6 +206,7 @@ class GameplayScreen {
         top: note.top,
         bottom: note.bottom,
         nowMs,
+        mode: note.mode,
       });
     }
     for (const note of frame.notes) {
@@ -220,7 +221,7 @@ class GameplayScreen {
 
     this.bombPool.begin();
     try {
-      skin.renderBombs({ pool: this.bombPool, bombs: frame.bombs, nowMs, combo, effects, audio });
+      skin.renderBombs({ pool: this.bombPool, bombs: frame.bombs, nowMs, combo, effects, audio, lanes: frame.lanes });
     } finally {
       this.bombPool.end();
     }

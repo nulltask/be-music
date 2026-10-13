@@ -95,12 +95,22 @@ export interface PixiLongNoteContext {
   /** Head just-timing y (lower), held on the judgement line once passed. */
   bottom: number;
   nowMs: number;
+  /**
+   * How the long note is judged: `'ln'` judges only its head (LR2's LN; the tail just marks where to let go), `'cn'` /
+   * `'hcn'` judge the release too. Lets a skin draw an LN's tail apart from a tail that is judged.
+   */
+  mode?: 'ln' | 'cn' | 'hcn';
 }
 
 export interface PixiBombsContext {
   pool: ChildPool;
   bombs: readonly BeMusicBomb[];
   nowMs: number;
+  /**
+   * The lanes, for effects tied to a lane rather than a hit: `holding` / `holdStartedAtMs` say a long note is held
+   * there. Drawn in this layer, above the notes.
+   */
+  lanes?: readonly BeMusicLaneFrame[];
   /** Current combo — lets skins escalate hit effects as a run builds. */
   combo?: number;
   effects?: BeMusicEffectLevel;

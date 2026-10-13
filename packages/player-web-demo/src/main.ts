@@ -4,6 +4,8 @@
 import {
   BUILT_IN_BE_MUSIC_SKINS,
   latticeSkin,
+  plainSkin,
+  synesthesiaSkin,
   DefaultPixiDecideView,
   DefaultPixiGameplayView,
   DefaultPixiResultView,
@@ -190,11 +192,20 @@ if (!app) {
 
 app.innerHTML = DEMO_APP_HTML;
 
+/**
+ * Skins beyond Synesthesia and Plain are on hold while those two are polished: Phantom and Lattice, LR2 themes and
+ * beatoraja skins, and every way to add one (theme drops, `?skin=`, the skin ZIP URL, "Add skin", the family and theme
+ * pickers). The code stays; turning this on brings it all back.
+ */
+const EXTRA_SKINS_ENABLED = false;
+
 /** Built-in be-music skins the default family can render with; the Debug Menu's "Built-in skin" picks one. */
-const BE_MUSIC_SKINS = createBeMusicSkinRegistry(BUILT_IN_BE_MUSIC_SKINS);
+const BE_MUSIC_SKINS = createBeMusicSkinRegistry(
+  EXTRA_SKINS_ENABLED ? BUILT_IN_BE_MUSIC_SKINS : [synesthesiaSkin, plainSkin],
+);
 const BUILT_IN_SKIN_STORAGE_KEY = 'be-music-demo.built-in-skin';
 // Lattice ships with the player but isn't loaded by default; bring it back when it was the last skin picked.
-if (readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
+if (EXTRA_SKINS_ENABLED && readStoredBuiltInSkinId() === latticeSkin.id) BE_MUSIC_SKINS.add(latticeSkin);
 
 /** Loads an added skin's faces in the background, so its first frame doesn't rasterize with a fallback font. */
 function loadSkinFonts(skin: BeMusicSkin): void {
@@ -660,7 +671,8 @@ class PlayerWebDemoApp {
       // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
-      skinFamilyOverride: 'auto',
+      // With extra skins on hold, every scene renders with the built-in be-music skin.
+      skinFamilyOverride: EXTRA_SKINS_ENABLED ? 'auto' : 'default',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
       skinEffects: readStoredSkinEffects(),
       playLayout: readStoredPlayLayout(),
@@ -857,7 +869,9 @@ class PlayerWebDemoApp {
     // `?music=<url.zip>` / `?skin=<url.zip>` auto-load: fetch + expand the archives at boot and run them through the
     // same pipeline as a drag-drop, so the select screen lists the archive's charts (with any skin already applied).
     // Sequenced after the initial mount so it doesn't race the Pixi host's first-time renderer init.
-    const mediaParams = parseUrlMediaParams(window.location.href);
+    const urlParams = parseUrlMediaParams(window.location.href);
+    // `?skin=` is on hold with the other extra skins.
+    const mediaParams = EXTRA_SKINS_ENABLED ? urlParams : { ...urlParams, skinUrl: undefined };
     if (mediaParams.musicUrl || mediaParams.skinUrl) {
       void initialSelectReady.then(() => this.loadFromUrl(mediaParams));
     } else {
@@ -1288,6 +1302,7 @@ class PlayerWebDemoApp {
     // LR2 theme picker — added once a drop discovers a theme (see `rebuildLr2ThemePicker`).
     this.rebuildLr2ThemePicker();
     // Add skins: the bundled Lattice, or a skin module from a URL (its default export, built with the skin SDK).
+    if (!EXTRA_SKINS_ENABLED) return;
     const addSkins = addFolder(skin, DEBUG_MENU_FOLDERS.addSkin);
     const skinSource = {
       url: '',
@@ -1319,7 +1334,7 @@ class PlayerWebDemoApp {
       },
     };
     library.add(urls, 'music').name('Music ZIP URL');
-    library.add(urls, 'skin').name('Skin ZIP URL');
+    if (EXTRA_SKINS_ENABLED) library.add(urls, 'skin').name('Skin ZIP URL');
     library.add(urls, 'load').name('Load from URLs');
     // Play-history auto-save — OFF by default. When enabled, every finished play downloads its play-log
     // (`*.bmplay.json`, the raw input replay defined in `@be-music/player/playlog`) as soon as the result scene
@@ -1556,8 +1571,9 @@ class PlayerWebDemoApp {
     const themeFamilies = skinFamilyRegistry.detectThemeFamilies(
       themeFiles.map((file) => file.webkitRelativePath || file.name),
     );
-    const carriesLr2Theme = themeFamilies.has('lr2');
-    const carriesBeatorajaTheme = themeFamilies.has('beatoraja');
+    // LR2 themes and beatoraja skins are on hold: their files are left out of the drop.
+    const carriesLr2Theme = EXTRA_SKINS_ENABLED && themeFamilies.has('lr2');
+    const carriesBeatorajaTheme = EXTRA_SKINS_ENABLED && themeFamilies.has('beatoraja');
     const themeMarkers = [...themeFamilies];
     dropLog.info(
       `received ${files.length} file(s) · theme=${themeFiles.length}${
@@ -1927,7 +1943,7 @@ class PlayerWebDemoApp {
    */
   private rebuildLr2ThemePicker(): void {
     const folder = this.skinFolder;
-    if (folder === undefined) return;
+    if (folder === undefined || !EXTRA_SKINS_ENABLED) return;
     const themes = this.availableLr2Themes;
     if (themes.length === 0) {
       // No discovered theme (drop didn't carry an `LR2files/Theme/<name>/` shape, OR LR2 isn't loaded at all).
@@ -2087,7 +2103,7 @@ class PlayerWebDemoApp {
    */
   private rebuildSkinFamilyPicker(): void {
     const gui = this.gui;
-    if (gui === undefined) return;
+    if (gui === undefined || !EXTRA_SKINS_ENABLED) return;
     const lr2Available = hasAnyLr2Skin(this.familyDispatchState());
     const beatorajaAvailable = this.beatorajaTheme !== undefined;
     // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.

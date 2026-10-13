@@ -19,7 +19,10 @@ import {
   comboTier,
   effectProfile,
   hash01,
+  holdSeed,
+  holdSparks,
   resolveLaneRuns,
+  type BeMusicLaneFrame,
 } from '@be-music/skin-sdk';
 import {
   type PixiBombsContext,
@@ -178,25 +181,29 @@ export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteCont
   }
 }
 
-export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
+export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom, mode }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: a translucent core with a bright centre filament.
+  // A beam of light between head and tail: a translucent core, no line down its middle.
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
-  graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 });
   drawNote(graphics, bodyX, bottom, bodyW, light);
-  drawNote(graphics, bodyX, top, bodyW, light);
+  // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
+  // judged on release and keeps the full cap.
+  drawNote(graphics, bodyX, top, bodyW, light, mode === 'ln' ? LN_TAIL_ALPHA : 1);
 }
 
+/** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */
+const LN_TAIL_ALPHA = 0.4;
+
 /** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */
-function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight): void {
+function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight, alpha = 1): void {
   // A dark rim lifts the bar off the lit lane and the beam behind it.
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill(light.body);
-  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 });
+  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
+  graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill({ color: light.body, alpha });
+  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
@@ -244,8 +251,9 @@ function cachedBurst(seed: number, count = BURST_PARTICLES_MAX): BurstParticle[]
  * The smaller sparks fly as square voxels rather than round glows, like shattering wireframes.
  * Everything is additive, so overlapping hits bloom into each other like light instead of stacking opaque shapes.
  */
-export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: PixiBombsContext): void {
+export function renderSynesthesiaBombs({ pool, bombs, combo, effects, lanes, nowMs }: PixiBombsContext): void {
   const profile = effectProfile(effects);
+  renderSynesthesiaHolds(pool, lanes ?? [], nowMs, profile.enabled ? profile.amount : 0);
   if (!profile.enabled) {
     // Effects off: a small, plain core flash per hit.
     renderPlainFlashes(pool, bombs);
@@ -266,6 +274,56 @@ export function renderSynesthesiaBombs({ pool, bombs, combo, effects }: PixiBomb
       BURST_SKIRT_FRAME_BUDGET,
     );
     renderBomb(pool, bomb, tier, crowd, profile.amount, grains, skirt);
+  }
+}
+
+/** Sparks a held lane gives off at most, at full effects (`holdSparks`' default: one every 45 ms for 520 ms). */
+const HOLD_SPARK_INTERVAL_MS = 45;
+
+/**
+ * While a long note is held, its lane burns on the judgement line: a glow that breathes in the lane's colour, and a
+ * stream of embers rising from it for as long as the hold lasts. Additive, like the bursts, so a held lane reads as
+ * lit. `amount` thins the embers (reduced effects) and drops them at 0 (effects off), leaving only the glow.
+ */
+function renderSynesthesiaHolds(
+  pool: ChildPool,
+  lanes: readonly BeMusicLaneFrame[],
+  nowMs: number,
+  amount: number,
+): void {
+  const glow = synGlowTexture();
+  for (const lane of lanes) {
+    if (lane.holding !== true || lane.holdStartedAtMs === undefined) continue;
+    const ageMs = nowMs - lane.holdStartedAtMs;
+    const light = LIGHTS[lane.kind];
+    const centerX = lane.x + lane.w / 2;
+    const halo = pool.acquireSprite();
+    halo.texture = glow;
+    halo.anchor.set(0.5);
+    halo.blendMode = 'add';
+    halo.width = Math.max(14, lane.w) * 1.8;
+    halo.height = Math.max(10, lane.w) * 1.4;
+    halo.position.set(centerX, lane.bottom - 2);
+    halo.tint = light.glow;
+    halo.alpha = 0.65 + 0.25 * Math.sin(ageMs / 90);
+    if (amount <= 0) continue;
+    const sparks = holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w, {
+      intervalMs: HOLD_SPARK_INTERVAL_MS / amount,
+      riseSpeed: 0.22,
+    });
+    for (const spark of sparks) {
+      const ember = pool.acquireSprite();
+      ember.texture = glow;
+      ember.anchor.set(0.5);
+      ember.blendMode = 'add';
+      const size = spark.size * 5;
+      ember.width = size;
+      ember.height = size;
+      ember.position.set(centerX + spark.offsetX, lane.bottom - spark.rise);
+      // White-hot when born, cooling into the lane's colour as it rises.
+      ember.tint = spark.alpha > 0.7 ? 0xffffff : light.glow;
+      ember.alpha = spark.alpha;
+    }
   }
 }
 

@@ -168,6 +168,16 @@ export function registerSkinSdkExportsCases(define: DefineBenchmarkCase): void {
       skinSdkApi.formatSongLength(125.4);
     },
   });
+  define('skin-sdk.holdSparks', {
+    run: () => {
+      skinSdkApi.holdSparks(5_000, 1234, 40);
+    },
+  });
+  define('skin-sdk.holdSeed', {
+    run: () => {
+      skinSdkApi.holdSeed('11', 123_456);
+    },
+  });
   define('skin-sdk.hash01', {
     run: () => {
       skinSdkApi.hash01(1234);
