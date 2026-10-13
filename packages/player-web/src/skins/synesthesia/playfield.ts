@@ -181,7 +181,7 @@ export function renderSynesthesiaMine({ graphics, x, w, y, nowMs }: PixiNoteCont
   }
 }
 
-export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }: PixiLongNoteContext): void {
+export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom, mode }: PixiLongNoteContext): void {
   const light = LIGHTS[kind];
   const bodyX = x;
   const bodyW = Math.max(4, w);
@@ -191,7 +191,16 @@ export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom }:
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
   graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 });
   drawNote(graphics, bodyX, bottom, bodyW, light);
-  drawNote(graphics, bodyX, top, bodyW, light);
+  // An LN's tail is not judged, so it is drawn hollow: where to let go, not a note to hit. A CN / HCN tail is judged on
+  // release and keeps the solid cap.
+  if (mode === 'ln') drawHollowTail(graphics, bodyX, top, bodyW, light);
+  else drawNote(graphics, bodyX, top, bodyW, light);
+}
+
+/** A long note's tail that only marks the end: the note's outline in its colour, on the same dark rim. */
+function drawHollowTail(graphics: Graphics, x: number, y: number, w: number, light: LaneLight): void {
+  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
+  graphics.rect(x + 1, y - NOTE_HEIGHT + 1, w - 2, NOTE_HEIGHT - 2).stroke({ width: 2, color: light.body });
 }
 
 /** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */

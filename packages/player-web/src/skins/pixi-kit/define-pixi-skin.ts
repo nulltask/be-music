@@ -206,6 +206,7 @@ class GameplayScreen {
         top: note.top,
         bottom: note.bottom,
         nowMs,
+        mode: note.mode,
       });
     }
     for (const note of frame.notes) {
