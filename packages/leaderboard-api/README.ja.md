@@ -8,13 +8,13 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 ## 実装済みのもの
 
 - Better Auth によるログイン: 匿名セッション、passkey、secret が設定されていれば Discord / Google の OAuth。
-- `POST /api/v1/scores`: プレイログ（gzip）を送信します。サーバーは対象かどうかの判定と、play / chart fingerprint の
+- `POST /api/v0/scores`: プレイログ（gzip）を送信します。サーバーは対象かどうかの判定と、play / chart fingerprint の
   ドキュメントの確認（検証の層 L1〜L3、`#RANDOM` のない譜面では L4 も）を行い、`lr2`・`beatoraja`・`iidx` で再計算し、
   ログを R2 に保存して自己ベストを更新します。再送された同じプレイはそれと分かり、別のアカウントからの同じプレイは
   拒否します。
-- `GET /api/v1/charts/:chartFingerprint/leaderboard` と `.../leaderboard/me`: ランキング。アシスト付きのプレイ、匿名の
+- `GET /api/v0/charts/:chartFingerprint/leaderboard` と `.../leaderboard/me`: ランキング。アシスト付きのプレイ、匿名の
   プレイヤー、「このルールセットでプレイしたもの」のフィルタ付き。
-- `GET /api/v1/scores/:id` と `.../playlog`。
+- `GET /api/v0/scores/:id` と `.../playlog`。
 
 - `/leaderboard` 以下のページ: 新着スコア（トップ）、スコア、譜面のランキング、プレイヤー。
 

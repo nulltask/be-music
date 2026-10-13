@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { claimAccount } from './accounts.ts';
-import { createV1Api } from './api/v1.ts';
+import { createV0Api } from './api/v0.ts';
 import { createAuth } from './auth.ts';
 import { bmsSearchLookup, type ChartsetLookup } from './chartsets/refresh.ts';
 import { openDatabase, type Database } from './db/client.ts';
@@ -33,7 +33,7 @@ export function createApp(options: { now?: () => number; newId?: () => string; c
     return response;
   });
 
-  app.route('/api/v1', createV1Api({ now, newId, chartsetLookup }));
+  app.route('/api/v0', createV0Api({ now, newId, chartsetLookup }));
 
   // Anything else under `/api`, an unknown version included, answers in JSON like the API does.
   app.all('/api/*', (c) => c.json({ error: 'not-found' }, 404));

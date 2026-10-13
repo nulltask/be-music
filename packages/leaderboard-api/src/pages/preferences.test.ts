@@ -18,7 +18,7 @@ describe('display ruleset preference', () => {
       'https://evil.example/leaderboard',
       '//evil.example/leaderboard',
       '/leaderboard\\..\\x',
-      '/api/v1/me',
+      '/api/v0/me',
     ]) {
       expect(safeReturnPath(next)).toBe('/leaderboard');
     }

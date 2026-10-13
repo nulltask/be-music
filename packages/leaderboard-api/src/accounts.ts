@@ -3,7 +3,7 @@ import type { Database } from './db/client.ts';
 import { refreshChartListing } from './charts.ts';
 import { bestScore, passkey, profile, user } from './db/schema.ts';
 
-/** The signed-in player's own view of their account (`GET /api/v1/me`). */
+/** The signed-in player's own view of their account (`GET /api/v0/me`). */
 export interface AccountSummary {
   handle: string;
   displayName: string;

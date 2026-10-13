@@ -144,7 +144,7 @@ sequenceDiagram
     P->>C: finish the play
     C->>C: play log (chartFingerprint, playFingerprint, randomOutcomes)<br/>+ play document, OG card PNG
     C->>C: queue the play log in IndexedDB
-    C->>A: POST /api/v1/scores (gzip)<br/>session cookie or bearer, Idempotency-Key
+    C->>A: POST /api/v0/scores (gzip)<br/>session cookie or bearer, Idempotency-Key
     A->>A: resolve the session (signed-in or anonymous)
     A->>RL: limit(user or device)
     alt over the limit
@@ -268,7 +268,7 @@ client_policies (name, min_version, blocked_versions JSON)
 - **Replays**: each user chooses who can download their play logs (a per-user default, overridable per score).
   Ghosts are always public: a judgment sequence reveals little (proposed; section 15).
 
-## 8. API (`/api/v1`)
+## 8. API (`/api/v0`)
 
 | Method                   | Path                                                                     | Purpose                                                                              |
 | ------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
@@ -286,9 +286,11 @@ client_policies (name, min_version, blocked_versions JSON)
 
 Reads are public and cached briefly with the Cache API; a submission purges the affected rankings.
 
-**Versioning.** The major version is in the path (`/api/v1`, later `/api/v2`), and each version is a sub-app mounted
-next to the others.
+**Versioning.** The major version is in the path, and each version is a sub-app mounted next to the others.
 
+- **`v0` is the beta**: the Leaderboard starts at `/api/v0`, like the `bmfp0` fingerprint and the `/0` ruleset
+  revisions. While at `v0`, the API may still change incompatibly, and the only client is the be-music player. Once the
+  API is stable it becomes `/api/v1`, and the rules below apply from then on.
 - **Same version**: additions stay in it: new endpoints, new response fields, new optional parameters. Clients ignore
   fields they do not know.
 - **New version**: a breaking change goes into one. Examples: removing or renaming a field, changing what a value means,
