@@ -5,6 +5,7 @@ import { createAuth } from './auth.ts';
 import { bmsSearchLookup, type ChartsetLookup } from './chartsets/refresh.ts';
 import { openDatabase, type Database } from './db/client.ts';
 import type { Env } from './env.ts';
+import { serverTiming } from './http/server-timing.ts';
 import { mountPages } from './pages/routes.tsx';
 import type { Viewer } from './pages/viewer.ts';
 
@@ -24,6 +25,9 @@ export function createApp(options: { now?: () => number; newId?: () => string; c
   const chartsetLookup = options.chartsetLookup ?? bmsSearchLookup();
 
   const app = new Hono<AppEnv>();
+
+  // Every response says how long it took and how much of that the database did.
+  app.use('*', serverTiming<AppEnv>());
 
   app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     const auth = createAuth(c.env, new URL(c.req.url).origin);
