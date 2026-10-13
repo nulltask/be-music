@@ -1,5 +1,5 @@
 /**
- * Live audio features for audio-reactive skins: loudness, a log-spaced spectrum, bass / mid / high energy, and onset
+ * Live audio features for audio-reactive skins: loudness, a spectrum in the ear's bands (ERB-spaced, A-weighted), bass / mid / high energy, and onset
  * (transient) detection by spectral flux. {@link analyzeAudioFrame} is pure over an explicit state object so it can be
  * tested without Web Audio; {@link AudioAnalyzer} wraps an `AnalyserNode` and samples it once per rendered frame.
  */
@@ -30,6 +30,70 @@ export function logBandBins(
     previousEnd = end;
   }
   return ranges;
+}
+
+/** The ERB-rate scale (Glasberg & Moore): how many of the ear's critical bands lie below `hz`. */
+export function erbRate(hz: number): number {
+  return 21.4 * Math.log10(1 + 0.00437 * hz);
+}
+
+/** The frequency at ERB-rate `erb` (the inverse of {@link erbRate}). */
+export function hzAtErbRate(erb: number): number {
+  return (10 ** (erb / 21.4) - 1) / 0.00437;
+}
+
+/**
+ * Half-open FFT bin ranges `[start, end)` for `count` bands spaced evenly on the ERB-rate scale between `minHz` and
+ * `maxHz`: as wide as the ear's own frequency resolution, nearly constant in hertz below about 500 Hz and widening
+ * like octaves above. So the bass gets a few bands, each spanning several FFT bins, and the mids, where melody and
+ * voice sit, get the most.
+ */
+export function erbBandBins(
+  count: number,
+  minHz: number,
+  maxHz: number,
+  sampleRate: number,
+  fftSize: number,
+): Array<readonly [number, number]> {
+  const binCount = Math.floor(fftSize / 2);
+  const hzPerBin = sampleRate / fftSize;
+  const minErb = erbRate(minHz);
+  const step = (erbRate(maxHz) - minErb) / count;
+  const ranges: Array<readonly [number, number]> = [];
+  let previousEnd = Math.max(1, Math.floor(minHz / hzPerBin));
+  for (let band = 0; band < count; band += 1) {
+    const upperHz = hzAtErbRate(minErb + step * (band + 1));
+    const end = Math.min(binCount, Math.max(previousEnd + 1, Math.round(upperHz / hzPerBin)));
+    ranges.push([Math.min(previousEnd, end - 1), end]);
+    previousEnd = end;
+  }
+  return ranges;
+}
+
+/**
+ * The A-weighting (IEC 61672) at `hz`, in dB: about 0 at 1 kHz, -20 dB at 100 Hz, -50 dB at 20 Hz, a little above 0
+ * around 2-4 kHz. The equal-loudness curve of quiet listening, which is how strongly the ear hears each part of the
+ * spectrum next to the rest.
+ */
+export function aWeightingDb(hz: number): number {
+  const f2 = hz * hz;
+  const ra =
+    (12194 ** 2 * f2 * f2) / ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2));
+  return ra > 0 ? 20 * Math.log10(ra) + 2 : Number.NEGATIVE_INFINITY;
+}
+
+/** The dB range `getByteFrequencyData` maps onto 0..255 ({@link AudioAnalyzer} sets it on its analyser). */
+export const FREQUENCY_MIN_DB = -100;
+export const FREQUENCY_MAX_DB = -30;
+
+/**
+ * A band's level (0..1 of the analyser's dB range) as the ear weighs it: `weightDb` added in dB, back on 0..1. Silence
+ * stays 0, so a boost never lifts an empty band.
+ */
+export function weightBandLevel(level: number, weightDb: number): number {
+  if (level <= 0) return 0;
+  const span = FREQUENCY_MAX_DB - FREQUENCY_MIN_DB;
+  return Math.max(0, Math.min(1, level + weightDb / span));
 }
 
 /** A running window of what a signal has recently done: its floor and ceiling (see {@link normalizeToRecentRange}). */
@@ -69,10 +133,36 @@ export function normalizeToRecentRange(value: number, range: RecentRange, dtSeco
   return Math.max(0, Math.min(1, (value - bottom) / span));
 }
 
+/**
+ * Automatic gain shared by every band: the range widens to the frame's lowest and highest band at once and drifts back
+ * like {@link normalizeToRecentRange}, and every band is placed within that one range. Unlike a gain per band, the
+ * shape across the spectrum survives: a band the ear hears less (after weighting) stays lower than its neighbours.
+ */
+export function normalizeBandsToRecentRange(
+  values: readonly number[],
+  range: RecentRange,
+  dtSeconds: number,
+): number[] {
+  const dt = Math.max(0, dtSeconds);
+  const audible = values.filter((value) => value > 0);
+  if (audible.length > 0) {
+    const low = Math.min(...audible);
+    const high = Math.max(...audible);
+    if (low < range.floor) range.floor = low;
+    else range.floor += (low - range.floor) * Math.min(1, dt / FLOOR_RISE_SECONDS);
+    if (high > range.ceiling) range.ceiling = high;
+    else range.ceiling += (high - range.ceiling) * Math.min(1, dt / CEILING_FALL_SECONDS);
+  }
+  if (!Number.isFinite(range.floor) || !Number.isFinite(range.ceiling)) return values.map(() => 0);
+  const span = Math.max(MIN_RECENT_SPAN, range.ceiling - range.floor);
+  const bottom = (range.floor + range.ceiling - span) / 2;
+  return values.map((value) => (value > 0 ? Math.max(0, Math.min(1, (value - bottom) / span)) : 0));
+}
+
 export interface AudioAnalysisState {
   bands: number[];
-  /** Recent range of each raw band and of bass / mid / high, for their automatic gain. */
-  bandRanges: RecentRange[];
+  /** Recent range of the weighted bands (shared), and of bass / mid / high, for their automatic gain. */
+  spectrumRange: RecentRange;
   bassRange: RecentRange;
   midRange: RecentRange;
   highRange: RecentRange;
@@ -92,7 +182,7 @@ export interface AudioAnalysisState {
 export function createAudioAnalysisState(): AudioAnalysisState {
   return {
     bands: Array.from({ length: AUDIO_BAND_COUNT }, () => 0),
-    bandRanges: Array.from({ length: AUDIO_BAND_COUNT }, () => createRecentRange()),
+    spectrumRange: createRecentRange(),
     bassRange: createRecentRange(),
     midRange: createRecentRange(),
     highRange: createRecentRange(),
@@ -122,6 +212,30 @@ export interface AudioFrameInput {
 
 const MIN_ONSET_GAP_MS = 90;
 
+/** The spectrum's range: from the lowest kick to the top of the cymbals. */
+const SPECTRUM_MIN_HZ = 30;
+const SPECTRUM_MAX_HZ = 14000;
+/** Bands that cover the low end (below about 200 Hz), weighted up in the onset flux. */
+const LOW_END_BANDS = 2;
+
+const LAYOUTS = new Map<string, { ranges: Array<readonly [number, number]>; weightsDb: number[] }>();
+
+/** The band bins and each band's A-weighting (at its centre on the ERB scale), worked out once per sample rate / FFT. */
+function spectrumLayout(sampleRate: number, fftSize: number) {
+  const key = `${sampleRate}/${fftSize}`;
+  let layout = LAYOUTS.get(key);
+  if (layout === undefined) {
+    const ranges = erbBandBins(AUDIO_BAND_COUNT, SPECTRUM_MIN_HZ, SPECTRUM_MAX_HZ, sampleRate, fftSize);
+    const hzPerBin = sampleRate / fftSize;
+    const weightsDb = ranges.map(([start, end]) =>
+      aWeightingDb(hzAtErbRate((erbRate(start * hzPerBin) + erbRate(end * hzPerBin)) / 2)),
+    );
+    layout = { ranges, weightsDb };
+    LAYOUTS.set(key, layout);
+  }
+  return layout;
+}
+
 /** Advances `state` by one frame and returns the features for it. */
 export function analyzeAudioFrame(state: AudioAnalysisState, input: AudioFrameInput): AudioFeatures {
   const dt = Math.max(0, Math.min(0.25, Number.isFinite(input.dtSeconds) ? input.dtSeconds : 0));
@@ -141,12 +255,14 @@ export function analyzeAudioFrame(state: AudioAnalysisState, input: AudioFrameIn
     for (let bin = start; bin < end; bin += 1) total += frequency[bin] ?? 0;
     return end > start ? total / (end - start) / 255 : 0;
   };
-  const ranges = logBandBins(AUDIO_BAND_COUNT, 30, 14000, sampleRate, fftSize);
+  const { ranges, weightsDb } = spectrumLayout(sampleRate, fftSize);
   const raw = ranges.map(([start, end]) => {
     let total = 0;
     for (let bin = start; bin < end; bin += 1) total += frequency[bin] ?? 0;
     return end > start ? total / (end - start) / 255 : 0;
   });
+  // What the ear hears of each band: quiet ends (sub-bass, air) count for less than the presence range.
+  const heard = raw.map((level, band) => weightBandLevel(level, weightsDb[band]!));
 
   // Fast attack, slower release: visuals snap to a hit and ease off.
   const follow = (current: number, target: number, releaseSeconds: number) =>
@@ -158,8 +274,11 @@ export function analyzeAudioFrame(state: AudioAnalysisState, input: AudioFrameIn
   // quiet, and silence still reads as zero.
   const gain = (value: number, range: RecentRange) =>
     value < 0.01 ? 0 : ABSOLUTE_SHARE * value + (1 - ABSOLUTE_SHARE) * normalizeToRecentRange(value, range, dt);
+  // One gain for the whole spectrum, so its weighted shape survives; a little absolute level, as above.
+  const placed = normalizeBandsToRecentRange(heard, state.spectrumRange, dt);
   for (let band = 0; band < AUDIO_BAND_COUNT; band += 1) {
-    state.bands[band] = follow(state.bands[band]!, gain(raw[band]!, state.bandRanges[band]!), 0.18);
+    const value = heard[band]! < 0.01 ? 0 : ABSOLUTE_SHARE * heard[band]! + (1 - ABSOLUTE_SHARE) * placed[band]!;
+    state.bands[band] = follow(state.bands[band]!, value, 0.18);
   }
   state.bass = follow(state.bass, gain(average(20, 150), state.bassRange), 0.2);
   state.mid = follow(state.mid, gain(average(150, 2000), state.midRange), 0.2);
@@ -171,7 +290,7 @@ export function analyzeAudioFrame(state: AudioAnalysisState, input: AudioFrameIn
   let flux = 0;
   for (let band = 0; band < AUDIO_BAND_COUNT; band += 1) {
     const rise = raw[band]! - state.previousRaw[band]!;
-    if (rise > 0) flux += rise * (band < 5 ? 1.5 : 1);
+    if (rise > 0) flux += rise * (band < LOW_END_BANDS ? 1.5 : 1);
   }
   flux /= AUDIO_BAND_COUNT;
   state.previousRaw = raw;
@@ -215,6 +334,9 @@ export class AudioAnalyzer {
     this.input = context.createAnalyser();
     this.input.fftSize = 2048;
     this.input.smoothingTimeConstant = 0.5;
+    // The dB range the band levels and their A-weighting are read against.
+    this.input.minDecibels = FREQUENCY_MIN_DB;
+    this.input.maxDecibels = FREQUENCY_MAX_DB;
     this.frequency = new Uint8Array(this.input.frequencyBinCount);
     this.waveform = new Float32Array(this.input.fftSize);
     this.sampleRate = context.sampleRate;
