@@ -15,6 +15,7 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 - `GET /api/v0/charts/:chartFingerprint/leaderboard` と `.../leaderboard/me`: ランキング。アシスト付きのプレイ、匿名の
   プレイヤー、「このルールセットでプレイしたもの」のフィルタ付き。
 - `GET /api/v0/scores/:id` と `.../playlog`。
+- `GET /api/v0/openapi.json`: OpenAPI 3.1 のドキュメント。ルートの valibot スキーマ（`src/api/schemas.ts`）から生成します。リファレンスページは `/leaderboard/api` です。コピーを [`openapi.json`](./openapi.json) としてコミットしており、古くなるとテストが失敗します。API を変えたら `vp test run -u` で更新してください。
 
 - `/leaderboard` 以下のページ: 新着スコア（トップ）、スコア、譜面のランキング、プレイヤー。
 
