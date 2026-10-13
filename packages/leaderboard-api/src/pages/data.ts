@@ -1,4 +1,5 @@
 import { and, asc, countDistinct, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
 import { chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
@@ -10,6 +11,7 @@ export interface RecentScore {
   handle: string;
   displayName: string;
   anonymous: boolean;
+  avatarUrl: string;
   chartFingerprint: string;
   title: string | null;
   artist: string | null;
@@ -52,6 +54,7 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       handle: profile.handle,
       displayName: profile.displayName,
       anonymous: user.isAnonymous,
+      avatarKey: profile.avatarKey,
       chartFingerprint: score.chartFingerprint,
       title: chart.title,
       artist: chart.artist,
@@ -73,8 +76,9 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     .where(and(...conditions))
     .orderBy(desc(score.createdAt), desc(score.id))
     .limit(filter.limit);
-  return rows.map(({ chartStatus, createdAt, anonymous, ...row }) => ({
+  return rows.map(({ chartStatus, createdAt, anonymous, avatarKey, ...row }) => ({
     ...row,
+    avatarUrl: avatarUrl(row.handle, avatarKey),
     createdAt: createdAt.getTime(),
     anonymous: anonymous === true,
     chartListed: chartStatus === 'listed',
@@ -140,14 +144,20 @@ export async function loadPlayer(db: Database, handle: string) {
       handle: profile.handle,
       displayName: profile.displayName,
       anonymous: user.isAnonymous,
+      avatarKey: profile.avatarKey,
       joinedAt: profile.createdAt,
     })
     .from(profile)
     .innerJoin(user, eq(user.id, profile.userId))
-    .where(eq(profile.handle, handle));
+    .where(eq(profile.handle, handle.toLowerCase()));
   return row === undefined
     ? undefined
-    : { ...row, anonymous: row.anonymous === true, joinedAt: row.joinedAt.getTime() };
+    : {
+        ...row,
+        anonymous: row.anonymous === true,
+        joinedAt: row.joinedAt.getTime(),
+        avatarUrl: avatarUrl(row.handle, row.avatarKey),
+      };
 }
 
 /** The file hashes known for a chart, in a stable order. */
