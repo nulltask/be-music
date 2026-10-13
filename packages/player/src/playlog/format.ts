@@ -153,11 +153,30 @@ export interface PlaylogRulesetResult {
   gauge: PlaylogGaugeResult;
 }
 
+/**
+ * Software that recorded the play — self-reported, so it identifies builds for compatibility and bug triage, never
+ * for trust. Every field is optional: a log from a host that declared nothing still carries the engine version.
+ */
+export interface PlaylogRecorderInfo {
+  /** Recording application id (`'be-music-web'`, `'be-music-tui'`, ...). */
+  name?: string;
+  /** Recording application version. */
+  version?: string;
+  /** Build identifier of the application, e.g. the source commit. */
+  build?: string;
+  /** `@be-music/player` version whose engine ran the play — filled by the recorder, not the host. */
+  engine?: string;
+  /** Coarse platform label (`'web'`, `'node'`, ...). Never a full user-agent string. */
+  platform?: string;
+}
+
 export interface BeMusicPlaylog {
   format: typeof BE_MUSIC_PLAYLOG_FORMAT;
   version: typeof BE_MUSIC_PLAYLOG_VERSION;
   /** ISO 8601 timestamp of the recording, when the recorder had a clock available. */
   createdAt?: string;
+  /** Software that recorded the play. Absent in logs written before the field existed. */
+  recorder?: PlaylogRecorderInfo;
   clock: { unit: 'us'; origin: 'chart-zero' };
   chart: PlaylogChart;
   inputs: PlaylogInputEvent[];
@@ -228,17 +247,30 @@ export function parsePlaylog(source: unknown): BeMusicPlaylog {
   const inputs = parseInputs(root.inputs);
   const play = parsePlay(expectRecord(root.play, 'play'));
   const results = root.results === undefined ? undefined : parseResults(expectRecord(root.results, 'results'));
+  const recorder = root.recorder === undefined ? undefined : parseRecorder(expectRecord(root.recorder, 'recorder'));
 
   return {
     format: BE_MUSIC_PLAYLOG_FORMAT,
     version: BE_MUSIC_PLAYLOG_VERSION,
     createdAt: optionalString(root.createdAt, 'createdAt'),
+    ...(recorder !== undefined ? { recorder } : {}),
     clock: { unit: 'us', origin: 'chart-zero' },
     chart,
     inputs,
     play,
     ...(results !== undefined ? { results } : {}),
   };
+}
+
+const RECORDER_KEYS = ['name', 'version', 'build', 'engine', 'platform'] as const;
+
+function parseRecorder(recorder: Record<string, unknown>): PlaylogRecorderInfo {
+  const parsed: PlaylogRecorderInfo = {};
+  for (const key of RECORDER_KEYS) {
+    const value = optionalString(recorder[key], `recorder.${key}`);
+    if (value !== undefined) parsed[key] = value;
+  }
+  return parsed;
 }
 
 function parseChart(chart: Record<string, unknown>): PlaylogChart {

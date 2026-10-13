@@ -30,6 +30,7 @@ import type { PlayerUiCommand, PlayerUiFramePayload } from '@be-music/player/cor
 import type { BeatorajaRenderContext } from './render.ts';
 import { extractChartSubartist, resolveChartTotalReadout } from '../../chart/beatoraja/meta.ts';
 import { computeBeatorajaNoteBreakdown } from '../../chart/beatoraja/note-counts.ts';
+import { resolveChartBpmRange } from '../../chart/bpm-range.ts';
 import {
   computeBeatorajaChartNoteDistribution,
   type BeatorajaBpmSegment,
@@ -1744,46 +1745,10 @@ export class BeatorajaRuntimeAdapter {
     return this.currentBpmAtMs(this.frame.currentSeconds * 1000);
   }
 
-  /**
-   * Min / max BPM across the chart's BPM-change events. Cached on first call (the events list
-   * is static for the chart's lifetime). Both fall back to the chart's main BPM when the chart
-   * is constant-tempo (no `03` / `08` events).
-   */
+  /** Min / max BPM of the chart's tempo map (`resolveChartBpmRange`); both are the main BPM for a constant tempo. */
   private cachedBpmRange(): { min: number; max: number } {
-    if (this.bpmRangeCache !== undefined) return this.bpmRangeCache;
-    const chart = this.chart;
-    const initial = chart?.metadata.bpm ?? 0;
-    let min = initial > 0 ? initial : Number.POSITIVE_INFINITY;
-    let max = initial;
-    const bpmTable = chart?.resources?.bpm ?? {};
-    for (const event of chart?.events ?? []) {
-      if (event.value === '00' || event.value === '') continue;
-      let bpm: number | undefined;
-      if (event.channel === '03') {
-        const parsed = parseInt(event.value, 16);
-        if (Number.isFinite(parsed) && parsed > 0) bpm = parsed;
-      } else if (event.channel === '08') {
-        const looked =
-          bpmTable[event.value] ?? bpmTable[event.value.toLowerCase()] ?? bpmTable[event.value.toUpperCase()];
-        if (typeof looked === 'number') bpm = looked;
-        else if (typeof looked === 'string') {
-          const parsed = Number.parseFloat(looked);
-          bpm = Number.isFinite(parsed) ? parsed : undefined;
-        }
-        // Negative `#BPMxx` (LR2 reverse-scroll gimmick) integrates at |BPM|, and LR2 displays the magnitude
-        // too — only the sign is forgiven here; zero slots still drop out via the `> 0` filter below.
-        if (bpm !== undefined) bpm = Math.abs(bpm);
-      }
-      if (bpm !== undefined && bpm > 0) {
-        if (bpm < min) min = bpm;
-        if (bpm > max) max = bpm;
-      }
-    }
-    if (!Number.isFinite(min)) min = max > 0 ? max : 0;
-    this.bpmRangeCache = { min, max };
-    return this.bpmRangeCache;
+    return this.chart === undefined ? { min: 0, max: 0 } : resolveChartBpmRange(this.chart);
   }
-  private bpmRangeCache: { min: number; max: number } | undefined;
 
   /**
    * Resolve recent judgement timings for `timingvisualizer[]` rendering. Returns oldest-first

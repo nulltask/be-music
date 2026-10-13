@@ -1,10 +1,11 @@
+import { resolveChart } from '@be-music/chart';
 import { resolveBmsBase, type BeMusicJson } from '@be-music/json';
 import type { PlayerSummary } from '../core/engine.ts';
 import type { PreparedPlaybackChartData } from '../core/bootstrap.ts';
-import { resolveJudgeRankPercent } from '../core/judge-window.ts';
-import { resolveChartLongNoteMode } from '../ruleset/index.ts';
+import { resolveChartJudgeRankFacts } from '../ruleset/index.ts';
 import { resolveLandmineGaugeEffect } from '../core/landmine.ts';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
+import packageJson from '../../package.json' with { type: 'json' };
 import {
   BE_MUSIC_PLAYLOG_FORMAT,
   BE_MUSIC_PLAYLOG_VERSION,
@@ -14,11 +15,15 @@ import {
   type PlaylogInputEvent,
   type PlaylogNote,
   type PlaylogPlay,
+  type PlaylogRecorderInfo,
   type PlaylogRulesetResult,
 } from './format.ts';
 
 /** Ruleset id used for the engine's own summary cached into `results` at record time. */
 export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
+
+/** `@be-music/player` version stamped into `recorder.engine` of every log this engine records. */
+const ENGINE_VERSION: string = packageJson.version;
 
 /**
  * Chart data the recorder snapshots — structurally a subset of the engine's `PreparedPlaybackChartData`, so the
@@ -27,7 +32,8 @@ export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
 export type PlaylogRecorderChartData = Pick<
   PreparedPlaybackChartData,
   'notes' | 'landmineNotes' | 'invisibleNotes' | 'activeFreeZoneChannels' | 'scorableNotes' | 'laneDisplayMode'
->;
+> &
+  Partial<Pick<PreparedPlaybackChartData, 'resolvedChart'>>;
 
 export interface PlaylogRecorderPlaySettings {
   mode: 'manual' | 'auto';
@@ -46,12 +52,14 @@ export interface PlaylogRecorderPlaySettings {
  * Host-declared subset of the recording inputs — the fields the engine cannot know by itself. Passed through
  * `PlayerOptions.recordPlaylog`. `chartSha256` is the SHA-256 (lowercase hex) of the source chart FILE bytes;
  * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content.
+ * `recorder` identifies the host application; the engine version is added by the recorder itself.
  */
 export type PlaylogRecordingOptions = Pick<
   PlaylogRecorderPlaySettings,
   'gauge' | 'randomLane' | 'dpFlip' | 'native'
 > & {
   chartSha256?: string;
+  recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
 };
 
 export interface PlaylogRecorderOptions {
@@ -61,6 +69,8 @@ export interface PlaylogRecorderOptions {
   /** SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. */
   chartSha256?: string;
   play: PlaylogRecorderPlaySettings;
+  /** Host application that records the play. `engine` is always overwritten with this package's version. */
+  recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
   /** Dynamic `#EXRANKxx` changes the engine collected (chart order). */
   dynamicJudgeRankChanges?: ReadonlyArray<{ seconds: number; exRankValue: number }>;
   /** LR2 negative-BPM reversal (chart seconds, #134) — recorded so re-simulations freeze judging at the same point. */
@@ -133,6 +143,7 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
         format: BE_MUSIC_PLAYLOG_FORMAT,
         version: BE_MUSIC_PLAYLOG_VERSION,
         createdAt,
+        recorder: { ...options.recorder, engine: ENGINE_VERSION },
         clock: { unit: 'us', origin: 'chart-zero' },
         chart,
         inputs,
@@ -148,7 +159,8 @@ export function createPlaylogRecorder(options: PlaylogRecorderOptions): PlaylogR
 function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   const { json, chart } = options;
   const idBase = resolveBmsBase(json);
-  const chartLnMode = resolveChartLongNoteMode(json);
+  const resolved = chart.resolvedChart ?? resolveChart(json);
+  const chartLnMode = resolved.lnMode;
   const notes: PlaylogNote[] = [];
 
   for (const note of chart.notes) {
@@ -191,17 +203,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
     notes[index]!.id = index;
   }
 
-  const judgeRank: PlaylogChart['judgeRank'] = {
-    percent: resolveJudgeRankPercent(json),
-  };
-  const sourceRank = json.metadata.rank;
-  if (typeof sourceRank === 'number' && Number.isFinite(sourceRank)) {
-    judgeRank.sourceRank = sourceRank;
-  }
-  const sourceExRank = json.sourceFormat === 'bmson' ? json.bmson.info.judgeRank : json.bms.defExRank;
-  if (typeof sourceExRank === 'number' && Number.isFinite(sourceExRank)) {
-    judgeRank.sourceExRank = sourceExRank;
-  }
+  const judgeRank: PlaylogChart['judgeRank'] = resolveChartJudgeRankFacts(json, resolved);
   const timelineSource = options.dynamicJudgeRankChanges ?? [];
   if (timelineSource.length > 0) {
     judgeRank.timeline = timelineSource.map((change) => ({
@@ -230,8 +232,8 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   }
   if (typeof json.metadata.artist === 'string' && json.metadata.artist.length > 0) result.artist = json.metadata.artist;
   if (typeof json.metadata.genre === 'string' && json.metadata.genre.length > 0) result.genre = json.metadata.genre;
-  if (typeof json.metadata.total === 'number' && Number.isFinite(json.metadata.total)) {
-    result.total = json.metadata.total;
+  if (resolved.total.value !== undefined) {
+    result.total = resolved.total.value;
   }
   return result;
 }

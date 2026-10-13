@@ -1,6 +1,4 @@
-import { createTimingResolver } from '@be-music/audio-renderer';
-import { createBeatResolver } from '@be-music/chart';
-import { createEmptyJson, type BeMusicEvent } from '@be-music/json';
+import { createEmptyJson, type BeMusicEvent } from '../../json/src/index.ts';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createBeatAtSecondsResolver,
@@ -11,7 +9,9 @@ import {
   createScrollTimeline,
   createSpeedTimeline,
   createStopBeatWindows,
-} from './timeline.ts';
+} from './timelines.ts';
+import { createBeatResolver } from './index.ts';
+import { createTimingResolver } from './timing.ts';
 
 function createStopEvent(measure: number, numerator: number, denominator: number, value: string): BeMusicEvent {
   return {

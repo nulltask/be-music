@@ -1,3 +1,4 @@
+import { resolveChart } from '@be-music/chart';
 import * as playerApi from '@be-music/player';
 import * as judgingApi from '@be-music/player/judging';
 import * as playlogApi from '@be-music/player/playlog';
@@ -80,6 +81,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       playerApi.resolveBmsControlFlowForPlayback(fixtures.controlFlowJson, () => 0.42);
     },
   });
+  define('player.resolvePlayChart', {
+    run: (fixtures) => {
+      playerApi.resolvePlayChart(fixtures.controlFlowJson, { random: () => 0.42 });
+    },
+  });
   define('player.preparePlaybackChartData', {
     run: (fixtures) => {
       playerApi.preparePlaybackChartData(
@@ -87,6 +93,14 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
         { showInvisibleNotes: true, laneModeExtension: '.bms' },
         true /* inferBmsLnTypeWhenMissing */,
         0 /* auxiliaryPlaybackEndSeconds */,
+      );
+    },
+  });
+  define('player.preparePlaybackChart', {
+    run: (fixtures) => {
+      playerApi.preparePlaybackChart(
+        resolveChart(fixtures.sampleBmsJson, { chartPath: '.bms', inferBmsLnTypeWhenMissing: true }),
+        { laneModeExtension: '.bms' },
       );
     },
   });

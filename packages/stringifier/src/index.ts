@@ -8,9 +8,11 @@ import {
   parseBpmFrom03Token,
   resolveBmsLongNotes,
   resolveChartPlayVariant,
+  BMSON_MODE_HINT_LAYOUTS,
+  getPlayModeLayouts,
+  resolveBmsonModeHintLayout,
   resolveLnobjLongNotes,
   sortEvents,
-  type ChartPlayVariant,
 } from '@be-music/chart';
 import { parseBms, parseBmson } from '@be-music/parser';
 import {
@@ -876,7 +878,11 @@ function areControlFlowEntriesEqual(
       continue;
     }
     if (leftEntry.kind === 'header' && rightEntry.kind === 'header') {
-      if (leftEntry.command !== rightEntry.command || leftEntry.value !== rightEntry.value) {
+      if (
+        leftEntry.command !== rightEntry.command ||
+        leftEntry.value !== rightEntry.value ||
+        (leftEntry.overriddenByLaterHeader === true) !== (rightEntry.overriddenByLaterHeader === true)
+      ) {
         return false;
       }
       continue;
@@ -1119,6 +1125,11 @@ function pushControlFlowLines(lines: string[], json: BeMusicJson): void {
       continue;
     }
     if (entry.kind === 'header') {
+      // This layout writes the top-level headers first, so a branch line that a later top-level line overrides would
+      // win again on re-parse. It never takes effect, so it is left out.
+      if (entry.overriddenByLaterHeader === true) {
+        continue;
+      }
       // Use the case-preserved `commandRaw` when present so e.g. `#WAV0a` survives the round-trip on a `#BASE 62`
       // chart.
       const commandText = entry.commandRaw ?? entry.command;
@@ -1579,84 +1590,54 @@ function normalizeBmsonBgaEventEntries(
   return normalized;
 }
 
-/** The playable lane a landmine channel sits on (`D3` → `13`, `E5` → `25`), or `undefined` for anything else. */
 /**
- * The `mode_hint` a bmson rendering of `json` declares: the chart's own hint when it has one, else the keyboard layout
- * for a 24 / 48 KEY chart (its wheel and extended lanes only have a home there), else the canonical hint of the chart's
- * play variant when every lane in use has a place in it, else `beat-<lanes>k`.
+ * The `mode_hint` a bmson rendering of `json` declares: the chart's own hint when it has one, else the hint of the chart's
+ * play-mode layout (from the play-mode table in `@be-music/chart`) — always for the 24 / 48 KEY keyboard layouts, whose
+ * wheel and extended lanes only have a home there, and for the other layouts when every lane in use has a place in the
+ * hint's table — else the spec's `generic-<lanes>keys`, a layout ordered left to right. (A made-up `beat-<lanes>k` would be
+ * an unknown hint, which beatoraja, Qwilight, Bemuse and the be-music parser read as `beat-7k`.)
  */
 function resolveBmsonModeHintForOutput(json: BeMusicJson, playableChannels: readonly string[]): string {
   if (json.bmson.info.modeHint !== undefined) {
     return json.bmson.info.modeHint;
   }
   const variant = resolveChartPlayVariant({ events: json.events, bms: json.bms, bmson: json.bmson });
-  if (variant === '24') return BMSON_KEYBOARD_24K_HINT;
-  if (variant === '48') return BMSON_KEYBOARD_24K_DOUBLE_HINT;
-  const variantHint = BMSON_VARIANT_MODE_HINTS[variant];
-  if (variantHint !== undefined) {
-    const lanes = BMSON_MODE_HINT_LANE_CHANNELS[variantHint]!;
-    if (playableChannels.every((channel) => lanes.includes(channel))) {
-      return variantHint;
+  for (const layout of getPlayModeLayouts(variant)) {
+    const hint = layout.bmsonModeHint;
+    if (hint === undefined) continue;
+    if (variant === '24' || variant === '48') return hint;
+    const lanes = BMSON_MODE_HINT_LAYOUTS[hint].xByChannel;
+    if (playableChannels.every((channel) => lanes.has(channel))) {
+      return hint;
     }
   }
-  return `beat-${Math.max(1, playableChannels.length)}k`;
+  return `generic-${Math.max(1, playableChannels.length)}keys`;
 }
 
-/** Play variant → the bmson `mode_hint` naming its layout (24 / 48 KEY take the keyboard hints instead). */
-const BMSON_VARIANT_MODE_HINTS: Partial<Record<ChartPlayVariant, string>> = {
-  '5': 'beat-5k',
-  '7': 'beat-7k',
-  '9': 'popn-9k',
-  '10': 'beat-10k',
-  '14': 'beat-14k',
-};
-
 /**
- * Lane channels of the bmson `mode_hint`s in `x` order (`x` = index + 1). Mirrors the parser's mode_hint lane maps, so a
- * chart written under one of these hints reads back onto the same lanes.
- */
-const BMSON_MODE_HINT_LANE_CHANNELS: Record<string, readonly string[]> = {
-  'beat-5k': ['11', '12', '13', '14', '15', '16'],
-  'beat-7k': ['11', '12', '13', '14', '15', '18', '19', '16'],
-  'beat-10k': ['11', '12', '13', '14', '15', '16', '21', '22', '23', '24', '25', '26'],
-  'beat-14k': ['11', '12', '13', '14', '15', '18', '19', '16', '21', '22', '23', '24', '25', '28', '29', '26'],
-  'popn-5k': ['11', '12', '13', '14', '15'],
-  'popn-9k': ['11', '12', '13', '14', '15', '22', '23', '24', '25'],
-};
-
-const BMSON_KEYBOARD_24K_HINT = 'keyboard-24k';
-const BMSON_KEYBOARD_24K_DOUBLE_HINT = 'keyboard-24k-double';
-/** Lane codes of a `<side><lane>` channel in a keyboard layout's `x` order: 24 keys, then the wheel up / down. */
-const BMSON_KEYBOARD_LANE_CODES = '123456789ABCDEFGHIJKLMNOPQ';
-
-/**
- * Lane channel → bmson `x`. Every hint the parser knows gives each lane its fixed `x` (the inverse of the parser's map):
- * the keyboard layouts take x = side * 26 + lane, the IIDX / Pop'n hints their table, so a sparse chart keeps its keys;
- * lanes outside the layout follow after it. Unknown hints number the lanes in use from 1.
+ * Lane channel → bmson `x`. A hint with a lane table in the play-mode table (`@be-music/chart`) gives each lane the
+ * fixed `x` the parser reads back from it — the keyboard layouts x = side * 26 + lane, the IIDX / Pop'n hints their
+ * spec table — so a sparse chart keeps its keys; lanes outside the table follow after its last `x`. Unknown hints
+ * number the lanes in use from 1.
  */
 function createBmsonXMap(playableChannels: readonly string[], modeHint: string): Map<string, number> {
   const xMap = new Map<string, number>();
-  const hint = modeHint.trim();
-  const hintedLanes = BMSON_MODE_HINT_LANE_CHANNELS[hint];
-  const sides = hint === BMSON_KEYBOARD_24K_DOUBLE_HINT ? 2 : hint === BMSON_KEYBOARD_24K_HINT ? 1 : 0;
+  const table = resolveBmsonModeHintLayout(modeHint);
   const unmapped: string[] = [];
   for (const channel of playableChannels) {
-    const hintedIndex = hintedLanes?.indexOf(channel) ?? -1;
-    const side = channel.charCodeAt(0) - 0x30;
-    const lane = BMSON_KEYBOARD_LANE_CODES.indexOf(channel.charAt(1).toUpperCase());
-    if (hintedIndex >= 0) {
-      xMap.set(channel, hintedIndex + 1);
-    } else if (channel.length === 2 && side >= 1 && side <= sides && lane >= 0) {
-      xMap.set(channel, (side - 1) * BMSON_KEYBOARD_LANE_CODES.length + lane + 1);
+    const x = table?.xByChannel.get(channel.toUpperCase());
+    if (x !== undefined) {
+      xMap.set(channel, x);
     } else {
       unmapped.push(channel);
     }
   }
-  const firstUnmappedX = (hintedLanes?.length ?? sides * BMSON_KEYBOARD_LANE_CODES.length) + 1;
+  const firstUnmappedX = (table?.width ?? 0) + 1;
   unmapped.forEach((channel, index) => xMap.set(channel, firstUnmappedX + index));
   return xMap;
 }
 
+/** The playable lane a landmine channel sits on (`D3` → `13`, `E5` → `25`), or `undefined` for anything else. */
 function landmineChannelToPlayableChannel(channel: string): string | undefined {
   if (channel.length !== 2) return undefined;
   const side = channel[0]!.toUpperCase();

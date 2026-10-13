@@ -222,6 +222,12 @@ export interface BmsControlFlowHeaderEntry {
    * absent, callers fall back to `command` (= upper-cased) for case-insensitive base-36 charts.
    */
   commandRaw?: string;
+  /**
+   * `true` when a top-level line later in the file defines the same header. LR2 and beatoraja apply header lines in
+   * file order, so that later line wins even when this branch is taken, and resolving the control flow skips this
+   * entry. Never set on repeatable headers (`#STP`, `#WAVCMD`, `#LNOBJ`), which add up instead.
+   */
+  overriddenByLaterHeader?: true;
 }
 
 export interface BmsControlFlowObjectEntry {

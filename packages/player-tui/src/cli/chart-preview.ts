@@ -1,4 +1,4 @@
-import { isPlayLaneSoundChannel } from '@be-music/chart';
+import { isPlayLaneSoundChannel, resolveChart } from '@be-music/chart';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { isAbortError, throwIfAborted } from '@be-music/utils/core';
@@ -6,7 +6,7 @@ import { resolveFirstExistingPath } from '@be-music/utils/path';
 import { writeStereoPcm16Le } from '@be-music/utils/pcm';
 import { createEmptyJson, type BeMusicJson } from '@be-music/json';
 import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
-import { collectSampleTriggers, createTimingResolver, type RenderResult, renderJson } from '@be-music/audio-renderer';
+import { type RenderResult, renderJson } from '@be-music/audio-renderer';
 import { createNodeAudioSink } from '@be-music/player/audio-sink';
 import { resolveChartVolWavGain } from '@be-music/player/utils';
 
@@ -461,8 +461,9 @@ async function resolveFallbackPreviewIdentity(
   signal?: AbortSignal,
 ): Promise<FallbackPreviewIdentity | undefined> {
   throwIfAborted(signal);
-  const resolver = createTimingResolver(chart);
-  const triggers = collectSampleTriggers(chart, resolver);
+  const resolved = resolveChart(chart);
+  const resolver = resolved.timing;
+  const triggers = resolved.sampleTriggers;
   if (triggers.length === 0) {
     return undefined;
   }

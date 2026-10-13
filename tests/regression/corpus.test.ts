@@ -5,7 +5,8 @@ import { collectSampleTriggers, createTimingResolver } from '@be-music/audio-ren
 import { resolveChartPlayVariant, resolveChartReferenceBpm } from '@be-music/chart';
 import type { BeMusicEvent, BeMusicJson } from '@be-music/json';
 import { parseChart, parseChartFile } from '@be-music/parser';
-import { manualPlay, resolveBmsControlFlowForPlayback } from '@be-music/player';
+import type { RandomDraws } from '@be-music/chart';
+import { manualPlay, resolvePlayChart } from '@be-music/player';
 import { extractTimedNotes } from '@be-music/player/playable-notes';
 import {
   simulatePlaylogRulesets,
@@ -127,7 +128,7 @@ function summarizeStringify(json: BeMusicJson): Record<string, unknown> {
 }
 
 function resolveForComparison(json: BeMusicJson): BeMusicJson {
-  return resolveBmsControlFlowForPlayback(json, () => 0).resolvedJson;
+  return resolvePlayChart(json, { random: () => 0 }).chart;
 }
 
 function formatPlayableNotes(json: BeMusicJson): string[] {
@@ -149,11 +150,8 @@ async function buildResolvedExpected(
   path: string,
   random: () => number,
 ): Promise<Record<string, unknown>> {
-  const { resolvedJson, randomPatterns } = resolveBmsControlFlowForPlayback(parsed, random);
-  // The resolver keeps `bms.controlFlow` populated, and the engine resolves control flow again on entry, which would
-  // roll every `#RANDOM` a second time with `Math.random` and stack a second branch on top of this one. Clearing it
-  // (as `toEngineChart` in player-web does) makes the engine play exactly the branch drawn here.
-  const json: BeMusicJson = { ...resolvedJson, bms: { ...resolvedJson.bms, controlFlow: [] } };
+  // Resolved once, the way the hosts do it: the engine plays this chart as is, with the draws it was resolved with.
+  const { chart: json, randomDraws } = resolvePlayChart(parsed, { random });
   const timing = createTimingResolver(json);
 
   // The engine runs once, with no input, purely to snapshot the note list it prepares for play (lane transforms,
@@ -161,7 +159,7 @@ async function buildResolvedExpected(
   // judges on a wall-clock tick loop, and its replay summary still shifts between runs (gauge order around the
   // 100 % clamp, trailing releases dropped once the loop ends), so pinning it here would make this suite flaky.
   // Engine/simulator agreement is `packages/player/src/playlog/equivalence.test.ts`'s job.
-  const playlog = await recordNoInputPlaylog(json);
+  const playlog = await recordNoInputPlaylog(json, randomDraws);
   const notes = playlog.chart.notes;
   const scenarios: Record<string, PlaylogInputEvent[]> = {
     missed: [],
@@ -179,7 +177,7 @@ async function buildResolvedExpected(
 
   const { notes: _notes, ...chartFacts } = playlog.chart;
   return {
-    randomPatterns: randomPatterns.map((pattern) => `${pattern.current}/${pattern.total}`),
+    randomPatterns: formatRandomPatterns(randomDraws),
     title: json.metadata.title,
     playVariant: resolveChartPlayVariant({ chartPath: path, events: json.events, bms: json.bms }),
     referenceBpm: resolveChartReferenceBpm(json),
@@ -223,9 +221,17 @@ function formatPlaylogNote(note: PlaylogNote): string {
   );
 }
 
-async function recordNoInputPlaylog(json: BeMusicJson): Promise<BeMusicPlaylog> {
+/** The `#RANDOM` / `#SETRANDOM` lines' outcomes as `value/range` (a `#SETRANDOM n` line reads `n/n`). */
+function formatRandomPatterns(draws: RandomDraws): string[] {
+  return draws
+    .filter((draw) => draw.command === 'RANDOM' || draw.command === 'SETRANDOM')
+    .map((draw) => (draw.command === 'SETRANDOM' ? `${draw.value}/${draw.value}` : `${draw.value}/${draw.range}`));
+}
+
+async function recordNoInputPlaylog(json: BeMusicJson, randomDraws: RandomDraws): Promise<BeMusicPlaylog> {
   let playlog: BeMusicPlaylog | undefined;
   await manualPlay(json, {
+    randomDraws,
     speed: 64,
     leadInMs: 0,
     audio: false,

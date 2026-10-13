@@ -11,3 +11,4 @@ export * from './gauge.ts';
 export * from './judge.ts';
 export * from './selection.ts';
 export * from './chart-facts.ts';
+export * from './long-note.ts';

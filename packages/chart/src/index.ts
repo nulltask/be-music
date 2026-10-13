@@ -5,6 +5,101 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
 } from '@be-music/json';
+import { PLAY_MODE_LAYOUTS } from './play-modes.ts';
+
+export {
+  BMSON_MODE_HINT_LAYOUTS,
+  PLAY_MODE_LAYOUTS,
+  findPlayModeLane,
+  getPlayModeLayouts,
+  resolveBmsonModeHintLayout,
+  resolvePlayLaneChannels,
+  type BmsonModeHint,
+  type BmsonModeHintLayout,
+  type PlayFreeZone,
+  type PlayKeyTone,
+  type PlayLane,
+  type PlayLaneChannels,
+  type PlayLaneKind,
+  type PlayModeLayout,
+  type PlayModeLayoutId,
+  type PlaySide,
+} from './play-modes.ts';
+
+export {
+  drawRandomOutcomes,
+  evaluateControlFlow,
+  hasControlFlow,
+  type ActiveControlFlowEntry,
+  type ControlFlowSource,
+  type RandomDraw,
+  type RandomDrawCommand,
+  type RandomDraws,
+} from './control-flow.ts';
+
+export {
+  createTimingBuildContext,
+  createTimingResolver,
+  createTimingResolverWithContext,
+  firesBeforeTempoReversal,
+  mirrorBeatAtTempoReversal,
+  type StopPoint,
+  type TempoPoint,
+  type TempoReversalPoint,
+  type TimingBuildContext,
+  type TimingResolver,
+} from './timing.ts';
+
+export {
+  collectSampleTriggers,
+  collectSampleTriggersWithContext,
+  createBmsonSamplePlaybackMap,
+  type CollectSampleTriggersOptions,
+  type TimedSampleTrigger,
+} from './sample-triggers.ts';
+
+export {
+  createBeatAtSecondsResolver,
+  createBeatAtSecondsResolverFromTimingResolver,
+  createBpmTimeline,
+  createMeasureBoundariesBeats,
+  createMeasureTimeline,
+  createScrollTimeline,
+  createSpeedTimeline,
+  createStopBeatWindows,
+  type BpmTimelinePoint,
+  type MeasureTimelinePoint,
+  type ScrollTimelinePoint,
+  type SpeedTimelinePoint,
+  type StopBeatWindow,
+} from './timelines.ts';
+
+export {
+  buildBgaTimelines,
+  buildBmsBgaTimeline,
+  type BgaCue,
+  type BgaTimelines,
+  type BgaTimingResolver,
+} from './bga.ts';
+
+export {
+  DEFAULT_LANDMINE_DAMAGE,
+  DEFAULT_LONG_NOTE_MODE,
+  resolveChartLongNoteMode,
+  resolveLandmineDamage,
+  type LongNoteMode,
+} from './note-rules.ts';
+
+export {
+  resolveChart,
+  type ResolveChartOptions,
+  type ResolvedChart,
+  type ResolvedJudgeRank,
+  type ResolvedTotal,
+  type ResolvedVolumeChange,
+} from './resolved-chart.ts';
+
+export { isInvisibleNoteChannel, type ResolvedNote, type ResolvedNoteKind } from './resolved-notes.ts';
 
 export interface BeatResolver {
   measureToBeat: (measure: number, position?: number) => number;
@@ -43,6 +138,22 @@ const KEYBOARD_MODE_HINT_VARIANTS: ReadonlyMap<string, ChartPlayVariant> = new M
   ['keyboard-24k', '24'],
   ['keyboard-24k-double', '48'],
 ]);
+
+const laneChannelsOf = (layout: keyof typeof PLAY_MODE_LAYOUTS): string[] =>
+  PLAY_MODE_LAYOUTS[layout].lanes.map((lane) => lane.channel);
+/** The BME-type 9 KEY layout: every one of `11..19`. */
+const BME_NINE_KEY_CHANNELS: readonly string[] = laneChannelsOf('9-bme');
+/** PMS-STD keys 6..9, authored on the 2P bank (`22..25`). */
+const PMS_STD_2P_CHANNELS: readonly string[] = laneChannelsOf('9-pms').filter((channel) => channel.startsWith('2'));
+/** The IIDX 2P side PMS-STD never uses: `21`, the 6 / 7 keys `28` / `29`, the scratch `26` and the FREE ZONE `27`. */
+const IIDX_ONLY_2P_CHANNELS: readonly string[] = [
+  ...laneChannelsOf('14'),
+  ...PLAY_MODE_LAYOUTS['14'].freeZones.map((zone) => zone.channel),
+].filter((channel) => channel.startsWith('2') && !PMS_STD_2P_CHANNELS.includes(channel));
+/** The 6 / 7 key columns (`18` / `19` / `28` / `29`): the lanes 14 KEY has and 10 KEY lacks. */
+const IIDX_SIX_SEVEN_KEY_CHANNELS: readonly string[] = laneChannelsOf('14').filter(
+  (channel) => !laneChannelsOf('10').includes(channel),
+);
 
 /**
  * Bounds of the extended lane-code range. A `<side><lane>` channel's lane code is either a classic `1`-`9` column or one
@@ -227,12 +338,12 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
 }
 
 /**
- * Resolves the LR2/play-skin lane family for a chart from its extension, `#PLAYER`, and playable lane usage.
+ * Resolves the LR2/play-skin lane family for a chart from its playable lane usage, `#PLAYER`, and the `.pms` extension.
  *
  * This is the single lane-mode rule every host shares: the engine derives its lane mode from it (unless the host
  * declares a variant explicitly), and the web / skin hosts pick play skins with it. Pass the RESOLVED chart (after
  * `#RANDOM` / `#SWITCH`) when classifying a play, so lanes a chosen branch adds are counted. `chartPath` may be a full
- * path or a bare extension (`.pms` / `.bme`).
+ * path or a bare extension (`.pms`).
  *
  * Lane usage counts the `1x` / `2x` lane channels plus the `5x` / `6x` `#LNTYPE` long-note channels mapped to their
  * lanes, so `#LNOBJ` and `#LNTYPE` notations of the same chart classify alike. Mines (`Dx` / `Ex`) and invisible
@@ -265,8 +376,8 @@ export function compareEvents(left: BeMusicEvent, right: BeMusicEvent): number {
  *      usage. Catches PMS-STD authored as `.bme` / `.bms` (common when chart authors export PMS charts
  *      to `.bme` for table-friendly tooling) without requiring an explicit `.pms` extension.
  *   5. **IIDX fallback** — classify by `2X` presence (`usesPlayer2`) and `18/19/28/29` (`uses6or7`) as IIDX
- *      `5/7/10/14`. A `.bme` chart without a 6 / 7 key column is completed to `7` / `14` (the extension names the
- *      7-key format); every other extension stays `5` / `10`.
+ *      `5/7/10/14`. The lanes in use decide, whatever the extension: a `.bme` chart without a 6 / 7 key column is
+ *      `5` / `10` like beatoraja reads it (be-music decision, see docs/format-compat.md §5).
  */
 export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlayVariant {
   const modeHint = chart.bmson?.info?.modeHint;
@@ -302,16 +413,14 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   }
   // `#PLAYER 3` is "DP or 9-key", so the POPN-9 reading needs the IIDX 2P side (`21` / `26..29`) to be absent: a
   // double-play chart with a FREE ZONE on `17` stays IIDX DP.
-  const usesOther2P = ['21', '26', '27', '28', '29'].some((c) => channels.has(c));
+  const usesOther2P = IIDX_ONLY_2P_CHANNELS.some((c) => channels.has(c));
   if (chart.bms?.player === 3 && channels.has('17') && !usesOther2P) {
     return '9';
   }
 
   // Rule 3 — BME POPN-9: 1P chart that authors every one of `11..19`. The IIDX 7K format never populates all
   // nine, so a full 1P keyboard is a strong POPN-9 signal regardless of `#PLAYER` or filename extension.
-  const p1NineKeyChannels = ['11', '12', '13', '14', '15', '16', '17', '18', '19'];
-  const p1Count = p1NineKeyChannels.reduce((n, c) => (channels.has(c) ? n + 1 : n), 0);
-  if (p1Count === 9 && !usesPlayer2) {
+  if (BME_NINE_KEY_CHANNELS.every((c) => channels.has(c)) && !usesPlayer2) {
     return '9';
   }
 
@@ -322,14 +431,14 @@ export function resolveChartPlayVariant(chart: ChartPlayVariantInput): ChartPlay
   // WITHOUT `21` / `26..29` is a reliable PMS-STD signal regardless of 1P-side scratch (`16`) or 6/7K
   // column (`18` / `19`) use. (A chart that combines `22..25` with 1P scratch is a non-standard hybrid
   // — we resolve it as POPN-9 since `22..25` is the POPN-specific signature.)
-  const usesPmsStd2P = ['22', '23', '24', '25'].some((c) => channels.has(c));
+  const usesPmsStd2P = PMS_STD_2P_CHANNELS.some((c) => channels.has(c));
   if (usesPmsStd2P && !usesOther2P) {
     return '9';
   }
 
-  // Rule 5 — IIDX families. A 6 / 7 key column decides 7 / 14 KEY; without one, a `.bme` file is still 7 / 14 KEY
-  // (the extension that names the 7-key format), and anything else is 5 / 10 KEY.
-  const uses6or7 = ['18', '19', '28', '29'].some((channel) => channels.has(channel)) || isBmeExtension(chart.chartPath);
+  // Rule 5 — IIDX families. A 6 / 7 key column decides 7 / 14 KEY, anything else is 5 / 10 KEY. The `.bme` extension
+  // does not complete the mode: beatoraja reads the mode from the lanes in use, and so do we.
+  const uses6or7 = IIDX_SIX_SEVEN_KEY_CHANNELS.some((channel) => channels.has(channel));
   if (usesPlayer2) {
     return uses6or7 ? '14' : '10';
   }
@@ -1509,13 +1618,9 @@ function isPmsExtension(chartPath: string | undefined): boolean {
   return resolveChartPathExtension(chartPath) === '.pms';
 }
 
-function isBmeExtension(chartPath: string | undefined): boolean {
-  return resolveChartPathExtension(chartPath) === '.bme';
-}
-
 /**
- * Lowercased extension (with its dot) of a chart path or of a bare extension such as `.bme`. Only the last path segment
- * counts, so a dotted directory name (`Song.bme/main`) is not mistaken for the chart's own extension.
+ * Lowercased extension (with its dot) of a chart path or of a bare extension such as `.pms`. Only the last path segment
+ * counts, so a dotted directory name (`Song.pms/main`) is not mistaken for the chart's own extension.
  */
 function resolveChartPathExtension(chartPath: string | undefined): string | undefined {
   if (typeof chartPath !== 'string' || chartPath.length === 0) {

@@ -15,6 +15,7 @@ function makePlaylog(): BeMusicPlaylog {
     format: BE_MUSIC_PLAYLOG_FORMAT,
     version: BE_MUSIC_PLAYLOG_VERSION,
     createdAt: '2026-08-17T01:02:03.456Z',
+    recorder: { name: 'be-music-web', version: '0.5.0', build: '6471cd16', engine: '0.8.0', platform: 'web' },
     clock: { unit: 'us', origin: 'chart-zero' },
     chart: {
       title: 'Song / Title: Test',
@@ -211,6 +212,29 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('results.native.judge.pgreat: expected a finite number');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.recorder = 'be-music-web';
+        }),
+      ),
+    ).toThrow('recorder: expected an object');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.recorder.version = 5;
+        }),
+      ),
+    ).toThrow('recorder.version: expected a string');
+  });
+
+  test('keeps only the recorder fields that are present', () => {
+    const parsed = parsePlaylog(
+      corrupt((value) => {
+        value.recorder = { engine: '0.8.0' };
+      }),
+    );
+    expect(parsed.recorder).toEqual({ engine: '0.8.0' });
   });
 
   test('ignores unknown fields for forward compatibility', () => {
@@ -222,6 +246,7 @@ describe('playlog format', () => {
         value.inputs[0].futureInputField = 1;
         value.play.futurePlayField = 1;
         value.results.native.futureResultField = 1;
+        value.recorder.futureRecorderField = 'x';
       }),
     );
     expect(parsed).toEqual(makePlaylog());

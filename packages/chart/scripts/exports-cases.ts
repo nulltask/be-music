@@ -1,6 +1,17 @@
 import * as chartApi from '@be-music/chart';
 import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.ts';
 
+const BENCH_RANDOM_DRAWS_CACHE = new WeakMap<object, chartApi.RandomDraws>();
+
+function benchRandomDraws(source: chartApi.ControlFlowSource): chartApi.RandomDraws {
+  let draws = BENCH_RANDOM_DRAWS_CACHE.get(source);
+  if (draws === undefined) {
+    draws = chartApi.drawRandomOutcomes(source, () => 0.25);
+    BENCH_RANDOM_DRAWS_CACHE.set(source, draws);
+  }
+  return draws;
+}
+
 const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
@@ -46,6 +57,26 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
         events: fixtures.sampleBmsJson.events,
         bms: fixtures.sampleBmsJson.bms,
       });
+    },
+  });
+  define('chart.getPlayModeLayouts', {
+    run: () => {
+      chartApi.getPlayModeLayouts('9');
+    },
+  });
+  define('chart.findPlayModeLane', {
+    run: () => {
+      chartApi.findPlayModeLane('48', '2Q');
+    },
+  });
+  define('chart.resolvePlayLaneChannels', {
+    run: () => {
+      chartApi.resolvePlayLaneChannels('1A');
+    },
+  });
+  define('chart.resolveBmsonModeHintLayout', {
+    run: () => {
+      chartApi.resolveBmsonModeHintLayout(' beat-10k ');
     },
   });
   define('chart.resolveChartReferenceBpm', {
@@ -206,6 +237,145 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.resolveLnobjLongNotes', {
     run: (fixtures) => {
       chartApi.resolveLnobjLongNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.drawRandomOutcomes', {
+    run: (fixtures) => {
+      chartApi.drawRandomOutcomes(fixtures.controlFlowJson, () => 0.25);
+    },
+  });
+  define('chart.evaluateControlFlow', {
+    run: (fixtures) => {
+      chartApi.evaluateControlFlow(fixtures.controlFlowJson, benchRandomDraws(fixtures.controlFlowJson));
+    },
+  });
+  define('chart.hasControlFlow', {
+    run: (fixtures) => {
+      chartApi.hasControlFlow(fixtures.controlFlowJson);
+    },
+  });
+  define('chart.createTimingResolver', {
+    run: (fixtures) => {
+      chartApi.createTimingResolver(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createTimingBuildContext', {
+    run: (fixtures) => {
+      chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createTimingResolverWithContext', {
+    run: (fixtures) => {
+      const context = chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
+      chartApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
+    },
+  });
+  define('chart.collectSampleTriggers', {
+    run: (fixtures) => {
+      const resolver = chartApi.createTimingResolver(fixtures.sampleBmsJson);
+      chartApi.collectSampleTriggers(fixtures.sampleBmsJson, resolver, { inferBmsLnTypeWhenMissing: true });
+    },
+  });
+  define('chart.collectSampleTriggersWithContext', {
+    run: (fixtures) => {
+      const context = chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
+      const resolver = chartApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
+      chartApi.collectSampleTriggersWithContext(fixtures.sampleBmsJson, resolver, context, {
+        inferBmsLnTypeWhenMissing: true,
+      });
+    },
+  });
+  define('chart.createBmsonSamplePlaybackMap', {
+    run: (fixtures) => {
+      const context = chartApi.createTimingBuildContext(fixtures.sampleBmsonJson);
+      const resolver = chartApi.createTimingResolverWithContext(fixtures.sampleBmsonJson, context);
+      chartApi.createBmsonSamplePlaybackMap(
+        fixtures.sampleBmsonJson,
+        resolver,
+        fixtures.sampleBmsonJson.events,
+        context.beatResolver,
+      );
+    },
+  });
+  define('chart.createMeasureTimeline', {
+    run: (fixtures) => {
+      const json = fixtures.sampleBmsJson;
+      chartApi.createMeasureTimeline(json, chartApi.createTimingResolver(json), chartApi.createBeatResolver(json));
+    },
+  });
+  define('chart.createBpmTimeline', {
+    run: (fixtures) => {
+      chartApi.createBpmTimeline(fixtures.sampleBmsJson, chartApi.createTimingResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createScrollTimeline', {
+    run: (fixtures) => {
+      chartApi.createScrollTimeline(fixtures.sampleBmsJson, chartApi.createBeatResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createSpeedTimeline', {
+    run: (fixtures) => {
+      chartApi.createSpeedTimeline(fixtures.sampleBmsJson, chartApi.createBeatResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createStopBeatWindows', {
+    run: (fixtures) => {
+      chartApi.createStopBeatWindows(chartApi.createTimingResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.createBeatAtSecondsResolver', {
+    run: (fixtures) => {
+      chartApi.createBeatAtSecondsResolver(fixtures.sampleBmsJson)(1.5);
+    },
+  });
+  define('chart.createBeatAtSecondsResolverFromTimingResolver', {
+    run: (fixtures) => {
+      chartApi.createBeatAtSecondsResolverFromTimingResolver(chartApi.createTimingResolver(fixtures.sampleBmsJson))(
+        1.5,
+      );
+    },
+  });
+  define('chart.createMeasureBoundariesBeats', {
+    run: (fixtures) => {
+      chartApi.createMeasureBoundariesBeats(
+        fixtures.sampleBmsJson,
+        chartApi.createBeatResolver(fixtures.sampleBmsJson),
+      );
+    },
+  });
+  define('chart.buildBgaTimelines', {
+    run: (fixtures) => {
+      chartApi.buildBgaTimelines(fixtures.sampleBmsJson, chartApi.createTimingResolver(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.buildBmsBgaTimeline', {
+    run: (fixtures) => {
+      const json = fixtures.sampleBmsJson;
+      chartApi.buildBmsBgaTimeline(json.events, chartApi.createTimingResolver(json), '04');
+    },
+  });
+  define('chart.resolveChartLongNoteMode', {
+    run: (fixtures) => {
+      chartApi.resolveChartLongNoteMode(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.resolveLandmineDamage', {
+    run: () => {
+      chartApi.resolveLandmineDamage({ value: '0A' }, 36, 'bms');
+    },
+  });
+  define('chart.resolveChart', {
+    run: (fixtures) => {
+      const resolved = chartApi.resolveChart(fixtures.sampleBmsJson, { chartPath: 'sample.bms' });
+      void resolved.notes;
+      void resolved.mines;
+      void resolved.invisibleNotes;
+      void resolved.sampleTriggers;
+    },
+  });
+  define('chart.isInvisibleNoteChannel', {
+    run: () => {
+      chartApi.isInvisibleNoteChannel('3A');
     },
   });
 }

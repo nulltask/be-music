@@ -237,6 +237,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 - `charset`: value of `#CHARSET`
 - `controlFlow`: Control syntax (`#RANDOM`/`#IF`/`#SWITCH` series) and the header/object lines inside it
 - `controlFlow.kind = "object"` is kept in the same `events` format as normal events (with `measureLength` if necessary)
+- `controlFlow.kind = "header"` has `overriddenByLaterHeader: true` when a top-level line later in the file defines the same header; header lines apply in file order, so resolving the control flow skips it
 - Parser keeps control syntax in this array and branches are executed at playback/render time
 - `scroll` values ​​allow finite numbers, `0` and negative values ​​are also retained
 

@@ -96,27 +96,43 @@ parser が IR へ保持するだけで、player が実行時に参照しない�
 player は次の順序で譜面を実行します。
 
 1. BMS 制御構文を実行時に解決し、今回の再生で使う分岐済み譜面を作ります。
-2. 分岐後の譜面から、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガを抽出します。
+2. 分岐後の譜面を `resolveChart`（`@be-music/chart`、[アーキテクチャ](./architecture.ja.md) を参照）で 1 回だけ解決し、演奏ノート、地雷、不可視ノート、リアルタイム音声トリガ、テンポマップ、譜面の事実を、得られた `ResolvedChart` から取り出します。
 3. 分岐後の譜面からレーンモードを確定し（[レーンモードと入力](#レーンモードと入力)）、実際に存在するチャンネル群からキー割り当てと FREE ZONE のエイリアスを確定します。
 4. ゲージ、スコア、UI state、入力 runtime、音声 runtime を初期化します。
 5. `AUTO` / `MANUAL` / `AUTO SCRATCH` のいずれかのメインループを実行し、最後に `PlayerSummary` を返します。
 
 時間解決では、通常の `#STOPxx` に加えて、BMS 拡張 `#STP` も停止イベントとして扱います。
+同じ位置に `#STOPxx` のオブジェクトが複数あれば、LR2 や beatoraja と同じく最後のものが勝ちます。bmson の同じパルスの `stop_events` は、bmson 仕様のとおり加算します。
 `#STP` は `xxx[.yyy] zzzz` を `measure xxx` の `yyy / 1000` 位置にある `zzzz ms` の停止として解釈し、同位置の複数定義は加算します。`.yyy` が省略された場合は `000` として扱います。書式に合わない `bms.stp` 要素は IR には保持されますが、player の時間解決では無視します。
 
 ## 制御構文の扱い
 
-BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に解決します。
-`#RANDOM` は実行時に乱数を 1 回引き、その値を `resolveBmsControlFlow()` へ再注入して分岐を再現します。
+BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始前に、ホストがプレイごとに 1 回だけ解決します。
 
-player は UI 表示用に、今回の再生で選ばれた RANDOM パターンも保持します。
-`#SETRANDOM` は固定値として記録し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
+1 回のプレイの結果は、はっきりした値 `RandomDraws`（`@be-music/chart`）で表します。`#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` の行ごとにファイル順で 1 項目あり、各項目は行のコマンド、`range`（取りうる結果の数）、その行の後で有効な `value` を持ちます。
+
+- 選ばれなかった分岐の中にある行も含め、該当する行にはすべて項目があります。評価器は分岐の状態にかかわらずすべての制御行をたどるためです。
+- `#RANDOM n` / `#SWITCH n` は `1..n` から `value` を引きます。`n` がない、0、負、数値でない行は結果が 1 つしかない行として扱い、`range` 1、`value` 1 とし、乱数源を消費しません。
+- `#SETRANDOM n` / `#SETSWITCH n` は `value` を `n`（`n` がないか正でなければ 1）に固定し、`range` は 1 です。乱数は引きません。
+
+解決する場所は 1 か所だけで、`drawRandomOutcomes(chart, random)` → `RandomDraws` と `resolveBmsControlFlowWithDraws(chart, draws)`（`@be-music/parser`）→ 解決済みの譜面、の組です。ホスト向けには `resolvePlayChart(chart)`（`@be-music/player`）がこれをまとめ、`{ chart, randomDraws }` を返します。
+分岐の意味（スタックは 1 本で共有する、閉じていない `#IF` は `#ENDRANDOM` の後も残る、選ばれた分岐の中の定義は譜面全体に効く）は、`evaluateControlFlow`（`@be-music/chart`）の 1 か所だけにあります。
+同じ譜面と draws からは常に同じ結果が得られ、その譜面のために引かれていない draws は `RangeError` で拒否します。
+解決済みの譜面は `bms.controlFlow` を持たないので、もう一度解決しても何も変わりません。
+
+どのホストも 1 回だけ引き、同じ譜面と draws をそのプレイのすべての利用者に渡します。CLI はプレビューの描画とゲームプレイ worker に、web player は決定画面、ゲームプレイシーン、エンジン、リザルト画面に渡します。
+リスタートでは引き直します。LR2 や beatoraja もプレイごとに引き直すためです。
+エンジン（`autoPlay` / `manualPlay`）は自分では引きません。解決済みの譜面はそのまま再生し、`PlayerOptions.randomDraws` は RANDOM 要約にだけ使います。
+制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とプレイログの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
+
+RANDOM 要約は draws から作ります。
+`#SETRANDOM` は固定値として表示し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
 
 ## ノートモデル
 
 ### 演奏対象ノート
 
-player はまず IR の `events` を beat/seconds 付きの演奏ノート列へ正規化します。
+ノートは解決済みの譜面（`ResolvedChart.notes`、`@be-music/chart` の `resolveChart`）から取ります。`resolveChart` は IR の `events` を beat/seconds 付きのノート列へ正規化し、エンジンはそれをプレイごとの状態を持つ演奏ノートにコピーします（`preparePlaybackChart`）。
 演奏対象に含めるのは playable channel のみで、各ノートは少なくとも次の情報を持ちます。
 
 - `channel`
@@ -142,7 +158,7 @@ bmson の `l`、FREE ZONE (`17` / `27`)、BMS の `#LNOBJ`、BMS legacy LN (`#mm
 - それ以外はイベント順で最初のノートを採用します。BMS では最小のオブジェクト ID、bmson では最初の sound channel です。bmson ではこれが beatoraja の判定するノートです。BMS の beatoraja はファイル内で後の行を採用しますが、IR は行順を記録していません。LR2 の選び方は分かっていません。
 
 残りのノートは判定・描画せず、`summary.total` にも数えません。ただしキー音は、採用したノートと同じ `#WAVxx` / sound channel でない限り、マニュアルプレイでは各ノートの時刻に BGM として鳴らします（オートプレイはもともと演奏レーンのオブジェクトをすべて鳴らします）。
-`extractTimedNotes` はこれらのノートを `shadowedNotes` として返します。
+解決済みの譜面はこれらのノートを `shadowedNotes` として返します（`extractTimedNotes` も同じ）。
 地雷と不可視ノートはまとめません。
 
 ### 地雷
@@ -181,8 +197,9 @@ bmson の `keyboard-24k` / `keyboard-24k-double` は `24 KEY SP` / `48 KEY DP` �
 知っている host は `PlayerOptions.playVariant` で明示できます。レーン使用は `1x` / `2x` のレーンチャンネルと `5x` / `6x` の
 `#LNTYPE` ロングノートチャンネルで数え、地雷と不可視オブジェはレーンモードを変えません。そのため、これらが beatoraja
 ruleset の 5 KEY / 7 KEY 判定幅を切り替えることもありません。判定順は
-[BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあり、文書化済みの `.bme` 補完（6 / 7 鍵の列がない `.bme`
-譜面は `7 KEY SP` / `14 KEY DP`）も含みます。
+[BMS 仕様 — player 固有挙動](./bms-spec.ja.md#player-固有挙動) にあります。モードを表す拡張子は `.pms` だけで、それ以外の
+拡張子では使われているレーンで決めます。そのため 6 / 7 鍵の列がない `.bme` 譜面は、beatoraja と同じく `5 KEY SP` /
+`5 KEY DP` です。
 現実装で自動判定できる主なモードは次のとおりです。
 
 - `5 KEY SP`
@@ -206,6 +223,27 @@ reverse scratch は 1P が左 `Ctrl`、2P が右 `Ctrl` を使います。macOS 
 
 left/right `Ctrl` と left/right `Option` の識別は kitty keyboard protocol で行います。
 kitty 非対応端末へフォールバックした場合、reverse scratch の side-specific 入力は保証しません。
+
+### プレイモード表
+
+すべてのプレイモードは `PLAY_MODE_LAYOUTS`（[`chart/src/play-modes.ts`](../packages/chart/src/play-modes.ts)、
+`@be-music/chart` から export）の 1 か所で宣言します。レイアウトごとにレーンを左から右へ並べ、各レーンの種類（鍵、scratch、
+ホイールの上 / 下）、side、slot（鍵の番号。scratch は `0`、ホイールは `25` / `26`）、色の分類、そのレーンに載る各オブジェ系統の
+BMS チャンネル（可視 `1x` / `2x`、不可視 `3x` / `4x`、`#LNTYPE` の `5x` / `6x`、地雷 `Dx` / `Ex`。拡張レーン `A`..`Q` を含む）と、
+scratch で扱う FREE ZONE のチャンネルを持ちます。bmson の `mode_hint` のレーン表（`BMSON_MODE_HINT_LAYOUTS`）も同じレイアウトから
+作ります。parser、stringifier、`resolveChartPlayVariant`、player のレーン配置とレーンオプション、CLI のレーン色、skin SDK の
+レーン種別は、すべてこの表から導出します。
+
+| レイアウト | 表示名               | レーン（左から右）                                                             | bmson `mode_hint`     |
+| ---------- | -------------------- | ------------------------------------------------------------------------------ | --------------------- |
+| `5`        | `5 KEY SP`           | `16`（scratch）、`11`-`15`                                                     | `beat-5k`             |
+| `7`        | `7 KEY SP`           | `16`（scratch）、`11`-`15`、`18`、`19`                                         | `beat-7k`             |
+| `9-pms`    | `9 KEY (PMS-STD)`    | `11`-`15`、`22`-`25`                                                           | `popn-9k`             |
+| `9-bme`    | `9 KEY (PMS-COMPAT)` | `11`-`19`                                                                      | —                     |
+| `10`       | `5 KEY DP`           | `16`（scratch）、`11`-`15`、`21`-`25`、`26`（scratch）                         | `beat-10k`            |
+| `14`       | `14 KEY DP`          | `16`（scratch）、`11`-`15`、`18`、`19`、`21`-`25`、`28`、`29`、`26`（scratch） | `beat-14k`            |
+| `24`       | `24 KEY SP`          | `1P` / `1Q`（ホイール）、`11`-`19`、`1A`-`1O`                                  | `keyboard-24k`        |
+| `48`       | `48 KEY DP`          | `24` と同じ並びの後に `21`-`29`、`2A`-`2O`、`2P` / `2Q`（ホイール）            | `keyboard-24k-double` |
 
 ## 互換ルールセット
 
@@ -597,7 +635,7 @@ pause 中は playback clock と audio session を同時に止め、resume で両
 
 ### 再生タイミング
 
-リアルタイム再生は、分岐解決後の譜面から `collectSampleTriggers()` で生成したトリガ列を使います。
+リアルタイム再生は、分岐解決後の譜面の解決済みトリガ列（`ResolvedChart.sampleTriggers`。`collectSampleTriggers()` で作る）を使います。
 再生時刻は負にならないように clamp します。
 
 ### 音量分離
@@ -712,7 +750,7 @@ TUI の描画上限はデフォルト `60fps` です。
 
 judge 済みノートでも、judge line を跨ぐまで、または `visibleUntilBeat` が切れるまでは描画を残します。
 long note は body と tail を持つ 1 本のノートとして描画し、保持中は lane highlight も継続します。
-ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。最初の keyframe より前の区間は、最初の keyframe の値で一定です（Bemuse 参照実装に準拠）。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
+ノートの視覚距離は、`#SCROLLxx` / `#xxxSC` の piecewise-constant 係数と、`#SPEEDxx` / `#xxxSP` の piecewise-linear 補間係数を掛け合わせて積分した値で決めます。`#SPEEDxx` がない場合は常に `1`、同一 beat の複数 keyframe は後勝ちです。最初の keyframe より前の区間は、beatoraja が時刻 0 の 1.0 から変化させるのと同じく、beat 0 の `1` から最初の keyframe の値まで線形に変化します（beat 0 の keyframe はすぐに効きます。Bemuse は最初の値で一定にします）。`#SPEEDxx` の値が負数、非数、未定義参照の場合、その keyframe は描画計算から無視します。
 
 ### 負の BPM — LR2 逆スクロール
 

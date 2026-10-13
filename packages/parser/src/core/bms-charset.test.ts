@@ -23,6 +23,9 @@ describe('canonicalizeBmsCharset', () => {
   test('maps EUC-JP variants', () => {
     expect(canonicalizeBmsCharset('EUC-JP')).toBe('euc-jp');
     expect(canonicalizeBmsCharset('eucjp')).toBe('euc-jp');
+    expect(canonicalizeBmsCharset('EUC-KR')).toBe('euc-kr');
+    expect(canonicalizeBmsCharset('CP949')).toBe('euc-kr');
+    expect(canonicalizeBmsCharset('ks_c_5601-1987')).toBe('euc-kr');
   });
 
   test('maps Latin1 / Windows-1252 variants', () => {

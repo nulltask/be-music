@@ -1,6 +1,6 @@
 import type { TimingResolver } from '@be-music/audio-renderer/triggers';
 import { normalizeObjectKey, resolveBmsBase, type BeMusicJson } from '@be-music/json';
-import { parseBmsBga } from '@be-music/chart';
+import { parseBmsBga, type BgaTimelines } from '@be-music/chart';
 import { buildBgaTimelines, pickActiveBgaCue as pickActiveCoreBgaCue } from '@be-music/player/core/bga-timeline';
 
 export interface BgaCue {
@@ -17,7 +17,14 @@ export function buildBgaTimeline(
   chart: BeMusicJson,
   resolver: TimingResolver,
 ): { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } {
-  const timelines = buildBgaTimelines(chart, resolver);
+  return toBrowserBgaTimeline(buildBgaTimelines(chart, resolver));
+}
+
+/**
+ * The browser scenes' BGA cue lists from a chart's BGA timelines (`ResolvedChart.bga`): the base and POOR cues as is,
+ * and the two layer channels (`07` / `0A`) merged into one time-ordered layer.
+ */
+export function toBrowserBgaTimeline(timelines: BgaTimelines): { base: BgaCue[]; layer: BgaCue[]; poor: BgaCue[] } {
   const layer = [...timelines.layer, ...timelines.layer2]
     .sort((left, right) => left.seconds - right.seconds)
     .map(toBrowserBgaCue);

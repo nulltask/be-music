@@ -7,6 +7,9 @@ import {
   resolveChartImageAsset,
   resolveChartPlayVariant,
 } from './collection.ts';
+import { resolveChart } from '@be-music/chart';
+import { parseChart } from '@be-music/parser';
+import { preparePlaybackChart } from '@be-music/player/core/engine';
 import { DeferredDroppedFile } from './dropped-file.ts';
 import type { BeMusicEvent, BeMusicJson } from '../../../json/src/index.ts';
 import type { BrowserSongAssetEntry, BrowserSongAssetSource, BrowserSongEntry, LoadProgress } from './types.ts';
@@ -73,6 +76,37 @@ describe('loadSongCollectionFromFiles with deferred drop handles', () => {
     expect(collection.errors).toEqual([]);
     expect(collection.songs.map((song) => song.title)).toEqual(charts.map((_, index) => `Song ${index}`));
     expect(opened).not.toContain('Pack/S00/kick.wav');
+  });
+});
+
+describe('loadSongCollectionFromFiles note counts', () => {
+  const engineScorableNotes = (path: string, text: string): number =>
+    preparePlaybackChart(resolveChart(parseChart(text, path), { chartPath: path, inferBmsLnTypeWhenMissing: true }))
+      .scorableNotes.length;
+
+  test.each([
+    {
+      name: 'a FREE ZONE (channel 17 under 7 KEY) is not a scored note',
+      path: 'Song/free-zone.bms',
+      text: ['#BPM 120', '#00111:01', '#00116:01', '#00117:01', '#00118:01'].join('\n'),
+      expected: 3,
+    },
+    {
+      name: 'channel 17 is the 7th button of a .pms chart',
+      path: 'Song/nine.pms',
+      text: ['#BPM 120', '#00111:01', '#00117:01', '#00122:01'].join('\n'),
+      expected: 3,
+    },
+    {
+      name: 'mines and invisible notes are not scored, a long note counts once',
+      path: 'Song/mixed.bms',
+      text: ['#BPM 120', '#00111:01', '#001D2:01', '#00133:01', '#00154:0101'].join('\n'),
+      expected: 2,
+    },
+  ])('$name', async ({ path, text, expected }) => {
+    const collection = await loadSongCollectionFromFiles([makeFile(path, text)]);
+    expect(collection.songs[0]!.totalNotes).toBe(expected);
+    expect(engineScorableNotes(path, text)).toBe(expected);
   });
 });
 
@@ -270,9 +304,9 @@ describe('resolveChartPlayVariant', () => {
     expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bms', channels: ['11', '21', '25'] }))).toBe('10');
   });
 
-  test('a `.bme` chart without a 6 / 7 key column is completed to 7 / 14 KEY, as the engine and CLI do', () => {
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('14');
-    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('7');
+  test('a `.bme` chart without a 6 / 7 key column is 5 / 10 KEY, as the engine and CLI read it', () => {
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '21', '25'] }))).toBe('10');
+    expect(resolveChartPlayVariant(makeSong({ chartPath: 'Song/main.bme', channels: ['11', '16'] }))).toBe('5');
   });
 
   test('classifies the play from the resolved chart when one is given (lanes added by a `#RANDOM` branch count)', () => {

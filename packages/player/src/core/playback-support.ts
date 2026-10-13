@@ -1,15 +1,8 @@
-import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/audio-renderer/triggers';
+import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
 import { type PlayerInputCommand, type PlayerInputSignalBus } from './input-signal-bus.ts';
-import { type GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { type PlayerUiFramePayload, type PlayerUiSignalBus } from './ui-signal-bus.ts';
-
-type GaugeBearingSummary = {
-  gauge?: {
-    current: number;
-  };
-};
 
 type PauseablePlaybackClock = {
   nowMs: () => number;
@@ -64,63 +57,6 @@ export function createNoopPlaybackStateLogger(): PlaybackStateLogger {
     logLongNoteState: () => undefined,
     logResult: () => undefined,
   };
-}
-
-export function applyGaugeJudgeWithLogging(params: {
-  summary: GaugeBearingSummary;
-  applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
-  playbackStateLogger: PlaybackStateLogger;
-  seconds: number;
-  judge: GrooveGaugeJudgeKind;
-  reason?: string;
-}): void {
-  const { summary, applyGaugeJudge, playbackStateLogger, seconds, judge, reason = 'judge' } = params;
-  const previousGauge = summary.gauge?.current;
-  applyGaugeJudge(judge);
-  const nextGauge = summary.gauge?.current;
-  playbackStateLogger.logGaugeChange(seconds, {
-    reason,
-    judge,
-    delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
-  });
-}
-
-export function applyGaugeDeltaWithLogging(params: {
-  summary: GaugeBearingSummary;
-  applyGaugeDelta: (delta: number) => void;
-  playbackStateLogger: PlaybackStateLogger;
-  seconds: number;
-  delta: number;
-  reason: string;
-}): void {
-  const { summary, applyGaugeDelta, playbackStateLogger, seconds, delta, reason } = params;
-  const previousGauge = summary.gauge?.current;
-  applyGaugeDelta(delta);
-  const nextGauge = summary.gauge?.current;
-  if (previousGauge === nextGauge) {
-    return;
-  }
-  playbackStateLogger.logGaugeChange(seconds, {
-    reason,
-    delta: previousGauge !== undefined && nextGauge !== undefined ? nextGauge - previousGauge : undefined,
-  });
-}
-
-export function setLoggedComboValue(
-  playbackStateLogger: PlaybackStateLogger,
-  seconds: number,
-  value: number,
-  reason: string,
-  judge?: string,
-  channel?: string,
-): number {
-  playbackStateLogger.logComboChange(seconds, {
-    value,
-    reason,
-    judge,
-    channel,
-  });
-  return value;
 }
 
 export function createUiFramePublisher(params: {

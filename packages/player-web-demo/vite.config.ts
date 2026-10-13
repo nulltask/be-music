@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { readFile, realpath } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -5,6 +6,20 @@ import { defineConfig, type Plugin } from 'vite-plus';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 const repositoryDir = resolve(import.meta.dirname, '../..');
+
+/**
+ * Short source commit stamped into recorded play-logs (`recorder.build`). Workers Builds exposes the commit as
+ * `WORKERS_CI_COMMIT_SHA`; local builds ask git. Empty when neither is available (e.g. a source tarball).
+ */
+function resolveBuildCommit(): string {
+  const fromCi = process.env.WORKERS_CI_COMMIT_SHA;
+  if (fromCi !== undefined && fromCi.length > 0) return fromCi.slice(0, 8);
+  try {
+    return execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], { cwd: repositoryDir, encoding: 'utf8' }).trim();
+  } catch {
+    return '';
+  }
+}
 
 // `@ffmpeg/core` is a transitive dep of `@be-music/player-web`, so pnpm doesn't hoist it to the workspace root. Resolve
 // via the consumer package's `require` so we always find the real on-disk path regardless of pnpm's virtual-store
@@ -542,6 +557,9 @@ export default defineConfig({
       resolve(repositoryDir, 'packages/player-web/package.json'),
     ]),
   ],
+  define: {
+    __BE_MUSIC_BUILD__: JSON.stringify(resolveBuildCommit()),
+  },
   resolve: {
     alias: workspaceSubpathAliases,
   },
