@@ -83,7 +83,13 @@ export function makeChart(lines: readonly string[]): TestChart {
  */
 export function makePlaylog(
   chart: TestChart,
-  options: { noteCount: number; hits: number; skip?: number; play?: Partial<BeMusicPlaylog['play']> },
+  options: {
+    noteCount: number;
+    hits: number;
+    skip?: number;
+    play?: Partial<BeMusicPlaylog['play']>;
+    chart?: Partial<BeMusicPlaylog['chart']>;
+  },
 ): BeMusicPlaylog {
   const skip = options.skip ?? 0;
   const notes: PlaylogNote[] = [];
@@ -111,6 +117,7 @@ export function makePlaylog(
       notes,
       chartFingerprint: chart.chartFingerprint,
       playFingerprint: chart.playFingerprint,
+      ...options.chart,
     },
     inputs,
     play: { mode: 'manual', autoScratch: false, gauge: 'EASY', judgeRuleset: 'lr2', ...options.play },
