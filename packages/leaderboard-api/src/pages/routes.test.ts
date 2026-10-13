@@ -242,10 +242,11 @@ describe('Leaderboard pages', () => {
     expect(setCookie).toContain('Path=/leaderboard');
     const cookie = setCookie.split(';')[0]!;
 
-    // Every page now reads beatoraja: the header switch marks it, the score page marks it as shown.
+    // Every page now reads beatoraja: the header's ruleset menu names and ticks it, the score page selects it.
     const top = await page('/leaderboard', cookie);
     expect(top.html).toContain('scored under beatoraja');
-    expect(top.html).toMatch(/data-variant="primary" aria-current="true"[^>]*>beatoraja</);
+    expect(top.html).toContain('aria-label="Scoring rules: beatoraja rules"');
+    expect(top.html).toMatch(/href="\/leaderboard\/ruleset\/beatoraja[^"]*" aria-current="true"/);
     const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
     expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>selected<\/span>/);
     expect(score.html).toContain('>played with</span>');
