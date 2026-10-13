@@ -2,8 +2,9 @@
 
 # Leaderboard 設計
 
-> ステータス: 設計段階。このドキュメントの内容はまだ何も実装されていません。これまでに決めたことと、まだ決まって
-> いないこと（15 章）を記録し、実装を 1 か所から始められるようにするためのものです。
+> ステータス: P0 の中核は [`packages/leaderboard-api`](../packages/leaderboard-api/README.ja.md) に実装済みです（認証、
+> 検証の層 L1〜L3 付きの送信（`#RANDOM` のない譜面では L4 も）、3 つのルールセットでの再計算、ランキングの API）。
+> それ以外はまだ設計段階です。このドキュメントは、これまでに決めたことと、まだ決まっていないこと（15 章）を記録します。
 
 Leaderboard は be-music のオンラインのスコアランキングで、LR2 や beatoraja が「IR」（Internet Ranking）と呼ぶ
 ものにあたります。このリポジトリでは「IR」を JSON の中間表現（`@be-music/json`）の意味で使っているので、
@@ -140,7 +141,7 @@ sequenceDiagram
 
     P->>C: プレイ終了
     C->>C: プレイログ (chartFingerprint, playFingerprint, randomOutcomes)<br/>+ play document、OG カードの PNG
-    C->>C: submissionId = sha256(プレイログ)<br/>IndexedDB のキューに保存
+    C->>C: プレイログを IndexedDB のキューに保存
     C->>A: POST /api/v1/scores (gzip)<br/>セッション Cookie か bearer、Idempotency-Key
     A->>A: セッションを確認 (ログイン済みか匿名)
     A->>RL: limit(ユーザーか端末)
@@ -148,9 +149,11 @@ sequenceDiagram
         A-->>C: 429 Retry-After
     end
     A->>A: サイズ上限 → gunzip → parsePlaylog / Valibot
-    A->>D: submission_id は保存済み?
-    alt 再送
+    A->>D: submission_id = sha256(play fingerprint、スコアに効く設定、入力列) は保存済み?
+    alt 同じプレイヤーの再送
         A-->>C: 200 保存済みの結果を返す
+    else 別のアカウントからの同じプレイ
+        A-->>C: 409 play_already_submitted
     end
     A->>A: 対象判定: オートプレイ → 422、ESC 中断 → 422、アシスト → フラグ
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
@@ -179,8 +182,10 @@ sequenceDiagram
     C->>P: リザルト画面に順位と自己ベスト更新を表示
 ```
 
-- **冪等性。** `submissionId` はプレイログのハッシュなので、再送しても同じプレイが二重に保存されることはありません。
-  送信に失敗した分は IndexedDB に残り、次の起動時かログイン時に送り直します。
+- **冪等性。** 送信 ID はログ全体ではなく、プレイを特定するもの（play fingerprint、スコアに効く設定、入力列）の
+  ハッシュです。ログの日時を書き換えて再送しても、同じプレイが二重に保存されることはありません。同じプレイが別の
+  アカウントから届いたら、コピーされたリプレイとして拒否します。送信に失敗した分は IndexedDB に残り、次の起動時か
+  ログイン時に送り直します。
 - **chart document は譜面ごとに 1 回だけ送ります。** 2 人目以降は play document だけを送ります。
 - **結果の組み立ては play fingerprint ごとに 1 回だけです。** 制御構文のない譜面は chart fingerprint と play
   fingerprint が等しいので、この手順を省きます。
