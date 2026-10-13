@@ -89,10 +89,18 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 | 本番    | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo`（`devel` からデプロイ） |
 | preview | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | それ以外のブランチのプレビュー版               |
 
-- preview: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:preview && pnpm --filter @be-music/leaderboard-api run deploy:preview`
-- 本番: 同じ手順を `db:migrate:production` と `deploy` で
+`packages/leaderboard-api/`、`packages/player/`、`packages/chart/`、`pnpm-lock.yaml` のいずれかに触れる push のたびに、
+Workers Builds がデプロイします。ビルドは Node 26.7.0（トリガーの `NODE_VERSION`）でワークスペースをインストールし、
+その環境の D1 にマイグレーションを適用してからデプロイします。
 
-preview の Worker は全ブランチで共有します。最後にデプロイしたブランチが反映されます。
+| ブランチ | トリガーを持つ Worker          | デプロイコマンド                                         |
+| -------- | ------------------------------ | -------------------------------------------------------- |
+| `devel`  | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
+| それ以外 | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
+
+Workers Builds はトリガーを持つ Worker にしかデプロイできないため、環境ごとの Worker にそれぞれトリガーがあります。
+preview の Worker は全ブランチで共有し、最後に push したブランチが反映されます。手動でデプロイするときは、この
+パッケージで同じコマンドを実行します。
 
 この Worker は公開 URL を持ちません。プレイヤーの Worker が `/api/*` と `/leaderboard/*` を Service Binding で
 転送します。

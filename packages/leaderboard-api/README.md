@@ -100,10 +100,18 @@ preview.
 | production  | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo` (deployed from `devel`) |
 | preview     | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | preview versions of every other branch         |
 
-- preview: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:preview && pnpm --filter @be-music/leaderboard-api run deploy:preview`
-- production: the same with `db:migrate:production` and `deploy`
+Workers Builds deploys on every push that touches `packages/leaderboard-api/`, `packages/player/`, `packages/chart/` or
+`pnpm-lock.yaml`. Each build installs the workspace on Node 26.7.0 (the trigger's `NODE_VERSION`), applies the
+migrations to the environment's D1, then deploys:
 
-The preview Worker is shared by every branch: the last one deployed wins.
+| Branch           | Worker the trigger belongs to  | Deploy command                                           |
+| ---------------- | ------------------------------ | -------------------------------------------------------- |
+| `devel`          | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
+| any other branch | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
+
+Workers Builds deploys only to the Worker its trigger belongs to, so each environment's Worker has its own trigger.
+The preview Worker is shared by every branch: the last one pushed wins. To deploy by hand, run the same commands in
+this package.
 
 The Worker has no public URL; the player's Worker forwards `/api/*` and `/leaderboard/*` to it through a Service
 Binding.
