@@ -34,25 +34,57 @@ export function Lamp(props: { lamp: number }) {
   );
 }
 
-/** A toggle that links to the same page with one query flag flipped. */
-export function FilterChip(props: { label: string; on: boolean; href: string }) {
+/**
+ * An on/off switch for a filter: a link to the same page with one query flag flipped. It looks like a switch (a track
+ * with a knob) rather than a button, so its state reads at a glance, and says so to assistive technology.
+ */
+export function Toggle(props: { label: string; on: boolean; href: string; description?: string }) {
   return (
     <a
-      class="btn"
-      data-size="sm"
-      data-variant={props.on ? 'secondary' : 'outline'}
-      aria-pressed={props.on ? 'true' : 'false'}
+      role="switch"
+      aria-checked={props.on ? 'true' : 'false'}
       href={props.href}
+      title={props.description}
+      class={`inline-flex items-center gap-2 rounded-md py-1 text-sm transition-colors ${props.on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
     >
-      {props.on ? '✓ ' : ''}
+      <span
+        class={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${props.on ? 'bg-primary' : 'bg-muted-foreground/35'}`}
+      >
+        <span
+          class={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${props.on ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`}
+        />
+      </span>
       {props.label}
     </a>
   );
 }
 
-/** A row of filter toggles. */
+/** One choice among a few, as joined buttons (the scoring rules, a chart's files). */
+export function Segmented(props: {
+  label: string;
+  options: Array<{ label: Child; href: string; current: boolean; title?: string }>;
+}) {
+  return (
+    <div class="button-group flex-wrap" role="group" aria-label={props.label}>
+      {props.options.map((option) => (
+        <a
+          class="btn"
+          data-size="sm"
+          data-variant={option.current ? 'primary' : 'outline'}
+          aria-current={option.current ? 'true' : undefined}
+          href={option.href}
+          title={option.title}
+        >
+          {option.label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+/** A row of filter switches. */
 export function Filters(props: { children: Child }) {
-  return <div class="flex flex-wrap gap-2">{props.children}</div>;
+  return <div class="flex flex-wrap items-center gap-x-5 gap-y-2">{props.children}</div>;
 }
 
 /** A bordered frame around a table, scrolling sideways on narrow screens. */
@@ -117,5 +149,17 @@ export function LocalTime(props: { at: number; precision?: 'minute' | 'day'; com
     <time datetime={new Date(props.at).toISOString()} data-local={precision} title={utc}>
       {text}
     </time>
+  );
+}
+
+/** A section's heading with an optional note at its end (a count, a hint), on one baseline. */
+export function SectionHeading(props: { id?: string; children: Child; note?: Child }) {
+  return (
+    <div class="flex items-baseline justify-between gap-3">
+      <h2 id={props.id} class="text-base font-semibold tracking-tight">
+        {props.children}
+      </h2>
+      {props.note !== undefined ? <span class="text-muted-foreground text-xs">{props.note}</span> : null}
+    </div>
   );
 }

@@ -10,7 +10,11 @@ import {
   type TestChart,
 } from '../test/support.ts';
 import { createApp } from './app.ts';
+import { eq } from 'drizzle-orm';
 import { openDatabase } from './db/client.ts';
+import { score } from './db/schema.ts';
+import { loadChartFiles, loadPlayRanking } from './ranking-plays.ts';
+import { backfillPlayedFiles } from './scores/backfill.ts';
 import type { Env } from './env.ts';
 import { ClearLamp } from './scoring/lamp.ts';
 
@@ -102,6 +106,16 @@ describe('POST /api/v0/scores', () => {
     expect(playlog.chart.chartFingerprint).toBe(chart.chartFingerprint);
     expect(await env.BLOBS.head(`charts/${chart.chartFingerprint}.json`)).not.toBeNull();
 
+    // The play's length is kept: to the last input, 50 ms after the tenth note at 5.5 s.
+    const db = openDatabase(env.DB);
+    const stored0 = await db.query.score.findFirst({ where: (row, { eq }) => eq(row.id, body.scoreId) });
+    expect(stored0?.durationMs).toBe(5_550);
+    // A play stored before lengths were kept gets it back from its play log.
+    await db.update(score).set({ durationMs: null }).where(eq(score.id, body.scoreId));
+    expect(await backfillPlayedFiles(db, env.BLOBS)).toBeGreaterThanOrEqual(1);
+    const backfilled = await db.query.score.findFirst({ where: (row, { eq }) => eq(row.id, body.scoreId) });
+    expect(backfilled?.durationMs).toBe(5_550);
+
     // Sending the same play log again returns the stored play instead of a second one.
     const again = await submitPlay(cookie, chart, 10);
     expect(again.status).toBe(200);
@@ -188,6 +202,55 @@ describe('rankings', () => {
       },
     );
     expect(await me.json()).toMatchObject({ rank: 2, players: 3, exScore: 12, playCount: 1 });
+  });
+
+  test('ranks every play, or the plays of one chart file, from the plays themselves', async () => {
+    const fileChart = makeChart(['#00111:01010101', '#00211:01010101', '#00611:01', '#00711:01']);
+    const [first, second] = [await signInAnonymously(fetchApp), await signInAnonymously(fetchApp)];
+    const fileA = 'a'.repeat(64);
+    const fileB = 'b'.repeat(64);
+    const play = (cookie: string, hits: number, sha256: string) =>
+      submit(
+        cookie,
+        submissionBody(
+          makePlaylog(fileChart, { noteCount: 10, hits, chart: { sha256, md5: sha256.slice(0, 32) } }),
+          fileChart.playDocument,
+          fileChart.chartDocument,
+        ),
+      );
+    expect((await play(first, 10, fileA)).status).toBe(201);
+    expect((await play(first, 8, fileB)).status).toBe(201);
+    expect((await play(second, 9, fileA)).status).toBe(201);
+
+    const db = openDatabase(env.DB);
+    const filter = {
+      chartFingerprint: fileChart.chartFingerprint,
+      ruleset: 'lr2' as const,
+      assisted: false,
+      includeAnonymous: true,
+      playedHereOnly: false,
+    };
+    const page = { offset: 0, limit: 10 };
+
+    // Every play on its own row: the first player twice.
+    const every = await loadPlayRanking(db, filter, { everyPlay: true }, page);
+    expect(every.entries.map((entry) => [entry.rank, entry.exScore])).toEqual([
+      [1, 20],
+      [2, 18],
+      [3, 16],
+    ]);
+    expect(every).toMatchObject({ players: 2, plays: 3 });
+    expect(every.entries[0]!.playCount).toBe(2);
+
+    // One file: each player's best play of it.
+    const onlyB = await loadPlayRanking(db, filter, { everyPlay: false, fileSha256: fileB }, page);
+    expect(onlyB.entries.map((entry) => entry.exScore)).toEqual([16]);
+    expect(onlyB).toMatchObject({ players: 1, plays: 1 });
+
+    expect(await loadChartFiles(db, fileChart.chartFingerprint)).toEqual([
+      { sha256: fileA, md5: fileA.slice(0, 32), plays: 2, players: 2 },
+      { sha256: fileB, md5: fileB.slice(0, 32), plays: 1, players: 1 },
+    ]);
   });
 
   test('ranks assisted plays apart from unassisted ones', async () => {

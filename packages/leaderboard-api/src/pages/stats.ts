@@ -1,8 +1,8 @@
-import { and, count, countDistinct, desc, eq, max, min, type SQL } from 'drizzle-orm';
+import { and, count, countDistinct, desc, eq, max, min, sql, type SQL } from 'drizzle-orm';
 import { computeScoreRate, IIDX_RANK_LABELS, type IidxRankLabel } from '@be-music/player/core/scoring';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
-import { bestScore, chart, score, user } from '../db/schema.ts';
+import { bestScore, chart, score, scoreResult, user } from '../db/schema.ts';
 import { filterConditions, type RankingFilter } from '../ranking.ts';
 import { djLevel, LAMP_STYLES } from './format.ts';
 
@@ -109,11 +109,32 @@ export interface PlayerStats {
   /** DJ Ranks of the best EX-Scores per chart under the display ruleset, unassisted. */
   djRanks: Distribution<DjRank>;
   averageRate: number | null;
+  /** Time spent playing, summed over every play (plays older than the recorded length count once backfilled). */
+  playTimeMs: number;
+  /** Notes played under the display ruleset, and how each was judged. */
+  notes: number;
+  judges: JudgeTotals;
 }
+
+/** Judgment counts summed over plays; `emptyPoor` counts presses that hit no note (空POOR). */
+export interface JudgeTotals {
+  pgreat: number;
+  great: number;
+  good: number;
+  bad: number;
+  poor: number;
+  emptyPoor: number;
+}
+
+export const JUDGE_KEYS = ['pgreat', 'great', 'good', 'bad', 'poor', 'emptyPoor'] as const satisfies ReadonlyArray<
+  keyof JudgeTotals
+>;
 
 /** A player's play counts and the spread of their bests under one ruleset. */
 export async function loadPlayerStats(db: Database, userId: string, ruleset: PlaylogRulesetId): Promise<PlayerStats> {
-  const [[plays], byRuleset, bests] = await Promise.all([
+  const judgeSum = (key: keyof JudgeTotals) =>
+    sql<number | null>`sum(json_extract(${scoreResult.judges}, ${`$.${key}`}))`;
+  const [[plays], byRuleset, bests, [totals]] = await Promise.all([
     db
       .select({
         plays: count(),
@@ -134,7 +155,17 @@ export async function loadPlayerStats(db: Database, userId: string, ruleset: Pla
       .from(bestScore)
       .innerJoin(chart, eq(chart.chartFingerprint, bestScore.chartFingerprint))
       .where(and(eq(bestScore.userId, userId), eq(bestScore.ruleset, ruleset), eq(bestScore.assisted, false))),
+    db
+      .select({
+        playTimeMs: sql<number | null>`sum(${score.durationMs})`,
+        notes: sql<number | null>`sum(${scoreResult.noteCount})`,
+        ...Object.fromEntries(JUDGE_KEYS.map((key) => [key, judgeSum(key)])),
+      })
+      .from(score)
+      .innerJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, ruleset)))
+      .where(eq(score.userId, userId)),
   ]);
+  const totalOf = (value: unknown) => Number(value ?? 0);
   return {
     plays: plays?.plays ?? 0,
     charts: plays?.charts ?? 0,
@@ -144,5 +175,10 @@ export async function loadPlayerStats(db: Database, userId: string, ruleset: Pla
     lamps: lampDistribution(bests.map((best) => ({ lamp: best.lamp, count: 1 }))),
     djRanks: djRankDistribution(bests),
     averageRate: averageRate(bests),
+    playTimeMs: totalOf(totals?.playTimeMs),
+    notes: totalOf(totals?.notes),
+    judges: Object.fromEntries(
+      JUDGE_KEYS.map((key) => [key, totalOf((totals as Record<string, unknown> | undefined)?.[key])]),
+    ) as unknown as JudgeTotals,
   };
 }
