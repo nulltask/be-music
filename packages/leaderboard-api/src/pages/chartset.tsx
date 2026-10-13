@@ -8,9 +8,11 @@ import { meta, notFound, PAGE_CACHE, type PageContext } from './page.tsx';
 /** A chartset: the charts of one work, the original package's and the add-ons, as BMS Search files them. */
 export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>) {
   const db = openDatabase(c.env.DB);
-  const found = await loadChartset(db, c.req.param('id'));
+  const [found, charts] = await Promise.all([
+    loadChartset(db, c.req.param('id')),
+    loadChartsetCharts(db, c.req.param('id')),
+  ]);
   if (found === undefined) return notFound(c, 'This chartset');
-  const charts = await loadChartsetCharts(db, found.id);
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout

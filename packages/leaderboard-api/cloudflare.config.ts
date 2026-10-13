@@ -19,6 +19,9 @@ export default defineConfig(({ mode }) => {
       workersDev: false,
       previewUrls: false,
       observability: { enabled: true },
+      // Run next to D1 rather than next to the visitor: a page makes several queries, each a round trip to the
+      // database, while the player's Worker reaches this one once per request through the Service Binding.
+      placement: { mode: 'smart' },
       // Hourly: ask BMS Search which work new and stale charts belong to (src/chartsets/refresh.ts).
       triggers: [triggers.scheduled({ schedule: '17 * * * *' })],
       env: {

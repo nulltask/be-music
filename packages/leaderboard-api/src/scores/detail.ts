@@ -5,22 +5,24 @@ import { byRulesetOrder } from '../rulesets.ts';
 
 /** One play with its chart, its player (null when the profile is gone) and its figures under every ruleset. */
 export async function loadScoreDetail(db: Database, scoreId: string) {
-  const [row] = await db
-    .select({
-      score,
-      chart,
-      handle: profile.handle,
-      displayName: profile.displayName,
-      anonymous: user.isAnonymous,
-      avatarKey: profile.avatarKey,
-    })
-    .from(score)
-    .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
-    .leftJoin(user, eq(user.id, score.userId))
-    .leftJoin(profile, eq(profile.userId, score.userId))
-    .where(eq(score.id, scoreId));
+  const [[row], results] = await Promise.all([
+    db
+      .select({
+        score,
+        chart,
+        handle: profile.handle,
+        displayName: profile.displayName,
+        anonymous: user.isAnonymous,
+        avatarKey: profile.avatarKey,
+      })
+      .from(score)
+      .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
+      .leftJoin(user, eq(user.id, score.userId))
+      .leftJoin(profile, eq(profile.userId, score.userId))
+      .where(eq(score.id, scoreId)),
+    db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId)),
+  ]);
   if (row === undefined) return undefined;
-  const results = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId));
   const player =
     row.handle !== null && row.displayName !== null
       ? {

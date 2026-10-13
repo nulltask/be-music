@@ -22,14 +22,16 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
     return notFound(c, 'This player');
   }
   const ruleset = displayRuleset(c);
-  const stats = await loadPlayerStats(db, player.userId, ruleset);
-  const scores = await loadRecentScores(db, {
-    limit: RECENT_LIMIT,
-    ruleset,
-    includeAnonymous: true,
-    includeUnlisted: true,
-    handle: player.handle,
-  });
+  const [stats, scores] = await Promise.all([
+    loadPlayerStats(db, player.userId, ruleset),
+    loadRecentScores(db, {
+      limit: RECENT_LIMIT,
+      ruleset,
+      includeAnonymous: true,
+      includeUnlisted: true,
+      handle: player.handle,
+    }),
+  ]);
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout
