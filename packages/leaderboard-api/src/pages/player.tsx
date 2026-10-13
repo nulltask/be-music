@@ -2,9 +2,9 @@
 import { openDatabase } from '../db/client.ts';
 import { RecentScoresTable } from './components/tables.tsx';
 import { Details, DistributionCard, LampLegend, Stats } from './components/cards.tsx';
-import { Avatar, Tag } from './components/basics.tsx';
+import { Avatar, LocalTime, Tag } from './components/basics.tsx';
 import { loadPlayer, loadPlayInfos, loadRecentScores } from './data.ts';
-import { formatPercent, formatTimestamp, RULESET_LABELS } from './format.ts';
+import { formatPercent, RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { day, displayRuleset, meta, notFound, PAGE_CACHE, RECENT_LIMIT, when, type PageContext } from './page.tsx';
 import { loadPlayerStats } from './stats.ts';
@@ -73,7 +73,7 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
       <Details
         title="Player"
         rows={[
-          ['Joined', formatTimestamp(player.joinedAt)],
+          ['Joined', <LocalTime at={player.joinedAt} />],
           ['First play', when(stats.firstPlayedAt)],
           [
             'Played under',

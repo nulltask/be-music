@@ -4,8 +4,7 @@ import type { Context } from 'hono';
 import type { Child } from 'hono/jsx';
 import { getCookie } from 'hono/cookie';
 import type { AppEnv } from '../app.ts';
-import { chartsetHref } from './components/basics.tsx';
-import { formatTimestamp } from './format.ts';
+import { chartsetHref, LocalTime } from './components/basics.tsx';
 import { Layout, PageHeader, type Crumb, type PageMeta } from './layout.tsx';
 import { RULESET_COOKIE, resolveDisplayRuleset } from './preferences.ts';
 
@@ -31,10 +30,10 @@ export const withArtist = (artist: string | null): string =>
 
 /** A day for a figure tile (the full time on hover), or `-` when there is none. */
 export const day = (epochMs: number | null): Child =>
-  epochMs === null ? '-' : <time title={formatTimestamp(epochMs)}>{formatTimestamp(epochMs).slice(0, 10)}</time>;
+  epochMs === null ? '-' : <LocalTime at={epochMs} precision="day" />;
 
 /** A timestamp, or `-` when there is none. */
-export const when = (epochMs: number | null): string => (epochMs === null ? '-' : formatTimestamp(epochMs));
+export const when = (epochMs: number | null): Child => (epochMs === null ? '-' : <LocalTime at={epochMs} />);
 
 /** The breadcrumb of a chart's chartset, when it is filed under one. */
 export const chartsetCrumbs = (filed: { id: string; title: string } | undefined): Crumb[] =>

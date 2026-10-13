@@ -4,9 +4,9 @@ import { openDatabase } from '../db/client.ts';
 import { loadScoreDetail } from '../scores/detail.ts';
 import { ResultsTable } from './components/tables.tsx';
 import { Details, LampLegend } from './components/cards.tsx';
-import { chartHref, playerHref, Tag } from './components/basics.tsx';
+import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
-import { chartTitle, formatTimestamp, RULESET_LABELS } from './format.ts';
+import { chartTitle, RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { displayRuleset, meta, notFound, PAGE_CACHE, withArtist, type PageContext, chartsetCrumbs } from './page.tsx';
 
@@ -53,7 +53,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
       <Details
         title="Play"
         rows={[
-          ['Played', formatTimestamp(detail.score.createdAt.getTime())],
+          ['Played', <LocalTime at={detail.score.createdAt.getTime()} />],
           ['Gauge', detail.score.gauge],
           ['Assists', detail.score.assisted ? detail.score.assistFlags.join(', ') : 'none'],
           ['Verification', detail.score.verification],
