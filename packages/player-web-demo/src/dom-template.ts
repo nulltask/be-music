@@ -234,6 +234,22 @@ export const DEMO_APP_HTML = `
       </form>
     </dialog>
     <!--
+      "Use this skin?" — asked after a drop whose folder carried an LR2 or
+      beatoraja skin. Filled and opened by \`askSkinOffer\` (skin-offer.ts).
+    -->
+    <dialog class="account-dialog" id="skin-offer" aria-labelledby="skin-offer-title">
+      <div class="account-dialog-body">
+        <header>
+          <h2 id="skin-offer-title">Use this skin?</h2>
+          <p data-skin-offer-message></p>
+        </header>
+        <footer>
+          <button type="button" class="account-dialog-quiet" data-skin-offer-decline>Not now</button>
+          <span class="account-dialog-buttons" data-skin-offer-choices></span>
+        </footer>
+      </div>
+    </dialog>
+    <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
       bar below moves between "indeterminate" (CSS animation) and
