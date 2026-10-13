@@ -112,12 +112,17 @@ Binding.
 
 The pages under `/leaderboard` are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
 shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
-which is committed and served from `/leaderboard/assets/app.<hash>.css`. After changing classes in the pages, rebuild
-it:
+served from `/leaderboard/assets/app.<hash>.css`.
+
+The stylesheet, the icons and the client script (`src/pages/*.generated.ts`) are generated, not kept in git.
+`pnpm install`, `dev`, the deploys and the tests generate them; after changing the pages' classes, the icons or
+`client/` while `cf dev` runs, regenerate them:
 
 ```bash
-pnpm --filter @be-music/leaderboard-api run build:css
+pnpm --filter @be-music/leaderboard-api run generate
 ```
+
+`build:css`, `build:icons` and `build:client` run one step each.
 
 ### Icons
 
@@ -128,7 +133,7 @@ web app manifest icons (192 / 512 px) are rendered from it. To change the icon, 
 pnpm --filter @be-music/leaderboard-api run build:icons
 ```
 
-The icons are compiled into `src/pages/icons.generated.ts` (committed) and served from
+The icons are compiled into `src/pages/icons.generated.ts` and served from
 `/leaderboard/assets/<name>.<hash>.<ext>`, next to `/leaderboard/manifest.webmanifest`. A hand-made PNG placed next to
 the SVG (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`) is used instead of its rendered one.
 
