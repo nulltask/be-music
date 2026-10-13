@@ -2,7 +2,6 @@
 import { openDatabase } from '../db/client.ts';
 import { isOn } from '../http/query.ts';
 import { RecentScoresList } from './components/lists.tsx';
-import { LampLegend } from './components/cards.tsx';
 import { Filters, Toggle } from './components/basics.tsx';
 import { loadPlayInfos, loadRecentScores } from './data.ts';
 import { rulesetName } from './format.ts';
@@ -53,7 +52,6 @@ export async function topPage(c: PageContext) {
             : 'Plays show up once their player creates a passkey — turn on “Anonymous players” to see the rest.'
         }
       />
-      <LampLegend />
     </Layout>,
   );
 }

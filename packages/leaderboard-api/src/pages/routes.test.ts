@@ -54,6 +54,27 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('about and help pages', () => {
+  test('explains the scoring and is linked from the header of every page', async () => {
+    const about = await page('/leaderboard/about');
+    expect(about.status).toBe(200);
+    expect(about.html).toContain('How a play is scored');
+    expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
+    expect((await page('/leaderboard')).html).toContain('href="/leaderboard/about"');
+  });
+
+  test('the help page gathers the lamp legend and the terms, and is linked from the header', async () => {
+    const help = await page('/leaderboard/help');
+    expect(help.status).toBe(200);
+    for (const id of ['lamps', 'scores', 'judgments', 'rules', 'verification'])
+      expect(help.html).toContain(`id="${id}"`);
+    expect(help.html).toContain('EX HARD CLEAR');
+    const top = await page('/leaderboard');
+    expect(top.html).toContain('href="/leaderboard/help"');
+    expect(top.html).not.toContain('What the clear lamps mean');
+  });
+});
+
 describe('site icons', () => {
   test('every page links the icons, which are served with their types, and the manifest lists them', async () => {
     const top = await page('/leaderboard');
@@ -115,18 +136,21 @@ describe('Leaderboard pages', () => {
     expect(before.cacheControl).toBe('private, max-age=0');
 
     // Once a player keeps their account (what registering a passkey does), their play shows, on a chart that is not
-    // listed yet (one player so far) and so is tagged as new.
+    // listed yet (one player so far), with its place among the players who count.
     const db = openDatabase(env.DB);
     await claimAccount(db, await userIdOf(alice));
     const one = await page('/leaderboard');
     expect(one.html.match(/\/leaderboard\/scores\//g)).toHaveLength(1);
-    expect(one.html).toContain('new chart');
+    expect(one.html).not.toContain('new chart');
+    expect(one.html).toContain('#1 / 1');
 
-    // A second such player lists the chart, so the tag goes.
+    // A second such player lists the chart and ranks below the first.
     await claimAccount(db, await userIdOf(bob));
     const listed = await page('/leaderboard/');
     expect(listed.html.match(/\/leaderboard\/scores\//g)).toHaveLength(2);
-    expect(listed.html).not.toContain('new chart');
+    expect(listed.html).toContain('#1 / 2');
+    expect(listed.html).toContain('#2 / 2');
+    expect(listed.html).toContain('played with LR2 rules');
     // Player-controlled text is escaped, never rendered as markup.
     expect(listed.html).not.toContain(evil);
     expect(listed.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -142,7 +166,39 @@ describe('Leaderboard pages', () => {
     expect((await page('/leaderboard')).html).not.toContain('Only Carol');
     const withAnonymous = await page('/leaderboard?anonymous=1');
     expect(withAnonymous.html).toContain('Only Carol');
-    expect(withAnonymous.html).toContain('new chart');
+    expect(withAnonymous.html).toContain('#1 / 1');
+  });
+
+  test('a play shows what it changed on the player’s best, and the chart’s mode and level', async () => {
+    const levelled = makeChart(['#00111:0101', '#00211:01010101']);
+    const dave = await signInAnonymously(fetchApp);
+    await claimAccount(openDatabase(env.DB), await userIdOf(dave));
+    const playlog = makePlaylog(levelled, { noteCount: 10, hits: 3 });
+    playlog.chart.title = 'Dave Song';
+    playlog.chart.playLevel = '12';
+    playlog.chart.difficulty = 4;
+    playlog.play.randomLane = { p1: 'RANDOM' };
+    const first = await fetchApp('/api/v0/scores', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie: dave },
+      body: submissionBody(playlog, levelled.playDocument, levelled.chartDocument),
+    });
+    expect(first.status).toBe(201);
+    const firstView = await page('/leaderboard');
+    // The row's text, up to the next row.
+    const rowText = (html: string) => {
+      const from = html.slice(html.indexOf('Dave Song'));
+      return from.slice(0, from.indexOf('</li>')).replace(/<[^>]+>/g, ' ');
+    };
+    const firstRow = rowText(firstView.html);
+    expect(firstRow).toContain('7K ☆12');
+    expect(firstRow).toContain('RANDOM');
+    expect(firstRow).not.toMatch(/\+\d+/);
+
+    // A better play: its row carries the EX-Score gained over the earlier best.
+    await submit(dave, levelled, 8, 'Dave Song');
+    const better = await page('/leaderboard');
+    expect(rowText(better.html)).toMatch(/\+\d+/);
   });
 
   test('the score, chart and player pages render with their sharing tags', async () => {
@@ -160,8 +216,10 @@ describe('Leaderboard pages', () => {
     expect(ranking.html).toContain('2 players');
     // Ranked by EX score: 18 (nine PGREATs) above 8.
     // EX-Score over its rate: ten notes make a maximum of 20.
-    expect(ranking.html.indexOf('>18</div><div class="text-muted-foreground text-xs">90.00%<')).toBeGreaterThan(0);
-    expect(ranking.html.indexOf('>90.00%<')).toBeLessThan(ranking.html.indexOf('>40.00%<'));
+    // The EX-Score sits over its DJ LEVEL and rate.
+    expect(ranking.html).toMatch(/>18<\/span><\/div><div class="[^"]*">.*?>AAA<\/span> 90\.00%</);
+    expect(ranking.html.indexOf(' 90.00%<')).toBeLessThan(ranking.html.indexOf(' 40.00%<'));
+    expect(ranking.html.indexOf(' 40.00%<')).toBeGreaterThan(0);
     // A row opens the play it shows, and its info icon opens the play's details.
     expect(ranking.html).toContain('aria-label="Play of');
     // The filters are switches, and say whether they are on.
@@ -205,12 +263,14 @@ describe('Leaderboard pages', () => {
     expect(setCookie).toContain('Path=/leaderboard');
     const cookie = setCookie.split(';')[0]!;
 
-    // Every page now reads beatoraja: the header switch marks it, the score page marks it as shown.
+    // Every page now reads beatoraja: the header's ruleset menu names and ticks it, the score page selects it.
     const top = await page('/leaderboard', cookie);
     expect(top.html).toContain('scored under beatoraja');
-    expect(top.html).toMatch(/data-variant="primary" aria-current="true"[^>]*>beatoraja</);
+    expect(top.html).toContain('aria-label="Scoring rules: beatoraja rules"');
+    expect(top.html).toMatch(/href="\/leaderboard\/ruleset\/beatoraja[^"]*" aria-current="true"/);
     const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
-    expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>shown<\/span>/);
+    expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>selected<\/span>/);
+    expect(score.html).toContain('>played with</span>');
     // Without the cookie, LR2.
     expect((await page('/leaderboard')).html).toContain('scored under LR2');
 

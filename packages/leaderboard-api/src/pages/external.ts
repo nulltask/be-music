@@ -12,6 +12,8 @@ export interface ExternalLink {
   kind: 'chart' | 'search';
   /** The file hash the link is keyed by, so variants of one chart can be told apart. */
   hash?: string;
+  /** For an MD5-keyed link, the SHA-256 of the same file when the plays tell which file that MD5 belongs to. */
+  file?: string;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;
@@ -34,16 +36,31 @@ const BY_MD5: ReadonlyArray<{ name: string; url: (md5: string) => string }> = [
  * Links to the chart on other sites, one set per known file (one chart fingerprint can cover several files: re-saves,
  * re-encodes). Mocha-Repository, MinIR and BMS Search look a chart up by the file's SHA-256, the LR2IR archive
  * (lr2ir.com) by its MD5. Malformed hashes are skipped. When no hash is known at all, BMS
- * Search still gets a search for the title.
+ * Search still gets a search for the title. `files` pairs each MD5 with the SHA-256 of the same file (from the plays),
+ * so a file's links can be shown together.
  */
-export function externalLinks(chart: { title: string | null }, aliases: readonly ChartAlias[]): ExternalLink[] {
+export function externalLinks(
+  chart: { title: string | null },
+  aliases: readonly ChartAlias[],
+  files: ReadonlyArray<{ sha256: string; md5: string | null }> = [],
+): ExternalLink[] {
+  const sha256OfMd5 = new Map(
+    files.flatMap((file) => (file.md5 === null ? [] : [[file.md5.toLowerCase(), file.sha256.toLowerCase()] as const])),
+  );
   const links: ExternalLink[] = [];
   for (const alias of aliases) {
     const hash = alias.hash.toLowerCase();
     const sites =
       alias.kind === 'sha256' && SHA256.test(hash) ? BY_SHA256 : alias.kind === 'md5' && MD5.test(hash) ? BY_MD5 : [];
     for (const site of sites) {
-      links.push({ name: site.name, url: site.url(hash), kind: 'chart', hash });
+      const file = alias.kind === 'md5' ? sha256OfMd5.get(hash) : undefined;
+      links.push({
+        name: site.name,
+        url: site.url(hash),
+        kind: 'chart',
+        hash,
+        ...(file !== undefined ? { file } : {}),
+      });
     }
   }
   const title = chart.title?.trim();

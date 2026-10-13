@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { BeMusicPlaylog } from '@be-music/player/playlog';
-import { fileHashAliases, playedFileOf } from './played-file.ts';
+import { fileHashAliases, laneOptionOf, playedFileOf } from './played-file.ts';
 
 function log(chart: Partial<BeMusicPlaylog['chart']>, inputs: Array<{ timeUs: number }> = []) {
   return {
@@ -11,6 +11,7 @@ function log(chart: Partial<BeMusicPlaylog['chart']>, inputs: Array<{ timeUs: nu
       channels: ['11'],
       ...input,
     })) as BeMusicPlaylog['inputs'],
+    play: { mode: 'manual', autoScratch: false, gauge: 'GROOVE' } as BeMusicPlaylog['play'],
   };
 }
 
@@ -32,6 +33,20 @@ describe('playedFileOf', () => {
     expect(playedFileOf(log({ notes })).durationMs).toBe(95_400);
     expect(playedFileOf(log({ notes }, [{ timeUs: 97_000_400 }])).durationMs).toBe(97_000);
     expect(playedFileOf(log({})).durationMs).toBe(0);
+  });
+});
+
+describe('laneOptionOf', () => {
+  test('names the arrangement of one side, OFF when none was applied', () => {
+    expect(laneOptionOf({})).toBe('OFF');
+    expect(laneOptionOf({ randomLane: { p1: 'random' } })).toBe('RANDOM');
+    expect(laneOptionOf(log({}).play)).toBe('OFF');
+  });
+
+  test('names both sides of a double play when they differ, and a swap', () => {
+    expect(laneOptionOf({ randomLane: { p1: 'MIRROR', p2: 'RANDOM' } })).toBe('MIRROR / RANDOM');
+    expect(laneOptionOf({ randomLane: { p1: 'RANDOM', p2: 'RANDOM' } })).toBe('RANDOM');
+    expect(laneOptionOf({ randomLane: { p1: 'OFF', p2: 'OFF' }, dpFlip: true })).toBe('OFF FLIP');
   });
 });
 

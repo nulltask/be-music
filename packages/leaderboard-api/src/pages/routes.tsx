@@ -4,7 +4,9 @@ import { setCookie } from 'hono/cookie';
 import { Scalar } from '@scalar/hono-api-reference';
 import type { AppEnv } from '../app.ts';
 import { isRuleset } from '../rulesets.ts';
+import { aboutPage } from './about.tsx';
 import { avatarImage } from './avatar.ts';
+import { helpPage } from './help.tsx';
 import { scoreCardImage } from './card.ts';
 import { mountClientScript } from './client-script.ts';
 import { chartPage } from './chart.tsx';
@@ -35,6 +37,8 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.get('/leaderboard/players/:handle/avatar', avatarImage);
   app.get('/leaderboard/chartsets/:id', chartsetPage);
   app.get('/leaderboard/settings', settingsPage);
+  app.get('/leaderboard/about', aboutPage);
+  app.get('/leaderboard/help', helpPage);
 
   // Switches the display ruleset and goes back to the page it was switched on. A dedicated URL keeps the setting out of
   // shareable page URLs, so opening someone's link never changes the viewer's setting.
