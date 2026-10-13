@@ -1,5 +1,6 @@
 import { and, count, eq } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
+import { avatarUrl } from './avatars.ts';
 import { refreshChartListing } from './charts.ts';
 import { bestScore, passkey, profile, user } from './db/schema.ts';
 
@@ -10,17 +11,30 @@ export interface AccountSummary {
   /** True until the account has a way back in (a passkey, or later a Discord / Google sign-in). */
   anonymous: boolean;
   passkeys: number;
+  /** The player's icon: the uploaded one, or the generated one. */
+  avatarUrl: string;
 }
 
 export async function loadAccount(db: Database, userId: string): Promise<AccountSummary | undefined> {
   const [row] = await db
-    .select({ handle: profile.handle, displayName: profile.displayName, anonymous: user.isAnonymous })
+    .select({
+      handle: profile.handle,
+      displayName: profile.displayName,
+      anonymous: user.isAnonymous,
+      avatarKey: profile.avatarKey,
+    })
     .from(user)
     .innerJoin(profile, eq(profile.userId, user.id))
     .where(eq(user.id, userId));
   if (row === undefined) return undefined;
   const [{ passkeys }] = await db.select({ passkeys: count() }).from(passkey).where(eq(passkey.userId, userId));
-  return { handle: row.handle, displayName: row.displayName, anonymous: row.anonymous === true, passkeys };
+  return {
+    handle: row.handle,
+    displayName: row.displayName,
+    anonymous: row.anonymous === true,
+    passkeys,
+    avatarUrl: avatarUrl(row.handle, row.avatarKey),
+  };
 }
 
 /**

@@ -15,6 +15,13 @@
       "when": 1791876159925,
       "tag": "0001_pages_and_chartsets",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791881640706,
+      "tag": "0002_profiles",
+      "breakpoints": true
     }
   ]
 }
