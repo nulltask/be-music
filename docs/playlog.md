@@ -13,7 +13,8 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    lane-shuffle (RANDOM / MIRROR / S-RANDOM), post DP-flip. Long notes are stored as single objects with a
    `timeUs` / `endTimeUs` pair, mines carry their resolved gauge damage, and the raw `#TOTAL` / `#RANK` /
    `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults. `chart.sha256` stamps the
-   SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content.
+   SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content, and `chart.md5`
+   the MD5 of the same bytes, the key LR2 and LR2IR use.
    Two Be-Music Fingerprints (`bmfp0:…`, see [fingerprint-spec.md](./fingerprint-spec.md)) identify the chart by
    what is played rather than by the file bytes, so logs of one chart still match after keysound / BGA / metadata
    edits, re-saves, or a BMS ↔ bmson conversion. `chart.chartFingerprint` covers every `#RANDOM` / `#SWITCH`

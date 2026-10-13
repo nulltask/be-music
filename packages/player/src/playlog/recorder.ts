@@ -60,7 +60,8 @@ export interface PlaylogRecorderPlaySettings {
 /**
  * Host-declared subset of the recording inputs — the fields the engine cannot know by itself. Passed through
  * `PlayerOptions.recordPlaylog`. `chartSha256` is the SHA-256 (lowercase hex) of the source chart FILE bytes;
- * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content.
+ * hosts that have the raw file compute it so dropped logs can be matched back to their chart by content. `chartMd5` is
+ * the MD5 of the same bytes, the key LR2 and LR2IR use.
  * `sourceChart` is the chart as loaded, before `#RANDOM` / `#SWITCH` resolution and before any lane option; hosts that
  * resolve control flow or rewrite lanes on the chart themselves pass it so the fingerprints describe the chart, not
  * their working copy. Without it the engine uses the chart it was given. `recorder` identifies the host application;
@@ -71,6 +72,7 @@ export type PlaylogRecordingOptions = Pick<
   'gauge' | 'randomLane' | 'dpFlip' | 'native'
 > & {
   chartSha256?: string;
+  chartMd5?: string;
   sourceChart?: BeMusicJson;
   recorder?: Omit<PlaylogRecorderInfo, 'engine'>;
 };
@@ -81,6 +83,8 @@ export interface PlaylogRecorderOptions {
   chart: PlaylogRecorderChartData;
   /** SHA-256 (lowercase hex) of the source chart file bytes, when the host computed one. */
   chartSha256?: string;
+  /** MD5 (lowercase hex) of the source chart file bytes, when the host computed one. */
+  chartMd5?: string;
   /**
    * The chart file's extension (`PlayerOptions.laneModeExtension`), the fingerprint's lane-mode input. Without it the
    * recorder infers `.pms` from a 9 KEY lane mode.
@@ -251,6 +255,9 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   }
   if (typeof options.chartSha256 === 'string' && options.chartSha256.length > 0) {
     result.sha256 = options.chartSha256.toLowerCase();
+  }
+  if (typeof options.chartMd5 === 'string' && options.chartMd5.length > 0) {
+    result.md5 = options.chartMd5.toLowerCase();
   }
   const { chartFingerprint, playFingerprint } = computePlaylogFingerprints(options);
   if (chartFingerprint !== undefined) result.chartFingerprint = chartFingerprint;
