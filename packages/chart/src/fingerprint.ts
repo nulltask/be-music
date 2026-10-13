@@ -88,6 +88,15 @@ export function computePlayFingerprint(json: BeMusicJson, options: BeMusicFinger
   return hashFingerprintDocument(createPlayFingerprintDocument(json, options));
 }
 
+/**
+ * `bmfp0:<sha256>` of a fingerprint document someone else built, e.g. one a client sent to a server. It equals
+ * {@link computeChartFingerprint} / {@link computePlayFingerprint} for the document they hash, so a verifier can check a
+ * claimed fingerprint against the document without the chart file.
+ */
+export function computeFingerprintOfDocument(document: BeMusicFingerprintDocument): string {
+  return hashFingerprintDocument(document);
+}
+
 function hashFingerprintDocument(document: BeMusicFingerprintDocument): string {
   return `${FINGERPRINT_VERSION}:${sha256Hex(canonicalizeFingerprintDocument(document))}`;
 }

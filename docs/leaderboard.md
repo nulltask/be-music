@@ -2,8 +2,10 @@
 
 # Leaderboard design
 
-> Status: design. Nothing in this document is implemented yet. It records the decisions made so far and the questions
-> that are still open (section 15), so that the implementation can start from one place.
+> Status: the core of P0 is implemented in [`packages/leaderboard-api`](../packages/leaderboard-api/README.md):
+> authentication, submission with verification layers L1–L3 (L4 for charts without `#RANDOM`), re-simulation under
+> the three rulesets, and the ranking API. Everything else is still design. This document records the decisions made
+> so far and the questions that are still open (section 15).
 
 The Leaderboard is be-music's online score ranking — what LR2 and beatoraja call an "IR" (Internet Ranking). This
 repository uses "IR" for the JSON intermediate representation (`@be-music/json`), so the ranking is called the
@@ -139,7 +141,7 @@ sequenceDiagram
 
     P->>C: finish the play
     C->>C: play log (chartFingerprint, playFingerprint, randomOutcomes)<br/>+ play document, OG card PNG
-    C->>C: submissionId = sha256(play log)<br/>queue in IndexedDB
+    C->>C: queue the play log in IndexedDB
     C->>A: POST /api/v1/scores (gzip)<br/>session cookie or bearer, Idempotency-Key
     A->>A: resolve the session (signed-in or anonymous)
     A->>RL: limit(user or device)
@@ -147,9 +149,11 @@ sequenceDiagram
         A-->>C: 429 Retry-After
     end
     A->>A: size limit → gunzip → parsePlaylog / Valibot
-    A->>D: submission_id already stored?
-    alt resubmission
+    A->>D: submission_id = sha256(play fingerprint, scoring settings, inputs) already stored?
+    alt resubmission by the same player
         A-->>C: 200 with the stored result
+    else the same play from another account
+        A-->>C: 409 play_already_submitted
     end
     A->>A: eligibility: auto play → 422, ESC abort → 422, assists → flags
     A->>A: sha256(canonicalize(play document)) == playFingerprint ?
@@ -178,8 +182,10 @@ sequenceDiagram
     C->>P: show rank and personal bests on the result screen
 ```
 
-- **Idempotency.** `submissionId` is the play log's hash, so a retried request never stores a play twice. Failed
-  submissions stay in IndexedDB and are retried on the next launch or sign-in.
+- **Idempotency.** The submission id is the hash of what identifies a play — the play fingerprint, the settings that
+  affect scoring, and the input stream — not of the whole log, so a retried request never stores a play twice even if
+  the log was re-dated. The same play from a second account is a copied replay and is refused. Failed submissions stay
+  in IndexedDB and are retried on the next launch or sign-in.
 - **The chart document is sent once per chart.** Later players send the play document only.
 - **Outcome composition runs once per play fingerprint.** A chart without control flow has equal chart and play
   fingerprints and skips it.

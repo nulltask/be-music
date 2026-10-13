@@ -133,6 +133,16 @@ export default defineConfig({
       {
         extends: true as const,
         test: {
+          name: '@be-music/leaderboard-api',
+          include: ['packages/leaderboard-api/src/**/*.test.ts'],
+          // The API tests start a workerd process (Miniflare) for real D1 and R2 bindings.
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+        },
+      },
+      {
+        extends: true as const,
+        test: {
           name: 'regression',
           include: ['tests/regression/**/*.test.ts'],
         },
