@@ -50,7 +50,8 @@ export async function loadRanking(
   page: { offset: number; limit: number },
 ): Promise<{ entries: RankingEntry[]; players: number }> {
   const conditions = filterConditions(filter);
-  const rows = await db
+  // The page and the player count are independent: one round trip to D1 for both.
+  const rowsQuery = db
     .select({
       handle: profile.handle,
       displayName: profile.displayName,
@@ -71,8 +72,7 @@ export async function loadRanking(
     .orderBy(desc(bestScore.bestEx), asc(bestScore.bestExAt), asc(profile.handle))
     .limit(page.limit)
     .offset(page.offset);
-
-  const players = await countPlayers(db, filter);
+  const [rows, players] = await Promise.all([rowsQuery, countPlayers(db, filter)]);
 
   // Rank the page from its first entry, then by position within the page (ties share the rank).
   const entries: RankingEntry[] = [];
@@ -82,7 +82,10 @@ export async function loadRanking(
       previous !== undefined && previous.exScore === row.exScore
         ? previous.rank
         : index === 0
-          ? await rankOfExScore(db, filter, row.exScore)
+          ? // The first page starts with the best score: nobody is above it.
+            page.offset === 0
+            ? 1
+            : await rankOfExScore(db, filter, row.exScore)
           : page.offset + index + 1;
     previous = { exScore: row.exScore, rank };
     const { avatarKey, ...rest } = row;

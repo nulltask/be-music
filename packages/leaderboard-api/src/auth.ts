@@ -37,6 +37,9 @@ export function createAuth(env: Env, origin: string) {
       },
     }),
     socialProviders,
+    // Keep the session in a signed cookie for 5 minutes, so pages and the API read it without a D1 round trip. A
+    // signed-out or revoked session lingers that long at most; nothing here trusts more than its user id.
+    session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
     plugins: [
       anonymous({
         // Runs before the anonymous user is deleted, so its plays move instead of cascading away.
