@@ -709,15 +709,20 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     // Search and library.
     framePanel(chrome, 14, 372, 290, 30, accent);
     addText('SEARCH', 30, 387, { ...labelStyle(accent), anchorY: 0.5 });
-    addText(frame.searchQuery || 'Title / artist / genre', 116, 387, {
-      size: 10,
-      anchorY: 0.5,
-      weight: '300',
-      fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: 180,
-    });
-    addHitArea(14, 372, 290, 30, 'text', frame.actions.activateSearch);
+    // While the player types in the host's field laid over the box, the field shows the text.
+    if (!frame.searchEditing) {
+      addText(frame.searchQuery || 'Title / artist / genre', 116, 387, {
+        size: 10,
+        anchorY: 0.5,
+        weight: '300',
+        fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
+        fontFamily: SYN_TEXT_FONT,
+        maxWidth: 180,
+      });
+    }
+    // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
+    addHitArea(14, 372, 98, 30, 'text', frame.actions.activateSearch);
+    addHitArea(112, 372, 192, 30, 'text', frame.actions.activateSearch);
     addText('LIBRARY', 30, 422, labelStyle());
     addText(`${entries.length} shown / ${frame.totalCharts} charts`, 30, 436, {
       size: 11,
@@ -900,15 +905,20 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const searchY = card.y + card.h + 10;
     framePanel(chrome, card.x, searchY, card.w, 32, accent);
     addText('SEARCH', left, searchY + 16, { ...label(accent), anchorY: 0.5 });
-    addText(frame.searchQuery || 'Title / artist / genre', left + 84, searchY + 16, {
-      size: 11,
-      anchorY: 0.5,
-      weight: '300',
-      fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
-      fontFamily: SYN_TEXT_FONT,
-      maxWidth: innerW - 84,
-    });
-    addHitArea(card.x, searchY, card.w, 32, 'text', frame.actions.activateSearch);
+    // While the player types in the host's field laid over the box, the field shows the text.
+    if (!frame.searchEditing) {
+      addText(frame.searchQuery || 'Title / artist / genre', left + 84, searchY + 16, {
+        size: 11,
+        anchorY: 0.5,
+        weight: '300',
+        fill: frame.searchQuery ? SYN_WHITE : SYN_DIM,
+        fontFamily: SYN_TEXT_FONT,
+        maxWidth: innerW - 84,
+      });
+    }
+    // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
+    addHitArea(card.x, searchY, left + 80 - card.x, 32, 'text', frame.actions.activateSearch);
+    addHitArea(left + 80, searchY, card.x + card.w - (left + 80), 32, 'text', frame.actions.activateSearch);
 
     // Library line at the foot.
     const footY = designHeight - 17;

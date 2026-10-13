@@ -628,6 +628,11 @@ export interface BeMusicSelectFrame {
   /** Current folder label (or search label), `undefined` at the library root. */
   folderLabel: string | undefined;
   searchQuery: string;
+  /**
+   * True while the host's text field sits over the search box (the box the skin bound to `actions.activateSearch`):
+   * the player is typing there, so draw the box but not its text or placeholder. Absent or false otherwise.
+   */
+  searchEditing?: boolean;
   totalCharts: number;
   actions: BeMusicSelectActions;
   effects: BeMusicEffectLevel;

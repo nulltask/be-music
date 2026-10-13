@@ -75,6 +75,12 @@ import { masterOutput } from '../../runtime/master-volume.ts';
 
 export interface PixiBeatorajaSelectSceneOptions {
   skin: BeatorajaSkin;
+  /**
+   * The host edits the search query in its own text field (with IME) and passes it in through
+   * {@link PixiBeatorajaSelectScene.setSearchQuery}: the scene then leaves `/` and typed keys to that field instead of
+   * running its own key-by-key search mode.
+   */
+  externalSearch?: boolean;
   textures: BeatorajaTextureCache;
   /** Optional skin TTF cache (`loadBeatorajaFonts`). Absent → platform sans-serif fallback. */
   fonts?: BeatorajaFontCache;
@@ -2858,6 +2864,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
 
   private readonly handleKeyDown = (event: KeyboardEvent): void => {
     if (this.disposed) return;
+    // Typing in the host's search field (or any text field) is not navigation.
+    if (isEditableKeyTarget(event.target)) return;
     // Search-input mode swallows most keys — ArrowUp/Down still navigate within the
     // filtered list (so the user can type, then arrow-pick), but printable characters /
     // Backspace mutate the query and Enter / Escape exit the mode.
@@ -2910,6 +2918,8 @@ export class PixiBeatorajaSelectScene implements PixiScene {
         this.leaveFolder();
         break;
       case '/':
+        // With the host's field doing the typing, `/` is its shortcut, not ours.
+        if (this.options.externalSearch === true) break;
         // `/` enters search-input mode. Subsequent keystrokes type into the query (see
         // `handleSearchKey`) until Enter (commit) or Escape (clear + exit) lands.
         event.preventDefault();
@@ -2935,7 +2945,7 @@ export class PixiBeatorajaSelectScene implements PixiScene {
    * types. The cursor resets to the top of the new filtered list (otherwise an old
    * `currentIndex` would point at a now-out-of-bounds slot).
    */
-  private setSearchQuery(query: string): void {
+  public setSearchQuery(query: string): void {
     if (this.searchQuery === query) return;
     this.searchQuery = query;
     this.refreshEntries(0);
@@ -3509,4 +3519,12 @@ function keysongOpForVariant(variant: ChartPlayVariant | undefined): number | un
     default:
       return undefined;
   }
+}
+
+/** Whether a key event comes from a text field, where keys type rather than steer the list. */
+function isEditableKeyTarget(target: EventTarget | null): boolean {
+  if (typeof HTMLElement === 'undefined' || !(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  if (target instanceof HTMLTextAreaElement) return true;
+  return target instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'range'].includes(target.type);
 }

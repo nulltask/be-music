@@ -2614,3 +2614,44 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 .skin-drop-hint code {
   color: #d2d9e4;
 }
+
+/*
+ * The search field over a skin's own search box (inline-search.ts): positioned
+ * and sized by script to the box, it shows only the typed text and caret, so
+ * the skin's box shows through around it. A skin with a box hides the field
+ * at the foot of the screen until the box is clicked (or `/` is pressed).
+ */
+.shell.search-in-skin .search-input:not(.search-inline) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.search-input.search-inline {
+  bottom: auto;
+  right: auto;
+  z-index: 12;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 0.3em;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #f8fafc;
+  caret-color: #ffd166;
+  opacity: 1;
+  transform: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.search-input.search-inline::placeholder {
+  color: rgb(248 250 252 / 0.45);
+}
+.search-input.search-inline::-webkit-search-cancel-button {
+  display: none;
+}
+/* Over the skin's box on a touch screen too: the box, not the top of the screen, places it. */
+html.touch-first .search-input.search-inline:focus {
+  transform: none;
+}

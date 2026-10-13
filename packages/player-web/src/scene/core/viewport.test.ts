@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { resolveDesignTextResolution, resolveScaledViewport } from './viewport.ts';
+import { designRectToCanvas, resolveDesignTextResolution, resolveScaledViewport } from './viewport.ts';
 
 describe('resolveScaledViewport', () => {
   test('centers the design rectangle inside a wider screen', () => {
@@ -30,5 +30,18 @@ describe('resolveDesignTextResolution', () => {
     expect(resolveDesignTextResolution(4, 3)).toBe(8);
     expect(resolveDesignTextResolution(0.4, 1)).toBe(1);
     expect(resolveDesignTextResolution(Number.NaN, 2)).toBe(1);
+  });
+});
+
+describe('designRectToCanvas', () => {
+  test('scales a design rectangle and offsets it by the letterbox', () => {
+    const viewport = resolveScaledViewport(1600, 900, 640, 480);
+    // scale 1.875, pillarboxed 200 px on each side
+    expect(designRectToCanvas({ x: 14, y: 372, width: 290, height: 30 }, viewport)).toEqual({
+      x: 200 + 14 * 1.875,
+      y: 372 * 1.875,
+      width: 290 * 1.875,
+      height: 30 * 1.875,
+    });
   });
 });

@@ -334,15 +334,20 @@ class LatticeSelectRenderer implements PixiSelectRenderer {
 
     // Search and library.
     text(onEntry('SEARCH', 480, 30), 14, 372, mono());
-    text(onEntry(frame.searchQuery || 'Title / artist / genre', 520, 31), 70, 369, {
-      size: 11,
-      weight: '300',
-      fill: frame.searchQuery ? LAT_INK : LAT_GRAPHITE,
-      fontFamily: LAT_TEXT_FONT,
-      maxWidth: 230,
-    });
+    // While the player types in the host's field laid over the box, the field shows the text.
+    if (!frame.searchEditing) {
+      text(onEntry(frame.searchQuery || 'Title / artist / genre', 520, 31), 70, 369, {
+        size: 11,
+        weight: '300',
+        fill: frame.searchQuery ? LAT_INK : LAT_GRAPHITE,
+        fontFamily: LAT_TEXT_FONT,
+        maxWidth: 230,
+      });
+    }
     chrome.rect(14, 388, 290, 1).fill(LAT_INK);
-    addHitArea(14, 362, 290, 30, 'text', frame.actions.activateSearch);
+    // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
+    addHitArea(14, 362, 52, 30, 'text', frame.actions.activateSearch);
+    addHitArea(66, 362, 238, 30, 'text', frame.actions.activateSearch);
     text(onEntry('LIBRARY', 560, 32), 14, 420, mono());
     text(onEntry(`${entries.length} shown / ${frame.totalCharts} charts`, 600, 33), 14, 434, {
       size: 11,
