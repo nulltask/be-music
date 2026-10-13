@@ -165,6 +165,9 @@ describe('Leaderboard pages', () => {
     expect(ranking.html).toContain('aria-label="Best play of');
     expect(ranking.html).toContain('popovertarget="info-');
     expect(ranking.html).toContain('popover="auto"');
+    // The card is a tooltip anchored to its icon.
+    expect(ranking.html).toMatch(/data-tooltip-for="(info-[^"]+)"[^>]*style="anchor-name:--\1"/);
+    expect(ranking.html).toContain('position-area:block-end span-inline-start');
     expect(ranking.html).toContain('Recorded with');
     // The breadcrumb trail starts at the Leaderboard.
     expect(ranking.html).toContain('aria-label="Breadcrumb"');

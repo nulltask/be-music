@@ -20,6 +20,67 @@ const COLOR_SCHEME_SCRIPT = `(() => {
   media.addEventListener('change', apply);
 })();`;
 
+/**
+ * Tooltips of the info icons (components/play-info.tsx). A mouse hovering an icon, or the keyboard focusing it, shows
+ * its card; leaving hides it. A click (or a tap) on a hovered card pins it instead of closing it; the Popover API then
+ * closes it on Escape or a click elsewhere. Browsers without CSS anchor positioning get the card placed here, below
+ * the icon or above it when there is no room. Without JavaScript the cards still open on click, centered.
+ */
+const TOOLTIP_SCRIPT = `(() => {
+  const anchored = typeof CSS !== 'undefined' && CSS.supports('anchor-name: --a');
+  const cardOf = (element) => {
+    const trigger = element instanceof Element ? element.closest('[data-tooltip-for]') : null;
+    return trigger ? [trigger, document.getElementById(trigger.dataset.tooltipFor)] : [null, null];
+  };
+  const place = (card) => {
+    if (anchored) return;
+    const trigger = document.querySelector('[data-tooltip-for="' + card.id + '"]');
+    if (!trigger) return;
+    const r = trigger.getBoundingClientRect();
+    const gap = 6, edge = 8;
+    let top = r.bottom + gap;
+    if (top + card.offsetHeight > innerHeight - edge && r.top - gap - card.offsetHeight >= edge) top = r.top - gap - card.offsetHeight;
+    const left = Math.max(edge, Math.min(r.right - card.offsetWidth, innerWidth - card.offsetWidth - edge));
+    card.style.position = 'fixed';
+    card.style.margin = '0';
+    card.style.top = top + 'px';
+    card.style.left = left + 'px';
+  };
+  const show = (card) => {
+    if (!card || card.matches(':popover-open')) return;
+    card.dataset.hovered = '';
+    card.showPopover();
+  };
+  const hide = (card) => {
+    if (card && card.matches(':popover-open') && 'hovered' in card.dataset) card.hidePopover();
+  };
+  document.addEventListener('toggle', (event) => {
+    const card = event.target;
+    if (!(card instanceof HTMLElement) || !card.hasAttribute('data-tooltip')) return;
+    if (event.newState === 'open') place(card);
+    else delete card.dataset.hovered;
+  }, true);
+  document.addEventListener('pointerover', (event) => {
+    if (event.pointerType === 'mouse') show(cardOf(event.target)[1]);
+  });
+  document.addEventListener('pointerout', (event) => {
+    const [trigger, card] = cardOf(event.target);
+    if (event.pointerType === 'mouse' && trigger && !trigger.contains(event.relatedTarget)) hide(card);
+  });
+  document.addEventListener('focusin', (event) => {
+    if (event.target instanceof Element && event.target.matches(':focus-visible')) show(cardOf(event.target)[1]);
+  });
+  document.addEventListener('focusout', (event) => hide(cardOf(event.target)[1]));
+  // A click on a hovered card pins it: keep it open instead of letting popovertarget toggle it shut.
+  document.addEventListener('click', (event) => {
+    const [, card] = cardOf(event.target);
+    if (card && card.matches(':popover-open') && 'hovered' in card.dataset) {
+      event.preventDefault();
+      delete card.dataset.hovered;
+    }
+  }, true);
+})();`;
+
 /** One step of the breadcrumb trail; the last one is the current page and has no link. */
 export interface Crumb {
   label: string;
@@ -121,6 +182,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <meta property="og:url" content={props.meta.url} />
         <meta name="twitter:card" content="summary" />
         <script dangerouslySetInnerHTML={{ __html: COLOR_SCHEME_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: TOOLTIP_SCRIPT }} />
         <link rel="stylesheet" href={STYLESHEET_PATH} />
         <link rel="icon" type="image/svg+xml" href={ICON_LINKS.favicon} />
         <link rel="apple-touch-icon" href={ICON_LINKS.appleTouch} />
