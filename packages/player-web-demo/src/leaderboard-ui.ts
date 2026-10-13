@@ -12,8 +12,8 @@ import {
   signOutOfLeaderboard,
   START_ACCOUNT_ACTION_LABELS,
   type AccountActionResult,
-  type StartAccountAction,
 } from './account.ts';
+import { wireAccountDialogs } from './account-dialogs.ts';
 import {
   describeLeaderboardResult,
   describeSkippedSubmission,
@@ -35,14 +35,6 @@ export function describeSubmittingClient(recorder: Omit<PlaylogRecorderInfo, 'en
   return `${recorder.name}/${recorder.version}${recorder.build !== undefined ? ` (build ${recorder.build})` : ''}`;
 }
 
-/** What each start card action does. */
-const START_ACTIONS: Readonly<Record<StartAccountAction, () => Promise<AccountActionResult>>> = {
-  'sign-in': signInWithLeaderboardPasskey,
-  'sign-up': createLeaderboardPasskey,
-  keep: createLeaderboardPasskey,
-  'sign-out': signOutOfLeaderboard,
-};
-
 /**
  * Everything the demo shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
  * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the account chip in the
@@ -55,6 +47,8 @@ export class LeaderboardPanel {
   private submitController: Controller | undefined;
   private accountController: Controller | undefined;
   private readonly accountState = { status: 'Not signed in' };
+  /** Opens the sign-in / sign-up dialogs the start card's buttons lead to. */
+  private readonly openDialog = wireAccountDialogs(() => void this.refreshAccount());
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
 
@@ -176,6 +170,8 @@ export class LeaderboardPanel {
     if (row === null || label === null || actions === null) return;
     const view = describeStartAccount(account);
     row.dataset.state = view.state;
+    const hint = document.querySelector<HTMLElement>('#start-account-hint');
+    if (hint !== null) hint.textContent = view.hint ?? '';
     if (view.href !== undefined) {
       const link = document.createElement('a');
       link.href = view.href;
@@ -194,10 +190,11 @@ export class LeaderboardPanel {
         // Making an account is the step the card leads to; the other actions stay quiet.
         button.className = `start-button${action === 'sign-up' || action === 'keep' ? ' start-button--primary' : ''}`;
         button.textContent = START_ACCOUNT_ACTION_LABELS[action];
-        button.addEventListener(
-          'click',
-          () => void this.runAccountAction(START_ACCOUNT_ACTION_LABELS[action], START_ACTIONS[action]),
-        );
+        button.addEventListener('click', () => {
+          // Signing out needs nothing more; the rest open the dialogs the Leaderboard's own pages use.
+          if (action === 'sign-out') void this.runAccountAction('Sign out', signOutOfLeaderboard);
+          else this.openDialog(action);
+        });
         return button;
       }),
     );

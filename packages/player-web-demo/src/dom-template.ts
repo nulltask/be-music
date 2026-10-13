@@ -97,6 +97,7 @@ export const DEMO_APP_HTML = `
               <span class="start-account-label" id="start-account-label">Not signed in</span>
               <div class="start-account-actions" id="start-account-actions"></div>
             </div>
+            <p class="start-account-hint" id="start-account-hint"></p>
             <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
           </section>
           <!--
@@ -148,6 +149,90 @@ export const DEMO_APP_HTML = `
         </div>
       </div>
     </div>
+    <!--
+      Leaderboard sign-in and sign-up, as on the Leaderboard's own pages:
+      a passkey now, Google and Discord shown but in development. Opened
+      from the start card's account row; wired by \`wireAccountDialogs\`
+      (account-dialogs.ts).
+    -->
+    <dialog class="account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
+      <div class="account-dialog-body">
+        <header>
+          <h2 id="leaderboard-sign-in-title">Sign in</h2>
+          <p>Use the passkey of your Leaderboard account.</p>
+        </header>
+        <button type="button" class="account-dialog-primary" data-account-dialog-action="sign-in">
+          Sign in with a passkey
+        </button>
+        <div class="account-dialog-or" role="separator">or</div>
+        <div class="account-providers">
+          <button type="button" class="account-provider" disabled title="Sign in with Google is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            Sign in with Google
+            <span class="account-provider-badge">In development</span>
+          </button>
+          <button type="button" class="account-provider" disabled title="Sign in with Discord is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            Sign in with Discord
+            <span class="account-provider-badge">In development</span>
+          </button>
+        </div>
+        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <footer>
+          <button type="button" class="account-dialog-link" data-account-dialog-action="open-sign-up">
+            No account yet? Sign up
+          </button>
+          <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+        </footer>
+      </div>
+    </dialog>
+    <dialog class="account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
+      <form class="account-dialog-body" method="dialog" data-account-sign-up-form>
+        <header>
+          <h2 id="leaderboard-sign-up-title">Create your account</h2>
+          <p data-account-sign-up-lead>Pick a handle and a name. Your browser then makes a passkey for it.</p>
+        </header>
+        <div class="account-providers">
+          <button type="button" class="account-provider" disabled title="Sign up with Google is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            Sign up with Google
+            <span class="account-provider-badge">In development</span>
+          </button>
+          <button type="button" class="account-provider" disabled title="Sign up with Discord is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            Sign up with Discord
+            <span class="account-provider-badge">In development</span>
+          </button>
+        </div>
+        <div class="account-dialog-or" role="separator">or with a passkey</div>
+        <label class="account-field">
+          <span>Handle</span>
+          <input
+            name="handle"
+            required
+            minlength="3"
+            maxlength="15"
+            pattern="[A-Za-z0-9_]{3,15}"
+            autocomplete="username webauthn"
+            spellcheck="false"
+          />
+          <small>3 to 15 letters, digits or _. It names your page.</small>
+        </label>
+        <label class="account-field">
+          <span>Name</span>
+          <input name="displayName" required maxlength="64" autocomplete="nickname" />
+          <small>Up to 32 characters, in any script. The rankings show it.</small>
+        </label>
+        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <footer>
+          <span></span>
+          <span class="account-dialog-buttons">
+            <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+            <button type="submit" class="account-dialog-primary">Create passkey</button>
+          </span>
+        </footer>
+      </form>
+    </dialog>
     <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The

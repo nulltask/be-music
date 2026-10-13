@@ -66,6 +66,74 @@ export async function signInWithLeaderboardPasskey(): Promise<AccountActionResul
   return result?.error ? { ok: false, error: describeError(result.error) } : { ok: true };
 }
 
+/** The handle and name a new account is made with. */
+export interface SignUpDetails {
+  handle: string;
+  displayName: string;
+}
+
+/**
+ * Sign-up, as the Leaderboard's own dialog does it: an anonymous account first (the passkey needs a session to belong
+ * to; an anonymous account already in this browser is the one kept), then the handle and name, then the passkey, which
+ * claims the account. Each step can fail on its own, and the message says where it stopped.
+ */
+export async function signUpForLeaderboard(
+  details: SignUpDetails,
+  doFetch: typeof fetch = fetch,
+): Promise<AccountActionResult> {
+  const auth = authClient();
+  const session = await auth.getSession();
+  if (session.data === null) {
+    const anonymous = await auth.signIn.anonymous();
+    if (anonymous.error !== null) {
+      return { ok: false, error: `Could not start the account: ${describeError(anonymous.error)}` };
+    }
+  }
+  const saved = await saveProfile(details, doFetch);
+  if (!saved.ok) return saved;
+  const passkey = await auth.passkey.addPasskey({ name: 'be-music' });
+  if (passkey?.error) {
+    return {
+      ok: false,
+      error: `Your account is ready, but the passkey was not made (${describeError(passkey.error)}). Try “Keep this account” again.`,
+    };
+  }
+  return { ok: true };
+}
+
+/** Saves the handle and name of the signed-in account (`PATCH /api/v0/me`). */
+export async function saveProfile(details: SignUpDetails, doFetch: typeof fetch = fetch): Promise<AccountActionResult> {
+  const response = await doFetch('/api/v0/me', {
+    method: 'PATCH',
+    credentials: 'same-origin',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(details),
+  });
+  if (response.ok) return { ok: true };
+  const body = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
+  return { ok: false, error: describeProfileError(body.error ?? `http-${response.status}`, body.detail) };
+}
+
+/** A message for an error the account API answered when saving a handle and name (`{ error, detail? }`). */
+export function describeProfileError(error: string, detail?: string): string {
+  switch (error) {
+    case 'invalid-handle':
+      return detail === 'reserved'
+        ? 'That handle is reserved. Pick another.'
+        : 'Handles are 3 to 15 letters, digits or _.';
+    case 'invalid-display-name':
+      if (detail === 'empty') return 'The name cannot be empty.';
+      if (detail === 'length') return 'Names are at most 32 characters.';
+      return 'Names cannot contain line breaks or control characters.';
+    case 'handle-taken':
+      return 'That handle is taken.';
+    case 'sign-in-required':
+      return 'Sign in first.';
+    default:
+      return `Something went wrong (${error}).`;
+  }
+}
+
 export async function signOutOfLeaderboard(): Promise<AccountActionResult> {
   const result = await authClient().signOut();
   return result.error ? { ok: false, error: describeError(result.error) } : { ok: true };
@@ -129,6 +197,11 @@ export interface StartAccountView {
   /** The player's Leaderboard page, when there is an account. */
   href: string | undefined;
   actions: StartAccountAction[];
+  /**
+   * Where submitted plays go when that is not plain from the label: without an account, to an anonymous one this
+   * browser makes on the first submission, which the rankings leave out. Undefined when signed in.
+   */
+  hint: string | undefined;
 }
 
 /** The button text of each start card action. */
@@ -146,11 +219,29 @@ export const START_ACCOUNT_ACTION_LABELS: Readonly<Record<StartAccountAction, st
  */
 export function describeStartAccount(account: LeaderboardAccount | undefined): StartAccountView {
   if (account === undefined) {
-    return { state: 'signed-out', label: 'Not signed in', href: undefined, actions: ['sign-in', 'sign-up'] };
+    return {
+      state: 'signed-out',
+      label: 'Not signed in',
+      href: undefined,
+      actions: ['sign-in', 'sign-up'],
+      hint: 'Plays go to an anonymous account this browser makes. Rankings leave them out until you sign up.',
+    };
   }
   const href = `/leaderboard/players/${encodeURIComponent(account.handle)}`;
   if (account.anonymous) {
-    return { state: 'anonymous', label: `@${account.handle} · anonymous`, href, actions: ['keep', 'sign-in'] };
+    return {
+      state: 'anonymous',
+      label: `@${account.handle} · anonymous`,
+      href,
+      actions: ['keep', 'sign-in'],
+      hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
+    };
   }
-  return { state: 'signed-in', label: `${account.displayName} @${account.handle}`, href, actions: ['sign-out'] };
+  return {
+    state: 'signed-in',
+    label: `${account.displayName} @${account.handle}`,
+    href,
+    actions: ['sign-out'],
+    hint: undefined,
+  };
 }

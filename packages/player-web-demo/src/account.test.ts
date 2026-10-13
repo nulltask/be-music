@@ -2,7 +2,9 @@ import { describe, expect, test } from 'vite-plus/test';
 import {
   describeAccountChip,
   describeLeaderboardAccount,
+  describeProfileError,
   describeStartAccount,
+  saveProfile,
   loadLeaderboardAccount,
 } from './account.ts';
 
@@ -76,6 +78,7 @@ describe('describeStartAccount', () => {
       label: 'Not signed in',
       href: undefined,
       actions: ['sign-in', 'sign-up'],
+      hint: 'Plays go to an anonymous account this browser makes. Rankings leave them out until you sign up.',
     });
   });
 
@@ -87,6 +90,7 @@ describe('describeStartAccount', () => {
       label: '@player-abc · anonymous',
       href: '/leaderboard/players/player-abc',
       actions: ['keep', 'sign-in'],
+      hint: 'This account lives only in this browser, and rankings leave it out. Keep it with a passkey to join them.',
     });
   });
 
@@ -96,6 +100,38 @@ describe('describeStartAccount', () => {
       label: 'Taro @taro dj',
       href: '/leaderboard/players/taro%20dj',
       actions: ['sign-out'],
+      hint: undefined,
     });
+  });
+});
+
+describe('saveProfile', () => {
+  test('patches the account and explains what the server refused', async () => {
+    const sent: Array<{ url: string; init: RequestInit | undefined }> = [];
+    const answer = (status: number, body: unknown) =>
+      (async (input: RequestInfo | URL, init?: RequestInit) => {
+        sent.push({ url: String(input), init });
+        return new Response(JSON.stringify(body), { status });
+      }) as typeof fetch;
+    expect(await saveProfile({ handle: 'taro_dj', displayName: 'Taro' }, answer(200, {}))).toEqual({ ok: true });
+    expect(sent[0]).toMatchObject({ url: '/api/v0/me', init: { method: 'PATCH' } });
+    expect(JSON.parse(String(sent[0]!.init!.body))).toEqual({ handle: 'taro_dj', displayName: 'Taro' });
+    expect(await saveProfile({ handle: 'x', displayName: 'Taro' }, answer(409, { error: 'handle-taken' }))).toEqual({
+      ok: false,
+      error: 'That handle is taken.',
+    });
+  });
+});
+
+describe('describeProfileError', () => {
+  test('names each refusal, and falls back to the code', () => {
+    expect(describeProfileError('invalid-handle')).toBe('Handles are 3 to 15 letters, digits or _.');
+    expect(describeProfileError('invalid-handle', 'reserved')).toBe('That handle is reserved. Pick another.');
+    expect(describeProfileError('invalid-display-name', 'empty')).toBe('The name cannot be empty.');
+    expect(describeProfileError('invalid-display-name', 'length')).toBe('Names are at most 32 characters.');
+    expect(describeProfileError('invalid-display-name', 'control')).toBe(
+      'Names cannot contain line breaks or control characters.',
+    );
+    expect(describeProfileError('http-500')).toBe('Something went wrong (http-500).');
   });
 });
