@@ -10,7 +10,7 @@
     "deploy": "cf deploy",
     "deploy:staging": "cf deploy --mode staging",
     "db:generate": "drizzle-kit generate",
-    "db:migrate:local": "cf d1 migrations apply d3791c87-75f0-4d6b-8fd9-9013f0492006 --local --dir migrations",
+    "db:migrate:local": "cf d1 migrations apply d3791c87-75f0-4d6b-8fd9-9013f0492006 --local --persist-to .wrangler/state --dir migrations",
     "db:migrate:staging": "cf d1 migrations apply 71f22d28-f646-4488-a624-dbdd4a1883d1 --dir migrations",
     "db:migrate:production": "cf d1 migrations apply d3791c87-75f0-4d6b-8fd9-9013f0492006 --dir migrations",
     "clean": "rimraf .wrangler .cloudflare"
