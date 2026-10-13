@@ -26,17 +26,13 @@ const BY_SHA256: ReadonlyArray<{ name: string; url: (sha256: string) => string }
 
 /** Sites keyed by the chart file's MD5. */
 const BY_MD5: ReadonlyArray<{ name: string; url: (md5: string) => string }> = [
-  {
-    name: 'LR2IR',
-    url: (md5) => `http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=ranking&bmsmd5=${md5}`,
-  },
-  // A read-only archive of LR2IR's rankings, reachable while the original host is not.
+  // A read-only archive of LR2IR's rankings. The original (dream-pro.info) has closed, so the archive is the only link.
   { name: 'LR2IR Archive', url: (md5) => `https://lr2ir.com/charts/${md5}` },
 ];
 
 /**
  * Links to the chart on other sites, one set per known file (one chart fingerprint can cover several files: re-saves,
- * re-encodes). Mocha-Repository, MinIR and BMS Search look a chart up by the file's SHA-256, LR2IR and its archive
+ * re-encodes). Mocha-Repository, MinIR and BMS Search look a chart up by the file's SHA-256, the LR2IR archive
  * (lr2ir.com) by its MD5. Malformed hashes are skipped. When no hash is known at all, BMS
  * Search still gets a search for the title.
  */

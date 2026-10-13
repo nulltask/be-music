@@ -1,6 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import { openDatabase } from '../db/client.ts';
-import { ChartsetChartsTable } from './components/tables.tsx';
+import { ChartsetChartsList } from './components/lists.tsx';
 import { loadChartset, loadChartsetCharts } from './data.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { meta, notFound, PAGE_CACHE, type PageContext } from './page.tsx';
@@ -32,7 +32,7 @@ export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>)
           BMS Search
         </a>
       </PageHeader>
-      <ChartsetChartsTable charts={charts} />
+      <ChartsetChartsList charts={charts} />
       <p class="text-muted-foreground text-sm">
         Charts are grouped as BMS Search files them, by hand; a chart it has not filed yet stays on its own.
       </p>

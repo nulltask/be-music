@@ -3,6 +3,7 @@
 import type { Child } from 'hono/jsx';
 import type { ExternalLink } from '../external.ts';
 import { LAMP_STYLES, lampStyle } from '../format.ts';
+import type { JudgeTotals } from '../stats.ts';
 import type { Distribution } from '../stats.ts';
 import { Lamp } from './basics.tsx';
 
@@ -25,10 +26,10 @@ export function Details(props: { title: string; rows: Array<[string, Child]> }) 
   );
 }
 
-/** A row of headline figures (label above, value below). */
+/** A row of headline figures (label above, value below); six figures make two rows of three. */
 export function Stats(props: { items: Array<[string, Child]> }) {
   return (
-    <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <dl class={`grid grid-cols-2 gap-3 ${props.items.length % 3 === 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-4'}`}>
       {props.items.map(([label, value]) => (
         <div class="card gap-1 px-4 py-3">
           <dt class="text-muted-foreground text-xs">{label}</dt>
@@ -44,13 +45,15 @@ const DJ_RANK_SHADES = ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8', '
 
 /**
  * A distribution as one stacked bar and a list of counts. Lamps take their lamp colours; DJ Ranks take grey shades.
- * Buckets without players stay out of the bar and the list.
+ * Empty buckets stay out of the bar; the list keeps them (muted) when `showEmpty` is set, so every lamp or rank still
+ * to get is there to see.
  */
 export function DistributionCard<Key extends number | string>(props: {
   title: string;
   description: string;
   distribution: Distribution<Key>;
   kind: 'lamp' | 'dj-rank';
+  showEmpty?: boolean;
 }) {
   const { total, buckets } = props.distribution;
   const shown = buckets
@@ -60,7 +63,8 @@ export function DistributionCard<Key extends number | string>(props: {
       color: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).color : (DJ_RANK_SHADES[index] ?? '#94a3b8'),
       meaning: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).meaning : undefined,
     }))
-    .filter((bucket) => bucket.count > 0);
+    .filter((bucket) => bucket.count > 0 || props.showEmpty === true);
+  const filled = shown.filter((bucket) => bucket.count > 0);
   return (
     <section class="card gap-4" data-size="sm">
       <header>
@@ -75,9 +79,9 @@ export function DistributionCard<Key extends number | string>(props: {
             <div
               class="ring-foreground/10 flex h-3 overflow-hidden rounded-full ring-1"
               role="img"
-              aria-label={shown.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}
+              aria-label={filled.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}
             >
-              {shown.map((bucket) => (
+              {filled.map((bucket) => (
                 <span
                   title={`${bucket.label}: ${bucket.count}`}
                   style={`background:${bucket.color};width:${(bucket.count / total) * 100}%`}
@@ -86,7 +90,10 @@ export function DistributionCard<Key extends number | string>(props: {
             </div>
             <ul class="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-6 gap-y-1 text-sm">
               {shown.map((bucket) => (
-                <li class="flex items-center justify-between gap-2" title={bucket.meaning}>
+                <li
+                  class={`flex items-center justify-between gap-2 ${bucket.count === 0 ? 'text-muted-foreground/70' : ''}`}
+                  title={bucket.meaning}
+                >
                   <span class="inline-flex items-center gap-2">
                     <span
                       class="ring-foreground/20 inline-block size-2.5 rounded-sm ring-1"
@@ -95,7 +102,7 @@ export function DistributionCard<Key extends number | string>(props: {
                     {bucket.label}
                   </span>
                   <span class="text-muted-foreground whitespace-nowrap tabular-nums">
-                    {bucket.count} ({Math.round((bucket.count / total) * 100)}%)
+                    {bucket.count === 0 ? '–' : `${bucket.count} (${Math.round((bucket.count / total) * 100)}%)`}
                   </span>
                 </li>
               ))}
@@ -165,5 +172,65 @@ export function LampLegend() {
         })}
       </dl>
     </details>
+  );
+}
+
+const JUDGE_ROWS: Array<{ key: keyof JudgeTotals; label: string; name: string; color: string }> = [
+  { key: 'pgreat', label: 'PG', name: 'PGREAT', color: '#38bdf8' },
+  { key: 'great', label: 'GR', name: 'GREAT', color: '#facc15' },
+  { key: 'good', label: 'GD', name: 'GOOD', color: '#4ade80' },
+  { key: 'bad', label: 'BD', name: 'BAD', color: '#c084fc' },
+  { key: 'poor', label: 'PR', name: 'POOR', color: '#f87171' },
+  { key: 'emptyPoor', label: 'EPR', name: 'empty POOR (a press with no note)', color: '#94a3b8' },
+];
+
+/**
+ * How a player's notes were judged, summed over every play under the display ruleset: one stacked bar and the count
+ * of each judgment. Empty POORs are presses, not notes, so they are listed but stay out of the bar's share.
+ */
+export function JudgeTotalsCard(props: { judges: JudgeTotals; ruleset: string }) {
+  const notes = JUDGE_ROWS.filter((row) => row.key !== 'emptyPoor').reduce(
+    (sum, row) => sum + props.judges[row.key],
+    0,
+  );
+  return (
+    <section class="card gap-4" data-size="sm">
+      <header>
+        <h2>Judgments</h2>
+        <p>Every note of every play under {props.ruleset}.</p>
+      </header>
+      <div class="space-y-3 px-4">
+        {notes === 0 ? (
+          <p class="text-muted-foreground text-sm">No plays yet.</p>
+        ) : (
+          <div
+            class="ring-foreground/10 flex h-3 overflow-hidden rounded-full ring-1"
+            role="img"
+            aria-label={JUDGE_ROWS.map((row) => `${row.name}: ${props.judges[row.key]}`).join(', ')}
+          >
+            {JUDGE_ROWS.filter((row) => row.key !== 'emptyPoor' && props.judges[row.key] > 0).map((row) => (
+              <span
+                title={`${row.name}: ${props.judges[row.key]}`}
+                style={`background:${row.color};width:${(props.judges[row.key] / notes) * 100}%`}
+              />
+            ))}
+          </div>
+        )}
+        <dl class="grid grid-cols-3 gap-x-6 gap-y-1 text-sm sm:grid-cols-6">
+          {JUDGE_ROWS.map((row) => (
+            <div class="flex items-center justify-between gap-2 sm:block" title={row.name}>
+              <dt class="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+                <span
+                  class="ring-foreground/20 inline-block size-2 rounded-full ring-1"
+                  style={`background:${row.color}`}
+                />
+                {row.label}
+              </dt>
+              <dd class="font-semibold tabular-nums">{props.judges[row.key].toLocaleString('en-US')}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
   );
 }

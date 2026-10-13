@@ -159,11 +159,13 @@ describe('Leaderboard pages', () => {
     expect(ranking.status).toBe(200);
     expect(ranking.html).toContain('2 players');
     // Ranked by EX score: 18 (nine PGREATs) above 8.
-    // EX-Score with its maximum and rate: ten notes make a maximum of 20.
-    expect(ranking.html.indexOf('>18 / 20 (90.00%)<')).toBeGreaterThan(0);
-    expect(ranking.html.indexOf('>18 / 20 (90.00%)<')).toBeLessThan(ranking.html.indexOf('>8 / 20 (40.00%)<'));
-    // A row opens the player's best play, and its info icon opens the play's details.
-    expect(ranking.html).toContain('aria-label="Best play of');
+    // EX-Score over its rate: ten notes make a maximum of 20.
+    expect(ranking.html.indexOf('>18</div><div class="text-muted-foreground text-xs">90.00%<')).toBeGreaterThan(0);
+    expect(ranking.html.indexOf('>90.00%<')).toBeLessThan(ranking.html.indexOf('>40.00%<'));
+    // A row opens the play it shows, and its info icon opens the play's details.
+    expect(ranking.html).toContain('aria-label="Play of');
+    // The filters are switches, and say whether they are on.
+    expect(ranking.html).toMatch(/role="switch" aria-checked="false"[^>]*>.*?Every play/);
     expect(ranking.html).toContain('popovertarget="info-');
     expect(ranking.html).toContain('popover="auto"');
     // The card is a tooltip anchored to its icon.
@@ -184,7 +186,11 @@ describe('Leaderboard pages', () => {
     expect(player.status).toBe(200);
     expect(player.html).toContain(`@${firstHandle}`);
     // Player figures: plays, charts, the lamp and DJ Rank spreads of their bests, and the rulesets they played under.
-    expect(player.html).toContain('>Average rate (LR2 rules)<');
+    expect(player.html).toContain('>Average rate<');
+    // Totals: the play time and the notes, with every judgment, and every lamp and rank in the legends.
+    expect(player.html).toContain('>Play time<');
+    expect(player.html).toContain('>Judgments<');
+    expect(player.html).toContain('>EX HARD CLEAR<');
     expect(player.html).toContain('>DJ Ranks<');
     expect(player.html).toContain('>Played under<');
   });
@@ -204,7 +210,7 @@ describe('Leaderboard pages', () => {
     expect(top.html).toContain('scored under beatoraja');
     expect(top.html).toMatch(/data-variant="primary" aria-current="true"[^>]*>beatoraja</);
     const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
-    expect(score.html).toMatch(/<tr data-state="selected">.*?beatoraja.*?>shown<\/span>/);
+    expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>shown<\/span>/);
     // Without the cookie, LR2.
     expect((await page('/leaderboard')).html).toContain('scored under LR2');
 

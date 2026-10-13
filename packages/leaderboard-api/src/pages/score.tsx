@@ -2,7 +2,7 @@
 import type { Child } from 'hono/jsx';
 import { openDatabase } from '../db/client.ts';
 import { loadScoreDetail } from '../scores/detail.ts';
-import { ResultsTable } from './components/tables.tsx';
+import { ResultCards } from './components/lists.tsx';
 import { Details, LampLegend } from './components/cards.tsx';
 import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
@@ -140,7 +140,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
         </a>
         {player.anonymous ? <Tag>anonymous</Tag> : null}
       </PageHeader>
-      <ResultsTable
+      <ResultCards
         results={detail.results}
         playedRuleset={detail.score.playedRuleset}
         displayRuleset={displayRuleset(c)}

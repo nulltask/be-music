@@ -1,10 +1,10 @@
 /** @jsxImportSource hono/jsx */
 import { openDatabase } from '../db/client.ts';
-import { RecentScoresTable } from './components/tables.tsx';
-import { Details, DistributionCard, LampLegend, Stats } from './components/cards.tsx';
-import { Avatar, LocalTime, Tag } from './components/basics.tsx';
+import { RecentScoresList } from './components/lists.tsx';
+import { Details, DistributionCard, JudgeTotalsCard, LampLegend, Stats } from './components/cards.tsx';
+import { Avatar, LocalTime, SectionHeading, Tag } from './components/basics.tsx';
 import { loadPlayer, loadPlayInfos, loadRecentScores } from './data.ts';
-import { formatPercent, rulesetName } from './format.ts';
+import { formatPercent, formatPlayTime, rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { day, displayRuleset, meta, notFound, PAGE_CACHE, RECENT_LIMIT, when, type PageContext } from './page.tsx';
 import { loadPlayerStats } from './stats.ts';
@@ -54,22 +54,27 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
         items={[
           ['Plays', stats.plays],
           ['Charts', stats.charts],
-          [`Average rate (${rulesetName(ruleset)})`, formatPercent(stats.averageRate)],
+          ['Play time', formatPlayTime(stats.playTimeMs)],
+          ['Notes', stats.notes.toLocaleString('en-US')],
+          [`Average rate`, formatPercent(stats.averageRate)],
           ['Last played', day(stats.lastPlayedAt)],
         ]}
       />
+      <JudgeTotalsCard judges={stats.judges} ruleset={rulesetName(ruleset)} />
       <div class="grid gap-6 lg:grid-cols-2">
         <DistributionCard
           title="Clear lamps"
           description={`Best lamp per chart under ${rulesetName(ruleset)}, without assists.`}
           distribution={stats.lamps}
           kind="lamp"
+          showEmpty
         />
         <DistributionCard
           title="DJ Ranks"
           description={`Best EX-Score per chart under ${rulesetName(ruleset)}, without assists.`}
           distribution={stats.djRanks}
           kind="dj-rank"
+          showEmpty
         />
       </div>
       <Details
@@ -87,15 +92,18 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
           ],
         ]}
       />
-      <RecentScoresTable
-        scores={scores}
-        infos={await loadPlayInfos(
-          db,
-          scores.map((entry) => entry.scoreId),
-        )}
-        showPlayer={false}
-        empty="No plays yet."
-      />
+      <section class="space-y-3" aria-labelledby="latest-plays">
+        <SectionHeading id="latest-plays">Latest plays</SectionHeading>
+        <RecentScoresList
+          scores={scores}
+          infos={await loadPlayInfos(
+            db,
+            scores.map((entry) => entry.scoreId),
+          )}
+          showPlayer={false}
+          empty="No plays yet."
+        />
+      </section>
       <LampLegend />
     </Layout>,
   );
