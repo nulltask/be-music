@@ -10,6 +10,7 @@ import { bestScore, profile, score, scoreResult } from './db/schema.ts';
 import type { Env } from './env.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from './http/body.ts';
 import { countPlayers, loadRanking, rankOfExScore, type RankingFilter } from './ranking.ts';
+import { mountPages } from './pages/routes.tsx';
 import { submitScore } from './scores/submit.ts';
 
 interface Variables {
@@ -17,7 +18,7 @@ interface Variables {
   userId: string | undefined;
 }
 
-type AppEnv = { Bindings: Env; Variables: Variables };
+export type AppEnv = { Bindings: Env; Variables: Variables };
 
 const rulesetSchema = v.picklist(['lr2', 'beatoraja', 'iidx']);
 const flagSchema = v.optional(v.picklist(['0', '1', 'true', 'false']), '0');
@@ -202,6 +203,8 @@ export function createApp(options: { now?: () => number; newId?: () => string } 
       playCount: mine.playCount,
     });
   });
+
+  mountPages(app);
 
   return app;
 }

@@ -1,0 +1,5 @@
+/* Leaderboard pages: Tailwind CSS v4 with the Basecoat components (shadcn/ui design, no framework runtime).
+   Compiled by scripts/build-css.ts into styles.generated.ts; only the classes the pages use are kept. */
+@import 'tailwindcss' source(none);
+@source "./";
+@import 'basecoat-css';

@@ -210,6 +210,12 @@ describe('GET /api/v1/scores/:id', () => {
       verification: 'L4',
     });
     expect(detail.results).toHaveLength(3);
+    // The final gauge is stored per ruleset, as a percentage.
+    for (const result of detail.results as Array<{ gaugeFinal: number | null }>) {
+      expect(typeof result.gaugeFinal).toBe('number');
+      expect(result.gaugeFinal).toBeGreaterThanOrEqual(0);
+      expect(result.gaugeFinal).toBeLessThanOrEqual(100);
+    }
 
     const playlog = await fetchApp(`/api/v1/scores/${accepted.scoreId}/playlog`);
     expect(playlog.status).toBe(200);

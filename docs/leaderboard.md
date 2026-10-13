@@ -252,7 +252,8 @@ client_policies (name, min_version, blocked_versions JSON)
 ```
 
 - Ranking queries use an index on `best_scores (chart_fp, ruleset, assisted, best_ex DESC)`.
-- A chart is **listed publicly** once more than one player has played it, or once it appears in a difficulty table.
+- A chart is **listed publicly** once two players who are not anonymous have played it (anonymous accounts cost
+  nothing, so they do not count), or once it appears in a difficulty table.
 - R2 keys: `playlogs/{scoreId}.bmplay.json.gz`, `charts/{chartFp}.json`, `ghosts/{scoreId}.bin`,
   `og/scores/{scoreId}.png`.
 - **Replays**: each user chooses who can download their play logs (a per-user default, overridable per score).
@@ -297,13 +298,24 @@ counted in D1.
 
 ## 10. Pages (`/leaderboard/*`)
 
-Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly:
+Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly, and styled as an information site with
+Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime), following the system colour scheme:
 
+- `/leaderboard` — the top page: the newest plays, each under the ruleset it was played with. It shows every play by
+  a player who is not anonymous, on any chart, tagging charts that are not listed yet as new; anonymous plays come in
+  with a filter. An invented chart reaches this page only through an account with a passkey.
 - `/leaderboard/scores/:id` — a score
 - `/leaderboard/charts/:chartFp` — a chart's rankings
 - `/leaderboard/players/:handle` — a profile, and `/leaderboard/players/:handle/versus/:rival`
 
-Interactive parts (the rival button and similar) are small `hono/jsx/dom` islands. If the site grows into an
+Every page shows its figures under one **display ruleset** (LR2, beatoraja or IIDX), chosen in the header and kept in a
+cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL
+(`/leaderboard/ruleset/:id?next=…`, which only returns to Leaderboard pages), so page URLs stay shareable without
+changing the setting of whoever opens them. Since a page depends on that cookie, pages are `Cache-Control: private,
+max-age=0`. The chart page links to the chart elsewhere, once per file it is known by, in the formats BMS Search itself
+uses: Mocha-Repository, MinIR and BMS Search (`/patterns/{sha256}`) by the file SHA-256, and LR2IR by the MD5 once it
+is recorded. A chart with no known hash gets a title search on BMS Search. Interactive parts (the rival button and similar) are
+small `hono/jsx/dom` islands. If the site grows into an
 application, HonoX or Nuxt can take over; the shared data-access functions keep that move cheap.
 
 ## 11. OG images and sharing
