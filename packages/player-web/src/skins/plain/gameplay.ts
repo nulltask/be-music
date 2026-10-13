@@ -1,5 +1,7 @@
 import {
   flashingGreatColor,
+  holdSeed,
+  holdSparks,
   isFlashingGreat,
   judgeDisplayWord,
   loadingDots,
@@ -60,6 +62,7 @@ export function drawGameplay({ context: ctx, width, height }: BeMusicSurface<'2d
 
   drawLanes(ctx, frame);
   drawNotes(ctx, frame);
+  drawHolds(ctx, frame);
   drawBombs(ctx, frame);
   if (portrait) {
     const hud = resolvePortraitGameplayHud(layout);
@@ -148,6 +151,32 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillRect(note.x, note.y - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
   }
 }
+
+/**
+ * While a long note is held, its lane's stretch of the judgement line glows (a slow pulse) and sparks keep rising
+ * from it, so a held note reads as held at a glance. Drawn from the hold's age alone, like every effect here.
+ */
+function drawHolds(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
+  const y = frame.layout.playfield.judgementY;
+  for (const lane of frame.lanes) {
+    if (lane.holding !== true || lane.holdStartedAtMs === undefined) continue;
+    const ageMs = frame.nowMs - lane.holdStartedAtMs;
+    const centerX = lane.x + lane.w / 2;
+    ctx.fillStyle = HOLD_GLOW;
+    ctx.globalAlpha = 0.55 + 0.25 * Math.sin(ageMs / 90);
+    ctx.fillRect(lane.x, y - 3, lane.w, 6);
+    ctx.fillStyle = '#ffffff';
+    for (const spark of holdSparks(ageMs, holdSeed(lane.channel, lane.holdStartedAtMs), lane.w)) {
+      ctx.globalAlpha = spark.alpha;
+      const size = spark.size * 1.6;
+      ctx.fillRect(centerX + spark.offsetX - size / 2, y - spark.rise - size / 2, size, size);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** The held lane's glow on the judgement line: the key beam's blue, brighter. */
+const HOLD_GLOW = 'rgb(120, 170, 255)';
 
 /** Each hit draws a ring that widens and fades over the effect's lifetime. */
 function drawBombs(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {

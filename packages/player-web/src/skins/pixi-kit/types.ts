@@ -101,6 +101,11 @@ export interface PixiBombsContext {
   pool: ChildPool;
   bombs: readonly BeMusicBomb[];
   nowMs: number;
+  /**
+   * The lanes, for effects tied to a lane rather than a hit: `holding` / `holdStartedAtMs` say a long note is held
+   * there. Drawn in this layer, above the notes.
+   */
+  lanes?: readonly BeMusicLaneFrame[];
   /** Current combo — lets skins escalate hit effects as a run builds. */
   combo?: number;
   effects?: BeMusicEffectLevel;
