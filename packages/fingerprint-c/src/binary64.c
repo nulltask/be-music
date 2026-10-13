@@ -82,7 +82,7 @@ int b64_from_rational(bmfp_ctx *ctx, const rat *value, b64 *out) {
   }
   if (ok) {
     uint64_t mant = bn_low_u64(&q);
-    int order;
+    int order = 0;
     /* round half to even on the remainder: compare 2 * rest with the divisor */
     ok = bn_shl(ctx, &twice, &rest, 1);
     if (ok) {
@@ -139,8 +139,8 @@ static int rat_pow10(bmfp_ctx *ctx, rat *r, long power) {
 /* Whether `candidate` lies in the rounding interval (low, high), the ends included when `inclusive`. */
 static int in_interval(bmfp_ctx *ctx, const rat *candidate, const rat *low, const rat *high, int inclusive,
                        int *inside) {
-  int lo;
-  int hi;
+  int lo = 0;
+  int hi = 0;
   if (!rat_cmp(ctx, candidate, low, &lo) || !rat_cmp(ctx, candidate, high, &hi)) return 0;
   *inside = inclusive ? (lo >= 0 && hi <= 0) : (lo > 0 && hi < 0);
   return 1;
@@ -212,13 +212,13 @@ int b64_shortest(bmfp_ctx *ctx, const b64 *value, rat *out) {
     e10 = bits >= 0 ? (bits * 1233) / 4096 : -(((-bits) * 1233 + 4095) / 4096);
   }
   while (ok) {
-    int order;
+    int order = 0;
     ok = rat_pow10(ctx, &scale, e10) && rat_cmp(ctx, &scale, &v, &order);
     if (!ok || order <= 0) break;
     e10--;
   }
   while (ok) {
-    int order;
+    int order = 0;
     ok = rat_pow10(ctx, &scale, e10 + 1) && rat_cmp(ctx, &scale, &v, &order);
     if (!ok || order > 0) break;
     e10++;
@@ -230,7 +230,7 @@ int b64_shortest(bmfp_ctx *ctx, const b64 *value, rat *out) {
     ok = rat_pow10(ctx, &scale, power) && rat_div(ctx, &t, &v, &scale) &&
          bn_divmod(ctx, &floor_t, &rest, &t.n, &t.d);
     for (pass = 0; ok && pass < 2; pass++) {
-      int inside;
+      int inside = 0;
       if (pass == 1 && bn_is_zero(&rest)) break;
       ok = (pass == 0 ? bn_copy(ctx, &c, &floor_t) : bn_add(ctx, &c, &floor_t, &one)) &&
            rat_set(ctx, &candidate, &c, &one) && rat_mul(ctx, &candidate, &candidate, &scale) &&
@@ -240,7 +240,7 @@ int b64_shortest(bmfp_ctx *ctx, const b64 *value, rat *out) {
       if (!ok) break;
       bn_abs(&distance.n);
       if (found) {
-        int order;
+        int order = 0;
         ok = rat_cmp(ctx, &distance, &best_distance, &order);
         if (!ok) break;
         /* closest wins; on a tie, the even c */
