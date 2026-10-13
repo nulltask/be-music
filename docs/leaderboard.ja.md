@@ -297,7 +297,8 @@ client_policies (name, min_version, blocked_versions JSON)
 
 ## 10. ページ（`/leaderboard/*`）
 
-leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。
+leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。見た目は情報サイトとして、
+Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの shadcn/ui デザイン）で整え、OS の配色に従います。
 
 - `/leaderboard` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。匿名でない
   プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。

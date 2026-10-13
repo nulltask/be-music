@@ -13,7 +13,8 @@
     "db:migrate:local": "cf d1 migrations apply <D1_DATABASE_ID> --local --persist-to .wrangler/state --dir migrations",
     "db:migrate:staging": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
     "db:migrate:production": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
-    "clean": "rimraf .wrangler .cloudflare"
+    "clean": "rimraf .wrangler .cloudflare",
+    "build:css": "node scripts/build-css.ts"
   },
   "dependencies": {
     "@be-music/chart": "workspace:*",
@@ -28,9 +29,12 @@
   "devDependencies": {
     "@be-music/parser": "workspace:*",
     "@cloudflare/workers-types": "^5.20261013.1",
+    "@tailwindcss/cli": "^4.3.3",
+    "basecoat-css": "^1.0.2",
     "cf": "1.0.0-beta.14",
     "drizzle-kit": "^0.31.11",
     "miniflare": "5.20261006.1-alpha",
+    "tailwindcss": "^4.3.3",
     "wrangler": "^4.149.0"
   }
 }

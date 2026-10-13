@@ -1,20 +1,28 @@
 import { ClearLamp } from '../scoring/lamp.ts';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style. */
-export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string }>> = {
-  [ClearLamp.FAILED]: { label: 'FAILED', color: '#7a1f2b' },
-  [ClearLamp.ASSIST_EASY]: { label: 'ASSIST EASY', color: '#8a5cf6' },
-  [ClearLamp.EASY]: { label: 'EASY CLEAR', color: '#3fb950' },
-  [ClearLamp.NORMAL]: { label: 'CLEAR', color: '#3b82f6' },
-  [ClearLamp.HARD]: { label: 'HARD CLEAR', color: '#e5e7eb' },
-  [ClearLamp.EX_HARD]: { label: 'EX HARD CLEAR', color: '#f5c518' },
-  [ClearLamp.FULL_COMBO]: { label: 'FULL COMBO', color: '#22d3ee' },
-  [ClearLamp.PERFECT]: { label: 'PERFECT', color: '#f472b6' },
-  [ClearLamp.MAX]: { label: 'MAX', color: '#ffffff' },
+export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string; meaning: string }>> = {
+  [ClearLamp.FAILED]: { label: 'FAILED', color: '#7a1f2b', meaning: 'Did not clear.' },
+  [ClearLamp.ASSIST_EASY]: { label: 'ASSIST EASY', color: '#8a5cf6', meaning: 'Cleared on the ASSIST EASY gauge.' },
+  [ClearLamp.EASY]: { label: 'EASY CLEAR', color: '#3fb950', meaning: 'Cleared on the EASY gauge.' },
+  [ClearLamp.NORMAL]: { label: 'CLEAR', color: '#3b82f6', meaning: 'Cleared on the normal gauge (GROOVE / NORMAL).' },
+  [ClearLamp.HARD]: { label: 'HARD CLEAR', color: '#e5e7eb', meaning: 'Cleared on the HARD gauge.' },
+  [ClearLamp.EX_HARD]: {
+    label: 'EX HARD CLEAR',
+    color: '#f5c518',
+    meaning: 'Cleared on the EX-HARD, DEATH or HAZARD gauge.',
+  },
+  [ClearLamp.FULL_COMBO]: {
+    label: 'FULL COMBO',
+    color: '#22d3ee',
+    meaning: 'No BAD and no missed POOR (empty POORs do not count). The top lamp under LR2 and IIDX.',
+  },
+  [ClearLamp.PERFECT]: { label: 'PERFECT', color: '#f472b6', meaning: 'A full combo without a GOOD (beatoraja).' },
+  [ClearLamp.MAX]: { label: 'MAX', color: '#ffffff', meaning: 'Every note a PGREAT (beatoraja).' },
 };
 
-export function lampStyle(lamp: number): { label: string; color: string } {
-  return LAMP_STYLES[lamp] ?? { label: 'NO PLAY', color: '#6b7280' };
+export function lampStyle(lamp: number): { label: string; color: string; meaning: string } {
+  return LAMP_STYLES[lamp] ?? { label: 'NO PLAY', color: '#6b7280', meaning: 'Not played.' };
 }
 
 export const RULESET_LABELS: Readonly<Record<string, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', iidx: 'IIDX' };

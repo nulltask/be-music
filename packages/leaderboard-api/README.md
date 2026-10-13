@@ -72,6 +72,17 @@ Workers Builds deploys `devel` to the staging Worker and `main` to production:
 The Worker has no public URL; the player's Worker forwards `/api/*` and `/leaderboard/*` to it through a Service
 Binding.
 
+## Pages
+
+The pages under `/leaderboard` are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
+shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
+which is committed and served from `/leaderboard/assets/app.<hash>.css`. After changing classes in the pages, rebuild
+it:
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:css
+```
+
 ## Tests
 
 `pnpm test` runs this package's tests with the rest of the workspace. The API tests drive the Hono app with real D1

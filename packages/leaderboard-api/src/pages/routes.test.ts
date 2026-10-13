@@ -137,9 +137,9 @@ describe('Leaderboard pages', () => {
     // Every page now reads beatoraja: the header switch marks it, the score page marks it as shown.
     const top = await page('/leaderboard', cookie);
     expect(top.html).toContain('scored under beatoraja');
-    expect(top.html).toMatch(/class="on"[^>]*>beatoraja</);
+    expect(top.html).toMatch(/data-variant="primary" aria-current="true"[^>]*>beatoraja</);
     const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
-    expect(score.html).toMatch(/beatoraja<span class="tag">shown<\/span>/);
+    expect(score.html).toMatch(/<tr data-state="selected">.*?beatoraja.*?>shown<\/span>/);
     // Without the cookie, LR2.
     expect((await page('/leaderboard')).html).toContain('scored under LR2');
 
