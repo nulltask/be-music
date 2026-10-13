@@ -324,6 +324,11 @@ function SignUpDialog() {
   );
 }
 
+/** The be-music source repository. */
+export const SOURCE_URL = 'https://github.com/nulltask/be-music';
+
+const FOOTER_LINK = 'hover:text-foreground inline-flex items-center gap-1 underline-offset-4 hover:underline';
+
 /** What each ruleset scores like, for the ruleset menu. */
 const RULESET_NOTES: Readonly<Record<PlaylogRulesetId, string>> = {
   lr2: 'LR2’s judge windows, gauges and lamps',
@@ -490,29 +495,19 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 <EntityIcon kind="latest" size="md" class="text-current" />
                 <span class="hidden sm:inline">Latest</span>
               </a>
-              {/* The API reference is a tool page of its own, so it opens beside the Leaderboard. */}
-              <a
-                class="hover:text-foreground inline-flex items-center gap-1.5"
-                href="/leaderboard/api"
-                title="API (opens in a new tab)"
-                target="_blank"
-                rel="noopener"
-              >
-                <EntityIcon kind="api" size="md" class="text-current" />
-                <span class="hidden sm:inline">API</span>
-                <Icon svg={ExternalLink} class="[&>svg]:size-3" />
-              </a>
-              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/about" title="About">
-                <EntityIcon kind="about" size="md" class="text-current" />
-                <span class="hidden sm:inline">About</span>
-              </a>
-              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/help" title="Help">
-                <EntityIcon kind="help" size="md" class="text-current" />
-                <span class="hidden sm:inline">Help</span>
-              </a>
             </nav>
             <div class="ms-auto flex items-center gap-2">
               <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />
+              <a
+                class="btn"
+                data-size="sm"
+                data-variant="ghost"
+                href="/leaderboard/help"
+                title="Help: what the figures and marks mean"
+                aria-label="Help"
+              >
+                <EntityIcon kind="help" size="md" class="text-current" />
+              </a>
               <AccountMenu viewer={props.meta.viewer} />
               <a class="btn" data-size="sm" href="/" title="Play in the browser">
                 <Icon svg={Play} />
@@ -526,19 +521,30 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
           <Breadcrumbs crumbs={props.meta.crumbs} />
           {props.children}
         </main>
-        <footer class="text-muted-foreground mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 pt-4 pb-8 text-xs">
-          <span>Beta — rankings may be reset while scoring rules settle.</span>
-          {/* The holder and licence of the be-music repository (LICENSE). */}
-          <span>
-            © 2026{' '}
-            <a
-              class="hover:text-foreground underline-offset-4 hover:underline"
-              href="https://github.com/nulltask/be-music"
-            >
-              nulltask
-            </a>{' '}
-            · MIT License
-          </span>
+        <footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs">
+          {/* What is about the site rather than in it: its story, help, the API (a tool page of its own, so it opens
+              beside the Leaderboard) and the source. */}
+          <nav class="flex flex-wrap items-center gap-x-4 gap-y-1" aria-label="About the Leaderboard">
+            <a class={FOOTER_LINK} href="/leaderboard/about">
+              About
+            </a>
+            <a class={FOOTER_LINK} href="/leaderboard/help">
+              Help
+            </a>
+            <a class={FOOTER_LINK} href="/leaderboard/api" target="_blank" rel="noopener" title="Opens in a new tab">
+              API
+              <Icon svg={ExternalLink} class="[&>svg]:size-3" />
+            </a>
+            <a class={FOOTER_LINK} href={SOURCE_URL} target="_blank" rel="noopener noreferrer" title="Opens GitHub">
+              GitHub
+              <Icon svg={ExternalLink} class="[&>svg]:size-3" />
+            </a>
+          </nav>
+          <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+            <span>Beta — rankings may be reset while scoring rules settle.</span>
+            {/* The holder and licence of the be-music repository (LICENSE). */}
+            <span>© 2026 nulltask · MIT License</span>
+          </div>
         </footer>
       </body>
     </html>

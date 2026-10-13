@@ -1,9 +1,8 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
-import { Layout, PageHeader } from './layout.tsx';
+import { Layout, PageHeader, SOURCE_URL } from './layout.tsx';
 import { meta, PAGE_CACHE, type PageContext } from './page.tsx';
 
-const SOURCE_URL = 'https://github.com/nulltask/be-music';
 const LINK = 'text-foreground underline underline-offset-4 hover:text-primary';
 
 /** One section of the page: a heading and its paragraphs or list. */
