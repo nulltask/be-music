@@ -5,7 +5,7 @@ import { isOn } from '../http/query.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
 import { loadChartFiles, loadPlayRanking, type ChartFile } from '../ranking-plays.ts';
 import { RankingList } from './components/lists.tsx';
-import { Details, DistributionCard, Elsewhere, LampLegend, Stats } from './components/cards.tsx';
+import { Details, DistributionCard, Elsewhere, Stats } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, Filters, LocalTime, SectionHeading, Segmented, Tag, Toggle } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
@@ -203,7 +203,6 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
         ])}
       />
       <Elsewhere links={elsewhere} />
-      <LampLegend />
     </Layout>,
   );
 }

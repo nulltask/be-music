@@ -3,10 +3,9 @@
 import type { Child } from 'hono/jsx';
 import { ExternalLink as ExternalLinkIcon } from 'lucide-static';
 import type { ExternalLink } from '../external.ts';
-import { LAMP_STYLES, lampStyle } from '../format.ts';
+import { lampStyle } from '../format.ts';
 import type { JudgeTotals } from '../stats.ts';
 import type { Distribution } from '../stats.ts';
-import { Lamp } from './basics.tsx';
 import { Icon } from './icon.tsx';
 
 /** A titled block of details: label / value rows. */
@@ -154,30 +153,6 @@ export function Elsewhere(props: { links: ExternalLink[] }) {
         ))}
       </div>
     </section>
-  );
-}
-
-/** What each clear lamp means, in the order lamps rank (FAILED lowest). */
-export function LampLegend() {
-  return (
-    <details class="text-sm">
-      <summary class="text-muted-foreground hover:text-foreground cursor-pointer select-none">
-        What the clear lamps mean
-      </summary>
-      <dl class="mt-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
-        {Object.entries(LAMP_STYLES).map(([lamp]) => {
-          const style = lampStyle(Number(lamp));
-          return (
-            <>
-              <dt>
-                <Lamp lamp={Number(lamp)} />
-              </dt>
-              <dd class="text-muted-foreground">{style.meaning}</dd>
-            </>
-          );
-        })}
-      </dl>
-    </details>
   );
 }
 

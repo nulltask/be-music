@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import { openDatabase } from '../db/client.ts';
 import { RecentScoresList } from './components/lists.tsx';
-import { Details, DistributionCard, JudgeTotalsCard, LampLegend, Stats } from './components/cards.tsx';
+import { Details, DistributionCard, JudgeTotalsCard, Stats } from './components/cards.tsx';
 import { Avatar, LocalTime, SectionHeading, Tag } from './components/basics.tsx';
 import { loadPlayer, loadPlayInfos, loadRecentScores } from './data.ts';
 import { formatPercent, formatPlayTime, rulesetName } from './format.ts';
@@ -104,7 +104,6 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
           empty="No plays yet."
         />
       </section>
-      <LampLegend />
     </Layout>,
   );
 }

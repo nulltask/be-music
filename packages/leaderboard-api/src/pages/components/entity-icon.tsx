@@ -1,12 +1,12 @@
 /** @jsxImportSource hono/jsx */
-import { Code, FileMusic, Folder, History, Info, Settings, Trophy, User } from 'lucide-static';
+import { CircleHelp, Code, FileMusic, Folder, History, Info, Settings, Trophy, User } from 'lucide-static';
 
 /**
  * Icons that tell the Leaderboard's kinds of page apart: a chart, a chartset (the charts of one work), a player, a
  * score, and the site's own pages. Each kind keeps one Lucide icon and one colour wherever it appears (page headings,
  * breadcrumbs, the header). The SVGs are inlined: no font to load, crisp at any size, coloured by the text colour.
  */
-export type EntityKind = 'chart' | 'chartset' | 'player' | 'score' | 'latest' | 'settings' | 'api' | 'about';
+export type EntityKind = 'chart' | 'chartset' | 'player' | 'score' | 'latest' | 'settings' | 'api' | 'about' | 'help';
 
 const ENTITIES: Readonly<Record<EntityKind, { svg: string; color: string; label: string }>> = {
   chart: { svg: FileMusic, color: 'text-sky-600 dark:text-sky-400', label: 'Chart' },
@@ -17,6 +17,7 @@ const ENTITIES: Readonly<Record<EntityKind, { svg: string; color: string; label:
   settings: { svg: Settings, color: 'text-muted-foreground', label: 'Settings' },
   api: { svg: Code, color: 'text-muted-foreground', label: 'API' },
   about: { svg: Info, color: 'text-muted-foreground', label: 'About' },
+  help: { svg: CircleHelp, color: 'text-muted-foreground', label: 'Help' },
 };
 
 /** The entity's name, for screen readers next to an icon that stands alone. */
