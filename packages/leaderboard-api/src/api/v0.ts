@@ -4,6 +4,7 @@ import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/pla
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
 import { AVATAR_MAX_BYTES, putAvatar, removeAvatar } from '../avatars.ts';
+import { CARD_HEIGHT, CARD_MAX_BYTES, CARD_WIDTH, cardUrl, putScoreCard } from '../cards.ts';
 import { updateProfile } from '../profiles.ts';
 import type { AppEnv } from '../app.ts';
 import { createAuth } from '../auth.ts';
@@ -281,6 +282,42 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       const detail = await loadScoreDetail(c.get('db'), c.req.param('id'));
       if (detail === undefined) return c.json({ error: 'not-found' }, 404);
       return c.json(toScoreResponse(detail));
+    },
+  );
+
+  v0.put(
+    '/scores/:id/card',
+    describeRoute({
+      tags: ['Scores'],
+      summary: 'Upload a play’s share card',
+      description: `The ${CARD_WIDTH} x ${CARD_HEIGHT} picture link previews of the score page show (og:image), drawn by the player’s browser: PNG, WebP or JPEG, at most ${CARD_MAX_BYTES / 1024} KB. Only the play’s player can upload it.`,
+      requestBody: {
+        required: true,
+        content: {
+          'image/png': { schema: { type: 'string', format: 'binary' } },
+          'image/webp': { schema: { type: 'string', format: 'binary' } },
+          'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+        },
+      },
+      responses: {
+        200: json('Stored.', v.object({ cardUrl: v.string() })),
+        400: json('No image was sent.', errorResponse(['empty-body'])),
+        401: signInRequired,
+        403: json('Someone else played it.', errorResponse(['not-your-score'])),
+        404: notFound('The score'),
+        413: json('The image is too large.', errorResponse(['card-too-large'])),
+        415: json('Not a PNG, WebP or JPEG image.', errorResponse(['unsupported-image'])),
+      },
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      if (Number(c.req.header('content-length') ?? '0') > CARD_MAX_BYTES)
+        return c.json({ error: 'card-too-large' }, 413);
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      const result = await putScoreCard(c.get('db'), c.env.BLOBS, c.req.param('id'), userId, bytes);
+      if (!result.ok) return c.json({ error: result.error }, result.status);
+      return c.json({ cardUrl: cardUrl(c.req.param('id'), result.cardKey) });
     },
   );
 

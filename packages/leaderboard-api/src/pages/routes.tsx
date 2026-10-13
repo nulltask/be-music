@@ -5,6 +5,7 @@ import { Scalar } from '@scalar/hono-api-reference';
 import type { AppEnv } from '../app.ts';
 import { isRuleset } from '../rulesets.ts';
 import { avatarImage } from './avatar.ts';
+import { scoreCardImage } from './card.ts';
 import { mountClientScript } from './client-script.ts';
 import { chartPage } from './chart.tsx';
 import { chartsetPage } from './chartset.tsx';
@@ -28,6 +29,7 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.get('/leaderboard', topPage);
   app.get('/leaderboard/', topPage);
   app.get('/leaderboard/scores/:id', scorePage);
+  app.get('/leaderboard/scores/:id/card', scoreCardImage);
   app.get('/leaderboard/charts/:chartFingerprint', chartPage);
   app.get('/leaderboard/players/:handle', playerPage);
   app.get('/leaderboard/players/:handle/avatar', avatarImage);
