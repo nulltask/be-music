@@ -764,6 +764,8 @@
         "subtitle": "Visual 4-Bar Command Blocks",
         "artist": "Codex",
         "genre": "TEST",
+        "playLevel": "5",
+        "difficulty": 3,
         "total": 320
       },
       "notes": [
@@ -1243,6 +1245,8 @@
         "subtitle": "Visual 4-Bar Command Blocks",
         "artist": "Codex",
         "genre": "TEST",
+        "playLevel": "5",
+        "difficulty": 3,
         "total": 320
       },
       "notes": [

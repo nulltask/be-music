@@ -13,13 +13,14 @@
  *
  * Both tracks share one origin (the context time at `start`), so the encoded file is in sync by construction, and a
  * dropped frame (overloaded encoder, busy main thread) only lowers the frame rate — it can never shift the picture
- * against the sound. Encoded packets are muxed into WebM by Mediabunny, which also writes the seek index.
+ * against the sound. Encoded packets are muxed into MP4 or WebM by Mediabunny, which also writes the seek index.
  */
 import {
   AudioSample,
   AudioSampleSource,
   BufferTarget,
   CanvasSource,
+  Mp4OutputFormat,
   Output,
   Quality,
   WebMOutputFormat,
@@ -27,8 +28,12 @@ import {
   getFirstEncodableVideoCodec,
 } from 'mediabunny';
 
-/** Video codecs WebM can carry, in order of preference. */
-const WEBM_VIDEO_CODECS = ['vp9', 'vp8', 'av1'] as const;
+import {
+  DEFAULT_RECORDING_FORMAT,
+  recordingAudioCodecs,
+  recordingVideoCodecs,
+  type RecordingFormat,
+} from './recording-format.ts';
 
 /** Frames the worklet buffers before posting a chunk to the main thread (~85 ms at 48 kHz). */
 const AUDIO_CHUNK_FRAMES = 4096;
@@ -139,18 +144,20 @@ export interface WebCodecsCaptureOptions {
   fps: number;
   videoBitsPerSecond: number;
   audioBitsPerSecond: number;
+  /** Container and preferred video codec; MP4 with H.264 by default. */
+  format?: RecordingFormat;
 }
 
 /**
  * One WebCodecs recording session. {@link prepare} probes the codecs and loads the worklet (it rejects when no
- * WebM-compatible codec pair is encodable, so the caller can fall back to `MediaRecorder`); {@link captureFrame} is
- * called right after each scene render; {@link finish} flushes everything and returns the WebM bytes.
+ * codec pair for the format's container is encodable, so the caller can fall back to `MediaRecorder`); {@link captureFrame}
+ * is called right after each scene render; {@link finish} flushes everything and returns the file.
  */
 export class WebCodecsCapture {
   private readonly options: WebCodecsCaptureOptions;
   private readonly originSeconds: number;
   private readonly originFrame: number;
-  private output: Output<WebMOutputFormat, BufferTarget> | undefined;
+  private output: Output<WebMOutputFormat | Mp4OutputFormat, BufferTarget> | undefined;
   private videoSource: CanvasSource | undefined;
   private audioSource: AudioSampleSource | undefined;
   private tap: AudioWorkletNode | undefined;
@@ -174,20 +181,21 @@ export class WebCodecsCapture {
     const { canvas, audioContext, fps } = this.options;
     const videoQuality = new Quality({ bitrate: Math.round(this.options.videoBitsPerSecond) });
     const audioQuality = new Quality({ bitrate: Math.round(this.options.audioBitsPerSecond) });
+    const format = this.options.format ?? DEFAULT_RECORDING_FORMAT;
     const [videoCodec, audioCodec] = await Promise.all([
-      getFirstEncodableVideoCodec([...WEBM_VIDEO_CODECS], {
+      getFirstEncodableVideoCodec(recordingVideoCodecs(format), {
         width: canvas.width,
         height: canvas.height,
         quality: videoQuality,
       }),
-      getFirstEncodableAudioCodec(['opus'], {
+      getFirstEncodableAudioCodec(recordingAudioCodecs(format.container), {
         numberOfChannels: 2,
         sampleRate: audioContext.sampleRate,
         quality: audioQuality,
       }),
     ]);
     if (!videoCodec || !audioCodec) {
-      throw new Error('WebCodecsCapture: no WebM-compatible codec pair is encodable');
+      throw new Error(`WebCodecsCapture: no codec pair for ${format.container} is encodable`);
     }
     const moduleUrl = URL.createObjectURL(new Blob([CAPTURE_WORKLET_SOURCE], { type: 'text/javascript' }));
     try {
@@ -197,7 +205,11 @@ export class WebCodecsCapture {
     }
     if (this.closed) return;
 
-    const output = new Output({ format: new WebMOutputFormat(), target: new BufferTarget() });
+    // MP4 keeps its index at the front (`fastStart: 'in-memory'`), so the file plays and seeks before it is fully read.
+    const output = new Output({
+      format: format.container === 'mp4' ? new Mp4OutputFormat({ fastStart: 'in-memory' }) : new WebMOutputFormat(),
+      target: new BufferTarget(),
+    });
     const videoSource = new CanvasSource(canvas, {
       codec: videoCodec,
       quality: videoQuality,
@@ -241,7 +253,7 @@ export class WebCodecsCapture {
     this.pendingFrame = pending;
   }
 
-  /** Drains the worklet and the encoders and returns the finished WebM, or `undefined` if nothing was set up. */
+  /** Drains the worklet and the encoders and returns the finished file, or `undefined` if nothing was set up. */
   public async finish(): Promise<Blob | undefined> {
     if (this.closed) return undefined;
     this.closed = true;
@@ -257,7 +269,7 @@ export class WebCodecsCapture {
     }
     await output.finalize();
     const buffer = output.target.buffer;
-    return buffer ? new Blob([buffer], { type: 'video/webm' }) : undefined;
+    return buffer ? new Blob([buffer], { type: output.format.mimeType }) : undefined;
   }
 
   /** Abandons the session without producing a file. */

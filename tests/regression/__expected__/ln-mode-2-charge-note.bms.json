@@ -135,6 +135,8 @@
         "subtitle": "Charge Note — held continuously to tail; release-before-tail is NOT BAD",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "2",
+        "difficulty": 2,
         "total": 200
       },
       "notes": [

@@ -37,6 +37,7 @@ import { SongImageCache } from '../../skin/be-music/song-images.ts';
 import { resolveSelectListWindow } from '../../skin/be-music/registry.ts';
 import { phantomSkin } from '../../skins/phantom/index.ts';
 import {
+  designRectToCanvas,
   resolveDesignTextResolution,
   resolveScaledViewport,
   setDesignPixelRatio,
@@ -717,6 +718,12 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * hosts call {@link setSearchQuery} to seed it; the view never mutates it on its own.
    */
   private searchQuery = '';
+  /** The query as typed (case and spaces kept), for skins that show it. */
+  protected searchText = '';
+  /** Whether the host's text field is laid over the search box: the skin then leaves the box's text to it. */
+  protected searchEditing = false;
+  /** The viewport of the last render, to place the search box on the page. */
+  private lastViewport: { x: number; y: number; scale: number } | undefined;
   /**
    * Memoized result of {@link currentEntries}. Recomputed only when one of the captured inputs changes; otherwise the
    * cached array is returned as-is so per-frame call sites (slider value, bar renderer) hit a Map-like O(1) path
@@ -1578,6 +1585,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
    * the cursor pointing past the new end and `focusedSong()` would return undefined.
    */
   public setSearchQuery(query: string): void {
+    this.searchText = query;
     const normalized = query.trim().toLowerCase();
     if (this.searchQuery === normalized) {
       return;
@@ -1585,6 +1593,31 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     this.searchQuery = normalized;
     this.selectedIndex = 0;
     this.render();
+  }
+  /**
+   * Tells the scene the host's text field sits over the search box (`true`) or has left it (`false`). While it does,
+   * skins leave the box's text to the field, so the query is not drawn twice.
+   */
+  public setSearchEditing(editing: boolean): void {
+    if (this.searchEditing === editing) return;
+    this.searchEditing = editing;
+    this.render();
+  }
+
+  /**
+   * Where the skin's search box is on the canvas, in CSS pixels from the canvas's top-left corner, or `undefined` when
+   * the skin has none (or nothing has been drawn yet). Hosts lay their text field over it to edit the query in place.
+   */
+  public getSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    const rect = this.designSearchFieldRect();
+    const viewport = this.lastViewport;
+    if (rect === undefined || viewport === undefined) return undefined;
+    return designRectToCanvas(rect, viewport);
+  }
+
+  /** The search box in design pixels: the be-music skin's search hit area. Theme scenes override it. */
+  protected designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    return this.themeDesignSize === undefined ? this.beMusicRenderer?.searchFieldRect : undefined;
   }
 
   /**
@@ -2347,6 +2380,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     }
     this.root.position.set(viewport.x, viewport.y);
     this.root.scale.set(viewport.scale);
+    this.lastViewport = viewport;
     this.host?.setStageOrientation(
       useTheme ? 'landscape' : resolveStageOrientation({ width: designWidth, height: designHeight }),
     );
@@ -2421,6 +2455,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       focusedSong: this.focusedSong(),
       folderLabel: currentFolder?.label,
       searchQuery: this.searchQuery,
+      searchEditing: this.searchEditing,
       totalCharts: this.collection.songs.length,
       actions: this.beMusicActions,
       effects: this.options.beMusicEffects ?? 'full',

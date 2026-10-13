@@ -171,6 +171,8 @@
         "subtitle": "Zero, negative and undefined #BPMxx slots referenced from channel 08",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "1",
+        "difficulty": 1,
         "total": 300
       },
       "notes": [

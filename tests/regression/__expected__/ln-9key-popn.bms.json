@@ -190,6 +190,8 @@
         "subtitle": "Pop'n 9-key LN — channels 11..19, keys Z S X D C F V G B",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "2",
+        "difficulty": 2,
         "total": 200
       },
       "notes": [

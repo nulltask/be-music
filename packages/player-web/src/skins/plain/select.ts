@@ -47,11 +47,22 @@ export function drawSelect(surface: BeMusicSurface<'2d'>, frame: BeMusicSelectFr
     drawList(ctx, frame, width, SELECT_LAYOUT, drawRow);
   }
 
-  if (frame.searchQuery) {
-    // In the strip under the list (`listBottomInset` keeps it free).
-    const y = portrait ? height - PORTRAIT_SELECT_LAYOUT.listBottomInset / 2 : height - 20;
-    text(ctx, `SEARCH: ${frame.searchQuery}`, MARGIN, y, { size: 11, color: MUTED });
+  // The search box, in the strip under the list (`listBottomInset` keeps it free). Clicking it starts typing there;
+  // while the player types, the host's field sits over it and shows the text.
+  const searchY = portrait ? height - PORTRAIT_SELECT_LAYOUT.listBottomInset / 2 : height - 20;
+  const searchW = portrait ? width - MARGIN * 2 : PANEL_W;
+  ctx.strokeStyle = LINE;
+  ctx.lineWidth = 1;
+  ctx.strokeRect(MARGIN + 0.5, searchY - 9.5, searchW - 1, 19);
+  text(ctx, 'SEARCH', MARGIN + 8, searchY, { size: 9, weight: 800, color: MUTED });
+  if (!frame.searchEditing) {
+    text(ctx, frame.searchQuery || 'Title / artist / genre', MARGIN + 60, searchY, {
+      size: 11,
+      color: frame.searchQuery ? TEXT : MUTED,
+      maxWidth: searchW - 68,
+    });
   }
+  frame.hit(MARGIN + 56, searchY - 10, searchW - 56, 20, frame.actions.activateSearch, 'text');
 
   // After a pick, darken the screen over the outro.
   if (frame.launchAt !== undefined) {

@@ -22,6 +22,7 @@
 // The gameplay scene layers authored skin chrome, scrolling notes, markers, BGA still/video textures, judge popups,
 // key-beam glows, LN hold effects, and HUD text on top of the same engine-driven state.
 
+import { DEFAULT_BEATORAJA_FADEOUT_MS } from '../../skin/beatoraja/scene-transition.ts';
 import { Container, Graphics, Text, type Ticker } from 'pixi.js';
 import type { BeMusicJson } from '@be-music/json';
 import type {
@@ -76,6 +77,7 @@ import { BeatorajaRuntimeAdapter } from '../../skin/beatoraja/runtime-adapter.ts
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import type { RecordingFormat } from '../../recording/recording-format.ts';
 import { HISPEED_MAX, HISPEED_MIN } from '../gameplay-constants.ts';
 import { drainWebUiSignals } from '../../runtime/web-ui-runtime.ts';
 import { logger } from '../../logger.ts';
@@ -272,6 +274,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private lastJudgeComboTick = 0;
   private enginePromise?: Promise<EngineDriverResult>;
   private engineSettled = false;
+  /** Whether the skin's fade-out timer has been stamped (at the chart's end, or at the engine's stop). */
+  private fadeoutStamped = false;
+  /** Holds the play open past the chart's end through the skin's fade-out (`holdAfterChart`). */
+  private chartEndHold: AbortController | undefined;
+  private chartEndHoldTimer: ReturnType<typeof setTimeout> | undefined;
   private exitRequested = false;
   /**
    * Play-log assembled by the shared engine right before its play promise settles (`onPlaylogRecorded`).
@@ -529,6 +536,18 @@ export class PixiBeatorajaGameplayView implements PixiScene {
         onPlaylogRecorded: (playlog) => {
           this.playlog = playlog;
         },
+        // Keys stay live after the last note: the skin's fade-out starts when the chart settles, and the play ends
+        // (handing the host its summary) once the fade-out has run.
+        holdAfterChart: {
+          signal: (this.chartEndHold = new AbortController()).signal,
+          onSettled: () => {
+            this.stampFadeout();
+            this.chartEndHoldTimer = setTimeout(
+              () => this.chartEndHold?.abort(),
+              resolveFadeoutMs(this.options.skin.fadeout),
+            );
+          },
+        },
       },
       onInputSignalsReady: ({ inputSignals }) => {
         this.inputSignals = inputSignals;
@@ -553,7 +572,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
           this.adapter.markReady();
           this.adapter.markPlay();
         },
-        onStop: () => this.adapter.markFadeout(),
+        onStop: () => this.stampFadeout(),
         // The actual per-frame fan-out of frame / command / judge-combo events is handled by
         // `drainWebUiSignals` inside `tick()` so all engine state arrives at the renderer in a single
         // batched pass per Pixi frame. Leaving these callbacks unset would still work via the engine's
@@ -587,7 +606,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       });
   }
 
+  /** Stamps the skin's fade-out timer once, so the engine's stop after a held outro does not restart the fade. */
+  private stampFadeout(): void {
+    if (this.fadeoutStamped) return;
+    this.fadeoutStamped = true;
+    this.adapter.markFadeout();
+  }
+
   exit(): void {
+    if (this.chartEndHoldTimer !== undefined) clearTimeout(this.chartEndHoldTimer);
+    this.chartEndHoldTimer = undefined;
     if (this.tickerHandle && this.host) {
       this.host.app.ticker.remove(this.tickerHandle);
     }
@@ -682,7 +710,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * Idempotent in the sense that calling while a recording is already active is a no-op
    * (use {@link isRecording} as the canonical gate).
    */
-  startRecording(): void {
+  startRecording(options: { format?: RecordingFormat } = {}): void {
     if (this.recorder?.isActive() === true) return;
     if (this.host === undefined) {
       throw new Error('PixiBeatorajaGameplayView.startRecording: scene is not mounted (no host canvas)');
@@ -695,6 +723,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.options.audio.audioContext,
       audioOutput: this.options.audio.audioBus.outputNode,
+      format: options.format,
     });
     this.recorder.start();
   }
@@ -1369,4 +1398,11 @@ function resolveChartImage(
     default:
       return undefined;
   }
+}
+
+/** The skin's fade-out window in ms: its `fadeout`, or beatoraja's 500 ms when it has none. */
+function resolveFadeoutMs(fadeout: number | undefined): number {
+  return typeof fadeout === 'number' && Number.isFinite(fadeout) && fadeout >= 0
+    ? fadeout
+    : DEFAULT_BEATORAJA_FADEOUT_MS;
 }

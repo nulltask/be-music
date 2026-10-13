@@ -264,6 +264,8 @@
         "subtitle": "#SCROLLxx on SC, #SPEEDxx on SP, #STOPxx on 09, tempo on 03 and 08",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "4",
+        "difficulty": 3,
         "total": 300
       },
       "notes": [

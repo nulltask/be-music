@@ -20,20 +20,21 @@ export interface DebugMenuFolder {
 }
 
 /**
- * Every folder of the Debug Menu, top to bottom. Everyday folders start open; skin detail, the library tools, and the
- * developer settings start closed. Nested folders sit under the folder named in their key.
+ * Every folder of the Debug Menu, top to bottom. Everyday folders start open; skin detail, the library tools, capture,
+ * the Leaderboard and the developer settings start closed. Nested folders sit under the folder named in their key.
  */
 export const DEBUG_MENU_FOLDERS = {
   playOptions: { title: 'Play options', open: true },
-  audio: { title: 'Audio', open: true },
-  compressor: { title: 'Compressor', open: false },
-  compressorStages: { title: 'Stages', open: true },
   skin: { title: 'Skin & display', open: false },
   beatorajaSkins: { title: 'Beatoraja skins', open: true },
   skinSettings: { title: 'Skin settings', open: true },
   addSkin: { title: 'Add skin', open: false },
+  audio: { title: 'Audio', open: true },
+  compressor: { title: 'Compressor', open: false },
+  compressorStages: { title: 'Stages', open: true },
   library: { title: 'Library & records', open: false },
   bgaTranscode: { title: 'BGA video transcode', open: false },
+  capture: { title: 'Capture', open: false },
   leaderboard: { title: 'Leaderboard', open: false },
   developer: { title: 'Developer', open: false },
 } as const satisfies Record<string, DebugMenuFolder>;

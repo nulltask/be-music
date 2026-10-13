@@ -142,6 +142,8 @@
         "subtitle": "MGQ-style long notes spelled as a run of repeated tokens",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "2",
+        "difficulty": 2,
         "total": 250
       },
       "notes": [

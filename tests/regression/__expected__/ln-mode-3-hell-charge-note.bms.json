@@ -135,6 +135,8 @@
         "subtitle": "Hell Charge Note — gauge drains while NOT holding mid-LN",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "3",
+        "difficulty": 3,
         "total": 200
       },
       "notes": [

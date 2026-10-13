@@ -78,6 +78,7 @@ import {
   type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
+  type RecordingFormat,
 } from '@be-music/player-web/runtime';
 import {
   TUNABLE_COMPRESSORS,
@@ -149,6 +150,10 @@ import GUI, { type Controller } from 'lil-gui';
 import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
+import { navigationAfterDrop } from './drop-navigation.ts';
+import { InlineSearch } from './inline-search.ts';
+import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
+import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
@@ -177,6 +182,8 @@ import {
   storeSilentModeHintSeen,
 } from './silent-mode-playback.ts';
 import {
+  RECORD_LABEL,
+  STOP_RECORDING_LABEL,
   captureScreenshot,
   finalizeRecordingIfActive,
   toggleRecording,
@@ -237,6 +244,26 @@ function readStoredSkinEffects(): SkinEffectsLevel {
 const PLAY_LAYOUT_STORAGE_KEY = 'be-music-demo.play-layout';
 
 /** Stored Debug Menu play-layout pick, `'auto'` when none. */
+const RECORDING_FORMAT_STORAGE_KEY = 'be-music-demo.recording-format';
+
+/** The remembered "Video format" (`mp4/avc`, `webm/vp9`, …); MP4 · H.264 when none is stored or it is unknown. */
+function readStoredRecordingFormat(): string {
+  try {
+    return recordingFormatKey(parseRecordingFormatKey(window.localStorage.getItem(RECORDING_FORMAT_STORAGE_KEY)));
+  } catch {
+    // Storage blocked — use the default.
+    return recordingFormatKey(parseRecordingFormatKey(null));
+  }
+}
+
+function storeRecordingFormat(key: string): void {
+  try {
+    window.localStorage.setItem(RECORDING_FORMAT_STORAGE_KEY, key);
+  } catch {
+    // Storage blocked — the choice lasts for this visit only.
+  }
+}
+
 function readStoredPlayLayout(): PlayLayoutChoice {
   try {
     const stored = window.localStorage.getItem(PLAY_LAYOUT_STORAGE_KEY);
@@ -460,6 +487,22 @@ class PlayerWebDemoApp {
   /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
   private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
   /**
+   * The search field: typed into in place over the skin's search box (built-in and LR2 skins), or at the foot of the
+   * screen where the skin has none (beatoraja). It filters whichever select scene is on screen.
+   */
+  private readonly search = new InlineSearch({
+    input: document.querySelector<HTMLInputElement>('#search')!,
+    shell: document.querySelector<HTMLElement>('.shell')!,
+    canvas: () => this.sceneHost?.app.canvas,
+    fieldRect: () => (this.beatorajaSelectScene === undefined ? this.selectView?.getSearchFieldRect() : undefined),
+    setQuery: (query) => {
+      if (this.beatorajaSelectScene !== undefined) this.beatorajaSelectScene.setSearchQuery(query);
+      else this.selectView?.setSearchQuery(query);
+    },
+    setEditing: (editing) => this.selectView?.setSearchEditing(editing),
+    touch: () => document.documentElement.classList.contains('touch-first'),
+  });
+  /**
    * Beatoraja-skinned decide splash. Active during the select → gameplay handoff when the loaded
    * theme ships a decide skin (`type = 6`). Disposed before the gameplay scene mounts.
    */
@@ -524,6 +567,10 @@ class PlayerWebDemoApp {
    * the user's position.
    */
   private lastSelectNavigation: PixiSongSelectNavigation | undefined;
+  /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
+  private activeSkinSystem: SkinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
+  /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
+  private pendingSkinSystem: OfferedSkinFamily | undefined;
   /**
    * Compressor architecture for `audioCompressorMode` on every gameplay mount. Defaults to `'split'` (the new 3-stage
    * bus — see `audio-bus.ts` for the design rationale); the demo accepts a `?compressor=legacy` URL flag for A/B
@@ -679,6 +726,7 @@ class PlayerWebDemoApp {
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       openFiles: () => this.elements.filesInput.click(),
+      recordingFormat: readStoredRecordingFormat(),
       record: () => {
         void toggleRecording(this.recordingDeps());
       },
@@ -792,30 +840,7 @@ class PlayerWebDemoApp {
         return;
       }
       event.preventDefault();
-      this.elements.searchInput.focus();
-      this.elements.searchInput.select();
-    });
-    // Search input: forward every keystroke to the select view so the bar list filters live. Escape clears the filter
-    // and returns focus to the canvas (so arrow-key navigation works again immediately).
-    this.elements.searchInput.addEventListener('input', () => {
-      this.selectView?.setSearchQuery(this.elements.searchInput.value);
-    });
-    this.elements.searchInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        this.elements.searchInput.value = '';
-        this.selectView?.setSearchQuery('');
-        this.elements.searchInput.blur();
-      } else if (event.key === 'Enter') {
-        // Pressing Enter while typing should let the user pick the currently-focused (filtered) result without leaving
-        // the input first. `keydown` on the window won't fire on the select view (the input has focus), so route the
-        // action explicitly.
-        event.preventDefault();
-        // No public "trigger Enter" API on the view; setSearchQuery already moved the cursor to 0 after each keystroke,
-        // so closing the input + giving focus back to the canvas is enough for the user's next Enter press to pick that
-        // song.
-        this.elements.searchInput.blur();
-      }
+      this.search.open();
     });
 
     // Drag state via a depth counter rather than a plain add/remove pair on dragover/dragleave. The browser fires
@@ -921,11 +946,14 @@ class PlayerWebDemoApp {
     const paused = this.gameplayView?.isPaused() === true;
     // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
     const portraitStage = this.sceneHost.getStageOrientation() === 'portrait';
-    const state = `${inGameplay}/${touchPlay}/${paused}/${portraitStage}`;
+    const searchInSkin = !inGameplay && this.search.skinHasBox;
+    const state = `${inGameplay}/${touchPlay}/${paused}/${portraitStage}/${searchInSkin}`;
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
+    // A skin with its own search box hides the field at the foot of the screen; the box opens it in place.
+    shell.classList.toggle('search-in-skin', searchInSkin);
     shell.classList.toggle('touch-play', touchPlay);
     shell.classList.toggle('play-paused', paused);
     document.documentElement.classList.toggle('portrait-stage', portraitStage);
@@ -1075,34 +1103,30 @@ class PlayerWebDemoApp {
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open folder');
     gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
-    // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
-    // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
-    // in place once a theme drop adds LR2 / beatoraja to the pool.
-    this.rebuildSkinFamilyPicker();
-    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
-    // scene. Persisted so a reload keeps the pick.
-    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
-    const skinPicker = gui
-      .add(this.guiState, 'builtInSkin', skinOptions())
-      .name('Built-in skin')
-      .onChange((id: string) => {
-        this.handleBuiltInSkinChange(id);
-      });
-    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
-    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    this.recordController = gui.add(this.guiState, 'record').name('● Record');
-    // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
-    // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
-    gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
-
+    // Folders in the order a session uses them: how to play, how it looks and sounds, the library, capturing a play,
+    // the Leaderboard, then the developer settings.
     this.buildPlayOptionsFolder(addFolder(gui, DEBUG_MENU_FOLDERS.playOptions));
-    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
+    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
+    this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
     this.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui);
+  }
+
+  /** Capture: recording the play screen as a video in the chosen format, and screenshots. */
+  private buildCaptureFolder(capture: GUI): void {
+    this.recordController = capture.add(this.guiState, 'record').name(RECORD_LABEL);
+    // The container and codec of the video: MP4 · H.264 unless the player picks another, remembered across visits.
+    capture
+      .add(this.guiState, 'recordingFormat', recordingFormatOptions())
+      .name('Video format')
+      .onChange((key: string) => storeRecordingFormat(key));
+    // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
+    // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
+    capture.add(this.guiState, 'screenshot').name('📸 Screenshot');
   }
 
   /**
@@ -1254,6 +1278,21 @@ class PlayerWebDemoApp {
   /** How the skins look and lay out, the loaded themes' pickers, the be-music skin's settings, and adding skins. */
   private buildSkinFolder(skin: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
     this.skinFolder = skin;
+    // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
+    // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
+    // in place once a theme drop adds LR2 / beatoraja to the pool.
+    this.rebuildSkinFamilyPicker();
+    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
+    // scene. Persisted so a reload keeps the pick.
+    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
+    const skinPicker = skin
+      .add(this.guiState, 'builtInSkin', skinOptions())
+      .name('Built-in skin')
+      .onChange((id: string) => {
+        this.handleBuiltInSkinChange(id);
+      });
+    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
+    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
     skin
       .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
       .name('Skin effects')
@@ -1497,11 +1536,14 @@ class PlayerWebDemoApp {
         this.autoRecordArmed = value;
       },
       getRecordingFilenameBase: () => this.recordingFilenameBase,
+      getRecordingFormat: () => this.recordingFormat,
       setStatus: (text) => this.setStatus(text),
     };
   }
 
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
+    // The "Drop a skin" prompt has done its job once something lands.
+    document.querySelector<HTMLDialogElement>('#skin-drop')?.close();
     // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
     // with tens of thousands of WAVs visibly stalls the UI for several seconds, and we want the user to see "we're
     // working on it" immediately rather than after the slow phase finishes.
@@ -1580,6 +1622,8 @@ class PlayerWebDemoApp {
         themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
       } · songs=${songFiles.length}`,
     );
+    // The songs already listed, so the select screen can open on what this drop added.
+    const previousSongIds = new Set(this.collection.songs.map((song) => song.id));
     const tasks: Array<Promise<unknown>> = [];
     if (carriesLr2Theme) {
       tasks.push(this.loadTheme(themeFiles));
@@ -1617,10 +1661,82 @@ class PlayerWebDemoApp {
     } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
       this.setStatus('Theme loaded');
     }
+    // Open what was dropped: its folder, or the folder list when the drop carried several.
+    const dropped = navigationAfterDrop(this.collection.songs, previousSongIds);
+    if (dropped !== undefined) this.lastSelectNavigation = dropped;
     await this.showSelect();
+    // With LR2 / beatoraja skins on hold they are not loaded with the drop; ask instead whether to use the one it carried.
+    if (!EXTRA_SKINS_ENABLED) await this.offerDroppedSkin(themeFamilies, themeFiles);
     if (playlogFiles.length > 0) {
       await this.startPlaylogReplayFromFile(playlogFiles[0]!);
     }
+  }
+
+  /**
+   * Offers the LR2 or beatoraja skin a drop carried, once its songs are listed. Taking it loads the skin and switches the
+   * scenes to its family; declining keeps the built-in skin. Only used while those skins are on hold
+   * (`EXTRA_SKINS_ENABLED` off), where a drop does not load them by itself.
+   */
+  private async offerDroppedSkin(families: ReadonlySet<string>, themeFiles: File[]): Promise<void> {
+    // A skin the player asked for through the Debug Menu is used without asking again.
+    const asked = this.pendingSkinSystem;
+    this.pendingSkinSystem = undefined;
+    if (asked !== undefined && families.has(asked)) {
+      await this.applyDroppedSkin(asked, themeFiles);
+      return;
+    }
+    const offer = describeSkinOffer(
+      families,
+      families.has('lr2') ? discoverLr2Themes(themeFiles).map((theme) => theme.name) : [],
+    );
+    if (offer === undefined) return;
+    // The question goes over the select screen, not the loading overlay.
+    hideLoadingOverlay(this.elements);
+    const family = await askSkinOffer(offer);
+    if (family !== undefined) await this.applyDroppedSkin(family, themeFiles);
+  }
+
+  /** Loads the dropped skin of `family` and switches the scenes to that skin system. */
+  private async applyDroppedSkin(family: OfferedSkinFamily, themeFiles: File[]): Promise<void> {
+    showLoadingOverlay(this.elements);
+    try {
+      await (family === 'lr2' ? this.loadTheme(themeFiles) : this.loadBeatorajaTheme(themeFiles));
+    } finally {
+      hideLoadingOverlay(this.elements);
+    }
+    this.handleSkinFamilyOverrideChange(family);
+  }
+
+  /**
+   * Asks for a drop of a skin of `family`, picked in the Debug Menu with none loaded: a drop-card-like prompt that any
+   * drop closes. The skin it brings is then used without the "Use this skin?" question.
+   */
+  private promptSkinDrop(family: OfferedSkinFamily): void {
+    const dialog = document.querySelector<HTMLDialogElement>('#skin-drop');
+    if (dialog === null) return;
+    this.pendingSkinSystem = family;
+    const title = dialog.querySelector('h2');
+    const hint = dialog.querySelector('[data-skin-drop-hint]');
+    if (title !== null) title.textContent = family === 'lr2' ? 'Drop an LR2 skin' : 'Drop a beatoraja skin';
+    if (hint !== null) {
+      hint.innerHTML =
+        family === 'lr2'
+          ? 'Drop the folder that holds your LR2 theme (<code>LR2files/Theme/…</code>, with its <code>.lr2skin</code> files).'
+          : 'Drop the folder that holds your beatoraja skin (its <code>.luaskin</code> or <code>.json</code> skin files).';
+    }
+    // Cancel or Escape withdraws the request; a drop closes the prompt but keeps it, for the drop to answer.
+    const withdraw = () => {
+      this.pendingSkinSystem = undefined;
+    };
+    dialog.oncancel = withdraw;
+    const cancel = dialog.querySelector<HTMLButtonElement>('[data-skin-drop-cancel]');
+    if (cancel !== null) {
+      cancel.onclick = () => {
+        withdraw();
+        dialog.close();
+      };
+    }
+    if (!dialog.open) dialog.showModal();
   }
 
   /**
@@ -2103,7 +2219,7 @@ class PlayerWebDemoApp {
    */
   private rebuildSkinFamilyPicker(): void {
     const gui = this.gui;
-    if (gui === undefined || !EXTRA_SKINS_ENABLED) return;
+    if (gui === undefined) return;
     const lr2Available = hasAnyLr2Skin(this.familyDispatchState());
     const beatorajaAvailable = this.beatorajaTheme !== undefined;
     // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
@@ -2111,12 +2227,17 @@ class PlayerWebDemoApp {
     // as a phantom dropdown value the runtime silently ignored.
     const override = this.guiState.skinFamilyOverride;
     if ((override === 'lr2' && !lr2Available) || (override === 'beatoraja' && !beatorajaAvailable)) {
-      this.guiState.skinFamilyOverride = 'auto';
+      this.guiState.skinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
     }
-    const options: Record<string, SkinFamilyOverride> = { 'Auto (prefer loaded theme)': 'auto' };
-    if (lr2Available) options['LR2'] = 'lr2';
-    if (beatorajaAvailable) options['beatoraja'] = 'beatoraja';
-    options['Default (no skin)'] = 'default';
+    // The three skin systems are always listed; one without a loaded skin says so, and picking it asks for a drop.
+    const options: Record<string, SkinFamilyOverride> = EXTRA_SKINS_ENABLED
+      ? { 'Auto (prefer loaded theme)': 'auto' }
+      : {};
+    options['Built-in'] = 'default';
+    options[lr2Available ? 'LR2' : 'LR2 (drop a skin)'] = 'lr2';
+    options[beatorajaAvailable ? 'beatoraja' : 'beatoraja (drop a skin)'] = 'beatoraja';
+    if (this.guiState.skinFamilyOverride === 'auto' && !EXTRA_SKINS_ENABLED)
+      this.guiState.skinFamilyOverride = 'default';
     if (this.skinFamilyController !== undefined) {
       // `OptionController#options(values)` updates the option list **in place** on an existing option controller
       // (see lil-gui v0.21.0 source: the subclass override mutates `_values` / `_names` + replaces the `<option>`
@@ -2129,10 +2250,25 @@ class PlayerWebDemoApp {
       return;
     }
     // First-time build (called from `buildGui` before any theme has been loaded).
-    this.skinFamilyController = gui
+    this.skinFamilyController = (this.skinFolder ?? gui)
       .add(this.guiState, 'skinFamilyOverride', options)
-      .name('Skin family')
+      .name('Skin system')
       .onChange((value: SkinFamilyOverride) => {
+        const loaded =
+          value === 'lr2'
+            ? hasAnyLr2Skin(this.familyDispatchState())
+            : value === 'beatoraja'
+              ? this.beatorajaTheme !== undefined
+              : true;
+        if (!loaded) {
+          // Nothing of that system is loaded: stay on the current one and ask for a drop of its skin.
+          this.promptSkinDrop(value === 'lr2' ? 'lr2' : 'beatoraja');
+          // Restored without `setValue`, which would run this handler again and rebuild the select screen for nothing.
+          this.guiState.skinFamilyOverride = this.activeSkinSystem;
+          this.skinFamilyController?.updateDisplay();
+          return;
+        }
+        this.activeSkinSystem = value;
         this.handleSkinFamilyOverrideChange(value);
       });
   }
@@ -2145,6 +2281,11 @@ class PlayerWebDemoApp {
    * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
    * even reach the GUI).
    */
+  /** The container and codec the Debug Menu's "Video format" asks recordings to be written in. */
+  private get recordingFormat(): RecordingFormat {
+    return parseRecordingFormatKey(this.guiState.recordingFormat);
+  }
+
   /** The be-music skin the default-family scenes render with. */
   private get beMusicSkin() {
     return BE_MUSIC_SKINS.resolve(this.guiState.builtInSkin);
@@ -2261,6 +2402,8 @@ class PlayerWebDemoApp {
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
+    this.activeSkinSystem = value;
+    this.skinFamilyController?.updateDisplay();
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
       this.lastSelectNavigation = this.selectView.getNavigation();
     }
@@ -2555,12 +2698,12 @@ class PlayerWebDemoApp {
       const controller = this.recordController;
       controller?.domElement.classList.remove('arming');
       try {
-        this.beatorajaGameplayView.startRecording();
+        this.beatorajaGameplayView.startRecording({ format: this.recordingFormat });
         controller?.domElement.classList.add('recording');
-        controller?.name('■ Stop');
+        controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
       } catch (error) {
-        controller?.name('● Record');
+        controller?.name(RECORD_LABEL);
         recordLog.warn('auto-start failed', error);
       }
     }
@@ -2715,6 +2858,8 @@ class PlayerWebDemoApp {
     this.beatorajaSelectScene?.dispose();
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
       skin: skinLoad.skin,
+      // The page's search field (IME and all) does the typing; the scene only filters.
+      externalSearch: true,
       textures,
       fonts,
       skinConfig: config,
@@ -3708,10 +3853,7 @@ class PlayerWebDemoApp {
         void this.selectView?.playDecideSound();
         void this.showDecide(song, { autoPlay: true });
       },
-      onSearchActivate: () => {
-        this.elements.searchInput.focus();
-        this.elements.searchInput.select();
-      },
+      onSearchActivate: () => this.search.openFromPointer(),
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
@@ -3951,12 +4093,12 @@ class PlayerWebDemoApp {
       const controller = this.recordController;
       controller?.domElement.classList.remove('arming');
       try {
-        this.gameplayView.startRecording();
+        this.gameplayView.startRecording({ format: this.recordingFormat });
         controller?.domElement.classList.add('recording');
-        controller?.name('■ Stop');
+        controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
       } catch (error) {
-        controller?.name('● Record');
+        controller?.name(RECORD_LABEL);
         recordLog.warn('auto-start failed', error);
       }
     }
@@ -4008,12 +4150,12 @@ class PlayerWebDemoApp {
       const controller = this.recordController;
       controller?.domElement.classList.remove('arming');
       try {
-        this.gameplayView.startRecording();
+        this.gameplayView.startRecording({ format: this.recordingFormat });
         controller?.domElement.classList.add('recording');
-        controller?.name('■ Stop');
+        controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
       } catch (error) {
-        controller?.name('● Record');
+        controller?.name(RECORD_LABEL);
         recordLog.warn('auto-start failed', error);
         this.setStatus(`Recording unavailable: ${(error as Error).message}`);
       }

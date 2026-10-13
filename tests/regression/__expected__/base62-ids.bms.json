@@ -166,6 +166,8 @@
         "subtitle": "#BASE 62 keeps upper and lower case as separate slots",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "1",
+        "difficulty": 1,
         "total": 200
       },
       "notes": [
@@ -439,6 +441,8 @@
         "subtitle": "#BASE 62 keeps upper and lower case as separate slots",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "1",
+        "difficulty": 1,
         "total": 200
       },
       "notes": [

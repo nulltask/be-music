@@ -91,6 +91,7 @@ import {
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import type { RecordingFormat } from '../../recording/recording-format.ts';
 import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
@@ -951,6 +952,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * `throwIfAborted` checks unwind cleanly instead of leaving the playback loop running on a torn-down audio bus.
    */
   private sharedEngineAbortController: AbortController | undefined;
+  /**
+   * Holds the engine's play open past the chart's end (`holdAfterChart`), so keys keep lighting the lanes through the
+   * result delay and the fade-out; aborted when the outro is over, which lets the play end and hand over its summary.
+   */
+  private chartEndHold: AbortController | undefined;
+  /** Set while the outro waits for the held play to end: receives its final summary. */
+  private onHeldPlayEnded: ((summary: Readonly<PlayerSummary>) => void) | undefined;
   /**
    * Latch for the engine's `stateSignals.judgeComboTick`. {@link drainWebUiSignals} compares the current tick
    * value against this latch on every poll and only fires the host's `onJudgeCombo` callback when a fresh
@@ -1856,7 +1864,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Idempotent in the sense that calling while a recording is already active is a no-op (`isRecording()` is the
    * canonical gate hosts should check).
    */
-  public startRecording(): void {
+  public startRecording(options: { format?: RecordingFormat } = {}): void {
     if (this.recorder?.isActive()) return;
     if (!this.host || !this.audioContext || !this.audioBus) {
       throw new Error('CoreGameplayView.startRecording: gameplay audio is not ready yet');
@@ -1869,6 +1877,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.audioContext,
       audioOutput: this.audioBus.outputNode,
+      format: options.format,
     });
     this.recorder.start();
   }
@@ -4970,6 +4979,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         // replay) the recorded settings below, so the windows skins see are the ones the run is judged with.
         onRulesetResolved: (info) => this.applyResolvedRuleset(info),
         signal: (this.sharedEngineAbortController = new AbortController()).signal,
+        // Keys stay live after the last note until the fade-out is over; the outro starts when the chart settles.
+        holdAfterChart: {
+          signal: (this.chartEndHold = new AbortController()).signal,
+          onSettled: () => {
+            this.drainSharedEngineSignals();
+            this.handleSharedEngineChartFinished(undefined, true);
+          },
+        },
         ...(this.options.replay !== undefined
           ? {
               // Replay playback — feed the recorded input stream; the engine ignores live lane input, and the run
@@ -5018,6 +5035,13 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.drainSharedEngineSignals();
         this.applyEngineSummary(summary);
         this.applyFinalComboSummary(summary);
+        // A held play ends when its outro lets go; one that ended on its own (auto play, a failed gauge) starts it now.
+        const waiting = this.onHeldPlayEnded;
+        if (waiting !== undefined) {
+          this.onHeldPlayEnded = undefined;
+          waiting(summary);
+          return;
+        }
         this.handleSharedEngineChartFinished(summary);
       })
       .catch((error: unknown) => {
@@ -5277,7 +5301,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * is the authoritative end-of-chart signal — the view's `currentSeconds` clock lags slightly behind the engine's
    * own bookkeeping, so we don't gate on it.
    */
-  private handleSharedEngineChartFinished(finalSummary: Readonly<PlayerSummary> | undefined): void {
+  /**
+   * Starts the outro once the chart is over. `held` means the engine's play is still open (keys still live): the fade-out
+   * runs first, then the play is let go and the result waits for its final summary.
+   */
+  private handleSharedEngineChartFinished(finalSummary: Readonly<PlayerSummary> | undefined, held = false): void {
     if (this.disposed || this.chartEnded) return;
     this.chartEnded = true;
     this.playMoments.outroAtMs ??= this.playClock();
@@ -5293,14 +5321,25 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         this.applyEngineSummary(finalSummary);
         this.applyFinalComboSummary(finalSummary);
       }
-      const result = this.getResultData();
+      const finish = (): void => {
+        const result = this.getResultData();
+        if (this.options.onChartFinished && result) {
+          this.options.onChartFinished(result);
+          return;
+        }
+        this.options.onExit?.();
+      };
       this.beginExitSequence(
         () => {
-          if (this.options.onChartFinished && result) {
-            this.options.onChartFinished(result);
+          if (!held) {
+            finish();
             return;
           }
-          this.options.onExit?.();
+          // The outro is over: let the held play end, and show the result with its final summary.
+          this.onHeldPlayEnded = () => {
+            if (!this.disposed) finish();
+          };
+          this.chartEndHold?.abort();
         },
         { fadeAudio: false },
       );

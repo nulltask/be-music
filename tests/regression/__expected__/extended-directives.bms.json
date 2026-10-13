@@ -207,6 +207,8 @@
         "subtitle": "Structurally valid #EXWAV / #EXBMP / #ARGB / #BGA / #SWBGA / #WAVCMD / #EXRANK payloads",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "1",
+        "difficulty": 1,
         "total": 200
       },
       "notes": [

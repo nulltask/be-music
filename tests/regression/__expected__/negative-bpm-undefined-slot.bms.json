@@ -160,6 +160,7 @@
         "title": "negative BPM test 3 (ch08 -> undefined #BPMZZ)",
         "artist": "be-music #134",
         "genre": "TEST",
+        "playLevel": "1",
         "total": 300
       },
       "notes": [

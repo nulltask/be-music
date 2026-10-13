@@ -180,6 +180,8 @@
         "subtitle": "IIDX 5-key double play - channels 11..16 and 21..26",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "2",
+        "difficulty": 2,
         "total": 250
       },
       "notes": [
