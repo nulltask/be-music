@@ -2,7 +2,7 @@
 
 # Be-Music Fingerprint 仕様
 
-> ステータス: `@be-music/chart` に実装済みで、プレイログにも記録します（7 章）。アルゴリズムのバージョン: `bmfp1`。
+> ステータス: `@be-music/chart` に実装済みで、プレイログにも記録します（7 章）。アルゴリズムのバージョン: `bmfp0`。
 
 Be-Music Fingerprint は、譜面をファイルのバイト列ではなく **プレイヤーが遊ぶもの、レーン上に見えるもの** で識別します。次のような違いがあっても、遊んだ内容が同じなら 2 つの譜面ファイルは同じ fingerprint になります。
 
@@ -199,7 +199,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 ```json
 {
-  "v": "bmfp1",
+  "v": "bmfp0",
   "laneMode": "7",
   "bpm": "150",
   "baseBpm": null,
@@ -223,7 +223,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 
 ```json
 {
-  "v": "bmfp1",
+  "v": "bmfp0",
   "lanes": { "extension": null, "player3": false },
   "bpm": "150",
   "baseBpm": null,
@@ -257,17 +257,19 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
 ## 5. 出力とバージョン
 
 ```
-bmfp1:<正規 JSON のバイト列の SHA-256 を小文字 16 進で表したもの>
+bmfp0:<正規 JSON のバイト列の SHA-256 を小文字 16 進で表したもの>
 ```
 
-`bmfp1` の接頭辞はアルゴリズムのバージョンを表します。fingerprint を比べられるのは同じバージョンどうしだけです。
+`bmfp0` の接頭辞はアルゴリズムのバージョンを表します。fingerprint を比べられるのは同じバージョンどうしだけです。
 
-**既存の譜面のドキュメントを変える変更には、新しいバージョン（`bmfp2`）が必要です。** 含めるものの変更、正規化の変更、ドキュメントのスキーマの変更、そして fingerprint が読む **パーサーや Resolved 層の振る舞い** の変更（イベントの生成、`#LNOBJ` / `#LNTYPE` の対応づけ、レーンと位置ごとに 1 つの判定ノーツ、STOP と SPEED の規則、レーンの対応づけとレーン構成の判定、制御構文の意味、エンジンのフォールバック）がこれにあたります。`@be-music/chart` のゴールデンコーパスのテスト（`packages/chart/src/fingerprint-golden.test.ts`）は代表的な譜面の fingerprint を固定していて、こうした変更が気づかれずに入るのを防ぎます。ゴールデン値を更新することはバージョンを上げることを意味します。最初のリリースまでは `bmfp1` はまだ定義中で、バージョンを上げずに変わることがあります。
+**`bmfp0` は開発用のバージョンです。** まだ定義中で、バージョンを上げずに変わることがあるので、`bmfp0` の fingerprint が同じ値になると保証されるのは `@be-music/chart` の同じリリースの中だけです。これをキーにする保存先（Leaderboard など）は、定義が変わったときにデータを捨てる前提で扱います。最初の安定版の定義は `bmfp1` になります。
+
+**`bmfp1` 以降、既存の譜面のドキュメントを変える変更には、新しいバージョン（`bmfp2` など）が必要です。** 含めるものの変更、正規化の変更、ドキュメントのスキーマの変更、そして fingerprint が読む **パーサーや Resolved 層の振る舞い** の変更（イベントの生成、`#LNOBJ` / `#LNTYPE` の対応づけ、レーンと位置ごとに 1 つの判定ノーツ、STOP と SPEED の規則、レーンの対応づけとレーン構成の判定、制御構文の意味、エンジンのフォールバック）がこれにあたります。`@be-music/chart` のゴールデンコーパスのテスト（`packages/chart/src/fingerprint-golden.test.ts`）は代表的な譜面の fingerprint を固定していて、こうした変更が気づかれずに入るのを防ぎます。安定版のバージョンでは、ゴールデン値を更新することはバージョンを上げることを意味します。
 
 ## 6. 実装メモ
 
 - `@be-music/chart` がこの仕様を実装しています（`packages/chart/src/fingerprint*.ts`）。
-  - `computeChartFingerprint(json, { chartPath })` / `computePlayFingerprint(json, { chartPath })` は同期的に `string`（`bmfp1:…`）を返します。`chartPath`（パス、ファイル名、拡張子だけでもよい）は 1 章のレーン構成の入力で、必須のオプションです（不明なら `undefined` を渡します）。小さな組み込みの SHA-256（`packages/chart/src/sha256.ts`）でハッシュするので、Node でもブラウザでも動き、同期的な呼び出し元からも使えます。
+  - `computeChartFingerprint(json, { chartPath })` / `computePlayFingerprint(json, { chartPath })` は同期的に `string`（`bmfp0:…`）を返します。`chartPath`（パス、ファイル名、拡張子だけでもよい）は 1 章のレーン構成の入力で、必須のオプションです（不明なら `undefined` を渡します）。小さな組み込みの SHA-256（`packages/chart/src/sha256.ts`）でハッシュするので、Node でもブラウザでも動き、同期的な呼び出し元からも使えます。
   - `createChartFingerprintDocument` / `createPlayFingerprintDocument` は正規化ドキュメントを作り、`canonicalizeFingerprintDocument(document)` はその RFC 8785 テキストを返します。
   - `computePlayFingerprint` は、`resolveBmsControlFlowWithDraws`（または `@be-music/player` の `resolvePlayChart`）が返すような制御構文のない譜面を受け取ります。`computeChartFingerprint` はパーサーの未解決の出力を受け取ります。その `events` には制御構文の外の内容だけが、`bms.controlFlow` には残りが入っています。解決済みの譜面は制御構文を持たないので、そのプレイドキュメントになります。
   - 項目は Resolved 層のリゾルバ（`resolved-notes.ts`、`note-rules.ts`、`timing.ts`、`timelines.ts`、`resolved-chart.ts`）、つまり `resolveChart` が使うものと同じリゾルバで読みます。`fingerprint-items.ts` が加えるのは、正確な座標、スナップ、譜面ドキュメントでの FREE ZONE の先送り、譜面モデルが必要とするバケットごとの再計算だけです。

@@ -1,5 +1,5 @@
 /**
- * Be-Music Fingerprint (`bmfp1`) — identifies a chart by what the player plays and sees in the lanes rather than by its
+ * Be-Music Fingerprint (`bmfp0`) — identifies a chart by what the player plays and sees in the lanes rather than by its
  * bytes. The normative definition is `docs/fingerprint-spec.md`; this module is its public API and the modules
  * `fingerprint-*.ts` its reference implementation.
  */
@@ -78,12 +78,12 @@ export function canonicalizeFingerprintDocument(document: BeMusicFingerprintDocu
   return canonicalizeJsonValue(document);
 }
 
-/** `bmfp1:<sha256>` of the chart fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
+/** `bmfp0:<sha256>` of the chart fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
 export function computeChartFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions): string {
   return hashFingerprintDocument(createChartFingerprintDocument(json, options));
 }
 
-/** `bmfp1:<sha256>` of the play fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
+/** `bmfp0:<sha256>` of the play fingerprint document. Synchronous and dependency-free, in Node and browsers alike. */
 export function computePlayFingerprint(json: BeMusicJson, options: BeMusicFingerprintOptions): string {
   return hashFingerprintDocument(createPlayFingerprintDocument(json, options));
 }

@@ -418,7 +418,7 @@ describe('evaluation budget (finding A7)', () => {
     }
     const result = timed(lines.join('\n'));
     expect(result.ms).toBeLessThan(3000);
-    expect(result.fingerprint).toMatch(/^bmfp1:[0-9a-f]{64}$/);
+    expect(result.fingerprint).toMatch(/^bmfp0:[0-9a-f]{64}$/);
   });
 
   test('a chart below the budget is not opaque', () => {

@@ -14,7 +14,7 @@ A playlog is deliberately **not** a list of judgments. Its canonical payload is:
    `timeUs` / `endTimeUs` pair, mines carry their resolved gauge damage, and the raw `#TOTAL` / `#RANK` /
    `#DEFEXRANK` metadata is preserved so each ruleset can apply its own defaults. `chart.sha256` stamps the
    SHA-256 of the source chart FILE bytes so a log can be matched back to its chart by content.
-   Two Be-Music Fingerprints (`bmfp1:…`, see [fingerprint-spec.md](./fingerprint-spec.md)) identify the chart by
+   Two Be-Music Fingerprints (`bmfp0:…`, see [fingerprint-spec.md](./fingerprint-spec.md)) identify the chart by
    what is played rather than by the file bytes, so logs of one chart still match after keysound / BGA / metadata
    edits, re-saves, or a BMS ↔ bmson conversion. `chart.chartFingerprint` covers every `#RANDOM` / `#SWITCH`
    branch, so every play of one chart shares it whatever it rolled — the key to group plays of a chart.

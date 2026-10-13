@@ -20,7 +20,7 @@ import {
 } from './fingerprint-items.ts';
 import type { KeyboardModeHint } from './keyboard-mode-hint.ts';
 
-export const FINGERPRINT_VERSION = 'bmfp1';
+export const FINGERPRINT_VERSION = 'bmfp0';
 
 /**
  * Most outcome classes one control-flow factor may have (the product of its segments' path counts). A factor with more

@@ -163,8 +163,8 @@
           "sourceRank": 2
         },
         "noteCount": 24,
-        "chartFingerprint": "bmfp1:355b638d0bfb5fcfced4adabeabf538a9ac1ada01af73b38a5632facb4507502",
-        "playFingerprint": "bmfp1:355b638d0bfb5fcfced4adabeabf538a9ac1ada01af73b38a5632facb4507502",
+        "chartFingerprint": "bmfp0:eab6e4287077471ee975d52153725ea4a76a54ec23645bfa920e385f08993b12",
+        "playFingerprint": "bmfp0:eab6e4287077471ee975d52153725ea4a76a54ec23645bfa920e385f08993b12",
         "title": "Non-Positive BPM Changes",
         "subtitle": "Zero, negative and undefined #BPMxx slots referenced from channel 08",
         "artist": "be-music",

@@ -260,7 +260,7 @@ describe('playlog recorder', () => {
     const playlog = createPlaylogRecorder(makeRecorderOptions({ json })).finalize({ summary: makeSummary() });
 
     expect(playlog.chart.playFingerprint).toBe(computePlayFingerprint(json, { chartPath: undefined }));
-    expect(playlog.chart.playFingerprint).toMatch(/^bmfp1:[0-9a-f]{64}$/);
+    expect(playlog.chart.playFingerprint).toMatch(/^bmfp0:[0-9a-f]{64}$/);
   });
 
   test('records one fingerprint as both chart and play fingerprint for a chart without control flow', () => {

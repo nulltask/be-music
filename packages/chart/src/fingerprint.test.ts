@@ -66,7 +66,7 @@ describe('fingerprint document', () => {
       ),
     );
     expect(document).toEqual({
-      v: 'bmfp1',
+      v: 'bmfp0',
       laneMode: '7',
       bpm: '150',
       baseBpm: null,
@@ -102,7 +102,7 @@ describe('fingerprint document', () => {
     );
     expect(canonical).not.toMatch(/\s/);
     const expected = createHash('sha256').update(Buffer.from(canonical, 'utf8')).digest('hex');
-    expect(computePlayFingerprint(json, NO_PATH)).toBe(`bmfp1:${expected}`);
+    expect(computePlayFingerprint(json, NO_PATH)).toBe(`bmfp0:${expected}`);
   });
 });
 

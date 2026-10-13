@@ -263,7 +263,7 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
 }
 
 /**
- * Chart and play fingerprints (`bmfp1:…`) of the play. Their lane-mode input is the chart's extension, which the
+ * Chart and play fingerprints (`bmfp0:…`) of the play. Their lane-mode input is the chart's extension, which the
  * engine passes as `laneModeExtension`; without it, a 9 KEY play stands in for `.pms` (it is 9 KEY exactly when the
  * chart is `.pms` or its content says so).
  *

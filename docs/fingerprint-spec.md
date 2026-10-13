@@ -2,7 +2,7 @@
 
 # Be-Music Fingerprint specification
 
-> Status: implemented in `@be-music/chart` and recorded in play logs (section 7). Algorithm version: `bmfp1`.
+> Status: implemented in `@be-music/chart` and recorded in play logs (section 7). Algorithm version: `bmfp0`.
 
 The Be-Music Fingerprint identifies a chart by **what the player plays and sees in the lanes**, not by the bytes of the file. Two chart files get the same fingerprint when they play the same, even if:
 
@@ -199,7 +199,7 @@ Play document (also the chart document when every outcome plays the same):
 
 ```json
 {
-  "v": "bmfp1",
+  "v": "bmfp0",
   "laneMode": "7",
   "bpm": "150",
   "baseBpm": null,
@@ -223,7 +223,7 @@ Chart document of a chart with control flow:
 
 ```json
 {
-  "v": "bmfp1",
+  "v": "bmfp0",
   "lanes": { "extension": null, "player3": false },
   "bpm": "150",
   "baseBpm": null,
@@ -257,17 +257,19 @@ Chart document of a chart with control flow:
 ## 5. Output and versioning
 
 ```
-bmfp1:<lowercase hex SHA-256 of the canonical JSON bytes>
+bmfp0:<lowercase hex SHA-256 of the canonical JSON bytes>
 ```
 
-The `bmfp1` prefix names the algorithm version. Fingerprints are only comparable within one version.
+The `bmfp0` prefix names the algorithm version. Fingerprints are only comparable within one version.
 
-**Any change that alters the document of an existing chart requires a new version** (`bmfp2`): a change to what is included, to normalization, to the document schema, or to the **parser or Resolved-layer behaviour the fingerprint reads** (event creation, `#LNOBJ` / `#LNTYPE` pairing, one judged note per lane and position, the STOP and SPEED rules, lane mapping and lane-mode detection, control-flow semantics, engine fallbacks). The golden corpus test in `@be-music/chart` (`packages/chart/src/fingerprint-golden.test.ts`) pins exact fingerprints of representative charts so such changes cannot slip in unnoticed; updating a golden value means bumping the version. Until the first release, `bmfp1` is still being defined and may change without a bump.
+**`bmfp0` is the development version.** It is still being defined and may change without a version bump, so a `bmfp0` fingerprint is only guaranteed stable within one release of `@be-music/chart`: a store keyed by it (such as a leaderboard) must expect to discard its data when the definition changes. The first stable definition will be `bmfp1`.
+
+**From `bmfp1` on, any change that alters the document of an existing chart requires a new version** (`bmfp2`, ...): a change to what is included, to normalization, to the document schema, or to the **parser or Resolved-layer behaviour the fingerprint reads** (event creation, `#LNOBJ` / `#LNTYPE` pairing, one judged note per lane and position, the STOP and SPEED rules, lane mapping and lane-mode detection, control-flow semantics, engine fallbacks). The golden corpus test in `@be-music/chart` (`packages/chart/src/fingerprint-golden.test.ts`) pins exact fingerprints of representative charts so such changes cannot slip in unnoticed; under a stable version, updating a golden value means bumping the version.
 
 ## 6. Implementation notes
 
 - `@be-music/chart` implements this specification (`packages/chart/src/fingerprint*.ts`):
-  - `computeChartFingerprint(json, { chartPath })` / `computePlayFingerprint(json, { chartPath })` return `string` (`bmfp1:…`) synchronously. `chartPath` (a path, file name, or bare extension) is the lane-mode input of section 1 and is a required option (pass `undefined` when unknown). They hash with a small built-in SHA-256 (`packages/chart/src/sha256.ts`), so they run in Node and browsers alike and synchronous callers can use them.
+  - `computeChartFingerprint(json, { chartPath })` / `computePlayFingerprint(json, { chartPath })` return `string` (`bmfp0:…`) synchronously. `chartPath` (a path, file name, or bare extension) is the lane-mode input of section 1 and is a required option (pass `undefined` when unknown). They hash with a small built-in SHA-256 (`packages/chart/src/sha256.ts`), so they run in Node and browsers alike and synchronous callers can use them.
   - `createChartFingerprintDocument` / `createPlayFingerprintDocument` build the canonical document, and `canonicalizeFingerprintDocument(document)` returns its RFC 8785 text.
   - `computePlayFingerprint` takes a chart without control flow, as `resolveBmsControlFlowWithDraws` (or `resolvePlayChart` in `@be-music/player`) returns it. `computeChartFingerprint` takes the parser's unresolved output, whose `events` hold only the content outside control flow and whose `bms.controlFlow` holds the rest; a resolved chart carries no control flow, so it gets its play document.
   - The items are read with the Resolved layer's resolvers (`resolved-notes.ts`, `note-rules.ts`, `timing.ts`, `timelines.ts`, `resolved-chart.ts`), the same ones `resolveChart` is built from; `fingerprint-items.ts` adds only exact coordinates, snapping, FREE ZONE deferral for chart documents, and the per-bucket recomputation the chart model needs.

@@ -1,6 +1,7 @@
 /**
- * Golden corpus of the Be-Music Fingerprint (`docs/fingerprint-spec.md` section 5). These values pin `bmfp1`: a change
- * that alters any of them alters the document of an existing chart and therefore needs a new algorithm version, not an
+ * Golden corpus of the Be-Music Fingerprint (`docs/fingerprint-spec.md` section 5). These values pin `bmfp0`, the
+ * development version, so a change that alters any of them is deliberate and visible in review. From the first stable
+ * version (`bmfp1`) on, such a change alters the document of an existing chart and needs a new algorithm version, not an
  * update of the expected value.
  */
 import { describe, expect, test } from 'vite-plus/test';
@@ -149,32 +150,32 @@ const KEYBOARD_24K = JSON.stringify({
   ],
 });
 
-describe('golden fingerprints (bmfp1)', () => {
+describe('golden fingerprints (bmfp0)', () => {
   test.each([
     [
       'BMS 7 KEY with LN, mines, BPM, STOP, SCROLL, SPEED',
       () => computePlayFingerprint(parseBms(SP7), { chartPath: 'golden.bms' }),
-      'bmfp1:b3e314d45a43486059ebf7b93a87ddd32a54827803753ad0bb71f904755b2405',
+      'bmfp0:ade823cec58e427c39f8d50616a5b8140724046cfdb80f50cc6cdee17ea88fc3',
     ],
     [
       'bmson',
       () => computePlayFingerprint(parseBmson(BMSON), { chartPath: 'golden.bmson' }),
-      'bmfp1:7355094b6844f4050a5ad7f4647522f284b4c9ef08570688f451172c4635e1f2',
+      'bmfp0:e3049307e79f2d3f4e4e07315197741c1d575fc43240e2f3014bb06bebe17f33',
     ],
     [
       'PMS',
       () => computePlayFingerprint(parseBms(PMS), { chartPath: 'golden.pms' }),
-      'bmfp1:641b9f6d364b2381b666612a5416f3cd18fd1e13acf2e1bdfc880e7deaffb5f9',
+      'bmfp0:a4c2c340bc12ece964cbb04646b95dc28da0d87840a9340ca3a4bdc2aef806d1',
     ],
     [
       'DP',
       () => computePlayFingerprint(parseBms(DP), { chartPath: 'golden.bms' }),
-      'bmfp1:2b74381b2cc5f5b70a8792cb0173e5358dc9d545bb4cbe0dcbc0c07b29a33a28',
+      'bmfp0:104518b32c44d40cf6e6cf2092254c99453a6ecd43672d607e8d8761b015f67c',
     ],
     [
       '#RANDOM chart',
       () => computeChartFingerprint(parseBms(RANDOM), { chartPath: 'golden.bms' }),
-      'bmfp1:b0aa106e49fd14f7cb2ea48bb0b25834459e6329964c81676bbbf313ad38954d',
+      'bmfp0:b34137d8903aa514ca8128cd31d01464adfc1d43ab78d6f0c25143f26d19902b',
     ],
     [
       '#RANDOM play',
@@ -187,12 +188,12 @@ describe('golden fingerprints (bmfp1)', () => {
           ]),
           { chartPath: 'golden.bms' },
         ),
-      'bmfp1:5904cce29cbd00ee7f411b093dae2960c1ce2b67cba2eb25c4f9dbdb2b227654',
+      'bmfp0:e3b5390634a28b5cef277084c99fa39c078ae75c6899946e30f0151965601c36',
     ],
     [
       'bmson keyboard-24k with wheel notes',
       () => computePlayFingerprint(parseBmson(KEYBOARD_24K), { chartPath: 'golden.bmson' }),
-      'bmfp1:9cf3f393bf7fdd98e5173a636387d3bc48ef973eb97179b22bd461a6a9300ec8',
+      'bmfp0:dd5fe26f10d52ffbae1a43063c665b41c6a18a27d4daf43cb8a9f0b279334ee4',
     ],
   ])('%s', (_label, compute, expected) => {
     expect(compute()).toBe(expected);

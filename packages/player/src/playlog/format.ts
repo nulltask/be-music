@@ -76,14 +76,14 @@ export interface PlaylogChart {
   /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
   sha256?: string;
   /**
-   * Chart fingerprint (`bmfp1:…`, docs/fingerprint-spec.md) of the source chart, every `#RANDOM` / `#SWITCH` branch
+   * Chart fingerprint (`bmfp0:…`, docs/fingerprint-spec.md) of the source chart, every `#RANDOM` / `#SWITCH` branch
    * included — identifies the chart regardless of file bytes, keysounds, BGA, metadata or which branches this play
    * rolled, so plays of one chart share it. Equal to {@link playFingerprint} for a chart without control flow. Omitted
    * when the recorder did not have the source chart (a host resolved `#RANDOM` itself without passing it).
    */
   chartFingerprint?: string;
   /**
-   * Play fingerprint (`bmfp1:…`) of the chart after this play's `#RANDOM` / `#SWITCH` outcomes — identifies what
+   * Play fingerprint (`bmfp0:…`) of the chart after this play's `#RANDOM` / `#SWITCH` outcomes — identifies what
    * the player played. Lane options (MIRROR / RANDOM / FLIP) are part of neither fingerprint; they live in `play`.
    */
   playFingerprint?: string;

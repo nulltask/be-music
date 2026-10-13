@@ -201,8 +201,8 @@
           ]
         },
         "noteCount": 12,
-        "chartFingerprint": "bmfp1:a397feefbfb1a6ceffd4f2275d3bcb58667ee425a9bb7dc8a913004c317d1e48",
-        "playFingerprint": "bmfp1:a397feefbfb1a6ceffd4f2275d3bcb58667ee425a9bb7dc8a913004c317d1e48",
+        "chartFingerprint": "bmfp0:5a3ad64ec10af9ed6783101281a6d951be6c0e8de751c46938faa627b31a7908",
+        "playFingerprint": "bmfp0:5a3ad64ec10af9ed6783101281a6d951be6c0e8de751c46938faa627b31a7908",
         "title": "Extended Directive Payloads",
         "subtitle": "Structurally valid #EXWAV / #EXBMP / #ARGB / #BGA / #SWBGA / #WAVCMD / #EXRANK payloads",
         "artist": "be-music",

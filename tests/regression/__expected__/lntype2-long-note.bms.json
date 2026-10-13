@@ -136,8 +136,8 @@
           "percent": 75
         },
         "noteCount": 16,
-        "chartFingerprint": "bmfp1:707e714185a92799a3506b0688f87b0dd8c7d489a681c0372c491be2d79fce75",
-        "playFingerprint": "bmfp1:707e714185a92799a3506b0688f87b0dd8c7d489a681c0372c491be2d79fce75",
+        "chartFingerprint": "bmfp0:90f5b1d995dfd51b5576451ce0c1b4a7c3d081aa9639cee86b42314c22820785",
+        "playFingerprint": "bmfp0:90f5b1d995dfd51b5576451ce0c1b4a7c3d081aa9639cee86b42314c22820785",
         "title": "LNTYPE 2 Continuous Long Note",
         "subtitle": "MGQ-style long notes spelled as a run of repeated tokens",
         "artist": "be-music",
