@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { djRankGradient, ellipsize, fitFontSize, readableTextColor } from './score-card.ts';
+import { COUNT_LABELS, countColumns, djRankGradient, ellipsize, fitFontSize, readableTextColor } from './score-card.ts';
 
 // A stand-in for canvas measurement: every character is 0.6 em wide.
 const measure = (text: string, size = 10) => [...text].length * size * 0.6;
@@ -23,6 +23,13 @@ describe('score card layout', () => {
     expect(readableTextColor('#f5c518')).toBe('#0a0e18');
     expect(readableTextColor('#7a1f2b')).toBe('#ffffff');
     expect(readableTextColor('#3b82f6')).toBe('#ffffff');
+  });
+
+  test('countColumns spaces the counts evenly and sets BP and the combo apart', () => {
+    const columns = countColumns(72, 720, 24);
+    expect(columns).toHaveLength(COUNT_LABELS.length);
+    // (720 - 24) / 7 = 99.43 px a column, rounded to whole pixels; BP and the combo start 24 px later.
+    expect(columns).toEqual([72, 171, 271, 370, 470, 593, 693]);
   });
 
   test('AAA is gold, lower ranks fade', () => {

@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 import type { AppEnv } from '../app.ts';
+import { FONTS } from './fonts.generated.ts';
 import { ICONS } from './icons.generated.ts';
 
 /** The web app manifest's path; the pages link it so a home-screen shortcut gets the icon and the name. */
@@ -37,9 +38,12 @@ function decode(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-/** Serves the icons (content-hashed, cached for good) and the manifest. */
+/** The share card's Latin typeface: the client script loads it before drawing a card. */
+export const CARD_FONT = { family: FONTS.interTight.family, url: FONTS.interTight.path } as const;
+
+/** Serves the icons and the fonts (content-hashed, cached for good) and the manifest. */
 export function mountIcons(app: Hono<AppEnv>): void {
-  for (const icon of Object.values(ICONS)) {
+  for (const icon of [...Object.values(ICONS), ...Object.values(FONTS)]) {
     const bytes = decode(icon.base64);
     app.get(icon.path, (c) =>
       c.body(bytes, 200, { 'content-type': icon.contentType, 'cache-control': 'public, max-age=31536000, immutable' }),
