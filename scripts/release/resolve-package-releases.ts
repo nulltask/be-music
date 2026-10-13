@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldReleasePackage, type ReleasablePackageJson } from './package-release.ts';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repositoryDir = resolve(scriptDir, '..', '..');
@@ -23,10 +24,7 @@ interface ResolveReleaseOptions {
   jsonOutput: string;
 }
 
-interface PackageJsonLike {
-  name: string;
-  version: string;
-}
+type PackageJsonLike = ReleasablePackageJson;
 
 interface PackageRelease {
   packageSlug: string;
@@ -170,7 +168,7 @@ async function main(): Promise<void> {
     const currentPackage = JSON.parse(currentPackageJsonText) as PackageJsonLike;
     const basePackageJsonText = gitShow(options.base, relativePackageJsonPath);
     const basePackage = basePackageJsonText ? (JSON.parse(basePackageJsonText) as PackageJsonLike) : null;
-    if (basePackage?.version === currentPackage.version) {
+    if (!shouldReleasePackage(currentPackage, basePackage)) {
       continue;
     }
 

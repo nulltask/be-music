@@ -5,43 +5,72 @@ on:
     branches:
       - devel
       - main
+  # Every pull request, stacked ones included, so a branch that targets another feature branch is verified too.
   pull_request:
-    branches:
-      - devel
-      - main
   workflow_dispatch:
 
 permissions:
   contents: read
-  pull-requests: read
 
+# A new push to a pull request supersedes the run in progress. Pushes to `devel` / `main` all finish: their
+# benchmark comments are the history of each commit.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
     runs-on: ubuntu-24.04-arm
     outputs:
-      code_changed: ${{ steps.filter.outputs.code }}
+      code_changed: ${{ steps.code.outputs.code }}
+      bench_changed: ${{ steps.filter.outputs.bench }}
       sea_player_changed: ${{ steps.filter.outputs.sea_player }}
       sea_audio_renderer_changed: ${{ steps.filter.outputs.sea_audio_renderer }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
-      - name: Detect changed paths
-        id: filter
-        uses: dorny/paths-filter@v4
+      # A file counts as code unless it is documentation. The negations need `every`: by default a file matches when
+      # any one pattern does, and `'**'` alone matches everything.
+      - name: Detect code changes
+        id: code
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
+          predicate-quantifier: every
           filters: |
             code:
               - '**'
               - '!docs/**'
               - '!**/*.md'
+
+      - name: Detect changed paths
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            # The packages scripts/bench measures (PACKAGE_NAMES in scripts/bench/exports.types.ts) and the bench itself.
+            bench:
+              - 'packages/utils/**'
+              - 'packages/json/**'
+              - 'packages/chart/**'
+              - 'packages/parser/**'
+              - 'packages/stringifier/**'
+              - 'packages/editor/**'
+              - 'packages/audio-renderer/**'
+              - 'packages/player/**'
+              - 'packages/player-tui/**'
+              - 'packages/lr2-skin/**'
+              - 'packages/skin-sdk/**'
+              - 'packages/player-web/**'
+              - 'scripts/bench/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - '.node-version'
+              - '.github/workflows/ci.yml'
             sea_player:
               - 'packages/player/**'
               - 'packages/audio-renderer/**'
@@ -84,12 +113,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           node-version-file: .node-version
           cache: true
@@ -110,7 +138,8 @@ jobs:
     name: Benchmark (PR)
     needs: changes
     if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]' &&
-      needs.changes.outputs.code_changed == 'true'
+      (github.base_ref == 'devel' || github.base_ref == 'main') &&
+      needs.changes.outputs.bench_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 75
     env:
@@ -124,7 +153,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -132,7 +161,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           node-version-file: .node-version
           cache: true
@@ -217,7 +246,7 @@ jobs:
           pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 3
           script: |
@@ -262,7 +291,7 @@ jobs:
   benchmark-push:
     name: Benchmark (Push)
     needs: changes
-    if: github.event_name == 'push' && needs.changes.outputs.code_changed == 'true'
+    if: github.event_name == 'push' && needs.changes.outputs.bench_changed == 'true'
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 75
     env:
@@ -275,7 +304,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.sha }}
@@ -283,7 +312,7 @@ jobs:
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           node-version-file: .node-version
           cache: true
@@ -373,7 +402,7 @@ jobs:
           pnpm run bench:compare "${args[@]}"
 
       - name: Post benchmark comment
-        uses: actions/github-script@v9
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           retries: 3
           script: |
@@ -431,12 +460,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Installs vp (version from the `vite-plus` catalog entry), the `.node-version` runtime, and managed
       # `pnpm`, and caches the package store.
       - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1.21.1
+        uses: voidzero-dev/setup-vp@3754dd7dbdb32bd8f6d28b6043de13ad3a75f21f # v1.21.1
         with:
           node-version-file: .node-version
           cache: true
