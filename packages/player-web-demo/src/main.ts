@@ -150,7 +150,7 @@ import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
-import { askSkinOffer, describeSkinOffer } from './skin-offer.ts';
+import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
@@ -179,6 +179,8 @@ import {
   storeSilentModeHintSeen,
 } from './silent-mode-playback.ts';
 import {
+  RECORD_LABEL,
+  STOP_RECORDING_LABEL,
   captureScreenshot,
   finalizeRecordingIfActive,
   toggleRecording,
@@ -528,6 +530,8 @@ class PlayerWebDemoApp {
   private lastSelectNavigation: PixiSongSelectNavigation | undefined;
   /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
   private activeSkinSystem: SkinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
+  /** The skin system the "Drop a skin" prompt asked for, until a drop answers it or it is cancelled. */
+  private pendingSkinSystem: OfferedSkinFamily | undefined;
   /**
    * Compressor architecture for `audioCompressorMode` on every gameplay mount. Defaults to `'split'` (the new 3-stage
    * bus — see `audio-bus.ts` for the design rationale); the demo accepts a `?compressor=legacy` URL flag for A/B
@@ -1094,7 +1098,7 @@ class PlayerWebDemoApp {
       });
     // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
     BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    this.recordController = gui.add(this.guiState, 'record').name('● Record');
+    this.recordController = gui.add(this.guiState, 'record').name(RECORD_LABEL);
     // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
     // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
     gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
@@ -1506,6 +1510,8 @@ class PlayerWebDemoApp {
   }
 
   private async handleDrop(dataTransfer: DataTransfer): Promise<void> {
+    // The "Drop a skin" prompt has done its job once something lands.
+    document.querySelector<HTMLDialogElement>('#skin-drop')?.close();
     // Show the overlay before we even start enumerating files — walking a deep `webkitGetAsEntry` tree on a chart pack
     // with tens of thousands of WAVs visibly stalls the UI for several seconds, and we want the user to see "we're
     // working on it" immediately rather than after the slow phase finishes.
@@ -1640,6 +1646,13 @@ class PlayerWebDemoApp {
    * (`EXTRA_SKINS_ENABLED` off), where a drop does not load them by itself.
    */
   private async offerDroppedSkin(families: ReadonlySet<string>, themeFiles: File[]): Promise<void> {
+    // A skin the player asked for through the Debug Menu is used without asking again.
+    const asked = this.pendingSkinSystem;
+    this.pendingSkinSystem = undefined;
+    if (asked !== undefined && families.has(asked)) {
+      await this.applyDroppedSkin(asked, themeFiles);
+      return;
+    }
     const offer = describeSkinOffer(
       families,
       families.has('lr2') ? discoverLr2Themes(themeFiles).map((theme) => theme.name) : [],
@@ -1648,7 +1661,11 @@ class PlayerWebDemoApp {
     // The question goes over the select screen, not the loading overlay.
     hideLoadingOverlay(this.elements);
     const family = await askSkinOffer(offer);
-    if (family === undefined) return;
+    if (family !== undefined) await this.applyDroppedSkin(family, themeFiles);
+  }
+
+  /** Loads the dropped skin of `family` and switches the scenes to that skin system. */
+  private async applyDroppedSkin(family: OfferedSkinFamily, themeFiles: File[]): Promise<void> {
     showLoadingOverlay(this.elements);
     try {
       await (family === 'lr2' ? this.loadTheme(themeFiles) : this.loadBeatorajaTheme(themeFiles));
@@ -1656,6 +1673,38 @@ class PlayerWebDemoApp {
       hideLoadingOverlay(this.elements);
     }
     this.handleSkinFamilyOverrideChange(family);
+  }
+
+  /**
+   * Asks for a drop of a skin of `family`, picked in the Debug Menu with none loaded: a drop-card-like prompt that any
+   * drop closes. The skin it brings is then used without the "Use this skin?" question.
+   */
+  private promptSkinDrop(family: OfferedSkinFamily): void {
+    const dialog = document.querySelector<HTMLDialogElement>('#skin-drop');
+    if (dialog === null) return;
+    this.pendingSkinSystem = family;
+    const title = dialog.querySelector('h2');
+    const hint = dialog.querySelector('[data-skin-drop-hint]');
+    if (title !== null) title.textContent = family === 'lr2' ? 'Drop an LR2 skin' : 'Drop a beatoraja skin';
+    if (hint !== null) {
+      hint.innerHTML =
+        family === 'lr2'
+          ? 'Drop the folder that holds your LR2 theme (<code>LR2files/Theme/…</code>, with its <code>.lr2skin</code> files).'
+          : 'Drop the folder that holds your beatoraja skin (its <code>.luaskin</code> or <code>.json</code> skin files).';
+    }
+    // Cancel or Escape withdraws the request; a drop closes the prompt but keeps it, for the drop to answer.
+    const withdraw = () => {
+      this.pendingSkinSystem = undefined;
+    };
+    dialog.oncancel = withdraw;
+    const cancel = dialog.querySelector<HTMLButtonElement>('[data-skin-drop-cancel]');
+    if (cancel !== null) {
+      cancel.onclick = () => {
+        withdraw();
+        dialog.close();
+      };
+    }
+    if (!dialog.open) dialog.showModal();
   }
 
   /**
@@ -2180,8 +2229,8 @@ class PlayerWebDemoApp {
               ? this.beatorajaTheme !== undefined
               : true;
         if (!loaded) {
-          // Nothing of that system is loaded: stay on the current one and say how to get it.
-          this.setStatus(`Drop a folder with ${value === 'lr2' ? 'an LR2' : 'a beatoraja'} skin to use it`);
+          // Nothing of that system is loaded: stay on the current one and ask for a drop of its skin.
+          this.promptSkinDrop(value === 'lr2' ? 'lr2' : 'beatoraja');
           // Restored without `setValue`, which would run this handler again and rebuild the select screen for nothing.
           this.guiState.skinFamilyOverride = this.activeSkinSystem;
           this.skinFamilyController?.updateDisplay();
@@ -2614,10 +2663,10 @@ class PlayerWebDemoApp {
       try {
         this.beatorajaGameplayView.startRecording();
         controller?.domElement.classList.add('recording');
-        controller?.name('■ Stop');
+        controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
       } catch (error) {
-        controller?.name('● Record');
+        controller?.name(RECORD_LABEL);
         recordLog.warn('auto-start failed', error);
       }
     }
@@ -4010,10 +4059,10 @@ class PlayerWebDemoApp {
       try {
         this.gameplayView.startRecording();
         controller?.domElement.classList.add('recording');
-        controller?.name('■ Stop');
+        controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
       } catch (error) {
-        controller?.name('● Record');
+        controller?.name(RECORD_LABEL);
         recordLog.warn('auto-start failed', error);
       }
     }
@@ -4067,10 +4116,10 @@ class PlayerWebDemoApp {
       try {
         this.gameplayView.startRecording();
         controller?.domElement.classList.add('recording');
-        controller?.name('■ Stop');
+        controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
       } catch (error) {
-        controller?.name('● Record');
+        controller?.name(RECORD_LABEL);
         recordLog.warn('auto-start failed', error);
         this.setStatus(`Recording unavailable: ${(error as Error).message}`);
       }
