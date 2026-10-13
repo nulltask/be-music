@@ -228,7 +228,7 @@ export interface PlayerOptions {
 
 /** The judging setup a play resolved to; see {@link PlayerOptions.onRulesetResolved}. */
 export interface PlayerRulesetInfo {
-  /** Versioned ruleset id (`'lr2/1'`, `'beatoraja/1'`, `'iidx/1'`). */
+  /** Versioned ruleset id (`'lr2/2'`, `'beatoraja/2'`, `'iidx/2'`). */
   id: string;
   rulesetId: PlaylogRulesetId;
   /** How the ruleset plays the chart's long notes (LN / per-note / charge). */

@@ -268,6 +268,21 @@ describe('player-tui', () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  test('hides notes a negative scroll brings back once the chart has run past the top of the grid', () => {
+    // Plain scroll for 40 beats (far past the grid), then #SCROLL -10 pulls the chart back: the note at beat 43.9 sits
+    // one beat above the judge line, but beatoraja stops walking the chart at the first object past the lane top.
+    const scrollTimeline = [{ beat: 40, speed: -10 }];
+
+    // The bottom row of the grid carries its own `███` (the beat-0 measure line), so compare against an empty chart.
+    const empty = renderRowsContaining([], '███', 0, { scrollTimeline });
+    expect(renderRowsContaining([{ channel: '11', beat: 43.9, seconds: 22 }], '███', 0, { scrollTimeline })).toEqual(
+      empty,
+    );
+    expect(
+      renderRowsContaining([{ channel: '11', beat: 1, seconds: 0.5 }], '███', 0, { scrollTimeline }).length,
+    ).toBeGreaterThan(empty.length);
+  });
+
   test('keeps rendering visible notes when invisible notes saturate their own window', () => {
     const invisibleNotes = Array.from({ length: 64 }, (_, index) => ({
       channel: '12',

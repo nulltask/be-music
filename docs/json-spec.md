@@ -273,6 +273,7 @@ This keeps `0a` and `0A` distinct for base-62 charts while preserving base-36 be
 - `preservation.bmson.lines`: Array of bar line `y` values ​​(ascending order, no duplicates, starting from `0`)
 - `preservation.bmson.bpmEvents`: ordered snapshot of `bpm_events`
 - `preservation.bmson.stopEvents`: ordered snapshot of `stop_events`
+- `preservation.bmson.scrollEvents`: ordered snapshot of the beatoraja extension `scroll_events` (optional; left out when the chart has none)
 - `preservation.bmson.soundChannels`: Ordered snapshot of `sound_channels`. Also retains unused channels
 
 ## Event structure (regular)

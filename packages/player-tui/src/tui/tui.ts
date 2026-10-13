@@ -563,8 +563,9 @@ export class PlayerTui {
     const measureLineRows = new Set<number>();
     const laneHighlightRatios = new Map<number, number>();
 
+    const lastVisibleBeat = this.scrollDistanceMapper.firstBeatBeyondDistance(frame.currentBeat, scrollWindowBeats);
     for (const boundaryBeat of this.options.measureBoundariesBeats ?? []) {
-      if (!isUpcomingBeat(frame.currentBeat, boundaryBeat)) {
+      if (!isUpcomingBeat(frame.currentBeat, boundaryBeat) || boundaryBeat > lastVisibleBeat) {
         continue;
       }
       const distance = this.scrollDistanceMapper.distanceBetween(frame.currentBeat, boundaryBeat);
@@ -1056,7 +1057,14 @@ export class PlayerTui {
 
     let end = Math.max(state.endIndex, start);
     if (this.scrollDistanceMapper.hasBidirectionalScrollWithinLookahead(currentBeat)) {
-      const capBeat = Math.max(0, currentBeat) + MAX_SCROLL_LOOKAHEAD_BEATS;
+      // As beatoraja's LaneRenderer: the walk ends where the chart first runs past the top of the grid, so notes a later
+      // negative #SCROLL brings back down stay hidden until the playhead gets there.
+      const capBeat = Math.min(
+        Math.max(0, currentBeat) + MAX_SCROLL_LOOKAHEAD_BEATS,
+        this.scrollDistanceMapper.firstBeatBeyondDistance(currentBeat, scrollWindowBeats),
+      );
+      // That beat can move back as the playhead runs down a negative #SCROLL, so the window is walked afresh.
+      end = start;
       while (end < notes.length && notes[end].beat <= capBeat && end - start < visibleNotesLimit) {
         end += 1;
       }

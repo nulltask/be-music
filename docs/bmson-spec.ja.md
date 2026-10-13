@@ -28,6 +28,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] ルート: `sound_channels`
 - [x] ルート: `bpm_events`
 - [x] ルート: `stop_events`
+- [x] ルート: `scroll_events`（beatoraja 拡張）を BMS の `#SCROLL`（チャンネル `SC`）として読む
 - [x] ルート: `bga`
 - [x] `info` 拡張項目: `subartists`
 - [x] `info` 拡張項目: `chart_name`
@@ -83,6 +84,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `sound_channels` 出力
 - [x] `bpm_events` 出力 (`03` / `08` 由来)
 - [x] `stop_events` 出力 (`09` 由来)
+- [x] `scroll_events` 出力（beatoraja 拡張、`SC` と `#SCROLLxx` 由来）
 - [x] `notes.l` 出力 (未指定時 `l=0`)
 - [x] `notes.c` 出力 (未指定時 `c=false`)
 - [x] `notes.t` 出力 (beatoraja 拡張、ロングノートのみ)
@@ -108,6 +110,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - [x] `resolution` を使った時刻解決
 - [x] `bpm_events` を使った時刻解決
 - [x] `stop_events` を使った時刻解決
+- [x] `scroll_events`（beatoraja 拡張）によるスクロール速度。BMS の SCROLL の仕組みをそのまま使う
 - [x] `notes.c` によるサンプル継続オフセット解釈
 - [x] `notes.l` を使ったロングノート終端解釈
 - [x] `bga.bga_events` の shared BGA timeline 抽出
@@ -125,7 +128,8 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 
 ## 実装が読み込むフィールド (parser)
 
-- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
+- ルート: `version`, `lines`, `resolution`(互換), `info`, `sound_channels`, `key_channels` / `mine_channels` / `scroll_events` (beatoraja 拡張), `bpm_events`, `stop_events`, `bga`
+- `scroll_events[]`: `y`, `rate`
 - `info`: `title`, `subtitle`, `artist`, `genre`, `subartists`, `chart_name`, `level`, `init_bpm`, `resolution`, `mode_hint`, `judge_rank`, `total`, `back_image`, `eyecatch_image`, `banner_image`, `preview_music`, `ln_type` (beatoraja extension)
 - `sound_channels[].notes[]`: `x`, `y`, `l`, `c`, `t` (beatoraja extension)
 - `key_channels[].notes[]`: `x`, `y`
@@ -144,7 +148,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - `info.total` はプレイヤー既定 TOTAL に対する百分率で、絶対 TOTAL ではない。プレイヤーの全ルールセット（`lr2`、`beatoraja`、`iidx`）はこれを各ルールセット自身の既定 TOTAL の `total / 100 ×` として扱い、0 以下は 100 % とみなす（beatoraja の `BMSPlayerRule.validate` と同じ）。仕様では `0` はライフバーが増えない意味だが、`total: 0` でもゲージは止まらない。詳細は [player-spec](./player-spec.ja.md#初期値と既定値lr2) を参照
 - `info.back_image`, `info.banner_image`, `info.eyecatch_image` を normalized metadata image field に mirror
 - `sound_channels[i].name` を `resources.wav[key]` に登録
-- `key = base36(i + 1)` を2桁化
+- サウンドチャンネルごとに 2 文字の WAV キーを割り当てる。番号はチャンネル順（`sound_channels`、`key_channels`、`mine_channels`）に `01` から
 - `notes[].y` を分数位置へ変換してイベント化
 - `notes[].l/c` は `events[].bmson.l/c` として保持
 - `notes[].t`（1 = LN、2 = CN、3 = HCN）はロングノート（`l > 0`）のとき `events[].bmson.t` として保持し、`info.ln_type` は `bmson.info.lnType` に保持
@@ -173,8 +177,11 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - 表にないノートが同じ sound channel の playable ノートと同じ `y` にある場合は、`x = 0` のノートと同じく捨てる
 - `bpm_events` は `resources.bpm` + チャンネル `08` へ変換
 - `stop_events` は `resources.stop` + チャンネル `09` へ変換
+- BPM と STOP の値には、異なる値ごとに初出順で 1 つのキーを割り当てる。数千の変化が少数の値を繰り返すギミック譜面でもキーは数個で済む。2 文字のキーは base 36 で 1,295 個（`01`〜`ZZ`）。WAV チャンネルか 1 つの表の異なる値がそれを超える譜面は base 62 のキー（`bms.base = 62`、3,843 個）に切り替え、キーが一周して前の値を上書きすることはない。3,843 を超えた BPM / STOP の値は、キーを持つ最も近い値のキーを使い、それ以上の WAV チャンネルは捨てる。beatoraja にはこの上限がないが、そこまで達する既知の譜面はない
 - `bpm_events` の元配列は `preservation.bmson.bpmEvents` に保持
 - `stop_events` の元配列は `preservation.bmson.stopEvents` に保持
+- beatoraja 拡張の `scroll_events` は `bms.scroll`（`#SCROLLxx` の表。異なる `rate` ごとに 1 キー）+ チャンネル `SC` へ変換し、BMS の SCROLL の仕組み（スクロールのタイムライン、レーン上の距離、緑数字）でそのまま再生する。速度は `#SCROLL` と同じく次のスクロールイベントまで続く。同じ `y` に複数あれば、beatoraja と同じくリストの最後のものが勝つ。有限の `rate` は 0 や負の値も含めて保持し、`y` か `rate` が有限数でない要素は読み飛ばす。元配列は `preservation.bmson.scrollEvents` に保持する（ない場合は省く）
+- beatoraja の bmson デコーダーは、後のオブジェクトのために作るタイムラインのスクロールを現在の速度ではなく 1.0 にする（`BMSONDecoder.getTimeLine`、L588-606）。そのため beatoraja では、次のスクロールイベントより前の次のノートで速度が 1.0 に戻ることがある。be-music は BMS 譜面と拡張の意図に合わせ、次のスクロールイベントまで速度を保つ。確認したギミック譜面（safe_state）では、2 つの解釈で描画に違いはなかった
 - `sound_channels` の元配列は `preservation.bmson.soundChannels` に保持
 - beatoraja 拡張は jbms-parser（beatoraja）と同じく読む。どちらも `sound_channels` と同じ `mode_hint` lane map を通り、`x` に対応するレーンがないノートは捨てる。WAV は `sound_channels` の後に `key_channels`、`mine_channels` の順で登録する
   - `key_channels` は隠しノート: 各ノートは BMS 不可視オブジェクト（`3x` / `4x`。拡張の `3A`〜`3Q` / `4A`〜`4Q` を含む）になり、チャンネルのサンプルをそのレーンの keysound として鳴らし、判定はしない。読むのは `x` と `y` だけ
@@ -198,12 +205,13 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 - 上の表にある hint（キーボード系とホイールを含む）では各レーンに表の固定 `x` を与えるため、再パースで同じレーンに戻る。表にないレーンはその後ろに続け、どの正式な hint にも収まらない配置は `generic-<レーン数>keys` として使っているレーンを `x = 1` から採番
 - `03` / `08` チャンネルから `bpm_events` を生成
 - `09` チャンネルから `stop_events` を生成
+- `SC` オブジェクトとその `#SCROLLxx` の速度から `scroll_events` を生成する（譜面にない場合は省く）。BMS から bmson へ変換しても、beatoraja で SCROLL のギミックが残る
 - `events[].bmson.l/c` を `sound_channels.notes[].l/c` へ反映 (未指定時は `l=0`, `c=false`)
 - BMS のロングノート（`#LNOBJ` のペア、または `5x` / `6x` のロングノート。`#LNTYPE 1` / `2`、`#LNTYPE` がなければ Web プレイヤーと同じく推定）は、演奏レーン上の 1 つのノートとして終端までの `l` 付きで出力し、終端オブジェクト（と `#LNTYPE 2` の継続）はノートとして出力しない。終端のない `5x` / `6x` の始点はそのレーンの通常ノートのまま
 - ロングノートの `events[].bmson.t` を `notes[].t` へ、`bmson.info.lnType`（なければ BMS の `#LNMODE` `1`〜`3`。LN / CN / HCN の番号は同じ）を `info.ln_type` へ反映
 - 地雷（`Dx` / `Ex`）は `events[].bmson.damage` を `damage` として保ったまま（ない場合、BMS / JSON の地雷はオブジェクト値を base36 で読んだ値。値が大文字 base36 のダメージでなければ出力せず、どちらでも既定の `4` になる） `mine_channels` へ出力。BMS の地雷はすべて `#WAV00` で爆発するため、その名前の 1 チャンネルにまとめる（`#WAV00` がなければ名前は空）。bmson の地雷はそれぞれのサンプルを保つ。不可視オブジェクト（`3x` / `4x`）は WAV キーごとにまとめて `key_channels` へ出力。どちらの配列も各ノートを載っているレーンの `x` で出力し、該当オブジェクトがなければ出力しない
 - 地雷や不可視オブジェクトを含む譜面は、保持配列がそれらを持たないため常に正規化出力を使う
-- `preservation.bmson.bpmEvents` / `stopEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
+- `preservation.bmson.bpmEvents` / `stopEvents` / `scrollEvents` / `soundChannels` が現在の IR と整合する場合は、それらの配列構造を優先して再出力
 - `bmson.bga` が存在すれば `bga` を出力
 
 ### BMS と bmson の相互変換
@@ -217,6 +225,7 @@ beatoraja など他のプレイヤーが同じフィールドをどう読むか�
 | 地雷の `damage`      | 地雷のオブジェクト値（base36）。整数に丸め、`01`〜`ZZ` に収める（`00` はオブジェクトなしなので `0` は `01` = 1 %、`1295` 超は `ZZ`）。`damage` のない地雷は be-music の既定値 `04`。`#WAV00` がなければ最初の地雷のサンプルを爆発音 `#WAV00` にする                                                        |
 | `judge_rank`         | 正の値なら同じ値の `#DEFEXRANK`（単位が同じで `100` = NORMAL）。`#RANK` は出力しない                                                                                                                                                                                                                       |
 | `total`              | 出力しない。bmson の `total` はプレイヤー既定 TOTAL（ノーツ数とプレイヤーに依存）に対する百分率で、正確な絶対値の `#TOTAL` はないため。BMS の既定値が適用され、これは bmson の既定値 `100` の意味と同じ                                                                                                    |
+| `scroll_events`      | `#SCROLLxx`（異なる速度ごとに 1 つ）と `SC` オブジェクト                                                                                                                                                                                                                                                   |
 | `c`、`up`            | 失われる: BMS にはサンプルの分割や LN 終端音がない                                                                                                                                                                                                                                                         |
 
 逆方向（BMS → bmson）は上の一覧のとおりです。ロングノートは `l` に、`#LNMODE` は `info.ln_type` に、地雷の base36 値は `damage` になり、`#TOTAL` は出力しません。BMS → bmson → BMS と変換した譜面は、ロングノート（`#LNTYPE 1` のペアとして）と地雷のダメージを保ちます。

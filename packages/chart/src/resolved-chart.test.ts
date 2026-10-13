@@ -95,7 +95,8 @@ describe('resolveChart', () => {
   test('lists bar lines unless the chart suppresses them', () => {
     const json = bmsChart([event(1, '11', '01')]);
     json.measures = [{ index: 0, length: 0.5 }];
-    expect(resolveChart(json).barLines).toEqual([0, 2, 6]);
+    // One line per measure start, 0..1 — none after the last measure.
+    expect(resolveChart(json).barLines).toEqual([0, 2]);
     json.bmson.barlinesSuppressed = true;
     const suppressed = resolveChart(json);
     expect(suppressed.barLinesSuppressed).toBe(true);

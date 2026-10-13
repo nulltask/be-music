@@ -9,13 +9,13 @@ import {
   type BeMusicEvent,
   type BeMusicJson,
   createEmptyJson,
-  intToBase36,
   normalizeChannel,
   normalizeObjectKey,
   resolveBmsBase,
 } from '@be-music/json';
 import { drawRandomOutcomes, type RandomDraws } from '@be-music/chart';
 import { normalizeAsciiBase36Code } from '@be-music/utils/core';
+import { countDistinctValues, createBmsonValueKeyTable, encodeBmsonKey, resolveBmsonKeyBase } from './bmson-keys.ts';
 import {
   buildBmsObjectLineEntry,
   collectNonZeroObjectTokens,
@@ -37,6 +37,7 @@ import {
   normalizeBmsonKeyChannels,
   normalizeBmsonMineChannels,
   normalizeBmsonLines,
+  normalizeBmsonScrollEvents,
   normalizeBmsonSoundChannels,
   normalizeBmsonStopEvents,
   resolveBmsonResolution,
@@ -319,9 +320,58 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   const keyChannels = normalizeBmsonKeyChannels(document.key_channels);
   const mineChannels = normalizeBmsonMineChannels(document.mine_channels);
   const laneMap = buildBmsonLaneMap([...soundChannels, ...keyChannels, ...mineChannels], json.bmson.info.modeHint);
+  const bpmEvents = normalizeBmsonBpmEvents(document.bpm_events);
+  const stopEvents = normalizeBmsonStopEvents(document.stop_events);
+  // Spec: `stop_events.duration` is measured in **pulses** at the chart's `resolution`. The downstream timing resolver
+  // reads `resources.stop[key]` through the BMS-style `(value / 192) × (240/bpm)` formula, which expects the value in
+  // "1/192-of-a-measure" units (1 measure = 4 beats = 192 BMS-spec STOP units, so 1 beat = 48 BMS units). To keep the
+  // BMS / bmson paths sharing one formula, convert bmson pulses into the equivalent 1/192-measure units at parse time:
+  //
+  // bms_units = pulses × 48 / resolution
+  //
+  // Default `resolution = 240` → 1 beat (`duration = 240`) becomes `48` BMS units, which the formula evaluates to
+  // `(48 / 192) × (240/bpm) = 60/bpm` seconds — exactly one beat. Without this conversion bmson stops were ~5× longer
+  // than authored at the default resolution.
+  const stopUnits = stopEvents.map((stopEvent) => (stopEvent.duration * 48) / resolution);
+  // Of several BPM changes on one pulse the last one in the list wins (jbms-parser sets the timeline's BPM event by
+  // event). Collapse them here, since `08` events on one position are ordered by key, and keys go by value.
+  const bpmByPulse = new Map<number, number>();
+  for (const bpmEvent of bpmEvents) {
+    bpmByPulse.delete(bpmEvent.y);
+    bpmByPulse.set(bpmEvent.y, bpmEvent.bpm);
+  }
+  const bpmValues = [...bpmByPulse.values()];
+  // beatoraja extension: `scroll_events` set the lane's scroll rate from `y` on, as BMS `#SCROLLxx` on channel `SC`,
+  // and the rate holds until the next event, as in BMS. jbms-parser sets the rate on the timeline at `y`, so of several
+  // events on one pulse the last one in the list wins; collapse them here, since `SC` events on one position are
+  // ordered by key, not by the list.
+  const scrollEvents = normalizeBmsonScrollEvents(document.scroll_events);
+  const scrollRateByPulse = new Map<number, number>();
+  for (const scrollEvent of scrollEvents) {
+    scrollRateByPulse.delete(scrollEvent.y);
+    scrollRateByPulse.set(scrollEvent.y, scrollEvent.rate);
+  }
+  const scrollRates = [...scrollRateByPulse.values()];
+  // BPM / STOP get one key per distinct value (a gimmick chart with thousands of changes usually repeats a handful of
+  // values) and every sound / key / mine channel its own WAV slot. A resource that still needs more than the 1,295
+  // base-36 keys moves the chart to base-62 keys rather than letting a key wrap round onto an earlier value.
+  const wavSlotCount = soundChannels.length + keyChannels.length + mineChannels.length;
+  const keyBase = resolveBmsonKeyBase([
+    wavSlotCount,
+    countDistinctValues(bpmValues),
+    countDistinctValues(stopUnits),
+    countDistinctValues(scrollRates),
+  ]);
+  if (keyBase === 62) {
+    json.bms.base = 62;
+  }
   for (let index = 0; index < soundChannels.length; index += 1) {
     const soundChannel = soundChannels[index]!;
-    const key = intToBase36(index + 1, 2);
+    const key = encodeBmsonKey(index + 1, keyBase);
+    if (key === undefined) {
+      // Past the 3,843 base-62 WAV slots: drop the channel rather than overwrite an earlier channel's sample.
+      break;
+    }
     json.resources.wav[key] = soundChannel.name;
     const notes = soundChannel.notes ?? [];
     const playableTicks = new Set<number>();
@@ -396,8 +446,11 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
     keepDamage: boolean,
   ): void => {
     for (const extensionChannel of channels) {
-      const wavKey = intToBase36(nextWavIndex, 2);
+      const wavKey = encodeBmsonKey(nextWavIndex, keyBase);
       nextWavIndex += 1;
+      if (wavKey === undefined) {
+        return;
+      }
       json.resources.wav[wavKey] = extensionChannel.name;
       for (const note of extensionChannel.notes) {
         const lane = Number.isFinite(note.x) ? Math.floor(note.x!) : 0;
@@ -418,46 +471,34 @@ function parseBmsonDocument(document: BmsonDocument): BeMusicJson {
   pushBmsonExtensionNotes(keyChannels, bmsPlayableChannelToInvisibleChannel, false);
   pushBmsonExtensionNotes(mineChannels, bmsPlayableChannelToLandmineChannel, true);
 
-  const bpmEvents = normalizeBmsonBpmEvents(document.bpm_events);
   json.preservation.bmson.bpmEvents = bpmEvents;
-  bpmEvents.forEach((bpmEvent, index) => {
-    const key = intToBase36(index + 1, 2);
-    json.resources.bpm[key] = bpmEvent.bpm;
-    const { measure, position } = positionResolver(bpmEvent.y);
-    json.events.push({
-      measure,
-      position,
-      channel: '08',
-      value: key,
-    });
+  const bpmKeys = createBmsonValueKeyTable(bpmValues, keyBase);
+  Object.assign(json.resources.bpm, bpmKeys.table);
+  [...bpmByPulse.keys()].forEach((y, index) => {
+    const { measure, position } = positionResolver(y);
+    json.events.push({ measure, position, channel: '08', value: bpmKeys.keys[index]! });
   });
 
-  const stopEvents = normalizeBmsonStopEvents(document.stop_events);
+  // STOPs on one pulse add up (bmson spec), so their order on the pulse does not matter.
   json.preservation.bmson.stopEvents = stopEvents;
+  const stopKeys = createBmsonValueKeyTable(stopUnits, keyBase);
+  Object.assign(json.resources.stop, stopKeys.table);
   stopEvents.forEach((stopEvent, index) => {
-    const key = intToBase36(index + 1, 2);
-    // Spec: `stop_events.duration` is measured in **pulses** at the chart's `resolution`. The downstream timing
-    // resolver reads `resources.stop[key]` through the BMS-style `(value / 192) × (240/bpm)` formula, which expects the
-    // value in "1/192-of-a-measure" units (1 measure = 4 beats = 192 BMS-spec STOP units, so 1 beat = 48 BMS units). To
-    // keep the BMS / bmson paths sharing one formula, convert bmson pulses into the equivalent 1/192-measure units at
-    // parse time:
-    //
-    // bms_units = pulses × 48 / resolution
-    //
-    // Default `resolution = 240` → 1 beat (`duration = 240`) becomes `48` BMS units, which the formula evaluates to
-    // `(48 / 192) × (240/bpm) = 60/bpm` seconds — exactly one beat. Without this conversion bmson stops were ~5× longer
-    // than authored at the default resolution.
-    json.resources.stop[key] = (stopEvent.duration * 48) / resolution;
     const { measure, position } = positionResolver(stopEvent.y);
-    json.events.push({
-      measure,
-      position,
-      channel: '09',
-      value: key,
-    });
+    json.events.push({ measure, position, channel: '09', value: stopKeys.keys[index]! });
   });
 
-  json.events = sortAndNormalizeEvents(json.events);
+  if (scrollEvents.length > 0) {
+    json.preservation.bmson.scrollEvents = scrollEvents;
+  }
+  const scrollKeys = createBmsonValueKeyTable(scrollRates, keyBase);
+  Object.assign(json.bms.scroll, scrollKeys.table);
+  [...scrollRateByPulse.keys()].forEach((y, index) => {
+    const { measure, position } = positionResolver(y);
+    json.events.push({ measure, position, channel: 'SC', value: scrollKeys.keys[index]! });
+  });
+
+  json.events = sortAndNormalizeEvents(json.events, keyBase);
   return json;
 }
 
@@ -1444,6 +1485,10 @@ function normalizePreservation(input: unknown, bmsInput: unknown, bmsonInput: un
   normalized.bmson.lines = normalizeBmsonLines(rawBmson?.lines);
   normalized.bmson.bpmEvents = normalizeBmsonBpmEvents(rawBmson?.bpmEvents ?? rawBmson?.bpm_events);
   normalized.bmson.stopEvents = normalizeBmsonStopEvents(rawBmson?.stopEvents ?? rawBmson?.stop_events);
+  const scrollEvents = normalizeBmsonScrollEvents(rawBmson?.scrollEvents ?? rawBmson?.scroll_events);
+  if (scrollEvents.length > 0) {
+    normalized.bmson.scrollEvents = scrollEvents;
+  }
   normalized.bmson.soundChannels = normalizeBmsonSoundChannels(rawBmson?.soundChannels ?? rawBmson?.sound_channels);
 
   return normalized;

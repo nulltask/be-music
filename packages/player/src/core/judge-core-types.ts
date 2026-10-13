@@ -3,6 +3,7 @@ import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts'
 import type { PlaylogInputEvent } from '../playlog/format.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import type { LaneHoldHistory } from './lane-hold.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
 import type { PlayerGaugeSummary, PlayerUiCommand } from './ui-signal-bus.ts';
@@ -108,7 +109,13 @@ export interface JudgeCoreState {
   readonly longHoldReleaseSeconds: Map<string, number>;
   /** Until this chart second, a note-less press on the lane is part of a long note just played, not a phantom. */
   readonly longNoteSuppressUntilSeconds: Map<string, number>;
-  readonly lastLanePressMs: Map<string, number>;
+  /** Each lane's press and release instants, for asking whether it was down when a mine crossed the line. */
+  readonly laneHolds: Map<string, LaneHoldHistory>;
+  /**
+   * The host reports releases (key-state input, replays): lanes are down exactly between their presses and releases.
+   * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}.
+   */
+  keyStateInput: boolean;
   readonly pendingAutoScratchLongNotes: PendingAutoLongNoteState[];
   readonly autoScratchNotes: readonly TimedPlayableNote[];
   /** Per-lane sorted note times — the reference notes a phantom press is measured against for an empty POOR. */

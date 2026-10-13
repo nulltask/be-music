@@ -305,7 +305,9 @@ export interface BeMusicGameplayRuntime {
   /** SUDDEN+ / HIDDEN+ / LIFT per play side, as fractions of the lane height. */
   laneCovers?: readonly BeMusicLaneCover[];
   /**
-   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed.
+   * How long (ms) a note stays on screen, from the edge of the lane cover to the judgement line, at the current speed —
+   * BPM, hi-speed and the chart's `#SCROLL` × `#SPEED` at the playhead. 0 while the chart scrolls backwards or stands
+   * still, as beatoraja shows it.
    */
   visibleMs?: number;
   /** IIDX-style green number (`visibleMs × 0.6`): the note's on-screen time in frames at 60 Hz. */
@@ -410,7 +412,11 @@ export interface BeMusicLaneFrame {
   holdStartedAtMs?: number;
 }
 
-/** A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. */
+/**
+ * A tap note as drawn this frame: its lane rect and the y its bottom edge sits at. In a chart with a negative `#SCROLL`
+ * a note still ahead can sit below the judgement line, down to the bottom of the stage (the player draws such charts
+ * the way beatoraja does); clip to the lane's `bottom` to keep nothing below the line.
+ */
 export interface BeMusicNote {
   kind: BeMusicLaneKind;
   x: number;
@@ -421,8 +427,10 @@ export interface BeMusicNote {
 }
 
 /**
- * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at. Pressing the lane as it
- * passes the judgement line costs a BAD, so draw it as something to avoid. Only handed to skins that set
+ * A mine (landmine) note as drawn this frame: its lane rect and the y its bottom edge sits at (below the judgement line
+ * when a negative `#SCROLL` puts it there, as for {@link BeMusicNote}). A mine detonates when its lane
+ * is held as it crosses the judgement line (under the LR2 ruleset also on a press inside the PGREAT window) and drains
+ * the gauge, so draw it as something to avoid. Only handed to skins that set
  * {@link BeMusicGameplaySkin.drawsMines}.
  */
 export interface BeMusicMine {
@@ -432,7 +440,10 @@ export interface BeMusicMine {
   y: number;
 }
 
-/** A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). */
+/**
+ * A long note as drawn this frame: its lane rect, tail (top) and head (bottom, held on the line once passed). Like
+ * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
+ */
 export interface BeMusicLongNote {
   kind: BeMusicLaneKind;
   x: number;
@@ -444,7 +455,10 @@ export interface BeMusicLongNote {
    * `'hcn'` (hell charge note: the gauge drains while it isn't held).
    */
   mode?: BeMusicLongNoteMode;
-  /** Where the long note is in its life: not yet reached, being held, let go early, or completed. */
+  /**
+   * Where the long note is in its life: not yet reached, being held, dropped (missed at the head or let go early), or
+   * completed. LR2 draws a dropped long note at half alpha until it goes; the built-in skins do the same.
+   */
   state?: BeMusicLongNoteState;
   /** True when autoplay (or auto-scratch) plays this long note. */
   autoplay?: boolean;
@@ -469,7 +483,10 @@ export interface BeMusicBomb {
   judge?: BeMusicJudge;
 }
 
-/** A measure (bar) line crossing one lane run, as drawn this frame. */
+/**
+ * A measure (bar) line crossing one lane run, as drawn this frame. Like {@link BeMusicNote}, it can sit below the
+ * judgement line when a negative `#SCROLL` puts it there.
+ */
 export interface BeMusicMeasureLine {
   side: BeMusicSide;
   /** Left edge and width of the lane run it crosses. */
