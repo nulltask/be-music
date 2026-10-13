@@ -9,6 +9,7 @@
  */
 export * from './collection.ts';
 export * from './chart-hash.ts';
+export * from './md5.ts';
 export * from './types.ts';
 
 // Browser-side input helpers — same logical surface (= "getting files INTO the player from the browser"), kept

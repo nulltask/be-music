@@ -22,6 +22,10 @@ function makePlaylog(): BeMusicPlaylog {
       subtitle: 'ANOTHER',
       artist: 'composer',
       genre: 'genre',
+      sha256: 'a'.repeat(64),
+      md5: 'c'.repeat(32),
+      chartFingerprint: `bmfp0:${'a'.repeat(64)}`,
+      playFingerprint: `bmfp0:${'b'.repeat(64)}`,
       sourceFormat: 'bms',
       laneMode: '7keys',
       total: 300,
@@ -52,6 +56,11 @@ function makePlaylog(): BeMusicPlaylog {
       randomLane: { p1: 'MIRROR', p2: 'RANDOM' },
       dpFlip: true,
       judgeWindowOverrideMs: 500,
+      randomDraws: [
+        { command: 'RANDOM', range: 3, value: 2 },
+        { command: 'SETRANDOM', range: 1, value: 4 },
+        { command: 'SWITCH', range: 2, value: 1 },
+      ],
       aborted: true,
       native: { hiSpeed: 2.5, skin: 'default', assist: false, memo: null },
     },
@@ -105,6 +114,27 @@ describe('playlog format', () => {
     const parsed = parsePlaylog(serializePlaylog(minimal));
     expect(parsed).toEqual(minimal);
     expect(parsed.results).toBeUndefined();
+    expect(parsed.chart).not.toHaveProperty('sha256');
+    expect(parsed.chart).not.toHaveProperty('md5');
+    expect(parsed.chart).not.toHaveProperty('chartFingerprint');
+    expect(parsed.chart).not.toHaveProperty('playFingerprint');
+  });
+
+  test('rejects #RANDOM draws that no control-flow line could have made', () => {
+    for (const randomDraws of [
+      3,
+      [2],
+      [{ command: 'IF', range: 2, value: 1 }],
+      [{ command: 'RANDOM', range: 0, value: 1 }],
+      [{ command: 'RANDOM', range: 2, value: 3 }],
+      [{ command: 'RANDOM', range: 2, value: 1.5 }],
+      [{ command: 'SETRANDOM', range: 2, value: 1 }],
+      [{ command: 'SWITCH', range: 2, value: '1' }],
+    ]) {
+      const log = makePlaylog() as unknown as { play: Record<string, unknown> };
+      log.play.randomDraws = randomDraws;
+      expect(() => parsePlaylog(JSON.stringify(log))).toThrow(/play\.randomDraws/);
+    }
   });
 
   test('chart.reversalTimeUs survives the round-trip and stays absent when the chart has none', () => {
@@ -198,6 +228,20 @@ describe('playlog format', () => {
         }),
       ),
     ).toThrow('chart.lnMode: expected 1 | 2 | 3');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.chart.chartFingerprint = 42;
+        }),
+      ),
+    ).toThrow('chart.chartFingerprint: expected a string');
+    expect(() =>
+      parsePlaylog(
+        corrupt((value) => {
+          value.chart.playFingerprint = 42;
+        }),
+      ),
+    ).toThrow('chart.playFingerprint: expected a string');
     expect(() =>
       parsePlaylog(
         corrupt((value) => {

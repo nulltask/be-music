@@ -142,12 +142,16 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
   // cached native result carries the actual AUTO outcome).
   const playlogRecorder = options.onPlaylogRecorded
     ? (() => {
-        const { chartSha256, recorder, ...hostPlaySettings } = options.recordPlaylog ?? {};
+        const { chartSha256, chartMd5, recorder, sourceChart, ...hostPlaySettings } = options.recordPlaylog ?? {};
         return createPlaylogRecorder({
           json: resolvedJson,
           chart: playbackChart,
           chartSha256,
+          chartMd5,
           recorder,
+          laneModeExtension: options.laneModeExtension,
+          // The chart the engine was handed is the source when it resolved the control flow itself.
+          sourceChart: sourceChart ?? json,
           dynamicJudgeRankChanges: resolvedChart.judgeRank.changes,
           reversalSeconds,
           play: {
@@ -155,6 +159,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
             autoScratch: false,
             judgeWindowOverrideMs: options.judgeWindowMs,
             judgeRuleset: options.judgeRuleset,
+            ...(options.randomDraws !== undefined ? { randomDraws: options.randomDraws } : {}),
             ...hostPlaySettings,
           },
         });

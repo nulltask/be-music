@@ -532,8 +532,10 @@ export interface CoreGameplayViewOptions {
    * Replay playback: a recorded play-log to re-drive instead of live keyboard input. The chart prepare skips the
    * usual DP-flip / lane-shuffle passes and re-applies the RECORDED arrangement (`applyPlaylogArrangement`), the
    * engine consumes `playlog.inputs` deterministically (`PlayerOptions.replayInputs`), live lane input is ignored,
-   * and no new play-log is recorded for the run. `prepare` rejects when the loaded chart does not match the log
-   * (different `#RANDOM` roll / different chart file).
+   * and no new play-log is recorded for the run. The chart's `#RANDOM` / `#SWITCH` lines take the log's
+   * `play.randomDraws`, so the replay plays the recorded branches. `prepare` rejects when the loaded chart does not
+   * match the log (draws that were not drawn for its control flow, a log without draws whose branches differ, or a
+   * different chart file).
    */
   replay?: BeMusicPlaylog;
   /**
@@ -546,6 +548,8 @@ export interface CoreGameplayViewOptions {
    * play-log (`chart.sha256`) so a dropped log can be matched back to its chart by content.
    */
   chartSha256?: string;
+  /** MD5 (lowercase hex) of the same bytes, stamped as `chart.md5` (the key LR2 and LR2IR use). */
+  chartMd5?: string;
   /** Host application stamped into the recorded play-log's `recorder` (the engine adds its own version). */
   playlogRecorder?: PlaylogRecordingOptions['recorder'];
   /**
@@ -2147,9 +2151,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   private prepareSong(song: BrowserSongEntry): void {
     // Resolve `#RANDOM` / `#SETRANDOM` / `#SWITCH` control flow once, first, so every play-time consumer below and the
-    // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay can hand
-    // the recorded draws to `resolvePlayChart` instead.
-    const { chart: resolved, randomDraws } = resolvePlayChart(song.chart);
+    // engine see the same chosen branches. The draws are fresh each play (LR2 re-rolls each play); a replay resolves
+    // with the draws its log recorded, so it plays the recorded branches.
+    const { chart: resolved, randomDraws } = resolvePlayChart(
+      song.chart,
+      this.options.replay?.play.randomDraws !== undefined ? { randomDraws: this.options.replay.play.randomDraws } : {},
+    );
     this.resolvedChart = resolved;
     this.randomDraws = randomDraws;
     // BMS spec — `#WAVCMD 01 xx vv` declares per-slot volume overrides (0..127 byte). Collect once now so every
@@ -4984,7 +4991,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
               recordPlaylog: {
                 gauge: this.options.gauge,
                 ...(this.options.chartSha256 !== undefined ? { chartSha256: this.options.chartSha256 } : {}),
+                ...(this.options.chartMd5 !== undefined ? { chartMd5: this.options.chartMd5 } : {}),
                 ...(this.options.playlogRecorder !== undefined ? { recorder: this.options.playlogRecorder } : {}),
+                // The engine plays the chart this view resolved; the song's chart is the source both fingerprints
+                // describe (`#RANDOM` unresolved, no lane option applied).
+                ...(this.song !== undefined ? { sourceChart: this.song.chart } : {}),
                 ...(this.options.random1P !== undefined || this.options.random2P !== undefined
                   ? {
                       randomLane: {

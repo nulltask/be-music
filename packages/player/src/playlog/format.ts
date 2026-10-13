@@ -1,3 +1,4 @@
+import type { RandomDraw } from '@be-music/chart';
 import type { GrooveGaugeType } from '../core/groove-gauge.ts';
 import type { LongNoteMode } from '../playable-notes.ts';
 
@@ -74,6 +75,20 @@ export interface PlaylogChart {
   genre?: string;
   /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
   sha256?: string;
+  /** Lowercase-hex MD5 of the source chart FILE bytes — how LR2 and LR2IR name a chart. */
+  md5?: string;
+  /**
+   * Chart fingerprint (`bmfp0:…`, docs/fingerprint-spec.md) of the source chart, every `#RANDOM` / `#SWITCH` branch
+   * included — identifies the chart regardless of file bytes, keysounds, BGA, metadata or which branches this play
+   * rolled, so plays of one chart share it. Equal to {@link playFingerprint} for a chart without control flow. Omitted
+   * when the recorder did not have the source chart (a host resolved `#RANDOM` itself without passing it).
+   */
+  chartFingerprint?: string;
+  /**
+   * Play fingerprint (`bmfp0:…`) of the chart after this play's `#RANDOM` / `#SWITCH` outcomes — identifies what
+   * the player played. Lane options (MIRROR / RANDOM / FLIP) are part of neither fingerprint; they live in `play`.
+   */
+  playFingerprint?: string;
   sourceFormat: 'bms' | 'bmson';
   /** Engine lane display mode (`'7keys'` / `'14keys'` / ... — `resolveLaneDisplayMode` output). */
   laneMode: string;
@@ -107,6 +122,13 @@ export interface PlaylogPlay {
   judgeWindowOverrideMs?: number;
   /** Judge-window ruleset the live engine ran (`PlayerOptions.judgeRuleset`). Absent = `'lr2'` (the default). */
   judgeRuleset?: 'lr2' | 'beatoraja' | 'iidx';
+  /**
+   * The play's `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` outcomes (`RandomDraws` from `@be-music/chart`): one
+   * entry per such line of the chart, in file order. With the chart file, `resolveBmsControlFlowWithDraws(json,
+   * randomDraws)` rebuilds the chart that was played (so a verifier can recompute `chart.playFingerprint`), and a
+   * replay passes them back as `PlayerOptions.randomDraws`. Absent for charts without control flow.
+   */
+  randomDraws?: RandomDraw[];
   /** True when the play ended early (ESC). The input stream stops at the abort point. */
   aborted?: boolean;
   /** Lossless bag for host-specific settings that don't affect simulation (hi-speed, skin, ...). */
@@ -306,6 +328,9 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     artist: optionalString(chart.artist, 'chart.artist'),
     genre: optionalString(chart.genre, 'chart.genre'),
     sha256: optionalString(chart.sha256, 'chart.sha256'),
+    md5: optionalString(chart.md5, 'chart.md5'),
+    chartFingerprint: optionalString(chart.chartFingerprint, 'chart.chartFingerprint'),
+    playFingerprint: optionalString(chart.playFingerprint, 'chart.playFingerprint'),
     sourceFormat,
     laneMode: expectString(chart.laneMode, 'chart.laneMode'),
     total: optionalFiniteNumber(chart.total, 'chart.total'),
@@ -315,7 +340,18 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     reversalTimeUs: optionalFiniteNumber(chart.reversalTimeUs, 'chart.reversalTimeUs'),
     notes,
   };
-  for (const key of ['title', 'subtitle', 'artist', 'genre', 'sha256', 'total', 'reversalTimeUs'] as const) {
+  for (const key of [
+    'title',
+    'subtitle',
+    'artist',
+    'genre',
+    'sha256',
+    'md5',
+    'chartFingerprint',
+    'playFingerprint',
+    'total',
+    'reversalTimeUs',
+  ] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }
   return parsed;
@@ -425,6 +461,9 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     }
     parsed.judgeRuleset = play.judgeRuleset;
   }
+  if (play.randomDraws !== undefined) {
+    parsed.randomDraws = parseRandomDraws(play.randomDraws);
+  }
   if (play.aborted !== undefined) parsed.aborted = play.aborted === true;
   if (play.native !== undefined) {
     const native = expectRecord(play.native, 'play.native');
@@ -437,6 +476,30 @@ function parsePlay(play: Record<string, unknown>): PlaylogPlay {
     parsed.native = copied;
   }
   return parsed;
+}
+
+const RANDOM_DRAW_COMMANDS: ReadonlySet<string> = new Set(['RANDOM', 'SETRANDOM', 'SWITCH', 'SETSWITCH']);
+
+function parseRandomDraws(value: unknown): RandomDraw[] {
+  if (!Array.isArray(value)) {
+    throw new PlaylogParseError('play.randomDraws: expected an array');
+  }
+  return value.map((entry: unknown, index): RandomDraw => {
+    const path = `play.randomDraws[${index}]`;
+    const draw = expectRecord(entry, path);
+    const { command, range, value: drawn } = draw;
+    if (typeof command !== 'string' || !RANDOM_DRAW_COMMANDS.has(command)) {
+      throw new PlaylogParseError(`${path}.command: expected 'RANDOM' | 'SETRANDOM' | 'SWITCH' | 'SETSWITCH'`);
+    }
+    if (typeof range !== 'number' || !Number.isInteger(range) || range < 1) {
+      throw new PlaylogParseError(`${path}.range: expected a positive integer`);
+    }
+    const fixed = command === 'SETRANDOM' || command === 'SETSWITCH';
+    if (typeof drawn !== 'number' || !Number.isInteger(drawn) || drawn < 1 || (fixed ? range !== 1 : drawn > range)) {
+      throw new PlaylogParseError(`${path}.value: expected an integer in 1..range (range 1 for a #SET… line)`);
+    }
+    return { command: command as RandomDraw['command'], range, value: drawn };
+  });
 }
 
 function parseResults(results: Record<string, unknown>): Record<string, PlaylogRulesetResult> {

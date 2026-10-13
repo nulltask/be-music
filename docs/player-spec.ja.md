@@ -125,6 +125,8 @@ BMS の `#RANDOM` / `#SETRANDOM` / `#SWITCH` 系制御構文は、再生開始�
 エンジン（`autoPlay` / `manualPlay`）は自分では引きません。解決済みの譜面はそのまま再生し、`PlayerOptions.randomDraws` は RANDOM 要約にだけ使います。
 制御構文が残った譜面を `randomDraws` と一緒に渡された場合（たとえば元の譜面とプレイログの draws）は、その draws でちょうど 1 回だけ解決します。draws なしで渡された場合は、エンジンの外の誰も知らない分岐を引く代わりに `TypeError` を投げます。
 
+プレイログは draws を `play.randomDraws` に記録し、リプレイはそれを `PlayerOptions.randomDraws` として渡し直します（[プレイログ](./playlog.ja.md) を参照）。
+
 RANDOM 要約は draws から作ります。
 `#SETRANDOM` は固定値として表示し、複数の RANDOM 系がある場合は宣言順で `RANDOM #1 2/3  #2 1/2` のように整形します。
 

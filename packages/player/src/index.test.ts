@@ -1,9 +1,15 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveChart } from '@be-music/chart';
+import {
+  computeChartFingerprint,
+  computePlayFingerprint,
+  drawRandomOutcomes,
+  resolveChart,
+  type RandomDraws,
+} from '@be-music/chart';
 import { createEmptyJson } from '../../json/src/index.ts';
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test';
-import { parseChart, parseChartFile } from '../../parser/src/index.ts';
+import { parseChart, parseChartFile, resolveBmsControlFlowWithDraws } from '../../parser/src/index.ts';
 import { resolveBeatorajaDefaultTotal, resolveLr2DefaultTotal } from './ruleset/index.ts';
 
 const audioSinkState = vi.hoisted(() => ({
@@ -96,6 +102,7 @@ import {
   resolveJudgeWindowsMs,
   resolveBmsControlFlowForPlayback,
   resolvePlayChart,
+  type PlayerSummary,
 } from './index.ts';
 import type { PlayerInputCommand } from './core/input-signal-bus.ts';
 import type { PlayerUiCommand } from './core/ui-signal-bus.ts';
@@ -1271,6 +1278,43 @@ describe('player', () => {
     expect(output.some((line) => line.includes('result:EMPTY_POOR'))).toBe(false);
   });
 
+  test('player: records the #RANDOM draws and the extension-aware fingerprints in the play log', async () => {
+    const json = parseChart(
+      [
+        '#BPM 240',
+        '#00111:01',
+        '#RANDOM 2',
+        '#IF 1',
+        '#00113:01',
+        '#ENDIF',
+        '#IF 2',
+        '#00114:01',
+        '#ENDIF',
+        '#ENDRANDOM',
+      ].join('\n'),
+      'bms',
+    );
+    const randomDraws = drawRandomOutcomes(json, () => 0.9);
+    let playlog: BeMusicPlaylog | undefined;
+    await autoPlay(json, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      laneModeExtension: '.pms',
+      randomDraws,
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+    });
+    expect(playlog!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
+    const replayed = resolveBmsControlFlowWithDraws(json, playlog!.play.randomDraws!);
+    expect(playlog!.chart.playFingerprint).toBe(computePlayFingerprint(replayed, { chartPath: '.pms' }));
+    expect(playlog!.chart.playFingerprint).not.toBe(computePlayFingerprint(replayed, { chartPath: undefined }));
+    // The engine resolved `#RANDOM` itself, so its input is the source chart the chart fingerprint describes.
+    expect(playlog!.chart.chartFingerprint).toBe(computeChartFingerprint(json, { chartPath: '.pms' }));
+  });
+
   test('player: onPlaylogRecorded captures the resolved chart, raw inputs, and native result cache', async () => {
     // BPM 240 → measure 1 starts at chart 1.0 s. One press near the note, then natural chart end.
     const json = createEmptyJson('bms');
@@ -1305,6 +1349,7 @@ describe('player', () => {
     expect(playlog!.chart.notes[0]).toMatchObject({ id: 0, channel: '11', type: 'normal', timeUs: 1_000_000 });
     expect(playlog!.play).toMatchObject({ mode: 'manual', autoScratch: false, gauge: 'GROOVE' });
     expect(playlog!.play.randomLane).toEqual({ p1: 'MIRROR' });
+    expect(playlog!.play.randomDraws).toBeUndefined();
     expect(playlog!.play.aborted).toBeUndefined();
     // The single scheduled press resolves against lane channel 11 with a chart-relative µs timestamp near the note.
     expect(playlog!.inputs).toHaveLength(1);
@@ -1382,6 +1427,65 @@ describe('player', () => {
     ).toEqual(
       recorded!.inputs.map((input) => ({ action: input.action, timeUs: input.timeUs, channels: input.channels })),
     );
+  });
+
+  test('player: a replay resolves #RANDOM with the recorded randomDraws', async () => {
+    // BPM 240: branch 1 puts a note on lane 11 at 1.0 s, branch 2 on lane 12 at the same time.
+    const json = parseChart(
+      ['#BPM 240', '#RANDOM 2', '#IF 1', '#00111:01', '#ENDIF', '#IF 2', '#00112:01', '#ENDIF', '#ENDRANDOM'].join(
+        '\n',
+      ),
+      'bms',
+    );
+    // Record a play of branch 2 with a press on lane 12 (`s`).
+    let recorded: BeMusicPlaylog | undefined;
+    const original = await manualPlay(json, {
+      speed: 1,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      randomDraws: drawRandomOutcomes(json, () => 0.9),
+      onPlaylogRecorded: (playlog) => {
+        recorded = playlog;
+      },
+      createInputRuntime: createScheduledInputRuntime([
+        { delayMs: 1000, command: { kind: 'lane-input', tokens: ['s'] } },
+      ]),
+    });
+    expect(recorded!.play.randomDraws).toEqual([{ command: 'RANDOM', range: 2, value: 2 }]);
+    expect(original.perfect + original.great).toBe(1);
+
+    const replay = async (randomDraws: RandomDraws): Promise<{ summary: PlayerSummary; playlog: BeMusicPlaylog }> => {
+      let playlog: BeMusicPlaylog | undefined;
+      const summary = await manualPlay(json, {
+        speed: 8,
+        leadInMs: 0,
+        audio: false,
+        tui: false,
+        replayInputs: recorded!.inputs,
+        randomDraws,
+        onPlaylogRecorded: (log) => {
+          playlog = log;
+        },
+      });
+      return { summary, playlog: playlog! };
+    };
+
+    const withRecordedDraws = await replay(recorded!.play.randomDraws!);
+    expect(withRecordedDraws.playlog.play.randomDraws).toEqual(recorded!.play.randomDraws);
+    expect(withRecordedDraws.playlog.chart.notes.map((note) => note.channel)).toEqual(['12']);
+    expect(withRecordedDraws.playlog.chart.playFingerprint).toBe(recorded!.chart.playFingerprint);
+    expect(withRecordedDraws.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
+    expect(withRecordedDraws.summary.exScore).toBe(original.exScore);
+    expect(withRecordedDraws.summary.perfect).toBe(original.perfect);
+    expect(withRecordedDraws.summary.great).toBe(original.great);
+
+    // Other draws play branch 1, where the recorded press misses; the chart fingerprint stays the same.
+    const otherDraws = await replay(drawRandomOutcomes(json, () => 0));
+    expect(otherDraws.playlog.chart.notes.map((note) => note.channel)).toEqual(['11']);
+    expect(otherDraws.playlog.chart.playFingerprint).not.toBe(recorded!.chart.playFingerprint);
+    expect(otherDraws.playlog.chart.chartFingerprint).toBe(recorded!.chart.chartFingerprint);
+    expect(otherDraws.summary.exScore).toBe(0);
   });
 
   test('player: judgeRuleset switches the manual judge windows (LR2 / beatoraja / IIDX)', async () => {
