@@ -28,9 +28,10 @@ const CHART: BeMusicJson = (() => {
   return json;
 })();
 
-function createAuto(ruleset: PlaylogRulesetId): AutoJudgeState {
-  const source = structuredClone(CHART);
-  const prepared = preparePlaybackChart(resolveChart(source));
+function createAuto(ruleset: PlaylogRulesetId, chart: BeMusicJson = CHART): AutoJudgeState {
+  const source = structuredClone(chart);
+  const resolved = resolveChart(source);
+  const prepared = preparePlaybackChart(resolved);
   const config = resolveRuleset(rulesetChartFactsFromChart(source, prepared), ruleset);
   return createAutoJudgeState(
     {
@@ -43,6 +44,7 @@ function createAuto(ruleset: PlaylogRulesetId): AutoJudgeState {
         ['12', 's'],
         ['16', 'shift'],
       ]),
+      reversalSeconds: resolved.reversal?.seconds,
     },
     {
       ...createInitialPlayerSummary(config, config.noteCount),
@@ -115,6 +117,25 @@ describe('auto judge core', () => {
     const coarse = run('beatoraja', [4]).state;
     expect(coarse.summary).toEqual(fine.summary);
     expect(coarse.scoreTracker.maxCombo).toBe(fine.scoreTracker.maxCombo);
+  });
+
+  test('an LR2 negative-BPM reversal freezes AUTO judging, and a run that leaves notes behind ends with the gauge at 0', () => {
+    // `#BPM02 -240` at 1.25 s: the tap at 1 s plays, the long note from 1.5 s never starts.
+    const chart = structuredClone(CHART);
+    chart.resources.bpm['02'] = -240;
+    chart.events.push({ measure: 1, channel: '08', position: [1, 4], value: '02' });
+    const state = createAuto('lr2', chart);
+    const effects: JudgeCoreEffect[] = [];
+    for (const nowSec of [1, 1.6, 3, 10]) {
+      runAutoJudgeStep(state, { kind: 'advance', nowSec }, (effect) => effects.push(effect));
+    }
+    expect(state.summary.perfect).toBe(1);
+    expect(isAutoJudgeSettled(state)).toBe(false);
+
+    runAutoJudgeStep(state, { kind: 'finish', totalSeconds: 4 }, (effect) => effects.push(effect));
+    expect(state.summary.gauge!.current).toBe(0);
+    expect(state.summary.gauge!.cleared).toBe(false);
+    expect(effects.at(-1)).toMatchObject({ kind: 'trace', name: 'gauge', seconds: 4 });
   });
 
   test('resolveNoteKeyLabel reads the scratch label for the scratch sub-channels', () => {
