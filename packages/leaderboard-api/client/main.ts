@@ -152,13 +152,14 @@ document.addEventListener('change', (event) => {
 });
 
 /** Draws the play's share card and returns it as an image, PNG unless that is too large for the upload limit. */
-async function renderScoreCard(data: ScoreCardData): Promise<Blob> {
+async function renderScoreCard(data: ScoreCardData, font: CardFont | undefined): Promise<Blob> {
   const canvas = document.createElement('canvas');
   canvas.width = CARD_WIDTH;
   canvas.height = CARD_HEIGHT;
   const context = canvas.getContext('2d');
   if (context === null) throw new Error('This browser cannot draw the card.');
   const avatar = await loadImage(data.avatarUrl).catch(() => null);
+  await loadCardFont(font);
   if (document.fonts !== undefined) await document.fonts.ready;
   const playedOn = new Date(data.playedAt).toLocaleDateString(undefined, {
     year: 'numeric',
@@ -178,6 +179,19 @@ async function renderScoreCard(data: ScoreCardData): Promise<Blob> {
   return jpeg;
 }
 
+interface CardFont {
+  family: string;
+  url: string;
+}
+
+/** Loads the card's Latin typeface; without it (or where it fails to load), the card falls back to system fonts. */
+async function loadCardFont(font: CardFont | undefined): Promise<void> {
+  if (font === undefined || typeof FontFace !== 'function' || document.fonts === undefined) return;
+  const face = new FontFace(font.family, `url(${JSON.stringify(font.url)}) format("woff2")`, { weight: '100 900' });
+  const loaded = await face.load().catch(() => null);
+  if (loaded !== null) document.fonts.add(loaded);
+}
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const image = new Image();
@@ -192,7 +206,9 @@ async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
   const upload = source.dataset.upload;
   if (upload === undefined || source.dataset.hasCard === 'true') return;
   const data = JSON.parse(source.textContent ?? '{}') as ScoreCardData;
-  const blob = await renderScoreCard(data);
+  const { fontFamily, fontUrl } = source.dataset;
+  const font = fontFamily !== undefined && fontUrl !== undefined ? { family: fontFamily, url: fontUrl } : undefined;
+  const blob = await renderScoreCard(data, font);
   const response = await fetch(upload, {
     method: 'PUT',
     credentials: 'same-origin',

@@ -3,6 +3,7 @@
  * the card from it. Kept free of DOM and Worker types, so both sides can import it.
  */
 export interface ScoreCardData {
+  genre: string | null;
   title: string;
   subtitle: string | null;
   artist: string | null;
