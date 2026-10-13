@@ -1,11 +1,12 @@
 /** @jsxImportSource hono/jsx */
 import type { RankingEntry } from '../ranking.ts';
 import type { RecentScore } from './data.ts';
+import type { ExternalLink } from './external.ts';
 import { chartTitle, djLevel, formatScoreRate, formatTimestamp, lampStyle, RULESET_LABELS } from './format.ts';
 
 export const scoreHref = (scoreId: string): string => `/leaderboard/scores/${encodeURIComponent(scoreId)}`;
-export const chartHref = (chartFingerprint: string, ruleset?: string): string =>
-  `/leaderboard/charts/${encodeURIComponent(chartFingerprint)}${ruleset !== undefined ? `?ruleset=${ruleset}` : ''}`;
+export const chartHref = (chartFingerprint: string): string =>
+  `/leaderboard/charts/${encodeURIComponent(chartFingerprint)}`;
 export const playerHref = (handle: string): string => `/leaderboard/players/${encodeURIComponent(handle)}`;
 
 function Lamp(props: { lamp: number }) {
@@ -45,7 +46,7 @@ export function RecentScoresTable(props: { scores: RecentScore[]; showPlayer: bo
             <th>When</th>
             {props.showPlayer ? <th>Player</th> : null}
             <th>Song</th>
-            <th>Ruleset</th>
+            <th>Played with</th>
             <th>Lamp</th>
             <th>EX</th>
             <th>Rate</th>
@@ -65,9 +66,7 @@ export function RecentScoresTable(props: { scores: RecentScore[]; showPlayer: bo
                 </td>
               ) : null}
               <td class="song">
-                <a href={chartHref(entry.chartFingerprint, entry.playedRuleset)}>
-                  {chartTitle(entry.title, entry.chartFingerprint)}
-                </a>
+                <a href={chartHref(entry.chartFingerprint)}>{chartTitle(entry.title, entry.chartFingerprint)}</a>
                 {entry.chartListed ? null : <span class="tag">new chart</span>}
                 {entry.artist !== null ? <small>{entry.artist}</small> : null}
               </td>
@@ -151,6 +150,8 @@ export function ResultsTable(props: {
     judges: Record<string, number>;
   }>;
   playedRuleset: string;
+  /** The viewer's display ruleset, marked as shown. */
+  displayRuleset: string;
 }) {
   const order = ['lr2', 'beatoraja', 'iidx'];
   const results = [...props.results].sort((left, right) => order.indexOf(left.ruleset) - order.indexOf(right.ruleset));
@@ -174,6 +175,7 @@ export function ResultsTable(props: {
             <tr>
               <td>
                 {RULESET_LABELS[result.ruleset] ?? result.ruleset}
+                {result.ruleset === props.displayRuleset ? <span class="tag">shown</span> : null}
                 {result.ruleset === props.playedRuleset ? <span class="tag">played</span> : null}
               </td>
               <td>
@@ -194,5 +196,28 @@ export function ResultsTable(props: {
         </tbody>
       </table>
     </div>
+  );
+}
+
+/** Links to the same chart elsewhere: other Internet Rankings (one per file the chart is known by) and BMS Search. */
+export function Elsewhere(props: { links: ExternalLink[] }) {
+  if (props.links.length === 0) return null;
+  const rankings = props.links.filter((link) => link.kind === 'ranking');
+  const many = rankings.length > 1;
+  return (
+    <section class="elsewhere">
+      <h2>Elsewhere</h2>
+      <ul>
+        {props.links.map((link) => (
+          <li>
+            <a href={link.url} rel="noopener noreferrer" target="_blank">
+              {link.name}
+            </a>
+            {link.kind === 'search' ? <span class="tag">search by title</span> : null}
+            {many && link.hash !== undefined ? <span class="tag">file {link.hash.slice(0, 8)}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

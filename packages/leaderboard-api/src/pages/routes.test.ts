@@ -46,8 +46,8 @@ async function userIdOf(cookie: string): Promise<string> {
   return ((await session.json()) as { user: { id: string } }).user.id;
 }
 
-const page = async (path: string) => {
-  const response = await fetchApp(path);
+const page = async (path: string, cookie?: string) => {
+  const response = await fetchApp(path, cookie !== undefined ? { headers: { cookie } } : undefined);
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
@@ -67,7 +67,7 @@ describe('Leaderboard pages', () => {
     const before = await page('/leaderboard');
     expect(before.status).toBe(200);
     expect(before.html).toContain('No plays here yet');
-    expect(before.cacheControl).toBe('public, max-age=0, s-maxage=30');
+    expect(before.cacheControl).toBe('private, max-age=0');
 
     // Once a player keeps their account (what registering a passkey does), their play shows, on a chart that is not
     // listed yet (one player so far) and so is tagged as new.
@@ -109,15 +109,45 @@ describe('Leaderboard pages', () => {
     expect(score.html).toContain('IIDX');
     expect(score.html).toContain(`/api/v1/scores/${firstScore}/playlog`);
 
-    const ranking = await page(`/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}?ruleset=beatoraja`);
+    const ranking = await page(`/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}`);
     expect(ranking.status).toBe(200);
     expect(ranking.html).toContain('2 players');
     // Ranked by EX score: 18 (nine PGREATs) above 8.
+    expect(ranking.html.indexOf('>18<')).toBeGreaterThan(0);
     expect(ranking.html.indexOf('>18<')).toBeLessThan(ranking.html.indexOf('>8<'));
+    // Elsewhere: no file hash was recorded for this chart, so only the title search on BMS Search, encoded.
+    expect(ranking.html).toContain('https://bmssearch.net/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
+    expect(ranking.html).not.toContain('mocha-repository.info');
 
     const player = await page(`/leaderboard/players/${firstHandle}`);
     expect(player.status).toBe(200);
     expect(player.html).toContain(`@${firstHandle}`);
+  });
+
+  test('the display ruleset is one setting for every page, switched without changing page URLs', async () => {
+    const back = `/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}?assisted=0`;
+    const switched = await fetchApp(`/leaderboard/ruleset/beatoraja?next=${encodeURIComponent(back)}`);
+    expect(switched.status).toBe(303);
+    expect(switched.headers.get('location')).toBe(back);
+    const setCookie = switched.headers.get('set-cookie') ?? '';
+    expect(setCookie).toMatch(/^lb-ruleset=beatoraja;/);
+    expect(setCookie).toContain('Path=/leaderboard');
+    const cookie = setCookie.split(';')[0]!;
+
+    // Every page now reads beatoraja: the header switch marks it, the score page marks it as shown.
+    const top = await page('/leaderboard', cookie);
+    expect(top.html).toContain('scored under beatoraja');
+    expect(top.html).toMatch(/class="on"[^>]*>beatoraja</);
+    const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
+    expect(score.html).toMatch(/beatoraja<span class="tag">shown<\/span>/);
+    // Without the cookie, LR2.
+    expect((await page('/leaderboard')).html).toContain('scored under LR2');
+
+    // An unknown ruleset changes nothing, and the switch never redirects off the Leaderboard.
+    const unknown = await fetchApp('/leaderboard/ruleset/popn?next=https://evil.example/');
+    expect(unknown.status).toBe(303);
+    expect(unknown.headers.get('location')).toBe('/leaderboard');
+    expect(unknown.headers.get('set-cookie')).toBeNull();
   });
 
   test('unknown pages, scores, charts and players are 404 pages', async () => {

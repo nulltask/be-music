@@ -1,23 +1,35 @@
 /** @jsxImportSource hono/jsx */
 import type { Context, Hono } from 'hono';
+import { getCookie, setCookie } from 'hono/cookie';
 import type { AppEnv } from '../app.ts';
 import { openDatabase } from '../db/client.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
-import { loadChart, loadPlayer, loadRecentScores, loadScoreDetail } from './data.ts';
+import { loadChart, loadChartAliases, loadPlayer, loadRecentScores, loadScoreDetail } from './data.ts';
+import { externalLinks } from './external.ts';
 import { chartTitle, formatTimestamp, RULESET_LABELS } from './format.ts';
 import { Layout, type PageMeta } from './layout.tsx';
-import { chartHref, FilterChip, playerHref, RankingTable, RecentScoresTable, ResultsTable } from './views.tsx';
+import { isRuleset, RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
+import {
+  chartHref,
+  FilterChip,
+  Elsewhere,
+  playerHref,
+  RankingTable,
+  RecentScoresTable,
+  ResultsTable,
+} from './views.tsx';
 
 const RECENT_LIMIT = 50;
 const RANKING_LIMIT = 100;
-const RULESETS = ['lr2', 'beatoraja', 'iidx'] as const;
-type Ruleset = (typeof RULESETS)[number];
 
 /**
- * Pages change with every submission. Browsers always revalidate, so a player sees their new score at once; a shared
- * cache may keep a page for half a minute to absorb a burst of visitors.
+ * Pages change with every submission and follow the viewer's display ruleset (a cookie), so they are private and the
+ * browser revalidates every time: a player sees their new score at once.
  */
-const PAGE_CACHE = 'public, max-age=0, s-maxage=30';
+const PAGE_CACHE = 'private, max-age=0';
+
+/** The display ruleset lasts a year; switching it again replaces it. */
+const RULESET_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 const isOn = (value: string | undefined): boolean => value === '1' || value === 'true';
 
@@ -34,7 +46,19 @@ function withQuery(c: Context, key: string, value: string | undefined): string {
 }
 
 function meta(c: Context, title: string, description: string): PageMeta {
-  return { title, description, url: c.req.url };
+  const url = new URL(c.req.url);
+  return {
+    title,
+    description,
+    url: c.req.url,
+    path: `${url.pathname}${url.search}`,
+    ruleset: resolveDisplayRuleset(getCookie(c, RULESET_COOKIE)),
+  };
+}
+
+/** The viewer's display ruleset: every page shows its figures under it (docs/leaderboard.md section 10). */
+function displayRuleset(c: Context) {
+  return resolveDisplayRuleset(getCookie(c, RULESET_COOKIE));
 }
 
 function notFound(c: Context<AppEnv>, what: string) {
@@ -54,8 +78,10 @@ export function mountPages(app: Hono<AppEnv>): void {
   // passkey, and the chart index (later) still lists charts by the two-player rule.
   const top = async (c: Context<AppEnv>) => {
     const includeAnonymous = isOn(c.req.query('anonymous'));
+    const ruleset = displayRuleset(c);
     const scores = await loadRecentScores(openDatabase(c.env.DB), {
       limit: RECENT_LIMIT,
+      ruleset,
       includeAnonymous,
       includeUnlisted: true,
     });
@@ -63,7 +89,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     return c.html(
       <Layout meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.')}>
         <h1>New scores</h1>
-        <p class="sub">The newest plays, each under the ruleset it was played with.</p>
+        <p class="sub">The newest plays, scored under {RULESET_LABELS[ruleset]}.</p>
         <div class="filters">
           <FilterChip
             label="Anonymous players"
@@ -86,6 +112,21 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.get('/leaderboard', top);
   app.get('/leaderboard/', top);
 
+  // Switches the display ruleset and goes back to the page it was switched on. A dedicated URL keeps the setting out of
+  // shareable page URLs, so opening someone's link never changes the viewer's setting.
+  app.get('/leaderboard/ruleset/:ruleset', (c) => {
+    const ruleset = c.req.param('ruleset');
+    if (isRuleset(ruleset)) {
+      setCookie(c, RULESET_COOKIE, ruleset, {
+        path: '/leaderboard',
+        maxAge: RULESET_COOKIE_MAX_AGE,
+        sameSite: 'Lax',
+        secure: new URL(c.req.url).protocol === 'https:',
+      });
+    }
+    return c.redirect(safeReturnPath(c.req.query('next')), 303);
+  });
+
   app.get('/leaderboard/scores/:id', async (c) => {
     const detail = await loadScoreDetail(openDatabase(c.env.DB), c.req.param('id'));
     if (detail === undefined) return notFound(c, 'This score');
@@ -99,13 +140,17 @@ export function mountPages(app: Hono<AppEnv>): void {
     return c.html(
       <Layout meta={meta(c, `${title} — ${detail.displayName}`, description)}>
         <h1>
-          <a href={chartHref(detail.chart.chartFingerprint, detail.score.playedRuleset)}>{title}</a>
+          <a href={chartHref(detail.chart.chartFingerprint)}>{title}</a>
         </h1>
         <p class="sub">
           {withArtist(detail.chart.artist)}played by <a href={playerHref(detail.handle)}>{detail.displayName}</a>
           {detail.anonymous ? <span class="tag">anonymous</span> : null}
         </p>
-        <ResultsTable results={detail.results} playedRuleset={detail.score.playedRuleset} />
+        <ResultsTable
+          results={detail.results}
+          playedRuleset={detail.score.playedRuleset}
+          displayRuleset={displayRuleset(c)}
+        />
         <h2 class="sub" style="margin-top:20px">
           Play
         </h2>
@@ -140,8 +185,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     const chartFingerprint = c.req.param('chartFingerprint');
     const found = await loadChart(db, chartFingerprint);
     if (found === undefined) return notFound(c, 'This chart');
-    const requested = c.req.query('ruleset');
-    const ruleset: Ruleset = (RULESETS as readonly string[]).includes(requested ?? '') ? (requested as Ruleset) : 'lr2';
+    const ruleset = displayRuleset(c);
     const assisted = isOn(c.req.query('assisted'));
     const includeAnonymous = isOn(c.req.query('anonymous'));
     const playedHereOnly = isOn(c.req.query('played'));
@@ -149,6 +193,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     const ranking = await loadRanking(db, filter, { offset: 0, limit: RANKING_LIMIT });
     const title = chartTitle(found.title, chartFingerprint);
     const everyone = await countPlayers(db, { ...filter, includeAnonymous: true, playedHereOnly: false });
+    const elsewhere = externalLinks(found, await loadChartAliases(db, chartFingerprint));
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`)}>
@@ -158,11 +203,6 @@ export function mountPages(app: Hono<AppEnv>): void {
           {found.noteCount} notes · {everyone} player{everyone === 1 ? '' : 's'}
           {found.status === 'listed' ? null : <span class="tag">new chart</span>}
         </p>
-        <div class="filters">
-          {RULESETS.map((id) => (
-            <FilterChip label={RULESET_LABELS[id]!} on={id === ruleset} href={withQuery(c, 'ruleset', id)} />
-          ))}
-        </div>
         <div class="filters">
           <FilterChip label="Assisted" on={assisted} href={withQuery(c, 'assisted', assisted ? undefined : '1')} />
           <FilterChip
@@ -177,6 +217,7 @@ export function mountPages(app: Hono<AppEnv>): void {
           />
         </div>
         <RankingTable entries={ranking.entries} noteCount={found.noteCount} />
+        <Elsewhere links={elsewhere} />
       </Layout>,
     );
   });
@@ -187,6 +228,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     if (player === undefined) return notFound(c, 'This player');
     const scores = await loadRecentScores(db, {
       limit: RECENT_LIMIT,
+      ruleset: displayRuleset(c),
       includeAnonymous: true,
       includeUnlisted: true,
       handle: player.handle,

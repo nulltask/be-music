@@ -1,6 +1,7 @@
 import { and, desc, eq, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { chart, profile, score, scoreResult, user } from '../db/schema.ts';
+import { chart, chartAlias, profile, score, scoreResult, user } from '../db/schema.ts';
+import type { ChartAlias } from './external.ts';
 
 export interface RecentScore {
   scoreId: string;
@@ -22,6 +23,8 @@ export interface RecentScore {
 
 export interface RecentScoresFilter {
   limit: number;
+  /** The ruleset whose figures each row shows (the viewer's display ruleset). */
+  ruleset: 'lr2' | 'beatoraja' | 'iidx';
   /** Include anonymous players. Off by default, like the rankings. */
   includeAnonymous: boolean;
   /** Include charts not listed yet (fewer than two players). Off by default (docs/leaderboard.md section 7). */
@@ -31,11 +34,11 @@ export interface RecentScoresFilter {
 }
 
 /**
- * The newest accepted plays, each with its figures under the ruleset it was played under. The listing rules of the
- * rankings apply: anonymous players and unlisted charts are left out unless asked for.
+ * The newest accepted plays, each with its figures under the display ruleset (every play is simulated under all three,
+ * so any ruleset has figures). Anonymous players and unlisted charts are left out unless asked for.
  */
 export async function loadRecentScores(db: Database, filter: RecentScoresFilter): Promise<RecentScore[]> {
-  const conditions: SQL[] = [eq(scoreResult.ruleset, score.playedRuleset)];
+  const conditions: SQL[] = [eq(scoreResult.ruleset, filter.ruleset)];
   if (!filter.includeAnonymous) conditions.push(eq(user.isAnonymous, false));
   if (!filter.includeUnlisted) conditions.push(eq(chart.status, 'listed'));
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
@@ -103,4 +106,13 @@ export async function loadPlayer(db: Database, handle: string) {
     .innerJoin(user, eq(user.id, profile.userId))
     .where(eq(profile.handle, handle));
   return row === undefined ? undefined : { ...row, anonymous: row.anonymous === true };
+}
+
+/** The file hashes known for a chart, in a stable order. */
+export async function loadChartAliases(db: Database, chartFingerprint: string): Promise<ChartAlias[]> {
+  return db
+    .select({ kind: chartAlias.kind, hash: chartAlias.hash })
+    .from(chartAlias)
+    .where(eq(chartAlias.chartFingerprint, chartFingerprint))
+    .orderBy(chartAlias.kind, chartAlias.hash);
 }

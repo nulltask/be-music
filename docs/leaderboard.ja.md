@@ -306,8 +306,12 @@ leaderboard Worker の中で Hono JSX によってサーバーレンダリング
 - `/leaderboard/charts/:chartFp` — 譜面のランキング
 - `/leaderboard/players/:handle` — プロフィール。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
 
-ページは `Cache-Control: public, max-age=0, s-maxage=30` を返します。ブラウザーは毎回確認するので新しいスコアはすぐ
-見え、共有キャッシュだけが 30 秒まで保持できます。操作が必要な部分（ライバル登録ボタンなど）は、小さな
+どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、IIDX）で値を表示し、
+プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/leaderboard/ruleset/:id?next=…`。
+戻り先は Leaderboard のページに限る）で行うので、ページの URL を共有しても、開いた人の設定は変わりません。ページが
+Cookie に依存するので、`Cache-Control: private, max-age=0` を返します。譜面のページには他のサイトへのリンクを
+置きます。譜面の既知のファイル SHA-256 ごとに Mocha-Repository（LR2IR は MD5 が必要で、まだ記録していません）、
+ハッシュで引けない BMS Search には曲名での検索です。操作が必要な部分（ライバル登録ボタンなど）は、小さな
 `hono/jsx/dom` の island にします。サイトが Web アプリと
 呼べる規模になったら HonoX か Nuxt に移れます。データアクセスの関数を共有しておけば、その移行は軽く済みます。
 
