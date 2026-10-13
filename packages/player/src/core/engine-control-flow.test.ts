@@ -104,3 +104,38 @@ describe('engine control flow', () => {
     await expect(play(autoPlay, SOURCE, { randomDraws: drawsFor(3) })).rejects.toThrow(RangeError);
   });
 });
+
+describe('holding a manual play open after its chart', () => {
+  test('reports the chart over once, keeps running, and ends normally when the host lets go', async () => {
+    const chart = resolveBmsControlFlowWithDraws(SOURCE, drawsFor(1));
+    const controller = new AbortController();
+    let settledAt: number | undefined;
+    let settledCount = 0;
+    let endedAt: number | undefined;
+    const run = manualPlay(chart, {
+      speed: 64,
+      leadInMs: 0,
+      audio: false,
+      tui: false,
+      laneModeExtension: '.bme',
+      writeOutput: () => {},
+      holdAfterChart: {
+        signal: controller.signal,
+        onSettled: () => {
+          settledCount += 1;
+          settledAt = performance.now();
+          // The host's outro: let go a little later.
+          setTimeout(() => controller.abort(), 120);
+        },
+      },
+    }).then((summary) => {
+      endedAt = performance.now();
+      return summary;
+    });
+    const summary = await run;
+    expect(settledCount).toBe(1);
+    expect(endedAt! - settledAt!).toBeGreaterThanOrEqual(100);
+    // Letting go is not an interrupt: the play ends with its summary.
+    expect(summary.total).toBe(1);
+  });
+});
