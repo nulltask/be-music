@@ -120,21 +120,7 @@ import {
   songRecordPlayFromResult,
   storeSongRecords,
 } from './song-records.ts';
-import {
-  describeLeaderboardResult,
-  describeSkippedSubmission,
-  prepareLeaderboardSubmission,
-  submitToLeaderboard,
-} from './leaderboard.ts';
-import {
-  createLeaderboardPasskey,
-  describeAccountChip,
-  describeLeaderboardAccount,
-  loadLeaderboardAccount,
-  signInWithLeaderboardPasskey,
-  signOutOfLeaderboard,
-  type AccountActionResult,
-} from './account.ts';
+import { LeaderboardPanel } from './leaderboard-ui.ts';
 import {
   describeSkinSettingControllers,
   readStoredSkinSettings,
@@ -555,13 +541,14 @@ class PlayerWebDemoApp {
    * select paths can `enable()` it again.
    */
   private playlogSaveController: Controller | undefined;
-  /** "Submit to Leaderboard" checkbox controller; locked during a play like {@link playlogSaveController}. */
-  private leaderboardSubmitController: Controller | undefined;
-  /** Read-only "Account" row of the Leaderboard folder, refreshed after every account action and submission. */
-  private leaderboardAccountController: Controller | undefined;
-  private readonly leaderboardAccountState = { status: 'Not signed in' };
-  /** The Debug Menu's Leaderboard folder, which the account chip opens while signed out. */
-  private leaderboardFolder: GUI | undefined;
+  /** The Leaderboard's Debug Menu folder, account chip and play submission. */
+  private readonly leaderboard = new LeaderboardPanel({
+    // Read on use: `guiState` is initialized after this field.
+    settings: () => this.guiState,
+    setStatus: (text) => this.setStatus(text),
+    warn: (message, error) => gameplayLog.warn(message, error),
+    recorder: PLAYLOG_RECORDER,
+  });
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
    * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
@@ -591,8 +578,6 @@ class PlayerWebDemoApp {
    * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
    */
   private activePlayAutoSavePlaylog = false;
-  /** `guiState.submitToLeaderboard` as it was when the current play started (see {@link activePlayAutoSavePlaylog}). */
-  private activePlaySubmitToLeaderboard = false;
   /**
    * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
    * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
@@ -1100,7 +1085,7 @@ class PlayerWebDemoApp {
     this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
     this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
-    this.buildLeaderboardFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
+    this.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui);
@@ -1412,76 +1397,6 @@ class PlayerWebDemoApp {
   }
 
   /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
-  /**
-   * The Leaderboard: play submission (opt-in) and the player's account. An account starts anonymous (the first
-   * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another
-   * device, moving that device's anonymous plays into it.
-   */
-  private buildLeaderboardFolder(leaderboard: GUI): void {
-    this.leaderboardFolder = leaderboard;
-    // Signed out, the account chip has no page to open: it opens this folder instead.
-    document.querySelector<HTMLAnchorElement>('#account-chip')?.addEventListener('click', (event) => {
-      if (event.currentTarget instanceof HTMLElement && event.currentTarget.dataset.state !== 'signed-out') return;
-      event.preventDefault();
-      this.openLeaderboardFolder();
-    });
-    // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
-    // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
-    this.leaderboardSubmitController = leaderboard
-      .add(this.guiState, 'submitToLeaderboard')
-      .name('Submit to Leaderboard')
-      .onChange((value: boolean) => {
-        this.guiState.submitToLeaderboard = value;
-      });
-    this.leaderboardAccountController = leaderboard
-      .add(this.leaderboardAccountState, 'status')
-      .name('Account')
-      .disable();
-    const run = (label: string, action: () => Promise<AccountActionResult>) => async (): Promise<void> => {
-      this.setStatus(`${label}…`);
-      try {
-        const result = await action();
-        this.setStatus(result.ok ? `${label}: done` : `${label} failed: ${result.error}`);
-      } catch (error) {
-        this.setStatus(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-      await this.refreshLeaderboardAccount();
-    };
-    leaderboard
-      .add({ create: run('Create passkey', createLeaderboardPasskey) }, 'create')
-      .name('Create passkey (keep this account)');
-    leaderboard
-      .add({ signIn: run('Sign in with passkey', signInWithLeaderboardPasskey) }, 'signIn')
-      .name('Sign in with passkey');
-    leaderboard.add({ signOut: run('Sign out', signOutOfLeaderboard) }, 'signOut').name('Sign out');
-    void this.refreshLeaderboardAccount();
-  }
-
-  /** Opens the Debug Menu with its Leaderboard folder unfolded. */
-  private openLeaderboardFolder(): void {
-    const folder = this.leaderboardFolder;
-    if (folder === undefined) return;
-    for (let current: GUI | undefined = folder; current !== undefined; current = current.parent) current.open();
-    folder.domElement.scrollIntoView({ block: 'nearest' });
-  }
-
-  /** Re-reads the Leaderboard account into the Debug Menu's "Account" row and the account chip. */
-  private async refreshLeaderboardAccount(): Promise<void> {
-    const account = await loadLeaderboardAccount();
-    this.leaderboardAccountState.status = describeLeaderboardAccount(account);
-    this.leaderboardAccountController?.updateDisplay();
-    const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
-    if (chip !== null) {
-      const view = describeAccountChip(account);
-      chip.dataset.state = view.state;
-      chip.title = view.title;
-      chip.href = view.href ?? '/leaderboard';
-      chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
-      const label = chip.querySelector('#account-chip-label');
-      if (label !== null) label.textContent = view.label;
-    }
-  }
-
   private buildDeveloperFolder(developer: GUI): void {
     developer
       .add(this.guiState, 'autoPauseOnBlur')
@@ -2597,7 +2512,7 @@ class PlayerWebDemoApp {
           // Auto-save fires even when the theme ships no result skin — falling back to select
           // shouldn't cost the user their replay file.
           this.maybeAutoSavePlaylog(playlog);
-          this.maybeSubmitToLeaderboard(playlog, song);
+          this.leaderboard.maybeSubmit(playlog, song);
           this.unlockPlaylogOptions();
         });
       },
@@ -4137,7 +4052,7 @@ class PlayerWebDemoApp {
       this.activePlayRecordKey = undefined;
     }
     this.maybeAutoSavePlaylog(data.playlog);
-    this.maybeSubmitToLeaderboard(data.playlog, data.song);
+    this.leaderboard.maybeSubmit(data.playlog, data.song);
     this.unlockPlaylogOptions();
   }
 
@@ -4149,9 +4064,8 @@ class PlayerWebDemoApp {
    */
   private lockPlaylogOptionsForPlay(): void {
     this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
-    this.activePlaySubmitToLeaderboard = this.guiState.submitToLeaderboard;
     this.playlogSaveController?.disable();
-    this.leaderboardSubmitController?.disable();
+    this.leaderboard.lockForPlay();
     for (const controller of this.playOptionControllers) {
       controller.disable();
     }
@@ -4160,7 +4074,7 @@ class PlayerWebDemoApp {
   /** Re-enables the playlog option controllers once no play is in flight. */
   private unlockPlaylogOptions(): void {
     this.playlogSaveController?.enable();
-    this.leaderboardSubmitController?.enable();
+    this.leaderboard.unlock();
     for (const controller of this.playOptionControllers) {
       controller.enable();
     }
@@ -4179,35 +4093,6 @@ class PlayerWebDemoApp {
    * (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is up. Failures are
    * non-fatal — the result screen must never be blocked by a download hiccup.
    */
-  /**
-   * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
-   * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
-   */
-  private maybeSubmitToLeaderboard(playlog: BeMusicPlaylog | undefined, song: BrowserSongEntry): void {
-    if (!this.activePlaySubmitToLeaderboard || playlog === undefined) {
-      return;
-    }
-    const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
-    if (!prepared.ok) {
-      this.setStatus(describeSkippedSubmission(prepared.reason));
-      return;
-    }
-    const client = `${PLAYLOG_RECORDER.name}/${PLAYLOG_RECORDER.version}${
-      PLAYLOG_RECORDER.build !== undefined ? ` (build ${PLAYLOG_RECORDER.build})` : ''
-    }`;
-    const playedRuleset = playlog.play.judgeRuleset ?? 'lr2';
-    void submitToLeaderboard(prepared.submission, { client })
-      .then((result) => {
-        this.setStatus(describeLeaderboardResult(result, playedRuleset));
-        // The first submission signs in anonymously; show the account it created.
-        void this.refreshLeaderboardAccount();
-      })
-      .catch((error: unknown) => {
-        gameplayLog.warn('leaderboard submission failed', error);
-        this.setStatus('Leaderboard: not submitted (network error)');
-      });
-  }
-
   private maybeAutoSavePlaylog(playlog: BeMusicPlaylog | undefined): void {
     if (!this.activePlayAutoSavePlaylog || playlog === undefined) {
       return;
