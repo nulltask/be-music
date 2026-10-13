@@ -1,5 +1,6 @@
 // Builds the Leaderboard pages' icons from src/pages/icons/ and writes them into src/pages/icons.generated.ts, which
-// the Worker bundles and serves. To change the icon, replace src/pages/icons/icon.svg and run:
+// the Worker bundles and serves. scripts/generate.ts runs it with the other generators; to change the icon, replace
+// src/pages/icons/icon.svg and run:
 //   pnpm --filter @be-music/leaderboard-api run build:icons
 //
 // icon.svg is the browser-tab icon as is. The PNGs (180 px for the iOS home screen, 192 / 512 px for the web app

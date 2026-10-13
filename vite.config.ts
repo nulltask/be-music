@@ -134,6 +134,8 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: '@be-music/leaderboard-api',
+          // The pages' stylesheet, icons and client script are generated, not kept in git.
+          globalSetup: ['packages/leaderboard-api/test/global-setup.ts'],
           include: ['packages/leaderboard-api/src/**/*.test.ts', 'packages/leaderboard-api/client/**/*.test.ts'],
           // The API tests start a workerd process (Miniflare) for real D1 and R2 bindings.
           testTimeout: 30_000,

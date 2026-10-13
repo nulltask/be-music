@@ -1,5 +1,6 @@
 // Bundles the pages' client script (client/main.ts: passkey sign-in, settings page) and writes it into
-// src/pages/client.generated.ts, which the Worker bundles and serves. Run it after changing anything under client/:
+// src/pages/client.generated.ts, which the Worker bundles and serves. scripts/generate.ts runs it with the other
+// generators; on its own:
 //   pnpm --filter @be-music/leaderboard-api run build:client
 import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
