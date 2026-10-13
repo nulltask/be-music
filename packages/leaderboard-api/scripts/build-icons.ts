@@ -3,7 +3,7 @@
 //   pnpm --filter @be-music/leaderboard-api run build:icons
 //
 // icon.svg is the browser-tab icon as is. The PNGs (180 px for the iOS home screen, 192 / 512 px for the web app
-// manifest) are rendered from it, unless a hand-made file of that name sits next to it (apple-touch-icon.png,
+// manifest) are rendered from it, and og.svg becomes the default 1200 x 630 share card, unless a hand-made file of that name sits next to it (apple-touch-icon.png,
 // icon-192.png, icon-512.png) — small sizes often look better drawn by hand.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -36,7 +36,24 @@ const icons: Icon[] = [
   png('appleTouch', 'apple-touch-icon.png', 180),
   png('manifest192', 'icon-192.png', 192),
   png('manifest512', 'icon-512.png', 512),
+  // The default share card (1200 x 630) of link previews, from og.svg (an og.png next to it overrides it).
+  card(),
 ];
+
+function card(): Icon {
+  const handMade = join(iconsDir, 'og.png');
+  const bytes = existsSync(handMade)
+    ? readFileSync(handMade)
+    : Buffer.from(
+        new Resvg(readFileSync(join(iconsDir, 'og.svg')), {
+          fitTo: { mode: 'width', value: 1200 },
+          font: { loadSystemFonts: true, defaultFontFamily: 'Helvetica' },
+        })
+          .render()
+          .asPng(),
+      );
+  return { key: 'ogDefault', file: 'og.png', contentType: 'image/png', bytes, size: 1200 };
+}
 
 const entries = icons.map((icon) => {
   const hash = createHash('sha256').update(icon.bytes).digest('hex').slice(0, 12);

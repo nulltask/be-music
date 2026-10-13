@@ -15,6 +15,7 @@ describe('OpenAPI document', () => {
       '/me/avatar',
       '/scores',
       '/scores/{id}',
+      '/scores/{id}/card',
       '/scores/{id}/playlog',
     ]);
     const ranking = spec.paths?.['/charts/{chartFingerprint}/leaderboard']?.get;

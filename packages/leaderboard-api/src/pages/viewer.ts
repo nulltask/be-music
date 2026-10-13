@@ -9,7 +9,12 @@ export type Viewer = AccountSummary;
 
 /** Paths that never show the viewer (assets, icons, the manifest): no session lookup for them. */
 function needsViewer(path: string): boolean {
-  return !path.startsWith('/leaderboard/assets/') && !path.endsWith('/avatar') && !path.endsWith('.webmanifest');
+  return (
+    !path.startsWith('/leaderboard/assets/') &&
+    !path.endsWith('/avatar') &&
+    !path.endsWith('/card') &&
+    !path.endsWith('.webmanifest')
+  );
 }
 
 /**
