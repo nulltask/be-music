@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadExportsBenchmarkSnapshot, resolveCliValue, runCliMain } from './cli-utils.ts';
 import type { BenchmarkTaskStats, ExportsBenchmarkSnapshot } from './exports.types.ts';
-import { median } from './task-stats.ts';
+import { median, resolveComparisonHz } from './task-stats.ts';
 
 interface CliDefaults {
   outputPath: string;
@@ -120,6 +120,12 @@ function aggregateTaskStats(values: readonly BenchmarkTaskStats[]): BenchmarkTas
     const aggregatedValue = median(values.map((value) => value[field]));
     aggregated[field] = field === 'sampleCount' ? Math.round(aggregatedValue) : aggregatedValue;
   }
+  const iterations = values.map((value) => value.iterationsPerSample ?? 1);
+  if (values.some((value) => value.iterationsPerSample !== undefined)) {
+    aggregated.iterationsPerSample = Math.round(median(iterations));
+  }
+  // Keep every run's figure: the comparison reads their spread to tell a change from run-to-run noise.
+  aggregated.runMedianHz = values.map((value) => resolveComparisonHz(value));
   return aggregated;
 }
 

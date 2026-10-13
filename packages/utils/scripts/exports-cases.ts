@@ -111,6 +111,7 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   define('utils.readFilesIntoEntryMap', {
+    ioBound: true,
     run: async () => {
       await utilsApi.readFilesIntoEntryMap([lazyEntry], { deferAudio: false });
     },
@@ -152,6 +153,7 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   define('utils.createFileLogger', {
+    ioBound: true,
     run: async (fixtures) => {
       const logger = await utilsApi.createFileLogger(`${fixtures.tmpDir}/bench-log.ndjson`);
       await logger.close();
@@ -191,6 +193,7 @@ export function registerUtilsExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   define('utils.resolveFirstExistingPath', {
+    ioBound: true,
     run: async (fixtures) => {
       await utilsApi.resolveFirstExistingPath(fixtures.tmpDir, ['missing.wav', 'missing.ogg']);
     },
