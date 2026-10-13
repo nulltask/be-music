@@ -3,21 +3,25 @@ import type { DefineBenchmarkCase } from '../../../scripts/bench/exports.types.t
 
 export function registerEditorExportsCases(define: DefineBenchmarkCase): void {
   define('editor.importChart', {
+    ioBound: true,
     run: async (fixtures) => {
       await editorApi.importChart(fixtures.paths.bmsPath);
     },
   });
   define('editor.loadJsonFile', {
+    ioBound: true,
     run: async (fixtures) => {
       await editorApi.loadJsonFile(fixtures.paths.jsonPath);
     },
   });
   define('editor.saveJsonFile', {
+    ioBound: true,
     run: async (fixtures) => {
       await editorApi.saveJsonFile(fixtures.paths.editorSavePath, fixtures.sampleBmsJson);
     },
   });
   define('editor.exportChart', {
+    ioBound: true,
     run: async (fixtures) => {
       await editorApi.exportChart(fixtures.paths.editorExportBmsPath, fixtures.sampleBmsJson);
     },

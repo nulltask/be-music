@@ -36,6 +36,13 @@ export interface BenchmarkTaskStats {
   rmePercent: number;
   sampleCount: number;
   totalTimeMs: number;
+  /**
+   * Calls batched into one timed sample (the figures above are per call). Fast functions run many times per sample so
+   * a sample lasts well past the timer's resolution; absent in snapshots from before batching, which means 1.
+   */
+  iterationsPerSample?: number;
+  /** Median ops/s of each run an aggregated snapshot was made from, to show how much the runs disagree. */
+  runMedianHz?: number[];
 }
 
 export interface ExportsBenchmarkSnapshot {
@@ -63,12 +70,19 @@ export interface ExportsBenchmarkSnapshot {
     filteredOut: number;
   };
   skipped: Record<string, string>;
+  /** Keys of the cases marked `ioBound`; absent in snapshots from before the mark. */
+  ioBound?: string[];
   results: Record<string, BenchmarkTaskStats>;
 }
 
 export interface BenchmarkCaseDefinition {
   run: (fixtures: BenchFixtures) => void | Promise<void>;
   interactive?: boolean;
+  /**
+   * The case touches the filesystem (or spawns processes): its time follows the OS cache and the disk more than the
+   * code, so reports list it apart and never call its change a regression or an improvement.
+   */
+  ioBound?: boolean;
   timeMs?: number;
   warmupTimeMs?: number;
 }
