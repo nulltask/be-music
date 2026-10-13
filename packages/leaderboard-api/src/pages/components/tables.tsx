@@ -6,6 +6,7 @@ import type { ChartsetChart, PlayInfo, RecentScore } from '../data.ts';
 import { chartTitle, djLevel, formatExScore, formatGauge, formatLaneMode, RULESET_LABELS } from '../format.ts';
 import {
   ABOVE,
+  Avatar,
   BP_MEANING,
   chartHref,
   DJ_MEANING,
@@ -55,6 +56,7 @@ export function RecentScoresTable(props: {
               <td>
                 <RowLink href={scoreHref(entry.scoreId)} label={`Score of ${entry.displayName}`} />
                 <span class="inline-flex items-center gap-1.5">
+                  <Avatar src={entry.avatarUrl} size={20} />
                   <a class={`${LINK} ${ABOVE}`} href={playerHref(entry.handle)}>
                     {entry.displayName}
                   </a>
@@ -126,6 +128,7 @@ export function RankingTable(props: { entries: RankingEntry[]; infos: Map<string
             </td>
             <td>
               <span class="inline-flex items-center gap-1.5">
+                <Avatar src={entry.avatarUrl} size={20} />
                 <a class={`${LINK} ${ABOVE}`} href={playerHref(entry.handle)}>
                   {entry.displayName}
                 </a>

@@ -4,6 +4,7 @@ import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { RULESET_LABELS } from './format.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { ICON_LINKS } from './icons.ts';
+import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
 
 /** Where the compiled stylesheet is served; the hash in the name lets browsers keep it forever. */
@@ -183,6 +184,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <meta name="twitter:card" content="summary" />
         <script dangerouslySetInnerHTML={{ __html: COLOR_SCHEME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: TOOLTIP_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: LOCAL_TIME_SCRIPT }} />
         <link rel="stylesheet" href={STYLESHEET_PATH} />
         <link rel="icon" type="image/svg+xml" href={ICON_LINKS.favicon} />
         <link rel="apple-touch-icon" href={ICON_LINKS.appleTouch} />

@@ -5,17 +5,10 @@ import { isOn } from '../http/query.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
 import { RankingTable } from './components/tables.tsx';
 import { Details, DistributionCard, Elsewhere, LampLegend, Stats } from './components/cards.tsx';
-import { chartsetHref, FilterChip, Filters, Tag } from './components/basics.tsx';
+import { chartsetHref, FilterChip, Filters, LocalTime, Tag } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
 import { externalLinks } from './external.ts';
-import {
-  chartTitle,
-  formatJudgeRank,
-  formatLaneMode,
-  formatLnMode,
-  formatTimestamp,
-  RULESET_LABELS,
-} from './format.ts';
+import { chartTitle, formatJudgeRank, formatLaneMode, formatLnMode, RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
   day,
@@ -136,7 +129,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             alias.kind === 'sha256' ? 'File SHA-256' : 'File MD5',
             <span class="font-mono text-xs">{alias.hash}</span>,
           ]),
-          ['First seen', formatTimestamp(found.createdAt.getTime())],
+          ['First seen', <LocalTime at={found.createdAt.getTime()} />],
           ['Listed', found.status === 'listed' ? 'yes' : 'not yet (two players with a passkey list a chart)'],
         ])}
       />
