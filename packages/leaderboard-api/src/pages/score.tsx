@@ -3,7 +3,7 @@ import type { Child } from 'hono/jsx';
 import { openDatabase } from '../db/client.ts';
 import { loadScoreDetail } from '../scores/detail.ts';
 import { ResultCards } from './components/lists.tsx';
-import { Details, LampLegend } from './components/cards.tsx';
+import { Details } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
 import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
@@ -197,7 +197,6 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
           hasCard={detail.score.cardKey !== null}
         />
       ) : null}
-      <LampLegend />
     </Layout>,
   );
 }

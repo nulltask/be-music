@@ -498,14 +498,18 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 <EntityIcon kind="about" size="md" class="text-current" />
                 <span class="hidden sm:inline">About</span>
               </a>
+              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/help" title="Help">
+                <EntityIcon kind="help" size="md" class="text-current" />
+                <span class="hidden sm:inline">Help</span>
+              </a>
             </nav>
             <div class="ms-auto flex items-center gap-2">
               <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />
+              <AccountMenu viewer={props.meta.viewer} />
               <a class="btn" data-size="sm" href="/" title="Play in the browser">
                 <Icon svg={Play} />
                 Play
               </a>
-              <AccountMenu viewer={props.meta.viewer} />
             </div>
           </div>
           <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />

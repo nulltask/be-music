@@ -54,13 +54,24 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
-describe('about page', () => {
+describe('about and help pages', () => {
   test('explains the scoring and is linked from the header of every page', async () => {
     const about = await page('/leaderboard/about');
     expect(about.status).toBe(200);
     expect(about.html).toContain('How a play is scored');
     expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
     expect((await page('/leaderboard')).html).toContain('href="/leaderboard/about"');
+  });
+
+  test('the help page gathers the lamp legend and the terms, and is linked from the header', async () => {
+    const help = await page('/leaderboard/help');
+    expect(help.status).toBe(200);
+    for (const id of ['lamps', 'scores', 'judgments', 'rules', 'verification'])
+      expect(help.html).toContain(`id="${id}"`);
+    expect(help.html).toContain('EX HARD CLEAR');
+    const top = await page('/leaderboard');
+    expect(top.html).toContain('href="/leaderboard/help"');
+    expect(top.html).not.toContain('What the clear lamps mean');
   });
 });
 

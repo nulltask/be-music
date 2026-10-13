@@ -1,6 +1,5 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
-import { LampLegend } from './components/cards.tsx';
 import { Layout, PageHeader } from './layout.tsx';
 import { meta, PAGE_CACHE, type PageContext } from './page.tsx';
 
@@ -110,7 +109,6 @@ export function aboutPage(c: PageContext<'/leaderboard/about'>) {
           </p>
         </Section>
       </div>
-      <LampLegend />
     </Layout>,
   );
 }
