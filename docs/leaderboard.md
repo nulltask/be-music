@@ -254,6 +254,15 @@ client_policies (name, min_version, blocked_versions JSON)
 - Ranking queries use an index on `best_scores (chart_fp, ruleset, assisted, best_ex DESC)`.
 - A chart is **listed publicly** once two players who are not anonymous have played it (anonymous accounts cost
   nothing, so they do not count), or once it appears in a difficulty table.
+- **Chartsets** group the charts of one work: the original package's charts and the add-ons (差分). The grouping
+  comes from BMS Search (https://bmssearch.net), whose maintainers file each chart, by its file SHA-256 or MD5, under a
+  work by hand. `chartset.id` is BMS Search's id for the work; `chart.chartset_id` and `chart.pack_type` (original or
+  add-on) hold the answer, and `chart.chartset_checked_at` says when BMS Search was asked.
+  - A chart seen for the first time is looked up right after its submission (`waitUntil`).
+  - An hourly Cron Trigger asks about up to 20 charts. It takes unchecked charts first, then unlinked charts a week
+    after their last check and linked charts a month after theirs, since a link may be added or changed.
+  - A chart BMS Search does not know, or has not linked, stays on its own. Calls identify the Leaderboard in their
+    `User-Agent`.
 - R2 keys: `playlogs/{scoreId}.bmplay.json.gz`, `charts/{chartFp}.json`, `ghosts/{scoreId}.bin`,
   `og/scores/{scoreId}.png`.
 - **Replays**: each user chooses who can download their play logs (a per-user default, overridable per score).
@@ -319,6 +328,7 @@ Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime),
   a player who is not anonymous, on any chart, tagging charts that are not listed yet as new; anonymous plays come in
   with a filter. An invented chart reaches this page only through an account with a passkey.
 - `/leaderboard/scores/:id` — a score
+- `/leaderboard/chartsets/:id` — the charts of one work (originals, then add-ons)
 - `/leaderboard/charts/:chartFp` — a chart's rankings, its play counts and lamp spread, and its details (mode, TOTAL,
   judge rank, long-note mode, file hashes)
 - `/leaderboard/players/:handle` — a profile with the player's figures (plays, charts, average rate, and the lamp and DJ

@@ -5,7 +5,17 @@ import { getCookie, setCookie } from 'hono/cookie';
 import type { AppEnv } from '../app.ts';
 import { openDatabase } from '../db/client.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
-import { loadChart, loadChartAliases, loadPlayer, loadPlayInfos, loadRecentScores, loadScoreDetail } from './data.ts';
+import {
+  loadChart,
+  loadChartAliases,
+  loadChartset,
+  loadChartsetCharts,
+  loadChartsetOf,
+  loadPlayer,
+  loadPlayInfos,
+  loadRecentScores,
+  loadScoreDetail,
+} from './data.ts';
 import { externalLinks } from './external.ts';
 import {
   chartTitle,
@@ -22,6 +32,8 @@ import { isRuleset, RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from
 import { loadChartStats, loadPlayerStats } from './stats.ts';
 import {
   chartHref,
+  chartsetHref,
+  ChartsetChartsTable,
   Details,
   DistributionCard,
   Elsewhere,
@@ -60,6 +72,10 @@ const day = (epochMs: number | null): Child =>
 
 /** A timestamp, or `-` when there is none. */
 const when = (epochMs: number | null): string => (epochMs === null ? '-' : formatTimestamp(epochMs));
+
+/** The breadcrumb of a chart's chartset, when it is filed under one. */
+const chartsetCrumbs = (filed: { id: string; title: string } | undefined): Crumb[] =>
+  filed === undefined ? [] : [{ label: filed.title, href: chartsetHref(filed.id) }];
 
 /** Detail rows without the ones the play log left empty. */
 const known = (rows: Array<[string, Child]>): Array<[string, Child]> => rows.filter(([, value]) => value !== '-');
@@ -163,8 +179,10 @@ export function mountPages(app: Hono<AppEnv>): void {
   });
 
   app.get('/leaderboard/scores/:id', async (c) => {
-    const detail = await loadScoreDetail(openDatabase(c.env.DB), c.req.param('id'));
+    const db = openDatabase(c.env.DB);
+    const detail = await loadScoreDetail(db, c.req.param('id'));
     if (detail === undefined) return notFound(c, 'This score');
+    const filed = await loadChartsetOf(db, detail.chart.chartsetId);
     const title = chartTitle(detail.chart.title, detail.chart.chartFingerprint);
     const played = detail.results.find((result) => result.ruleset === detail.score.playedRuleset);
     const description =
@@ -175,6 +193,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     return c.html(
       <Layout
         meta={meta(c, `${title} — ${detail.displayName}`, description, [
+          ...chartsetCrumbs(filed),
           { label: title, href: chartHref(detail.chart.chartFingerprint) },
           { label: `${detail.displayName}’s play` },
         ])}
@@ -241,10 +260,12 @@ export function mountPages(app: Hono<AppEnv>): void {
     const aliases = await loadChartAliases(db, chartFingerprint);
     const elsewhere = externalLinks(found, aliases);
     const stats = await loadChartStats(db, filter);
+    const filed = await loadChartsetOf(db, found.chartsetId);
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout
         meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`, [
+          ...chartsetCrumbs(filed),
           { label: title },
         ])}
       >
@@ -296,6 +317,20 @@ export function mountPages(app: Hono<AppEnv>): void {
         <Details
           title="Chart"
           rows={known([
+            [
+              'Chartset',
+              filed === undefined ? (
+                '-'
+              ) : (
+                <a class="underline-offset-4 hover:underline" href={chartsetHref(filed.id)}>
+                  {filed.title}
+                </a>
+              ),
+            ],
+            [
+              'Package',
+              found.packType === 'included' ? 'original' : found.packType === 'additional' ? 'add-on (差分)' : '-',
+            ],
             ['Genre', orDash(found.genre)],
             ['Mode', formatLaneMode(found.laneMode)],
             ['Notes', found.noteCount],
@@ -395,6 +430,39 @@ export function mountPages(app: Hono<AppEnv>): void {
           empty="No plays yet."
         />
         <LampLegend />
+      </Layout>,
+    );
+  });
+
+  // A chartset: the charts of one work, the original package's and the add-ons, as BMS Search files them.
+  app.get('/leaderboard/chartsets/:id', async (c) => {
+    const db = openDatabase(c.env.DB);
+    const found = await loadChartset(db, c.req.param('id'));
+    if (found === undefined) return notFound(c, 'This chartset');
+    const charts = await loadChartsetCharts(db, found.id);
+    c.header('cache-control', PAGE_CACHE);
+    return c.html(
+      <Layout
+        meta={meta(c, found.title, `${found.title} — ${charts.length} charts on the be-music Leaderboard.`, [
+          { label: found.title },
+        ])}
+      >
+        <PageHeader title={found.title}>
+          {found.event !== null ? `${found.event} · ` : ''}
+          {charts.length} chart{charts.length === 1 ? '' : 's'} ·
+          <a
+            class="underline-offset-4 hover:underline"
+            href={`https://bmssearch.net/bmses/${encodeURIComponent(found.id)}`}
+            rel="noopener"
+            target="_blank"
+          >
+            BMS Search
+          </a>
+        </PageHeader>
+        <ChartsetChartsTable charts={charts} />
+        <p class="text-muted-foreground text-sm">
+          Charts are grouped as BMS Search files them, by hand; a chart it has not filed yet stays on its own.
+        </p>
       </Layout>,
     );
   });

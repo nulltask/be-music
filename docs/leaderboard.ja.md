@@ -253,6 +253,10 @@ client_policies (name, min_version, blocked_versions JSON)
 - ランキングの取得には `best_scores (chart_fp, ruleset, assisted, best_ex DESC)` のインデックスを使います。
 - 譜面は、匿名でないプレイヤー 2 人以上がプレイしたか（匿名アカウントはいくらでも作れるので数えません）、難易度表に
   載った時点で**公開一覧に載ります**。
+- **chartset** は 1 作品の譜面（同梱譜面と差分）をまとめる単位です。まとめ方は BMS Search（https://bmssearch.net）に従います。BMS Search では運営者が譜面を、ファイルの SHA-256 か MD5 で、作品へ手作業で紐付けています。`chartset.id` は BMS Search の作品 ID です。結果は `chart.chartset_id` と `chart.pack_type`（同梱か差分か）に、問い合わせた時刻は `chart.chartset_checked_at` に保存します。
+  - 初めて見た譜面は、送信の直後に問い合わせます（`waitUntil`）。
+  - 1 時間ごとの Cron Trigger で、最大 20 譜面を問い合わせます。未確認の譜面を先に、次に紐付けのない譜面を前回から 1 週間後、紐付け済みの譜面を 1 か月後に確認し直します。紐付けは後から追加・変更されることがあるためです。
+  - BMS Search が知らない譜面や、まだ紐付けのない譜面は単独のままです。問い合わせの `User-Agent` で Leaderboard からのアクセスだと分かるようにしています。
 - R2 のキー: `playlogs/{scoreId}.bmplay.json.gz`、`charts/{chartFp}.json`、`ghosts/{scoreId}.bin`、
   `og/scores/{scoreId}.png`。
 - **リプレイ**: プレイログを誰がダウンロードできるかは、各ユーザーが選びます（ユーザーごとの既定値を、スコアごとに
@@ -312,6 +316,7 @@ Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの 
   プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。
   匿名のプレイはフィルタで含めます。架空の譜面がこのページに出るには、passkey を持つアカウントが必要です。
 - `/leaderboard/scores/:id` — スコア
+- `/leaderboard/chartsets/:id` — 1 作品の譜面一覧（同梱譜面、次に差分）
 - `/leaderboard/charts/:chartFp` — 譜面のランキング、プレイ数とランプの分布、譜面の詳細（モード、TOTAL、判定ランク、LN モード、ファイルハッシュ）
 - `/leaderboard/players/:handle` — プロフィールとプレイヤーの統計（プレイ数、譜面数、平均スコアレート、自己ベストのランプと DJ Rank の分布）。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
 

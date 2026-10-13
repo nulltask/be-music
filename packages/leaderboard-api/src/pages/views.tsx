@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
 import type { RankingEntry } from '../ranking.ts';
-import type { PlayInfo, RecentScore } from './data.ts';
+import type { ChartsetChart, PlayInfo, RecentScore } from './data.ts';
 import type { ExternalLink } from './external.ts';
 import type { Distribution } from './stats.ts';
 import {
@@ -9,6 +9,7 @@ import {
   djLevel,
   formatExScore,
   formatGauge,
+  formatLaneMode,
   formatRecorder,
   formatTimestamp,
   LAMP_STYLES,
@@ -303,6 +304,60 @@ export function RankingTable(props: { entries: RankingEntry[]; infos: Map<string
             </td>
           </tr>
         ))}
+      </tbody>
+    </TableCard>
+  );
+}
+
+export const chartsetHref = (id: string): string => `/leaderboard/chartsets/${encodeURIComponent(id)}`;
+
+const PACK_TYPE_LABELS = {
+  included: { label: 'original', meaning: 'Came in the work’s own package.' },
+  additional: { label: 'add-on', meaning: 'An add-on chart (差分), distributed separately from the work.' },
+} as const;
+
+/** The charts of a chartset; a row opens the chart. */
+export function ChartsetChartsTable(props: { charts: ChartsetChart[] }) {
+  if (props.charts.length === 0) {
+    return <Empty title="No charts yet">No chart of this work has been played here.</Empty>;
+  }
+  return (
+    <TableCard>
+      <thead>
+        <tr>
+          <th>Chart</th>
+          <th>Package</th>
+          <th>Mode</th>
+          <th class={NUM}>Notes</th>
+          <th class={NUM}>Players</th>
+        </tr>
+      </thead>
+      <tbody>
+        {props.charts.map((entry) => {
+          const pack = entry.packType === null ? undefined : PACK_TYPE_LABELS[entry.packType];
+          const title = chartTitle(entry.title, entry.chartFingerprint);
+          return (
+            <tr class={ROW}>
+              <td>
+                <RowLink href={chartHref(entry.chartFingerprint)} label={title} />
+                <span class="inline-flex flex-wrap items-center gap-1.5">
+                  <span class="font-medium">{title}</span>
+                  {entry.subtitle !== null && entry.subtitle.length > 0 ? (
+                    <span class="text-muted-foreground">{entry.subtitle}</span>
+                  ) : null}
+                  {entry.listed ? null : <Tag>new chart</Tag>}
+                </span>
+                {entry.artist !== null && entry.artist.length > 0 ? (
+                  <div class="text-muted-foreground text-xs">{entry.artist}</div>
+                ) : null}
+              </td>
+              <td>{pack !== undefined ? <span title={pack.meaning}>{pack.label}</span> : '-'}</td>
+              <td>{formatLaneMode(entry.laneMode)}</td>
+              <td class={NUM}>{entry.noteCount}</td>
+              <td class={NUM}>{entry.players}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </TableCard>
   );
