@@ -117,13 +117,18 @@ export const profile = sqliteTable('profile', {
 /**
  * Handles an account used before. They stay reserved for that account, and their URLs redirect to its current handle.
  */
-export const handleHistory = sqliteTable('handle_history', {
-  handle: text('handle').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  createdAt: timestamps.createdAt,
-});
+export const handleHistory = sqliteTable(
+  'handle_history',
+  {
+    handle: text('handle').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    createdAt: timestamps.createdAt,
+  },
+  // A player's former handles.
+  (table) => [index('handle_history_user_idx').on(table.userId)],
+);
 
 /**
  * A chartset: the charts of one work, the original package's and the add-ons (差分), as BMS Search files them. `id` is
@@ -192,7 +197,11 @@ export const chartAlias = sqliteTable(
       .notNull()
       .references(() => chart.chartFingerprint, { onDelete: 'cascade' }),
   },
-  (table) => [primaryKey({ columns: [table.kind, table.hash] })],
+  (table) => [
+    primaryKey({ columns: [table.kind, table.hash] }),
+    // A chart's files (its page, its links elsewhere).
+    index('chart_alias_chart_idx').on(table.chartFingerprint),
+  ],
 );
 
 /** One accepted play. Its per-ruleset figures live in `score_result`. */
@@ -237,6 +246,13 @@ export const score = sqliteTable(
   (table) => [
     index('score_user_chart_idx').on(table.userId, table.chartFingerprint),
     index('score_chart_file_idx').on(table.chartFingerprint, table.fileSha256),
+    // The newest plays (the top page) and a player's newest plays.
+    index('score_created_idx').on(table.createdAt),
+    index('score_user_created_idx').on(table.userId, table.createdAt),
+    // Plays the hourly backfill has yet to fill in (src/scores/backfill.ts); empty once it has caught up.
+    index('score_pending_backfill_idx')
+      .on(table.durationMs)
+      .where(sql`${table.durationMs} is null`),
   ],
 );
 

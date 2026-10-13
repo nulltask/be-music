@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "8c792d8a-b506-489c-8ed5-3985a50ac8f7",
+  "id": "4d8c9bee-5fe7-4248-a7e5-cde2395ca4a0",
   "prevId": "c55f17eb-7ee1-4c67-8e45-b10cb9a7cb73",
   "tables": {
     "account": {
@@ -486,7 +486,15 @@
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "chart_alias_chart_idx": {
+          "name": "chart_alias_chart_idx",
+          "columns": [
+            "chart_fingerprint"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "chart_alias_chart_fingerprint_chart_chart_fingerprint_fk": {
           "name": "chart_alias_chart_fingerprint_chart_chart_fingerprint_fk",
@@ -587,7 +595,15 @@
           "default": "(cast(unixepoch('subsecond') * 1000 as integer))"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "handle_history_user_idx": {
+          "name": "handle_history_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
       "foreignKeys": {
         "handle_history_user_id_user_id_fk": {
           "name": "handle_history_user_id_user_id_fk",
@@ -976,6 +992,29 @@
             "file_sha256"
           ],
           "isUnique": false
+        },
+        "score_created_idx": {
+          "name": "score_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "score_user_created_idx": {
+          "name": "score_user_created_idx",
+          "columns": [
+            "user_id",
+            "created_at"
+          ],
+          "isUnique": false
+        },
+        "score_pending_backfill_idx": {
+          "name": "score_pending_backfill_idx",
+          "columns": [
+            "duration_ms"
+          ],
+          "isUnique": false,
+          "where": "\"score\".\"duration_ms\" is null"
         }
       },
       "foreignKeys": {
