@@ -384,6 +384,8 @@
         "subtitle": "24 KEY SP — channels 11..19 + 1A..1O",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "3",
+        "difficulty": 2,
         "total": 300
       },
       "notes": [

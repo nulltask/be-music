@@ -164,6 +164,7 @@
         "title": "negative BPM test 1 (#BPMxx -65 via ch08)",
         "artist": "be-music #134",
         "genre": "TEST",
+        "playLevel": "1",
         "total": 300
       },
       "notes": [

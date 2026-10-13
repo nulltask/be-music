@@ -251,6 +251,7 @@
         "subtitle": "Strict",
         "artist": "Codex",
         "genre": "TEST",
+        "playLevel": "9",
         "total": 340
       },
       "notes": [

@@ -248,6 +248,7 @@
         "subtitle": "beatoraja mine_channels / key_channels / ln_type / notes[].t extensions",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "4",
         "total": 260
       },
       "notes": [
