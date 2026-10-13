@@ -135,6 +135,9 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               <a class="hover:text-foreground" href="/">
                 Play
               </a>
+              <a class="hover:text-foreground" href="/leaderboard/api">
+                API
+              </a>
             </nav>
             <RulesetSwitch current={props.meta.ruleset} path={props.meta.path} />
           </div>

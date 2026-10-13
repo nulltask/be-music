@@ -270,6 +270,10 @@ client_policies (name, min_version, blocked_versions JSON)
 
 ## 8. API (`/api/v0`)
 
+The routes describe themselves: their valibot schemas validate requests and also generate the OpenAPI 3.1 document
+(`GET /api/v0/openapi.json`, reference page at `/leaderboard/api`). TypeSpec was considered, but a separate spec would
+drift from the validation the routes run.
+
 | Method                   | Path                                                                     | Purpose                                                                              |
 | ------------------------ | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `POST`                   | `/scores`                                                                | submit a play (section 5)                                                            |
