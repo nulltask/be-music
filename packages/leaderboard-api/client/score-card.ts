@@ -68,6 +68,45 @@ export function djRankGradient(rank: string): [string, string] {
   }
 }
 
+/** How far the optical correction moves a line's start, as a share of its first glyph's average left inset. */
+const OPTICAL_STRENGTH = 0.5;
+/** The most it moves a line, in em: a glyph like A or Y would otherwise be pulled far past the edge. */
+const OPTICAL_LIMIT = 0.06;
+
+/**
+ * How far left of the ink edge a line should start to look aligned with its neighbours. The eye lines text up by its
+ * mass, not its extreme pixel: the crossbar of T or t juts out past the stem, round letters bulge, diagonals lean in.
+ * `edges` are the first glyph's left ink edge on each of its rows; the inset is part of their average distance from
+ * the extreme edge, capped for glyphs that lean in a long way.
+ */
+export function opticalInset(edges: readonly number[], size: number): number {
+  if (edges.length === 0) return 0;
+  const extreme = Math.min(...edges);
+  const mean = edges.reduce((sum, edge) => sum + edge - extreme, 0) / edges.length;
+  return Math.min(mean * OPTICAL_STRENGTH, size * OPTICAL_LIMIT);
+}
+
+/** The left ink edge of `glyph` in `cssFont` on each row it covers, drawn on a scratch canvas. */
+function glyphLeftEdges(cssFont: string, glyph: string, size: number): number[] {
+  if (typeof OffscreenCanvas !== 'function') return [];
+  const extent = Math.ceil(size * 2);
+  const g = new OffscreenCanvas(extent, extent).getContext('2d');
+  if (g === null) return [];
+  g.font = cssFont;
+  g.fillText(glyph, size / 2, size * 1.5);
+  const { data } = g.getImageData(0, 0, extent, extent);
+  const edges: number[] = [];
+  for (let y = 0; y < extent; y++) {
+    for (let x = 0; x < extent; x++) {
+      if ((data[(y * extent + x) * 4 + 3] ?? 0) >= 128) {
+        edges.push(x);
+        break;
+      }
+    }
+  }
+  return edges;
+}
+
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -175,7 +214,9 @@ export function drawScoreCard(
   playedOn: string,
 ): void {
   const right = CARD_WIDTH - MARGIN;
+  let fontSize = 0;
   const set = (weight: number, size: number, color: string, spacing = 0) => {
+    fontSize = size;
     ctx.font = font(weight, size);
     ctx.fillStyle = color;
     if ('letterSpacing' in ctx) ctx.letterSpacing = `${spacing}px`;
@@ -183,11 +224,15 @@ export function drawScoreCard(
   /** The height of capitals in the current font: blocks align on their ink, not on their em box. */
   const capHeight = () => ctx.measureText('H').actualBoundingBoxAscent;
   const fit = (text: string, maxWidth: number) => ellipsize((t) => ctx.measureText(t).width, text, maxWidth);
-  /** Draws `text` with its ink (not its side bearing) starting at `x`; returns the ink's right edge. */
+  /**
+   * Draws `text` starting at `x` by its ink, not its side bearing, then nudged left by the first glyph's optical inset
+   * (opticalInset); returns the ink's right edge.
+   */
   const inkText = (text: string, x: number, baseline: number) => {
     const metrics = ctx.measureText(text);
-    ctx.fillText(text, x + metrics.actualBoundingBoxLeft, baseline);
-    return x + metrics.actualBoundingBoxLeft + metrics.actualBoundingBoxRight;
+    const inset = opticalInset(glyphLeftEdges(ctx.font, [...text][0] ?? '', fontSize), fontSize);
+    ctx.fillText(text, x + metrics.actualBoundingBoxLeft - inset, baseline);
+    return x + metrics.actualBoundingBoxLeft - inset + metrics.actualBoundingBoxRight;
   };
   /** A label: small spaced capitals, the one style every label repeats. */
   const label = (text: string, x: number, top: number) => {
