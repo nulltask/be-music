@@ -169,18 +169,26 @@ Scenes implement `enter()`, `exit()`, and `dispose()`.
 
 ## Note visibility
 
-The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):
+Drawing is not part of a judge ruleset, so the ruleset plays no part in it. The gameplay view picks one of two rule sets for which notes, mines and bar lines it draws and where ([`note-draw-window.ts`](../packages/player-web/src/scene/core/note-draw-window.ts)):
 
-- **LR2 rules** — charts without `#SCROLL` / `#SPEED` judged under the `lr2` or `iidx` ruleset. An object draws while its position lies between the lane top and the judgement line.
-- **beatoraja rules** — every chart with a `#SCROLL` or `#SPEED` point other than 1 (LR2 plays neither, so beatoraja is the reference; a chart whose points are all 1 scrolls as a plain chart) and every chart judged under the `beatoraja` ruleset. As in beatoraja's `LaneRenderer`, the view walks the chart's timelines (notes, mines, invisible notes, bar lines, BPM / STOP / `#SCROLL` / `#SPEED` points) in order from the playhead and stops after drawing the first one that lies past the lane top, so objects enter through the band above the lane: nothing beyond it is drawn, not even notes a later negative `#SCROLL` brings back into the lane.
+- **LR2 rules** — every chart without `#SCROLL` / `#SPEED`, whatever the ruleset.
+- **beatoraja rules** — every chart with a `#SCROLL` or `#SPEED` point other than 1. LR2 plays neither, so beatoraja is the reference; a chart whose points are all 1 scrolls as a plain chart.
 
-The two also part on objects whose time has come. Under LR2's rules a late note the player has not hit yet stays until it reaches the judgement line or is judged, so it can sit on the line through a STOP that began on it. Under beatoraja's rules a note, mine or bar line disappears the moment its time comes, judged or not (`LaneRenderer` draws one only while its time is still ahead); a long note stays while its end is still ahead, held or not, and once its head has passed the head is drawn on the judgement line until the tail's time. These rules follow the chart and the ruleset, not the skin, so an LR2 skin played under the `beatoraja` ruleset shows them too. In charts that only scroll forward the two rule sets look the same except under such a STOP.
+Under LR2's rules (`DrawNotes` in `LR2body.exe`):
 
-beatoraja's renderer does not clip notes at the judgement line, so a note a negative `#SCROLL` puts below the line while its time is still ahead is drawn there. Under beatoraja's rules be-music draws such notes, mines, long notes and bar lines down to the bottom of the stage; under LR2's rules nothing is drawn below the line. Skins receive these objects with a `y` below the lane's `bottom` ([be-music skins](./be-music-skin.md)).
+- **Position:** an object scrolls down to the judgement line and is held on it once its beat has passed. Nothing is drawn below the line.
+- **Notes and mines:** one goes only once it is judged and its beat has reached the playhead. A note the player has not hit sits on the line until the ruleset's late window judges it a miss, so it also stays there through a STOP that began on it. A note hit early keeps scrolling down to the line and goes when it reaches it. A mine goes once it has passed (or, set off early, when it reaches the line). On an auto lane (autoplay, auto-scratch) a note goes when its beat has passed.
+- **Long notes:** the head is held on the line once passed, and the long note stays until it is judged and its end has passed. One missed at the head or let go early is drawn at half alpha (LR2's `0x80`) until then.
+- **Bar lines:** one goes once the playhead has passed it, so a STOP that began on one holds it on the line.
+- **Walk:** the walk over the chart ends once a beat lies past the lane top.
+
+Under beatoraja's rules (`LaneRenderer`), the view walks the chart's timelines (notes, mines, invisible notes, bar lines, BPM / STOP / `#SCROLL` / `#SPEED` points) in order from the playhead and stops after drawing the first one that lies past the lane top, so objects enter through the band above the lane: nothing beyond it is drawn, not even notes a later negative `#SCROLL` brings back into the lane. A note, mine or bar line disappears the moment its time comes, judged or not (`LaneRenderer` draws one only while its time is still ahead). A long note stays while its end is still ahead, held or not, and once its head has passed the head is drawn on the judgement line until the tail's time. beatoraja's renderer does not clip notes at the judgement line, so a note a negative `#SCROLL` puts below the line while its time is still ahead is drawn there, down to the bottom of the stage. Skins receive these objects with a `y` below the lane's `bottom` ([be-music skins](./be-music-skin.md)).
+
+Both rule sets keep a judged note until its time, as LR2 and beatoraja do, so a note hit early keeps scrolling to the line. The Debug Menu's **Judged notes** (`judgedNoteDisplay`) can instead hide a note the moment it is judged (`HIDE`); the default is `KEEP_SCROLLING`. A long note missed at the head or let go early is drawn at half alpha under either rule set; the built-in skins dim it the same way, and other be-music skins get its `state`.
 
 The terminal player stops its walk at the same point when a chart scrolls both ways.
 
-beatoraja play skins place notes and bar lines with the same `#SCROLL` / `#SPEED` distances and, on a chart with either, draw notes, bar lines and BPM / STOP markers by beatoraja's rules ([`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)); on other charts they keep their beat-distance placement.
+beatoraja play skins are a display choice, not a ruleset, so they follow the same rules ([`scroll-placement.ts`](../packages/player-web/src/scene/beatoraja/scroll-placement.ts)): notes, bar lines and BPM / STOP markers use the same `#SCROLL` / `#SPEED` distances and beatoraja's rules on a chart that scrolls, and LR2's position and visibility rules on every other chart. They do not dim dropped long notes (their own held / unheld body images show the state) and have no `HIDE` option.
 
 ## HS-FIX
 

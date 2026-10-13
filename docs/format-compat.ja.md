@@ -35,6 +35,7 @@ de facto の記述には次のラベルを 1 つ付けます。
 - **[V]** 上記コミットのソースコードで確認した。
 - **[R]** OpenLR2 による LR2 beta3 100201 の再現コードで確認した。LR2 について得られる最良の根拠だが、書き起こしであって LR2 自身のソースではない。
 - **[C]** コミュニティの知見。hitkey や LR2oraja の作者が記録しているが、コードでは確認していない。
+- **[D]** LR2 beta3 自身の `LR2body.exe` を逆アセンブルして確認した。アドレスで示す。OpenLR2 がプログラムから外れている箇所（ノートの描画、[§2.18](#218-ノートの描画)）で使う。
 - **[I]** 根拠がないことからの推定（どの対応表にも載っていないコマンドなど）。
 
 「未定義」は、どの de jure の資料にも記述がないことを表します。
@@ -218,6 +219,19 @@ beatoraja は読みません [V]。be-music は IR に保持しますが適用�
 | `#BGA`、`#SWBGA`、`#ARGB`、`#POORBGA` | `#BGA`：BM98de。互換性の問題が知られている（[`#ABOUT-THE-COMPATIBILITY-OF-BGAXX`][cmds-bga-compat]）。`#SWBGA` / `#ARGB` / `#POORBGA`：nanasi       | 非対応 [C]                              | 非対応 [V]                                                                                            | web プレイヤーは `#BGAxx`、`#SWBGAxx`、`#ARGBxx`、`#EXBMPxx` を描く。ターミナルプレイヤーは描かない                |
 | 動画                                  | `#BMPxx` に動画ファイルを書くのは LR の拡張で、チャンネル `04` のみ（[`#BMPXX-VIDEO-FILE-DEFINING-TO-BMP`][cmds-video]）。`#VIDEOFILE` は bemaniaDX | `#BMPxx` の動画を DirectShow で再生 [C] | `#BMPxx` の動画を拡張子（`mp4`、`wmv`、`webm`、`mpg` など）で判別 [V]（[VideoFormat L7-13][b-video]） | `#BMPxx` の動画（`mpeg1video`、`h264`、`mjpeg`。音声は無視）。`#VIDEOFILE` は保持するが再生しない                  |
 
+### 2.18 ノートの描画
+
+ノートの描き方を定める de jure の資料はありません。LR2 の `DrawNotes`（0x406710）はバイナリから読みました [D]。OpenLR2 の新しい書き直しは小節線のクランプ、LN を薄くする処理、たどる処理の打ち切り条件の一部を落としており、古い再現コードはバイナリと一致します。
+
+| 項目                   | LR2                                                                                                                                                                                                        | beatoraja                                                                                                                            | be-music                                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 判定ラインを過ぎた位置 | ノート・地雷・LN の始点と終点はラインで止める（`if (note_y > 0) note_y = 0`）[D]（0x40746c-0x40748e）。小節線も同じ [D]（0x406f18-0x406f34）                                                               | 切り取らない。過ぎたオブジェクトは時刻で消え（下記）、時刻を過ぎた LN の始点はライン上に置く [V]（[LaneRenderer L552][b-lane-ln]）   | SCROLL / SPEED のない譜面では LR2 と同じくラインで止める。SCROLL / SPEED のある譜面では beatoraja と同じく切り取らない（[`note-draw-window.ts`][bm-note-draw]） |
+| ノート・地雷が消える時 | 処理済み（判定済み）で、**かつ** 判定位置が拍と LN 終端に達したとき。レーンの `draw_count` を進めるのはこれだけ [D]（0x407af0-0x407b4c）。打っていない遅れたノートは見逃しと判定されるまでライン上に留まる | 判定の有無にかかわらず時刻を過ぎたとき [V]（[LaneRenderer L546-550][b-lane-note]、[L587][b-lane-mine]）                              | SCROLL / SPEED のない譜面では LR2 と同じ（見逃しは選んだ ruleset の遅い側の窓で決まる）。ある譜面では beatoraja と同じ                                          |
+| 早く打ったノート       | ラインまでスクロールを続け、拍で消える（打鍵は処理済みにするだけ）[D]（0x407a9e-0x407ae8）                                                                                                                 | 時刻までスクロールを続ける。処理済みの画像は `markprocessednote`（既定で無効）のときだけ [V]（[LaneRenderer L546-550][b-lane-note]） | どちらの規則でも時刻までスクロールを続ける。web player の `judgedNoteDisplay: 'HIDE'` ではすぐ消す                                                              |
+| オートのレーン         | 判定に関係なく、判定位置が拍と LN 終端に達したら消える [D]（0x407cd1-0x407d45）                                                                                                                            | 他のノートと同じく時刻で消える                                                                                                       | SCROLL / SPEED のない譜面では LR2 と同じ                                                                                                                        |
+| 見逃した・離した LN    | 終端を過ぎるまでアルファ `0x80` で描く [D]（0x407a25、0x407a8d）                                                                                                                                           | 薄くしない。押している間は本体の画像が変わる [V]（[LaneRenderer L717-724][b-lane-ln-body]）                                          | 譜面にかかわらず、消えるまで半透明で描く。beatoraja のプレイスキンは代わりに自身の本体画像を使う                                                                |
+| 小節線                 | 判定位置が通過したら消える（厳密な `>`）。そのため、その位置で始まる STOP の間はライン上に留まる [D]（0x40703d-0x40705b）                                                                                  | 時刻になったら消える。その位置の STOP も含む [V]（[LaneRenderer L357-364][b-lane-bar]）                                              | SCROLL / SPEED のない譜面では LR2 と同じ。ある譜面では beatoraja と同じ                                                                                         |
+
 ## 3. bmson
 
 各節で、根拠にした bmson 仕様の行を示します。
@@ -349,8 +363,8 @@ be-music の [`@be-music/stringifier`](../packages/stringifier/src/index.ts) は
 - 小節線は beatoraja と同じく最後の小節まで各小節の頭に引き、その後には足さない。bmson の `lines` はそのまま引く（[§3.3](#33-lines-と-resolution-と-y)）。
 - `#BPM` のない譜面は BM98 の 130 で遊ぶ。LR2 はスクロールせず、beatoraja は譜面を読まない（[§2.8](#28-bpm)）。
 - 0 以下の BPM と STOP は無視する。同じ位置に BMS の `#STOP` が複数あれば最後のものが勝ち（LR2、beatoraja と同じ）、bmson の停止と `#STP` の行は加算する。STOP と同じ位置のノートは停止の前に叩く。STOP の長さは正確な値を保つ（beatoraja は停止ごとに整数マイクロ秒へ切り捨てるため、停止が数千ある譜面ではノートの時刻が数 ms 早くずれる）（[§2.8](#28-bpm)、[§2.9](#29-stop-と-stp)）。
-- SCROLL / SPEED を含む譜面は、どちらも持たない LR2 ではなく beatoraja の `LaneRenderer` の規則で描く。判定ラインの位置からレーンをたどり、最初に上端を越えた位置より先は描かない（[§2.10](#210-scroll-と-speed)）。
-- その規則で描く譜面（と `beatoraja` ruleset で判定するすべての譜面）では、beatoraja と同じく、ノート・地雷・小節線は判定の有無にかかわらず時刻になったら消える。LR2 の規則では、遅れたノートは判定ラインに達するか判定されるまで残る（[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。
+- 描画は判定 ruleset に含まれない。ruleset やスキンにかかわらず、すべての譜面を LR2 の規則で描く。過ぎたオブジェクトは判定ライン上に留まり、ノートは判定済みで拍を過ぎたときに消え（打っていないノートは ruleset の見逃し判定までライン上で待ち、早く打ったノートはスクロールを続ける）、LN の始点はライン上に留まり、見逃した・離した LN は薄く描き、STOP の下の小節線はライン上に留まる（[§2.18](#218-ノートの描画)、[ブラウザプレイヤー — ノートの表示範囲](./player-web.ja.md#ノートの表示範囲)）。
+- LR2 が扱えない SCROLL / SPEED を含む譜面だけを beatoraja の `LaneRenderer` の規則で描く。判定ラインの位置からレーンをたどり、最初に上端を越えた位置より先は描かず、ノート・地雷・小節線は判定の有無にかかわらず時刻になったら消える（[§2.10](#210-scroll-と-speed)）。
 - SPEED は Bemuse の間隔モデルに従う。ただし最初のキーフレームより前は、最初の値を保つ Bemuse ではなく beatoraja と同じく 1.0 から変化させる（[§2.10](#210-scroll-と-speed)）。
 - 制御構文はすべて対応し、`#RANDOM` はプレイごとに抽選する。分岐内の定義は LR2 や beatoraja と同じくファイル順に適用する（[§2.14](#214-制御構文)）。
 - `#VOLWAV` は beatoraja と同じ `0 < n < 200` の範囲でだけ適用する（[§2.15](#215-音声系コマンドとキー音)）。
@@ -482,6 +496,11 @@ be-music が de facto の実装と理由を記録しないまま食い違って�
 [b-resource]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/PlayerResource.java#L217-L229
 [b-lane]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L314-L321
 [b-lane-speed]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L259-L286
+[b-lane-bar]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L357-L364
+[b-lane-note]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L546-L550
+[b-lane-ln]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L552
+[b-lane-mine]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L587
+[b-lane-ln-body]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/LaneRenderer.java#L717-L724
 [b-bga]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/play/bga/BGAProcessor.java#L135-L209
 [b-video]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/video/VideoFormat.java#L7-L13
 [b-volwav]: https://github.com/exch-bms2/beatoraja/blob/8320241d8481e0826c703878c3eba01cd81ca3e4/src/bms/player/beatoraja/audio/AbstractAudioDriver.java#L355-L359

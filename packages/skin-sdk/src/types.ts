@@ -441,7 +441,7 @@ export interface BeMusicMine {
 }
 
 /**
- * A long note as drawn this frame: its lane rect, tail (top) and head (bottom, clamped to the line while held). Like
+ * A long note as drawn this frame: its lane rect, tail (top) and head (bottom, held on the line once passed). Like
  * {@link BeMusicNote}, it can reach below the judgement line when a negative `#SCROLL` puts it there.
  */
 export interface BeMusicLongNote {
@@ -455,7 +455,10 @@ export interface BeMusicLongNote {
    * `'hcn'` (hell charge note: the gauge drains while it isn't held).
    */
   mode?: BeMusicLongNoteMode;
-  /** Where the long note is in its life: not yet reached, being held, let go early, or completed. */
+  /**
+   * Where the long note is in its life: not yet reached, being held, dropped (missed at the head or let go early), or
+   * completed. LR2 draws a dropped long note at half alpha until it goes; the built-in skins do the same.
+   */
   state?: BeMusicLongNoteState;
   /** True when autoplay (or auto-scratch) plays this long note. */
   autoplay?: boolean;
