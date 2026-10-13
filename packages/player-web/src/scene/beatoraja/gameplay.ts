@@ -76,6 +76,7 @@ import { BeatorajaRuntimeAdapter } from '../../skin/beatoraja/runtime-adapter.ts
 import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import type { RecordingFormat } from '../../recording/recording-format.ts';
 import { HISPEED_MAX, HISPEED_MIN } from '../gameplay-constants.ts';
 import { drainWebUiSignals } from '../../runtime/web-ui-runtime.ts';
 import { logger } from '../../logger.ts';
@@ -682,7 +683,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
    * Idempotent in the sense that calling while a recording is already active is a no-op
    * (use {@link isRecording} as the canonical gate).
    */
-  startRecording(): void {
+  startRecording(options: { format?: RecordingFormat } = {}): void {
     if (this.recorder?.isActive() === true) return;
     if (this.host === undefined) {
       throw new Error('PixiBeatorajaGameplayView.startRecording: scene is not mounted (no host canvas)');
@@ -695,6 +696,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.options.audio.audioContext,
       audioOutput: this.options.audio.audioBus.outputNode,
+      format: options.format,
     });
     this.recorder.start();
   }

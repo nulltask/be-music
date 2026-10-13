@@ -78,6 +78,7 @@ import {
   type CompressorMode,
   type CompressorParams,
   type TunableCompressor,
+  type RecordingFormat,
 } from '@be-music/player-web/runtime';
 import {
   TUNABLE_COMPRESSORS,
@@ -150,6 +151,7 @@ import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
+import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
 import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
@@ -241,6 +243,26 @@ function readStoredSkinEffects(): SkinEffectsLevel {
 const PLAY_LAYOUT_STORAGE_KEY = 'be-music-demo.play-layout';
 
 /** Stored Debug Menu play-layout pick, `'auto'` when none. */
+const RECORDING_FORMAT_STORAGE_KEY = 'be-music-demo.recording-format';
+
+/** The remembered "Video format" (`mp4/avc`, `webm/vp9`, …); MP4 · H.264 when none is stored or it is unknown. */
+function readStoredRecordingFormat(): string {
+  try {
+    return recordingFormatKey(parseRecordingFormatKey(window.localStorage.getItem(RECORDING_FORMAT_STORAGE_KEY)));
+  } catch {
+    // Storage blocked — use the default.
+    return recordingFormatKey(parseRecordingFormatKey(null));
+  }
+}
+
+function storeRecordingFormat(key: string): void {
+  try {
+    window.localStorage.setItem(RECORDING_FORMAT_STORAGE_KEY, key);
+  } catch {
+    // Storage blocked — the choice lasts for this visit only.
+  }
+}
+
 function readStoredPlayLayout(): PlayLayoutChoice {
   try {
     const stored = window.localStorage.getItem(PLAY_LAYOUT_STORAGE_KEY);
@@ -687,6 +709,7 @@ class PlayerWebDemoApp {
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
       openFiles: () => this.elements.filesInput.click(),
+      recordingFormat: readStoredRecordingFormat(),
       record: () => {
         void toggleRecording(this.recordingDeps());
       },
@@ -1099,6 +1122,11 @@ class PlayerWebDemoApp {
     // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
     BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
     this.recordController = gui.add(this.guiState, 'record').name(RECORD_LABEL);
+    // The container and codec of the video: MP4 · H.264 unless the player picks another, remembered across visits.
+    gui
+      .add(this.guiState, 'recordingFormat', recordingFormatOptions())
+      .name('Video format')
+      .onChange((key: string) => storeRecordingFormat(key));
     // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
     // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
     gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
@@ -1505,6 +1533,7 @@ class PlayerWebDemoApp {
         this.autoRecordArmed = value;
       },
       getRecordingFilenameBase: () => this.recordingFilenameBase,
+      getRecordingFormat: () => this.recordingFormat,
       setStatus: (text) => this.setStatus(text),
     };
   }
@@ -2249,6 +2278,11 @@ class PlayerWebDemoApp {
    * nothing on screen to swap at the moment the user changes the dropdown (they'd have to be in song-select to
    * even reach the GUI).
    */
+  /** The container and codec the Debug Menu's "Video format" asks recordings to be written in. */
+  private get recordingFormat(): RecordingFormat {
+    return parseRecordingFormatKey(this.guiState.recordingFormat);
+  }
+
   /** The be-music skin the default-family scenes render with. */
   private get beMusicSkin() {
     return BE_MUSIC_SKINS.resolve(this.guiState.builtInSkin);
@@ -2661,7 +2695,7 @@ class PlayerWebDemoApp {
       const controller = this.recordController;
       controller?.domElement.classList.remove('arming');
       try {
-        this.beatorajaGameplayView.startRecording();
+        this.beatorajaGameplayView.startRecording({ format: this.recordingFormat });
         controller?.domElement.classList.add('recording');
         controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
@@ -4057,7 +4091,7 @@ class PlayerWebDemoApp {
       const controller = this.recordController;
       controller?.domElement.classList.remove('arming');
       try {
-        this.gameplayView.startRecording();
+        this.gameplayView.startRecording({ format: this.recordingFormat });
         controller?.domElement.classList.add('recording');
         controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');
@@ -4114,7 +4148,7 @@ class PlayerWebDemoApp {
       const controller = this.recordController;
       controller?.domElement.classList.remove('arming');
       try {
-        this.gameplayView.startRecording();
+        this.gameplayView.startRecording({ format: this.recordingFormat });
         controller?.domElement.classList.add('recording');
         controller?.name(STOP_RECORDING_LABEL);
         this.setStatus('Recording…');

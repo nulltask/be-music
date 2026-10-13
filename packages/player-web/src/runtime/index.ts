@@ -13,6 +13,7 @@ export * from './system-audio-session.ts';
 // Gameplay recorder lives in its own directory but is conceptually a runtime output channel — same scope as the
 // audio bus that feeds it.
 export * from '../recording/gameplay-recorder.ts';
+export * from '../recording/recording-format.ts';
 export { alignAudioChunk, resolveFrameTimestamp, supportsWebCodecsRecording } from '../recording/webcodecs-recorder.ts';
 
 // Play-log format helpers re-exported for hosts (the demo has no direct `@be-music/player` dependency). The

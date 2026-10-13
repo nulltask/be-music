@@ -1,6 +1,11 @@
 import type { PixiSceneHost } from '@be-music/player-web/scenes';
 import { Rectangle, logger } from '@be-music/player-web';
-import { downloadBlob, makeWebmSeekable } from '@be-music/player-web/runtime';
+import {
+  downloadBlob,
+  makeWebmSeekable,
+  recordingFileExtension,
+  type RecordingFormat,
+} from '@be-music/player-web/runtime';
 import type { Controller } from 'lil-gui';
 
 /** The Debug Menu button that records the play screen (gameplay) as a video. */
@@ -16,7 +21,7 @@ const recordLog = logger('record');
  * acts on without branching by family.
  */
 export interface GameplayRecorder {
-  startRecording(): void;
+  startRecording(options?: { format?: RecordingFormat }): void;
   stopRecording(): Promise<{ blob: Blob; mimeType: string; durationMs: number; seekable: boolean } | undefined>;
   isRecording(): boolean;
 }
@@ -38,6 +43,8 @@ export interface RecordingDeps {
   setAutoRecordArmed(value: boolean): void;
   /** Snapshot of the recording filename stem at call time; the demo updates it per chart in `playSong`. */
   getRecordingFilenameBase(): string;
+  /** The Debug Menu's "Video format": the container and codec a new recording is written in. */
+  getRecordingFormat(): RecordingFormat;
   setStatus(text: string): void;
 }
 
@@ -163,11 +170,12 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     try {
       const result = await gameplay.stopRecording();
       if (result) {
-        // The `MediaRecorder` fallback writes a play-only WebM stream — post-process it to inject `Duration` + `Cues`
-        // so external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
-        // silently lost. The WebCodecs backend writes the seek index itself.
+        // A WebM from the `MediaRecorder` fallback has no seek index — post-process it to inject `Duration` + `Cues` so
+        // external players can seek inside it. Falls back to the raw blob if the patch fails, so a take is never
+        // silently lost. The WebCodecs backend, and MP4 from either, carry the index already.
         const seekable = result.seekable ? result.blob : await makeWebmSeekable(result.blob);
-        const filename = `${deps.getRecordingFilenameBase()}.webm`;
+        // Named after what was written: the browser may have fallen back to another container.
+        const filename = `${deps.getRecordingFilenameBase()}.${recordingFileExtension(result.mimeType)}`;
         downloadBlob(seekable, filename);
         const seconds = (result.durationMs / 1000).toFixed(1);
         const sizeMb = (seekable.size / (1024 * 1024)).toFixed(1);
@@ -181,7 +189,7 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     return;
   }
   try {
-    gameplay.startRecording();
+    gameplay.startRecording({ format: deps.getRecordingFormat() });
     controller?.domElement.classList.add('recording');
     controller?.name(STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');

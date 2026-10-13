@@ -91,6 +91,7 @@ import {
   sanitizeBusVolume,
 } from '../../runtime/audio-bus.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
+import type { RecordingFormat } from '../../recording/recording-format.ts';
 import { resolveClearLamp } from './clear-lamp.ts';
 import { resolveChartBpmRange, type ChartBpmRange } from './gameplay-bpm-range.ts';
 import { JudgeTimingLog } from './judge-timing-log.ts';
@@ -1856,7 +1857,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * Idempotent in the sense that calling while a recording is already active is a no-op (`isRecording()` is the
    * canonical gate hosts should check).
    */
-  public startRecording(): void {
+  public startRecording(options: { format?: RecordingFormat } = {}): void {
     if (this.recorder?.isActive()) return;
     if (!this.host || !this.audioContext || !this.audioBus) {
       throw new Error('CoreGameplayView.startRecording: gameplay audio is not ready yet');
@@ -1869,6 +1870,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       subscribeFrame: (onFrame) => host.onAfterRender(onFrame),
       audioContext: this.audioContext,
       audioOutput: this.audioBus.outputNode,
+      format: options.format,
     });
     this.recorder.start();
   }

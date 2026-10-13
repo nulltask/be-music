@@ -177,6 +177,8 @@ export interface DemoGuiState {
   openFolder: () => void;
   /** Triggered by clicking the GUI's "Open files" button (ZIP archives / play logs). */
   openFiles: () => void;
+  /** "Video format": the container and codec of recordings, as `mp4/avc` / `webm/vp9` (`recording-format-choice.ts`). */
+  recordingFormat: string;
   /** Triggered by clicking the GUI's record toggle. */
   record: () => void;
   /** Triggered by clicking the GUI's "Screenshot" button. Captures the Pixi stage at its native size. */
