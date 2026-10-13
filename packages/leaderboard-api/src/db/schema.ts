@@ -208,6 +208,15 @@ export const score = sqliteTable(
       .notNull()
       .references(() => chart.chartFingerprint),
     playFingerprint: text('play_fingerprint').notNull(),
+    /**
+     * The chart file the play came from, as its client reported it (`chart.sha256` / `chart.md5` of the play log).
+     * One chart fingerprint can cover several files (re-saves, re-encodes); rankings can be narrowed to one of them.
+     * Null when the log carried no hash; filled for older plays from their logs (src/scores/backfill.ts).
+     */
+    fileSha256: text('file_sha256'),
+    fileMd5: text('file_md5'),
+    /** How long the play ran, in milliseconds: to the last note's end or the last input, whichever is later. */
+    durationMs: integer('duration_ms'),
     playedRuleset: text('played_ruleset', { enum: RULESET_IDS }).notNull(),
     gauge: text('gauge').notNull(),
     assisted: integer('assisted', { mode: 'boolean' }).notNull(),
@@ -225,7 +234,10 @@ export const score = sqliteTable(
       .default('public'),
     ...timestamps,
   },
-  (table) => [index('score_user_chart_idx').on(table.userId, table.chartFingerprint)],
+  (table) => [
+    index('score_user_chart_idx').on(table.userId, table.chartFingerprint),
+    index('score_chart_file_idx').on(table.chartFingerprint, table.fileSha256),
+  ],
 );
 
 /** The figures of one score under one ruleset (every play is simulated under all three). */

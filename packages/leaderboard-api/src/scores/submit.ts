@@ -16,6 +16,7 @@ import { mergeBestScores } from '../scoring/best.ts';
 import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../scoring/lamp.ts';
 import { checkFingerprintDocument } from '../submission/documents.ts';
 import { sha256Hex } from '../hash.ts';
+import { fileHashAliases, playedFileOf } from './played-file.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import { loadBestScores, toBestScoreRow } from './bests.ts';
 
@@ -173,6 +174,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       userId: input.userId,
       chartFingerprint,
       playFingerprint,
+      ...playedFileOf(input.playlog),
       playedRuleset,
       gauge: input.playlog.play.gauge,
       assisted,
@@ -299,21 +301,6 @@ function chartJudgeRank(judgeRank: { percent: number; sourceRank?: number; sourc
     ...(judgeRank.sourceRank !== undefined ? { sourceRank: judgeRank.sourceRank } : {}),
     ...(judgeRank.sourceExRank !== undefined ? { sourceExRank: judgeRank.sourceExRank } : {}),
   };
-}
-
-const FILE_HASH_PATTERNS = { sha256: /^[0-9a-f]{64}$/, md5: /^[0-9a-f]{32}$/ } as const;
-
-/** The well-formed file hashes of a play log's chart, lowercased, as chart aliases. */
-export function fileHashAliases(chart: {
-  sha256?: string;
-  md5?: string;
-}): Array<{ kind: 'sha256' | 'md5'; hash: string }> {
-  const aliases: Array<{ kind: 'sha256' | 'md5'; hash: string }> = [];
-  for (const kind of ['sha256', 'md5'] as const) {
-    const hash = chart[kind]?.toLowerCase();
-    if (hash !== undefined && FILE_HASH_PATTERNS[kind].test(hash)) aliases.push({ kind, hash });
-  }
-  return aliases;
 }
 
 async function gzip(text: string): Promise<ArrayBuffer> {
