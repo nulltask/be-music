@@ -1,4 +1,5 @@
 import { and, count, countDistinct, desc, eq, max, min, type SQL } from 'drizzle-orm';
+import { computeScoreRate, IIDX_RANK_LABELS, type IidxRankLabel } from '@be-music/player/core/scoring';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
 import { bestScore, chart, score, user } from '../db/schema.ts';
@@ -16,8 +17,7 @@ const LAMPS_HIGH_TO_LOW = Object.keys(LAMP_STYLES)
   .map(Number)
   .sort((a, b) => b - a);
 
-const DJ_RANKS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
-export type DjRank = (typeof DJ_RANKS)[number];
+export type DjRank = IidxRankLabel;
 
 /** Lamp counts (`{lamp, count}` rows from a GROUP BY) as a distribution over every lamp, highest first. */
 export function lampDistribution(rows: ReadonlyArray<{ lamp: number; count: number }>): Distribution<number> {
@@ -37,14 +37,17 @@ export function djRankDistribution(bests: ReadonlyArray<{ exScore: number; noteC
     counts.set(rank, (counts.get(rank) ?? 0) + 1);
     total += 1;
   }
-  return { total, buckets: DJ_RANKS.map((rank) => ({ key: rank, count: counts.get(rank) ?? 0 })) };
+  return { total, buckets: IIDX_RANK_LABELS.map((rank) => ({ key: rank, count: counts.get(rank) ?? 0 })) };
 }
 
 /** Mean score rate (0–1) of best EX-Scores, or null without any. */
 export function averageRate(bests: ReadonlyArray<{ exScore: number; noteCount: number }>): number | null {
   const rated = bests.filter((best) => best.noteCount > 0);
   if (rated.length === 0) return null;
-  return rated.reduce((sum, best) => sum + best.exScore / (best.noteCount * 2), 0) / rated.length;
+  return (
+    rated.reduce((sum, best) => sum + computeScoreRate({ exScore: best.exScore, total: best.noteCount }), 0) /
+    rated.length
+  );
 }
 
 /** An aggregated timestamp: D1 hands MIN / MAX back as a number even where the column maps to a Date. */

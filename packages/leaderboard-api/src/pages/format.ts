@@ -1,4 +1,5 @@
 import { ClearLamp } from '../scoring/lamp.ts';
+import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style. */
 export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string; meaning: string }>> = {
@@ -42,15 +43,11 @@ export const RULESET_MEANING =
 /** EX score rate in percent with two decimals (`ex / (notes × 2)`), or `-` without notes. */
 export function formatScoreRate(exScore: number, noteCount: number): string {
   if (noteCount <= 0) return '-';
-  return `${((exScore / (noteCount * 2)) * 100).toFixed(2)}%`;
+  return `${(computeScoreRate({ exScore, total: noteCount }) * 100).toFixed(2)}%`;
 }
 
-/** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F). */
-export function djLevel(exScore: number, noteCount: number): string {
-  if (noteCount <= 0) return '-';
-  const ninths = Math.floor((exScore / (noteCount * 2)) * 9);
-  return ['F', 'F', 'E', 'D', 'C', 'B', 'A', 'AA', 'AAA', 'AAA'][Math.max(0, Math.min(9, ninths))]!;
-}
+/** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F), or `-` without notes. */
+export const djLevel = (exScore: number, noteCount: number): string => resolveIidxRankLabel(exScore, noteCount);
 
 /** `2026-10-13 14:51` in UTC, so a cached page reads the same everywhere. */
 export function formatTimestamp(epochMs: number): string {

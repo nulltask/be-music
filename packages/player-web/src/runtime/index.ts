@@ -16,8 +16,10 @@ export * from '../recording/gameplay-recorder.ts';
 export { alignAudioChunk, resolveFrameTimestamp, supportsWebCodecsRecording } from '../recording/webcodecs-recorder.ts';
 
 // Play-log format helpers re-exported for hosts (the demo has no direct `@be-music/player` dependency). The
-// gameplay scenes populate a `BeMusicPlaylog` per run; these helpers serialize it for the auto-save download.
+// gameplay scenes populate a `BeMusicPlaylog` per run; these helpers serialize it for the auto-save download, and
+// `checkPlaylogEligibility` tells whether the Leaderboard would rank it.
 export {
+  checkPlaylogEligibility,
   serializePlaylog,
   parsePlaylog,
   resolvePlaylogFilename,

@@ -1,10 +1,10 @@
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import { PLAYLOG_SIMULATOR_RULESETS } from '@be-music/player/playlog';
 
 /**
- * The rulesets every play is simulated and ranked under, in display order. The one list the database enums, the API
- * schemas and the pages read.
+ * The rulesets every play is simulated and ranked under, in display order: the simulator's own list. The one list the
+ * database enums, the API schemas and the pages read.
  */
-export const RULESET_IDS = ['lr2', 'beatoraja', 'iidx'] as const satisfies readonly PlaylogRulesetId[];
+export const RULESET_IDS = PLAYLOG_SIMULATOR_RULESETS;
 
 export type RulesetId = (typeof RULESET_IDS)[number];
 
