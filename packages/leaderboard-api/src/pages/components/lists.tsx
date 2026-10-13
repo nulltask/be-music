@@ -136,10 +136,7 @@ function Score(props: { exScore: number; noteCount: number; previous?: number })
             <Delta delta={gain} better title="Above the player’s previous best EX-Score" />
           </span>
         ) : null}
-        <span class="inline-flex items-center gap-1 font-semibold">
-          <EntityIcon kind="score" size="sm" />
-          {props.exScore}
-        </span>
+        <span class="font-semibold">{props.exScore}</span>
       </div>
       <div class="text-muted-foreground mt-1 text-xs">
         <span class="text-foreground/80 font-medium">{djLevel(props.exScore, props.noteCount)}</span>{' '}
