@@ -30,6 +30,8 @@ import { resolvePortraitGameplayHud } from './layout.ts';
 const NOTE_HEIGHT = 6;
 /** LR2's opacity for a long note missed at the head or let go early (`0x80` of `0xff`). */
 const DROPPED_LONG_NOTE_ALPHA = 0x80 / 0xff;
+/** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */
+const LN_TAIL_ALPHA = 0.4;
 /** Top of the right-hand judgement column: level with the BGA band's top, whatever size the BGA takes. */
 const COLUMN_TOP = 66;
 const MARGIN = 16;
@@ -126,9 +128,9 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 }
 
 /**
- * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars, the
- * shape every built-in skin uses; an LN's tail (not judged) is hollow, a CN / HCN tail (judged on release) solid. A long
- * note missed at the head or let go early draws at LR2's half alpha.
+ * Tap notes as flat bars. Long notes: a translucent body between the head and tail bars; an LN's tail (not judged)
+ * is translucent, a CN / HCN tail (judged on release) solid. A long note missed at the head or let go early draws at
+ * LR2's half alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
@@ -138,20 +140,12 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.globalAlpha = 0.25 * alpha;
     ctx.fillRect(note.x + 1, bodyTop, note.w - 2, bodyHeight);
-    ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.6 * alpha;
-    ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
-    if (note.mode === 'ln') {
-      // An LN's tail is not judged: drawn hollow, where to let go. A CN / HCN tail is judged and stays solid.
-      ctx.strokeStyle = NOTE_FILL[note.kind];
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(note.x + 0.75, note.top - NOTE_HEIGHT + 0.75, note.w - 1.5, NOTE_HEIGHT - 1.5);
-    } else {
-      ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
-    }
+    // An LN's tail is not judged: drawn translucent, where to let go. A CN / HCN tail is judged and stays solid.
+    if (note.mode === 'ln') ctx.globalAlpha = alpha * LN_TAIL_ALPHA;
+    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {

@@ -187,28 +187,23 @@ export function renderSynesthesiaLongNote({ graphics, kind, x, w, top, bottom, m
   const bodyW = Math.max(4, w);
   const bodyTop = top - NOTE_HEIGHT;
   const bodyH = Math.max(1, bottom - top);
-  // A beam of light between head and tail: a translucent core with a bright centre filament.
+  // A beam of light between head and tail: a translucent core, no line down its middle.
   graphics.rect(bodyX + 1, bodyTop, bodyW - 2, bodyH).fill({ color: light.body, alpha: 0.22 });
-  graphics.rect(bodyX + bodyW / 2 - 1, bodyTop, 2, bodyH).fill({ color: 0xffffff, alpha: 0.55 });
   drawNote(graphics, bodyX, bottom, bodyW, light);
-  // An LN's tail is not judged, so it is drawn hollow: where to let go, not a note to hit. A CN / HCN tail is judged on
-  // release and keeps the solid cap.
-  if (mode === 'ln') drawHollowTail(graphics, bodyX, top, bodyW, light);
-  else drawNote(graphics, bodyX, top, bodyW, light);
+  // An LN's tail is not judged, so it is drawn translucent: where to let go, not a note to hit. A CN / HCN tail is
+  // judged on release and keeps the full cap.
+  drawNote(graphics, bodyX, top, bodyW, light, mode === 'ln' ? LN_TAIL_ALPHA : 1);
 }
 
-/** A long note's tail that only marks the end: the note's outline in its colour, on the same dark rim. */
-function drawHollowTail(graphics: Graphics, x: number, y: number, w: number, light: LaneLight): void {
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x + 1, y - NOTE_HEIGHT + 1, w - 2, NOTE_HEIGHT - 2).stroke({ width: 2, color: light.body });
-}
+/** How opaque an LN's tail cap is: clearly the end of the note, but quieter than a cap to hit. */
+const LN_TAIL_ALPHA = 0.4;
 
 /** A flat bar with a white filament on top and a dark rim — a plain rectangle that reads at a glance. */
-function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight): void {
+function drawNote(graphics: Graphics, x: number, y: number, w: number, light: LaneLight, alpha = 1): void {
   // A dark rim lifts the bar off the lit lane and the beam behind it.
-  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 });
-  graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill(light.body);
-  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 });
+  graphics.rect(x - 1, y - NOTE_HEIGHT - 1, w + 2, NOTE_HEIGHT + 2).fill({ color: 0x05010a, alpha: 0.9 * alpha });
+  graphics.rect(x, y - NOTE_HEIGHT, w, NOTE_HEIGHT).fill({ color: light.body, alpha });
+  graphics.rect(x, y - NOTE_HEIGHT, w, 2).fill({ color: 0xffffff, alpha: 0.6 * alpha });
 }
 
 /** Sparks per hit at combo tier 0; each tier adds {@link BURST_PARTICLES_PER_TIER}. */
