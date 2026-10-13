@@ -102,7 +102,7 @@ export function findLaneSoundCandidate<T extends JudgeCandidate>(
   // LR2-style lane sound hold: do not look ahead to the closest future note. A lane's fallback sound only advances
   // when that note's early judgment window has opened, then remains current until the next same-lane window opens.
   const latestEligibleSeconds = nowSec + Math.max(0, activationWindowSec) + 1e-9;
-  for (let index = lowerBoundBySeconds(notes, latestEligibleSeconds); index > 0; ) {
+  for (let index = lowerBoundBySeconds(notes, latestEligibleSeconds); index > 0;) {
     index -= 1;
     const note = notes[index]!;
     if (!candidateChannels.has(note.channel)) {
