@@ -22,6 +22,8 @@ function makePlaylog(): BeMusicPlaylog {
       subtitle: 'ANOTHER',
       artist: 'composer',
       genre: 'genre',
+      playLevel: '12',
+      difficulty: 3,
       sha256: 'a'.repeat(64),
       md5: 'c'.repeat(32),
       chartFingerprint: `bmfp0:${'a'.repeat(64)}`,
