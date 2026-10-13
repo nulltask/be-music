@@ -134,7 +134,7 @@ export interface PlaylogGaugeResult {
 }
 
 export interface PlaylogRulesetResult {
-  /** Ruleset identifier + revision (e.g. `'lr2/2'`, `'beatoraja/2'`, `'iidx/2'`, `'be-music/native'`). */
+  /** Ruleset identifier + revision (e.g. `'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`, `'be-music/native'`). */
   ruleset: string;
   judge: PlaylogJudgeCounts;
   fast: number;

@@ -26,7 +26,7 @@ function makePlaylog(): BeMusicPlaylog {
 
 function makeResult(overrides: Partial<PlaylogRulesetResult> = {}): PlaylogRulesetResult {
   return {
-    ruleset: 'lr2/2',
+    ruleset: 'lr2/0',
     judge: { pgreat: 8, great: 1, good: 0, bad: 1, poor: 0, emptyPoor: 2 },
     fast: 1,
     slow: 0,
@@ -91,11 +91,11 @@ describe('playlog-cli', () => {
 
   test('buildPlaylogReport: renders the chart header and one row per result', () => {
     const report = buildPlaylogReport('file.bmplay.json', makePlaylog(), [
-      { label: 'lr2/2', result: makeResult() },
+      { label: 'lr2/0', result: makeResult() },
       {
-        label: 'iidx/2',
+        label: 'iidx/0',
         result: makeResult({
-          ruleset: 'iidx/2',
+          ruleset: 'iidx/0',
           score: undefined,
           djLevel: 'A',
           gauge: { type: 'HARD', final: 0, cleared: false, failedMidPlay: true },
@@ -106,14 +106,14 @@ describe('playlog-cli', () => {
     expect(report).toContain('Sample Song / someone [7keys] notes=10 mode=manual gauge=GROOVE');
     expect(report).toContain('@ 2026-08-17T10:00:00.000Z');
     const lines = report.split('\n');
-    const lr2Line = lines.find((line) => line.startsWith('lr2/2'));
+    const lr2Line = lines.find((line) => line.startsWith('lr2/0'));
     expect(lr2Line).toBeDefined();
     // EX 17 / 10 notes → 85.00%, money score printed, gauge cleared.
     expect(lr2Line).toContain('17');
     expect(lr2Line).toContain('85.00%');
     expect(lr2Line).toContain('170000');
     expect(lr2Line).toContain('84.0% GROOVE CLEAR');
-    const iidxLine = lines.find((line) => line.startsWith('iidx/2'));
+    const iidxLine = lines.find((line) => line.startsWith('iidx/0'));
     expect(iidxLine).toContain('0.0% HARD FAILED(0%)');
     // No money score for IIDX.
     expect(iidxLine).toContain(' - ');

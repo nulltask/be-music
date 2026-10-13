@@ -93,7 +93,7 @@
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/2",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -116,7 +116,7 @@
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/2",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -138,7 +138,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/2",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -163,7 +163,7 @@
         "perfect": {
           "inputs": 6,
           "lr2": {
-            "ruleset": "lr2/2",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 3,
               "great": 0,
@@ -186,7 +186,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/2",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 3,
               "great": 0,
@@ -208,7 +208,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/2",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 3,
               "great": 0,
@@ -233,7 +233,7 @@
         "offset": {
           "inputs": 6,
           "lr2": {
-            "ruleset": "lr2/2",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 3,
               "great": 0,
@@ -256,7 +256,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/2",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 3,
               "great": 0,
@@ -278,7 +278,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/2",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 3,
               "great": 0,
