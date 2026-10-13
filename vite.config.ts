@@ -143,6 +143,13 @@ export default defineConfig({
       {
         extends: true as const,
         test: {
+          name: 'native',
+          include: ['native/**/*.test.ts'],
+        },
+      },
+      {
+        extends: true as const,
+        test: {
           name: 'regression',
           include: ['tests/regression/**/*.test.ts'],
         },
