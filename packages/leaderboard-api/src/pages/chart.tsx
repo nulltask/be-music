@@ -37,13 +37,20 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   const assisted = isOn(c.req.query('assisted'));
   const includeAnonymous = isOn(c.req.query('anonymous'));
   const filter = { chartFingerprint, ruleset, assisted, includeAnonymous, playedHereOnly: false };
-  const ranking = await loadRanking(db, filter, { offset: 0, limit: RANKING_LIMIT });
+  // Everything below depends only on the chart: ask D1 for it at once rather than one query after another.
+  const [ranking, everyone, aliases, stats, filed] = await Promise.all([
+    loadRanking(db, filter, { offset: 0, limit: RANKING_LIMIT }),
+    countPlayers(db, { ...filter, includeAnonymous: true }),
+    loadChartAliases(db, chartFingerprint),
+    loadChartStats(db, filter),
+    loadChartsetOf(db, found.chartsetId),
+  ]);
+  const infos = await loadPlayInfos(
+    db,
+    ranking.entries.map((entry) => entry.exScoreId),
+  );
   const title = chartTitle(found.title, chartFingerprint);
-  const everyone = await countPlayers(db, { ...filter, includeAnonymous: true });
-  const aliases = await loadChartAliases(db, chartFingerprint);
   const elsewhere = externalLinks(found, aliases);
-  const stats = await loadChartStats(db, filter);
-  const filed = await loadChartsetOf(db, found.chartsetId);
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout
@@ -84,14 +91,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
         />
       </Filters>
-      <RankingTable
-        entries={ranking.entries}
-        infos={await loadPlayInfos(
-          db,
-          ranking.entries.map((entry) => entry.exScoreId),
-        )}
-        noteCount={found.noteCount}
-      />
+      <RankingTable entries={ranking.entries} infos={infos} noteCount={found.noteCount} />
       <DistributionCard
         title="Clear lamps"
         description={`Best lamps of the players above, under ${rulesetName(ruleset)}.`}

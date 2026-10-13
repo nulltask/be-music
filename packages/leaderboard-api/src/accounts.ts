@@ -16,18 +16,20 @@ export interface AccountSummary {
 }
 
 export async function loadAccount(db: Database, userId: string): Promise<AccountSummary | undefined> {
-  const [row] = await db
-    .select({
-      handle: profile.handle,
-      displayName: profile.displayName,
-      anonymous: user.isAnonymous,
-      avatarKey: profile.avatarKey,
-    })
-    .from(user)
-    .innerJoin(profile, eq(profile.userId, user.id))
-    .where(eq(user.id, userId));
+  const [[row], [{ passkeys }]] = await Promise.all([
+    db
+      .select({
+        handle: profile.handle,
+        displayName: profile.displayName,
+        anonymous: user.isAnonymous,
+        avatarKey: profile.avatarKey,
+      })
+      .from(user)
+      .innerJoin(profile, eq(profile.userId, user.id))
+      .where(eq(user.id, userId)),
+    db.select({ passkeys: count() }).from(passkey).where(eq(passkey.userId, userId)),
+  ]);
   if (row === undefined) return undefined;
-  const [{ passkeys }] = await db.select({ passkeys: count() }).from(passkey).where(eq(passkey.userId, userId));
   return {
     handle: row.handle,
     displayName: row.displayName,

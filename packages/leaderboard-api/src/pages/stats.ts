@@ -70,22 +70,24 @@ export async function loadChartStats(db: Database, filter: RankingFilter): Promi
     eq(score.assisted, filter.assisted),
   ];
   if (!filter.includeAnonymous) playConditions.push(eq(user.isAnonymous, false));
-  const [plays] = await db
-    .select({
-      plays: count(),
-      players: countDistinct(score.userId),
-      first: min(score.createdAt),
-      last: max(score.createdAt),
-    })
-    .from(score)
-    .innerJoin(user, eq(user.id, score.userId))
-    .where(and(...playConditions));
-  const lampRows = await db
-    .select({ lamp: bestScore.bestLamp, count: count() })
-    .from(bestScore)
-    .innerJoin(user, eq(user.id, bestScore.userId))
-    .where(and(...filterConditions(filter)))
-    .groupBy(bestScore.bestLamp);
+  const [[plays], lampRows] = await Promise.all([
+    db
+      .select({
+        plays: count(),
+        players: countDistinct(score.userId),
+        first: min(score.createdAt),
+        last: max(score.createdAt),
+      })
+      .from(score)
+      .innerJoin(user, eq(user.id, score.userId))
+      .where(and(...playConditions)),
+    db
+      .select({ lamp: bestScore.bestLamp, count: count() })
+      .from(bestScore)
+      .innerJoin(user, eq(user.id, bestScore.userId))
+      .where(and(...filterConditions(filter)))
+      .groupBy(bestScore.bestLamp),
+  ]);
   return {
     plays: plays?.plays ?? 0,
     players: plays?.players ?? 0,
@@ -111,26 +113,28 @@ export interface PlayerStats {
 
 /** A player's play counts and the spread of their bests under one ruleset. */
 export async function loadPlayerStats(db: Database, userId: string, ruleset: PlaylogRulesetId): Promise<PlayerStats> {
-  const [plays] = await db
-    .select({
-      plays: count(),
-      charts: countDistinct(score.chartFingerprint),
-      first: min(score.createdAt),
-      last: max(score.createdAt),
-    })
-    .from(score)
-    .where(eq(score.userId, userId));
-  const byRuleset = await db
-    .select({ ruleset: score.playedRuleset, count: count() })
-    .from(score)
-    .where(eq(score.userId, userId))
-    .groupBy(score.playedRuleset)
-    .orderBy(desc(count()));
-  const bests = await db
-    .select({ lamp: bestScore.bestLamp, exScore: bestScore.bestEx, noteCount: chart.noteCount })
-    .from(bestScore)
-    .innerJoin(chart, eq(chart.chartFingerprint, bestScore.chartFingerprint))
-    .where(and(eq(bestScore.userId, userId), eq(bestScore.ruleset, ruleset), eq(bestScore.assisted, false)));
+  const [[plays], byRuleset, bests] = await Promise.all([
+    db
+      .select({
+        plays: count(),
+        charts: countDistinct(score.chartFingerprint),
+        first: min(score.createdAt),
+        last: max(score.createdAt),
+      })
+      .from(score)
+      .where(eq(score.userId, userId)),
+    db
+      .select({ ruleset: score.playedRuleset, count: count() })
+      .from(score)
+      .where(eq(score.userId, userId))
+      .groupBy(score.playedRuleset)
+      .orderBy(desc(count())),
+    db
+      .select({ lamp: bestScore.bestLamp, exScore: bestScore.bestEx, noteCount: chart.noteCount })
+      .from(bestScore)
+      .innerJoin(chart, eq(chart.chartFingerprint, bestScore.chartFingerprint))
+      .where(and(eq(bestScore.userId, userId), eq(bestScore.ruleset, ruleset), eq(bestScore.assisted, false))),
+  ]);
   return {
     plays: plays?.plays ?? 0,
     charts: plays?.charts ?? 0,
