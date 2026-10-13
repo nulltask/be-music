@@ -3,6 +3,11 @@ import { Rectangle, logger } from '@be-music/player-web';
 import { downloadBlob, makeWebmSeekable } from '@be-music/player-web/runtime';
 import type { Controller } from 'lil-gui';
 
+/** The Debug Menu button that records the play screen (gameplay) as a video. */
+export const RECORD_LABEL = '● Record gameplay video';
+/** The same button while a recording runs. */
+export const STOP_RECORDING_LABEL = '■ Stop recording';
+
 const recordLog = logger('record');
 
 /**
@@ -143,11 +148,11 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
     deps.setAutoRecordArmed(next);
     if (next) {
       controller?.domElement.classList.add('arming');
-      controller?.name('◉ Recording on next song');
+      controller?.name('◉ Records the next play');
       deps.setStatus('Recording armed — pick a song to start capturing');
     } else {
       controller?.domElement.classList.remove('arming');
-      controller?.name('● Record');
+      controller?.name(RECORD_LABEL);
       deps.setStatus('Recording disarmed');
     }
     return;
@@ -170,7 +175,7 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
       }
     } finally {
       controller?.domElement.classList.remove('recording');
-      controller?.name('● Record');
+      controller?.name(RECORD_LABEL);
       controller?.enable();
     }
     return;
@@ -178,7 +183,7 @@ export async function toggleRecording(deps: RecordingDeps): Promise<void> {
   try {
     gameplay.startRecording();
     controller?.domElement.classList.add('recording');
-    controller?.name('■ Stop');
+    controller?.name(STOP_RECORDING_LABEL);
     deps.setStatus('Recording…');
   } catch (error) {
     recordLog.warn('start failed', error);

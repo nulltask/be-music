@@ -2576,3 +2576,41 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
 .skin-offer-buttons > button {
   width: 100%;
 }
+
+/*
+ * "Drop a skin" prompt: the drop card's look, as a modal over the page.
+ * Drops on it bubble to the window's drop handler like any other.
+ */
+.skin-drop {
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: min(420px, calc(100vw - 32px));
+  margin: auto;
+  padding: 38px 40px 24px;
+  border: 1px dashed rgb(255 209 102 / 0.45);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgb(20 24 34 / 0.96), rgb(11 14 22 / 0.96));
+  color: #f8fafc;
+  text-align: center;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
+  font-family: 'LINE Seed JP', system-ui, sans-serif;
+}
+.skin-drop[open] {
+  display: flex;
+}
+.skin-drop::backdrop {
+  background: rgb(0 0 0 / 0.6);
+}
+.skin-drop .drop-title {
+  margin: 0;
+}
+.skin-drop-hint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #aab4c2;
+}
+.skin-drop-hint code {
+  color: #d2d9e4;
+}

@@ -234,6 +234,22 @@ export const DEMO_APP_HTML = `
       </form>
     </dialog>
     <!--
+      "Drop a skin" — shown when the Debug Menu's Skin system is set to LR2 or
+      beatoraja with none of that system loaded. A drop anywhere closes it, and
+      a skin of the asked-for system is then used without asking. Filled by
+      \`promptSkinDrop\` (main.ts).
+    -->
+    <dialog class="skin-drop" id="skin-drop" aria-labelledby="skin-drop-title">
+      <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 6 L24 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+        <path d="M14 22 L24 32 L34 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M10 38 L38 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+      </svg>
+      <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
+      <p class="skin-drop-hint" data-skin-drop-hint></p>
+      <button type="button" class="account-dialog-quiet" data-skin-drop-cancel>Cancel</button>
+    </dialog>
+    <!--
       "Use this skin?" — asked after a drop whose folder carried an LR2 or
       beatoraja skin. Filled and opened by \`askSkinOffer\` (skin-offer.ts).
     -->
@@ -502,7 +518,7 @@ export const DEMO_APP_HTML = `
                 and developer settings sit in its collapsed folders, which remember whether you left them open.
               </li>
               <li>
-                Click <strong>Record</strong> to capture the next play as a downloadable WebM (requires
+                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable WebM (requires
                 MediaRecorder support — see Open source / browser checks).
               </li>
               <li>
@@ -599,7 +615,7 @@ export const DEMO_APP_HTML = `
                 右上 Debug Menu に読み込み / スキン / プレイオプション / オーディオ / 録画のコントロールがあります。あまり使わない設定や開発者向けの設定は折りたたまれたフォルダにあり、フォルダの開閉状態は記憶されます。
               </li>
               <li>
-                <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
+                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
               </li>
               <li>
                 選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。
