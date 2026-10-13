@@ -312,8 +312,8 @@ Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの 
   プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。
   匿名のプレイはフィルタで含めます。架空の譜面がこのページに出るには、passkey を持つアカウントが必要です。
 - `/leaderboard/scores/:id` — スコア
-- `/leaderboard/charts/:chartFp` — 譜面のランキング
-- `/leaderboard/players/:handle` — プロフィール。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
+- `/leaderboard/charts/:chartFp` — 譜面のランキング、プレイ数とランプの分布、譜面の詳細（モード、TOTAL、判定ランク、LN モード、ファイルハッシュ）
+- `/leaderboard/players/:handle` — プロフィールとプレイヤーの統計（プレイ数、譜面数、平均スコアレート、自己ベストのランプと DJ Rank の分布）。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
 
 どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、IIDX）で値を表示し、
 プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/leaderboard/ruleset/:id?next=…`。

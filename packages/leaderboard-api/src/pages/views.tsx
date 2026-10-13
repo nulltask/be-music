@@ -3,6 +3,7 @@ import type { Child } from 'hono/jsx';
 import type { RankingEntry } from '../ranking.ts';
 import type { PlayInfo, RecentScore } from './data.ts';
 import type { ExternalLink } from './external.ts';
+import type { Distribution } from './stats.ts';
 import {
   chartTitle,
   djLevel,
@@ -389,6 +390,88 @@ export function Details(props: { title: string; rows: Array<[string, Child]> }) 
           </>
         ))}
       </dl>
+    </section>
+  );
+}
+
+/** A row of headline figures (label above, value below). */
+export function Stats(props: { items: Array<[string, Child]> }) {
+  return (
+    <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {props.items.map(([label, value]) => (
+        <div class="card gap-1 px-4 py-3">
+          <dt class="text-muted-foreground text-xs">{label}</dt>
+          <dd class="text-xl font-semibold tabular-nums">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+/** Shades for the DJ Rank bar, AAA darkest. */
+const DJ_RANK_SHADES = ['#0f172a', '#334155', '#475569', '#64748b', '#94a3b8', '#cbd5e1', '#e2e8f0', '#f1f5f9'];
+
+/**
+ * A distribution as one stacked bar and a list of counts. Lamps take their lamp colours; DJ Ranks take grey shades.
+ * Buckets without players stay out of the bar and the list.
+ */
+export function DistributionCard<Key extends number | string>(props: {
+  title: string;
+  description: string;
+  distribution: Distribution<Key>;
+  kind: 'lamp' | 'dj-rank';
+}) {
+  const { total, buckets } = props.distribution;
+  const shown = buckets
+    .map((bucket, index) => ({
+      ...bucket,
+      label: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).label : String(bucket.key),
+      color: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).color : (DJ_RANK_SHADES[index] ?? '#94a3b8'),
+      meaning: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).meaning : undefined,
+    }))
+    .filter((bucket) => bucket.count > 0);
+  return (
+    <section class="card gap-4" data-size="sm">
+      <header>
+        <h2>{props.title}</h2>
+        <p>{props.description}</p>
+      </header>
+      <div class="space-y-3 px-4">
+        {total === 0 ? (
+          <p class="text-muted-foreground text-sm">No plays yet.</p>
+        ) : (
+          <>
+            <div
+              class="ring-foreground/10 flex h-3 overflow-hidden rounded-full ring-1"
+              role="img"
+              aria-label={shown.map((bucket) => `${bucket.label}: ${bucket.count}`).join(', ')}
+            >
+              {shown.map((bucket) => (
+                <span
+                  title={`${bucket.label}: ${bucket.count}`}
+                  style={`background:${bucket.color};width:${(bucket.count / total) * 100}%`}
+                />
+              ))}
+            </div>
+            <ul class="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-x-6 gap-y-1 text-sm">
+              {shown.map((bucket) => (
+                <li class="flex items-center justify-between gap-2" title={bucket.meaning}>
+                  <span class="inline-flex items-center gap-2">
+                    <span
+                      class="ring-foreground/20 inline-block size-2.5 rounded-sm ring-1"
+                      style={`background:${bucket.color}`}
+                    />
+                    {bucket.label}
+                  </span>
+                  <span class="text-muted-foreground whitespace-nowrap tabular-nums">
+                    {bucket.count} ({Math.round((bucket.count / total) * 100)}%)
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
     </section>
   );
 }
