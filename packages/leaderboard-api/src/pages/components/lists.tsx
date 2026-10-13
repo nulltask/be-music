@@ -369,7 +369,7 @@ export function ResultCards(props: {
     judges: Record<string, number>;
   }>;
   playedRuleset: string;
-  /** The viewer's display ruleset (the Scoring rules switch), marked as selected. */
+  /** The viewer's display ruleset (the header's ruleset menu), marked as selected. */
   displayRuleset: string;
 }) {
   const results = [...props.results].sort(byRulesetOrder);

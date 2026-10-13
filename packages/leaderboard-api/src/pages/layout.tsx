@@ -1,13 +1,13 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
-import { RULESET_LABELS, RULESET_MEANING } from './format.ts';
+import { RULESET_LABELS, RULESET_MEANING, rulesetName } from './format.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
 import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
 import { Icon } from './components/icon.tsx';
-import { ChevronDown, KeyRound, LogOut, Play } from 'lucide-static';
+import { Check, ChevronDown, KeyRound, LogOut, Play, Scale } from 'lucide-static';
 import { CARD_HEIGHT, CARD_WIDTH } from '../cards.ts';
 import { ICON_LINKS } from './icons.ts';
 import { ICONS } from './icons.generated.ts';
@@ -324,30 +324,59 @@ function SignUpDialog() {
   );
 }
 
+/** What each ruleset scores like, for the ruleset menu. */
+const RULESET_NOTES: Readonly<Record<PlaylogRulesetId, string>> = {
+  lr2: 'LR2’s judge windows, gauges and lamps',
+  beatoraja: 'beatoraja’s, with the PERFECT and MAX lamps',
+  iidx: 'beatmania IIDX’s, with charge notes',
+};
+
 /**
- * The display ruleset, for every page: a bar under the header, its start on the content's edge. Labelled "Scoring
- * rules", so the names do not read as the software the plays came from.
+ * The scoring rules every figure on the pages is shown under, as a menu in the header next to the account: the
+ * current ruleset on the button, the three to pick from in its popover. A choice is kept in a cookie
+ * (`/leaderboard/ruleset/:id`) and brings the viewer back to the page.
  */
-function RulesetBar(props: { current: PlaylogRulesetId; path: string }) {
+function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
   return (
-    <div class="bg-muted/40 border-b">
-      <div class="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
-        <span class="text-muted-foreground cursor-help text-xs" id="ruleset-switch-label" title={RULESET_MEANING}>
-          Scoring rules
-        </span>
-        <div class="button-group" role="group" aria-labelledby="ruleset-switch-label">
-          {RULESET_IDS.map((id) => (
-            <a
-              class="btn"
-              data-size="sm"
-              data-variant={id === props.current ? 'primary' : 'outline'}
-              aria-current={id === props.current ? 'true' : undefined}
-              href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
-            >
-              {RULESET_LABELS[id]}
-            </a>
-          ))}
-        </div>
+    <div class="relative">
+      <button
+        type="button"
+        class="btn"
+        data-size="sm"
+        data-variant="ghost"
+        popovertarget="ruleset-menu"
+        aria-label={`Scoring rules: ${rulesetName(props.current)}`}
+        title="The scoring rules the figures are shown under"
+        style="anchor-name:--ruleset-menu"
+      >
+        <Icon svg={Scale} class="text-muted-foreground" />
+        <span>{RULESET_LABELS[props.current]}</span>
+        <span class="hidden sm:inline">rules</span>
+        <Icon svg={ChevronDown} class="text-muted-foreground" />
+      </button>
+      <div
+        id="ruleset-menu"
+        popover="auto"
+        class="bg-popover text-popover-foreground w-72 rounded-lg border p-1 text-sm shadow-md"
+        style="position-anchor:--ruleset-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline"
+      >
+        <div class="text-muted-foreground px-2 pt-1.5 pb-1 text-xs">Show scores under</div>
+        {RULESET_IDS.map((id) => (
+          <a
+            class="hover:bg-muted flex items-start gap-2 rounded-md px-2 py-1.5"
+            href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
+            aria-current={id === props.current ? 'true' : undefined}
+          >
+            <span class={`mt-0.5 ${id === props.current ? '' : 'invisible'}`}>
+              <Icon svg={Check} />
+            </span>
+            <span>
+              <span class="block font-medium">{rulesetName(id)}</span>
+              <span class="text-muted-foreground block text-xs">{RULESET_NOTES[id]}</span>
+            </span>
+          </a>
+        ))}
+        <p class="text-muted-foreground border-t px-2 pt-2 pb-1.5 text-xs">{RULESET_MEANING}</p>
       </div>
     </div>
   );
@@ -467,6 +496,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               </a>
             </nav>
             <div class="ms-auto flex items-center gap-2">
+              <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />
               <a class="btn" data-size="sm" href="/" title="Play in the browser">
                 <Icon svg={Play} />
                 Play
@@ -476,7 +506,6 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
           </div>
           <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
         </header>
-        <RulesetBar current={props.meta.ruleset} path={props.meta.path} />
         <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">
           <Breadcrumbs crumbs={props.meta.crumbs} />
           {props.children}
