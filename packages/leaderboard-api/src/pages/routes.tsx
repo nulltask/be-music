@@ -6,6 +6,7 @@ import type { AppEnv } from '../app.ts';
 import { isRuleset } from '../rulesets.ts';
 import { chartPage } from './chart.tsx';
 import { chartsetPage } from './chartset.tsx';
+import { mountIcons } from './icons.ts';
 import { STYLESHEET_PATH } from './layout.tsx';
 import { notFound, RULESET_COOKIE_MAX_AGE } from './page.tsx';
 import { playerPage } from './player.tsx';
@@ -51,6 +52,8 @@ export function mountPages(app: Hono<AppEnv>): void {
       showDeveloperTools: 'never',
     }),
   );
+
+  mountIcons(app);
 
   // The compiled stylesheet. Its name carries a content hash, so browsers and caches may keep it forever.
   app.get(STYLESHEET_PATH, (c) =>

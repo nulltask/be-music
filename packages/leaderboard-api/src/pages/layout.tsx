@@ -3,6 +3,7 @@ import type { Child } from 'hono/jsx';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { RULESET_LABELS } from './format.ts';
 import { RULESET_IDS } from '../rulesets.ts';
+import { ICON_LINKS } from './icons.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
 
 /** Where the compiled stylesheet is served; the hash in the name lets browsers keep it forever. */
@@ -121,6 +122,10 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <meta name="twitter:card" content="summary" />
         <script dangerouslySetInnerHTML={{ __html: COLOR_SCHEME_SCRIPT }} />
         <link rel="stylesheet" href={STYLESHEET_PATH} />
+        <link rel="icon" type="image/svg+xml" href={ICON_LINKS.favicon} />
+        <link rel="apple-touch-icon" href={ICON_LINKS.appleTouch} />
+        <link rel="manifest" href={ICON_LINKS.manifest} />
+        <meta name="theme-color" content="#0a0e18" />
       </head>
       <body class="bg-background text-foreground min-h-screen antialiased">
         <header class="border-b">
