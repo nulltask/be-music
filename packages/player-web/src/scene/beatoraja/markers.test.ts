@@ -278,3 +278,42 @@ describe('BeatorajaMarkerLayer — beatoraja LaneRenderer window on a chart that
     expect(visibleYs(layer)).toEqual([950]);
   });
 });
+
+describe('BeatorajaMarkerLayer — LR2 window on a chart that does not scroll', () => {
+  const canvasHeight = 1000;
+  const makeLayer = () =>
+    new BeatorajaMarkerLayer({
+      group: [{ id: 'section-line', dst: [{ x: 0, y: 200, w: 500, h: 3, a: 255, r: 255, g: 255, b: 255 }] }],
+      bpm: [],
+      stop: [],
+      time: [],
+      images: makeImages(),
+      textures: fakeTextureCache(),
+      canvasHeight,
+      laneAuthoredBottomY: canvasHeight - 200,
+    });
+  const visibleYs = (layer: BeatorajaMarkerLayer): number[] =>
+    layer.container.children.filter((child) => child.visible).map((child) => (child as { y: number }).y);
+
+  it('holds the bar line just crossed on the judgement line and drops the ones the playhead has passed', () => {
+    const layer = makeLayer();
+    const window = resolveNoteDrawWindow({
+      rules: 'lr2',
+      currentBeat: 2,
+      nowSeconds: 1,
+      laneBeats: 3,
+      overscanBeats: 0,
+    });
+    layer.update({
+      currentBeat: 2,
+      judgementY: 800,
+      laneTopY: 500,
+      pixelsPerBeat: 100,
+      // Beat 1.995 was crossed within the last pixel: it stays, on the line rather than half a pixel below it. Beat 1.9
+      // is gone (LR2 does not slide bar lines under the judgement line).
+      markers: { group: [1.9, 1.995, 2, 3], bpm: [], stop: [], time: [] },
+      window,
+    });
+    expect(visibleYs(layer)).toEqual([800, 800, 700]);
+  });
+});

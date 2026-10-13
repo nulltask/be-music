@@ -421,6 +421,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       canvasHeight: this.view.height,
       scrollMapper: this.scrollMapper,
       timelineBeats: this.laneTimelines?.beats,
+      autoplay: this.options.mode === 'auto',
     });
     // Marker layer goes ON the same container as notes — insertion order makes markers paint
     // first, then notes paint on top. Authors expect this so a falling note can visually cross
@@ -791,6 +792,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       canvasHeight: this.view.height,
       scrollMapper: this.scrollMapper,
       timelineBeats: this.laneTimelines?.beats,
+      autoplay: this.options.mode === 'auto',
     });
     this.markerLayer = new BeatorajaMarkerLayer({
       group: noteSection.group,

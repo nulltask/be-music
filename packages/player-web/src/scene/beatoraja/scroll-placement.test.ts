@@ -23,7 +23,7 @@ describe('createBeatorajaScrollMapper', () => {
     expect(createBeatorajaScrollMapper(parseBms(['#BPM 120', '#00111:01'].join('\n')))).toBeUndefined();
   });
 
-  it('is undefined when every #SCROLL / #SPEED point is 1, so the chart keeps its ruleset rules', () => {
+  it('is undefined when every #SCROLL / #SPEED point is 1, so the chart keeps LR2 drawing rules', () => {
     const chart = parseBms(
       ['#BPM 120', '#WAV01 a.wav', '#SCROLL01 1', '#SPEED01 1', '#00111:01', '#001SC:01', '#001SP:01'].join('\n'),
     );
@@ -41,7 +41,7 @@ describe('createBeatorajaLaneTimelines', () => {
 });
 
 describe('resolveBeatorajaScrollPlacement', () => {
-  it('without a mapper places objects by beat difference and has no draw window', () => {
+  it('without a mapper places objects by beat difference and draws by LR2 rules', () => {
     const placement = resolveBeatorajaScrollPlacement({
       currentBeat: 2,
       nowSeconds: 1,
@@ -49,7 +49,8 @@ describe('resolveBeatorajaScrollPlacement', () => {
       laneBeats: 4,
       stageBottomY: 720,
     });
-    expect(placement.window).toBeUndefined();
+    // A beatoraja skin is a display choice, not a ruleset: a chart that does not scroll draws as in the other skins.
+    expect(placement.window).toMatchObject({ rules: 'lr2', currentBeat: 2, nowSeconds: 1, stageBottomY: 720 });
     expect(placement.distance(5)).toBe(3);
   });
 
@@ -64,7 +65,7 @@ describe('resolveBeatorajaScrollPlacement', () => {
     expect(placement.distance(6)).toBeCloseTo(1, 9);
     // Two beats of lane distance reach four chart beats ahead at half speed.
     expect(placement.window).toMatchObject({ rules: 'beatoraja', currentBeat: 4, nowSeconds: 2, stageBottomY: 720 });
-    expect(placement.window!.lastBeat).toBeGreaterThanOrEqual(8);
+    expect(placement.window.lastBeat).toBeGreaterThanOrEqual(8);
   });
 
   it('takes in the first timeline past the lane top', () => {
@@ -77,6 +78,6 @@ describe('resolveBeatorajaScrollPlacement', () => {
       stageBottomY: 720,
     });
     // The lane is overrun at beat 2; the next timeline is the measure-1 note and #SCROLL point at beat 4.
-    expect(placement.window!.lastBeat).toBe(4);
+    expect(placement.window.lastBeat).toBe(4);
   });
 });

@@ -1,6 +1,7 @@
-// Where the beatoraja play skin puts notes and bar lines on the lane when the chart has `#SCROLL` / `#SPEED` (bmson
-// `scroll_events` included): the same distance integrator and `LaneRenderer` draw window the core gameplay view uses
-// (`../core/note-draw-window.ts`), so SCROLL gimmicks show up in beatoraja skins as they do in beatoraja.
+// Where the beatoraja play skin puts notes and bar lines on the lane, and which of them it draws: the same distance
+// integrator and draw window the core gameplay view uses (`../core/note-draw-window.ts`). A chart with `#SCROLL` /
+// `#SPEED` (bmson `scroll_events` included) draws by beatoraja's `LaneRenderer` rules, so SCROLL gimmicks show up as they
+// do in beatoraja; every other chart draws by LR2's, as in the other skins — a skin is a display choice, not a ruleset.
 
 import { createBeatResolver, createScrollTimeline, createSpeedTimeline, resolveChart } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
@@ -8,6 +9,7 @@ import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-m
 import {
   changesScrollRate,
   collectResolvedLaneTimelineBeats,
+  resolveNoteDrawRules,
   resolveNoteDrawWindow,
   type NoteDrawWindow,
 } from '../core/note-draw-window.ts';
@@ -50,31 +52,26 @@ export interface BeatorajaScrollPlacementInput {
 }
 
 export interface BeatorajaScrollPlacement {
-  /**
-   * beatoraja's `LaneRenderer` window when the chart scrolls; `undefined` keeps the skin's plain rules for a chart
-   * without `#SCROLL` / `#SPEED`.
-   */
-  window: NoteDrawWindow | undefined;
+  /** beatoraja's `LaneRenderer` window when the chart scrolls, LR2's otherwise ({@link resolveNoteDrawRules}). */
+  window: NoteDrawWindow;
   /** Lane distance from the playhead to `beat`, in beats at scroll rate 1. */
   distance: (beat: number) => number;
 }
 
 export function resolveBeatorajaScrollPlacement(input: BeatorajaScrollPlacementInput): BeatorajaScrollPlacement {
   const { currentBeat, nowSeconds, mapper, laneBeats, timelineBeats, stageBottomY } = input;
+  const window = resolveNoteDrawWindow({
+    rules: resolveNoteDrawRules(mapper !== undefined),
+    currentBeat,
+    nowSeconds,
+    mapper,
+    laneBeats,
+    timelineBeats,
+    overscanBeats: 0,
+    stageBottomY,
+  });
   if (mapper === undefined) {
-    return { window: undefined, distance: (beat) => beat - currentBeat };
+    return { window, distance: (beat) => beat - currentBeat };
   }
-  return {
-    window: resolveNoteDrawWindow({
-      rules: 'beatoraja',
-      currentBeat,
-      nowSeconds,
-      mapper,
-      laneBeats,
-      timelineBeats,
-      overscanBeats: 0,
-      stageBottomY,
-    }),
-    distance: (beat) => mapper.distanceBetween(currentBeat, beat),
-  };
+  return { window, distance: (beat) => mapper.distanceBetween(currentBeat, beat) };
 }
