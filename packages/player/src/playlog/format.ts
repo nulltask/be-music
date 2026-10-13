@@ -73,6 +73,10 @@ export interface PlaylogChart {
   subtitle?: string;
   artist?: string;
   genre?: string;
+  /** `#PLAYLEVEL` / bmson `info.level` as the chart wrote it (a number for most charts, text for some). */
+  playLevel?: string;
+  /** `#DIFFICULTY`: 1 BEGINNER, 2 NORMAL, 3 HYPER, 4 ANOTHER, 5 INSANE. */
+  difficulty?: number;
   /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
   sha256?: string;
   /** Lowercase-hex MD5 of the source chart FILE bytes — how LR2 and LR2IR name a chart. */
@@ -327,6 +331,8 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     subtitle: optionalString(chart.subtitle, 'chart.subtitle'),
     artist: optionalString(chart.artist, 'chart.artist'),
     genre: optionalString(chart.genre, 'chart.genre'),
+    playLevel: optionalString(chart.playLevel, 'chart.playLevel'),
+    difficulty: optionalFiniteNumber(chart.difficulty, 'chart.difficulty'),
     sha256: optionalString(chart.sha256, 'chart.sha256'),
     md5: optionalString(chart.md5, 'chart.md5'),
     chartFingerprint: optionalString(chart.chartFingerprint, 'chart.chartFingerprint'),
@@ -345,6 +351,8 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     'subtitle',
     'artist',
     'genre',
+    'playLevel',
+    'difficulty',
     'sha256',
     'md5',
     'chartFingerprint',

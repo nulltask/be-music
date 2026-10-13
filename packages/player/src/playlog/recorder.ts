@@ -269,6 +269,16 @@ function buildPlaylogChart(options: PlaylogRecorderOptions): PlaylogChart {
   }
   if (typeof json.metadata.artist === 'string' && json.metadata.artist.length > 0) result.artist = json.metadata.artist;
   if (typeof json.metadata.genre === 'string' && json.metadata.genre.length > 0) result.genre = json.metadata.genre;
+  const playLevel = json.metadata.playLevel;
+  if (
+    (typeof playLevel === 'number' && Number.isFinite(playLevel)) ||
+    (typeof playLevel === 'string' && playLevel !== '')
+  ) {
+    result.playLevel = String(playLevel);
+  }
+  if (typeof json.metadata.difficulty === 'number' && Number.isFinite(json.metadata.difficulty)) {
+    result.difficulty = json.metadata.difficulty;
+  }
   if (resolved.total.value !== undefined) {
     result.total = resolved.total.value;
   }
