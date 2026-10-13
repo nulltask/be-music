@@ -10,7 +10,7 @@ import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, Filters, LocalTime, SectionHeading, Segmented, Tag, Toggle } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
 import { externalLinks, type ChartAlias } from './external.ts';
-import { chartTitle, formatJudgeRank, formatLaneMode, formatLnMode, rulesetName } from './format.ts';
+import { chartTitle, difficultyName, formatJudgeRank, formatLaneMode, formatLnMode, rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
   day,
@@ -59,7 +59,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
     ranking.entries.map((entry) => entry.exScoreId),
   );
   const title = chartTitle(found.title, chartFingerprint);
-  const elsewhere = externalLinks(found, aliases);
+  const elsewhere = externalLinks(found, aliases, files);
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout
@@ -81,8 +81,13 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
       >
         {withArtist(found.artist)}
         {found.laneMode !== null ? `${formatLaneMode(found.laneMode)} · ` : ''}
+        {found.playLevel !== null ? (
+          <span title={difficultyName(found.difficulty)}>
+            ☆{found.playLevel}
+            {difficultyName(found.difficulty) !== undefined ? ` ${difficultyName(found.difficulty)}` : ''} ·{' '}
+          </span>
+        ) : null}
         {found.noteCount} notes · {everyone} player{everyone === 1 ? '' : 's'}
-        {found.status === 'listed' ? null : <Tag>new chart</Tag>}
       </PageHeader>
       <Stats
         items={[
@@ -131,7 +136,12 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
               options={[
                 { label: 'All files', href: withQuery(c, 'file', undefined), current: fileSha256 === undefined },
                 ...files.map((file) => ({
-                  label: <span class="font-mono">{file.sha256.slice(0, 8)}</span>,
+                  label: (
+                    <span class="inline-flex items-baseline gap-1.5">
+                      <span class="font-mono">{file.sha256.slice(0, 8)}</span>
+                      <span class="text-muted-foreground text-xs">{file.plays}</span>
+                    </span>
+                  ),
                   href: withQuery(c, 'file', file.sha256),
                   current: file.sha256 === fileSha256,
                   title: `SHA-256 ${file.sha256}${file.md5 !== null ? ` · MD5 ${file.md5}` : ''} · ${file.plays} play${file.plays === 1 ? '' : 's'}`,
@@ -145,6 +155,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           infos={infos}
           noteCount={found.noteCount}
           highlight={c.get('viewer')?.handle}
+          everyPlay={everyPlay}
         />
       </section>
       <DistributionCard
@@ -179,7 +190,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           ['Notes', found.noteCount],
           ['TOTAL', orDash(found.total)],
           ['Judge rank', formatJudgeRank(found.judgeRank)],
-          ['Long notes', formatLnMode(found.lnMode)],
+          ['LN mode', formatLnMode(found.lnMode)],
           ['Format', found.sourceFormat === null ? '-' : found.sourceFormat.toUpperCase()],
           [
             '#RANDOM outcomes',

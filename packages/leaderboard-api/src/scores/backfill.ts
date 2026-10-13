@@ -1,4 +1,4 @@
-import { eq, isNull } from 'drizzle-orm';
+import { eq, isNull, or } from 'drizzle-orm';
 import { parsePlaylog } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
 import { score } from '../db/schema.ts';
@@ -8,21 +8,21 @@ import { playedFileOf, type PlayedFile } from './played-file.ts';
 const BACKFILL_BATCH = 50;
 
 /**
- * Fills in the chart file and length of plays stored before they were recorded (`duration_ms` is null), from their
- * play logs in R2. A play whose log is gone or unreadable gets a length of 0 and no file, so it is not retried.
- * Returns how many plays it filled in.
+ * Fills in the chart file, length and lane option of plays stored before they were recorded (`duration_ms` or
+ * `lane_option` is null), from their play logs in R2. A play whose log is gone or unreadable gets a length of 0, no
+ * file and an unknown (`-`) lane option, so it is not retried. Returns how many plays it filled in.
  */
 export async function backfillPlayedFiles(db: Database, blobs: R2Bucket, limit = BACKFILL_BATCH): Promise<number> {
   const pending = await db
     .select({ id: score.id, playlogKey: score.playlogKey })
     .from(score)
-    .where(isNull(score.durationMs))
+    .where(or(isNull(score.durationMs), isNull(score.laneOption)))
     .limit(limit);
   for (const play of pending) {
     const filled = await readPlayedFile(blobs, play.playlogKey).catch(() => undefined);
     await db
       .update(score)
-      .set(filled ?? { fileSha256: null, fileMd5: null, durationMs: 0 })
+      .set(filled ?? { fileSha256: null, fileMd5: null, durationMs: 0, laneOption: '-' })
       .where(eq(score.id, play.id));
   }
   return pending.length;

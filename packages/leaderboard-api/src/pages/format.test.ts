@@ -2,7 +2,10 @@ import { describe, expect, test } from 'vite-plus/test';
 import { ClearLamp } from '../scoring/lamp.ts';
 import {
   chartTitle,
+  difficultyName,
   djLevel,
+  formatChartLevel,
+  formatDelta,
   formatExScore,
   formatGauge,
   formatJudgeRank,
@@ -15,6 +18,9 @@ import {
   formatTimestamp,
   lampStyle,
   rulesetName,
+  shortLaneMode,
+  showsGauge,
+  verificationMeaning,
 } from './format.ts';
 
 describe('page formatting', () => {
@@ -92,8 +98,48 @@ describe('chart metadata', () => {
   });
 
   test('formatLnMode and formatPercent', () => {
-    expect([1, 2, 3, null].map(formatLnMode)).toEqual(['LN', 'CN', 'HCN', '-']);
+    expect([1, 2, 3, null].map((mode) => formatLnMode(mode).split(' ')[0])).toEqual(['LN', 'CN', 'HCN', '-']);
     expect(formatPercent(0.77884)).toBe('77.88%');
     expect(formatPercent(null)).toBe('-');
+  });
+});
+
+describe('chart and play labels', () => {
+  test('shortLaneMode writes the key count the way players do', () => {
+    expect(
+      ['7 KEY SP', '14 KEY DP', '5 KEY SP', '5 KEY DP', '9 KEY (PMS-STD)', '7keys', '48 KEY DP'].map(shortLaneMode),
+    ).toEqual(['7K', '14K', '5K', '10K', '9K', '7K', '48K']);
+    expect(shortLaneMode(null)).toBeUndefined();
+    expect(shortLaneMode('popn-9k')).toBeUndefined();
+  });
+
+  test('formatChartLevel puts the mode and the level together, leaving out what is unknown', () => {
+    expect(formatChartLevel('7 KEY SP', '12')).toBe('7K ☆12');
+    expect(formatChartLevel('14 KEY DP', null)).toBe('14K');
+    expect(formatChartLevel(null, '★5')).toBe('☆★5');
+    expect(formatChartLevel(null, null)).toBeUndefined();
+    expect(formatChartLevel('7 KEY SP', '')).toBe('7K');
+  });
+
+  test('difficultyName names #DIFFICULTY 1 to 5 only', () => {
+    expect([1, 2, 3, 4, 5].map(difficultyName)).toEqual(['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE']);
+    expect(difficultyName(0)).toBeUndefined();
+    expect(difficultyName(null)).toBeUndefined();
+  });
+
+  test('formatDelta signs a change with a real minus', () => {
+    expect([23, -5, 0].map(formatDelta)).toEqual(['+23', '−5', '±0']);
+  });
+
+  test('showsGauge keeps the gauge for plays that did not clear', () => {
+    expect(showsGauge(ClearLamp.FAILED)).toBe(true);
+    expect(showsGauge(ClearLamp.NORMAL)).toBe(false);
+    expect(showsGauge(ClearLamp.EASY)).toBe(false);
+  });
+
+  test('verificationMeaning explains L3 and L4 and passes anything else through', () => {
+    expect(verificationMeaning('L4')).toMatch(/^L4 — /);
+    expect(verificationMeaning('L3')).toMatch(/^L3 — /);
+    expect(verificationMeaning('L5')).toBe('L5');
   });
 });

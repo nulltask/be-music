@@ -125,12 +125,65 @@ export function formatJudgeRank(
   return percent;
 }
 
-/** Long-note mode: 1 LN, 2 CN (charge note), 3 HCN (hell charge note). */
+/**
+ * How the chart's long notes are judged (`#LNMODE`, or the default LN when the chart names none): 1 LN, 2 CN (charge
+ * note), 3 HCN (hell charge note), each with what it means. The mode applies only if the chart has long notes.
+ */
 export function formatLnMode(lnMode: number | null): string {
-  return lnMode === 1 ? 'LN' : lnMode === 2 ? 'CN' : lnMode === 3 ? 'HCN' : '-';
+  return lnMode === 1
+    ? 'LN — the start is judged; hold to the end'
+    : lnMode === 2
+      ? 'CN — the release is judged too'
+      : lnMode === 3
+        ? 'HCN — the release is judged, and holding gains or drains the gauge'
+        : '-';
 }
 
 /** A 0–1 rate as `77.88%`, or `-`. */
 export function formatPercent(rate: number | null): string {
   return rate === null ? '-' : `${(rate * 100).toFixed(2)}%`;
+}
+
+const DIFFICULTY_NAMES = ['BEGINNER', 'NORMAL', 'HYPER', 'ANOTHER', 'INSANE'];
+
+/** `#DIFFICULTY` by name: 1 BEGINNER .. 5 INSANE, or undefined for anything else. */
+export function difficultyName(difficulty: number | null): string | undefined {
+  return difficulty === null ? undefined : DIFFICULTY_NAMES[difficulty - 1];
+}
+
+/**
+ * A lane mode the short way players write it: `7 KEY SP` → `7K`, `14 KEY DP` → `14K`, `5 KEY DP` → `10K`,
+ * `9 KEY (PMS-STD)` → `9K`, and the older `7keys` → `7K`. Undefined when there is none or it names no key count.
+ */
+export function shortLaneMode(laneMode: string | null): string | undefined {
+  const keys = laneMode === null ? null : /^(\d+)\s*keys?(?:\s+(SP|DP))?/i.exec(laneMode);
+  if (keys === null) return undefined;
+  const count = Number(keys[1]);
+  return `${keys[2]?.toUpperCase() === 'DP' && count === 5 ? 10 : count}K`;
+}
+
+/** A chart's mode and level in one short label: `7K ☆12`, `14K`, `☆★5`; undefined when neither is known. */
+export function formatChartLevel(laneMode: string | null, playLevel: string | null): string | undefined {
+  const parts = [shortLaneMode(laneMode), playLevel !== null && playLevel !== '' ? `☆${playLevel}` : undefined];
+  const label = parts.filter((part) => part !== undefined).join(' ');
+  return label === '' ? undefined : label;
+}
+
+/** A signed difference for a change against an earlier best: `+23`, `−5` (a minus sign, not a hyphen), `±0`. */
+export function formatDelta(delta: number): string {
+  return delta > 0 ? `+${delta}` : delta < 0 ? `−${-delta}` : '±0';
+}
+
+/** Whether a play's gauge is worth showing next to its lamp: only when it did not clear, where it tells how close. */
+export function showsGauge(clearLamp: number): boolean {
+  return clearLamp <= ClearLamp.FAILED;
+}
+
+/** What a verification layer means (docs/leaderboard.md section 5.3), for its tooltip and the info panel. */
+export function verificationMeaning(verification: string): string {
+  return verification === 'L4'
+    ? 'L4 — the chart played is known to be this one'
+    : verification === 'L3'
+      ? 'L3 — the chart played matches its fingerprint'
+      : verification;
 }
