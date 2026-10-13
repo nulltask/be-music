@@ -40,6 +40,7 @@ import {
 import type { BeatorajaSkinAudio } from '../../skin/beatoraja/audio.ts';
 import { chartPlayVariantForBeatorajaVariant, type BeatorajaPlayableVariant } from '../../skin/beatoraja/theme.ts';
 import { BeatorajaNoteLayer, beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat } from './notes.ts';
+import { createTimingResolver, type TempoReversalPoint } from '@be-music/chart';
 import { BeatorajaMarkerLayer } from './markers.ts';
 import {
   createBeatorajaLaneTimelines,
@@ -231,6 +232,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private readonly scrollMapper: ScrollDistanceMapperLike | undefined;
   /** The chart's lane timelines, built only for a chart that scrolls. */
   private readonly laneTimelines: BeatorajaLaneTimelines | undefined;
+  /** The chart's LR2 negative-BPM reversal, if any: past it the lane scrolls back from the mirrored display beat. */
+  private readonly tempoReversal: TempoReversalPoint | undefined;
   /**
    * Chart's BPM curve as a polyline in `[0, 1]²` — computed once at construction and handed to
    * the play skin view's `resolveBpmGraphPoints` so any `bpmgraph[]` element gets a real curve
@@ -300,6 +303,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.options = effectiveChart === options.chart ? options : { ...options, chart: effectiveChart };
     this.scrollMapper = createBeatorajaScrollMapper(effectiveChart);
     this.laneTimelines = this.scrollMapper ? createBeatorajaLaneTimelines(effectiveChart) : undefined;
+    this.tempoReversal = createTimingResolver(effectiveChart).reversal;
     this.skinAudioRenderContext = {
       activeOps: new Set<number>(),
       getTimerStart: () => undefined,
@@ -422,6 +426,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       scrollMapper: this.scrollMapper,
       timelineBeats: this.laneTimelines?.beats,
       autoplay: this.options.mode === 'auto',
+      reversal: this.tempoReversal,
     });
     // Marker layer goes ON the same container as notes — insertion order makes markers paint
     // first, then notes paint on top. Authors expect this so a falling note can visually cross
@@ -793,6 +798,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       scrollMapper: this.scrollMapper,
       timelineBeats: this.laneTimelines?.beats,
       autoplay: this.options.mode === 'auto',
+      reversal: this.tempoReversal,
     });
     this.markerLayer = new BeatorajaMarkerLayer({
       group: noteSection.group,
@@ -1060,6 +1066,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       const placement = resolveBeatorajaScrollPlacement({
         currentBeat,
         nowSeconds: this.currentFrame.currentSeconds,
+        reversal: this.tempoReversal,
         mapper: this.scrollMapper,
         laneBeats: pixelsPerBeat > 0 ? laneHeightPixi / pixelsPerBeat : 0,
         timelineBeats: this.laneTimelines?.beats,

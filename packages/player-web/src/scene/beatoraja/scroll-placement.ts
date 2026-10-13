@@ -3,7 +3,13 @@
 // `#SPEED` (bmson `scroll_events` included) draws by beatoraja's `LaneRenderer` rules, so SCROLL gimmicks show up as they
 // do in beatoraja; every other chart draws by LR2's, as in the other skins — a skin is a display choice, not a ruleset.
 
-import { createBeatResolver, createScrollTimeline, createSpeedTimeline, resolveChart } from '@be-music/chart';
+import {
+  createBeatResolver,
+  createScrollTimeline,
+  createSpeedTimeline,
+  resolveChart,
+  type TempoReversalPoint,
+} from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { createScrollDistanceMapper, type ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import {
@@ -11,6 +17,7 @@ import {
   collectResolvedLaneTimelineBeats,
   resolveNoteDrawRules,
   resolveNoteDrawWindow,
+  resolveReversedDrawClock,
   type NoteDrawWindow,
 } from '../core/note-draw-window.ts';
 
@@ -39,9 +46,12 @@ export function createBeatorajaLaneTimelines(chart: BeMusicJson): BeatorajaLaneT
 }
 
 export interface BeatorajaScrollPlacementInput {
+  /** The beat the lane scrolls from: the mirrored display beat past an LR2 negative-BPM reversal. */
   currentBeat: number;
   /** Chart time of the playhead, in seconds. */
   nowSeconds: number;
+  /** The chart's LR2 negative-BPM reversal, if any ({@link resolveReversedDrawClock}). */
+  reversal?: TempoReversalPoint;
   mapper: ScrollDistanceMapperLike | undefined;
   /** The lane's height in beats of scroll distance (lane pixels over pixels per beat). */
   laneBeats: number;
@@ -59,11 +69,13 @@ export interface BeatorajaScrollPlacement {
 }
 
 export function resolveBeatorajaScrollPlacement(input: BeatorajaScrollPlacementInput): BeatorajaScrollPlacement {
-  const { currentBeat, nowSeconds, mapper, laneBeats, timelineBeats, stageBottomY } = input;
+  const { currentBeat, nowSeconds, reversal, mapper, laneBeats, timelineBeats, stageBottomY } = input;
+  const clock = resolveReversedDrawClock(reversal, nowSeconds, currentBeat);
   const window = resolveNoteDrawWindow({
     rules: resolveNoteDrawRules(mapper !== undefined),
     currentBeat,
-    nowSeconds,
+    nowSeconds: clock.nowSeconds,
+    reachedBeat: clock.reachedBeat,
     mapper,
     laneBeats,
     timelineBeats,

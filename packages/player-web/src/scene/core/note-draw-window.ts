@@ -1,4 +1,4 @@
-import type { ResolvedChart, ScrollTimelinePoint, SpeedTimelinePoint } from '@be-music/chart';
+import type { ResolvedChart, ScrollTimelinePoint, SpeedTimelinePoint, TempoReversalPoint } from '@be-music/chart';
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 
 /**
@@ -45,6 +45,11 @@ export interface NoteDrawWindow {
   currentBeat: number;
   /** Chart time of the playhead, in seconds. */
   nowSeconds: number;
+  /**
+   * The furthest beat the playhead has reached. It is `currentBeat` except past an LR2 negative-BPM reversal, where the
+   * mirrored playhead runs back while what it passed stays passed ({@link resolveReversedDrawClock}).
+   */
+  reachedBeat: number;
   /** The walk over the beat-sorted notes, mines and bar lines stops past this beat. */
   lastBeat: number;
   /** Bottom edge of the stage, in the lanes' coordinates (y grows downward). */
@@ -55,6 +60,8 @@ export interface NoteDrawWindowInput {
   rules: NoteDrawRules;
   currentBeat: number;
   nowSeconds: number;
+  /** The furthest beat the playhead has reached ({@link NoteDrawWindow.reachedBeat}). Omitted: `currentBeat`. */
+  reachedBeat?: number;
   /**
    * The `#SCROLL` / `#SPEED` distance integrator, when the chart has either. One without `firstBeatBeyondDistance`
    * gives the walk no early exit.
@@ -74,7 +81,17 @@ export interface NoteDrawWindowInput {
 }
 
 export function resolveNoteDrawWindow(input: NoteDrawWindowInput): NoteDrawWindow {
-  const { rules, currentBeat, nowSeconds, mapper, laneBeats, overscanBeats, timelineBeats, stageBottomY = 0 } = input;
+  const {
+    rules,
+    currentBeat,
+    nowSeconds,
+    reachedBeat = currentBeat,
+    mapper,
+    laneBeats,
+    overscanBeats,
+    timelineBeats,
+    stageBottomY = 0,
+  } = input;
   let lastBeat: number;
   if (rules === 'beatoraja') {
     // `LaneRenderer` draws each timeline and then checks `y <= hu`, so the loop stops after drawing the first timeline
@@ -87,7 +104,61 @@ export function resolveNoteDrawWindow(input: NoteDrawWindowInput): NoteDrawWindo
   } else {
     lastBeat = mapper ? Number.POSITIVE_INFINITY : currentBeat + laneBeats + overscanBeats;
   }
-  return { rules, currentBeat, nowSeconds, lastBeat, stageBottomY };
+  return { rules, currentBeat, nowSeconds, reachedBeat, lastBeat, stageBottomY };
+}
+
+/** The playhead a frame draws from ({@link resolveReversedDrawClock}). */
+export interface ReversedDrawClock {
+  /** Chart time the drawing rules compare object times against, in seconds. */
+  nowSeconds: number;
+  /** The furthest beat the playhead has reached. */
+  reachedBeat: number;
+}
+
+/**
+ * The draw clock past an LR2 negative-BPM reversal, for a frame at chart time `nowSeconds` whose (mirrored) display
+ * beat is `displayBeat`. Before the reversal, or without one, it is the frame's own. Past it the scroll runs back from
+ * the reversal while the judge clock reads `2R − now` (`toJudgeClock`), so an object's time is compared with that
+ * mirrored clock, and the furthest beat reached stays the reversal's: an object the playhead passed before the
+ * reversal does not come back as the scroll recedes, as LR2's `draw_count` never moves back.
+ */
+export function resolveReversedDrawClock(
+  reversal: TempoReversalPoint | undefined,
+  nowSeconds: number,
+  displayBeat: number,
+): ReversedDrawClock {
+  if (reversal === undefined || nowSeconds <= reversal.seconds) {
+    return { nowSeconds, reachedBeat: displayBeat };
+  }
+  return { nowSeconds: 2 * reversal.seconds - nowSeconds, reachedBeat: reversal.beat };
+}
+
+/**
+ * LR2's `draw_count` per object: once a note or mine has gone under LR2's rules ({@link isDrawnUntilJudged}) it stays
+ * gone. Without a negative-BPM reversal the playhead only moves forward, so the per-frame test already never brings an
+ * object back; past one the mirrored playhead runs back over objects that went before it, and LR2 does not draw them
+ * again. {@link sync} starts over when the playhead's chart time moves back (a restart or a seek), not when the
+ * reversal mirrors the scroll.
+ */
+export class GoneDrawObjects {
+  private gone = new WeakSet<JudgedDrawObject>();
+  private seconds = Number.NEGATIVE_INFINITY;
+
+  /** Forgets every gone object when `nowSeconds` (the true chart time, not a mirrored one) moves back. */
+  sync(nowSeconds: number): void {
+    if (nowSeconds < this.seconds) {
+      this.gone = new WeakSet();
+    }
+    this.seconds = nowSeconds;
+  }
+
+  /** Whether `object` has gone by this frame or an earlier one. */
+  isGone(window: NoteDrawWindow, object: JudgedDrawObject, autoplayed: boolean): boolean {
+    if (this.gone.has(object)) return true;
+    if (isDrawnUntilJudged(window, object, autoplayed)) return false;
+    this.gone.add(object);
+    return true;
+  }
 }
 
 /**
