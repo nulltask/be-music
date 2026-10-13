@@ -55,7 +55,7 @@ pnpm run release:version
 
 - Normal feature PR adds `.changeset/*.md` for the changed package
 - When you want to release, run `pnpm run release:version` on `devel` and commit the generated `packages/*/package.json` and `packages/*/CHANGELOG.md` updates together.
-- In that state, if you merge the release PR of `devel -> main`, a separate GitHub Release will be created only for the package whose version has increased.
+- In that state, merging the release PR of `devel -> main` creates a separate GitHub Release for each public package whose version has increased (private packages such as the player demo and the Leaderboard get none).
 - The player SEA executable is built from `@be-music/player-tui` and attached to the `@be-music/player-tui` release; `@be-music/audio-renderer` also ships a SEA zip
 - The private repository root `package.json` stays at `0.0.0`; releasable versions are tracked in `packages/*/package.json`.
 
