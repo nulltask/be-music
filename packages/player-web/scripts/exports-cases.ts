@@ -572,6 +572,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolvePlaylogFilename(BENCH_PLAYLOG);
     },
   });
+  define('player-web.checkPlaylogEligibility', {
+    run: () => {
+      playerWebCoreApi.checkPlaylogEligibility(BENCH_PLAYLOG);
+    },
+  });
   define('player-web.serializePlaylog', {
     run: () => {
       playerWebCoreApi.serializePlaylog(BENCH_PLAYLOG);
