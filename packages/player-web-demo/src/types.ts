@@ -117,10 +117,11 @@ export interface DemoGuiState {
   /**
    * Single-note visibility after a judgement lands.
    *
-   * - `'HIDE'` (default) — judged notes disappear at the judgement instant, matching the LR2 / beatoraja default.
-   * - `'KEEP_SCROLLING'` — judged notes keep scrolling past the judgement line (≈ beatoraja's `LANEEFFECT ON`).
+   * - `'KEEP_SCROLLING'` (default) — a judged note stays until its own time, so one hit early keeps scrolling down to
+   *   the judgement line, as in LR2 and beatoraja.
+   * - `'HIDE'` — a judged note disappears the moment it is judged.
    *
-   * Long-note bodies are unaffected — they always persist until the tail crosses the line.
+   * Long notes are unaffected — they stay until their end.
    */
   judgedNoteDisplay: 'KEEP_SCROLLING' | 'HIDE';
   /**

@@ -624,14 +624,13 @@ export interface CoreGameplayViewOptions {
   /**
    * Single-note visibility after judgement.
    *
-   * - `'HIDE'` (default) — judged notes vanish at the judgement instant. Matches the LR2 / beatoraja default behavior
-   *   and keeps the playfield visually clean during dense passages.
-   * - `'KEEP_SCROLLING'` — judged notes stay on screen and keep scrolling until their position crosses the judgement
-   *   line. Equivalent to beatoraja's `LANEEFFECT ON` mode; useful as a timing-learning aid because the player can see
-   *   *where* a press landed relative to the line.
+   * - `'KEEP_SCROLLING'` (default) — a judged note stays on screen until its own time: one hit early keeps scrolling
+   *   down to the judgement line and goes when it reaches it. This is what LR2 (`DrawNotes` draws a hit note until the
+   *   playhead reaches it) and beatoraja (`LaneRenderer` draws a note while its time is ahead, judged or not) both do.
+   * - `'HIDE'` — a judged note goes the moment it is judged, which neither player does; kept as a preference for a
+   *   cleaner playfield in dense passages.
    *
-   * Only single notes are gated. Long-note bodies are always positionally clipped (the body persists until the tail
-   * passes the line regardless of head-hit state) so this option doesn't disturb LN visuals.
+   * Only tap notes are gated. Long notes stay until their end either way, so this option doesn't disturb them.
    */
   judgedNoteDisplay?: 'KEEP_SCROLLING' | 'HIDE';
 }
@@ -4395,7 +4394,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const cursor = drawWindow.rules === 'lr2' ? this.advanceDrawCursor(drawWindow) : undefined;
     const firstNoteIndex =
       cursor?.note ?? findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
-    const hideJudgedNotes = this.options.judgedNoteDisplay !== 'KEEP_SCROLLING';
+    const hideJudgedNotes = this.options.judgedNoteDisplay === 'HIDE';
     for (let noteIndex = firstNoteIndex; noteIndex < this.notes.length; noteIndex += 1) {
       const note = this.notes[noteIndex]!;
       if (isPastDrawWindow(drawWindow, note.beat)) {
@@ -4449,8 +4448,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // Read the engine's `judged` flag directly off the shared `TimedPlayableNote` instance — the engine
       // mutates it the moment it resolves the note's verdict, and because the renderer and the engine
       // hold the same array (handed in via `engineOptions.preparedChart`), there is no parallel `hit` flag
-      // to keep in sync. HIDE-on-judge mode uses this to clip the note immediately at the judgment moment;
-      // KEEP_SCROLLING leaves it on screen until its time.
+      // to keep in sync. `judgedNoteDisplay: 'HIDE'` drops a judged note at once; by default (as in LR2 and
+      // beatoraja) it stays until its time.
       if (note.judged && hideJudgedNotes) {
         continue;
       }
