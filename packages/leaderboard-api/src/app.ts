@@ -6,10 +6,13 @@ import { bmsSearchLookup, type ChartsetLookup } from './chartsets/refresh.ts';
 import { openDatabase, type Database } from './db/client.ts';
 import type { Env } from './env.ts';
 import { mountPages } from './pages/routes.tsx';
+import type { Viewer } from './pages/viewer.ts';
 
 interface Variables {
   db: Database;
   userId: string | undefined;
+  /** The signed-in player on the pages (src/pages/viewer.ts); null when signed out. */
+  viewer: Viewer | null;
 }
 
 export type AppEnv = { Bindings: Env; Variables: Variables };
