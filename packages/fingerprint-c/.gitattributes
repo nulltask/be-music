@@ -1,0 +1,2 @@
+# Test vectors are compared byte for byte: keep LF line endings on every platform.
+tests/vectors/*.txt text eol=lf

@@ -92,6 +92,8 @@ static char *read_line(FILE *stream) {
     free(line);
     return NULL;
   }
+  /* A checkout with CRLF line endings must read the same. */
+  if (length > 0 && line[length - 1] == '\r') length--;
   line[length] = '\0';
   return line;
 }
