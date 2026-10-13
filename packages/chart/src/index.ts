@@ -105,6 +105,7 @@ export { isInvisibleNoteChannel, type ResolvedNote, type ResolvedNoteKind } from
 export {
   canonicalizeFingerprintDocument,
   computeChartFingerprint,
+  computeFingerprintOfDocument,
   computePlayFingerprint,
   createChartFingerprintDocument,
   createPlayFingerprintDocument,
