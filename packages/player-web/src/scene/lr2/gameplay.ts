@@ -1341,7 +1341,8 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         this.currentSeconds(),
         this.displayedScore,
         this.fps,
-        this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
+        // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) — see `nowBpm`.
+        this.nowBpm(this.currentSeconds()),
         this.resolveSongDurationSeconds(),
         this.maxCombo,
       );

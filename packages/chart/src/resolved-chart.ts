@@ -35,7 +35,12 @@ import {
   type ScrollTimelinePoint,
   type SpeedTimelinePoint,
 } from './timelines.ts';
-import { createTimingBuildContext, createTimingResolverWithContext, type TimingResolver } from './timing.ts';
+import {
+  createTimingBuildContext,
+  createTimingResolverWithContext,
+  type TempoReversalPoint,
+  type TimingResolver,
+} from './timing.ts';
 
 export interface ResolveChartOptions {
   /**
@@ -114,6 +119,11 @@ export interface ResolvedChart {
   readonly beatResolver: BeatResolver;
   /** The tempo map: BPM points, STOP / `#STP` points, beat → seconds. */
   readonly timing: TimingResolver;
+  /**
+   * The LR2 negative-BPM reversal (`timing.reversal`): where the first negative `#BPMxx` arms the reverse scroll and
+   * the event pump freezes. Absent when the chart has none. See docs/bms-spec.md "Negative BPM".
+   */
+  readonly reversal: TempoReversalPoint | undefined;
   /** The source events in chart order (`sortEvents`). */
   readonly sortedEvents: ReadonlyArray<BeMusicEvent>;
   /** Judged notes (`tap` / `ln`), one per lane and position. */
@@ -163,6 +173,7 @@ class LazyResolvedChart implements ResolvedChart {
   readonly beatResolver: BeatResolver;
   readonly sortedEvents: ReadonlyArray<BeMusicEvent>;
   readonly timing: TimingResolver;
+  readonly reversal: TempoReversalPoint | undefined;
   private readonly playVariantInput: ChartPlayVariant | undefined;
   private readonly chartPath: string | undefined;
   private playVariantCache: ChartPlayVariant | undefined;
@@ -190,6 +201,7 @@ class LazyResolvedChart implements ResolvedChart {
     this.beatResolver = context.beatResolver;
     this.sortedEvents = context.sortedEvents;
     this.timing = createTimingResolverWithContext(chart, context);
+    this.reversal = this.timing.reversal;
   }
 
   get playVariant(): ChartPlayVariant {

@@ -87,6 +87,8 @@ export function createInitialPlayerSummary(
   summary: PlayerSummary;
   applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
   applyGaugeDelta: (delta: number) => void;
+  /** Empties the gauge for good (LR2's `HP = 0` on leaving a reversed play with notes outstanding). */
+  drainGaugeToZero: () => void;
 } {
   const gauge = new RulesetGauge(ruleset.gauge);
   const gaugeSummary: PlayerGrooveGaugeSummary = {
@@ -131,6 +133,10 @@ export function createInitialPlayerSummary(
       // Raw deltas (mine damage) bypass the per-judge table, the guts softening, and the TOTAL modifier — every
       // ruleset specifies mine damage directly as a gauge percentage — but still kill a survival gauge that bottoms out.
       gauge.applyRawDelta(delta);
+      syncGaugeSummary();
+    },
+    drainGaugeToZero: (): void => {
+      gauge.drainToZero();
       syncGaugeSummary();
     },
   };

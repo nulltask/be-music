@@ -17,6 +17,7 @@ import {
   toUiLongNoteMode,
   type PendingAutoLongNoteState,
 } from './judge-rules.ts';
+import { clampToReversal } from './judge-core-score.ts';
 import { applyJudgeToSummary } from './scoring.ts';
 
 /**
@@ -37,6 +38,12 @@ export interface AutoJudgeConfig {
   invisibleNotes: TimedPlayableNote[];
   /** Lane channel → key label, for the trace's `key` field. */
   keyLabels: ReadonlyMap<string, string>;
+  /**
+   * Chart second of the LR2 negative-BPM reversal, when the chart has one (see `JudgeCoreConfig.reversalSeconds`).
+   * AUTO play freezes there the same way: nothing at or past it is judged, and a play that ends with notes
+   * outstanding empties the gauge.
+   */
+  reversalSeconds?: number;
 }
 
 export interface AutoJudgeState {
@@ -44,6 +51,7 @@ export interface AutoJudgeState {
   readonly summary: JudgeCoreScore['summary'];
   readonly scoreTracker: JudgeCoreScore['scoreTracker'];
   readonly applyGaugeJudge: JudgeCoreScore['applyGaugeJudge'];
+  readonly drainGaugeToZero: JudgeCoreScore['drainGaugeToZero'];
   combo: number;
   /** Notes up to this index have been judged. */
   judgeCursor: number;
@@ -69,6 +77,7 @@ export function createAutoJudgeState(
     summary: score.summary,
     scoreTracker: score.scoreTracker,
     applyGaugeJudge: score.applyGaugeJudge,
+    drainGaugeToZero: score.drainGaugeToZero,
     combo: 0,
     judgeCursor: 0,
     landmineExpireCursor: 0,
@@ -80,18 +89,19 @@ export function createAutoJudgeState(
 /** Applies one input, delivering the effects to `emit` in the order they happen. */
 export function runAutoJudgeStep(state: AutoJudgeState, input: AutoJudgeInput, emit: JudgeCoreEffectSink): void {
   switch (input.kind) {
+    // Judging is clamped below an LR2 negative-BPM reversal: AUTO play freezes with the pump there too (#134).
     case 'reach':
-      applyDueJudgements(state, input.nowSec, emit);
+      applyDueJudgements(state, clampToReversal(state.config, input.nowSec), emit);
       return;
     case 'advance':
-      applyDueJudgements(state, input.nowSec, emit);
-      drainPendingLongNotes(state, input.nowSec, emit);
-      markExpiredLandmines(state, input.nowSec);
+      applyDueJudgements(state, clampToReversal(state.config, input.nowSec), emit);
+      drainPendingLongNotes(state, clampToReversal(state.config, input.nowSec), emit);
+      markExpiredLandmines(state, clampToReversal(state.config, input.nowSec));
       markExpiredInvisibleNotes(state, input.nowSec);
       return;
     case 'finish': {
       const horizon = input.totalSeconds + autoBadWindowSeconds(state.config);
-      drainPendingLongNotes(state, input.totalSeconds, emit);
+      drainPendingLongNotes(state, clampToReversal(state.config, input.totalSeconds), emit);
       markExpiredLandmines(state, horizon);
       markExpiredInvisibleNotes(state, horizon);
       for (const landmine of state.config.landmineNotes) {
@@ -99,6 +109,23 @@ export function runAutoJudgeStep(state: AutoJudgeState, input: AutoJudgeInput, e
       }
       for (const invisible of state.config.invisibleNotes) {
         invisible.judged = true;
+      }
+      if (
+        state.config.reversalSeconds !== undefined &&
+        (state.judgeCursor < state.config.scorableNotes.length || state.pendingLongNotes.length > 0)
+      ) {
+        // LR2 zeroes HP when a play ends with notes outstanding (OpenLR2 `LR2f.cpp:12980-12982`), AUTO included: the
+        // notes past a negative-BPM reversal were never reached, so the run is FAILED.
+        state.drainGaugeToZero();
+        emit({
+          kind: 'trace',
+          name: 'gauge',
+          seconds: input.totalSeconds,
+          fields: [
+            ['value', 0],
+            ['reason', 'notes-outstanding-past-reversal'],
+          ],
+        });
       }
       return;
     }

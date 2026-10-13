@@ -177,6 +177,24 @@ describe('timeline', () => {
     expect(createBpmTimeline(createEmptyJson('bms'), emptyResolver)).toEqual([{ bpm: 130, seconds: 0 }]);
   });
 
+  test('createBpmTimeline shows negative #BPMxx as |trunc(BPM)| (LR2 NOWBPM)', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm['02'] = -65.5;
+    json.resources.bpm['03'] = -0.5;
+    json.events = [
+      { measure: 1, channel: '08', position: [0, 1], value: '02' },
+      { measure: 2, channel: '08', position: [0, 1], value: '03' },
+    ];
+
+    // Timing still runs at the full |BPM| (measure 1 lasts 240 / 65.5 s); only the readout truncates.
+    expect(createBpmTimeline(json, createTimingResolver(json))).toEqual([
+      { bpm: 120, seconds: 0 },
+      { bpm: 65, seconds: 2 },
+      { bpm: 0, seconds: expect.closeTo(2 + 240 / 65.5, 9) },
+    ]);
+  });
+
   test('createScrollTimeline and createSpeedTimeline ignore missing, invalid, and negative values', () => {
     const json = createEmptyJson('bms');
     json.bms.scroll['01'] = 1.5;

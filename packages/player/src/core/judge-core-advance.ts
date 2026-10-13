@@ -21,6 +21,7 @@ import {
   applyResolvedManualJudge,
   applyTailMissPoor,
   badWindowSeconds,
+  clampToReversal,
   judgeWindowsFor,
   markInvisibleJudged,
   markLandmineJudged,
@@ -28,6 +29,7 @@ import {
   noteOwesTailMiss,
   resolveMissDeadlineSeconds,
   setCombo,
+  toJudgeClock,
   windowTablesAt,
 } from './judge-core-score.ts';
 import {
@@ -142,6 +144,7 @@ export function processLandminePassage(
 ): void {
   const { config } = state;
   const landmineNotes = config.landmineNotes;
+  const reversalSeconds = config.reversalSeconds;
   // Reach form keeps the early / late legs separate — nothing guarantees a ruleset's window table is symmetric.
   const [pgreatLateUs, pgreatEarlyUs] = pgreatWindowReachUs(windowTablesAt(config, nowSec).note);
   const pressDetonates = config.ruleset.mineTrigger === 'press-or-hold';
@@ -153,6 +156,10 @@ export function processLandminePassage(
     if (landmine.judged) {
       state.landmineExpireCursor += 1;
       continue;
+    }
+    if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
+      // Mines at or behind the LR2 reversal are frozen with the pump (#134) — they neither detonate nor retire.
+      break;
     }
     // Settled only once time has moved past the crossing (`<=` under the hold rule), so an input at the crossing's
     // very instant is in, whichever order the driver applies it and the advance to that instant.
@@ -174,9 +181,18 @@ export function processLandminePassage(
   if (!pressDetonates) {
     return;
   }
+  if (reversalSeconds !== undefined && nowSec >= reversalSeconds) {
+    // The press leg is dead past the reversal (#134). The crossing sweep above still ran so a PRE-reversal crossing
+    // whose PGREAT window closed on the far side of the reversal is not silently dropped.
+    return;
+  }
   for (let index = state.landmineExpireCursor; index < landmineNotes.length; index += 1) {
     const landmine = landmineNotes[index]!;
     if (landmine.seconds - nowSec > pgreatEarlySeconds) {
+      break;
+    }
+    if (reversalSeconds !== undefined && landmine.seconds >= reversalSeconds) {
+      // The early reach must not detonate mines positioned behind the reversal (#134).
       break;
     }
     if (landmine.judged) {
@@ -461,13 +477,19 @@ export function advanceJudgeState(
     state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_REPEAT_HOLD_GRACE_MS);
   }
 
+  // Holds are judged on the judge clock: past an LR2 reversal it is the mirrored `t' = 2R - now`, which never reaches
+  // a tail beyond R — a hold spanning the reversal stays open while held and BADs on release, as in LR2
+  // (`LR2f.cpp:7613-7616`). Judgments, logs and UI cues keep the true clock.
+  const judgeSec = toJudgeClock(config, nowSec);
   for (const [channel, hold] of state.activeLongNotes.entries()) {
     const holdUntilMs = state.longHoldUntilMs.get(channel);
     const isHolding = holdUntilMs !== undefined && nowMs <= holdUntilMs;
     // The tail is judged against the release instant when there was one — a frame can be hundreds of chart
     // milliseconds wide at high `speed`, and quantizing to it would turn a clean release into a GOOD.
     const releaseSeconds = state.longHoldReleaseSeconds.get(channel);
-    const tailJudgeSeconds = releaseSeconds ?? nowSec;
+    const tailJudgeSeconds = releaseSeconds === undefined ? judgeSec : toJudgeClock(config, releaseSeconds);
+    // When the tail resolves on the true clock (the release instant, or this step).
+    const tailAtSeconds = releaseSeconds ?? nowSec;
     if (hold.mode === 1 && holdUntilMs !== undefined && nowMs > holdUntilMs && tailJudgeSeconds < hold.endSeconds) {
       if (!hold.audioStopped) {
         stopLongNoteSound(hold, channel, nowSec, 'release', emit);
@@ -476,13 +498,13 @@ export function advanceJudgeState(
         state,
         channel,
         { kind: 'BAD', signedDeltaMs: (tailJudgeSeconds - hold.endSeconds) * 1000 },
-        tailJudgeSeconds,
+        tailAtSeconds,
         emit,
       );
       continue;
     }
     if (hold.mode === 3) {
-      const accumulateUntilSeconds = Math.min(nowSec, hold.endSeconds);
+      const accumulateUntilSeconds = Math.min(judgeSec, hold.endSeconds);
       if (accumulateUntilSeconds > hold.gaugeDrainCursorSeconds) {
         const elapsedSeconds = accumulateUntilSeconds - hold.gaugeDrainCursorSeconds;
         if (isHolding) {
@@ -499,11 +521,12 @@ export function advanceJudgeState(
       }
     }
 
-    if (nowSec >= hold.endSeconds) {
+    if (judgeSec >= hold.endSeconds) {
       if (
         isChargeLongNoteMode(hold.mode) &&
         isHolding &&
-        nowSec < hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(config, channel, hold.endSeconds, true)) / 1e6
+        judgeSec <
+          hold.endSeconds + judgeWindowLateReachUs(judgeWindowsFor(config, channel, hold.endSeconds, true)) / 1e6
       ) {
         // Charge modes judge the tail on the RELEASE. Still holding past the tail is not yet a judgment — the player
         // has until the tail's late window closes to let go, exactly as the play-log simulator models it.
@@ -547,7 +570,7 @@ export function advanceJudgeState(
       });
       const finalJudge =
         hold.mode === 3 && !isHolding && releaseSeconds === undefined
-          ? resolveLongNoteTailJudge(hold, { kind: 'POOR', signedDeltaMs: (nowSec - hold.endSeconds) * 1000 })
+          ? resolveLongNoteTailJudge(hold, { kind: 'POOR', signedDeltaMs: (judgeSec - hold.endSeconds) * 1000 })
           : resolveLongNoteTailJudge(
               hold,
               resolveManualTimedJudge(
@@ -555,7 +578,7 @@ export function advanceJudgeState(
                 judgeWindowsFor(config, channel, hold.endSeconds, true),
               ),
             );
-      finalizeActiveLongNote(state, channel, finalJudge, tailJudgeSeconds, emit);
+      finalizeActiveLongNote(state, channel, finalJudge, tailAtSeconds, emit);
       continue;
     }
 
@@ -573,21 +596,23 @@ export function advanceJudgeState(
             judgeWindowsFor(config, channel, hold.endSeconds, true),
           ),
         ),
-        tailJudgeSeconds,
+        tailAtSeconds,
         emit,
       );
     }
   }
 
-  drainPendingAutoScratchLongNotes(state, nowSec, emit);
+  drainPendingAutoScratchLongNotes(state, clampToReversal(config, nowSec), emit);
   for (const [channel, suppressUntil] of state.longNoteSuppressUntilSeconds.entries()) {
     if (nowSec >= suppressUntil) {
       state.longNoteSuppressUntilSeconds.delete(channel);
     }
   }
 
-  applyAutoScratchJudgements(state, nowSec, emit);
-  applyExpiredScorableJudgements(state, nowSec, emit);
+  // Clamped to the reversal: notes whose miss deadline falls before it are still missed on time, while everything past
+  // it stays unjudged forever — matching LR2's frozen judge pump.
+  applyAutoScratchJudgements(state, clampToReversal(config, nowSec), emit);
+  applyExpiredScorableJudgements(state, clampToReversal(config, nowSec), emit);
 
   processLandminePassage(state, nowSec, nowMs, emit);
   markExpiredInvisibleNotes(state, nowSec);
@@ -599,28 +624,71 @@ export function advanceJudgeState(
  * denominator, and under IIDX a missed charge note owes only ONE judgment even though it counts for two.
  */
 export function finishJudgeState(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
-  const { ruleset } = state.config;
+  const { config } = state;
+  const { ruleset, reversalSeconds } = config;
   let missingCount = 0;
-  for (const note of state.config.scorableNotes) {
+  // Notes the LR2 negative-BPM reversal left unreachable (#134). LR2 never misses them — its mirrored judge clock
+  // recedes before their deadline — and zeroes HP when the play ends with them outstanding.
+  let outstandingPastReversal = false;
+  for (const note of config.scorableNotes) {
     if (note.judged) {
       continue;
     }
     note.judged = true;
+    if (reversalSeconds !== undefined && note.seconds + resolveMissDeadlineSeconds(config, note) >= reversalSeconds) {
+      outstandingPastReversal = true;
+      continue;
+    }
     missingCount += 1;
     if (noteOwesTailMiss(ruleset, note)) {
       missingCount += 1;
     }
   }
   for (const hold of state.activeLongNotes.values()) {
+    if (reversalSeconds !== undefined) {
+      // A hold still open at the end of a reversed run spans the reversal: the mirrored clock never reaches its tail,
+      // so LR2 never judges it.
+      outstandingPastReversal = true;
+      continue;
+    }
     // The head already scored; only the unresolved tail is outstanding.
     if (hold.headScored) {
       missingCount += 1;
     }
   }
   state.activeLongNotes.clear();
-  if (missingCount === 0) {
-    return;
+  if (missingCount > 0) {
+    chargeRemainingNotes(state, totalSeconds, missingCount, emit);
   }
+  if (outstandingPastReversal) {
+    // LR2 sets HP = 0 when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`, LR2body.exe 0x42c525), so
+    // a reversed run that leaves notes behind is always FAILED. be-music still ends the song at its precomputed end
+    // instead of waiting for ESC (documented deviation), but reports the same result.
+    drainGaugeAtReversalEnd(state, totalSeconds, emit);
+  }
+}
+
+/** Empties the gauge at the end of a reversed run with notes outstanding (see {@link finishJudgeState}). */
+function drainGaugeAtReversalEnd(state: JudgeCoreState, totalSeconds: number, emit: JudgeCoreEffectSink): void {
+  state.drainGaugeToZero();
+  emit({
+    kind: 'trace',
+    name: 'gauge',
+    seconds: totalSeconds,
+    fields: [
+      ['value', 0],
+      ['reason', 'notes-outstanding-past-reversal'],
+    ],
+  });
+  emit({ kind: 'frame', seconds: totalSeconds });
+}
+
+function chargeRemainingNotes(
+  state: JudgeCoreState,
+  totalSeconds: number,
+  missingCount: number,
+  emit: JudgeCoreEffectSink,
+): void {
   for (let index = 0; index < missingCount; index += 1) {
     applyJudgeToSummary(state.summary, 'POOR', state.scoreTracker);
     applyGaugeJudge(state, totalSeconds, 'POOR', emit, 'remaining-notes');

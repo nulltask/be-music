@@ -164,7 +164,8 @@ export class BeatorajaMarkerLayer {
     const drawBottom = window ? resolveDrawBottom(window, args.judgementY) : args.judgementY;
     // Under LR2's rules a marker goes once the playhead has passed it; a pixel of slack keeps the one just crossed for a
     // frame, on the line.
-    const passedBeat = args.currentBeat - 1 / Math.max(1, args.pixelsPerBeat);
+    // Past an LR2 negative-BPM reversal one the playhead passed before it stays gone as the scroll runs back.
+    const passedBeat = (window?.reachedBeat ?? args.currentBeat) - 1 / Math.max(1, args.pixelsPerBeat);
     let used = 0;
     const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number> }> = [
       { kind: this.kindData.group, beats: args.markers.group },

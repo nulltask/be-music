@@ -41,8 +41,11 @@ export {
   createTimingBuildContext,
   createTimingResolver,
   createTimingResolverWithContext,
+  firesBeforeTempoReversal,
+  mirrorBeatAtTempoReversal,
   type StopPoint,
   type TempoPoint,
+  type TempoReversalPoint,
   type TimingBuildContext,
   type TimingResolver,
 } from './timing.ts';

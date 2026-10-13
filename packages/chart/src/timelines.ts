@@ -58,15 +58,17 @@ export function createBpmTimeline(json: BeMusicJson, resolver: TimingResolver): 
     if (!Number.isFinite(seconds) || !Number.isFinite(point.bpm) || point.bpm <= 0) {
       continue;
     }
-    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(point.bpm - previousBpm) < 1e-6) {
+    // The readout value: a negative `#BPMxx` shows as |trunc(BPM)| the way LR2's NOWBPM does.
+    const bpm = point.displayBpm ?? point.bpm;
+    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(bpm - previousBpm) < 1e-6) {
       continue;
     }
     timeline.push({
-      bpm: point.bpm,
+      bpm,
       seconds,
     });
     previousSeconds = seconds;
-    previousBpm = point.bpm;
+    previousBpm = bpm;
   }
 
   if (timeline.length === 0) {

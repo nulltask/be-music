@@ -6,6 +6,7 @@ import {
   collectLaneTimelineBeats,
   collectResolvedLaneTimelineBeats,
   firstBeatAfter,
+  GoneDrawObjects,
   isDrawnAtTime,
   isDrawnUntilJudged,
   isLongNoteDrawnAtTime,
@@ -16,6 +17,7 @@ import {
   resolveLongNoteAlpha,
   resolveNoteDrawRules,
   resolveNoteDrawWindow,
+  resolveReversedDrawClock,
 } from './note-draw-window.ts';
 
 // A gimmick-chart shape: plain scroll, then a negative #SCROLL that pulls the chart back down, a frozen stretch with
@@ -316,5 +318,57 @@ describe('advanceDrawCursor', () => {
     expect(advanceDrawCursor([1, 2, 3, 4], 3, gone)).toBe(3);
     expect(advanceDrawCursor([1, 2], 0, gone)).toBe(2);
     expect(advanceDrawCursor([], 0, gone)).toBe(0);
+  });
+});
+
+describe('resolveReversedDrawClock (LR2 negative-BPM reversal)', () => {
+  const reversal = { beat: 16, seconds: 8 };
+
+  it('is the frame itself without a reversal or before it', () => {
+    expect(resolveReversedDrawClock(undefined, 12, 24)).toEqual({ nowSeconds: 12, reachedBeat: 24 });
+    expect(resolveReversedDrawClock(reversal, 8, 16)).toEqual({ nowSeconds: 8, reachedBeat: 16 });
+  });
+
+  it('past the reversal reads the mirrored judge clock and keeps the reversal as the furthest beat reached', () => {
+    // 1 s past the reversal the scroll has run back to beat 14.
+    expect(resolveReversedDrawClock(reversal, 9, 14)).toEqual({ nowSeconds: 7, reachedBeat: 16 });
+  });
+
+  it('feeds the draw window, whose furthest beat reached defaults to the playhead', () => {
+    const base = { rules: 'lr2' as const, laneBeats: 4, overscanBeats: 1 };
+    expect(resolveNoteDrawWindow({ ...base, currentBeat: 14, nowSeconds: 9 }).reachedBeat).toBe(14);
+    const clock = resolveReversedDrawClock(reversal, 9, 14);
+    const window = resolveNoteDrawWindow({ ...base, currentBeat: 14, ...clock });
+    expect(window).toMatchObject({ currentBeat: 14, nowSeconds: 7, reachedBeat: 16 });
+  });
+});
+
+describe('GoneDrawObjects', () => {
+  const lr2 = (currentBeat: number) =>
+    resolveNoteDrawWindow({ rules: 'lr2', currentBeat, nowSeconds: 0, laneBeats: 4, overscanBeats: 1 });
+
+  it('keeps a note gone once the playhead passed it judged, as the mirrored scroll runs back over it', () => {
+    const gone = new GoneDrawObjects();
+    const passed = { beat: 15, judged: true };
+    const late = { beat: 15.5, judged: false };
+    gone.sync(8);
+    expect(gone.isGone(lr2(16), passed, false)).toBe(true);
+    expect(gone.isGone(lr2(16), late, false)).toBe(false);
+    // Past the reversal the display beat runs back to 14: the passed note stays gone (LR2's `draw_count`), while the
+    // note still unjudged at the reversal draws again above the line.
+    gone.sync(9);
+    expect(isDrawnUntilJudged(lr2(14), passed, false)).toBe(true);
+    expect(gone.isGone(lr2(14), passed, false)).toBe(true);
+    expect(gone.isGone(lr2(14), late, false)).toBe(false);
+  });
+
+  it('starts over when the chart time moves back (a restart or a seek)', () => {
+    const gone = new GoneDrawObjects();
+    const note = { beat: 15, judged: true };
+    gone.sync(8);
+    expect(gone.isGone(lr2(16), note, false)).toBe(true);
+    note.judged = false;
+    gone.sync(1);
+    expect(gone.isGone(lr2(2), note, false)).toBe(false);
   });
 });

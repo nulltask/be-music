@@ -170,6 +170,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.beatorajaPixelsPerBeat(580, 2.5);
     },
   });
+  define('player-web.beatorajaDisplayScrollBeat', {
+    run: () => {
+      playerWebCoreApi.beatorajaDisplayScrollBeat({ currentBeat: 24, displayBeat: 8 });
+      playerWebCoreApi.beatorajaDisplayScrollBeat({ currentBeat: 24 });
+    },
+  });
   define('player-web.BeatorajaPlaySkinView', {
     run: () => {
       const view = new playerWebCoreApi.BeatorajaPlaySkinView({

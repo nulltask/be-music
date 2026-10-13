@@ -206,6 +206,35 @@ describe('collectChartPreviewTriggers', () => {
     expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'DD']);
   });
 
+  test('drops triggers past a negative-BPM reversal but keeps BGM on the reversal tick (LR2 op order)', () => {
+    // A negative `#BPMxx` (channel 08) arms `TimingResolver.reversal`; gameplay's event pump freezes there. LR2 sorts
+    // same-tick events by op, so the BGM (op 1) on the reversal tick still fires while a lane sound (op 11) beside it
+    // and everything later stay silent — the select-scene preview matches. BPM 120 → each default-length measure =
+    // 4 beats = 2 s; timing integrates the negative slot at |BPM| so the measure-2 trigger still resolves to a finite
+    // chart-time (t = 4 s) — it is the reversal, not the cutoff, that drops it.
+    const chart = createEmptyJson('bms');
+    chart.metadata.bpm = 120;
+    chart.measures = [
+      { index: 0, length: 1 },
+      { index: 1, length: 1 },
+      { index: 2, length: 1 },
+    ];
+    chart.events = [
+      { measure: 0, channel: '01', position: [0, 1], value: 'AA' }, // t = 0 — audible.
+      { measure: 0, channel: '01', position: [1, 2], value: 'BB' }, // t = 1 — audible.
+      { measure: 1, channel: '08', position: [0, 1], value: 'NB' }, // reversal at t = 2 (beat 4).
+      { measure: 1, channel: '01', position: [0, 1], value: 'CC' }, // t = 2 — BGM ON the reversal tick: audible.
+      { measure: 1, channel: '11', position: [0, 1], value: 'EE' }, // t = 2 — lane sound on the tick: dropped.
+      { measure: 2, channel: '01', position: [0, 1], value: 'DD' }, // t = 4 (|BPM| integration) — dropped.
+    ];
+    chart.resources.wav = { AA: 'a.wav', BB: 'b.wav', CC: 'c.wav', DD: 'd.wav', EE: 'e.wav' };
+    chart.resources.bpm = { NB: -120 };
+
+    // Cutoff well past every trigger — only the reversal filter can be responsible for the exclusions.
+    const triggers = collectChartPreviewTriggers(chart, 30);
+    expect(triggers.map((trigger) => trigger.sampleKey)).toEqual(['AA', 'BB', 'CC']);
+  });
+
   test('excludes invisible objects on the extended 24-key lanes too', () => {
     // bmson `keyboard-24k` hidden notes (`key_channels`) become invisible objects on `3A`-`3Q` / `4A`-`4Q`.
     const chart = createEmptyJson('bms');

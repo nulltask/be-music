@@ -22,6 +22,7 @@ import {
   maxJudgeReachSeconds,
   noteOwesTailMiss,
   setCombo,
+  toJudgeClock,
 } from './judge-core-score.ts';
 import {
   type JudgeCoreEffectSink,
@@ -100,7 +101,8 @@ function selectPressCandidate(
 /**
  * lr2oraja `MultiBadCollector`: once a press has consumed its note, every OTHER unjudged note on the pressed lanes
  * that sits inside the BAD window but outside the GOOD window also resolves as a BAD (pruned by
- * {@link isMultiBadCollectorTarget}).
+ * {@link isMultiBadCollectorTarget}). `nowSec` is the judge clock; the BADs land at `atSeconds` on the true clock
+ * (the two differ only past an LR2 negative-BPM reversal).
  */
 function applyMultiBadCollector(
   state: JudgeCoreState,
@@ -108,6 +110,7 @@ function applyMultiBadCollector(
   candidateChannels: ReadonlySet<string>,
   consumed: TimedPlayableNote,
   consumedJudge: RulesetJudgeIndex,
+  atSeconds: number,
   emit: JudgeCoreEffectSink,
 ): void {
   const { config } = state;
@@ -153,11 +156,11 @@ function applyMultiBadCollector(
       state,
       note.channel,
       { kind: 'BAD', signedDeltaMs: (nowSec - note.seconds) * 1000 },
-      nowSec,
+      atSeconds,
       emit,
     );
     if (noteOwesTailMiss(config.ruleset, note)) {
-      applyTailMissPoor(state, nowSec, emit);
+      applyTailMissPoor(state, atSeconds, emit);
     }
   }
 }
@@ -241,7 +244,11 @@ export function handleLanePress(
   }
   processLandminePassage(state, nowSec, nowMs, emit);
 
-  const selected = selectPressCandidate(state, nowSec, candidateChannels);
+  // Past an LR2 negative-BPM reversal the press is judged on the mirrored clock (#134; see `toJudgeClock`): note
+  // selection, timing deltas, windows, the lane keysound and the empty-POOR reach all read `judgeSec`, while the
+  // judgments, logs, gauge history and UI cues keep the true `nowSec`.
+  const judgeSec = toJudgeClock(config, nowSec);
+  const selected = selectPressCandidate(state, judgeSec, candidateChannels);
 
   if (!selected) {
     if (refreshedHold) {
@@ -255,8 +262,8 @@ export function handleLanePress(
     const fallback = findLaneSoundCandidate(
       config.laneSoundNotes,
       candidateChannels,
-      nowSec,
-      maxJudgeEarlyReachSeconds(config, nowSec),
+      judgeSec,
+      maxJudgeEarlyReachSeconds(config, judgeSec),
     );
     if (fallback) {
       emit({
@@ -271,7 +278,7 @@ export function handleLanePress(
         return;
       }
     }
-    if (!hasEmptyPoorReferenceNote(state, candidateChannels, nowSec)) {
+    if (!hasEmptyPoorReferenceNote(state, candidateChannels, judgeSec)) {
       // No note in the ruleset's miss window — the press is harmless: only the lane keysound plays.
       return;
     }
@@ -304,10 +311,10 @@ export function handleLanePress(
     return;
   }
   const channel = candidate.channel;
-  const signedDeltaMs = (nowSec - candidate.seconds) * 1000;
+  const signedDeltaMs = (judgeSec - candidate.seconds) * 1000;
   const collectMultiBad = (): void => {
     if (ruleset.multiBad) {
-      applyMultiBadCollector(state, nowSec, candidateChannels, candidate, selected.judge, emit);
+      applyMultiBadCollector(state, judgeSec, candidateChannels, candidate, selected.judge, nowSec, emit);
     }
   };
   emit({ kind: 'ui', command: { kind: 'flash-lane', channel } });
@@ -340,7 +347,7 @@ export function handleLanePress(
         command: { kind: 'long-note-start', channel, beat: candidate.beat, mode: toUiLongNoteMode(longNoteMode) },
       });
     }
-    const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(config, channel, nowSec));
+    const headJudge = resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(config, channel, judgeSec));
     if (longNoteMode !== undefined && isChargeLongNoteMode(longNoteMode)) {
       // Charge modes score the head right here — it is a judgment of its own, not half of a deferred one.
       applyResolvedManualJudge(state, channel, headJudge, nowSec, emit);
@@ -359,7 +366,7 @@ export function handleLanePress(
         mode: longNoteMode,
         headJudge,
         headScored: true,
-        gaugeDrainCursorSeconds: nowSec,
+        gaugeDrainCursorSeconds: judgeSec,
         audioStopped: false,
       });
       state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
@@ -374,7 +381,7 @@ export function handleLanePress(
         mode: 1,
         headJudge,
         headScored: false,
-        gaugeDrainCursorSeconds: nowSec,
+        gaugeDrainCursorSeconds: judgeSec,
         audioStopped: false,
       });
       state.longHoldUntilMs.set(channel, nowMs + LONG_NOTE_INITIAL_HOLD_GRACE_MS);
@@ -393,7 +400,7 @@ export function handleLanePress(
   applyResolvedManualJudge(
     state,
     channel,
-    resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(config, channel, nowSec)),
+    resolveManualTimedJudge(signedDeltaMs, judgeWindowsFor(config, channel, judgeSec)),
     nowSec,
     emit,
   );

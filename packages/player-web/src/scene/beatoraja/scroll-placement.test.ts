@@ -81,3 +81,19 @@ describe('resolveBeatorajaScrollPlacement', () => {
     expect(placement.window.lastBeat).toBe(4);
   });
 });
+
+describe('resolveBeatorajaScrollPlacement past an LR2 negative-BPM reversal', () => {
+  it('draws against the mirrored judge clock and keeps the reversal as the furthest beat reached', () => {
+    const placement = resolveBeatorajaScrollPlacement({
+      currentBeat: 14,
+      nowSeconds: 9,
+      reversal: { beat: 16, seconds: 8 },
+      mapper: undefined,
+      laneBeats: 4,
+      stageBottomY: 720,
+    });
+    expect(placement.window).toMatchObject({ rules: 'lr2', currentBeat: 14, nowSeconds: 7, reachedBeat: 16 });
+    // Objects scroll from the mirrored display beat: one ahead of the reversal sits further up the lane.
+    expect(placement.distance(17)).toBe(3);
+  });
+});

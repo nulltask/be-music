@@ -17,6 +17,7 @@ import {
 import { createScoreTracker } from './scoring.ts';
 import { resolveRuleset, rulesetChartFactsFromChart } from '../ruleset/index.ts';
 import { createAutoJudgeState, isAutoJudgeSettled, runAutoJudgeStep, type AutoJudgeInput } from './auto-judge-core.ts';
+import { clampToReversal } from './judge-core.ts';
 import { createPlaylogRecorder } from '../playlog/recorder.ts';
 import { createBeatAtSecondsResolverFromTimingResolver } from './timeline.ts';
 import { createInitialPlayerSummary, preparePlaybackChart } from './bootstrap.ts';
@@ -125,8 +126,11 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     },
   );
   reportResolvedRuleset(options, autoRuleset);
+  // LR2 negative-BPM reversal (#134) — see `manualPlay`. AUTO play freezes the same way: no judging and no audio past
+  // it (the realtime streams are cut in `collectRealtimeAudioTriggers`), and a mirrored display clock.
+  const reversalSeconds = resolvedChart.reversal?.seconds;
   const autoJudge = createAutoJudgeState(
-    { ruleset: autoRuleset, scorableNotes, landmineNotes, invisibleNotes, keyLabels: keyMap },
+    { ruleset: autoRuleset, scorableNotes, landmineNotes, invisibleNotes, keyLabels: keyMap, reversalSeconds },
     {
       ...createInitialPlayerSummary(autoRuleset, autoRuleset.noteCount),
       scoreTracker: createScoreTracker({ moneyScore: autoRuleset.moneyScore }),
@@ -145,6 +149,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
           chartSha256,
           recorder,
           dynamicJudgeRankChanges: resolvedChart.judgeRank.changes,
+          reversalSeconds,
           play: {
             mode: 'auto',
             autoScratch: false,
@@ -254,6 +259,7 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
     invisibleNotes,
     audioBackend: audioBackendLabel,
     resolveDebugActiveAudioState,
+    reversal: resolvedChart.reversal,
   });
 
   if (!uiEnabled) {
@@ -432,7 +438,9 @@ export async function autoPlay(json: BeMusicJson, options: PlayerOptions = {}): 
       let autoPlayableAudioIndex = 0;
 
       const triggerAutoPlayableNoteAudio = (referenceSeconds: number): void => {
-        const safeReferenceSeconds = Math.max(0, referenceSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
+        // Note keysounds freeze with the judge pump at an LR2 negative-BPM reversal (#134).
+        const safeReferenceSeconds =
+          Math.max(0, clampToReversal(autoJudge.config, referenceSeconds)) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
         while (autoPlayableAudioIndex < scorableNotes.length) {
           const note = scorableNotes[autoPlayableAudioIndex]!;
           if (note.seconds > safeReferenceSeconds) {

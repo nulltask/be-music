@@ -25,9 +25,14 @@ describe('resolveChartBpmRange', () => {
     expect(resolveChartBpmRange(chart)).toEqual({ min: 150, max: 160 });
   });
 
-  test('ignores BPM changes that are not positive', () => {
-    const chart = bms(['#BPM 150', '#BPM01 -30', '#BPM02 0', '#00108:0102', '#00211:01']);
+  test('ignores zero BPM changes', () => {
+    const chart = bms(['#BPM 150', '#BPM02 0', '#00108:02', '#00211:01']);
     expect(resolveChartBpmRange(chart)).toEqual({ min: 150, max: 150 });
+  });
+
+  test('reads a negative #BPMxx at its magnitude, the tempo LR2 integrates its reverse scroll at', () => {
+    const chart = bms(['#BPM 150', '#BPM01 -30', '#BPM02 0', '#00108:0102', '#00211:01']);
+    expect(resolveChartBpmRange(chart)).toEqual({ min: 30, max: 150 });
   });
 
   test('reads bmson bpm_events', () => {

@@ -277,6 +277,23 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
     },
   });
+  define('chart.mirrorBeatAtTempoReversal', {
+    run: () => {
+      const reversal = { beat: 16, seconds: 7.5 };
+      chartApi.mirrorBeatAtTempoReversal(reversal, 5, 10);
+      chartApi.mirrorBeatAtTempoReversal(reversal, 9, 17.5);
+      chartApi.mirrorBeatAtTempoReversal(undefined, 9, 17.5);
+    },
+  });
+  define('chart.firesBeforeTempoReversal', {
+    run: () => {
+      const reversal = { beat: 16, seconds: 7.5 };
+      chartApi.firesBeforeTempoReversal(reversal, 5, '01');
+      chartApi.firesBeforeTempoReversal(reversal, 7.5, '01');
+      chartApi.firesBeforeTempoReversal(reversal, 7.5, '11');
+      chartApi.firesBeforeTempoReversal(undefined, 9, '11');
+    },
+  });
   define('chart.collectSampleTriggers', {
     run: (fixtures) => {
       const resolver = chartApi.createTimingResolver(fixtures.sampleBmsJson);

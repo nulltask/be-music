@@ -16,6 +16,7 @@ import {
 import 'pixi.js/prepare';
 import {
   createBmsonSamplePlaybackMap,
+  mirrorBeatAtTempoReversal,
   type TimedSampleTrigger,
   type TimingResolver,
 } from '@be-music/audio-renderer/triggers';
@@ -56,6 +57,7 @@ import {
   advanceDrawCursor,
   changesScrollRate,
   collectResolvedLaneTimelineBeats,
+  GoneDrawObjects,
   isDrawnAtTime,
   isDrawnUntilJudged,
   isLongNoteDrawnAtTime,
@@ -65,6 +67,7 @@ import {
   resolveLongNoteAlpha,
   resolveNoteDrawRules,
   resolveNoteDrawWindow,
+  resolveReversedDrawClock,
   type NoteDrawWindow,
 } from './note-draw-window.ts';
 import { findFirstIndexAtOrAfter, findFirstIndexNumberAtOrAfter, runWithConcurrency } from '@be-music/utils/core';
@@ -830,11 +833,20 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
   private maxLongNoteBeatSpan = 0;
   /**
    * LR2's `draw_count` for {@link notes} and {@link mineNotes} under LR2's drawing rules: the first of each not gone yet
-   * ({@link advanceDrawCursor}), kept between frames. Rebuilt when the arrays change or the playhead moves back.
+   * ({@link advanceDrawCursor}), kept between frames. Rebuilt when the arrays change or the playhead's chart time moves
+   * back (not when an LR2 negative-BPM reversal mirrors the scroll: LR2's `draw_count` never moves back).
    */
   private drawCursor:
-    | { notes: readonly RuntimeNote[]; mines: readonly TimedLandmineNote[]; beat: number; note: number; mine: number }
+    | {
+        notes: readonly RuntimeNote[];
+        mines: readonly TimedLandmineNote[];
+        seconds: number;
+        note: number;
+        mine: number;
+      }
     | undefined;
+  /** Notes and mines gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
+  private readonly goneDrawObjects = new GoneDrawObjects();
   private chartLastNoteEndSeconds = 0;
   private songDurationSeconds = 0;
   protected laneChannels: string[] = [];
@@ -2431,7 +2443,30 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     return performance.now() < this.startTime;
   }
 
+  /**
+   * The tempo the BPM readouts show at `seconds`. Past an LR2 negative-BPM reversal (issue #134) it holds the value at
+   * the reversal — LR2's frozen event pump never applies a later BPM event — even though the reverse scroll itself
+   * keeps following the forward tempo map.
+   */
+  protected nowBpm(seconds: number): number | undefined {
+    const resolver = this.timingResolver;
+    if (!resolver) return undefined;
+    // `displayBpmAtBeat`: a negative `#BPMxx` reads as |trunc(BPM)|, LR2's int NOWBPM.
+    return resolver.displayBpmAtBeat(
+      this.currentBeat(Math.min(seconds, resolver.reversal?.seconds ?? Number.POSITIVE_INFINITY)),
+    );
+  }
+
   protected currentBeat(seconds: number): number {
+    // LR2 negative-BPM reversal (issue #134): past the first negative `#BPMxx` the chart *visually* scrolls backwards.
+    // LR2 mirrors the chart POSITION around the reversal (`2 * pos(R) - pos(now)`), so the reverse scroll runs at the
+    // post-reversal |BPM| and pauses through post-reversal STOPs. Every display consumer — renderNotes, measure
+    // lines, beatPhase — funnels through this method, so mirroring here covers them all; the forward beat underneath
+    // keeps `beatAtSeconds`'s monotonic stop-window cursor intact.
+    return mirrorBeatAtTempoReversal(this.timingResolver?.reversal, seconds, this.forwardBeat(seconds));
+  }
+
+  private forwardBeat(seconds: number): number {
     // Prefer the proper STOP-aware resolver (built once per song in `prepareSong`). Falls back to a flat-BPM
     // extrapolation when the resolver isn't ready yet (very early frames during mount).
     const resolver = this.timingResolver;
@@ -2940,7 +2975,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (referenceBpm === undefined) return;
     const tempoPoints = resolver.tempoPoints;
     if (tempoPoints.length === 0) return;
-    const bpms = tempoPoints.map((point) => point.bpm).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
+    // |BPM| — a negative `#BPMxx` (LR2 reverse-scroll gimmick) integrates at its magnitude, so the HS-fix range
+    // math uses the magnitude too. Zero / non-finite points still drop out via the `> 0` filter.
+    const bpms = tempoPoints.map((point) => Math.abs(point.bpm)).filter((bpm) => Number.isFinite(bpm) && bpm > 0);
     if (bpms.length === 0) return;
     let targetBpm: number;
     switch (mode) {
@@ -3547,7 +3584,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.applyExitFadeAlpha();
     this.audioFrame = this.audioAnalyzer?.sample(this.playClock());
     this.perf.time('renderSkin', () => this.renderThemeLayer(designWidth, designHeight));
-    this.perf.time('renderBga', () => this.renderBga(seconds));
+    // LR2 negative-BPM reversal: the event pump stops firing BGA cues there, so the cue clock is clamped (freeze, not
+    // rewind) while an already-playing movie keeps running on the true clock. All other `seconds` readers here
+    // (progress ratio, time readouts, judge-until comparisons) stay on the true clock.
+    const reversalSeconds = this.timingResolver?.reversal?.seconds;
+    const bgaCueSeconds = reversalSeconds === undefined ? seconds : Math.min(seconds, reversalSeconds);
+    this.perf.time('renderBga', () => this.renderBga(seconds, bgaCueSeconds));
     this.perf.time('renderLanes', () => this.renderLanes(designWidth, designHeight));
     this.perf.time('renderNotes', () => this.renderNotes(seconds, designHeight));
     this.perf.time('renderShutter', () => this.renderShutter());
@@ -3757,7 +3799,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * The renderer is idempotent per frame — it tears down any existing sprites and rebuilds from the active cues, so cue
    * switches show up the next frame without explicit dirty tracking.
    */
-  private renderBga(seconds: number): void {
+  /**
+   * `cueSeconds` picks which BGA cue is active; `seconds` is the true clock that plays the cue (movie offsets, SWBGA
+   * frames). They differ only past an LR2 negative-BPM reversal, where the event pump stops firing new BGA cues but a
+   * movie that is already playing keeps running.
+   */
+  private renderBga(seconds: number, cueSeconds = seconds): void {
     this.bgaLayerPool.begin();
     this.bgaTargetsScratch.length = 0;
     // Honor the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). - `'OFF'` → never render - `'AUTOPLAY_ONLY'` → render
@@ -3787,14 +3834,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     // is fine in practice: the LR2 default skin uses identical flags on every rect, and a future skin that mixes them
     // per-rect would still get a consistent global playback state from this single sync point.
     const controllingBga = visibleBgas[0]!;
-    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, seconds);
-    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, seconds);
+    const baseCue = controllingBga.noBase ? undefined : pickActiveBgaCue(this.bgaTimeline.base, cueSeconds);
+    const layerCue = controllingBga.noLayer ? undefined : pickActiveBgaCue(this.bgaTimeline.layer, cueSeconds);
     const baseKey = baseCue?.bmpKey;
     const layerKey = layerCue?.bmpKey;
     const poorWindowMs = DEFAULT_POOR_BGA_DISPLAY_SECONDS * 1000;
     const inPoorWindow =
       !controllingBga.noPoor && this.lastPoorAt > 0 && this.playClock() - this.lastPoorAt < poorWindowMs;
-    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, seconds) : undefined;
+    let poorKey = inPoorWindow ? pickActiveBgaKey(this.bgaTimeline.poor, cueSeconds) : undefined;
     // BMP00 fallback: when no explicit POOR cue is active but the chart left `#POORBGA` blank with a `#BMP00` defined,
     // paint BMP00 during the miss window. Capped at the first authored POOR cue's chart-time so a chart that does
     // eventually author POOR isn't permanently stuck on the placeholder.
@@ -3802,7 +3849,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       inPoorWindow &&
       poorKey === undefined &&
       this.poorBgaFallbackKey !== undefined &&
-      seconds < this.poorBgaFallbackUntilSeconds
+      cueSeconds < this.poorBgaFallbackUntilSeconds
     ) {
       poorKey = this.poorBgaFallbackKey;
     }
@@ -4031,7 +4078,9 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
     }
     const currentBeat = this.currentBeat(seconds);
-    const bpm = this.timingResolver?.bpmAtBeat(currentBeat) ?? this.song?.bpm;
+    // The BPM readout freezes at the reversal value (LR2's frozen pump holds |BPM| there) instead of following the
+    // mirrored scroll back through earlier tempo points — see `nowBpm`.
+    const bpm = this.nowBpm(seconds) ?? this.song?.bpm;
     const laneCovers = this.resolveLaneCovers();
     const visibleMs = this.resolveVisibleMs(laneCovers[0], bpm, this.scrollMapper?.rateAt?.(currentBeat) ?? 1);
     return {
@@ -4334,10 +4383,15 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     for (const lane of this.laneX.values()) {
       laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
     }
+    // Past an LR2 negative-BPM reversal the scroll runs back: object times are compared with the mirrored judge clock,
+    // and what the playhead passed before the reversal stays passed.
+    const reversal = this.timingResolver?.reversal;
+    const drawClock = resolveReversedDrawClock(reversal, seconds, currentBeat);
     const drawWindow = resolveNoteDrawWindow({
       rules: resolveNoteDrawRules(this.scrollMapper !== undefined),
       currentBeat,
-      nowSeconds: seconds,
+      nowSeconds: drawClock.nowSeconds,
+      reachedBeat: drawClock.reachedBeat,
       mapper: this.scrollMapper,
       laneBeats: laneHeight / Math.max(1, pixelsPerBeat),
       timelineBeats: this.laneTimelineBeats,
@@ -4391,7 +4445,14 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     // Under LR2's rules a note stays until it is judged and its beat has passed, so the walk starts from LR2's
     // `draw_count` (the first note not gone yet); beatoraja's rules start from the notes whose time can still be ahead.
-    const cursor = drawWindow.rules === 'lr2' ? this.advanceDrawCursor(drawWindow) : undefined;
+    const isGone = (object: RuntimeNote | TimedLandmineNote): boolean => {
+      const autoplayed = this.isAutoplayedChannel(object.channel);
+      return reversal === undefined
+        ? !isDrawnUntilJudged(drawWindow, object, autoplayed)
+        : this.goneDrawObjects.isGone(drawWindow, object, autoplayed);
+    };
+    if (reversal !== undefined) this.goneDrawObjects.sync(seconds);
+    const cursor = drawWindow.rules === 'lr2' ? this.advanceDrawCursor(seconds, isGone) : undefined;
     const firstNoteIndex =
       cursor?.note ?? findFirstIndexAtOrAfter(this.notes, currentBeat - this.maxLongNoteBeatSpan, (note) => note.beat);
     const hideJudgedNotes = this.options.judgedNoteDisplay === 'HIDE';
@@ -4402,7 +4463,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       }
       // LR2's rules: a note stays until it is judged and its beat (a long note's end) has passed — on the judgement line
       // once its beat has. beatoraja's rules go by time below.
-      if (!isDrawnUntilJudged(drawWindow, note, this.isAutoplayedChannel(note.channel))) {
+      if (drawWindow.rules === 'lr2' && isGone(note)) {
         continue;
       }
       const lane = this.laneX.get(note.channel);
@@ -4429,7 +4490,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         }
         // beatoraja draws a long note whose head has passed with the head on the judgement line (the walk does not
         // advance past the playhead), and skips one whose tail does not sit above its head.
-        const headY = drawWindow.rules === 'beatoraja' && note.seconds < seconds ? lane.bottom : y;
+        const headY = drawWindow.rules === 'beatoraja' && note.seconds < drawWindow.nowSeconds ? lane.bottom : y;
         if (drawWindow.rules === 'beatoraja' && yEnd >= headY) {
           continue;
         }
@@ -4467,7 +4528,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
         break;
       }
       if (drawWindow.rules === 'lr2') {
-        if (!isDrawnUntilJudged(drawWindow, mine, this.isAutoplayedChannel(mine.channel))) continue;
+        if (isGone(mine)) continue;
       } else if (mine.judged || !isDrawnAtTime(drawWindow, mine.seconds)) continue;
       const lane = this.laneX.get(mine.channel);
       if (!lane) continue;
@@ -4481,18 +4542,18 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
 
   /**
    * Moves LR2's `draw_count` ({@link drawCursor}) past the notes and mines gone by this frame and returns it. Starts
-   * over when the chart's arrays change or the playhead moves back.
+   * over when the chart's arrays change or the playhead's chart time `seconds` moves back.
    */
-  private advanceDrawCursor(drawWindow: NoteDrawWindow): { note: number; mine: number } {
-    const { currentBeat } = drawWindow;
+  private advanceDrawCursor(
+    seconds: number,
+    isGone: (object: RuntimeNote | TimedLandmineNote) => boolean,
+  ): { note: number; mine: number } {
     let cursor = this.drawCursor;
-    if (!cursor || cursor.notes !== this.notes || cursor.mines !== this.mineNotes || currentBeat < cursor.beat) {
-      cursor = { notes: this.notes, mines: this.mineNotes, beat: currentBeat, note: 0, mine: 0 };
+    if (!cursor || cursor.notes !== this.notes || cursor.mines !== this.mineNotes || seconds < cursor.seconds) {
+      cursor = { notes: this.notes, mines: this.mineNotes, seconds, note: 0, mine: 0 };
       this.drawCursor = cursor;
     }
-    cursor.beat = currentBeat;
-    const isGone = (object: RuntimeNote | TimedLandmineNote): boolean =>
-      !isDrawnUntilJudged(drawWindow, object, this.isAutoplayedChannel(object.channel));
+    cursor.seconds = seconds;
     cursor.note = advanceDrawCursor(this.notes, cursor.note, isGone);
     cursor.mine = advanceDrawCursor(this.mineNotes, cursor.mine, isGone);
     return cursor;
@@ -4588,7 +4649,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // LR2 drops a bar line once the playhead has passed it (`DrawNotes` 0x40703d-0x40705b), so one under a STOP that
       // began on it stays on the judgement line for the STOP. A pixel of slack keeps the line just crossed for a frame,
       // as LR2 draws it once more on the line before dropping it.
-      firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, currentBeat - 1 / Math.max(1, pixelsPerBeat));
+      // Past an LR2 negative-BPM reversal a bar line the playhead passed before it stays gone as the scroll runs back.
+      firstBeatIndex = findFirstIndexNumberAtOrAfter(beats, drawWindow.reachedBeat - 1 / Math.max(1, pixelsPerBeat));
     }
     // beatoraja's rules end the walk where the notes' walk ends (bar lines are timelines like any other).
     const maxBeat =

@@ -12,19 +12,16 @@
 
 *---------------------- EXTENDED HEADER FIELD
 * Channel `08` looks up a `#BPMxx` slot, and nothing stops a chart from pointing
-* it at a value the timeline cannot use. The timing resolver skips any BPM point
-* that is not finite and positive, which is the only thing keeping these charts
-* from producing infinite or backwards note times:
+* it at a value the timeline cannot use as-is:
 *
 *   #BPM02 0    - 240/0 is infinite seconds per measure; every later event would
-*                 land at t = inf and never fire
-*   #BPM03 -65  - a negative tempo runs the chart backwards
-*   ZZ          - an undefined slot, which has no value at all
+*                 land at t = inf and never fire, so the change is skipped
+*   #BPM03 -65  - LR2's reverse-scroll gimmick: timing integrates |BPM| and the
+*                 first negative change arms the reversal (see docs/bms-spec.md)
+*   ZZ          - an undefined slot, which has no value at all and is skipped
 *
-* Real players disagree on what these should do (LR2 stops or reverses the
-* scroll), so the fixture pins the one thing that has to hold regardless: the
-* chart still parses, and the notes before the bad change still play at the
-* declared tempo.
+* The fixture pins that the chart still parses and the notes before the
+* reversal still play at the declared tempo.
 
 #PLAYER 1
 #LNTYPE 1

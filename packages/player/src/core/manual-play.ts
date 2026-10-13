@@ -169,6 +169,10 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       wavResources,
       idBase,
       sourceFormat: resolvedJson.sourceFormat,
+      // LR2 negative-BPM reversal (#134): timing stays monotonic (the resolver integrates |BPM|), but from this chart
+      // time on LR2's event pump freezes and presses are judged on the mirrored clock. The realtime audio streams are
+      // already cut there (`collectRealtimeAudioTriggers` / `collectRealtimeAudioVolumeEvents`).
+      reversalSeconds: resolvedChart.reversal?.seconds,
     },
     {
       ...createInitialPlayerSummary(ruleset, ruleset.noteCount),
@@ -185,6 +189,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
           chartSha256,
           recorder,
           dynamicJudgeRankChanges,
+          reversalSeconds: resolvedChart.reversal?.seconds,
           play: {
             mode: 'manual',
             autoScratch: autoScratchEnabled,
@@ -277,6 +282,7 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
     invisibleNotes,
     audioBackend: audioBackendLabel,
     resolveDebugActiveAudioState: () => resolveDebugActiveAudioState(),
+    reversal: resolvedChart.reversal,
   });
 
   const applyJudgeEffect = createJudgeEffectHandler({

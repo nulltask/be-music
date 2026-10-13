@@ -1,4 +1,5 @@
 import {
+  firesBeforeTempoReversal,
   isInvisibleNoteChannel,
   resolveChart,
   usesMonophonicWavPlayback,
@@ -510,8 +511,18 @@ export class ChartPreviewEngine {
  */
 export function collectChartPreviewTriggers(chart: BeMusicJson, cutoffSeconds: number): TimedSampleTrigger[] {
   if (!Number.isFinite(cutoffSeconds) || cutoffSeconds <= 0) return [];
-  return resolveChart(chart, { inferBmsLnTypeWhenMissing: true })
-    .sampleTriggers.filter((trigger) => !isInvisibleNoteChannel(trigger.channel) && trigger.seconds < cutoffSeconds)
+  const resolved = resolveChart(chart, { inferBmsLnTypeWhenMissing: true });
+  // LR2 negative-BPM reversal: the gameplay engine's event pump freezes at the reversal — nothing past it ever
+  // sounds, and on the reversal tick only the BGM LR2 orders before the negative BPM does — so the select-scene
+  // preview drops the same triggers.
+  const { reversal } = resolved;
+  return resolved.sampleTriggers
+    .filter(
+      (trigger) =>
+        !isInvisibleNoteChannel(trigger.channel) &&
+        trigger.seconds < cutoffSeconds &&
+        firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
+    )
     .sort((left, right) => left.seconds - right.seconds);
 }
 

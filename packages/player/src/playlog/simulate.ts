@@ -160,16 +160,30 @@ class PlaylogSimulation {
   }
 
   run(): PlaylogRulesetResult {
+    const reversalUs = this.playlog.chart.reversalTimeUs;
     const inputs = [...this.playlog.inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq);
     for (const input of inputs) {
       this.advanceTime(input.timeUs);
+      // LR2 negative-BPM reversal (#134): past the reversal R presses and releases are judged on the mirrored clock
+      // t' = 2R - now (OpenLR2 `LR2f.cpp:12624,12931`), exactly as the engine does. `advanceTime` stays clamped to R,
+      // so nothing past it is ever swept into a miss.
+      const judged =
+        reversalUs !== undefined && input.timeUs > reversalUs
+          ? { ...input, timeUs: 2 * reversalUs - input.timeUs }
+          : input;
       if (input.action === 'down') {
-        this.handleDown(input);
+        // The engine's mine press leg is dead past the reversal too (`processLandminePassage`).
+        this.handleDown(judged, judged === input);
       } else {
-        this.handleUp(input);
+        this.handleUp(judged);
       }
     }
     this.advanceTime(Number.POSITIVE_INFINITY);
+    if (reversalUs !== undefined && this.hasOutstandingNotes()) {
+      // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
+      // leaves notes past the reversal behind — open holds included — is always FAILED.
+      this.gauge.drainToZero();
+    }
 
     const result: PlaylogRulesetResult = {
       ruleset: this.config.id,
@@ -203,6 +217,15 @@ class PlaylogSimulation {
       );
     }
     return result;
+  }
+
+  private hasOutstandingNotes(): boolean {
+    for (const lane of this.lanes.values()) {
+      if (lane.notes.some((note) => !note.judged)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private buildLanes(): void {
@@ -269,6 +292,12 @@ class PlaylogSimulation {
   // ---- time advancement --------------------------------------------------------------------------------------
 
   private advanceTime(untilUs: number): void {
+    const reversalUs = this.playlog.chart.reversalTimeUs;
+    if (reversalUs !== undefined && untilUs > reversalUs) {
+      // The LR2 event pump froze at the reversal and the mirrored judge clock never passes it: misses, mines, hold
+      // deadlines, and auto judgements past it never happen.
+      untilUs = reversalUs;
+    }
     interface TimedEvent {
       timeUs: number;
       kind: 'miss' | 'mine-enter' | 'mine' | 'mine-settle' | 'hold-deadline' | 'auto';
@@ -302,6 +331,8 @@ class PlaylogSimulation {
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
+        // Mines at or behind the reversal are frozen with the pump: not even LR2's early PGREAT reach detonates them.
+        if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
         const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
         if (mine.timeUs - earlyUs >= untilUs) break;
         if (mine.applied) continue;
@@ -405,9 +436,11 @@ class PlaylogSimulation {
   /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
   private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
     if (this.config.mineTrigger !== 'press-or-hold') return;
+    const reversalUs = this.playlog.chart.reversalTimeUs;
     for (const lane of lanes) {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
+        if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
         const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
         if (mine.timeUs - earlyUs > timeUs) break;
         if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
@@ -441,7 +474,7 @@ class PlaylogSimulation {
 
   // ---- input handling ----------------------------------------------------------------------------------------
 
-  private handleDown(input: PlaylogInputEvent): void {
+  private handleDown(input: PlaylogInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
     const windows = this.config.windowsAt(timeUs);
     const lanes = this.resolveInputLanes(input);
@@ -451,7 +484,9 @@ class PlaylogSimulation {
     if (lanes.length === 0) {
       return;
     }
-    this.detonateMinesOnPress(lanes, timeUs);
+    if (minePressLegLive) {
+      this.detonateMinesOnPress(lanes, timeUs);
+    }
 
     const selected = this.selectCandidate(lanes, timeUs, windows);
     if (!selected) {
