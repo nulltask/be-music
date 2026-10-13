@@ -11,11 +11,11 @@ import { bestScore, profile, score, scoreResult } from '../db/schema.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { countPlayers, loadRanking, rankOfExScore, type RankingFilter } from '../ranking.ts';
 import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
+import { isOn } from '../http/query.ts';
 import { submitScore } from '../scores/submit.ts';
 import {
   accountResponse,
   errorResponse,
-  isOn,
   myRankQuery,
   myRankResponse,
   rankingQuery,

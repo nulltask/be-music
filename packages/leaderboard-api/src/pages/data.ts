@@ -1,5 +1,6 @@
 import { and, asc, countDistinct, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
+import type { RulesetId } from '../rulesets.ts';
 import { chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
 import type { ChartAlias } from './external.ts';
 
@@ -13,7 +14,7 @@ export interface RecentScore {
   title: string | null;
   artist: string | null;
   chartListed: boolean;
-  playedRuleset: 'lr2' | 'beatoraja' | 'iidx';
+  playedRuleset: RulesetId;
   assisted: boolean;
   exScore: number;
   noteCount: number;
@@ -26,7 +27,7 @@ export interface RecentScore {
 export interface RecentScoresFilter {
   limit: number;
   /** The ruleset whose figures each row shows (the viewer's display ruleset). */
-  ruleset: 'lr2' | 'beatoraja' | 'iidx';
+  ruleset: RulesetId;
   /** Include anonymous players. Off by default, like the rankings. */
   includeAnonymous: boolean;
   /** Include charts not listed yet (fewer than two players). Off by default (docs/leaderboard.md section 7). */
