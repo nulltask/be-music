@@ -29,7 +29,9 @@ import {
 } from './format.ts';
 import { Layout, PageHeader, STYLESHEET_PATH, type Crumb, type PageMeta } from './layout.tsx';
 import { APP_CSS } from './styles.generated.ts';
-import { isRuleset, RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
+import { isOn } from '../http/query.ts';
+import { isRuleset } from '../rulesets.ts';
+import { RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
 import { loadChartStats, loadPlayerStats } from './stats.ts';
 import {
   chartHref,
@@ -60,8 +62,6 @@ const PAGE_CACHE = 'private, max-age=0';
 
 /** The display ruleset lasts a year; switching it again replaces it. */
 const RULESET_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-
-const isOn = (value: string | undefined): boolean => value === '1' || value === 'true';
 
 /** `Artist · ` before the rest of a subtitle, or nothing when the play log carried no artist. */
 const withArtist = (artist: string | null): string =>

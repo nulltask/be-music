@@ -15,9 +15,8 @@ import { mergeBestScores } from '../scoring/best.ts';
 import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../scoring/lamp.ts';
 import { checkFingerprintDocument } from '../submission/documents.ts';
 import { checkEligibility } from '../submission/eligibility.ts';
+import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import { loadBestScores, toBestScoreRow } from './bests.ts';
-
-export const RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 export interface SubmissionInput {
   userId: string;
@@ -106,7 +105,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   const verification =
     chartFingerprint === playFingerprint || knownPlayFingerprints.includes(playFingerprint) ? 'L4' : 'L3';
 
-  const simulated = RULESETS.map((ruleset) => ({ ruleset, result: simulatePlaylog(input.playlog, { ruleset }) }));
+  const simulated = RULESET_IDS.map((ruleset) => ({ ruleset, result: simulatePlaylog(input.playlog, { ruleset }) }));
 
   const now = deps.now();
   const scoreId = deps.newId();
@@ -289,7 +288,7 @@ async function loadOutcomes(
       improved: { exScore: false, lamp: false, missCount: false },
     });
   }
-  return outcomes.sort((left, right) => RULESETS.indexOf(left.ruleset) - RULESETS.indexOf(right.ruleset));
+  return outcomes.sort(byRulesetOrder);
 }
 
 /** The chart's own judge rank, without the in-play changes (`timeline`). */

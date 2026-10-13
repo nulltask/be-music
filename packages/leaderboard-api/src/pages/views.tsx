@@ -3,6 +3,7 @@ import type { Child } from 'hono/jsx';
 import type { RankingEntry } from '../ranking.ts';
 import type { ChartsetChart, PlayInfo, RecentScore } from './data.ts';
 import type { ExternalLink } from './external.ts';
+import { byRulesetOrder } from '../rulesets.ts';
 import type { Distribution } from './stats.ts';
 import {
   chartTitle,
@@ -380,8 +381,7 @@ export function ResultsTable(props: {
   /** The viewer's display ruleset, marked as shown. */
   displayRuleset: string;
 }) {
-  const order = ['lr2', 'beatoraja', 'iidx'];
-  const results = [...props.results].sort((left, right) => order.indexOf(left.ruleset) - order.indexOf(right.ruleset));
+  const results = [...props.results].sort(byRulesetOrder);
   return (
     <TableCard>
       <thead>

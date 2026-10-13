@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+import { RULESET_IDS } from '../rulesets.ts';
 
 /**
  * Request and response schemas of `/api/v0`. The request schemas validate what comes in; the response schemas describe
@@ -13,15 +14,10 @@ const described = <T extends v.GenericSchema>(schema: T, description: string) =>
 // Requests
 // ---------------------------------------------------------------------------------------------------------------------
 
-export const rulesetSchema = described(
-  v.picklist(['lr2', 'beatoraja', 'iidx']),
-  'Ruleset the figures are simulated under.',
-);
+export const rulesetSchema = described(v.picklist(RULESET_IDS), 'Ruleset the figures are simulated under.');
 
 const flagSchema = (description: string) =>
   v.optional(described(v.picklist(['0', '1', 'true', 'false']), description), '0');
-
-export const isOn = (flag: string): boolean => flag === '1' || flag === 'true';
 
 export const rankingQuery = v.object({
   ruleset: rulesetSchema,
