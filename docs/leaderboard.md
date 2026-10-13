@@ -307,8 +307,12 @@ Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly:
 - `/leaderboard/charts/:chartFp` — a chart's rankings
 - `/leaderboard/players/:handle` — a profile, and `/leaderboard/players/:handle/versus/:rival`
 
-Pages send `Cache-Control: public, max-age=0, s-maxage=30`: a browser always revalidates, so a player sees a new score
-at once, while a shared cache may hold a page for half a minute. Interactive parts (the rival button and similar) are
+Every page shows its figures under one **display ruleset** (LR2, beatoraja or IIDX), chosen in the header and kept in a
+cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL
+(`/leaderboard/ruleset/:id?next=…`, which only returns to Leaderboard pages), so page URLs stay shareable without
+changing the setting of whoever opens them. Since a page depends on that cookie, pages are `Cache-Control: private,
+max-age=0`. The chart page links to the chart elsewhere: Mocha-Repository for each file SHA-256 the chart is known by
+(LR2IR needs the MD5, not recorded yet), and a title search on BMS Search, which has no lookup by hash. Interactive parts (the rival button and similar) are
 small `hono/jsx/dom` islands. If the site grows into an
 application, HonoX or Nuxt can take over; the shared data-access functions keep that move cheap.
 

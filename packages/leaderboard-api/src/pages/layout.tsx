@@ -1,5 +1,8 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
+import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import { RULESET_LABELS } from './format.ts';
+import { RULESETS } from './preferences.ts';
 
 const STYLE = `
 :root { color-scheme: dark light; --bg: #0b0d12; --panel: #141821; --line: #262c3a; --text: #e6e8ee; --muted: #8b93a7;
@@ -12,6 +15,9 @@ header { display: flex; align-items: baseline; gap: 16px; padding: 16px; border-
 header .brand { font-weight: 700; letter-spacing: .04em; text-decoration: none; }
 header .brand span { color: var(--accent); }
 header nav { display: flex; gap: 12px; font-size: 14px; color: var(--muted); }
+header nav.ruleset { margin-left: auto; gap: 0; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+header nav.ruleset a { padding: 4px 12px; text-decoration: none; }
+header nav.ruleset a.on { background: var(--accent); color: #111; }
 main { max-width: 960px; margin: 0 auto; padding: 16px; }
 h1 { font-size: 22px; margin: 8px 0 4px; }
 .sub { color: var(--muted); margin: 0 0 16px; font-size: 14px; }
@@ -40,6 +46,27 @@ export interface PageMeta {
   description: string;
   /** Absolute URL of this page, for `og:url`. */
   url: string;
+  /** Path and query of this page, where the ruleset switch comes back to. */
+  path: string;
+  /** The viewer's display ruleset, highlighted in the switch. */
+  ruleset: PlaylogRulesetId;
+}
+
+/** Header switch of the display ruleset; it applies to every page. */
+function RulesetSwitch(props: { current: PlaylogRulesetId; path: string }) {
+  return (
+    <nav class="ruleset" aria-label="Display ruleset">
+      {RULESETS.map((id) => (
+        <a
+          class={id === props.current ? 'on' : ''}
+          aria-current={id === props.current ? 'true' : undefined}
+          href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
+        >
+          {RULESET_LABELS[id]}
+        </a>
+      ))}
+    </nav>
+  );
 }
 
 /** The shell of every Leaderboard page: head with sharing tags, header, and the page body. */
@@ -70,6 +97,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             <a href="/leaderboard">New scores</a>
             <a href="/">Play</a>
           </nav>
+          <RulesetSwitch current={props.meta.ruleset} path={props.meta.path} />
         </header>
         <main>{props.children}</main>
       </body>
