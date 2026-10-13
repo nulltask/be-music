@@ -119,6 +119,7 @@ import {
   songRecordPlayFromResult,
   storeSongRecords,
 } from './song-records.ts';
+import { describeLeaderboardResult, prepareLeaderboardSubmission, submitToLeaderboard } from './leaderboard.ts';
 import {
   describeSkinSettingControllers,
   readStoredSkinSettings,
@@ -539,6 +540,8 @@ class PlayerWebDemoApp {
    * select paths can `enable()` it again.
    */
   private playlogSaveController: Controller | undefined;
+  /** "Submit to Leaderboard" checkbox controller; locked during a play like {@link playlogSaveController}. */
+  private leaderboardSubmitController: Controller | undefined;
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
    * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
@@ -568,6 +571,8 @@ class PlayerWebDemoApp {
    * disabled during gameplay anyway — this latch is the enforcement for any path that slips through).
    */
   private activePlayAutoSavePlaylog = false;
+  /** `guiState.submitToLeaderboard` as it was when the current play started (see {@link activePlayAutoSavePlaylog}). */
+  private activePlaySubmitToLeaderboard = false;
   /**
    * Top-level "Skin family" dropdown. Rebuilt via {@link rebuildSkinFamilyPicker} on every theme load / wipe so its
    * option list reflects which families are actually selectable (LR2 only shows up once an `.lr2skin` has been
@@ -635,6 +640,8 @@ class PlayerWebDemoApp {
       // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
       // scene mounts.
       autoSavePlaylog: false,
+      // Leaderboard submission is opt-in: a play is only sent once the player turns it on.
+      submitToLeaderboard: false,
       // Play options (playMode / chartOptions / assists / judge / gauge equivalents). Two-way synced with the LR2
       // select scene's PLAY OPTION panel where a counterpart exists; latched at song start and disabled during a
       // play. The judge ruleset has no in-skin counterpart — the Debug Menu is its only surface.
@@ -1318,6 +1325,14 @@ class PlayerWebDemoApp {
       .name('Auto-save play history')
       .onChange((value: boolean) => {
         this.guiState.autoSavePlaylog = value;
+      });
+    // Leaderboard submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API
+    // (same origin, `/api/*`) as the result scene mounts; the result shows the rank in the status line.
+    this.leaderboardSubmitController = library
+      .add(this.guiState, 'submitToLeaderboard')
+      .name('Submit to Leaderboard')
+      .onChange((value: boolean) => {
+        this.guiState.submitToLeaderboard = value;
       });
     library
       .add(
@@ -2494,6 +2509,7 @@ class PlayerWebDemoApp {
           // Auto-save fires even when the theme ships no result skin — falling back to select
           // shouldn't cost the user their replay file.
           this.maybeAutoSavePlaylog(playlog);
+          this.maybeSubmitToLeaderboard(playlog, song);
           this.unlockPlaylogOptions();
         });
       },
@@ -4037,6 +4053,7 @@ class PlayerWebDemoApp {
       this.activePlayRecordKey = undefined;
     }
     this.maybeAutoSavePlaylog(data.playlog);
+    this.maybeSubmitToLeaderboard(data.playlog, data.song);
     this.unlockPlaylogOptions();
   }
 
@@ -4048,7 +4065,9 @@ class PlayerWebDemoApp {
    */
   private lockPlaylogOptionsForPlay(): void {
     this.activePlayAutoSavePlaylog = this.guiState.autoSavePlaylog;
+    this.activePlaySubmitToLeaderboard = this.guiState.submitToLeaderboard;
     this.playlogSaveController?.disable();
+    this.leaderboardSubmitController?.disable();
     for (const controller of this.playOptionControllers) {
       controller.disable();
     }
@@ -4057,6 +4076,7 @@ class PlayerWebDemoApp {
   /** Re-enables the playlog option controllers once no play is in flight. */
   private unlockPlaylogOptions(): void {
     this.playlogSaveController?.enable();
+    this.leaderboardSubmitController?.enable();
     for (const controller of this.playOptionControllers) {
       controller.enable();
     }
@@ -4075,6 +4095,33 @@ class PlayerWebDemoApp {
    * (LR2/default `showResult`, beatoraja `onComplete`) the moment the result presentation is up. Failures are
    * non-fatal — the result screen must never be blocked by a download hiccup.
    */
+  /**
+   * Sends the play to the Leaderboard when "Submit to Leaderboard" was on at song start. Runs in the background: the
+   * result screen never waits for it, and its outcome (rank, or why it was not sent) goes to the status line.
+   */
+  private maybeSubmitToLeaderboard(playlog: BeMusicPlaylog | undefined, song: BrowserSongEntry): void {
+    if (!this.activePlaySubmitToLeaderboard || playlog === undefined) {
+      return;
+    }
+    const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
+    if (!prepared.ok) {
+      if (prepared.reason !== 'not-rankable') {
+        this.setStatus(`Leaderboard: not submitted (${prepared.reason})`);
+      }
+      return;
+    }
+    const client = `${PLAYLOG_RECORDER.name}/${PLAYLOG_RECORDER.version}${
+      PLAYLOG_RECORDER.build !== undefined ? ` (build ${PLAYLOG_RECORDER.build})` : ''
+    }`;
+    const playedRuleset = playlog.play.judgeRuleset ?? 'lr2';
+    void submitToLeaderboard(prepared.submission, { client })
+      .then((result) => this.setStatus(describeLeaderboardResult(result, playedRuleset)))
+      .catch((error: unknown) => {
+        gameplayLog.warn('leaderboard submission failed', error);
+        this.setStatus('Leaderboard: not submitted (network error)');
+      });
+  }
+
   private maybeAutoSavePlaylog(playlog: BeMusicPlaylog | undefined): void {
     if (!this.activePlayAutoSavePlaylog || playlog === undefined) {
       return;

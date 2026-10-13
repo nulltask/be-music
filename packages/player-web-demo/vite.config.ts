@@ -612,5 +612,14 @@ export default defineConfig({
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
     },
+    // The deployed Worker forwards `/api/*` and `/leaderboard/*` to the Leaderboard Worker; in development they go to a
+    // local one (`pnpm --filter @be-music/leaderboard-api run dev`, port 8787 unless LEADERBOARD_DEV_ORIGIN says
+    // otherwise). The Host header is kept, so the Leaderboard sees this dev origin like it sees the real one.
+    proxy: Object.fromEntries(
+      ['/api', '/leaderboard'].map((prefix) => [
+        prefix,
+        { target: process.env.LEADERBOARD_DEV_ORIGIN ?? 'http://localhost:8787', changeOrigin: false },
+      ]),
+    ),
   },
 });
