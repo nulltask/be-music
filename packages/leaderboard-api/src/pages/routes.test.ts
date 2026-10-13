@@ -32,7 +32,7 @@ async function submit(cookie: string, chart: TestChart, hits: number, title: str
   const playlog = makePlaylog(chart, { noteCount: 10, hits, skip });
   playlog.chart.title = title;
   playlog.chart.artist = 'Artist';
-  const response = await fetchApp('/api/v1/scores', {
+  const response = await fetchApp('/api/v0/scores', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
     body: submissionBody(playlog, chart.playDocument, chart.chartDocument),
@@ -85,7 +85,7 @@ describe('Leaderboard pages', () => {
     // Player-controlled text is escaped, never rendered as markup.
     expect(listed.html).not.toContain(evil);
     expect(listed.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-    const me = (await (await fetchApp('/api/v1/me', { headers: { cookie: alice } })).json()) as { handle: string };
+    const me = (await (await fetchApp('/api/v0/me', { headers: { cookie: alice } })).json()) as { handle: string };
     firstHandle = me.handle;
   });
 
@@ -107,7 +107,7 @@ describe('Leaderboard pages', () => {
     expect(score.html).toContain('LR2');
     expect(score.html).toContain('beatoraja');
     expect(score.html).toContain('IIDX');
-    expect(score.html).toContain(`/api/v1/scores/${firstScore}/playlog`);
+    expect(score.html).toContain(`/api/v0/scores/${firstScore}/playlog`);
 
     const ranking = await page(`/leaderboard/charts/${encodeURIComponent(chart.chartFingerprint)}`);
     expect(ranking.status).toBe(200);

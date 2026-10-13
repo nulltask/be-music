@@ -115,8 +115,8 @@ describe('submitToLeaderboard', () => {
     expect(calls.map((call) => call.url)).toEqual([
       '/api/auth/get-session',
       '/api/auth/sign-in/anonymous',
-      '/api/v1/scores',
-      '/api/v1/scores',
+      '/api/v0/scores',
+      '/api/v0/scores',
     ]);
     const headers = calls[2]!.init!.headers as Record<string, string>;
     expect(headers['content-encoding']).toBe('gzip');
@@ -142,7 +142,7 @@ describe('submitToLeaderboard', () => {
       httpStatus: 409,
       error: 'play-already-submitted',
     });
-    expect(calls.map((call) => call.url)).toEqual(['/api/auth/get-session', '/api/v1/scores']);
+    expect(calls.map((call) => call.url)).toEqual(['/api/auth/get-session', '/api/v0/scores']);
   });
 });
 

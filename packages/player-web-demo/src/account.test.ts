@@ -17,7 +17,7 @@ describe('describeLeaderboardAccount', () => {
 });
 
 describe('loadLeaderboardAccount', () => {
-  test('reads /api/v1/me, and reports no account without a session or a server', async () => {
+  test('reads /api/v0/me, and reports no account without a session or a server', async () => {
     const account = { handle: 'h', displayName: 'D', anonymous: false, passkeys: 1 };
     const requested: string[] = [];
     const ok = (async (input: RequestInfo | URL) => {
@@ -34,7 +34,7 @@ describe('loadLeaderboardAccount', () => {
       throw new TypeError('Failed to fetch');
     }) as typeof fetch;
     expect(await loadLeaderboardAccount(ok)).toEqual(account);
-    expect(requested.splice(0)).toEqual(['/api/auth/get-session', '/api/v1/me']);
+    expect(requested.splice(0)).toEqual(['/api/auth/get-session', '/api/v0/me']);
     // Signed out: /me is never asked, so the browser logs no 401.
     expect(await loadLeaderboardAccount(signedOut)).toBeUndefined();
     expect(requested.splice(0)).toEqual(['/api/auth/get-session']);

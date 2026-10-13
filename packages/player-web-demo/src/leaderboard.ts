@@ -97,7 +97,7 @@ export async function submitToLeaderboard(
   }
 
   const post = async (withChartDocument: boolean): Promise<Response> =>
-    doFetch('/api/v1/scores', {
+    doFetch('/api/v0/scores', {
       method: 'POST',
       credentials: 'same-origin',
       headers: {

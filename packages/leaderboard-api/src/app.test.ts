@@ -31,7 +31,7 @@ afterAll(async () => {
 });
 
 function submit(cookie: string | undefined, body: Uint8Array<ArrayBuffer>): Promise<Response> {
-  return fetchApp('/api/v1/scores', {
+  return fetchApp('/api/v0/scores', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -53,7 +53,7 @@ async function submitPlay(cookie: string, chart: TestChart, hits: number, withCh
 
 describe('API versions', () => {
   test('answers an unknown version or path under /api with a JSON 404', async () => {
-    for (const path of ['/api/v2/me', '/api/v1/nothing-here', '/api/scores']) {
+    for (const path of ['/api/v2/me', '/api/v0/nothing-here', '/api/scores']) {
       const response = await fetchApp(path);
       expect(response.status).toBe(404);
       expect(await response.json()).toEqual({ error: 'not-found' });
@@ -61,7 +61,7 @@ describe('API versions', () => {
   });
 });
 
-describe('POST /api/v1/scores', () => {
+describe('POST /api/v0/scores', () => {
   const chart = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);
 
   test('requires a session, anonymous or not', async () => {
@@ -155,7 +155,7 @@ describe('rankings', () => {
     // A worse play does not lower a personal best.
     expect((await submitPlay(players[0]!, chart, 2)).status).toBe(201);
 
-    const query = `/api/v1/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard?ruleset=lr2`;
+    const query = `/api/v0/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard?ruleset=lr2`;
     const publicOnly = (await (await fetchApp(query)).json()) as { players: number; entries: unknown[] };
     expect(publicOnly).toMatchObject({ players: 0, entries: [] });
 
@@ -179,7 +179,7 @@ describe('rankings', () => {
     expect(secondPage.entries.map((entry) => entry.rank)).toEqual([2]);
 
     const me = await fetchApp(
-      `/api/v1/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard/me?ruleset=lr2`,
+      `/api/v0/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard/me?ruleset=lr2`,
       {
         headers: { cookie: players[1]! },
       },
@@ -196,19 +196,19 @@ describe('rankings', () => {
       submissionBody(playlog, assistedChart.playDocument, assistedChart.chartDocument),
     );
     expect(response.status).toBe(201);
-    const base = `/api/v1/charts/${encodeURIComponent(assistedChart.chartFingerprint)}/leaderboard?ruleset=lr2&anonymous=1`;
+    const base = `/api/v0/charts/${encodeURIComponent(assistedChart.chartFingerprint)}/leaderboard?ruleset=lr2&anonymous=1`;
     expect(((await (await fetchApp(base)).json()) as { players: number }).players).toBe(0);
     expect(((await (await fetchApp(`${base}&assisted=1`)).json()) as { players: number }).players).toBe(1);
   });
 });
 
-describe('GET /api/v1/scores/:id', () => {
+describe('GET /api/v0/scores/:id', () => {
   test('returns the play and its public play log', async () => {
     const chart = makeChart(['#00111:01', '#00211:01', '#00311:01', '#00411:01', '#00511:01', '#00611:01']);
     const cookie = await signInAnonymously(fetchApp);
     const accepted = (await (await submitPlay(cookie, chart, 7)).json()) as { scoreId: string };
 
-    const detail = (await (await fetchApp(`/api/v1/scores/${accepted.scoreId}`)).json()) as {
+    const detail = (await (await fetchApp(`/api/v0/scores/${accepted.scoreId}`)).json()) as {
       chartFingerprint: string;
       playedRuleset: string;
       verification: string;
@@ -227,11 +227,11 @@ describe('GET /api/v1/scores/:id', () => {
       expect(result.gaugeFinal).toBeLessThanOrEqual(100);
     }
 
-    const playlog = await fetchApp(`/api/v1/scores/${accepted.scoreId}/playlog`);
+    const playlog = await fetchApp(`/api/v0/scores/${accepted.scoreId}/playlog`);
     expect(playlog.status).toBe(200);
     expect(playlog.headers.get('content-encoding')).toBe('gzip');
 
-    expect((await fetchApp('/api/v1/scores/missing')).status).toBe(404);
+    expect((await fetchApp('/api/v0/scores/missing')).status).toBe(404);
   });
 });
 
@@ -252,7 +252,7 @@ describe('reassignScores', () => {
     await reassignScores(db, await userIdOf(anonymous), await userIdOf(linked));
 
     const me = await fetchApp(
-      `/api/v1/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard/me?ruleset=lr2`,
+      `/api/v0/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard/me?ruleset=lr2`,
       {
         headers: { cookie: linked },
       },
@@ -262,12 +262,12 @@ describe('reassignScores', () => {
 });
 
 describe('accounts', () => {
-  test('GET /api/v1/me shows the account, and a claimed account leaves the anonymous filter', async () => {
+  test('GET /api/v0/me shows the account, and a claimed account leaves the anonymous filter', async () => {
     const { claimAccount } = await import('./accounts.ts');
-    expect((await fetchApp('/api/v1/me')).status).toBe(401);
+    expect((await fetchApp('/api/v0/me')).status).toBe(401);
 
     const cookie = await signInAnonymously(fetchApp);
-    const before = (await (await fetchApp('/api/v1/me', { headers: { cookie } })).json()) as {
+    const before = (await (await fetchApp('/api/v0/me', { headers: { cookie } })).json()) as {
       handle: string;
       displayName: string;
       anonymous: boolean;
@@ -277,7 +277,7 @@ describe('accounts', () => {
 
     const chart = makeChart(['#00111:01', '#00211:0101', '#00311:010101']);
     expect((await submitPlay(cookie, chart, 8)).status).toBe(201);
-    const ranking = `/api/v1/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard?ruleset=lr2`;
+    const ranking = `/api/v0/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard?ruleset=lr2`;
     expect(((await (await fetchApp(ranking)).json()) as { players: number }).players).toBe(0);
 
     // What registering a passkey does to the account (the WebAuthn ceremony itself needs a browser).
@@ -286,7 +286,7 @@ describe('accounts', () => {
     };
     await claimAccount(openDatabase(env.DB), session.user.id);
 
-    const after = await (await fetchApp('/api/v1/me', { headers: { cookie } })).json();
+    const after = await (await fetchApp('/api/v0/me', { headers: { cookie } })).json();
     expect(after).toEqual({ ...before, displayName: 'Player', anonymous: false });
     const listed = (await (await fetchApp(ranking)).json()) as { players: number; entries: Array<{ handle: string }> };
     expect(listed.players).toBe(1);

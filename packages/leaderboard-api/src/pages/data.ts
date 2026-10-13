@@ -1,6 +1,6 @@
-import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
-import { chart, chartAlias, profile, score, scoreResult, user } from '../db/schema.ts';
+import { chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
 import type { ChartAlias } from './external.ts';
 
 export interface RecentScore {
@@ -101,6 +101,54 @@ export async function loadScoreDetail(db: Database, scoreId: string) {
 
 export async function loadChart(db: Database, chartFingerprint: string) {
   return db.query.chart.findFirst({ where: eq(chart.chartFingerprint, chartFingerprint) });
+}
+
+/** The chartset a chart is filed under, for the breadcrumbs and the link to it. */
+export async function loadChartsetOf(db: Database, chartsetId: string | null) {
+  if (chartsetId === null) return undefined;
+  return db.query.chartset.findFirst({ where: eq(chartset.id, chartsetId) });
+}
+
+export async function loadChartset(db: Database, id: string) {
+  return db.query.chartset.findFirst({ where: eq(chartset.id, id) });
+}
+
+export interface ChartsetChart {
+  chartFingerprint: string;
+  title: string | null;
+  subtitle: string | null;
+  artist: string | null;
+  laneMode: string | null;
+  noteCount: number;
+  packType: 'included' | 'additional' | null;
+  listed: boolean;
+  players: number;
+}
+
+/** The charts of a chartset with their player counts: the work's own charts first, then the add-ons, by note count. */
+export async function loadChartsetCharts(db: Database, chartsetId: string): Promise<ChartsetChart[]> {
+  const rows = await db
+    .select({
+      chartFingerprint: chart.chartFingerprint,
+      title: chart.title,
+      subtitle: chart.subtitle,
+      artist: chart.artist,
+      laneMode: chart.laneMode,
+      noteCount: chart.noteCount,
+      packType: chart.packType,
+      status: chart.status,
+      players: countDistinct(score.userId),
+    })
+    .from(chart)
+    .leftJoin(score, eq(score.chartFingerprint, chart.chartFingerprint))
+    .where(eq(chart.chartsetId, chartsetId))
+    .groupBy(chart.chartFingerprint)
+    .orderBy(asc(chart.noteCount));
+  const order = (packType: ChartsetChart['packType']): number =>
+    packType === 'included' ? 0 : packType === 'additional' ? 1 : 2;
+  return rows
+    .map(({ status, ...row }) => ({ ...row, listed: status === 'listed' }))
+    .sort((a, b) => order(a.packType) - order(b.packType) || a.noteCount - b.noteCount);
 }
 
 export async function loadPlayer(db: Database, handle: string) {
