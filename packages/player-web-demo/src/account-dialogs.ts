@@ -17,11 +17,19 @@ const SIGN_UP_COPY = {
   },
 } as const;
 
+/** What the dialogs report back: any change to the account, and a sign-in or sign-up that went through. */
+export interface AccountDialogHandlers {
+  /** The account may have changed (also after a sign-up that stopped half-way): re-read it. */
+  onChanged(): void;
+  /** The player is signed in to a kept account now. */
+  onSignedIn(): void;
+}
+
 /**
- * Wires the Leaderboard sign-in and sign-up dialogs (`#leaderboard-sign-in`, `#leaderboard-sign-up`). `onChanged`
- * runs after a successful sign-in or sign-up, to re-read the account. Returns the function that opens one.
+ * Wires the Leaderboard sign-in and sign-up dialogs (`#leaderboard-sign-in`, `#leaderboard-sign-up`). Returns the
+ * function that opens one.
  */
-export function wireAccountDialogs(onChanged: () => void): (dialog: AccountDialog) => void {
+export function wireAccountDialogs(handlers: AccountDialogHandlers): (dialog: AccountDialog) => void {
   const open = (which: AccountDialog): void => {
     closeAll();
     const dialog = document.querySelector<HTMLDialogElement>(DIALOG_IDS[which === 'keep' ? 'sign-up' : which]);
@@ -45,7 +53,7 @@ export function wireAccountDialogs(onChanged: () => void): (dialog: AccountDialo
     else if (action === 'open-sign-up') open('sign-up');
     else if (action === 'sign-in') {
       const dialog = button.closest('dialog');
-      void run(button, dialog, signInWithLeaderboardPasskey, 'Sign-in failed', onChanged);
+      void run(button, dialog, signInWithLeaderboardPasskey, 'Sign-in failed', handlers);
     }
   });
 
@@ -64,7 +72,7 @@ export function wireAccountDialogs(onChanged: () => void): (dialog: AccountDialo
       form.closest('dialog'),
       () => signUpForLeaderboard({ handle: text('handle'), displayName: text('displayName') }),
       'Sign-up failed',
-      onChanged,
+      handlers,
     );
   });
 
@@ -77,7 +85,7 @@ async function run(
   dialog: HTMLDialogElement | null,
   action: () => Promise<AccountActionResult>,
   failure: string,
-  onChanged: () => void,
+  handlers: AccountDialogHandlers,
 ): Promise<void> {
   if (button !== null) button.disabled = true;
   say(dialog, undefined);
@@ -85,11 +93,12 @@ async function run(
     const result = await action();
     if (result.ok) {
       dialog?.close();
-      onChanged();
+      handlers.onSignedIn();
+      handlers.onChanged();
     } else {
       say(dialog, result.error.startsWith('Your account is ready') ? result.error : `${failure}: ${result.error}`);
       // A half-made account (saved, no passkey yet) is still an account: show it.
-      onChanged();
+      handlers.onChanged();
     }
   } catch (error) {
     say(dialog, `${failure}: ${error instanceof Error ? error.message : String(error)}`);
