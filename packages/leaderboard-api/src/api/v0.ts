@@ -1,6 +1,6 @@
-import { sValidator } from '@hono/standard-validator';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
+import { describeRoute, openAPIRouteHandler, resolver, validator } from 'hono-openapi';
 import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
@@ -12,27 +12,40 @@ import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { countPlayers, loadRanking, rankOfExScore, type RankingFilter } from '../ranking.ts';
 import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
 import { submitScore } from '../scores/submit.ts';
+import {
+  accountResponse,
+  errorResponse,
+  isOn,
+  myRankQuery,
+  myRankResponse,
+  rankingQuery,
+  rankingResponse,
+  scoreResponse,
+  submissionBody,
+  submissionResponse,
+} from './schemas.ts';
 
-const rulesetSchema = v.picklist(['lr2', 'beatoraja', 'iidx']);
-const flagSchema = v.optional(v.picklist(['0', '1', 'true', 'false']), '0');
-const isOn = (flag: string): boolean => flag === '1' || flag === 'true';
-
-const rankingQuery = v.object({
-  ruleset: rulesetSchema,
-  assisted: flagSchema,
-  anonymous: flagSchema,
-  played: flagSchema,
-  offset: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(0)), '0'),
-  limit: v.optional(v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1), v.maxValue(100)), '50'),
+/** A JSON response of `schema` for the OpenAPI document. */
+const json = (description: string, schema: Parameters<typeof resolver>[0]) => ({
+  description,
+  content: { 'application/json': { schema: resolver(schema) } },
 });
 
-const meQuery = v.object({ ruleset: rulesetSchema, assisted: flagSchema });
+const signInRequired = json('No session: sign in first (anonymously is enough).', errorResponse(['sign-in-required']));
+const notFound = (what: string) => json(`${what} does not exist.`, errorResponse(['not-found']));
 
-const submissionBody = v.object({
-  playlog: v.unknown(),
-  playDocument: v.unknown(),
-  chartDocument: v.optional(v.unknown()),
-});
+/** The OpenAPI document's header; the paths come from the routes' `describeRoute` and validators. */
+export const OPENAPI_DOCUMENTATION = {
+  openapi: '3.1.0',
+  info: {
+    title: 'be-music Leaderboard API',
+    version: '0',
+    description:
+      'Version 0 is the beta: it may still change incompatibly (docs/leaderboard.md section 8). Requests are ' +
+      'authenticated with the Better Auth session cookie from `/api/auth/*`; reads are public.',
+  },
+  servers: [{ url: '/api/v0' }],
+};
 
 /**
  * Runs `work` after the response is sent (`waitUntil`). Without an execution context (tests calling `app.request`
@@ -68,147 +81,253 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
     await next();
   });
 
-  v0.get('/me', async (c) => {
-    const userId = c.get('userId');
-    if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
-    const account = await loadAccount(c.get('db'), userId);
-    if (account === undefined) return c.json({ error: 'not-found' }, 404);
-    return c.json(account);
-  });
+  v0.get(
+    '/openapi.json',
+    openAPIRouteHandler(v0, { documentation: OPENAPI_DOCUMENTATION, exclude: ['/openapi.json'] }),
+  );
 
-  v0.post('/scores', async (c) => {
-    const userId = c.get('userId');
-    if (userId === undefined) {
-      return c.json({ error: 'sign-in-required' }, 401);
-    }
-    if (c.env.SUBMIT_LIMITER !== undefined) {
-      const { success } = await c.env.SUBMIT_LIMITER.limit({ key: userId });
-      if (!success) return c.json({ error: 'rate-limited' }, 429, { 'Retry-After': '60' });
-    }
-    const body = await readJsonBody(c.req.raw, SUBMISSION_LIMITS);
-    if (!body.ok) {
-      return c.json({ error: body.reason }, body.status);
-    }
-    const parsedBody = v.safeParse(submissionBody, body.value);
-    if (!parsedBody.success) {
-      return c.json({ error: 'invalid-submission' }, 400);
-    }
-    let playlog;
-    try {
-      playlog = parsePlaylog(parsedBody.output.playlog);
-    } catch (error) {
-      if (error instanceof PlaylogParseError) return c.json({ error: 'invalid-playlog', detail: error.message }, 422);
-      throw error;
-    }
-    const outcome = await submitScore(
-      { db: c.get('db'), blobs: c.env.BLOBS, now, newId },
-      {
-        userId,
-        playlog,
-        playlogText: serializePlaylog(playlog),
-        playDocument: parsedBody.output.playDocument,
-        chartDocument: parsedBody.output.chartDocument,
-        submittedBy: c.req.header('be-music-client'),
+  v0.get(
+    '/me',
+    describeRoute({
+      tags: ['Account'],
+      summary: 'My account',
+      responses: {
+        200: json('The signed-in account.', accountResponse),
+        401: signInRequired,
+        404: notFound('The account'),
       },
-    );
-    if (outcome.status === 'rejected') {
-      return c.json({ error: outcome.reason }, outcome.httpStatus);
-    }
-    const { status, ...rest } = outcome;
-    // A chart seen for the first time is filed under its chartset after the response, without holding it up.
-    if (status === 'accepted') {
-      afterResponse(c, refreshChartsetIfUnchecked(c.get('db'), chartsetLookup, rest.chartFingerprint, now()));
-    }
-    return c.json(rest, status === 'accepted' ? 201 : 200);
-  });
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const account = await loadAccount(c.get('db'), userId);
+      if (account === undefined) return c.json({ error: 'not-found' }, 404);
+      return c.json(account);
+    },
+  );
 
-  v0.get('/scores/:id', async (c) => {
-    const db = c.get('db');
-    const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
-    if (found === undefined) return c.json({ error: 'not-found' }, 404);
-    const owner = await db.query.profile.findFirst({ where: eq(profile.userId, found.userId) });
-    const results = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, found.id));
-    return c.json({
-      id: found.id,
-      chartFingerprint: found.chartFingerprint,
-      playFingerprint: found.playFingerprint,
-      player: owner ? { handle: owner.handle, displayName: owner.displayName } : null,
-      playedRuleset: found.playedRuleset,
-      gauge: found.gauge,
-      assisted: found.assisted,
-      assistFlags: found.assistFlags,
-      verification: found.verification,
-      createdAt: found.createdAt.getTime(),
-      results: results.map(({ scoreId: _scoreId, ...result }) => result),
-    });
-  });
-
-  v0.get('/scores/:id/playlog', async (c) => {
-    const db = c.get('db');
-    const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
-    if (found === undefined) return c.json({ error: 'not-found' }, 404);
-    if (found.replayVisibility !== 'public' && found.userId !== c.get('userId')) {
-      return c.json({ error: 'not-found' }, 404);
-    }
-    const object = await c.env.BLOBS.get(found.playlogKey);
-    if (object === null) return c.json({ error: 'not-found' }, 404);
-    return new Response(object.body, {
-      headers: {
-        'content-type': 'application/json',
-        'content-encoding': 'gzip',
-        'cache-control': found.replayVisibility === 'public' ? 'public, max-age=31536000, immutable' : 'private',
+  v0.post(
+    '/scores',
+    describeRoute({
+      tags: ['Scores'],
+      summary: 'Submit a play',
+      description:
+        'Submits a play log with its fingerprint documents. The body is JSON, gzip-compressed (`Content-Encoding: ' +
+        'gzip`). The server re-simulates the play under every ruleset and answers its figures and ranks. The same ' +
+        'play submitted again by the same account answers 200 with the stored result.',
+      requestBody: {
+        required: true,
+        content: { 'application/json': { schema: resolver(submissionBody) } },
       },
-      encodeBody: 'manual',
-    });
-  });
+      responses: {
+        201: json('Accepted.', submissionResponse),
+        200: json('Already submitted by this account: the stored result.', submissionResponse),
+        400: json(
+          'The body is not a submission.',
+          errorResponse(['invalid-submission', 'empty-body', 'invalid-encoding', 'invalid-json']),
+        ),
+        401: signInRequired,
+        409: json(
+          '`chart-document-required`: send `chartDocument` too. `play-already-submitted`: another account sent it.',
+          errorResponse(['chart-document-required', 'play-already-submitted']),
+        ),
+        413: json('The body is too large.', errorResponse(['body-too-large'])),
+        415: json('Not gzip-compressed JSON.', errorResponse(['expected-json', 'unsupported-encoding'])),
+        422: json(
+          'The play cannot be ranked: an auto or aborted play, a malformed play log, or a fingerprint document that ' +
+            'does not hash to the play log’s fingerprint.',
+          errorResponse([
+            'invalid-playlog',
+            'auto-play',
+            'aborted',
+            'missing-fingerprint',
+            'play-document-not-a-document',
+            'play-document-fingerprint-mismatch',
+            'chart-document-not-a-document',
+            'chart-document-fingerprint-mismatch',
+          ]),
+        ),
+        429: json('Too many submissions; retry after `Retry-After` seconds.', errorResponse(['rate-limited'])),
+      },
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) {
+        return c.json({ error: 'sign-in-required' }, 401);
+      }
+      if (c.env.SUBMIT_LIMITER !== undefined) {
+        const { success } = await c.env.SUBMIT_LIMITER.limit({ key: userId });
+        if (!success) return c.json({ error: 'rate-limited' }, 429, { 'Retry-After': '60' });
+      }
+      const body = await readJsonBody(c.req.raw, SUBMISSION_LIMITS);
+      if (!body.ok) {
+        return c.json({ error: body.reason }, body.status);
+      }
+      const parsedBody = v.safeParse(submissionBody, body.value);
+      if (!parsedBody.success) {
+        return c.json({ error: 'invalid-submission' }, 400);
+      }
+      let playlog;
+      try {
+        playlog = parsePlaylog(parsedBody.output.playlog);
+      } catch (error) {
+        if (error instanceof PlaylogParseError) return c.json({ error: 'invalid-playlog', detail: error.message }, 422);
+        throw error;
+      }
+      const outcome = await submitScore(
+        { db: c.get('db'), blobs: c.env.BLOBS, now, newId },
+        {
+          userId,
+          playlog,
+          playlogText: serializePlaylog(playlog),
+          playDocument: parsedBody.output.playDocument,
+          chartDocument: parsedBody.output.chartDocument,
+          submittedBy: c.req.header('be-music-client'),
+        },
+      );
+      if (outcome.status === 'rejected') {
+        return c.json({ error: outcome.reason }, outcome.httpStatus);
+      }
+      const { status, ...rest } = outcome;
+      // A chart seen for the first time is filed under its chartset after the response, without holding it up.
+      if (status === 'accepted') {
+        afterResponse(c, refreshChartsetIfUnchecked(c.get('db'), chartsetLookup, rest.chartFingerprint, now()));
+      }
+      return c.json(rest, status === 'accepted' ? 201 : 200);
+    },
+  );
 
-  v0.get('/charts/:chartFingerprint/leaderboard', sValidator('query', rankingQuery), async (c) => {
-    const query = c.req.valid('query');
-    const filter: RankingFilter = {
-      chartFingerprint: c.req.param('chartFingerprint'),
-      ruleset: query.ruleset,
-      assisted: isOn(query.assisted),
-      includeAnonymous: isOn(query.anonymous),
-      playedHereOnly: isOn(query.played),
-    };
-    const ranking = await loadRanking(c.get('db'), filter, { offset: query.offset, limit: query.limit });
-    return c.json({ ...ranking, offset: query.offset, limit: query.limit });
-  });
+  v0.get(
+    '/scores/:id',
+    describeRoute({
+      tags: ['Scores'],
+      summary: 'A play',
+      responses: { 200: json('The play under every ruleset.', scoreResponse), 404: notFound('The score') },
+    }),
+    async (c) => {
+      const db = c.get('db');
+      const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
+      if (found === undefined) return c.json({ error: 'not-found' }, 404);
+      const owner = await db.query.profile.findFirst({ where: eq(profile.userId, found.userId) });
+      const results = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, found.id));
+      return c.json({
+        id: found.id,
+        chartFingerprint: found.chartFingerprint,
+        playFingerprint: found.playFingerprint,
+        player: owner ? { handle: owner.handle, displayName: owner.displayName } : null,
+        playedRuleset: found.playedRuleset,
+        gauge: found.gauge,
+        assisted: found.assisted,
+        assistFlags: found.assistFlags,
+        verification: found.verification,
+        createdAt: found.createdAt.getTime(),
+        results: results.map(({ scoreId: _scoreId, ...result }) => result),
+      });
+    },
+  );
 
-  v0.get('/charts/:chartFingerprint/leaderboard/me', sValidator('query', meQuery), async (c) => {
-    const userId = c.get('userId');
-    if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
-    const query = c.req.valid('query');
-    const db = c.get('db');
-    const chartFingerprint = c.req.param('chartFingerprint');
-    const assisted = isOn(query.assisted);
-    const mine = await db.query.bestScore.findFirst({
-      where: and(
-        eq(bestScore.userId, userId),
-        eq(bestScore.chartFingerprint, chartFingerprint),
-        eq(bestScore.ruleset, query.ruleset),
-        eq(bestScore.assisted, assisted),
-      ),
-    });
-    if (mine === undefined) return c.json({ error: 'not-played' }, 404);
-    // The viewer's own rank counts everyone, anonymous players included, so an anonymous viewer is ranked too.
-    const filter: RankingFilter = {
-      chartFingerprint,
-      ruleset: query.ruleset,
-      assisted,
-      includeAnonymous: true,
-      playedHereOnly: false,
-    };
-    return c.json({
-      rank: await rankOfExScore(db, filter, mine.bestEx),
-      players: await countPlayers(db, filter),
-      exScore: mine.bestEx,
-      exScoreId: mine.bestExScoreId,
-      clearLamp: mine.bestLamp,
-      missCount: mine.minMiss,
-      playCount: mine.playCount,
-    });
-  });
+  v0.get(
+    '/scores/:id/playlog',
+    describeRoute({
+      tags: ['Scores'],
+      summary: 'A play’s play log',
+      description: 'The stored play log, gzip-compressed. Only its player can read a private one.',
+      responses: {
+        200: { description: 'The play log (docs/playlog.md).', content: { 'application/json': {} } },
+        404: notFound('The score or its play log'),
+      },
+    }),
+    async (c) => {
+      const db = c.get('db');
+      const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
+      if (found === undefined) return c.json({ error: 'not-found' }, 404);
+      if (found.replayVisibility !== 'public' && found.userId !== c.get('userId')) {
+        return c.json({ error: 'not-found' }, 404);
+      }
+      const object = await c.env.BLOBS.get(found.playlogKey);
+      if (object === null) return c.json({ error: 'not-found' }, 404);
+      return new Response(object.body, {
+        headers: {
+          'content-type': 'application/json',
+          'content-encoding': 'gzip',
+          'cache-control': found.replayVisibility === 'public' ? 'public, max-age=31536000, immutable' : 'private',
+        },
+        encodeBody: 'manual',
+      });
+    },
+  );
+
+  v0.get(
+    '/charts/:chartFingerprint/leaderboard',
+    describeRoute({
+      tags: ['Rankings'],
+      summary: 'A chart’s ranking',
+      description: 'Players by best EX-Score under one ruleset; ties share a rank.',
+      responses: { 200: json('A page of the ranking.', rankingResponse) },
+    }),
+    validator('query', rankingQuery),
+    async (c) => {
+      const query = c.req.valid('query');
+      const filter: RankingFilter = {
+        chartFingerprint: c.req.param('chartFingerprint'),
+        ruleset: query.ruleset,
+        assisted: isOn(query.assisted),
+        includeAnonymous: isOn(query.anonymous),
+        playedHereOnly: isOn(query.played),
+      };
+      const ranking = await loadRanking(c.get('db'), filter, { offset: query.offset, limit: query.limit });
+      return c.json({ ...ranking, offset: query.offset, limit: query.limit });
+    },
+  );
+
+  v0.get(
+    '/charts/:chartFingerprint/leaderboard/me',
+    describeRoute({
+      tags: ['Rankings'],
+      summary: 'My rank on a chart',
+      description: 'My best on the chart and my rank among every player, anonymous ones included.',
+      responses: {
+        200: json('My rank.', myRankResponse),
+        401: signInRequired,
+        404: json('I have not played the chart under these filters.', errorResponse(['not-played'])),
+      },
+    }),
+    validator('query', myRankQuery),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const query = c.req.valid('query');
+      const db = c.get('db');
+      const chartFingerprint = c.req.param('chartFingerprint');
+      const assisted = isOn(query.assisted);
+      const mine = await db.query.bestScore.findFirst({
+        where: and(
+          eq(bestScore.userId, userId),
+          eq(bestScore.chartFingerprint, chartFingerprint),
+          eq(bestScore.ruleset, query.ruleset),
+          eq(bestScore.assisted, assisted),
+        ),
+      });
+      if (mine === undefined) return c.json({ error: 'not-played' }, 404);
+      // The viewer's own rank counts everyone, anonymous players included, so an anonymous viewer is ranked too.
+      const filter: RankingFilter = {
+        chartFingerprint,
+        ruleset: query.ruleset,
+        assisted,
+        includeAnonymous: true,
+        playedHereOnly: false,
+      };
+      return c.json({
+        rank: await rankOfExScore(db, filter, mine.bestEx),
+        players: await countPlayers(db, filter),
+        exScore: mine.bestEx,
+        exScoreId: mine.bestExScoreId,
+        clearLamp: mine.bestLamp,
+        missCount: mine.minMiss,
+        playCount: mine.playCount,
+      });
+    },
+  );
 
   return v0;
 }
