@@ -1,12 +1,13 @@
 import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import {
+  checkPlaylogEligibility,
+  PLAYLOG_ENGINE_VERSION,
   simulatePlaylog,
   type BeMusicPlaylog,
   type PlaylogRulesetId,
   type PlaylogRulesetResult,
 } from '@be-music/player/playlog';
-import playerPackage from '../../../player/package.json' with { type: 'json' };
 import { refreshChartListing } from '../charts.ts';
 import type { Database } from '../db/client.ts';
 import { bestScore, chart, chartAlias, score, scoreResult } from '../db/schema.ts';
@@ -14,7 +15,7 @@ import { rankOfExScore, countPlayers } from '../ranking.ts';
 import { mergeBestScores } from '../scoring/best.ts';
 import { resolveClearLamp, resolveMissCount, type ClearLamp } from '../scoring/lamp.ts';
 import { checkFingerprintDocument } from '../submission/documents.ts';
-import { checkEligibility } from '../submission/eligibility.ts';
+import { sha256Hex } from '../hash.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import { loadBestScores, toBestScoreRow } from './bests.ts';
 
@@ -58,7 +59,7 @@ export type SubmissionOutcome =
  */
 export async function submitScore(deps: SubmissionDeps, input: SubmissionInput): Promise<SubmissionOutcome> {
   const { db, blobs } = deps;
-  const eligibility = checkEligibility(input.playlog);
+  const eligibility = checkPlaylogEligibility(input.playlog);
   if (!eligibility.eligible) {
     return { status: 'rejected', httpStatus: 422, reason: eligibility.reason };
   }
@@ -179,7 +180,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
       verification,
       recordedBy: input.playlog.recorder !== undefined ? { ...input.playlog.recorder } : null,
       submittedBy: input.submittedBy ?? null,
-      serverEngine: playerPackage.version,
+      serverEngine: PLAYLOG_ENGINE_VERSION,
       playlogKey,
       createdAt: new Date(now),
       updatedAt: new Date(now),
@@ -313,11 +314,6 @@ export function fileHashAliases(chart: {
     if (hash !== undefined && FILE_HASH_PATTERNS[kind].test(hash)) aliases.push({ kind, hash });
   }
   return aliases;
-}
-
-async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 async function gzip(text: string): Promise<ArrayBuffer> {

@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
 import { profile } from './db/schema.ts';
+import { sha256Hex } from './hash.ts';
 
 /**
  * Player icons. A player may upload one (the clients shrink it to a 256 px square first); without one, an icon is
@@ -63,11 +64,6 @@ export function generatedAvatarSvg(seed: string): string {
     '<rect width="7" height="7" fill="#0f172a"/>' +
     `<g fill="hsl(${hue} 70% 62%)">${cells.join('')}</g></svg>`
   );
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export type AvatarUpload =

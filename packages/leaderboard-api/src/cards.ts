@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm';
 import { detectAvatarType } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import { score } from './db/schema.ts';
+import { sha256Hex } from './hash.ts';
 
 /**
  * Share cards of plays: the 1200 x 630 picture link previews show (og:image, twitter:card). The player's browser draws
@@ -20,11 +21,6 @@ const EXTENSIONS = { 'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jp
 export function cardUrl(scoreId: string, cardKey: string | null): string {
   const version = cardKey === null ? 'd' : (/\/([0-9a-f]{16})[0-9a-f]*\.\w+$/.exec(cardKey)?.[1] ?? 'u');
   return `/leaderboard/scores/${encodeURIComponent(scoreId)}/card?v=${version}`;
-}
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export type CardUpload =
