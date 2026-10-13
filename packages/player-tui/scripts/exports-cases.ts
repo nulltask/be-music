@@ -44,6 +44,7 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
     },
   });
   define('player-tui.createBgaAnsiRenderer', {
+    ioBound: true,
     run: async (fixtures) => {
       await playerTuiApi.createBgaAnsiRenderer(fixtures.emptyBmsJson, {
         baseDir: fixtures.tmpDir,
@@ -79,6 +80,7 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
     },
   });
   define('player-tui.loadStageFileAnsiImage', {
+    ioBound: true,
     run: async (fixtures) => {
       await playerTuiApi.loadStageFileAnsiImage(fixtures.emptyBmsJson, {
         baseDir: fixtures.tmpDir,
@@ -88,6 +90,7 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
     },
   });
   define('player-tui.loadStageFileAnsiLines', {
+    ioBound: true,
     run: async (fixtures) => {
       await playerTuiApi.loadStageFileAnsiLines(fixtures.emptyBmsJson, {
         baseDir: fixtures.tmpDir,
@@ -97,6 +100,7 @@ export function registerPlayerTuiExportsCases(define: DefineBenchmarkCase): void
     },
   });
   define('player-tui.loadTerminalAnsiImage', {
+    ioBound: true,
     run: async (fixtures) => {
       await playerTuiApi.loadTerminalAnsiImage(fixtures.tmpDir, 'missing.bmp', { width: 8, height: 4 });
     },

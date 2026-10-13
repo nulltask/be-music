@@ -36,6 +36,48 @@ export function resolveComparisonHz(stats: Pick<BenchmarkTaskStats, 'hz'> & { me
   return Number.isFinite(stats.hz) && stats.hz > 0 ? stats.hz : 0;
 }
 
+/**
+ * How long one timed sample should last when calls are batched: far above the timer's resolution (a fast function's
+ * single call, tens of nanoseconds, is otherwise indistinguishable from timer noise; issue #202).
+ */
+export const TARGET_SAMPLE_MS = 0.05;
+/** Upper bound on calls per sample, so a calibration fluke cannot make one sample run for long. */
+export const MAX_ITERATIONS_PER_SAMPLE = 100_000;
+
+/** Calls per sample for a function whose single call takes `singleCallMs`, so that a sample lasts `targetMs`. */
+export function resolveIterationsPerSample(
+  singleCallMs: number,
+  targetMs: number = TARGET_SAMPLE_MS,
+  maxIterations: number = MAX_ITERATIONS_PER_SAMPLE,
+): number {
+  if (!(singleCallMs > 0) || !Number.isFinite(singleCallMs)) {
+    return maxIterations;
+  }
+  return Math.max(1, Math.min(maxIterations, Math.ceil(targetMs / singleCallMs)));
+}
+
+/** Per-sample stats of a batch of `iterations` calls, turned into per-call stats. */
+export function scaleBatchedStats(stats: BenchmarkTaskStats, iterations: number): BenchmarkTaskStats {
+  const perCall = (value: number) => value / iterations;
+  return {
+    ...stats,
+    hz: stats.hz * iterations,
+    medianHz: stats.medianHz * iterations,
+    meanMs: perCall(stats.meanMs),
+    p50Ms: perCall(stats.p50Ms),
+    p75Ms: perCall(stats.p75Ms),
+    p99Ms: perCall(stats.p99Ms),
+    minMs: perCall(stats.minMs),
+    maxMs: perCall(stats.maxMs),
+    iterationsPerSample: iterations,
+  };
+}
+
+/** How long one timed sample lasted: the per-call median times the calls batched into it. */
+export function resolveSampleMs(stats: Pick<BenchmarkTaskStats, 'p50Ms' | 'iterationsPerSample'>): number {
+  return stats.p50Ms * (stats.iterationsPerSample ?? 1);
+}
+
 export function median(values: readonly number[]): number {
   if (values.length === 0) {
     return 0;
