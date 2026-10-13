@@ -4,13 +4,22 @@ import { openDatabase } from '../db/client.ts';
 import { loadScoreDetail } from '../scores/detail.ts';
 import { ResultCards } from './components/lists.tsx';
 import { Details, LampLegend } from './components/cards.tsx';
+import { EntityIcon } from './components/entity-icon.tsx';
 import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
 import { avatarUrl } from '../avatars.ts';
 import { cardUrl } from '../cards.ts';
 import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
-import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
+import {
+  chartTitle,
+  djLevel,
+  formatGauge,
+  formatScoreRate,
+  lampStyle,
+  rulesetName,
+  verificationMeaning,
+} from './format.ts';
 import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { displayRuleset, meta, notFound, PAGE_CACHE, withArtist, type PageContext, chartsetCrumbs } from './page.tsx';
@@ -151,8 +160,18 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
           ['Played', <LocalTime at={detail.score.createdAt.getTime()} />],
           ['Gauge', detail.score.gauge],
           ['Assists', detail.score.assisted ? detail.score.assistFlags.join(', ') : 'none'],
-          ['Verification', detail.score.verification],
-          ['Chart', <span class="font-mono text-xs">{detail.chart.chartFingerprint}</span>],
+          ['Verification', verificationMeaning(detail.score.verification)],
+          [
+            'Chart',
+            <a
+              class="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+              href={chartHref(detail.chart.chartFingerprint)}
+            >
+              <EntityIcon kind="chart" size="sm" />
+              {title}
+            </a>,
+          ],
+          ['Fingerprint', <span class="font-mono text-xs break-all">{detail.chart.chartFingerprint}</span>],
           ...(detail.score.replayVisibility === 'public'
             ? ([
                 [

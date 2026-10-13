@@ -25,6 +25,7 @@ import {
   showsGauge,
 } from '../format.ts';
 import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, Tag } from './basics.tsx';
+import { EntityIcon } from './entity-icon.tsx';
 import { InfoButton, When } from './play-info.tsx';
 
 /** The frame of a list: a card whose rows are split by hairlines. */
@@ -135,7 +136,10 @@ function Score(props: { exScore: number; noteCount: number; previous?: number })
             <Delta delta={gain} better title="Above the player’s previous best EX-Score" />
           </span>
         ) : null}
-        <span class="font-semibold">{props.exScore}</span>
+        <span class="inline-flex items-center gap-1 font-semibold">
+          <EntityIcon kind="score" size="sm" />
+          {props.exScore}
+        </span>
       </div>
       <div class="text-muted-foreground mt-1 text-xs">
         <span class="text-foreground/80 font-medium">{djLevel(props.exScore, props.noteCount)}</span>{' '}
@@ -244,8 +248,12 @@ export function RecentScoresList(props: {
             }
             title={
               <>
-                <a class={`${LINK} ${ABOVE} truncate`} href={chartHref(entry.chartFingerprint)}>
-                  {title}
+                <a
+                  class={`${LINK} ${ABOVE} inline-flex min-w-0 items-center gap-1`}
+                  href={chartHref(entry.chartFingerprint)}
+                >
+                  <EntityIcon kind="chart" size="sm" />
+                  <span class="truncate">{title}</span>
                 </a>
                 <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
               </>
@@ -314,7 +322,10 @@ export function ChartsetChartsList(props: { charts: ChartsetChart[] }) {
             start={<span class="text-muted-foreground w-14 text-xs font-medium">{formatLaneMode(entry.laneMode)}</span>}
             title={
               <>
-                <span class="truncate font-medium">{title}</span>
+                <span class="inline-flex min-w-0 items-center gap-1 font-medium">
+                  <EntityIcon kind="chart" size="sm" />
+                  <span class="truncate">{title}</span>
+                </span>
                 {entry.subtitle !== null && entry.subtitle.length > 0 ? (
                   <span class="text-muted-foreground truncate">{entry.subtitle}</span>
                 ) : null}
