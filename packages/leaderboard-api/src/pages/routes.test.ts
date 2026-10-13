@@ -126,10 +126,18 @@ describe('Leaderboard pages', () => {
     // Elsewhere: no file hash was recorded for this chart, so only the title search on BMS Search, encoded.
     expect(ranking.html).toContain('https://bmssearch.net/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
     expect(ranking.html).not.toContain('mocha-repository.info');
+    // Chart details and figures: the play log's metadata, the play counts and the lamp spread.
+    expect(ranking.html).toContain('>Judge rank<');
+    expect(ranking.html).toContain('>First played<');
+    expect(ranking.html).toContain('>Clear lamps<');
 
     const player = await page(`/leaderboard/players/${firstHandle}`);
     expect(player.status).toBe(200);
     expect(player.html).toContain(`@${firstHandle}`);
+    // Player figures: plays, charts, the lamp and DJ Rank spreads of their bests, and the rulesets they played under.
+    expect(player.html).toContain('>Average rate (LR2)<');
+    expect(player.html).toContain('>DJ Ranks<');
+    expect(player.html).toContain('>Played under<');
   });
 
   test('the display ruleset is one setting for every page, switched without changing page URLs', async () => {

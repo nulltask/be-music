@@ -48,7 +48,7 @@ import { prepareBeatorajaGameplayChart, type PreparedBeatorajaGameplayChart } fr
 import {
   BrowserSongCollectionStore,
   checkBrowserCompat,
-  computeChartFileSha256,
+  computeChartFileHashes,
   describeSongCollection,
   loadAssetBytes,
   materializeDroppedFiles,
@@ -58,6 +58,7 @@ import {
   type BrowserDroppedFile,
   type BrowserSongCollection,
   type BrowserSongEntry,
+  type ChartFileHashes,
 } from '@be-music/player-web/collection';
 import {
   downloadBlob,
@@ -127,6 +128,7 @@ import {
 } from './leaderboard.ts';
 import {
   createLeaderboardPasskey,
+  describeAccountChip,
   describeLeaderboardAccount,
   loadLeaderboardAccount,
   signInWithLeaderboardPasskey,
@@ -558,16 +560,18 @@ class PlayerWebDemoApp {
   /** Read-only "Account" row of the Leaderboard folder, refreshed after every account action and submission. */
   private leaderboardAccountController: Controller | undefined;
   private readonly leaderboardAccountState = { status: 'Not signed in' };
+  /** The Debug Menu's Leaderboard folder, which the account chip opens while signed out. */
+  private leaderboardFolder: GUI | undefined;
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
    * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
    * a change (`refreshPlayOptionControllers`).
    */
   private readonly playOptionControllers: Controller[] = [];
-  /** Per-entry chart-file SHA-256 cache (`''` = lookup failed) — see {@link resolveChartSha256}. */
-  private readonly chartSha256Cache = new Map<string, string>();
-  /** In-flight {@link resolveChartSha256} lookups, so a chart is hashed once however often it is asked for. */
-  private readonly chartSha256Pending = new Map<string, Promise<string | undefined>>();
+  /** Per-entry chart-file hash cache (`null` = lookup failed) — see {@link resolveChartHashes}. */
+  private readonly chartHashCache = new Map<string, ChartFileHashes | null>();
+  /** In-flight {@link resolveChartHashes} lookups, so a chart is hashed once however often it is asked for. */
+  private readonly chartHashPending = new Map<string, Promise<ChartFileHashes | undefined>>();
   /** Best record per chart ({@link songRecordKey}), persisted in `localStorage` and shown to be-music select skins. */
   private readonly songRecords = readStoredSongRecords();
   /** Each be-music skin's `settings` values by skin id, persisted in `localStorage` and handed to its scenes. */
@@ -1414,6 +1418,13 @@ class PlayerWebDemoApp {
    * device, moving that device's anonymous plays into it.
    */
   private buildLeaderboardFolder(leaderboard: GUI): void {
+    this.leaderboardFolder = leaderboard;
+    // Signed out, the account chip has no page to open: it opens this folder instead.
+    document.querySelector<HTMLAnchorElement>('#account-chip')?.addEventListener('click', (event) => {
+      if (event.currentTarget instanceof HTMLElement && event.currentTarget.dataset.state !== 'signed-out') return;
+      event.preventDefault();
+      this.openLeaderboardFolder();
+    });
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     this.leaderboardSubmitController = leaderboard
@@ -1446,10 +1457,29 @@ class PlayerWebDemoApp {
     void this.refreshLeaderboardAccount();
   }
 
-  /** Re-reads the Leaderboard account into the Debug Menu's "Account" row. */
+  /** Opens the Debug Menu with its Leaderboard folder unfolded. */
+  private openLeaderboardFolder(): void {
+    const folder = this.leaderboardFolder;
+    if (folder === undefined) return;
+    for (let current: GUI | undefined = folder; current !== undefined; current = current.parent) current.open();
+    folder.domElement.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Re-reads the Leaderboard account into the Debug Menu's "Account" row and the account chip. */
   private async refreshLeaderboardAccount(): Promise<void> {
-    this.leaderboardAccountState.status = describeLeaderboardAccount(await loadLeaderboardAccount());
+    const account = await loadLeaderboardAccount();
+    this.leaderboardAccountState.status = describeLeaderboardAccount(account);
     this.leaderboardAccountController?.updateDisplay();
+    const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
+    if (chip !== null) {
+      const view = describeAccountChip(account);
+      chip.dataset.state = view.state;
+      chip.title = view.title;
+      chip.href = view.href ?? '/leaderboard';
+      chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
+      const label = chip.querySelector('#account-chip-label');
+      if (label !== null) label.textContent = view.label;
+    }
   }
 
   private buildDeveloperFolder(developer: GUI): void {
@@ -1746,28 +1776,33 @@ class PlayerWebDemoApp {
   }
 
   /**
-   * SHA-256 (lowercase hex) of a song's source chart file, cached per entry id — the hash feeds both the play-log
-   * recording (`chart.sha256`) and dropped-log matching, and chart files are small enough that hashing the whole
-   * library on a dropped log stays cheap.
+   * SHA-256 and MD5 (lowercase hex) of a song's source chart file, cached per entry id — the hashes feed the play-log
+   * recording (`chart.sha256` / `chart.md5`) and dropped-log matching, and chart files are small enough that hashing
+   * the whole library on a dropped log stays cheap.
    */
-  private async resolveChartSha256(song: BrowserSongEntry): Promise<string | undefined> {
-    const cached = this.chartSha256Cache.get(song.id);
+  private async resolveChartHashes(song: BrowserSongEntry): Promise<ChartFileHashes | undefined> {
+    const cached = this.chartHashCache.get(song.id);
     if (cached !== undefined) {
-      return cached === '' ? undefined : cached;
+      return cached ?? undefined;
     }
-    const pending = this.chartSha256Pending.get(song.id);
+    const pending = this.chartHashPending.get(song.id);
     if (pending !== undefined) {
       return pending;
     }
-    const lookup = computeChartFileSha256(resolveSongSource(this.collection, song), song.chartPath)
+    const lookup = computeChartFileHashes(resolveSongSource(this.collection, song), song.chartPath)
       .catch(() => undefined)
-      .then((hash) => {
-        this.chartSha256Cache.set(song.id, hash ?? '');
-        return hash;
+      .then((hashes) => {
+        this.chartHashCache.set(song.id, hashes ?? null);
+        return hashes;
       })
-      .finally(() => this.chartSha256Pending.delete(song.id));
-    this.chartSha256Pending.set(song.id, lookup);
+      .finally(() => this.chartHashPending.delete(song.id));
+    this.chartHashPending.set(song.id, lookup);
     return lookup;
+  }
+
+  /** The SHA-256 half of {@link resolveChartHashes}. */
+  private async resolveChartSha256(song: BrowserSongEntry): Promise<string | undefined> {
+    return (await this.resolveChartHashes(song))?.sha256;
   }
 
   /**
@@ -1779,11 +1814,11 @@ class PlayerWebDemoApp {
     if (this.songRecords.size === 0) {
       return undefined;
     }
-    const hash = this.chartSha256Cache.get(song.id);
-    if (hash === undefined) {
-      void this.resolveChartSha256(song);
+    const hashes = this.chartHashCache.get(song.id);
+    if (hashes === undefined) {
+      void this.resolveChartHashes(song);
     }
-    return this.songRecords.get(songRecordKey(song, hash || undefined));
+    return this.songRecords.get(songRecordKey(song, hashes?.sha256));
   }
 
   /** Folds a finished play into its chart's best record and persists the records. */
@@ -2321,8 +2356,8 @@ class PlayerWebDemoApp {
   private async playSongBeatoraja(song: BrowserSongEntry, overrides: { autoPlay?: boolean }): Promise<void> {
     const bundle = this.beatorajaTheme;
     if (!bundle) return;
-    // Chart-file hash for the recorded play-log (matched back on a future play-log drop).
-    const chartSha256 = await this.resolveChartSha256(song);
+    // Chart-file hashes for the recorded play-log (matched back on a future play-log drop).
+    const chartHashes = await this.resolveChartHashes(song);
     // **TWO distinct variants** flow into the gameplay scene:
     //   - `skinVariant`: which `play_*` skin file to load. The theme may not ship every
     //     variant (a popular 7-only theme lacks a `play_9` skin, etc.), so this falls back
@@ -2529,7 +2564,7 @@ class PlayerWebDemoApp {
         autoScratch: this.guiState.autoScratch1P || this.guiState.autoScratch2P,
         recordPlaylog: {
           gauge: this.guiState.gauge,
-          ...(chartSha256 !== undefined ? { chartSha256 } : {}),
+          ...(chartHashes !== undefined ? { chartSha256: chartHashes.sha256, chartMd5: chartHashes.md5 } : {}),
           recorder: PLAYLOG_RECORDER,
         },
       },
@@ -3851,11 +3886,8 @@ class PlayerWebDemoApp {
     // with the no-decide fast-path.
     const gameplayFamily = pickActiveFamilyForScene(this.familyDispatchState(), 'gameplay', song);
     const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
-    const chartSha256 = await this.resolveChartSha256(song);
-    this.gameplayView = this.buildLr2GameplayView(song, playSkin, {
-      ...overrides,
-      ...(chartSha256 !== undefined ? { chartSha256 } : {}),
-    });
+    const chartHashes = await this.resolveChartHashes(song);
+    this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
     return this.gameplayView.prepare(this.sceneHost, song, resolveSongSource(this.collection, song));
   }
 
@@ -3873,14 +3905,14 @@ class PlayerWebDemoApp {
   private buildLr2GameplayView(
     song: BrowserSongEntry,
     playSkin: Lr2Skin | undefined,
-    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; chartSha256?: string },
+    overrides: { autoPlay?: boolean; replay?: BeMusicPlaylog; chartHashes?: ChartFileHashes },
   ): PixiGameplayView | DefaultPixiGameplayView {
     const playOptions = this.selectView?.getPlayOptions();
     const replay = overrides.replay;
     const autoPlay = overrides.autoPlay ?? this.guiState.autoPlay;
     // Only a play the player actually played counts towards the chart's best record.
     this.activePlayRecordKey =
-      autoPlay || replay !== undefined ? undefined : songRecordKey(song, overrides.chartSha256);
+      autoPlay || replay !== undefined ? undefined : songRecordKey(song, overrides.chartHashes?.sha256);
     const sharedOptions = {
       // The playlog-relevant options (auto play / random / DP flip / auto scratch / gauge / judge) read from
       // `guiState` — the Debug Menu's "Play options" folder and the LR2 select panel two-way sync into it, and it
@@ -3906,7 +3938,9 @@ class PlayerWebDemoApp {
       random2P: replay !== undefined ? ('OFF' as const) : this.guiState.random2P,
       gauge: replay !== undefined ? replay.play.gauge : this.guiState.gauge,
       ...(replay === undefined ? { judgeRuleset: this.guiState.judgeRuleset } : {}),
-      ...(overrides.chartSha256 !== undefined ? { chartSha256: overrides.chartSha256 } : {}),
+      ...(overrides.chartHashes !== undefined
+        ? { chartSha256: overrides.chartHashes.sha256, chartMd5: overrides.chartHashes.md5 }
+        : {}),
       playlogRecorder: PLAYLOG_RECORDER,
       replay,
       audioVolumes: { key: this.guiState.keyVolume / 100, bgm: this.guiState.bgmVolume / 100 },
@@ -4029,11 +4063,8 @@ class PlayerWebDemoApp {
     // the same helper so option marshalling stays in one place).
     const playSkin = gameplayFamily === 'lr2' ? pickLr2PlaySkin(this.playSkins, song) : undefined;
     // Chart-file hash for the recorded play-log (skipped for replays — they record nothing).
-    const chartSha256 = overrides.replay === undefined ? await this.resolveChartSha256(song) : undefined;
-    this.gameplayView = this.buildLr2GameplayView(song, playSkin, {
-      ...overrides,
-      ...(chartSha256 !== undefined ? { chartSha256 } : {}),
-    });
+    const chartHashes = overrides.replay === undefined ? await this.resolveChartHashes(song) : undefined;
+    this.gameplayView = this.buildLr2GameplayView(song, playSkin, { ...overrides, chartHashes });
     this.setStatus(`Playing: ${song.title}`);
     this.lockPlaylogOptionsForPlay();
     await this.gameplayView.mount(this.sceneHost, song, resolveSongSource(this.collection, song));

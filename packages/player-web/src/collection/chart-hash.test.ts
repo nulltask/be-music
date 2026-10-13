@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vite-plus/test';
 import type { BrowserSongAssetSource } from './types.ts';
-import { computeChartFileSha256, computeSha256Hex } from './chart-hash.ts';
+import { computeChartFileHashes, computeChartFileSha256, computeSha256Hex } from './chart-hash.ts';
+import { md5HexOfBytes } from './md5.ts';
 
 const encoder = new TextEncoder();
 
@@ -29,5 +30,16 @@ describe('chart-hash', () => {
   test('computeChartFileSha256 returns undefined for a missing chart or source', async () => {
     expect(await computeChartFileSha256(makeSource({}), 'songs/missing.bms')).toBeUndefined();
     expect(await computeChartFileSha256(undefined, 'songs/missing.bms')).toBeUndefined();
+  });
+
+  test('computeChartFileHashes returns the SHA-256 and MD5 of the chart file bytes', async () => {
+    const bytes = encoder.encode('#TITLE test\n#BPM 120\n');
+    const source = makeSource({ 'songs/test.bms': bytes });
+    expect(await computeChartFileHashes(source, 'songs/TEST.BMS')).toEqual({
+      sha256: await computeSha256Hex(bytes),
+      md5: md5HexOfBytes(bytes),
+    });
+    expect(await computeChartFileHashes(makeSource({}), 'songs/missing.bms')).toBeUndefined();
+    expect(await computeChartFileHashes(undefined, 'songs/missing.bms')).toBeUndefined();
   });
 });

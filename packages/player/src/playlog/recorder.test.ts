@@ -125,6 +125,18 @@ describe('playlog recorder', () => {
     });
   });
 
+  test('stamps the chart file hashes in lowercase, and omits them when the host has none', () => {
+    const bare = createPlaylogRecorder(makeRecorderOptions()).finalize({ summary: makeSummary() });
+    expect(bare.chart).not.toHaveProperty('sha256');
+    expect(bare.chart).not.toHaveProperty('md5');
+
+    const hashed = createPlaylogRecorder(
+      makeRecorderOptions({ chartSha256: 'A'.repeat(64), chartMd5: 'B'.repeat(32) }),
+    ).finalize({ summary: makeSummary() });
+    expect(hashed.chart.sha256).toBe('a'.repeat(64));
+    expect(hashed.chart.md5).toBe('b'.repeat(32));
+  });
+
   test('never lets the host override the engine version', () => {
     const playlog = createPlaylogRecorder(
       makeRecorderOptions({

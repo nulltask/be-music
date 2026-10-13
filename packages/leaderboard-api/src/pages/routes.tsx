@@ -7,13 +7,23 @@ import { openDatabase } from '../db/client.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
 import { loadChart, loadChartAliases, loadPlayer, loadPlayInfos, loadRecentScores, loadScoreDetail } from './data.ts';
 import { externalLinks } from './external.ts';
-import { chartTitle, formatTimestamp, RULESET_LABELS } from './format.ts';
+import {
+  chartTitle,
+  formatJudgeRank,
+  formatLaneMode,
+  formatLnMode,
+  formatPercent,
+  formatTimestamp,
+  RULESET_LABELS,
+} from './format.ts';
 import { Layout, PageHeader, STYLESHEET_PATH, type Crumb, type PageMeta } from './layout.tsx';
 import { APP_CSS } from './styles.generated.ts';
 import { isRuleset, RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
+import { loadChartStats, loadPlayerStats } from './stats.ts';
 import {
   chartHref,
   Details,
+  DistributionCard,
   Elsewhere,
   FilterChip,
   Filters,
@@ -22,6 +32,7 @@ import {
   RankingTable,
   RecentScoresTable,
   ResultsTable,
+  Stats,
   Tag,
 } from './views.tsx';
 
@@ -42,6 +53,19 @@ const isOn = (value: string | undefined): boolean => value === '1' || value === 
 /** `Artist · ` before the rest of a subtitle, or nothing when the play log carried no artist. */
 const withArtist = (artist: string | null): string =>
   artist !== null && artist.trim().length > 0 ? `${artist} · ` : '';
+
+/** A day for a figure tile (the full time on hover), or `-` when there is none. */
+const day = (epochMs: number | null): Child =>
+  epochMs === null ? '-' : <time title={formatTimestamp(epochMs)}>{formatTimestamp(epochMs).slice(0, 10)}</time>;
+
+/** A timestamp, or `-` when there is none. */
+const when = (epochMs: number | null): string => (epochMs === null ? '-' : formatTimestamp(epochMs));
+
+/** Detail rows without the ones the play log left empty. */
+const known = (rows: Array<[string, Child]>): Array<[string, Child]> => rows.filter(([, value]) => value !== '-');
+
+/** A text value a play log may have left out. */
+const orDash = (value: string | number | null): string | number => (value === null || value === '' ? '-' : value);
 
 /** The current URL with one query parameter set (or removed with `undefined`). */
 function withQuery(c: Context, key: string, value: string | undefined): string {
@@ -214,7 +238,9 @@ export function mountPages(app: Hono<AppEnv>): void {
     const ranking = await loadRanking(db, filter, { offset: 0, limit: RANKING_LIMIT });
     const title = chartTitle(found.title, chartFingerprint);
     const everyone = await countPlayers(db, { ...filter, includeAnonymous: true });
-    const elsewhere = externalLinks(found, await loadChartAliases(db, chartFingerprint));
+    const aliases = await loadChartAliases(db, chartFingerprint);
+    const elsewhere = externalLinks(found, aliases);
+    const stats = await loadChartStats(db, filter);
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout
@@ -222,11 +248,29 @@ export function mountPages(app: Hono<AppEnv>): void {
           { label: title },
         ])}
       >
-        <PageHeader title={title}>
+        <PageHeader
+          title={
+            <>
+              {title}
+              {found.subtitle !== null && found.subtitle.length > 0 ? (
+                <span class="text-muted-foreground ms-2 text-lg font-normal">{found.subtitle}</span>
+              ) : null}
+            </>
+          }
+        >
           {withArtist(found.artist)}
+          {found.laneMode !== null ? `${formatLaneMode(found.laneMode)} · ` : ''}
           {found.noteCount} notes · {everyone} player{everyone === 1 ? '' : 's'}
           {found.status === 'listed' ? null : <Tag>new chart</Tag>}
         </PageHeader>
+        <Stats
+          items={[
+            ['Players', stats.players],
+            ['Plays', stats.plays],
+            ['First played', day(stats.firstPlayedAt)],
+            ['Last played', day(stats.lastPlayedAt)],
+          ]}
+        />
         <Filters>
           <FilterChip label="Assisted" on={assisted} href={withQuery(c, 'assisted', assisted ? undefined : '1')} />
           <FilterChip
@@ -243,6 +287,35 @@ export function mountPages(app: Hono<AppEnv>): void {
           )}
           noteCount={found.noteCount}
         />
+        <DistributionCard
+          title="Clear lamps"
+          description={`Best lamps of the players above, under ${RULESET_LABELS[ruleset]}.`}
+          distribution={stats.lamps}
+          kind="lamp"
+        />
+        <Details
+          title="Chart"
+          rows={known([
+            ['Genre', orDash(found.genre)],
+            ['Mode', formatLaneMode(found.laneMode)],
+            ['Notes', found.noteCount],
+            ['TOTAL', orDash(found.total)],
+            ['Judge rank', formatJudgeRank(found.judgeRank)],
+            ['Long notes', formatLnMode(found.lnMode)],
+            ['Format', found.sourceFormat === null ? '-' : found.sourceFormat.toUpperCase()],
+            [
+              '#RANDOM outcomes',
+              found.playFingerprints.length > 1 ? `${found.playFingerprints.length} seen` : 'none seen',
+            ],
+            ['Fingerprint', <span class="font-mono text-xs">{chartFingerprint}</span>],
+            ...aliases.map((alias): [string, Child] => [
+              alias.kind === 'sha256' ? 'File SHA-256' : 'File MD5',
+              <span class="font-mono text-xs">{alias.hash}</span>,
+            ]),
+            ['First seen', formatTimestamp(found.createdAt.getTime())],
+            ['Listed', found.status === 'listed' ? 'yes' : 'not yet (two players with a passkey list a chart)'],
+          ])}
+        />
         <Elsewhere links={elsewhere} />
         <LampLegend />
       </Layout>,
@@ -253,9 +326,11 @@ export function mountPages(app: Hono<AppEnv>): void {
     const db = openDatabase(c.env.DB);
     const player = await loadPlayer(db, c.req.param('handle'));
     if (player === undefined) return notFound(c, 'This player');
+    const ruleset = displayRuleset(c);
+    const stats = await loadPlayerStats(db, player.userId, ruleset);
     const scores = await loadRecentScores(db, {
       limit: RECENT_LIMIT,
-      ruleset: displayRuleset(c),
+      ruleset,
       includeAnonymous: true,
       includeUnlisted: true,
       handle: player.handle,
@@ -271,6 +346,45 @@ export function mountPages(app: Hono<AppEnv>): void {
           @{player.handle}
           {player.anonymous ? <Tag>anonymous</Tag> : null}
         </PageHeader>
+        <Stats
+          items={[
+            ['Plays', stats.plays],
+            ['Charts', stats.charts],
+            [`Average rate (${RULESET_LABELS[ruleset]})`, formatPercent(stats.averageRate)],
+            ['Last played', day(stats.lastPlayedAt)],
+          ]}
+        />
+        <div class="grid gap-6 lg:grid-cols-2">
+          <DistributionCard
+            title="Clear lamps"
+            description={`Best lamp per chart under ${RULESET_LABELS[ruleset]}, without assists.`}
+            distribution={stats.lamps}
+            kind="lamp"
+          />
+          <DistributionCard
+            title="DJ Ranks"
+            description={`Best EX-Score per chart under ${RULESET_LABELS[ruleset]}, without assists.`}
+            distribution={stats.djRanks}
+            kind="dj-rank"
+          />
+        </div>
+        <Details
+          title="Player"
+          rows={[
+            ['Joined', formatTimestamp(player.joinedAt)],
+            ['First play', when(stats.firstPlayedAt)],
+            [
+              'Played under',
+              stats.playsByRuleset.length === 0
+                ? '-'
+                : stats.playsByRuleset
+                    .map(
+                      (entry) => `${RULESET_LABELS[entry.ruleset]}: ${entry.count} play${entry.count === 1 ? '' : 's'}`,
+                    )
+                    .join(' · '),
+            ],
+          ]}
+        />
         <RecentScoresTable
           scores={scores}
           infos={await loadPlayInfos(

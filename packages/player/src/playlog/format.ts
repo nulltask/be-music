@@ -75,6 +75,8 @@ export interface PlaylogChart {
   genre?: string;
   /** Lowercase-hex SHA-256 of the source chart FILE bytes — the primary key for matching a log back to its chart. */
   sha256?: string;
+  /** Lowercase-hex MD5 of the source chart FILE bytes — how LR2 and LR2IR name a chart. */
+  md5?: string;
   /**
    * Chart fingerprint (`bmfp0:…`, docs/fingerprint-spec.md) of the source chart, every `#RANDOM` / `#SWITCH` branch
    * included — identifies the chart regardless of file bytes, keysounds, BGA, metadata or which branches this play
@@ -326,6 +328,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     artist: optionalString(chart.artist, 'chart.artist'),
     genre: optionalString(chart.genre, 'chart.genre'),
     sha256: optionalString(chart.sha256, 'chart.sha256'),
+    md5: optionalString(chart.md5, 'chart.md5'),
     chartFingerprint: optionalString(chart.chartFingerprint, 'chart.chartFingerprint'),
     playFingerprint: optionalString(chart.playFingerprint, 'chart.playFingerprint'),
     sourceFormat,
@@ -343,6 +346,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     'artist',
     'genre',
     'sha256',
+    'md5',
     'chartFingerprint',
     'playFingerprint',
     'total',

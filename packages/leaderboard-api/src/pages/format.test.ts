@@ -5,6 +5,10 @@ import {
   djLevel,
   formatExScore,
   formatGauge,
+  formatJudgeRank,
+  formatLaneMode,
+  formatLnMode,
+  formatPercent,
   formatRecorder,
   formatScoreRate,
   formatTimestamp,
@@ -52,5 +56,28 @@ describe('page formatting', () => {
   test('prints the EX-Score with its maximum and rate', () => {
     expect(formatExScore(81, 52)).toBe('81 / 104 (77.88%)');
     expect(formatExScore(5, 0)).toBe('5');
+  });
+});
+
+describe('chart metadata', () => {
+  test('formatLaneMode names key counts as players do', () => {
+    expect(formatLaneMode('7keys')).toBe('7 KEYS');
+    expect(formatLaneMode('14keys')).toBe('14 KEYS');
+    expect(formatLaneMode('popn-9k')).toBe('POPN-9K');
+    expect(formatLaneMode(null)).toBe('-');
+  });
+
+  test('formatJudgeRank shows the raw rank first, then the window', () => {
+    expect(formatJudgeRank({ percent: 75, sourceRank: 2 })).toBe('#RANK 2 (NORMAL) · 75%');
+    expect(formatJudgeRank({ percent: 90, sourceRank: 2, sourceExRank: 120 })).toBe('#DEFEXRANK 120 · 90%');
+    expect(formatJudgeRank({ percent: 100 })).toBe('100%');
+    expect(formatJudgeRank({ percent: 50, sourceRank: 9 })).toBe('#RANK 9 · 50%');
+    expect(formatJudgeRank(null)).toBe('-');
+  });
+
+  test('formatLnMode and formatPercent', () => {
+    expect([1, 2, 3, null].map(formatLnMode)).toEqual(['LN', 'CN', 'HCN', '-']);
+    expect(formatPercent(0.77884)).toBe('77.88%');
+    expect(formatPercent(null)).toBe('-');
   });
 });
