@@ -119,7 +119,20 @@ import {
   songRecordPlayFromResult,
   storeSongRecords,
 } from './song-records.ts';
-import { describeLeaderboardResult, prepareLeaderboardSubmission, submitToLeaderboard } from './leaderboard.ts';
+import {
+  describeLeaderboardResult,
+  describeSkippedSubmission,
+  prepareLeaderboardSubmission,
+  submitToLeaderboard,
+} from './leaderboard.ts';
+import {
+  createLeaderboardPasskey,
+  describeLeaderboardAccount,
+  loadLeaderboardAccount,
+  signInWithLeaderboardPasskey,
+  signOutOfLeaderboard,
+  type AccountActionResult,
+} from './account.ts';
 import {
   describeSkinSettingControllers,
   readStoredSkinSettings,
@@ -542,6 +555,9 @@ class PlayerWebDemoApp {
   private playlogSaveController: Controller | undefined;
   /** "Submit to Leaderboard" checkbox controller; locked during a play like {@link playlogSaveController}. */
   private leaderboardSubmitController: Controller | undefined;
+  /** Read-only "Account" row of the Leaderboard folder, refreshed after every account action and submission. */
+  private leaderboardAccountController: Controller | undefined;
+  private readonly leaderboardAccountState = { status: 'Not signed in' };
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
    * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
@@ -1080,6 +1096,7 @@ class PlayerWebDemoApp {
     this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
     this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
     this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
+    this.buildLeaderboardFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
     this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
     this.refreshCompressorStageVisibility();
     rememberFolderOpenStates(gui);
@@ -1326,14 +1343,6 @@ class PlayerWebDemoApp {
       .onChange((value: boolean) => {
         this.guiState.autoSavePlaylog = value;
       });
-    // Leaderboard submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API
-    // (same origin, `/api/*`) as the result scene mounts; the result shows the rank in the status line.
-    this.leaderboardSubmitController = library
-      .add(this.guiState, 'submitToLeaderboard')
-      .name('Submit to Leaderboard')
-      .onChange((value: boolean) => {
-        this.guiState.submitToLeaderboard = value;
-      });
     library
       .add(
         {
@@ -1399,6 +1408,50 @@ class PlayerWebDemoApp {
   }
 
   /** Diagnostics and session behaviour most players never touch, plus the reset for every remembered setting. */
+  /**
+   * The Leaderboard: play submission (opt-in) and the player's account. An account starts anonymous (the first
+   * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another
+   * device, moving that device's anonymous plays into it.
+   */
+  private buildLeaderboardFolder(leaderboard: GUI): void {
+    // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
+    // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
+    this.leaderboardSubmitController = leaderboard
+      .add(this.guiState, 'submitToLeaderboard')
+      .name('Submit to Leaderboard')
+      .onChange((value: boolean) => {
+        this.guiState.submitToLeaderboard = value;
+      });
+    this.leaderboardAccountController = leaderboard
+      .add(this.leaderboardAccountState, 'status')
+      .name('Account')
+      .disable();
+    const run = (label: string, action: () => Promise<AccountActionResult>) => async (): Promise<void> => {
+      this.setStatus(`${label}…`);
+      try {
+        const result = await action();
+        this.setStatus(result.ok ? `${label}: done` : `${label} failed: ${result.error}`);
+      } catch (error) {
+        this.setStatus(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      await this.refreshLeaderboardAccount();
+    };
+    leaderboard
+      .add({ create: run('Create passkey', createLeaderboardPasskey) }, 'create')
+      .name('Create passkey (keep this account)');
+    leaderboard
+      .add({ signIn: run('Sign in with passkey', signInWithLeaderboardPasskey) }, 'signIn')
+      .name('Sign in with passkey');
+    leaderboard.add({ signOut: run('Sign out', signOutOfLeaderboard) }, 'signOut').name('Sign out');
+    void this.refreshLeaderboardAccount();
+  }
+
+  /** Re-reads the Leaderboard account into the Debug Menu's "Account" row. */
+  private async refreshLeaderboardAccount(): Promise<void> {
+    this.leaderboardAccountState.status = describeLeaderboardAccount(await loadLeaderboardAccount());
+    this.leaderboardAccountController?.updateDisplay();
+  }
+
   private buildDeveloperFolder(developer: GUI): void {
     developer
       .add(this.guiState, 'autoPauseOnBlur')
@@ -4105,9 +4158,7 @@ class PlayerWebDemoApp {
     }
     const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
     if (!prepared.ok) {
-      if (prepared.reason !== 'not-rankable') {
-        this.setStatus(`Leaderboard: not submitted (${prepared.reason})`);
-      }
+      this.setStatus(describeSkippedSubmission(prepared.reason));
       return;
     }
     const client = `${PLAYLOG_RECORDER.name}/${PLAYLOG_RECORDER.version}${
@@ -4115,7 +4166,11 @@ class PlayerWebDemoApp {
     }`;
     const playedRuleset = playlog.play.judgeRuleset ?? 'lr2';
     void submitToLeaderboard(prepared.submission, { client })
-      .then((result) => this.setStatus(describeLeaderboardResult(result, playedRuleset)))
+      .then((result) => {
+        this.setStatus(describeLeaderboardResult(result, playedRuleset));
+        // The first submission signs in anonymously; show the account it created.
+        void this.refreshLeaderboardAccount();
+      })
       .catch((error: unknown) => {
         gameplayLog.warn('leaderboard submission failed', error);
         this.setStatus('Leaderboard: not submitted (network error)');

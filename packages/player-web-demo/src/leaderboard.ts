@@ -143,6 +143,18 @@ export function describeLeaderboardResult(result: LeaderboardSubmitResult, playe
   return `Leaderboard ${mine.ruleset}: #${mine.rank} / ${mine.players} · EX ${mine.exScore}${best}${again}`;
 }
 
+/** Why a play was not sent, for the status line (a skipped play must never pass silently). */
+export function describeSkippedSubmission(reason: Exclude<SubmissionPreparation, { ok: true }>['reason']): string {
+  switch (reason) {
+    case 'not-rankable':
+      return 'Leaderboard: not submitted (auto play and aborted runs are not ranked)';
+    case 'missing-fingerprint':
+      return 'Leaderboard: not submitted (this play log has no chart fingerprint)';
+    case 'fingerprint-mismatch':
+      return 'Leaderboard: not submitted (the chart does not match the recorded play)';
+  }
+}
+
 async function gzipJson(value: unknown): Promise<Blob> {
   const stream = new Blob([JSON.stringify(value)]).stream().pipeThrough(new CompressionStream('gzip'));
   return await new Response(stream).blob();
