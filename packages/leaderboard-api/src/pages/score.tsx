@@ -8,6 +8,7 @@ import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
 import { avatarUrl } from '../avatars.ts';
 import { cardUrl } from '../cards.ts';
+import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
 import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, RULESET_LABELS } from './format.ts';
 import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
@@ -18,6 +19,7 @@ import { displayRuleset, meta, notFound, PAGE_CACHE, withArtist, type PageContex
 function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][number], title: string): ScoreCardData {
   const lamp = lampStyle(played.clearLamp);
   return {
+    genre: detail.chart.genre,
     title,
     subtitle: detail.chart.subtitle,
     artist: detail.chart.artist,
@@ -87,6 +89,8 @@ function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string;
         data-score-card
         data-upload={props.upload}
         data-has-card={props.hasCard ? 'true' : 'false'}
+        data-font-family={CARD_FONT.family}
+        data-font-url={CARD_FONT.url}
         data-share-text={text}
         dangerouslySetInnerHTML={{ __html: JSON.stringify(props.data).replace(/</g, '\\u003c') }}
       />
