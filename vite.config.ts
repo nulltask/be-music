@@ -127,7 +127,7 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: '@be-music/player-web-demo',
-          include: ['packages/player-web-demo/src/**/*.test.ts'],
+          include: ['packages/player-web-demo/src/**/*.test.ts', 'packages/player-web-demo/worker/**/*.test.ts'],
         },
       },
       {
