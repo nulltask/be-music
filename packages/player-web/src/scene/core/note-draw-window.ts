@@ -2,24 +2,30 @@ import type { ResolvedChart, ScrollTimelinePoint, SpeedTimelinePoint } from '@be
 import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 
 /**
- * Whose note-visibility rules the gameplay view follows this play.
+ * Whose note-visibility rules the gameplay view follows this play. Drawing is not part of a judge ruleset, so the
+ * ruleset plays no part in the choice: every chart draws by LR2's rules, and only one LR2 cannot play (with `#SCROLL` /
+ * `#SPEED`) draws by beatoraja's.
  *
- * - `'lr2'` — notes, mines and bar lines draw while their scrolled position lies between the lane top and the
- *   judgement line, and the walk over the chart ends once a beat lies past the lane top. A late note the player has
- *   not hit yet keeps drawing until it scrolls past the line (or is judged).
+ * - `'lr2'` — LR2's `DrawNotes` (`LR2body.exe` 0x406710). A note, mine or bar line scrolls down to the judgement line
+ *   and stays on it once its beat has passed (its y is capped at the line, never drawn below it). A note or mine goes
+ *   only once it is judged and its beat has reached the playhead (a long note: its end), so a late note the player has
+ *   not hit yet sits on the line until it is judged a miss, and a note hit early keeps scrolling down to the line. On an
+ *   auto lane a note goes once its beat has passed. A long note's head stays on the line until the note goes. A bar
+ *   line goes once the playhead passes it, so a STOP that begins on one holds it on the line. The walk over the chart
+ *   ends once a beat lies past the lane top.
  * - `'beatoraja'` — beatoraja's `LaneRenderer`: walk the chart in order from the playhead and stop after the first
  *   timeline past the lane top (drawn in the band above it), so nothing beyond it draws, even what a later negative
  *   `#SCROLL` brings back down. A note, mine or bar line whose time has come is gone, judged or not; a long note stays
- *   while its end is ahead.
+ *   while its end is ahead, its head on the judgement line once passed.
  *
- * LR2 has no `#SCROLL` / `#SPEED`, so a chart with either is drawn by beatoraja's rules whatever the ruleset (unless
- * every point is 1, see {@link changesScrollRate}); so is any chart judged under the `beatoraja` ruleset.
+ * LR2 has no `#SCROLL` / `#SPEED`, so a chart with either is drawn by beatoraja's rules (unless every point is 1, see
+ * {@link changesScrollRate}).
  */
 export type NoteDrawRules = 'lr2' | 'beatoraja';
 
 /**
  * Whether a chart's `#SCROLL` / `#SPEED` points change how it scrolls: some point other than 1. A chart whose points are
- * all 1 scrolls as one without any, so it needs no distance integrator and keeps the judge ruleset's drawing rules.
+ * all 1 scrolls as one without any, so it needs no distance integrator and keeps LR2's drawing rules.
  */
 export function changesScrollRate(
   scroll: ReadonlyArray<ScrollTimelinePoint>,
@@ -28,8 +34,9 @@ export function changesScrollRate(
   return scroll.some((point) => point.speed !== 1) || speed.some((point) => point.speed !== 1);
 }
 
-export function resolveNoteDrawRules(scrolling: boolean, judgeRuleset: string): NoteDrawRules {
-  return scrolling || judgeRuleset === 'beatoraja' ? 'beatoraja' : 'lr2';
+/** The drawing rules for a chart: beatoraja's when it scrolls ({@link changesScrollRate}), LR2's otherwise. */
+export function resolveNoteDrawRules(scrolling: boolean): NoteDrawRules {
+  return scrolling ? 'beatoraja' : 'lr2';
 }
 
 /** What one frame draws of the chart: the playhead and how far up the lane the walk over the chart goes. */
@@ -149,7 +156,7 @@ export function isPastDrawWindow(window: NoteDrawWindow, beat: number): boolean 
 /**
  * Whether a tap note, mine or bar line at chart time `seconds` still draws. beatoraja draws one only while
  * `tl.getMicroTime() >= microtime` — a note inside its late window that the player has not hit yet is already gone, as
- * is one under a STOP that began at its beat. LR2's rules leave it to the position (see {@link NoteDrawRules}).
+ * is one under a STOP that began at its beat. LR2's rules leave it to the judgement ({@link isDrawnUntilJudged}).
  */
 export function isDrawnAtTime(window: NoteDrawWindow, seconds: number): boolean {
   return window.rules !== 'beatoraja' || seconds >= window.nowSeconds;
@@ -158,7 +165,7 @@ export function isDrawnAtTime(window: NoteDrawWindow, seconds: number): boolean 
 /**
  * Whether a long note ending at chart time `endSeconds` still draws: under beatoraja's rules while its end is ahead —
  * not reached yet, held, or let go with its tail still to come (`LaneRenderer` checks the pair's time). LR2's rules
- * leave it to the position.
+ * leave it to the judgement ({@link isDrawnUntilJudged}).
  */
 export function isLongNoteDrawnAtTime(window: NoteDrawWindow, endSeconds: number): boolean {
   return window.rules !== 'beatoraja' || endSeconds >= window.nowSeconds;
@@ -166,9 +173,70 @@ export function isLongNoteDrawnAtTime(window: NoteDrawWindow, endSeconds: number
 
 /**
  * The lowest y (largest value) an object in a lane whose judgement line is at `judgementY` may be drawn at. LR2's
- * rules stop at the line. beatoraja's `LaneRenderer` does not clip, so a note a negative `#SCROLL` puts below the line
- * while its time is still ahead is drawn there; beatoraja's rules let it run down to the bottom of the stage.
+ * rules stop at the line (and {@link resolveDrawY} holds a passed object there). beatoraja's `LaneRenderer` does not
+ * clip, so a note a negative `#SCROLL` puts below the line while its time is still ahead is drawn there; beatoraja's
+ * rules let it run down to the bottom of the stage.
  */
 export function resolveDrawBottom(window: NoteDrawWindow, judgementY: number): number {
   return window.rules === 'beatoraja' ? Math.max(judgementY, window.stageBottomY) : judgementY;
+}
+
+/** What {@link isDrawnUntilJudged} reads off a note, long note or mine: the engine's own `judged` flag. */
+export interface JudgedDrawObject {
+  beat: number;
+  /** A long note's end beat. */
+  endBeat?: number;
+  judged: boolean;
+}
+
+/**
+ * Whether a tap note, long note or mine still draws under LR2's rules: LR2 draws a lane's objects from its
+ * `draw_count` and advances it past an object only once the object is processed (`active == -1`) and the playhead has
+ * reached both its beat and its long-note end (`DrawNotes` 0x407af0-0x407b4c). Nothing else clears an object — a hit
+ * only marks it processed — so a note judged early keeps scrolling down to the line and goes at its own beat, and one
+ * the player has not hit sits on the line until it is judged a miss (the ruleset's late window, through `judged`). On
+ * an auto lane (`autoplayed`) the object goes once the playhead reaches its beat or end, judged or not
+ * (0x407cd1-0x407d45). LR2 also draws the object once more on the frame it goes; be-music drops it on that frame.
+ *
+ * beatoraja's rules leave it to the time ({@link isDrawnAtTime}, {@link isLongNoteDrawnAtTime}).
+ */
+export function isDrawnUntilJudged(window: NoteDrawWindow, object: JudgedDrawObject, autoplayed: boolean): boolean {
+  if (window.rules !== 'lr2') return true;
+  return (object.endBeat ?? object.beat) > window.currentBeat || (!autoplayed && !object.judged);
+}
+
+/**
+ * Where an object whose scrolled position is `y` draws in a lane whose judgement line is at `judgementY`. LR2 caps the
+ * position at the line (`if (note_y > 0) note_y = 0`, `DrawNotes` 0x40746c-0x40748e; bar lines 0x406f18-0x406f34), so
+ * a passed object that is still drawn sits on the line. beatoraja's rules leave the position as it is.
+ */
+export function resolveDrawY(window: NoteDrawWindow, y: number, judgementY: number): number {
+  return window.rules === 'lr2' && y > judgementY ? judgementY : y;
+}
+
+/**
+ * Opacity LR2 draws a long note at once it is processed before its end — the head missed, or the note let go early:
+ * `0x80` of `0xff` (`DrawNotes` 0x407a25 / 0x407a8d).
+ */
+export const LR2_DROPPED_LONG_NOTE_ALPHA: number = 0x80 / 0xff;
+
+/**
+ * Opacity of a long note in its `state`: half once dropped ({@link LR2_DROPPED_LONG_NOTE_ALPHA}), otherwise full. This
+ * is LR2's look and does not hang on the scroll model, so it applies under beatoraja's rules too (beatoraja itself
+ * swaps the body image instead).
+ */
+export function resolveLongNoteAlpha(state: string | undefined): number {
+  return state === 'dropped' ? LR2_DROPPED_LONG_NOTE_ALPHA : 1;
+}
+
+/**
+ * LR2's `draw_count` over objects sorted by beat: the index of the first one not yet gone, starting from `cursor` (an
+ * earlier call's result, or 0). Objects before it are past and stay so while the playhead moves on, so a frame need
+ * not look at them; one still drawn — a missed note on the line, a long note held across many beats — keeps every
+ * later object in reach. Call again from 0 when the playhead moves back or the objects change.
+ */
+export function advanceDrawCursor<T>(objects: ArrayLike<T>, cursor: number, isGone: (object: T) => boolean): number {
+  let index = Math.max(0, cursor);
+  while (index < objects.length && isGone(objects[index]!)) index += 1;
+  return index;
 }

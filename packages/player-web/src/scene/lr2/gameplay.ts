@@ -507,7 +507,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     if (skinLines.length === 0) {
       return false;
     }
-    const { beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom, drawBottom } = frame;
+    const { beats, firstBeatIndex, maxBeat, lineY, top, drawBottom } = frame;
     for (const skinLine of skinLines) {
       const baseTexture = this.textures.get(skinLine.source.imagePath);
       if (!baseTexture) continue;
@@ -520,7 +520,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         if (beat > maxBeat) {
           break;
         }
-        const y = bottom - beatDistance(beat) * pixelsPerBeat;
+        const y = lineY(beat);
         if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }

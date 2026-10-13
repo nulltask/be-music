@@ -1,14 +1,19 @@
 import { describe, expect, it } from 'vite-plus/test';
 import { createScrollDistanceMapper } from '@be-music/player/core/scroll-distance';
 import {
+  advanceDrawCursor,
   changesScrollRate,
   collectLaneTimelineBeats,
   collectResolvedLaneTimelineBeats,
   firstBeatAfter,
   isDrawnAtTime,
+  isDrawnUntilJudged,
   isLongNoteDrawnAtTime,
   isPastDrawWindow,
+  LR2_DROPPED_LONG_NOTE_ALPHA,
   resolveDrawBottom,
+  resolveDrawY,
+  resolveLongNoteAlpha,
   resolveNoteDrawRules,
   resolveNoteDrawWindow,
 } from './note-draw-window.ts';
@@ -100,11 +105,10 @@ describe('collectLaneTimelineBeats / firstBeatAfter', () => {
 });
 
 describe('resolveNoteDrawRules', () => {
-  it('follows beatoraja whenever the chart scrolls (LR2 has no #SCROLL) or the beatoraja ruleset judges', () => {
-    expect(resolveNoteDrawRules(true, 'lr2')).toBe('beatoraja');
-    expect(resolveNoteDrawRules(false, 'beatoraja')).toBe('beatoraja');
-    expect(resolveNoteDrawRules(false, 'lr2')).toBe('lr2');
-    expect(resolveNoteDrawRules(false, 'iidx')).toBe('lr2');
+  it('follows beatoraja only when the chart scrolls (LR2 has no #SCROLL), LR2 otherwise', () => {
+    // Drawing is not part of a judge ruleset, so the ruleset does not enter the choice.
+    expect(resolveNoteDrawRules(true)).toBe('beatoraja');
+    expect(resolveNoteDrawRules(false)).toBe('lr2');
   });
 });
 
@@ -216,7 +220,7 @@ describe('isDrawnAtTime / isLongNoteDrawnAtTime', () => {
     expect(isDrawnAtTime(at('beatoraja', 10), 9.999)).toBe(false);
   });
 
-  it('leaves LR2 rules to the position (a late, unjudged note keeps drawing until it scrolls past the line)', () => {
+  it('leaves LR2 rules to the judgement (a late, unjudged note keeps drawing)', () => {
     expect(isDrawnAtTime(at('lr2', 10), 9.9)).toBe(true);
   });
 
@@ -243,5 +247,74 @@ describe('resolveDrawBottom', () => {
 
   it('never lifts the bottom above the judgement line', () => {
     expect(resolveDrawBottom(window('beatoraja'), 760)).toBe(760);
+  });
+});
+
+describe('isDrawnUntilJudged', () => {
+  const at = (rules: 'lr2' | 'beatoraja', currentBeat: number) =>
+    resolveNoteDrawWindow({ rules, currentBeat, nowSeconds: 0, laneBeats: 4, overscanBeats: 1 });
+
+  it('keeps a note LR2 has not judged yet, even once its beat has passed (it sits on the line until the miss)', () => {
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 9, judged: false }, false)).toBe(true);
+  });
+
+  it('keeps a note hit early until its beat reaches the playhead, then drops it', () => {
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 10.5, judged: true }, false)).toBe(true);
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 10, judged: true }, false)).toBe(false);
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 9, judged: true }, false)).toBe(false);
+  });
+
+  it('keeps a long note until it is judged and its end has passed', () => {
+    // Held (head judged), its end still ahead.
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 8, endBeat: 12, judged: true }, false)).toBe(true);
+    // Missed at the head, end passed: gone. Not judged yet: stays on the line.
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 8, endBeat: 9, judged: true }, false)).toBe(false);
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 8, endBeat: 9, judged: false }, false)).toBe(true);
+  });
+
+  it('drops a note on an auto lane once its beat (end) has passed, judged or not', () => {
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 9, judged: false }, true)).toBe(false);
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 10.5, judged: false }, true)).toBe(true);
+    expect(isDrawnUntilJudged(at('lr2', 10), { beat: 9, endBeat: 11, judged: true }, true)).toBe(true);
+  });
+
+  it('leaves beatoraja rules to the time', () => {
+    expect(isDrawnUntilJudged(at('beatoraja', 10), { beat: 9, judged: true }, false)).toBe(true);
+  });
+});
+
+describe('resolveDrawY', () => {
+  const window = (rules: 'lr2' | 'beatoraja') =>
+    resolveNoteDrawWindow({ rules, currentBeat: 0, nowSeconds: 0, laneBeats: 4, overscanBeats: 1, stageBottomY: 720 });
+
+  it('holds a passed object on the judgement line under LR2 rules', () => {
+    expect(resolveDrawY(window('lr2'), 640, 600)).toBe(600);
+    expect(resolveDrawY(window('lr2'), 580, 600)).toBe(580);
+  });
+
+  it('leaves the position under beatoraja rules (a negative #SCROLL can put a note below the line)', () => {
+    expect(resolveDrawY(window('beatoraja'), 640, 600)).toBe(640);
+  });
+});
+
+describe('resolveLongNoteAlpha', () => {
+  it("dims a dropped long note to LR2's 0x80 and leaves the rest opaque", () => {
+    expect(LR2_DROPPED_LONG_NOTE_ALPHA).toBeCloseTo(128 / 255, 9);
+    expect(resolveLongNoteAlpha('dropped')).toBe(LR2_DROPPED_LONG_NOTE_ALPHA);
+    for (const state of ['pending', 'held', 'done', undefined]) expect(resolveLongNoteAlpha(state)).toBe(1);
+  });
+});
+
+describe('advanceDrawCursor', () => {
+  const gone = (beat: number) => beat < 3;
+
+  it('skips the leading objects that are gone and stops at the first one still drawn', () => {
+    expect(advanceDrawCursor([1, 2, 3, 1, 4], 0, gone)).toBe(2);
+  });
+
+  it('resumes from an earlier result and never moves back', () => {
+    expect(advanceDrawCursor([1, 2, 3, 4], 3, gone)).toBe(3);
+    expect(advanceDrawCursor([1, 2], 0, gone)).toBe(2);
+    expect(advanceDrawCursor([], 0, gone)).toBe(0);
   });
 });
