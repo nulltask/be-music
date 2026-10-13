@@ -3,13 +3,13 @@
 import type { Child } from 'hono/jsx';
 import type { PlayInfo } from '../data.ts';
 import { LocalTime } from './basics.tsx';
-import { formatRecorder, RULESET_LABELS } from '../format.ts';
+import { formatRecorder, rulesetName } from '../format.ts';
 
 /** Everything a play's info popover lists: how it was played and which software recorded and sent it. */
 function playInfoRows(info: PlayInfo): Array<[string, Child]> {
   return [
     ['Played', <LocalTime at={info.createdAt} />],
-    ['Ruleset played', RULESET_LABELS[info.playedRuleset] ?? info.playedRuleset],
+    ['Played under', rulesetName(info.playedRuleset)],
     ['Gauge', info.gauge],
     ['Assists', info.assistFlags.length > 0 ? info.assistFlags.join(', ') : 'none'],
     ['Verification', info.verification],
