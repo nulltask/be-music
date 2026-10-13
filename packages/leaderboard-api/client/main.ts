@@ -45,20 +45,25 @@ async function callAccountApi(path: string, init: RequestInit): Promise<{ ok: tr
 }
 
 const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
-  async 'sign-in'() {
+  async 'sign-in'(button) {
     const result = await auth().signIn.passkey();
-    if (result?.error) return say(`Sign-in failed: ${errorText(result.error)}`);
+    // Inside the sign-in dialog the message goes under its button; elsewhere (Settings) to the header's status line.
+    const status = button.closest('dialog') !== null ? '[data-sign-in-status]' : undefined;
+    if (result?.error) return say(`Sign-in failed: ${errorText(result.error)}`, status);
     location.reload();
   },
   async 'sign-out'() {
     await auth().signOut();
     location.reload();
   },
-  async 'open-sign-up'() {
-    document.querySelector<HTMLDialogElement>('#sign-up')?.showModal();
+  async 'open-sign-in'() {
+    openDialog('#sign-in');
   },
-  async 'close-sign-up'() {
-    document.querySelector<HTMLDialogElement>('#sign-up')?.close();
+  async 'open-sign-up'() {
+    openDialog('#sign-up');
+  },
+  async 'close-dialogs'() {
+    for (const dialog of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) dialog.close();
   },
   async 'create-passkey'() {
     const result = await auth().passkey.addPasskey({ name: 'be-music' });
@@ -71,6 +76,12 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
     location.reload();
   },
 };
+
+/** Opens one account dialog, closing any other first (Sign in links to Sign up). */
+function openDialog(selector: string): void {
+  for (const open of document.querySelectorAll<HTMLDialogElement>('dialog[open]')) open.close();
+  document.querySelector<HTMLDialogElement>(selector)?.showModal();
+}
 
 document.addEventListener('click', (event) => {
   const button =
