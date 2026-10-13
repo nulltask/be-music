@@ -518,7 +518,7 @@ export const DEMO_APP_HTML = `
                 and developer settings sit in its collapsed folders, which remember whether you left them open.
               </li>
               <li>
-                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable WebM (requires
+                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
                 MediaRecorder support — see Open source / browser checks).
               </li>
               <li>
@@ -615,7 +615,7 @@ export const DEMO_APP_HTML = `
                 右上 Debug Menu に読み込み / スキン / プレイオプション / オーディオ / 録画のコントロールがあります。あまり使わない設定や開発者向けの設定は折りたたまれたフォルダにあり、フォルダの開閉状態は記憶されます。
               </li>
               <li>
-                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
+                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong> で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
               </li>
               <li>
                 選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。
