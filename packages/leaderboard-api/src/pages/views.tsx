@@ -6,6 +6,7 @@ import type { ExternalLink } from './external.ts';
 import {
   chartTitle,
   djLevel,
+  formatGauge,
   formatScoreRate,
   formatTimestamp,
   LAMP_STYLES,
@@ -20,6 +21,10 @@ export const playerHref = (handle: string): string => `/leaderboard/players/${en
 
 const LINK = 'font-medium underline-offset-4 hover:underline';
 const NUM = 'text-end tabular-nums';
+
+/** What the column abbreviations stand for, shown on hover. */
+const BP_MEANING = 'BP (miss count): BADs + missed POORs + empty POORs. Lower is better.';
+const DJ_MEANING = 'DJ LEVEL: the score rate in ninths, from F up to AAA (8/9 of the maximum EX score).';
 
 /** A small outlined label next to a name or a title. */
 export function Tag(props: { children: Child }) {
@@ -97,9 +102,12 @@ export function RecentScoresTable(props: { scores: RecentScore[]; showPlayer: bo
           <th>Song</th>
           <th>Ruleset</th>
           <th>Lamp</th>
+          <th class={NUM}>Gauge</th>
           <th class={NUM}>EX</th>
-          <th class={NUM}>Rate</th>
-          <th class={NUM}>BP</th>
+          <th class={NUM}>Score rate</th>
+          <th class={NUM}>
+            <abbr title={BP_MEANING}>BP</abbr>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -138,6 +146,7 @@ export function RecentScoresTable(props: { scores: RecentScore[]; showPlayer: bo
             <td>
               <Lamp lamp={entry.clearLamp} />
             </td>
+            <td class={NUM}>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</td>
             <td class={NUM}>{entry.exScore}</td>
             <td class={NUM}>{formatScoreRate(entry.exScore, entry.noteCount)}</td>
             <td class={NUM}>{entry.missCount}</td>
@@ -161,9 +170,13 @@ export function RankingTable(props: { entries: RankingEntry[]; noteCount: number
           <th>Player</th>
           <th>Lamp</th>
           <th class={NUM}>EX</th>
-          <th class={NUM}>Rate</th>
-          <th>DJ</th>
-          <th class={NUM}>BP</th>
+          <th class={NUM}>Score rate</th>
+          <th>
+            <abbr title={DJ_MEANING}>DJ</abbr>
+          </th>
+          <th class={NUM}>
+            <abbr title={BP_MEANING}>BP</abbr>
+          </th>
           <th class={NUM}>Plays</th>
         </tr>
       </thead>
@@ -207,6 +220,8 @@ export function ResultsTable(props: {
     clearLamp: number;
     missCount: number;
     maxCombo: number;
+    gaugeType: string;
+    gaugeFinal: number | null;
     judges: Record<string, number>;
   }>;
   playedRuleset: string;
@@ -221,10 +236,15 @@ export function ResultsTable(props: {
         <tr>
           <th>Ruleset</th>
           <th>Lamp</th>
+          <th class={NUM}>Gauge</th>
           <th class={NUM}>EX</th>
-          <th class={NUM}>Rate</th>
-          <th>DJ</th>
-          <th class={NUM}>BP</th>
+          <th class={NUM}>Score rate</th>
+          <th>
+            <abbr title={DJ_MEANING}>DJ</abbr>
+          </th>
+          <th class={NUM}>
+            <abbr title={BP_MEANING}>BP</abbr>
+          </th>
           <th class={NUM}>Combo</th>
           <th class={NUM}>PG / GR / GD / BD / PR / EPR</th>
         </tr>
@@ -242,6 +262,7 @@ export function ResultsTable(props: {
             <td>
               <Lamp lamp={result.clearLamp} />
             </td>
+            <td class={NUM}>{formatGauge(result.gaugeType, result.gaugeFinal)}</td>
             <td class={NUM}>{result.exScore}</td>
             <td class={NUM}>{formatScoreRate(result.exScore, result.noteCount)}</td>
             <td>{djLevel(result.exScore, result.noteCount)}</td>

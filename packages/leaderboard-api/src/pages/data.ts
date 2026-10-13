@@ -19,6 +19,8 @@ export interface RecentScore {
   noteCount: number;
   clearLamp: number;
   missCount: number;
+  gaugeType: string;
+  gaugeFinal: number | null;
 }
 
 export interface RecentScoresFilter {
@@ -59,6 +61,8 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       noteCount: scoreResult.noteCount,
       clearLamp: scoreResult.clearLamp,
       missCount: scoreResult.missCount,
+      gaugeType: scoreResult.gaugeType,
+      gaugeFinal: scoreResult.gaugeFinal,
     })
     .from(score)
     .innerJoin(scoreResult, eq(scoreResult.scoreId, score.id))
