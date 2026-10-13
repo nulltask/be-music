@@ -1,8 +1,8 @@
-import { and, asc, countDistinct, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
-import { chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
+import { bestScore, chart, chartAlias, chartset, profile, score, scoreResult, user } from '../db/schema.ts';
 import type { ChartAlias } from './external.ts';
 
 export interface RecentScore {
@@ -15,8 +15,12 @@ export interface RecentScore {
   chartFingerprint: string;
   title: string | null;
   artist: string | null;
-  chartListed: boolean;
+  laneMode: string | null;
+  playLevel: string | null;
+  difficulty: number | null;
   playedRuleset: RulesetId;
+  /** The lane arrangement (`RANDOM`, ...), `OFF` for none; null or `-` when unknown. */
+  laneOption: string | null;
   assisted: boolean;
   exScore: number;
   noteCount: number;
@@ -24,6 +28,14 @@ export interface RecentScore {
   missCount: number;
   gaugeType: string;
   gaugeFinal: number | null;
+  /**
+   * The player's best on the chart before this play, under the same ruleset and assist class; undefined for their
+   * first play of it.
+   */
+  previous?: { exScore: number; clearLamp: number; missCount: number };
+  /** Where the play's EX-Score stands among the other players' bests on the chart, and how many players there are. */
+  rank: number;
+  players: number;
 }
 
 export interface RecentScoresFilter {
@@ -58,8 +70,11 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       chartFingerprint: score.chartFingerprint,
       title: chart.title,
       artist: chart.artist,
-      chartStatus: chart.status,
+      laneMode: chart.laneMode,
+      playLevel: chart.playLevel,
+      difficulty: chart.difficulty,
       playedRuleset: score.playedRuleset,
+      laneOption: score.laneOption,
       assisted: score.assisted,
       exScore: scoreResult.exScore,
       noteCount: scoreResult.noteCount,
@@ -67,6 +82,8 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       missCount: scoreResult.missCount,
       gaugeType: scoreResult.gaugeType,
       gaugeFinal: scoreResult.gaugeFinal,
+      ...previousBest(filter.ruleset),
+      ...standing(filter),
     })
     .from(score)
     .innerJoin(scoreResult, eq(scoreResult.scoreId, score.id))
@@ -76,13 +93,58 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     .where(and(...conditions))
     .orderBy(desc(score.createdAt), desc(score.id))
     .limit(filter.limit);
-  return rows.map(({ chartStatus, createdAt, anonymous, avatarKey, ...row }) => ({
-    ...row,
-    avatarUrl: avatarUrl(row.handle, avatarKey),
-    createdAt: createdAt.getTime(),
-    anonymous: anonymous === true,
-    chartListed: chartStatus === 'listed',
-  }));
+  return rows.map(
+    ({ createdAt, anonymous, avatarKey, previousEx, previousLamp, previousMiss, above, players, ...row }) => ({
+      ...row,
+      avatarUrl: avatarUrl(row.handle, avatarKey),
+      createdAt: createdAt.getTime(),
+      anonymous: anonymous === true,
+      ...(previousEx === null
+        ? {}
+        : {
+            previous: {
+              exScore: Number(previousEx),
+              clearLamp: Number(previousLamp),
+              missCount: Number(previousMiss),
+            },
+          }),
+      rank: Number(above) + 1,
+      players: Number(players),
+    }),
+  );
+}
+
+/**
+ * The player's earlier plays of the chart under the ruleset and the play's assist class: their best EX-Score, best
+ * lamp and fewest misses. The plays come off `score_user_chart_idx`, so each row costs one short index range.
+ */
+function previousBest(ruleset: RulesetId) {
+  const earlier = (column: SQL) => sql`(
+    select ${column} from score p join score_result pr on pr.score_id = p.id and pr.ruleset = ${ruleset}
+    where p.user_id = ${score.userId} and p.chart_fingerprint = ${score.chartFingerprint}
+      and p.assisted = ${score.assisted} and p.created_at < ${score.createdAt}
+  )`;
+  return {
+    previousEx: sql<number | null>`${earlier(sql`max(pr.ex_score)`)}`,
+    previousLamp: sql<number | null>`${earlier(sql`max(pr.clear_lamp)`)}`,
+    previousMiss: sql<number | null>`${earlier(sql`min(pr.miss_count)`)}`,
+  };
+}
+
+/**
+ * The play's place in the chart's ranking (the kept bests under the display ruleset and the play's assist class): how
+ * many other players' bests beat its EX-Score, and how many players the ranking has. Anonymous players count only when
+ * the list includes them, as in the rankings.
+ */
+function standing(filter: RecentScoresFilter) {
+  const anonymous = filter.includeAnonymous ? sql`` : sql`and coalesce(u.is_anonymous, 0) = 0`;
+  const ranking = sql`from best_score b join "user" u on u.id = b.user_id
+    where b.chart_fingerprint = ${score.chartFingerprint} and b.ruleset = ${filter.ruleset}
+      and b.assisted = ${score.assisted} ${anonymous}`;
+  return {
+    above: sql<number>`(select count(*) ${ranking} and b.user_id <> ${score.userId} and b.best_ex > ${scoreResult.exScore})`,
+    players: sql<number>`(select count(*) ${ranking})`,
+  };
 }
 
 export async function loadChart(db: Database, chartFingerprint: string) {
@@ -176,6 +238,9 @@ export interface PlayInfo {
   playedRuleset: string;
   gauge: string;
   assistFlags: string[];
+  /** The lane arrangement (`RANDOM`, ...); null or `-` while unknown. */
+  laneOption: string | null;
+  durationMs: number | null;
   verification: string;
   /** The play log's `recorder` (application, version, build, engine version, platform). */
   recordedBy: Record<string, string> | null;
@@ -194,6 +259,8 @@ export async function loadPlayInfos(db: Database, scoreIds: readonly string[]): 
       playedRuleset: score.playedRuleset,
       gauge: score.gauge,
       assistFlags: score.assistFlags,
+      laneOption: score.laneOption,
+      durationMs: score.durationMs,
       verification: score.verification,
       recordedBy: score.recordedBy,
       submittedBy: score.submittedBy,

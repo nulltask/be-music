@@ -54,4 +54,22 @@ describe('externalLinks', () => {
     expect(externalLinks({ title: '   ' }, [])).toEqual([]);
     expect(externalLinks(titled, [{ kind: 'sha256', hash: SHA }]).some((link) => link.kind === 'search')).toBe(false);
   });
+  test('files an MD5 link under the SHA-256 of the same file when the plays pair them', () => {
+    const links = externalLinks(
+      titled,
+      [
+        { kind: 'md5', hash: MD5 },
+        { kind: 'sha256', hash: SHA },
+      ],
+      [{ sha256: SHA, md5: MD5.toUpperCase() }],
+    );
+    expect(links[0]).toEqual({
+      name: 'LR2IR Archive',
+      url: `https://lr2ir.com/charts/${MD5}`,
+      kind: 'chart',
+      hash: MD5,
+      file: SHA,
+    });
+    expect(links.slice(1).every((link) => link.file === undefined && link.hash === SHA)).toBe(true);
+  });
 });

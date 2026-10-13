@@ -155,6 +155,9 @@ export const chart = sqliteTable(
     // What the first play log of the chart said about it. Null for charts registered before these were kept.
     subtitle: text('subtitle'),
     genre: text('genre'),
+    /** `#PLAYLEVEL` / bmson `info.level` as written, and `#DIFFICULTY` (1 BEGINNER .. 5 INSANE), from a play log. */
+    playLevel: text('play_level'),
+    difficulty: integer('difficulty'),
     sourceFormat: text('source_format', { enum: ['bms', 'bmson'] }),
     laneMode: text('lane_mode'),
     /** Raw `#TOTAL` / bmson `info.total`, when the chart wrote one. */
@@ -226,6 +229,11 @@ export const score = sqliteTable(
     fileMd5: text('file_md5'),
     /** How long the play ran, in milliseconds: to the last note's end or the last input, whichever is later. */
     durationMs: integer('duration_ms'),
+    /**
+     * The lane arrangement the play used (`RANDOM`, `MIRROR / RANDOM` for the two sides of a double play, ` FLIP`
+     * appended for a swapped double play), `OFF` for none. Null until filled in from the play log.
+     */
+    laneOption: text('lane_option'),
     playedRuleset: text('played_ruleset', { enum: RULESET_IDS }).notNull(),
     gauge: text('gauge').notNull(),
     assisted: integer('assisted', { mode: 'boolean' }).notNull(),
@@ -253,6 +261,9 @@ export const score = sqliteTable(
     index('score_pending_backfill_idx')
       .on(table.durationMs)
       .where(sql`${table.durationMs} is null`),
+    index('score_pending_lane_option_idx')
+      .on(table.laneOption)
+      .where(sql`${table.laneOption} is null`),
   ],
 );
 

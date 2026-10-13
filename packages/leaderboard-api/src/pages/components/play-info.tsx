@@ -1,22 +1,34 @@
 /** @jsxImportSource hono/jsx */
-/** A play's details: the info icon and its popover, and the compact time cell that carries it. */
+/** A play's details: the info icon and its popover, and the compact time of a play. */
 import type { Child } from 'hono/jsx';
 import type { PlayInfo } from '../data.ts';
 import { LocalTime } from './basics.tsx';
-import { formatRecorder, rulesetName } from '../format.ts';
+import { formatPlayTime, formatRecorder, rulesetName, verificationMeaning } from '../format.ts';
 
-/** Everything a play's info popover lists: how it was played and which software recorded and sent it. */
-function playInfoRows(info: PlayInfo): Array<[string, Child]> {
-  return [
+/**
+ * Everything a play's info popover lists: how it was played, how far it was verified, and which software recorded,
+ * sent and scored it. The app that recorded a play is usually the one that sent it; then it gets one row.
+ */
+export function playInfoRows(info: PlayInfo): Array<[string, Child]> {
+  const recorder = info.recordedBy;
+  const sentByRecorder =
+    recorder !== null &&
+    info.submittedBy !== null &&
+    recorder.name !== undefined &&
+    info.submittedBy.startsWith(`${recorder.name}/${recorder.version ?? ''}`);
+  const rows: Array<[string, Child | undefined]> = [
     ['Played', <LocalTime at={info.createdAt} />],
     ['Played under', rulesetName(info.playedRuleset)],
     ['Gauge', info.gauge],
+    ['Lanes', info.laneOption !== null && info.laneOption !== '-' ? info.laneOption : undefined],
     ['Assists', info.assistFlags.length > 0 ? info.assistFlags.join(', ') : 'none'],
-    ['Verification', info.verification],
-    ['Recorded with', formatRecorder(info.recordedBy)],
-    ['Sent from', info.submittedBy ?? 'unknown'],
+    ['Length', info.durationMs !== null && info.durationMs > 0 ? formatPlayTime(info.durationMs) : undefined],
+    ['Verified', verificationMeaning(info.verification)],
+    sentByRecorder ? ['App', formatRecorder(recorder)] : ['Recorded with', formatRecorder(recorder)],
+    ['Sent from', sentByRecorder ? undefined : (info.submittedBy ?? 'unknown')],
     ['Scored by', `be-music engine ${info.serverEngine}`],
   ];
+  return rows.filter((row): row is [string, Child] => row[1] !== undefined);
 }
 
 /**
@@ -25,7 +37,7 @@ function playInfoRows(info: PlayInfo): Array<[string, Child]> {
  * a Popover API popover (`popovertarget`), so clicking works without script; TOOLTIP_SCRIPT in layout.tsx adds the
  * hover and the placement for browsers without CSS anchor positioning.
  */
-function InfoButton(props: { info: PlayInfo | undefined }) {
+export function InfoButton(props: { info: PlayInfo | undefined }) {
   if (props.info === undefined) return null;
   const id = `info-${props.info.scoreId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
   const anchor = `--${id}`;
@@ -80,12 +92,7 @@ function InfoButton(props: { info: PlayInfo | undefined }) {
   );
 }
 
-/** When a play happened, compact (`2026-10-13 15:20`, in the viewer's time; UTC on hover), with its info icon. */
-export function When(props: { at: number; info: PlayInfo | undefined }) {
-  return (
-    <span class="text-muted-foreground inline-flex items-center gap-1">
-      <LocalTime at={props.at} compact />
-      <InfoButton info={props.info} />
-    </span>
-  );
+/** When a play happened, compact (`2026-10-13 15:20`, in the viewer's time; UTC on hover). */
+export function When(props: { at: number }) {
+  return <LocalTime at={props.at} compact />;
 }
