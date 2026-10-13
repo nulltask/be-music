@@ -16,7 +16,9 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
   plays, anonymous players, and "played under this ruleset".
 - `GET /api/v1/scores/:id` and `.../playlog`.
 
-Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, pages, OG cards, and the player-side client.
+- Pages under `/leaderboard`: new scores (top), a score, a chart's rankings, and a player.
+
+Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
 
 ## Setup
 
@@ -69,6 +71,17 @@ Workers Builds deploys `devel` to the staging Worker and `main` to production:
 
 The Worker has no public URL; the player's Worker forwards `/api/*` and `/leaderboard/*` to it through a Service
 Binding.
+
+## Pages
+
+The pages under `/leaderboard` are Hono JSX styled with Tailwind CSS v4 and [Basecoat](https://basecoatui.com) (the
+shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
+which is committed and served from `/leaderboard/assets/app.<hash>.css`. After changing classes in the pages, rebuild
+it:
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:css
+```
 
 ## Tests
 

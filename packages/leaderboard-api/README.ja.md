@@ -16,7 +16,9 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
   プレイヤー、「このルールセットでプレイしたもの」のフィルタ付き。
 - `GET /api/v1/scores/:id` と `.../playlog`。
 
-未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、ページ、OG カード、プレイヤー側のクライアント。
+- `/leaderboard` 以下のページ: 新着スコア（トップ）、スコア、譜面のランキング、プレイヤー。
+
+未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、OG カード。
 
 ## 準備
 
@@ -69,6 +71,17 @@ Workers Builds が `devel` を staging の Worker に、`main` を本番にデ�
 
 この Worker は公開 URL を持ちません。プレイヤーの Worker が `/api/*` と `/leaderboard/*` を Service Binding で
 転送します。
+
+## ページ
+
+`/leaderboard` 以下のページは Hono JSX で、Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（フレームワークの
+ランタイムなしの shadcn/ui デザイン）でスタイルを付けています。`src/pages/app.css` は `src/pages/styles.generated.ts`
+にコンパイルされ、コミットされたうえで `/leaderboard/assets/app.<hash>.css` から配信されます。ページのクラスを
+変えたら作り直します。
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:css
+```
 
 ## テスト
 

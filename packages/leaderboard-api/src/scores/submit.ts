@@ -7,6 +7,7 @@ import {
   type PlaylogRulesetResult,
 } from '@be-music/player/playlog';
 import playerPackage from '../../../player/package.json' with { type: 'json' };
+import { refreshChartListing } from '../charts.ts';
 import type { Database } from '../db/client.ts';
 import { bestScore, chart, chartAlias, score, scoreResult } from '../db/schema.ts';
 import { rankOfExScore, countPlayers } from '../ranking.ts';
@@ -198,6 +199,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     }),
   ];
   await db.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]]);
+  await refreshChartListing(db, chartFingerprint);
 
   const results: RulesetOutcome[] = [];
   for (const { ruleset, result, lamp, missCount, update } of figures) {
@@ -253,6 +255,7 @@ function toScoreResultRow(
     missCount,
     maxCombo: result.maxCombo,
     gaugeType: result.gauge.type,
+    gaugeFinal: result.gauge.final,
     judges: { ...result.judge, fast: result.fast, slow: result.slow },
   };
 }

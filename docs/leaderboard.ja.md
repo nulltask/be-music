@@ -251,7 +251,8 @@ client_policies (name, min_version, blocked_versions JSON)
 ```
 
 - ランキングの取得には `best_scores (chart_fp, ruleset, assisted, best_ex DESC)` のインデックスを使います。
-- 譜面は、2 人以上がプレイしたか、難易度表に載った時点で**公開一覧に載ります**。
+- 譜面は、匿名でないプレイヤー 2 人以上がプレイしたか（匿名アカウントはいくらでも作れるので数えません）、難易度表に
+  載った時点で**公開一覧に載ります**。
 - R2 のキー: `playlogs/{scoreId}.bmplay.json.gz`、`charts/{chartFp}.json`、`ghosts/{scoreId}.bin`、
   `og/scores/{scoreId}.png`。
 - **リプレイ**: プレイログを誰がダウンロードできるかは、各ユーザーが選びます（ユーザーごとの既定値を、スコアごとに
@@ -296,13 +297,23 @@ client_policies (name, min_version, blocked_versions JSON)
 
 ## 10. ページ（`/leaderboard/*`）
 
-leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。
+leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。見た目は情報サイトとして、
+Tailwind CSS v4 と Basecoat（フレームワークのランタイムなしの shadcn/ui デザイン）で整え、OS の配色に従います。
 
+- `/leaderboard` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。匿名でない
+  プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。
+  匿名のプレイはフィルタで含めます。架空の譜面がこのページに出るには、passkey を持つアカウントが必要です。
 - `/leaderboard/scores/:id` — スコア
 - `/leaderboard/charts/:chartFp` — 譜面のランキング
 - `/leaderboard/players/:handle` — プロフィール。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
 
-操作が必要な部分（ライバル登録ボタンなど）は、小さな `hono/jsx/dom` の island にします。サイトが Web アプリと
+どのページも、ヘッダーで選んで Cookie に保存する 1 つの**表示ルールセット**（LR2、beatoraja、IIDX）で値を表示し、
+プレイ自体のルールセットは「played with」として併記します。切り替えは専用の URL（`/leaderboard/ruleset/:id?next=…`。
+戻り先は Leaderboard のページに限る）で行うので、ページの URL を共有しても、開いた人の設定は変わりません。ページが
+Cookie に依存するので、`Cache-Control: private, max-age=0` を返します。譜面のページには、既知のファイルごとに、BMS Search 自身が使う形式で他のサイトへのリンクを置きます。ファイルの
+SHA-256 で Mocha-Repository、MinIR、BMS Search（`/patterns/{sha256}`）を、MD5 を記録するようになれば LR2IR を
+引きます。ハッシュが 1 つも分からない譜面には、BMS Search での曲名検索を置きます。操作が必要な部分（ライバル登録ボタンなど）は、小さな
+`hono/jsx/dom` の island にします。サイトが Web アプリと
 呼べる規模になったら HonoX か Nuxt に移れます。データアクセスの関数を共有しておけば、その移行は軽く済みます。
 
 ## 11. OG 画像と共有
