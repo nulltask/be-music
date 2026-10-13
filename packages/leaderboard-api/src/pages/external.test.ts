@@ -19,14 +19,8 @@ describe('externalLinks', () => {
     ]);
   });
 
-  test('links an MD5 to LR2IR and its archive', () => {
+  test('links an MD5 to the LR2IR archive only (the original LR2IR has closed)', () => {
     expect(externalLinks(titled, [{ kind: 'md5', hash: MD5 }])).toEqual([
-      {
-        name: 'LR2IR',
-        url: `http://www.dream-pro.info/~lavalse/LR2IR/search.cgi?mode=ranking&bmsmd5=${MD5}`,
-        kind: 'chart',
-        hash: MD5,
-      },
       { name: 'LR2IR Archive', url: `https://lr2ir.com/charts/${MD5}`, kind: 'chart', hash: MD5 },
     ]);
   });

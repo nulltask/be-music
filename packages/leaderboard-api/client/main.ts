@@ -54,6 +54,12 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
     await auth().signOut();
     location.reload();
   },
+  async 'open-sign-up'() {
+    document.querySelector<HTMLDialogElement>('#sign-up')?.showModal();
+  },
+  async 'close-sign-up'() {
+    document.querySelector<HTMLDialogElement>('#sign-up')?.close();
+  },
   async 'create-passkey'() {
     const result = await auth().passkey.addPasskey({ name: 'be-music' });
     if (result?.error) return say(`Creating the passkey failed: ${errorText(result.error)}`, '[data-settings-status]');
@@ -94,8 +100,8 @@ document.addEventListener('submit', (event) => {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      handle: String(data.get('handle') ?? ''),
-      displayName: String(data.get('displayName') ?? ''),
+      handle: formText(data, 'handle'),
+      displayName: formText(data, 'displayName'),
     }),
   })
     .then((result) => {
@@ -106,6 +112,56 @@ document.addEventListener('submit', (event) => {
       if (submit !== null) submit.disabled = false;
     });
 });
+
+/**
+ * Sign-up: an anonymous account first (the passkey needs a session to belong to), then the handle and name, then the
+ * passkey, which claims the account. Each step can fail on its own: the message says where it stopped, and an account
+ * left without a passkey can add one in Settings.
+ */
+document.addEventListener('submit', (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement) || !form.matches('[data-sign-up-form]')) return;
+  event.preventDefault();
+  const data = new FormData(form);
+  const status = '[data-sign-up-status]';
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (submit !== null) submit.disabled = true;
+  say(undefined, status);
+  void (async () => {
+    const session = await auth().getSession();
+    if (session.data === null) {
+      const anonymous = await auth().signIn.anonymous();
+      if (anonymous?.error) return say(`Could not start the account: ${errorText(anonymous.error)}`, status);
+    }
+    const saved = await callAccountApi('/api/v0/me', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        handle: formText(data, 'handle'),
+        displayName: formText(data, 'displayName'),
+      }),
+    });
+    if (!saved.ok) return say(saved.message, status);
+    const passkey = await auth().passkey.addPasskey({ name: 'be-music' });
+    if (passkey?.error) {
+      return say(
+        `Your account is ready, but the passkey was not made (${errorText(passkey.error)}). Add one in Settings to keep it.`,
+        status,
+      );
+    }
+    location.reload();
+  })()
+    .catch((error: unknown) => say(error instanceof Error ? error.message : String(error), status))
+    .finally(() => {
+      if (submit !== null) submit.disabled = false;
+    });
+});
+
+/** A form field's text, or empty. */
+function formText(data: FormData, name: string): string {
+  const value = data.get(name);
+  return typeof value === 'string' ? value : '';
+}
 
 /** Shrinks an image to the icon size: the centred square, as WebP (JPEG where the browser cannot write WebP). */
 async function toAvatar(file: File): Promise<Blob> {

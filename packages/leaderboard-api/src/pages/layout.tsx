@@ -6,6 +6,8 @@ import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
 import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
+import { Icon } from './components/icon.tsx';
+import { ChevronDown, LogOut, Play } from 'lucide-static';
 import { CARD_HEIGHT, CARD_WIDTH } from '../cards.ts';
 import { ICON_LINKS } from './icons.ts';
 import { ICONS } from './icons.generated.ts';
@@ -114,60 +116,153 @@ export interface PageMeta {
 }
 
 /**
- * The header's account area. Signed out: a passkey sign-in button. Signed in: the player's icon and handle (their page),
- * Settings, and Sign out. The buttons are wired by the client script (client/main.ts); `data-account-status` shows
- * what went wrong.
+ * The header's account area. Signed out: Sign in (a passkey) and Sign up (a handle and a name, then a passkey). Signed
+ * in: the player's icon, opening a menu with their page, Settings and Sign out. The buttons are wired by the client
+ * script (client/main.ts); `data-account-status` shows what went wrong.
  */
 function AccountMenu(props: { viewer: Viewer | null }) {
   const viewer = props.viewer;
   if (viewer === null) {
     return (
-      <div class="flex items-center gap-2">
-        <button type="button" class="btn" data-size="sm" data-variant="outline" data-account-action="sign-in">
+      <div class="flex items-center gap-1">
+        <button type="button" class="btn" data-size="sm" data-variant="ghost" data-account-action="sign-in">
           Sign in
         </button>
+        <button type="button" class="btn" data-size="sm" data-variant="outline" data-account-action="open-sign-up">
+          Sign up
+        </button>
+        <SignUpDialog />
       </div>
     );
   }
   return (
-    <div class="flex items-center gap-1 text-sm">
-      <a class="hover:text-foreground me-1 inline-flex items-center gap-2" href={playerHref(viewer.handle)}>
+    <div class="relative">
+      <button
+        type="button"
+        class="btn"
+        data-size="sm"
+        data-variant="ghost"
+        popovertarget="account-menu"
+        aria-label={`Account of @${viewer.handle}`}
+        style="anchor-name:--account-menu"
+      >
         <Avatar src={viewer.avatarUrl} size={24} />
-        <span class="max-w-[12ch] truncate">@{viewer.handle}</span>
-      </a>
-      <a class="btn" data-size="sm" data-variant="ghost" href="/leaderboard/settings">
-        <EntityIcon kind="settings" size="md" class="text-current" />
-        Settings
-      </a>
-      <button type="button" class="btn" data-size="sm" data-variant="ghost" data-account-action="sign-out">
-        Sign out
+        <span class="hidden max-w-[12ch] truncate sm:inline">@{viewer.handle}</span>
+        <Icon svg={ChevronDown} class="text-muted-foreground" />
       </button>
+      <div
+        id="account-menu"
+        popover="auto"
+        class="bg-popover text-popover-foreground w-56 rounded-lg border p-1 text-sm shadow-md"
+        style="position-anchor:--account-menu;inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-inline"
+      >
+        <div class="border-b px-2 py-2">
+          <div class="truncate font-medium">{viewer.displayName}</div>
+          <div class="text-muted-foreground truncate text-xs">@{viewer.handle}</div>
+        </div>
+        <a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href={playerHref(viewer.handle)}>
+          <EntityIcon kind="player" size="md" class="text-current" />
+          Your page
+        </a>
+        <a class="hover:bg-muted flex items-center gap-2 rounded-md px-2 py-1.5" href="/leaderboard/settings">
+          <EntityIcon kind="settings" size="md" class="text-current" />
+          Settings
+        </a>
+        <button
+          type="button"
+          class="hover:bg-muted flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-start"
+          data-account-action="sign-out"
+        >
+          <Icon svg={LogOut} />
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }
 
 /**
- * Header switch of the display ruleset; it applies to every page. Labelled "Scoring rules", so the names do not read
- * as the software the plays came from.
+ * Sign-up: a handle and a display name. The client script signs in anonymously, saves them, then asks the browser for
+ * a passkey, which claims the account (docs/leaderboard.md section 3).
  */
-function RulesetSwitch(props: { current: PlaylogRulesetId; path: string }) {
+function SignUpDialog() {
   return (
-    <div class="flex items-center gap-2 sm:ms-auto">
-      <span class="text-muted-foreground cursor-help text-xs" id="ruleset-switch-label" title={RULESET_MEANING}>
-        Scoring rules
-      </span>
-      <div class="button-group" role="group" aria-labelledby="ruleset-switch-label">
-        {RULESET_IDS.map((id) => (
-          <a
-            class="btn"
-            data-size="sm"
-            data-variant={id === props.current ? 'primary' : 'outline'}
-            aria-current={id === props.current ? 'true' : undefined}
-            href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
-          >
-            {RULESET_LABELS[id]}
-          </a>
-        ))}
+    <dialog
+      id="sign-up"
+      aria-labelledby="sign-up-title"
+      class="bg-background text-foreground m-auto w-[min(24rem,calc(100vw-2rem))] rounded-xl border p-6 shadow-lg backdrop:bg-black/50"
+    >
+      <form class="space-y-4" data-sign-up-form method="dialog">
+        <header class="space-y-1">
+          <h2 id="sign-up-title" class="text-lg font-semibold">
+            Create your account
+          </h2>
+          <p class="text-muted-foreground text-sm">
+            Pick a handle and a name. Your browser then makes a passkey for it.
+          </p>
+        </header>
+        <div class="grid gap-2">
+          <label class="label" for="sign-up-handle">
+            Handle
+          </label>
+          <input
+            class="input"
+            id="sign-up-handle"
+            name="handle"
+            required
+            minlength={3}
+            maxlength={15}
+            pattern="[A-Za-z0-9_]{3,15}"
+            autocomplete="username webauthn"
+            spellcheck={false}
+          />
+          <p class="text-muted-foreground text-xs">3 to 15 letters, digits or _. It names your page.</p>
+        </div>
+        <div class="grid gap-2">
+          <label class="label" for="sign-up-name">
+            Name
+          </label>
+          <input class="input" id="sign-up-name" name="displayName" required maxlength={64} autocomplete="nickname" />
+          <p class="text-muted-foreground text-xs">Up to 32 characters, in any script. The rankings show it.</p>
+        </div>
+        <p class="text-destructive text-sm" data-sign-up-status role="status" hidden />
+        <footer class="flex justify-end gap-2">
+          <button type="button" class="btn" data-variant="ghost" data-account-action="close-sign-up">
+            Cancel
+          </button>
+          <button type="submit" class="btn">
+            Create passkey
+          </button>
+        </footer>
+      </form>
+    </dialog>
+  );
+}
+
+/**
+ * The display ruleset, for every page: a bar under the header, its start on the content's edge. Labelled "Scoring
+ * rules", so the names do not read as the software the plays came from.
+ */
+function RulesetBar(props: { current: PlaylogRulesetId; path: string }) {
+  return (
+    <div class="bg-muted/40 border-b">
+      <div class="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2">
+        <span class="text-muted-foreground cursor-help text-xs" id="ruleset-switch-label" title={RULESET_MEANING}>
+          Scoring rules
+        </span>
+        <div class="button-group" role="group" aria-labelledby="ruleset-switch-label">
+          {RULESET_IDS.map((id) => (
+            <a
+              class="btn"
+              data-size="sm"
+              data-variant={id === props.current ? 'primary' : 'outline'}
+              aria-current={id === props.current ? 'true' : undefined}
+              href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
+            >
+              {RULESET_LABELS[id]}
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -268,28 +363,35 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
       </head>
       <body class="bg-background text-foreground min-h-screen antialiased">
         <header class="border-b">
-          <div class="mx-auto flex max-w-5xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3">
-            <a href="/leaderboard" class="font-semibold tracking-tight">
-              be-music <span class="text-muted-foreground font-normal">Leaderboard</span>
+          <div class="mx-auto flex max-w-5xl items-center gap-x-4 px-4 py-2.5 sm:gap-x-6">
+            <a href="/leaderboard" class="shrink-0 font-semibold tracking-tight">
+              be-music <span class="text-muted-foreground hidden font-normal sm:inline">Leaderboard</span>
             </a>
-            <nav class="text-muted-foreground flex items-center gap-4 text-sm">
-              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard">
-                <EntityIcon kind="new-scores" size="sm" class="text-current" />
-                New scores
+            <nav class="text-muted-foreground flex items-center gap-4 text-sm" aria-label="Leaderboard">
+              <a
+                class="hover:text-foreground inline-flex items-center gap-1.5"
+                href="/leaderboard"
+                title="Latest plays"
+              >
+                <EntityIcon kind="latest" size="md" class="text-current" />
+                <span class="hidden sm:inline">Latest</span>
               </a>
-              <a class="hover:text-foreground" href="/">
-                Play
-              </a>
-              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/api">
-                <EntityIcon kind="api" size="sm" class="text-current" />
-                API
+              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/api" title="API">
+                <EntityIcon kind="api" size="md" class="text-current" />
+                <span class="hidden sm:inline">API</span>
               </a>
             </nav>
-            <RulesetSwitch current={props.meta.ruleset} path={props.meta.path} />
-            <AccountMenu viewer={props.meta.viewer} />
+            <div class="ms-auto flex items-center gap-2">
+              <a class="btn" data-size="sm" href="/" title="Play in the browser">
+                <Icon svg={Play} />
+                Play
+              </a>
+              <AccountMenu viewer={props.meta.viewer} />
+            </div>
           </div>
           <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
         </header>
+        <RulesetBar current={props.meta.ruleset} path={props.meta.path} />
         <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">
           <Breadcrumbs crumbs={props.meta.crumbs} />
           {props.children}

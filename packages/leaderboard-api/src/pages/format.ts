@@ -49,6 +49,16 @@ export function formatScoreRate(exScore: number, noteCount: number): string {
 /** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F), or `-` without notes. */
 export const djLevel = (exScore: number, noteCount: number): string => resolveIidxRankLabel(exScore, noteCount);
 
+/** A length of time for totals: `3h 25m`, `25m 12s`, `48s`. */
+export function formatPlayTime(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+  return `${seconds}s`;
+}
+
 /** `2026-10-13 14:51` in UTC, so a cached page reads the same everywhere. */
 export function formatTimestamp(epochMs: number): string {
   return `${new Date(epochMs).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
