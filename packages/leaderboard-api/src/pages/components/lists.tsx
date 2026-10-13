@@ -369,7 +369,7 @@ export function ResultCards(props: {
     judges: Record<string, number>;
   }>;
   playedRuleset: string;
-  /** The viewer's display ruleset, marked as shown. */
+  /** The viewer's display ruleset (the Scoring rules switch), marked as selected. */
   displayRuleset: string;
 }) {
   const results = [...props.results].sort(byRulesetOrder);
@@ -390,8 +390,8 @@ export function ResultCards(props: {
               {/* A div, not a header: Basecoat pads a card's header, which would shift it off the card's edge. */}
               <div class="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                 {rulesetName(result.ruleset)}
-                {shown ? <Tag>shown</Tag> : null}
-                {result.ruleset === props.playedRuleset ? <Tag>played</Tag> : null}
+                {shown ? <Tag>selected</Tag> : null}
+                {result.ruleset === props.playedRuleset ? <Tag>played with</Tag> : null}
               </div>
               <div class="flex items-end justify-between gap-3">
                 <LampLabel lamp={result.clearLamp} />

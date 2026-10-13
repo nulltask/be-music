@@ -247,7 +247,8 @@ describe('Leaderboard pages', () => {
     expect(top.html).toContain('scored under beatoraja');
     expect(top.html).toMatch(/data-variant="primary" aria-current="true"[^>]*>beatoraja</);
     const score = await page(`/leaderboard/scores/${firstScore}`, cookie);
-    expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>shown<\/span>/);
+    expect(score.html).toMatch(/aria-label="beatoraja rules" data-state="selected">.*?>selected<\/span>/);
+    expect(score.html).toContain('>played with</span>');
     // Without the cookie, LR2.
     expect((await page('/leaderboard')).html).toContain('scored under LR2');
 
