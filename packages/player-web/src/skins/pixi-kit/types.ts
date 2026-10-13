@@ -92,7 +92,7 @@ export interface PixiLongNoteContext {
   w: number;
   /** Tail just-timing y (upper). */
   top: number;
-  /** Head just-timing y (lower), clamped to the judgement line while held. */
+  /** Head just-timing y (lower), held on the judgement line once passed. */
   bottom: number;
   nowMs: number;
 }
