@@ -128,6 +128,7 @@ import {
 } from './leaderboard.ts';
 import {
   createLeaderboardPasskey,
+  describeAccountChip,
   describeLeaderboardAccount,
   loadLeaderboardAccount,
   signInWithLeaderboardPasskey,
@@ -559,6 +560,8 @@ class PlayerWebDemoApp {
   /** Read-only "Account" row of the Leaderboard folder, refreshed after every account action and submission. */
   private leaderboardAccountController: Controller | undefined;
   private readonly leaderboardAccountState = { status: 'Not signed in' };
+  /** The Debug Menu's Leaderboard folder, which the account chip opens while signed out. */
+  private leaderboardFolder: GUI | undefined;
   /**
    * Every "Play options" folder controller (auto play / judge / gauge / random / DP flip / auto scratch). Disabled
    * together while a song is playing (`lockPlaylogOptionsForPlay`) and refreshed when the LR2 select panel pushes
@@ -1415,6 +1418,13 @@ class PlayerWebDemoApp {
    * device, moving that device's anonymous plays into it.
    */
   private buildLeaderboardFolder(leaderboard: GUI): void {
+    this.leaderboardFolder = leaderboard;
+    // Signed out, the account chip has no page to open: it opens this folder instead.
+    document.querySelector<HTMLAnchorElement>('#account-chip')?.addEventListener('click', (event) => {
+      if (event.currentTarget instanceof HTMLElement && event.currentTarget.dataset.state !== 'signed-out') return;
+      event.preventDefault();
+      this.openLeaderboardFolder();
+    });
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     this.leaderboardSubmitController = leaderboard
@@ -1447,10 +1457,29 @@ class PlayerWebDemoApp {
     void this.refreshLeaderboardAccount();
   }
 
-  /** Re-reads the Leaderboard account into the Debug Menu's "Account" row. */
+  /** Opens the Debug Menu with its Leaderboard folder unfolded. */
+  private openLeaderboardFolder(): void {
+    const folder = this.leaderboardFolder;
+    if (folder === undefined) return;
+    for (let current: GUI | undefined = folder; current !== undefined; current = current.parent) current.open();
+    folder.domElement.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Re-reads the Leaderboard account into the Debug Menu's "Account" row and the account chip. */
   private async refreshLeaderboardAccount(): Promise<void> {
-    this.leaderboardAccountState.status = describeLeaderboardAccount(await loadLeaderboardAccount());
+    const account = await loadLeaderboardAccount();
+    this.leaderboardAccountState.status = describeLeaderboardAccount(account);
     this.leaderboardAccountController?.updateDisplay();
+    const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
+    if (chip !== null) {
+      const view = describeAccountChip(account);
+      chip.dataset.state = view.state;
+      chip.title = view.title;
+      chip.href = view.href ?? '/leaderboard';
+      chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
+      const label = chip.querySelector('#account-chip-label');
+      if (label !== null) label.textContent = view.label;
+    }
   }
 
   private buildDeveloperFolder(developer: GUI): void {
