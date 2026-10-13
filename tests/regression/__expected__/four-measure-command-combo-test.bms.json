@@ -880,7 +880,7 @@
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -903,7 +903,7 @@
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -925,7 +925,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -950,7 +950,7 @@
         "perfect": {
           "inputs": 184,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 84,
               "great": 0,
@@ -973,7 +973,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 84,
               "great": 0,
@@ -995,7 +995,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 101,
               "great": 0,
@@ -1020,7 +1020,7 @@
         "offset": {
           "inputs": 158,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 30,
               "great": 16,
@@ -1043,7 +1043,7 @@
             "score": 100595
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 30,
               "great": 16,
@@ -1065,7 +1065,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 43,
               "great": 16,
@@ -1359,7 +1359,7 @@
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -1382,7 +1382,7 @@
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -1404,7 +1404,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -1429,7 +1429,7 @@
         "perfect": {
           "inputs": 184,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 84,
               "great": 0,
@@ -1452,7 +1452,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 84,
               "great": 0,
@@ -1474,7 +1474,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 101,
               "great": 0,
@@ -1499,7 +1499,7 @@
         "offset": {
           "inputs": 158,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 30,
               "great": 16,
@@ -1522,7 +1522,7 @@
             "score": 100595
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 30,
               "great": 16,
@@ -1544,7 +1544,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 43,
               "great": 16,

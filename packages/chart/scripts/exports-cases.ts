@@ -97,6 +97,13 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
       chartApi.resolveChartReferenceBpm(fixtures.sampleBmsJson, 120);
     },
   });
+  let mainBpmChart: ReturnType<typeof chartApi.resolveChart> | undefined;
+  define('chart.resolveChartMainBpm', {
+    run: (fixtures) => {
+      mainBpmChart ??= chartApi.resolveChart(fixtures.sampleBmsJson, { chartPath: 'sample.bms' });
+      chartApi.resolveChartMainBpm(mainBpmChart);
+    },
+  });
   define('chart.parseBmsExWav', {
     run: () => {
       chartApi.parseBmsExWav('pvf 1024,-200,48000 sample.wav');
@@ -306,6 +313,23 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
     run: (fixtures) => {
       const context = chartApi.createTimingBuildContext(fixtures.sampleBmsJson);
       chartApi.createTimingResolverWithContext(fixtures.sampleBmsJson, context);
+    },
+  });
+  define('chart.mirrorBeatAtTempoReversal', {
+    run: () => {
+      const reversal = { beat: 16, seconds: 7.5 };
+      chartApi.mirrorBeatAtTempoReversal(reversal, 5, 10);
+      chartApi.mirrorBeatAtTempoReversal(reversal, 9, 17.5);
+      chartApi.mirrorBeatAtTempoReversal(undefined, 9, 17.5);
+    },
+  });
+  define('chart.firesBeforeTempoReversal', {
+    run: () => {
+      const reversal = { beat: 16, seconds: 7.5 };
+      chartApi.firesBeforeTempoReversal(reversal, 5, '01');
+      chartApi.firesBeforeTempoReversal(reversal, 7.5, '01');
+      chartApi.firesBeforeTempoReversal(reversal, 7.5, '11');
+      chartApi.firesBeforeTempoReversal(undefined, 9, '11');
     },
   });
   define('chart.collectSampleTriggers', {

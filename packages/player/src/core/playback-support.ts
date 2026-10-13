@@ -1,3 +1,4 @@
+import { mirrorBeatAtTempoReversal, type TempoReversalPoint } from '@be-music/chart';
 import { type PlayerStateSignals } from '../state-signals.ts';
 import { applyHighSpeedControlAction, type HighSpeedControlAction } from './high-speed-control.ts';
 import { type PlayerInputCommand, type PlayerInputSignalBus } from './input-signal-bus.ts';
@@ -70,6 +71,13 @@ export function createUiFramePublisher(params: {
   resolveDebugActiveAudioState: (
     seconds: number,
   ) => Pick<PlayerUiFramePayload, 'activeAudioFiles' | 'activeAudioVoiceCount'>;
+  /**
+   * LR2 negative-BPM reversal anchor. Past `seconds`, frames carry a display beat mirrored in chart-POSITION space —
+   * `displayBeat = 2 * beat - currentBeat` — exactly like LR2's `songtimer = 2 * bpmChangedBmstime - songtimer`
+   * (LR2body.exe 0x406d81). The forward beat keeps following the tempo map past the reversal, so the reverse scroll
+   * runs at the post-reversal |BPM| and a post-reversal STOP pauses it.
+   */
+  reversal?: TempoReversalPoint;
 }): (seconds: number, beat: number) => void {
   const {
     uiEnabled,
@@ -81,15 +89,22 @@ export function createUiFramePublisher(params: {
     invisibleNotes,
     audioBackend,
     resolveDebugActiveAudioState,
+    reversal,
   } = params;
   return (seconds: number, beat: number): void => {
     if (!uiEnabled) {
       return;
     }
     const debugState = resolveDebugActiveAudioState(seconds);
+    const displayBeat =
+      reversal !== undefined && seconds > reversal.seconds
+        ? mirrorBeatAtTempoReversal(reversal, seconds, beat)
+        : undefined;
     uiSignals.publishFrame({
       currentBeat: beat,
       currentSeconds: seconds,
+      displayBeat,
+      reversalSeconds: reversal?.seconds,
       totalSeconds,
       summary,
       notes,

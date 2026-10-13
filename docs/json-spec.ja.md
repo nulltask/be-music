@@ -273,6 +273,7 @@ ID を消費する code は手動で upper-case せず、`resolveBmsBase(json)` 
 - `preservation.bmson.lines`: 小節線 `y` 値の配列 (昇順・重複なし・`0` 始まり)
 - `preservation.bmson.bpmEvents`: `bpm_events` の配列順スナップショット
 - `preservation.bmson.stopEvents`: `stop_events` の配列順スナップショット
+- `preservation.bmson.scrollEvents`: beatoraja 拡張 `scroll_events` の配列順スナップショット（省略可。譜面にない場合は省く）
 - `preservation.bmson.soundChannels`: `sound_channels` の配列順スナップショット。未使用チャンネルも保持します
 
 ## Event 構造 (正規)

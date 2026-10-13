@@ -309,7 +309,7 @@
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -332,7 +332,7 @@
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -354,7 +354,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
@@ -379,7 +379,7 @@
         "perfect": {
           "inputs": 74,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 37,
               "great": 0,
@@ -402,7 +402,7 @@
             "score": 200000
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 37,
               "great": 0,
@@ -424,7 +424,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 37,
               "great": 0,
@@ -449,7 +449,7 @@
         "offset": {
           "inputs": 64,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 14,
               "great": 8,
@@ -472,7 +472,7 @@
             "score": 105405
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 14,
               "great": 8,
@@ -494,7 +494,7 @@
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 14,
               "great": 8,

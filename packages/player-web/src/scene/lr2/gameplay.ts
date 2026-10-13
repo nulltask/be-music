@@ -507,7 +507,7 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     if (skinLines.length === 0) {
       return false;
     }
-    const { beats, firstBeatIndex, maxBeat, pixelsPerBeat, beatDistance, top, bottom } = frame;
+    const { beats, firstBeatIndex, maxBeat, lineY, top, drawBottom } = frame;
     for (const skinLine of skinLines) {
       const baseTexture = this.textures.get(skinLine.source.imagePath);
       if (!baseTexture) continue;
@@ -520,8 +520,8 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         if (beat > maxBeat) {
           break;
         }
-        const y = bottom - beatDistance(beat) * pixelsPerBeat;
-        if (y < top - 1 || y > bottom + 1) {
+        const y = lineY(beat);
+        if (y < top - 1 || y > drawBottom + 1) {
           continue;
         }
         const sprite = this.noteLayerPool.acquireSprite();
@@ -1341,7 +1341,8 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
         this.currentSeconds(),
         this.displayedScore,
         this.fps,
-        this.timingResolver?.bpmAtBeat(this.currentBeat(this.currentSeconds())),
+        // NOWBPM freezes at the reversal value (LR2's frozen pump holds |BPM| there) — see `nowBpm`.
+        this.nowBpm(this.currentSeconds()),
         this.resolveSongDurationSeconds(),
         this.maxCombo,
       );

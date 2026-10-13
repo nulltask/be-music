@@ -6,6 +6,7 @@ import {
   isMultiBadCollectorTarget,
   judgeWindowLateReachUs,
   longNoteOwesTailMiss,
+  pgreatWindowReachUs,
   preferJudgeCandidate,
   resolveEffectiveLongNoteMode,
   RULESET_JUDGE_NONE,
@@ -100,6 +101,7 @@ interface SimNote {
 interface SimMine {
   timeUs: number;
   damage: number;
+  /** Settled: detonated, or past the point where it no longer can (see {@link PlaylogSimulation.mineSettleUs}). */
   applied: boolean;
 }
 
@@ -158,16 +160,30 @@ class PlaylogSimulation {
   }
 
   run(): PlaylogRulesetResult {
+    const reversalUs = this.playlog.chart.reversalTimeUs;
     const inputs = [...this.playlog.inputs].sort((left, right) => left.timeUs - right.timeUs || left.seq - right.seq);
     for (const input of inputs) {
       this.advanceTime(input.timeUs);
+      // LR2 negative-BPM reversal (#134): past the reversal R presses and releases are judged on the mirrored clock
+      // t' = 2R - now (OpenLR2 `LR2f.cpp:12624,12931`), exactly as the engine does. `advanceTime` stays clamped to R,
+      // so nothing past it is ever swept into a miss.
+      const judged =
+        reversalUs !== undefined && input.timeUs > reversalUs
+          ? { ...input, timeUs: 2 * reversalUs - input.timeUs }
+          : input;
       if (input.action === 'down') {
-        this.handleDown(input);
+        // The engine's mine press leg is dead past the reversal too (`processLandminePassage`).
+        this.handleDown(judged, judged === input);
       } else {
-        this.handleUp(input);
+        this.handleUp(judged);
       }
     }
     this.advanceTime(Number.POSITIVE_INFINITY);
+    if (reversalUs !== undefined && this.hasOutstandingNotes()) {
+      // LR2 zeroes HP when a play ends with notes unjudged (OpenLR2 `LR2f.cpp:12980-12982`): a reversed run that
+      // leaves notes past the reversal behind — open holds included — is always FAILED.
+      this.gauge.drainToZero();
+    }
 
     const result: PlaylogRulesetResult = {
       ruleset: this.config.id,
@@ -201,6 +217,15 @@ class PlaylogSimulation {
       );
     }
     return result;
+  }
+
+  private hasOutstandingNotes(): boolean {
+    for (const lane of this.lanes.values()) {
+      if (lane.notes.some((note) => !note.judged)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private buildLanes(): void {
@@ -267,9 +292,15 @@ class PlaylogSimulation {
   // ---- time advancement --------------------------------------------------------------------------------------
 
   private advanceTime(untilUs: number): void {
+    const reversalUs = this.playlog.chart.reversalTimeUs;
+    if (reversalUs !== undefined && untilUs > reversalUs) {
+      // The LR2 event pump froze at the reversal and the mirrored judge clock never passes it: misses, mines, hold
+      // deadlines, and auto judgements past it never happen.
+      untilUs = reversalUs;
+    }
     interface TimedEvent {
       timeUs: number;
-      kind: 'miss' | 'mine' | 'hold-deadline' | 'auto';
+      kind: 'miss' | 'mine-enter' | 'mine' | 'mine-settle' | 'hold-deadline' | 'auto';
       lane: SimLane;
       note?: SimNote;
       mine?: SimMine;
@@ -300,8 +331,21 @@ class PlaylogSimulation {
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
-        if (mine.timeUs >= untilUs) break;
-        events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        // Mines at or behind the reversal are frozen with the pump: not even LR2's early PGREAT reach detonates them.
+        if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
+        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
+        if (mine.timeUs - earlyUs >= untilUs) break;
+        if (mine.applied) continue;
+        // Each point is visited once: in the advance whose span [lastAdvanceUs, untilUs) holds it.
+        const due = (timeUs: number): boolean => timeUs >= this.lastAdvanceUs && timeUs < untilUs;
+        const enterUs = mine.timeUs - earlyUs;
+        if (this.config.mineTrigger === 'press-or-hold' && due(enterUs)) {
+          // LR2: a key already down as the mine enters the PGREAT window detonates it there.
+          events.push({ timeUs: enterUs, kind: 'mine-enter', lane, mine });
+        }
+        if (due(mine.timeUs)) events.push({ timeUs: mine.timeUs, kind: 'mine', lane, mine });
+        const settleUs = this.config.mineTrigger === 'press-or-hold' ? mine.timeUs + lateUs : mine.timeUs;
+        if (due(settleUs)) events.push({ timeUs: settleUs, kind: 'mine-settle', lane, mine });
       }
     }
     events.sort((left, right) => left.timeUs - right.timeUs);
@@ -325,13 +369,11 @@ class PlaylogSimulation {
           // beatoraja: a missed CN/HCN head also POORs the tail. IIDX (headBadSkipsTail) skips it.
           this.applyJudge(JUDGE_MISS_POOR, undefined);
         }
-      } else if (event.kind === 'mine') {
-        const mine = event.mine!;
-        if (mine.applied) continue;
-        mine.applied = true;
-        if (event.lane.held && mine.damage > 0) {
-          this.gauge.applyRawDelta(-mine.damage);
-        }
+      } else if (event.kind === 'mine' || event.kind === 'mine-enter') {
+        // Held as it enters the window (LR2) or as it crosses the line (every ruleset).
+        if (event.lane.held) this.detonateMine(event.mine!);
+      } else if (event.kind === 'mine-settle') {
+        event.mine!.applied = true;
       } else {
         // Charge tail held past its late window — the tail resolves as a missed POOR (beatoraja / IIDX).
         const lane = event.lane;
@@ -378,6 +420,34 @@ class PlaylogSimulation {
     this.lastAdvanceUs = untilUs;
   }
 
+  /** The PGREAT window's `[late, early]` reach (µs) around a mine, which bounds LR2's press-or-hold detonation. */
+  private minePgreatReachUs(mine: SimMine): readonly [number, number] {
+    return pgreatWindowReachUs(this.config.windowsAt(mine.timeUs).note);
+  }
+
+  private detonateMine(mine: SimMine): void {
+    if (mine.applied) return;
+    mine.applied = true;
+    if (mine.damage > 0) {
+      this.gauge.applyRawDelta(-mine.damage);
+    }
+  }
+
+  /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
+  private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
+    if (this.config.mineTrigger !== 'press-or-hold') return;
+    const reversalUs = this.playlog.chart.reversalTimeUs;
+    for (const lane of lanes) {
+      for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
+        const mine = lane.mines[index]!;
+        if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
+        const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
+        if (mine.timeUs - earlyUs > timeUs) break;
+        if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
+      }
+    }
+  }
+
   /** Integrates the beatoraja-model HCN hold ticks for a lane up to `untilUs`. */
   private integrateHcn(lane: SimLane, untilUs: number): void {
     const hold = lane.hold;
@@ -404,7 +474,7 @@ class PlaylogSimulation {
 
   // ---- input handling ----------------------------------------------------------------------------------------
 
-  private handleDown(input: PlaylogInputEvent): void {
+  private handleDown(input: PlaylogInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
     const windows = this.config.windowsAt(timeUs);
     const lanes = this.resolveInputLanes(input);
@@ -413,6 +483,9 @@ class PlaylogSimulation {
     }
     if (lanes.length === 0) {
       return;
+    }
+    if (minePressLegLive) {
+      this.detonateMinesOnPress(lanes, timeUs);
     }
 
     const selected = this.selectCandidate(lanes, timeUs, windows);

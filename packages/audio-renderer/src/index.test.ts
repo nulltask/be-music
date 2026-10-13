@@ -418,6 +418,48 @@ test('audio-renderer: startSeconds trims leading timeline before rendering', asy
   expect(shifted.durationSeconds).toBeLessThan(0.2);
 });
 
+test('audio-renderer: renderJson keeps BGM at the LR2 reversal tick and drops lane sounds there and behind it', async () => {
+  // BPM 240 → measure = 1 s. The reversal (#BPM02 -240 via channel 08) sits at 2 s. LR2 sorts same-tick events by
+  // op (`CMP_NotesByRealTimingOp`): BGM (op 1) fires BEFORE the negative BPM (op 8), lane sounds (op 10+) after it,
+  // so the BGM at the boundary renders while the lane note beside it and anything strictly behind stay silent.
+  const reference = createEmptyJson('bms');
+  reference.metadata.bpm = 240;
+  reference.resources.bpm['02'] = -240;
+  reference.resources.wav['01'] = 'not-found.wav';
+  reference.events = [
+    { measure: 1, channel: '01', position: [0, 1], value: '01' },
+    { measure: 2, channel: '08', position: [0, 1], value: '02' },
+    { measure: 2, channel: '01', position: [0, 1], value: '01' }, // exactly AT the reversal — op 1 fires
+  ];
+
+  const withFrozen = createEmptyJson('bms');
+  withFrozen.metadata.bpm = 240;
+  withFrozen.resources.bpm['02'] = -240;
+  withFrozen.resources.wav['01'] = 'not-found.wav';
+  withFrozen.events = [
+    ...reference.events,
+    { measure: 2, channel: '11', position: [0, 1], value: '01' }, // lane note AT the reversal — op 11 is frozen
+    { measure: 3, channel: '01', position: [0, 1], value: '01' }, // strictly behind it
+  ];
+
+  const renderOptions = {
+    sampleRate: 44_100,
+    normalize: false,
+    tailSeconds: 0,
+    fallbackToneSeconds: 0.05,
+  };
+  const [referenceResult, filtered] = await Promise.all([
+    renderJson(reference, renderOptions),
+    renderJson(withFrozen, renderOptions),
+  ]);
+
+  // Only the 1 s and 2 s BGM tones render in either chart: same length, same content.
+  expect(filtered.left.length).toBe(referenceResult.left.length);
+  expect(filtered.durationSeconds).toBeGreaterThan(2);
+  expect(filtered.durationSeconds).toBeLessThan(3);
+  expect(maxDeltaBetweenResults(referenceResult, filtered, 0, referenceResult.left.length)).toBe(0);
+});
+
 test('audio-renderer: renderJson throws AbortError when signal is already aborted', async () => {
   const json = createEmptyJson('bms');
   json.metadata.bpm = 120;

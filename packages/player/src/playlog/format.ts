@@ -100,6 +100,11 @@ export interface PlaylogChart {
   judgeRank: PlaylogJudgeRank;
   /** Number of scorable notes (TOTAL / EX-SCORE denominator — mines / invisibles / freezones excluded). */
   noteCount: number;
+  /**
+   * LR2 negative-BPM reversal in chart µs (#134). Judging and realtime audio froze here during the recorded run,
+   * so re-simulations must apply the same cutoff. Absent when the chart has no negative `#BPMxx`.
+   */
+  reversalTimeUs?: number;
   notes: PlaylogNote[];
 }
 
@@ -149,7 +154,7 @@ export interface PlaylogGaugeResult {
 }
 
 export interface PlaylogRulesetResult {
-  /** Ruleset identifier + revision (e.g. `'lr2/1'`, `'beatoraja/1'`, `'iidx/1'`, `'be-music/native'`). */
+  /** Ruleset identifier + revision (e.g. `'lr2/0'`, `'beatoraja/0'`, `'iidx/0'`, `'be-music/native'`). */
   ruleset: string;
   judge: PlaylogJudgeCounts;
   fast: number;
@@ -329,6 +334,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     lnMode,
     judgeRank,
     noteCount: expectFiniteNumber(chart.noteCount, 'chart.noteCount'),
+    reversalTimeUs: optionalFiniteNumber(chart.reversalTimeUs, 'chart.reversalTimeUs'),
     notes,
   };
   for (const key of [
@@ -340,6 +346,7 @@ function parseChart(chart: Record<string, unknown>): PlaylogChart {
     'chartFingerprint',
     'playFingerprint',
     'total',
+    'reversalTimeUs',
   ] as const) {
     if (parsed[key] === undefined) delete parsed[key];
   }

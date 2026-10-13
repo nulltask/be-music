@@ -3,6 +3,7 @@ import type { TimedLandmineNote, TimedPlayableNote } from '../playable-notes.ts'
 import type { PlaylogInputEvent } from '../playlog/format.ts';
 import type { RulesetConfig } from '../ruleset/definitions.ts';
 import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
+import type { LaneHoldHistory } from './lane-hold.ts';
 import { type PendingAutoLongNoteState, type TimedManualJudge } from './judge-rules.ts';
 import { type ScoreSummary, type ScoreTracker } from './scoring.ts';
 import type { PlayerGaugeSummary, PlayerUiCommand } from './ui-signal-bus.ts';
@@ -58,6 +59,13 @@ export interface JudgeCoreConfig {
   /** Object-id radix, for reading mine damage values. */
   idBase: 36 | 62;
   sourceFormat: BeMusicSourceFormat;
+  /**
+   * Chart second of the LR2 negative-BPM reversal (`ResolvedChart.reversal`), when the chart has one. LR2's event pump
+   * freezes there: nothing at or past it is missed, auto-played or detonated, and presses and releases past it are
+   * judged on the mirrored clock `t' = 2R - now` (OpenLR2 `LR2f.cpp:12624,12931`). Chart data, not a clock — the
+   * judgments stay a pure function of the inputs' chart times. See docs/bms-spec.md "Negative BPM".
+   */
+  reversalSeconds?: number;
 }
 
 /** The play's running result — the same shape as the engine's public `PlayerSummary`. */
@@ -73,6 +81,8 @@ export interface JudgeCoreScore {
   scoreTracker: ScoreTracker;
   applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
   applyGaugeDelta: (delta: number) => void;
+  /** Empties the gauge for good (LR2's `HP = 0` when a reversed play ends with notes outstanding). */
+  drainGaugeToZero: () => void;
 }
 
 /** A long note whose head was hit and whose tail is not resolved yet. */
@@ -98,6 +108,7 @@ export interface JudgeCoreState {
   readonly scoreTracker: ScoreTracker;
   readonly applyGaugeJudge: (judge: GrooveGaugeJudgeKind) => void;
   readonly applyGaugeDelta: (delta: number) => void;
+  readonly drainGaugeToZero: () => void;
   combo: number;
   /** Lanes whose key is down (kitty key-state input and replays; plain terminals only send presses). */
   readonly heldChannels: Set<string>;
@@ -108,7 +119,13 @@ export interface JudgeCoreState {
   readonly longHoldReleaseSeconds: Map<string, number>;
   /** Until this chart second, a note-less press on the lane is part of a long note just played, not a phantom. */
   readonly longNoteSuppressUntilSeconds: Map<string, number>;
-  readonly lastLanePressMs: Map<string, number>;
+  /** Each lane's press and release instants, for asking whether it was down when a mine crossed the line. */
+  readonly laneHolds: Map<string, LaneHoldHistory>;
+  /**
+   * The host reports releases (key-state input, replays): lanes are down exactly between their presses and releases.
+   * Until then a press counts as held for {@link LONG_NOTE_REPEAT_HOLD_GRACE_MS}.
+   */
+  keyStateInput: boolean;
   readonly pendingAutoScratchLongNotes: PendingAutoLongNoteState[];
   readonly autoScratchNotes: readonly TimedPlayableNote[];
   /** Per-lane sorted note times — the reference notes a phantom press is measured against for an empty POOR. */
@@ -139,7 +156,10 @@ export type JudgeCoreInput =
       nowMs: number;
       recordSec: number;
     }
-  /** The play ended: anything still unjudged is charged as POOR at `totalSeconds`. */
+  /**
+   * The play ended: anything still unjudged is charged as POOR at `totalSeconds` — except, past an LR2 negative-BPM
+   * reversal, the notes the frozen pump never reached, which empty the gauge instead.
+   */
   | { kind: 'finish'; totalSeconds: number };
 
 /** A `name value` field of a no-TUI trace line (the time field is added from the effect's `seconds`). */

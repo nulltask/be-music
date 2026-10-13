@@ -6,6 +6,7 @@ import type { GrooveGaugeJudgeKind } from './groove-gauge.ts';
 import { isLongPlayableNote, resolveRulesetLongNoteMode, type TimedManualJudge } from './judge-rules.ts';
 import { applyJudgeToSummary, type JudgeKind } from './scoring.ts';
 import {
+  JUDGE_TIME_EPSILON_SECONDS,
   type JudgeCoreConfig,
   type JudgeCoreEffectSink,
   type JudgeCoreState,
@@ -16,6 +17,30 @@ import {
  * Judge-core scoring: the ruleset windows a judgment reads, and how a judgment moves the
  * score, gauge and combo.
  */
+
+// ---- LR2 negative-BPM reversal --------------------------------------------------------------------------------
+
+/**
+ * The clock a press, a release or a long-note hold is judged on. Past an LR2 negative-BPM reversal R it is the
+ * mirrored `t' = 2R - now` (OpenLR2 `LR2f.cpp:12624,12931`, LR2body.exe 0x42c25b / 0x42c788): notes around the
+ * reversal stay hittable just after it, empty POORs keep firing while the lane's next note is within reach of t', and
+ * a long note spanning the reversal BADs on release. t' never passes R, so nothing past it is ever reached. Pure in
+ * the true chart time, so replays reproduce it.
+ */
+export function toJudgeClock(config: Pick<JudgeCoreConfig, 'reversalSeconds'>, seconds: number): number {
+  const reversal = config.reversalSeconds;
+  return reversal !== undefined && seconds > reversal ? 2 * reversal - seconds : seconds;
+}
+
+/**
+ * Clamps a forward pump reference (misses, auto-scratch) strictly BELOW the reversal. The sweeps are inclusive at
+ * their reference (some add {@link JUDGE_TIME_EPSILON_SECONDS} on top), while LR2 orders lane notes (op 10+) AFTER the
+ * negative BPM (op 8) on the reversal tick, so a note exactly AT the reversal is frozen with the pump.
+ */
+export function clampToReversal(config: Pick<JudgeCoreConfig, 'reversalSeconds'>, seconds: number): number {
+  const reversal = config.reversalSeconds;
+  return reversal === undefined ? seconds : Math.min(seconds, reversal - 2 * JUDGE_TIME_EPSILON_SECONDS);
+}
 
 // ---- windows --------------------------------------------------------------------------------------------------
 

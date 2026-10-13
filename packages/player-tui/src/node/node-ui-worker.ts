@@ -245,6 +245,8 @@ async function bootstrap(): Promise<void> {
       if (!latestFrame) {
         return;
       }
+      // The BGA renderer itself stops cue changes at an LR2 negative-BPM reversal (a playing movie keeps running), so
+      // it is driven by the true clock.
       const bgaAnsiLines = useKittyGraphicsForBga ? undefined : bgaRenderer?.getAnsiLines(latestFrame.currentSeconds);
       const bgaKittyImage = useKittyGraphicsForBga ? bgaRenderer?.getKittyImage(latestFrame.currentSeconds) : undefined;
       if (useKittyGraphicsForBga) {

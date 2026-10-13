@@ -17,6 +17,13 @@ import {
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import {
+  isDrawnAtTime,
+  isPastDrawWindow,
+  resolveDrawBottom,
+  resolveDrawY,
+  type NoteDrawWindow,
+} from '../core/note-draw-window.ts';
 
 /** Beat positions per marker kind. Caller computes these from the chart once per play. */
 export interface BeatorajaMarkerBeats {
@@ -136,7 +143,29 @@ export class BeatorajaMarkerLayer {
     laneTopY: number;
     pixelsPerBeat: number;
     markers: BeatorajaMarkerBeats;
+    /**
+     * Lane distance from the playhead to a beat, in beats at scroll rate 1 — the note layer's `#SCROLL` / `#SPEED`
+     * integrator, so bar lines move with the notes. Defaults to the beat difference.
+     */
+    distance?: (beat: number) => number;
+    /**
+     * The note layer's draw window. On a chart that scrolls it is beatoraja's `LaneRenderer` window: markers stop after
+     * the first timeline past the lane top, one whose time has come is gone, and one a negative rate puts below the line
+     * while its time is ahead still draws, down to the stage bottom. Otherwise it is LR2's: a marker scrolls down to the
+     * judgement line and goes once the playhead has passed it, so one under a STOP that began on it stays on the line.
+     * Omitted: every marker in the lane draws.
+     */
+    window?: NoteDrawWindow;
+    /** Chart time of a beat, in seconds; with `window`, hides a marker whose time has come. */
+    secondsAt?: (beat: number) => number;
   }): void {
+    const distance = args.distance ?? ((beat: number): number => beat - args.currentBeat);
+    const { window, secondsAt } = args;
+    const drawBottom = window ? resolveDrawBottom(window, args.judgementY) : args.judgementY;
+    // Under LR2's rules a marker goes once the playhead has passed it; a pixel of slack keeps the one just crossed for a
+    // frame, on the line.
+    // Past an LR2 negative-BPM reversal one the playhead passed before it stays gone as the scroll runs back.
+    const passedBeat = (window?.reachedBeat ?? args.currentBeat) - 1 / Math.max(1, args.pixelsPerBeat);
     let used = 0;
     const ranges: ReadonlyArray<{ kind: MarkerKindData[]; beats: ReadonlyArray<number> }> = [
       { kind: this.kindData.group, beats: args.markers.group },
@@ -156,7 +185,15 @@ export class BeatorajaMarkerLayer {
       for (const proto of kind) {
         if (proto.texture === undefined) continue;
         for (const beat of beats) {
-          const scrollY = args.judgementY - (beat - args.currentBeat) * args.pixelsPerBeat;
+          if (window?.rules === 'beatoraja') {
+            if (isPastDrawWindow(window, beat)) break;
+            if (secondsAt && !isDrawnAtTime(window, secondsAt(beat))) continue;
+          } else if (window && beat < passedBeat) {
+            continue;
+          }
+          const scrollY = window
+            ? resolveDrawY(window, args.judgementY - distance(beat) * args.pixelsPerBeat, args.judgementY)
+            : args.judgementY - distance(beat) * args.pixelsPerBeat;
           // Apply the authored bottom offset relative to the lane's authored bottom — mirrors
           // upstream's `line.draw(..., 0, y - hl)` (`LaneRenderer.java:373`). Without this the
           // barline lands at the lane's BOTTOM EDGE instead of the authored bar position
@@ -167,7 +204,7 @@ export class BeatorajaMarkerLayer {
           // well above the lane bottom (e.g., a hypothetical "ceiling marker") doesn't get
           // culled prematurely. 24-pixel slack matches the note layer's culling so markers
           // don't pop in/out at the edge.
-          if (y < args.laneTopY - 24 || y > args.judgementY + 24) continue;
+          if (y < args.laneTopY - 24 || y > drawBottom + 24) continue;
           const sprite = this.acquireSprite(used);
           sprite.texture = proto.texture;
           // Anchor at the rect's BOTTOM-LEFT so the marker's bottom edge sits exactly on `y`.

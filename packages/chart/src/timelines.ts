@@ -64,15 +64,17 @@ export function createBpmTimeline(json: BeMusicJson, resolver: TimingResolver): 
     if (!Number.isFinite(seconds) || !Number.isFinite(point.bpm) || point.bpm <= 0) {
       continue;
     }
-    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(point.bpm - previousBpm) < 1e-6) {
+    // The readout value: a negative `#BPMxx` shows as |trunc(BPM)| the way LR2's NOWBPM does.
+    const bpm = point.displayBpm ?? point.bpm;
+    if (Math.abs(seconds - previousSeconds) < 1e-6 && Math.abs(bpm - previousBpm) < 1e-6) {
       continue;
     }
     timeline.push({
-      bpm: point.bpm,
+      bpm,
       seconds,
     });
     previousSeconds = seconds;
-    previousBpm = point.bpm;
+    previousBpm = bpm;
   }
 
   if (timeline.length === 0) {
@@ -219,12 +221,19 @@ export function createStopBeatWindows(resolver: TimingResolver): StopBeatWindow[
     });
 }
 
+/**
+ * The beats bar lines sit at: the start of every measure from 0 to the last one with data, as beatoraja builds its
+ * sections (jbms-parser `BMSDecoder`: sections `0..maxsec`, each opening with a bar line) — no line after the last
+ * measure. A bmson chart that authors `lines` gets exactly those (one per measure start), as beatoraja's
+ * `BMSONDecoder` draws them; without `lines` the spec's line every 4 beats applies over the chart's measures.
+ */
 export function createMeasureBoundariesBeats(json: BeMusicJson, beatResolver: BeatResolver): number[] {
-  const maxMeasure = resolveMaxMeasureIndex(json);
+  const bmsonLines = json.sourceFormat === 'bmson' ? json.preservation.bmson.lines : [];
+  const lastMeasure = bmsonLines.length > 0 ? bmsonLines.length - 1 : resolveMaxMeasureIndex(json);
   const boundaries: number[] = [];
   let previous = Number.NaN;
 
-  for (let measure = 0; measure <= maxMeasure + 1; measure += 1) {
+  for (let measure = 0; measure <= lastMeasure; measure += 1) {
     const beat = beatResolver.measureToBeat(measure, 0);
     if (!Number.isFinite(beat)) {
       continue;

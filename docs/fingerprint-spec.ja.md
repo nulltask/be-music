@@ -106,7 +106,7 @@ fingerprint は **be-music による譜面の解釈** の上で定義します�
   - モード: bmson のノーツごとの `t`、なければ `info.ln_type`、なければ 1（LN）。BMS は `#LNMODE` の 2 か 3、なければ 1。終点が始点より後でなければ通常ノーツです。
 - **FREE ZONE**: 9 / 24 / 48 KEY 以外のすべてのレーン構成で、be-music はレーン `17` / `27` のオブジェクト（`1x` / `2x` または bmson のもの。`57` / `67` のものは除く）を 1 拍の FREE ZONE ノーツとして扱い、`#LNOBJ` の終点や bmson の `l` は無視します。このノーツは `end` を持たない `{"m", "p", "lane", "fz": true, "ln": モード}` で、モードは bmson の `t`、なければ `info.ln_type`、なければ 1 です。
 - **地雷**（`Dx` / `Ex`、bmson の `mine_channels`）: レーン、位置、ダメージ。ダメージは bmson の `damage` があればその値、bmson でなければ `4`。BMS ではオブジェクトの値を 36 進数として読んだ値、それが 0 でない有効な 36 進 2 桁でなければ `4` です。
-- **BPM**: 初期 BPM はヘッダの値です。チャンネル `03`、`#BPMxx` を使うチャンネル `08`、bmson の `bpm_events` はどれも `bpm` イベントになります。be-music と同じく 0 以下の値は無視します。
+- **BPM**: 初期 BPM はヘッダの値です。チャンネル `03`、`#BPMxx` を使うチャンネル `08`、bmson の `bpm_events` はどれも `bpm` イベントになります。be-music と同じく、0 の BPM と定義されていない `#BPMxx` は無視します。負の `#BPMxx` は符号付きのまま含めます。be-music はこれを LR2 の逆スクロールとして演奏するからです。逆スクロールの起点になるのは最初の負の変化だけですが、すべての負の変化の符号を残すので、後の負の変化の符号だけが違う 2 つの譜面は、同じように演奏されても別の fingerprint になります。fingerprint は譜面をまとめるより区別する側に倒しています。
 - **STOP**: 拍単位です。BMS の `#STOPxx` は 4/4 小節の 1/192 単位（拍 = 値 / 48）、bmson の `duration` はパルス単位（拍 = duration / resolution）です。同じ時刻に BMS の `#STOPxx` が複数あれば、LR2、beatoraja、エンジンと同じくイベント順で最後のものだけが効きます。bmson の同じ時刻の stop は **足し合わせて** 1 つの `stop` イベントにします。
 - **`#STP`**: ミリ秒単位の `stp` イベントです。同じ時刻の `#STP` は足し合わせます。
 - **SCROLL / SPEED / EXRANK**: 値を持つ `scroll`、`speed`、`exrank` イベントです。負の SPEED は無視します。`exrank` イベントは BMS 譜面の正の `#EXRANKxx` からだけ作ります。

@@ -1,5 +1,6 @@
 import {
   collectLnobjEndEvents,
+  firesBeforeTempoReversal,
   isBmsBgmVolumeChangeChannel,
   isBmsDynamicVolumeChangeChannel,
   isBmsKeyVolumeChangeChannel,
@@ -914,13 +915,22 @@ function buildEventPlaybackMap(resolved: ResolvedChart): Map<BeMusicEvent, Playa
   return playbackMap;
 }
 
+/**
+ * The chart's sample triggers on the channels `includeChannel` accepts, as realtime audio triggers. Under an LR2
+ * negative-BPM reversal (#134) only what fires before LR2's event pump freezes is kept: everything strictly before the
+ * reversal, and on its tick only what LR2 orders before the negative BPM (BGM, BGA) — see `firesBeforeTempoReversal`.
+ */
 export function collectRealtimeAudioTriggers(
   resolved: ResolvedChart,
   includeChannel: (channel: string) => boolean = () => true,
 ): Array<TimedSampleTrigger & RealtimeAudioTrigger> {
   const filtered: Array<TimedSampleTrigger & RealtimeAudioTrigger> = [];
+  const { reversal } = resolved;
   for (const trigger of resolved.sampleTriggers) {
     if (!includeChannel(trigger.channel)) {
+      continue;
+    }
+    if (!firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel)) {
       continue;
     }
     filtered.push({

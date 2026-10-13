@@ -76,6 +76,33 @@ function chart(events: BeMusicJson['events'], rank = 2): BeMusicJson {
   return json;
 }
 
+/**
+ * The negative-BPM reversal scenario: BPM 240, a pre-reversal STOP (1.0 s, 0.25 s long), an LN on 12 from 1.75 s to
+ * 3.25 s, a note on 11 at 2.2 s (R - 50 ms), the reversal `#BPM02 -60` at R = 2.25 s with a BGM on the same tick, a
+ * note on 13 at 2.35 s (R + 100 ms), a note on 14 at 2.75 s, a post-reversal STOP (4.25 s, 1 s long), BPM 240 again
+ * at 7.25 s, and a far note on 11 at 8.25 s.
+ */
+function reversalScenarioChart(): BeMusicJson {
+  const json = chart([
+    { measure: 1, channel: '09', position: [0, 1], value: '01' },
+    { measure: 1, channel: '12', position: [1, 2], value: '01' },
+    { measure: 1, channel: '11', position: [19, 20], value: '01' },
+    { measure: 2, channel: '08', position: [0, 1], value: '02' },
+    { measure: 2, channel: '01', position: [0, 1], value: '03' },
+    { measure: 2, channel: '13', position: [1, 40], value: '01' },
+    { measure: 2, channel: '12', position: [1, 4], value: 'ZZ' },
+    { measure: 2, channel: '14', position: [1, 8], value: '01' },
+    { measure: 2, channel: '09', position: [1, 2], value: '01' },
+    { measure: 3, channel: '03', position: [0, 1], value: 'F0' },
+    { measure: 4, channel: '11', position: [0, 1], value: '01' },
+  ]);
+  json.bms.lnObjs = ['ZZ'];
+  json.resources.bpm['02'] = -60;
+  json.resources.stop['01'] = 48;
+  json.resources.wav = { '01': 'note.wav', '03': 'bgm.wav' };
+  return json;
+}
+
 const RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
 
 describe('engine / simulator equivalence', () => {
@@ -221,6 +248,129 @@ describe('engine / simulator equivalence', () => {
 
     expect(before.summary.emptyPoor).toBe(1);
     expect(after.summary.emptyPoor).toBe(0);
+  });
+
+  test('lr2: a negative-BPM reversal chart records its cutoff and re-simulates to the same judges', async () => {
+    // LR2 negative-BPM reversal (#134). BPM 240 → measure = 1 s; `#BPM02 = -240` fires via channel 08 at 2 s.
+    // The 1 s note misses normally, the 3 s note sits behind the frozen judge clock and ends the run unjudged.
+    // The recorded playlog must carry the reversal instant so the simulator applies the same cutoff instead of
+    // sweeping the post-reversal note into a POOR.
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+      { measure: 3, channel: '11', position: [0, 1], value: '01' },
+    ]);
+    json.resources.bpm['02'] = -240;
+
+    const { summary, playlog } = await replay(json, [], 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(playlog.chart.reversalTimeUs).toBe(2_000_000);
+    // Live run: exactly one POOR (the pre-reversal note) and nothing else.
+    expect(summary.poor).toBe(1);
+    expect(summary.perfect + summary.great + summary.good + summary.bad).toBe(0);
+    expect(summary.total).toBe(2);
+    // The simulator reaches the same verdicts from the recorded log.
+    expect([summary.perfect, summary.great, summary.good, summary.bad, summary.poor]).toEqual([
+      simulated.judge.pgreat,
+      simulated.judge.great,
+      simulated.judge.good,
+      simulated.judge.bad,
+      simulated.judge.poor,
+    ]);
+    expect(summary.exScore).toBe(simulated.exScore);
+  });
+
+  test('lr2: past a negative-BPM reversal presses judge on the mirrored clock, like LR2 (engine and simulator)', async () => {
+    // LR2 keeps judging presses after the reversal R on the mirrored clock t' = 2R - now (OpenLR2 `LR2f.cpp:12624`,
+    // LR2body.exe 0x42c25b) with no miss sweep (t' <= R). Chart (BPM 240, rank NORMAL; see `reversalScenarioChart`):
+    // a pre-R STOP, an LN 1.75 s → 3.25 s spanning R = 2.25 s, notes at R - 50 ms (11) and R + 100 ms (13), an
+    // empty-POOR reference note at R + 0.5 s (14), the reversal (-60), a BGM on the reversal tick, a post-R STOP, a
+    // later BPM 240 change, and a far note at 8.25 s (11).
+    const json = reversalScenarioChart();
+    const inputs = [
+      down(0, 1_750_000, '12'), // LN head, on time
+      down(1, 2_270_000, '13'), // t' = 2.23 → the R + 100 ms note is 120 ms early: BAD
+      up(2, 2_280_000, '13'),
+      down(3, 2_300_000, '11'), // t' = 2.20 → the R - 50 ms note dead on: PGREAT
+      up(4, 2_320_000, '11'),
+      down(5, 2_550_000, '14'), // t' = 1.95 → the lane's note is 0.8 s ahead: empty POOR (LR2's 1 s reach)
+      up(6, 2_560_000, '14'),
+      up(7, 2_750_000, '12'), // t' = 1.75 → released 1.5 s before the LN tail: BAD (LR2f.cpp:7613-7616)
+      down(8, 3_250_000, '14'), // t' = 1.25 → the note is 1.5 s ahead, outside the reach: nothing
+      up(9, 3_260_000, '14'),
+    ];
+
+    const triggered: string[] = [];
+    let playlog: BeMusicPlaylog | undefined;
+    const summary = await manualPlay(json, {
+      speed: 16,
+      leadInMs: 0,
+      audio: true,
+      tui: false,
+      judgeRuleset: 'lr2',
+      replayInputs: inputs,
+      recordPlaylog: {},
+      onPlaylogRecorded: (recorded) => {
+        playlog = recorded;
+      },
+      createAudioSession: async () => ({
+        backendLabel: 'recording-audio',
+        chartStartDelayMs: 0,
+        start: () => undefined,
+        pause: () => undefined,
+        resume: () => undefined,
+        finish: async () => undefined,
+        dispose: async () => undefined,
+        triggerEvent: (event) => {
+          triggered.push(`${event.channel}:${event.value}`);
+        },
+        stopChannel: () => undefined,
+      }),
+    });
+    const simulated = simulatePlaylog(playlog!, { ruleset: 'lr2' });
+
+    // The BGM on the reversal tick sounded (op 1 precedes the negative BPM's op 8).
+    expect(triggered).toContain('01:03');
+    // Both notes near R were hit, the spanning LN BADs on its early release, and the empty POOR fired once.
+    expect(summary.perfect).toBe(1);
+    expect(summary.bad).toBe(2);
+    expect(summary.emptyPoor).toBe(1);
+    // No miss sweep past R: the R + 0.5 s reference note and the far note are never POORed.
+    expect(summary.poor).toBe(0);
+    expect(summary.great + summary.good).toBe(0);
+    // The simulator re-derives the same verdicts from the recorded log.
+    expect(simulated.judge).toEqual({
+      pgreat: summary.perfect,
+      great: summary.great,
+      good: summary.good,
+      bad: summary.bad,
+      poor: summary.poor,
+      emptyPoor: summary.emptyPoor,
+    });
+    expect(simulated.exScore).toBe(summary.exScore);
+    // Scorable notes were left unjudged past R, so the run is FAILED with the gauge at 0 — LR2 zeroes HP on leaving
+    // a play with notes outstanding (OpenLR2 `LR2f.cpp:12980-12982`) — on both sides.
+    expect(summary.gauge?.current).toBe(0);
+    expect(summary.gauge?.cleared).toBe(false);
+    expect(simulated.gauge.final).toBe(0);
+    expect(simulated.gauge.cleared).toBe(false);
+  });
+
+  test('lr2: a reversal run that judged every note before the reversal keeps its clear', async () => {
+    const json = chart([
+      { measure: 1, channel: '11', position: [0, 1], value: '01' },
+      { measure: 2, channel: '08', position: [0, 1], value: '02' },
+    ]);
+    json.resources.bpm['02'] = -240;
+
+    const { summary, playlog } = await replay(json, [down(0, 1_000_000, '11'), up(1, 1_050_000, '11')], 'lr2');
+    const simulated = simulatePlaylog(playlog, { ruleset: 'lr2' });
+
+    expect(summary.perfect).toBe(1);
+    expect(summary.gauge?.cleared).toBe(true);
+    expect(simulated.gauge.cleared).toBe(true);
+    expect(simulated.gauge.final).toBe(summary.gauge?.current);
   });
 
   test.each(RULESETS)('%s: an untouched chart misses every note on both sides', async (ruleset) => {

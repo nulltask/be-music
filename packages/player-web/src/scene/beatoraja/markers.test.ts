@@ -2,6 +2,7 @@ import { Texture, TextureSource } from 'pixi.js';
 import { describe, expect, it } from 'vite-plus/test';
 import type { BeatorajaImageElement, BeatorajaImageId } from '@be-music/beatoraja-skin';
 import { BeatorajaMarkerLayer } from './markers.ts';
+import { resolveNoteDrawWindow } from '../core/note-draw-window.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 
 // Match the skin-view tests' fake-texture pattern: a 1×1 non-EMPTY texture so the marker layer
@@ -207,5 +208,112 @@ describe('BeatorajaMarkerLayer — barline alignment vs lane bottom (upstream `y
     const sprite = layer.container.children[0]!;
     // Pre-fix: sprite.y = scrollY = judgementY = 850. No 12-px offset.
     expect((sprite as { y: number }).y).toBe(850);
+  });
+});
+
+describe('BeatorajaMarkerLayer — beatoraja LaneRenderer window on a chart that scrolls', () => {
+  const canvasHeight = 1000;
+  const makeLayer = () =>
+    new BeatorajaMarkerLayer({
+      group: [{ id: 'section-line', dst: [{ x: 0, y: 200, w: 500, h: 3, a: 255, r: 255, g: 255, b: 255 }] }],
+      bpm: [],
+      stop: [],
+      time: [],
+      images: makeImages(),
+      textures: fakeTextureCache(),
+      canvasHeight,
+      laneAuthoredBottomY: canvasHeight - 200,
+    });
+  const visibleYs = (layer: BeatorajaMarkerLayer): number[] =>
+    layer.container.children.filter((child) => child.visible).map((child) => (child as { y: number }).y);
+
+  it('hides a bar line whose time has come and stops after the first timeline past the lane top', () => {
+    const layer = makeLayer();
+    // Lane from y=510 to the line at y=800: 2.9 beats at 100 px per beat, overrun at beat 4.9; the next timeline is
+    // the bar line at beat 5, which draws in the band above the lane, and the walk stops there: beat 6, which a
+    // negative scroll brings back into the lane, is not drawn.
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 2,
+      nowSeconds: 1,
+      laneBeats: 2.9,
+      timelineBeats: [1, 3, 5, 6],
+      overscanBeats: 0,
+      stageBottomY: canvasHeight,
+    });
+    layer.update({
+      currentBeat: 2,
+      judgementY: 800,
+      laneTopY: 510,
+      pixelsPerBeat: 100,
+      // Beat 1.8 lies just below the line but its time (0.9 s) has passed; beat 2 is on the line at 1 s.
+      markers: { group: [1.8, 2, 3, 5, 6], bpm: [], stop: [], time: [] },
+      distance: (beat) => (beat === 6 ? 1 : beat - 2),
+      window,
+      secondsAt: (beat) => beat / 2,
+    });
+    expect(visibleYs(layer)).toEqual([800, 700, 500]);
+  });
+
+  it('draws a bar line a negative scroll puts below the line while its time is ahead', () => {
+    const layer = makeLayer();
+    const window = resolveNoteDrawWindow({
+      rules: 'beatoraja',
+      currentBeat: 2,
+      nowSeconds: 1,
+      laneBeats: 3,
+      overscanBeats: 0,
+      stageBottomY: canvasHeight,
+    });
+    layer.update({
+      currentBeat: 2,
+      judgementY: 800,
+      laneTopY: 500,
+      pixelsPerBeat: 100,
+      markers: { group: [3], bpm: [], stop: [], time: [] },
+      distance: () => -1.5,
+      window,
+      secondsAt: (beat) => beat / 2,
+    });
+    expect(visibleYs(layer)).toEqual([950]);
+  });
+});
+
+describe('BeatorajaMarkerLayer — LR2 window on a chart that does not scroll', () => {
+  const canvasHeight = 1000;
+  const makeLayer = () =>
+    new BeatorajaMarkerLayer({
+      group: [{ id: 'section-line', dst: [{ x: 0, y: 200, w: 500, h: 3, a: 255, r: 255, g: 255, b: 255 }] }],
+      bpm: [],
+      stop: [],
+      time: [],
+      images: makeImages(),
+      textures: fakeTextureCache(),
+      canvasHeight,
+      laneAuthoredBottomY: canvasHeight - 200,
+    });
+  const visibleYs = (layer: BeatorajaMarkerLayer): number[] =>
+    layer.container.children.filter((child) => child.visible).map((child) => (child as { y: number }).y);
+
+  it('holds the bar line just crossed on the judgement line and drops the ones the playhead has passed', () => {
+    const layer = makeLayer();
+    const window = resolveNoteDrawWindow({
+      rules: 'lr2',
+      currentBeat: 2,
+      nowSeconds: 1,
+      laneBeats: 3,
+      overscanBeats: 0,
+    });
+    layer.update({
+      currentBeat: 2,
+      judgementY: 800,
+      laneTopY: 500,
+      pixelsPerBeat: 100,
+      // Beat 1.995 was crossed within the last pixel: it stays, on the line rather than half a pixel below it. Beat 1.9
+      // is gone (LR2 does not slide bar lines under the judgement line).
+      markers: { group: [1.9, 1.995, 2, 3], bpm: [], stop: [], time: [] },
+      window,
+    });
+    expect(visibleYs(layer)).toEqual([800, 800, 700]);
   });
 });

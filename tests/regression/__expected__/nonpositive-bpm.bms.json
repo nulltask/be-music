@@ -122,7 +122,8 @@
       "timing": {
         "tempo": [
           "0 130 0",
-          "8 130 3692308"
+          "8 130 3692308",
+          "16 65 7384615"
         ],
         "stops": []
       },
@@ -146,13 +147,13 @@
         "6461538 11 01",
         "6923077 11 01",
         "7384615 11 01",
-        "7846154 11 01",
         "8307692 11 01",
-        "8769231 11 01",
         "9230769 11 01",
-        "9692308 11 01",
         "10153846 11 01",
-        "10615385 11 01"
+        "11076923 11 01",
+        "12000000 11 01",
+        "12923077 11 01",
+        "13846154 11 01"
       ],
       "playlogChart": {
         "sourceFormat": "bms",
@@ -163,8 +164,9 @@
           "sourceRank": 2
         },
         "noteCount": 24,
-        "chartFingerprint": "bmfp0:eab6e4287077471ee975d52153725ea4a76a54ec23645bfa920e385f08993b12",
-        "playFingerprint": "bmfp0:eab6e4287077471ee975d52153725ea4a76a54ec23645bfa920e385f08993b12",
+        "reversalTimeUs": 7384615,
+        "chartFingerprint": "bmfp0:0f3afe17bafc3889296db04fbb5dcbfffe5457ce40e8b3ea8749c5ca6e34ba17",
+        "playFingerprint": "bmfp0:0f3afe17bafc3889296db04fbb5dcbfffe5457ce40e8b3ea8749c5ca6e34ba17",
         "title": "Non-Positive BPM Changes",
         "subtitle": "Zero, negative and undefined #BPMxx slots referenced from channel 08",
         "artist": "be-music",
@@ -189,25 +191,25 @@
         "6461538 11 normal",
         "6923077 11 normal",
         "7384615 11 normal",
-        "7846154 11 normal",
         "8307692 11 normal",
-        "8769231 11 normal",
         "9230769 11 normal",
-        "9692308 11 normal",
         "10153846 11 normal",
-        "10615385 11 normal"
+        "11076923 11 normal",
+        "12000000 11 normal",
+        "12923077 11 normal",
+        "13846154 11 normal"
       ],
       "play": {
         "missed": {
           "inputs": 0,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 24,
+              "poor": 16,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -218,19 +220,19 @@
             "djLevel": "F",
             "gauge": {
               "type": "GROOVE",
-              "final": 2,
+              "final": 0,
               "cleared": false
             },
             "score": 0
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 24,
+              "poor": 16,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -241,18 +243,18 @@
             "djLevel": "F",
             "gauge": {
               "type": "NORMAL",
-              "final": 2,
+              "final": 0,
               "cleared": false
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
               "pgreat": 0,
               "great": 0,
               "good": 0,
               "bad": 0,
-              "poor": 24,
+              "poor": 16,
               "emptyPoor": 0
             },
             "fast": 0,
@@ -271,140 +273,140 @@
         "perfect": {
           "inputs": 48,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
-              "pgreat": 24,
+              "pgreat": 17,
               "great": 0,
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 7
             },
             "fast": 0,
             "slow": 0,
-            "exScore": 48,
+            "exScore": 34,
             "noteCount": 24,
-            "maxCombo": 24,
-            "djLevel": "AAA",
+            "maxCombo": 17,
+            "djLevel": "A",
             "gauge": {
               "type": "GROOVE",
-              "final": 100,
-              "cleared": true
+              "final": 0,
+              "cleared": false
             },
-            "score": 200000
+            "score": 141666
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
-              "pgreat": 24,
+              "pgreat": 17,
               "great": 0,
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 7
             },
             "fast": 0,
             "slow": 0,
-            "exScore": 48,
+            "exScore": 34,
             "noteCount": 24,
-            "maxCombo": 24,
-            "djLevel": "AAA",
+            "maxCombo": 17,
+            "djLevel": "A",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
-              "cleared": true
+              "final": 0,
+              "cleared": false
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
-              "pgreat": 24,
+              "pgreat": 17,
               "great": 0,
               "good": 0,
               "bad": 0,
               "poor": 0,
-              "emptyPoor": 0
+              "emptyPoor": 7
             },
             "fast": 0,
             "slow": 0,
-            "exScore": 48,
+            "exScore": 34,
             "noteCount": 24,
-            "maxCombo": 24,
-            "djLevel": "AAA",
+            "maxCombo": 17,
+            "djLevel": "A",
             "gauge": {
               "type": "NORMAL",
-              "final": 100,
-              "cleared": true
+              "final": 0,
+              "cleared": false
             }
           }
         },
         "offset": {
           "inputs": 42,
           "lr2": {
-            "ruleset": "lr2/1",
+            "ruleset": "lr2/0",
             "judge": {
-              "pgreat": 9,
-              "great": 5,
-              "good": 4,
-              "bad": 3,
-              "poor": 3,
-              "emptyPoor": 0
+              "pgreat": 7,
+              "great": 4,
+              "good": 2,
+              "bad": 2,
+              "poor": 2,
+              "emptyPoor": 6
             },
-            "fast": 4,
-            "slow": 5,
-            "exScore": 23,
+            "fast": 3,
+            "slow": 3,
+            "exScore": 18,
             "noteCount": 24,
             "maxCombo": 6,
-            "djLevel": "C",
+            "djLevel": "D",
             "gauge": {
               "type": "GROOVE",
-              "final": 96,
-              "cleared": true
+              "final": 0,
+              "cleared": false
             },
-            "score": 104166
+            "score": 79166
           },
           "beatoraja": {
-            "ruleset": "beatoraja/1",
+            "ruleset": "beatoraja/0",
             "judge": {
-              "pgreat": 9,
-              "great": 5,
-              "good": 4,
+              "pgreat": 7,
+              "great": 4,
+              "good": 2,
               "bad": 0,
-              "poor": 6,
-              "emptyPoor": 3
+              "poor": 4,
+              "emptyPoor": 8
             },
-            "fast": 4,
-            "slow": 5,
-            "exScore": 23,
+            "fast": 3,
+            "slow": 3,
+            "exScore": 18,
             "noteCount": 24,
             "maxCombo": 6,
-            "djLevel": "C",
+            "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 92,
-              "cleared": true
+              "final": 0,
+              "cleared": false
             }
           },
           "iidx": {
-            "ruleset": "iidx/1",
+            "ruleset": "iidx/0",
             "judge": {
-              "pgreat": 9,
-              "great": 5,
-              "good": 4,
-              "bad": 3,
-              "poor": 3,
-              "emptyPoor": 0
+              "pgreat": 7,
+              "great": 4,
+              "good": 2,
+              "bad": 2,
+              "poor": 2,
+              "emptyPoor": 6
             },
-            "fast": 4,
-            "slow": 5,
-            "exScore": 23,
+            "fast": 3,
+            "slow": 3,
+            "exScore": 18,
             "noteCount": 24,
             "maxCombo": 6,
-            "djLevel": "C",
+            "djLevel": "D",
             "gauge": {
               "type": "NORMAL",
-              "final": 98,
-              "cleared": true
+              "final": 0,
+              "cleared": false
             }
           }
         }

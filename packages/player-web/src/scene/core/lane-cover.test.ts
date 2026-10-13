@@ -43,6 +43,14 @@ describe('resolveNoteVisibleMs', () => {
     expect(resolveNoteVisibleMs(72 * 4, lanecover, 0, pixelsPerBeat, bpm)).toBeCloseTo(beatoraja, 9);
   });
 
+  it('divides by the scroll rate and reads 0 while the chart scrolls backwards or stands still, as beatoraja', () => {
+    // beatoraja: `region = nscroll > 0 ? (240000 / nbpm / hispeed / speed) / nscroll : 0`.
+    expect(resolveNoteVisibleMs(576, 0, 0, 144, 120, 2)).toBe(1000);
+    expect(resolveNoteVisibleMs(576, 0, 0, 144, 120, 0.5)).toBe(4000);
+    expect(resolveNoteVisibleMs(576, 0, 0, 144, 120, 0)).toBe(0);
+    expect(resolveNoteVisibleMs(576, 0, 0, 144, 120, -1)).toBe(0);
+  });
+
   it('subtracts SUDDEN+ and LIFT from the travelled height', () => {
     expect(resolveNoteVisibleMs(576, 0.25, 0.25, 144, 120)).toBe(1000);
     expect(resolveNoteVisibleMs(576, 0.8, 0.5, 144, 120)).toBe(0);

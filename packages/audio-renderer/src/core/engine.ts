@@ -25,7 +25,7 @@ import { parseChartFile, resolveBmsControlFlow } from '@be-music/parser';
 import { detectAudioFormat, encodeAiff16, encodeWav16 } from './file-codec.ts';
 import { createFallbackTone, decodeAudioSample, resampleLinear } from './decode.ts';
 import { resolveSamplePath } from './sample-path.ts';
-import { type TimedSampleTrigger } from './triggers.ts';
+import { firesBeforeTempoReversal, type TimedSampleTrigger } from './triggers.ts';
 
 export * from './triggers.ts';
 export interface RenderOptions {
@@ -138,7 +138,16 @@ export async function renderJson(json: BeMusicJson, options: RenderOptions = {})
 
   const resolved = resolveChart(json, { inferBmsLnTypeWhenMissing: options.inferBmsLnTypeWhenMissing === true });
   const dynamicVolumeChanges = splitDynamicVolumeChangesByBus(resolved.volumeChanges);
-  const triggers = resolved.sampleTriggers;
+  // LR2's event pump freezes at a negative-BPM reversal: nothing behind the reversal ever sounds, and on the reversal
+  // tick only the BGM ordered before the negative BPM does (Scene04_Play.cpp:1267-1269). Match that audibility in the
+  // offline render.
+  const reversal = resolved.reversal;
+  const triggers =
+    reversal === undefined
+      ? resolved.sampleTriggers
+      : resolved.sampleTriggers.filter((trigger) =>
+          firesBeforeTempoReversal(reversal, trigger.seconds, trigger.channel),
+        );
 
   const loadedSamples = new Map<string, StereoSample>();
   const resolvedPathCache = new Map<string, string | undefined>();

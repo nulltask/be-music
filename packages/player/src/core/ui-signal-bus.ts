@@ -78,6 +78,14 @@ export interface PlayerUiFrameNote {
 export interface PlayerUiFramePayload {
   currentBeat: number;
   currentSeconds: number;
+  /**
+   * Display beat mirrored in chart-position space around the LR2 negative-BPM reversal
+   * (`2 * reversalBeat - currentBeat`) — set only once the chart is past the reversal point. Renderers scroll from it
+   * (falling back to `currentBeat`); the true clock keeps driving audio, BGA, and the forward judge-state sweep.
+   */
+  displayBeat?: number;
+  /** Chart time of the LR2 negative-BPM reversal, when the chart has one — BGA compositors freeze there. */
+  reversalSeconds?: number;
   totalSeconds: number;
   summary: PlayerUiFrameSummary;
   notes: PlayerUiFrameNote[];
@@ -134,6 +142,8 @@ export function createPlayerUiSignalBus(initialFrame: PlayerUiFramePayload): Pla
   const publishFrame = (frame: PlayerUiFramePayload): void => {
     frameState.currentBeat = frame.currentBeat;
     frameState.currentSeconds = frame.currentSeconds;
+    frameState.displayBeat = frame.displayBeat;
+    frameState.reversalSeconds = frame.reversalSeconds;
     frameState.totalSeconds = frame.totalSeconds;
     frameState.summary = frame.summary;
     frameState.notes = frame.notes;

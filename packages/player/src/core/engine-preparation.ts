@@ -1,6 +1,7 @@
 import type { ResolvedPlayChart, ResolvePlayChartOptions } from './engine-types.ts';
 import {
   drawRandomOutcomes,
+  firesBeforeTempoReversal,
   hasControlFlow,
   resolveChart,
   type RandomDraws,
@@ -377,9 +378,15 @@ interface TimedAudioVolumeEvent {
   seconds: number;
 }
 
-/** The chart's dynamic volume changes as realtime audio events (times clamped to the chart start). */
+/**
+ * The chart's dynamic volume changes as realtime audio events (times clamped to the chart start). Changes behind an
+ * LR2 negative-BPM reversal never fire: the event pump froze there (#134).
+ */
 export function collectRealtimeAudioVolumeEvents(resolved: ResolvedChart): TimedAudioVolumeEvent[] {
-  return resolved.volumeChanges.map((change) => ({ event: change.event, seconds: Math.max(0, change.seconds) }));
+  const { reversal } = resolved;
+  return resolved.volumeChanges
+    .filter((change) => firesBeforeTempoReversal(reversal, change.seconds, change.event.channel))
+    .map((change) => ({ event: change.event, seconds: Math.max(0, change.seconds) }));
 }
 
 export function resolveAudioBackendLabel(options: PlayerOptions, audioSession: AudioSession | undefined): string {

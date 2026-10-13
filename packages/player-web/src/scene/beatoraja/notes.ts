@@ -18,6 +18,7 @@ import { Container, Graphics, Sprite, type Texture, TilingSprite } from 'pixi.js
 import type { ChartPlayVariant } from '@be-music/player/core/lane-layout';
 import { resolveSideKeySlot } from '@be-music/player/core/lane-layout';
 import type { PlayerUiFrameNote, PlayerUiFramePayload } from '@be-music/player/core/ui-signal-bus';
+import type { ScrollDistanceMapperLike } from '@be-music/player/core/scroll-distance';
 import {
   pickBeatorajaNoteRects,
   type BeatorajaImageElement,
@@ -27,6 +28,16 @@ import {
 } from '@be-music/beatoraja-skin';
 import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beatoraja/render.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
+import type { TempoReversalPoint } from '@be-music/chart';
+import {
+  GoneDrawObjects,
+  isDrawnAtTime,
+  isDrawnUntilJudged,
+  isPastDrawWindow,
+  resolveDrawBottom,
+  resolveDrawY,
+} from '../core/note-draw-window.ts';
+import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
 
 /**
  * Beats per standard 4/4 measure. Mirrors `getMeasureBeats(1.0) === 4` from
@@ -90,6 +101,16 @@ export function beatorajaPixelsPerBeat(laneHeight: number, hispeed: number): num
   return (laneHeight / BEATS_PER_STANDARD_MEASURE) * hispeed;
 }
 
+/**
+ * Beat the display layers scroll from. Past an LR2 negative-BPM reversal (issue #134) the engine publishes a
+ * mirrored `displayBeat` — the chart visually scrolls backwards at |BPM| — while `currentBeat` stays on the
+ * true clock for judging / audio. Display consumers (note layer, marker layer) fall back to `currentBeat`
+ * when no reversal is armed.
+ */
+export function beatorajaDisplayScrollBeat(frame: Pick<PlayerUiFramePayload, 'currentBeat' | 'displayBeat'>): number {
+  return frame.displayBeat ?? frame.currentBeat;
+}
+
 /** Fallback palette when the skin omits a per-lane sprite or texture decode fails. */
 const FALLBACK_COLOR_BY_KEY: Record<string, number> = {
   white: 0xf5f5f5,
@@ -151,6 +172,18 @@ export interface BeatorajaNoteLayerOptions {
   canvasHeight: number;
   /** Optional override for the judgement-line Y. Defaults to the active lane rect's bottom edge. */
   judgementY?: number;
+  /**
+   * The chart's `#SCROLL` / `#SPEED` distance integrator (`createBeatorajaScrollMapper`). When set, notes sit at their
+   * scrolled distance and draw by beatoraja's `LaneRenderer` window, as in the core gameplay view; when omitted they
+   * sit at their beat distance.
+   */
+  scrollMapper?: ScrollDistanceMapperLike;
+  /** Beats of the chart's lane timelines (`createBeatorajaLaneTimelines`), used with `scrollMapper`. */
+  timelineBeats?: ArrayLike<number>;
+  /** True when autoplay plays every lane: under LR2's rules a note then goes once its beat has passed, judged or not. */
+  autoplay?: boolean;
+  /** The chart's LR2 negative-BPM reversal, if any: past it the lane scrolls back without redrawing what went. */
+  reversal?: TempoReversalPoint;
 }
 
 interface CroppedSprite {
@@ -190,6 +223,12 @@ export class BeatorajaNoteLayer {
   private readonly textures: BeatorajaTextureCache;
   private readonly canvasHeight: number;
   private readonly judgementYOverride?: number;
+  private readonly scrollMapper?: ScrollDistanceMapperLike;
+  private readonly timelineBeats?: ArrayLike<number>;
+  private readonly autoplay: boolean;
+  private readonly reversal?: TempoReversalPoint;
+  /** Notes gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
+  private readonly goneDrawObjects = new GoneDrawObjects();
   /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
   private readonly graphicsPool: Graphics[] = [];
   /** Pool of skin-sprite nodes (tap notes / mines / LN caps). One sprite per slot — texture swapped per use. */
@@ -212,6 +251,10 @@ export class BeatorajaNoteLayer {
     this.textures = options.textures;
     this.canvasHeight = options.canvasHeight;
     this.judgementYOverride = options.judgementY;
+    this.scrollMapper = options.scrollMapper;
+    this.timelineBeats = options.timelineBeats;
+    this.autoplay = options.autoplay === true;
+    this.reversal = options.reversal;
     // bodyLayer first (= back), noteLayer second (= front). See field doc for rationale.
     this.container.addChild(this.bodyLayer);
     this.container.addChild(this.noteLayer);
@@ -255,6 +298,25 @@ export class BeatorajaNoteLayer {
     // changes (lift / `if`-gated alt blocks).
     const laneTopY = this.resolveLaneTopY(rects);
     const pixelsPerBeat = beatorajaPixelsPerBeat(judgementY - laneTopY, hiSpeed);
+    // With `#SCROLL` / `#SPEED` the lane distance follows the scroll rate and beatoraja's `LaneRenderer` window decides
+    // what draws: the walk stops past the lane top, a note whose time has come is gone, and a note a negative rate puts
+    // below the line while its time is ahead still draws, down to the stage bottom. Every other chart draws by LR2's
+    // rules: a note scrolls down to the line, stays on it until it is judged and its beat (a long note's end) has
+    // passed, and a note hit early keeps scrolling until its beat.
+    // The lane scrolls from the mirrored display beat past an LR2 negative-BPM reversal (see
+    // `beatorajaDisplayScrollBeat`); judging state (`note.judged`, LN held flags) stays engine-driven.
+    const { window: drawWindow, distance } = resolveBeatorajaScrollPlacement({
+      currentBeat: beatorajaDisplayScrollBeat(frame),
+      nowSeconds: frame.currentSeconds,
+      reversal: this.reversal,
+      mapper: this.scrollMapper,
+      laneBeats: pixelsPerBeat > 0 ? (judgementY - laneTopY) / pixelsPerBeat : 0,
+      timelineBeats: this.timelineBeats,
+      stageBottomY: this.canvasHeight,
+    });
+    const scrolling = drawWindow.rules === 'beatoraja';
+    const drawBottom = resolveDrawBottom(drawWindow, judgementY);
+    if (this.reversal !== undefined) this.goneDrawObjects.sync(frame.currentSeconds);
     let usedG = 0;
     let usedS = 0;
     let usedT = 0;
@@ -275,40 +337,44 @@ export class BeatorajaNoteLayer {
     }
 
     for (const note of frame.notes) {
+      if (scrolling && isPastDrawWindow(drawWindow, note.beat)) break;
       const isLongNote = note.endBeat !== undefined && Number.isFinite(note.endBeat);
-      // Tap-note `judged` gate. LN notes need a DIFFERENT visibility rule: upstream
-      // beatoraja's `LaneRenderer` keeps drawing the LN body / tail until the tail crosses
-      // the judgement line — even after the head's verdict has been recorded — so the
-      // player sees the sustain glow / `lnactive` frame while holding the key. Our engine
-      // flags `note.judged = true` at LN head time (manual `markScorableJudged` at
-      // `engine.ts:3077` / autoplay's `note.judged = true` at `engine.ts:2139`), so a naive
-      // `if (note.judged) continue` here would clip the entire LN — body, tail, and all —
-      // the moment the head was hit. User-reported symptom: LN notes disappeared
-      // as soon as the head's judge fired. The LN branch below handles its own tail-past culling via the
-      // `yEnd` check.
-      if (!isLongNote && note.judged) continue;
+      // A judged note is not dropped on the spot: beatoraja's `LaneRenderer` draws a note while its time is ahead, judged
+      // or not (and keeps a long note while its end is), and LR2 keeps one until it is judged and its beat has passed, so
+      // a note hit early keeps scrolling down to the line. The engine flags `note.judged` at the long-note head
+      // (`markScorableJudged`), so a long note in particular must not go then: the player sees the sustain glow /
+      // `lnactive` frame while holding the key.
+      if (
+        this.reversal === undefined
+          ? !isDrawnUntilJudged(drawWindow, note, this.autoplay)
+          : this.goneDrawObjects.isGone(drawWindow, note, this.autoplay)
+      ) {
+        continue;
+      }
       const lane = resolveBeatorajaNoteLane(note.channel, this.variant);
       if (lane === undefined) continue;
       const rect = rects[lane];
       if (rect === undefined) continue;
 
-      const y = judgementY - (note.beat - frame.currentBeat) * pixelsPerBeat;
+      // LR2's rules hold a passed note on the judgement line.
+      const y = resolveDrawY(drawWindow, judgementY - distance(note.beat) * pixelsPerBeat, judgementY);
 
       if (isLongNote) {
-        const yEnd = judgementY - (note.endBeat! - frame.currentBeat) * pixelsPerBeat;
-        // Cull when the tail hasn't yet reached the judgement line. (LN body extends DOWN
-        // from the tail to the head, so this checks if the tail is still scrolling in.)
-        if (yEnd > judgementY) continue;
+        // beatoraja keeps a long note while its end is ahead (the frame carries no end time, so its beat stands in).
+        if (scrolling && note.endBeat! < drawWindow.currentBeat) continue;
+        const yEnd = resolveDrawY(drawWindow, judgementY - distance(note.endBeat!) * pixelsPerBeat, judgementY);
+        // Under beatoraja's rules a tail below the stage bottom has nothing left to draw (LR2's hold it on the line).
+        if (yEnd > drawBottom) continue;
         // Cull when the entire LN has scrolled past the top of the lane. Both head AND
         // tail must be off the top edge — if the tail is still on-screen but the head
         // has just slipped past, we want to keep drawing the part that's still visible.
         if (y < rect.y - 24 && yEnd < rect.y - 24) continue;
-        // Clip the LN's start cap (player-facing head) to the judgement line so the body
-        // doesn't visually extend past the chart's bottom edge while the player is holding.
-        // The engine still drives the LN's actual judging window from `note.beat` /
-        // `note.endBeat`; this is purely a visual cap so the body stops growing once it has
-        // reached the line.
-        const yStartClipped = Math.min(y, judgementY);
+        // The head sits on the judgement line once it has passed: LR2 caps its position there, and under beatoraja's
+        // window a head whose time has passed sits on the line, and a long note whose tail does not sit above its head is
+        // skipped, as in `LaneRenderer`.
+        const headY = scrolling && note.seconds < drawWindow.nowSeconds ? judgementY : y;
+        if (scrolling && yEnd >= headY) continue;
+        const yStartClipped = Math.min(headY, drawBottom);
         // "Held" = THIS specific LN is the one currently being judged on its lane.
         // `isLaneLnHeld(channel)` is a channel-level flag (true while ANY LN on the lane is in
         // its active judgement window), so a future, not-yet-judged LN on the same lane
@@ -328,12 +394,10 @@ export class BeatorajaNoteLayer {
         continue;
       }
 
-      // Tap-note bottom + top cull at the judgement line — notes whose visual bottom has
-      // crossed the line are no longer judgable (the engine fires auto-POOR shortly after)
-      // and rendering them past the line looked like the note was "flying through" the
-      // chart's bottom edge. Top cull keeps a small lead-in margin so notes pop into view
-      // smoothly as they approach from above.
-      if (y < rect.y - 24 || y > judgementY) continue;
+      // Tap notes draw from a small lead-in margin above the lane top down to the draw bottom: the judgement line (LR2's
+      // rules hold a passed note there), or under beatoraja's rules the stage bottom while the note's time is ahead.
+      if (y < rect.y - 24 || y > drawBottom) continue;
+      if (scrolling && !isDrawnAtTime(drawWindow, note.seconds)) continue;
       const r = this.paintTapNote(usedG, usedS, rect, lane, note, y);
       usedG = r.g;
       usedS = r.s;

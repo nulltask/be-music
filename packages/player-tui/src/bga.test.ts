@@ -1172,6 +1172,62 @@ describe('player bga', () => {
     }
   });
 
+  test('player bga: past an LR2 reversal, freezes cue changes but keeps a playing movie and the POOR window on the true clock', () => {
+    // LR2's event pump stops firing BGA cues at a negative-BPM reversal, but a movie that is already playing keeps
+    // running, and the POOR overlay times out on the real clock. Reversal at 1 s; the movie on `01` turns green at
+    // 2 s; the 3 s cue to `02` never fires.
+    const solid = (color: RgbColor) => createOpaqueAnsiFrame(40, 20, () => color);
+    const red = { r: 255, g: 0, b: 0 };
+    const green = { r: 0, g: 255, b: 0 };
+    const blue = { r: 0, g: 0, b: 255 };
+    const yellow = { r: 255, g: 255, b: 0 };
+    const renderer = new BgaAnsiRenderer({
+      baseTimeline: [
+        { seconds: 0, key: '01' },
+        { seconds: 3, key: '02' },
+      ],
+      poorTimeline: [{ seconds: 0, key: 'PP' }],
+      layerTimeline: [],
+      layer2Timeline: [],
+      baseSourceFramesByKey: new Map([
+        [
+          '01',
+          {
+            kind: 'video',
+            frames: [
+              { seconds: 0, frame: solid(red) },
+              { seconds: 2, frame: solid(green) },
+            ],
+          },
+        ],
+        ['02', { kind: 'static', frame: solid(blue) }],
+      ]) as any,
+      poorSourceFramesByKey: new Map([['PP', { kind: 'static', frame: solid(yellow) }]]) as any,
+      layerSourceFramesByKey: new Map(),
+      layer2SourceFramesByKey: new Map(),
+      missingBaseSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+      missingPoorSourceFrame: createOpaqueAnsiFrame(256, 256, () => ({ r: 0, g: 0, b: 0 })),
+      missingLayerSourceFrame: createTransparentAnsiFrame(256, 256),
+      poorFallbackKey: undefined,
+      poorFallbackUntilSeconds: Number.POSITIVE_INFINITY,
+      playbackEndSeconds: 0,
+      cueFreezeSeconds: 1,
+      width: 40,
+      height: 20,
+      resizeAlgorithm: 'nearest',
+    });
+
+    expect(parseAnsiPixels(renderer.getAnsiLines(0.5) ?? [])[10]?.[20]).toEqual(red);
+    // The movie keeps running past the reversal...
+    expect(parseAnsiPixels(renderer.getAnsiLines(2.5) ?? [])[10]?.[20]).toEqual(green);
+    // ...but the 3 s cue never fires.
+    expect(parseAnsiPixels(renderer.getAnsiLines(3.5) ?? [])[10]?.[20]).toEqual(green);
+    // A POOR after the reversal shows, then clears on the true clock instead of sticking.
+    renderer.triggerPoor(4);
+    expect(parseAnsiPixels(renderer.getAnsiLines(4.1) ?? [])[10]?.[20]).toEqual(yellow);
+    expect(parseAnsiPixels(renderer.getAnsiLines(5) ?? [])[10]?.[20]).toEqual(green);
+  });
+
   test('player bga: fits raw video frames with terminal aspect correction once', () => {
     const frame = createOpaqueAnsiFrame(40, 20, (_x, y) => (y < 10 ? { r: 255, g: 0, b: 0 } : { r: 0, g: 0, b: 255 }));
     const renderer = new BgaAnsiRenderer({

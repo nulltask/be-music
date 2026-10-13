@@ -522,6 +522,16 @@ describe('engine fallbacks (findings A10 – A13)', () => {
     });
   });
 
+  test('keeps a negative #BPMxx with its sign and drops a zero or undefined one', () => {
+    // The engine plays a negative `#BPMxx` as LR2's reverse scroll, so it must not fingerprint like the positive BPM.
+    const reversed = chart('#BPM01 -150', '#00208:01');
+    expect(playDocument(reversed).timeline).toContainEqual({ m: '2', p: '0', type: 'bpm', v: '-150' });
+    expect(playFingerprint(reversed)).not.toBe(playFingerprint(chart('#BPM01 150', '#00208:01')));
+    // A zero or undefined slot is dropped and the previous tempo continues, as in the engine.
+    expect(playFingerprint(chart('#BPM01 0', '#00208:01'))).toBe(playFingerprint(chart()));
+    expect(playFingerprint(chart('#00208:01'))).toBe(playFingerprint(chart()));
+  });
+
   test('treats a #TOTAL of 0 or below as absent', () => {
     expect(playFingerprint(chart('#TOTAL 0'))).toBe(playFingerprint(chart()));
     expect(playFingerprint(chart('#TOTAL -5'))).toBe(playFingerprint(chart()));

@@ -628,10 +628,9 @@ class PlayerWebDemoApp {
       // Debug overlay for invisible / keysound notes — off by default. Power users investigating chart authoring (or
       // diagnosing missing keysound triggers) flip it on; the regular gameplay surface stays clean otherwise.
       showInvisibleNotes: false,
-      // Default to LR2 / beatoraja's stock behavior (judged notes disappear at the judge line) — matches what most
-      // users coming from those players expect. The dropdown lets users opt into the `'KEEP_SCROLLING'` mode (≈
-      // beatoraja LANEEFFECT ON) for timing-learning play.
-      judgedNoteDisplay: 'HIDE',
+      // LR2's and beatoraja's own behaviour: a judged note stays until its time, so one hit early keeps scrolling down
+      // to the judgement line. The dropdown offers `'HIDE'` (gone the moment it is judged) as a preference.
+      judgedNoteDisplay: 'KEEP_SCROLLING',
       // Play-history auto-save defaults OFF, so plays don't pile up downloaded files. Users who want every play's
       // play-log (`*.bmplay.json`) preserved turn it on from the Debug Menu checkbox; it then downloads when the result
       // scene mounts.
@@ -1250,13 +1249,13 @@ class PlayerWebDemoApp {
           // Private windows / blocked storage: the pick still applies for this session.
         }
       });
-    // Picks between LR2-faithful "judged note disappears at the judge line" and our historical "keep scrolling past it"
-    // behavior. Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint —
-    // the visibility check is a single per-frame branch with no backing state to rebuild.
+    // Picks between LR2 / beatoraja's "a judged note stays until its time" and "a judged note goes the moment it is
+    // judged". Pushed live into the running gameplay view so a mid-song toggle takes effect on the very next paint — the
+    // visibility check is a single per-frame branch with no backing state to rebuild.
     skin
       .add(this.guiState, 'judgedNoteDisplay', {
-        'Keep scrolling (LANEEFFECT ON)': 'KEEP_SCROLLING',
-        'Hide on judge (LR2 default)': 'HIDE',
+        'Keep until its time (LR2)': 'KEEP_SCROLLING',
+        'Hide on judge': 'HIDE',
       })
       .name('Judged notes')
       .onChange((value: 'KEEP_SCROLLING' | 'HIDE') => {

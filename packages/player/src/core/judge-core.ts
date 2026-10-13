@@ -30,7 +30,7 @@ import {
  */
 
 export * from './judge-core-types.ts';
-export { maxJudgeReachSeconds, noteOwesTailMiss } from './judge-core-score.ts';
+export { clampToReversal, maxJudgeReachSeconds, noteOwesTailMiss, toJudgeClock } from './judge-core-score.ts';
 export { resolveLandmineExplosionEvent } from './judge-core-advance.ts';
 
 /** Builds the initial judge state of a play. */
@@ -50,13 +50,15 @@ export function createJudgeCoreState(config: JudgeCoreConfig, score: JudgeCoreSc
     scoreTracker: score.scoreTracker,
     applyGaugeJudge: score.applyGaugeJudge,
     applyGaugeDelta: score.applyGaugeDelta,
+    drainGaugeToZero: score.drainGaugeToZero,
     combo: 0,
     heldChannels: new Set(),
     activeLongNotes: new Map(),
     longHoldUntilMs: new Map(),
     longHoldReleaseSeconds: new Map(),
     longNoteSuppressUntilSeconds: new Map(),
-    lastLanePressMs: new Map(),
+    laneHolds: new Map(),
+    keyStateInput: false,
     pendingAutoScratchLongNotes: [],
     autoScratchNotes: config.autoScratch
       ? config.scorableNotes.filter((note) => config.scratchChannels.has(note.channel))
@@ -82,6 +84,7 @@ export function runJudgeCoreStep(state: JudgeCoreState, input: JudgeCoreInput, e
       handleLanePress(state, input.channels, input.tokens, input.nowMs, input.nowSec, emit);
       return;
     case 'hold':
+      state.keyStateInput = true;
       for (const channel of input.channels) {
         state.heldChannels.add(channel);
         emit({ kind: 'ui', command: { kind: 'press-lane', channel } });

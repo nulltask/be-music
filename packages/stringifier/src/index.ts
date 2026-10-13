@@ -23,6 +23,7 @@ import {
   type BmsObjectLineEntry,
   type BmsSourceLineEntry,
   type BmsonBpmEventEntry,
+  type BmsonScrollEventEntry,
   type BmsonSoundChannelEntry,
   type BmsonStopEventEntry,
   type BeMusicEvent,
@@ -131,6 +132,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   const mineChannels = new Map<string, { name: string; notes: Array<{ x: number; y: number; damage?: number }> }>();
   const bpmEvents: Array<{ y: number; bpm: number }> = [];
   const stopEvents: Array<{ y: number; duration: number }> = [];
+  const scrollEvents: Array<{ y: number; rate: number }> = [];
   // Honor `#BASE 62` so a chart whose `event.value` is a case-sensitive lowercase ID resolves to the right sample /
   // BPM / STOP slot when re-emitted as bmson.
   const idBase = resolveBmsBase(json);
@@ -138,7 +140,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
   for (const event of sortedEvents) {
     const channel = normalizeChannel(event.channel);
     const isSampleChannel = isSampleTriggerChannel(channel);
-    if (!isSampleChannel && channel !== '03' && channel !== '08' && channel !== '09') {
+    if (!isSampleChannel && channel !== '03' && channel !== '08' && channel !== '09' && channel !== 'SC') {
       continue;
     }
 
@@ -218,6 +220,14 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
       if (typeof stopUnits === 'number' && stopUnits > 0) {
         stopEvents.push({ y, duration: Math.round((stopUnits * resolution) / 48) });
       }
+      continue;
+    }
+    if (channel === 'SC') {
+      // beatoraja's `scroll_events` extension carries `#SCROLLxx` rates as they are.
+      const rate = json.bms.scroll[normalizeObjectKey(event.value, idBase)];
+      if (typeof rate === 'number' && Number.isFinite(rate)) {
+        scrollEvents.push({ y, rate });
+      }
     }
   }
 
@@ -227,6 +237,7 @@ export function stringifyBmson(json: BeMusicJson, options: BmsonStringifyOptions
     lines: mapBmsonLineValues(resolveBmsonLinesForOutput(json, resolution)),
     bpm_events: bpmEvents,
     stop_events: stopEvents,
+    ...(scrollEvents.length > 0 ? { scroll_events: scrollEvents } : {}),
     sound_channels: [...soundChannels.values()],
   };
   if (keyChannels.size > 0) {
@@ -300,7 +311,8 @@ function resolvePreservedBmsonDocumentForOutput(
   if (
     json.preservation.bmson.soundChannels.length === 0 &&
     json.preservation.bmson.bpmEvents.length === 0 &&
-    json.preservation.bmson.stopEvents.length === 0
+    json.preservation.bmson.stopEvents.length === 0 &&
+    (json.preservation.bmson.scrollEvents?.length ?? 0) === 0
   ) {
     return undefined;
   }
@@ -308,6 +320,13 @@ function resolvePreservedBmsonDocumentForOutput(
   // the canonical path; otherwise a trusted (unvalidated) re-output would silently drop them.
   if (
     json.events.some((event) => laneExtensionChannelToPlayableChannel(normalizeChannel(event.channel)) !== undefined)
+  ) {
+    return undefined;
+  }
+  // Likewise SCROLL objects without a preserved `scroll_events` list (added after parsing, or from an older IR).
+  if (
+    (json.preservation.bmson.scrollEvents?.length ?? 0) === 0 &&
+    json.events.some((event) => normalizeChannel(event.channel) === 'SC')
   ) {
     return undefined;
   }
@@ -334,6 +353,10 @@ function createPreservedBmsonDocumentForOutput(json: BeMusicJson, resolution: nu
   }
   if (json.preservation.bmson.stopEvents.length > 0) {
     document.stop_events = json.preservation.bmson.stopEvents.map(mapBmsonStopEventForOutput);
+  }
+  const scrollEvents = json.preservation.bmson.scrollEvents ?? [];
+  if (scrollEvents.length > 0) {
+    document.scroll_events = scrollEvents.map(mapBmsonScrollEventForOutput);
   }
   if (json.preservation.bmson.soundChannels.length > 0) {
     document.sound_channels = json.preservation.bmson.soundChannels.map(mapBmsonSoundChannelForOutput);
@@ -731,6 +754,9 @@ function areBmsonChartsEquivalent(left: BeMusicJson, right: BeMusicJson): boolea
     areMeasuresEqual(left.measures, right.measures) &&
     areEventsEqual(left.events, right.events) &&
     areBmsonExtensionsEqual(left.bmson, right.bmson) &&
+    // bmson `scroll_events` live in the BMS `#SCROLL` table, and many keys move the chart to base-62 IDs.
+    resolveBmsBase(left) === resolveBmsBase(right) &&
+    areNumberMapsEqual(left.bms.scroll, right.bms.scroll) &&
     areBmsonPreservationEqual(left.preservation.bmson, right.preservation.bmson)
   );
 }
@@ -854,6 +880,7 @@ function areBmsonPreservationEqual(
     areNumberArraysEqual(left.lines, right.lines) &&
     areBmsonBpmEventsEqual(left.bpmEvents, right.bpmEvents) &&
     areBmsonStopEventsEqual(left.stopEvents, right.stopEvents) &&
+    areBmsonScrollEventsEqual(left.scrollEvents ?? [], right.scrollEvents ?? []) &&
     areBmsonSoundChannelsEqual(left.soundChannels, right.soundChannels)
   );
 }
@@ -1002,6 +1029,18 @@ function areBmsonStopEventsEqual(left: BmsonStopEventEntry[], right: BmsonStopEv
   return true;
 }
 
+function areBmsonScrollEventsEqual(left: BmsonScrollEventEntry[], right: BmsonScrollEventEntry[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index]!.y !== right[index]!.y || left[index]!.rate !== right[index]!.rate) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function areBmsonSoundChannelsEqual(left: BmsonSoundChannelEntry[], right: BmsonSoundChannelEntry[]): boolean {
   if (left.length !== right.length) {
     return false;
@@ -1099,6 +1138,13 @@ function mapBmsonStopEventForOutput(event: BmsonStopEventEntry): { y: number; du
   return {
     y: Math.max(0, Math.floor(event.y)),
     duration: event.duration,
+  };
+}
+
+function mapBmsonScrollEventForOutput(event: BmsonScrollEventEntry): { y: number; rate: number } {
+  return {
+    y: Math.max(0, Math.floor(event.y)),
+    rate: event.rate,
   };
 }
 

@@ -2330,8 +2330,14 @@ export class BeatorajaRuntimeAdapter {
       // cached {@link bpmSegments} timeline (built at chart load) keyed by
       // `frame.currentSeconds * 1000`. Falls back to the chart's metadata BPM before the
       // first frame lands.
+      // Past an LR2 negative-BPM reversal the readout holds the value at the reversal: LR2's event pump is frozen
+      // there and never applies a later BPM event (the reverse scroll itself keeps following the tempo map).
       case BEATORAJA_NUM.NOWBPM:
-        return Math.round(this.currentBpmForDuration());
+        return Math.round(
+          this.frame !== null && this.frame.reversalSeconds !== undefined
+            ? this.currentBpmAtMs(Math.min(this.frame.currentSeconds, this.frame.reversalSeconds) * 1000)
+            : this.currentBpmForDuration(),
+        );
       // `playtime_*` — minute / second elapsed since playback started. Pulled from the engine
       // frame's `currentSeconds` so it stays in lockstep with what the user hears (independent of
       // wallclock drift, which would cause clock readouts to slip from chart progress).

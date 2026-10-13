@@ -109,7 +109,7 @@ describe('timeline', () => {
     ]);
   });
 
-  test('createMeasureTimeline and createMeasureBoundariesBeats include trailing boundary and skip invalid points', () => {
+  test('createMeasureTimeline includes the trailing boundary, bar lines stop at the last measure, invalid points skipped', () => {
     const json = createEmptyJson('bms');
     json.events = [{ measure: 2, channel: '11', position: [0, 1], value: '01' }];
     json.measures = [
@@ -132,7 +132,20 @@ describe('timeline', () => {
       { measure: 4, seconds: 4 },
       { measure: 5, seconds: 4 },
     ]);
+    // Bar lines start measures 0..4 (the last one with data); measures 3 and 4 collapse onto beat 8. No line after the
+    // last measure: beatoraja (jbms-parser `BMSDecoder`) builds sections 0..maxsec, each starting with its bar line.
     expect(createMeasureBoundariesBeats(json, beatResolver)).toEqual([0, 4, 8]);
+    expect(createMeasureBoundariesBeats(json, { measureToBeat: (measure: number) => measure * 4 } as never)).toEqual([
+      0, 4, 8, 12, 16,
+    ]);
+  });
+
+  test('createMeasureBoundariesBeats draws exactly the lines a bmson chart authors', () => {
+    const json = createEmptyJson('bmson');
+    json.events = [{ measure: 1, channel: '11', position: [0, 1], value: '01' }];
+    json.preservation.bmson.lines = [0, 960, 1920, 2880];
+    const beatResolver = { measureToBeat: (measure: number) => measure * 4 } as never;
+    expect(createMeasureBoundariesBeats(json, beatResolver)).toEqual([0, 4, 8, 12]);
   });
 
   test('createBpmTimeline deduplicates identical points and falls back to metadata/default BPM', () => {
@@ -162,6 +175,24 @@ describe('timeline', () => {
     } as unknown as ReturnType<typeof createTimingResolver>;
     expect(createBpmTimeline(json, emptyResolver)).toEqual([{ bpm: 144, seconds: 0 }]);
     expect(createBpmTimeline(createEmptyJson('bms'), emptyResolver)).toEqual([{ bpm: 130, seconds: 0 }]);
+  });
+
+  test('createBpmTimeline shows negative #BPMxx as |trunc(BPM)| (LR2 NOWBPM)', () => {
+    const json = createEmptyJson('bms');
+    json.metadata.bpm = 120;
+    json.resources.bpm['02'] = -65.5;
+    json.resources.bpm['03'] = -0.5;
+    json.events = [
+      { measure: 1, channel: '08', position: [0, 1], value: '02' },
+      { measure: 2, channel: '08', position: [0, 1], value: '03' },
+    ];
+
+    // Timing still runs at the full |BPM| (measure 1 lasts 240 / 65.5 s); only the readout truncates.
+    expect(createBpmTimeline(json, createTimingResolver(json))).toEqual([
+      { bpm: 120, seconds: 0 },
+      { bpm: 65, seconds: 2 },
+      { bpm: 0, seconds: expect.closeTo(2 + 240 / 65.5, 9) },
+    ]);
   });
 
   test('createScrollTimeline and createSpeedTimeline ignore missing, invalid, and negative values', () => {
