@@ -12,22 +12,8 @@
     {
       "idx": 1,
       "version": "6",
-      "when": 1791873454013,
-      "tag": "0001_gauge_final",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1791874780454,
-      "tag": "0002_chart_details",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1791875678952,
-      "tag": "0003_chartsets",
+      "when": 1791876159925,
+      "tag": "0001_pages_and_chartsets",
       "breakpoints": true
     }
   ]
