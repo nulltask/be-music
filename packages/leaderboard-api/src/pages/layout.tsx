@@ -5,6 +5,7 @@ import { RULESET_LABELS } from './format.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
+import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
 import { ICON_LINKS } from './icons.ts';
 import type { Viewer } from './viewer.ts';
 import { LOCAL_TIME_SCRIPT } from './local-time.ts';
@@ -89,6 +90,8 @@ const TOOLTIP_SCRIPT = `(() => {
 export interface Crumb {
   label: string;
   href?: string;
+  /** What the step is, shown as its icon. */
+  kind?: EntityKind;
 }
 
 export interface PageMeta {
@@ -129,6 +132,7 @@ function AccountMenu(props: { viewer: Viewer | null }) {
         <span class="max-w-[12ch] truncate">@{viewer.handle}</span>
       </a>
       <a class="btn" data-size="sm" data-variant="ghost" href="/leaderboard/settings">
+        <EntityIcon kind="settings" size="md" class="text-current" />
         Settings
       </a>
       <button type="button" class="btn" data-size="sm" data-variant="ghost" data-account-action="sign-out">
@@ -174,12 +178,17 @@ function Breadcrumbs(props: { crumbs: Crumb[] }) {
               ) : null}
               <li>
                 {last || crumb.href === undefined ? (
-                  <span class="text-foreground max-w-[40ch] truncate" aria-current={last ? 'page' : undefined}>
-                    {crumb.label}
+                  <span
+                    class="text-foreground inline-flex max-w-[40ch] items-center gap-1"
+                    aria-current={last ? 'page' : undefined}
+                  >
+                    {crumb.kind !== undefined ? <EntityIcon kind={crumb.kind} size="sm" /> : null}
+                    <span class="truncate">{crumb.label}</span>
                   </span>
                 ) : (
-                  <a class="hover:text-foreground max-w-[40ch] truncate" href={crumb.href}>
-                    {crumb.label}
+                  <a class="hover:text-foreground inline-flex max-w-[40ch] items-center gap-1" href={crumb.href}>
+                    {crumb.kind !== undefined ? <EntityIcon kind={crumb.kind} size="sm" /> : null}
+                    <span class="truncate">{crumb.label}</span>
                   </a>
                 )}
               </li>
@@ -192,10 +201,13 @@ function Breadcrumbs(props: { crumbs: Crumb[] }) {
 }
 
 /** The heading block of a page. */
-export function PageHeader(props: { title: Child; children?: Child }) {
+export function PageHeader(props: { title: Child; kind?: EntityKind; children?: Child }) {
   return (
     <div class="space-y-1">
-      <h1 class="text-2xl font-semibold tracking-tight break-words">{props.title}</h1>
+      <h1 class="flex items-center gap-2 text-2xl font-semibold tracking-tight break-words">
+        {props.kind !== undefined ? <EntityIcon kind={props.kind} size="lg" /> : null}
+        <span class="min-w-0">{props.title}</span>
+      </h1>
       {props.children !== undefined ? (
         <p class="text-muted-foreground flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">{props.children}</p>
       ) : null}
@@ -236,13 +248,15 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
               be-music <span class="text-muted-foreground font-normal">Leaderboard</span>
             </a>
             <nav class="text-muted-foreground flex items-center gap-4 text-sm">
-              <a class="hover:text-foreground" href="/leaderboard">
+              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard">
+                <EntityIcon kind="new-scores" size="sm" class="text-current" />
                 New scores
               </a>
               <a class="hover:text-foreground" href="/">
                 Play
               </a>
-              <a class="hover:text-foreground" href="/leaderboard/api">
+              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/api">
+                <EntityIcon kind="api" size="sm" class="text-current" />
                 API
               </a>
             </nav>

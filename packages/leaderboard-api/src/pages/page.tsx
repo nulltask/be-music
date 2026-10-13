@@ -37,7 +37,7 @@ export const when = (epochMs: number | null): Child => (epochMs === null ? '-' :
 
 /** The breadcrumb of a chart's chartset, when it is filed under one. */
 export const chartsetCrumbs = (filed: { id: string; title: string } | undefined): Crumb[] =>
-  filed === undefined ? [] : [{ label: filed.title, href: chartsetHref(filed.id) }];
+  filed === undefined ? [] : [{ label: filed.title, href: chartsetHref(filed.id), kind: 'chartset' }];
 
 /** Detail rows without the ones the play log left empty. */
 export const known = (rows: Array<[string, Child]>): Array<[string, Child]> =>

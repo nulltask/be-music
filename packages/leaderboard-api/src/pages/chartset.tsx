@@ -15,10 +15,10 @@ export async function chartsetPage(c: PageContext<'/leaderboard/chartsets/:id'>)
   return c.html(
     <Layout
       meta={meta(c, found.title, `${found.title} — ${charts.length} charts on the be-music Leaderboard.`, [
-        { label: found.title },
+        { label: found.title, kind: 'chartset' },
       ])}
     >
-      <PageHeader title={found.title}>
+      <PageHeader title={found.title} kind="chartset">
         {found.event !== null ? `${found.event} · ` : ''}
         {charts.length} chart{charts.length === 1 ? '' : 's'} ·
         <a
