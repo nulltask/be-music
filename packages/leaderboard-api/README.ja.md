@@ -16,7 +16,9 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
   プレイヤー、「このルールセットでプレイしたもの」のフィルタ付き。
 - `GET /api/v1/scores/:id` と `.../playlog`。
 
-未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、ページ、OG カード、プレイヤー側のクライアント。
+- `/leaderboard` 以下のページ: 新着スコア（トップ）、スコア、譜面のランキング、プレイヤー。
+
+未実装: 新しい `#RANDOM` の結果に対する L4 と L5、ライバル、OG カード。
 
 ## 準備
 

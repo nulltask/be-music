@@ -251,7 +251,8 @@ client_policies (name, min_version, blocked_versions JSON)
 ```
 
 - ランキングの取得には `best_scores (chart_fp, ruleset, assisted, best_ex DESC)` のインデックスを使います。
-- 譜面は、2 人以上がプレイしたか、難易度表に載った時点で**公開一覧に載ります**。
+- 譜面は、匿名でないプレイヤー 2 人以上がプレイしたか（匿名アカウントはいくらでも作れるので数えません）、難易度表に
+  載った時点で**公開一覧に載ります**。
 - R2 のキー: `playlogs/{scoreId}.bmplay.json.gz`、`charts/{chartFp}.json`、`ghosts/{scoreId}.bin`、
   `og/scores/{scoreId}.png`。
 - **リプレイ**: プレイログを誰がダウンロードできるかは、各ユーザーが選びます（ユーザーごとの既定値を、スコアごとに
@@ -298,11 +299,15 @@ client_policies (name, min_version, blocked_versions JSON)
 
 leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。
 
+- `/leaderboard` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。ランキングと同じく、
+  匿名のプレイヤーと、まだ公開一覧に載っていない譜面（匿名でないプレイヤーが 2 人未満）は除き、フィルタで含められます。
 - `/leaderboard/scores/:id` — スコア
 - `/leaderboard/charts/:chartFp` — 譜面のランキング
 - `/leaderboard/players/:handle` — プロフィール。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
 
-操作が必要な部分（ライバル登録ボタンなど）は、小さな `hono/jsx/dom` の island にします。サイトが Web アプリと
+ページは `Cache-Control: public, max-age=0, s-maxage=30` を返します。ブラウザーは毎回確認するので新しいスコアはすぐ
+見え、共有キャッシュだけが 30 秒まで保持できます。操作が必要な部分（ライバル登録ボタンなど）は、小さな
+`hono/jsx/dom` の island にします。サイトが Web アプリと
 呼べる規模になったら HonoX か Nuxt に移れます。データアクセスの関数を共有しておけば、その移行は軽く済みます。
 
 ## 11. OG 画像と共有
