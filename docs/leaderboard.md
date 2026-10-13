@@ -277,6 +277,20 @@ client_policies (name, min_version, blocked_versions JSON)
 
 Reads are public and cached briefly with the Cache API; a submission purges the affected rankings.
 
+**Versioning.** The major version is in the path (`/api/v1`, later `/api/v2`), and each version is a sub-app mounted
+next to the others.
+
+- **Same version**: additions stay in it: new endpoints, new response fields, new optional parameters. Clients ignore
+  fields they do not know.
+- **New version**: a breaking change goes into one. Examples: removing or renaming a field, changing what a value means,
+  or making a request stricter.
+- **Retiring a version**: the old one keeps serving until the clients that use it are gone, then answers
+  `410 Gone`. The play log's `recorder` and the `be-music-client` header show who still calls it.
+- **Unknown paths**: anything else under `/api`, an unknown version included, answers `404` with
+  `{"error": "not-found"}`.
+- **Not versioned**: `/api/auth/*` is Better Auth's own protocol, and the OAuth callback URLs registered with Discord and
+  Google point at it.
+
 **Rate limits** (proposed): submissions 10 per minute per signed-in user and 5 per minute per anonymous device; reads
 120 per minute per IP. Workers' rate-limiting binding only counts over 10 or 60 seconds, so longer windows would be
 counted in D1.

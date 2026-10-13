@@ -51,6 +51,16 @@ async function submitPlay(cookie: string, chart: TestChart, hits: number, withCh
   );
 }
 
+describe('API versions', () => {
+  test('answers an unknown version or path under /api with a JSON 404', async () => {
+    for (const path of ['/api/v2/me', '/api/v1/nothing-here', '/api/scores']) {
+      const response = await fetchApp(path);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: 'not-found' });
+    }
+  });
+});
+
 describe('POST /api/v1/scores', () => {
   const chart = makeChart(['#00111:01010101', '#00211:01010101', '#00311:0101']);
 
