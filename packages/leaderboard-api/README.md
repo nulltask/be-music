@@ -16,7 +16,9 @@ The be-music Leaderboard API: a Hono app on Cloudflare Workers with D1 and R2. T
   plays, anonymous players, and "played under this ruleset".
 - `GET /api/v1/scores/:id` and `.../playlog`.
 
-Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, pages, OG cards, and the player-side client.
+- Pages under `/leaderboard`: new scores (top), a score, a chart's rankings, and a player.
+
+Not yet: L4 for new `#RANDOM` outcomes and L5, rivals, and OG cards.
 
 ## Setup
 

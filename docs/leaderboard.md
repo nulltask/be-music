@@ -252,7 +252,8 @@ client_policies (name, min_version, blocked_versions JSON)
 ```
 
 - Ranking queries use an index on `best_scores (chart_fp, ruleset, assisted, best_ex DESC)`.
-- A chart is **listed publicly** once more than one player has played it, or once it appears in a difficulty table.
+- A chart is **listed publicly** once two players who are not anonymous have played it (anonymous accounts cost
+  nothing, so they do not count), or once it appears in a difficulty table.
 - R2 keys: `playlogs/{scoreId}.bmplay.json.gz`, `charts/{chartFp}.json`, `ghosts/{scoreId}.bin`,
   `og/scores/{scoreId}.png`.
 - **Replays**: each user chooses who can download their play logs (a per-user default, overridable per score).
@@ -299,11 +300,16 @@ counted in D1.
 
 Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly:
 
+- `/leaderboard` — the top page: the newest plays, each under the ruleset it was played with. Like the rankings it
+  leaves out anonymous players and charts that are not listed yet (fewer than two non-anonymous players), with filters
+  to bring both in.
 - `/leaderboard/scores/:id` — a score
 - `/leaderboard/charts/:chartFp` — a chart's rankings
 - `/leaderboard/players/:handle` — a profile, and `/leaderboard/players/:handle/versus/:rival`
 
-Interactive parts (the rival button and similar) are small `hono/jsx/dom` islands. If the site grows into an
+Pages send `Cache-Control: public, max-age=0, s-maxage=30`: a browser always revalidates, so a player sees a new score
+at once, while a shared cache may hold a page for half a minute. Interactive parts (the rival button and similar) are
+small `hono/jsx/dom` islands. If the site grows into an
 application, HonoX or Nuxt can take over; the shared data-access functions keep that move cheap.
 
 ## 11. OG images and sharing
