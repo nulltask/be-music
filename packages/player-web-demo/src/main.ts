@@ -1106,39 +1106,30 @@ class PlayerWebDemoApp {
     this.statusController.domElement.classList.add('status-row');
     gui.add(this.guiState, 'openFolder').name('Open folder');
     gui.add(this.guiState, 'openFiles').name('Open files (ZIP / play log)');
-    // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
-    // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
-    // in place once a theme drop adds LR2 / beatoraja to the pool.
-    this.rebuildSkinFamilyPicker();
-    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
-    // scene. Persisted so a reload keeps the pick.
-    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
-    const skinPicker = gui
-      .add(this.guiState, 'builtInSkin', skinOptions())
-      .name('Built-in skin')
-      .onChange((id: string) => {
-        this.handleBuiltInSkinChange(id);
-      });
-    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
-    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
-    this.recordController = gui.add(this.guiState, 'record').name(RECORD_LABEL);
+    // Folders in the order a session uses them: how to play, how it looks and sounds, the library, capturing a play,
+    // the Leaderboard, then the developer settings.
+    this.buildPlayOptionsFolder(addFolder(gui, DEBUG_MENU_FOLDERS.playOptions));
+    this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
+    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
+    this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
+    this.buildCaptureFolder(addFolder(gui, DEBUG_MENU_FOLDERS.capture));
+    this.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
+    this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
+    this.refreshCompressorStageVisibility();
+    rememberFolderOpenStates(gui);
+  }
+
+  /** Capture: recording the play screen as a video in the chosen format, and screenshots. */
+  private buildCaptureFolder(capture: GUI): void {
+    this.recordController = capture.add(this.guiState, 'record').name(RECORD_LABEL);
     // The container and codec of the video: MP4 · H.264 unless the player picks another, remembered across visits.
-    gui
+    capture
       .add(this.guiState, 'recordingFormat', recordingFormatOptions())
       .name('Video format')
       .onChange((key: string) => storeRecordingFormat(key));
     // Screenshot button — captures the Pixi stage at its native size (= the renderer's current screen dimensions;
     // matches what the user sees in the canvas, downloaded as PNG). See `captureScreenshot` for the extract pipeline.
-    gui.add(this.guiState, 'screenshot').name('📸 Screenshot');
-
-    this.buildPlayOptionsFolder(addFolder(gui, DEBUG_MENU_FOLDERS.playOptions));
-    this.buildAudioFolder(addFolder(gui, DEBUG_MENU_FOLDERS.audio), addFolder);
-    this.buildSkinFolder(addFolder(gui, DEBUG_MENU_FOLDERS.skin), addFolder);
-    this.buildLibraryFolder(addFolder(gui, DEBUG_MENU_FOLDERS.library), addFolder);
-    this.leaderboard.buildFolder(addFolder(gui, DEBUG_MENU_FOLDERS.leaderboard));
-    this.buildDeveloperFolder(addFolder(gui, DEBUG_MENU_FOLDERS.developer));
-    this.refreshCompressorStageVisibility();
-    rememberFolderOpenStates(gui);
+    capture.add(this.guiState, 'screenshot').name('📸 Screenshot');
   }
 
   /**
@@ -1290,6 +1281,21 @@ class PlayerWebDemoApp {
   /** How the skins look and lay out, the loaded themes' pickers, the be-music skin's settings, and adding skins. */
   private buildSkinFolder(skin: GUI, addFolder: (parent: GUI, folder: DebugMenuFolder) => GUI): void {
     this.skinFolder = skin;
+    // Skin family override — picks the active rendering family (LR2 / beatoraja / default) regardless of what's
+    // loaded. First-time build seeds with `Auto` + `Default` only; `rebuildSkinFamilyPicker` swaps the option list
+    // in place once a theme drop adds LR2 / beatoraja to the pool.
+    this.rebuildSkinFamilyPicker();
+    // Built-in (be-music) skin used whenever the default family renders — i.e. no LR2 / beatoraja theme covers the
+    // scene. Persisted so a reload keeps the pick.
+    const skinOptions = () => Object.fromEntries(BE_MUSIC_SKINS.skins.map((skin) => [skin.label, skin.id]));
+    const skinPicker = skin
+      .add(this.guiState, 'builtInSkin', skinOptions())
+      .name('Built-in skin')
+      .onChange((id: string) => {
+        this.handleBuiltInSkinChange(id);
+      });
+    // Skins added at runtime join the picker (in place: re-adding the controller would stack a second handler).
+    BE_MUSIC_SKINS.subscribe(() => skinPicker.options(skinOptions()).updateDisplay());
     skin
       .add(this.guiState, 'skinEffects', { Full: 'full', Reduced: 'reduced', Off: 'off' })
       .name('Skin effects')
@@ -2247,7 +2253,7 @@ class PlayerWebDemoApp {
       return;
     }
     // First-time build (called from `buildGui` before any theme has been loaded).
-    this.skinFamilyController = gui
+    this.skinFamilyController = (this.skinFolder ?? gui)
       .add(this.guiState, 'skinFamilyOverride', options)
       .name('Skin system')
       .onChange((value: SkinFamilyOverride) => {
