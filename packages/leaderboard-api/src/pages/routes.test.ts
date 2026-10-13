@@ -13,10 +13,13 @@ import {
   type TestChart,
 } from '../../test/support.ts';
 
+// Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
+const noChartsets = async () => undefined;
+
 let env: Env;
 let dispose: () => Promise<void>;
 let clock = Date.UTC(2026, 9, 13, 12);
-const app = createApp({ now: () => (clock += 60_000) });
+const app = createApp({ now: () => (clock += 60_000), chartsetLookup: noChartsets });
 const fetchApp = (path: string, init?: RequestInit): Promise<Response> =>
   Promise.resolve(app.request(`${ORIGIN}${path}`, init, env));
 

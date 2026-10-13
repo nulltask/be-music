@@ -117,7 +117,11 @@ describe('fingerprint document', () => {
       Array.isArray(value)
         ? value.map(reverseKeys)
         : value !== null && typeof value === 'object'
-          ? Object.fromEntries(Object.entries(value).reverse().map(([key, entry]) => [key, reverseKeys(entry)]))
+          ? Object.fromEntries(
+              Object.entries(value)
+                .reverse()
+                .map(([key, entry]) => [key, reverseKeys(entry)]),
+            )
           : value;
     const roundTripped = JSON.parse(JSON.stringify(reverseKeys(playDocument))) as typeof playDocument;
     expect(computeFingerprintOfDocument(roundTripped)).toBe(computePlayFingerprint(json, NO_PATH));

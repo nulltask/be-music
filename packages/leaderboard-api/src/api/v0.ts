@@ -173,7 +173,7 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       const { status, ...rest } = outcome;
       // A chart seen for the first time is filed under its chartset after the response, without holding it up.
       if (status === 'accepted') {
-        afterResponse(c, refreshChartsetIfUnchecked(c.get('db'), chartsetLookup, rest.chartFingerprint, now()));
+        afterResponse(c, () => refreshChartsetIfUnchecked(c.get('db'), chartsetLookup, rest.chartFingerprint, now()));
       }
       return c.json(rest, status === 'accepted' ? 201 : 200);
     },
