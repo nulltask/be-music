@@ -1,5 +1,13 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { COUNT_LABELS, countColumns, djRankGradient, ellipsize, fitFontSize, readableTextColor } from './score-card.ts';
+import {
+  COUNT_LABELS,
+  countColumns,
+  djRankGradient,
+  ellipsize,
+  fitFontSize,
+  opticalInset,
+  readableTextColor,
+} from './score-card.ts';
 
 // A stand-in for canvas measurement: every character is 0.6 em wide.
 const measure = (text: string, size = 10) => [...text].length * size * 0.6;
@@ -30,6 +38,16 @@ describe('score card layout', () => {
     expect(columns).toHaveLength(COUNT_LABELS.length);
     // (720 - 24) / 7 = 99.43 px a column, rounded to whole pixels; BP and the combo start 24 px later.
     expect(columns).toEqual([72, 171, 271, 370, 470, 593, 693]);
+  });
+
+  test("opticalInset pulls a line left by half the first glyph's average inset, within a limit", () => {
+    // A straight stem (l, I) needs nothing.
+    expect(opticalInset([10, 10, 10, 10], 50)).toBe(0);
+    // A T: the crossbar row at 10, the stem 6 px in on the other three rows; the average inset is 4.5.
+    expect(opticalInset([10, 16, 16, 16], 50)).toBe(2.25);
+    // An A leans in a long way; 0.06 em caps it.
+    expect(opticalInset([0, 10, 20, 30, 40], 50)).toBe(3);
+    expect(opticalInset([], 50)).toBe(0);
   });
 
   test('AAA is gold, lower ranks fade', () => {
