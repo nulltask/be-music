@@ -32,7 +32,7 @@ Non-goals:
 
 ```
 player-web (browser) ─┐                       ┌─ D1: users / charts / scores / best_scores / rivals ...
-player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-web Worker ─(Service Binding)→ be-music-leaderboard Worker
+player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-demo Worker ─(Service Binding)→ be-music-leaderboard Worker
                       │            /api/*          → Hono API     └─ R2: play logs, chart documents, ghosts, OG images
                       │            /leaderboard/*  → Hono JSX pages
 ```
@@ -45,27 +45,30 @@ player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-web Worker �
 - **Validation**: Valibot through `@hono/standard-validator`.
 - **ORM**: Drizzle. drizzle-kit generates SQL migrations into the package; Better Auth's tables use the same
   migrations.
-- **Same origin**: the existing `be-music-player-web` Worker forwards `/api/*` and `/leaderboard/*` to the
+- **Same origin**: the player demo's Worker (`be-music-player-demo`) forwards `/api/*` and `/leaderboard/*` to the
   leaderboard Worker through a Service Binding. The leaderboard Worker has no public URL of its own
   (`workers_dev: false`, `preview_urls: false`), so pages, API and session cookies share the player's origin and no
   CORS is needed.
 
 ### 2.1 Environments and deployment
 
-| Branch  | Worker                         | D1 / R2                  |
-| ------- | ------------------------------ | ------------------------ |
-| `devel` | `be-music-leaderboard-staging` | staging database, bucket |
-| `main`  | `be-music-leaderboard`         | production               |
+| Branches        | Leaderboard Worker             | D1 / R2                  | Player demo                                            |
+| --------------- | ------------------------------ | ------------------------ | ------------------------------------------------------ |
+| `devel`         | `be-music-leaderboard`         | production               | `be-music-player-demo`, deployed                       |
+| every other one | `be-music-leaderboard-preview` | preview database, bucket | a preview version of `be-music-player-demo` per branch |
 
-- **CI/CD**: Workers Builds, one Worker per branch. The release PR (`devel → main`) deploys production, matching the
-  package release flow.
+- **CI/CD**: Workers Builds, following the player demo, whose production branch is `devel`. Every other branch is
+  uploaded as a preview version with its own Preview URL (`wrangler versions upload --env preview`). A version carries
+  its own bindings, so the previews talk to the preview Leaderboard. The preview Leaderboard is one Worker shared by all
+  branches; the last deploy wins.
 - **Migrations run before the deploy**, so every migration must work with the code that is still running
   (expand → switch → contract). D1 has no rollback.
-- **Preview deployments must never reach production data.** Preview URLs stay off; PR checks run against staging.
-- **Secrets** (`BETTER_AUTH_SECRET`, OAuth client secrets) are set per environment and listed, without values, in the
-  package README.
+- **Previews must never reach production data.** The demo's previews bind the preview Leaderboard, and the Leaderboard
+  Workers keep their own Preview URLs off.
+- **Secrets** (`BETTER_AUTH_SECRET`, OAuth client secrets) are set per environment. Their values live in 1Password; the
+  repository holds `op://` references, and a script sets them with `cf` (package README, "Secrets").
 - **Configuration and tooling**: the `cf` CLI is the primary tool (`cloudflare.config.ts`); Wrangler fills the gaps
-  `cf` does not cover yet. No Terraform. `cf` is in beta, so its version is pinned and upgrades go through staging
+  `cf` does not cover yet. No Terraform. `cf` is in beta, so its version is pinned and upgrades go through preview
   first. Whether `wrangler d1 migrations apply` works next to `cloudflare.config.ts` must be verified (section 15).
 
 ### 2.2 Plan limits

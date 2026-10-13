@@ -31,7 +31,7 @@ Leaderboard は be-music のオンラインのスコアランキングで、LR2 
 
 ```
 player-web（ブラウザ）─┐                      ┌─ D1: users / charts / scores / best_scores / rivals ...
-player-tui（CLI）─────┼─ HTTPS ─→ be-music-player-web Worker ─(Service Binding)→ be-music-leaderboard Worker
+player-tui（CLI）─────┼─ HTTPS ─→ be-music-player-demo Worker ─(Service Binding)→ be-music-leaderboard Worker
                       │            /api/*          → Hono の API      └─ R2: プレイログ、譜面ドキュメント、ゴースト、OG 画像
                       │            /leaderboard/*  → Hono JSX のページ
 ```
@@ -45,26 +45,24 @@ player-tui（CLI）─────┼─ HTTPS ─→ be-music-player-web Worker
 - **入力検証**: Valibot と `@hono/standard-validator`。
 - **ORM**: Drizzle。drizzle-kit で SQL のマイグレーションをパッケージ内に生成し、Better Auth のテーブルも同じ
   マイグレーションで管理します。
-- **同一オリジン**: 既存の `be-music-player-web` Worker が `/api/*` と `/leaderboard/*` を Service Binding で
+- **同一オリジン**: プレイヤーのデモの Worker（`be-music-player-demo`） が `/api/*` と `/leaderboard/*` を Service Binding で
   leaderboard Worker に転送します。leaderboard Worker は自分の公開 URL を持たない（`workers_dev: false`、
   `preview_urls: false`）ので、ページ・API・セッションの Cookie はプレイヤーと同じオリジンになり、CORS は不要です。
 
 ### 2.1 環境とデプロイ
 
-| ブランチ | Worker                         | D1 / R2                            |
-| -------- | ------------------------------ | ---------------------------------- |
-| `devel`  | `be-music-leaderboard-staging` | staging 用のデータベースとバケット |
-| `main`   | `be-music-leaderboard`         | 本番                               |
+| ブランチ         | Leaderboard の Worker          | D1 / R2                            | プレイヤーのデモ                                     |
+| ---------------- | ------------------------------ | ---------------------------------- | ---------------------------------------------------- |
+| `devel`          | `be-music-leaderboard`         | 本番                               | `be-music-player-demo` にデプロイ                    |
+| それ以外のすべて | `be-music-leaderboard-preview` | preview 用のデータベースとバケット | ブランチごとに `be-music-player-demo` のプレビュー版 |
 
-- **CI/CD**: Workers Builds。ブランチごとに Worker を 1 つ接続します。リリース PR（`devel → main`）のマージが本番
-  へのデプロイになり、パッケージのリリースの流れと揃います。
+- **CI/CD**: Workers Builds。本番ブランチが `devel` のプレイヤーのデモに合わせます。それ以外のブランチは、それぞれのプレビュー URL を持つプレビュー版としてアップロードします（`wrangler versions upload --env preview`）。プレビュー版はバージョンごとに binding を持つので、preview の Leaderboard につながります。preview の Leaderboard は全ブランチで共有する 1 つの Worker で、最後のデプロイが反映されます。
 - **マイグレーションはデプロイより先に実行する**ので、どのマイグレーションも動いている旧コードと両立させます
   （追加 → 切り替え → 削除）。D1 にはロールバックがありません。
-- **プレビューデプロイを本番データに触れさせない。** プレビュー URL は無効にし、PR の確認は staging で行います。
-- **secrets**（`BETTER_AUTH_SECRET`、OAuth のクライアントシークレット）は環境ごとに設定し、値を書かずに
-  パッケージの README に一覧します。
+- **プレビューを本番データに触れさせない。** デモのプレビュー版は preview の Leaderboard につなぎ、Leaderboard の Worker 自身のプレビュー URL は無効にします。
+- **secrets**（`BETTER_AUTH_SECRET`、OAuth のクライアントシークレット）は環境ごとに設定します。値は 1Password に置き、リポジトリには `op://` の参照だけを置いて、スクリプトが `cf` で設定します（パッケージの README の「Secrets」）。
 - **構成管理とツール**: `cf` CLI（`cloudflare.config.ts`）を基本にし、`cf` がまだ対応していない部分を Wrangler で
-  補います。Terraform は使いません。`cf` は beta なのでバージョンを固定し、上げるときは staging で確かめてから
+  補います。Terraform は使いません。`cf` は beta なのでバージョンを固定し、上げるときは preview で確かめてから
   にします。`cloudflare.config.ts` と並べて `wrangler d1 migrations apply` が使えるかは検証が要ります（15 章）。
 
 ### 2.2 プランの制限
