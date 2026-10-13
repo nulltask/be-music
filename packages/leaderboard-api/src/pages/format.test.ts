@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { ClearLamp } from '../scoring/lamp.ts';
-import { chartTitle, djLevel, formatGauge, formatScoreRate, formatTimestamp, lampStyle } from './format.ts';
+import {
+  chartTitle,
+  djLevel,
+  formatExScore,
+  formatGauge,
+  formatRecorder,
+  formatScoreRate,
+  formatTimestamp,
+  lampStyle,
+} from './format.ts';
 
 describe('page formatting', () => {
   test('names every lamp and falls back to NO PLAY', () => {
@@ -30,5 +39,18 @@ describe('page formatting', () => {
     expect(formatGauge('GROOVE', 100)).toBe('GROOVE 100.0%');
     expect(formatGauge('HARD', 2.34)).toBe('HARD 2.3%');
     expect(formatGauge('NORMAL', null)).toBe('NORMAL');
+  });
+
+  test('names the recording software from the play log recorder', () => {
+    expect(
+      formatRecorder({ name: 'be-music-web', version: '0.5.0', build: '6471cd16', engine: '0.8.0', platform: 'web' }),
+    ).toBe('be-music-web 0.5.0 (build 6471cd16, engine 0.8.0, web)');
+    expect(formatRecorder({ engine: '0.8.0' })).toBe('unknown app (engine 0.8.0)');
+    expect(formatRecorder(null)).toBe('unknown');
+  });
+
+  test('prints the EX-Score with its maximum and rate', () => {
+    expect(formatExScore(81, 52)).toBe('81 / 104 (77.88%)');
+    expect(formatExScore(5, 0)).toBe('5');
   });
 });
