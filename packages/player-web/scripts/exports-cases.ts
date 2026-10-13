@@ -754,6 +754,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
   });
   define('player-web.readFilesIntoBytesMap', {
+    ioBound: true,
     run: async () => {
       await playerWebCoreApi.readFilesIntoBytesMap([BENCH_BMS_FILE], { deferAudio: false });
     },

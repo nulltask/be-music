@@ -1,6 +1,33 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { TaskResult } from 'tinybench';
-import { convertTaskResult, createSingleIterationStats, median, resolveComparisonHz } from './task-stats.ts';
+import {
+  convertTaskResult,
+  createSingleIterationStats,
+  median,
+  resolveComparisonHz,
+  resolveIterationsPerSample,
+  resolveSampleMs,
+  scaleBatchedStats,
+} from './task-stats.ts';
+
+describe('batching', () => {
+  it('batches fast calls so a sample lasts the target time', () => {
+    expect(resolveIterationsPerSample(0.00002, 0.05, 100_000)).toBe(2500);
+    expect(resolveIterationsPerSample(0.3, 0.05, 100_000)).toBe(1);
+    expect(resolveIterationsPerSample(0, 0.05, 100_000)).toBe(100_000);
+    expect(resolveIterationsPerSample(0.0000001, 0.05, 1000)).toBe(1000);
+  });
+
+  it("turns a batch's per-sample stats into per-call stats", () => {
+    const batched = scaleBatchedStats(createSingleIterationStats(0.05), 1000);
+    expect(batched.p50Ms).toBeCloseTo(0.00005);
+    expect(batched.medianHz).toBeCloseTo(20_000_000);
+    expect(batched.iterationsPerSample).toBe(1000);
+    expect(resolveSampleMs(batched)).toBeCloseTo(0.05);
+    // Snapshots from before batching timed single calls.
+    expect(resolveSampleMs({ p50Ms: 0.0004 })).toBe(0.0004);
+  });
+});
 
 describe('median', () => {
   it('returns 0 for an empty list', () => {

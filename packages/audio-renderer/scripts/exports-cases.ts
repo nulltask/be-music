@@ -65,6 +65,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
     },
   });
   define('audio-renderer.renderJson', {
+    ioBound: true,
     run: async (fixtures) => {
       await audioRendererApi.renderJson(fixtures.sampleBmsJson, {
         baseDir: fixtures.tmpDir,
@@ -78,6 +79,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
     warmupTimeMs: 0,
   });
   define('audio-renderer.renderSingleSample', {
+    ioBound: true,
     run: async (fixtures) => {
       await audioRendererApi.renderSingleSample('01', undefined, {
         sampleRate: 22_050,
@@ -88,6 +90,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
     },
   });
   define('audio-renderer.renderChartFile', {
+    ioBound: true,
     run: async (fixtures) => {
       await audioRendererApi.renderChartFile(fixtures.paths.bmsPath, fixtures.paths.renderOutputPath, {
         baseDir: fixtures.tmpDir,
@@ -101,6 +104,7 @@ export function registerAudioRendererExportsCases(define: DefineBenchmarkCase): 
     warmupTimeMs: 0,
   });
   define('audio-renderer.writeAudioFile', {
+    ioBound: true,
     run: async (fixtures) => {
       await audioRendererApi.writeAudioFile(fixtures.paths.audioOutputPath, fixtures.sampleRenderResult);
     },

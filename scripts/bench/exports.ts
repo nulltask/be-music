@@ -8,7 +8,15 @@ import * as jsonApi from '@be-music/json';
 import * as parserApi from '@be-music/parser';
 import type { RenderResult } from '@be-music/audio-renderer';
 import { parseNonNegativeCliNumber, parsePositiveCliNumber, resolveCliValue, runCliMain } from './cli-utils.ts';
-import { convertTaskResult, createSingleIterationStats, resolveComparisonHz } from './task-stats.ts';
+import {
+  convertTaskResult,
+  createSingleIterationStats,
+  MAX_ITERATIONS_PER_SAMPLE,
+  resolveComparisonHz,
+  resolveIterationsPerSample,
+  scaleBatchedStats,
+  TARGET_SAMPLE_MS,
+} from './task-stats.ts';
 import {
   PACKAGE_NAMES,
   type PackageName,
@@ -129,6 +137,7 @@ export async function runExportsBenchmark(options: CliOptions): Promise<ExportsB
   }
 
   const skipped: Record<string, string> = {};
+  const ioBound: string[] = [];
   const results: Record<string, BenchmarkTaskStats> = {};
   let filteredOutCount = 0;
 
@@ -154,6 +163,7 @@ export async function runExportsBenchmark(options: CliOptions): Promise<ExportsB
       process.stdout.write(`[bench] ${key}\n`);
       const taskStats = await runBenchmarkCase(key, benchmarkCase, fixtures, options);
       results[key] = taskStats;
+      if (benchmarkCase.ioBound) ioBound.push(key);
     }
   }
 
@@ -178,6 +188,7 @@ export async function runExportsBenchmark(options: CliOptions): Promise<ExportsB
       filteredOut: filteredOutCount,
     },
     skipped,
+    ioBound,
     results,
   };
 
@@ -244,7 +255,18 @@ async function runBenchmarkCase(
     warmupTime: benchmarkCase.warmupTimeMs ?? options.warmupTimeMs,
   });
 
-  bench.add(key, () => benchmarkCase.run(fixtures));
+  // Batch fast calls into one timed sample, so a sample lasts well past the timer's resolution.
+  const { iterations, isAsync } = await calibrateBatch(benchmarkCase, fixtures);
+  bench.add(
+    key,
+    isAsync
+      ? async () => {
+          for (let index = 0; index < iterations; index += 1) await benchmarkCase.run(fixtures);
+        }
+      : () => {
+          for (let index = 0; index < iterations; index += 1) void benchmarkCase.run(fixtures);
+        },
+  );
   if ((benchmarkCase.warmupTimeMs ?? options.warmupTimeMs) > 0) {
     const maybeWarmup = (bench as unknown as { warmup?: () => Promise<void> }).warmup;
     if (typeof maybeWarmup === 'function') {
@@ -257,11 +279,38 @@ async function runBenchmarkCase(
   if (!result) {
     throw new Error(`Benchmark result is unavailable: ${key}`);
   }
-  const converted = convertTaskResult(result);
+  const converted = scaleBatchedStats(convertTaskResult(result), iterations);
   if (resolveComparisonHz(converted) > 0 && converted.sampleCount > 0 && Number.isFinite(converted.meanMs)) {
     return converted;
   }
   return runSingleIterationFallback(benchmarkCase, fixtures);
+}
+
+/**
+ * Finds how many calls to batch per sample: times growing batches until one lasts TARGET_SAMPLE_MS (or the cap is
+ * reached), then sizes the batch from the per-call time. Also tells whether the case returns a promise, which the
+ * batch must await call by call.
+ */
+async function calibrateBatch(
+  benchmarkCase: BenchmarkCaseDefinition,
+  fixtures: BenchFixtures,
+): Promise<{ iterations: number; isAsync: boolean }> {
+  const first = benchmarkCase.run(fixtures);
+  const isAsync = first instanceof Promise;
+  if (isAsync) await first;
+  let count = 1;
+  for (;;) {
+    const startedAt = performance.now();
+    for (let index = 0; index < count; index += 1) {
+      if (isAsync) await benchmarkCase.run(fixtures);
+      else void benchmarkCase.run(fixtures);
+    }
+    const elapsedMs = performance.now() - startedAt;
+    if (elapsedMs >= TARGET_SAMPLE_MS || count >= MAX_ITERATIONS_PER_SAMPLE) {
+      return { iterations: resolveIterationsPerSample(elapsedMs / count), isAsync };
+    }
+    count = Math.min(MAX_ITERATIONS_PER_SAMPLE, count * 4);
+  }
 }
 
 async function runSingleIterationFallback(

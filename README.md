@@ -459,5 +459,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare output: arbitrary Markdown and summary JSON
 - In GitHub Actions, post base/head comparison as PR comment in PR for `devel` / `main`
 - GitHub Actions also performs the previous revision comparison when pushing to `devel` / `main` and posts a commit comment to the target commit.
-- CI measures base and head on the same runner before comparing, so host-to-host noise does not dominate the delta.
-- CI uses a longer per-case time than the local default, and treats the median change as the comparison signal. Per-case lists compare median ops/s, not mean.
+- CI measures base and head on the same runner, taking turns (head, base, head, base, …) for 5 runs each, so host-to-host noise and slow stretches hit both sides alike.
+- Fast functions are called many times per timed sample (about 50 µs a sample), so cases that take nanoseconds are measured rather than lost in the timer's resolution. Times are reported per call.
+- A case counts as a regression or an improvement only when its median changes past the threshold (8% in CI) and the runs of the two sides do not overlap; a change past the threshold with overlapping runs is listed as "within noise".
+- Cases marked `ioBound` (they touch the filesystem) are listed apart and never judged, since their time follows the OS cache and the disk.
+- The comment leads with the verdict, links the base and head commits, lists the changed packages' cases and new or removed exports, and folds noise, exclusions and run details into collapsible sections.
