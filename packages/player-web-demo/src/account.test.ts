@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { describeLeaderboardAccount, loadLeaderboardAccount } from './account.ts';
+import { describeAccountChip, describeLeaderboardAccount, loadLeaderboardAccount } from './account.ts';
 
 describe('describeLeaderboardAccount', () => {
   test('summarizes the session state', () => {
@@ -39,5 +39,27 @@ describe('loadLeaderboardAccount', () => {
     expect(await loadLeaderboardAccount(signedOut)).toBeUndefined();
     expect(requested.splice(0)).toEqual(['/api/auth/get-session']);
     expect(await loadLeaderboardAccount(offline)).toBeUndefined();
+  });
+});
+
+describe('describeAccountChip', () => {
+  test('shows the sign-in state, linking to the player page when there is an account', () => {
+    expect(describeAccountChip(undefined)).toMatchObject({
+      state: 'signed-out',
+      label: 'Not signed in',
+      href: undefined,
+    });
+    expect(
+      describeAccountChip({ handle: 'player-abc', displayName: 'Anonymous', anonymous: true, passkeys: 0 }),
+    ).toMatchObject({
+      state: 'anonymous',
+      label: '@player-abc · anonymous',
+      href: '/leaderboard/players/player-abc',
+    });
+    expect(describeAccountChip({ handle: 'a b', displayName: 'Player', anonymous: false, passkeys: 1 })).toMatchObject({
+      state: 'signed-in',
+      label: '@a b',
+      href: '/leaderboard/players/a%20b',
+    });
   });
 });
