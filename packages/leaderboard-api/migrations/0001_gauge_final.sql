@@ -1,0 +1,1 @@
+ALTER TABLE `score_result` ADD `gauge_final` real;

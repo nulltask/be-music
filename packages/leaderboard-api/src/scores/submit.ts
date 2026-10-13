@@ -255,6 +255,7 @@ function toScoreResultRow(
     missCount,
     maxCombo: result.maxCombo,
     gaugeType: result.gauge.type,
+    gaugeFinal: result.gauge.final,
     judges: { ...result.judge, fast: result.fast, slow: result.slow },
   };
 }

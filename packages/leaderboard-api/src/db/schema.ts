@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 const timestamps = {
   createdAt: integer('created_at', { mode: 'timestamp_ms' })
@@ -184,6 +184,8 @@ export const scoreResult = sqliteTable(
     missCount: integer('miss_count').notNull(),
     maxCombo: integer('max_combo').notNull(),
     gaugeType: text('gauge_type').notNull(),
+    /** Gauge at the end of the play, in percent. Null for plays stored before it was recorded. */
+    gaugeFinal: real('gauge_final'),
     judges: text('judges', { mode: 'json' }).$type<Record<string, number>>().notNull(),
   },
   (table) => [primaryKey({ columns: [table.scoreId, table.ruleset] })],

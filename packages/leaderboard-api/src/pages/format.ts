@@ -49,3 +49,11 @@ export function formatTimestamp(epochMs: number): string {
 export function chartTitle(title: string | null, chartFingerprint: string): string {
   return title !== null && title.trim().length > 0 ? title : `${chartFingerprint.slice(0, 18)}…`;
 }
+
+/**
+ * The gauge at the end of a play: its type and percentage with one decimal (`GROOVE 82.4%`), or just the type for
+ * plays stored before the final value was recorded.
+ */
+export function formatGauge(type: string, final: number | null): string {
+  return final === null ? type : `${type} ${final.toFixed(1)}%`;
+}

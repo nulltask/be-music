@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vite-plus/test';
 import { ClearLamp } from '../scoring/lamp.ts';
-import { chartTitle, djLevel, formatScoreRate, formatTimestamp, lampStyle } from './format.ts';
+import { chartTitle, djLevel, formatGauge, formatScoreRate, formatTimestamp, lampStyle } from './format.ts';
 
 describe('page formatting', () => {
   test('names every lamp and falls back to NO PLAY', () => {
@@ -24,5 +24,11 @@ describe('page formatting', () => {
     expect(chartTitle('Song', 'bmfp0:abc')).toBe('Song');
     expect(chartTitle('  ', 'bmfp0:0123456789abcdef0123')).toBe('bmfp0:0123456789ab…');
     expect(chartTitle(null, 'bmfp0:0123456789abcdef0123')).toBe('bmfp0:0123456789ab…');
+  });
+
+  test('prints the final gauge with its type, or only the type when it was not recorded', () => {
+    expect(formatGauge('GROOVE', 100)).toBe('GROOVE 100.0%');
+    expect(formatGauge('HARD', 2.34)).toBe('HARD 2.3%');
+    expect(formatGauge('NORMAL', null)).toBe('NORMAL');
   });
 });
