@@ -23,11 +23,13 @@ function Card(props: { title: string; description?: string; children: Child }) {
 export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
   const viewer = c.get('viewer');
   c.header('cache-control', PAGE_CACHE);
-  const pageMeta = meta(c, 'Settings', 'Your be-music Leaderboard profile.', [{ label: 'Settings' }]);
+  const pageMeta = meta(c, 'Settings', 'Your be-music Leaderboard profile.', [{ label: 'Settings', kind: 'settings' }]);
   if (viewer === null) {
     return c.html(
       <Layout meta={pageMeta}>
-        <PageHeader title="Settings">Sign in to change your handle, name and icon.</PageHeader>
+        <PageHeader title="Settings" kind="settings">
+          Sign in to change your handle, name and icon.
+        </PageHeader>
         <Card title="Sign in" description="Use the passkey of your Leaderboard account.">
           <button type="button" class="btn" data-account-action="sign-in">
             Sign in with a passkey
@@ -43,7 +45,7 @@ export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
   const hasUpload = !viewer.avatarUrl.endsWith('?v=g');
   return c.html(
     <Layout meta={pageMeta}>
-      <PageHeader title="Settings">
+      <PageHeader title="Settings" kind="settings">
         Signed in as @{viewer.handle}
         {viewer.anonymous ? ' (anonymous)' : ''}
       </PageHeader>

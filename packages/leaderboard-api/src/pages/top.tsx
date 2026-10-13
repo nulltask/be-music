@@ -26,8 +26,14 @@ export async function topPage(c: PageContext) {
   });
   c.header('cache-control', PAGE_CACHE);
   return c.html(
-    <Layout meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.', [{ label: 'New scores' }])}>
-      <PageHeader title="New scores">The newest plays, scored under {RULESET_LABELS[ruleset]}.</PageHeader>
+    <Layout
+      meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.', [
+        { label: 'New scores', kind: 'new-scores' },
+      ])}
+    >
+      <PageHeader title="New scores" kind="new-scores">
+        The newest plays, scored under {RULESET_LABELS[ruleset]}.
+      </PageHeader>
       <Filters>
         <FilterChip
           label="Anonymous players"
