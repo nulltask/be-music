@@ -34,6 +34,7 @@ export * from './touch-layout.ts';
 export * from './portrait.ts';
 export * from './fonts.ts';
 export * from './motion.ts';
+export * from './hold.ts';
 export * from './tabular.ts';
 export * from './judge-word.ts';
 export * from './moments.ts';
