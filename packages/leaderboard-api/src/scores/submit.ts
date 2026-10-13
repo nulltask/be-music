@@ -139,6 +139,13 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
             chartFingerprint,
             title: input.playlog.chart.title ?? null,
             artist: input.playlog.chart.artist ?? null,
+            subtitle: input.playlog.chart.subtitle ?? null,
+            genre: input.playlog.chart.genre ?? null,
+            sourceFormat: input.playlog.chart.sourceFormat,
+            laneMode: input.playlog.chart.laneMode,
+            total: input.playlog.chart.total ?? null,
+            lnMode: input.playlog.chart.lnMode,
+            judgeRank: chartJudgeRank(input.playlog.chart.judgeRank),
             noteCount: input.playlog.chart.noteCount,
             playFingerprints: verification === 'L4' ? [playFingerprint] : [],
             documentKey: documentKey(chartFingerprint),
@@ -283,6 +290,15 @@ async function loadOutcomes(
     });
   }
   return outcomes.sort((left, right) => RULESETS.indexOf(left.ruleset) - RULESETS.indexOf(right.ruleset));
+}
+
+/** The chart's own judge rank, without the in-play changes (`timeline`). */
+function chartJudgeRank(judgeRank: { percent: number; sourceRank?: number; sourceExRank?: number }) {
+  return {
+    percent: judgeRank.percent,
+    ...(judgeRank.sourceRank !== undefined ? { sourceRank: judgeRank.sourceRank } : {}),
+    ...(judgeRank.sourceExRank !== undefined ? { sourceExRank: judgeRank.sourceExRank } : {}),
+  };
 }
 
 const FILE_HASH_PATTERNS = { sha256: /^[0-9a-f]{64}$/, md5: /^[0-9a-f]{32}$/ } as const;

@@ -319,8 +319,10 @@ Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime),
   a player who is not anonymous, on any chart, tagging charts that are not listed yet as new; anonymous plays come in
   with a filter. An invented chart reaches this page only through an account with a passkey.
 - `/leaderboard/scores/:id` — a score
-- `/leaderboard/charts/:chartFp` — a chart's rankings
-- `/leaderboard/players/:handle` — a profile, and `/leaderboard/players/:handle/versus/:rival`
+- `/leaderboard/charts/:chartFp` — a chart's rankings, its play counts and lamp spread, and its details (mode, TOTAL,
+  judge rank, long-note mode, file hashes)
+- `/leaderboard/players/:handle` — a profile with the player's figures (plays, charts, average rate, and the lamp and DJ
+  Rank spreads of their bests), and `/leaderboard/players/:handle/versus/:rival`
 
 Every page shows its figures under one **display ruleset** (LR2, beatoraja or IIDX), chosen in the header and kept in a
 cookie; a play's own ruleset is shown alongside as "played with". The switch is its own URL

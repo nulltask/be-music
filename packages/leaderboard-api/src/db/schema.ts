@@ -116,6 +116,21 @@ export const chart = sqliteTable('chart', {
   chartFingerprint: text('chart_fingerprint').primaryKey(),
   title: text('title'),
   artist: text('artist'),
+  // What the first play log of the chart said about it. Null for charts registered before these were kept.
+  subtitle: text('subtitle'),
+  genre: text('genre'),
+  sourceFormat: text('source_format', { enum: ['bms', 'bmson'] }),
+  laneMode: text('lane_mode'),
+  /** Raw `#TOTAL` / bmson `info.total`, when the chart wrote one. */
+  total: real('total'),
+  /** Long-note mode: 1 LN, 2 CN, 3 HCN. */
+  lnMode: integer('ln_mode'),
+  /** Judge rank as the play log carried it: the window percentage and the raw `#RANK` / `#DEFEXRANK`. */
+  judgeRank: text('judge_rank', { mode: 'json' }).$type<{
+    percent: number;
+    sourceRank?: number;
+    sourceExRank?: number;
+  }>(),
   noteCount: integer('note_count').notNull(),
   playFingerprints: text('play_fingerprints', { mode: 'json' }).$type<string[]>().notNull(),
   documentKey: text('document_key').notNull(),

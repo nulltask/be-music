@@ -105,11 +105,19 @@ export async function loadChart(db: Database, chartFingerprint: string) {
 
 export async function loadPlayer(db: Database, handle: string) {
   const [row] = await db
-    .select({ handle: profile.handle, displayName: profile.displayName, anonymous: user.isAnonymous })
+    .select({
+      userId: profile.userId,
+      handle: profile.handle,
+      displayName: profile.displayName,
+      anonymous: user.isAnonymous,
+      joinedAt: profile.createdAt,
+    })
     .from(profile)
     .innerJoin(user, eq(user.id, profile.userId))
     .where(eq(profile.handle, handle));
-  return row === undefined ? undefined : { ...row, anonymous: row.anonymous === true };
+  return row === undefined
+    ? undefined
+    : { ...row, anonymous: row.anonymous === true, joinedAt: row.joinedAt.getTime() };
 }
 
 /** The file hashes known for a chart, in a stable order. */
