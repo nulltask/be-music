@@ -10,7 +10,7 @@ export interface ScoreCardData {
   playerName: string;
   handle: string;
   avatarUrl: string;
-  /** The ruleset the play was played under, e.g. "LR2". */
+  /** The ruleset the play was played under and scored with, e.g. "LR2 rules". */
   rulesetLabel: string;
   lamp: { label: string; color: string };
   exScore: number;
