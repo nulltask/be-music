@@ -36,15 +36,39 @@ The resources already exist in the be-music account (D1 and R2 in APAC, one of e
 are in `cloudflare.config.ts` and the migrate scripts. For a new environment, create them and record the new id:
 
 ```bash
-pnpm exec cf d1 create be-music-leaderboard-staging
+pnpm exec cf d1 create --name be-music-leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
-pnpm exec cf r2 bucket create be-music-leaderboard-staging
+pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hint apac
 ```
 
-Secrets, per environment (none of them are committed). A secret declared in `cloudflare.config.ts` is required on every
-deploy; the very first deploy of a Worker passes it with `cf deploy --secrets-file <file>`, later ones keep it.
+### Secrets
+
+Secrets live in 1Password, in the `be-music` vault of the `my.1password.com` account, one item per Worker
+(`be-music-leaderboard-preview`, `be-music-leaderboard`). The repository holds only references:
+`secrets/<environment>.env.tpl` maps each secret to its 1Password field (`KEY={{ op://… }}`). Set them on the Worker
+with the [1Password CLI](https://developer.1password.com/docs/cli/) signed in:
+
+```bash
+pnpm --filter @be-music/leaderboard-api run secrets:preview
+```
+
+`scripts/put-secrets.ts` reads each value with `op read` and passes it to `cf workers secrets update`; nothing is
+written to disk or printed. Set `OP_ACCOUNT` to use another 1Password account. To rotate a secret, regenerate it in
+1Password and run the script again (rotating `BETTER_AUTH_SECRET` signs everyone out; passkeys stay).
+
+Use `cf`, not Wrangler, for anything that touches an account: Wrangler keeps its own login, which may be another
+Cloudflare account.
+
+A secret declared in `cloudflare.config.ts` is required on every deploy. The first deploy of a new Worker must carry it
+in a file (`cf deploy --secrets-file`); a named pipe keeps the value off the disk:
+
+```bash
+d=$(mktemp -d) && mkfifo -m 600 "$d/secrets" && (op inject -i secrets/preview.env.tpl > "$d/secrets" &) && pnpm exec cf deploy --mode preview --secrets-file "$d/secrets"; rm -rf "$d"
+```
+
+Later deploys keep the secrets already set.
 
 | Secret                                       | Purpose                                                        |
 | -------------------------------------------- | -------------------------------------------------------------- |
@@ -63,15 +87,23 @@ pnpm --filter @be-music/leaderboard-api run db:generate
 Migrations run before the deploy and must work with the code still running (add, switch, then remove):
 
 ```bash
-pnpm --filter @be-music/leaderboard-api run db:migrate:staging
+pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 ```
 
 ## Deploy
 
-Workers Builds deploys `devel` to the staging Worker and `main` to production:
+Two environments, following the player demo's Workers Builds: `devel` is production, and every other branch is
+preview.
 
-- staging: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:staging && pnpm --filter @be-music/leaderboard-api run deploy:staging`
+| Environment | Worker                         | D1 / R2                        | Player demo                                    |
+| ----------- | ------------------------------ | ------------------------------ | ---------------------------------------------- |
+| production  | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo` (deployed from `devel`) |
+| preview     | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | preview versions of every other branch         |
+
+- preview: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:preview && pnpm --filter @be-music/leaderboard-api run deploy:preview`
 - production: the same with `db:migrate:production` and `deploy`
+
+The preview Worker is shared by every branch: the last one deployed wins.
 
 The Worker has no public URL; the player's Worker forwards `/api/*` and `/leaderboard/*` to it through a Service
 Binding.

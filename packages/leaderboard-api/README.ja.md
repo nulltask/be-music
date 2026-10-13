@@ -33,15 +33,32 @@ pnpm run build
 `cloudflare.config.ts` とマイグレーションのスクリプトに書いてあります。新しい環境では作成して id を記録します。
 
 ```bash
-pnpm exec cf d1 create be-music-leaderboard-staging
+pnpm exec cf d1 create --name be-music-leaderboard-preview --primary-location-hint apac
 ```
 
 ```bash
-pnpm exec cf r2 bucket create be-music-leaderboard-staging
+pnpm exec cf r2 buckets create --name be-music-leaderboard-preview --location-hint apac
 ```
 
-環境ごとの secrets（どれもコミットしません）。`cloudflare.config.ts` で宣言した secret はデプロイのたびに必須です。
-Worker の最初のデプロイでは `cf deploy --secrets-file <file>` で渡し、以降のデプロイでは設定済みの値が引き継がれます。
+### Secrets
+
+secrets は 1Password の `my.1password.com` アカウントの `be-music` Vault に、Worker ごとに 1 アイテム（`be-music-leaderboard-preview`、`be-music-leaderboard`）で保存しています。リポジトリには参照だけを置きます。`secrets/<環境>.env.tpl` が各 secret と 1Password のフィールドを対応づけます（`KEY={{ op://… }}`）。[1Password CLI](https://developer.1password.com/docs/cli/) にサインインした状態で、Worker に設定します。
+
+```bash
+pnpm --filter @be-music/leaderboard-api run secrets:preview
+```
+
+`scripts/put-secrets.ts` は各値を `op read` で読み、`cf workers secrets update` に渡します。ディスクにも画面にも値は出ません。別の 1Password アカウントを使うときは `OP_ACCOUNT` を指定します。secret を入れ替えるときは 1Password で生成し直してスクリプトを再実行します（`BETTER_AUTH_SECRET` を入れ替えると全員のログインが切れます。パスキーは残ります）。
+
+アカウントに触れる操作は Wrangler ではなく `cf` で行います。Wrangler は独自にログイン情報を持っていて、別の Cloudflare アカウントを指していることがあります。
+
+`cloudflare.config.ts` で宣言した secret はデプロイのたびに必須です。新しい Worker の最初のデプロイではファイルで渡す必要があります（`cf deploy --secrets-file`）。名前付きパイプを使えば値をディスクに書かずに済みます。
+
+```bash
+d=$(mktemp -d) && mkfifo -m 600 "$d/secrets" && (op inject -i secrets/preview.env.tpl > "$d/secrets" &) && pnpm exec cf deploy --mode preview --secrets-file "$d/secrets"; rm -rf "$d"
+```
+
+以降のデプロイでは設定済みの secret が引き継がれます。
 
 | Secret                                       | 用途                                                           |
 | -------------------------------------------- | -------------------------------------------------------------- |
@@ -60,15 +77,22 @@ pnpm --filter @be-music/leaderboard-api run db:generate
 マイグレーションはデプロイより先に実行するので、動いている旧コードと両立させます（追加 → 切り替え → 削除）。
 
 ```bash
-pnpm --filter @be-music/leaderboard-api run db:migrate:staging
+pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 ```
 
 ## デプロイ
 
-Workers Builds が `devel` を staging の Worker に、`main` を本番にデプロイします。
+環境は 2 つで、プレイヤーのデモの Workers Builds に合わせています。`devel` が本番、それ以外のブランチが preview です。
 
-- staging: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:staging && pnpm --filter @be-music/leaderboard-api run deploy:staging`
+| 環境    | Worker                         | D1 / R2                        | プレイヤーのデモ                               |
+| ------- | ------------------------------ | ------------------------------ | ---------------------------------------------- |
+| 本番    | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo`（`devel` からデプロイ） |
+| preview | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | それ以外のブランチのプレビュー版               |
+
+- preview: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:preview && pnpm --filter @be-music/leaderboard-api run deploy:preview`
 - 本番: 同じ手順を `db:migrate:production` と `deploy` で
+
+preview の Worker は全ブランチで共有します。最後にデプロイしたブランチが反映されます。
 
 この Worker は公開 URL を持ちません。プレイヤーの Worker が `/api/*` と `/leaderboard/*` を Service Binding で
 転送します。

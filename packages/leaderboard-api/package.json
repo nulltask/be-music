@@ -8,10 +8,12 @@
   "scripts": {
     "dev": "cf dev",
     "deploy": "cf deploy",
-    "deploy:staging": "cf deploy --mode staging",
+    "deploy:preview": "cf deploy --mode preview",
+    "secrets:preview": "node scripts/put-secrets.ts preview",
+    "secrets:production": "node scripts/put-secrets.ts production",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "cf d1 migrations apply <D1_DATABASE_ID> --local --persist-to .wrangler/state --dir migrations",
-    "db:migrate:staging": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
+    "db:migrate:preview": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
     "db:migrate:production": "cf d1 migrations apply <D1_DATABASE_ID> --dir migrations",
     "clean": "rimraf .wrangler .cloudflare",
     "build:css": "node scripts/build-css.ts"
