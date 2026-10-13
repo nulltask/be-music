@@ -2,6 +2,8 @@
 
 // Worker entry for the Cloudflare deployment of the be-music web player.
 //
+// `/api/*` and `/leaderboard/*` go to the Leaderboard Worker through the `LEADERBOARD` Service Binding.
+//
 // Almost everything is served straight from Workers Static Assets (`env.ASSETS`, configured via `assets.directory` in
 // wrangler.jsonc). The exceptions are the ffmpeg.wasm core under `/ffmpeg-core/` and URL auto-load archives under
 // `/__url-load-proxy`. The core lives in R2 because `ffmpeg-core.wasm` is ~31 MB, which blows past the 25 MiB per-file
@@ -13,7 +15,12 @@
 interface Env {
   ASSETS: Fetcher;
   FFMPEG_CORE: R2Bucket;
+  /** The Leaderboard Worker (`packages/leaderboard-api`), which has no public URL of its own. */
+  LEADERBOARD: Fetcher;
 }
+
+/** Paths served by the Leaderboard Worker on this origin: its API (Better Auth included) and its pages. */
+const LEADERBOARD_PREFIXES = ['/api/', '/leaderboard/'];
 
 const FFMPEG_PREFIX = '/ffmpeg-core/';
 const URL_LOAD_PROXY_PATH = '/__url-load-proxy';
@@ -116,6 +123,11 @@ export default {
     }
     if (pathname === URL_LOAD_PROXY_PATH) {
       return serveUrlLoadProxy(request);
+    }
+    // The request goes over as is, so the Leaderboard sees this origin: its session cookies and sign-in callbacks stay
+    // first-party, and no CORS is involved.
+    if (LEADERBOARD_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
+      return env.LEADERBOARD.fetch(request);
     }
     // Everything else: static assets, with `not_found_handling: single-page-application` serving index.html on a miss.
     return env.ASSETS.fetch(request);
