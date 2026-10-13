@@ -298,7 +298,8 @@ counted in D1.
 
 ## 10. Pages (`/leaderboard/*`)
 
-Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly:
+Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly, and styled as an information site with
+Tailwind CSS v4 and Basecoat (the shadcn/ui design without a framework runtime), following the system colour scheme:
 
 - `/leaderboard` — the top page: the newest plays, each under the ruleset it was played with. It shows every play by
   a player who is not anonymous, on any chart, tagging charts that are not listed yet as new; anonymous plays come in

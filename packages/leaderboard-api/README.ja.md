@@ -72,6 +72,17 @@ Workers Builds が `devel` を staging の Worker に、`main` を本番にデ�
 この Worker は公開 URL を持ちません。プレイヤーの Worker が `/api/*` と `/leaderboard/*` を Service Binding で
 転送します。
 
+## ページ
+
+`/leaderboard` 以下のページは Hono JSX で、Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（フレームワークの
+ランタイムなしの shadcn/ui デザイン）でスタイルを付けています。`src/pages/app.css` は `src/pages/styles.generated.ts`
+にコンパイルされ、コミットされたうえで `/leaderboard/assets/app.<hash>.css` から配信されます。ページのクラスを
+変えたら作り直します。
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:css
+```
+
 ## テスト
 
 `pnpm test` で、ワークスペースのほかのテストと一緒にこのパッケージのテストも実行されます。API のテストは Miniflare の

@@ -1,5 +1,6 @@
 /** @jsxImportSource hono/jsx */
 import type { Context, Hono } from 'hono';
+import type { Child } from 'hono/jsx';
 import { getCookie, setCookie } from 'hono/cookie';
 import type { AppEnv } from '../app.ts';
 import { openDatabase } from '../db/client.ts';
@@ -7,16 +8,21 @@ import { countPlayers, loadRanking } from '../ranking.ts';
 import { loadChart, loadChartAliases, loadPlayer, loadRecentScores, loadScoreDetail } from './data.ts';
 import { externalLinks } from './external.ts';
 import { chartTitle, formatTimestamp, RULESET_LABELS } from './format.ts';
-import { Layout, type PageMeta } from './layout.tsx';
+import { Layout, PageHeader, STYLESHEET_PATH, type PageMeta } from './layout.tsx';
+import { APP_CSS } from './styles.generated.ts';
 import { isRuleset, RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
 import {
   chartHref,
-  FilterChip,
+  Details,
   Elsewhere,
+  FilterChip,
+  Filters,
+  LampLegend,
   playerHref,
   RankingTable,
   RecentScoresTable,
   ResultsTable,
+  Tag,
 } from './views.tsx';
 
 const RECENT_LIMIT = 50;
@@ -64,8 +70,7 @@ function displayRuleset(c: Context) {
 function notFound(c: Context<AppEnv>, what: string) {
   return c.html(
     <Layout meta={meta(c, 'Not found', `${what} not found.`)}>
-      <h1>Not found</h1>
-      <p class="sub">{what} does not exist, or it was removed.</p>
+      <PageHeader title="Not found">{what} does not exist, or it was removed.</PageHeader>
     </Layout>,
     404,
   );
@@ -88,24 +93,24 @@ export function mountPages(app: Hono<AppEnv>): void {
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.')}>
-        <h1>New scores</h1>
-        <p class="sub">The newest plays, scored under {RULESET_LABELS[ruleset]}.</p>
-        <div class="filters">
+        <PageHeader title="New scores">The newest plays, scored under {RULESET_LABELS[ruleset]}.</PageHeader>
+        <Filters>
           <FilterChip
             label="Anonymous players"
             on={includeAnonymous}
             href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
           />
-        </div>
+        </Filters>
         <RecentScoresTable
           scores={scores}
           showPlayer
           empty={
             includeAnonymous
               ? 'No plays yet.'
-              : 'No plays here yet. Plays show up once their player creates a passkey — turn on “Anonymous players” to see the rest.'
+              : 'Plays show up once their player creates a passkey — turn on “Anonymous players” to see the rest.'
           }
         />
+        <LampLegend />
       </Layout>,
     );
   };
@@ -139,43 +144,49 @@ export function mountPages(app: Hono<AppEnv>): void {
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout meta={meta(c, `${title} — ${detail.displayName}`, description)}>
-        <h1>
-          <a href={chartHref(detail.chart.chartFingerprint)}>{title}</a>
-        </h1>
-        <p class="sub">
-          {withArtist(detail.chart.artist)}played by <a href={playerHref(detail.handle)}>{detail.displayName}</a>
-          {detail.anonymous ? <span class="tag">anonymous</span> : null}
-        </p>
+        <PageHeader
+          title={
+            <a class="underline-offset-4 hover:underline" href={chartHref(detail.chart.chartFingerprint)}>
+              {title}
+            </a>
+          }
+        >
+          {withArtist(detail.chart.artist)}played by
+          <a class="text-foreground font-medium underline-offset-4 hover:underline" href={playerHref(detail.handle)}>
+            {detail.displayName}
+          </a>
+          {detail.anonymous ? <Tag>anonymous</Tag> : null}
+        </PageHeader>
         <ResultsTable
           results={detail.results}
           playedRuleset={detail.score.playedRuleset}
           displayRuleset={displayRuleset(c)}
         />
-        <h2 class="sub" style="margin-top:20px">
-          Play
-        </h2>
-        <dl>
-          <dt>Played</dt>
-          <dd>{formatTimestamp(detail.score.createdAt.getTime())}</dd>
-          <dt>Gauge</dt>
-          <dd>{detail.score.gauge}</dd>
-          <dt>Assists</dt>
-          <dd>{detail.score.assisted ? detail.score.assistFlags.join(', ') : 'none'}</dd>
-          <dt>Verification</dt>
-          <dd>{detail.score.verification}</dd>
-          <dt>Chart</dt>
-          <dd>{detail.chart.chartFingerprint}</dd>
-          {detail.score.replayVisibility === 'public' ? (
-            <>
-              <dt>Replay</dt>
-              <dd>
-                <a href={`/api/v1/scores/${encodeURIComponent(detail.score.id)}/playlog`} download>
-                  Download play log
-                </a>
-              </dd>
-            </>
-          ) : null}
-        </dl>
+        <Details
+          title="Play"
+          rows={[
+            ['Played', formatTimestamp(detail.score.createdAt.getTime())],
+            ['Gauge', detail.score.gauge],
+            ['Assists', detail.score.assisted ? detail.score.assistFlags.join(', ') : 'none'],
+            ['Verification', detail.score.verification],
+            ['Chart', <span class="font-mono text-xs">{detail.chart.chartFingerprint}</span>],
+            ...(detail.score.replayVisibility === 'public'
+              ? ([
+                  [
+                    'Replay',
+                    <a
+                      class="underline-offset-4 hover:underline"
+                      href={`/api/v1/scores/${encodeURIComponent(detail.score.id)}/playlog`}
+                      download
+                    >
+                      Download play log
+                    </a>,
+                  ],
+                ] as Array<[string, Child]>)
+              : []),
+          ]}
+        />
+        <LampLegend />
       </Layout>,
     );
   });
@@ -196,22 +207,22 @@ export function mountPages(app: Hono<AppEnv>): void {
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`)}>
-        <h1>{title}</h1>
-        <p class="sub">
+        <PageHeader title={title}>
           {withArtist(found.artist)}
           {found.noteCount} notes · {everyone} player{everyone === 1 ? '' : 's'}
-          {found.status === 'listed' ? null : <span class="tag">new chart</span>}
-        </p>
-        <div class="filters">
+          {found.status === 'listed' ? null : <Tag>new chart</Tag>}
+        </PageHeader>
+        <Filters>
           <FilterChip label="Assisted" on={assisted} href={withQuery(c, 'assisted', assisted ? undefined : '1')} />
           <FilterChip
             label="Anonymous players"
             on={includeAnonymous}
             href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
           />
-        </div>
+        </Filters>
         <RankingTable entries={ranking.entries} noteCount={found.noteCount} />
         <Elsewhere links={elsewhere} />
+        <LampLegend />
       </Layout>,
     );
   });
@@ -232,15 +243,23 @@ export function mountPages(app: Hono<AppEnv>): void {
       <Layout
         meta={meta(c, player.displayName, `${player.displayName} (@${player.handle}) on the be-music Leaderboard.`)}
       >
-        <h1>{player.displayName}</h1>
-        <p class="sub">
+        <PageHeader title={player.displayName}>
           @{player.handle}
-          {player.anonymous ? <span class="tag">anonymous</span> : null}
-        </p>
+          {player.anonymous ? <Tag>anonymous</Tag> : null}
+        </PageHeader>
         <RecentScoresTable scores={scores} showPlayer={false} empty="No plays yet." />
+        <LampLegend />
       </Layout>,
     );
   });
+
+  // The compiled stylesheet. Its name carries a content hash, so browsers and caches may keep it forever.
+  app.get(STYLESHEET_PATH, (c) =>
+    c.body(APP_CSS, 200, {
+      'content-type': 'text/css; charset=utf-8',
+      'cache-control': 'public, max-age=31536000, immutable',
+    }),
+  );
 
   app.get('/leaderboard/*', (c) => notFound(c, 'This page'));
 }
