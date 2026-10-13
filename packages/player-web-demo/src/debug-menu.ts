@@ -34,6 +34,7 @@ export const DEBUG_MENU_FOLDERS = {
   addSkin: { title: 'Add skin', open: false },
   library: { title: 'Library & records', open: false },
   bgaTranscode: { title: 'BGA video transcode', open: false },
+  leaderboard: { title: 'Leaderboard', open: false },
   developer: { title: 'Developer', open: false },
 } as const satisfies Record<string, DebugMenuFolder>;
 
