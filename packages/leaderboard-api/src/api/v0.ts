@@ -1,5 +1,4 @@
-import { and, eq } from 'drizzle-orm';
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { describeRoute, openAPIRouteHandler, resolver, validator } from 'hono-openapi';
 import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
@@ -7,11 +6,12 @@ import { loadAccount } from '../accounts.ts';
 import type { AppEnv } from '../app.ts';
 import { createAuth } from '../auth.ts';
 import { openDatabase } from '../db/client.ts';
-import { bestScore, profile, score, scoreResult } from '../db/schema.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
-import { countPlayers, loadRanking, rankOfExScore, type RankingFilter } from '../ranking.ts';
+import { loadMyRank, loadRanking, type RankingFilter } from '../ranking.ts';
 import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
 import { isOn } from '../http/query.ts';
+import { afterResponse } from '../http/after-response.ts';
+import { loadPlaylogAccess, loadScoreDetail, toScoreResponse } from '../scores/detail.ts';
 import { submitScore } from '../scores/submit.ts';
 import {
   accountResponse,
@@ -46,24 +46,6 @@ export const OPENAPI_DOCUMENTATION = {
   },
   servers: [{ url: '/api/v0' }],
 };
-
-/**
- * Runs `work` after the response is sent (`waitUntil`). Without an execution context (tests calling `app.request`
- * directly) the work is dropped: it only fills in data the scheduled run fills in as well.
- */
-function afterResponse(c: Context<AppEnv>, work: Promise<unknown>): void {
-  let context: { waitUntil(promise: Promise<unknown>): void } | undefined;
-  try {
-    context = c.executionCtx;
-  } catch {
-    context = undefined;
-  }
-  if (context === undefined) {
-    work.catch(() => undefined);
-    return;
-  }
-  context.waitUntil(work.catch((error: unknown) => console.warn('background work failed', error)));
-}
 
 /**
  * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is the beta: it may
@@ -205,24 +187,9 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       responses: { 200: json('The play under every ruleset.', scoreResponse), 404: notFound('The score') },
     }),
     async (c) => {
-      const db = c.get('db');
-      const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
-      if (found === undefined) return c.json({ error: 'not-found' }, 404);
-      const owner = await db.query.profile.findFirst({ where: eq(profile.userId, found.userId) });
-      const results = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, found.id));
-      return c.json({
-        id: found.id,
-        chartFingerprint: found.chartFingerprint,
-        playFingerprint: found.playFingerprint,
-        player: owner ? { handle: owner.handle, displayName: owner.displayName } : null,
-        playedRuleset: found.playedRuleset,
-        gauge: found.gauge,
-        assisted: found.assisted,
-        assistFlags: found.assistFlags,
-        verification: found.verification,
-        createdAt: found.createdAt.getTime(),
-        results: results.map(({ scoreId: _scoreId, ...result }) => result),
-      });
+      const detail = await loadScoreDetail(c.get('db'), c.req.param('id'));
+      if (detail === undefined) return c.json({ error: 'not-found' }, 404);
+      return c.json(toScoreResponse(detail));
     },
   );
 
@@ -238,19 +205,15 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       },
     }),
     async (c) => {
-      const db = c.get('db');
-      const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
-      if (found === undefined) return c.json({ error: 'not-found' }, 404);
-      if (found.replayVisibility !== 'public' && found.userId !== c.get('userId')) {
-        return c.json({ error: 'not-found' }, 404);
-      }
-      const object = await c.env.BLOBS.get(found.playlogKey);
+      const access = await loadPlaylogAccess(c.get('db'), c.req.param('id'), c.get('userId'));
+      if (access === undefined) return c.json({ error: 'not-found' }, 404);
+      const object = await c.env.BLOBS.get(access.key);
       if (object === null) return c.json({ error: 'not-found' }, 404);
       return new Response(object.body, {
         headers: {
           'content-type': 'application/json',
           'content-encoding': 'gzip',
-          'cache-control': found.replayVisibility === 'public' ? 'public, max-age=31536000, immutable' : 'private',
+          'cache-control': access.public ? 'public, max-age=31536000, immutable' : 'private',
         },
         encodeBody: 'manual',
       });
@@ -297,35 +260,14 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
       const userId = c.get('userId');
       if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
       const query = c.req.valid('query');
-      const db = c.get('db');
-      const chartFingerprint = c.req.param('chartFingerprint');
-      const assisted = isOn(query.assisted);
-      const mine = await db.query.bestScore.findFirst({
-        where: and(
-          eq(bestScore.userId, userId),
-          eq(bestScore.chartFingerprint, chartFingerprint),
-          eq(bestScore.ruleset, query.ruleset),
-          eq(bestScore.assisted, assisted),
-        ),
+      const mine = await loadMyRank(c.get('db'), {
+        userId,
+        chartFingerprint: c.req.param('chartFingerprint'),
+        ruleset: query.ruleset,
+        assisted: isOn(query.assisted),
       });
       if (mine === undefined) return c.json({ error: 'not-played' }, 404);
-      // The viewer's own rank counts everyone, anonymous players included, so an anonymous viewer is ranked too.
-      const filter: RankingFilter = {
-        chartFingerprint,
-        ruleset: query.ruleset,
-        assisted,
-        includeAnonymous: true,
-        playedHereOnly: false,
-      };
-      return c.json({
-        rank: await rankOfExScore(db, filter, mine.bestEx),
-        players: await countPlayers(db, filter),
-        exScore: mine.bestEx,
-        exScoreId: mine.bestExScoreId,
-        clearLamp: mine.bestLamp,
-        missCount: mine.minMiss,
-        playCount: mine.playCount,
-      });
+      return c.json(mine);
     },
   );
 

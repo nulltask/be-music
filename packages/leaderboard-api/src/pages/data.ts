@@ -81,25 +81,6 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
   }));
 }
 
-export async function loadScoreDetail(db: Database, scoreId: string) {
-  const [row] = await db
-    .select({
-      score,
-      chart,
-      handle: profile.handle,
-      displayName: profile.displayName,
-      anonymous: user.isAnonymous,
-    })
-    .from(score)
-    .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
-    .innerJoin(user, eq(user.id, score.userId))
-    .innerJoin(profile, eq(profile.userId, score.userId))
-    .where(eq(score.id, scoreId));
-  if (row === undefined) return undefined;
-  const results = await db.select().from(scoreResult).where(eq(scoreResult.scoreId, scoreId));
-  return { ...row, anonymous: row.anonymous === true, results };
-}
-
 export async function loadChart(db: Database, chartFingerprint: string) {
   return db.query.chart.findFirst({ where: eq(chart.chartFingerprint, chartFingerprint) });
 }

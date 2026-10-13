@@ -15,7 +15,6 @@ import {
   loadPlayer,
   loadPlayInfos,
   loadRecentScores,
-  loadScoreDetail,
 } from './data.ts';
 import { externalLinks } from './external.ts';
 import {
@@ -30,6 +29,7 @@ import {
 import { Layout, PageHeader, STYLESHEET_PATH, type Crumb, type PageMeta } from './layout.tsx';
 import { APP_CSS } from './styles.generated.ts';
 import { isOn } from '../http/query.ts';
+import { loadScoreDetail } from '../scores/detail.ts';
 import { isRuleset } from '../rulesets.ts';
 import { RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
 import { loadChartStats, loadPlayerStats } from './stats.ts';
@@ -182,21 +182,22 @@ export function mountPages(app: Hono<AppEnv>): void {
   app.get('/leaderboard/scores/:id', async (c) => {
     const db = openDatabase(c.env.DB);
     const detail = await loadScoreDetail(db, c.req.param('id'));
-    if (detail === undefined) return notFound(c, 'This score');
+    if (detail === undefined || detail.player === null) return notFound(c, 'This score');
+    const { player } = detail;
     const filed = await loadChartsetOf(db, detail.chart.chartsetId);
     const title = chartTitle(detail.chart.title, detail.chart.chartFingerprint);
     const played = detail.results.find((result) => result.ruleset === detail.score.playedRuleset);
     const description =
       played !== undefined
-        ? `${detail.displayName} · ${title} · EX ${played.exScore} (${RULESET_LABELS[played.ruleset]})`
-        : `${detail.displayName} · ${title}`;
+        ? `${player.displayName} · ${title} · EX ${played.exScore} (${RULESET_LABELS[played.ruleset]})`
+        : `${player.displayName} · ${title}`;
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout
-        meta={meta(c, `${title} — ${detail.displayName}`, description, [
+        meta={meta(c, `${title} — ${player.displayName}`, description, [
           ...chartsetCrumbs(filed),
           { label: title, href: chartHref(detail.chart.chartFingerprint) },
-          { label: `${detail.displayName}’s play` },
+          { label: `${player.displayName}’s play` },
         ])}
       >
         <PageHeader
@@ -207,10 +208,10 @@ export function mountPages(app: Hono<AppEnv>): void {
           }
         >
           {withArtist(detail.chart.artist)}played by
-          <a class="text-foreground font-medium underline-offset-4 hover:underline" href={playerHref(detail.handle)}>
-            {detail.displayName}
+          <a class="text-foreground font-medium underline-offset-4 hover:underline" href={playerHref(player.handle)}>
+            {player.displayName}
           </a>
-          {detail.anonymous ? <Tag>anonymous</Tag> : null}
+          {player.anonymous ? <Tag>anonymous</Tag> : null}
         </PageHeader>
         <ResultsTable
           results={detail.results}

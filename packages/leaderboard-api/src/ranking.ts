@@ -106,3 +106,36 @@ export async function countPlayers(db: Database, filter: RankingFilter): Promise
     .where(and(...filterConditions(filter)));
   return players ?? 0;
 }
+
+/** The viewer's best on a chart and their rank among every player, anonymous ones included. */
+export async function loadMyRank(
+  db: Database,
+  query: { userId: string; chartFingerprint: string; ruleset: PlaylogRulesetId; assisted: boolean },
+) {
+  const mine = await db.query.bestScore.findFirst({
+    where: and(
+      eq(bestScore.userId, query.userId),
+      eq(bestScore.chartFingerprint, query.chartFingerprint),
+      eq(bestScore.ruleset, query.ruleset),
+      eq(bestScore.assisted, query.assisted),
+    ),
+  });
+  if (mine === undefined) return undefined;
+  // The viewer's own rank counts everyone, anonymous players included, so an anonymous viewer is ranked too.
+  const filter: RankingFilter = {
+    chartFingerprint: query.chartFingerprint,
+    ruleset: query.ruleset,
+    assisted: query.assisted,
+    includeAnonymous: true,
+    playedHereOnly: false,
+  };
+  return {
+    rank: await rankOfExScore(db, filter, mine.bestEx),
+    players: await countPlayers(db, filter),
+    exScore: mine.bestEx,
+    exScoreId: mine.bestExScoreId,
+    clearLamp: mine.bestLamp,
+    missCount: mine.minMiss,
+    playCount: mine.playCount,
+  };
+}
