@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from 'hono/jsx';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
-import { RULESET_LABELS } from './format.ts';
+import { RULESET_LABELS, RULESET_MEANING } from './format.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
@@ -146,21 +146,29 @@ function AccountMenu(props: { viewer: Viewer | null }) {
   );
 }
 
-/** Header switch of the display ruleset; it applies to every page. */
+/**
+ * Header switch of the display ruleset; it applies to every page. Labelled "Scoring rules", so the names do not read
+ * as the software the plays came from.
+ */
 function RulesetSwitch(props: { current: PlaylogRulesetId; path: string }) {
   return (
-    <div class="button-group sm:ms-auto" role="group" aria-label="Display ruleset">
-      {RULESET_IDS.map((id) => (
-        <a
-          class="btn"
-          data-size="sm"
-          data-variant={id === props.current ? 'primary' : 'outline'}
-          aria-current={id === props.current ? 'true' : undefined}
-          href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
-        >
-          {RULESET_LABELS[id]}
-        </a>
-      ))}
+    <div class="flex items-center gap-2 sm:ms-auto">
+      <span class="text-muted-foreground cursor-help text-xs" id="ruleset-switch-label" title={RULESET_MEANING}>
+        Scoring rules
+      </span>
+      <div class="button-group" role="group" aria-labelledby="ruleset-switch-label">
+        {RULESET_IDS.map((id) => (
+          <a
+            class="btn"
+            data-size="sm"
+            data-variant={id === props.current ? 'primary' : 'outline'}
+            aria-current={id === props.current ? 'true' : undefined}
+            href={`/leaderboard/ruleset/${id}?next=${encodeURIComponent(props.path)}`}
+          >
+            {RULESET_LABELS[id]}
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

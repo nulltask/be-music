@@ -27,6 +27,18 @@ export function lampStyle(lamp: number): { label: string; color: string; meaning
 
 export const RULESET_LABELS: Readonly<Record<string, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', iidx: 'IIDX' };
 
+/**
+ * A ruleset as the pages name it: "LR2 rules". The bare name reads like the software a play came from; a ruleset is
+ * only how the Leaderboard scores the play.
+ */
+export function rulesetName(ruleset: string): string {
+  return `${RULESET_LABELS[ruleset] ?? ruleset} rules`;
+}
+
+/** What a ruleset is, for tooltips next to ruleset names. */
+export const RULESET_MEANING =
+  'Every play is scored under each ruleset: the judge windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the play log. It is how the score is counted, not the software the play came from.';
+
 /** EX score rate in percent with two decimals (`ex / (notes × 2)`), or `-` without notes. */
 export function formatScoreRate(exScore: number, noteCount: number): string {
   if (noteCount <= 0) return '-';
