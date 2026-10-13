@@ -28,11 +28,12 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
     <Layout
       meta={meta(c, `${title} — ${player.displayName}`, description, [
         ...chartsetCrumbs(filed),
-        { label: title, href: chartHref(detail.chart.chartFingerprint) },
-        { label: `${player.displayName}’s play` },
+        { label: title, href: chartHref(detail.chart.chartFingerprint), kind: 'chart' },
+        { label: `${player.displayName}’s play`, kind: 'score' },
       ])}
     >
       <PageHeader
+        kind="score"
         title={
           <a class="underline-offset-4 hover:underline" href={chartHref(detail.chart.chartFingerprint)}>
             {title}

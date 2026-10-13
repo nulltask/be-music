@@ -34,7 +34,7 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
   return c.html(
     <Layout
       meta={meta(c, player.displayName, `${player.displayName} (@${player.handle}) on the be-music Leaderboard.`, [
-        { label: player.displayName },
+        { label: player.displayName, kind: 'player' },
       ])}
     >
       <PageHeader

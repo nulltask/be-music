@@ -90,7 +90,7 @@ export const ABOVE = 'relative z-10';
 
 export const chartsetHref = (id: string): string => `/leaderboard/chartsets/${encodeURIComponent(id)}`;
 
-/** A player's icon, square; the name next to it says who it is, so it is decorative to screen readers. */
+/** A player's icon, round; the name next to it says who it is, so it is decorative to screen readers. */
 export function Avatar(props: { src: string; size: number; class?: string }) {
   return (
     <img
@@ -100,7 +100,7 @@ export function Avatar(props: { src: string; size: number; class?: string }) {
       alt=""
       loading="lazy"
       decoding="async"
-      class={`bg-muted ring-foreground/10 inline-block shrink-0 rounded-sm ring-1 ${props.class ?? ''}`}
+      class={`bg-muted ring-foreground/10 inline-block shrink-0 rounded-full ring-1 ${props.class ?? ''}`}
     />
   );
 }
