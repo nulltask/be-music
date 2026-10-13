@@ -6,10 +6,13 @@ import {
   createLeaderboardPasskey,
   describeAccountChip,
   describeLeaderboardAccount,
+  describeStartAccount,
   loadLeaderboardAccount,
   signInWithLeaderboardPasskey,
   signOutOfLeaderboard,
+  START_ACCOUNT_ACTION_LABELS,
   type AccountActionResult,
+  type StartAccountAction,
 } from './account.ts';
 import {
   describeLeaderboardResult,
@@ -32,9 +35,18 @@ export function describeSubmittingClient(recorder: Omit<PlaylogRecorderInfo, 'en
   return `${recorder.name}/${recorder.version}${recorder.build !== undefined ? ` (build ${recorder.build})` : ''}`;
 }
 
+/** What each start card action does. */
+const START_ACTIONS: Readonly<Record<StartAccountAction, () => Promise<AccountActionResult>>> = {
+  'sign-in': signInWithLeaderboardPasskey,
+  'sign-up': createLeaderboardPasskey,
+  keep: createLeaderboardPasskey,
+  'sign-out': signOutOfLeaderboard,
+};
+
 /**
- * Everything the demo shows of the Leaderboard: the Debug Menu folder (submission toggle, account row and passkey
- * buttons), the account chip in the corner, and submitting a finished play. An account starts anonymous (the first
+ * Everything the demo shows of the Leaderboard: the start card's row (submission checkbox, account and its sign-in /
+ * sign-up buttons), the Debug Menu folder (the same toggle, account row and passkey buttons), the account chip in the
+ * corner, and submitting a finished play. An account starts anonymous (the first
  * submission signs in anonymously); creating a passkey keeps it, and "Sign in with passkey" brings it to another device,
  * moving that device's anonymous plays into it.
  */
@@ -60,23 +72,23 @@ export class LeaderboardPanel {
     // Submission — OFF by default. When enabled, a finished manual play is sent to the Leaderboard API (same origin,
     // `/api/*`) as the result scene mounts; the result shows the rank in the status line.
     const settings = this.host.settings();
+    const startCheckbox = document.querySelector<HTMLInputElement>('#start-submit');
     this.submitController = folder
       .add(settings, 'submitToLeaderboard')
       .name('Submit to Leaderboard')
       .onChange((value: boolean) => {
         settings.submitToLeaderboard = value;
+        if (startCheckbox !== null) startCheckbox.checked = value;
       });
+    // The start card's checkbox is the same setting: it goes through the controller, so it is remembered like any
+    // Debug Menu change.
+    if (startCheckbox !== null) {
+      startCheckbox.checked = settings.submitToLeaderboard;
+      startCheckbox.addEventListener('change', () => this.submitController?.setValue(startCheckbox.checked));
+    }
     this.accountController = folder.add(this.accountState, 'status').name('Account').disable();
-    const run = (label: string, action: () => Promise<AccountActionResult>) => async (): Promise<void> => {
-      this.host.setStatus(`${label}…`);
-      try {
-        const result = await action();
-        this.host.setStatus(result.ok ? `${label}: done` : `${label} failed: ${result.error}`);
-      } catch (error) {
-        this.host.setStatus(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-      await this.refreshAccount();
-    };
+    const run = (label: string, action: () => Promise<AccountActionResult>) => () =>
+      this.runAccountAction(label, action);
     folder
       .add({ create: run('Create passkey', createLeaderboardPasskey) }, 'create')
       .name('Create passkey (keep this account)');
@@ -85,6 +97,24 @@ export class LeaderboardPanel {
       .name('Sign in with passkey');
     folder.add({ signOut: run('Sign out', signOutOfLeaderboard) }, 'signOut').name('Sign out');
     void this.refreshAccount();
+  }
+
+  /** Runs an account action, reporting it in the status line and under the start card's account row. */
+  private async runAccountAction(label: string, action: () => Promise<AccountActionResult>): Promise<void> {
+    const status = document.querySelector<HTMLElement>('#start-account-status');
+    const say = (text: string) => {
+      this.host.setStatus(text);
+      if (status !== null) status.textContent = text;
+    };
+    say(`${label}…`);
+    try {
+      const result = await action();
+      say(result.ok ? '' : `${label} failed: ${result.error}`);
+      if (result.ok) this.host.setStatus(`${label}: done`);
+    } catch (error) {
+      say(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    await this.refreshAccount();
   }
 
   /** Latches the toggle for the play about to start and locks it until {@link unlock}. */
@@ -126,6 +156,7 @@ export class LeaderboardPanel {
     const account = await loadLeaderboardAccount();
     this.accountState.status = describeLeaderboardAccount(account);
     this.accountController?.updateDisplay();
+    this.renderStartAccount(account);
     const chip = document.querySelector<HTMLAnchorElement>('#account-chip');
     if (chip === null) return;
     const view = describeAccountChip(account);
@@ -135,6 +166,41 @@ export class LeaderboardPanel {
     chip.setAttribute('aria-label', `Leaderboard account: ${view.label}`);
     const label = chip.querySelector('#account-chip-label');
     if (label !== null) label.textContent = view.label;
+  }
+
+  /** Fills the start card's account row: who the plays go to, a link to their page, and the actions that fit. */
+  private renderStartAccount(account: Awaited<ReturnType<typeof loadLeaderboardAccount>>): void {
+    const row = document.querySelector<HTMLElement>('#start-account');
+    const label = document.querySelector<HTMLElement>('#start-account-label');
+    const actions = document.querySelector<HTMLElement>('#start-account-actions');
+    if (row === null || label === null || actions === null) return;
+    const view = describeStartAccount(account);
+    row.dataset.state = view.state;
+    if (view.href !== undefined) {
+      const link = document.createElement('a');
+      link.href = view.href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.title = 'Your Leaderboard page (opens in a new tab)';
+      link.textContent = view.label;
+      label.replaceChildren(link);
+    } else {
+      label.textContent = view.label;
+    }
+    actions.replaceChildren(
+      ...view.actions.map((action) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        // Making an account is the step the card leads to; the other actions stay quiet.
+        button.className = `start-button${action === 'sign-up' || action === 'keep' ? ' start-button--primary' : ''}`;
+        button.textContent = START_ACCOUNT_ACTION_LABELS[action];
+        button.addEventListener(
+          'click',
+          () => void this.runAccountAction(START_ACCOUNT_ACTION_LABELS[action], START_ACTIONS[action]),
+        );
+        return button;
+      }),
+    );
   }
 
   /** Opens the Debug Menu with the Leaderboard folder unfolded. */

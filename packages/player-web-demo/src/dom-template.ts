@@ -9,7 +9,8 @@
  * Sub-elements wired up elsewhere:
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
  *  - `#account-chip` — `main.ts` (`refreshLeaderboardAccount`)
- *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`)
+ *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
+ *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — referenced via `PlayerWebDemoElements` in `main.ts`
  */
 export const DEMO_APP_HTML = `
@@ -83,65 +84,72 @@ export const DEMO_APP_HTML = `
             <span class="drop-subtitle-sep">·</span>
             <span>LR2 Files</span>
           </div>
+          <!--
+            Leaderboard: whether this browser's plays are sent, and the
+            account they go to. Rendered by \`LeaderboardPanel\`
+            (leaderboard-ui.ts) from the account state; the checkbox is
+            the Debug Menu's "Submit to Leaderboard" setting.
+          -->
+          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard">
+            <label class="start-check">
+              <input type="checkbox" id="start-submit" />
+              <span>Submit my plays to the Leaderboard</span>
+            </label>
+            <div class="start-account" id="start-account" data-state="signed-out">
+              <span class="start-account-label" id="start-account-label">Not signed in</span>
+              <div class="start-account-actions" id="start-account-actions"></div>
+            </div>
+            <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
+          </section>
+          <!--
+            Browser-compatibility check, folded: the summary gives the
+            verdict at a glance, opening it lists every probed feature
+            split into Required / Optional. Opened up front when a
+            required feature is missing. Populated once at boot from
+            \`checkBrowserCompat()\` (compat-panel.ts).
+          -->
+          <details class="compat-panel" id="compat-panel">
+            <summary class="compat-panel-header">
+              <span class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+                  <path
+                    class="compat-panel-badge-mark compat-panel-badge-mark--check"
+                    d="M7 12 L11 16 L17 9"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    class="compat-panel-badge-mark compat-panel-badge-mark--cross"
+                    d="M8 8 L16 16 M16 8 L8 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span class="compat-panel-eyebrow">System check</span>
+              <span class="compat-panel-status" id="compat-panel-status">Browser ready</span>
+              <span class="compat-panel-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="compat-panel-sections">
+              <section class="compat-panel-section">
+                <h3 class="compat-panel-section-title">Required</h3>
+                <ul class="compat-panel-list" id="compat-panel-required"></ul>
+              </section>
+              <section class="compat-panel-section">
+                <h3 class="compat-panel-section-title">Optional</h3>
+                <ul class="compat-panel-list" id="compat-panel-optional"></ul>
+              </section>
+            </div>
+          </details>
         </div>
       </div>
     </div>
-    <!--
-      Browser-compatibility panel. Lives at the shell level — NOT
-      inside the drop card — so it reads as a separate diagnostic
-      widget rather than as decoration on the call-to-action.
-      Header (icon + eyebrow + status) communicates at-a-glance
-      readiness; the body lists every probed feature split into
-      \`Required\` / \`Optional\` sections so the user can see
-      exactly which feature is responsible for an unsupported
-      verdict. Populated once at boot from \`checkBrowserCompat()\`.
-    -->
-    <aside class="compat-panel" id="compat-panel" aria-label="Browser compatibility check">
-      <header class="compat-panel-header">
-        <div class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
-          <!--
-            Status mark. The default check arc paints when the
-            browser is fully supported; the JS swaps in a cross
-            path for the unsupported state by toggling a class on
-            the panel root.
-          -->
-          <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--check"
-              d="M7 12 L11 16 L17 9"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--cross"
-              d="M8 8 L16 16 M16 8 L8 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-            />
-          </svg>
-        </div>
-        <div class="compat-panel-heading">
-          <div class="compat-panel-eyebrow">System check</div>
-          <div class="compat-panel-status" id="compat-panel-status">Browser ready</div>
-        </div>
-      </header>
-      <div class="compat-panel-sections">
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Required</h3>
-          <ul class="compat-panel-list" id="compat-panel-required"></ul>
-        </section>
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Optional</h3>
-          <ul class="compat-panel-list" id="compat-panel-optional"></ul>
-        </section>
-      </div>
-    </aside>
     <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
