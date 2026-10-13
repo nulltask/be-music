@@ -243,10 +243,11 @@ export const DEMO_APP_HTML = `
           <h2 id="skin-offer-title">Use this skin?</h2>
           <p data-skin-offer-message></p>
         </header>
-        <footer>
+        <!-- Stacked, full width: each skin to use, then keeping the built-in one. -->
+        <div class="skin-offer-buttons">
+          <div class="skin-offer-buttons" data-skin-offer-choices></div>
           <button type="button" class="account-dialog-quiet" data-skin-offer-decline>Not now</button>
-          <span class="account-dialog-buttons" data-skin-offer-choices></span>
-        </footer>
+        </div>
       </div>
     </dialog>
     <!--
