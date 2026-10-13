@@ -5,6 +5,7 @@ import { isOn } from '../http/query.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
 import { RankingTable } from './components/tables.tsx';
 import { Details, DistributionCard, Elsewhere, LampLegend, Stats } from './components/cards.tsx';
+import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, FilterChip, Filters, LocalTime, Tag } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
 import { externalLinks } from './external.ts';
@@ -48,10 +49,11 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
     <Layout
       meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`, [
         ...chartsetCrumbs(filed),
-        { label: title },
+        { label: title, kind: 'chart' },
       ])}
     >
       <PageHeader
+        kind="chart"
         title={
           <>
             {title}
@@ -104,7 +106,11 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             filed === undefined ? (
               '-'
             ) : (
-              <a class="underline-offset-4 hover:underline" href={chartsetHref(filed.id)}>
+              <a
+                class="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                href={chartsetHref(filed.id)}
+              >
+                <EntityIcon kind="chartset" size="sm" />
                 {filed.title}
               </a>
             ),
