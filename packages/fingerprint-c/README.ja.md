@@ -1,8 +1,10 @@
 [English version](./README.md)
 
-# bmfp
+# @be-music/fingerprint-c
 
 Be-Music Fingerprint（[仕様](../../docs/fingerprint-spec.ja.md)）の、移植性の高い C 実装です。ライブラリ、コマンドラインツール、WebAssembly モジュールを提供します。TypeScript 以外で書かれたプログラム向けで、他の言語からはバインディングや FFI でライブラリを呼びます。
+
+移植元は `@be-music/chart` の TypeScript 実装（`packages/chart/src/fingerprint*.ts`）です。ライブラリ、ヘッダ、コマンドは短い名前 `bmfp` のままです（`bmfp.h`、`libbmfp.a`、`bmfp`）。
 
 **状況: 基盤。** 数値処理の中核を移植し、TypeScript 実装と結果が一致することを確認済みです。API、ビルド、テストも整っています。BMS / bmson の読み込みと fingerprint 本体はこれからです（[ロードマップ](#ロードマップ)）。
 
@@ -31,11 +33,11 @@ Be-Music Fingerprint（[仕様](../../docs/fingerprint-spec.ja.md)）の、移�
 ## ビルド
 
 ```bash
-make -C native/bmfp
+pnpm --filter @be-music/fingerprint-c run build:c
 ```
 
 ```bash
-make -C native/bmfp check
+pnpm --filter @be-music/fingerprint-c run check:c
 ```
 
 `check` は次の 4 つを実行します。
@@ -48,7 +50,7 @@ make -C native/bmfp check
 WebAssembly のビルドには、wasm32 ターゲットを持つ Clang と `wasm-ld` が必要です。Apple の Clang はターゲットはありますが `wasm-ld` がないので、Homebrew の LLVM と LLD を使います。
 
 ```bash
-make -C native/bmfp wasm WASM_CC=/opt/homebrew/opt/llvm/bin/clang WASM_LDFLAGS=-fuse-ld=/opt/homebrew/opt/lld/bin/wasm-ld
+make -C packages/fingerprint-c wasm WASM_CC=/opt/homebrew/opt/llvm/bin/clang WASM_LDFLAGS=-fuse-ld=/opt/homebrew/opt/lld/bin/wasm-ld
 ```
 
 モジュールは何もインポートせず、`memory` と API をエクスポートします。ホストが渡すバッファ用に `bmfp_wasm_alloc` / `bmfp_wasm_free` もエクスポートします。
@@ -65,7 +67,7 @@ C 実装は TypeScript 実装とビット単位で同じ結果を出す必要が
 `vectors.test.ts`（Vitest）は、コミットされたベクタが TypeScript 実装と合わなくなると失敗します。TypeScript 側を意図して変えたときは、ベクタを生成し直して C のテストを流します。
 
 ```bash
-pnpm vp test run -u native/bmfp
+pnpm vp test run -u packages/fingerprint-c
 ```
 
 C のテストランナーは、すべてのベクタを数を数えるアロケータ経由で確かめるので、メモリリークも失敗になります。確保を 1 回ずつ順に失敗させ、`BMFP_E_NO_MEMORY` が返ってリークがないことも確認します。

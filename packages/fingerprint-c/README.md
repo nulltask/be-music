@@ -1,10 +1,13 @@
 [Japanese version](./README.ja.md)
 
-# bmfp
+# @be-music/fingerprint-c
 
 The Be-Music Fingerprint ([spec](../../docs/fingerprint-spec.md)) in portable C: a library, a command-line tool, and a
 WebAssembly module, for programs that are not written in TypeScript. Other languages call the library through
 bindings or FFI.
+
+It ports the TypeScript implementation in `@be-music/chart` (`packages/chart/src/fingerprint*.ts`). The library, its
+header and the command keep the short name `bmfp` (`bmfp.h`, `libbmfp.a`, `bmfp`).
 
 **Status: foundation.** The numeric core is ported and matches the TypeScript implementation, and the API, the build
 and the tests are in place. Reading BMS / bmson charts and the fingerprint itself come next (see [Roadmap](#roadmap)).
@@ -40,11 +43,11 @@ and the tests are in place. Reading BMS / bmson charts and the fingerprint itsel
 ## Build
 
 ```bash
-make -C native/bmfp
+pnpm --filter @be-music/fingerprint-c run build:c
 ```
 
 ```bash
-make -C native/bmfp check
+pnpm --filter @be-music/fingerprint-c run check:c
 ```
 
 `check` runs four groups:
@@ -58,7 +61,7 @@ The WebAssembly build needs a Clang with the wasm32 target and `wasm-ld`. Apple'
 `wasm-ld`; with Homebrew's LLVM and LLD:
 
 ```bash
-make -C native/bmfp wasm WASM_CC=/opt/homebrew/opt/llvm/bin/clang WASM_LDFLAGS=-fuse-ld=/opt/homebrew/opt/lld/bin/wasm-ld
+make -C packages/fingerprint-c wasm WASM_CC=/opt/homebrew/opt/llvm/bin/clang WASM_LDFLAGS=-fuse-ld=/opt/homebrew/opt/lld/bin/wasm-ld
 ```
 
 The module imports nothing and exports `memory` and the API, plus `bmfp_wasm_alloc` / `bmfp_wasm_free` for the
@@ -78,7 +81,7 @@ with the TypeScript code and JavaScript itself, and writes them to `tests/vector
 change there, regenerate them and run the C tests:
 
 ```bash
-pnpm vp test run -u native/bmfp
+pnpm vp test run -u packages/fingerprint-c
 ```
 
 The C runner checks every vector through a counting allocator, so leaks fail too. It also fails every allocation in

@@ -1,0 +1,15 @@
+{
+  "name": "@be-music/fingerprint-c",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The Be-Music Fingerprint in portable C: library, CLI and WebAssembly module",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build:c": "make",
+    "test:c": "make test",
+    "check:c": "make check",
+    "wasm": "make wasm",
+    "clean": "make clean"
+  }
+}

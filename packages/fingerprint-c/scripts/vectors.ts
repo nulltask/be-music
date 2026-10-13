@@ -20,7 +20,7 @@ import {
   snapValue,
   subtractRational,
   type Rational,
-} from '../../../packages/chart/src/fingerprint-rational.ts';
+} from '../../chart/src/fingerprint-rational.ts';
 
 /** mulberry32: small, deterministic, good enough to spread test inputs. */
 function createRandom(seed: number): () => number {

@@ -143,8 +143,8 @@ export default defineConfig({
       {
         extends: true as const,
         test: {
-          name: 'native',
-          include: ['native/**/*.test.ts'],
+          name: '@be-music/fingerprint-c',
+          include: ['packages/fingerprint-c/scripts/**/*.test.ts'],
         },
       },
       {

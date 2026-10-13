@@ -154,6 +154,8 @@ importers:
         specifier: workspace:*
         version: link:../utils
 
+  packages/fingerprint-c: {}
+
   packages/json:
     dependencies:
       '@be-music/utils':

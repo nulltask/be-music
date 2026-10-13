@@ -44,7 +44,8 @@ jobs:
               - '!docs/**'
               - '!**/*.md'
             native:
-              - 'native/**'
+              - 'packages/fingerprint-c/**'
+              - 'packages/chart/src/fingerprint-rational.ts'
               - '.github/workflows/ci.yml'
             sea_player:
               - 'packages/player/**'
@@ -83,18 +84,18 @@ jobs:
         include:
           - name: linux-gcc
             os: ubuntu-24.04
-            run: make -C native/bmfp test std sanitize CC=gcc CXX=g++
+            run: make -C packages/fingerprint-c test std sanitize CC=gcc CXX=g++
           - name: linux-clang-wasm
             os: ubuntu-24.04
             setup: sudo apt-get update && sudo apt-get install -y lld
-            run: make -C native/bmfp test std sanitize wasm CC=clang CXX=clang++ WASM_CC=clang
+            run: make -C packages/fingerprint-c test std sanitize wasm CC=clang CXX=clang++ WASM_CC=clang
           - name: linux-32bit
             os: ubuntu-24.04
             setup: sudo apt-get update && sudo apt-get install -y gcc-multilib
-            run: make -C native/bmfp test CC="gcc -m32"
+            run: make -C packages/fingerprint-c test CC="gcc -m32"
           - name: macos-clang
             os: macos-15
-            run: make -C native/bmfp test std sanitize
+            run: make -C packages/fingerprint-c test std sanitize
 
     steps:
       - name: Checkout
@@ -124,7 +125,7 @@ jobs:
 
       - name: Build and test
         shell: cmd
-        working-directory: native/bmfp
+        working-directory: packages/fingerprint-c
         run: |
           cl /nologo /std:c11 /W4 /WX /D_CRT_SECURE_NO_WARNINGS /Iinclude /Isrc tests\test_main.c src\context.c src\bigint.c src\rational.c src\binary64.c src\sha256.c src\bmfp.c src\alloc_libc.c /Fe:bmfp-test.exe || exit /b 1
           bmfp-test.exe tests\vectors

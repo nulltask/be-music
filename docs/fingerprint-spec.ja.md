@@ -275,7 +275,7 @@ bmfp0:<正規 JSON のバイト列の SHA-256 を小文字 16 進で表したも
   - 項目は Resolved 層のリゾルバ（`resolved-notes.ts`、`note-rules.ts`、`timing.ts`、`timelines.ts`、`resolved-chart.ts`）、つまり `resolveChart` が使うものと同じリゾルバで読みます。`fingerprint-items.ts` が加えるのは、正確な座標、スナップ、譜面ドキュメントでの FREE ZONE の先送り、譜面モデルが必要とするバケットごとの再計算だけです。
   - 結果は、`evaluateControlFlow`（`control-flow.ts`）のフレーム操作を 1 組の draws ではなくすべての値クラスについてまとめて動かして列挙し（`fingerprint-control-flow.ts`）、差分、因子、決定木にします（`fingerprint-delta.ts`、`fingerprint-chart-model.ts`）。差分テストは、入れ子や不正な制御構文を含む数千のランダムな譜面について、譜面モデルから組み立てたすべての結果が、同じ draws で `resolveBmsControlFlowWithDraws` が解決した譜面のプレイドキュメントと一致すること、そしてすべての譜面ドキュメントの結果の分布がパーサーのものと一致することを確かめます。
 - パーサーは BMS の値を数値として保持するので、保持された double の最短往復表現のテキストを小数表記の代わりにします（3.1 節）。パーサーが生の文字列で保持するもの（`#EXRANKxx`、`#STP`）は数字の並びから読みます。
-- 移植性の高い C 版を [`native/bmfp`](../native/bmfp/README.ja.md) で進めています（ライブラリ、CLI、WebAssembly）。この実装とビット単位で一致する必要があり、テストベクタは TypeScript のコードから生成します。今のところ数値処理の中核（有理数、スナップ、3.1 節の double 変換）までです。
+- 移植性の高い C 版を `@be-music/fingerprint-c`（[`packages/fingerprint-c`](../packages/fingerprint-c/README.ja.md)） で進めています（ライブラリ、CLI、WebAssembly）。この実装とビット単位で一致する必要があり、テストベクタは TypeScript のコードから生成します。今のところ数値処理の中核（有理数、スナップ、3.1 節の double 変換）までです。
 
 ## 7. プレイログ
 
