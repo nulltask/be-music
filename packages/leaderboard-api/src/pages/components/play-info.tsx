@@ -2,12 +2,13 @@
 /** A play's details: the info icon and its popover, and the compact time cell that carries it. */
 import type { Child } from 'hono/jsx';
 import type { PlayInfo } from '../data.ts';
-import { formatRecorder, formatTimestamp, RULESET_LABELS } from '../format.ts';
+import { LocalTime } from './basics.tsx';
+import { formatRecorder, RULESET_LABELS } from '../format.ts';
 
 /** Everything a play's info popover lists: how it was played and which software recorded and sent it. */
 function playInfoRows(info: PlayInfo): Array<[string, Child]> {
   return [
-    ['Played', formatTimestamp(info.createdAt)],
+    ['Played', <LocalTime at={info.createdAt} />],
     ['Ruleset played', RULESET_LABELS[info.playedRuleset] ?? info.playedRuleset],
     ['Gauge', info.gauge],
     ['Assists', info.assistFlags.length > 0 ? info.assistFlags.join(', ') : 'none'],
@@ -79,14 +80,11 @@ function InfoButton(props: { info: PlayInfo | undefined }) {
   );
 }
 
-/** When a play happened, compact (`2026-10-13 06:20`, UTC in full on hover), with its info icon. */
+/** When a play happened, compact (`2026-10-13 15:20`, in the viewer's time; UTC on hover), with its info icon. */
 export function When(props: { at: number; info: PlayInfo | undefined }) {
-  const full = formatTimestamp(props.at);
   return (
     <span class="text-muted-foreground inline-flex items-center gap-1">
-      <time datetime={new Date(props.at).toISOString()} title={full}>
-        {full.replace(' UTC', '')}
-      </time>
+      <LocalTime at={props.at} compact />
       <InfoButton info={props.info} />
     </span>
   );
