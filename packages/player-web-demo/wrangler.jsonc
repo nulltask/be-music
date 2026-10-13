@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "be-music-player-web",
+  // The Worker Workers Builds deploys (it overrides any other name with this one).
+  "name": "be-music-player-demo",
   "main": "worker/index.ts",
   "compatibility_date": "2026-06-02",
   // Account is resolved automatically: from the logged-in user locally (single account), and from the auto-generated
@@ -13,7 +14,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/ffmpeg-core/*", "/__url-load-proxy", "/api/*", "/leaderboard/*"],
+    "run_worker_first": ["/ffmpeg-core/*", "/__url-load-proxy", "/api/*", "/leaderboard", "/leaderboard/*"],
   },
   // Holds `ffmpeg-core.wasm` (~31 MB, over the 25 MiB Static Assets per-file limit) and its `ffmpeg-core.js` loader.
   // Create the bucket with `pnpm cf:r2:create` and upload the files with `pnpm cf:r2:push`.
@@ -33,5 +34,26 @@
   ],
   "observability": {
     "enabled": true,
+  },
+  // Branch previews. Workers Builds uploads every branch but `devel` as a preview version of this same Worker
+  // (`wrangler versions upload --env preview`, one Preview URL per branch). A version carries its own bindings, so the
+  // previews talk to the preview Leaderboard, and never to production data. Bindings are not inherited by an
+  // environment, hence the repeats.
+  "env": {
+    "preview": {
+      "name": "be-music-player-demo",
+      "r2_buckets": [
+        {
+          "binding": "FFMPEG_CORE",
+          "bucket_name": "be-music-ffmpeg-core",
+        },
+      ],
+      "services": [
+        {
+          "binding": "LEADERBOARD",
+          "service": "be-music-leaderboard-preview",
+        },
+      ],
+    },
   },
 }

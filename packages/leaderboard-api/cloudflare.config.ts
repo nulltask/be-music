@@ -1,15 +1,15 @@
 import { bindings, defineConfig, triggers } from 'cf/config';
 
 /**
- * Leaderboard Worker. One complete configuration per mode (`cf deploy --mode staging` deploys the staging Worker from
- * `devel`; the default mode deploys production from `main`). The Worker has no public URL of its own: the player's
+ * Leaderboard Worker. One complete configuration per mode (`cf deploy --mode preview` deploys the preview Worker,
+ * shared by every branch but `devel`; the default mode deploys production from `devel`). The Worker has no public URL of its own: the player's
  * Worker forwards `/api/*` and `/leaderboard/*` to it through a Service Binding (docs/leaderboard.md section 2).
  */
 export default defineConfig(({ mode }) => {
-  const staging = mode === 'staging';
-  const suffix = staging ? '-staging' : '';
+  const preview = mode === 'preview';
+  const suffix = preview ? '-preview' : '';
   // Created with `cf d1 create` (primary location APAC); the ids are not secret.
-  const databaseId = staging ? '71f22d28-f646-4488-a624-dbdd4a1883d1' : 'd3791c87-75f0-4d6b-8fd9-9013f0492006';
+  const databaseId = preview ? 'f4f59881-e902-450c-892b-d764c481eb46' : 'd3791c87-75f0-4d6b-8fd9-9013f0492006';
   return {
     worker: {
       name: `be-music-leaderboard${suffix}`,
@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => {
       env: {
         DB: bindings.d1({ name: `be-music-leaderboard${suffix}`, id: databaseId }),
         BLOBS: bindings.r2({ name: `be-music-leaderboard${suffix}` }),
-        SUBMIT_LIMITER: bindings.rateLimit({ namespace: staging ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
+        SUBMIT_LIMITER: bindings.rateLimit({ namespace: preview ? '2001' : '1001', simple: { limit: 10, period: 60 } }),
         RIVAL_LIMIT: bindings.text('100'),
         BETTER_AUTH_SECRET: bindings.secret(),
         // DISCORD_CLIENT_ID / DISCORD_CLIENT_SECRET and GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are optional secrets:
