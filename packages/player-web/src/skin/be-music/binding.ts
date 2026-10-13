@@ -363,6 +363,11 @@ export class BeMusicSelectBinding {
   private pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
   private revision = 0;
+  /**
+   * Where the skin's search box was on the last drawn frame, in design pixels: the hit area it bound to
+   * `actions.activateSearch`. Undefined when the skin has none. The host lays its text field over it.
+   */
+  searchFieldRect: { x: number; y: number; width: number; height: number } | undefined;
 
   /**
    * `resolveSongRecord` looks up the player's best record on a song for `frame.songRecord`; without one every song
@@ -432,6 +437,7 @@ export class BeMusicSelectBinding {
     const pool = this.hitPool;
     pool.begin();
     const pointer = this.pointer;
+    let searchFieldRect: BeMusicSelectBinding['searchFieldRect'];
     const frame: BeMusicSelectFrame = {
       ...base,
       nowMs,
@@ -450,6 +456,7 @@ export class BeMusicSelectBinding {
         area.cursor = cursor;
         area.removeAllListeners('pointerdown');
         area.on('pointerdown', action);
+        if (action === base.actions.activateSearch) searchFieldRect = { x, y, width: w, height: h };
         return pointer !== undefined && pointer.x >= x && pointer.x < x + w && pointer.y >= y && pointer.y < y + h;
       },
     };
@@ -459,6 +466,7 @@ export class BeMusicSelectBinding {
       );
     } finally {
       pool.end();
+      this.searchFieldRect = searchFieldRect;
     }
   }
 

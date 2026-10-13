@@ -199,6 +199,33 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
     }
   }
 
+  /**
+   * The search box of an LR2 skin: the visible `#SRC_TEXT st=30`, where its text is drawn. Its DST often hugs the text
+   * and collapses when empty, so a narrow one is widened (to the LR2 default theme's box on that theme). The default
+   * theme's box stands in when no such text is visible.
+   */
+  protected override designSearchFieldRect(): { x: number; y: number; width: number; height: number } | undefined {
+    const skin = this.options.skin;
+    if (skin === undefined || this.themeDesignSize === undefined) return undefined;
+    const ops = computeSelectOps(
+      this.focusedSong(),
+      this.panelStates,
+      this.playOptions,
+      skin.customOptions,
+      this.collection,
+    );
+    const isDefaultTheme = skin.width === 1280 && skin.height === 720;
+    for (const text of skin.texts) {
+      if (text.st !== 30 || !this.isPanelOpen(text.panel)) continue;
+      const dst = this.evaluateElementDst(text);
+      if (!isDestinationVisible(dst, ops, this.timerActive)) continue;
+      const rect = normalizeRect(dst);
+      const width = rect.w >= 40 ? rect.w : isDefaultTheme ? Math.max(40, 920 - rect.x) : 320;
+      return { x: rect.x, y: rect.y, width, height: Math.max(rect.h, 16) };
+    }
+    return isDefaultTheme ? { x: 0, y: 540, width: 920, height: 42 } : undefined;
+  }
+
   protected override handleThemePointerDown(virtualX: number, virtualY: number): void {
     const skin = this.options.skin;
     if (!skin) return;
@@ -737,7 +764,13 @@ export class PixiSongSelectView extends CoreSongSelectView<PixiSongSelectViewOpt
           if (!this.isPanelOpen(entry.element.panel)) break;
           const dst = this.evaluateElementDst(entry.element);
           if (!isDestinationVisible(dst, ops, this.timerActive)) break;
-          const value = resolveSelectText(entry.element.st, focusedSong, this.playOptions);
+          // The search word is the typed query, left to the host's field while the player types in it.
+          const value =
+            entry.element.st === 30
+              ? this.searchEditing
+                ? ''
+                : this.searchText
+              : resolveSelectText(entry.element.st, focusedSong, this.playOptions);
           if (value === undefined || value.length === 0) break;
           layer.addChild(
             makeLr2TextSprite(value, entry.element, dst, {
@@ -1304,8 +1337,7 @@ function resolveSelectText(
       // Player name. Placeholder until a profile system exists.
       return 'PLAYER';
     case 30:
-      // Search box content / jukebox name. We don't model search yet, so return an empty string to keep the panel
-      // rendering.
+      // Search box content / jukebox name: the scene fills it with the typed query before calling here.
       return '';
     case 50: // skin name
       return 'LR2 SELECT';

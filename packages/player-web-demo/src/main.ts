@@ -151,6 +151,7 @@ import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
+import { InlineSearch } from './inline-search.ts';
 import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
 import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
@@ -485,6 +486,22 @@ class PlayerWebDemoApp {
   private lastBeatorajaChart: { resolved: ResolvedPlayChart; chartPath: string } | undefined;
   /** Beatoraja-skinned song select scene. Active when a beatoraja theme with a select skin is loaded. */
   private beatorajaSelectScene: PixiBeatorajaSelectScene | undefined;
+  /**
+   * The search field: typed into in place over the skin's search box (built-in and LR2 skins), or at the foot of the
+   * screen where the skin has none (beatoraja). It filters whichever select scene is on screen.
+   */
+  private readonly search = new InlineSearch({
+    input: document.querySelector<HTMLInputElement>('#search')!,
+    shell: document.querySelector<HTMLElement>('.shell')!,
+    canvas: () => this.sceneHost?.app.canvas,
+    fieldRect: () => (this.beatorajaSelectScene === undefined ? this.selectView?.getSearchFieldRect() : undefined),
+    setQuery: (query) => {
+      if (this.beatorajaSelectScene !== undefined) this.beatorajaSelectScene.setSearchQuery(query);
+      else this.selectView?.setSearchQuery(query);
+    },
+    setEditing: (editing) => this.selectView?.setSearchEditing(editing),
+    touch: () => document.documentElement.classList.contains('touch-first'),
+  });
   /**
    * Beatoraja-skinned decide splash. Active during the select → gameplay handoff when the loaded
    * theme ships a decide skin (`type = 6`). Disposed before the gameplay scene mounts.
@@ -823,30 +840,7 @@ class PlayerWebDemoApp {
         return;
       }
       event.preventDefault();
-      this.elements.searchInput.focus();
-      this.elements.searchInput.select();
-    });
-    // Search input: forward every keystroke to the select view so the bar list filters live. Escape clears the filter
-    // and returns focus to the canvas (so arrow-key navigation works again immediately).
-    this.elements.searchInput.addEventListener('input', () => {
-      this.selectView?.setSearchQuery(this.elements.searchInput.value);
-    });
-    this.elements.searchInput.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        this.elements.searchInput.value = '';
-        this.selectView?.setSearchQuery('');
-        this.elements.searchInput.blur();
-      } else if (event.key === 'Enter') {
-        // Pressing Enter while typing should let the user pick the currently-focused (filtered) result without leaving
-        // the input first. `keydown` on the window won't fire on the select view (the input has focus), so route the
-        // action explicitly.
-        event.preventDefault();
-        // No public "trigger Enter" API on the view; setSearchQuery already moved the cursor to 0 after each keystroke,
-        // so closing the input + giving focus back to the canvas is enough for the user's next Enter press to pick that
-        // song.
-        this.elements.searchInput.blur();
-      }
+      this.search.open();
     });
 
     // Drag state via a depth counter rather than a plain add/remove pair on dragover/dragleave. The browser fires
@@ -952,11 +946,14 @@ class PlayerWebDemoApp {
     const paused = this.gameplayView?.isPaused() === true;
     // A skin drawing on its portrait stage needs no rotate prompt on a phone held upright.
     const portraitStage = this.sceneHost.getStageOrientation() === 'portrait';
-    const state = `${inGameplay}/${touchPlay}/${paused}/${portraitStage}`;
+    const searchInSkin = !inGameplay && this.search.skinHasBox;
+    const state = `${inGameplay}/${touchPlay}/${paused}/${portraitStage}/${searchInSkin}`;
     if (state === this.shellGameplayState) return;
     this.shellGameplayState = state;
     const { shell } = this.elements;
     shell.classList.toggle('in-gameplay', inGameplay);
+    // A skin with its own search box hides the field at the foot of the screen; the box opens it in place.
+    shell.classList.toggle('search-in-skin', searchInSkin);
     shell.classList.toggle('touch-play', touchPlay);
     shell.classList.toggle('play-paused', paused);
     document.documentElement.classList.toggle('portrait-stage', portraitStage);
@@ -2861,6 +2858,8 @@ class PlayerWebDemoApp {
     this.beatorajaSelectScene?.dispose();
     this.beatorajaSelectScene = new PixiBeatorajaSelectScene({
       skin: skinLoad.skin,
+      // The page's search field (IME and all) does the typing; the scene only filters.
+      externalSearch: true,
       textures,
       fonts,
       skinConfig: config,
@@ -3854,10 +3853,7 @@ class PlayerWebDemoApp {
         void this.selectView?.playDecideSound();
         void this.showDecide(song, { autoPlay: true });
       },
-      onSearchActivate: () => {
-        this.elements.searchInput.focus();
-        this.elements.searchInput.select();
-      },
+      onSearchActivate: () => this.search.openFromPointer(),
     };
     this.selectView = lr2SelectSkin
       ? new PixiSongSelectView({ skin: lr2SelectSkin, ...selectSceneOptions })
