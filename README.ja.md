@@ -55,7 +55,7 @@ pnpm run release:version
 
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
 - release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
-- その状態で `devel -> main` の release PR を merge すると、version が上がった package だけ GitHub Release が個別に作成されます
+- その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのデモや Leaderboard などの private package は対象外です）
 - player SEA 実行ファイルは `@be-music/player-tui` から build し、`@be-music/player-tui` release に添付します。`@be-music/audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
