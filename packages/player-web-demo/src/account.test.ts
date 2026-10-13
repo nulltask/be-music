@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vite-plus/test';
-import { describeAccountChip, describeLeaderboardAccount, loadLeaderboardAccount } from './account.ts';
+import {
+  describeAccountChip,
+  describeLeaderboardAccount,
+  describeStartAccount,
+  loadLeaderboardAccount,
+} from './account.ts';
 
 describe('describeLeaderboardAccount', () => {
   test('summarizes the session state', () => {
@@ -60,6 +65,37 @@ describe('describeAccountChip', () => {
       state: 'signed-in',
       label: '@a b',
       href: '/leaderboard/players/a%20b',
+    });
+  });
+});
+
+describe('describeStartAccount', () => {
+  test('offers sign-in and sign-up when signed out', () => {
+    expect(describeStartAccount(undefined)).toEqual({
+      state: 'signed-out',
+      label: 'Not signed in',
+      href: undefined,
+      actions: ['sign-in', 'sign-up'],
+    });
+  });
+
+  test('offers to keep an anonymous account, or to sign in to another', () => {
+    expect(
+      describeStartAccount({ handle: 'player-abc', displayName: 'Anonymous', anonymous: true, passkeys: 0 }),
+    ).toEqual({
+      state: 'anonymous',
+      label: '@player-abc · anonymous',
+      href: '/leaderboard/players/player-abc',
+      actions: ['keep', 'sign-in'],
+    });
+  });
+
+  test('names a signed-in player and links their page', () => {
+    expect(describeStartAccount({ handle: 'taro dj', displayName: 'Taro', anonymous: false, passkeys: 1 })).toEqual({
+      state: 'signed-in',
+      label: 'Taro @taro dj',
+      href: '/leaderboard/players/taro%20dj',
+      actions: ['sign-out'],
     });
   });
 });

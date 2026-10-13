@@ -118,3 +118,39 @@ export function describeAccountChip(account: LeaderboardAccount | undefined): Ac
     href,
   };
 }
+
+/** An action the start card offers for the account. */
+export type StartAccountAction = 'sign-in' | 'sign-up' | 'keep' | 'sign-out';
+
+/** What the start card's Leaderboard row shows: who the plays go to, and what the player can do about it. */
+export interface StartAccountView {
+  state: AccountChip['state'];
+  label: string;
+  /** The player's Leaderboard page, when there is an account. */
+  href: string | undefined;
+  actions: StartAccountAction[];
+}
+
+/** The button text of each start card action. */
+export const START_ACCOUNT_ACTION_LABELS: Readonly<Record<StartAccountAction, string>> = {
+  'sign-in': 'Sign in',
+  'sign-up': 'Sign up',
+  keep: 'Keep this account',
+  'sign-out': 'Sign out',
+};
+
+/**
+ * The start card's account row. Signed out: sign in with a passkey, or sign up (an account kept by a new passkey).
+ * Anonymous (the first submitted play made the account): keep it with a passkey, or sign in to another one, which takes
+ * this browser's plays along. Signed in: the player's page and signing out.
+ */
+export function describeStartAccount(account: LeaderboardAccount | undefined): StartAccountView {
+  if (account === undefined) {
+    return { state: 'signed-out', label: 'Not signed in', href: undefined, actions: ['sign-in', 'sign-up'] };
+  }
+  const href = `/leaderboard/players/${encodeURIComponent(account.handle)}`;
+  if (account.anonymous) {
+    return { state: 'anonymous', label: `@${account.handle} · anonymous`, href, actions: ['keep', 'sign-in'] };
+  }
+  return { state: 'signed-in', label: `${account.displayName} @${account.handle}`, href, actions: ['sign-out'] };
+}
