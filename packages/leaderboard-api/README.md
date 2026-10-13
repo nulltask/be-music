@@ -26,7 +26,8 @@ Workspace packages are bundled from their `dist`, so build them first:
 pnpm run build
 ```
 
-Create the resources once per environment and put the D1 id into `cloudflare.config.ts` if `cf` asks for it:
+The resources already exist in the be-music account (D1 and R2 in APAC, one of each per environment); their D1 ids
+are in `cloudflare.config.ts` and the migrate scripts. For a new environment, create them and record the new id:
 
 ```bash
 pnpm exec cf d1 create be-music-leaderboard-staging
@@ -36,13 +37,14 @@ pnpm exec cf d1 create be-music-leaderboard-staging
 pnpm exec cf r2 bucket create be-music-leaderboard-staging
 ```
 
-Secrets, per environment (none of them are committed):
+Secrets, per environment (none of them are committed). A secret declared in `cloudflare.config.ts` is required on every
+deploy; the very first deploy of a Worker passes it with `cf deploy --secrets-file <file>`, later ones keep it.
 
-| Secret                                       | Purpose                                    |
-| -------------------------------------------- | ------------------------------------------ |
-| `BETTER_AUTH_SECRET`                         | Signs sessions; any long random string     |
-| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord sign-in (optional; off when unset) |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`   | Google sign-in (optional; off when unset)  |
+| Secret                                       | Purpose                                                        |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                         | Signs sessions; any long random string                         |
+| `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` | Discord sign-in (optional; off when unset; declare when added) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`   | Google sign-in (optional; off when unset; declare when added)  |
 
 ## Database
 
