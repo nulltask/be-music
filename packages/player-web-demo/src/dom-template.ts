@@ -9,7 +9,8 @@
  * Sub-elements wired up elsewhere:
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
  *  - `#account-chip` — `main.ts` (`refreshLeaderboardAccount`)
- *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`)
+ *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`), folded inside the drop card
+ *  - `#start-leaderboard` / `#start-*` — `leaderboard-ui.ts` (`LeaderboardPanel.bindStartCard`)
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — referenced via `PlayerWebDemoElements` in `main.ts`
  */
 export const DEMO_APP_HTML = `
@@ -80,68 +81,191 @@ export const DEMO_APP_HTML = `
           <div class="drop-title">Drop to load</div>
           <div class="drop-subtitle">
             <span>BMS folder</span>
-            <span class="drop-subtitle-sep">·</span>
-            <span>LR2 Files</span>
           </div>
+          <!--
+            Leaderboard: whether this browser's plays are sent, and the
+            account they go to. Rendered by \`LeaderboardPanel\`
+            (leaderboard-ui.ts) from the account state; the checkbox is
+            the Debug Menu's "Submit to Leaderboard" setting.
+          -->
+          <section class="start-leaderboard" id="start-leaderboard" aria-label="Leaderboard">
+            <label class="start-check">
+              <input type="checkbox" id="start-submit" />
+              <span>Submit my plays to the Leaderboard</span>
+            </label>
+            <div class="start-account" id="start-account" data-state="signed-out">
+              <span class="start-account-label" id="start-account-label">Not signed in</span>
+              <div class="start-account-actions" id="start-account-actions"></div>
+            </div>
+            <p class="start-account-hint" id="start-account-hint"></p>
+            <div class="start-account-status" id="start-account-status" role="status" aria-live="polite"></div>
+          </section>
+          <!--
+            Browser-compatibility check, folded: the summary gives the
+            verdict at a glance, opening it lists every probed feature
+            split into Required / Optional. Opened up front when a
+            required feature is missing. Populated once at boot from
+            \`checkBrowserCompat()\` (compat-panel.ts).
+          -->
+          <details class="compat-panel" id="compat-panel">
+            <summary class="compat-panel-header">
+              <span class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
+                  <path
+                    class="compat-panel-badge-mark compat-panel-badge-mark--check"
+                    d="M7 12 L11 16 L17 9"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    class="compat-panel-badge-mark compat-panel-badge-mark--cross"
+                    d="M8 8 L16 16 M16 8 L8 16"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+              <span class="compat-panel-eyebrow">System check</span>
+              <span class="compat-panel-status" id="compat-panel-status">Browser ready</span>
+              <span class="compat-panel-chevron" aria-hidden="true"></span>
+            </summary>
+            <div class="compat-panel-sections">
+              <section class="compat-panel-section">
+                <h3 class="compat-panel-section-title">Required</h3>
+                <ul class="compat-panel-list" id="compat-panel-required"></ul>
+              </section>
+              <section class="compat-panel-section">
+                <h3 class="compat-panel-section-title">Optional</h3>
+                <ul class="compat-panel-list" id="compat-panel-optional"></ul>
+              </section>
+            </div>
+          </details>
         </div>
       </div>
     </div>
     <!--
-      Browser-compatibility panel. Lives at the shell level — NOT
-      inside the drop card — so it reads as a separate diagnostic
-      widget rather than as decoration on the call-to-action.
-      Header (icon + eyebrow + status) communicates at-a-glance
-      readiness; the body lists every probed feature split into
-      \`Required\` / \`Optional\` sections so the user can see
-      exactly which feature is responsible for an unsupported
-      verdict. Populated once at boot from \`checkBrowserCompat()\`.
+      Leaderboard sign-in and sign-up, as on the Leaderboard's own pages:
+      a passkey now, Google and Discord shown but in development. Opened
+      from the start card's account row; wired by \`wireAccountDialogs\`
+      (account-dialogs.ts).
     -->
-    <aside class="compat-panel" id="compat-panel" aria-label="Browser compatibility check">
-      <header class="compat-panel-header">
-        <div class="compat-panel-badge" id="compat-panel-badge" aria-hidden="true">
-          <!--
-            Status mark. The default check arc paints when the
-            browser is fully supported; the JS swaps in a cross
-            path for the unsupported state by toggling a class on
-            the panel root.
-          -->
-          <svg viewBox="0 0 24 24" class="compat-panel-badge-icon" aria-hidden="true">
-            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--check"
-              d="M7 12 L11 16 L17 9"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <path
-              class="compat-panel-badge-mark compat-panel-badge-mark--cross"
-              d="M8 8 L16 16 M16 8 L8 16"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.4"
-              stroke-linecap="round"
-            />
-          </svg>
+    <dialog class="account-dialog" id="leaderboard-sign-in" aria-labelledby="leaderboard-sign-in-title">
+      <div class="account-dialog-body">
+        <header>
+          <h2 id="leaderboard-sign-in-title">Sign in</h2>
+          <p>Use the passkey of your Leaderboard account.</p>
+        </header>
+        <button type="button" class="account-dialog-primary" data-account-dialog-action="sign-in">
+          Sign in with a passkey
+        </button>
+        <div class="account-dialog-or" role="separator">or</div>
+        <div class="account-providers">
+          <button type="button" class="account-provider" disabled title="Sign in with Google is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            Sign in with Google
+            <span class="account-provider-badge">In development</span>
+          </button>
+          <button type="button" class="account-provider" disabled title="Sign in with Discord is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            Sign in with Discord
+            <span class="account-provider-badge">In development</span>
+          </button>
         </div>
-        <div class="compat-panel-heading">
-          <div class="compat-panel-eyebrow">System check</div>
-          <div class="compat-panel-status" id="compat-panel-status">Browser ready</div>
-        </div>
-      </header>
-      <div class="compat-panel-sections">
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Required</h3>
-          <ul class="compat-panel-list" id="compat-panel-required"></ul>
-        </section>
-        <section class="compat-panel-section">
-          <h3 class="compat-panel-section-title">Optional</h3>
-          <ul class="compat-panel-list" id="compat-panel-optional"></ul>
-        </section>
+        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <footer>
+          <button type="button" class="account-dialog-link" data-account-dialog-action="open-sign-up">
+            No account yet? Sign up
+          </button>
+          <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+        </footer>
       </div>
-    </aside>
+    </dialog>
+    <dialog class="account-dialog" id="leaderboard-sign-up" aria-labelledby="leaderboard-sign-up-title">
+      <form class="account-dialog-body" method="dialog" data-account-sign-up-form>
+        <header>
+          <h2 id="leaderboard-sign-up-title">Create your account</h2>
+          <p data-account-sign-up-lead>Pick a handle and a name. Your browser then makes a passkey for it.</p>
+        </header>
+        <div class="account-providers">
+          <button type="button" class="account-provider" disabled title="Sign up with Google is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6h-4a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="#EA4335" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A11.5 11.5 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1c.9-2.9 3.6-4.9 6.7-4.9z"/></svg></span>
+            Sign up with Google
+            <span class="account-provider-badge">In development</span>
+          </button>
+          <button type="button" class="account-provider" disabled title="Sign up with Discord is in development">
+            <span class="account-provider-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#5865F2" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3l-.6 1.3a18.3 18.3 0 0 0-5.6 0L8.6 3a19.7 19.7 0 0 0-4.9 1.5A20.3 20.3 0 0 0 .1 18a19.9 19.9 0 0 0 6 3l1.3-2.1a12.9 12.9 0 0 1-2-1l.5-.4a14.2 14.2 0 0 0 12.2 0l.5.4c-.6.4-1.3.7-2 1l1.3 2.1a19.8 19.8 0 0 0 6-3 20.2 20.2 0 0 0-3.6-13.6zM8 15.3c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4zm8 0c-1.2 0-2.2-1.1-2.2-2.4 0-1.4 1-2.5 2.2-2.5s2.2 1.1 2.2 2.5c0 1.3-1 2.4-2.2 2.4z"/></svg></span>
+            Sign up with Discord
+            <span class="account-provider-badge">In development</span>
+          </button>
+        </div>
+        <div class="account-dialog-or" role="separator">or with a passkey</div>
+        <label class="account-field">
+          <span>Handle</span>
+          <input
+            name="handle"
+            required
+            minlength="3"
+            maxlength="15"
+            pattern="[A-Za-z0-9_]{3,15}"
+            autocomplete="username"
+            spellcheck="false"
+          />
+          <small>3 to 15 letters, digits or _. It names your page.</small>
+        </label>
+        <label class="account-field">
+          <span>Name</span>
+          <input name="displayName" required maxlength="64" autocomplete="nickname" />
+          <small>Up to 32 characters, in any script. The rankings show it.</small>
+        </label>
+        <p class="account-dialog-status" data-account-dialog-status role="status" hidden></p>
+        <footer>
+          <span></span>
+          <span class="account-dialog-buttons">
+            <button type="button" class="account-dialog-quiet" data-account-dialog-action="close">Cancel</button>
+            <button type="submit" class="account-dialog-primary">Create passkey</button>
+          </span>
+        </footer>
+      </form>
+    </dialog>
+    <!--
+      "Drop a skin" — shown when the Debug Menu's Skin system is set to LR2 or
+      beatoraja with none of that system loaded. A drop anywhere closes it, and
+      a skin of the asked-for system is then used without asking. Filled by
+      \`promptSkinDrop\` (main.ts).
+    -->
+    <dialog class="skin-drop" id="skin-drop" aria-labelledby="skin-drop-title">
+      <svg class="drop-icon" viewBox="0 0 48 48" aria-hidden="true">
+        <path d="M24 6 L24 30" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+        <path d="M14 22 L24 32 L34 22" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M10 38 L38 38" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.55" />
+      </svg>
+      <h2 class="drop-title" id="skin-drop-title">Drop an LR2 skin</h2>
+      <p class="skin-drop-hint" data-skin-drop-hint></p>
+      <button type="button" class="account-dialog-quiet" data-skin-drop-cancel>Cancel</button>
+    </dialog>
+    <!--
+      "Use this skin?" — asked after a drop whose folder carried an LR2 or
+      beatoraja skin. Filled and opened by \`askSkinOffer\` (skin-offer.ts).
+    -->
+    <dialog class="account-dialog" id="skin-offer" aria-labelledby="skin-offer-title">
+      <div class="account-dialog-body">
+        <header>
+          <h2 id="skin-offer-title">Use this skin?</h2>
+          <p data-skin-offer-message></p>
+        </header>
+        <!-- Stacked, full width: each skin to use, then keeping the built-in one. -->
+        <div class="skin-offer-buttons">
+          <div class="skin-offer-buttons" data-skin-offer-choices></div>
+          <button type="button" class="account-dialog-quiet" data-skin-offer-decline>Not now</button>
+        </div>
+      </div>
+    </dialog>
     <!--
       Loading overlay. Hidden by default; revealed via the
       "visible" class while a folder / ZIP drop is mid-load. The
@@ -394,7 +518,7 @@ export const DEMO_APP_HTML = `
                 and developer settings sit in its collapsed folders, which remember whether you left them open.
               </li>
               <li>
-                Click <strong>Record</strong> to capture the next play as a downloadable WebM (requires
+                Click <strong>Record gameplay video</strong> to capture the next play as a downloadable video (MP4 · H.264 unless <strong>Video format</strong> says otherwise) (requires
                 MediaRecorder support — see Open source / browser checks).
               </li>
               <li>
@@ -491,7 +615,7 @@ export const DEMO_APP_HTML = `
                 右上 Debug Menu に読み込み / スキン / プレイオプション / オーディオ / 録画のコントロールがあります。あまり使わない設定や開発者向けの設定は折りたたまれたフォルダにあり、フォルダの開閉状態は記憶されます。
               </li>
               <li>
-                <strong>Record</strong> ボタンを押すと、次の再生を WebM として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
+                <strong>Record gameplay video</strong> ボタンを押すと、次の再生を動画（<strong>Video format</strong> で選んだ形式、既定は MP4 · H.264）として録画してダウンロードできます (ブラウザが MediaRecorder に対応している必要があります — Open source / Browser checks を参照)。
               </li>
               <li>
                 選曲画面で現在のスキンの <strong>PLAY OPTION</strong> パネルを開くと、Random / Mirror / Auto-scratch / hi-speed などのプレイヤー側モディファイアを設定できます。

@@ -178,6 +178,8 @@
         "subtitle": "Channels 3x / 4x sound without being drawn or judged",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "2",
+        "difficulty": 2,
         "total": 250
       },
       "notes": [

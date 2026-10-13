@@ -534,13 +534,18 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
       .fill(PHANTOM_INK)
       .stroke({ color: PHANTOM_WHITE, width: 1.5, join: 'miter' });
     addText('SEARCH', 24, 377, tagStyle(PHANTOM_RED));
-    addText(frame.searchQuery || 'Title / artist / genre', 82, 376, {
-      size: 10,
-      weight: '600',
-      fill: frame.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
-      maxWidth: 210,
-    });
-    addHitArea(12, 368, 292, 28, 'text', frame.actions.activateSearch);
+    // While the player types in the host's field laid over the box, the field shows the text.
+    if (!frame.searchEditing) {
+      addText(frame.searchQuery || 'Title / artist / genre', 82, 376, {
+        size: 10,
+        weight: '600',
+        fill: frame.searchQuery ? PHANTOM_WHITE : PHANTOM_ASH,
+        maxWidth: 210,
+      });
+    }
+    // The label and the text strip both start typing; the strip comes last, so the host lays its field over the text.
+    addHitArea(12, 368, 66, 28, 'text', frame.actions.activateSearch);
+    addHitArea(78, 368, 226, 28, 'text', frame.actions.activateSearch);
     addHitArea(24, 298, 176, 36, 'pointer', frame.actions.play);
     addHitArea(206, 302, 86, 30, 'pointer', frame.actions.autoPlay);
 

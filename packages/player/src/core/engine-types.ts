@@ -105,6 +105,14 @@ export interface PlayerOptions {
   tui?: boolean;
   videoBgaStreaming?: boolean;
   signal?: AbortSignal;
+  /**
+   * Keeps a manual play open after its chart is over, so the player's keys still light the lanes (and the chart's
+   * remaining background sounds still play) while the host shows its outro. When the chart is over — every note judged
+   * and the judge windows passed — `onSettled` runs once; the play then carries on until `signal` aborts, and only then
+   * ends normally (its summary and play log as usual; aborting this signal is not an interrupt). Without it a play ends
+   * as soon as its chart is over. Auto play ignores it.
+   */
+  holdAfterChart?: { signal: AbortSignal; onSettled?: () => void };
   onLoadProgress?: (progress: PlayerLoadProgress) => void;
   onLoadComplete?: () => void;
   onHighSpeedChange?: (highSpeed: number) => void;

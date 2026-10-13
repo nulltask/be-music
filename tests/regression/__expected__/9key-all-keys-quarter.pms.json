@@ -412,6 +412,8 @@
         "subtitle": "PMS-STD — simultaneous 9-key chord on every quarter note",
         "artist": "be-music",
         "genre": "TEST",
+        "playLevel": "1",
+        "difficulty": 1,
         "total": 200
       },
       "notes": [

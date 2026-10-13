@@ -24,6 +24,19 @@ export function resolveScaledViewport(
   };
 }
 
+/** A rectangle in design pixels placed on the canvas through `viewport`: CSS pixels from the canvas's top-left. */
+export function designRectToCanvas(
+  rect: { x: number; y: number; width: number; height: number },
+  viewport: ScaledViewport,
+): { x: number; y: number; width: number; height: number } {
+  return {
+    x: viewport.x + rect.x * viewport.scale,
+    y: viewport.y + rect.y * viewport.scale,
+    width: rect.width * viewport.scale,
+    height: rect.height * viewport.scale,
+  };
+}
+
 /**
  * Upper bound for text rasterization density. High enough for a 3x-DPR display magnified 2.5x; beyond that the glyph
  * textures cost memory without visible gain.
