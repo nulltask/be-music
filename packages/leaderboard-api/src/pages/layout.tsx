@@ -7,7 +7,7 @@ import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
 import { EntityIcon, type EntityKind } from './components/entity-icon.tsx';
 import { Icon } from './components/icon.tsx';
-import { Check, ChevronDown, KeyRound, LogOut, Play, Scale } from 'lucide-static';
+import { Check, ChevronDown, ExternalLink, KeyRound, LogOut, Play, Scale } from 'lucide-static';
 import { CARD_HEIGHT, CARD_WIDTH } from '../cards.ts';
 import { ICON_LINKS } from './icons.ts';
 import { ICONS } from './icons.generated.ts';
@@ -490,9 +490,17 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 <EntityIcon kind="latest" size="md" class="text-current" />
                 <span class="hidden sm:inline">Latest</span>
               </a>
-              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/api" title="API">
+              {/* The API reference is a tool page of its own, so it opens beside the Leaderboard. */}
+              <a
+                class="hover:text-foreground inline-flex items-center gap-1.5"
+                href="/leaderboard/api"
+                title="API (opens in a new tab)"
+                target="_blank"
+                rel="noopener"
+              >
                 <EntityIcon kind="api" size="md" class="text-current" />
                 <span class="hidden sm:inline">API</span>
+                <Icon svg={ExternalLink} class="[&>svg]:size-3" />
               </a>
               <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/about" title="About">
                 <EntityIcon kind="about" size="md" class="text-current" />
@@ -518,8 +526,19 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
           <Breadcrumbs crumbs={props.meta.crumbs} />
           {props.children}
         </main>
-        <footer class="text-muted-foreground mx-auto max-w-5xl px-4 pb-8 text-xs">
-          Beta — rankings may be reset while scoring rules settle.
+        <footer class="text-muted-foreground mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t px-4 pt-4 pb-8 text-xs">
+          <span>Beta — rankings may be reset while scoring rules settle.</span>
+          {/* The holder and licence of the be-music repository (LICENSE). */}
+          <span>
+            © 2026{' '}
+            <a
+              class="hover:text-foreground underline-offset-4 hover:underline"
+              href="https://github.com/nulltask/be-music"
+            >
+              nulltask
+            </a>{' '}
+            · MIT License
+          </span>
         </footer>
       </body>
     </html>
