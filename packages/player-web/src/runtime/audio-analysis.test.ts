@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vite-plus/test';
 import {
   AUDIO_BAND_COUNT,
   SILENT_AUDIO,
+  aWeightingDb,
   analyzeAudioFrame,
   createAudioAnalysisState,
   createRecentRange,
+  erbBandBins,
+  erbRate,
+  hzAtErbRate,
   logBandBins,
+  normalizeBandsToRecentRange,
   normalizeToRecentRange,
+  weightBandLevel,
   type AudioFrameInput,
 } from './audio-analysis.ts';
 
@@ -34,6 +40,73 @@ describe('logBandBins', () => {
     }
     expect(bins.at(-1)![1] - bins.at(-1)![0]).toBeGreaterThan(bins[0]![1] - bins[0]![0]);
     expect(bins.at(-1)![1]).toBeLessThanOrEqual(FFT / 2);
+  });
+});
+
+describe('erbRate', () => {
+  it("counts the ear's critical bands, and inverts", () => {
+    expect(erbRate(1000)).toBeCloseTo(15.6, 1);
+    expect(erbRate(0)).toBe(0);
+    for (const hz of [30, 440, 14000]) expect(hzAtErbRate(erbRate(hz))).toBeCloseTo(hz, 6);
+  });
+});
+
+describe('erbBandBins', () => {
+  it('covers the range with contiguous, non-empty bands', () => {
+    const bins = erbBandBins(16, 30, 14000, SAMPLE_RATE, FFT);
+    expect(bins).toHaveLength(16);
+    for (let band = 1; band < bins.length; band += 1) {
+      expect(bins[band]![0]).toBe(bins[band - 1]![1]);
+      expect(bins[band]![1]).toBeGreaterThan(bins[band]![0]);
+    }
+    expect(bins[0]![0]).toBe(1);
+    expect(bins.at(-1)![1]).toBeLessThanOrEqual(FFT / 2);
+  });
+
+  it('gives the bass fewer, wider-in-bins bands than an octave split, and the mids more', () => {
+    const erb = erbBandBins(16, 30, 14000, SAMPLE_RATE, FFT);
+    const log = logBandBins(16, 30, 14000, SAMPLE_RATE, FFT);
+    const below = (bins: Array<readonly [number, number]>, hz: number) =>
+      bins.filter(([, end]) => end * (SAMPLE_RATE / FFT) <= hz).length;
+    expect(below(erb, 250)).toBeLessThan(below(log, 250));
+    expect(erb[0]![1] - erb[0]![0]).toBeGreaterThan(log[0]![1] - log[0]![0]);
+  });
+});
+
+describe('aWeightingDb', () => {
+  it('follows the IEC 61672 curve', () => {
+    expect(aWeightingDb(1000)).toBeCloseTo(0, 1);
+    expect(aWeightingDb(100)).toBeCloseTo(-19.1, 0);
+    expect(aWeightingDb(31.5)).toBeCloseTo(-39.4, 0);
+    expect(aWeightingDb(2500)).toBeGreaterThan(1);
+    expect(aWeightingDb(10000)).toBeCloseTo(-2.5, 0);
+  });
+});
+
+describe('weightBandLevel', () => {
+  it('shifts a level by dB across the analyser range, clamped, leaving silence silent', () => {
+    expect(weightBandLevel(0.5, -35)).toBeCloseTo(0, 6);
+    expect(weightBandLevel(0.5, 7)).toBeCloseTo(0.6, 6);
+    expect(weightBandLevel(0.95, 7)).toBe(1);
+    expect(weightBandLevel(0, 20)).toBe(0);
+  });
+});
+
+describe('normalizeBandsToRecentRange', () => {
+  it("keeps the bands' relative shape under one shared gain", () => {
+    const range = createRecentRange();
+    let placed: number[] = [];
+    for (let frame = 0; frame < 60; frame += 1) placed = normalizeBandsToRecentRange([0.2, 0.5, 0.8], range, 1 / 60);
+    expect(placed[0]!).toBeLessThan(placed[1]!);
+    expect(placed[1]!).toBeLessThan(placed[2]!);
+    expect(placed[0]!).toBeLessThan(0.1);
+    expect(placed[2]!).toBeGreaterThan(0.9);
+  });
+
+  it('leaves silent bands at zero and an all-silent frame at zero', () => {
+    const range = createRecentRange();
+    expect(normalizeBandsToRecentRange([0, 0], range, 1 / 60)).toEqual([0, 0]);
+    expect(normalizeBandsToRecentRange([0, 0.6, 0.7], range, 1 / 60)[0]).toBe(0);
   });
 });
 
