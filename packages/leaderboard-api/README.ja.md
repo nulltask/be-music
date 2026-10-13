@@ -103,7 +103,7 @@ preview の Worker は全ブランチで共有します。最後にデプロイ�
 ランタイムなしの shadcn/ui デザイン）でスタイルを付けています。`src/pages/app.css` は `src/pages/styles.generated.ts`
 にコンパイルされ、`/leaderboard/assets/app.<hash>.css` から配信されます。
 
-スタイルシート、アイコン、クライアントスクリプト（`src/pages/*.generated.ts`）は生成物で、git には入れません。
+スタイルシート、アイコン、シェアカードのフォント、クライアントスクリプト（`src/pages/*.generated.ts`）は生成物で、git には入れません。
 `pnpm install`、`dev`、デプロイ、テストの前に生成されます。`cf dev` の実行中にページのクラス、アイコン、`client/`
 を変えたら作り直します。
 
@@ -111,7 +111,7 @@ preview の Worker は全ブランチで共有します。最後にデプロイ�
 pnpm --filter @be-music/leaderboard-api run generate
 ```
 
-`build:css`、`build:icons`、`build:client` はそれぞれ 1 つだけ作ります。
+`build:css`、`build:icons`、`build:fonts`、`build:client` はそれぞれ 1 つだけ作ります。シェアカードの英数字は [Inter Tight](https://github.com/rsms/inter)（SIL Open Font License 1.1）で、`/leaderboard/assets/` から配信します。
 
 ### アイコン
 

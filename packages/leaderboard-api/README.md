@@ -114,7 +114,7 @@ The pages under `/leaderboard` are Hono JSX styled with Tailwind CSS v4 and [Bas
 shadcn/ui design without a framework runtime). `src/pages/app.css` compiles into `src/pages/styles.generated.ts`,
 served from `/leaderboard/assets/app.<hash>.css`.
 
-The stylesheet, the icons and the client script (`src/pages/*.generated.ts`) are generated, not kept in git.
+The stylesheet, the icons, the share card's font and the client script (`src/pages/*.generated.ts`) are generated, not kept in git.
 `pnpm install`, `dev`, the deploys and the tests generate them; after changing the pages' classes, the icons or
 `client/` while `cf dev` runs, regenerate them:
 
@@ -122,7 +122,7 @@ The stylesheet, the icons and the client script (`src/pages/*.generated.ts`) are
 pnpm --filter @be-music/leaderboard-api run generate
 ```
 
-`build:css`, `build:icons` and `build:client` run one step each.
+`build:css`, `build:icons`, `build:fonts` and `build:client` run one step each. The share card sets Latin letters and figures in [Inter Tight](https://github.com/rsms/inter) (SIL Open Font License 1.1), served from `/leaderboard/assets/`.
 
 ### Icons
 
