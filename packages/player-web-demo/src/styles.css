@@ -2567,3 +2567,12 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+.skin-offer-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.skin-offer-buttons > button {
+  width: 100%;
+}
