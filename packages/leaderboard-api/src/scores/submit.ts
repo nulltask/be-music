@@ -149,15 +149,14 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
           .onConflictDoNothing(),
       ]
     : [];
-  const aliasValues =
-    input.playlog.chart.sha256 !== undefined
-      ? [
-          db
-            .insert(chartAlias)
-            .values({ kind: 'sha256', hash: input.playlog.chart.sha256, chartFingerprint })
-            .onConflictDoNothing(),
-        ]
-      : [];
+  // The file hashes the client claims (`chart.sha256`, `chart.md5`). The server cannot check them without the file, so
+  // they only name the chart on other sites; well-formed ones are kept, lowercased.
+  const aliasValues = fileHashAliases(input.playlog.chart).map((alias) =>
+    db
+      .insert(chartAlias)
+      .values({ ...alias, chartFingerprint })
+      .onConflictDoNothing(),
+  );
   const statements: BatchItem<'sqlite'>[] = [
     ...chartValues,
     ...aliasValues,
@@ -284,6 +283,21 @@ async function loadOutcomes(
     });
   }
   return outcomes.sort((left, right) => RULESETS.indexOf(left.ruleset) - RULESETS.indexOf(right.ruleset));
+}
+
+const FILE_HASH_PATTERNS = { sha256: /^[0-9a-f]{64}$/, md5: /^[0-9a-f]{32}$/ } as const;
+
+/** The well-formed file hashes of a play log's chart, lowercased, as chart aliases. */
+export function fileHashAliases(chart: {
+  sha256?: string;
+  md5?: string;
+}): Array<{ kind: 'sha256' | 'md5'; hash: string }> {
+  const aliases: Array<{ kind: 'sha256' | 'md5'; hash: string }> = [];
+  for (const kind of ['sha256', 'md5'] as const) {
+    const hash = chart[kind]?.toLowerCase();
+    if (hash !== undefined && FILE_HASH_PATTERNS[kind].test(hash)) aliases.push({ kind, hash });
+  }
+  return aliases;
 }
 
 async function sha256Hex(text: string): Promise<string> {

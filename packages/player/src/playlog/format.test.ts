@@ -23,6 +23,7 @@ function makePlaylog(): BeMusicPlaylog {
       artist: 'composer',
       genre: 'genre',
       sha256: 'a'.repeat(64),
+      md5: 'c'.repeat(32),
       chartFingerprint: `bmfp0:${'a'.repeat(64)}`,
       playFingerprint: `bmfp0:${'b'.repeat(64)}`,
       sourceFormat: 'bms',
@@ -114,6 +115,7 @@ describe('playlog format', () => {
     expect(parsed).toEqual(minimal);
     expect(parsed.results).toBeUndefined();
     expect(parsed.chart).not.toHaveProperty('sha256');
+    expect(parsed.chart).not.toHaveProperty('md5');
     expect(parsed.chart).not.toHaveProperty('chartFingerprint');
     expect(parsed.chart).not.toHaveProperty('playFingerprint');
   });
