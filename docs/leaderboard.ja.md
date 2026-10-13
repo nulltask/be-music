@@ -299,8 +299,9 @@ client_policies (name, min_version, blocked_versions JSON)
 
 leaderboard Worker の中で Hono JSX によってサーバーレンダリングし、D1 を直接読みます。
 
-- `/leaderboard` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。ランキングと同じく、
-  匿名のプレイヤーと、まだ公開一覧に載っていない譜面（匿名でないプレイヤーが 2 人未満）は除き、フィルタで含められます。
+- `/leaderboard` — トップページ。新着のプレイを、それぞれプレイしたルールセットの結果で並べます。匿名でない
+  プレイヤーのプレイは譜面に関わらずすべて表示し、まだ公開一覧に載っていない譜面には「new chart」の印を付けます。
+  匿名のプレイはフィルタで含めます。架空の譜面がこのページに出るには、passkey を持つアカウントが必要です。
 - `/leaderboard/scores/:id` — スコア
 - `/leaderboard/charts/:chartFp` — 譜面のランキング
 - `/leaderboard/players/:handle` — プロフィール。ライバル比較は `/leaderboard/players/:handle/versus/:rival`
