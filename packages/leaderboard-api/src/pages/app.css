@@ -3,3 +3,10 @@
 @import 'tailwindcss' source(none);
 @source "./";
 @import 'basecoat-css';
+
+/* Figures line up everywhere: scores, counts, dates and percentages take tabular digits site-wide. */
+@layer base {
+  html {
+    font-variant-numeric: tabular-nums;
+  }
+}

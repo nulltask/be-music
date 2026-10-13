@@ -48,7 +48,7 @@ export function Toggle(props: { label: string; on: boolean; href: string; descri
       class={`inline-flex items-center gap-2 rounded-md py-1 text-sm transition-colors ${props.on ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
     >
       <span
-        class={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${props.on ? 'bg-primary' : 'bg-muted-foreground/35'}`}
+        class={`relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors ${props.on ? 'bg-sky-500' : 'bg-muted-foreground/35'}`}
       >
         <span
           class={`absolute top-0.5 size-4 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${props.on ? 'translate-x-[1.125rem]' : 'translate-x-0.5'}`}

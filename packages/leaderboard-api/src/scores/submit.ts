@@ -142,6 +142,8 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
             artist: input.playlog.chart.artist ?? null,
             subtitle: input.playlog.chart.subtitle ?? null,
             genre: input.playlog.chart.genre ?? null,
+            playLevel: input.playlog.chart.playLevel ?? null,
+            difficulty: input.playlog.chart.difficulty ?? null,
             sourceFormat: input.playlog.chart.sourceFormat,
             laneMode: input.playlog.chart.laneMode,
             total: input.playlog.chart.total ?? null,
@@ -157,6 +159,19 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
           .onConflictDoNothing(),
       ]
     : [];
+  // Charts registered before play logs carried the level take it from the first play that does.
+  const levelValues =
+    known !== undefined && known.playLevel === null && input.playlog.chart.playLevel !== undefined
+      ? [
+          db
+            .update(chart)
+            .set({
+              playLevel: input.playlog.chart.playLevel,
+              difficulty: input.playlog.chart.difficulty ?? null,
+            })
+            .where(eq(chart.chartFingerprint, chartFingerprint)),
+        ]
+      : [];
   // The file hashes the client claims (`chart.sha256`, `chart.md5`). The server cannot check them without the file, so
   // they only name the chart on other sites; well-formed ones are kept, lowercased.
   const aliasValues = fileHashAliases(input.playlog.chart).map((alias) =>
@@ -167,6 +182,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   );
   const statements: BatchItem<'sqlite'>[] = [
     ...chartValues,
+    ...levelValues,
     ...aliasValues,
     db.insert(score).values({
       id: scoreId,

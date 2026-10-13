@@ -1,11 +1,12 @@
 /** @jsxImportSource hono/jsx */
 /** The Leaderboard's cards: detail lists, figure tiles, distributions, links elsewhere and the lamp legend. */
 import type { Child } from 'hono/jsx';
+import { ExternalLink as ExternalLinkIcon } from 'lucide-static';
 import type { ExternalLink } from '../external.ts';
-import { LAMP_STYLES, lampStyle } from '../format.ts';
+import { lampStyle } from '../format.ts';
 import type { JudgeTotals } from '../stats.ts';
 import type { Distribution } from '../stats.ts';
-import { Lamp } from './basics.tsx';
+import { Icon } from './icon.tsx';
 
 /** A titled block of details: label / value rows. */
 export function Details(props: { title: string; rows: Array<[string, Child]> }) {
@@ -117,7 +118,9 @@ export function DistributionCard<Key extends number | string>(props: {
 /** Links to the same chart on other Internet Rankings and BMS Search, one set per file the chart is known by. */
 export function Elsewhere(props: { links: ExternalLink[] }) {
   if (props.links.length === 0) return null;
-  const files = [...new Set(props.links.map((link) => link.hash ?? ''))];
+  // One row per file: an MD5-keyed link joins the SHA-256 of its file when that is known.
+  const fileOf = (link: ExternalLink) => link.file ?? link.hash ?? '';
+  const files = [...new Set(props.links.map(fileOf))];
   return (
     <section class="card gap-4" data-size="sm">
       <header>
@@ -131,7 +134,7 @@ export function Elsewhere(props: { links: ExternalLink[] }) {
               <span class="text-muted-foreground font-mono text-xs">file {hash.slice(0, 8)}</span>
             ) : null}
             {props.links
-              .filter((link) => (link.hash ?? '') === hash)
+              .filter((link) => fileOf(link) === hash)
               .map((link) => (
                 <a
                   class="btn"
@@ -140,38 +143,16 @@ export function Elsewhere(props: { links: ExternalLink[] }) {
                   href={link.url}
                   rel="noopener noreferrer"
                   target="_blank"
+                  aria-label={`${link.kind === 'search' ? `Search ${link.name}` : link.name} (opens another site)`}
                 >
                   {link.kind === 'search' ? `Search ${link.name}` : link.name}
+                  <Icon svg={ExternalLinkIcon} class="text-muted-foreground [&>svg]:size-3.5" />
                 </a>
               ))}
           </div>
         ))}
       </div>
     </section>
-  );
-}
-
-/** What each clear lamp means, in the order lamps rank (FAILED lowest). */
-export function LampLegend() {
-  return (
-    <details class="text-sm">
-      <summary class="text-muted-foreground hover:text-foreground cursor-pointer select-none">
-        What the clear lamps mean
-      </summary>
-      <dl class="mt-3 grid grid-cols-[max-content_1fr] gap-x-6 gap-y-2">
-        {Object.entries(LAMP_STYLES).map(([lamp]) => {
-          const style = lampStyle(Number(lamp));
-          return (
-            <>
-              <dt>
-                <Lamp lamp={Number(lamp)} />
-              </dt>
-              <dd class="text-muted-foreground">{style.meaning}</dd>
-            </>
-          );
-        })}
-      </dl>
-    </details>
   );
 }
 

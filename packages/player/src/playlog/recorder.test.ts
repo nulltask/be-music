@@ -33,6 +33,8 @@ function makeJson(): BeMusicJson {
   json.metadata.artist = 'composer';
   json.metadata.total = 300;
   json.metadata.rank = 2;
+  json.metadata.playLevel = 12;
+  json.metadata.difficulty = 3;
   json.bms.lnMode = 2;
   return json;
 }
@@ -156,6 +158,8 @@ describe('playlog recorder', () => {
     expect(playlog.chart.title).toBe('My Song');
     expect(playlog.chart.artist).toBe('composer');
     expect(playlog.chart.subtitle).toBeUndefined();
+    expect(playlog.chart.playLevel).toBe('12');
+    expect(playlog.chart.difficulty).toBe(3);
     expect(playlog.chart.total).toBe(300);
     expect(playlog.chart.lnMode).toBe(2);
     expect(playlog.chart.noteCount).toBe(4); // scorableNotes.length — mines / invisibles / freezones excluded

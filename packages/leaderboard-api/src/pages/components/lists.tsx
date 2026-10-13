@@ -12,16 +12,21 @@ import { byRulesetOrder } from '../../rulesets.ts';
 import type { ChartsetChart, PlayInfo, RecentScore } from '../data.ts';
 import {
   chartTitle,
+  difficultyName,
   djLevel,
+  formatChartLevel,
+  formatDelta,
   formatGauge,
   formatLaneMode,
   formatScoreRate,
   lampStyle,
   RULESET_MEANING,
   rulesetName,
+  showsGauge,
 } from '../format.ts';
 import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, Tag } from './basics.tsx';
-import { When } from './play-info.tsx';
+import { EntityIcon } from './entity-icon.tsx';
+import { InfoButton, When } from './play-info.tsx';
 
 /** The frame of a list: a card whose rows are split by hairlines. */
 function List(props: { label: string; children: Child }) {
@@ -32,7 +37,10 @@ function List(props: { label: string; children: Child }) {
   );
 }
 
-/** One row: a fixed start column, the main text (title over details), and the score at the end. */
+/**
+ * One row: a fixed start column, the main text (title over details), the score, and, for a play, its info icon in a
+ * column of its own at the end, so the icons line up down the list whatever the details say.
+ */
 function Row(props: {
   href: string;
   label: string;
@@ -40,19 +48,22 @@ function Row(props: {
   title: Child;
   details: Child[];
   end: Child;
+  /** A play's row: the info column, holding the play's info icon when its info was loaded. */
+  play?: { info: PlayInfo | undefined };
   current?: boolean;
 }) {
+  const hasInfo = props.play !== undefined;
   return (
     <li
-      class={`hover:bg-muted/50 relative grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2.5 ${props.current ? 'bg-muted/60' : ''}`}
+      class={`hover:bg-muted/50 relative grid items-center gap-x-3 py-3 ps-4 ${hasInfo ? 'grid-cols-[auto_minmax(0,1fr)_auto_2rem] pe-2' : 'grid-cols-[auto_minmax(0,1fr)_auto] pe-4'} ${props.current ? 'bg-muted/60' : ''}`}
     >
       <RowLink href={props.href} label={props.label} />
       {props.start}
-      <div class="min-w-0">
-        <div class="flex min-w-0 items-center gap-1.5">{props.title}</div>
-        <div class="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+      <div class="min-w-0 space-y-1">
+        <div class="flex min-w-0 items-center gap-2 leading-tight">{props.title}</div>
+        <div class="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-tight">
           {props.details
-            .filter((item) => item !== null && item !== false)
+            .filter((item) => item !== null && item !== false && item !== undefined)
             .map((item) => (
               // The separator trails each item, so a wrapped line never starts with one.
               <span class="inline-flex items-center gap-1 [&:not(:last-child)]:after:ms-1 [&:not(:last-child)]:after:text-muted-foreground/60 [&:not(:last-child)]:after:content-['·']">
@@ -62,6 +73,11 @@ function Row(props: {
         </div>
       </div>
       {props.end}
+      {hasInfo ? (
+        <span class="flex justify-center">
+          <InfoButton info={props.play?.info} />
+        </span>
+      ) : null}
     </li>
   );
 }
@@ -78,35 +94,80 @@ function LampBar(props: { lamp: number }) {
   );
 }
 
-/** The lamp's name in its colour's dot, for the details line. */
-function LampLabel(props: { lamp: number }) {
+/** The lamp's name in its colour's dot, for the details line; `from` marks a lamp this play raised. */
+function LampLabel(props: { lamp: number; from?: number }) {
   const style = lampStyle(props.lamp);
+  const raised = props.from !== undefined && props.lamp > props.from;
   return (
     <span class="inline-flex items-center gap-1" title={style.meaning}>
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
-      {style.label}
+      {raised ? (
+        <>
+          <span class="text-muted-foreground/70">{lampStyle(props.from!).label} →</span>
+          <span class="text-foreground font-medium">{style.label}</span>
+        </>
+      ) : (
+        style.label
+      )}
     </span>
   );
 }
 
-/** EX-Score over its rate, right-aligned on the digits. */
-function Score(props: { exScore: number; noteCount: number }) {
+/** A change against the player's earlier best, in the colour of a gain or a loss. */
+function Delta(props: { delta: number; better: boolean; title: string }) {
   return (
-    <div class="text-end tabular-nums">
-      <div class="font-semibold">{props.exScore}</div>
-      <div class="text-muted-foreground text-xs">{formatScoreRate(props.exScore, props.noteCount)}</div>
+    <span class={props.better ? 'text-emerald-400' : 'text-muted-foreground'} title={props.title}>
+      {formatDelta(props.delta)}
+    </span>
+  );
+}
+
+/**
+ * EX-Score over its DJ LEVEL and rate, right-aligned on the digits; `previous` adds how far the play moved the
+ * player's best, when it did.
+ */
+function Score(props: { exScore: number; noteCount: number; previous?: number }) {
+  const gain = props.previous !== undefined ? props.exScore - props.previous : 0;
+  return (
+    <div class="text-end leading-tight">
+      <div class="flex items-baseline justify-end gap-1.5">
+        {gain > 0 ? (
+          <span class="text-xs">
+            <Delta delta={gain} better title="Above the player’s previous best EX-Score" />
+          </span>
+        ) : null}
+        <span class="font-semibold">{props.exScore}</span>
+      </div>
+      <div class="text-muted-foreground mt-1 text-xs">
+        <span class="text-foreground/80 font-medium">{djLevel(props.exScore, props.noteCount)}</span>{' '}
+        {formatScoreRate(props.exScore, props.noteCount)}
+      </div>
     </div>
+  );
+}
+
+/** A chart's mode and level as a small badge (`7K ☆12`), the difficulty's name on hover. */
+function ChartLevel(props: { laneMode: string | null; playLevel: string | null; difficulty: number | null }) {
+  const label = formatChartLevel(props.laneMode, props.playLevel);
+  if (label === undefined) return null;
+  const name = difficultyName(props.difficulty);
+  return (
+    <span class="badge shrink-0 font-normal" data-variant="outline" title={name}>
+      {label}
+    </span>
   );
 }
 
 /**
  * A chart's ranking under the display ruleset; a row opens the play it shows. `highlight` marks the viewer's rows.
+ * `everyPlay` lists plays rather than players, where a play count per row would only repeat itself.
  */
 export function RankingList(props: {
   entries: RankingEntry[];
   infos: Map<string, PlayInfo>;
   noteCount: number;
   highlight?: string;
+  everyPlay?: boolean;
   empty?: string;
 }) {
   if (props.entries.length === 0) {
@@ -119,9 +180,10 @@ export function RankingList(props: {
           href={scoreHref(entry.exScoreId)}
           label={`Play of ${entry.displayName}, rank ${entry.rank}`}
           current={props.highlight === entry.handle}
+          play={{ info: props.infos.get(entry.exScoreId) }}
           start={
             <span class="flex items-center gap-3">
-              <span class="w-6 text-end font-semibold tabular-nums">{entry.rank}</span>
+              <span class="w-6 text-end font-semibold">{entry.rank}</span>
               <LampBar lamp={entry.clearLamp} />
               <Avatar src={entry.avatarUrl} size={32} />
             </span>
@@ -136,14 +198,13 @@ export function RankingList(props: {
           }
           details={[
             <LampLabel lamp={entry.clearLamp} />,
-            <>DJ {djLevel(entry.exScore, props.noteCount)}</>,
-            <span class="tabular-nums">BP {entry.missCount}</span>,
-            <span class="tabular-nums">
-              {entry.playCount} play{entry.playCount === 1 ? '' : 's'}
-            </span>,
-            <span class={ABOVE}>
-              <When at={entry.achievedAt} info={props.infos.get(entry.exScoreId)} />
-            </span>,
+            <>BP {entry.missCount}</>,
+            props.everyPlay ? null : (
+              <>
+                {entry.playCount} play{entry.playCount === 1 ? '' : 's'}
+              </>
+            ),
+            <When at={entry.achievedAt} />,
           ]}
           end={<Score exScore={entry.exScore} noteCount={props.noteCount} />}
         />
@@ -152,7 +213,10 @@ export function RankingList(props: {
   );
 }
 
-/** The latest plays: which chart, who, how it went under the display ruleset, and when. */
+/**
+ * The latest plays: which chart (with its mode and level), who, how it went under the display ruleset and what it
+ * changed on the player's best, where it places on the chart, and when.
+ */
 export function RecentScoresList(props: {
   scores: RecentScore[];
   infos: Map<string, PlayInfo>;
@@ -166,10 +230,13 @@ export function RecentScoresList(props: {
     <List label="Latest plays">
       {props.scores.map((entry) => {
         const title = chartTitle(entry.title, entry.chartFingerprint);
+        const previous = entry.previous;
+        const missDelta = previous !== undefined ? entry.missCount - previous.missCount : 0;
         return (
           <Row
             href={scoreHref(entry.scoreId)}
             label={`Play of ${title} by ${entry.displayName}`}
+            play={{ info: props.infos.get(entry.scoreId) }}
             start={
               <span class="flex items-center gap-3">
                 <LampBar lamp={entry.clearLamp} />
@@ -178,10 +245,14 @@ export function RecentScoresList(props: {
             }
             title={
               <>
-                <a class={`${LINK} ${ABOVE} truncate`} href={chartHref(entry.chartFingerprint)}>
-                  {title}
+                <a
+                  class={`${LINK} ${ABOVE} inline-flex min-w-0 items-center gap-1`}
+                  href={chartHref(entry.chartFingerprint)}
+                >
+                  <EntityIcon kind="chart" size="sm" />
+                  <span class="truncate">{title}</span>
                 </a>
-                {entry.chartListed ? null : <Tag>new chart</Tag>}
+                <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
               </>
             }
             details={[
@@ -196,18 +267,29 @@ export function RecentScoresList(props: {
                   {entry.anonymous ? <Tag>anonymous</Tag> : null}
                 </>
               ) : null,
-              <LampLabel lamp={entry.clearLamp} />,
-              <span class="tabular-nums">{formatGauge(entry.gaugeType, entry.gaugeFinal)}</span>,
-              <span class="tabular-nums">BP {entry.missCount}</span>,
+              <LampLabel lamp={entry.clearLamp} from={previous?.clearLamp} />,
+              showsGauge(entry.clearLamp) ? <>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</> : null,
               <>
-                <span title="The scoring rules the player played under">{rulesetName(entry.playedRuleset)}</span>
+                BP {entry.missCount}
+                {missDelta < 0 ? (
+                  <Delta delta={missDelta} better title="Fewer misses than the player’s previous best" />
+                ) : null}
+              </>,
+              entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-' ? (
+                <>{entry.laneOption}</>
+              ) : null,
+              <span title={`Rank among ${entry.players} player${entry.players === 1 ? '' : 's'} on this chart`}>
+                #{entry.rank} / {entry.players}
+              </span>,
+              <>
+                <span title="The scoring rules the player played under">
+                  played with {rulesetName(entry.playedRuleset)}
+                </span>
                 {entry.assisted ? <Tag>assist</Tag> : null}
               </>,
-              <span class={ABOVE}>
-                <When at={entry.createdAt} info={props.infos.get(entry.scoreId)} />
-              </span>,
+              <When at={entry.createdAt} />,
             ]}
-            end={<Score exScore={entry.exScore} noteCount={entry.noteCount} />}
+            end={<Score exScore={entry.exScore} noteCount={entry.noteCount} previous={previous?.exScore} />}
           />
         );
       })}
@@ -237,11 +319,13 @@ export function ChartsetChartsList(props: { charts: ChartsetChart[] }) {
             start={<span class="text-muted-foreground w-14 text-xs font-medium">{formatLaneMode(entry.laneMode)}</span>}
             title={
               <>
-                <span class="truncate font-medium">{title}</span>
+                <span class="inline-flex min-w-0 items-center gap-1 font-medium">
+                  <EntityIcon kind="chart" size="sm" />
+                  <span class="truncate">{title}</span>
+                </span>
                 {entry.subtitle !== null && entry.subtitle.length > 0 ? (
                   <span class="text-muted-foreground truncate">{entry.subtitle}</span>
                 ) : null}
-                {entry.listed ? null : <Tag>new chart</Tag>}
               </>
             }
             details={[
@@ -285,7 +369,7 @@ export function ResultCards(props: {
     judges: Record<string, number>;
   }>;
   playedRuleset: string;
-  /** The viewer's display ruleset, marked as shown. */
+  /** The viewer's display ruleset (the header's ruleset menu), marked as selected. */
   displayRuleset: string;
 }) {
   const results = [...props.results].sort(byRulesetOrder);
@@ -306,15 +390,16 @@ export function ResultCards(props: {
               {/* A div, not a header: Basecoat pads a card's header, which would shift it off the card's edge. */}
               <div class="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                 {rulesetName(result.ruleset)}
-                {shown ? <Tag>shown</Tag> : null}
-                {result.ruleset === props.playedRuleset ? <Tag>played</Tag> : null}
+                {shown ? <Tag>selected</Tag> : null}
+                {result.ruleset === props.playedRuleset ? <Tag>played with</Tag> : null}
               </div>
               <div class="flex items-end justify-between gap-3">
                 <LampLabel lamp={result.clearLamp} />
                 <div class="text-end tabular-nums">
                   <div class="text-2xl leading-none font-semibold">{result.exScore}</div>
                   <div class="text-muted-foreground mt-1 text-xs">
-                    {formatScoreRate(result.exScore, result.noteCount)} · DJ {djLevel(result.exScore, result.noteCount)}
+                    <span class="text-foreground/80 font-medium">{djLevel(result.exScore, result.noteCount)}</span>{' '}
+                    {formatScoreRate(result.exScore, result.noteCount)}
                   </div>
                 </div>
               </div>
