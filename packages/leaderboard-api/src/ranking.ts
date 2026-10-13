@@ -1,5 +1,6 @@
 import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import { avatarUrl } from './avatars.ts';
 import type { Database } from './db/client.ts';
 import { bestScore, profile, user } from './db/schema.ts';
 
@@ -18,6 +19,7 @@ export interface RankingEntry {
   handle: string;
   displayName: string;
   anonymous: boolean;
+  avatarUrl: string;
   exScore: number;
   exScoreId: string;
   clearLamp: number;
@@ -53,6 +55,7 @@ export async function loadRanking(
       handle: profile.handle,
       displayName: profile.displayName,
       anonymous: user.isAnonymous,
+      avatarKey: profile.avatarKey,
       exScore: bestScore.bestEx,
       exScoreId: bestScore.bestExScoreId,
       clearLamp: bestScore.bestLamp,
@@ -82,7 +85,14 @@ export async function loadRanking(
           ? await rankOfExScore(db, filter, row.exScore)
           : page.offset + index + 1;
     previous = { exScore: row.exScore, rank };
-    entries.push({ ...row, anonymous: row.anonymous === true, achievedAt: row.achievedAt.getTime(), rank });
+    const { avatarKey, ...rest } = row;
+    entries.push({
+      ...rest,
+      anonymous: row.anonymous === true,
+      avatarUrl: avatarUrl(row.handle, avatarKey),
+      achievedAt: row.achievedAt.getTime(),
+      rank,
+    });
   }
   return { entries, players };
 }

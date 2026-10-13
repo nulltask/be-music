@@ -143,6 +143,11 @@ export function registerPlayerExportsCases(define: DefineBenchmarkCase): void {
       new playerApi.PlayerInterruptedError('escape');
     },
   });
+  define('player.playlog.checkPlaylogEligibility', {
+    run: () => {
+      playlogApi.checkPlaylogEligibility(BENCH_PLAYLOG);
+    },
+  });
   define('player.playlog.serializePlaylog', {
     run: () => {
       playlogApi.serializePlaylog(BENCH_PLAYLOG);

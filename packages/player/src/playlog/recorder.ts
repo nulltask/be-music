@@ -30,7 +30,8 @@ import {
 export const PLAYLOG_NATIVE_RULESET_ID = 'be-music/native';
 
 /** `@be-music/player` version stamped into `recorder.engine` of every log this engine records. */
-const ENGINE_VERSION: string = packageJson.version;
+export const PLAYLOG_ENGINE_VERSION: string = packageJson.version;
+const ENGINE_VERSION = PLAYLOG_ENGINE_VERSION;
 
 /**
  * Chart data the recorder snapshots — structurally a subset of the engine's `PreparedPlaybackChartData`, so the

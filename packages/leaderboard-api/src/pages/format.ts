@@ -1,4 +1,5 @@
 import { ClearLamp } from '../scoring/lamp.ts';
+import { computeScoreRate, resolveIidxRankLabel } from '@be-music/player/core/scoring';
 
 /** Display name and colour of each clear lamp, LR2 / beatoraja style. */
 export const LAMP_STYLES: Readonly<Record<number, { label: string; color: string; meaning: string }>> = {
@@ -27,18 +28,26 @@ export function lampStyle(lamp: number): { label: string; color: string; meaning
 
 export const RULESET_LABELS: Readonly<Record<string, string>> = { lr2: 'LR2', beatoraja: 'beatoraja', iidx: 'IIDX' };
 
+/**
+ * A ruleset as the pages name it: "LR2 rules". The bare name reads like the software a play came from; a ruleset is
+ * only how the Leaderboard scores the play.
+ */
+export function rulesetName(ruleset: string): string {
+  return `${RULESET_LABELS[ruleset] ?? ruleset} rules`;
+}
+
+/** What a ruleset is, for tooltips next to ruleset names. */
+export const RULESET_MEANING =
+  'Every play is scored under each ruleset: the judge windows, gauges and clear lamps of LR2, beatoraja or IIDX, applied by the be-music engine to the play log. It is how the score is counted, not the software the play came from.';
+
 /** EX score rate in percent with two decimals (`ex / (notes × 2)`), or `-` without notes. */
 export function formatScoreRate(exScore: number, noteCount: number): string {
   if (noteCount <= 0) return '-';
-  return `${((exScore / (noteCount * 2)) * 100).toFixed(2)}%`;
+  return `${(computeScoreRate({ exScore, total: noteCount }) * 100).toFixed(2)}%`;
 }
 
-/** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F). */
-export function djLevel(exScore: number, noteCount: number): string {
-  if (noteCount <= 0) return '-';
-  const ninths = Math.floor((exScore / (noteCount * 2)) * 9);
-  return ['F', 'F', 'E', 'D', 'C', 'B', 'A', 'AA', 'AAA', 'AAA'][Math.max(0, Math.min(9, ninths))]!;
-}
+/** DJ LEVEL on the IIDX ninths (AAA from 8/9 of the maximum EX score down to F), or `-` without notes. */
+export const djLevel = (exScore: number, noteCount: number): string => resolveIidxRankLabel(exScore, noteCount);
 
 /** `2026-10-13 14:51` in UTC, so a cached page reads the same everywhere. */
 export function formatTimestamp(epochMs: number): string {

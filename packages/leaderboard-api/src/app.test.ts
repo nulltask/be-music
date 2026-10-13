@@ -173,7 +173,7 @@ describe('rankings', () => {
       [2, 12],
     ]);
     expect(everyone.entries[0]).toMatchObject({ playCount: 2, anonymous: true });
-    expect(everyone.entries[0]!.handle).toMatch(/^player-[a-z0-9]{8}$/);
+    expect(everyone.entries[0]!.handle).toMatch(/^player_[a-z0-9]{8}$/);
 
     // The second page starts inside the tie and keeps its rank.
     const secondPage = (await (await fetchApp(`${query}&anonymous=1&offset=2&limit=1`)).json()) as {

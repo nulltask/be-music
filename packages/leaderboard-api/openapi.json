@@ -39,13 +39,18 @@
                     },
                     "passkeys": {
                       "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
                     }
                   },
                   "required": [
                     "handle",
                     "displayName",
                     "anonymous",
-                    "passkeys"
+                    "passkeys",
+                    "avatarUrl"
                   ]
                 }
               }
@@ -87,6 +92,425 @@
                     "error": {
                       "enum": [
                         "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patchMe",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Change my handle or display name",
+        "description": "Fields left out stay as they are. The old handle stays reserved for the player, and its pages redirect to the new one.",
+        "responses": {
+          "200": {
+            "description": "The account after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The handle or the display name breaks a rule (`detail`: format, reserved, empty, length, characters).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "invalid-handle",
+                        "invalid-display-name"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The account does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Another player holds this handle, now or formerly.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "handle-taken"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "handle": {
+                    "type": "string",
+                    "description": "New handle: letters, digits and `_`, 3 to 15 characters, case-insensitive. The old handle stays reserved for the player and its pages redirect."
+                  },
+                  "displayName": {
+                    "type": "string",
+                    "description": "New display name: 1 to 32 characters, no line breaks or control characters."
+                  }
+                },
+                "required": []
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/avatar": {
+      "put": {
+        "operationId": "putMeAvatar",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Upload my icon",
+        "description": "The image itself as the body: WebP, PNG or JPEG (recognized by its signature), at most 128 KB. Clients shrink it to a 256 px square first.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The account with its new icon.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No image was sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "empty-body"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "avatar-too-large"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a WebP, PNG or JPEG image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "unsupported-image"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteMeAvatar",
+        "tags": [
+          "Account"
+        ],
+        "summary": "Remove my icon",
+        "description": "Goes back to the icon generated from the account.",
+        "responses": {
+          "200": {
+            "description": "The account with the generated icon.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "handle": {
+                      "type": "string"
+                    },
+                    "displayName": {
+                      "type": "string"
+                    },
+                    "anonymous": {
+                      "type": "boolean",
+                      "description": "True until the account has a way back in (a passkey)."
+                    },
+                    "passkeys": {
+                      "type": "integer"
+                    },
+                    "avatarUrl": {
+                      "type": "string",
+                      "description": "The player icon: the uploaded one, or one generated from the account."
+                    }
+                  },
+                  "required": [
+                    "handle",
+                    "displayName",
+                    "anonymous",
+                    "passkeys",
+                    "avatarUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
                       ],
                       "type": "string",
                       "description": "Error code."
@@ -741,6 +1165,225 @@
         ]
       }
     },
+    "/scores/{id}/card": {
+      "put": {
+        "operationId": "putScoresByIdCard",
+        "tags": [
+          "Scores"
+        ],
+        "summary": "Upload a play’s share card",
+        "description": "The 1200 x 630 picture link previews of the score page show (og:image), drawn by the player’s browser: PNG, WebP or JPEG, at most 512 KB. Only the play’s player can upload it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cardUrl": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cardUrl"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "No image was sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "empty-body"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session: sign in first (anonymously is enough).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "sign-in-required"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Someone else played it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-your-score"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The score does not exist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "not-found"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image is too large.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "card-too-large"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Not a PNG, WebP or JPEG image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "enum": [
+                        "unsupported-image"
+                      ],
+                      "type": "string",
+                      "description": "Error code."
+                    },
+                    "detail": {
+                      "type": "string",
+                      "description": "Human-readable detail, for some errors."
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "schema": {
+              "type": "string"
+            },
+            "in": "path",
+            "name": "id",
+            "required": true
+          }
+        ]
+      }
+    },
     "/scores/{id}/playlog": {
       "get": {
         "operationId": "getScoresByIdPlaylog",
@@ -829,6 +1472,9 @@
                           "anonymous": {
                             "type": "boolean"
                           },
+                          "avatarUrl": {
+                            "type": "string"
+                          },
                           "exScore": {
                             "type": "integer"
                           },
@@ -861,6 +1507,7 @@
                           "handle",
                           "displayName",
                           "anonymous",
+                          "avatarUrl",
                           "exScore",
                           "exScoreId",
                           "clearLamp",

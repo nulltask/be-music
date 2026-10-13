@@ -99,14 +99,30 @@ export const passkey = sqliteTable(
 // Leaderboard
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** Public identity of an account. `handle` is unique and changeable and names the account in URLs. */
+/**
+ * Public identity of an account. `handle` is unique and changeable and names the account in URLs; it is stored in
+ * lower case, so handles differing only in case are one handle (src/profiles.ts).
+ */
 export const profile = sqliteTable('profile', {
   userId: text('user_id')
     .primaryKey()
     .references(() => user.id, { onDelete: 'cascade' }),
   handle: text('handle').notNull().unique(),
   displayName: text('display_name').notNull(),
+  /** R2 key of the uploaded icon (`avatars/{userId}/{sha256}.{ext}`); null shows the generated one. */
+  avatarKey: text('avatar_key'),
   ...timestamps,
+});
+
+/**
+ * Handles an account used before. They stay reserved for that account, and their URLs redirect to its current handle.
+ */
+export const handleHistory = sqliteTable('handle_history', {
+  handle: text('handle').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: timestamps.createdAt,
 });
 
 /**
@@ -202,6 +218,8 @@ export const score = sqliteTable(
     submittedBy: text('submitted_by'),
     serverEngine: text('server_engine').notNull(),
     playlogKey: text('playlog_key').notNull(),
+    /** R2 key of the play's share card (`cards/scores/{scoreId}/{sha256}.{ext}`), drawn by the player's browser. */
+    cardKey: text('card_key'),
     replayVisibility: text('replay_visibility', { enum: ['public', 'private'] })
       .notNull()
       .default('public'),

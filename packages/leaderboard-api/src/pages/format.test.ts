@@ -13,9 +13,17 @@ import {
   formatScoreRate,
   formatTimestamp,
   lampStyle,
+  rulesetName,
 } from './format.ts';
 
 describe('page formatting', () => {
+  test('rulesetName names a ruleset as the rules a score is counted by, not as a player', () => {
+    expect(rulesetName('lr2')).toBe('LR2 rules');
+    expect(rulesetName('beatoraja')).toBe('beatoraja rules');
+    expect(rulesetName('iidx')).toBe('IIDX rules');
+    expect(rulesetName('unknown')).toBe('unknown rules');
+  });
+
   test('names every lamp and falls back to NO PLAY', () => {
     expect(lampStyle(ClearLamp.HARD).label).toBe('HARD CLEAR');
     expect(lampStyle(ClearLamp.MAX).label).toBe('MAX');

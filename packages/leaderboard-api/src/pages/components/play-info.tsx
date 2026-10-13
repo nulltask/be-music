@@ -2,13 +2,14 @@
 /** A play's details: the info icon and its popover, and the compact time cell that carries it. */
 import type { Child } from 'hono/jsx';
 import type { PlayInfo } from '../data.ts';
-import { formatRecorder, formatTimestamp, RULESET_LABELS } from '../format.ts';
+import { LocalTime } from './basics.tsx';
+import { formatRecorder, rulesetName } from '../format.ts';
 
 /** Everything a play's info popover lists: how it was played and which software recorded and sent it. */
 function playInfoRows(info: PlayInfo): Array<[string, Child]> {
   return [
-    ['Played', formatTimestamp(info.createdAt)],
-    ['Ruleset played', RULESET_LABELS[info.playedRuleset] ?? info.playedRuleset],
+    ['Played', <LocalTime at={info.createdAt} />],
+    ['Played under', rulesetName(info.playedRuleset)],
     ['Gauge', info.gauge],
     ['Assists', info.assistFlags.length > 0 ? info.assistFlags.join(', ') : 'none'],
     ['Verification', info.verification],
@@ -19,12 +20,15 @@ function playInfoRows(info: PlayInfo): Array<[string, Child]> {
 }
 
 /**
- * An info icon that opens a small card with a play's details. It uses the browser's Popover API (`popovertarget`), so
- * it opens, closes on Escape or an outside click, and is announced as a dialog without any script.
+ * An info icon with a tooltip card of a play's details, anchored below the icon (above it when there is no room).
+ * Hovering or focusing the icon shows the card; a click or a tap pins it until Escape or a click elsewhere. The card is
+ * a Popover API popover (`popovertarget`), so clicking works without script; TOOLTIP_SCRIPT in layout.tsx adds the
+ * hover and the placement for browsers without CSS anchor positioning.
  */
 function InfoButton(props: { info: PlayInfo | undefined }) {
   if (props.info === undefined) return null;
-  const id = `info-${props.info.scoreId}`;
+  const id = `info-${props.info.scoreId.replace(/[^A-Za-z0-9_-]/g, '_')}`;
+  const anchor = `--${id}`;
   return (
     <>
       <button
@@ -33,8 +37,9 @@ function InfoButton(props: { info: PlayInfo | undefined }) {
         data-variant="ghost"
         data-size="icon-sm"
         popovertarget={id}
+        data-tooltip-for={id}
         aria-label="Play details"
-        title="Play details"
+        style={`anchor-name:${anchor}`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -56,7 +61,11 @@ function InfoButton(props: { info: PlayInfo | undefined }) {
         // Spelled out: a bare `popover` renders as `popover="true"`, which browsers treat as `manual` (no Escape, no
         // outside click). `auto` closes on both.
         popover="auto"
-        class="bg-popover text-popover-foreground m-auto w-80 max-w-[calc(100vw-2rem)] rounded-lg border p-4 text-sm shadow-md"
+        data-tooltip
+        role="tooltip"
+        class="bg-popover text-popover-foreground w-80 max-w-[calc(100vw-2rem)] rounded-lg border p-4 text-sm shadow-md"
+        // Below the icon, right edges aligned, flipping above or to the other side when it would not fit.
+        style={`position-anchor:${anchor};inset:auto;margin:6px 0;position-area:block-end span-inline-start;position-try-fallbacks:flip-block,flip-inline`}
       >
         <dl class="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 whitespace-normal">
           {playInfoRows(props.info).map(([label, value]) => (
@@ -71,14 +80,11 @@ function InfoButton(props: { info: PlayInfo | undefined }) {
   );
 }
 
-/** When a play happened, compact (`2026-10-13 06:20`, UTC in full on hover), with its info icon. */
+/** When a play happened, compact (`2026-10-13 15:20`, in the viewer's time; UTC on hover), with its info icon. */
 export function When(props: { at: number; info: PlayInfo | undefined }) {
-  const full = formatTimestamp(props.at);
   return (
     <span class="text-muted-foreground inline-flex items-center gap-1">
-      <time datetime={new Date(props.at).toISOString()} title={full}>
-        {full.replace(' UTC', '')}
-      </time>
+      <LocalTime at={props.at} compact />
       <InfoButton info={props.info} />
     </span>
   );

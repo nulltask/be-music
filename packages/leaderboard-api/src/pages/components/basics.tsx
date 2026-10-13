@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 /** Shared building blocks of the Leaderboard pages: links, tags, lamps, filter chips, table frames. */
 import type { Child } from 'hono/jsx';
-import { lampStyle } from '../format.ts';
+import { formatTimestamp, lampStyle } from '../format.ts';
 
 export const scoreHref = (scoreId: string): string => `/leaderboard/scores/${encodeURIComponent(scoreId)}`;
 export const chartHref = (chartFingerprint: string): string =>
@@ -89,3 +89,33 @@ export const ROW = 'relative cursor-pointer';
 export const ABOVE = 'relative z-10';
 
 export const chartsetHref = (id: string): string => `/leaderboard/chartsets/${encodeURIComponent(id)}`;
+
+/** A player's icon, round; the name next to it says who it is, so it is decorative to screen readers. */
+export function Avatar(props: { src: string; size: number; class?: string }) {
+  return (
+    <img
+      src={props.src}
+      width={props.size}
+      height={props.size}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      class={`bg-muted ring-foreground/10 inline-block shrink-0 rounded-full ring-1 ${props.class ?? ''}`}
+    />
+  );
+}
+
+/**
+ * A moment: written in UTC here, rewritten in the viewer's local time by LOCAL_TIME_SCRIPT (local-time.ts). `compact`
+ * leaves the zone out of the UTC text (table cells); the title always holds the UTC time.
+ */
+export function LocalTime(props: { at: number; precision?: 'minute' | 'day'; compact?: boolean }) {
+  const utc = formatTimestamp(props.at);
+  const precision = props.precision ?? 'minute';
+  const text = precision === 'day' ? utc.slice(0, 10) : props.compact ? utc.replace(' UTC', '') : utc;
+  return (
+    <time datetime={new Date(props.at).toISOString()} data-local={precision} title={utc}>
+      {text}
+    </time>
+  );
+}

@@ -5,17 +5,11 @@ import { isOn } from '../http/query.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
 import { RankingTable } from './components/tables.tsx';
 import { Details, DistributionCard, Elsewhere, LampLegend, Stats } from './components/cards.tsx';
-import { chartsetHref, FilterChip, Filters, Tag } from './components/basics.tsx';
+import { EntityIcon } from './components/entity-icon.tsx';
+import { chartsetHref, FilterChip, Filters, LocalTime, Tag } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
 import { externalLinks } from './external.ts';
-import {
-  chartTitle,
-  formatJudgeRank,
-  formatLaneMode,
-  formatLnMode,
-  formatTimestamp,
-  RULESET_LABELS,
-} from './format.ts';
+import { chartTitle, formatJudgeRank, formatLaneMode, formatLnMode, rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
   day,
@@ -53,12 +47,13 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout
-      meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`, [
+      meta={meta(c, title, `${title} — ranking under ${rulesetName(ruleset)}, ${ranking.players} players.`, [
         ...chartsetCrumbs(filed),
-        { label: title },
+        { label: title, kind: 'chart' },
       ])}
     >
       <PageHeader
+        kind="chart"
         title={
           <>
             {title}
@@ -99,7 +94,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
       />
       <DistributionCard
         title="Clear lamps"
-        description={`Best lamps of the players above, under ${RULESET_LABELS[ruleset]}.`}
+        description={`Best lamps of the players above, under ${rulesetName(ruleset)}.`}
         distribution={stats.lamps}
         kind="lamp"
       />
@@ -111,7 +106,11 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             filed === undefined ? (
               '-'
             ) : (
-              <a class="underline-offset-4 hover:underline" href={chartsetHref(filed.id)}>
+              <a
+                class="inline-flex items-center gap-1 underline-offset-4 hover:underline"
+                href={chartsetHref(filed.id)}
+              >
+                <EntityIcon kind="chartset" size="sm" />
                 {filed.title}
               </a>
             ),
@@ -136,7 +135,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             alias.kind === 'sha256' ? 'File SHA-256' : 'File MD5',
             <span class="font-mono text-xs">{alias.hash}</span>,
           ]),
-          ['First seen', formatTimestamp(found.createdAt.getTime())],
+          ['First seen', <LocalTime at={found.createdAt.getTime()} />],
           ['Listed', found.status === 'listed' ? 'yes' : 'not yet (two players with a passkey list a chart)'],
         ])}
       />

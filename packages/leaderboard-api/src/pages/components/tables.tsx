@@ -3,9 +3,18 @@
 import type { RankingEntry } from '../../ranking.ts';
 import { byRulesetOrder } from '../../rulesets.ts';
 import type { ChartsetChart, PlayInfo, RecentScore } from '../data.ts';
-import { chartTitle, djLevel, formatExScore, formatGauge, formatLaneMode, RULESET_LABELS } from '../format.ts';
+import {
+  chartTitle,
+  djLevel,
+  formatExScore,
+  formatGauge,
+  formatLaneMode,
+  RULESET_MEANING,
+  rulesetName,
+} from '../format.ts';
 import {
   ABOVE,
+  Avatar,
   BP_MEANING,
   chartHref,
   DJ_MEANING,
@@ -38,7 +47,9 @@ export function RecentScoresTable(props: {
         <tr>
           {props.showPlayer ? <th>Player</th> : null}
           <th>Song</th>
-          <th>Ruleset</th>
+          <th>
+            <abbr title={RULESET_MEANING}>Played under</abbr>
+          </th>
           <th>Lamp</th>
           <th class={NUM}>Gauge</th>
           <th class={NUM}>EX-Score</th>
@@ -55,6 +66,7 @@ export function RecentScoresTable(props: {
               <td>
                 <RowLink href={scoreHref(entry.scoreId)} label={`Score of ${entry.displayName}`} />
                 <span class="inline-flex items-center gap-1.5">
+                  <Avatar src={entry.avatarUrl} size={20} />
                   <a class={`${LINK} ${ABOVE}`} href={playerHref(entry.handle)}>
                     {entry.displayName}
                   </a>
@@ -74,7 +86,7 @@ export function RecentScoresTable(props: {
             </td>
             <td>
               <span class="inline-flex items-center gap-1.5">
-                {RULESET_LABELS[entry.playedRuleset] ?? entry.playedRuleset}
+                {rulesetName(entry.playedRuleset)}
                 {entry.assisted ? <Tag>assist</Tag> : null}
               </span>
             </td>
@@ -126,6 +138,7 @@ export function RankingTable(props: { entries: RankingEntry[]; infos: Map<string
             </td>
             <td>
               <span class="inline-flex items-center gap-1.5">
+                <Avatar src={entry.avatarUrl} size={20} />
                 <a class={`${LINK} ${ABOVE}`} href={playerHref(entry.handle)}>
                   {entry.displayName}
                 </a>
@@ -223,7 +236,9 @@ export function ResultsTable(props: {
     <TableCard>
       <thead>
         <tr>
-          <th>Ruleset</th>
+          <th>
+            <abbr title={RULESET_MEANING}>Scored with</abbr>
+          </th>
           <th>Lamp</th>
           <th class={NUM}>Gauge</th>
           <th class={NUM}>EX-Score</th>
@@ -242,7 +257,7 @@ export function ResultsTable(props: {
           <tr data-state={result.ruleset === props.displayRuleset ? 'selected' : undefined}>
             <td>
               <span class="inline-flex items-center gap-1.5">
-                {RULESET_LABELS[result.ruleset] ?? result.ruleset}
+                {rulesetName(result.ruleset)}
                 {result.ruleset === props.displayRuleset ? <Tag>shown</Tag> : null}
                 {result.ruleset === props.playedRuleset ? <Tag>played</Tag> : null}
               </span>

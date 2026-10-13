@@ -1,0 +1,251 @@
+/**
+ * The Leaderboard pages' client script, bundled by scripts/build-client.ts into src/pages/client.generated.ts. It wires
+ * what needs the browser: passkey sign-in and sign-out in the header, and the settings page (profile form, icon upload,
+ * passkey creation). The pages work without it, minus these actions.
+ */
+import { passkeyClient } from '@better-auth/passkey/client';
+import { createAuthClient } from 'better-auth/client';
+import { anonymousClient } from 'better-auth/client/plugins';
+import type { ScoreCardData } from '../src/pages/score-card-data.ts';
+import { centerSquare, describeAccountError } from './profile.ts';
+import { CARD_HEIGHT, CARD_WIDTH, drawScoreCard } from './score-card.ts';
+
+const AVATAR_SIZE = 256;
+/** The server's limit for a share card (src/cards.ts). */
+const CARD_UPLOAD_LIMIT = 512 * 1024;
+
+let client: ReturnType<typeof createClient> | undefined;
+function createClient() {
+  return createAuthClient({ plugins: [anonymousClient(), passkeyClient()] });
+}
+/** Better Auth on this origin (`/api/auth`), created on first use. */
+function auth() {
+  client ??= createClient();
+  return client;
+}
+
+/** Shows a message in the element `selector` names (the header status line by default), or clears it. */
+function say(message: string | undefined, selector = '[data-account-status]'): void {
+  const target = document.querySelector<HTMLElement>(selector);
+  if (target === null) return;
+  target.textContent = message ?? '';
+  target.hidden = message === undefined;
+}
+
+function errorText(error: { message?: string; code?: string } | null | undefined): string {
+  return error?.message ?? error?.code ?? 'Something went wrong.';
+}
+
+/** Answers of the account API: the body on success, a message otherwise. */
+async function callAccountApi(path: string, init: RequestInit): Promise<{ ok: true } | { ok: false; message: string }> {
+  const response = await fetch(path, { credentials: 'same-origin', ...init });
+  if (response.ok) return { ok: true };
+  const body = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
+  return { ok: false, message: describeAccountError(body.error ?? `http-${response.status}`, body.detail) };
+}
+
+const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
+  async 'sign-in'() {
+    const result = await auth().signIn.passkey();
+    if (result?.error) return say(`Sign-in failed: ${errorText(result.error)}`);
+    location.reload();
+  },
+  async 'sign-out'() {
+    await auth().signOut();
+    location.reload();
+  },
+  async 'create-passkey'() {
+    const result = await auth().passkey.addPasskey({ name: 'be-music' });
+    if (result?.error) return say(`Creating the passkey failed: ${errorText(result.error)}`, '[data-settings-status]');
+    location.reload();
+  },
+  async 'remove-avatar'() {
+    const result = await callAccountApi('/api/v0/me/avatar', { method: 'DELETE' });
+    if (!result.ok) return say(result.message, '[data-settings-status]');
+    location.reload();
+  },
+};
+
+document.addEventListener('click', (event) => {
+  const button =
+    event.target instanceof Element ? event.target.closest<HTMLButtonElement>('[data-account-action]') : null;
+  const action = button?.dataset.accountAction;
+  if (button === null || button === undefined || action === undefined || actions[action] === undefined) return;
+  event.preventDefault();
+  say(undefined);
+  button.disabled = true;
+  actions[action](button)
+    .catch((error: unknown) => say(error instanceof Error ? error.message : String(error)))
+    .finally(() => {
+      button.disabled = false;
+    });
+});
+
+/** The profile form: handle and display name, saved with PATCH /api/v0/me. */
+document.addEventListener('submit', (event) => {
+  const form = event.target;
+  if (!(form instanceof HTMLFormElement) || !form.matches('[data-profile-form]')) return;
+  event.preventDefault();
+  const data = new FormData(form);
+  const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+  if (submit !== null) submit.disabled = true;
+  say(undefined, '[data-settings-status]');
+  void callAccountApi('/api/v0/me', {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      handle: String(data.get('handle') ?? ''),
+      displayName: String(data.get('displayName') ?? ''),
+    }),
+  })
+    .then((result) => {
+      if (result.ok) location.reload();
+      else say(result.message, '[data-settings-status]');
+    })
+    .finally(() => {
+      if (submit !== null) submit.disabled = false;
+    });
+});
+
+/** Shrinks an image to the icon size: the centred square, as WebP (JPEG where the browser cannot write WebP). */
+async function toAvatar(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const crop = centerSquare(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = AVATAR_SIZE;
+  canvas.height = AVATAR_SIZE;
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('This browser cannot draw the image.');
+  context.imageSmoothingQuality = 'high';
+  context.drawImage(bitmap, crop.x, crop.y, crop.size, crop.size, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  bitmap.close();
+  const encode = (type: string, quality: number) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+  const webp = await encode('image/webp', 0.9);
+  if (webp !== null && webp.type === 'image/webp') return webp;
+  const jpeg = await encode('image/jpeg', 0.88);
+  if (jpeg === null) throw new Error('This browser cannot encode the image.');
+  return jpeg;
+}
+
+/** The icon picker: shrink, upload with PUT /api/v0/me/avatar, reload. */
+document.addEventListener('change', (event) => {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement) || !input.matches('[data-avatar-input]')) return;
+  const file = input.files?.[0];
+  if (file === undefined) return;
+  say(undefined, '[data-settings-status]');
+  input.disabled = true;
+  void toAvatar(file)
+    .then((blob) =>
+      callAccountApi('/api/v0/me/avatar', { method: 'PUT', headers: { 'content-type': blob.type }, body: blob }),
+    )
+    .then((result) => {
+      if (result.ok) location.reload();
+      else say(result.message, '[data-settings-status]');
+    })
+    .catch((error: unknown) => say(error instanceof Error ? error.message : String(error), '[data-settings-status]'))
+    .finally(() => {
+      input.disabled = false;
+      input.value = '';
+    });
+});
+
+/** Draws the play's share card and returns it as an image, PNG unless that is too large for the upload limit. */
+async function renderScoreCard(data: ScoreCardData, font: CardFont | undefined): Promise<Blob> {
+  const canvas = document.createElement('canvas');
+  canvas.width = CARD_WIDTH;
+  canvas.height = CARD_HEIGHT;
+  const context = canvas.getContext('2d');
+  if (context === null) throw new Error('This browser cannot draw the card.');
+  const avatar = await loadImage(data.avatarUrl).catch(() => null);
+  await loadCardFont(font);
+  if (document.fonts !== undefined) await document.fonts.ready;
+  const playedOn = new Date(data.playedAt).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+  drawScoreCard(context, data, avatar, playedOn);
+  const encode = (type: string, quality?: number) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+  const png = await encode('image/png');
+  if (png !== null && png.size <= CARD_UPLOAD_LIMIT) return png;
+  // WebP keeps the text sharper than JPEG at the same size; browsers that cannot write it hand back PNG.
+  const webp = await encode('image/webp', 0.92);
+  if (webp !== null && webp.type === 'image/webp' && webp.size <= CARD_UPLOAD_LIMIT) return webp;
+  const jpeg = await encode('image/jpeg', 0.9);
+  if (jpeg === null) throw new Error('This browser cannot encode the card.');
+  return jpeg;
+}
+
+interface CardFont {
+  family: string;
+  url: string;
+}
+
+/** Loads the card's Latin typeface; without it (or where it fails to load), the card falls back to system fonts. */
+async function loadCardFont(font: CardFont | undefined): Promise<void> {
+  if (font === undefined || typeof FontFace !== 'function' || document.fonts === undefined) return;
+  const face = new FontFace(font.family, `url(${JSON.stringify(font.url)}) format("woff2")`, { weight: '100 900' });
+  const loaded = await face.load().catch(() => null);
+  if (loaded !== null) document.fonts.add(loaded);
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error(`cannot load ${src}`));
+    image.src = src;
+  });
+}
+
+/** The play's own player: draw the card and upload it when the play has none yet. */
+async function ensureScoreCard(source: HTMLScriptElement): Promise<void> {
+  const upload = source.dataset.upload;
+  if (upload === undefined || source.dataset.hasCard === 'true') return;
+  const data = JSON.parse(source.textContent ?? '{}') as ScoreCardData;
+  const { fontFamily, fontUrl } = source.dataset;
+  const font = fontFamily !== undefined && fontUrl !== undefined ? { family: fontFamily, url: fontUrl } : undefined;
+  const blob = await renderScoreCard(data, font);
+  const response = await fetch(upload, {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'content-type': blob.type },
+    body: blob,
+  });
+  if (!response.ok) throw new Error(`the card upload answered ${response.status}`);
+  const { cardUrl } = (await response.json()) as { cardUrl: string };
+  source.dataset.hasCard = 'true';
+  const preview = document.querySelector<HTMLImageElement>('[data-card-preview]');
+  if (preview !== null) preview.src = cardUrl;
+  say('Your share card is ready.', '[data-share-status]');
+}
+
+function setUpSharing(): void {
+  const source = document.querySelector<HTMLScriptElement>('script[data-score-card]');
+  if (source === null) return;
+  const native = document.querySelector<HTMLButtonElement>('[data-share-native]');
+  if (native !== null && typeof navigator.share === 'function') native.hidden = false;
+  native?.addEventListener('click', () => {
+    void navigator
+      .share({ title: document.title, text: source.dataset.shareText, url: location.href })
+      .catch(() => undefined);
+  });
+  document.querySelector('[data-share-copy]')?.addEventListener('click', () => {
+    void navigator.clipboard
+      .writeText(location.href)
+      .then(() => say('Link copied.', '[data-share-status]'))
+      .catch(() => say('Copying is not allowed here; copy the address bar instead.', '[data-share-status]'));
+  });
+  void ensureScoreCard(source).catch((error: unknown) =>
+    say(
+      `The share card could not be made: ${error instanceof Error ? error.message : String(error)}`,
+      '[data-share-status]',
+    ),
+  );
+}
+
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setUpSharing);
+else setUpSharing();

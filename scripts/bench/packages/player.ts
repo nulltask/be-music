@@ -8,6 +8,7 @@ export const playerBenchmarkPackage: BenchmarkPackageDefinition = {
   module: {
     ...(playerApi as Record<string, unknown>),
     'judging.findClosestCandidateInWindow': judgingApi.findClosestCandidateInWindow,
+    'playlog.checkPlaylogEligibility': playlogApi.checkPlaylogEligibility,
     'playlog.serializePlaylog': playlogApi.serializePlaylog,
     'playlog.parsePlaylog': playlogApi.parsePlaylog,
     'playlog.simulatePlaylog': playlogApi.simulatePlaylog,
