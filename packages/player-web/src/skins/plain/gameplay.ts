@@ -127,7 +127,8 @@ function beamGradient(ctx: CanvasRenderingContext2D, top: number, bottom: number
 
 /**
  * Tap notes as flat bars. Long notes: a translucent body with a white centre line between the head and tail bars, the
- * shape every built-in skin uses. A long note missed at the head or let go early draws at LR2's half alpha.
+ * shape every built-in skin uses; an LN's tail (not judged) is hollow, a CN / HCN tail (judged on release) solid. A long
+ * note missed at the head or let go early draws at LR2's half alpha.
  */
 function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): void {
   for (const note of frame.longNotes) {
@@ -142,8 +143,15 @@ function drawNotes(ctx: CanvasRenderingContext2D, frame: BeMusicGameplayFrame): 
     ctx.fillRect(note.x + note.w / 2 - 1, bodyTop, 2, bodyHeight);
     ctx.globalAlpha = alpha;
     ctx.fillStyle = NOTE_FILL[note.kind];
-    ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
     ctx.fillRect(note.x, note.bottom - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    if (note.mode === 'ln') {
+      // An LN's tail is not judged: drawn hollow, where to let go. A CN / HCN tail is judged and stays solid.
+      ctx.strokeStyle = NOTE_FILL[note.kind];
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(note.x + 0.75, note.top - NOTE_HEIGHT + 0.75, note.w - 1.5, NOTE_HEIGHT - 1.5);
+    } else {
+      ctx.fillRect(note.x, note.top - NOTE_HEIGHT, note.w, NOTE_HEIGHT);
+    }
     ctx.globalAlpha = 1;
   }
   for (const note of frame.notes) {

@@ -95,6 +95,11 @@ export interface PixiLongNoteContext {
   /** Head just-timing y (lower), held on the judgement line once passed. */
   bottom: number;
   nowMs: number;
+  /**
+   * How the long note is judged: `'ln'` judges only its head (LR2's LN; the tail just marks where to let go), `'cn'` /
+   * `'hcn'` judge the release too. Lets a skin draw an LN's tail apart from a tail that is judged.
+   */
+  mode?: 'ln' | 'cn' | 'hcn';
 }
 
 export interface PixiBombsContext {
