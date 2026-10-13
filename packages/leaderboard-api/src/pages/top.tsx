@@ -5,7 +5,7 @@ import { RecentScoresTable } from './components/tables.tsx';
 import { LampLegend } from './components/cards.tsx';
 import { FilterChip, Filters } from './components/basics.tsx';
 import { loadPlayInfos, loadRecentScores } from './data.ts';
-import { RULESET_LABELS } from './format.ts';
+import { rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { displayRuleset, meta, PAGE_CACHE, RECENT_LIMIT, withQuery, type PageContext } from './page.tsx';
 
@@ -26,8 +26,14 @@ export async function topPage(c: PageContext) {
   });
   c.header('cache-control', PAGE_CACHE);
   return c.html(
-    <Layout meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.', [{ label: 'New scores' }])}>
-      <PageHeader title="New scores">The newest plays, scored under {RULESET_LABELS[ruleset]}.</PageHeader>
+    <Layout
+      meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.', [
+        { label: 'New scores', kind: 'new-scores' },
+      ])}
+    >
+      <PageHeader title="New scores" kind="new-scores">
+        The newest plays, scored under {rulesetName(ruleset)}.
+      </PageHeader>
       <Filters>
         <FilterChip
           label="Anonymous players"

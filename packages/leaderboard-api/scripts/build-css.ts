@@ -1,5 +1,6 @@
 // Compiles the Leaderboard pages' stylesheet (src/pages/app.css: Tailwind CSS v4 + Basecoat) and writes it into
-// src/pages/styles.generated.ts, which the Worker bundles and serves. Run it after changing classes in the pages:
+// src/pages/styles.generated.ts, which the Worker bundles and serves. scripts/generate.ts runs it with the other
+// generators; on its own:
 //   pnpm --filter @be-music/leaderboard-api run build:css
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

@@ -572,6 +572,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolvePlaylogFilename(BENCH_PLAYLOG);
     },
   });
+  define('player-web.checkPlaylogEligibility', {
+    run: () => {
+      playerWebCoreApi.checkPlaylogEligibility(BENCH_PLAYLOG);
+    },
+  });
   define('player-web.serializePlaylog', {
     run: () => {
       playerWebCoreApi.serializePlaylog(BENCH_PLAYLOG);
@@ -749,6 +754,7 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
     },
   });
   define('player-web.readFilesIntoBytesMap', {
+    ioBound: true,
     run: async () => {
       await playerWebCoreApi.readFilesIntoBytesMap([BENCH_BMS_FILE], { deferAudio: false });
     },

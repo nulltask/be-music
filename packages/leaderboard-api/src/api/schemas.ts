@@ -73,6 +73,19 @@ export const accountResponse = v.object({
   displayName: v.string(),
   anonymous: described(v.boolean(), 'True until the account has a way back in (a passkey).'),
   passkeys: v.pipe(v.number(), v.integer()),
+  avatarUrl: described(v.string(), 'The player icon: the uploaded one, or one generated from the account.'),
+});
+
+export const profileUpdateBody = v.object({
+  handle: v.optional(
+    described(
+      v.string(),
+      'New handle: letters, digits and `_`, 3 to 15 characters, case-insensitive. The old handle stays reserved for the player and its pages redirect.',
+    ),
+  ),
+  displayName: v.optional(
+    described(v.string(), 'New display name: 1 to 32 characters, no line breaks or control characters.'),
+  ),
 });
 
 const rulesetOutcome = v.object({
@@ -130,6 +143,7 @@ export const rankingResponse = v.object({
       handle: v.string(),
       displayName: v.string(),
       anonymous: v.boolean(),
+      avatarUrl: v.string(),
       exScore: v.pipe(v.number(), v.integer()),
       exScoreId: described(v.string(), 'The score that set the best EX-Score.'),
       clearLamp,

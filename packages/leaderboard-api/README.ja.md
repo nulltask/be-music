@@ -89,10 +89,18 @@ pnpm --filter @be-music/leaderboard-api run db:migrate:preview
 | 本番    | `be-music-leaderboard`         | `be-music-leaderboard`         | `be-music-player-demo`（`devel` からデプロイ） |
 | preview | `be-music-leaderboard-preview` | `be-music-leaderboard-preview` | それ以外のブランチのプレビュー版               |
 
-- preview: `pnpm run build && pnpm --filter @be-music/leaderboard-api run db:migrate:preview && pnpm --filter @be-music/leaderboard-api run deploy:preview`
-- 本番: 同じ手順を `db:migrate:production` と `deploy` で
+`packages/leaderboard-api/`、`packages/player/`、`packages/chart/`、`pnpm-lock.yaml` のいずれかに触れる push のたびに、
+Workers Builds がデプロイします。ビルドは Node 26.7.0（トリガーの `NODE_VERSION`）でワークスペースをインストールし、
+その環境の D1 にマイグレーションを適用してからデプロイします。
 
-preview の Worker は全ブランチで共有します。最後にデプロイしたブランチが反映されます。
+| ブランチ | トリガーを持つ Worker          | デプロイコマンド                                         |
+| -------- | ------------------------------ | -------------------------------------------------------- |
+| `devel`  | `be-music-leaderboard`         | `pnpm run db:migrate:production && pnpm run deploy`      |
+| それ以外 | `be-music-leaderboard-preview` | `pnpm run db:migrate:preview && pnpm run deploy:preview` |
+
+Workers Builds はトリガーを持つ Worker にしかデプロイできないため、環境ごとの Worker にそれぞれトリガーがあります。
+preview の Worker は全ブランチで共有し、最後に push したブランチが反映されます。手動でデプロイするときは、この
+パッケージで同じコマンドを実行します。
 
 この Worker は公開 URL を持ちません。プレイヤーの Worker が `/api/*` と `/leaderboard/*` を Service Binding で
 転送します。
@@ -101,12 +109,27 @@ preview の Worker は全ブランチで共有します。最後にデプロイ�
 
 `/leaderboard` 以下のページは Hono JSX で、Tailwind CSS v4 と [Basecoat](https://basecoatui.com)（フレームワークの
 ランタイムなしの shadcn/ui デザイン）でスタイルを付けています。`src/pages/app.css` は `src/pages/styles.generated.ts`
-にコンパイルされ、コミットされたうえで `/leaderboard/assets/app.<hash>.css` から配信されます。ページのクラスを
-変えたら作り直します。
+にコンパイルされ、`/leaderboard/assets/app.<hash>.css` から配信されます。
+
+スタイルシート、アイコン、シェアカードのフォント、クライアントスクリプト（`src/pages/*.generated.ts`）は生成物で、git には入れません。
+`pnpm install`、`dev`、デプロイ、テストの前に生成されます。`cf dev` の実行中にページのクラス、アイコン、`client/`
+を変えたら作り直します。
 
 ```bash
-pnpm --filter @be-music/leaderboard-api run build:css
+pnpm --filter @be-music/leaderboard-api run generate
 ```
+
+`build:css`、`build:icons`、`build:fonts`、`build:client` はそれぞれ 1 つだけ作ります。シェアカードの英数字は [Inter Tight](https://github.com/rsms/inter)（SIL Open Font License 1.1）で、`/leaderboard/assets/` から配信します。
+
+### アイコン
+
+ページのアイコンは `src/pages/icons/icon.svg` です。ブラウザのタブにはこれがそのまま表示されます。ホーム画面用（180 px）と Web アプリマニフェスト用（192 / 512 px）のアイコンはこの SVG から描画します。アイコンを変えるときは SVG を差し替えて、作り直します。
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:icons
+```
+
+アイコンは `src/pages/icons.generated.ts` にまとめられ、`/leaderboard/manifest.webmanifest` と並んで `/leaderboard/assets/<名前>.<hash>.<拡張子>` から配信されます。SVG の隣に手描きの PNG（`apple-touch-icon.png`、`icon-192.png`、`icon-512.png`）を置くと、描画したものの代わりにそちらを使います。
 
 ## テスト
 

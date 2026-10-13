@@ -55,7 +55,7 @@ pnpm run release:version
 
 - 通常の feature PR では、変更した package に対する `.changeset/*.md` を追加します
 - release したいタイミングで `devel` 上で `pnpm run release:version` を実行し、生成された `packages/*/package.json` と `packages/*/CHANGELOG.md` の更新をまとめてコミットします
-- その状態で `devel -> main` の release PR を merge すると、version が上がった package だけ GitHub Release が個別に作成されます
+- その状態で `devel -> main` の release PR を merge すると、version が上がった公開 package だけ GitHub Release が個別に作成されます（プレイヤーのデモや Leaderboard などの private package は対象外です）
 - player SEA 実行ファイルは `@be-music/player-tui` から build し、`@be-music/player-tui` release に添付します。`@be-music/audio-renderer` も SEA zip を添付します
 - private な repository root の `package.json` は `0.0.0` のままで、release 対象 version は `packages/*/package.json` で管理します
 
@@ -459,5 +459,8 @@ pnpm run bench:compare -- --head tmp/bench/head.json --base tmp/bench/base.json 
 - compare 出力: 任意の Markdown と summary JSON
 - GitHub Actions では、`devel` / `main` 向け PR で base/head 比較を PR comment として投稿します
 - GitHub Actions では、`devel` / `main` への push でも直前 revision 比較を実行し、対象 commit へ commit comment を投稿します
-- CI は比較前に base と head を同一 runner で計測し、ホスト間ノイズが delta を支配しないようにします
-- CI はローカル default より長い per-case time を使い、比較シグナルは median change です。ケース単位の一覧も mean ではなく median ops/s で比較します
+- CI は base と head を同一 runner で交互に（head、base、head、base…）5 回ずつ計測し、ホスト間のノイズや一時的な遅さが両方に等しくかかるようにします
+- 速い関数は 1 回の計測サンプルの中で何度も呼び出し（1 サンプル約 50 µs）、ナノ秒単位のケースもタイマーの分解能に埋もれずに計測します。時間は 1 回の呼び出しあたりで表示します
+- 回帰・改善と判定するのは、中央値の変化がしきい値（CI では 8%）を超え、かつ base と head の各回の計測値が重ならないケースだけです。しきい値を超えても計測値が重なるものは「within noise」として別に表示します
+- `ioBound` を付けたケース（ファイルシステムに触るもの）は、時間が OS のキャッシュやディスクに左右されるため、判定せずに別枠で表示します
+- コメントは判定結果から始まり、base / head のコミットへのリンク、変更したパッケージのケース、追加・削除された公開関数を載せ、ノイズ・除外・実行条件は折りたたんで表示します

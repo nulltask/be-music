@@ -51,6 +51,7 @@ export function registerParserExportsCases(define: DefineBenchmarkCase): void {
     },
   });
   define('parser.parseChartFile', {
+    ioBound: true,
     run: async (fixtures) => {
       await parserApi.parseChartFile(fixtures.paths.bmsPath);
     },

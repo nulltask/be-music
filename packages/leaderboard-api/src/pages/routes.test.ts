@@ -54,6 +54,32 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('site icons', () => {
+  test('every page links the icons, which are served with their types, and the manifest lists them', async () => {
+    const top = await page('/leaderboard');
+    const favicon = /<link rel="icon" type="image\/svg\+xml" href="([^"]+)"/.exec(top.html)?.[1];
+    const appleTouch = /<link rel="apple-touch-icon" href="([^"]+)"/.exec(top.html)?.[1];
+    expect(favicon).toMatch(/^\/leaderboard\/assets\/icon\.[0-9a-f]{12}\.svg$/);
+    expect(appleTouch).toMatch(/^\/leaderboard\/assets\/apple-touch-icon\.[0-9a-f]{12}\.png$/);
+    expect(top.html).toContain('<link rel="manifest" href="/leaderboard/manifest.webmanifest"');
+
+    const svg = await fetchApp(favicon!);
+    expect(svg.headers.get('content-type')).toBe('image/svg+xml');
+    expect(svg.headers.get('cache-control')).toContain('immutable');
+    expect(await svg.text()).toContain('<svg');
+    const png = new Uint8Array(await (await fetchApp(appleTouch!)).arrayBuffer());
+    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+    const manifest = (await (await fetchApp('/leaderboard/manifest.webmanifest')).json()) as {
+      start_url: string;
+      icons: Array<{ src: string; sizes: string }>;
+    };
+    expect(manifest.start_url).toBe('/leaderboard');
+    expect(manifest.icons.map((icon) => icon.sizes)).toEqual(['192x192', '512x512']);
+    expect((await fetchApp(manifest.icons[1]!.src)).status).toBe(200);
+  });
+});
+
 describe('API reference', () => {
   test('serves the OpenAPI document and the reference page that reads it', async () => {
     const document = await fetchApp('/api/v0/openapi.json');
@@ -123,7 +149,8 @@ describe('Leaderboard pages', () => {
     const score = await page(`/leaderboard/scores/${firstScore}`);
     expect(score.status).toBe(200);
     expect(score.html).toContain('property="og:title"');
-    expect(score.html).toContain('LR2');
+    expect(score.html).toContain('LR2 rules');
+    expect(score.html).toContain('Scored with');
     expect(score.html).toContain('beatoraja');
     expect(score.html).toContain('IIDX');
     expect(score.html).toContain(`/api/v0/scores/${firstScore}/playlog`);
@@ -139,6 +166,9 @@ describe('Leaderboard pages', () => {
     expect(ranking.html).toContain('aria-label="Best play of');
     expect(ranking.html).toContain('popovertarget="info-');
     expect(ranking.html).toContain('popover="auto"');
+    // The card is a tooltip anchored to its icon.
+    expect(ranking.html).toMatch(/data-tooltip-for="(info-[^"]+)"[^>]*style="anchor-name:--\1"/);
+    expect(ranking.html).toContain('position-area:block-end span-inline-start');
     expect(ranking.html).toContain('Recorded with');
     // The breadcrumb trail starts at the Leaderboard.
     expect(ranking.html).toContain('aria-label="Breadcrumb"');
@@ -154,7 +184,7 @@ describe('Leaderboard pages', () => {
     expect(player.status).toBe(200);
     expect(player.html).toContain(`@${firstHandle}`);
     // Player figures: plays, charts, the lamp and DJ Rank spreads of their bests, and the rulesets they played under.
-    expect(player.html).toContain('>Average rate (LR2)<');
+    expect(player.html).toContain('>Average rate (LR2 rules)<');
     expect(player.html).toContain('>DJ Ranks<');
     expect(player.html).toContain('>Played under<');
   });

@@ -39,7 +39,8 @@ export interface SimulatePlaylogOptions extends ResolveRulesetOptions {
   ruleset: PlaylogRulesetId;
 }
 
-export const PLAYLOG_SIMULATOR_RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
+/** The rulesets `simulatePlaylog` scores under, in display order. */
+export const PLAYLOG_SIMULATOR_RULESETS: readonly ['lr2', 'beatoraja', 'iidx'] = ['lr2', 'beatoraja', 'iidx'];
 
 /**
  * Re-derives one ruleset's judgments / EX-SCORE / combo / gauge from a playlog's canonical data (resolved chart +
