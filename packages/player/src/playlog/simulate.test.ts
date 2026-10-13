@@ -69,10 +69,14 @@ describe('simulatePlaylog mines', () => {
   const filler = note(500_000);
   const mine = note(1_000_000, { type: 'mine', damage: 10 });
   /** How much the mine took off the final gauge: the run with it against the same run without it. */
-  function mineDamage(ruleset: PlaylogRulesetId, inputs: Array<Omit<PlaylogInputEvent, 'seq'>>): number {
+  function mineDamage(
+    ruleset: PlaylogRulesetId,
+    inputs: Array<Omit<PlaylogInputEvent, 'seq'>>,
+    chart: Partial<BeMusicPlaylog['chart']> = {},
+  ): number {
     const all = [down(500_000), up(510_000), ...inputs];
-    const withMine = simulatePlaylog(makePlaylog({ notes: [filler, mine], inputs: all }), { ruleset });
-    const without = simulatePlaylog(makePlaylog({ notes: [filler], inputs: all }), { ruleset });
+    const withMine = simulatePlaylog(makePlaylog({ notes: [filler, mine], inputs: all, chart }), { ruleset });
+    const without = simulatePlaylog(makePlaylog({ notes: [filler], inputs: all, chart }), { ruleset });
     return Math.round((without.gauge.final - withMine.gauge.final) * 1000) / 1000;
   }
 
@@ -103,6 +107,20 @@ describe('simulatePlaylog mines', () => {
 
   test('a press outside the PGREAT window leaves the mine alone', () => {
     expect(mineDamage('lr2', [down(1_100_000), up(1_120_000)])).toBe(0);
+  });
+
+  test('a mine behind an LR2 negative-BPM reversal is frozen, even inside the PGREAT reach', () => {
+    // The reversal at 0.998 s, 2 ms before the mine: neither a press nor a key held as the window opens sets it off.
+    const chart = { reversalTimeUs: 998_000 };
+    expect(mineDamage('lr2', [down(997_000), up(997_500)], chart)).toBe(0);
+    expect(mineDamage('lr2', [down(970_000), up(1_100_000)], chart)).toBe(0);
+    expect(mineDamage('beatoraja', [down(970_000), up(1_100_000)], chart)).toBe(0);
+  });
+
+  test('a press past an LR2 negative-BPM reversal does not detonate a mine on the mirrored clock', () => {
+    // The reversal at 1.01 s: a press at 1.025 s reads 0.995 s on the mirrored judge clock, inside the mine's PGREAT
+    // window, but the press leg is dead past the reversal.
+    expect(mineDamage('lr2', [down(1_025_000), up(1_030_000)], { reversalTimeUs: 1_010_000 })).toBe(0);
   });
 });
 

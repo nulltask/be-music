@@ -172,7 +172,8 @@ class PlaylogSimulation {
           ? { ...input, timeUs: 2 * reversalUs - input.timeUs }
           : input;
       if (input.action === 'down') {
-        this.handleDown(judged);
+        // The engine's mine press leg is dead past the reversal too (`processLandminePassage`).
+        this.handleDown(judged, judged === input);
       } else {
         this.handleUp(judged);
       }
@@ -330,6 +331,8 @@ class PlaylogSimulation {
       }
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
+        // Mines at or behind the reversal are frozen with the pump: not even LR2's early PGREAT reach detonates them.
+        if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
         const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
         if (mine.timeUs - earlyUs >= untilUs) break;
         if (mine.applied) continue;
@@ -433,9 +436,11 @@ class PlaylogSimulation {
   /** LR2: a press with a mine inside the PGREAT window of the line detonates it (before the press judges a note). */
   private detonateMinesOnPress(lanes: readonly SimLane[], timeUs: number): void {
     if (this.config.mineTrigger !== 'press-or-hold') return;
+    const reversalUs = this.playlog.chart.reversalTimeUs;
     for (const lane of lanes) {
       for (let index = lane.mineCursor; index < lane.mines.length; index += 1) {
         const mine = lane.mines[index]!;
+        if (reversalUs !== undefined && mine.timeUs >= reversalUs) break;
         const [lateUs, earlyUs] = this.minePgreatReachUs(mine);
         if (mine.timeUs - earlyUs > timeUs) break;
         if (!mine.applied && timeUs - mine.timeUs <= lateUs) this.detonateMine(mine);
@@ -469,7 +474,7 @@ class PlaylogSimulation {
 
   // ---- input handling ----------------------------------------------------------------------------------------
 
-  private handleDown(input: PlaylogInputEvent): void {
+  private handleDown(input: PlaylogInputEvent, minePressLegLive: boolean): void {
     const timeUs = input.timeUs;
     const windows = this.config.windowsAt(timeUs);
     const lanes = this.resolveInputLanes(input);
@@ -479,7 +484,9 @@ class PlaylogSimulation {
     if (lanes.length === 0) {
       return;
     }
-    this.detonateMinesOnPress(lanes, timeUs);
+    if (minePressLegLive) {
+      this.detonateMinesOnPress(lanes, timeUs);
+    }
 
     const selected = this.selectCandidate(lanes, timeUs, windows);
     if (!selected) {
