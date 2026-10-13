@@ -1,4 +1,4 @@
-import { bindings, defineConfig } from 'cf/config';
+import { bindings, defineConfig, triggers } from 'cf/config';
 
 /**
  * Leaderboard Worker. One complete configuration per mode (`cf deploy --mode staging` deploys the staging Worker from
@@ -19,6 +19,8 @@ export default defineConfig(({ mode }) => {
       workersDev: false,
       previewUrls: false,
       observability: { enabled: true },
+      // Hourly: ask BMS Search which work new and stale charts belong to (src/chartsets/refresh.ts).
+      triggers: [triggers.scheduled({ schedule: '17 * * * *' })],
       env: {
         DB: bindings.d1({ name: `be-music-leaderboard${suffix}`, id: databaseId }),
         BLOBS: bindings.r2({ name: `be-music-leaderboard${suffix}` }),

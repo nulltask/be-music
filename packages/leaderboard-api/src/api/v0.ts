@@ -1,6 +1,6 @@
 import { sValidator } from '@hono/standard-validator';
 import { and, eq } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
@@ -10,6 +10,7 @@ import { openDatabase } from '../db/client.ts';
 import { bestScore, profile, score, scoreResult } from '../db/schema.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { countPlayers, loadRanking, rankOfExScore, type RankingFilter } from '../ranking.ts';
+import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
 import { submitScore } from '../scores/submit.ts';
 
 const rulesetSchema = v.picklist(['lr2', 'beatoraja', 'iidx']);
@@ -34,21 +35,40 @@ const submissionBody = v.object({
 });
 
 /**
- * Version 1 of the Leaderboard API, mounted at `/api/v1` (docs/leaderboard.md section 8). A breaking change goes into a
- * new version mounted next to this one; additions stay here.
+ * Runs `work` after the response is sent (`waitUntil`). Without an execution context (tests calling `app.request`
+ * directly) the work is dropped: it only fills in data the scheduled run fills in as well.
  */
-export function createV1Api(options: { now: () => number; newId: () => string }) {
-  const { now, newId } = options;
-  const v1 = new Hono<AppEnv>();
+function afterResponse(c: Context<AppEnv>, work: Promise<unknown>): void {
+  let context: { waitUntil(promise: Promise<unknown>): void } | undefined;
+  try {
+    context = c.executionCtx;
+  } catch {
+    context = undefined;
+  }
+  if (context === undefined) {
+    work.catch(() => undefined);
+    return;
+  }
+  context.waitUntil(work.catch((error: unknown) => console.warn('background work failed', error)));
+}
 
-  v1.use('*', async (c, next) => {
+/**
+ * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is the beta: it may
+ * still change incompatibly. Once stable it becomes `/api/v1`, and breaking changes after that go into a new version
+ * mounted next to the old one.
+ */
+export function createV0Api(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
+  const { now, newId, chartsetLookup } = options;
+  const v0 = new Hono<AppEnv>();
+
+  v0.use('*', async (c, next) => {
     c.set('db', openDatabase(c.env.DB));
     const session = await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
     c.set('userId', session?.user.id);
     await next();
   });
 
-  v1.get('/me', async (c) => {
+  v0.get('/me', async (c) => {
     const userId = c.get('userId');
     if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
     const account = await loadAccount(c.get('db'), userId);
@@ -56,7 +76,7 @@ export function createV1Api(options: { now: () => number; newId: () => string })
     return c.json(account);
   });
 
-  v1.post('/scores', async (c) => {
+  v0.post('/scores', async (c) => {
     const userId = c.get('userId');
     if (userId === undefined) {
       return c.json({ error: 'sign-in-required' }, 401);
@@ -95,10 +115,14 @@ export function createV1Api(options: { now: () => number; newId: () => string })
       return c.json({ error: outcome.reason }, outcome.httpStatus);
     }
     const { status, ...rest } = outcome;
+    // A chart seen for the first time is filed under its chartset after the response, without holding it up.
+    if (status === 'accepted') {
+      afterResponse(c, refreshChartsetIfUnchecked(c.get('db'), chartsetLookup, rest.chartFingerprint, now()));
+    }
     return c.json(rest, status === 'accepted' ? 201 : 200);
   });
 
-  v1.get('/scores/:id', async (c) => {
+  v0.get('/scores/:id', async (c) => {
     const db = c.get('db');
     const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
     if (found === undefined) return c.json({ error: 'not-found' }, 404);
@@ -119,7 +143,7 @@ export function createV1Api(options: { now: () => number; newId: () => string })
     });
   });
 
-  v1.get('/scores/:id/playlog', async (c) => {
+  v0.get('/scores/:id/playlog', async (c) => {
     const db = c.get('db');
     const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
     if (found === undefined) return c.json({ error: 'not-found' }, 404);
@@ -138,7 +162,7 @@ export function createV1Api(options: { now: () => number; newId: () => string })
     });
   });
 
-  v1.get('/charts/:chartFingerprint/leaderboard', sValidator('query', rankingQuery), async (c) => {
+  v0.get('/charts/:chartFingerprint/leaderboard', sValidator('query', rankingQuery), async (c) => {
     const query = c.req.valid('query');
     const filter: RankingFilter = {
       chartFingerprint: c.req.param('chartFingerprint'),
@@ -151,7 +175,7 @@ export function createV1Api(options: { now: () => number; newId: () => string })
     return c.json({ ...ranking, offset: query.offset, limit: query.limit });
   });
 
-  v1.get('/charts/:chartFingerprint/leaderboard/me', sValidator('query', meQuery), async (c) => {
+  v0.get('/charts/:chartFingerprint/leaderboard/me', sValidator('query', meQuery), async (c) => {
     const userId = c.get('userId');
     if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
     const query = c.req.valid('query');
@@ -186,5 +210,5 @@ export function createV1Api(options: { now: () => number; newId: () => string })
     });
   });
 
-  return v1;
+  return v0;
 }
