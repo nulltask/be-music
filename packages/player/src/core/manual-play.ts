@@ -560,8 +560,21 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
   // fixed chart-time grid (`advanceJudgeCoreReplay`), so the replayed judgments are independent of tick timing.
   const replay = options.replayInputs !== undefined ? createJudgeCoreReplay(options.replayInputs) : undefined;
 
+  // A held play (`holdAfterChart`) runs past its horizon until the host ends it.
+  const hold = options.holdAfterChart;
+  let settled = false;
+  const pastHorizon = (): boolean => {
+    if (playbackClock.nowMs() < horizon) return false;
+    if (hold === undefined || hold.signal.aborted) return true;
+    if (!settled) {
+      settled = true;
+      hold.onSettled?.();
+    }
+    return hold.signal.aborted;
+  };
+
   try {
-    while (playbackClock.nowMs() < horizon) {
+    while (!pastHorizon()) {
       consumeInputCommands();
       if (interruptedReason) {
         break;
@@ -595,7 +608,8 @@ export async function manualPlay(json: BeMusicJson, options: PlayerOptions = {})
       // A replay has only judged up to its last chart-time step, which can trail the tick by up to one step.
       const judgedThroughSeconds = replay ? replay.judgedThroughSeconds : nowSec;
       const safeNowSeconds = Math.max(0, judgedThroughSeconds) + REALTIME_AUDIO_TRIGGER_EPSILON_SECONDS;
-      if (isJudgeCoreSettled(judgeCore) && !audioSession && safeNowSeconds >= totalSeconds) {
+      // Without audio a play may end as soon as its chart is over — unless the host holds it open.
+      if (isJudgeCoreSettled(judgeCore) && !audioSession && hold === undefined && safeNowSeconds >= totalSeconds) {
         break;
       }
 
