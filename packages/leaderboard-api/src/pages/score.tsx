@@ -6,9 +6,93 @@ import { ResultsTable } from './components/tables.tsx';
 import { Details, LampLegend } from './components/cards.tsx';
 import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
-import { chartTitle, RULESET_LABELS } from './format.ts';
+import { avatarUrl } from '../avatars.ts';
+import { cardUrl } from '../cards.ts';
+import type { ScoreDetail } from '../scores/detail.ts';
+import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, RULESET_LABELS } from './format.ts';
+import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { displayRuleset, meta, notFound, PAGE_CACHE, withArtist, type PageContext, chartsetCrumbs } from './page.tsx';
+
+/** The share card's content: the play under the ruleset it was played with. */
+function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][number], title: string): ScoreCardData {
+  const lamp = lampStyle(played.clearLamp);
+  return {
+    title,
+    subtitle: detail.chart.subtitle,
+    artist: detail.chart.artist,
+    playerName: detail.player?.displayName ?? '',
+    handle: detail.player?.handle ?? '',
+    avatarUrl: detail.player !== null ? avatarUrl(detail.player.handle, detail.player.avatarKey) : '',
+    rulesetLabel: RULESET_LABELS[played.ruleset] ?? played.ruleset,
+    lamp: { label: lamp.label, color: lamp.color },
+    exScore: played.exScore,
+    maxExScore: played.noteCount * 2,
+    rate: formatScoreRate(played.exScore, played.noteCount),
+    djRank: djLevel(played.exScore, played.noteCount),
+    bp: played.missCount,
+    maxCombo: played.maxCombo,
+    judges: {
+      pgreat: played.judges.pgreat ?? 0,
+      great: played.judges.great ?? 0,
+      good: played.judges.good ?? 0,
+      bad: played.judges.bad ?? 0,
+      poor: (played.judges.poor ?? 0) + (played.judges.emptyPoor ?? 0),
+    },
+    gauge: formatGauge(played.gaugeType, played.gaugeFinal),
+    playedAt: detail.score.createdAt.getTime(),
+  };
+}
+
+/**
+ * The share section: the card, a post on X (a plain link, so it works without script), the system share sheet and a
+ * copy-link button. For the play's own player, the client script draws the card and uploads it when there is none yet.
+ */
+function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string; upload?: string; hasCard: boolean }) {
+  const text = shareText(props.data);
+  return (
+    <section class="card gap-4" data-size="sm" data-share>
+      <header>
+        <h2>Share</h2>
+        <p>
+          {props.upload !== undefined && !props.hasCard
+            ? 'Your share card is being drawn; links to this page show it.'
+            : 'Links to this page show this card.'}
+        </p>
+      </header>
+      <div class="space-y-4 px-4">
+        <img
+          src={props.image}
+          width={600}
+          height={315}
+          alt={text}
+          class="w-full max-w-[600px] rounded-lg border"
+          data-card-preview
+        />
+        <div class="flex flex-wrap gap-2">
+          <a class="btn" href={xIntentUrl(text, props.pageUrl)} target="_blank" rel="noopener" data-share-x>
+            Post on X
+          </a>
+          <button type="button" class="btn" data-variant="outline" data-share-native hidden>
+            Share…
+          </button>
+          <button type="button" class="btn" data-variant="outline" data-share-copy>
+            Copy link
+          </button>
+        </div>
+        <p class="text-muted-foreground text-sm" data-share-status role="status" hidden />
+      </div>
+      <script
+        type="application/json"
+        data-score-card
+        data-upload={props.upload}
+        data-has-card={props.hasCard ? 'true' : 'false'}
+        data-share-text={text}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(props.data).replace(/</g, '\\u003c') }}
+      />
+    </section>
+  );
+}
 
 /** One play under every ruleset, with how it was played. */
 export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
@@ -23,15 +107,21 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
     played !== undefined
       ? `${player.displayName} · ${title} · EX ${played.exScore} (${RULESET_LABELS[played.ruleset]})`
       : `${player.displayName} · ${title}`;
+  const card = played === undefined ? undefined : scoreCardData(detail, played, title);
+  const image = cardUrl(detail.score.id, detail.score.cardKey);
+  const viewer = c.get('viewer');
+  const isOwner = viewer !== null && viewer.handle === player.handle;
   c.header('cache-control', PAGE_CACHE);
+  const pageMeta = {
+    ...meta(c, `${title} — ${player.displayName}`, description, [
+      ...chartsetCrumbs(filed),
+      { label: title, href: chartHref(detail.chart.chartFingerprint), kind: 'chart' as const },
+      { label: `${player.displayName}’s play`, kind: 'score' as const },
+    ]),
+    image: { path: image, alt: card !== undefined ? shareText(card) : description },
+  };
   return c.html(
-    <Layout
-      meta={meta(c, `${title} — ${player.displayName}`, description, [
-        ...chartsetCrumbs(filed),
-        { label: title, href: chartHref(detail.chart.chartFingerprint), kind: 'chart' },
-        { label: `${player.displayName}’s play`, kind: 'score' },
-      ])}
-    >
+    <Layout meta={pageMeta}>
       <PageHeader
         kind="score"
         title={
@@ -75,6 +165,15 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
             : []),
         ]}
       />
+      {card !== undefined ? (
+        <ShareCard
+          data={card}
+          pageUrl={c.req.url}
+          image={image}
+          upload={isOwner ? `/api/v0/scores/${encodeURIComponent(detail.score.id)}/card` : undefined}
+          hasCard={detail.score.cardKey !== null}
+        />
+      ) : null}
       <LampLegend />
     </Layout>,
   );

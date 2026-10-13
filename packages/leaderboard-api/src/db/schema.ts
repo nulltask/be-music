@@ -218,6 +218,8 @@ export const score = sqliteTable(
     submittedBy: text('submitted_by'),
     serverEngine: text('server_engine').notNull(),
     playlogKey: text('playlog_key').notNull(),
+    /** R2 key of the play's share card (`cards/scores/{scoreId}/{sha256}.{ext}`), drawn by the player's browser. */
+    cardKey: text('card_key'),
     replayVisibility: text('replay_visibility', { enum: ['public', 'private'] })
       .notNull()
       .default('public'),
