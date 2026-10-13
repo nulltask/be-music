@@ -1,4 +1,4 @@
-import { and, desc, eq, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, type SQL } from 'drizzle-orm';
 import type { Database } from '../db/client.ts';
 import { chart, chartAlias, profile, score, scoreResult, user } from '../db/schema.ts';
 import type { ChartAlias } from './external.ts';
@@ -119,4 +119,39 @@ export async function loadChartAliases(db: Database, chartFingerprint: string): 
     .from(chartAlias)
     .where(eq(chartAlias.chartFingerprint, chartFingerprint))
     .orderBy(chartAlias.kind, chartAlias.hash);
+}
+
+/** What a score's info popover shows: how the play was made and which software recorded and sent it. */
+export interface PlayInfo {
+  scoreId: string;
+  createdAt: number;
+  playedRuleset: string;
+  gauge: string;
+  assistFlags: string[];
+  verification: string;
+  /** The play log's `recorder` (application, version, build, engine version, platform). */
+  recordedBy: Record<string, string> | null;
+  /** The `Be-Music-Client` header the play was sent with. */
+  submittedBy: string | null;
+  serverEngine: string;
+}
+
+/** Info of several scores at once, keyed by score id. */
+export async function loadPlayInfos(db: Database, scoreIds: readonly string[]): Promise<Map<string, PlayInfo>> {
+  if (scoreIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      scoreId: score.id,
+      createdAt: score.createdAt,
+      playedRuleset: score.playedRuleset,
+      gauge: score.gauge,
+      assistFlags: score.assistFlags,
+      verification: score.verification,
+      recordedBy: score.recordedBy,
+      submittedBy: score.submittedBy,
+      serverEngine: score.serverEngine,
+    })
+    .from(score)
+    .where(inArray(score.id, [...new Set(scoreIds)]));
+  return new Map(rows.map((row) => [row.scoreId, { ...row, createdAt: row.createdAt.getTime() }]));
 }

@@ -113,8 +113,16 @@ describe('Leaderboard pages', () => {
     expect(ranking.status).toBe(200);
     expect(ranking.html).toContain('2 players');
     // Ranked by EX score: 18 (nine PGREATs) above 8.
-    expect(ranking.html.indexOf('>18<')).toBeGreaterThan(0);
-    expect(ranking.html.indexOf('>18<')).toBeLessThan(ranking.html.indexOf('>8<'));
+    // EX-Score with its maximum and rate: ten notes make a maximum of 20.
+    expect(ranking.html.indexOf('>18 / 20 (90.00%)<')).toBeGreaterThan(0);
+    expect(ranking.html.indexOf('>18 / 20 (90.00%)<')).toBeLessThan(ranking.html.indexOf('>8 / 20 (40.00%)<'));
+    // A row opens the player's best play, and its info icon opens the play's details.
+    expect(ranking.html).toContain('aria-label="Best play of');
+    expect(ranking.html).toContain('popovertarget="info-');
+    expect(ranking.html).toContain('popover="auto"');
+    expect(ranking.html).toContain('Recorded with');
+    // The breadcrumb trail starts at the Leaderboard.
+    expect(ranking.html).toContain('aria-label="Breadcrumb"');
     // Elsewhere: no file hash was recorded for this chart, so only the title search on BMS Search, encoded.
     expect(ranking.html).toContain('https://bmssearch.net/search?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E');
     expect(ranking.html).not.toContain('mocha-repository.info');

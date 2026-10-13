@@ -57,3 +57,25 @@ export function chartTitle(title: string | null, chartFingerprint: string): stri
 export function formatGauge(type: string, final: number | null): string {
   return final === null ? type : `${type} ${final.toFixed(1)}%`;
 }
+
+/**
+ * The software that recorded a play, from its play log's `recorder`: `be-music-web 0.5.0 (build 6471cd16, engine 0.8.0,
+ * web)`, or `unknown` for logs written before the field existed.
+ */
+export function formatRecorder(recorder: Record<string, string> | null): string {
+  if (recorder === null) return 'unknown';
+  const name = [recorder.name, recorder.version].filter((part) => part !== undefined && part !== '').join(' ');
+  const extras = [
+    recorder.build !== undefined ? `build ${recorder.build}` : undefined,
+    recorder.engine !== undefined ? `engine ${recorder.engine}` : undefined,
+    recorder.platform,
+  ].filter((part): part is string => part !== undefined && part !== '');
+  const head = name !== '' ? name : 'unknown app';
+  return extras.length > 0 ? `${head} (${extras.join(', ')})` : head;
+}
+
+/** EX-Score with its maximum and rate: `81 / 104 (77.88%)` (the maximum is two per note). */
+export function formatExScore(exScore: number, noteCount: number): string {
+  if (noteCount <= 0) return String(exScore);
+  return `${exScore} / ${noteCount * 2} (${formatScoreRate(exScore, noteCount)})`;
+}

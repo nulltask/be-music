@@ -5,10 +5,10 @@ import { getCookie, setCookie } from 'hono/cookie';
 import type { AppEnv } from '../app.ts';
 import { openDatabase } from '../db/client.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
-import { loadChart, loadChartAliases, loadPlayer, loadRecentScores, loadScoreDetail } from './data.ts';
+import { loadChart, loadChartAliases, loadPlayer, loadPlayInfos, loadRecentScores, loadScoreDetail } from './data.ts';
 import { externalLinks } from './external.ts';
 import { chartTitle, formatTimestamp, RULESET_LABELS } from './format.ts';
-import { Layout, PageHeader, STYLESHEET_PATH, type PageMeta } from './layout.tsx';
+import { Layout, PageHeader, STYLESHEET_PATH, type Crumb, type PageMeta } from './layout.tsx';
 import { APP_CSS } from './styles.generated.ts';
 import { isRuleset, RULESET_COOKIE, resolveDisplayRuleset, safeReturnPath } from './preferences.ts';
 import {
@@ -51,11 +51,12 @@ function withQuery(c: Context, key: string, value: string | undefined): string {
   return `${url.pathname}${url.search}`;
 }
 
-function meta(c: Context, title: string, description: string): PageMeta {
+function meta(c: Context, title: string, description: string, crumbs: Crumb[] = []): PageMeta {
   const url = new URL(c.req.url);
   return {
     title,
     description,
+    crumbs,
     url: c.req.url,
     path: `${url.pathname}${url.search}`,
     ruleset: resolveDisplayRuleset(getCookie(c, RULESET_COOKIE)),
@@ -69,7 +70,7 @@ function displayRuleset(c: Context) {
 
 function notFound(c: Context<AppEnv>, what: string) {
   return c.html(
-    <Layout meta={meta(c, 'Not found', `${what} not found.`)}>
+    <Layout meta={meta(c, 'Not found', `${what} not found.`, [{ label: 'Not found' }])}>
       <PageHeader title="Not found">{what} does not exist, or it was removed.</PageHeader>
     </Layout>,
     404,
@@ -84,7 +85,8 @@ export function mountPages(app: Hono<AppEnv>): void {
   const top = async (c: Context<AppEnv>) => {
     const includeAnonymous = isOn(c.req.query('anonymous'));
     const ruleset = displayRuleset(c);
-    const scores = await loadRecentScores(openDatabase(c.env.DB), {
+    const db = openDatabase(c.env.DB);
+    const scores = await loadRecentScores(db, {
       limit: RECENT_LIMIT,
       ruleset,
       includeAnonymous,
@@ -92,7 +94,7 @@ export function mountPages(app: Hono<AppEnv>): void {
     });
     c.header('cache-control', PAGE_CACHE);
     return c.html(
-      <Layout meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.')}>
+      <Layout meta={meta(c, 'New scores', 'The newest plays on the be-music Leaderboard.', [{ label: 'New scores' }])}>
         <PageHeader title="New scores">The newest plays, scored under {RULESET_LABELS[ruleset]}.</PageHeader>
         <Filters>
           <FilterChip
@@ -103,6 +105,10 @@ export function mountPages(app: Hono<AppEnv>): void {
         </Filters>
         <RecentScoresTable
           scores={scores}
+          infos={await loadPlayInfos(
+            db,
+            scores.map((entry) => entry.scoreId),
+          )}
           showPlayer
           empty={
             includeAnonymous
@@ -143,7 +149,12 @@ export function mountPages(app: Hono<AppEnv>): void {
         : `${detail.displayName} · ${title}`;
     c.header('cache-control', PAGE_CACHE);
     return c.html(
-      <Layout meta={meta(c, `${title} — ${detail.displayName}`, description)}>
+      <Layout
+        meta={meta(c, `${title} — ${detail.displayName}`, description, [
+          { label: title, href: chartHref(detail.chart.chartFingerprint) },
+          { label: `${detail.displayName}’s play` },
+        ])}
+      >
         <PageHeader
           title={
             <a class="underline-offset-4 hover:underline" href={chartHref(detail.chart.chartFingerprint)}>
@@ -206,7 +217,11 @@ export function mountPages(app: Hono<AppEnv>): void {
     const elsewhere = externalLinks(found, await loadChartAliases(db, chartFingerprint));
     c.header('cache-control', PAGE_CACHE);
     return c.html(
-      <Layout meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`)}>
+      <Layout
+        meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`, [
+          { label: title },
+        ])}
+      >
         <PageHeader title={title}>
           {withArtist(found.artist)}
           {found.noteCount} notes · {everyone} player{everyone === 1 ? '' : 's'}
@@ -220,7 +235,14 @@ export function mountPages(app: Hono<AppEnv>): void {
             href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
           />
         </Filters>
-        <RankingTable entries={ranking.entries} noteCount={found.noteCount} />
+        <RankingTable
+          entries={ranking.entries}
+          infos={await loadPlayInfos(
+            db,
+            ranking.entries.map((entry) => entry.exScoreId),
+          )}
+          noteCount={found.noteCount}
+        />
         <Elsewhere links={elsewhere} />
         <LampLegend />
       </Layout>,
@@ -241,13 +263,23 @@ export function mountPages(app: Hono<AppEnv>): void {
     c.header('cache-control', PAGE_CACHE);
     return c.html(
       <Layout
-        meta={meta(c, player.displayName, `${player.displayName} (@${player.handle}) on the be-music Leaderboard.`)}
+        meta={meta(c, player.displayName, `${player.displayName} (@${player.handle}) on the be-music Leaderboard.`, [
+          { label: player.displayName },
+        ])}
       >
         <PageHeader title={player.displayName}>
           @{player.handle}
           {player.anonymous ? <Tag>anonymous</Tag> : null}
         </PageHeader>
-        <RecentScoresTable scores={scores} showPlayer={false} empty="No plays yet." />
+        <RecentScoresTable
+          scores={scores}
+          infos={await loadPlayInfos(
+            db,
+            scores.map((entry) => entry.scoreId),
+          )}
+          showPlayer={false}
+          empty="No plays yet."
+        />
         <LampLegend />
       </Layout>,
     );

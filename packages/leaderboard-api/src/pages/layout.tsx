@@ -19,9 +19,17 @@ const COLOR_SCHEME_SCRIPT = `(() => {
   media.addEventListener('change', apply);
 })();`;
 
+/** One step of the breadcrumb trail; the last one is the current page and has no link. */
+export interface Crumb {
+  label: string;
+  href?: string;
+}
+
 export interface PageMeta {
   title: string;
   description: string;
+  /** The trail below "Leaderboard", ending with this page. */
+  crumbs: Crumb[];
   /** Absolute URL of this page, for `og:url`. */
   url: string;
   /** Path and query of this page, where the ruleset switch comes back to. */
@@ -46,6 +54,40 @@ function RulesetSwitch(props: { current: PlaylogRulesetId; path: string }) {
         </a>
       ))}
     </div>
+  );
+}
+
+/** Where this page sits: Leaderboard › … › this page (the last step is not a link). */
+function Breadcrumbs(props: { crumbs: Crumb[] }) {
+  const trail: Crumb[] = [{ label: 'Leaderboard', href: '/leaderboard' }, ...props.crumbs];
+  return (
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol class="text-muted-foreground gap-1.5 text-sm">
+        {trail.map((crumb, index) => {
+          const last = index === trail.length - 1;
+          return (
+            <>
+              {index > 0 ? (
+                <li aria-hidden="true">
+                  <span aria-hidden="true">›</span>
+                </li>
+              ) : null}
+              <li>
+                {last || crumb.href === undefined ? (
+                  <span class="text-foreground max-w-[40ch] truncate" aria-current={last ? 'page' : undefined}>
+                    {crumb.label}
+                  </span>
+                ) : (
+                  <a class="hover:text-foreground max-w-[40ch] truncate" href={crumb.href}>
+                    {crumb.label}
+                  </a>
+                )}
+              </li>
+            </>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -97,7 +139,10 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
             <RulesetSwitch current={props.meta.ruleset} path={props.meta.path} />
           </div>
         </header>
-        <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">{props.children}</main>
+        <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">
+          <Breadcrumbs crumbs={props.meta.crumbs} />
+          {props.children}
+        </main>
         <footer class="text-muted-foreground mx-auto max-w-5xl px-4 pb-8 text-xs">
           Beta — rankings may be reset while scoring rules settle.
         </footer>
