@@ -119,6 +119,19 @@ it:
 pnpm --filter @be-music/leaderboard-api run build:css
 ```
 
+### Icons
+
+The pages' icon is `src/pages/icons/icon.svg`: the browser tab shows it as is. The home-screen icon (180 px) and the
+web app manifest icons (192 / 512 px) are rendered from it. To change the icon, replace the SVG and rebuild:
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:icons
+```
+
+The icons are compiled into `src/pages/icons.generated.ts` (committed) and served from
+`/leaderboard/assets/<name>.<hash>.<ext>`, next to `/leaderboard/manifest.webmanifest`. A hand-made PNG placed next to
+the SVG (`apple-touch-icon.png`, `icon-192.png`, `icon-512.png`) is used instead of its rendered one.
+
 ## Tests
 
 `pnpm test` runs this package's tests with the rest of the workspace. The API tests drive the Hono app with real D1

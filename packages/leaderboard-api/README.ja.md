@@ -108,6 +108,16 @@ preview の Worker は全ブランチで共有します。最後にデプロイ�
 pnpm --filter @be-music/leaderboard-api run build:css
 ```
 
+### アイコン
+
+ページのアイコンは `src/pages/icons/icon.svg` です。ブラウザのタブにはこれがそのまま表示されます。ホーム画面用（180 px）と Web アプリマニフェスト用（192 / 512 px）のアイコンはこの SVG から描画します。アイコンを変えるときは SVG を差し替えて、作り直します。
+
+```bash
+pnpm --filter @be-music/leaderboard-api run build:icons
+```
+
+アイコンは `src/pages/icons.generated.ts`（コミット対象）にまとめられ、`/leaderboard/manifest.webmanifest` と並んで `/leaderboard/assets/<名前>.<hash>.<拡張子>` から配信されます。SVG の隣に手描きの PNG（`apple-touch-icon.png`、`icon-192.png`、`icon-512.png`）を置くと、描画したものの代わりにそちらを使います。
+
 ## テスト
 
 `pnpm test` で、ワークスペースのほかのテストと一緒にこのパッケージのテストも実行されます。API のテストは Miniflare の

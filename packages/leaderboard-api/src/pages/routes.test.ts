@@ -54,6 +54,32 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('site icons', () => {
+  test('every page links the icons, which are served with their types, and the manifest lists them', async () => {
+    const top = await page('/leaderboard');
+    const favicon = /<link rel="icon" type="image\/svg\+xml" href="([^"]+)"/.exec(top.html)?.[1];
+    const appleTouch = /<link rel="apple-touch-icon" href="([^"]+)"/.exec(top.html)?.[1];
+    expect(favicon).toMatch(/^\/leaderboard\/assets\/icon\.[0-9a-f]{12}\.svg$/);
+    expect(appleTouch).toMatch(/^\/leaderboard\/assets\/apple-touch-icon\.[0-9a-f]{12}\.png$/);
+    expect(top.html).toContain('<link rel="manifest" href="/leaderboard/manifest.webmanifest"');
+
+    const svg = await fetchApp(favicon!);
+    expect(svg.headers.get('content-type')).toBe('image/svg+xml');
+    expect(svg.headers.get('cache-control')).toContain('immutable');
+    expect(await svg.text()).toContain('<svg');
+    const png = new Uint8Array(await (await fetchApp(appleTouch!)).arrayBuffer());
+    expect([...png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+
+    const manifest = (await (await fetchApp('/leaderboard/manifest.webmanifest')).json()) as {
+      start_url: string;
+      icons: Array<{ src: string; sizes: string }>;
+    };
+    expect(manifest.start_url).toBe('/leaderboard');
+    expect(manifest.icons.map((icon) => icon.sizes)).toEqual(['192x192', '512x512']);
+    expect((await fetchApp(manifest.icons[1]!.src)).status).toBe(200);
+  });
+});
+
 describe('API reference', () => {
   test('serves the OpenAPI document and the reference page that reads it', async () => {
     const document = await fetchApp('/api/v0/openapi.json');

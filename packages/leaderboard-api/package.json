@@ -16,7 +16,8 @@
     "db:migrate:preview": "cf d1 migrations apply f4f59881-e902-450c-892b-d764c481eb46 --dir migrations",
     "db:migrate:production": "cf d1 migrations apply d3791c87-75f0-4d6b-8fd9-9013f0492006 --dir migrations",
     "clean": "rimraf .wrangler .cloudflare",
-    "build:css": "node scripts/build-css.ts"
+    "build:css": "node scripts/build-css.ts",
+    "build:icons": "node scripts/build-icons.ts"
   },
   "dependencies": {
     "@be-music/chart": "workspace:*",
@@ -34,6 +35,7 @@
   "devDependencies": {
     "@be-music/parser": "workspace:*",
     "@cloudflare/workers-types": "^5.20261013.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/cli": "^4.3.3",
     "basecoat-css": "^1.0.2",
     "cf": "1.0.0-beta.14",
