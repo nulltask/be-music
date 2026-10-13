@@ -3,12 +3,13 @@ import type { Child } from 'hono/jsx';
 import { openDatabase } from '../db/client.ts';
 import { isOn } from '../http/query.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
-import { RankingTable } from './components/tables.tsx';
+import { loadChartFiles, loadPlayRanking, type ChartFile } from '../ranking-plays.ts';
+import { RankingList } from './components/lists.tsx';
 import { Details, DistributionCard, Elsewhere, LampLegend, Stats } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
-import { chartsetHref, FilterChip, Filters, LocalTime, Tag } from './components/basics.tsx';
+import { chartsetHref, Filters, LocalTime, SectionHeading, Segmented, Tag, Toggle } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
-import { externalLinks } from './external.ts';
+import { externalLinks, type ChartAlias } from './external.ts';
 import { chartTitle, formatJudgeRank, formatLaneMode, formatLnMode, rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
@@ -36,14 +37,22 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   const ruleset = displayRuleset(c);
   const assisted = isOn(c.req.query('assisted'));
   const includeAnonymous = isOn(c.req.query('anonymous'));
+  const everyPlay = isOn(c.req.query('every'));
+  const fileQuery = c.req.query('file')?.toLowerCase();
+  const fileSha256 = fileQuery !== undefined && /^[0-9a-f]{64}$/.test(fileQuery) ? fileQuery : undefined;
   const filter = { chartFingerprint, ruleset, assisted, includeAnonymous, playedHereOnly: false };
+  const page = { offset: 0, limit: RANKING_LIMIT };
   // Everything below depends only on the chart: ask D1 for it at once rather than one query after another.
-  const [ranking, everyone, aliases, stats, filed] = await Promise.all([
-    loadRanking(db, filter, { offset: 0, limit: RANKING_LIMIT }),
+  const [ranking, everyone, aliases, stats, filed, files] = await Promise.all([
+    // The kept personal bests answer the plain ranking; every play and one file's plays need the plays themselves.
+    everyPlay || fileSha256 !== undefined
+      ? loadPlayRanking(db, filter, { everyPlay, fileSha256 }, page)
+      : loadRanking(db, filter, page),
     countPlayers(db, { ...filter, includeAnonymous: true }),
     loadChartAliases(db, chartFingerprint),
     loadChartStats(db, filter),
     loadChartsetOf(db, found.chartsetId),
+    loadChartFiles(db, chartFingerprint),
   ]);
   const infos = await loadPlayInfos(
     db,
@@ -83,15 +92,61 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           ['Last played', day(stats.lastPlayedAt)],
         ]}
       />
-      <Filters>
-        <FilterChip label="Assisted" on={assisted} href={withQuery(c, 'assisted', assisted ? undefined : '1')} />
-        <FilterChip
-          label="Anonymous players"
-          on={includeAnonymous}
-          href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
+      <section class="space-y-3" aria-labelledby="ranking">
+        <SectionHeading
+          id="ranking"
+          note={
+            everyPlay
+              ? `${'plays' in ranking ? ranking.plays : ranking.entries.length} plays`
+              : `${ranking.players} player${ranking.players === 1 ? '' : 's'}`
+          }
+        >
+          Ranking
+        </SectionHeading>
+        <Filters>
+          <Toggle
+            label="Every play"
+            description="List each play on its own row, so a player can appear more than once"
+            on={everyPlay}
+            href={withQuery(c, 'every', everyPlay ? undefined : '1')}
+          />
+          <Toggle
+            label="Assisted"
+            description="Plays with auto-scratch or a judge window override, ranked apart"
+            on={assisted}
+            href={withQuery(c, 'assisted', assisted ? undefined : '1')}
+          />
+          <Toggle
+            label="Anonymous players"
+            description="Include players who have not made a passkey yet"
+            on={includeAnonymous}
+            href={withQuery(c, 'anonymous', includeAnonymous ? undefined : '1')}
+          />
+        </Filters>
+        {files.length > 1 ? (
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-muted-foreground text-xs">File</span>
+            <Segmented
+              label="Chart file"
+              options={[
+                { label: 'All files', href: withQuery(c, 'file', undefined), current: fileSha256 === undefined },
+                ...files.map((file) => ({
+                  label: <span class="font-mono">{file.sha256.slice(0, 8)}</span>,
+                  href: withQuery(c, 'file', file.sha256),
+                  current: file.sha256 === fileSha256,
+                  title: `SHA-256 ${file.sha256}${file.md5 !== null ? ` · MD5 ${file.md5}` : ''} · ${file.plays} play${file.plays === 1 ? '' : 's'}`,
+                })),
+              ]}
+            />
+          </div>
+        ) : null}
+        <RankingList
+          entries={ranking.entries}
+          infos={infos}
+          noteCount={found.noteCount}
+          highlight={c.get('viewer')?.handle}
         />
-      </Filters>
-      <RankingTable entries={ranking.entries} infos={infos} noteCount={found.noteCount} />
+      </section>
       <DistributionCard
         title="Clear lamps"
         description={`Best lamps of the players above, under ${rulesetName(ruleset)}.`}
@@ -131,10 +186,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             found.playFingerprints.length > 1 ? `${found.playFingerprints.length} seen` : 'none seen',
           ],
           ['Fingerprint', <span class="font-mono text-xs">{chartFingerprint}</span>],
-          ...aliases.map((alias): [string, Child] => [
-            alias.kind === 'sha256' ? 'File SHA-256' : 'File MD5',
-            <span class="font-mono text-xs">{alias.hash}</span>,
-          ]),
+          [files.length > 1 ? 'Files' : 'File', <ChartFilesList files={files} aliases={aliases} />],
           ['First seen', <LocalTime at={found.createdAt.getTime()} />],
           ['Listed', found.status === 'listed' ? 'yes' : 'not yet (two players with a passkey list a chart)'],
         ])}
@@ -142,5 +194,33 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
       <Elsewhere links={elsewhere} />
       <LampLegend />
     </Layout>,
+  );
+}
+
+/**
+ * The files a chart is known by: those its plays came from (with their play counts), then any other hash a client
+ * reported for it. One chart fingerprint can cover several files.
+ */
+function ChartFilesList(props: { files: ChartFile[]; aliases: ChartAlias[] }) {
+  const played = new Set(props.files.flatMap((file) => [file.sha256, file.md5]));
+  const others = props.aliases.filter((alias) => !played.has(alias.hash));
+  if (props.files.length === 0 && others.length === 0) return <>-</>;
+  return (
+    <ul class="space-y-1.5">
+      {props.files.map((file) => (
+        <li class="space-y-0.5">
+          <div class="font-mono text-xs break-all">SHA-256 {file.sha256}</div>
+          {file.md5 !== null ? <div class="font-mono text-xs break-all">MD5 {file.md5}</div> : null}
+          <div class="text-muted-foreground text-xs">
+            {file.plays} play{file.plays === 1 ? '' : 's'} by {file.players} player{file.players === 1 ? '' : 's'}
+          </div>
+        </li>
+      ))}
+      {others.map((alias) => (
+        <li class="font-mono text-xs break-all">
+          {alias.kind === 'sha256' ? 'SHA-256' : 'MD5'} {alias.hash}
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -9,6 +9,7 @@ import {
   formatLaneMode,
   formatLnMode,
   formatPercent,
+  formatPlayTime,
   formatRecorder,
   formatScoreRate,
   formatTimestamp,
@@ -17,6 +18,13 @@ import {
 } from './format.ts';
 
 describe('page formatting', () => {
+  test('formatPlayTime keeps the two largest units', () => {
+    expect(formatPlayTime(0)).toBe('0s');
+    expect(formatPlayTime(48_900)).toBe('48s');
+    expect(formatPlayTime(25 * 60_000 + 12_000)).toBe('25m 12s');
+    expect(formatPlayTime(3 * 3_600_000 + 25 * 60_000 + 59_000)).toBe('3h 25m');
+  });
+
   test('rulesetName names a ruleset as the rules a score is counted by, not as a player', () => {
     expect(rulesetName('lr2')).toBe('LR2 rules');
     expect(rulesetName('beatoraja')).toBe('beatoraja rules');
