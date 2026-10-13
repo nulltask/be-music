@@ -13,6 +13,19 @@ function benchRandomDraws(source: chartApi.ControlFlowSource): chartApi.RandomDr
 }
 
 const BENCH_SWITCHING_BGA = chartApi.parseBmsSwBga('10:5:1:FF000000 02 03 04 05 06');
+const BENCH_FINGERPRINT_OPTIONS: chartApi.BeMusicFingerprintOptions = { chartPath: 'sample.bms' };
+const BENCH_FINGERPRINT_DOCUMENTS = new WeakMap<object, chartApi.BeMusicFingerprintDocument>();
+
+function getBenchFingerprintDocument(
+  json: Parameters<typeof chartApi.createChartFingerprintDocument>[0],
+): chartApi.BeMusicFingerprintDocument {
+  let document = BENCH_FINGERPRINT_DOCUMENTS.get(json);
+  if (!document) {
+    document = chartApi.createChartFingerprintDocument(json, BENCH_FINGERPRINT_OPTIONS);
+    BENCH_FINGERPRINT_DOCUMENTS.set(json, document);
+  }
+  return document;
+}
 
 export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.parseBpmFrom03Token', {
@@ -244,6 +257,36 @@ export function registerChartExportsCases(define: DefineBenchmarkCase): void {
   define('chart.resolveLnobjLongNotes', {
     run: (fixtures) => {
       chartApi.resolveLnobjLongNotes(fixtures.sampleBmsJson);
+    },
+  });
+  define('chart.createChartFingerprintDocument', {
+    run: (fixtures) => {
+      chartApi.createChartFingerprintDocument(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
+    },
+  });
+  define('chart.createPlayFingerprintDocument', {
+    run: (fixtures) => {
+      chartApi.createPlayFingerprintDocument(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
+    },
+  });
+  define('chart.canonicalizeFingerprintDocument', {
+    run: (fixtures) => {
+      chartApi.canonicalizeFingerprintDocument(getBenchFingerprintDocument(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.computeChartFingerprint', {
+    run: (fixtures) => {
+      chartApi.computeChartFingerprint(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
+    },
+  });
+  define('chart.computeFingerprintOfDocument', {
+    run: (fixtures) => {
+      chartApi.computeFingerprintOfDocument(getBenchFingerprintDocument(fixtures.sampleBmsJson));
+    },
+  });
+  define('chart.computePlayFingerprint', {
+    run: (fixtures) => {
+      chartApi.computePlayFingerprint(fixtures.sampleBmsJson, BENCH_FINGERPRINT_OPTIONS);
     },
   });
   define('chart.drawRandomOutcomes', {

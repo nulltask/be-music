@@ -261,6 +261,16 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       await playerWebCoreApi.computeChartFileSha256(BENCH_SOURCE, 'Songs/Bench/main.bms');
     },
   });
+  define('player-web.computeChartFileHashes', {
+    run: async () => {
+      await playerWebCoreApi.computeChartFileHashes(BENCH_SOURCE, 'Songs/Bench/main.bms');
+    },
+  });
+  define('player-web.md5HexOfBytes', {
+    run: () => {
+      playerWebCoreApi.md5HexOfBytes(BENCH_BYTES);
+    },
+  });
   define('player-web.computeSha256Hex', {
     run: async () => {
       await playerWebCoreApi.computeSha256Hex(BENCH_BYTES);

@@ -159,6 +159,8 @@
         },
         "noteCount": 23,
         "reversalTimeUs": 7384615,
+        "chartFingerprint": "bmfp0:c51a65425e5cedd08f33f509791e8109517021e2160d74b6a3e47f3656926e9e",
+        "playFingerprint": "bmfp0:c51a65425e5cedd08f33f509791e8109517021e2160d74b6a3e47f3656926e9e",
         "title": "negative BPM test 1 (#BPMxx -65 via ch08)",
         "artist": "be-music #134",
         "genre": "TEST",

@@ -13,7 +13,7 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/ffmpeg-core/*", "/__url-load-proxy"],
+    "run_worker_first": ["/ffmpeg-core/*", "/__url-load-proxy", "/api/*", "/leaderboard/*"],
   },
   // Holds `ffmpeg-core.wasm` (~31 MB, over the 25 MiB Static Assets per-file limit) and its `ffmpeg-core.js` loader.
   // Create the bucket with `pnpm cf:r2:create` and upload the files with `pnpm cf:r2:push`.
@@ -21,6 +21,14 @@
     {
       "binding": "FFMPEG_CORE",
       "bucket_name": "be-music-ffmpeg-core",
+    },
+  ],
+  // The Leaderboard Worker (`packages/leaderboard-api`, deployed with `cf deploy`). It has no public URL; this Worker
+  // forwards `/api/*` and `/leaderboard/*` to it so the player, the API and its session cookies share one origin.
+  "services": [
+    {
+      "binding": "LEADERBOARD",
+      "service": "be-music-leaderboard",
     },
   ],
   "observability": {

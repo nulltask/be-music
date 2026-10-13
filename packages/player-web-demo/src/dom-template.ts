@@ -8,6 +8,7 @@
  *
  * Sub-elements wired up elsewhere:
  *  - `#help-button` / `#help-modal` — `help-modal.ts` (`wireHelpModal`)
+ *  - `#account-chip` — `main.ts` (`refreshLeaderboardAccount`)
  *  - `#compat-panel*` — `compat-panel.ts` (`renderBrowserCompatPanel`)
  *  - `#songs` / `#search` / `#stage` / `#loading-*` / `.shell` — referenced via `PlayerWebDemoElements` in `main.ts`
  */
@@ -181,6 +182,16 @@ export const DEMO_APP_HTML = `
       <span class="help-button-label">Help</span>
     </button>
     <!--
+      Bottom-right Leaderboard account chip: the sign-in state at a glance
+      (a green dot when signed in, amber when anonymous, grey when signed
+      out). Signed in, it opens the player's Leaderboard page; signed out,
+      it opens the Debug Menu's Leaderboard folder. Wired in \`main.ts\`.
+    -->
+    <a class="account-chip" id="account-chip" data-state="signed-out" href="/leaderboard" target="_blank" rel="noopener">
+      <span class="account-chip-dot" aria-hidden="true"></span>
+      <span class="account-chip-label" id="account-chip-label">Not signed in</span>
+    </a>
+    <!--
       Touch play controls. Phones and tablets have no Space / Esc key, so
       during play a pause button sits in the top-left corner; while paused
       it shows Resume and Quit. Hidden on desktops and outside play.
@@ -317,12 +328,15 @@ export const DEMO_APP_HTML = `
               <ul class="help-about-notes">
                 <li>
                   Dropped files stay entirely in your browser. Charts, audio, and BGA assets are
-                  <strong>never uploaded to any server</strong>.
+                  <strong>never uploaded to any server</strong>. Only with
+                  <strong>Submit to Leaderboard</strong> on does a finished play send its play log
+                  (your key presses and the chart's note layout) and a fingerprint of the chart to
+                  the Leaderboard.
                 </li>
                 <li>Some features are still missing or incomplete — expect rough edges.</li>
                 <li>
-                  <strong>Scores are not saved.</strong> There is no persistence or leaderboard
-                  yet — refreshing the page or revisiting later loses every result.
+                  <strong>Best records stay in this browser.</strong> The Leaderboard (off by
+                  default, Debug Menu → Leaderboard) is a beta: its rankings may be reset.
                 </li>
                 <li>
                   <strong>Verified skins:</strong> the Lunatic Rave 2 default skin, plus the

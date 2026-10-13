@@ -1,5 +1,6 @@
 import { normalizePath } from '@be-music/utils/core';
 import { loadAssetBytes, lookupBytesCaseInsensitive } from './file-lookup.ts';
+import { md5HexOfBytes } from './md5.ts';
 import type { BrowserSongAssetSource } from './types.ts';
 
 /**
@@ -34,6 +35,35 @@ export async function computeChartFileSha256(
   }
   try {
     return await computeSha256Hex(bytes);
+  } catch {
+    return undefined;
+  }
+}
+
+/** The file hashes of a chart: SHA-256 (the play-log's primary key) and MD5 (how LR2 and LR2IR name a chart). */
+export interface ChartFileHashes {
+  sha256: string;
+  md5: string;
+}
+
+/**
+ * SHA-256 and MD5 (lowercase hex) of a song entry's source chart FILE bytes, read once. `undefined` when the chart file
+ * cannot be located in the asset source or the runtime lacks Web Crypto, as with {@link computeChartFileSha256}.
+ */
+export async function computeChartFileHashes(
+  source: BrowserSongAssetSource | undefined,
+  chartPath: string,
+): Promise<ChartFileHashes | undefined> {
+  if (!source || typeof crypto === 'undefined' || !crypto.subtle) {
+    return undefined;
+  }
+  const entry = lookupBytesCaseInsensitive(source.files, normalizePath(chartPath));
+  const bytes = await loadAssetBytes(entry);
+  if (!bytes) {
+    return undefined;
+  }
+  try {
+    return { sha256: await computeSha256Hex(bytes), md5: md5HexOfBytes(bytes) };
   } catch {
     return undefined;
   }

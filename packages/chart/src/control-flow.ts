@@ -55,10 +55,10 @@ export function drawRandomOutcomes(source: ControlFlowSource, random: () => numb
       continue;
     }
     if (entry.command === 'SETRANDOM' || entry.command === 'SETSWITCH') {
-      draws.push({ command: entry.command, range: 1, value: parsePositiveInteger(entry.value) ?? 1 });
+      draws.push({ command: entry.command, range: 1, value: parseControlFlowInteger(entry.value) ?? 1 });
       continue;
     }
-    const range = parsePositiveInteger(entry.value) ?? 1;
+    const range = parseControlFlowInteger(entry.value) ?? 1;
     draws.push({ command: entry.command, range, value: range <= 1 ? 1 : drawValue(range, random()) });
   }
   return draws;
@@ -85,16 +85,18 @@ export function evaluateControlFlow(source: ControlFlowSource, draws: RandomDraw
   const active: ActiveControlFlowEntry[] = [];
   const stack: ControlFlowFrame[] = [];
   let drawIndex = 0;
-  for (const entry of source.bms.controlFlow) {
+  const entries = source.bms.controlFlow;
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]!;
     if (entry.kind === 'directive') {
       if (isRandomDrawCommand(entry.command)) {
         const draw = draws[drawIndex];
         assertDrawMatches(draw, drawIndex, entry.command, entry.value);
         drawIndex += 1;
-        pushValueFrame(stack, entry.command, draw.value);
+        pushValueFrame(stack, entry.command, draw.value, index);
         continue;
       }
-      applyBranchCommand(stack, entry.command, entry.value);
+      applyBranchCommand(stack, entry.command, entry.value, index);
       continue;
     }
     if (isControlFlowActive(stack)) {
@@ -114,19 +116,29 @@ export function hasControlFlow(source: ControlFlowSource): boolean {
   return source.bms.controlFlow.length > 0;
 }
 
-interface RandomControlFrame {
+// ---------------------------------------------------------------------------------------------------------------------
+// The frame-stack semantics. Exported for the chart fingerprint, which runs them over every outcome at once
+// (`fingerprint-control-flow.ts`); not part of the package API.
+// ---------------------------------------------------------------------------------------------------------------------
+
+interface ControlFrameBase {
+  /** Index in `bms.controlFlow` of the directive that pushed the frame. */
+  origin: number;
+}
+
+export interface RandomControlFrame extends ControlFrameBase {
   type: 'random';
   value: number;
 }
 
-interface IfControlFrame {
+export interface IfControlFrame extends ControlFrameBase {
   type: 'if';
   active: boolean;
   matched: boolean;
   hasElse: boolean;
 }
 
-interface SwitchControlFrame {
+export interface SwitchControlFrame extends ControlFrameBase {
   type: 'switch';
   value: number;
   active: boolean;
@@ -135,10 +147,27 @@ interface SwitchControlFrame {
   terminated: boolean;
 }
 
-type ControlFlowFrame = RandomControlFrame | IfControlFrame | SwitchControlFrame;
+/** One frame of the control-flow stack. */
+export type ControlFlowFrame = RandomControlFrame | IfControlFrame | SwitchControlFrame;
 
-function isRandomDrawCommand(command: BmsControlFlowCommand): command is RandomDrawCommand {
+export function isRandomDrawCommand(command: BmsControlFlowCommand): command is RandomDrawCommand {
   return command === 'RANDOM' || command === 'SETRANDOM' || command === 'SWITCH' || command === 'SETSWITCH';
+}
+
+/**
+ * The value a `#SETRANDOM` / `#SETSWITCH` line fixes, or `undefined` for a `#RANDOM` / `#SWITCH` line with more than one
+ * outcome (a variable). Single-outcome `#RANDOM` / `#SWITCH` lines are fixed to 1.
+ */
+export function fixedDrawValue(command: RandomDrawCommand, rawValue: string | undefined): number | undefined {
+  if (command === 'SETRANDOM' || command === 'SETSWITCH') {
+    return parseControlFlowInteger(rawValue) ?? 1;
+  }
+  return (parseControlFlowInteger(rawValue) ?? 1) <= 1 ? 1 : undefined;
+}
+
+/** Number of outcomes a `#RANDOM` / `#SWITCH` line offers (1 for the `#SET…` lines). */
+export function drawRange(command: RandomDrawCommand, rawValue: string | undefined): number {
+  return command === 'SETRANDOM' || command === 'SETSWITCH' ? 1 : (parseControlFlowInteger(rawValue) ?? 1);
 }
 
 function assertDrawMatches(
@@ -155,13 +184,13 @@ function assertDrawMatches(
     throw new RangeError(`${prefix}: the draw is for #${draw.command}.`);
   }
   if (command === 'SETRANDOM' || command === 'SETSWITCH') {
-    const fixed = parsePositiveInteger(rawValue) ?? 1;
+    const fixed = parseControlFlowInteger(rawValue) ?? 1;
     if (draw.range !== 1 || draw.value !== fixed) {
       throw new RangeError(`${prefix}: the line fixes ${fixed}, the draw has ${draw.value}.`);
     }
     return;
   }
-  const range = parsePositiveInteger(rawValue) ?? 1;
+  const range = parseControlFlowInteger(rawValue) ?? 1;
   if (draw.range !== range) {
     throw new RangeError(`${prefix}: the line offers ${range} outcomes, the draw ${draw.range}.`);
   }
@@ -170,21 +199,33 @@ function assertDrawMatches(
   }
 }
 
-function pushValueFrame(stack: ControlFlowFrame[], command: RandomDrawCommand, value: number): void {
+/** Pushes the frame of a `#RANDOM` / `#SETRANDOM` / `#SWITCH` / `#SETSWITCH` line whose value is `value`. */
+export function pushValueFrame(
+  stack: ControlFlowFrame[],
+  command: RandomDrawCommand,
+  value: number,
+  origin: number,
+): void {
   if (command === 'RANDOM' || command === 'SETRANDOM') {
-    stack.push({ type: 'random', value });
+    stack.push({ type: 'random', value, origin });
     return;
   }
-  stack.push({ type: 'switch', value, active: false, matched: false, fallthrough: false, terminated: false });
+  stack.push({ type: 'switch', value, active: false, matched: false, fallthrough: false, terminated: false, origin });
 }
 
-function applyBranchCommand(stack: ControlFlowFrame[], command: BmsControlFlowCommand, rawValue?: string): void {
+/** Applies any other directive (`#IF`, `#ELSE`, `#CASE`, `#ENDSW`, …) to the stack. */
+export function applyBranchCommand(
+  stack: ControlFlowFrame[],
+  command: BmsControlFlowCommand,
+  rawValue: string | undefined,
+  origin: number,
+): void {
   switch (command) {
     case 'IF': {
-      const label = parsePositiveInteger(rawValue);
+      const label = parseControlFlowInteger(rawValue);
       const randomValue = getCurrentRandomValue(stack);
       const matched = label !== undefined && randomValue !== undefined && label === randomValue;
-      stack.push({ type: 'if', active: matched, matched, hasElse: false });
+      stack.push({ type: 'if', active: matched, matched, hasElse: false, origin });
       return;
     }
     case 'ELSEIF': {
@@ -195,7 +236,7 @@ function applyBranchCommand(stack: ControlFlowFrame[], command: BmsControlFlowCo
         }
         return;
       }
-      const label = parsePositiveInteger(rawValue);
+      const label = parseControlFlowInteger(rawValue);
       const randomValue = getCurrentRandomValue(stack);
       const matched = label !== undefined && randomValue !== undefined && label === randomValue;
       frame.active = matched;
@@ -240,7 +281,7 @@ function applyBranchCommand(stack: ControlFlowFrame[], command: BmsControlFlowCo
       }
       let matched: boolean;
       if (command === 'CASE') {
-        const label = parsePositiveInteger(rawValue);
+        const label = parseControlFlowInteger(rawValue);
         matched = label !== undefined && label === frame.value;
       } else {
         matched = !frame.matched;
@@ -270,7 +311,8 @@ function applyBranchCommand(stack: ControlFlowFrame[], command: BmsControlFlowCo
   }
 }
 
-function parsePositiveInteger(value?: string): number | undefined {
+/** A control-flow line's positive integer argument (`#RANDOM n`, `#IF n`, …), or `undefined`. */
+export function parseControlFlowInteger(value?: string): number | undefined {
   if (!value || value.length === 0) {
     return undefined;
   }
@@ -287,7 +329,8 @@ function drawValue(range: number, randomValue: number): number {
   return Math.floor(clamped * range) + 1;
 }
 
-function isControlFlowActive(stack: ReadonlyArray<ControlFlowFrame>): boolean {
+/** A header or object line is applied when every `#IF` and `#SWITCH` frame on the stack is active. */
+export function isControlFlowActive(stack: ReadonlyArray<ControlFlowFrame>): boolean {
   for (const frame of stack) {
     if (frame.type !== 'random' && !frame.active) {
       return false;
@@ -296,32 +339,33 @@ function isControlFlowActive(stack: ReadonlyArray<ControlFlowFrame>): boolean {
   return true;
 }
 
+/** The value of the innermost `#RANDOM` / `#SETRANDOM` frame, which `#IF` / `#ELSEIF` compare with. */
 function getCurrentRandomValue(stack: ReadonlyArray<ControlFlowFrame>): number | undefined {
-  for (let index = stack.length - 1; index >= 0; index -= 1) {
-    const frame = stack[index]!;
-    if (frame.type === 'random') {
-      return frame.value;
-    }
-  }
-  return undefined;
+  return getCurrentFrame(stack, 'random')?.value;
 }
 
-function getCurrentFrame(stack: ControlFlowFrame[], type: 'if'): IfControlFrame | undefined;
-function getCurrentFrame(stack: ControlFlowFrame[], type: 'switch'): SwitchControlFrame | undefined;
-function getCurrentFrame(
-  stack: ControlFlowFrame[],
-  type: 'if' | 'switch',
-): IfControlFrame | SwitchControlFrame | undefined {
+/**
+ * The innermost frame of a kind: `#IF` / `#ELSEIF` compare with the innermost `#RANDOM`, `#ELSE` / `#ELSEIF` act on the
+ * innermost `#IF`, and `#CASE` / `#DEF` / `#SKIP` on the innermost `#SWITCH`.
+ */
+export function getCurrentFrame(stack: ReadonlyArray<ControlFlowFrame>, type: 'random'): RandomControlFrame | undefined;
+export function getCurrentFrame(stack: ReadonlyArray<ControlFlowFrame>, type: 'if'): IfControlFrame | undefined;
+export function getCurrentFrame(stack: ReadonlyArray<ControlFlowFrame>, type: 'switch'): SwitchControlFrame | undefined;
+export function getCurrentFrame(
+  stack: ReadonlyArray<ControlFlowFrame>,
+  type: ControlFlowFrame['type'],
+): ControlFlowFrame | undefined {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const frame = stack[index]!;
     if (frame.type === type) {
-      return frame as IfControlFrame | SwitchControlFrame;
+      return frame;
     }
   }
   return undefined;
 }
 
-function removeCurrentFrame(stack: ControlFlowFrame[], type: ControlFlowFrame['type']): void {
+/** `#ENDIF` / `#ENDRANDOM` / `#ENDSW` remove the innermost frame of their kind, wherever it is on the stack. */
+export function removeCurrentFrame(stack: ControlFlowFrame[], type: ControlFlowFrame['type']): void {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     if (stack[index]!.type === type) {
       stack.splice(index, 1);

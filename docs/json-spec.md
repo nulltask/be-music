@@ -15,7 +15,7 @@ Also, as it is still in the early stages of development, backward compatibility 
 
 - `@be-music/json` is a pure IR package
 - `@be-music/json` only provides types, normalized data structures, and clone/initialization/basic formatting helpers
-- `@be-music/chart` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc.
+- `@be-music/chart` is in charge of score semantics such as beat conversion, event order, long note resolution, sample trigger judgment, etc., and computes the [Be-Music Fingerprint](./fingerprint-spec.md) of a chart (`computeChartFingerprint` / `computePlayFingerprint`).
 - Source-level information for round-trips is kept as part of the IR, but separated from the normalized score semantics in the `preservation` layer.
 
 ## Design principles

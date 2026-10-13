@@ -1,0 +1,5 @@
+# cf / Wrangler build output, generated types and local state
+.cloudflare/
+.wrangler/
+# Local secrets for `cf dev` (never committed)
+.dev.vars
