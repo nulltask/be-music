@@ -119,7 +119,12 @@ import {
   songRecordPlayFromResult,
   storeSongRecords,
 } from './song-records.ts';
-import { describeLeaderboardResult, prepareLeaderboardSubmission, submitToLeaderboard } from './leaderboard.ts';
+import {
+  describeLeaderboardResult,
+  describeSkippedSubmission,
+  prepareLeaderboardSubmission,
+  submitToLeaderboard,
+} from './leaderboard.ts';
 import {
   createLeaderboardPasskey,
   describeLeaderboardAccount,
@@ -4153,9 +4158,7 @@ class PlayerWebDemoApp {
     }
     const prepared = prepareLeaderboardSubmission(playlog, song.chart, song.chartPath);
     if (!prepared.ok) {
-      if (prepared.reason !== 'not-rankable') {
-        this.setStatus(`Leaderboard: not submitted (${prepared.reason})`);
-      }
+      this.setStatus(describeSkippedSubmission(prepared.reason));
       return;
     }
     const client = `${PLAYLOG_RECORDER.name}/${PLAYLOG_RECORDER.version}${
