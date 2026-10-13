@@ -3,6 +3,8 @@ import { describeRoute, openAPIRouteHandler, resolver, validator } from 'hono-op
 import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
+import { AVATAR_MAX_BYTES, putAvatar, removeAvatar } from '../avatars.ts';
+import { updateProfile } from '../profiles.ts';
 import type { AppEnv } from '../app.ts';
 import { createAuth } from '../auth.ts';
 import { openDatabase } from '../db/client.ts';
@@ -18,6 +20,7 @@ import {
   errorResponse,
   myRankQuery,
   myRankResponse,
+  profileUpdateBody,
   rankingQuery,
   rankingResponse,
   scoreResponse,
@@ -82,6 +85,94 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
     async (c) => {
       const userId = c.get('userId');
       if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const account = await loadAccount(c.get('db'), userId);
+      if (account === undefined) return c.json({ error: 'not-found' }, 404);
+      return c.json(account);
+    },
+  );
+
+  v0.patch(
+    '/me',
+    describeRoute({
+      tags: ['Account'],
+      summary: 'Change my handle or display name',
+      description:
+        'Fields left out stay as they are. The old handle stays reserved for the player, and its pages redirect to the new one.',
+      responses: {
+        200: json('The account after the change.', accountResponse),
+        400: json(
+          'The handle or the display name breaks a rule (`detail`: format, reserved, empty, length, characters).',
+          errorResponse(['invalid-handle', 'invalid-display-name']),
+        ),
+        401: signInRequired,
+        404: notFound('The account'),
+        409: json('Another player holds this handle, now or formerly.', errorResponse(['handle-taken'])),
+      },
+    }),
+    validator('json', profileUpdateBody),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const result = await updateProfile(c.get('db'), userId, c.req.valid('json'));
+      if (!result.ok) {
+        return result.status === 400
+          ? c.json({ error: result.error, detail: result.detail }, 400)
+          : c.json({ error: result.error }, result.status);
+      }
+      const account = await loadAccount(c.get('db'), userId);
+      if (account === undefined) return c.json({ error: 'not-found' }, 404);
+      return c.json(account);
+    },
+  );
+
+  v0.put(
+    '/me/avatar',
+    describeRoute({
+      tags: ['Account'],
+      summary: 'Upload my icon',
+      description: `The image itself as the body: WebP, PNG or JPEG (recognized by its signature), at most ${AVATAR_MAX_BYTES / 1024} KB. Clients shrink it to a 256 px square first.`,
+      requestBody: {
+        required: true,
+        content: {
+          'image/webp': { schema: { type: 'string', format: 'binary' } },
+          'image/png': { schema: { type: 'string', format: 'binary' } },
+          'image/jpeg': { schema: { type: 'string', format: 'binary' } },
+        },
+      },
+      responses: {
+        200: json('The account with its new icon.', accountResponse),
+        400: json('No image was sent.', errorResponse(['empty-body'])),
+        401: signInRequired,
+        413: json('The image is too large.', errorResponse(['avatar-too-large'])),
+        415: json('Not a WebP, PNG or JPEG image.', errorResponse(['unsupported-image'])),
+      },
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const declared = Number(c.req.header('content-length') ?? '0');
+      if (declared > AVATAR_MAX_BYTES) return c.json({ error: 'avatar-too-large' }, 413);
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      const result = await putAvatar(c.get('db'), c.env.BLOBS, userId, bytes);
+      if (!result.ok) return c.json({ error: result.error }, result.status);
+      const account = await loadAccount(c.get('db'), userId);
+      if (account === undefined) return c.json({ error: 'not-found' }, 404);
+      return c.json(account);
+    },
+  );
+
+  v0.delete(
+    '/me/avatar',
+    describeRoute({
+      tags: ['Account'],
+      summary: 'Remove my icon',
+      description: 'Goes back to the icon generated from the account.',
+      responses: { 200: json('The account with the generated icon.', accountResponse), 401: signInRequired },
+    }),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      await removeAvatar(c.get('db'), c.env.BLOBS, userId);
       const account = await loadAccount(c.get('db'), userId);
       if (account === undefined) return c.json({ error: 'not-found' }, 404);
       return c.json(account);
