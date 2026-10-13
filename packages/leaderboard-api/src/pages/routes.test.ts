@@ -149,7 +149,8 @@ describe('Leaderboard pages', () => {
     const score = await page(`/leaderboard/scores/${firstScore}`);
     expect(score.status).toBe(200);
     expect(score.html).toContain('property="og:title"');
-    expect(score.html).toContain('LR2');
+    expect(score.html).toContain('LR2 rules');
+    expect(score.html).toContain('Scored with');
     expect(score.html).toContain('beatoraja');
     expect(score.html).toContain('IIDX');
     expect(score.html).toContain(`/api/v0/scores/${firstScore}/playlog`);
@@ -183,7 +184,7 @@ describe('Leaderboard pages', () => {
     expect(player.status).toBe(200);
     expect(player.html).toContain(`@${firstHandle}`);
     // Player figures: plays, charts, the lamp and DJ Rank spreads of their bests, and the rulesets they played under.
-    expect(player.html).toContain('>Average rate (LR2)<');
+    expect(player.html).toContain('>Average rate (LR2 rules)<');
     expect(player.html).toContain('>DJ Ranks<');
     expect(player.html).toContain('>Played under<');
   });

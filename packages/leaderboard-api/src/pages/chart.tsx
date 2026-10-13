@@ -9,7 +9,7 @@ import { EntityIcon } from './components/entity-icon.tsx';
 import { chartsetHref, FilterChip, Filters, LocalTime, Tag } from './components/basics.tsx';
 import { loadChart, loadChartAliases, loadChartsetOf, loadPlayInfos } from './data.ts';
 import { externalLinks } from './external.ts';
-import { chartTitle, formatJudgeRank, formatLaneMode, formatLnMode, RULESET_LABELS } from './format.ts';
+import { chartTitle, formatJudgeRank, formatLaneMode, formatLnMode, rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
   day,
@@ -47,7 +47,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   c.header('cache-control', PAGE_CACHE);
   return c.html(
     <Layout
-      meta={meta(c, title, `${title} — ${RULESET_LABELS[ruleset]} ranking, ${ranking.players} players.`, [
+      meta={meta(c, title, `${title} — ranking under ${rulesetName(ruleset)}, ${ranking.players} players.`, [
         ...chartsetCrumbs(filed),
         { label: title, kind: 'chart' },
       ])}
@@ -94,7 +94,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
       />
       <DistributionCard
         title="Clear lamps"
-        description={`Best lamps of the players above, under ${RULESET_LABELS[ruleset]}.`}
+        description={`Best lamps of the players above, under ${rulesetName(ruleset)}.`}
         distribution={stats.lamps}
         kind="lamp"
       />

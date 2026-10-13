@@ -4,7 +4,7 @@ import { RecentScoresTable } from './components/tables.tsx';
 import { Details, DistributionCard, LampLegend, Stats } from './components/cards.tsx';
 import { Avatar, LocalTime, Tag } from './components/basics.tsx';
 import { loadPlayer, loadPlayInfos, loadRecentScores } from './data.ts';
-import { formatPercent, RULESET_LABELS } from './format.ts';
+import { formatPercent, rulesetName } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { day, displayRuleset, meta, notFound, PAGE_CACHE, RECENT_LIMIT, when, type PageContext } from './page.tsx';
 import { loadPlayerStats } from './stats.ts';
@@ -52,20 +52,20 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
         items={[
           ['Plays', stats.plays],
           ['Charts', stats.charts],
-          [`Average rate (${RULESET_LABELS[ruleset]})`, formatPercent(stats.averageRate)],
+          [`Average rate (${rulesetName(ruleset)})`, formatPercent(stats.averageRate)],
           ['Last played', day(stats.lastPlayedAt)],
         ]}
       />
       <div class="grid gap-6 lg:grid-cols-2">
         <DistributionCard
           title="Clear lamps"
-          description={`Best lamp per chart under ${RULESET_LABELS[ruleset]}, without assists.`}
+          description={`Best lamp per chart under ${rulesetName(ruleset)}, without assists.`}
           distribution={stats.lamps}
           kind="lamp"
         />
         <DistributionCard
           title="DJ Ranks"
-          description={`Best EX-Score per chart under ${RULESET_LABELS[ruleset]}, without assists.`}
+          description={`Best EX-Score per chart under ${rulesetName(ruleset)}, without assists.`}
           distribution={stats.djRanks}
           kind="dj-rank"
         />
@@ -80,9 +80,7 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
             stats.playsByRuleset.length === 0
               ? '-'
               : stats.playsByRuleset
-                  .map(
-                    (entry) => `${RULESET_LABELS[entry.ruleset]}: ${entry.count} play${entry.count === 1 ? '' : 's'}`,
-                  )
+                  .map((entry) => `${rulesetName(entry.ruleset)}: ${entry.count} play${entry.count === 1 ? '' : 's'}`)
                   .join(' · '),
           ],
         ]}

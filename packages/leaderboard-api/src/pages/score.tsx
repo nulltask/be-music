@@ -10,7 +10,7 @@ import { avatarUrl } from '../avatars.ts';
 import { cardUrl } from '../cards.ts';
 import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
-import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, RULESET_LABELS } from './format.ts';
+import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
 import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { displayRuleset, meta, notFound, PAGE_CACHE, withArtist, type PageContext, chartsetCrumbs } from './page.tsx';
@@ -26,7 +26,7 @@ function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][numbe
     playerName: detail.player?.displayName ?? '',
     handle: detail.player?.handle ?? '',
     avatarUrl: detail.player !== null ? avatarUrl(detail.player.handle, detail.player.avatarKey) : '',
-    rulesetLabel: RULESET_LABELS[played.ruleset] ?? played.ruleset,
+    rulesetLabel: rulesetName(played.ruleset),
     lamp: { label: lamp.label, color: lamp.color },
     exScore: played.exScore,
     maxExScore: played.noteCount * 2,
@@ -109,7 +109,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   const played = detail.results.find((result) => result.ruleset === detail.score.playedRuleset);
   const description =
     played !== undefined
-      ? `${player.displayName} · ${title} · EX ${played.exScore} (${RULESET_LABELS[played.ruleset]})`
+      ? `${player.displayName} · ${title} · EX ${played.exScore} (${rulesetName(played.ruleset)})`
       : `${player.displayName} · ${title}`;
   const card = played === undefined ? undefined : scoreCardData(detail, played, title);
   const image = cardUrl(detail.score.id, detail.score.cardKey);
