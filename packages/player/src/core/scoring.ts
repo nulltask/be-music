@@ -143,4 +143,6 @@ function resolveExScoreDelta(judge: JudgeKind): number {
   return 0;
 }
 
-const IIDX_RANK_LABELS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
+/** The DJ Ranks (DJ LEVEL) on the IIDX ninths, best first: the labels `resolveIidxRankLabel` returns. */
+export const IIDX_RANK_LABELS = ['AAA', 'AA', 'A', 'B', 'C', 'D', 'E', 'F'] as const;
+export type IidxRankLabel = (typeof IIDX_RANK_LABELS)[number];
