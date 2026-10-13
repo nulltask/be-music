@@ -10,7 +10,10 @@ import {
   type TestChart,
 } from '../test/support.ts';
 import { createApp } from './app.ts';
+import { eq } from 'drizzle-orm';
 import { openDatabase } from './db/client.ts';
+import { score } from './db/schema.ts';
+import { backfillPlayedFiles } from './scores/backfill.ts';
 import type { Env } from './env.ts';
 import { ClearLamp } from './scoring/lamp.ts';
 
@@ -101,6 +104,16 @@ describe('POST /api/v0/scores', () => {
     const playlog = JSON.parse(gunzipSync(Buffer.from(await stored!.arrayBuffer())).toString('utf8'));
     expect(playlog.chart.chartFingerprint).toBe(chart.chartFingerprint);
     expect(await env.BLOBS.head(`charts/${chart.chartFingerprint}.json`)).not.toBeNull();
+
+    // The play's length is kept: to the last input, 50 ms after the tenth note at 5.5 s.
+    const db = openDatabase(env.DB);
+    const stored0 = await db.query.score.findFirst({ where: (row, { eq }) => eq(row.id, body.scoreId) });
+    expect(stored0?.durationMs).toBe(5_550);
+    // A play stored before lengths were kept gets it back from its play log.
+    await db.update(score).set({ durationMs: null }).where(eq(score.id, body.scoreId));
+    expect(await backfillPlayedFiles(db, env.BLOBS)).toBeGreaterThanOrEqual(1);
+    const backfilled = await db.query.score.findFirst({ where: (row, { eq }) => eq(row.id, body.scoreId) });
+    expect(backfilled?.durationMs).toBe(5_550);
 
     // Sending the same play log again returns the stored play instead of a second one.
     const again = await submitPlay(cookie, chart, 10);
