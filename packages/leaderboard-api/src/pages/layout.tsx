@@ -2,7 +2,7 @@
 import type { Child } from 'hono/jsx';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { RULESET_LABELS } from './format.ts';
-import { RULESETS } from './preferences.ts';
+import { RULESET_IDS } from '../rulesets.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
 
 /** Where the compiled stylesheet is served; the hash in the name lets browsers keep it forever. */
@@ -42,7 +42,7 @@ export interface PageMeta {
 function RulesetSwitch(props: { current: PlaylogRulesetId; path: string }) {
   return (
     <div class="button-group sm:ms-auto" role="group" aria-label="Display ruleset">
-      {RULESETS.map((id) => (
+      {RULESET_IDS.map((id) => (
         <a
           class="btn"
           data-size="sm"

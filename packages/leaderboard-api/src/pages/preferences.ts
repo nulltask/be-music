@@ -1,16 +1,11 @@
-import type { PlaylogRulesetId } from '@be-music/player/playlog';
+import { isRuleset, type RulesetId } from '../rulesets.ts';
 
 /** Cookie holding the viewer's display ruleset; every page shows its figures under it. */
 export const RULESET_COOKIE = 'lb-ruleset';
-export const RULESETS: readonly PlaylogRulesetId[] = ['lr2', 'beatoraja', 'iidx'];
-export const DEFAULT_RULESET: PlaylogRulesetId = 'lr2';
-
-export function isRuleset(value: string | undefined): value is PlaylogRulesetId {
-  return value !== undefined && (RULESETS as readonly string[]).includes(value);
-}
+export const DEFAULT_RULESET: RulesetId = 'lr2';
 
 /** The display ruleset from the cookie, or LR2 when it is missing or not a ruleset. */
-export function resolveDisplayRuleset(cookieValue: string | undefined): PlaylogRulesetId {
+export function resolveDisplayRuleset(cookieValue: string | undefined): RulesetId {
   return isRuleset(cookieValue) ? cookieValue : DEFAULT_RULESET;
 }
 

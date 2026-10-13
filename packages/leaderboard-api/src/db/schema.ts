@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { RULESET_IDS } from '../rulesets.ts';
 import { index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 const timestamps = {
@@ -191,7 +192,7 @@ export const score = sqliteTable(
       .notNull()
       .references(() => chart.chartFingerprint),
     playFingerprint: text('play_fingerprint').notNull(),
-    playedRuleset: text('played_ruleset', { enum: ['lr2', 'beatoraja', 'iidx'] }).notNull(),
+    playedRuleset: text('played_ruleset', { enum: RULESET_IDS }).notNull(),
     gauge: text('gauge').notNull(),
     assisted: integer('assisted', { mode: 'boolean' }).notNull(),
     assistFlags: text('assist_flags', { mode: 'json' }).$type<string[]>().notNull(),
@@ -216,7 +217,7 @@ export const scoreResult = sqliteTable(
     scoreId: text('score_id')
       .notNull()
       .references(() => score.id, { onDelete: 'cascade' }),
-    ruleset: text('ruleset', { enum: ['lr2', 'beatoraja', 'iidx'] }).notNull(),
+    ruleset: text('ruleset', { enum: RULESET_IDS }).notNull(),
     rulesetRevision: text('ruleset_revision').notNull(),
     exScore: integer('ex_score').notNull(),
     noteCount: integer('note_count').notNull(),
@@ -241,7 +242,7 @@ export const bestScore = sqliteTable(
     chartFingerprint: text('chart_fingerprint')
       .notNull()
       .references(() => chart.chartFingerprint),
-    ruleset: text('ruleset', { enum: ['lr2', 'beatoraja', 'iidx'] }).notNull(),
+    ruleset: text('ruleset', { enum: RULESET_IDS }).notNull(),
     assisted: integer('assisted', { mode: 'boolean' }).notNull(),
     bestEx: integer('best_ex').notNull(),
     bestExScoreId: text('best_ex_score_id').notNull(),
