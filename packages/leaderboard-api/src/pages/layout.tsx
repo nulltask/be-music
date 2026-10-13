@@ -494,6 +494,10 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 <EntityIcon kind="api" size="md" class="text-current" />
                 <span class="hidden sm:inline">API</span>
               </a>
+              <a class="hover:text-foreground inline-flex items-center gap-1.5" href="/leaderboard/about" title="About">
+                <EntityIcon kind="about" size="md" class="text-current" />
+                <span class="hidden sm:inline">About</span>
+              </a>
             </nav>
             <div class="ms-auto flex items-center gap-2">
               <RulesetMenu current={props.meta.ruleset} path={props.meta.path} />

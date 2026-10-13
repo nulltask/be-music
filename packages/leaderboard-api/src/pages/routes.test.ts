@@ -54,6 +54,16 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('about page', () => {
+  test('explains the scoring and is linked from the header of every page', async () => {
+    const about = await page('/leaderboard/about');
+    expect(about.status).toBe(200);
+    expect(about.html).toContain('How a play is scored');
+    expect(about.html).toContain('href="https://github.com/nulltask/be-music"');
+    expect((await page('/leaderboard')).html).toContain('href="/leaderboard/about"');
+  });
+});
+
 describe('site icons', () => {
   test('every page links the icons, which are served with their types, and the manifest lists them', async () => {
     const top = await page('/leaderboard');
