@@ -7,7 +7,7 @@ import {
 } from '@be-music/chart';
 import type { BeMusicJson } from '@be-music/json';
 import { resolveBmsControlFlowWithDraws } from '@be-music/parser';
-import type { BeMusicPlaylog } from '@be-music/player-web/runtime';
+import { checkPlaylogEligibility, type BeMusicPlaylog } from '@be-music/player-web/runtime';
 
 /** What the Leaderboard API needs for one play (docs/leaderboard.md section 5.1). */
 export interface LeaderboardSubmission {
@@ -31,13 +31,12 @@ export function prepareLeaderboardSubmission(
   sourceChart: BeMusicJson,
   chartPath: string | undefined,
 ): SubmissionPreparation {
-  if (playlog.play.mode !== 'manual' || playlog.play.aborted === true) {
-    return { ok: false, reason: 'not-rankable' };
+  // The server applies the same check (`checkPlaylogEligibility`); assists are allowed and ranked apart there.
+  const eligibility = checkPlaylogEligibility(playlog);
+  if (!eligibility.eligible) {
+    return { ok: false, reason: eligibility.reason === 'missing-fingerprint' ? 'missing-fingerprint' : 'not-rankable' };
   }
-  const { chartFingerprint, playFingerprint } = playlog.chart;
-  if (chartFingerprint === undefined || playFingerprint === undefined) {
-    return { ok: false, reason: 'missing-fingerprint' };
-  }
+  const { chartFingerprint, playFingerprint } = eligibility;
   const playedChart = hasControlFlow(sourceChart)
     ? resolveBmsControlFlowWithDraws(sourceChart, playlog.play.randomDraws ?? [])
     : sourceChart;
