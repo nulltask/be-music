@@ -10,4 +10,4 @@ Give each play in the lists more context and less noise:
 
 Charts take their level from play logs that carry it, and plays get their lane option from their logs, the older ones through the hourly backfill (migration `0005_score_context`).
 
-The scoring rules switch moves from its own bar into a menu in the header, and a new About page (`/leaderboard/about`, linked from the header) explains how plays are scored, how charts are known, accounts, the checks, personal bests and the beta state.
+The scoring rules switch moves from its own bar into a menu in the header, and a new About page (`/leaderboard/about`, linked from the header) explains how plays are scored, how charts are known, accounts, the checks, personal bests and the beta state. A Help page (`/leaderboard/help`) gathers the lamp legend, which no longer trails every page, with the terms: reading a play row, EX-Score and DJ LEVEL, judgments and BP, the rulesets, gauges, long-note modes, the ranking switches and verification. Play sits at the far right of the header.
