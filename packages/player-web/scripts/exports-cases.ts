@@ -660,6 +660,31 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.pickRecorderMimeType((type) => type === 'video/webm');
     },
   });
+  define('player-web.recorderMimeCandidates', {
+    run: () => {
+      playerWebCoreApi.recorderMimeCandidates({ container: 'mp4', videoCodec: 'avc' });
+    },
+  });
+  define('player-web.recordingVideoCodecs', {
+    run: () => {
+      playerWebCoreApi.recordingVideoCodecs({ container: 'webm', videoCodec: 'vp8' });
+    },
+  });
+  define('player-web.recordingAudioCodecs', {
+    run: () => {
+      playerWebCoreApi.recordingAudioCodecs('mp4');
+    },
+  });
+  define('player-web.describeRecordingFormat', {
+    run: () => {
+      playerWebCoreApi.describeRecordingFormat({ container: 'mp4', videoCodec: 'hevc' });
+    },
+  });
+  define('player-web.recordingFileExtension', {
+    run: () => {
+      playerWebCoreApi.recordingFileExtension('video/mp4;codecs=avc1,mp4a.40.2');
+    },
+  });
   define('player-web.chartPlayVariantForBeatorajaVariant', {
     run: () => {
       playerWebCoreApi.chartPlayVariantForBeatorajaVariant('7');

@@ -26,6 +26,12 @@
  *
  * Disposed instances throw on further calls; the host should construct a fresh recorder per recording session.
  */
+import {
+  DEFAULT_RECORDING_FORMAT,
+  recorderMimeCandidates,
+  recordingFileExtension,
+  type RecordingFormat,
+} from './recording-format.ts';
 import { WebCodecsCapture, supportsWebCodecsRecording } from './webcodecs-recorder.ts';
 
 export interface GameplayRecorderOptions {
@@ -85,6 +91,11 @@ export interface GameplayRecorderOptions {
    * {@link mimeType} implies `'media-recorder'`.
    */
   backend?: 'auto' | 'webcodecs' | 'media-recorder';
+  /**
+   * The container and video codec to record in. Defaults to {@link DEFAULT_RECORDING_FORMAT} (MP4 with H.264). When the
+   * browser cannot encode that codec the recorder takes the next one the container can carry, then any it can record.
+   */
+  format?: RecordingFormat;
 }
 
 /**
@@ -96,25 +107,16 @@ export interface GameplayRecorderResult {
   blob: Blob;
   mimeType: string;
   durationMs: number;
-  /** Whether the file already carries its seek index (WebCodecs backend); otherwise run {@link makeWebmSeekable}. */
+  /**
+   * Whether the file already carries its seek index (the WebCodecs backend, and MP4 from `MediaRecorder`); otherwise
+   * (WebM from `MediaRecorder`) run {@link makeWebmSeekable}.
+   */
   seekable: boolean;
 }
 
 /**
- * Codec / container preference list, tried in order. The last entry is the bare `video/webm` MIME with no codec hint —
- * every `MediaRecorder` implementation that supports webm at all also supports this form, so it's the safety net.
- */
-const PREFERRED_RECORDER_MIME_TYPES: readonly string[] = [
-  'video/webm;codecs=vp9,opus',
-  'video/webm;codecs=vp8,opus',
-  'video/webm;codecs=vp9',
-  'video/webm;codecs=vp8',
-  'video/webm',
-];
-
-/**
- * Picks the highest-priority MIME type from {@link PREFERRED_RECORDER_MIME_TYPES} that the runtime `MediaRecorder`
- * claims to support. Returns `undefined` when no candidate is available (e.g. older Safari that lacks
+ * Picks the first MIME type of `candidates` (by default the WebM chain: VP9 / VP8 with Opus, then without, then bare
+ * `video/webm`) that the runtime `MediaRecorder` claims to support. Returns `undefined` when no candidate is available (e.g. older Safari that lacks
  * `MediaRecorder.isTypeSupported`); callers should treat that as "recording unavailable" rather than guessing.
  *
  * Exported for testing — production callers go through {@link GameplayRecorder.start} which calls this internally.
@@ -124,8 +126,9 @@ export function pickRecorderMimeType(
     typeof MediaRecorder !== 'undefined' &&
     typeof MediaRecorder.isTypeSupported === 'function' &&
     MediaRecorder.isTypeSupported(type),
+  candidates: readonly string[] = recorderMimeCandidates({ container: 'webm', videoCodec: 'vp9' }),
 ): string | undefined {
-  for (const candidate of PREFERRED_RECORDER_MIME_TYPES) {
+  for (const candidate of candidates) {
     if (isSupported(candidate)) return candidate;
   }
   return undefined;
@@ -172,6 +175,7 @@ export class GameplayRecorder {
   private readonly maxVideoSize: { width: number; height: number };
   private readonly subscribeFrame: ((onFrame: () => void) => () => void) | undefined;
   private readonly backend: 'auto' | 'webcodecs' | 'media-recorder';
+  private readonly format: RecordingFormat;
   /** The canvas frames are encoded from, and the copy that refreshes it (when the scene canvas is scaled down). */
   private source: { canvas: HTMLCanvasElement; copy?: () => void } | undefined;
   /** Active WebCodecs session, when that backend is in use. */
@@ -203,6 +207,7 @@ export class GameplayRecorder {
     this.maxVideoSize = options.maxVideoSize ?? { width: 1920, height: 1080 };
     this.subscribeFrame = options.subscribeFrame;
     this.backend = options.mimeType !== undefined ? 'media-recorder' : (options.backend ?? 'auto');
+    this.format = options.format ?? DEFAULT_RECORDING_FORMAT;
   }
 
   public isActive(): boolean {
@@ -258,7 +263,7 @@ export class GameplayRecorder {
       this.capture = undefined;
       try {
         const blob = await capture.finish();
-        return blob ? { blob, mimeType: 'video/webm', durationMs, seekable: true } : undefined;
+        return blob ? { blob, mimeType: blob.type, durationMs, seekable: true } : undefined;
       } finally {
         this.release();
       }
@@ -276,7 +281,7 @@ export class GameplayRecorder {
     const mimeType = recorder.mimeType || 'video/webm';
     const blob = new Blob(this.chunks, { type: mimeType });
     this.release();
-    return { blob, mimeType, durationMs, seekable: false };
+    return { blob, mimeType, durationMs, seekable: recordingFileExtension(mimeType) === 'mp4' };
   }
 
   /**
@@ -308,6 +313,7 @@ export class GameplayRecorder {
       fps: this.fps,
       videoBitsPerSecond: this.videoBitsPerSecond,
       audioBitsPerSecond: this.audioBitsPerSecond,
+      format: this.format,
     });
     this.capture = capture;
     this.startFrameLoop(() => {
@@ -334,7 +340,7 @@ export class GameplayRecorder {
   }
 
   private startMediaRecorder(source: { canvas: HTMLCanvasElement; copy?: () => void }): void {
-    const mimeType = this.explicitMimeType ?? pickRecorderMimeType();
+    const mimeType = this.explicitMimeType ?? pickRecorderMimeType(undefined, recorderMimeCandidates(this.format));
     if (!mimeType) {
       throw new Error('GameplayRecorder.start: browser exposes no supported MediaRecorder MIME type');
     }
