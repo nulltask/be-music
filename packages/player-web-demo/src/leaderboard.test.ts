@@ -4,6 +4,7 @@ import { parseBms, resolveBmsControlFlowWithDraws } from '@be-music/parser';
 import type { BeMusicPlaylog } from '@be-music/player-web/runtime';
 import {
   describeLeaderboardResult,
+  describeSkippedSubmission,
   prepareLeaderboardSubmission,
   submitToLeaderboard,
   type LeaderboardSubmission,
@@ -166,5 +167,15 @@ describe('describeLeaderboardResult', () => {
     expect(describeLeaderboardResult({ status: 'failed', httpStatus: 429, error: 'rate-limited' }, 'lr2')).toBe(
       'Leaderboard: not submitted (rate-limited)',
     );
+  });
+});
+
+describe('describeSkippedSubmission', () => {
+  test('names why a play was not sent', () => {
+    expect(describeSkippedSubmission('not-rankable')).toBe(
+      'Leaderboard: not submitted (auto play and aborted runs are not ranked)',
+    );
+    expect(describeSkippedSubmission('missing-fingerprint')).toMatch(/no chart fingerprint/);
+    expect(describeSkippedSubmission('fingerprint-mismatch')).toMatch(/does not match/);
   });
 });

@@ -88,7 +88,9 @@ request and a 3 MB compressed Worker. This shapes two decisions:
   (RFC 8628) and stores a bearer token.
 - **Anonymous play**: a player can submit without signing in. Better Auth's anonymous session creates an anonymous
   user, which can later be linked to a Discord or Google account. Anonymous scores are stored like any other; whether a
-  ranking lists them is a viewer-side filter.
+  ranking lists them is a viewer-side filter. Registering a passkey turns the account into a regular one (it has a way
+  back in now), and signing in with a passkey while an anonymous session is open moves that session's plays into the
+  passkey's account.
 - **Handles**: every account has a unique, changeable `handle` (used in URLs) and a `display_name`; OAuth profile names
   and emails are never shown. A changed handle keeps redirecting from the old URL, and a released handle cannot be
   claimed by someone else for a while (section 15).
