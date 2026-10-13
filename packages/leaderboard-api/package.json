@@ -1,0 +1,36 @@
+{
+  "name": "@be-music/leaderboard-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Leaderboard API for be-music on Cloudflare Workers",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "cf dev",
+    "deploy": "cf deploy",
+    "deploy:staging": "cf deploy --mode staging",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "cf d1 migrations apply be-music-leaderboard --local --dir migrations",
+    "db:migrate:staging": "cf d1 migrations apply be-music-leaderboard-staging --remote --dir migrations",
+    "db:migrate:production": "cf d1 migrations apply be-music-leaderboard --remote --dir migrations",
+    "clean": "rimraf .wrangler .cloudflare"
+  },
+  "dependencies": {
+    "@be-music/chart": "workspace:*",
+    "@be-music/player": "workspace:*",
+    "@better-auth/passkey": "^1.7.7",
+    "@hono/standard-validator": "^0.4.0",
+    "better-auth": "^1.7.7",
+    "drizzle-orm": "^0.45.4",
+    "hono": "^4.13.13",
+    "valibot": "^1.5.0"
+  },
+  "devDependencies": {
+    "@be-music/parser": "workspace:*",
+    "@cloudflare/workers-types": "^5.20261013.1",
+    "cf": "1.0.0-beta.14",
+    "drizzle-kit": "^0.31.11",
+    "miniflare": "5.20261006.1-alpha",
+    "wrangler": "^4.149.0"
+  }
+}
