@@ -213,7 +213,7 @@ export const DEMO_APP_HTML = `
             minlength="3"
             maxlength="15"
             pattern="[A-Za-z0-9_]{3,15}"
-            autocomplete="username webauthn"
+            autocomplete="username"
             spellcheck="false"
           />
           <small>3 to 15 letters, digits or _. It names your page.</small>

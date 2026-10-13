@@ -48,7 +48,11 @@ export class LeaderboardPanel {
   private accountController: Controller | undefined;
   private readonly accountState = { status: 'Not signed in' };
   /** Opens the sign-in / sign-up dialogs the start card's buttons lead to. */
-  private readonly openDialog = wireAccountDialogs(() => void this.refreshAccount());
+  private readonly openDialog = wireAccountDialogs({
+    onChanged: () => void this.refreshAccount(),
+    // Signing in is choosing to take part: plays from now on are submitted.
+    onSignedIn: () => this.submitController?.setValue(true),
+  });
   /** The toggle as it was when the current play started: a play is sent only if it was on at song start. */
   private submitThisPlay = false;
 
@@ -81,20 +85,26 @@ export class LeaderboardPanel {
       startCheckbox.addEventListener('change', () => this.submitController?.setValue(startCheckbox.checked));
     }
     this.accountController = folder.add(this.accountState, 'status').name('Account').disable();
-    const run = (label: string, action: () => Promise<AccountActionResult>) => () =>
-      this.runAccountAction(label, action);
+    const run = (label: string, action: () => Promise<AccountActionResult>, onSuccess?: () => void) => () =>
+      this.runAccountAction(label, action, onSuccess);
+    // Signing in, or keeping the account with a passkey, is choosing to take part: plays from now on are submitted.
+    const takePart = () => this.submitController?.setValue(true);
     folder
-      .add({ create: run('Create passkey', createLeaderboardPasskey) }, 'create')
+      .add({ create: run('Create passkey', createLeaderboardPasskey, takePart) }, 'create')
       .name('Create passkey (keep this account)');
     folder
-      .add({ signIn: run('Sign in with passkey', signInWithLeaderboardPasskey) }, 'signIn')
+      .add({ signIn: run('Sign in with passkey', signInWithLeaderboardPasskey, takePart) }, 'signIn')
       .name('Sign in with passkey');
     folder.add({ signOut: run('Sign out', signOutOfLeaderboard) }, 'signOut').name('Sign out');
     void this.refreshAccount();
   }
 
   /** Runs an account action, reporting it in the status line and under the start card's account row. */
-  private async runAccountAction(label: string, action: () => Promise<AccountActionResult>): Promise<void> {
+  private async runAccountAction(
+    label: string,
+    action: () => Promise<AccountActionResult>,
+    onSuccess?: () => void,
+  ): Promise<void> {
     const status = document.querySelector<HTMLElement>('#start-account-status');
     const say = (text: string) => {
       this.host.setStatus(text);
@@ -104,7 +114,10 @@ export class LeaderboardPanel {
     try {
       const result = await action();
       say(result.ok ? '' : `${label} failed: ${result.error}`);
-      if (result.ok) this.host.setStatus(`${label}: done`);
+      if (result.ok) {
+        this.host.setStatus(`${label}: done`);
+        onSuccess?.();
+      }
     } catch (error) {
       say(`${label} failed: ${error instanceof Error ? error.message : String(error)}`);
     }

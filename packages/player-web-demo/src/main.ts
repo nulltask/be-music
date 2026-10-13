@@ -526,6 +526,8 @@ class PlayerWebDemoApp {
    * the user's position.
    */
   private lastSelectNavigation: PixiSongSelectNavigation | undefined;
+  /** The skin system the scenes run on, so a pick of one that is not loaded can be undone. */
+  private activeSkinSystem: SkinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
   /**
    * Compressor architecture for `audioCompressorMode` on every gameplay mount. Defaults to `'split'` (the new 3-stage
    * bus — see `audio-bus.ts` for the design rationale); the demo accepts a `?compressor=legacy` URL flag for A/B
@@ -2136,7 +2138,7 @@ class PlayerWebDemoApp {
    */
   private rebuildSkinFamilyPicker(): void {
     const gui = this.gui;
-    if (gui === undefined || !EXTRA_SKINS_ENABLED) return;
+    if (gui === undefined) return;
     const lr2Available = hasAnyLr2Skin(this.familyDispatchState());
     const beatorajaAvailable = this.beatorajaTheme !== undefined;
     // Snap back to 'auto' BEFORE rebuilding options so the freshly-built controller initialises to a valid value.
@@ -2144,12 +2146,17 @@ class PlayerWebDemoApp {
     // as a phantom dropdown value the runtime silently ignored.
     const override = this.guiState.skinFamilyOverride;
     if ((override === 'lr2' && !lr2Available) || (override === 'beatoraja' && !beatorajaAvailable)) {
-      this.guiState.skinFamilyOverride = 'auto';
+      this.guiState.skinFamilyOverride = EXTRA_SKINS_ENABLED ? 'auto' : 'default';
     }
-    const options: Record<string, SkinFamilyOverride> = { 'Auto (prefer loaded theme)': 'auto' };
-    if (lr2Available) options['LR2'] = 'lr2';
-    if (beatorajaAvailable) options['beatoraja'] = 'beatoraja';
-    options['Default (no skin)'] = 'default';
+    // The three skin systems are always listed; one without a loaded skin says so, and picking it asks for a drop.
+    const options: Record<string, SkinFamilyOverride> = EXTRA_SKINS_ENABLED
+      ? { 'Auto (prefer loaded theme)': 'auto' }
+      : {};
+    options['Built-in'] = 'default';
+    options[lr2Available ? 'LR2' : 'LR2 (drop a skin)'] = 'lr2';
+    options[beatorajaAvailable ? 'beatoraja' : 'beatoraja (drop a skin)'] = 'beatoraja';
+    if (this.guiState.skinFamilyOverride === 'auto' && !EXTRA_SKINS_ENABLED)
+      this.guiState.skinFamilyOverride = 'default';
     if (this.skinFamilyController !== undefined) {
       // `OptionController#options(values)` updates the option list **in place** on an existing option controller
       // (see lil-gui v0.21.0 source: the subclass override mutates `_values` / `_names` + replaces the `<option>`
@@ -2164,8 +2171,23 @@ class PlayerWebDemoApp {
     // First-time build (called from `buildGui` before any theme has been loaded).
     this.skinFamilyController = gui
       .add(this.guiState, 'skinFamilyOverride', options)
-      .name('Skin family')
+      .name('Skin system')
       .onChange((value: SkinFamilyOverride) => {
+        const loaded =
+          value === 'lr2'
+            ? hasAnyLr2Skin(this.familyDispatchState())
+            : value === 'beatoraja'
+              ? this.beatorajaTheme !== undefined
+              : true;
+        if (!loaded) {
+          // Nothing of that system is loaded: stay on the current one and say how to get it.
+          this.setStatus(`Drop a folder with ${value === 'lr2' ? 'an LR2' : 'a beatoraja'} skin to use it`);
+          // Restored without `setValue`, which would run this handler again and rebuild the select screen for nothing.
+          this.guiState.skinFamilyOverride = this.activeSkinSystem;
+          this.skinFamilyController?.updateDisplay();
+          return;
+        }
+        this.activeSkinSystem = value;
         this.handleSkinFamilyOverrideChange(value);
       });
   }
@@ -2294,6 +2316,8 @@ class PlayerWebDemoApp {
 
   private handleSkinFamilyOverrideChange(value: SkinFamilyOverride): void {
     this.guiState.skinFamilyOverride = value;
+    this.activeSkinSystem = value;
+    this.skinFamilyController?.updateDisplay();
     if (this.lastSelectNavigation === undefined && this.selectView !== undefined) {
       this.lastSelectNavigation = this.selectView.getNavigation();
     }
