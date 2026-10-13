@@ -81,8 +81,6 @@ export const DEMO_APP_HTML = `
           <div class="drop-title">Drop to load</div>
           <div class="drop-subtitle">
             <span>BMS folder</span>
-            <span class="drop-subtitle-sep">·</span>
-            <span>LR2 Files</span>
           </div>
           <!--
             Leaderboard: whether this browser's plays are sent, and the
