@@ -149,6 +149,8 @@ import GUI, { type Controller } from 'lil-gui';
 import { wireHelpModal } from './help-modal.ts';
 import { DEMO_APP_HTML } from './dom-template.ts';
 import { renderBrowserCompatPanel } from './compat-panel.ts';
+import { navigationAfterDrop } from './drop-navigation.ts';
+import { askSkinOffer, describeSkinOffer } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
 import { chartShapeFor, resolveBeatorajaSkinVariant } from './chart-shape.ts';
@@ -1580,6 +1582,8 @@ class PlayerWebDemoApp {
         themeMarkers.length > 0 ? ` (${themeMarkers.join('+')})` : ' (no skin entry → preserving current theme)'
       } · songs=${songFiles.length}`,
     );
+    // The songs already listed, so the select screen can open on what this drop added.
+    const previousSongIds = new Set(this.collection.songs.map((song) => song.id));
     const tasks: Array<Promise<unknown>> = [];
     if (carriesLr2Theme) {
       tasks.push(this.loadTheme(themeFiles));
@@ -1617,10 +1621,39 @@ class PlayerWebDemoApp {
     } else if (this.selectSkin || this.resultSkin || Object.keys(this.playSkins).length > 0) {
       this.setStatus('Theme loaded');
     }
+    // Open what was dropped: its folder, or the folder list when the drop carried several.
+    const dropped = navigationAfterDrop(this.collection.songs, previousSongIds);
+    if (dropped !== undefined) this.lastSelectNavigation = dropped;
     await this.showSelect();
+    // With LR2 / beatoraja skins on hold they are not loaded with the drop; ask instead whether to use the one it carried.
+    if (!EXTRA_SKINS_ENABLED) await this.offerDroppedSkin(themeFamilies, themeFiles);
     if (playlogFiles.length > 0) {
       await this.startPlaylogReplayFromFile(playlogFiles[0]!);
     }
+  }
+
+  /**
+   * Offers the LR2 or beatoraja skin a drop carried, once its songs are listed. Taking it loads the skin and switches the
+   * scenes to its family; declining keeps the built-in skin. Only used while those skins are on hold
+   * (`EXTRA_SKINS_ENABLED` off), where a drop does not load them by itself.
+   */
+  private async offerDroppedSkin(families: ReadonlySet<string>, themeFiles: File[]): Promise<void> {
+    const offer = describeSkinOffer(
+      families,
+      families.has('lr2') ? discoverLr2Themes(themeFiles).map((theme) => theme.name) : [],
+    );
+    if (offer === undefined) return;
+    // The question goes over the select screen, not the loading overlay.
+    hideLoadingOverlay(this.elements);
+    const family = await askSkinOffer(offer);
+    if (family === undefined) return;
+    showLoadingOverlay(this.elements);
+    try {
+      await (family === 'lr2' ? this.loadTheme(themeFiles) : this.loadBeatorajaTheme(themeFiles));
+    } finally {
+      hideLoadingOverlay(this.elements);
+    }
+    this.handleSkinFamilyOverrideChange(family);
   }
 
   /**
