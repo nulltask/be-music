@@ -109,36 +109,61 @@ export const profile = sqliteTable('profile', {
 });
 
 /**
+ * A chartset: the charts of one work, the original package's and the add-ons (差分), as BMS Search files them. `id` is
+ * BMS Search's id for the work (docs/leaderboard.md section 7).
+ */
+export const chartset = sqliteTable('chartset', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  /** The event the work was entered in (BMS Search's "exhibition"), if any. */
+  event: text('event'),
+  ...timestamps,
+});
+
+/**
  * A chart, keyed by its chart fingerprint. `playFingerprints` lists the play fingerprints verified to be outcomes of
  * the chart (JSON array). `status` is `provisional` until the chart qualifies for public listing.
  */
-export const chart = sqliteTable('chart', {
-  chartFingerprint: text('chart_fingerprint').primaryKey(),
-  title: text('title'),
-  artist: text('artist'),
-  // What the first play log of the chart said about it. Null for charts registered before these were kept.
-  subtitle: text('subtitle'),
-  genre: text('genre'),
-  sourceFormat: text('source_format', { enum: ['bms', 'bmson'] }),
-  laneMode: text('lane_mode'),
-  /** Raw `#TOTAL` / bmson `info.total`, when the chart wrote one. */
-  total: real('total'),
-  /** Long-note mode: 1 LN, 2 CN, 3 HCN. */
-  lnMode: integer('ln_mode'),
-  /** Judge rank as the play log carried it: the window percentage and the raw `#RANK` / `#DEFEXRANK`. */
-  judgeRank: text('judge_rank', { mode: 'json' }).$type<{
-    percent: number;
-    sourceRank?: number;
-    sourceExRank?: number;
-  }>(),
-  noteCount: integer('note_count').notNull(),
-  playFingerprints: text('play_fingerprints', { mode: 'json' }).$type<string[]>().notNull(),
-  documentKey: text('document_key').notNull(),
-  status: text('status', { enum: ['provisional', 'listed'] })
-    .notNull()
-    .default('provisional'),
-  ...timestamps,
-});
+export const chart = sqliteTable(
+  'chart',
+  {
+    chartFingerprint: text('chart_fingerprint').primaryKey(),
+    title: text('title'),
+    artist: text('artist'),
+    // What the first play log of the chart said about it. Null for charts registered before these were kept.
+    subtitle: text('subtitle'),
+    genre: text('genre'),
+    sourceFormat: text('source_format', { enum: ['bms', 'bmson'] }),
+    laneMode: text('lane_mode'),
+    /** Raw `#TOTAL` / bmson `info.total`, when the chart wrote one. */
+    total: real('total'),
+    /** Long-note mode: 1 LN, 2 CN, 3 HCN. */
+    lnMode: integer('ln_mode'),
+    /** Judge rank as the play log carried it: the window percentage and the raw `#RANK` / `#DEFEXRANK`. */
+    judgeRank: text('judge_rank', { mode: 'json' }).$type<{
+      percent: number;
+      sourceRank?: number;
+      sourceExRank?: number;
+    }>(),
+    noteCount: integer('note_count').notNull(),
+    /** The chartset BMS Search files the chart under; null while unknown or unlinked. */
+    chartsetId: text('chartset_id').references(() => chartset.id),
+    /** Whether the chart came in the work's package or as an add-on (差分), per BMS Search. */
+    packType: text('pack_type', { enum: ['included', 'additional'] }),
+    /** When BMS Search was last asked about the chart; null until it has been. */
+    chartsetCheckedAt: integer('chartset_checked_at', { mode: 'timestamp_ms' }),
+    playFingerprints: text('play_fingerprints', { mode: 'json' }).$type<string[]>().notNull(),
+    documentKey: text('document_key').notNull(),
+    status: text('status', { enum: ['provisional', 'listed'] })
+      .notNull()
+      .default('provisional'),
+    ...timestamps,
+  },
+  (table) => [
+    index('chart_chartset_idx').on(table.chartsetId),
+    index('chart_chartset_checked_idx').on(table.chartsetCheckedAt),
+  ],
+);
 
 /** File-hash aliases of a chart (`sha256` of the chart file, later `md5`), many to one. */
 export const chartAlias = sqliteTable(

@@ -1,6 +1,6 @@
 import { sValidator } from '@hono/standard-validator';
 import { and, eq } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
 import { loadAccount } from '../accounts.ts';
@@ -10,6 +10,7 @@ import { openDatabase } from '../db/client.ts';
 import { bestScore, profile, score, scoreResult } from '../db/schema.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { countPlayers, loadRanking, rankOfExScore, type RankingFilter } from '../ranking.ts';
+import { refreshChartsetIfUnchecked, type ChartsetLookup } from '../chartsets/refresh.ts';
 import { submitScore } from '../scores/submit.ts';
 
 const rulesetSchema = v.picklist(['lr2', 'beatoraja', 'iidx']);
@@ -34,11 +35,29 @@ const submissionBody = v.object({
 });
 
 /**
+ * Runs `work` after the response is sent (`waitUntil`). Without an execution context (tests calling `app.request`
+ * directly) the work is dropped: it only fills in data the scheduled run fills in as well.
+ */
+function afterResponse(c: Context<AppEnv>, work: Promise<unknown>): void {
+  let context: { waitUntil(promise: Promise<unknown>): void } | undefined;
+  try {
+    context = c.executionCtx;
+  } catch {
+    context = undefined;
+  }
+  if (context === undefined) {
+    work.catch(() => undefined);
+    return;
+  }
+  context.waitUntil(work.catch((error: unknown) => console.warn('background work failed', error)));
+}
+
+/**
  * Version 1 of the Leaderboard API, mounted at `/api/v1` (docs/leaderboard.md section 8). A breaking change goes into a
  * new version mounted next to this one; additions stay here.
  */
-export function createV1Api(options: { now: () => number; newId: () => string }) {
-  const { now, newId } = options;
+export function createV1Api(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
+  const { now, newId, chartsetLookup } = options;
   const v1 = new Hono<AppEnv>();
 
   v1.use('*', async (c, next) => {
@@ -95,6 +114,10 @@ export function createV1Api(options: { now: () => number; newId: () => string })
       return c.json({ error: outcome.reason }, outcome.httpStatus);
     }
     const { status, ...rest } = outcome;
+    // A chart seen for the first time is filed under its chartset after the response, without holding it up.
+    if (status === 'accepted') {
+      afterResponse(c, refreshChartsetIfUnchecked(c.get('db'), chartsetLookup, rest.chartFingerprint, now()));
+    }
     return c.json(rest, status === 'accepted' ? 201 : 200);
   });
 
