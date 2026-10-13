@@ -26,7 +26,8 @@ be-music の Leaderboard API です。Cloudflare Workers 上の Hono アプリ�
 pnpm run build
 ```
 
-環境ごとに一度だけリソースを作り、`cf` に求められたら D1 の id を `cloudflare.config.ts` に書きます。
+リソースは be-music のアカウントに作成済みです（D1 と R2 を APAC に、環境ごとに 1 つずつ）。D1 の id は
+`cloudflare.config.ts` とマイグレーションのスクリプトに書いてあります。新しい環境では作成して id を記録します。
 
 ```bash
 pnpm exec cf d1 create be-music-leaderboard-staging
@@ -36,13 +37,14 @@ pnpm exec cf d1 create be-music-leaderboard-staging
 pnpm exec cf r2 bucket create be-music-leaderboard-staging
 ```
 
-環境ごとの secrets（どれもコミットしません）:
+環境ごとの secrets（どれもコミットしません）。`cloudflare.config.ts` で宣言した secret はデプロイのたびに必須です。
+Worker の最初のデプロイでは `cf deploy --secrets-file <file>` で渡し、以降のデプロイでは設定済みの値が引き継がれます。
 
-| Secret                                       | 用途                                         |
-| -------------------------------------------- | -------------------------------------------- |
-| `BETTER_AUTH_SECRET`                         | セッションの署名。長いランダムな文字列       |
-| `DISCORD_CLIENT_ID`、`DISCORD_CLIENT_SECRET` | Discord でのログイン（任意。未設定なら無効） |
-| `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`   | Google でのログイン（任意。未設定なら無効）  |
+| Secret                                       | 用途                                                           |
+| -------------------------------------------- | -------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                         | セッションの署名。長いランダムな文字列                         |
+| `DISCORD_CLIENT_ID`、`DISCORD_CLIENT_SECRET` | Discord でのログイン（任意。未設定なら無効。追加時に宣言する） |
+| `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET`   | Google でのログイン（任意。未設定なら無効。追加時に宣言する）  |
 
 ## データベース
 
