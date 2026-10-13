@@ -153,7 +153,7 @@ export default defineConfig({
         extends: true as const,
         test: {
           name: 'benchmark-scripts',
-          include: ['scripts/bench/**/*.test.ts', 'scripts/lint/**/*.test.ts'],
+          include: ['scripts/bench/**/*.test.ts', 'scripts/lint/**/*.test.ts', 'scripts/release/**/*.test.ts'],
         },
       },
     ],
