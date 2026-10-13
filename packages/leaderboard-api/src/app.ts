@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { parsePlaylog, PlaylogParseError, serializePlaylog } from '@be-music/player/playlog';
 import * as v from 'valibot';
+import { claimAccount, loadAccount } from './accounts.ts';
 import { createAuth } from './auth.ts';
 import { openDatabase, type Database } from './db/client.ts';
 import { bestScore, profile, score, scoreResult } from './db/schema.ts';
@@ -46,13 +47,30 @@ export function createApp(options: { now?: () => number; newId?: () => string } 
 
   const app = new Hono<AppEnv>();
 
-  app.on(['GET', 'POST'], '/api/auth/*', (c) => createAuth(c.env, new URL(c.req.url).origin).handler(c.req.raw));
+  app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
+    const auth = createAuth(c.env, new URL(c.req.url).origin);
+    const response = await auth.handler(c.req.raw);
+    // A registered passkey is a way back into the account, so it stops being anonymous (docs/leaderboard.md section 3).
+    if (c.req.path === '/api/auth/passkey/verify-registration' && response.ok) {
+      const session = await auth.api.getSession({ headers: c.req.raw.headers });
+      if (session !== null) await claimAccount(openDatabase(c.env.DB), session.user.id);
+    }
+    return response;
+  });
 
   app.use('/api/v1/*', async (c, next) => {
     c.set('db', openDatabase(c.env.DB));
     const session = await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
     c.set('userId', session?.user.id);
     await next();
+  });
+
+  app.get('/api/v1/me', async (c) => {
+    const userId = c.get('userId');
+    if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+    const account = await loadAccount(c.get('db'), userId);
+    if (account === undefined) return c.json({ error: 'not-found' }, 404);
+    return c.json(account);
   });
 
   app.post('/api/v1/scores', async (c) => {

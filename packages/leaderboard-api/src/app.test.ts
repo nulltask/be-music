@@ -244,3 +244,36 @@ describe('reassignScores', () => {
     expect(await me.json()).toMatchObject({ exScore: 18, playCount: 2 });
   });
 });
+
+describe('accounts', () => {
+  test('GET /api/v1/me shows the account, and a claimed account leaves the anonymous filter', async () => {
+    const { claimAccount } = await import('./accounts.ts');
+    expect((await fetchApp('/api/v1/me')).status).toBe(401);
+
+    const cookie = await signInAnonymously(fetchApp);
+    const before = (await (await fetchApp('/api/v1/me', { headers: { cookie } })).json()) as {
+      handle: string;
+      displayName: string;
+      anonymous: boolean;
+      passkeys: number;
+    };
+    expect(before).toMatchObject({ displayName: 'Anonymous', anonymous: true, passkeys: 0 });
+
+    const chart = makeChart(['#00111:01', '#00211:0101', '#00311:010101']);
+    expect((await submitPlay(cookie, chart, 8)).status).toBe(201);
+    const ranking = `/api/v1/charts/${encodeURIComponent(chart.chartFingerprint)}/leaderboard?ruleset=lr2`;
+    expect(((await (await fetchApp(ranking)).json()) as { players: number }).players).toBe(0);
+
+    // What registering a passkey does to the account (the WebAuthn ceremony itself needs a browser).
+    const session = (await (await fetchApp('/api/auth/get-session', { headers: { cookie } })).json()) as {
+      user: { id: string };
+    };
+    await claimAccount(openDatabase(env.DB), session.user.id);
+
+    const after = await (await fetchApp('/api/v1/me', { headers: { cookie } })).json();
+    expect(after).toEqual({ ...before, displayName: 'Player', anonymous: false });
+    const listed = (await (await fetchApp(ranking)).json()) as { players: number; entries: Array<{ handle: string }> };
+    expect(listed.players).toBe(1);
+    expect(listed.entries[0]!.handle).toBe(before.handle);
+  });
+});
