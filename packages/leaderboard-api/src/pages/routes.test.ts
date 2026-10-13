@@ -51,6 +51,22 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('API reference', () => {
+  test('serves the OpenAPI document and the reference page that reads it', async () => {
+    const document = await fetchApp('/api/v0/openapi.json');
+    expect(document.status).toBe(200);
+    const spec = (await document.json()) as { openapi: string; paths: Record<string, unknown> };
+    expect(spec.openapi).toBe('3.1.0');
+    expect(spec.paths).toHaveProperty('/scores');
+    expect(spec.paths).not.toHaveProperty('/openapi.json');
+
+    const reference = await page('/leaderboard/api');
+    expect(reference.status).toBe(200);
+    expect(reference.html).toContain('/api/v0/openapi.json');
+    expect(reference.html).toContain('@scalar/api-reference@1.72.4');
+  });
+});
+
 describe('Leaderboard pages', () => {
   const chart = makeChart(['#00111:0101', '#00211:010101', '#00311:01010101']);
   const evil = '<script>alert(1)</script>';

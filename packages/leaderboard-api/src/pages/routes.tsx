@@ -2,6 +2,7 @@
 import type { Context, Hono } from 'hono';
 import type { Child } from 'hono/jsx';
 import { getCookie, setCookie } from 'hono/cookie';
+import { Scalar } from '@scalar/hono-api-reference';
 import type { AppEnv } from '../app.ts';
 import { openDatabase } from '../db/client.ts';
 import { countPlayers, loadRanking } from '../ranking.ts';
@@ -466,6 +467,20 @@ export function mountPages(app: Hono<AppEnv>): void {
       </Layout>,
     );
   });
+
+  // The API reference, rendered by Scalar from the OpenAPI document. Its script is pinned so the page does not change
+  // under us.
+  app.get(
+    '/leaderboard/api',
+    Scalar({
+      url: '/api/v0/openapi.json',
+      pageTitle: 'be-music Leaderboard API',
+      cdn: 'https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.72.4',
+      // A plain reference: no hosted AI agent and no developer toolbar.
+      agent: { disabled: true },
+      showDeveloperTools: 'never',
+    }),
+  );
 
   // The compiled stylesheet. Its name carries a content hash, so browsers and caches may keep it forever.
   app.get(STYLESHEET_PATH, (c) =>
