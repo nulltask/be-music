@@ -21,10 +21,13 @@ import {
   type ChartsetLookup,
 } from './refresh.ts';
 
+// Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
+const noChartsets = async () => undefined;
+
 let env: Env;
 let dispose: () => Promise<void>;
 const NOW = Date.UTC(2026, 9, 13, 12);
-const app = createApp({ now: () => NOW });
+const app = createApp({ now: () => NOW, chartsetLookup: noChartsets });
 const fetchApp = (path: string, init?: RequestInit): Promise<Response> =>
   Promise.resolve(app.request(`${ORIGIN}${path}`, init, env));
 

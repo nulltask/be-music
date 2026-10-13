@@ -4,23 +4,13 @@
     {
       "name": "player-web-demo",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@be-music/player-web-demo",
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@be-music/player-web-demo", "run", "dev"],
       "port": 5173
     },
     {
       "name": "leaderboard-api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "--filter",
-        "@be-music/leaderboard-api",
-        "run",
-        "dev"
-      ],
+      "runtimeArgs": ["--filter", "@be-music/leaderboard-api", "run", "dev"],
       "port": 8787
     }
   ]

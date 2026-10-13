@@ -14,10 +14,13 @@ import { openDatabase } from './db/client.ts';
 import type { Env } from './env.ts';
 import { ClearLamp } from './scoring/lamp.ts';
 
+// Tests never reach BMS Search: a submission's background chartset lookup finds nothing.
+const noChartsets = async () => undefined;
+
 let env: Env;
 let dispose: () => Promise<void>;
 let clock = Date.UTC(2026, 9, 13);
-const app = createApp({ now: () => (clock += 1000) });
+const app = createApp({ now: () => (clock += 1000), chartsetLookup: noChartsets });
 
 const fetchApp = (path: string, init?: RequestInit): Promise<Response> =>
   Promise.resolve(app.request(`${ORIGIN}${path}`, init, env));
