@@ -42,7 +42,7 @@ async function submitChart(cookie: string, lines: string[], sha256: string, titl
   const playlog = makePlaylog(testChart, { noteCount: 4, hits: 4 });
   playlog.chart.title = title;
   playlog.chart.sha256 = sha256;
-  const response = await fetchApp('/api/v1/scores', {
+  const response = await fetchApp('/api/v0/scores', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'content-encoding': 'gzip', cookie },
     body: submissionBody(playlog, testChart.playDocument, testChart.chartDocument),

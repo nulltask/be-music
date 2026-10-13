@@ -53,21 +53,22 @@ function afterResponse(c: Context<AppEnv>, work: Promise<unknown>): void {
 }
 
 /**
- * Version 1 of the Leaderboard API, mounted at `/api/v1` (docs/leaderboard.md section 8). A breaking change goes into a
- * new version mounted next to this one; additions stay here.
+ * Version 0 of the Leaderboard API, mounted at `/api/v0` (docs/leaderboard.md section 8). Version 0 is the beta: it may
+ * still change incompatibly. Once stable it becomes `/api/v1`, and breaking changes after that go into a new version
+ * mounted next to the old one.
  */
-export function createV1Api(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
+export function createV0Api(options: { now: () => number; newId: () => string; chartsetLookup: ChartsetLookup }) {
   const { now, newId, chartsetLookup } = options;
-  const v1 = new Hono<AppEnv>();
+  const v0 = new Hono<AppEnv>();
 
-  v1.use('*', async (c, next) => {
+  v0.use('*', async (c, next) => {
     c.set('db', openDatabase(c.env.DB));
     const session = await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
     c.set('userId', session?.user.id);
     await next();
   });
 
-  v1.get('/me', async (c) => {
+  v0.get('/me', async (c) => {
     const userId = c.get('userId');
     if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
     const account = await loadAccount(c.get('db'), userId);
@@ -75,7 +76,7 @@ export function createV1Api(options: { now: () => number; newId: () => string; c
     return c.json(account);
   });
 
-  v1.post('/scores', async (c) => {
+  v0.post('/scores', async (c) => {
     const userId = c.get('userId');
     if (userId === undefined) {
       return c.json({ error: 'sign-in-required' }, 401);
@@ -121,7 +122,7 @@ export function createV1Api(options: { now: () => number; newId: () => string; c
     return c.json(rest, status === 'accepted' ? 201 : 200);
   });
 
-  v1.get('/scores/:id', async (c) => {
+  v0.get('/scores/:id', async (c) => {
     const db = c.get('db');
     const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
     if (found === undefined) return c.json({ error: 'not-found' }, 404);
@@ -142,7 +143,7 @@ export function createV1Api(options: { now: () => number; newId: () => string; c
     });
   });
 
-  v1.get('/scores/:id/playlog', async (c) => {
+  v0.get('/scores/:id/playlog', async (c) => {
     const db = c.get('db');
     const found = await db.query.score.findFirst({ where: eq(score.id, c.req.param('id')) });
     if (found === undefined) return c.json({ error: 'not-found' }, 404);
@@ -161,7 +162,7 @@ export function createV1Api(options: { now: () => number; newId: () => string; c
     });
   });
 
-  v1.get('/charts/:chartFingerprint/leaderboard', sValidator('query', rankingQuery), async (c) => {
+  v0.get('/charts/:chartFingerprint/leaderboard', sValidator('query', rankingQuery), async (c) => {
     const query = c.req.valid('query');
     const filter: RankingFilter = {
       chartFingerprint: c.req.param('chartFingerprint'),
@@ -174,7 +175,7 @@ export function createV1Api(options: { now: () => number; newId: () => string; c
     return c.json({ ...ranking, offset: query.offset, limit: query.limit });
   });
 
-  v1.get('/charts/:chartFingerprint/leaderboard/me', sValidator('query', meQuery), async (c) => {
+  v0.get('/charts/:chartFingerprint/leaderboard/me', sValidator('query', meQuery), async (c) => {
     const userId = c.get('userId');
     if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
     const query = c.req.valid('query');
@@ -209,5 +210,5 @@ export function createV1Api(options: { now: () => number; newId: () => string; c
     });
   });
 
-  return v1;
+  return v0;
 }

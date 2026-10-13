@@ -5,7 +5,7 @@ import { readJsonBody } from './body.ts';
 const limits = { maxEncodedBytes: 1024, maxDecodedBytes: 4096 };
 
 function request(body: BodyInit, headers: Record<string, string> = {}): Request {
-  return new Request('http://localhost/api/v1/scores', {
+  return new Request('http://localhost/api/v0/scores', {
     method: 'POST',
     body,
     headers: { 'content-type': 'application/json', ...headers },

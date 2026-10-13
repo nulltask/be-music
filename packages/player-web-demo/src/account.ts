@@ -2,7 +2,7 @@ import { passkeyClient } from '@better-auth/passkey/client';
 import { createAuthClient } from 'better-auth/client';
 import { anonymousClient } from 'better-auth/client/plugins';
 
-/** The player's Leaderboard account as `GET /api/v1/me` reports it. */
+/** The player's Leaderboard account as `GET /api/v0/me` reports it. */
 export interface LeaderboardAccount {
   handle: string;
   displayName: string;
@@ -35,7 +35,7 @@ export async function loadLeaderboardAccount(doFetch: typeof fetch = fetch): Pro
   try {
     const session = await doFetch('/api/auth/get-session', { credentials: 'same-origin' });
     if (!session.ok || (await session.json()) === null) return undefined;
-    const response = await doFetch('/api/v1/me', { credentials: 'same-origin' });
+    const response = await doFetch('/api/v0/me', { credentials: 'same-origin' });
     return response.ok ? ((await response.json()) as LeaderboardAccount) : undefined;
   } catch {
     return undefined;

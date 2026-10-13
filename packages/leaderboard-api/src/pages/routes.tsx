@@ -230,7 +230,7 @@ export function mountPages(app: Hono<AppEnv>): void {
                     'Replay',
                     <a
                       class="underline-offset-4 hover:underline"
-                      href={`/api/v1/scores/${encodeURIComponent(detail.score.id)}/playlog`}
+                      href={`/api/v0/scores/${encodeURIComponent(detail.score.id)}/playlog`}
                       download
                     >
                       Download play log
