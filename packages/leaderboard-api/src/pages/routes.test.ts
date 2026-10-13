@@ -57,27 +57,31 @@ describe('Leaderboard pages', () => {
   let firstScore: string;
   let firstHandle: string;
 
-  test('the top page lists only charts two non-anonymous players have played', async () => {
+  test('the top page shows every play by a player who is not anonymous, new charts included', async () => {
     const alice = await signInAnonymously(fetchApp);
     const bob = await signInAnonymously(fetchApp);
     firstScore = await submit(alice, chart, 9, evil);
     await submit(bob, chart, 4, evil, 3);
 
-    // Two anonymous players do not list a chart.
+    // Anonymous plays stay off the default view.
     const before = await page('/leaderboard');
     expect(before.status).toBe(200);
     expect(before.html).toContain('No plays here yet');
     expect(before.cacheControl).toBe('public, max-age=0, s-maxage=30');
 
-    // Both players keep their accounts (what registering a passkey does); the chart is now listed.
+    // Once a player keeps their account (what registering a passkey does), their play shows, on a chart that is not
+    // listed yet (one player so far) and so is tagged as new.
     const db = openDatabase(env.DB);
     await claimAccount(db, await userIdOf(alice));
-    expect((await page('/leaderboard')).html).toContain('No plays here yet');
-    await claimAccount(db, await userIdOf(bob));
+    const one = await page('/leaderboard');
+    expect(one.html.match(/\/leaderboard\/scores\//g)).toHaveLength(1);
+    expect(one.html).toContain('new chart');
 
+    // A second such player lists the chart, so the tag goes.
+    await claimAccount(db, await userIdOf(bob));
     const listed = await page('/leaderboard/');
-    expect(listed.html).not.toContain('No plays here yet');
     expect(listed.html.match(/\/leaderboard\/scores\//g)).toHaveLength(2);
+    expect(listed.html).not.toContain('new chart');
     // Player-controlled text is escaped, never rendered as markup.
     expect(listed.html).not.toContain(evil);
     expect(listed.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -85,16 +89,15 @@ describe('Leaderboard pages', () => {
     firstHandle = me.handle;
   });
 
-  test('the filters bring in new charts and anonymous players', async () => {
+  test('the anonymous filter brings in anonymous players', async () => {
     const other = makeChart(['#00111:01010101', '#00211:01']);
     const carol = await signInAnonymously(fetchApp);
     await submit(carol, other, 5, 'Only Carol');
 
     expect((await page('/leaderboard')).html).not.toContain('Only Carol');
-    expect((await page('/leaderboard?charts=all')).html).not.toContain('Only Carol'); // still anonymous
-    const both = await page('/leaderboard?charts=all&anonymous=1');
-    expect(both.html).toContain('Only Carol');
-    expect(both.html).toContain('new chart');
+    const withAnonymous = await page('/leaderboard?anonymous=1');
+    expect(withAnonymous.html).toContain('Only Carol');
+    expect(withAnonymous.html).toContain('new chart');
   });
 
   test('the score, chart and player pages render with their sharing tags', async () => {

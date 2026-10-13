@@ -49,13 +49,15 @@ function notFound(c: Context<AppEnv>, what: string) {
 
 /** Server-rendered Leaderboard pages under `/leaderboard` (docs/leaderboard.md section 10). */
 export function mountPages(app: Hono<AppEnv>): void {
+  // New scores: every play by a player who is not anonymous, on any chart; a chart not listed yet carries a "new chart"
+  // tag. Anonymous plays come in on request. An invented chart can reach this page only through an account with a
+  // passkey, and the chart index (later) still lists charts by the two-player rule.
   const top = async (c: Context<AppEnv>) => {
     const includeAnonymous = isOn(c.req.query('anonymous'));
-    const includeUnlisted = c.req.query('charts') === 'all';
     const scores = await loadRecentScores(openDatabase(c.env.DB), {
       limit: RECENT_LIMIT,
       includeAnonymous,
-      includeUnlisted,
+      includeUnlisted: true,
     });
     c.header('cache-control', PAGE_CACHE);
     return c.html(
@@ -63,11 +65,6 @@ export function mountPages(app: Hono<AppEnv>): void {
         <h1>New scores</h1>
         <p class="sub">The newest plays, each under the ruleset it was played with.</p>
         <div class="filters">
-          <FilterChip
-            label="New charts"
-            on={includeUnlisted}
-            href={withQuery(c, 'charts', includeUnlisted ? undefined : 'all')}
-          />
           <FilterChip
             label="Anonymous players"
             on={includeAnonymous}
@@ -78,9 +75,9 @@ export function mountPages(app: Hono<AppEnv>): void {
           scores={scores}
           showPlayer
           empty={
-            includeUnlisted && includeAnonymous
+            includeAnonymous
               ? 'No plays yet.'
-              : 'No plays here yet. A chart is listed once two players with a passkey have played it — turn on “New charts” or “Anonymous players” to see the rest.'
+              : 'No plays here yet. Plays show up once their player creates a passkey — turn on “Anonymous players” to see the rest.'
           }
         />
       </Layout>,

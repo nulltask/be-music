@@ -300,9 +300,9 @@ counted in D1.
 
 Server-rendered with Hono JSX in the leaderboard Worker, reading D1 directly:
 
-- `/leaderboard` — the top page: the newest plays, each under the ruleset it was played with. Like the rankings it
-  leaves out anonymous players and charts that are not listed yet (fewer than two non-anonymous players), with filters
-  to bring both in.
+- `/leaderboard` — the top page: the newest plays, each under the ruleset it was played with. It shows every play by
+  a player who is not anonymous, on any chart, tagging charts that are not listed yet as new; anonymous plays come in
+  with a filter. An invented chart reaches this page only through an account with a passkey.
 - `/leaderboard/scores/:id` — a score
 - `/leaderboard/charts/:chartFp` — a chart's rankings
 - `/leaderboard/players/:handle` — a profile, and `/leaderboard/players/:handle/versus/:rival`
