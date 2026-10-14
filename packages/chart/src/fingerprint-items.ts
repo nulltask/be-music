@@ -173,11 +173,35 @@ function normalizePositionNumerator(value: number, denominator: number): number 
   return Number.isFinite(value) ? Math.max(0, Math.min(denominator - 1, Math.floor(value))) : 0;
 }
 
+/**
+ * Event positions for the fingerprint being computed ({@link withEventTimes}): every outcome of a chart reads the same
+ * events again. Kept for one computation only, so a caller that edits its events in place between two fingerprints is
+ * never served an old position.
+ */
+let eventTimes: WeakMap<BeMusicEvent, FpTime> | undefined;
+
+/** Runs `compute` with {@link eventTime} remembering each event's position (nested calls share the outer cache). */
+export function withEventTimes<T>(compute: () => T): T {
+  const outer = eventTimes;
+  eventTimes ??= new WeakMap();
+  try {
+    return compute();
+  } finally {
+    eventTimes = outer;
+  }
+}
+
 /** The exact position an object is written at: cell index / cell count of its measure line (spec 3.3). */
 export function eventTime(event: BeMusicEvent): FpTime {
+  const cached = eventTimes?.get(event);
+  if (cached !== undefined) {
+    return cached;
+  }
   const measure = Number.isFinite(event.measure) ? Math.max(0, Math.floor(event.measure)) : 0;
   const denominator = normalizePositionDenominator(event.position[1]);
-  return createTime(measure, normalizePositionNumerator(event.position[0], denominator), denominator);
+  const time = createTime(measure, normalizePositionNumerator(event.position[0], denominator), denominator);
+  eventTimes?.set(event, time);
+  return time;
 }
 
 export function compareTime(left: FpTime, right: FpTime): number {
