@@ -137,8 +137,8 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             <span class="text-muted-foreground inline-flex items-center gap-0.5 text-xs">
               File
               <HelpTip topic="filters" label="File">
-                One chart can come in several files (re-saves, re-encodes). Pick one to rank only its plays; the number is
-                its plays.
+                One chart can come in several files (re-saves, re-encodes). Pick one to rank only its plays; the number
+                is its plays.
               </HelpTip>
             </span>
             <Segmented

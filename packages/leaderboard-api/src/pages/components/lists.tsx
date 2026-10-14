@@ -380,8 +380,8 @@ export function ResultCards(props: {
         <span class="inline-flex items-center gap-0.5">
           <abbr title={RULESET_MEANING}>Scored with</abbr> each set of rules
           <HelpTip topic="rules" label="the rule sets">
-            Every play is scored under LR2, beatoraja and IIDX rules. “selected” is the one the pages show; “played with”
-            is the one the player played under.
+            Every play is scored under LR2, beatoraja and IIDX rules. “selected” is the one the pages show; “played
+            with” is the one the player played under.
           </HelpTip>
         </span>
       </h2>
