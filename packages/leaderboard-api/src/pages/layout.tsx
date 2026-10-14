@@ -664,7 +664,8 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
       <body class="bg-background text-foreground min-h-screen antialiased">
         {/* Every component on the page reads the page's language from here (`useMessages`). */}
         <MessagesContext.Provider value={t}>
-          <header class="border-b">
+          {/* Named for the cross-page view transition (app.css): it stays put while the page below it changes. */}
+          <header class="border-b [view-transition-name:site-header]">
             <div class="mx-auto flex max-w-5xl items-center gap-x-3 px-4 py-2.5 sm:gap-x-6">
               <a href="/leaderboard" class="shrink-0 font-semibold tracking-tight">
                 be-music <span class="text-muted-foreground hidden font-normal md:inline">Leaderboard</span>

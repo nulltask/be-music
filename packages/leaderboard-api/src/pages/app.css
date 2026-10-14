@@ -17,3 +17,16 @@
   position-area: block-end span-all;
   margin: 6px 1rem;
 }
+
+/* Moving between pages cross-fades instead of flashing (cross-document View Transitions). The header is its own
+   layer (layout.tsx) and is swapped without animation, so it stays still while the page below it fades. Off for
+   viewers who ask for reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+::view-transition-old(site-header),
+::view-transition-new(site-header) {
+  animation: none;
+}
