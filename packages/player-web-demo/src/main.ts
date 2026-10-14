@@ -2693,6 +2693,10 @@ class PlayerWebDemoApp {
           initialCompressorParams: this.resolveCompressorParamOverrides(),
         },
         ...(preResolved !== undefined ? { preResolved } : {}),
+        bgaTranscode: {
+          maxLongEdgePx: this.guiState.bgaResizeMaxEdgePx > 0 ? this.guiState.bgaResizeMaxEdgePx : undefined,
+          useWebCodecs: this.guiState.bgaUseWebCodecs,
+        },
       });
     } catch (error) {
       gameplayLog.warn('beatoraja prep failed', error);

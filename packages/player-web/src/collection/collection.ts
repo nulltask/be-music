@@ -645,7 +645,7 @@ export function resolveSongSource(
 /**
  * Resolves a chart-relative asset path (BMP, WAV, banner, …) to its decoded byte array within a song asset source.
  * Mirrors the BMS convention of looking next to the chart file first, then falling back to the source's root and the
- * basename. Used by both gameplay (BGA/audio) and select (banner / preview) loaders.
+ * basename, then — as LR2 does — the same one folder up from the chart. Used by both gameplay (BGA/audio) and select (banner / preview) loaders.
  *
  * Lookup is **case-insensitive** at every candidate step: real-world BMS archives routinely mix `KICK.WAV` / `kick.WAV`
  * / `Kick.wav`, and demanding the chart's casing match the file's would scuttle a large fraction of legitimate drops on
@@ -653,6 +653,30 @@ export function resolveSongSource(
  * builds a lazy lower-key index the first time it's called per source and caches it via WeakMap.
  */
 export function resolveChartAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): BrowserSongAssetEntry | undefined {
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    const entry = resolveChartAssetInFolder(source, folderChartPath, assetPath);
+    if (entry) return entry;
+  }
+  return undefined;
+}
+
+/**
+ * Where a chart's assets are looked for, as chart paths: the chart itself, then — as LR2 does — a stand-in one folder
+ * up, so a 差分 (alternate difficulty) chart shipped in a sub-folder finds the keysounds and BGA beside its parent.
+ * A chart directly under the dropped folder has no extra entry: its parent is the top, which the lookup always tries.
+ * Every extension is tried in the chart's own folder before the parent's (see {@link resolveChartAudioAsset}).
+ */
+function chartLookupFolders(chartPath: string): string[] {
+  const parent = dirname(dirname(chartPath));
+  return parent === '' ? [chartPath] : [chartPath, `${parent}/${basename(chartPath)}`];
+}
+
+/** {@link resolveChartAsset} in one folder: next to `chartPath`, then the top of the source. */
+function resolveChartAssetInFolder(
   source: BrowserSongAssetSource,
   chartPath: string,
   assetPath: string,
@@ -710,17 +734,21 @@ export function resolveChartAudioAsset(
   assetPath: string,
   options: ResolveChartAudioAssetOptions = {},
 ): BrowserSongAssetEntry | undefined {
-  for (const candidate of audioFallbackPaths(assetPath)) {
-    // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
-    // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as before.
-    const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
-    if (prefixed !== undefined) {
-      const entry = resolveChartAsset(source, chartPath, prefixed);
-      if (entry) return entry;
-    }
-    const entry = resolveChartAsset(source, chartPath, candidate);
-    if (entry) {
-      return entry;
+  // Every codec in the chart's folder before any in its parent, as LR2 does.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of audioFallbackPaths(assetPath)) {
+      // Try the `#PATH_WAV` prefixed form first when supplied; fall through to the bare name if the prefix-joined path
+      // doesn't resolve. Charts that don't author `#PATH_WAV` pass `pathPrefix: undefined` and behave exactly as
+      // before.
+      const prefixed = joinPathWavPrefix(options.pathPrefix, candidate);
+      if (prefixed !== undefined) {
+        const entry = resolveChartAssetInFolder(source, folderChartPath, prefixed);
+        if (entry) return entry;
+      }
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      if (entry) {
+        return entry;
+      }
     }
   }
   return undefined;
@@ -784,14 +812,36 @@ export function resolveChartImageAsset(
   chartPath: string,
   assetPath: string,
 ): BrowserSongAssetEntry | undefined {
-  for (const candidate of imageFallbackPaths(assetPath)) {
-    const entry = resolveChartAsset(source, chartPath, candidate);
-    if (entry) {
-      return entry;
+  return resolveChartBgaAsset(source, chartPath, assetPath)?.entry;
+}
+
+/**
+ * {@link resolveChartImageAsset}, also naming the file it found (`path`, relative like `assetPath`): a video declared
+ * as `_bga.mpg` may resolve to `_bga.mp4`, and the video loader should treat the bytes as what they are.
+ */
+export function resolveChartBgaAsset(
+  source: BrowserSongAssetSource,
+  chartPath: string,
+  assetPath: string,
+): { entry: BrowserSongAssetEntry; path: string } | undefined {
+  // Every extension in the chart's folder before any in its parent, as LR2 does.
+  for (const folderChartPath of chartLookupFolders(chartPath)) {
+    for (const candidate of imageFallbackPaths(assetPath)) {
+      const entry = resolveChartAssetInFolder(source, folderChartPath, candidate);
+      if (entry) {
+        return { entry, path: candidate };
+      }
     }
   }
   return undefined;
 }
+
+/**
+ * The video extensions tried, in order, when a chart's declared video BGA isn't there under its own name: packs often
+ * re-encode `_bga.mpg` / `_bga.wmv` to `_bga.mp4` without touching the chart (beatoraja looks for the other
+ * extensions too). Browser-native containers come first, so the re-encode wins over a legacy original left beside it.
+ */
+const VIDEO_FALLBACK_EXTENSIONS = ['mp4', 'webm', 'm4v', 'mov', 'mpg', 'mpeg', 'wmv', 'avi', 'mkv'] as const;
 
 function imageFallbackPaths(path: string): string[] {
   const lastSlash = path.lastIndexOf('/');
@@ -799,6 +849,7 @@ function imageFallbackPaths(path: string): string[] {
   if (dotIndex < 0 || dotIndex < lastSlash) {
     return [path];
   }
+  // A declared video falls back to the same name under the other video extensions (see VIDEO_FALLBACK_EXTENSIONS).
   // Don't walk image extensions when the chart explicitly declared a video BGA — `_scualee.mpg` paired with a same-
   // basename `_scualee.png` (cover art / static fallback frame shipped alongside the actual video) would otherwise have
   // the resolver pick the PNG. The BGA loader only checks the declared path's extension to decide between the image vs.
@@ -806,7 +857,9 @@ function imageFallbackPaths(path: string): string[] {
   // MP4 — visually a frozen still during gameplay. Returning just the original path here keeps the video reference
   // resolving to its own file.
   if (isVideoExtensionPath(path)) {
-    return [path];
+    const videoBase = path.slice(0, dotIndex);
+    const declared = path.slice(dotIndex + 1).toLowerCase();
+    return [path, ...VIDEO_FALLBACK_EXTENSIONS.filter((ext) => ext !== declared).map((ext) => `${videoBase}.${ext}`)];
   }
   const base = path.slice(0, dotIndex);
   const candidates = [`${base}.webp`, `${base}.png`, `${base}.jpg`, `${base}.jpeg`, `${base}.gif`, `${base}.bmp`];

@@ -3,7 +3,9 @@ import { afterEach, describe, expect, test, vi } from 'vite-plus/test';
 import {
   BrowserSongCollectionStore,
   loadSongCollectionFromFiles,
+  resolveChartAsset,
   resolveChartAudioAsset,
+  resolveChartBgaAsset,
   resolveChartImageAsset,
   resolveChartPlayVariant,
 } from './collection.ts';
@@ -475,6 +477,62 @@ describe('resolveChartImageAsset', () => {
       const source = makeAssetSource({ 'Song/clip.png': PNG_BYTES });
       expect(resolveChartImageAsset(source, 'Song/main.bms', `clip.${ext}`)).toBeUndefined();
     }
+  });
+});
+
+describe('resolveChartBgaAsset', () => {
+  test('finds a video re-encoded under another video extension, and names it', () => {
+    const MP4_BYTES = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70]);
+    const source = makeAssetSource({ 'Song/_bga.mp4': MP4_BYTES });
+    expect(resolveChartBgaAsset(source, 'Song/main.bms', '_bga.mpg')).toEqual({ entry: MP4_BYTES, path: '_bga.mp4' });
+    expect(resolveChartBgaAsset(source, 'Song/main.bms', '_bga.wmv')?.path).toBe('_bga.mp4');
+  });
+
+  test('prefers the declared file, then browser-native containers', () => {
+    const MPG = new Uint8Array([1]);
+    const MP4 = new Uint8Array([2]);
+    const WMV = new Uint8Array([3]);
+    const both = makeAssetSource({ 'Song/m.mpg': MPG, 'Song/m.mp4': MP4 });
+    expect(resolveChartBgaAsset(both, 'Song/main.bms', 'm.mpg')?.path).toBe('m.mpg');
+    const legacy = makeAssetSource({ 'Song/m.wmv': WMV, 'Song/m.mp4': MP4 });
+    expect(resolveChartBgaAsset(legacy, 'Song/main.bms', 'm.avi')?.path).toBe('m.mp4');
+  });
+
+  test('still never answers a video with an image', () => {
+    const source = makeAssetSource({ 'Song/m.png': new Uint8Array([0x89]) });
+    expect(resolveChartBgaAsset(source, 'Song/main.bms', 'm.mpg')).toBeUndefined();
+  });
+});
+
+describe('parent-folder retry (LR2)', () => {
+  const OGG = new Uint8Array([0x4f, 0x67]);
+  const WAV = new Uint8Array([0x52, 0x49]);
+  const MP4 = new Uint8Array([0, 0, 0, 0x18]);
+  const PNG = new Uint8Array([0x89, 0x50]);
+
+  test('a 差分 chart in a sub-folder finds keysounds, videos and images one folder up', () => {
+    const source = makeAssetSource({
+      'Pack/Song/kick.ogg': OGG,
+      'Pack/Song/_bga.mp4': MP4,
+      'Pack/Song/stage.png': PNG,
+    });
+    const chart = 'Pack/Song/差分用/hard.bms';
+    expect(resolveChartAudioAsset(source, chart, 'kick.wav')).toBe(OGG);
+    expect(resolveChartBgaAsset(source, chart, '_bga.mpg')).toEqual({ entry: MP4, path: '_bga.mp4' });
+    expect(resolveChartImageAsset(source, chart, 'stage.bmp')).toBe(PNG);
+    expect(resolveChartAsset(source, chart, 'stage.png')).toBe(PNG);
+  });
+
+  test("every extension in the chart's own folder comes before the parent", () => {
+    // The web player prefers .ogg over .wav, but a .wav beside the chart still beats an .ogg in the parent.
+    const source = makeAssetSource({ 'Pack/Song/sub/kick.wav': WAV, 'Pack/Song/kick.ogg': OGG });
+    expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBe(WAV);
+  });
+
+  test('goes up one folder only', () => {
+    const source = makeAssetSource({ 'Pack/kick.ogg': OGG });
+    expect(resolveChartAudioAsset(source, 'Pack/Song/sub/hard.bms', 'kick.wav')).toBeUndefined();
+    expect(resolveChartAudioAsset(source, 'Pack/Song/hard.bms', 'kick.wav')).toBe(OGG);
   });
 });
 
