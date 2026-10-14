@@ -227,6 +227,29 @@ const FLASH_LANE_HOLD_MS = 60;
  */
 const LN_TAIL_BOMB_HOLD_MS = 320;
 
+/**
+ * For each BPM segment, the last positive BPM at or before it (`NaN` before the first one), so the current BPM is one
+ * binary search away. `undefined` when the segments are not in time order, where only the walk is right.
+ */
+function bpmLookupFor(segments: ReadonlyArray<BeatorajaBpmSegment>): Float64Array | undefined {
+  if (BPM_LOOKUPS.has(segments)) return BPM_LOOKUPS.get(segments);
+  let lookup: Float64Array | undefined = new Float64Array(segments.length);
+  let lastPositive = Number.NaN;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index]!;
+    if (index > 0 && segment.timeMs < segments[index - 1]!.timeMs) {
+      lookup = undefined;
+      break;
+    }
+    if (segment.bpm > 0) lastPositive = segment.bpm;
+    lookup[index] = lastPositive;
+  }
+  BPM_LOOKUPS.set(segments, lookup);
+  return lookup;
+}
+
+const BPM_LOOKUPS = new WeakMap<ReadonlyArray<BeatorajaBpmSegment>, Float64Array | undefined>();
+
 export class BeatorajaRuntimeAdapter {
   /**
    * Live op set — option ops (from `baseOps`) plus runtime ops the engine has toggled. Exposed via
@@ -1850,12 +1873,30 @@ export class BeatorajaRuntimeAdapter {
   private currentBpmAtMs(timeMs: number): number {
     const segments = this.bpmSegments;
     if (segments.length === 0) return this.chart?.metadata.bpm ?? 0;
-    let lastPositive = segments[0]!.bpm > 0 ? segments[0]!.bpm : (this.chart?.metadata.bpm ?? 0);
-    for (const seg of segments) {
-      if (seg.timeMs > timeMs) break;
-      if (seg.bpm > 0) lastPositive = seg.bpm;
+    const initial = segments[0]!.bpm > 0 ? segments[0]!.bpm : (this.chart?.metadata.bpm ?? 0);
+    const lookup = bpmLookupFor(segments);
+    if (lookup === undefined) {
+      let lastPositive = initial;
+      for (const seg of segments) {
+        if (seg.timeMs > timeMs) break;
+        if (seg.bpm > 0) lastPositive = seg.bpm;
+      }
+      return lastPositive;
     }
-    return lastPositive;
+    // The last segment at or before `timeMs` (a binary search), and the last positive BPM up to it: what walking the
+    // segments in order until one starts after `timeMs` finds, for a readout asked several times a frame.
+    let low = 0;
+    let high = segments.length;
+    while (low < high) {
+      const middle = (low + high) >>> 1;
+      if (segments[middle]!.timeMs > timeMs) {
+        high = middle;
+      } else {
+        low = middle + 1;
+      }
+    }
+    const lastPositive = low === 0 ? Number.NaN : lookup[low - 1]!;
+    return Number.isNaN(lastPositive) ? initial : lastPositive;
   }
 
   /**
