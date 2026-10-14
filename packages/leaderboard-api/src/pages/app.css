@@ -10,3 +10,10 @@
     font-variant-numeric: tabular-nums;
   }
 }
+
+/* The last place a header menu tries (layout.tsx, headerMenuStyle): under its button across the whole width, kept a
+   page gutter in from either edge, for when neither side of the button has room (a narrow phone). */
+@position-try --header-menu-span {
+  position-area: block-end span-all;
+  margin: 6px 1rem;
+}
