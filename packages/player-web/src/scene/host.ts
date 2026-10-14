@@ -51,6 +51,12 @@ export interface PixiSceneHostMountOptions {
    * pass an override to swap any subset for a specific deployment.
    */
   appOptions?: Partial<ApplicationOptions>;
+  /**
+   * The render resolution to ask for (canvas pixels per CSS pixel), capped at the display's `devicePixelRatio`. Lower
+   * trades sharpness for fill-rate on GPUs that cannot keep up at full density. `?resolution=` in the URL overrides it;
+   * without either the display's own ratio is used. Change it later with {@link PixiSceneHost.setResolution}.
+   */
+  resolution?: number;
 }
 
 /**
@@ -130,8 +136,9 @@ export class PixiSceneHost {
       autoDensity: true,
       // Render at the display's full devicePixelRatio so vector chrome and text land on real device pixels. (This
       // used to be capped at 2× to save fill-rate on 3× displays, but the built-in skins' vector shapes and text then
-      // rendered visibly soft there.) `?resolution=` caps it, trading that sharpness for fill-rate on slow GPUs.
-      resolution: resolveRenderResolution(globalThis.devicePixelRatio || 1),
+      // rendered visibly soft there.) `options.resolution` or `?resolution=` lowers it, trading that sharpness for
+      // fill-rate on slow GPUs.
+      resolution: resolveRenderResolution(globalThis.devicePixelRatio || 1, undefined, options?.resolution),
       roundPixels: true,
       // Force the discrete GPU on hybrid systems (every modern laptop with switchable graphics). Rhythm-game
       // input-to-display latency is critical, and the integrated-GPU path adds variable frame-time on top of the
@@ -245,6 +252,21 @@ export class PixiSceneHost {
     return this.current;
   }
 
+  /**
+   * Renders at `resolution` canvas pixels per CSS pixel from the next frame, capped at the display's
+   * `devicePixelRatio` and no lower than 0.5. Scenes size their surfaces from the renderer every frame, so they follow.
+   * Returns the resolution applied.
+   */
+  public setResolution(resolution: number): number {
+    const applied = clampRenderResolution(globalThis.devicePixelRatio || 1, resolution);
+    const renderer = this.app.renderer;
+    if (renderer && renderer.resolution !== applied) {
+      // `resize` (rather than the `resolution` setter) keeps the canvas's CSS size while its pixel size changes.
+      renderer.resize(this.app.screen.width, this.app.screen.height, applied);
+    }
+    return applied;
+  }
+
   public isDisposed(): boolean {
     return this.disposed;
   }
@@ -350,20 +372,29 @@ export function resolveRendererPreference(rawSearch?: string): 'webgl' | 'webgpu
 const MIN_RENDER_RESOLUTION = 0.5;
 
 /**
- * The render resolution (canvas pixels per CSS pixel) for a display of `devicePixelRatio`: the display's own ratio,
- * capped by `?resolution=<number>` (e.g. `1` or `1.5`) from `window.location.search` when given. The cap never raises
- * the ratio, and goes no lower than 0.5; anything that isn't a positive number is ignored. Every surface follows the
- * renderer's resolution, so this sets the pixel count the GPU fills each frame.
+ * The render resolution (canvas pixels per CSS pixel) for a display of `devicePixelRatio`: `?resolution=<number>` (e.g.
+ * `1` or `1.5`) from `window.location.search` when given, else `requested`, else the display's own ratio. Either one
+ * is capped at the display's ratio and goes no lower than 0.5; anything that isn't a positive number is ignored. Every
+ * surface follows the renderer's resolution, so this sets the pixel count the GPU fills each frame.
  */
-export function resolveRenderResolution(devicePixelRatio: number, rawSearch?: string): number {
-  const native = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
+export function resolveRenderResolution(devicePixelRatio: number, rawSearch?: string, requested?: number): number {
   const search =
     rawSearch ??
     (typeof globalThis !== 'undefined' && typeof globalThis.location !== 'undefined' ? globalThis.location.search : '');
   const raw = search ? new URLSearchParams(search).get('resolution') : null;
-  const cap = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
-  if (!Number.isFinite(cap) || cap <= 0) return native;
-  return Math.min(native, Math.max(MIN_RENDER_RESOLUTION, cap));
+  const fromUrl = raw === null || raw.trim() === '' ? Number.NaN : Number(raw);
+  return clampRenderResolution(devicePixelRatio, isPositive(fromUrl) ? fromUrl : requested);
+}
+
+/** `requested` held between 0.5 and the display's ratio; the display's ratio when `requested` isn't a positive number. */
+function clampRenderResolution(devicePixelRatio: number, requested: number | undefined): number {
+  const native = isPositive(devicePixelRatio) ? devicePixelRatio : 1;
+  if (!isPositive(requested)) return native;
+  return Math.min(native, Math.max(MIN_RENDER_RESOLUTION, requested));
+}
+
+function isPositive(value: number | undefined): value is number {
+  return value !== undefined && Number.isFinite(value) && value > 0;
 }
 
 /**
