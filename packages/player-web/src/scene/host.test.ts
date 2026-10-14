@@ -126,6 +126,18 @@ describe('resolveRenderResolution', () => {
     }
   });
 
+  it('uses the requested resolution when the URL has none', () => {
+    expect(resolveRenderResolution(2, '', 1.5)).toBe(1.5);
+    expect(resolveRenderResolution(1, '', 1.5)).toBe(1);
+    expect(resolveRenderResolution(2, '', 0.2)).toBe(0.5);
+    expect(resolveRenderResolution(2, '', Number.NaN)).toBe(2);
+  });
+
+  it('lets ?resolution= override the requested resolution', () => {
+    expect(resolveRenderResolution(2, '?resolution=1', 1.5)).toBe(1);
+    expect(resolveRenderResolution(2, '?resolution=abc', 1.5)).toBe(1.5);
+  });
+
   it('falls back to 1 for a missing display ratio', () => {
     expect(resolveRenderResolution(Number.NaN, '')).toBe(1);
     expect(resolveRenderResolution(0, '?resolution=1.5')).toBe(1);
