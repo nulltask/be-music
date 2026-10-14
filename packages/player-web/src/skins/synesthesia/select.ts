@@ -141,16 +141,19 @@ function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
   return { size: 9, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2 };
 }
 
-/** `JUDGE <rank>` (the chart's #RANK / #DEFEXRANK), starting at `left` and centred on `centerY`. */
+/**
+ * `JUDGE <rank>` (the chart's #RANK / #DEFEXRANK), starting at `left` and centred on `centerY`. Label and value share one
+ * size, so their capitals line up top and bottom; colour and tracking tell them apart.
+ */
 function drawJudgeRank(
   addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
   song: BrowserSongEntry | undefined,
   left: number,
   centerY: number,
 ): void {
-  const label = addText('JUDGE', left, centerY, { ...labelStyle(), anchorY: 0.5 });
+  const label = addText('JUDGE', left, centerY, { ...labelStyle(), size: 10, anchorY: 0.5 });
   addText(song ? resolveSongStats(song).judgeRank : '-', left + label.width + 8, centerY, {
-    size: 11,
+    size: 10,
     fill: SYN_WHITE,
     fontFamily: SYN_DISPLAY_FONT,
     anchorY: 0.5,
