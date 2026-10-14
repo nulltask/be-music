@@ -209,7 +209,8 @@ describe('Leaderboard pages', () => {
     await claimAccount(db, await userIdOf(alice));
     expect((await page('/leaderboard')).html).toContain('No plays here yet');
     const own = await page('/leaderboard', alice);
-    expect(own.html.match(/\/leaderboard\/scores\//g)).toHaveLength(1);
+    // Links to plays only: the page's speculation rules name /leaderboard/scores/ paths too.
+    expect(own.html.match(/href="\/leaderboard\/scores\//g)).toHaveLength(1);
     expect(own.html).toContain('>not public<');
     expect(own.html).toContain('#1 / 1');
     // Its badge's help tip says why: the chart is not listed yet.
@@ -218,7 +219,7 @@ describe('Leaderboard pages', () => {
     // A second such player lists the chart: both plays are public, ranked.
     await claimAccount(db, await userIdOf(bob));
     const listed = await page('/leaderboard/');
-    expect(listed.html.match(/\/leaderboard\/scores\//g)).toHaveLength(2);
+    expect(listed.html.match(/href="\/leaderboard\/scores\//g)).toHaveLength(2);
     expect(listed.html).toContain('#1 / 2');
     expect(listed.html).toContain('#2 / 2');
     expect(listed.html).toContain('played with LR2 rules');

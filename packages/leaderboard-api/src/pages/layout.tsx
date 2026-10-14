@@ -27,6 +27,7 @@ import { ICONS } from './icons.generated.ts';
 import type { Viewer } from './viewer.ts';
 import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 import { APP_CSS_HASH } from './styles.generated.ts';
+import { speculationRules } from './speculation.ts';
 
 /** Where the compiled stylesheet is served; the hash in the name lets browsers keep it forever. */
 export const STYLESHEET_PATH = `/leaderboard/assets/app.${APP_CSS_HASH}.css`;
@@ -653,6 +654,8 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <script dangerouslySetInnerHTML={{ __html: LOCAL_TIME_SCRIPT }} />
         <link rel="stylesheet" href={STYLESHEET_PATH} />
         <script src={CLIENT_SCRIPT_PATH} defer />
+        {/* Fetches a page while its link is hovered (speculation.ts), so the navigation starts from a warm response. */}
+        <script type="speculationrules" dangerouslySetInnerHTML={{ __html: speculationRules() }} />
         <link rel="icon" type="image/svg+xml" href={ICON_LINKS.favicon} />
         <link rel="apple-touch-icon" href={ICON_LINKS.appleTouch} />
         <link rel="manifest" href={ICON_LINKS.manifest} />

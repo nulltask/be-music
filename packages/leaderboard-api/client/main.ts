@@ -330,5 +330,18 @@ function setUpSharing(): void {
   );
 }
 
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setUpSharing);
-else setUpSharing();
+/**
+ * Runs `start` once the page is the one being shown. A page prerendered from a hovered link (src/pages/speculation.ts)
+ * runs this script before the viewer opens it, and may never be opened; setting up sharing uploads the play's card, so
+ * it waits for the page to be activated.
+ */
+function whenShown(start: () => void): void {
+  if ((document as Document & { prerendering?: boolean }).prerendering === true) {
+    document.addEventListener('prerenderingchange', start, { once: true });
+  } else start();
+}
+
+whenShown(() => {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setUpSharing);
+  else setUpSharing();
+});
