@@ -6,6 +6,7 @@ import {
   keepsUp,
   nearestRenderResolution,
   parseStoredRenderResolution,
+  RenderResolutionBenchmarkCancelled,
   renderResolutionLabel,
   renderResolutionSteps,
 } from './render-resolution.ts';
@@ -54,10 +55,13 @@ describe('parseStoredRenderResolution', () => {
     expect(parseStoredRenderResolution('1')).toBe(1);
   });
 
-  it('falls back to 1.5× when nothing usable is stored', () => {
+  it('reads nothing usable as not picked', () => {
     for (const stored of [null, '', 'abc', '0', '-1']) {
-      expect(parseStoredRenderResolution(stored)).toBe(DEFAULT_RENDER_RESOLUTION);
+      expect(parseStoredRenderResolution(stored)).toBeUndefined();
     }
+  });
+
+  it('starts at 1.5× before a pick', () => {
     expect(DEFAULT_RENDER_RESOLUTION).toBe(1.5);
   });
 });
@@ -146,6 +150,26 @@ describe('benchmarkRenderResolution', () => {
       sampleFrames: 10,
     });
     expect(result.chosen).toBe(2);
+  });
+
+  it('stops when cancelled, without applying a pick', async () => {
+    const display = fakeDisplay({ 1: 16.7, 1.5: 16.7, 2: 16.7 });
+    let frames = 0;
+    await expect(
+      benchmarkRenderResolution({
+        steps: [1, 1.5, 2],
+        ...display,
+        nextFrame: async () => {
+          frames += 1;
+          return display.nextFrame();
+        },
+        cancelled: () => frames > 15,
+        warmupFrames: 2,
+        sampleFrames: 10,
+      }),
+    ).rejects.toBeInstanceOf(RenderResolutionBenchmarkCancelled);
+    // Cancelled while measuring 2× (after 1×'s 13 frames): nothing chosen was applied afterwards.
+    expect(display.applied).toEqual([1, 2]);
   });
 
   it('measures the only resolution of a 1x display and keeps it', async () => {
