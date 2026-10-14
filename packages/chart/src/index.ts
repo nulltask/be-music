@@ -1355,12 +1355,14 @@ function prepareResolvedBmsLongNoteEvents(
   base: 36 | 62 = 36,
 ): ResolvedBmsLongNoteEvent[] {
   const prepared: ResolvedBmsLongNoteEvent[] = [];
-  for (const event of sortEvents(events as BeMusicEvent[])) {
+  // Only the `5x` / `6x` objects are sorted, not the whole chart: the sort is stable, so they come out in the same order
+  // as when picked from the sorted chart.
+  const longNoteEvents = events.filter(
+    (event) => mapBmsLongNoteNormalizedChannelToPlayable(normalizeChannel(event.channel)) !== undefined,
+  );
+  for (const event of sortEvents(longNoteEvents)) {
     const sourceChannel = normalizeChannel(event.channel);
-    const mapped = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel);
-    if (!mapped) {
-      continue;
-    }
+    const mapped = mapBmsLongNoteNormalizedChannelToPlayable(sourceChannel)!;
     prepared.push({
       event,
       sourceChannel,
