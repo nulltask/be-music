@@ -150,6 +150,18 @@ export interface BeatorajaRenderContext {
  * to handle out-of-range entries.
  */
 function collectOffsetIds(group: BeatorajaDestinationGroup): ReadonlyArray<number> | undefined {
+  // A destination group does not change once the skin is loaded, and this runs for every element every frame: its ids
+  // are worked out once (`null` records "none").
+  const cached = OFFSET_IDS_BY_GROUP.get(group);
+  if (cached !== undefined) return cached ?? undefined;
+  const ids = collectOffsetIdsOnce(group);
+  OFFSET_IDS_BY_GROUP.set(group, ids ?? null);
+  return ids;
+}
+
+const OFFSET_IDS_BY_GROUP = new WeakMap<BeatorajaDestinationGroup, ReadonlyArray<number> | null>();
+
+function collectOffsetIdsOnce(group: BeatorajaDestinationGroup): ReadonlyArray<number> | undefined {
   const hasPlural = group.offsets.length > 0;
   const hasSingular = group.offset !== 0;
   if (!hasPlural && !hasSingular) return undefined;
