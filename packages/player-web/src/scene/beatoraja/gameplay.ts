@@ -78,7 +78,7 @@ import { BeatorajaPlaySkinView } from './skin-view.ts';
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import { GameplayRecorder, type GameplayRecorderResult } from '../../recording/gameplay-recorder.ts';
 import type { RecordingFormat } from '../../recording/recording-format.ts';
-import { snapHiSpeed } from '../hi-speed.ts';
+import { HiSpeedTransition, snapHiSpeed } from '../hi-speed.ts';
 import { drainWebUiSignals } from '../../runtime/web-ui-runtime.ts';
 import { logger } from '../../logger.ts';
 import type { PixiScene, PixiSceneHost } from '../host.ts';
@@ -279,6 +279,12 @@ export class PixiBeatorajaGameplayView implements PixiScene {
   private hiSpeed = 2.0;
   /** Whether {@link hiSpeed} came from the host (`initialHiSpeed` / `setHiSpeed`) and must seed the engine's signal. */
   private hiSpeedSeeded = false;
+  /**
+   * The scroll factor the note and marker layers are positioned with: it glides to each new {@link hiSpeed} over
+   * `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the skin's hi-speed readouts show the new target at
+   * once. Visual only — judging never reads it.
+   */
+  private readonly scrollHiSpeed = new HiSpeedTransition(this.hiSpeed);
   private host?: PixiSceneHost;
   private startMs = 0;
   private tickerHandle?: (ticker: Ticker) => void;
@@ -329,6 +335,8 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const effectiveChart = options.dpFlip === true ? flipDpChart(options.chart) : options.chart;
     this.options = effectiveChart === options.chart ? options : { ...options, chart: effectiveChart };
     if (options.initialHiSpeed !== undefined) this.setHiSpeed(options.initialHiSpeed);
+    // Set up before the notes are on screen — no glide.
+    this.scrollHiSpeed.jump(this.hiSpeed);
     this.scrollMapper = createBeatorajaScrollMapper(effectiveChart);
     this.laneTimelines = this.scrollMapper ? createBeatorajaLaneTimelines(effectiveChart) : undefined;
     this.tempoReversal = createTimingResolver(effectiveChart).reversal;
@@ -581,7 +589,16 @@ export class PixiBeatorajaGameplayView implements PixiScene {
           this.stateSignals = stateSignals;
           // Seed the engine's hi-speed with the host's (or a live `setHiSpeed`'s) value, so the first tick reads it back
           // instead of the engine default.
-          if (this.hiSpeedSeeded) stateSignals?.setHighSpeed(this.hiSpeed);
+          if (this.hiSpeedSeeded) {
+            stateSignals?.setHighSpeed(this.hiSpeed);
+          } else {
+            // No host value: start from the engine's own hi-speed, without a glide or a change report.
+            const engineHiSpeed = stateSignals?.highSpeed();
+            if (engineHiSpeed !== undefined && Number.isFinite(engineHiSpeed) && engineHiSpeed > 0) {
+              this.hiSpeed = engineHiSpeed;
+              this.scrollHiSpeed.jump(engineHiSpeed);
+            }
+          }
         },
         onStart: () => {
           // The engine has begun audible playback. Stamp `ready` (skin's READY flash) and `play` (the
@@ -1079,6 +1096,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
           // Changed through the engine (its Option + lane key shortcut) — the arrow keys and `setHiSpeed` update
           // `this.hiSpeed` together with the signal, so they never land here.
           this.hiSpeed = hs;
+          this.scrollHiSpeed.retarget(hs, performance.now());
           const reported = snapHiSpeed(hs);
           if (reported !== undefined) this.options.onHiSpeedChange?.(reported);
         }
@@ -1087,9 +1105,11 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     }
     const ctx = this.adapter.getRenderContext();
     const skinAudio = this.options.skinAudio;
+    // The eased scroll factor, so a hi-speed change glides instead of making the notes jump.
+    const scrollHiSpeed = this.scrollHiSpeed.valueAt(performance.now());
     this.view.update(skinAudio === undefined ? ctx : this.renderContextWithSkinAudio(ctx));
     if (this.currentFrame) {
-      this.noteLayer.update(this.currentFrame, this.hiSpeed, ctx.activeOps, (channel) =>
+      this.noteLayer.update(this.currentFrame, scrollHiSpeed, ctx.activeOps, (channel) =>
         this.adapter.isLaneLnHeld(channel),
       );
       // Marker layer scrolls with the same hispeed math as notes, anchored to the same lane
@@ -1105,7 +1125,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
       // Mirrored display beat past an LR2 negative-BPM reversal — the note layer scrolls from the same one, so markers and
       // notes keep in lock-step. HUD elements (runtime adapter) stay on the true frame.
       const currentBeat = beatorajaDisplayScrollBeat(this.currentFrame);
-      const pixelsPerBeat = beatorajaPixelsPerBeat(laneHeightPixi, this.hiSpeed);
+      const pixelsPerBeat = beatorajaPixelsPerBeat(laneHeightPixi, scrollHiSpeed);
       // On a chart that scrolls, bar lines follow the notes' `LaneRenderer` window as well as their distance.
       const placement = resolveBeatorajaScrollPlacement({
         currentBeat,
@@ -1249,6 +1269,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     const next = snapHiSpeed(this.hiSpeed + delta);
     if (next === undefined || next === this.hiSpeed) return;
     this.hiSpeed = next;
+    this.scrollHiSpeed.retarget(next, performance.now());
     this.options.onHiSpeedChange?.(next);
     // Push back through `stateSignals` when present so any downstream consumer (engine
     // playback support, the LR2-shared `applyPlaybackHighSpeedAction` path, future remote
@@ -1271,6 +1292,7 @@ export class PixiBeatorajaGameplayView implements PixiScene {
     this.hiSpeedSeeded = true;
     if (next === this.hiSpeed) return;
     this.hiSpeed = next;
+    this.scrollHiSpeed.retarget(next, performance.now());
     this.stateSignals?.setHighSpeed(next);
   }
 

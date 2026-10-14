@@ -134,7 +134,7 @@ import {
   PIXELS_PER_BEAT,
   PLAYFIELD,
 } from '../gameplay-constants.ts';
-import { snapHiSpeed } from '../hi-speed.ts';
+import { HiSpeedTransition, snapHiSpeed } from '../hi-speed.ts';
 import {
   buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
@@ -1189,6 +1189,12 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   private hsFixMultiplier = 1;
   /**
+   * The scroll factor notes, bar lines and long notes are positioned with: it glides to each new {@link hiSpeed} over
+   * `HISPEED_TRANSITION_MS` (wall clock) instead of jumping, while the HUD / readouts show the new target at once.
+   * Visual only — judging never reads it.
+   */
+  private readonly scrollHiSpeed = new HiSpeedTransition(this.hiSpeed);
+  /**
    * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
    * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp
    * their own timers (bombs, FC, judge, scene stages, …) into the same map. Removed when the timer "stops" (e.g. key
@@ -1283,6 +1289,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
       // would produce.
       this.hiSpeed = snapHiSpeed(options.initialHiSpeed) ?? this.hiSpeed;
+      this.scrollHiSpeed.jump(this.hiSpeed);
     }
     this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
     this.audioVolumes = {
@@ -3004,6 +3011,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const next = snapHiSpeed(this.hiSpeed + delta);
     if (next === undefined || next === this.hiSpeed) return;
     this.hiSpeed = next;
+    this.scrollHiSpeed.retarget(next, performance.now());
     const reported = snapHiSpeed(next / this.hsFixMultiplier);
     if (reported !== undefined) this.options.onHiSpeedChange?.(reported);
   }
@@ -3019,6 +3027,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     const next = snapHiSpeed(base * this.hsFixMultiplier);
     if (next === undefined || next === this.hiSpeed) return;
     this.hiSpeed = next;
+    this.scrollHiSpeed.retarget(next, performance.now());
   }
 
   /**
@@ -3070,6 +3079,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     if (!Number.isFinite(multiplier) || multiplier <= 0) return;
     this.hsFixMultiplier = multiplier;
     this.hiSpeed = snapHiSpeed(this.hiSpeed * multiplier) ?? this.hiSpeed;
+    // Chart setup, before the notes are on screen — no glide.
+    this.scrollHiSpeed.jump(this.hiSpeed);
   }
 
   private resolveKeyOnTimerId(channel: string): number | undefined {
@@ -4456,7 +4467,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       return;
     }
     const currentBeat = this.currentBeat(seconds);
-    const pixelsPerBeat = PIXELS_PER_BEAT * this.hiSpeed;
+    // The eased scroll factor, so a hi-speed change glides instead of making the notes jump.
+    const pixelsPerBeat = PIXELS_PER_BEAT * this.scrollHiSpeed.valueAt(performance.now());
     let laneHeight = 1;
     for (const lane of this.laneX.values()) {
       laneHeight = Math.max(laneHeight, lane.bottom - lane.top);
