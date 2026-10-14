@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { HelpTip } from './components/help-tip.tsx';
 import { openDatabase } from '../db/client.ts';
 import { isOn } from '../http/query.ts';
 import { RecentScoresList } from './components/lists.tsx';
@@ -29,10 +30,17 @@ export async function topPage(c: PageContext) {
       meta={meta(c, 'Latest', 'The latest plays on the be-music Leaderboard.', [{ label: 'Latest', kind: 'latest' }])}
     >
       <PageHeader title="Latest" kind="latest">
-        The latest plays, scored under {rulesetName(ruleset)}.
+        <span class="inline-flex items-center gap-0.5">
+          The latest plays, scored under {rulesetName(ruleset)}.
+          <HelpTip topic="rows" label="a play row">
+            Each row: the lamp's colour bar, the chart with its mode and level, the player, what the play changed on
+            their best, where it ranks, the rules it was played with, and its EX-Score with DJ LEVEL and rate.
+          </HelpTip>
+        </span>
       </PageHeader>
       <Filters>
         <Toggle
+          help="filters"
           label="Anonymous players"
           description="Include plays by players who have not made a passkey yet"
           on={includeAnonymous}

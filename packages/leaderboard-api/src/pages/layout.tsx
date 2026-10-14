@@ -2,6 +2,7 @@
 import type { Child } from 'hono/jsx';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { RULESET_LABELS, RULESET_MEANING, rulesetName } from './format.ts';
+import { helpHref } from './help-topics.ts';
 import { RULESET_IDS } from '../rulesets.ts';
 import { CLIENT_SCRIPT_PATH } from './client-script.ts';
 import { Avatar, playerHref } from './components/basics.tsx';
@@ -381,7 +382,12 @@ function RulesetMenu(props: { current: PlaylogRulesetId; path: string }) {
             </span>
           </a>
         ))}
-        <p class="text-muted-foreground border-t px-2 pt-2 pb-1.5 text-xs">{RULESET_MEANING}</p>
+        <p class="text-muted-foreground border-t px-2 pt-2 pb-1.5 text-xs">
+          {RULESET_MEANING}{' '}
+          <a class="text-foreground underline underline-offset-4" href={helpHref('rules')}>
+            More in Help
+          </a>
+        </p>
       </div>
     </div>
   );

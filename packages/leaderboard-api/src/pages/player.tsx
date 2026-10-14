@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { HelpTip } from './components/help-tip.tsx';
 import { openDatabase } from '../db/client.ts';
 import { RecentScoresList } from './components/lists.tsx';
 import { Details, DistributionCard, JudgeTotalsCard, Stats } from './components/cards.tsx';
@@ -83,7 +84,12 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
           ['Joined', <LocalTime at={player.joinedAt} />],
           ['First play', when(stats.firstPlayedAt)],
           [
-            'Played under',
+            <span class="inline-flex items-center gap-0.5">
+              Played under
+              <HelpTip topic="rules" label="Played under">
+                The rules the player's plays were played with. Every play is still scored under all three.
+              </HelpTip>
+            </span>,
             stats.playsByRuleset.length === 0
               ? '-'
               : stats.playsByRuleset

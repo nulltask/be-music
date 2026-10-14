@@ -1,4 +1,5 @@
 /** @jsxImportSource hono/jsx */
+import { HelpTip } from './components/help-tip.tsx';
 import type { Child } from 'hono/jsx';
 import { openDatabase } from '../db/client.ts';
 import { loadScoreDetail } from '../scores/detail.ts';
@@ -158,9 +159,25 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
         title="Play"
         rows={[
           ['Played', <LocalTime at={detail.score.createdAt.getTime()} />],
-          ['Gauge', detail.score.gauge],
+          [
+            <span class="inline-flex items-center gap-0.5">
+              Gauge
+              <HelpTip topic="gauges" label="Gauge">
+                The gauge the player chose, as each ruleset names it.
+              </HelpTip>
+            </span>,
+            detail.score.gauge,
+          ],
           ['Assists', detail.score.assisted ? detail.score.assistFlags.join(', ') : 'none'],
-          ['Verification', verificationMeaning(detail.score.verification)],
+          [
+            <span class="inline-flex items-center gap-0.5">
+              Verification
+              <HelpTip topic="verification" label="Verification">
+                How far the chart in the play log was checked. Every play is recounted from its inputs either way.
+              </HelpTip>
+            </span>,
+            verificationMeaning(detail.score.verification),
+          ],
           [
             'Chart',
             <a
