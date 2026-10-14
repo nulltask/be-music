@@ -141,6 +141,8 @@ export interface PageMeta {
   viewer: Viewer | null;
   /** The picture link previews show (a path on this site); the site's default card when absent. */
   image?: { path: string; alt: string };
+  /** Keeps search engines from indexing the page (a chart not listed yet). */
+  noindex?: boolean;
 }
 
 /**
@@ -542,6 +544,7 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{fullTitle}</title>
         <meta name="description" content={props.meta.description} />
+        {props.meta.noindex === true ? <meta name="robots" content="noindex" /> : null}
         <meta property="og:type" content="website" />
         <meta property="og:site_name" content="be-music Leaderboard" />
         <meta property="og:title" content={fullTitle} />

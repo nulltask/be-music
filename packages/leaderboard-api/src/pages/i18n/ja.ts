@@ -138,14 +138,19 @@ export const ja: Messages = {
       file: 'ファイル',
       files: 'ファイル',
       firstSeen: '初登録',
-      listed: '掲載',
+      listed: '一般公開',
     },
     original: '本体',
     addOn: '差分',
     randomSeen: (count) => `${count} 通り`,
     noneSeen: 'なし',
-    listedYes: 'あり',
-    listedNo: 'まだ（パスキーを持つプレイヤー 2 人が遊ぶと掲載されます）',
+    listedYes: '済み',
+    listedNo: 'まだ — パスキーを持つプレイヤー 2 人が遊ぶと公開されます',
+    notListedTitle: 'まだ一般公開されていません',
+    notListedLead:
+      'この譜面は、パスキーを持つプレイヤー 2 人が遊ぶと一般公開されます。それまでは最新のプレイ、他のプレイヤーのページ、検索エンジンには載らず、ランキングには各プレイヤー自身の記録だけが表示されます。',
+    notListedSignIn: 'サインインすると自分の記録を見られます。',
+    notListedEmpty: '一般公開されると、ここに記録が表示されます。',
   },
   lists: {
     ranking: 'ランキング',
@@ -160,6 +165,9 @@ export const ja: Messages = {
     fewerMisses: '自己ベストより少ないミス数',
     anonymous: '匿名',
     assist: 'アシスト',
+    notListed: '非公開',
+    notListedHelp:
+      'このプレイはあなたにだけ表示されています。譜面がまだ一般公開されていないためです。パスキーを持つプレイヤー 2 人が遊ぶと公開されます。',
   },
   lnModes: {
     1: 'LN — 始点を判定。終点まで押し続ける',

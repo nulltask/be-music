@@ -12,6 +12,8 @@ export interface RankingFilter {
   includeAnonymous: boolean;
   /** Only players who played the chart under this ruleset at least once. */
   playedHereOnly: boolean;
+  /** Only this player (a chart not listed yet shows a signed-in player their own place, and nobody else's). */
+  onlyUserId?: string;
 }
 
 export interface RankingEntry {
@@ -37,6 +39,7 @@ export function filterConditions(filter: RankingFilter): SQL[] {
   ];
   if (!filter.includeAnonymous) conditions.push(eq(user.isAnonymous, false));
   if (filter.playedHereOnly) conditions.push(eq(bestScore.playedHere, true));
+  if (filter.onlyUserId !== undefined) conditions.push(eq(bestScore.userId, filter.onlyUserId));
   return conditions;
 }
 
