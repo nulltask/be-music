@@ -17,11 +17,61 @@ export function hasSessionCookie(headers: Headers): boolean {
 }
 
 /**
- * Better Auth for one request (docs/leaderboard.md section 3). D1 and the secrets are only reachable per request on
- * Workers, so the instance is built per request; the cost is a few object allocations. Discord and Google sign-in are
- * enabled only when their secrets are configured, so local runs and tests work with anonymous sessions alone.
+ * Better Auth for a request's bindings and origin (docs/leaderboard.md section 3), built once per bindings object and
+ * origin and reused while the isolate lives: setting it up and its context per request cost every request. The
+ * bindings come from the request (`c.env`), so the cache is keyed by that object and never outlives it. Discord and
+ * Google sign-in are enabled only when their secrets are configured, so local runs and tests work with anonymous
+ * sessions alone.
  */
-export function createAuth(env: Env, origin: string) {
+export function createAuth(env: Env, origin: string): Auth {
+  let byOrigin = AUTH_BY_ENV.get(env);
+  if (byOrigin === undefined) {
+    byOrigin = new Map();
+    AUTH_BY_ENV.set(env, byOrigin);
+  }
+  let auth = byOrigin.get(origin);
+  if (auth === undefined) {
+    auth = buildAuth(env, origin);
+    byOrigin.set(origin, auth);
+  }
+  return auth;
+}
+
+const AUTH_BY_ENV = new WeakMap<Env, Map<string, Auth>>();
+
+/**
+ * The signed-in session of a request (null without one), and the cookies Better Auth set while reading it: the
+ * refreshed five-minute cookie cache, or a session whose expiry it extended. Passing those on with the response keeps
+ * the cache warm, so later requests read the session from the cookie instead of D1.
+ */
+export async function loadSession(
+  env: Env,
+  request: Request,
+): Promise<{ session: Awaited<ReturnType<Auth['api']['getSession']>>; setCookies: string[] }> {
+  if (!hasSessionCookie(request.headers)) {
+    return { session: null, setCookies: [] };
+  }
+  const result = await createAuth(env, new URL(request.url).origin).api.getSession({
+    headers: request.headers,
+    returnHeaders: true,
+  });
+  return { session: result.response, setCookies: result.headers?.getSetCookie() ?? [] };
+}
+
+/**
+ * Adds the cookies {@link loadSession} collected to a response, unless it is publicly cacheable (a play log, a card):
+ * a shared cache must not keep one player's cookie, and a response with one would not be cached at all.
+ */
+export function passOnSetCookies(response: Response, setCookies: readonly string[]): void {
+  if (setCookies.length === 0 || /\bpublic\b/.test(response.headers.get('cache-control') ?? '')) {
+    return;
+  }
+  for (const cookie of setCookies) {
+    response.headers.append('set-cookie', cookie);
+  }
+}
+
+function buildAuth(env: Env, origin: string) {
   const db = drizzle(env.DB, { schema });
   const socialProviders: Parameters<typeof betterAuth>[0]['socialProviders'] = {};
   if (env.DISCORD_CLIENT_ID && env.DISCORD_CLIENT_SECRET) {
@@ -69,4 +119,4 @@ export function createAuth(env: Env, origin: string) {
   });
 }
 
-export type Auth = ReturnType<typeof createAuth>;
+export type Auth = ReturnType<typeof buildAuth>;
