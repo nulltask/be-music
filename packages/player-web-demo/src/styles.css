@@ -13,8 +13,16 @@ body,
 body {
   background: #08090d;
   color: #f8fafc;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   overflow: hidden;
+}
+
+/* Form controls don't inherit the page font by default; keep them on the UI font too. */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 .shell {
@@ -59,7 +67,7 @@ body {
   --focus-color: #ffd166;
   --number-color: #ffd166;
   --string-color: #ffd166;
-  --font-family: 'LINE Seed JP', system-ui, sans-serif;
+  --font-family: system-ui, sans-serif;
   z-index: 10;
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   backdrop-filter: blur(10px) saturate(140%);
@@ -190,7 +198,7 @@ body {
   background: rgb(11 14 22 / 0.85);
   color: #f8fafc;
   font-size: 13px;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   outline: none;
 }
 
@@ -1131,7 +1139,7 @@ body {
   border-radius: 10px;
   background: rgb(17 22 32 / 0.94);
   color: #f8fafc;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   /*
    * Card has its own pointer-events so a future "Cancel" button
    * inside it would be clickable; the parent overlay stays
@@ -1266,7 +1274,7 @@ body {
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   backdrop-filter: blur(10px) saturate(140%);
   color: #d2d9e4;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
@@ -1473,7 +1481,7 @@ body {
   padding: 6px 14px;
   border-radius: 8px;
   color: rgb(151 163 179 / 0.85);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -1673,7 +1681,7 @@ body {
   padding: 5px 14px;
   border-radius: 999px;
   color: rgb(151 163 179 / 0.85);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -2051,7 +2059,7 @@ body {
   -webkit-backdrop-filter: blur(10px) saturate(140%);
   backdrop-filter: blur(10px) saturate(140%);
   color: #d2d9e4;
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 12px;
   font-weight: 600;
   text-decoration: none;
@@ -2226,7 +2234,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   border-radius: 999px;
   background: rgb(11 14 22 / 0.55);
   color: rgb(248 250 252 / 0.75);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -2402,7 +2410,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   background: rgb(14 18 27 / 0.97);
   color: #f8fafc;
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 .account-dialog::backdrop {
   background: rgb(0 0 0 / 0.55);
@@ -2594,7 +2602,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
   color: #f8fafc;
   text-align: center;
   box-shadow: 0 24px 60px rgb(0 0 0 / 0.55);
-  font-family: 'LINE Seed JP', system-ui, sans-serif;
+  font-family: system-ui, sans-serif;
 }
 .skin-drop[open] {
   display: flex;
