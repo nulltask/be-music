@@ -13,6 +13,7 @@ export const ja: Messages = {
   },
   nav: {
     label: 'Leaderboard',
+    menu: 'メニュー',
     latest: '最新',
     latestTitle: '最新のプレイ',
     help: 'ヘルプ',
