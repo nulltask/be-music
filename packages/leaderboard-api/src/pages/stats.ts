@@ -1,9 +1,10 @@
-import { and, count, countDistinct, desc, eq, max, min, sql, type SQL } from 'drizzle-orm';
+import { and, count, countDistinct, eq, max, min, sql, type SQL } from 'drizzle-orm';
 import { computeScoreRate, IIDX_RANK_LABELS, type IidxRankLabel } from '@be-music/player/core/scoring';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import type { Database } from '../db/client.ts';
 import { bestScore, chart, score, scoreResult, user } from '../db/schema.ts';
 import { filterConditions, type RankingFilter } from '../ranking.ts';
+import { RULESET_IDS } from '../rulesets.ts';
 import { djLevel, LAMP_STYLES } from './format.ts';
 
 /** How many players hold each clear lamp (or DJ Rank), highest first. */
@@ -135,37 +136,38 @@ export const JUDGE_KEYS = ['pgreat', 'great', 'good', 'bad', 'poor', 'emptyPoor'
 export async function loadPlayerStats(db: Database, userId: string, ruleset: PlaylogRulesetId): Promise<PlayerStats> {
   const judgeSum = (key: keyof JudgeTotals) =>
     sql<number | null>`sum(json_extract(${scoreResult.judges}, ${`$.${key}`}))`;
-  const [[plays], byRuleset, bests, [totals]] = await Promise.all([
+  // One walk over the player's plays: counts, dates, plays per ruleset played, and the totals under the display ruleset.
+  // The result row is joined on the left so every play counts; the totals add up only plays that have one, as an inner
+  // join over the results would.
+  const hasResult = sql`${scoreResult.scoreId} is not null`;
+  const [[plays], bests] = await Promise.all([
     db
       .select({
         plays: count(),
         charts: countDistinct(score.chartFingerprint),
         first: min(score.createdAt),
         last: max(score.createdAt),
+        ...Object.fromEntries(
+          RULESET_IDS.map((id) => [`played:${id}`, sql<number>`sum(${score.playedRuleset} = ${id})`]),
+        ),
+        playTimeMs: sql<number | null>`sum(case when ${hasResult} then ${score.durationMs} end)`,
+        notes: sql<number | null>`sum(${scoreResult.noteCount})`,
+        ...Object.fromEntries(JUDGE_KEYS.map((key) => [key, judgeSum(key)])),
       })
       .from(score)
+      .leftJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, ruleset)))
       .where(and(eq(score.userId, userId), eq(score.hidden, false))),
-    db
-      .select({ ruleset: score.playedRuleset, count: count() })
-      .from(score)
-      .where(and(eq(score.userId, userId), eq(score.hidden, false)))
-      .groupBy(score.playedRuleset)
-      .orderBy(desc(count())),
     db
       .select({ lamp: bestScore.bestLamp, exScore: bestScore.bestEx, noteCount: chart.noteCount })
       .from(bestScore)
       .innerJoin(chart, eq(chart.chartFingerprint, bestScore.chartFingerprint))
       .where(and(eq(bestScore.userId, userId), eq(bestScore.ruleset, ruleset), eq(bestScore.assisted, false))),
-    db
-      .select({
-        playTimeMs: sql<number | null>`sum(${score.durationMs})`,
-        notes: sql<number | null>`sum(${scoreResult.noteCount})`,
-        ...Object.fromEntries(JUDGE_KEYS.map((key) => [key, judgeSum(key)])),
-      })
-      .from(score)
-      .innerJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, ruleset)))
-      .where(and(eq(score.userId, userId), eq(score.hidden, false))),
   ]);
+  const totals = plays as Record<string, unknown> | undefined;
+  // Most played first; a tie in ruleset id order, as the grouped query listed them.
+  const byRuleset = RULESET_IDS.map((id) => ({ ruleset: id, count: Number(totals?.[`played:${id}`] ?? 0) }))
+    .filter((entry) => entry.count > 0)
+    .sort((left, right) => right.count - left.count || (left.ruleset < right.ruleset ? -1 : 1));
   const totalOf = (value: unknown) => Number(value ?? 0);
   return {
     plays: plays?.plays ?? 0,
@@ -178,8 +180,6 @@ export async function loadPlayerStats(db: Database, userId: string, ruleset: Pla
     averageRate: averageRate(bests),
     playTimeMs: totalOf(totals?.playTimeMs),
     notes: totalOf(totals?.notes),
-    judges: Object.fromEntries(
-      JUDGE_KEYS.map((key) => [key, totalOf((totals as Record<string, unknown> | undefined)?.[key])]),
-    ) as unknown as JudgeTotals,
+    judges: Object.fromEntries(JUDGE_KEYS.map((key) => [key, totalOf(totals?.[key])])) as unknown as JudgeTotals,
   };
 }
