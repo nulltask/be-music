@@ -8,6 +8,7 @@ import { ChartPreviewEngine } from '../../chart/preview.ts';
 import { AudioAnalyzer } from '../../runtime/audio-analysis.ts';
 import { resolveKeyModeOp, SELECT_KEYS_FILTER_TO_OP } from '../select-ops.ts';
 import { logger } from '../../logger.ts';
+import { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from '../hi-speed.ts';
 import type {
   BrowserBrowseEntry,
   BrowserFolderNode,
@@ -210,7 +211,7 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
   // about a full lane in 1.8 seconds at hispeed=1) which reads as "the chart isn't moving" to
   // anyone coming from LR2 / iidx-style defaults. 2.0 is the lowest preset most contemporary
   // BMS players actually use; the Up/Down hotkeys can adjust from there.
-  hiSpeed: 2.0,
+  hiSpeed: DEFAULT_HISPEED,
   autoPlay: false,
   bga: 'ON',
   // BGA renders at LR2's `#DST_BGA,...,30` rect (NORMAL) at `'NORMAL'` — a 256×256 window squeezed in beside the lane
@@ -238,25 +239,17 @@ export const DEFAULT_PLAY_OPTIONS: PixiPlayOptions = {
 };
 
 /**
- * Allowed range for {@link PixiPlayOptions.hiSpeed}. Mirrors gameplay's `HISPEED_MIN` / `HISPEED_MAX` so values seeded
+ * Allowed range for {@link PixiPlayOptions.hiSpeed} — the shared hi-speed range (`scene/hi-speed.ts`), so values seeded
  * from the select scene cover the same domain the in-play adjust hotkeys (`ArrowUp` / `ArrowDown`) can produce.
- * Duplicated here rather than re-exported from `scene/gameplay-constants.ts` so the select view stays free of gameplay
- * imports.
  */
-export const HISPEED_MIN = 0.1;
-export const HISPEED_MAX = 6.0;
-/** Per-click HS step. 0.1 matches gameplay's `HISPEED_STEP`. */
-const HISPEED_STEP = 0.1;
+export { HISPEED_MAX, HISPEED_MIN };
 
 /**
- * Snaps a hiSpeed value to the 1/1000 grid and clamps to [{@link HISPEED_MIN}, {@link HISPEED_MAX}]. The 1/1000 snap
- * absorbs float drift from repeated +0.1 / -0.1 increments — the same trick the LR2 gameplay scene's `adjustHiSpeed`
- * uses so the two paths converge on identical step values.
+ * Snaps a hiSpeed value to the 1/1000 grid and clamps to [{@link HISPEED_MIN}, {@link HISPEED_MAX}] ({@link
+ * snapHiSpeed}), falling back to the default for non-finite input.
  */
 function clampHiSpeed(value: number): number {
-  if (!Number.isFinite(value)) return DEFAULT_PLAY_OPTIONS.hiSpeed;
-  const snapped = Math.round(value * 1000) / 1000;
-  return Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
+  return snapHiSpeed(value) ?? DEFAULT_PLAY_OPTIONS.hiSpeed;
 }
 
 /**

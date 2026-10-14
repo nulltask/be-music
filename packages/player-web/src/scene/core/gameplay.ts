@@ -127,8 +127,6 @@ import {
   BGA,
   DESIGN_HEIGHT,
   DESIGN_WIDTH,
-  HISPEED_MAX,
-  HISPEED_MIN,
   HISPEED_STEP,
   FALLBACK_INTRO_DELAY_MS,
   LR2_1P_KEYON_TIMER_BASE,
@@ -136,6 +134,7 @@ import {
   PIXELS_PER_BEAT,
   PLAYFIELD,
 } from '../gameplay-constants.ts';
+import { snapHiSpeed } from '../hi-speed.ts';
 import {
   buildSkinBgaFrame,
   collectBgaTextureLoadKeys,
@@ -462,6 +461,12 @@ export interface CoreGameplayViewOptions {
    * to re-dial their preferred HS at every song. Clamped to [`HISPEED_MIN`, `HISPEED_MAX`] internally; defaults to 1.5.
    */
   initialHiSpeed?: number;
+  /**
+   * Fires when the player changes the hi-speed during play (`ArrowUp` / `ArrowDown`), with the new value on the same
+   * scale as {@link initialHiSpeed} — before any HS-FIX rescaling — so a host can remember it and seed the next play
+   * with it. Not fired for {@link CoreGameplayView.setHiSpeed} writes, which come from the host.
+   */
+  onHiSpeedChange?: (hiSpeed: number) => void;
   /**
    * BGA display mode picked from the LR2 panel-1 BGA toggle (`#SRC_BUTTON,type=72`). Defaults to `'ON'` so charts that
    * ship a BGA render it by default. With `'OFF'` the BGA layer stays empty for the entire play; with `'AUTOPLAY_ONLY'`
@@ -1179,6 +1184,11 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    */
   protected hiSpeed = 2.0;
   /**
+   * The HS-FIX multiplier {@link applyHsFix} folded into {@link hiSpeed} (1 without HS-FIX), so a hi-speed reported to
+   * or set by the host stays on the player's own scale.
+   */
+  private hsFixMultiplier = 1;
+  /**
    * Map of timer-id → `playClock()` timestamp at which the timer started, using the LR2 timer numbering from
    * `gameplay-constants.ts`. The core scene drives the key-on bank (100–119) for the lane beams; theme families stamp
    * their own timers (bombs, FC, judge, scene stages, …) into the same map. Removed when the timer "stops" (e.g. key
@@ -1272,8 +1282,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // Snap to the same 1/1000 grid `adjustHiSpeed` uses so a host-supplied `1.5000000000000002` (the obvious
       // float-drift failure mode of repeated +0.1 steps) lands on the canonical grid value the in-game adjust hotkey
       // would produce.
-      const snapped = Math.round(options.initialHiSpeed * 1000) / 1000;
-      this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
+      this.hiSpeed = snapHiSpeed(options.initialHiSpeed) ?? this.hiSpeed;
     }
     this.autoPauseOnBlur = options.autoPauseOnBlur ?? false;
     this.audioVolumes = {
@@ -2992,8 +3001,24 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * even finer steps if HISPEED_STEP shrinks again later.
    */
   private adjustHiSpeed(delta: number): void {
-    const next = Math.round((this.hiSpeed + delta) * 1000) / 1000;
-    this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));
+    const next = snapHiSpeed(this.hiSpeed + delta);
+    if (next === undefined || next === this.hiSpeed) return;
+    this.hiSpeed = next;
+    const reported = snapHiSpeed(next / this.hsFixMultiplier);
+    if (reported !== undefined) this.options.onHiSpeedChange?.(reported);
+  }
+
+  /**
+   * Sets the hi-speed from the host (e.g. a settings menu) while the scene is mounted. `value` is on the scale of
+   * {@link CoreGameplayViewOptions.initialHiSpeed}: the chart's HS-FIX multiplier is applied on top, as at mount.
+   * Snapped and clamped like the in-game hotkey; non-finite values are ignored.
+   */
+  public setHiSpeed(value: number): void {
+    const base = snapHiSpeed(value);
+    if (base === undefined) return;
+    const next = snapHiSpeed(base * this.hsFixMultiplier);
+    if (next === undefined || next === this.hiSpeed) return;
+    this.hiSpeed = next;
   }
 
   /**
@@ -3043,8 +3068,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
     const multiplier = referenceBpm / targetBpm;
     if (!Number.isFinite(multiplier) || multiplier <= 0) return;
-    const next = Math.round(this.hiSpeed * multiplier * 1000) / 1000;
-    this.hiSpeed = Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, next));
+    this.hsFixMultiplier = multiplier;
+    this.hiSpeed = snapHiSpeed(this.hiSpeed * multiplier) ?? this.hiSpeed;
   }
 
   private resolveKeyOnTimerId(channel: string): number | undefined {
