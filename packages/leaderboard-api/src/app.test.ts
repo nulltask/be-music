@@ -389,6 +389,35 @@ describe('reassignScores', () => {
     await rebuildBestScores(db, linkedId, [...unplayed.slice(0, 80), ...played, ...unplayed.slice(80)], Date.now());
     await expectBests();
   });
+
+  test('the linked account counts towards listing the charts it takes over', async () => {
+    const { reassignScores } = await import('./scores/reassign.ts');
+    const { claimAccount } = await import('./accounts.ts');
+    const db = openDatabase(env.DB);
+    const [shared, onlyAnonymous] = makeCharts(2, '17') as [TestChart, TestChart];
+    const bob = await signInAnonymously(fetchApp);
+    // The account the anonymous player links stands in for a Discord or Google one: not anonymous.
+    const linked = await signInAnonymously(fetchApp);
+    await claimAccount(db, await userIdOf(bob));
+    await claimAccount(db, await userIdOf(linked));
+    const anonymous = await signInAnonymously(fetchApp);
+    expect((await submitPlay(bob, shared, 5)).status).toBe(201);
+    expect((await submitPlay(anonymous, shared, 7)).status).toBe(201);
+    expect((await submitPlay(anonymous, onlyAnonymous, 7)).status).toBe(201);
+    const status = async (chart: TestChart) =>
+      (
+        await db.query.chart.findFirst({
+          where: (row, { eq }) => eq(row.chartFingerprint, chart.chartFingerprint),
+          columns: { status: true },
+        })
+      )?.status;
+    expect(await status(shared)).toBe('provisional');
+
+    await reassignScores(db, await userIdOf(anonymous), await userIdOf(linked));
+    // Bob and the linked account have both played the shared chart now; the other one still has a single player.
+    expect(await status(shared)).toBe('listed');
+    expect(await status(onlyAnonymous)).toBe('provisional');
+  });
 });
 
 describe('accounts', () => {
