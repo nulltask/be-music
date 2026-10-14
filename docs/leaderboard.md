@@ -365,6 +365,14 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
   reports cover images (section 12).
 - **First card**: one design for a score — title, artist, level, clear-lamp band, EX score, rate, DJ level, judgments,
   rank and player count, ruleset badge, player name, date. Ranking, profile and versus cards come later.
+- **The score card's playfield shows the chart.** When the play's own player opens a score page without a card, the
+  page hands the client the chart's densest two measures (8 beats from a whole beat with the most notes, the earliest
+  on a tie; `src/pages/chart-excerpt.ts`), read from the chart's fingerprint document in R2 and laid on the lanes of
+  its lane mode (`src/pages/score-card-excerpt.ts`). The card draws them on the right-hand playfield in the usual
+  colours (white and blue keys, a red scratch, long notes as bars, bar lines) above the lamp-coloured judge line,
+  inside the safe area and below the site's name. Without the document, with an unknown lane mode or with more than
+  16 lanes (24 / 48 KEY), the playfield keeps its decorative notes. A chart with `#RANDOM` shows the notes every
+  outcome shares, and the chart is drawn as written, whatever lane option the play used.
 - **Meta tags** on every page: absolute `og:image`, `og:image:width` / `height`, `twitter:card=summary_large_image`.
 - **Safe area** (`src/pages/share-card-safe-area.ts`): link previews draw over and crop the card, so titles, scores,
   the player and the site's name stay inside it, and the bottom left holds nothing that matters. As of October 2026:

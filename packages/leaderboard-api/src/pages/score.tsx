@@ -14,6 +14,7 @@ import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
 import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
 import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
+import { scoreCardExcerpt } from './score-card-excerpt.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import { helpHref } from './help-topics.ts';
 import { useMessages } from './i18n/index.ts';
@@ -133,6 +134,18 @@ function VisibilityCard(props: { scoreId: string; hidden: boolean }) {
   );
 }
 
+/** The excerpt for a play's card, from the chart's fingerprint document in R2; null when it cannot be read. */
+async function loadCardExcerpt(c: PageContext, documentKey: string, laneMode: string | null) {
+  if (laneMode === null) return null;
+  try {
+    const object = await c.env.BLOBS.get(documentKey);
+    return object === null ? null : scoreCardExcerpt(await object.json(), laneMode);
+  } catch (error) {
+    console.warn('could not read the chart document for a score card', error);
+    return null;
+  }
+}
+
 /** One play under every ruleset, with how it was played. */
 export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   const db = openDatabase(c.env.DB);
@@ -152,6 +165,11 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
       ? `${player.displayName} · ${title} · EX ${played.exScore} (${rulesetName(played.ruleset)})`
       : `${player.displayName} · ${title}`;
   const card = played === undefined ? undefined : scoreCardData(detail, played, title);
+  // The play's own player draws the card when it has none yet: hand them the chart's notes for its playfield.
+  if (card !== undefined && isOwner && detail.score.cardKey === null) {
+    const excerpt = await loadCardExcerpt(c, detail.chart.documentKey, detail.chart.laneMode);
+    if (excerpt !== null) card.excerpt = excerpt;
+  }
   const image = cardUrl(detail.score.id, detail.score.cardKey);
   const { hidden } = detail.score;
   c.header('cache-control', PAGE_CACHE);
