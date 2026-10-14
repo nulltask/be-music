@@ -564,13 +564,13 @@ function withoutLang(path: string): string {
 }
 
 /**
- * Where this page sits: Leaderboard › … › this page (the last step is not a link). It is the header's second row, so it
- * stays on one line rather than wrapping the sticky header taller: the steps in between give way first, then this page;
- * the short root step keeps its width.
+ * Where this page sits: … › this page (the last step is not a link). The site name in the header is the way home, so the
+ * trail does not repeat it. It is the header's second row, so it stays on one line rather than wrapping the sticky header
+ * taller: the steps before this page give way first.
  */
 function Breadcrumbs(props: { crumbs: Crumb[] }) {
   const t = useMessages();
-  const trail: Crumb[] = [{ label: t.site.leaderboard, href: '/leaderboard' }, ...props.crumbs];
+  const trail = props.crumbs;
   return (
     <nav class="breadcrumb" aria-label={t.nav.breadcrumb}>
       <ol class="text-muted-foreground flex-nowrap gap-1.5 text-sm">
@@ -583,7 +583,7 @@ function Breadcrumbs(props: { crumbs: Crumb[] }) {
                   <span aria-hidden="true">›</span>
                 </li>
               ) : null}
-              <li class={index === 0 ? 'shrink-0' : last ? 'min-w-0' : 'min-w-0 shrink-[4]'}>
+              <li class={last ? 'min-w-0' : 'min-w-0 shrink-[4]'}>
                 {last || crumb.href === undefined ? (
                   <span
                     class="text-foreground inline-flex max-w-[40ch] min-w-0 items-center gap-1"
@@ -712,10 +712,15 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 <NavMenu current={props.meta.locale} path={props.meta.path} signedIn={props.meta.viewer !== null} />
               </div>
             </div>
-            {/* The second row: where this page sits, kept in view with the header. */}
-            <div class="mx-auto max-w-5xl px-4 pb-2.5">
-              <Breadcrumbs crumbs={props.meta.crumbs} />
-            </div>
+            {/* The second row: where this page sits, kept in view with the header, on a band of its own. The top page has
+              no trail and no row. */}
+            {props.meta.crumbs.length > 0 ? (
+              <div class="bg-muted/60 border-t">
+                <div class="mx-auto max-w-5xl px-4 py-2">
+                  <Breadcrumbs crumbs={props.meta.crumbs} />
+                </div>
+              </div>
+            ) : null}
             <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
           </header>
           <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">{props.children}</main>
