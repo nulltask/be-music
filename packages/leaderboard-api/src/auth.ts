@@ -9,6 +9,14 @@ import { createProfile } from './profiles.ts';
 import { reassignScores } from './scores/reassign.ts';
 
 /**
+ * Whether a request carries a Better Auth session cookie (`better-auth.session_token`, `__Secure-` prefixed over HTTPS).
+ * Without one `getSession` can only answer null, so callers skip building the auth instance and asking it.
+ */
+export function hasSessionCookie(headers: Headers): boolean {
+  return headers.get('cookie')?.includes('session_token=') ?? false;
+}
+
+/**
  * Better Auth for one request (docs/leaderboard.md section 3). D1 and the secrets are only reachable per request on
  * Workers, so the instance is built per request; the cost is a few object allocations. Discord and Google sign-in are
  * enabled only when their secrets are configured, so local runs and tests work with anonymous sessions alone.

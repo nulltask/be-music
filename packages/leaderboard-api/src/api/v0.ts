@@ -7,7 +7,7 @@ import { AVATAR_MAX_BYTES, putAvatar, removeAvatar } from '../avatars.ts';
 import { CARD_HEIGHT, CARD_MAX_BYTES, CARD_WIDTH, cardUrl, putScoreCard } from '../cards.ts';
 import { updateProfile } from '../profiles.ts';
 import type { AppEnv } from '../app.ts';
-import { createAuth } from '../auth.ts';
+import { createAuth, hasSessionCookie } from '../auth.ts';
 import { openDatabase } from '../db/client.ts';
 import { readJsonBody, SUBMISSION_LIMITS } from '../http/body.ts';
 import { loadMyRank, loadRanking, type RankingFilter } from '../ranking.ts';
@@ -65,7 +65,10 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
 
   v0.use('*', async (c, next) => {
     c.set('db', openDatabase(c.env.DB));
-    const session = await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers });
+    // Signed-out reads (most of the API's traffic) carry no session cookie and skip the auth setup altogether.
+    const session = hasSessionCookie(c.req.raw.headers)
+      ? await createAuth(c.env, new URL(c.req.url).origin).api.getSession({ headers: c.req.raw.headers })
+      : null;
     c.set('userId', session?.user.id);
     await next();
   });
