@@ -4,7 +4,8 @@
  *
  * Each row is one line of a compact list rather than a table row, so nothing wraps into columns or scrolls sideways on
  * a phone. Every row keeps one layout: what it is at the start (rank, lamp colour), who or what in the middle with its
- * details on a second, smaller line, and the score at the end, aligned on its digits.
+ * details on a second, smaller line, and the score at the end, aligned on its digits. The list is a size container:
+ * where it is narrow (a phone), the details line runs on under the score too, so it keeps most of the row's width.
  */
 import type { Child } from 'hono/jsx';
 import type { RankingEntry } from '../../ranking.ts';
@@ -29,57 +30,117 @@ import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
 import { useMessages, type Messages } from '../i18n/index.ts';
 
-/** The frame of a list: a card whose rows are split by hairlines. */
+/**
+ * A detail only a wide row shows. A narrow row keeps its details line to what tells the plays apart (who, the lamp, the
+ * misses, the place, when); the rest (the rules it was played under, the gauge, the lane option) is on the play's page,
+ * which a tap on the row opens.
+ */
+interface WideOnly {
+  wideOnly: Child;
+}
+
+const wideOnly = (child: Child): WideOnly => ({ wideOnly: child });
+
+const isWideOnly = (item: unknown): item is WideOnly => typeof item === 'object' && item !== null && 'wideOnly' in item;
+
+const shown = (item: Child): boolean => item !== null && item !== false && item !== undefined;
+
+/** The frame of a list: a card whose rows are split by hairlines, and the container its rows lay out against. */
 function List(props: { label: string; children: Child }) {
   return (
-    <ol class="card divide-border gap-0 divide-y overflow-hidden py-0" aria-label={props.label}>
+    <ol class="card divide-border @container gap-0 divide-y overflow-hidden py-0" aria-label={props.label}>
       {props.children}
     </ol>
   );
 }
 
+/** A details-line item and the separator after it (its `content` set where one is due). */
+const DETAIL =
+  "items-center gap-1 after:ms-1 after:text-muted-foreground/60 @xl:[&:not(:last-child)]:after:content-['·']";
+
 /**
- * One row: a fixed start column, the main text (title over details), the score, and, for a play, its info icon in a
- * column of its own at the end, so the icons line up down the list whatever the details say.
+ * One row: a fixed start column, the main text (title over details), the score, and, for a play in a wide list, its
+ * info icon in a column of its own at the end, so the icons line up down the list whatever the details say.
+ *
+ * In a wide list the score and the icon stand beside both lines. In a narrow one (under `@xl`, 36rem) the row reads in
+ * three steps: the title beside the score, the `subtitle` (who played it) beside the DJ LEVEL and rate, and the details,
+ * small and muted, spanning to the row's end beneath them instead of wrapping down a column squeezed between the start
+ * and the score. A wide row has room for the subtitle among the details, so it shows it there.
  */
 function Row(props: {
   href: string;
   label: string;
   start: Child;
   title: Child;
-  details: Child[];
+  /** The narrow row's second line; a wide row shows it among the details instead. */
+  subtitle?: Child;
+  details: Array<Child | WideOnly>;
   end: Child;
   /** A play's row: the info column, holding the play's info icon when its info was loaded. */
   play?: { info: PlayInfo | undefined };
   current?: boolean;
 }) {
   const hasInfo = props.play !== undefined;
+  const hasSubtitle = props.subtitle !== undefined;
   return (
     <li
-      class={`hover:bg-muted/50 relative grid items-center gap-x-3 py-3 ps-4 ${hasInfo ? 'grid-cols-[auto_minmax(0,1fr)_auto_2rem] pe-2' : 'grid-cols-[auto_minmax(0,1fr)_auto] pe-4'} ${props.current ? 'bg-muted/60' : ''}`}
+      class={`hover:bg-muted/50 relative grid items-center gap-x-3 gap-y-1 py-3 ps-4 grid-cols-[auto_minmax(0,1fr)_auto] pe-4 ${hasInfo ? '@xl:grid-cols-[auto_minmax(0,1fr)_auto_2rem] @xl:pe-2' : ''} ${props.current ? 'bg-muted/60' : ''}`}
     >
       <RowLink href={props.href} label={props.label} />
-      {props.start}
-      <div class="min-w-0 space-y-1">
-        <div class="flex min-w-0 items-center gap-2 leading-tight">{props.title}</div>
-        <div class="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-tight">
-          {props.details
-            .filter((item) => item !== null && item !== false && item !== undefined)
-            .map((item) => (
-              // The separator trails each item, so a wrapped line never starts with one.
-              <span class="inline-flex items-center gap-1 [&:not(:last-child)]:after:ms-1 [&:not(:last-child)]:after:text-muted-foreground/60 [&:not(:last-child)]:after:content-['·']">
+      <div class={hasSubtitle ? 'row-span-3 @xl:row-span-2' : 'row-span-2'}>{props.start}</div>
+      {/* A narrow row keeps the title and its badge on one line, the title giving way; a wide one has room for the
+        badges to wrap under the title rather than squeeze it. */}
+      <div class="col-start-2 row-start-1 flex min-w-0 flex-nowrap items-center gap-x-2 gap-y-1 self-center leading-tight font-medium @xl:flex-wrap @xl:self-end">
+        {props.title}
+      </div>
+      {hasSubtitle ? (
+        <div class="col-start-2 row-start-2 flex min-w-0 items-center gap-1.5 text-sm leading-tight @xl:hidden">
+          {props.subtitle}
+        </div>
+      ) : null}
+      <div
+        class={`text-muted-foreground col-[2/-1] flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 self-start text-xs leading-tight @xl:col-[2/3] ${hasSubtitle ? 'row-start-3 @xl:row-start-2 pt-0.5 @xl:pt-0' : 'row-start-2'}`}
+      >
+        {props.details
+          .filter((item) => (isWideOnly(item) ? shown(item.wideOnly) : shown(item)))
+          .map((item) =>
+            // The separator trails each item, so a wrapped line never starts with one: in a wide row every item but
+            // the last has one; in a narrow one, an item has one only while a narrow item follows it.
+            isWideOnly(item) ? (
+              <span class={`${DETAIL} hidden @xl:inline-flex`}>{item.wideOnly}</span>
+            ) : (
+              <span class={`${DETAIL} inline-flex [&:has(~[data-narrow])]:after:content-['·']`} data-narrow>
                 {item}
               </span>
-            ))}
-        </div>
+            ),
+          )}
       </div>
-      {props.end}
+      <div class={`col-start-3 row-start-1 ${hasSubtitle ? 'row-span-2' : '@xl:row-span-2'}`}>{props.end}</div>
       {hasInfo ? (
-        <span class="flex justify-center">
+        // Only a wide row has the info icon: on a phone a tap opens the play, whose page lists the same info.
+        <span class="col-start-4 row-start-1 hidden justify-center @xl:row-span-2 @xl:flex">
           <InfoButton info={props.play?.info} />
         </span>
       ) : null}
     </li>
+  );
+}
+
+/** What only a wide row shows, such as a help tip beside a badge. */
+function NarrowHidden(props: { children: Child }) {
+  return <span class="hidden items-center @xl:inline-flex">{props.children}</span>;
+}
+
+/** Marks an anonymous player: quiet text in a narrow row, a badge in a wide one. */
+function AnonymousMark() {
+  const t = useMessages();
+  return (
+    <>
+      <span class="text-muted-foreground shrink-0 text-xs font-normal @xl:hidden">{t.lists.anonymous}</span>
+      <span class="hidden @xl:inline-flex">
+        <Tag>{t.lists.anonymous}</Tag>
+      </span>
+    </>
   );
 }
 
@@ -111,7 +172,8 @@ function LampLabel(props: { lamp: number; from?: number }) {
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
       {raised ? (
         <>
-          <span class="text-muted-foreground/70">{lampStyle(props.from!).label} →</span>
+          {/* A narrow row shows only the lamp reached; a wide one adds the lamp it was raised from. */}
+          <span class="text-muted-foreground/70 hidden @xl:inline">{lampStyle(props.from!).label} →</span>
           <span class="text-foreground font-medium">{style.label}</span>
         </>
       ) : (
@@ -155,13 +217,15 @@ function Score(props: { exScore: number; noteCount: number; previous?: number })
   );
 }
 
-/** A chart's mode and level as a small badge (`7K ☆12`), the difficulty's name on hover. */
+/**
+ * A chart's mode and level (`7K ☆12`), the difficulty's name on hover: the first item of a play's details, so the
+ * title line keeps its width for the title.
+ */
 function ChartLevel(props: { laneMode: string | null; playLevel: string | null; difficulty: number | null }) {
   const label = formatChartLevel(props.laneMode, props.playLevel);
   if (label === undefined) return null;
-  const name = difficultyName(props.difficulty);
   return (
-    <span class="badge shrink-0 font-normal" data-variant="outline" title={name}>
+    <span class="text-foreground/80 font-medium" title={difficultyName(props.difficulty)}>
       {label}
     </span>
   );
@@ -203,13 +267,13 @@ export function RankingList(props: {
               <a class={`${LINK} ${ABOVE} truncate`} href={playerHref(entry.handle)}>
                 {entry.displayName}
               </a>
-              {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
+              {entry.anonymous ? <AnonymousMark /> : null}
             </>
           }
           details={[
             <LampLabel lamp={entry.clearLamp} />,
             <>BP {entry.missCount}</>,
-            props.everyPlay ? null : <>{t.count.plays(entry.playCount)}</>,
+            props.everyPlay ? null : wideOnly(<>{t.count.plays(entry.playCount)}</>),
             <When at={entry.achievedAt} />,
           ]}
           end={<Score exScore={entry.exScore} noteCount={props.noteCount} />}
@@ -233,14 +297,16 @@ function PrivacyBadge(props: { hidden: boolean; reasons: Array<string | undefine
       <span class="badge" data-variant="secondary">
         {label}
       </span>
-      <HelpTip topic="visibility" label={label}>
-        {t.visibility.onlyYou}
-        {reasons.map((reason) => (
-          <>
-            <br />• {reason}
-          </>
-        ))}
-      </HelpTip>
+      <NarrowHidden>
+        <HelpTip topic="visibility" label={label}>
+          {t.visibility.onlyYou}
+          {reasons.map((reason) => (
+            <>
+              <br />• {reason}
+            </>
+          ))}
+        </HelpTip>
+      </NarrowHidden>
     </span>
   );
 }
@@ -288,7 +354,6 @@ export function RecentScoresList(props: {
                   <EntityIcon kind="chart" size="sm" />
                   <span class="truncate">{title}</span>
                 </a>
-                <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
                 <PrivacyBadge
                   hidden={entry.hidden}
                   reasons={[
@@ -301,38 +366,53 @@ export function RecentScoresList(props: {
                 />
               </>
             }
-            details={[
+            subtitle={
               props.showPlayer ? (
                 <>
-                  <a
-                    class={`${ABOVE} text-foreground font-medium underline-offset-4 hover:underline`}
-                    href={playerHref(entry.handle)}
-                  >
+                  <a class={`${ABOVE} truncate underline-offset-4 hover:underline`} href={playerHref(entry.handle)}>
                     {entry.displayName}
                   </a>
-                  {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
+                  {entry.anonymous ? <AnonymousMark /> : null}
                 </>
+              ) : undefined
+            }
+            details={[
+              formatChartLevel(entry.laneMode, entry.playLevel) !== undefined ? (
+                <ChartLevel laneMode={entry.laneMode} playLevel={entry.playLevel} difficulty={entry.difficulty} />
               ) : null,
+              props.showPlayer
+                ? wideOnly(
+                    <>
+                      <a
+                        class={`${ABOVE} text-foreground font-medium underline-offset-4 hover:underline`}
+                        href={playerHref(entry.handle)}
+                      >
+                        {entry.displayName}
+                      </a>
+                      {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
+                    </>,
+                  )
+                : null,
               <LampLabel lamp={entry.clearLamp} from={previous?.clearLamp} />,
-              showsGauge(entry.clearLamp) ? <>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</> : null,
+              showsGauge(entry.clearLamp) ? wideOnly(<>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</>) : null,
               <>
                 BP {entry.missCount}
                 {missDelta < 0 ? <Delta delta={missDelta} better title={t.lists.fewerMisses} /> : null}
               </>,
-              entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-' ? (
-                <>{entry.laneOption}</>
-              ) : null,
+              entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-'
+                ? wideOnly(<>{entry.laneOption}</>)
+                : null,
               entry.hidden ? null : (
                 <span title={t.lists.rankAmong(entry.players)}>
                   #{entry.rank} / {entry.players}
                 </span>
               ),
-              <>
+              wideOnly(
                 <span title={t.rules.playedWithTitle}>
                   {t.rules.playedWith(t.rules.name(RULESET_LABELS[entry.playedRuleset] ?? entry.playedRuleset))}
-                </span>
-                {entry.assisted ? <Tag>{t.lists.assist}</Tag> : null}
-              </>,
+                </span>,
+              ),
+              entry.assisted ? <Tag>{t.lists.assist}</Tag> : null,
               <When at={entry.createdAt} />,
             ]}
             end={<Score exScore={entry.exScore} noteCount={entry.noteCount} previous={previous?.exScore} />}
