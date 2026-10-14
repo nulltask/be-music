@@ -1,8 +1,8 @@
 import { and, count, eq } from 'drizzle-orm';
 import type { Database } from './db/client.ts';
 import { avatarUrl } from './avatars.ts';
-import { refreshChartListing } from './charts.ts';
-import { bestScore, passkey, profile, user } from './db/schema.ts';
+import { refreshPlayedChartListings } from './charts.ts';
+import { passkey, profile, user } from './db/schema.ts';
 
 /** The signed-in player's own view of their account (`GET /api/v0/me`). */
 export interface AccountSummary {
@@ -51,13 +51,7 @@ export async function claimAccount(db: Database, userId: string): Promise<void> 
       .update(profile)
       .set({ displayName: 'Player' })
       .where(and(eq(profile.userId, userId), eq(profile.displayName, 'Anonymous'))),
+    // The player now counts towards listing the charts they played (the batch runs in order, after the first update).
+    refreshPlayedChartListings(db, userId),
   ]);
-  // The player now counts towards listing the charts they played.
-  const played = await db
-    .selectDistinct({ chartFingerprint: bestScore.chartFingerprint })
-    .from(bestScore)
-    .where(eq(bestScore.userId, userId));
-  for (const { chartFingerprint } of played) {
-    await refreshChartListing(db, chartFingerprint);
-  }
 }
