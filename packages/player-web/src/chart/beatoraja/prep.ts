@@ -57,8 +57,8 @@ import {
   type CompressorMode,
 } from '../../runtime/audio-bus.ts';
 import type { EngineDriverAudioContext } from '../../runtime/engine-driver.ts';
-import { loadAssetBytes, resolveChartAudioAsset } from '../../collection/collection.ts';
-import { loadVideoTextureFromBytes } from '../../media/textures.ts';
+import { loadAssetBytes, resolveChartAudioAsset, resolveChartBgaAsset } from '../../collection/collection.ts';
+import { loadVideoTextureFromBytes, type VideoTranscodeOptions } from '../../media/textures.ts';
 import { logger } from '../../logger.ts';
 import type { BgaCue } from '../../scene/core/gameplay-bga.ts';
 import { isVideoExtension, toBrowserBgaTimeline } from '../../scene/core/gameplay-bga.ts';
@@ -86,6 +86,8 @@ export interface PrepareBeatorajaGameplayChartOptions {
    * decide and gameplay show and play the same `#RANDOM` branches. Without it the prep resolves the chart itself.
    */
   preResolved?: ResolvedPlayChart;
+  /** How a video BGA the browser can't play is transcoded (size cap, WebCodecs encode), as the LR2 path takes it. */
+  bgaTranscode?: VideoTranscodeOptions;
 }
 
 export interface PreparedBeatorajaGameplayChart {
@@ -199,15 +201,17 @@ export async function prepareBeatorajaGameplayChart(
   await runWithConcurrency([...referencedKeys], BGA_DECODE_CONCURRENCY, async (key) => {
     const path = chart.resources.bmp[key];
     if (typeof path !== 'string') return;
-    const entry = resolveChartAudioAsset(source, song.chartPath, path, { pathPrefix: undefined });
-    const bytes = await loadAssetBytes(entry);
+    // The image / video resolver, as the LR2 path uses: it tries the other image extensions for a still, and the other
+    // video extensions for a video (`_bga.mpg` re-encoded to `_bga.mp4`), but never an image for a video.
+    const resolved = resolveChartBgaAsset(source, song.chartPath, path);
+    const bytes = await loadAssetBytes(resolved?.entry);
     if (!bytes) return;
     // Video paths route through the LR2-derived video loader. Browsers that can't
     // natively decode the source codec fall through to the libav / ffmpeg.wasm
     // transcode path inside `loadVideoTextureFromBytes`.
     if (isVideoExtension(path)) {
       try {
-        const handle = await loadVideoTextureFromBytes(path, bytes);
+        const handle = await loadVideoTextureFromBytes(resolved?.path ?? path, bytes, options.bgaTranscode);
         if (handle === undefined) return;
         handle.texture.label = `bga[${key}]:video`;
         handle.video.muted = true;
