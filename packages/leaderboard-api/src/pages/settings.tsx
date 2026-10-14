@@ -2,7 +2,7 @@
 import type { Child } from 'hono/jsx';
 import { Avatar } from './components/basics.tsx';
 import { Layout, PageHeader } from './layout.tsx';
-import { meta, PAGE_CACHE, type PageContext } from './page.tsx';
+import { meta, PAGE_CACHE, pageMessages, type PageContext } from './page.tsx';
 
 function Card(props: { title: string; description?: string; children: Child }) {
   return (
@@ -23,21 +23,19 @@ function Card(props: { title: string; description?: string; children: Child }) {
 export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
   const viewer = c.get('viewer');
   c.header('cache-control', PAGE_CACHE);
-  const pageMeta = meta(c, 'Settings', 'Your be-music Leaderboard profile.', [{ label: 'Settings', kind: 'settings' }]);
+  const t = pageMessages(c).settings;
+  const pageMeta = meta(c, t.title, t.description, [{ label: t.title, kind: 'settings' }]);
   if (viewer === null) {
     return c.html(
       <Layout meta={pageMeta}>
-        <PageHeader title="Settings" kind="settings">
-          Sign in to change your handle, name and icon.
+        <PageHeader title={t.title} kind="settings">
+          {t.signedOutLead}
         </PageHeader>
-        <Card title="Sign in" description="Use the passkey of your Leaderboard account.">
+        <Card title={t.signIn} description={t.signInLead}>
           <button type="button" class="btn" data-account-action="sign-in">
-            Sign in with a passkey
+            {t.signInWithPasskey}
           </button>
-          <p class="text-muted-foreground text-sm">
-            No passkey yet? Submitting a play from the player signs you in anonymously; create a passkey there, or here
-            once signed in, to keep the account.
-          </p>
+          <p class="text-muted-foreground text-sm">{t.noPasskey}</p>
         </Card>
       </Layout>,
     );
@@ -45,16 +43,16 @@ export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
   const hasUpload = !viewer.avatarUrl.endsWith('?v=g');
   return c.html(
     <Layout meta={pageMeta}>
-      <PageHeader title="Settings" kind="settings">
-        Signed in as @{viewer.handle}
-        {viewer.anonymous ? ' (anonymous)' : ''}
+      <PageHeader title={t.title} kind="settings">
+        {t.signedInAs(viewer.handle)}
+        {viewer.anonymous ? t.anonymousSuffix : ''}
       </PageHeader>
       <p class="text-destructive text-sm" data-settings-status role="status" hidden />
-      <Card title="Profile" description="Your handle names your page; your name is what the rankings show.">
+      <Card title={t.profile} description={t.profileLead}>
         <form class="grid gap-4 sm:max-w-md" data-profile-form>
           <div class="grid gap-2">
             <label class="label" for="settings-handle">
-              Handle
+              {t.handle}
             </label>
             <input
               class="input"
@@ -68,13 +66,11 @@ export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
               autocomplete="username"
               spellcheck={false}
             />
-            <p class="text-muted-foreground text-xs">
-              3 to 15 letters, digits or _. Your old handle stays yours, and links to it keep working.
-            </p>
+            <p class="text-muted-foreground text-xs">{t.handleHint}</p>
           </div>
           <div class="grid gap-2">
             <label class="label" for="settings-name">
-              Name
+              {t.name}
             </label>
             <input
               class="input"
@@ -85,39 +81,32 @@ export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
               maxlength={64}
               autocomplete="nickname"
             />
-            <p class="text-muted-foreground text-xs">Up to 32 characters, in any script.</p>
+            <p class="text-muted-foreground text-xs">{t.nameHint}</p>
           </div>
           <div>
             <button type="submit" class="btn">
-              Save
+              {t.save}
             </button>
           </div>
         </form>
       </Card>
-      <Card title="Icon" description="Shown next to your name. Pictures are cropped to a square and shrunk to 256 px.">
+      <Card title={t.icon} description={t.iconLead}>
         <div class="flex flex-wrap items-center gap-4">
           <Avatar src={viewer.avatarUrl} size={96} />
           <div class="flex flex-wrap items-center gap-2">
             <label class="btn" data-variant="outline">
-              Upload a picture
+              {t.upload}
               <input type="file" class="sr-only" accept="image/png,image/jpeg,image/webp,image/*" data-avatar-input />
             </label>
             {hasUpload ? (
               <button type="button" class="btn" data-variant="ghost" data-account-action="remove-avatar">
-                Use the generated icon
+                {t.useGenerated}
               </button>
             ) : null}
           </div>
         </div>
       </Card>
-      <Card
-        title="Passkeys"
-        description={
-          viewer.anonymous
-            ? 'This account is anonymous: without a passkey, it is lost with this browser’s data.'
-            : `${viewer.passkeys} passkey${viewer.passkeys === 1 ? '' : 's'}. A passkey signs you in on any device.`
-        }
-      >
+      <Card title={t.passkeys} description={viewer.anonymous ? t.passkeysAnonymous : t.passkeysCount(viewer.passkeys)}>
         <div>
           <button
             type="button"
@@ -125,7 +114,7 @@ export async function settingsPage(c: PageContext<'/leaderboard/settings'>) {
             data-variant={viewer.anonymous ? 'primary' : 'outline'}
             data-account-action="create-passkey"
           >
-            {viewer.anonymous ? 'Create a passkey to keep this account' : 'Add a passkey'}
+            {viewer.anonymous ? t.keepAccount : t.addPasskey}
           </button>
         </div>
       </Card>

@@ -3,7 +3,7 @@
 import type { Child } from 'hono/jsx';
 import type { PlayInfo } from '../data.ts';
 import { LocalTime } from './basics.tsx';
-import { formatRecorder, RULESET_LABELS } from '../format.ts';
+import { formatPlayTime, formatRecorder, RULESET_LABELS } from '../format.ts';
 import { messagesFor, useMessages, type Messages } from '../i18n/index.ts';
 
 /**
@@ -28,23 +28,16 @@ export function playInfoRows(info: PlayInfo, t: Messages = messagesFor('en')): A
     [p.gauge, info.gauge],
     [p.lanes, info.laneOption !== null && info.laneOption !== '-' ? info.laneOption : undefined],
     [p.assists, info.assistFlags.length > 0 ? info.assistFlags.join(', ') : p.none],
-    [p.length, info.durationMs !== null && info.durationMs > 0 ? formatDuration(info.durationMs, t) : undefined],
+    [
+      p.length,
+      info.durationMs !== null && info.durationMs > 0 ? formatPlayTime(info.durationMs, t.duration) : undefined,
+    ],
     [p.verified, p.verification[info.verification] ?? info.verification],
     sentByRecorder ? [p.app, recorded(recorder)] : [p.recordedWith, recorded(recorder)],
     [p.sentFrom, sentByRecorder ? undefined : (info.submittedBy ?? p.unknown)],
     [p.scoredBy, p.engine(info.serverEngine)],
   ];
   return rows.filter((row): row is [string, Child] => row[1] !== undefined);
-}
-
-/** A length of time in the page's language: `3h 25m`, `25m 12s`, `48s` (`3 時間 25 分` …). */
-export function formatDuration(ms: number, t: Messages): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  if (hours > 0) return t.duration.hoursMinutes(hours, minutes);
-  if (minutes > 0) return t.duration.minutesSeconds(minutes, seconds % 60);
-  return t.duration.seconds(seconds);
 }
 
 /**

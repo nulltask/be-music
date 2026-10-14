@@ -4,6 +4,7 @@ import type { Child } from 'hono/jsx';
 import type { HelpId } from '../help-topics.ts';
 import { HelpTip } from './help-tip.tsx';
 import { formatTimestamp, lampStyle } from '../format.ts';
+import { useMessages } from '../i18n/index.ts';
 
 export const scoreHref = (scoreId: string): string => `/leaderboard/scores/${encodeURIComponent(scoreId)}`;
 export const chartHref = (chartFingerprint: string): string =>
@@ -27,9 +28,10 @@ export function Tag(props: { children: Child }) {
 }
 
 export function Lamp(props: { lamp: number }) {
+  const t = useMessages();
   const style = lampStyle(props.lamp);
   return (
-    <span class="inline-flex items-center gap-2" title={style.meaning}>
+    <span class="inline-flex items-center gap-2" title={t.lampMeanings[props.lamp] ?? t.lampMeanings.none}>
       <span class="ring-foreground/20 inline-block h-4 w-1.5 rounded-sm ring-1" style={`background:${style.color}`} />
       {style.label}
     </span>

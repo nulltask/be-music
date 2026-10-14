@@ -22,6 +22,7 @@ import {
   showsGauge,
   verificationMeaning,
 } from './format.ts';
+import { ja } from './i18n/ja.ts';
 
 describe('page formatting', () => {
   test('formatPlayTime keeps the two largest units', () => {
@@ -29,6 +30,8 @@ describe('page formatting', () => {
     expect(formatPlayTime(48_900)).toBe('48s');
     expect(formatPlayTime(25 * 60_000 + 12_000)).toBe('25m 12s');
     expect(formatPlayTime(3 * 3_600_000 + 25 * 60_000 + 59_000)).toBe('3h 25m');
+    // In the page's language.
+    expect(formatPlayTime(25 * 60_000 + 12_000, ja.duration)).toBe('25 分 12 秒');
   });
 
   test('rulesetName names a ruleset as the rules a score is counted by, not as a player', () => {

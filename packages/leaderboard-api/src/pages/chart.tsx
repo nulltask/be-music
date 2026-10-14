@@ -36,7 +36,7 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   const db = openDatabase(c.env.DB);
   const chartFingerprint = c.req.param('chartFingerprint');
   const found = await loadChart(db, chartFingerprint);
-  if (found === undefined) return notFound(c, 'This chart');
+  if (found === undefined) return notFound(c, 'chart');
   const ruleset = displayRuleset(c);
   const assisted = isOn(c.req.query('assisted'));
   const includeAnonymous = isOn(c.req.query('anonymous'));

@@ -65,7 +65,7 @@ export function DistributionCard<Key extends number | string>(props: {
       ...bucket,
       label: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).label : String(bucket.key),
       color: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).color : (DJ_RANK_SHADES[index] ?? '#94a3b8'),
-      meaning: props.kind === 'lamp' ? lampStyle(Number(bucket.key)).meaning : undefined,
+      meaning: props.kind === 'lamp' ? (t.lampMeanings[Number(bucket.key)] ?? t.lampMeanings.none) : undefined,
     }))
     .filter((bucket) => bucket.count > 0 || props.showEmpty === true);
   const filled = shown.filter((bucket) => bucket.count > 0);
@@ -82,7 +82,7 @@ export function DistributionCard<Key extends number | string>(props: {
       </header>
       <div class="space-y-3 px-4">
         {total === 0 ? (
-          <p class="text-muted-foreground text-sm">No plays yet.</p>
+          <p class="text-muted-foreground text-sm">{t.judgments.empty}</p>
         ) : (
           <>
             <div
@@ -172,7 +172,7 @@ const JUDGE_ROWS: Array<{ key: keyof JudgeTotals; label: string; name: string; c
   { key: 'good', label: 'GD', name: 'GOOD', color: '#4ade80' },
   { key: 'bad', label: 'BD', name: 'BAD', color: '#c084fc' },
   { key: 'poor', label: 'PR', name: 'POOR', color: '#f87171' },
-  { key: 'emptyPoor', label: 'EPR', name: 'empty POOR (a press with no note)', color: '#94a3b8' },
+  { key: 'emptyPoor', label: 'EPR', name: 'empty POOR', color: '#94a3b8' },
 ];
 
 /**
@@ -180,6 +180,8 @@ const JUDGE_ROWS: Array<{ key: keyof JudgeTotals; label: string; name: string; c
  * of each judgment. Empty POORs are presses, not notes, so they are listed but stay out of the bar's share.
  */
 export function JudgeTotalsCard(props: { judges: JudgeTotals; ruleset: string }) {
+  const t = useMessages();
+  const name = (row: (typeof JUDGE_ROWS)[number]) => (row.key === 'emptyPoor' ? t.judgments.emptyPoor : row.name);
   const notes = JUDGE_ROWS.filter((row) => row.key !== 'emptyPoor').reduce(
     (sum, row) => sum + props.judges[row.key],
     0,
@@ -188,26 +190,25 @@ export function JudgeTotalsCard(props: { judges: JudgeTotals; ruleset: string })
     <section class="card gap-4" data-size="sm">
       <header>
         <h2 class="inline-flex items-center gap-0.5">
-          Judgments
-          <HelpTip topic="judgments" label="Judgments">
-            PGREAT, GREAT and GOOD keep the combo; BAD and POOR break it. Empty POOR is a press with no note. BP counts
-            BAD, POOR and empty POOR.
+          {t.judgments.title}
+          <HelpTip topic="judgments" label={t.judgments.title}>
+            {t.judgments.help}
           </HelpTip>
         </h2>
-        <p>Every note of every play under {props.ruleset}.</p>
+        <p>{t.judgments.lead(props.ruleset)}</p>
       </header>
       <div class="space-y-3 px-4">
         {notes === 0 ? (
-          <p class="text-muted-foreground text-sm">No plays yet.</p>
+          <p class="text-muted-foreground text-sm">{t.judgments.empty}</p>
         ) : (
           <div
             class="ring-foreground/10 flex h-3 overflow-hidden rounded-full ring-1"
             role="img"
-            aria-label={JUDGE_ROWS.map((row) => `${row.name}: ${props.judges[row.key]}`).join(', ')}
+            aria-label={JUDGE_ROWS.map((row) => `${name(row)}: ${props.judges[row.key]}`).join(', ')}
           >
             {JUDGE_ROWS.filter((row) => row.key !== 'emptyPoor' && props.judges[row.key] > 0).map((row) => (
               <span
-                title={`${row.name}: ${props.judges[row.key]}`}
+                title={`${name(row)}: ${props.judges[row.key]}`}
                 style={`background:${row.color};width:${(props.judges[row.key] / notes) * 100}%`}
               />
             ))}
@@ -215,7 +216,7 @@ export function JudgeTotalsCard(props: { judges: JudgeTotals; ruleset: string })
         )}
         <dl class="grid grid-cols-3 gap-x-6 gap-y-1 text-sm sm:grid-cols-6">
           {JUDGE_ROWS.map((row) => (
-            <div class="flex items-center justify-between gap-2 sm:block" title={row.name}>
+            <div class="flex items-center justify-between gap-2 sm:block" title={name(row)}>
               <dt class="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
                 <span
                   class="ring-foreground/20 inline-block size-2 rounded-full ring-1"
