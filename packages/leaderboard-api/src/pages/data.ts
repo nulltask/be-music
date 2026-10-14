@@ -109,7 +109,18 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
     .orderBy(desc(score.createdAt), desc(score.id))
     .limit(filter.limit);
   return rows.map(
-    ({ createdAt, chartStatus, anonymous, avatarKey, previousEx, previousLamp, previousMiss, above, players, ...row }) => ({
+    ({
+      createdAt,
+      chartStatus,
+      anonymous,
+      avatarKey,
+      previousEx,
+      previousLamp,
+      previousMiss,
+      above,
+      players,
+      ...row
+    }) => ({
       ...row,
       avatarUrl: avatarUrl(row.handle, avatarKey),
       createdAt: createdAt.getTime(),

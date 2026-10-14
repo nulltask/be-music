@@ -117,14 +117,16 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           </section>
         </div>
       )}
-      {listed ? <Stats
-        items={[
-          [t.chart.stats.players, stats.players],
-          [t.chart.stats.plays, stats.plays],
-          [t.chart.stats.firstPlayed, day(stats.firstPlayedAt)],
-          [t.chart.stats.lastPlayed, day(stats.lastPlayedAt)],
-        ]}
-      /> : null}
+      {listed ? (
+        <Stats
+          items={[
+            [t.chart.stats.players, stats.players],
+            [t.chart.stats.plays, stats.plays],
+            [t.chart.stats.firstPlayed, day(stats.firstPlayedAt)],
+            [t.chart.stats.lastPlayed, day(stats.lastPlayedAt)],
+          ]}
+        />
+      ) : null}
       <section class="space-y-3" aria-labelledby="ranking">
         <SectionHeading
           id="ranking"
