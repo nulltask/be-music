@@ -57,6 +57,13 @@
       "when": 1791948272404,
       "tag": "0007_score_created_id_index",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1791967134338,
+      "tag": "0008_chart_long_notes",
+      "breakpoints": true
     }
   ]
 }

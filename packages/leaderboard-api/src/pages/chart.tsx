@@ -236,15 +236,21 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           [t.chart.rows.notes, found.noteCount],
           [t.chart.rows.total, orDash(found.total)],
           [t.chart.rows.judgeRank, formatJudgeRank(found.judgeRank)],
-          [
-            <span class="inline-flex items-center gap-0.5">
-              {t.chart.rows.lnMode}
-              <HelpTip topic="long-notes" label={t.chart.rows.lnMode}>
-                {t.chart.rows.lnModeHelp}
-              </HelpTip>
-            </span>,
-            found.lnMode === 1 || found.lnMode === 2 || found.lnMode === 3 ? t.lnModes[found.lnMode] : '-',
-          ],
+          // The LN mode means nothing on a chart without long notes. Charts registered before that was kept (null) still
+          // show it.
+          ...(found.hasLongNotes === false
+            ? []
+            : [
+                [
+                  <span class="inline-flex items-center gap-0.5">
+                    {t.chart.rows.lnMode}
+                    <HelpTip topic="long-notes" label={t.chart.rows.lnMode}>
+                      {t.chart.rows.lnModeHelp}
+                    </HelpTip>
+                  </span>,
+                  found.lnMode === 1 || found.lnMode === 2 || found.lnMode === 3 ? t.lnModes[found.lnMode] : '-',
+                ] satisfies [Child, Child],
+              ]),
           [t.chart.rows.format, found.sourceFormat === null ? '-' : found.sourceFormat.toUpperCase()],
           [
             t.chart.rows.randomOutcomes,
