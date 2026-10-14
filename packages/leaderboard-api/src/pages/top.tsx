@@ -55,6 +55,7 @@ export async function topPage(c: PageContext) {
         )}
         showPlayer
         empty={includeAnonymous ? t.latest.empty : t.latest.emptyNamed}
+        anonymousOnlyForOwner={!includeAnonymous}
       />
     </Layout>,
   );

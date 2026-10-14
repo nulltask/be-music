@@ -200,6 +200,31 @@ const en: HelpContent = {
         />
         <p>Every play is recounted from its inputs whatever its layer.</p>
       </Section>
+      <Section id="visibility" t={t}>
+        <p>
+          A play by a player with a passkey on a listed chart is <strong>public</strong>: it is in the rankings, Latest
+          and its player’s page. A play that is not shows to its own player marked{' '}
+          <strong>{t.visibility.notPublic}</strong> or <strong>{t.visibility.hidden}</strong>, with the reason under its
+          “?”.
+        </p>
+        <Terms
+          rows={[
+            [
+              'Chart not listed yet',
+              'A chart is listed once two players with a passkey have played it. Until then its plays reach the lists and rankings only for their own player, and search engines skip them.',
+            ],
+            [
+              'Anonymous account',
+              'Plays of an account without a passkey stay out of the rankings and Latest unless “Anonymous players” is on. Create a passkey to keep the account; its plays then count as public.',
+            ],
+            [
+              'Hidden',
+              'A play its player hid: kept, but out of the rankings, the personal bests, the figures and every list, and only its player can open it. They can show it again from its page.',
+            ],
+            [t.filters.assisted, 'Plays with an assist are public, but ranked apart from the rest.'],
+          ]}
+        />
+      </Section>
     </>
   ),
 };
@@ -227,6 +252,7 @@ const ja: HelpContent = {
     'long-notes': 'ロングノーツ',
     filters: 'ランキングの切り替え',
     verification: '検証',
+    visibility: 'プレイの公開範囲',
   },
   body: (t) => (
     <>
@@ -332,6 +358,31 @@ const ja: HelpContent = {
           ]}
         />
         <p>どの段階でも、スコアは入力から数え直しています。</p>
+      </Section>
+      <Section id="visibility" t={t}>
+        <p>
+          パスキーを持つプレイヤーの、一般公開された譜面でのプレイは<strong>公開</strong>
+          です。ランキング、最新のプレイ、プレイヤーのページに載ります。公開されていないプレイは、本人にだけ
+          <strong>{t.visibility.notPublic}</strong>または<strong>{t.visibility.hidden}</strong>
+          の印つきで表示され、「?」から理由を確認できます。
+        </p>
+        <Terms
+          rows={[
+            [
+              '譜面が未公開',
+              '譜面は、パスキーを持つプレイヤー 2 人が遊ぶと一般公開されます。それまでは、そのプレイはリストとランキングに本人にだけ表示され、検索エンジンにも載りません。',
+            ],
+            [
+              '匿名アカウント',
+              'パスキーのないアカウントのプレイは、「匿名プレイヤー」をオンにしない限りランキングと最新のプレイに載りません。パスキーを作るとアカウントが残り、プレイが公開されます。',
+            ],
+            [
+              '非表示',
+              'プレイヤーが非表示にしたプレイ。保存はされますが、ランキング・自己ベスト・集計・すべてのリストから外れ、開けるのは本人だけです。プレイのページから表示に戻せます。',
+            ],
+            [t.filters.assisted, 'アシストを使ったプレイも公開されますが、ほかとは別にランキングします。'],
+          ]}
+        />
       </Section>
     </>
   ),
