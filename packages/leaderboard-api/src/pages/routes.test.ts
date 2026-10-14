@@ -54,6 +54,36 @@ const page = async (path: string, cookie?: string) => {
   return { status: response.status, html: await response.text(), cacheControl: response.headers.get('cache-control') };
 };
 
+describe('page language', () => {
+  const html = async (path: string, headers: Record<string, string> = {}) => (await fetchApp(path, { headers })).text();
+
+  test('follows Accept-Language, a picked language, and ?lang=, in English otherwise', async () => {
+    const english = await html('/leaderboard');
+    expect(english).toContain('<html lang="en"');
+    expect(english).toContain('>Latest<');
+
+    const japanese = await html('/leaderboard', { 'accept-language': 'ja-JP,ja;q=0.9,en;q=0.8' });
+    expect(japanese).toContain('<html lang="ja"');
+    expect(japanese).toContain('>最新<');
+
+    expect(await html('/leaderboard?lang=ja')).toContain('<html lang="ja"');
+    expect(await html('/leaderboard', { cookie: 'lb-lang=ja' })).toContain('<html lang="ja"');
+    // ?lang= wins over the cookie, so a shared link shows its language.
+    expect(await html('/leaderboard?lang=en', { cookie: 'lb-lang=ja' })).toContain('<html lang="en"');
+  });
+
+  test('the language switch keeps the pick in a cookie and goes back to the page', async () => {
+    const response = await fetchApp(`/leaderboard/lang/ja?next=${encodeURIComponent('/leaderboard?anonymous=1')}`);
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/leaderboard?anonymous=1');
+    expect(response.headers.get('set-cookie')).toContain('lb-lang=ja');
+
+    const unknown = await fetchApp('/leaderboard/lang/xx?next=https://evil.example/');
+    expect(unknown.headers.get('location')).toBe('/leaderboard');
+    expect(unknown.headers.get('set-cookie')).toBeNull();
+  });
+});
+
 describe('about and help pages', () => {
   test('explains the scoring and is linked from the header of every page', async () => {
     const about = await page('/leaderboard/about');

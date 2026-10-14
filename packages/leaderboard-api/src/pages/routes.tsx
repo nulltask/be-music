@@ -4,6 +4,7 @@ import { setCookie } from 'hono/cookie';
 import { Scalar } from '@scalar/hono-api-reference';
 import type { AppEnv } from '../app.ts';
 import { isRuleset } from '../rulesets.ts';
+import { isLocale, LOCALE_COOKIE } from './i18n/index.ts';
 import { aboutPage } from './about.tsx';
 import { avatarImage } from './avatar.ts';
 import { helpPage } from './help.tsx';
@@ -46,6 +47,20 @@ export function mountPages(app: Hono<AppEnv>): void {
     const ruleset = c.req.param('ruleset');
     if (isRuleset(ruleset)) {
       setCookie(c, RULESET_COOKIE, ruleset, {
+        path: '/leaderboard',
+        maxAge: RULESET_COOKIE_MAX_AGE,
+        sameSite: 'Lax',
+        secure: new URL(c.req.url).protocol === 'https:',
+      });
+    }
+    return c.redirect(safeReturnPath(c.req.query('next')), 303);
+  });
+
+  // Switches the page language, like the ruleset switch: kept in a cookie, then back to the page it was switched on.
+  app.get('/leaderboard/lang/:locale', (c) => {
+    const locale = c.req.param('locale');
+    if (isLocale(locale)) {
+      setCookie(c, LOCALE_COOKIE, locale, {
         path: '/leaderboard',
         maxAge: RULESET_COOKIE_MAX_AGE,
         sameSite: 'Lax',

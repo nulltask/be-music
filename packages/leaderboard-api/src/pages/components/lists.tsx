@@ -20,6 +20,7 @@ import {
   formatLaneMode,
   formatScoreRate,
   lampStyle,
+  RULESET_LABELS,
   RULESET_MEANING,
   rulesetName,
   showsGauge,
@@ -28,6 +29,7 @@ import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, 
 import { EntityIcon } from './entity-icon.tsx';
 import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
+import { useMessages, type Messages } from '../i18n/index.ts';
 
 /** The frame of a list: a card whose rows are split by hairlines. */
 function List(props: { label: string; children: Child }) {
@@ -83,24 +85,31 @@ function Row(props: {
   );
 }
 
+/** What a lamp means, in the page's language. */
+function lampMeaning(t: Messages, lamp: number): string {
+  return t.lampMeanings[lamp] ?? t.lampMeanings.none;
+}
+
 /** The lamp as a colour bar: the row's leading edge, the same colour the lamp has everywhere else. */
 function LampBar(props: { lamp: number }) {
+  const t = useMessages();
   const style = lampStyle(props.lamp);
   return (
     <span
       class="ring-foreground/15 block h-8 w-1.5 rounded-full ring-1"
       style={`background:${style.color}`}
-      title={`${style.label}: ${style.meaning}`}
+      title={`${style.label}: ${lampMeaning(t, props.lamp)}`}
     />
   );
 }
 
 /** The lamp's name in its colour's dot, for the details line; `from` marks a lamp this play raised. */
 function LampLabel(props: { lamp: number; from?: number }) {
+  const t = useMessages();
   const style = lampStyle(props.lamp);
   const raised = props.from !== undefined && props.lamp > props.from;
   return (
-    <span class="inline-flex items-center gap-1" title={style.meaning}>
+    <span class="inline-flex items-center gap-1" title={lampMeaning(t, props.lamp)}>
       <span class="ring-foreground/20 inline-block size-2 rounded-full ring-1" style={`background:${style.color}`} />
       {raised ? (
         <>
@@ -128,13 +137,14 @@ function Delta(props: { delta: number; better: boolean; title: string }) {
  * player's best, when it did.
  */
 function Score(props: { exScore: number; noteCount: number; previous?: number }) {
+  const t = useMessages();
   const gain = props.previous !== undefined ? props.exScore - props.previous : 0;
   return (
     <div class="text-end leading-tight">
       <div class="flex items-baseline justify-end gap-1.5">
         {gain > 0 ? (
           <span class="text-xs">
-            <Delta delta={gain} better title="Above the player’s previous best EX-Score" />
+            <Delta delta={gain} better title={t.lists.aboveBest} />
           </span>
         ) : null}
         <span class="font-semibold">{props.exScore}</span>
@@ -171,15 +181,16 @@ export function RankingList(props: {
   everyPlay?: boolean;
   empty?: string;
 }) {
+  const t = useMessages();
   if (props.entries.length === 0) {
-    return <Empty title="Nobody here yet">{props.empty ?? 'No plays match these filters.'}</Empty>;
+    return <Empty title={t.lists.nobody}>{props.empty ?? t.lists.noMatch}</Empty>;
   }
   return (
-    <List label="Ranking">
+    <List label={t.lists.ranking}>
       {props.entries.map((entry) => (
         <Row
           href={scoreHref(entry.exScoreId)}
-          label={`Play of ${entry.displayName}, rank ${entry.rank}`}
+          label={t.lists.playOfPlayer(entry.displayName, entry.rank)}
           current={props.highlight === entry.handle}
           play={{ info: props.infos.get(entry.exScoreId) }}
           start={
@@ -194,17 +205,13 @@ export function RankingList(props: {
               <a class={`${LINK} ${ABOVE} truncate`} href={playerHref(entry.handle)}>
                 {entry.displayName}
               </a>
-              {entry.anonymous ? <Tag>anonymous</Tag> : null}
+              {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
             </>
           }
           details={[
             <LampLabel lamp={entry.clearLamp} />,
             <>BP {entry.missCount}</>,
-            props.everyPlay ? null : (
-              <>
-                {entry.playCount} play{entry.playCount === 1 ? '' : 's'}
-              </>
-            ),
+            props.everyPlay ? null : <>{t.count.plays(entry.playCount)}</>,
             <When at={entry.achievedAt} />,
           ]}
           end={<Score exScore={entry.exScore} noteCount={props.noteCount} />}
@@ -224,11 +231,12 @@ export function RecentScoresList(props: {
   showPlayer: boolean;
   empty: string;
 }) {
+  const t = useMessages();
   if (props.scores.length === 0) {
-    return <Empty title="No plays here yet">{props.empty}</Empty>;
+    return <Empty title={t.lists.noPlays}>{props.empty}</Empty>;
   }
   return (
-    <List label="Latest plays">
+    <List label={t.lists.latestPlays}>
       {props.scores.map((entry) => {
         const title = chartTitle(entry.title, entry.chartFingerprint);
         const previous = entry.previous;
@@ -236,7 +244,7 @@ export function RecentScoresList(props: {
         return (
           <Row
             href={scoreHref(entry.scoreId)}
-            label={`Play of ${title} by ${entry.displayName}`}
+            label={t.lists.playOfChart(title, entry.displayName)}
             play={{ info: props.infos.get(entry.scoreId) }}
             start={
               <span class="flex items-center gap-3">
@@ -265,28 +273,26 @@ export function RecentScoresList(props: {
                   >
                     {entry.displayName}
                   </a>
-                  {entry.anonymous ? <Tag>anonymous</Tag> : null}
+                  {entry.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
                 </>
               ) : null,
               <LampLabel lamp={entry.clearLamp} from={previous?.clearLamp} />,
               showsGauge(entry.clearLamp) ? <>{formatGauge(entry.gaugeType, entry.gaugeFinal)}</> : null,
               <>
                 BP {entry.missCount}
-                {missDelta < 0 ? (
-                  <Delta delta={missDelta} better title="Fewer misses than the player’s previous best" />
-                ) : null}
+                {missDelta < 0 ? <Delta delta={missDelta} better title={t.lists.fewerMisses} /> : null}
               </>,
               entry.laneOption !== null && entry.laneOption !== 'OFF' && entry.laneOption !== '-' ? (
                 <>{entry.laneOption}</>
               ) : null,
-              <span title={`Rank among ${entry.players} player${entry.players === 1 ? '' : 's'} on this chart`}>
+              <span title={t.lists.rankAmong(entry.players)}>
                 #{entry.rank} / {entry.players}
               </span>,
               <>
-                <span title="The scoring rules the player played under">
-                  played with {rulesetName(entry.playedRuleset)}
+                <span title={t.rules.playedWithTitle}>
+                  {t.rules.playedWith(t.rules.name(RULESET_LABELS[entry.playedRuleset] ?? entry.playedRuleset))}
                 </span>
-                {entry.assisted ? <Tag>assist</Tag> : null}
+                {entry.assisted ? <Tag>{t.lists.assist}</Tag> : null}
               </>,
               <When at={entry.createdAt} />,
             ]}

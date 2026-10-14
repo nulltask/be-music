@@ -7,6 +7,7 @@ import type { AppEnv } from '../app.ts';
 import { chartsetHref, LocalTime } from './components/basics.tsx';
 import { Layout, PageHeader, type Crumb, type PageMeta } from './layout.tsx';
 import { RULESET_COOKIE, resolveDisplayRuleset } from './preferences.ts';
+import { LOCALE_COOKIE, messagesFor, resolveLocale, type Locale, type Messages } from './i18n/index.ts';
 
 /** A page handler's context; `Path` types its route parameters. */
 export type PageContext<Path extends string = string> = Context<AppEnv, Path>;
@@ -21,7 +22,7 @@ export const RANKING_LIMIT = 100;
  */
 export const PAGE_CACHE = 'private, max-age=0';
 
-/** The display ruleset lasts a year; switching it again replaces it. */
+/** The display ruleset lasts a year; switching it again replaces it. The language does too. */
 export const RULESET_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /** `Artist · ` before the rest of a subtitle, or nothing when the play log carried no artist. */
@@ -54,6 +55,20 @@ export function withQuery(c: Context, key: string, value: string | undefined): s
   return `${url.pathname}${url.search}`;
 }
 
+/** The language a page is in (`?lang=`, the viewer's pick, the browser's languages, else English). */
+export function pageLocale(c: Context): Locale {
+  return resolveLocale({
+    query: c.req.query('lang'),
+    cookie: getCookie(c, LOCALE_COOKIE),
+    acceptLanguage: c.req.header('accept-language'),
+  });
+}
+
+/** The catalog a page handler writes its own text with; components below the layout use `useMessages`. */
+export function pageMessages(c: Context): Messages {
+  return messagesFor(pageLocale(c));
+}
+
 export function meta(c: Context, title: string, description: string, crumbs: Crumb[] = []): PageMeta {
   const url = new URL(c.req.url);
   return {
@@ -62,6 +77,7 @@ export function meta(c: Context, title: string, description: string, crumbs: Cru
     crumbs,
     url: c.req.url,
     path: `${url.pathname}${url.search}`,
+    locale: pageLocale(c),
     ruleset: resolveDisplayRuleset(getCookie(c, RULESET_COOKIE)),
     viewer: (c as Context<AppEnv>).get('viewer') ?? null,
   };

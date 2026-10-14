@@ -7,6 +7,7 @@ import { lampStyle } from '../format.ts';
 import type { JudgeTotals } from '../stats.ts';
 import type { Distribution } from '../stats.ts';
 import { HelpTip } from './help-tip.tsx';
+import { useMessages } from '../i18n/index.ts';
 import { Icon } from './icon.tsx';
 
 /** A titled block of details: label / value rows. */
@@ -57,6 +58,7 @@ export function DistributionCard<Key extends number | string>(props: {
   kind: 'lamp' | 'dj-rank';
   showEmpty?: boolean;
 }) {
+  const t = useMessages();
   const { total, buckets } = props.distribution;
   const shown = buckets
     .map((bucket, index) => ({
@@ -73,9 +75,7 @@ export function DistributionCard<Key extends number | string>(props: {
         <h2 class="inline-flex items-center gap-0.5">
           {props.title}
           <HelpTip topic={props.kind === 'lamp' ? 'lamps' : 'scores'} label={props.title}>
-            {props.kind === 'lamp'
-              ? 'The best lamp each play reached, lowest first; each ruleset tops out at its own lamp.'
-              : 'The EX-Score rate in ninths: AAA from 88.89%, AA from 77.78%, down to F.'}
+            {props.kind === 'lamp' ? t.cards.lampsHelp : t.cards.djHelp}
           </HelpTip>
         </h2>
         <p>{props.description}</p>
@@ -125,21 +125,23 @@ export function DistributionCard<Key extends number | string>(props: {
 
 /** Links to the same chart on other Internet Rankings and BMS Search, one set per file the chart is known by. */
 export function Elsewhere(props: { links: ExternalLink[] }) {
+  const t = useMessages();
   if (props.links.length === 0) return null;
+  const name = (link: ExternalLink) => (link.kind === 'search' ? t.cards.search(link.name) : link.name);
   // One row per file: an MD5-keyed link joins the SHA-256 of its file when that is known.
   const fileOf = (link: ExternalLink) => link.file ?? link.hash ?? '';
   const files = [...new Set(props.links.map(fileOf))];
   return (
     <section class="card gap-4" data-size="sm">
       <header>
-        <h2>Elsewhere</h2>
-        <p>This chart on other Internet Rankings and on BMS Search.</p>
+        <h2>{t.cards.elsewhere}</h2>
+        <p>{t.cards.elsewhereLead}</p>
       </header>
       <div class="space-y-3 px-4">
         {files.map((hash) => (
           <div class="flex flex-wrap items-center gap-2">
             {files.length > 1 && hash !== '' ? (
-              <span class="text-muted-foreground font-mono text-xs">file {hash.slice(0, 8)}</span>
+              <span class="text-muted-foreground font-mono text-xs">{t.cards.file(hash.slice(0, 8))}</span>
             ) : null}
             {props.links
               .filter((link) => fileOf(link) === hash)
@@ -151,9 +153,9 @@ export function Elsewhere(props: { links: ExternalLink[] }) {
                   href={link.url}
                   rel="noopener noreferrer"
                   target="_blank"
-                  aria-label={`${link.kind === 'search' ? `Search ${link.name}` : link.name} (opens another site)`}
+                  aria-label={t.cards.opensAnotherSite(name(link))}
                 >
-                  {link.kind === 'search' ? `Search ${link.name}` : link.name}
+                  {name(link)}
                   <Icon svg={ExternalLinkIcon} class="text-muted-foreground [&>svg]:size-3.5" />
                 </a>
               ))}
