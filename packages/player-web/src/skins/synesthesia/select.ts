@@ -55,6 +55,7 @@ import {
   type BrowserBrowseEntry,
   type BrowserSongEntry,
   formatPlayVariantLabel,
+  resolveSongStats,
   hash01,
   resolveSongRowFacts,
   stageProgress,
@@ -75,9 +76,9 @@ const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 
  * The portrait list: full width under the focused-song card and the search bar, with taller rows (two lines each, and
  * a thumb's height to tap).
  */
-const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 344, listBottomInset: 34, rowHeight: 36 };
+const PORTRAIT_LAYOUT: BeMusicSelectLayout = { listX: 16, listTop: 356, listBottomInset: 34, rowHeight: 36 };
 /** The focused-song card on the portrait stage. */
-const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 236 } as const;
+const PORTRAIT_CARD = { x: 12, y: 52, w: 456, h: 248 } as const;
 /** Fixed widths of a song row's fact columns (right to left: tempo, length, note count), so they align down the list. */
 const ROW_BPM_W = 76;
 const ROW_LENGTH_W = 30;
@@ -138,6 +139,26 @@ export const synesthesiaSelectSkin: PixiSelectSkin = {
 
 function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
   return { size: 9, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2 };
+}
+
+/**
+ * `JUDGE <rank>` (the chart's #RANK / #DEFEXRANK), starting at `left` and centred on `centerY`. Label and value share one
+ * size, so their capitals line up top and bottom; colour and tracking tell them apart.
+ */
+function drawJudgeRank(
+  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
+  song: BrowserSongEntry | undefined,
+  left: number,
+  centerY: number,
+): void {
+  const label = addText('JUDGE', left, centerY, { ...labelStyle(), size: 10, anchorY: 0.5 });
+  addText(song ? resolveSongStats(song).judgeRank : '-', left + label.width + 8, centerY, {
+    size: 10,
+    fill: SYN_WHITE,
+    fontFamily: SYN_DISPLAY_FONT,
+    anchorY: 0.5,
+    dropShadow: { color: SYN_WHITE, distance: 0, blur: 6, alpha: 0.4 },
+  });
 }
 
 function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
@@ -658,6 +679,9 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
 
+    // The judge rank (#RANK / #DEFEXRANK) between the stat chips and the level lights.
+    drawJudgeRank(addText, song, 30, 214);
+
     // Level as a row of lights, from cool electric blue through magenta to hot ember.
     const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
     const dots = 12;
@@ -666,14 +690,14 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       const x = 38 + dot * 22;
       const color = levelColor(dot / dots);
       if (lit) {
-        chrome.circle(x, 226, 7).fill({ color, alpha: 0.18 });
-        chrome.circle(x, 226, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
+        chrome.circle(x, 236, 7).fill({ color, alpha: 0.18 });
+        chrome.circle(x, 236, 3).fill({ color: SYN_WHITE, alpha: 0.95 });
       } else {
-        chrome.circle(x, 226, 2).fill({ color: SYN_DIM, alpha: 0.5 });
+        chrome.circle(x, 236, 2).fill({ color: SYN_DIM, alpha: 0.5 });
       }
     }
     if (song?.fileLabel) {
-      addText(song.fileLabel, 30, 245, {
+      addText(song.fileLabel, 30, 251, {
         size: 9,
         weight: '300',
         fill: SYN_DIM,
@@ -681,7 +705,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         maxWidth: 258,
       });
     }
-    addText(position, 288, 268, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
+    addText(position, 288, 270, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
     chrome.rect(26, 296, 170, 40).fill({ color: accent, alpha: 0.16 });
@@ -849,10 +873,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     });
 
+    // The judge rank (#RANK / #DEFEXRANK) between the stat chips and the level lights.
+    drawJudgeRank(addText, song, left, card.y + 148);
+
     // Level as a row of lights, with the list position at its end.
     const levelRatio = Number.isFinite(playLevelNumber) ? Math.max(0.04, Math.min(1, playLevelNumber / 12)) : 0;
     const dots = 12;
-    const dotsY = card.y + 154;
+    const dotsY = card.y + 166;
     for (let dot = 0; dot < dots; dot += 1) {
       const lit = dot < Math.round(levelRatio * dots);
       const x = left + 8 + dot * 22;
@@ -866,7 +893,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
     addText(position, left + innerW, dotsY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
     if (song?.fileLabel) {
-      addText(song.fileLabel, left, card.y + 166, {
+      addText(song.fileLabel, left, card.y + 178, {
         size: 10,
         weight: '300',
         fill: SYN_DIM,
@@ -876,7 +903,7 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     }
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline), thumb-sized.
-    const buttonY = card.y + 186;
+    const buttonY = card.y + 198;
     const playW = Math.round(innerW * 0.62);
     chrome.rect(left - 4, buttonY - 4, playW + 8, 44).fill({ color: accent, alpha: 0.16 });
     chrome.rect(left, buttonY, playW, 36).fill({ color: accent, alpha: 0.88 });

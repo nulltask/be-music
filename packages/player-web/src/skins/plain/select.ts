@@ -2,6 +2,7 @@ import {
   formatPlayVariantLabel,
   resolveStageOrientation,
   resolveSongRowFacts,
+  resolveSongStats,
   type BeMusicSelectLayout,
   type BrowserBrowseEntry,
   type BeMusicSelectFrame,
@@ -102,6 +103,8 @@ function drawFocusedSong(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFram
   stat(ctx, 'NOTES', facts.notes, x + 16, y + 140, narrow);
   stat(ctx, 'LENGTH', facts.length, x + 110, y + 140, { maxWidth: 72, nowMs });
   stat(ctx, 'GIMMICKS', facts.tags.join(' ') || '-', x + 190, y + 140, wide);
+  // The judge rank (#RANK / #DEFEXRANK) on a third row.
+  stat(ctx, 'JUDGE', resolveSongStats(song).judgeRank, x + 16, y + 188, narrow);
 
   button(ctx, frame, 'PLAY', x + 16, y + 236, 160, frame.actions.play, true);
   button(ctx, frame, 'AUTO', x + 186, y + 236, 88, frame.actions.autoPlay, false);
@@ -133,7 +136,20 @@ function drawPortraitCard(ctx: CanvasRenderingContext2D, frame: BeMusicSelectFra
   const lift = song.genre ? 12 : 0;
   if (song.genre) text(ctx, song.genre, left, card.y + 20, { size: 10, color: MUTED, maxWidth: textW, nowMs });
   text(ctx, song.title, left, card.y + 30 + lift, { size: 20, weight: 800, maxWidth: textW, nowMs });
-  text(ctx, song.artist ?? '', left, card.y + 56 + lift, { size: 12, color: MUTED, maxWidth: textW, nowMs });
+  // The judge rank (#RANK / #DEFEXRANK) at the end of the artist line: the card has no room for a third row of facts.
+  const right = card.x + card.w - 16;
+  const artistY = card.y + 56 + lift;
+  const judgeRank = resolveSongStats(song).judgeRank;
+  text(ctx, judgeRank, right, artistY, { size: 12, weight: 800, align: 'right' });
+  const judgeWidth = ctx.measureText(judgeRank).width;
+  text(ctx, 'JUDGE', right - judgeWidth - 6, artistY, { size: 10, color: MUTED, align: 'right' });
+  const judgeLeft = right - judgeWidth - 6 - ctx.measureText('JUDGE').width;
+  text(ctx, song.artist ?? '', left, artistY, {
+    size: 12,
+    color: MUTED,
+    maxWidth: Math.max(40, judgeLeft - left - 12),
+    nowMs,
+  });
 
   const facts = resolveSongRowFacts(song);
   const fit = { maxWidth: factWidth, nowMs, labelSize: 10 };
