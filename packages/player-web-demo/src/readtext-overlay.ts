@@ -29,7 +29,7 @@ export function showReadtextOverlay(opts: { title: string; filename: string; bod
   dialog.style.borderRadius = '6px';
   dialog.style.background = '#0b0f18';
   dialog.style.color = '#eee';
-  dialog.style.fontFamily = 'LINE Seed JP, sans-serif';
+  dialog.style.fontFamily = 'system-ui, sans-serif';
   dialog.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.6)';
 
   const header = document.createElement('div');
