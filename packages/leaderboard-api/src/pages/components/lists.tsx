@@ -4,7 +4,8 @@
  *
  * Each row is one line of a compact list rather than a table row, so nothing wraps into columns or scrolls sideways on
  * a phone. Every row keeps one layout: what it is at the start (rank, lamp colour), who or what in the middle with its
- * details on a second, smaller line, and the score at the end, aligned on its digits.
+ * details on a second, smaller line, and the score at the end, aligned on its digits. The list is a size container:
+ * where it is narrow (a phone), the details line runs on under the score too, so it keeps most of the row's width.
  */
 import type { Child } from 'hono/jsx';
 import type { RankingEntry } from '../../ranking.ts';
@@ -29,10 +30,10 @@ import { HelpTip } from './help-tip.tsx';
 import { InfoButton, When } from './play-info.tsx';
 import { useMessages, type Messages } from '../i18n/index.ts';
 
-/** The frame of a list: a card whose rows are split by hairlines. */
+/** The frame of a list: a card whose rows are split by hairlines, and the container its rows lay out against. */
 function List(props: { label: string; children: Child }) {
   return (
-    <ol class="card divide-border gap-0 divide-y overflow-hidden py-0" aria-label={props.label}>
+    <ol class="card divide-border @container gap-0 divide-y overflow-hidden py-0" aria-label={props.label}>
       {props.children}
     </ol>
   );
@@ -41,6 +42,10 @@ function List(props: { label: string; children: Child }) {
 /**
  * One row: a fixed start column, the main text (title over details), the score, and, for a play, its info icon in a
  * column of its own at the end, so the icons line up down the list whatever the details say.
+ *
+ * In a wide list the score and the icon stand beside both lines. In a narrow one (under `@xl`, 36rem) they stand
+ * beside the title only, and the details line spans to the row's end beneath them, instead of wrapping down a column
+ * squeezed between the start and the score.
  */
 function Row(props: {
   href: string;
@@ -56,26 +61,27 @@ function Row(props: {
   const hasInfo = props.play !== undefined;
   return (
     <li
-      class={`hover:bg-muted/50 relative grid items-center gap-x-3 py-3 ps-4 ${hasInfo ? 'grid-cols-[auto_minmax(0,1fr)_auto_2rem] pe-2' : 'grid-cols-[auto_minmax(0,1fr)_auto] pe-4'} ${props.current ? 'bg-muted/60' : ''}`}
+      class={`hover:bg-muted/50 relative grid items-center gap-x-3 gap-y-1 py-3 ps-4 ${hasInfo ? 'grid-cols-[auto_minmax(0,1fr)_auto_2rem] pe-2' : 'grid-cols-[auto_minmax(0,1fr)_auto] pe-4'} ${props.current ? 'bg-muted/60' : ''}`}
     >
       <RowLink href={props.href} label={props.label} />
-      {props.start}
-      <div class="min-w-0 space-y-1">
-        <div class="flex min-w-0 items-center gap-2 leading-tight">{props.title}</div>
-        <div class="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs leading-tight">
-          {props.details
-            .filter((item) => item !== null && item !== false && item !== undefined)
-            .map((item) => (
-              // The separator trails each item, so a wrapped line never starts with one.
-              <span class="inline-flex items-center gap-1 [&:not(:last-child)]:after:ms-1 [&:not(:last-child)]:after:text-muted-foreground/60 [&:not(:last-child)]:after:content-['·']">
-                {item}
-              </span>
-            ))}
-        </div>
+      <div class="row-span-2">{props.start}</div>
+      {/* The title's badges wrap under it rather than squeezing it to nothing in a narrow row. */}
+      <div class="col-start-2 row-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 self-center leading-tight @xl:self-end">
+        {props.title}
       </div>
-      {props.end}
+      <div class="text-muted-foreground col-[2/-1] row-start-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 self-start text-xs leading-tight @xl:col-[2/3]">
+        {props.details
+          .filter((item) => item !== null && item !== false && item !== undefined)
+          .map((item) => (
+            // The separator trails each item, so a wrapped line never starts with one.
+            <span class="inline-flex items-center gap-1 [&:not(:last-child)]:after:ms-1 [&:not(:last-child)]:after:text-muted-foreground/60 [&:not(:last-child)]:after:content-['·']">
+              {item}
+            </span>
+          ))}
+      </div>
+      <div class="col-start-3 row-start-1 @xl:row-span-2">{props.end}</div>
       {hasInfo ? (
-        <span class="flex justify-center">
+        <span class="col-start-4 row-start-1 flex justify-center @xl:row-span-2">
           <InfoButton info={props.play?.info} />
         </span>
       ) : null}
