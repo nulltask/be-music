@@ -58,6 +58,7 @@ import {
   hash01,
   resolveSongRowFacts,
   stageProgress,
+  selectListRows,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -66,6 +67,7 @@ import {
   type PixiSelectRenderer,
   type PixiSelectSkin,
   type SkinTextOptions,
+  fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 322, listTop: 56, listBottomInset: 28, rowHeight: 28 };
@@ -203,14 +205,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     let needsFrame = portrait ? this.renderPortraitChrome(frame) : this.renderChrome(frame);
     const layout = portrait ? PORTRAIT_LAYOUT : LAYOUT;
     const listWidth = frame.designWidth - layout.listX - (portrait ? 12 : 14);
-    for (let visibleIndex = 0; visibleIndex < frame.visibleRows; visibleIndex += 1) {
-      const entryIndex = frame.firstVisibleIndex + visibleIndex;
-      const entry = frame.entries[entryIndex];
-      if (!entry) break;
+    // Rows follow the list's pull (`frame.listScroll`): fractional slots, faded where they slide past the window's edge.
+    for (const { entryIndex, slot, alpha } of selectListRows(frame, layout.rowHeight)) {
+      const entry = frame.entries[entryIndex]!;
+      const from = frame.layer.children.length;
       needsFrame =
         (portrait
-          ? this.renderPortraitRow(frame, entry, entryIndex, visibleIndex, listWidth)
-          : this.renderRow(frame, entry, entryIndex, visibleIndex, listWidth)) || needsFrame;
+          ? this.renderPortraitRow(frame, entry, entryIndex, slot, listWidth)
+          : this.renderRow(frame, entry, entryIndex, slot, listWidth)) || needsFrame;
+      fadeChildrenFrom(frame.layer, from, alpha);
     }
     const visible = this.activeCard !== undefined;
     this.cursorGlow.visible = visible;
@@ -960,7 +963,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const accent = hsvToHex(sceneHue(frame.nowMs / 1000), 0.6, 1);
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
     const intro =
-      1 - easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 120 + visibleIndex * INTRO_STAGGER_MS, 420));
+      1 -
+      easeOutCubic(
+        stageProgress(frame.nowMs - frame.sceneStartedAt, 120 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS, 420),
+      );
     // The focused row steps out a little to the left; the list is full width, so it does not grow.
     const rowX = (active ? listX - 4 : listX) + slide * 18 + intro * 80;
     const rowW = listWidth + (active ? 4 : 0);
@@ -1057,7 +1063,10 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
     const accent = hsvToHex(hue, 0.6, 1);
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
     const intro =
-      1 - easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, 120 + visibleIndex * INTRO_STAGGER_MS, 420));
+      1 -
+      easeOutCubic(
+        stageProgress(frame.nowMs - frame.sceneStartedAt, 120 + Math.max(0, visibleIndex) * INTRO_STAGGER_MS, 420),
+      );
     const rowX = (active ? listX - 8 : listX) + slide * 26 + intro * 120;
     const rowW = active ? listWidth + 8 : listWidth;
     const alpha = 1 - intro;

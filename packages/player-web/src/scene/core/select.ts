@@ -95,6 +95,13 @@ const WHEEL_THROTTLE_INTERVAL_MS = 15;
 /** Finger positions kept per touch for the release velocity (a few frames' worth). */
 const TOUCH_SAMPLE_LIMIT = 8;
 
+/** How long (ms) after the last wheel or drag movement a partly pulled list starts settling back to a row. */
+const PULL_SETTLE_DELAY_MS = 120;
+/** Time constant (ms) of the settle back to a row. */
+const PULL_SETTLE_TIME_CONSTANT_MS = 70;
+/** Below this pull (design pixels) the list counts as at rest. */
+const PULL_SETTLE_EPSILON = 0.3;
+
 /**
  * Serializable cursor / browse state. Used to round-trip the select view across `dispose()` / new-instance cycles (e.g.
  * play → return → select), so the user lands back on the same song they launched.
@@ -714,18 +721,25 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         startY: number;
         lastY: number;
         dragging: boolean;
-        carry: number;
         /** Recent positions (design pixels), for the velocity the list keeps once the finger lifts. */
         samples: TouchSample[];
       }
     | undefined;
   /**
    * The list still gliding after a swipe was let go: its velocity (design pixels per ms, positive = toward earlier
-   * entries, as the finger moved down), the travel not yet turned into a step, and when it last advanced.
+   * entries, as the finger moved down) and when it last advanced.
    */
-  private fling: { velocity: number; carry: number; lastAt: number } | undefined;
-  /** Smooth-wheel travel (CSS pixels) not yet turned into a cursor step; see `stepWheelScroll`. */
-  private wheelCarry = 0;
+  private fling: { velocity: number; lastAt: number } | undefined;
+  /**
+   * How far the list is pulled past the focused row toward later entries, in design pixels, less than a row: the
+   * travel of a drag, a fling or a trackpad not yet turned into a cursor step. Shown to the skin as
+   * `frame.listScroll`, and eased back to a row (see {@link settleListPull}) once nothing is moving the list.
+   */
+  private listPull = 0;
+  /** `performance.now()` of the last wheel or drag movement, so the pull settles only once input stops. */
+  private lastPullInputAt = Number.NEGATIVE_INFINITY;
+  /** `performance.now()` of the last {@link settleListPull}, for its frame-rate independent easing. */
+  private lastSettleAt: number | undefined;
   /**
    * Last known pointer position in **design-space** coordinates, used by `#SRC_ONMOUSE` hit-tests and
    * `#SRC_MOUSECURSOR` follow. `-1` means "no pointer over canvas yet"; both renderers skip drawing in that case.
@@ -1337,7 +1351,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       return;
     }
     this.perf.beginTick();
-    this.advanceFling(performance.now());
+    const tickNow = performance.now();
+    this.advanceFling(tickNow);
+    this.settleListPull(tickNow);
     if (this.themeDesignSize) {
       this.perf.time('render', () => this.render());
     } else {
@@ -1357,6 +1373,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         const { width, height } = this.beMusicDesignSize;
         const onStage = this.mouseX >= 0 && this.mouseY >= 0 && this.mouseX < width && this.mouseY < height;
         this.beMusicRenderer.setPointer(onStage ? this.mouseX : undefined, onStage ? this.mouseY : undefined);
+        this.beMusicRenderer.setListScroll(this.shownListPull());
         this.beMusicRenderer.tick(now, this.focusedSong(), this.launchAt, this.selectAudioAnalyzer?.sample(now));
       }
     }
@@ -1879,8 +1896,9 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
       this.scrollReadText(-delta);
       return;
     }
-    const step = stepTouchScroll(gesture.carry, delta, this.resolveTouchScrollPitch());
-    gesture.carry = step.carry;
+    const step = stepTouchScroll(this.listPull, delta, this.resolveTouchScrollPitch());
+    this.listPull = step.carry;
+    this.lastPullInputAt = performance.now();
     if (step.steps !== 0) this.moveCursorBy(step.steps);
   };
 
@@ -1900,7 +1918,7 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const now = performance.now();
     const velocity = releaseVelocity(gesture.samples, now);
     if (Math.abs(velocity) >= FLING_START_VELOCITY) {
-      this.fling = { velocity, carry: gesture.carry, lastAt: now };
+      this.fling = { velocity, lastAt: now };
     }
   };
 
@@ -1911,10 +1929,48 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     const { distance, velocity } = stepFling(fling.velocity, now - fling.lastAt);
     fling.lastAt = now;
     fling.velocity = velocity;
-    const step = stepTouchScroll(fling.carry, distance, this.resolveTouchScrollPitch());
-    fling.carry = step.carry;
+    const step = stepTouchScroll(this.listPull, distance, this.resolveTouchScrollPitch());
+    this.listPull = step.carry;
     if (step.steps !== 0) this.moveCursorBy(step.steps);
     if (Math.abs(velocity) < FLING_STOP_VELOCITY) this.fling = undefined;
+  }
+
+  /**
+   * Once nothing moves the list (no finger down, no fling, no wheel for {@link PULL_SETTLE_DELAY_MS}), eases its pull
+   * back to a row: on to the next one when it was pulled past half a row and the window can move that way, back to the
+   * focused one otherwise.
+   */
+  private settleListPull(now: number): void {
+    const dt = this.lastSettleAt === undefined ? 0 : now - this.lastSettleAt;
+    this.lastSettleAt = now;
+    if (this.listPull === 0 || this.touchGesture?.dragging || this.fling !== undefined) return;
+    if (now - this.lastPullInputAt < PULL_SETTLE_DELAY_MS) return;
+    const pitch = this.resolveTouchScrollPitch();
+    const direction = Math.sign(this.listPull);
+    if (Math.abs(this.listPull) >= pitch / 2 && this.listWindowMoves(direction)) {
+      this.moveCursorBy(direction);
+      this.listPull -= direction * pitch;
+    }
+    this.listPull *= Math.exp(-dt / PULL_SETTLE_TIME_CONSTANT_MS);
+    if (Math.abs(this.listPull) < PULL_SETTLE_EPSILON) this.listPull = 0;
+  }
+
+  /** The pull the skin draws: none where the list window can't move that way (at the list's ends). */
+  private shownListPull(): number {
+    return this.listPull !== 0 && this.listWindowMoves(Math.sign(this.listPull)) ? this.listPull : 0;
+  }
+
+  /** Whether one cursor step in `direction` (±1) scrolls the list window rather than only moving the highlight. */
+  private listWindowMoves(direction: number): boolean {
+    const entries = this.currentEntries();
+    const next = this.selectedIndex + direction;
+    if (next < 0 || next >= entries.length) return false;
+    const layout = this.beMusicSelectLayout;
+    const { height } = this.resolveDesignSize();
+    return (
+      resolveSelectListWindow(layout, height, next, entries.length).firstVisibleIndex !==
+      resolveSelectListWindow(layout, height, this.selectedIndex, entries.length).firstVisibleIndex
+    );
   }
 
   private readonly handlePointerCancel = (event: PointerEvent): void => {
@@ -2143,12 +2199,13 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
     if (!isWheelNotch(event)) {
       const { width: designWidth, height: designHeight } = this.resolveDesignSize();
       const viewport = resolveScaledViewport(this.app.screen.width, this.app.screen.height, designWidth, designHeight);
-      const step = stepWheelScroll(this.wheelCarry, event.deltaY, this.resolveTouchScrollPitch() * viewport.scale);
-      this.wheelCarry = step.carry;
+      const step = stepWheelScroll(this.listPull, event.deltaY / viewport.scale, this.resolveTouchScrollPitch());
+      this.listPull = step.carry;
+      this.lastPullInputAt = performance.now();
       if (step.steps !== 0) this.moveCursorBy(step.steps);
       return;
     }
-    this.wheelCarry = 0;
+    this.listPull = 0;
     const now = performance.now();
     if (now - this.lastWheelMoveAt < WHEEL_THROTTLE_INTERVAL_MS) return;
     this.lastWheelMoveAt = now;
@@ -2180,7 +2237,6 @@ export class CoreSongSelectView<TOptions extends CoreSongSelectViewOptions = Cor
         startY: event.offsetY,
         lastY: event.offsetY,
         dragging: false,
-        carry: 0,
         samples: [],
       };
       return;
