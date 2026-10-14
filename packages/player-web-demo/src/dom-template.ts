@@ -512,6 +512,12 @@ export const DEMO_APP_HTML = `
               <li>Double-click the playfield to enter or leave fullscreen. <kbd>Esc</kbd> leaves fullscreen first, then repeats the usual scene action.</li>
             </ul>
 
+            <h3 class="help-section-title">Result</h3>
+            <ul class="help-list">
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> returns to song select.</li>
+              <li><kbd>R</kbd> plays the same chart again right away with the same options.</li>
+            </ul>
+
             <h3 class="help-section-title">Options &amp; recording</h3>
             <ul class="help-list">
               <li>
@@ -608,6 +614,12 @@ export const DEMO_APP_HTML = `
               <li><kbd>F5</kbd> で現在のチャートをリスタート。</li>
               <li><kbd>Esc</kbd> でリザルト画面 (または選曲画面) へ戻ります。</li>
               <li>プレイフィールドをダブルクリックするとフルスクリーンに入り / 解除します。<kbd>Esc</kbd> は先にフルスクリーンを解除し、もう一度押すと通常のシーン操作になります。</li>
+            </ul>
+
+            <h3 class="help-section-title">リザルト</h3>
+            <ul class="help-list">
+              <li><kbd>Enter</kbd> / <kbd>Space</kbd> / <kbd>Esc</kbd> で選曲画面へ戻ります。</li>
+              <li><kbd>R</kbd> で同じオプションのまま同じチャートをすぐにもう一度プレイします。</li>
             </ul>
 
             <h3 class="help-section-title">オプションと録画</h3>
