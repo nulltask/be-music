@@ -83,6 +83,44 @@ export function isVideoExtension(path: string): boolean {
   return /\.(mpg|mpeg|mp4|m4v|avi|mov|wmv|webm|mkv)$/u.test(lower);
 }
 
+/** Edge length of the BMS BGA canvas: every BGA rect on screen stands for this 256x256 image space. */
+export const BMS_BGA_CANVAS_SIZE = 256;
+
+export interface BgaRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Where a still BGA image of `imageWidth` x `imageHeight` px lands inside the BGA `rect`, which stands for the 256x256
+ * BMS canvas. An image whose long edge fits the canvas keeps its own pixel size on it, centered horizontally and
+ * against the top edge — the BM98 convention LR2 and beatoraja (`BGImageProcessor`) follow — so a 256x161 frame leaves
+ * an empty band at the bottom rather than being stretched. A larger image fills the whole rect, as in LR2 and
+ * beatoraja. `origin` places a `#BGAxx` sub-region at its authored `dx dy` on the canvas instead of centering it.
+ */
+export function resolveBgaImageRect(
+  imageWidth: number,
+  imageHeight: number,
+  rect: BgaRect,
+  origin?: { x: number; y: number },
+): BgaRect {
+  if (!(imageWidth > 0) || !(imageHeight > 0) || Math.max(imageWidth, imageHeight) > BMS_BGA_CANVAS_SIZE) {
+    return { x: rect.x, y: rect.y, w: rect.w, h: rect.h };
+  }
+  const scaleX = rect.w / BMS_BGA_CANVAS_SIZE;
+  const scaleY = rect.h / BMS_BGA_CANVAS_SIZE;
+  const canvasX = origin ? origin.x : Math.floor((BMS_BGA_CANVAS_SIZE - imageWidth) / 2);
+  const canvasY = origin ? origin.y : 0;
+  return {
+    x: rect.x + canvasX * scaleX,
+    y: rect.y + canvasY * scaleY,
+    w: imageWidth * scaleX,
+    h: imageHeight * scaleY,
+  };
+}
+
 /** The BGA keys showing this frame, as `renderBga` resolved them (`#SWBGA` frames already picked). */
 export interface ActiveBgaKeys {
   base: string | undefined;

@@ -40,7 +40,7 @@ describe('BeatorajaBgaLayer', () => {
         poor: [],
       },
     });
-    const sprite = layer.container.children[0] as Sprite;
+    const sprite = layer.container.children[1] as Sprite;
 
     layer.update(0, { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 }, false);
     expect(sprite.visible).toBe(true);
@@ -50,6 +50,23 @@ describe('BeatorajaBgaLayer', () => {
     expect(sprite.visible).toBe(false);
     expect(sprite.texture).toBe(validTexture);
     expect(sprite.texture).not.toBe(Texture.EMPTY);
+
+    layer.dispose();
+  });
+
+  it('centers a small image top-aligned on the 256x256 canvas over a black fill', () => {
+    const layer = new BeatorajaBgaLayer({
+      skin: skin(),
+      textures: new Map([['01', fakeTexture()]]),
+      cues: { base: [{ seconds: 0, bmpKey: '01' }], layer: [], poor: [] },
+    });
+    const [canvas, sprite] = layer.container.children as Sprite[];
+
+    layer.update(0, { activeOps: new Set(), getTimerStart: () => 0, nowMs: 0 }, false);
+    // The 320x240 destination scales the canvas by 1.25 x 0.9375; a 1x1 image sits at canvas x 127, y 0.
+    expect(canvas!.visible).toBe(true);
+    expect([canvas!.x, canvas!.width, canvas!.height]).toEqual([100, 320, 240]);
+    expect([sprite!.x, sprite!.y, sprite!.width, sprite!.height]).toEqual([258.75, canvas!.y, 1.25, 0.9375]);
 
     layer.dispose();
   });
