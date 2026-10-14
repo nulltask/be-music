@@ -141,14 +141,19 @@ export const en = {
       file: 'File',
       files: 'Files',
       firstSeen: 'First seen',
-      listed: 'Listed',
+      listed: 'Listed publicly',
     },
     original: 'original',
     addOn: 'add-on (差分)',
     randomSeen: (count: number) => `${count} seen`,
     noneSeen: 'none seen',
     listedYes: 'yes',
-    listedNo: 'not yet (two players with a passkey list a chart)',
+    listedNo: 'not yet — once two players with a passkey have played it',
+    notListedTitle: 'Not listed yet',
+    notListedLead:
+      'This chart is listed once two players with a passkey have played it. Until then it stays out of the latest plays, other players’ pages and search engines, and its ranking shows each player only their own record.',
+    notListedSignIn: 'Sign in to see your own record.',
+    notListedEmpty: 'Records show here once the chart is listed.',
   },
   lists: {
     ranking: 'Ranking',
@@ -163,6 +168,9 @@ export const en = {
     fewerMisses: 'Fewer misses than the player’s previous best',
     anonymous: 'anonymous',
     assist: 'assist',
+    notListed: 'not listed',
+    notListedHelp:
+      'Only you see this play: its chart is not listed yet. It is listed once two players with a passkey have played it.',
   },
   lnModes: {
     1: 'LN — the start is judged; hold to the end',

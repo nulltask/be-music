@@ -39,7 +39,9 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
       limit: RECENT_LIMIT,
       ruleset,
       includeAnonymous: true,
-      includeUnlisted: true,
+      // Plays of charts not listed yet show only on the player's own page, to them.
+      includeUnlisted: false,
+      ...(c.get('viewer')?.handle === player.handle ? { ownerUserId: c.get('viewer')!.userId } : {}),
       handle: player.handle,
     }),
   ]);

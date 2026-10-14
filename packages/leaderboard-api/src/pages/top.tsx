@@ -22,7 +22,9 @@ export async function topPage(c: PageContext) {
     limit: RECENT_LIMIT,
     ruleset,
     includeAnonymous,
-    includeUnlisted: true,
+    // Charts not listed yet stay out, except the viewer's own plays of them.
+    includeUnlisted: false,
+    ...(c.get('viewer') !== null ? { ownerUserId: c.get('viewer')!.userId } : {}),
   });
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);

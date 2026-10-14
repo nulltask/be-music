@@ -43,7 +43,17 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   const everyPlay = isOn(c.req.query('every'));
   const fileQuery = c.req.query('file')?.toLowerCase();
   const fileSha256 = fileQuery !== undefined && /^[0-9a-f]{64}$/.test(fileQuery) ? fileQuery : undefined;
-  const filter = { chartFingerprint, ruleset, assisted, includeAnonymous, playedHereOnly: false };
+  // A chart not listed yet shows each signed-in player their own record (anonymous or not) and nobody else's.
+  const listed = found.status === 'listed';
+  const viewer = c.get('viewer');
+  const filter = {
+    chartFingerprint,
+    ruleset,
+    assisted,
+    includeAnonymous: includeAnonymous || !listed,
+    playedHereOnly: false,
+    ...(listed ? {} : { onlyUserId: viewer?.userId ?? '' }),
+  };
   const page = { offset: 0, limit: RANKING_LIMIT };
   // Everything below depends only on the chart: ask D1 for it at once rather than one query after another.
   const [ranking, everyone, aliases, stats, filed, files] = await Promise.all([
@@ -68,10 +78,14 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
   const rules = t.rules.name(RULESET_LABELS[ruleset] ?? ruleset);
   return c.html(
     <Layout
-      meta={meta(c, title, t.chart.description(title, rules, ranking.players), [
-        ...chartsetCrumbs(filed),
-        { label: title, kind: 'chart' },
-      ])}
+      meta={{
+        ...meta(c, title, t.chart.description(title, rules, ranking.players), [
+          ...chartsetCrumbs(filed),
+          { label: title, kind: 'chart' },
+        ]),
+        // Search engines leave a chart alone until it is listed: a made-up one should not spread from here.
+        noindex: !listed,
+      }}
     >
       <PageHeader
         kind="chart"
@@ -92,23 +106,37 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
             {difficultyName(found.difficulty) !== undefined ? ` ${difficultyName(found.difficulty)}` : ''} ·{' '}
           </span>
         ) : null}
-        {t.count.notes(found.noteCount)} · {t.count.players(everyone)}
+        {t.count.notes(found.noteCount)}
+        {listed ? ` · ${t.count.players(everyone)}` : ''}
       </PageHeader>
-      <Stats
-        items={[
-          [t.chart.stats.players, stats.players],
-          [t.chart.stats.plays, stats.plays],
-          [t.chart.stats.firstPlayed, day(stats.firstPlayedAt)],
-          [t.chart.stats.lastPlayed, day(stats.lastPlayedAt)],
-        ]}
-      />
+      {listed ? null : (
+        <div class="alert" role="note">
+          <h2>{t.chart.notListedTitle}</h2>
+          <section>
+            {t.chart.notListedLead} {viewer === null ? t.chart.notListedSignIn : ''}
+          </section>
+        </div>
+      )}
+      {listed ? (
+        <Stats
+          items={[
+            [t.chart.stats.players, stats.players],
+            [t.chart.stats.plays, stats.plays],
+            [t.chart.stats.firstPlayed, day(stats.firstPlayedAt)],
+            [t.chart.stats.lastPlayed, day(stats.lastPlayedAt)],
+          ]}
+        />
+      ) : null}
       <section class="space-y-3" aria-labelledby="ranking">
         <SectionHeading
           id="ranking"
           note={
-            everyPlay
-              ? t.count.plays('plays' in ranking ? Number(ranking.plays) : ranking.entries.length)
-              : t.count.players(ranking.players)
+            // Not listed, the ranking holds only the viewer, so a count would mislead.
+            !listed
+              ? undefined
+              : everyPlay
+                ? t.count.plays('plays' in ranking ? Number(ranking.plays) : ranking.entries.length)
+                : t.count.players(ranking.players)
           }
         >
           {t.chart.ranking}
@@ -167,16 +195,19 @@ export async function chartPage(c: PageContext<'/leaderboard/charts/:chartFinger
           entries={ranking.entries}
           infos={infos}
           noteCount={found.noteCount}
-          highlight={c.get('viewer')?.handle}
+          highlight={viewer?.handle}
           everyPlay={everyPlay}
+          {...(listed ? {} : { empty: viewer === null ? t.chart.notListedSignIn : t.chart.notListedEmpty })}
         />
       </section>
-      <DistributionCard
-        title={t.chart.clearLamps}
-        description={t.chart.clearLampsLead(rules)}
-        distribution={stats.lamps}
-        kind="lamp"
-      />
+      {listed ? (
+        <DistributionCard
+          title={t.chart.clearLamps}
+          description={t.chart.clearLampsLead(rules)}
+          distribution={stats.lamps}
+          kind="lamp"
+        />
+      ) : null}
       <Details
         title={t.chart.details}
         rows={known([

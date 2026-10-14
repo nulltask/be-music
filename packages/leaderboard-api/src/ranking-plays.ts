@@ -47,6 +47,7 @@ export async function loadPlayRanking(
   if (!filter.includeAnonymous) conditions.push(sql`coalesce(u.is_anonymous, 0) = 0`);
   if (filter.playedHereOnly) conditions.push(sql`s.played_ruleset = ${filter.ruleset}`);
   if (options.fileSha256 !== undefined) conditions.push(sql`s.file_sha256 = ${options.fileSha256}`);
+  if (filter.onlyUserId !== undefined) conditions.push(sql`s.user_id = ${filter.onlyUserId}`);
   const rows = await db.all<PlayRow>(sql`
     with plays as (
       select s.id as score_id, s.created_at, s.played_ruleset, s.user_id,

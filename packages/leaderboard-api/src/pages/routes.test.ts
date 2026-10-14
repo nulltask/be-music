@@ -174,7 +174,7 @@ describe('Leaderboard pages', () => {
   let firstScore: string;
   let firstHandle: string;
 
-  test('the top page shows every play by a player who is not anonymous, new charts included', async () => {
+  test('the top page shows plays of listed charts, and a player also their own plays of charts not listed yet', async () => {
     const alice = await signInAnonymously(fetchApp);
     const bob = await signInAnonymously(fetchApp);
     firstScore = await submit(alice, chart, 9, evil);
@@ -186,22 +186,24 @@ describe('Leaderboard pages', () => {
     expect(before.html).toContain('No plays here yet');
     expect(before.cacheControl).toBe('private, max-age=0');
 
-    // Once a player keeps their account (what registering a passkey does), their play shows, on a chart that is not
-    // listed yet (one player so far), with its place among the players who count.
+    // Once a player keeps their account (what registering a passkey does), the chart still is not listed (one player so
+    // far): it stays off the public page, and only the player sees their own play, marked as not listed.
     const db = openDatabase(env.DB);
     await claimAccount(db, await userIdOf(alice));
-    const one = await page('/leaderboard');
-    expect(one.html.match(/\/leaderboard\/scores\//g)).toHaveLength(1);
-    expect(one.html).not.toContain('new chart');
-    expect(one.html).toContain('#1 / 1');
+    expect((await page('/leaderboard')).html).toContain('No plays here yet');
+    const own = await page('/leaderboard', alice);
+    expect(own.html.match(/\/leaderboard\/scores\//g)).toHaveLength(1);
+    expect(own.html).toContain('>not listed<');
+    expect(own.html).toContain('#1 / 1');
 
-    // A second such player lists the chart and ranks below the first.
+    // A second such player lists the chart: both plays are public, ranked.
     await claimAccount(db, await userIdOf(bob));
     const listed = await page('/leaderboard/');
     expect(listed.html.match(/\/leaderboard\/scores\//g)).toHaveLength(2);
     expect(listed.html).toContain('#1 / 2');
     expect(listed.html).toContain('#2 / 2');
     expect(listed.html).toContain('played with LR2 rules');
+    expect(listed.html).not.toContain('>not listed<');
     // Player-controlled text is escaped, never rendered as markup.
     expect(listed.html).not.toContain(evil);
     expect(listed.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
@@ -214,10 +216,17 @@ describe('Leaderboard pages', () => {
     const carol = await signInAnonymously(fetchApp);
     await submit(carol, other, 5, 'Only Carol');
 
-    expect((await page('/leaderboard')).html).not.toContain('Only Carol');
-    const withAnonymous = await page('/leaderboard?anonymous=1');
-    expect(withAnonymous.html).toContain('Only Carol');
-    expect(withAnonymous.html).toContain('#1 / 1');
+    // Carol's chart is not listed (anonymous players do not list one): nobody else sees it, even with anonymous players
+    // on; Carol does, marked as not listed.
+    expect((await page('/leaderboard?anonymous=1')).html).not.toContain('Only Carol');
+    const own = await page('/leaderboard', carol);
+    expect(own.html).toContain('Only Carol');
+    expect(own.html).toContain('>not listed<');
+
+    // On a listed chart, Carol's play is left out by default and comes in with anonymous players on.
+    const carolsPlay = `/leaderboard/scores/${await submit(carol, chart, 7, 'Carol on a listed chart', 2)}`;
+    expect((await page('/leaderboard')).html).not.toContain(carolsPlay);
+    expect((await page('/leaderboard?anonymous=1')).html).toContain(carolsPlay);
   });
 
   test('a play shows what it changed on the player’s best, and the chart’s mode and level', async () => {
@@ -235,7 +244,8 @@ describe('Leaderboard pages', () => {
       body: submissionBody(playlog, levelled.playDocument, levelled.chartDocument),
     });
     expect(first.status).toBe(201);
-    const firstView = await page('/leaderboard');
+    // Dave is the chart's only player, so it is not listed: he sees his plays on his own view.
+    const firstView = await page('/leaderboard', dave);
     // The row's text, up to the next row.
     const rowText = (html: string) => {
       const from = html.slice(html.indexOf('Dave Song'));
@@ -248,8 +258,33 @@ describe('Leaderboard pages', () => {
 
     // A better play: its row carries the EX-Score gained over the earlier best.
     await submit(dave, levelled, 8, 'Dave Song');
-    const better = await page('/leaderboard');
+    const better = await page('/leaderboard', dave);
     expect(rowText(better.html)).toMatch(/\+\d+/);
+  });
+
+  test('a chart not listed yet keeps out of search engines and shows each player only their own record', async () => {
+    const lonely = makeChart(['#00111:01', '#00211:0101', '#00311:01']);
+    const erin = await signInAnonymously(fetchApp);
+    const scoreId = await submit(erin, lonely, 4, 'Lonely chart');
+    const chartPath = new URL(
+      (await page(`/leaderboard/scores/${scoreId}`)).html.match(/href="(\/leaderboard\/charts\/[^"]+)"/)![1]!,
+      'http://x',
+    ).pathname;
+
+    const anyone = await page(chartPath);
+    expect(anyone.html).toContain('<meta name="robots" content="noindex"/>');
+    expect(anyone.html).toContain('Not listed yet');
+    expect(anyone.html).toContain('Sign in to see your own record.');
+    expect(anyone.html).not.toContain(`/leaderboard/scores/${scoreId}`);
+
+    const own = await page(chartPath, erin);
+    expect(own.html).toContain(`/leaderboard/scores/${scoreId}`);
+    expect(own.html).not.toContain('Sign in to see your own record.');
+
+    // Erin's own player page lists the play; anyone else's view of it does not.
+    const me = (await (await fetchApp('/api/v0/me', { headers: { cookie: erin } })).json()) as { handle: string };
+    expect((await page(`/leaderboard/players/${me.handle}`, erin)).html).toContain(`/leaderboard/scores/${scoreId}`);
+    expect((await page(`/leaderboard/players/${me.handle}`)).html).not.toContain(`/leaderboard/scores/${scoreId}`);
   });
 
   test('the score, chart and player pages render with their sharing tags', async () => {
