@@ -291,3 +291,13 @@ function trimIdleBucket<T extends Sprite | Graphics | Text>(bucket: T[], cursor:
   }
   return 0;
 }
+
+/**
+ * Multiplies the alpha of `layer`'s children from index `from` on by `alpha` — what a draw call added since `from` was
+ * the child count. Used to fade a select-list row by how much of it is inside the list window (`selectListRows`).
+ */
+export function fadeChildrenFrom(layer: Container, from: number, alpha: number): void {
+  if (alpha >= 1) return;
+  const children = layer.children;
+  for (let index = from; index < children.length; index += 1) children[index]!.alpha *= alpha;
+}

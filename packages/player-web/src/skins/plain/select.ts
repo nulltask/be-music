@@ -6,6 +6,7 @@ import {
   type BrowserBrowseEntry,
   type BeMusicSelectFrame,
   type BeMusicSurface,
+  selectListRows,
 } from '@be-music/skin-sdk';
 import { PORTRAIT_SELECT_LAYOUT, resolvePortraitSelectCard } from './layout.ts';
 import { ACCENT, INK, LINE, MUTED, PANEL, TEXT, stat, text } from './theme.ts';
@@ -189,15 +190,17 @@ function drawList(
 ): void {
   const { listX, listTop, rowHeight } = layout;
   const rowW = width - listX - MARGIN;
-  for (let row = 0; row < frame.visibleRows; row += 1) {
-    const index = frame.firstVisibleIndex + row;
-    const entry = frame.entries[index];
-    if (!entry) break;
-    const y = listTop + row * rowHeight;
+  // Rows follow the list's pull (`frame.listScroll`), fading where they slide past the window's edge.
+  for (const { entryIndex: index, slot, alpha } of selectListRows(frame, rowHeight)) {
+    const entry = frame.entries[index]!;
+    const y = listTop + slot * rowHeight;
     const selected = index === frame.selectedIndex;
-    ctx.fillStyle = selected ? ACCENT : row % 2 === 0 ? PANEL : INK;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.fillStyle = selected ? ACCENT : index % 2 === 0 ? PANEL : INK;
     ctx.fillRect(listX, y, rowW, rowHeight - 2);
     drawEntry(ctx, entry, listX, y + (rowHeight - 2) / 2, rowW, selected ? frame.nowMs : undefined);
+    ctx.restore();
   }
 }
 

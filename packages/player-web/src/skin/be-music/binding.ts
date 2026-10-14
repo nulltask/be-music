@@ -386,7 +386,7 @@ export class BeMusicGameplayBinding {
  */
 export type BeMusicSelectSceneFrame = Omit<
   BeMusicSelectFrame,
-  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'songImage' | 'settings'
+  'revision' | 'audio' | 'hit' | 'pointer' | 'songRecord' | 'songImage' | 'settings' | 'listScroll'
 >;
 
 /**
@@ -405,6 +405,8 @@ export class BeMusicSelectBinding {
   private settings: BeMusicSkinSettingValues;
   private readonly songRecord: BeMusicSelectFrame['songRecord'];
   private readonly songImage: BeMusicSongImageLookup;
+  /** `frame.listScroll`: how far the list is pulled past its resting place, in design pixels (see `setListScroll`). */
+  private listScroll = 0;
   /** The pointer in design pixels, replaced (not mutated) when it moves so a skin may keep last frame's. */
   private pointer: BeMusicSelectFrame['pointer'] = undefined;
   private frame: BeMusicSelectSceneFrame | undefined;
@@ -473,6 +475,14 @@ export class BeMusicSelectBinding {
     }
   }
 
+  /**
+   * Records how far the list is pulled past its resting place (design pixels, positive toward later entries), read by
+   * the next {@link tick} as `frame.listScroll`. Changes every frame of a drag without moving `frame.revision`.
+   */
+  setListScroll(value: number): void {
+    this.listScroll = value;
+  }
+
   /** Draws the skin with the latest state, the current time, and what is playing. */
   tick(
     nowMs: number,
@@ -493,6 +503,7 @@ export class BeMusicSelectBinding {
       launchAt,
       audio,
       revision: this.revision,
+      listScroll: this.listScroll,
       pointer,
       songRecord: this.songRecord,
       songImage: this.songImage,

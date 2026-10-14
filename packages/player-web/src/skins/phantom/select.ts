@@ -31,6 +31,7 @@ import {
   hash01,
   resolveSongRowFacts,
   stageProgress,
+  selectListRows,
 } from '@be-music/skin-sdk';
 import {
   addHitArea,
@@ -39,6 +40,7 @@ import {
   type PixiSelectRenderer,
   type PixiSelectSkin,
   type SkinTextOptions,
+  fadeChildrenFrom,
 } from '../pixi-kit/index.ts';
 
 const LAYOUT: BeMusicSelectLayout = { listX: 320, listTop: 60, listBottomInset: 26, rowHeight: 28 };
@@ -115,11 +117,12 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     this.activeCard = undefined;
     let needsFrame = this.renderChrome(frame);
     const listWidth = frame.designWidth - LAYOUT.listX - 16;
-    for (let visibleIndex = 0; visibleIndex < frame.visibleRows; visibleIndex += 1) {
-      const entryIndex = frame.firstVisibleIndex + visibleIndex;
-      const entry = frame.entries[entryIndex];
-      if (!entry) break;
-      needsFrame = this.renderRow(frame, entry, entryIndex, visibleIndex, listWidth) || needsFrame;
+    // Rows follow the list's pull (`frame.listScroll`): fractional slots, faded where they slide past the window's edge.
+    for (const { entryIndex, slot, alpha } of selectListRows(frame, LAYOUT.rowHeight)) {
+      const entry = frame.entries[entryIndex]!;
+      const from = frame.layer.children.length;
+      needsFrame = this.renderRow(frame, entry, entryIndex, slot, listWidth) || needsFrame;
+      fadeChildrenFrom(frame.layer, from, alpha);
     }
     this.pointer.visible = this.activeRowY !== undefined;
     this.glint.visible = this.activeCard !== undefined;
@@ -591,7 +594,10 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     // rows fly in from the right one after another.
     const slide = active ? 1 - easeOutCubic(stageProgress(frame.nowMs - frame.cursorChangedAt, 0, SLIDE_MS)) : 0;
     const intro =
-      1 - easeOutCubic(stageProgress(frame.nowMs - frame.sceneStartedAt, visibleIndex * INTRO_STAGGER_MS, SLIDE_MS));
+      1 -
+      easeOutCubic(
+        stageProgress(frame.nowMs - frame.sceneStartedAt, Math.max(0, visibleIndex) * INTRO_STAGGER_MS, SLIDE_MS),
+      );
     const rowX = (active ? listX - 6 : listX + 4) + slide * 30 + intro * 260;
     const rowW = active ? listWidth + 2 : listWidth - 8;
     const keyPillX = rowX + 8;
@@ -611,7 +617,7 @@ class PhantomSelectRenderer implements PixiSelectRenderer {
     } else {
       row
         .poly(parallelogramPoints(rowX, y, rowW, rowHeight - 4, 6))
-        .fill(visibleIndex % 2 === 0 ? PHANTOM_CHARCOAL : PHANTOM_BLACK)
+        .fill(entryIndex % 2 === 0 ? PHANTOM_CHARCOAL : PHANTOM_BLACK)
         .stroke({ color: PHANTOM_SLATE, width: 1 });
     }
     row
