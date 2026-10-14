@@ -142,6 +142,12 @@ export interface DemoGuiState {
    * Latched at song start (the Play options folder is disabled during a play) and recorded into the play-log.
    */
   judgeRuleset: 'lr2' | 'beatoraja' | 'iidx';
+  /**
+   * Hi-speed (note scroll multiplier) the next play starts at. Two-way synced with the LR2 select panel's HS and the
+   * in-game `ArrowUp` / `ArrowDown` keys, applied live to a running play when changed here, and remembered across
+   * reloads.
+   */
+  hiSpeed: number;
   /** Gauge variant for the next play. Two-way synced with the LR2 select scene's PLAY OPTION panel. */
   gauge: 'GROOVE' | 'HARD' | 'DEATH' | 'EASY';
   /** 1P lane arrangement for the next play. Two-way synced with the LR2 select panel. */

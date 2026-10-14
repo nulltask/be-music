@@ -40,6 +40,7 @@ const workspaceAliases = [
   { find: '@be-music/player/utils', replacement: resolve(rootDir, 'packages/player/src/utils.ts') },
   { find: '@be-music/player/core', replacement: resolve(rootDir, 'packages/player/src/core') },
   { find: '@be-music/player-web/runtime', replacement: resolve(rootDir, 'packages/player-web/src/runtime/index.ts') },
+  { find: '@be-music/player-web/scenes', replacement: resolve(rootDir, 'packages/player-web/src/scene/index.ts') },
   {
     find: '@be-music/player-web/collection',
     replacement: resolve(rootDir, 'packages/player-web/src/collection/index.ts'),

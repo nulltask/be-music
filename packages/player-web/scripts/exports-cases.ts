@@ -170,6 +170,12 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.beatorajaPixelsPerBeat(580, 2.5);
     },
   });
+  define('player-web.snapHiSpeed', {
+    run: () => {
+      playerWebCoreApi.snapHiSpeed(1.3000000000000003);
+      playerWebCoreApi.snapHiSpeed(42);
+    },
+  });
   define('player-web.lr2LastWalkedBeat', {
     run: () => {
       playerWebCoreApi.lr2LastWalkedBeat({ rules: 'lr2', lastBeat: 32 }, 145);
