@@ -8,6 +8,9 @@
  */
 export * from './host.ts';
 
+// Hi-speed range shared by every family's select and gameplay scenes (and hosts that remember the player's pick).
+export { DEFAULT_HISPEED, HISPEED_MAX, HISPEED_MIN, HISPEED_STEP, snapHiSpeed } from './hi-speed.ts';
+
 // Default family — built-in chrome when neither LR2 nor beatoraja themes are loaded.
 export * from './default/index.ts';
 

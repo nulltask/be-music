@@ -23,9 +23,7 @@ export const BOMB_DIVX = 8;
 export const BOMB_DIVY = 4;
 export const BOMB_CYCLE_MS = 30;
 
-export const HISPEED_MIN = 0.1;
-export const HISPEED_MAX = 6.0;
-export const HISPEED_STEP = 0.1;
+export { HISPEED_MAX, HISPEED_MIN, HISPEED_STEP } from './hi-speed.ts';
 
 /**
  * Fallback time-to-chart-start (in ms) used when the active skin doesn't author a `#PLAYSTART` directive. The skin's

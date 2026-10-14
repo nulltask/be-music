@@ -19,6 +19,10 @@ import {
   PixiResultView,
   PixiSceneHost,
   PixiSongSelectView,
+  HISPEED_MAX,
+  HISPEED_MIN,
+  HISPEED_STEP,
+  snapHiSpeed,
   type BeatorajaSelectSystemSoundPaths,
   type PixiGameplayResultData,
   type PixiPlayOptions,
@@ -159,6 +163,7 @@ import { renderBrowserCompatPanel } from './compat-panel.ts';
 import { navigationAfterDrop } from './drop-navigation.ts';
 import { InlineSearch } from './inline-search.ts';
 import { parseRecordingFormatKey, recordingFormatKey, recordingFormatOptions } from './recording-format-choice.ts';
+import { readStoredHiSpeed, storeHiSpeed } from './hi-speed-storage.ts';
 import { askSkinOffer, describeSkinOffer, type OfferedSkinFamily } from './skin-offer.ts';
 import { decodeText, showReadtextOverlay } from './readtext-overlay.ts';
 import { playSkinTypeForVariant, sanitizeFilenameStem } from './demo-utils.ts';
@@ -645,6 +650,8 @@ class PlayerWebDemoApp {
    * a change (`refreshPlayOptionControllers`).
    */
   private readonly playOptionControllers: Controller[] = [];
+  /** The "Hi-speed" slider — left enabled during a play (it applies live) and repainted by {@link rememberHiSpeed}. */
+  private hiSpeedController: Controller | undefined;
   /** Per-entry chart-file hash cache (`null` = lookup failed) — see {@link resolveChartHashes}. */
   private readonly chartHashCache = new Map<string, ChartFileHashes | null>();
   /** In-flight {@link resolveChartHashes} lookups, so a chart is hashed once however often it is asked for. */
@@ -749,6 +756,7 @@ class PlayerWebDemoApp {
       dpFlip: false,
       autoScratch1P: false,
       autoScratch2P: false,
+      hiSpeed: readStoredHiSpeed(),
       // Skin-family routing defaults to `'auto'`: beatoraja > LR2 > default, picked per-scene from what's loaded.
       // The Debug Menu's "Skin family" dropdown lets users force a specific family; LR2 / beatoraja entries appear
       // in the dropdown only when their theme is loaded (see {@link rebuildSkinFamilyPicker}).
@@ -1235,6 +1243,12 @@ class PlayerWebDemoApp {
           this.selectView?.setPlayOptions({ autoScratch2P: value });
         }),
     );
+    // Hi-speed — the same range and step as the in-game `ArrowUp` / `ArrowDown` keys. Unlike the options above it is
+    // visual only, so it stays enabled during a play and applies to it live.
+    this.hiSpeedController = folder
+      .add(this.guiState, 'hiSpeed', HISPEED_MIN, HISPEED_MAX, HISPEED_STEP)
+      .name('Hi-speed')
+      .onChange((value: number) => this.rememberHiSpeed(value, 'menu'));
     // Judge-window ruleset — no in-skin counterpart; the Debug Menu is its only surface. Window widths only (note
     // selection / empty POOR / LN mechanics / gauge stay LR2-aligned — see docs/playlog.md).
     trackPlayOption(
@@ -2699,6 +2713,8 @@ class PlayerWebDemoApp {
       // into `guiState`) AND the chart is a DP variant (10 / 14 keys), the chart's lane channels mirror at
       // construction. SP charts pass through unchanged because they have no 2P channels to swap with.
       dpFlip: this.guiState.dpFlip,
+      initialHiSpeed: this.guiState.hiSpeed,
+      onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
       // Judge-window ruleset + auto scratch + play-log extras ride the engine-options passthrough — the beatoraja
       // scene forwards them onto the shared engine and merges `recordPlaylog` with its own fields.
       engineOptions: {
@@ -3912,6 +3928,7 @@ class PlayerWebDemoApp {
         dpFlip: this.guiState.dpFlip,
         autoScratch1P: this.guiState.autoScratch1P,
         autoScratch2P: this.guiState.autoScratch2P,
+        hiSpeed: this.guiState.hiSpeed,
       },
       onPlayOptionsChange: (options: PixiPlayOptions) => {
         // Mirror the in-skin PLAY OPTION panel's edits back into the Debug Menu state so both surfaces always
@@ -3923,6 +3940,7 @@ class PlayerWebDemoApp {
         this.guiState.dpFlip = options.dpFlip;
         this.guiState.autoScratch1P = options.autoScratch1P;
         this.guiState.autoScratch2P = options.autoScratch2P;
+        if (options.hiSpeed !== this.guiState.hiSpeed) this.rememberHiSpeed(options.hiSpeed, 'select');
         this.refreshPlayOptionControllers();
       },
       resolveSongRecord: (song: BrowserSongEntry) => this.lookupSongRecord(song),
@@ -4145,7 +4163,10 @@ class PlayerWebDemoApp {
       // is the surface that exists on every family (default / beatoraja selects have no LR2 PLAY OPTION panel).
       autoPlay,
       autoPauseOnBlur: this.guiState.autoPauseOnBlur,
-      initialHiSpeed: playOptions?.hiSpeed,
+      // The remembered hi-speed (two-way synced with the LR2 select panel's HS); in-play changes come back to be
+      // remembered for the next play.
+      initialHiSpeed: this.guiState.hiSpeed,
+      onHiSpeedChange: (hiSpeed: number) => this.rememberHiSpeed(hiSpeed, 'play'),
       bga: playOptions?.bga,
       bgaSize: playOptions?.bgaSize,
       scoreGraph: playOptions?.scoreGraph,
@@ -4401,6 +4422,24 @@ class PlayerWebDemoApp {
     this.leaderboard.unlock();
     for (const controller of this.playOptionControllers) {
       controller.enable();
+    }
+  }
+
+  /**
+   * Takes a new hi-speed from one surface — the Debug Menu slider, the LR2 select panel, or the running play's keys —
+   * remembers it for the next play and mirrors it onto the others: the slider, the select panel, and (for a menu
+   * change) the running play.
+   */
+  private rememberHiSpeed(value: number, source: 'menu' | 'select' | 'play'): void {
+    const hiSpeed = snapHiSpeed(value);
+    if (hiSpeed === undefined) return;
+    this.guiState.hiSpeed = hiSpeed;
+    storeHiSpeed(hiSpeed);
+    if (source !== 'menu') this.hiSpeedController?.updateDisplay();
+    if (source !== 'select') this.selectView?.setPlayOptions({ hiSpeed });
+    if (source === 'menu') {
+      this.gameplayView?.setHiSpeed(hiSpeed);
+      this.beatorajaGameplayView?.setHiSpeed(hiSpeed);
     }
   }
 
