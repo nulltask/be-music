@@ -64,7 +64,10 @@ export interface RecentScoresFilter {
  * so any ruleset has figures). Anonymous players and unlisted charts are left out unless asked for.
  */
 export async function loadRecentScores(db: Database, filter: RecentScoresFilter): Promise<RecentScore[]> {
-  const conditions: SQL[] = [eq(scoreResult.ruleset, filter.ruleset)];
+  // The page is picked first, from the plays alone, newest first: the figures and the per-play subqueries below then run
+  // for the rows shown rather than for every play that passes the filters (SQLite does not flatten a subquery with a
+  // LIMIT into a join, so the page stays a walk down `score_created_idx` that stops at `limit`).
+  const conditions: SQL[] = [];
   if (!filter.includeAnonymous) {
     // A viewer's own plays show even while their account is anonymous.
     const named = eq(user.isAnonymous, false);
@@ -78,6 +81,16 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
   const shown = eq(score.hidden, false);
   conditions.push(filter.ownerUserId === undefined ? shown : or(shown, eq(score.userId, filter.ownerUserId))!);
   if (filter.handle !== undefined) conditions.push(eq(profile.handle, filter.handle));
+  const page = db
+    .select({ id: score.id, createdAt: score.createdAt })
+    .from(score)
+    .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
+    .innerJoin(user, eq(user.id, score.userId))
+    .innerJoin(profile, eq(profile.userId, score.userId))
+    .where(and(...conditions))
+    .orderBy(desc(score.createdAt), desc(score.id))
+    .limit(filter.limit)
+    .as('page');
   const rows = await db
     .select({
       scoreId: score.id,
@@ -106,14 +119,14 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       ...previousBest(filter.ruleset),
       ...standing(filter),
     })
-    .from(score)
-    .innerJoin(scoreResult, eq(scoreResult.scoreId, score.id))
+    .from(page)
+    .innerJoin(score, eq(score.id, page.id))
+    .innerJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, filter.ruleset)))
     .innerJoin(chart, eq(chart.chartFingerprint, score.chartFingerprint))
     .innerJoin(user, eq(user.id, score.userId))
     .innerJoin(profile, eq(profile.userId, score.userId))
-    .where(and(...conditions))
-    .orderBy(desc(score.createdAt), desc(score.id))
-    .limit(filter.limit);
+    // Ordered by the page's own columns, so the page drives the join rather than a scan of every play in index order.
+    .orderBy(desc(page.createdAt), desc(page.id));
   return rows.map(
     ({
       createdAt,
