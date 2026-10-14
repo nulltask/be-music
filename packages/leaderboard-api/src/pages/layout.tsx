@@ -563,33 +563,37 @@ function withoutLang(path: string): string {
   return `${url.pathname}${url.search}`;
 }
 
-/** Where this page sits: Leaderboard › … › this page (the last step is not a link). */
+/**
+ * Where this page sits: Leaderboard › … › this page (the last step is not a link). It is the header's second row, so it
+ * stays on one line rather than wrapping the sticky header taller: the steps in between give way first, then this page;
+ * the short root step keeps its width.
+ */
 function Breadcrumbs(props: { crumbs: Crumb[] }) {
   const t = useMessages();
   const trail: Crumb[] = [{ label: t.site.leaderboard, href: '/leaderboard' }, ...props.crumbs];
   return (
     <nav class="breadcrumb" aria-label={t.nav.breadcrumb}>
-      <ol class="text-muted-foreground gap-1.5 text-sm">
+      <ol class="text-muted-foreground flex-nowrap gap-1.5 text-sm">
         {trail.map((crumb, index) => {
           const last = index === trail.length - 1;
           return (
             <>
               {index > 0 ? (
-                <li aria-hidden="true">
+                <li class="shrink-0" aria-hidden="true">
                   <span aria-hidden="true">›</span>
                 </li>
               ) : null}
-              <li>
+              <li class={index === 0 ? 'shrink-0' : last ? 'min-w-0' : 'min-w-0 shrink-[4]'}>
                 {last || crumb.href === undefined ? (
                   <span
-                    class="text-foreground inline-flex max-w-[40ch] items-center gap-1"
+                    class="text-foreground inline-flex max-w-[40ch] min-w-0 items-center gap-1"
                     aria-current={last ? 'page' : undefined}
                   >
                     {crumb.kind !== undefined ? <EntityIcon kind={crumb.kind} size="sm" /> : null}
                     <span class="truncate">{crumb.label}</span>
                   </span>
                 ) : (
-                  <a class="hover:text-foreground inline-flex max-w-[40ch] items-center gap-1" href={crumb.href}>
+                  <a class="hover:text-foreground inline-flex max-w-[40ch] min-w-0 items-center gap-1" href={crumb.href}>
                     {crumb.kind !== undefined ? <EntityIcon kind={crumb.kind} size="sm" /> : null}
                     <span class="truncate">{crumb.label}</span>
                   </a>
@@ -705,10 +709,13 @@ export function Layout(props: { meta: PageMeta; children: Child }) {
                 <NavMenu current={props.meta.locale} path={props.meta.path} signedIn={props.meta.viewer !== null} />
               </div>
             </div>
+            {/* The second row: where this page sits, kept in view with the header. */}
+            <div class="mx-auto max-w-5xl px-4 pb-2.5">
+              <Breadcrumbs crumbs={props.meta.crumbs} />
+            </div>
             <p class="text-destructive mx-auto max-w-5xl px-4 pb-3 text-sm" data-account-status role="status" hidden />
           </header>
           <main class="mx-auto max-w-5xl space-y-6 px-4 py-8">
-            <Breadcrumbs crumbs={props.meta.crumbs} />
             {props.children}
           </main>
           <footer class="text-muted-foreground mx-auto max-w-5xl space-y-2 border-t px-4 pt-4 pb-8 text-xs">
