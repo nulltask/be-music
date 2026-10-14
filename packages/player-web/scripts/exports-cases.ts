@@ -806,6 +806,11 @@ export function registerPlayerWebCoreExportsCases(define: DefineBenchmarkCase): 
       playerWebCoreApi.resolveChartAudioAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'kick.wav');
     },
   });
+  define('player-web.resolveChartBgaAsset', {
+    run: () => {
+      playerWebCoreApi.resolveChartBgaAsset(BENCH_SOURCE, BENCH_SONG.chartPath, '_bga.mpg');
+    },
+  });
   define('player-web.resolveChartImageAsset', {
     run: () => {
       playerWebCoreApi.resolveChartImageAsset(BENCH_SOURCE, BENCH_SONG.chartPath, 'banner.bmp');

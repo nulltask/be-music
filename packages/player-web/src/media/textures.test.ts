@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vite-plus/test';
-import { attachBlobUrlToTexture, loadTextureFromBytes, registerImageDecoder } from './textures.ts';
+import {
+  attachBlobUrlToTexture,
+  isRawVideoStreamFormat,
+  loadTextureFromBytes,
+  parseFfmpegProbe,
+  registerImageDecoder,
+} from './textures.ts';
 
 describe('attachBlobUrlToTexture', () => {
   it('records the blob URL on a real texture object', () => {
@@ -49,5 +55,52 @@ describe('registerImageDecoder', () => {
     registerImageDecoder('.otherfmt', decoder);
     await loadTextureFromBytes('Skin/Sheet.png', new Uint8Array([1]));
     expect(decoder).not.toHaveBeenCalled();
+  });
+});
+
+describe('parseFfmpegProbe', () => {
+  it('reads geometry, frame rate, duration and the input format from ffmpeg stderr', () => {
+    const lines = [
+      "Input #0, asf, from 'bga-input.wmv':",
+      '  Duration: 00:02:46.40, start: 0.000000, bitrate: 124 kb/s',
+      '  Stream #0:0: Video: vc1 (Advanced) (WVC1 / 0x31435657), yuv420p, 512x512 [SAR 1:1 DAR 1:1], 60 fps, 60 tbr, 1k tbn',
+    ];
+    expect(parseFfmpegProbe(lines)).toEqual({
+      width: 512,
+      height: 512,
+      frameRate: 60,
+      durationSec: 166.4,
+      inputFormat: 'asf',
+    });
+  });
+
+  it('flags a bare MPEG-1 stream whose header duration is a guess', () => {
+    const lines = [
+      "Input #0, mpegvideo, from 'bga-input.mpg':",
+      '  Duration: 00:00:01.15, bitrate: 104857 kb/s',
+      '  Stream #0:0: Video: mpeg1video, yuv420p(tv, progressive), 512x512 [SAR 1:1 DAR 1:1], 104857 kb/s, 25 fps, 60 tbr, 1200k tbn',
+    ];
+    const probe = parseFfmpegProbe(lines);
+    expect(probe?.inputFormat).toBe('mpegvideo');
+    expect(isRawVideoStreamFormat(probe?.inputFormat)).toBe(true);
+  });
+
+  it('returns nothing without a duration', () => {
+    expect(
+      parseFfmpegProbe([
+        "Input #0, mpegvideo, from 'bga-input.mpg':",
+        '  Duration: N/A, bitrate: N/A',
+        '  Stream #0:0: Video: mpeg2video (Main), yuv420p(tv, progressive), 640x640, 25 fps, 25 tbr, 1200k tbn',
+      ]),
+    ).toBeUndefined();
+  });
+});
+
+describe('isRawVideoStreamFormat', () => {
+  it('is true only for bare elementary streams', () => {
+    for (const format of ['mpegvideo', 'h264', 'hevc', 'm4v', 'vc1']) expect(isRawVideoStreamFormat(format)).toBe(true);
+    for (const format of ['asf', 'avi', 'mpeg', 'mov,mp4,m4a,3gp,3g2,mj2', 'matroska,webm', undefined]) {
+      expect(isRawVideoStreamFormat(format)).toBe(false);
+    }
   });
 });

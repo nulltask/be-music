@@ -424,7 +424,13 @@ async function transcodeViaWebCodecsLocked(
       log.warn(`WebCodecs path could not parse ffmpeg probe; falling back: ${path}`);
       return undefined;
     }
-    const { width, height, frameRate, durationSec } = probe;
+    const { width, height, frameRate, durationSec, inputFormat } = probe;
+    if (isRawVideoStreamFormat(inputFormat)) {
+      log.info(
+        `WebCodecs path skipped for a bare ${inputFormat} stream (no reliable duration / seek); falling back: ${path}`,
+      );
+      return undefined;
+    }
     if (!durationSec || durationSec <= 0) {
       log.warn(`WebCodecs path could not determine duration; falling back: ${path}`);
       return undefined;
@@ -491,9 +497,12 @@ async function transcodeViaWebCodecsLocked(
 
     let frameIndex = 0;
     let chunkCount = 0;
-    for (let chunkStartSec = 0; chunkStartSec < durationSec; chunkStartSec += chunkSeconds) {
-      const remainingSec = durationSec - chunkStartSec;
-      const thisChunkSec = Math.min(chunkSeconds, remainingSec);
+    // The reported duration only sizes the first guess: a container can understate it (a header written before the
+    // encode finished), so chunks keep coming until ffmpeg returns an empty one, capped at twice the reported length
+    // plus a minute so a demuxer that never runs dry can't loop forever.
+    const lastStartSec = durationSec * 2 + 60;
+    for (let chunkStartSec = 0; chunkStartSec < lastStartSec; chunkStartSec += chunkSeconds) {
+      const thisChunkSec = chunkSeconds;
 
       // `-ss BEFORE -i` does input-level seek and is accurate by default in modern ffmpeg (decode-and-discard between
       // the prior keyframe and the seek target). For the first chunk we omit `-ss` entirely — some demuxers re-parse
@@ -504,6 +513,8 @@ async function transcodeViaWebCodecsLocked(
       if (maxLongEdge) chunkArgs.push('-vf', buildScaleFilterArg(maxLongEdge));
       chunkArgs.push('-c:v', 'rawvideo', '-pix_fmt', 'yuv420p', '-f', 'rawvideo', '-an', '-sn', '-dn', chunkName);
       const chunkExit = await ffmpeg.exec(chunkArgs);
+      // Past the reported end, a demuxer may fail the seek rather than return nothing: that is the end too.
+      if (chunkExit !== 0 && chunkStartSec >= durationSec) break;
       if (chunkExit !== 0) {
         log.warn(
           `ffmpeg chunk decode (WebCodecs path) exited with code ${chunkExit} at ${chunkStartSec.toFixed(2)}s for ${path}`,
@@ -608,14 +619,19 @@ async function transcodeViaWebCodecsLocked(
  * Returns `undefined` if any of geometry / frame rate / duration could not be parsed. The WebCodecs path bails out in
  * that case rather than guessing.
  */
-function parseFfmpegProbe(
+export function parseFfmpegProbe(
   lines: ReadonlyArray<string>,
-): { width: number; height: number; frameRate: number; durationSec: number } | undefined {
+): { width: number; height: number; frameRate: number; durationSec: number; inputFormat?: string } | undefined {
   let width: number | undefined;
   let height: number | undefined;
   let frameRate: number | undefined;
   let durationSec: number | undefined;
+  let inputFormat: string | undefined;
   for (const line of lines) {
+    if (inputFormat === undefined) {
+      const input = line.match(/Input #0, ([\w,]+), from/u);
+      if (input) inputFormat = input[1];
+    }
     if (durationSec === undefined) {
       const duration = line.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/u);
       if (duration) {
@@ -642,7 +658,33 @@ function parseFfmpegProbe(
     }
   }
   if (!width || !height || !frameRate || !durationSec) return undefined;
-  return { width, height, frameRate, durationSec };
+  return { width, height, frameRate, durationSec, ...(inputFormat !== undefined ? { inputFormat } : {}) };
+}
+
+/**
+ * ffmpeg's names for bare video elementary streams — a codec's bitstream with no container around it (`.mpg` files
+ * that are just an MPEG-1 sequence, raw H.264 / HEVC / MPEG-4 Part 2 / VC-1). They carry no timestamps or index:
+ * ffmpeg guesses their duration from a bitrate field and their frame rate from heuristics, and a seek lands wherever
+ * the bitrate guess says. A BMS BGA like that can report 1.2 s for a 113 s clip.
+ */
+const RAW_VIDEO_STREAM_FORMATS = new Set([
+  'mpegvideo',
+  'mpeg1video',
+  'mpeg2video',
+  'h264',
+  'hevc',
+  'm4v',
+  'vc1',
+  'cavsvideo',
+]);
+
+/**
+ * Whether ffmpeg read the input as a bare elementary stream (see {@link RAW_VIDEO_STREAM_FORMATS}). The chunked
+ * WebCodecs path depends on the reported duration, frame rate and on seeking, so such inputs take the single-pass
+ * libx264 transcode instead, which decodes every frame in order with the stream's own timing.
+ */
+export function isRawVideoStreamFormat(inputFormat: string | undefined): boolean {
+  return inputFormat !== undefined && inputFormat.split(',').some((name) => RAW_VIDEO_STREAM_FORMATS.has(name));
 }
 
 /**
