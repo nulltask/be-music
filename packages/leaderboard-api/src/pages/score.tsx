@@ -8,6 +8,8 @@ import { Details } from './components/cards.tsx';
 import { EntityIcon } from './components/entity-icon.tsx';
 import { chartHref, LocalTime, playerHref, Tag } from './components/basics.tsx';
 import { loadChartsetOf } from './data.ts';
+import { pickPlayInfoRows } from './components/play-info.tsx';
+import { toPlayInfo } from '../play-info.ts';
 import { avatarUrl } from '../avatars.ts';
 import { cardUrl } from '../cards.ts';
 import { CARD_FONT } from './icons.ts';
@@ -172,6 +174,19 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   }
   const image = cardUrl(detail.score.id, detail.score.cardKey);
   const { hidden } = detail.score;
+  const info = toPlayInfo({
+    scoreId: detail.score.id,
+    createdAt: detail.score.createdAt,
+    playedRuleset: detail.score.playedRuleset,
+    gauge: detail.score.gauge,
+    assistFlags: detail.score.assistFlags,
+    laneOption: detail.score.laneOption,
+    durationMs: detail.score.durationMs,
+    verification: detail.score.verification,
+    recordedBy: detail.score.recordedBy,
+    submittedBy: detail.score.submittedBy,
+    serverEngine: detail.score.serverEngine,
+  });
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);
   // Why the rankings and lists leave a shown play out; the play's own player also reads how to change it.
@@ -240,6 +255,9 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
         title={t.score.details}
         rows={[
           [t.score.played, <LocalTime at={detail.score.createdAt.getTime()} />],
+          // What the lists' info popover shows of a play, here on every screen width, around the rows this page
+          // writes with help tips of its own.
+          ...pickPlayInfoRows(info, t, ['playedUnder']),
           [
             <span class="inline-flex items-center gap-0.5">
               {t.score.gauge}
@@ -249,7 +267,9 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
             </span>,
             detail.score.gauge,
           ],
+          ...pickPlayInfoRows(info, t, ['lanes']),
           [t.score.assists, detail.score.assisted ? detail.score.assistFlags.join(', ') : t.score.none],
+          ...pickPlayInfoRows(info, t, ['length']),
           [
             <span class="inline-flex items-center gap-0.5">
               {t.score.verification}
@@ -259,6 +279,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
             </span>,
             t.playInfo.verification[detail.score.verification] ?? detail.score.verification,
           ],
+          ...pickPlayInfoRows(info, t, ['app', 'sentFrom', 'scoredBy']),
           [
             t.score.chart,
             <a

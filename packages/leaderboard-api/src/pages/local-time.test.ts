@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from 'vite-plus/test';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test';
 import { LOCAL_TIME_SCRIPT } from './local-time.ts';
 
 /** A stand-in for the page's `<time data-local>` elements. */
@@ -7,8 +7,13 @@ function timeElement(iso: string, local: string, utcText: string) {
 }
 
 /** Runs the page script as the browser would, against a fake document. */
-function run(elements: ReturnType<typeof timeElement>[]) {
-  const document = { readyState: 'complete', querySelectorAll: () => elements, addEventListener: () => undefined };
+function run(elements: ReturnType<typeof timeElement>[], lang = 'en') {
+  const document = {
+    readyState: 'complete',
+    documentElement: { lang },
+    querySelectorAll: () => elements,
+    addEventListener: () => undefined,
+  };
   new Function('document', LOCAL_TIME_SCRIPT)(document);
 }
 
@@ -19,6 +24,7 @@ describe('LOCAL_TIME_SCRIPT', () => {
   });
   afterEach(() => {
     process.env.TZ = previousZone;
+    vi.useRealTimers();
   });
 
   test('rewrites UTC times in the viewer’s zone, keeping the UTC text in the title', () => {
@@ -29,6 +35,41 @@ describe('LOCAL_TIME_SCRIPT', () => {
     expect(minute.title).toBe('2026-10-13 15:20 Asia/Tokyo · 2026-10-13 06:20 UTC');
     // Late in the UTC day is already the next day in Tokyo.
     expect(day.textContent).toBe('2026-10-14');
+  });
+
+  test('writes a relative time as how long ago it was, in the page’s language', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-15T12:00:00.000Z'));
+    const at = (iso: string) => timeElement(iso, 'relative', 'utc');
+    const now = at('2026-10-15T11:59:40.000Z');
+    const minutes = at('2026-10-15T11:55:00.000Z');
+    const hours = at('2026-10-15T09:00:00.000Z');
+    const days = at('2026-10-12T12:00:00.000Z');
+    const future = at('2026-10-15T12:00:05.000Z');
+    run([now, minutes, hours, days, future], 'en');
+    expect([now, minutes, hours, days, future].map((element) => element.textContent)).toEqual([
+      'now',
+      '5 minutes ago',
+      '3 hours ago',
+      '3 days ago',
+      // A clock a little ahead of the viewer's still reads as now.
+      'now',
+    ]);
+    const japanese = at('2026-10-12T12:00:00.000Z');
+    run([japanese], 'ja');
+    expect(japanese.textContent).toBe('3 日前');
+    // The title keeps the exact local time.
+    expect(japanese.title).toBe('2026-10-12 21:00 Asia/Tokyo · utc');
+  });
+
+  test('writes the local date once a relative time is 30 days old', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-15T12:00:00.000Z'));
+    const month = timeElement('2026-09-15T11:00:00.000Z', 'relative', 'utc');
+    const almost = timeElement('2026-09-15T12:00:01.000Z', 'relative', 'utc');
+    run([month, almost]);
+    expect(month.textContent).toBe('2026-09-15');
+    expect(almost.textContent).toBe('29 days ago');
   });
 
   test('leaves a time it cannot read as it is', () => {

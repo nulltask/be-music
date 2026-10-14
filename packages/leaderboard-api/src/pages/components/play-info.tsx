@@ -6,11 +6,41 @@ import { LocalTime } from './basics.tsx';
 import { formatPlayTime, formatRecorder, RULESET_LABELS } from '../format.ts';
 import { messagesFor, useMessages, type Messages } from '../i18n/index.ts';
 
+/** The rows {@link playInfoRows} can give, in its order, so a page can take some of them where it wants them. */
+export const PLAY_INFO_ROW_IDS = [
+  'played',
+  'playedUnder',
+  'gauge',
+  'lanes',
+  'assists',
+  'length',
+  'verified',
+  'app',
+  'sentFrom',
+  'scoredBy',
+] as const;
+
+export type PlayInfoRowId = (typeof PLAY_INFO_ROW_IDS)[number];
+
+/** Just the rows `ids` of a play's info, for a page that lays the info out around rows of its own. */
+export function pickPlayInfoRows(info: PlayInfo, t: Messages, ids: readonly PlayInfoRowId[]): Array<[string, Child]> {
+  return playInfoRows(
+    info,
+    t,
+    PLAY_INFO_ROW_IDS.filter((id) => !ids.includes(id)),
+  );
+}
+
 /**
  * Everything a play's info popover lists: how it was played, how far it was verified, and which software recorded,
- * sent and scored it. The app that recorded a play is usually the one that sent it; then it gets one row.
+ * sent and scored it. The app that recorded a play is usually the one that sent it; then it gets one row. The score
+ * page lists the same, leaving out (`omit`) the rows it writes with help tips of its own.
  */
-export function playInfoRows(info: PlayInfo, t: Messages = messagesFor('en')): Array<[string, Child]> {
+export function playInfoRows(
+  info: PlayInfo,
+  t: Messages = messagesFor('en'),
+  omit: readonly PlayInfoRowId[] = [],
+): Array<[string, Child]> {
   const p = t.playInfo;
   const recorded = (value: Record<string, string> | null) => {
     const text = formatRecorder(value);
@@ -22,22 +52,25 @@ export function playInfoRows(info: PlayInfo, t: Messages = messagesFor('en')): A
     info.submittedBy !== null &&
     recorder.name !== undefined &&
     info.submittedBy.startsWith(`${recorder.name}/${recorder.version ?? ''}`);
-  const rows: Array<[string, Child | undefined]> = [
-    [p.played, <LocalTime at={info.createdAt} />],
-    [p.playedUnder, t.rules.name(RULESET_LABELS[info.playedRuleset] ?? info.playedRuleset)],
-    [p.gauge, info.gauge],
-    [p.lanes, info.laneOption !== null && info.laneOption !== '-' ? info.laneOption : undefined],
-    [p.assists, info.assistFlags.length > 0 ? info.assistFlags.join(', ') : p.none],
+  const rows: Array<[PlayInfoRowId, string, Child | undefined]> = [
+    ['played', p.played, <LocalTime at={info.createdAt} />],
+    ['playedUnder', p.playedUnder, t.rules.name(RULESET_LABELS[info.playedRuleset] ?? info.playedRuleset)],
+    ['gauge', p.gauge, info.gauge],
+    ['lanes', p.lanes, info.laneOption !== null && info.laneOption !== '-' ? info.laneOption : undefined],
+    ['assists', p.assists, info.assistFlags.length > 0 ? info.assistFlags.join(', ') : p.none],
     [
+      'length',
       p.length,
       info.durationMs !== null && info.durationMs > 0 ? formatPlayTime(info.durationMs, t.duration) : undefined,
     ],
-    [p.verified, p.verification[info.verification] ?? info.verification],
-    sentByRecorder ? [p.app, recorded(recorder)] : [p.recordedWith, recorded(recorder)],
-    [p.sentFrom, sentByRecorder ? undefined : (info.submittedBy ?? p.unknown)],
-    [p.scoredBy, p.engine(info.serverEngine)],
+    ['verified', p.verified, p.verification[info.verification] ?? info.verification],
+    ['app', sentByRecorder ? p.app : p.recordedWith, recorded(recorder)],
+    ['sentFrom', p.sentFrom, sentByRecorder ? undefined : (info.submittedBy ?? p.unknown)],
+    ['scoredBy', p.scoredBy, p.engine(info.serverEngine)],
   ];
-  return rows.filter((row): row is [string, Child] => row[1] !== undefined);
+  return rows
+    .filter(([id, , value]) => value !== undefined && !omit.includes(id))
+    .map(([, label, value]) => [label, value as Child]);
 }
 
 /**
@@ -104,5 +137,5 @@ export function InfoButton(props: { info: PlayInfo | undefined }) {
 
 /** When a play happened, compact (`2026-10-13 15:20`, in the viewer's time; UTC on hover). */
 export function When(props: { at: number }) {
-  return <LocalTime at={props.at} compact />;
+  return <LocalTime at={props.at} precision="relative" compact />;
 }

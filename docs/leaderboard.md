@@ -74,13 +74,17 @@ player-tui (CLI) ─────┼─ HTTPS ─→ be-music-player-demo Worker 
 ### 2.2 Plan limits
 
 The Leaderboard starts on the **Workers Free plan** and moves to Paid when it has to. Free allows 10 ms of CPU per
-request and a 3 MB compressed Worker. This shapes two decisions:
+invocation. Bundle size no longer constrains it: since 2026-09-04 every plan allows a 64 MiB Worker, measured
+uncompressed, with no compressed limit (Free used to allow 3 MB compressed). Queues are on the Free plan too (10,000
+operations a day, 24-hour retention), but a consumer shares the same per-invocation CPU limit, so deferring work to a
+queue does not give it more CPU on Free. The CPU limit shapes two decisions:
 
 - **Re-simulation** (gunzip, `parsePlaylog`, three `simulatePlaylog` runs) may exceed 10 ms on dense charts. It must be
   measured against the regression corpus before the API is built (section 15). The verification step is written so it
   can run inline or deferred, so the move to Paid changes configuration, not code.
-- **OG images are drawn in the browser** (section 11), because server-side rendering (satori + resvg and a Japanese
-  font) does not fit either limit.
+- **OG images are drawn in the browser** (section 11), because server-side rendering (satori + resvg) takes far more
+  than 10 ms of CPU, whether in the request or in a queue consumer. The bundle (resvg's wasm and a Japanese font) would
+  now fit; on Paid, a queue consumer could render the cards on submission.
 
 ## 3. Authentication and accounts
 
