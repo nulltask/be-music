@@ -127,6 +127,9 @@ The original BM98-era core BMS specifications do not define landmine damage as p
 - [x] Handle BGA images assuming a 256x256 canvas
 - [x] Do not normally scale BGA images
 - [x] Images smaller than 256x256 aligned on the center of the X axis / top aligned on the Y axis
+- [x] Images larger than 256x256 (long edge over 256) and videos are stretched over the BGA frame, as in LR2 and beatoraja
+- [x] The base / POOR canvas around a smaller image is black (a 1x1 black `#BMPxx` blanks the BGA); the layer canvas is transparent
+- [x] `#BGAxx` crops are placed at their `dx dy` on the 256x256 canvas (browser player)
 - [x] Undefined in `04` / `07` / `0A` Treated as 256x256 black when referencing `#BMPxx`
 - [x] Play BGA video by drawing (`mpeg1video` / `h264` / `mjpeg`, ignore audio)
 - [x] Preserve control construct `#RANDOM` and evaluate at runtime
@@ -316,7 +319,6 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
 - [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
 - [ ] Acceptance rules for Bemuse extension line `#EXT #xxxyy:...` (differences from normal objects)
-- [ ] 256x256 Oversize BGA drawing policy (cropping, reduction, placement)
 - [ ] Whether to apply `#ARGBxx` / `#BGAxx` parameters to video BGA
 - [ ] `#BASEBPM` core time-resolution reflection policy. Browser HS-FIX uses it as a visual reference BPM, but internal chart timing still follows BPM events.
 - [ ] player: `#PLAYER` When not specified, the default value `1` is reflected on the song selection screen, TUI, and result display.

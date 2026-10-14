@@ -8,6 +8,7 @@ import {
   isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
+  resolveBgaImageRect,
   toBrowserBgaTimeline,
 } from './gameplay-bga.ts';
 
@@ -185,5 +186,39 @@ describe('toBrowserBgaTimeline', () => {
       ],
       poor: [{ seconds: 4, bmpKey: 'CC' }],
     });
+  });
+});
+
+describe('resolveBgaImageRect', () => {
+  const rect = { x: 100, y: 50, w: 512, h: 512 };
+
+  it('fills the rect with a 256x256 image', () => {
+    expect(resolveBgaImageRect(256, 256, rect)).toEqual(rect);
+  });
+
+  it('keeps a short image at its pixel size, top-aligned', () => {
+    expect(resolveBgaImageRect(256, 161, rect)).toEqual({ x: 100, y: 50, w: 512, h: 322 });
+  });
+
+  it('centers a narrow image horizontally, flooring the canvas offset', () => {
+    // (256 - 117) / 2 = 69.5 → 69 canvas px, ×2 for the 512 px rect.
+    expect(resolveBgaImageRect(117, 130, rect)).toEqual({ x: 238, y: 50, w: 234, h: 260 });
+  });
+
+  it('scales the canvas to a non-square rect', () => {
+    expect(resolveBgaImageRect(128, 128, { x: 0, y: 0, w: 256, h: 128 })).toEqual({ x: 64, y: 0, w: 128, h: 64 });
+  });
+
+  it('stretches an image whose long edge exceeds the canvas over the rect', () => {
+    expect(resolveBgaImageRect(512, 384, rect)).toEqual(rect);
+    expect(resolveBgaImageRect(300, 100, rect)).toEqual(rect);
+  });
+
+  it('places a sub-region at its authored origin instead of centering it', () => {
+    expect(resolveBgaImageRect(64, 32, rect, { x: 10, y: 20 })).toEqual({ x: 120, y: 90, w: 128, h: 64 });
+  });
+
+  it('falls back to the rect for an empty image', () => {
+    expect(resolveBgaImageRect(0, 0, rect)).toEqual(rect);
   });
 });

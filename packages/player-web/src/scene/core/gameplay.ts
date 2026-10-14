@@ -141,6 +141,7 @@ import {
   isVideoExtension,
   pickActiveBgaCue,
   pickActiveBgaKey,
+  resolveBgaImageRect,
   toBrowserBgaTimeline,
   type BgaCue,
 } from './gameplay-bga.ts';
@@ -1014,6 +1015,8 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
    * takes over.
    */
   private switchingBgas = new Map<string, BmsSwitchingBga>();
+  /** `#BGAxx` sub-region slot → its authored `dx dy` on the 256x256 BGA canvas. */
+  private readonly bgaSubRegionOrigins = new Map<string, { x: number; y: number }>();
   /**
    * bmson per-event slice playback map. For bmson charts the audio-renderer's `createBmsonSamplePlaybackMap`
    * precomputes which portion of each `sound_channels[]` WAV a given note is supposed to play — `offsetSeconds` is the
@@ -2189,6 +2192,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     this.keyOnFadeOutStart.clear();
     this.wavCmdVolumeMultipliers.clear();
     this.switchingBgas.clear();
+    this.bgaSubRegionOrigins.clear();
     this.gaugeHistory.length = 0;
     this.scoreHistory.length = 0;
     this.notes = [];
@@ -2869,6 +2873,7 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
       // as a cheap view, no extra GPU upload. Keeping `frame` in pixel coordinates that match the source image size
       // guarantees the crop the chart author intended.
       const frame = new Rectangle(parsed.sx, parsed.sy, frameWidth, frameHeight);
+      this.bgaSubRegionOrigins.set(normalizedBgaSlot, { x: parsed.dx, y: parsed.dy });
       if (sourceBase && !this.bgaTextures.has(normalizedBgaSlot)) {
         this.bgaTextures.set(normalizedBgaSlot, new Texture({ source: sourceBase.source, frame }));
       }
@@ -3989,27 +3994,46 @@ export class CoreGameplayView<TOptions extends CoreGameplayViewOptions = CoreGam
     }
 
     for (const bga of visibleBgas) {
-      const { x, y, w, h } = bga;
-      if (w <= 0 || h <= 0) continue;
+      if (bga.w <= 0 || bga.h <= 0) continue;
       const drawLayer = (
         key: string | undefined,
         textures: ReadonlyMap<string, Texture>,
-        layerName: string,
+        layerName: 'base' | 'layer' | 'poor',
         cueSeconds: number | undefined,
       ): void => {
         if (!key) return;
         const resolvedKey = this.resolveBgaFrameKey(key, cueSeconds, seconds);
         const texture = textures.get(resolvedKey);
         if (!texture) return;
-        // Stretch the BGA texture to fill this rect exactly. The previous version routed through a BMS 256×256 spec
-        // canvas which left non-256 sources covering only part of the DST and produced visible "letterbox" gaps. LR2
-        // stretches straight to the skin rect, matching here.
+        // The rect stands for the 256x256 BMS canvas: an image that fits it keeps its pixel size there, centered
+        // horizontally and top-aligned (a 256x161 frame leaves a band at the bottom), while a larger image or a
+        // video fills the rect, as LR2 and beatoraja do.
+        const placed = this.bgaVideos.has(resolvedKey)
+          ? bga
+          : resolveBgaImageRect(
+              texture.frame.width,
+              texture.frame.height,
+              bga,
+              this.bgaSubRegionOrigins.get(resolvedKey),
+            );
+        if (layerName !== 'layer' && (placed.w < bga.w || placed.h < bga.h)) {
+          // The base canvas around a small image is black (a 1x1 black BMP blanks the BGA in LR2 and beatoraja), so
+          // fill the rect before drawing the image; the layer track's canvas stays transparent.
+          const backdrop = this.bgaLayerPool.acquireSprite();
+          backdrop.texture = Texture.WHITE;
+          backdrop.label = `bga/${layerName}/canvas`;
+          backdrop.position.set(bga.x, bga.y);
+          backdrop.width = bga.w;
+          backdrop.height = bga.h;
+          bga.applyToSprite(backdrop);
+          backdrop.tint = 0x000000;
+        }
         const sprite = this.bgaLayerPool.acquireSprite();
         sprite.texture = texture;
         sprite.label = `bga/${layerName}[key=${resolvedKey}]`;
-        sprite.position.set(x, y);
-        sprite.width = w;
-        sprite.height = h;
+        sprite.position.set(placed.x, placed.y);
+        sprite.width = placed.w;
+        sprite.height = placed.h;
         bga.applyToSprite(sprite);
         // BMS spec — `#ARGBxx AARRGGBB` (and the ARGB tuple embedded in `#EXBMPxx a,r,g,b,filename`) declare the BMP
         // slot's alpha + RGB tint for layer composition. Apply the parsed values via Pixi's per-sprite `tint` (RGB
