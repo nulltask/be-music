@@ -2,7 +2,8 @@ import { and, asc, count, desc, eq, gt, type SQL } from 'drizzle-orm';
 import type { PlaylogRulesetId } from '@be-music/player/playlog';
 import { avatarUrl } from './avatars.ts';
 import type { Database } from './db/client.ts';
-import { bestScore, profile, user } from './db/schema.ts';
+import { bestScore, profile, score, user } from './db/schema.ts';
+import { PLAY_INFO_COLUMNS, toPlayInfo, type PlayInfo } from './play-info.ts';
 
 export interface RankingFilter {
   chartFingerprint: string;
@@ -51,11 +52,14 @@ export async function loadRanking(
   db: Database,
   filter: RankingFilter,
   page: { offset: number; limit: number },
-): Promise<{ entries: RankingEntry[]; players: number }> {
+  options: { playInfo?: boolean } = {},
+): Promise<{ entries: RankingEntry[]; players: number; infos?: Map<string, PlayInfo> }> {
   const conditions = filterConditions(filter);
-  // The page and the player count are independent: one round trip to D1 for both.
+  // The page and the player count are independent: one round trip to D1 for both. Each row's play (the one that set the
+  // best EX-Score, by primary key) comes along, so `playInfo` callers need no second round trip after it.
   const rowsQuery = db
     .select({
+      info: PLAY_INFO_COLUMNS,
       handle: profile.handle,
       displayName: profile.displayName,
       anonymous: user.isAnonymous,
@@ -71,6 +75,7 @@ export async function loadRanking(
     .from(bestScore)
     .innerJoin(user, eq(user.id, bestScore.userId))
     .innerJoin(profile, eq(profile.userId, bestScore.userId))
+    .leftJoin(score, eq(score.id, bestScore.bestExScoreId))
     .where(and(...conditions))
     .orderBy(desc(bestScore.bestEx), asc(bestScore.bestExAt), asc(profile.handle))
     .limit(page.limit)
@@ -79,6 +84,7 @@ export async function loadRanking(
 
   // Rank the page from its first entry, then by position within the page (ties share the rank).
   const entries: RankingEntry[] = [];
+  const infos = options.playInfo === true ? new Map<string, PlayInfo>() : undefined;
   let previous: { exScore: number; rank: number } | undefined;
   for (const [index, row] of rows.entries()) {
     const rank =
@@ -91,7 +97,10 @@ export async function loadRanking(
             : await rankOfExScore(db, filter, row.exScore)
           : page.offset + index + 1;
     previous = { exScore: row.exScore, rank };
-    const { avatarKey, ...rest } = row;
+    const { avatarKey, info, ...rest } = row;
+    if (infos !== undefined && info !== null) {
+      infos.set(info.scoreId, toPlayInfo(info));
+    }
     entries.push({
       ...rest,
       anonymous: row.anonymous === true,
@@ -100,7 +109,7 @@ export async function loadRanking(
       rank,
     });
   }
-  return { entries, players };
+  return infos === undefined ? { entries, players } : { entries, players, infos };
 }
 
 /** Competition rank of a best EX score: one more than the number of players strictly above it. */
