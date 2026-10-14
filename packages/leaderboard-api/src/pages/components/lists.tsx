@@ -34,8 +34,8 @@ import { useMessages, type Messages } from '../i18n/index.ts';
 
 /**
  * A detail only a wide row shows. A narrow row keeps its details line to what tells the plays apart (who, the lamp, the
- * misses, the place, when); the rest (the rules it was played under, the gauge, the lane option) is in the play's info
- * popover anyway.
+ * misses, the place, when); the rest (the rules it was played under, the gauge, the lane option) is on the play's page,
+ * which a tap on the row opens.
  */
 interface WideOnly {
   wideOnly: Child;
@@ -61,8 +61,8 @@ const DETAIL =
   "items-center gap-1 after:ms-1 after:text-muted-foreground/60 @xl:[&:not(:last-child)]:after:content-['·']";
 
 /**
- * One row: a fixed start column, the main text (title over details), the score, and, for a play, its info icon in a
- * column of its own at the end, so the icons line up down the list whatever the details say.
+ * One row: a fixed start column, the main text (title over details), the score, and, for a play in a wide list, its
+ * info icon in a column of its own at the end, so the icons line up down the list whatever the details say.
  *
  * In a wide list the score and the icon stand beside both lines. In a narrow one (under `@xl`, 36rem) the row reads in
  * three steps: the title beside the score, the `subtitle` (who played it) beside the DJ LEVEL and rate, and the details,
@@ -86,7 +86,7 @@ function Row(props: {
   const hasSubtitle = props.subtitle !== undefined;
   return (
     <li
-      class={`hover:bg-muted/50 relative grid items-center gap-x-3 gap-y-1 py-3 ps-4 ${hasInfo ? 'grid-cols-[auto_minmax(0,1fr)_auto_2rem] pe-2' : 'grid-cols-[auto_minmax(0,1fr)_auto] pe-4'} ${props.current ? 'bg-muted/60' : ''}`}
+      class={`hover:bg-muted/50 relative grid items-center gap-x-3 gap-y-1 py-3 ps-4 grid-cols-[auto_minmax(0,1fr)_auto] pe-4 ${hasInfo ? '@xl:grid-cols-[auto_minmax(0,1fr)_auto_2rem] @xl:pe-2' : ''} ${props.current ? 'bg-muted/60' : ''}`}
     >
       <RowLink href={props.href} label={props.label} />
       <div class={hasSubtitle ? 'row-span-3 @xl:row-span-2' : 'row-span-2'}>{props.start}</div>
@@ -119,7 +119,8 @@ function Row(props: {
       </div>
       <div class={`col-start-3 row-start-1 ${hasSubtitle ? 'row-span-2' : '@xl:row-span-2'}`}>{props.end}</div>
       {hasInfo ? (
-        <span class="col-start-4 row-start-1 flex justify-center @xl:row-span-2">
+        // Only a wide row has the info icon: on a phone a tap opens the play, whose page lists the same info.
+        <span class="col-start-4 row-start-1 hidden justify-center @xl:row-span-2 @xl:flex">
           <InfoButton info={props.play?.info} />
         </span>
       ) : null}
