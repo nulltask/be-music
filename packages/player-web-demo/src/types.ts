@@ -60,6 +60,11 @@ export interface DemoGuiState {
   builtInSkin: string;
   /** Showmanship level for the built-in skins. Persisted in `localStorage`. */
   skinEffects: 'full' | 'reduced' | 'off';
+  /**
+   * Render resolution (canvas pixels per CSS pixel), one of 1× up to the display's `devicePixelRatio` in 0.5 steps;
+   * 1.5× until picked. Persisted in `localStorage`.
+   */
+  renderResolution: number;
   /** Gameplay layout pick: `'auto'` follows the device (touch layout on phones / tablets). Persisted in `localStorage`. */
   playLayout: 'auto' | 'standard' | 'touch';
   /**
