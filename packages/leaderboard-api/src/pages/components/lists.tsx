@@ -21,8 +21,6 @@ import {
   formatScoreRate,
   lampStyle,
   RULESET_LABELS,
-  RULESET_MEANING,
-  rulesetName,
   showsGauge,
 } from '../format.ts';
 import { ABOVE, Avatar, chartHref, Empty, LINK, playerHref, RowLink, scoreHref, Tag } from './basics.tsx';
@@ -304,20 +302,20 @@ export function RecentScoresList(props: {
   );
 }
 
-const PACK_TYPE_LABELS = {
-  included: { label: 'original', meaning: 'Came in the work’s own package.' },
-  additional: { label: 'add-on', meaning: 'An add-on chart (差分), distributed separately from the work.' },
-} as const;
-
 /** The charts of a chartset; a row opens the chart. */
 export function ChartsetChartsList(props: { charts: ChartsetChart[] }) {
+  const t = useMessages();
   if (props.charts.length === 0) {
-    return <Empty title="No charts yet">No chart of this work has been played here.</Empty>;
+    return <Empty title={t.chartset.empty}>{t.chartset.emptyLead}</Empty>;
   }
+  const packs = {
+    included: { label: t.chartset.original, meaning: t.chartset.originalMeaning },
+    additional: { label: t.chartset.addOn, meaning: t.chartset.addOnMeaning },
+  };
   return (
-    <List label="Charts">
+    <List label={t.chartset.listLabel}>
       {props.charts.map((entry) => {
-        const pack = entry.packType === null ? undefined : PACK_TYPE_LABELS[entry.packType];
+        const pack = entry.packType === null ? undefined : packs[entry.packType];
         const title = chartTitle(entry.title, entry.chartFingerprint);
         return (
           <Row
@@ -337,13 +335,13 @@ export function ChartsetChartsList(props: { charts: ChartsetChart[] }) {
             }
             details={[
               entry.artist !== null && entry.artist.length > 0 ? <>{entry.artist}</> : null,
-              <span class="tabular-nums">{entry.noteCount} notes</span>,
+              <span class="tabular-nums">{t.count.notes(entry.noteCount)}</span>,
               pack !== undefined ? <span title={pack.meaning}>{pack.label}</span> : null,
             ]}
             end={
               <div class="text-end tabular-nums">
                 <div class="font-semibold">{entry.players}</div>
-                <div class="text-muted-foreground text-xs">player{entry.players === 1 ? '' : 's'}</div>
+                <div class="text-muted-foreground text-xs">{t.chartset.players(entry.players)}</div>
               </div>
             }
           />
@@ -379,15 +377,16 @@ export function ResultCards(props: {
   /** The viewer's display ruleset (the header's ruleset menu), marked as selected. */
   displayRuleset: string;
 }) {
+  const t = useMessages();
+  const name = (ruleset: string) => t.rules.name(RULESET_LABELS[ruleset] ?? ruleset);
   const results = [...props.results].sort(byRulesetOrder);
   return (
     <section class="space-y-2" aria-labelledby="scored-with">
       <h2 id="scored-with" class="text-muted-foreground text-sm">
         <span class="inline-flex items-center gap-0.5">
-          <abbr title={RULESET_MEANING}>Scored with</abbr> each set of rules
-          <HelpTip topic="rules" label="the rule sets">
-            Every play is scored under LR2, beatoraja and IIDX rules. “selected” is the one the pages show; “played
-            with” is the one the player played under.
+          <abbr title={t.rules.meaning}>{t.score.scoredWith}</abbr> {t.score.eachSet}
+          <HelpTip topic="rules" label={t.score.rulesLabel}>
+            {t.score.rulesHelp}
           </HelpTip>
         </span>
       </h2>
@@ -397,14 +396,14 @@ export function ResultCards(props: {
           return (
             <section
               class={`card gap-3 px-4 py-4 ${shown ? 'ring-primary ring-2' : ''}`}
-              aria-label={rulesetName(result.ruleset)}
+              aria-label={name(result.ruleset)}
               data-state={shown ? 'selected' : undefined}
             >
               {/* A div, not a header: Basecoat pads a card's header, which would shift it off the card's edge. */}
               <div class="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                {rulesetName(result.ruleset)}
-                {shown ? <Tag>selected</Tag> : null}
-                {result.ruleset === props.playedRuleset ? <Tag>played with</Tag> : null}
+                {name(result.ruleset)}
+                {shown ? <Tag>{t.score.selected}</Tag> : null}
+                {result.ruleset === props.playedRuleset ? <Tag>{t.score.playedWith}</Tag> : null}
               </div>
               <div class="flex items-end justify-between gap-3">
                 <LampLabel lamp={result.clearLamp} />
@@ -428,11 +427,11 @@ export function ResultCards(props: {
                   <dd class="text-foreground">{result.missCount}</dd>
                 </div>
                 <div class="flex justify-between gap-2">
-                  <dt>Combo</dt>
+                  <dt>{t.score.combo}</dt>
                   <dd class="text-foreground">{result.maxCombo}</dd>
                 </div>
                 <div class="col-span-3 flex justify-between gap-2">
-                  <dt>Gauge</dt>
+                  <dt>{t.score.gauge}</dt>
                   <dd class="text-foreground">{formatGauge(result.gaugeType, result.gaugeFinal)}</dd>
                 </div>
               </dl>

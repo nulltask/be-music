@@ -12,18 +12,20 @@ import { avatarUrl } from '../avatars.ts';
 import { cardUrl } from '../cards.ts';
 import { CARD_FONT } from './icons.ts';
 import type { ScoreDetail } from '../scores/detail.ts';
-import {
-  chartTitle,
-  djLevel,
-  formatGauge,
-  formatScoreRate,
-  lampStyle,
-  rulesetName,
-  verificationMeaning,
-} from './format.ts';
+import { chartTitle, djLevel, formatGauge, formatScoreRate, lampStyle, rulesetName } from './format.ts';
 import { shareText, xIntentUrl, type ScoreCardData } from './score-card-data.ts';
 import { Layout, PageHeader } from './layout.tsx';
-import { displayRuleset, meta, notFound, PAGE_CACHE, withArtist, type PageContext, chartsetCrumbs } from './page.tsx';
+import { useMessages } from './i18n/index.ts';
+import {
+  displayRuleset,
+  meta,
+  notFound,
+  PAGE_CACHE,
+  pageMessages,
+  withArtist,
+  type PageContext,
+  chartsetCrumbs,
+} from './page.tsx';
 
 /** The share card's content: the play under the ruleset it was played with. */
 function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][number], title: string): ScoreCardData {
@@ -61,16 +63,13 @@ function scoreCardData(detail: ScoreDetail, played: ScoreDetail['results'][numbe
  * copy-link button. For the play's own player, the client script draws the card and uploads it when there is none yet.
  */
 function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string; upload?: string; hasCard: boolean }) {
+  const t = useMessages().score;
   const text = shareText(props.data);
   return (
     <section class="card gap-4" data-size="sm" data-share>
       <header>
-        <h2>Share</h2>
-        <p>
-          {props.upload !== undefined && !props.hasCard
-            ? 'Your share card is being drawn; links to this page show it.'
-            : 'Links to this page show this card.'}
-        </p>
+        <h2>{t.share}</h2>
+        <p>{props.upload !== undefined && !props.hasCard ? t.shareDrawing : t.shareShown}</p>
       </header>
       <div class="space-y-4 px-4">
         <img
@@ -83,13 +82,13 @@ function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string;
         />
         <div class="flex flex-wrap gap-2">
           <a class="btn" href={xIntentUrl(text, props.pageUrl)} target="_blank" rel="noopener" data-share-x>
-            Post on X
+            {t.postOnX}
           </a>
           <button type="button" class="btn" data-variant="outline" data-share-native hidden>
-            Share…
+            {t.shareNative}
           </button>
           <button type="button" class="btn" data-variant="outline" data-share-copy>
-            Copy link
+            {t.copyLink}
           </button>
         </div>
         <p class="text-muted-foreground text-sm" data-share-status role="status" hidden />
@@ -112,7 +111,7 @@ function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string;
 export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   const db = openDatabase(c.env.DB);
   const detail = await loadScoreDetail(db, c.req.param('id'));
-  if (detail === undefined || detail.player === null) return notFound(c, 'This score');
+  if (detail === undefined || detail.player === null) return notFound(c, 'score');
   const { player } = detail;
   const filed = await loadChartsetOf(db, detail.chart.chartsetId);
   const title = chartTitle(detail.chart.title, detail.chart.chartFingerprint);
@@ -126,11 +125,12 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   const viewer = c.get('viewer');
   const isOwner = viewer !== null && viewer.handle === player.handle;
   c.header('cache-control', PAGE_CACHE);
+  const t = pageMessages(c);
   const pageMeta = {
     ...meta(c, `${title} — ${player.displayName}`, description, [
       ...chartsetCrumbs(filed),
       { label: title, href: chartHref(detail.chart.chartFingerprint), kind: 'chart' as const },
-      { label: `${player.displayName}’s play`, kind: 'score' as const },
+      { label: t.score.crumb(player.displayName), kind: 'score' as const },
     ]),
     image: { path: image, alt: card !== undefined ? shareText(card) : description },
   };
@@ -144,11 +144,12 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
           </a>
         }
       >
-        {withArtist(detail.chart.artist)}played by
+        {withArtist(detail.chart.artist)}
+        {t.score.playedBy}
         <a class="text-foreground font-medium underline-offset-4 hover:underline" href={playerHref(player.handle)}>
           {player.displayName}
         </a>
-        {player.anonymous ? <Tag>anonymous</Tag> : null}
+        {player.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
       </PageHeader>
       <ResultCards
         results={detail.results}
@@ -156,30 +157,30 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
         displayRuleset={displayRuleset(c)}
       />
       <Details
-        title="Play"
+        title={t.score.details}
         rows={[
-          ['Played', <LocalTime at={detail.score.createdAt.getTime()} />],
+          [t.score.played, <LocalTime at={detail.score.createdAt.getTime()} />],
           [
             <span class="inline-flex items-center gap-0.5">
-              Gauge
-              <HelpTip topic="gauges" label="Gauge">
-                The gauge the player chose, as each ruleset names it.
+              {t.score.gauge}
+              <HelpTip topic="gauges" label={t.score.gauge}>
+                {t.score.gaugeHelp}
               </HelpTip>
             </span>,
             detail.score.gauge,
           ],
-          ['Assists', detail.score.assisted ? detail.score.assistFlags.join(', ') : 'none'],
+          [t.score.assists, detail.score.assisted ? detail.score.assistFlags.join(', ') : t.score.none],
           [
             <span class="inline-flex items-center gap-0.5">
-              Verification
-              <HelpTip topic="verification" label="Verification">
-                How far the chart in the play log was checked. Every play is recounted from its inputs either way.
+              {t.score.verification}
+              <HelpTip topic="verification" label={t.score.verification}>
+                {t.score.verificationHelp}
               </HelpTip>
             </span>,
-            verificationMeaning(detail.score.verification),
+            t.playInfo.verification[detail.score.verification] ?? detail.score.verification,
           ],
           [
-            'Chart',
+            t.score.chart,
             <a
               class="inline-flex items-center gap-1 underline-offset-4 hover:underline"
               href={chartHref(detail.chart.chartFingerprint)}
@@ -188,20 +189,20 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
               {title}
             </a>,
           ],
-          ['Fingerprint', <span class="font-mono text-xs break-all">{detail.chart.chartFingerprint}</span>],
+          [t.score.fingerprint, <span class="font-mono text-xs break-all">{detail.chart.chartFingerprint}</span>],
           ...(detail.score.replayVisibility === 'public'
             ? ([
                 [
-                  'Replay',
+                  t.score.replay,
                   <a
                     class="underline-offset-4 hover:underline"
                     href={`/api/v0/scores/${encodeURIComponent(detail.score.id)}/playlog`}
                     download
                   >
-                    Download play log
+                    {t.score.downloadPlayLog}
                   </a>,
                 ],
-              ] as Array<[string, Child]>)
+              ] as Array<[Child, Child]>)
             : []),
         ]}
       />

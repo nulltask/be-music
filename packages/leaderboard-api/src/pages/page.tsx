@@ -88,10 +88,12 @@ export function displayRuleset(c: Context) {
   return resolveDisplayRuleset(getCookie(c, RULESET_COOKIE));
 }
 
-export function notFound(c: Context<AppEnv>, what: string) {
+export function notFound(c: Context<AppEnv>, kind: 'chart' | 'chartset' | 'player' | 'score' | 'page') {
+  const t = pageMessages(c).notFound;
+  const what = t[kind];
   return c.html(
-    <Layout meta={meta(c, 'Not found', `${what} not found.`, [{ label: 'Not found' }])}>
-      <PageHeader title="Not found">{what} does not exist, or it was removed.</PageHeader>
+    <Layout meta={meta(c, t.title, t.description(what), [{ label: t.title }])}>
+      <PageHeader title={t.title}>{t.lead(what)}</PageHeader>
     </Layout>,
     404,
   );

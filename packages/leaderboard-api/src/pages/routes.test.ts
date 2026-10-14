@@ -82,6 +82,23 @@ describe('page language', () => {
     expect(unknown.headers.get('location')).toBe('/leaderboard');
     expect(unknown.headers.get('set-cookie')).toBeNull();
   });
+
+  test('every page without data reads in Japanese, the About and Help prose included', async () => {
+    const ja = { 'accept-language': 'ja' };
+    const about = await html('/leaderboard/about', ja);
+    expect(about).toContain('<title>このサイトについて');
+    expect(about).toContain('プレイの採点');
+    expect(about).toContain('href="#replays"');
+    expect(about).toContain('id="replays"');
+    const help = await html('/leaderboard/help', ja);
+    expect(help).toContain('>プレイの見方<');
+    expect(help).toContain('クリアできなかった。');
+    expect(help).toContain('id="lamps"');
+    expect(await html('/leaderboard/settings', ja)).toContain('パスキーでサインイン');
+    const missing = await fetchApp('/leaderboard/players/nobody-here', { headers: ja });
+    expect(missing.status).toBe(404);
+    expect(await missing.text()).toContain('このプレイヤーは存在しないか、削除されました。');
+  });
 });
 
 describe('about and help pages', () => {
@@ -285,6 +302,15 @@ describe('Leaderboard pages', () => {
     expect(player.html).toContain('>EX HARD CLEAR<');
     expect(player.html).toContain('>DJ Ranks<');
     expect(player.html).toContain('>Played under<');
+
+    // In Japanese, the player and score pages too.
+    const playerJa = await page(`/leaderboard/players/${firstHandle}`, 'lb-lang=ja');
+    expect(playerJa.html).toContain('>平均レート<');
+    expect(playerJa.html).toContain('>判定<');
+    expect(playerJa.html).toContain('>最新のプレイ<');
+    const scoreJa = await page(`/leaderboard/scores/${firstScore}`, 'lb-lang=ja');
+    expect(scoreJa.html).toContain('>選択中</span>');
+    expect(scoreJa.html).toContain('>リンクをコピー<');
   });
 
   test('the display ruleset is one setting for every page, switched without changing page URLs', async () => {

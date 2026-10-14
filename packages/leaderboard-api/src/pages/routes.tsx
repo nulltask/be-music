@@ -95,5 +95,5 @@ export function mountPages(app: Hono<AppEnv>): void {
     }),
   );
 
-  app.get('/leaderboard/*', (c) => notFound(c, 'This page'));
+  app.get('/leaderboard/*', (c) => notFound(c, 'page'));
 }
