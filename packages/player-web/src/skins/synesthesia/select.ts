@@ -141,6 +141,29 @@ function labelStyle(fill: number = SYN_DIM): SkinTextOptions {
   return { size: 9, fill, fontFamily: SYN_DISPLAY_FONT, letterSpacing: 2 };
 }
 
+/**
+ * `JUDGE <rank>` (the chart's #RANK / #DEFEXRANK), right-aligned at `right` and centred on `centerY`. Returns the left
+ * edge it takes, so the text before it on the line can stop short of it.
+ */
+function drawJudgeRank(
+  addText: (text: string, x: number, y: number, options?: SkinTextOptions) => Container,
+  song: BrowserSongEntry | undefined,
+  right: number,
+  centerY: number,
+): number {
+  const value = addText(song ? resolveSongStats(song).judgeRank : '-', right, centerY, {
+    size: 11,
+    fill: SYN_WHITE,
+    fontFamily: SYN_DISPLAY_FONT,
+    anchorX: 1,
+    anchorY: 0.5,
+    dropShadow: { color: SYN_WHITE, distance: 0, blur: 6, alpha: 0.4 },
+  });
+  const labelRight = right - value.width - 8;
+  const label = addText('JUDGE', labelRight, centerY, { ...labelStyle(), anchorX: 1, anchorY: 0.5 });
+  return labelRight - label.width;
+}
+
 function framePanel(graphics: Graphics, x: number, y: number, w: number, h: number, rim: number): void {
   graphics.rect(x, y, w, h).fill({ color: SYN_GLASS, alpha: 0.5 });
   graphics.rect(x, y, w, h).stroke({ color: rim, width: 1, alpha: 0.28 });
@@ -628,13 +651,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
         alpha: 1 - slide,
       });
     }
+    // The judge rank (#RANK / #DEFEXRANK) above the LEVEL chip, flush with its right edge, on the artist line.
+    const judgeLeft = drawJudgeRank(addText, song, 288, 121);
     if (songArtist) {
       addText(songArtist, 30 + slide * 40, 114, {
         size: 10,
         weight: '300',
         fill: SYN_MIST,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: 258,
+        maxWidth: Math.max(40, judgeLeft - 12 - (30 + slide * 40)),
         alpha: 1 - slide,
       });
     }
@@ -683,16 +708,6 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       });
     }
     addText(position, 288, 268, { size: 9, fill: SYN_MIST, fontFamily: SYN_DISPLAY_FONT, anchorX: 1 });
-    // The judge rank (#RANK / #DEFEXRANK) on the same line, from the left, centred on the position's line.
-    const judgeLabel = addText('JUDGE', 30, 273, { ...labelStyle(), anchorY: 0.5 });
-    addText(song ? resolveSongStats(song).judgeRank : '-', 30 + judgeLabel.width + 8, 273, {
-      size: 11,
-      fill: SYN_WHITE,
-      fontFamily: SYN_DISPLAY_FONT,
-      anchorY: 0.5,
-      maxWidth: 150,
-      dropShadow: { color: SYN_WHITE, distance: 0, blur: 6, alpha: 0.4 },
-    });
 
     // PLAY (primary glowing pill) / AUTO PLAY (secondary outline).
     chrome.rect(26, 296, 170, 40).fill({ color: accent, alpha: 0.16 });
@@ -825,13 +840,15 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       alpha: 1 - slide,
       dropShadow: { color: accent, distance: 0, blur: 10, alpha: 0.8 },
     });
+    // The judge rank (#RANK / #DEFEXRANK) above the LEVEL chip, flush with its right edge, on the artist line.
+    const judgeLeft = drawJudgeRank(addText, song, left + innerW, card.y + 63);
     if (songArtist) {
       addText(songArtist, left + slide * 40, card.y + 56, {
         size: 11,
         weight: '300',
         fill: SYN_MIST,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: innerW,
+        maxWidth: Math.max(40, judgeLeft - 12 - (left + slide * 40)),
         alpha: 1 - slide,
       });
     }
@@ -876,24 +893,13 @@ class SynesthesiaSelectRenderer implements PixiSelectRenderer {
       }
     }
     addText(position, left + innerW, dotsY, { ...label(SYN_MIST), anchorX: 1, anchorY: 0.5 });
-    // The judge rank (#RANK / #DEFEXRANK) at the end of the file line.
-    const judgeRank = song ? resolveSongStats(song).judgeRank : '-';
-    const judgeText = addText(judgeRank, left + innerW, card.y + 166, {
-      size: 11,
-      fill: SYN_WHITE,
-      fontFamily: SYN_DISPLAY_FONT,
-      anchorX: 1,
-      dropShadow: { color: SYN_WHITE, distance: 0, blur: 6, alpha: 0.4 },
-    });
-    const judgeLabelRight = left + innerW - judgeText.width - 8;
-    addText('JUDGE', judgeLabelRight, card.y + 168, { ...label(), anchorX: 1 });
     if (song?.fileLabel) {
       addText(song.fileLabel, left, card.y + 166, {
         size: 10,
         weight: '300',
         fill: SYN_DIM,
         fontFamily: SYN_TEXT_FONT,
-        maxWidth: Math.max(40, judgeLabelRight - left - 60),
+        maxWidth: innerW,
       });
     }
 
