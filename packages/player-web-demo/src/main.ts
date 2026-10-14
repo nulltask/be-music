@@ -189,6 +189,13 @@ import {
   toggleRecording,
   type RecordingDeps,
 } from './recording-controller.ts';
+import {
+  nearestRenderResolution,
+  readStoredRenderResolution,
+  renderResolutionLabel,
+  renderResolutionSteps,
+  storeRenderResolution,
+} from './render-resolution.ts';
 import type { ChartImageTexture, DemoGuiState, PlayerWebDemoElements, SkinFamilyOverride } from './types.ts';
 import './styles.css';
 
@@ -722,6 +729,10 @@ class PlayerWebDemoApp {
       skinFamilyOverride: EXTRA_SKINS_ENABLED ? 'auto' : 'default',
       builtInSkin: BE_MUSIC_SKINS.resolve(readStoredBuiltInSkinId()).id,
       skinEffects: readStoredSkinEffects(),
+      renderResolution: nearestRenderResolution(
+        renderResolutionSteps(window.devicePixelRatio || 1),
+        readStoredRenderResolution(),
+      ),
       playLayout: readStoredPlayLayout(),
       status: 'Ready',
       openFolder: () => this.elements.songInput.click(),
@@ -907,7 +918,7 @@ class PlayerWebDemoApp {
   private async ensureHostMounted(): Promise<void> {
     if (this.hostMounted) return;
     this.hostMounted = true;
-    await this.sceneHost.mount(this.elements.stage);
+    await this.sceneHost.mount(this.elements.stage, { resolution: this.guiState.renderResolution });
     this.wireCanvasFullscreen();
     this.wireTouchControls();
     this.sceneHost.app.ticker.add(this.syncGameplayShellState);
@@ -1303,6 +1314,21 @@ class PlayerWebDemoApp {
           // Private windows / blocked storage: the pick still applies for this session.
         }
         this.handleSkinFamilyOverrideChange(this.guiState.skinFamilyOverride);
+      });
+    // Canvas pixels per CSS pixel, 1× up to the display's ratio. Lower trades sharpness for fill-rate (tablets drop
+    // under 30 fps at 2×); applies from the next frame. `?resolution=` in the URL overrides it until a pick here.
+    skin
+      .add(
+        this.guiState,
+        'renderResolution',
+        Object.fromEntries(
+          renderResolutionSteps(window.devicePixelRatio || 1).map((value) => [renderResolutionLabel(value), value]),
+        ),
+      )
+      .name('Render resolution')
+      .onChange((value: number) => {
+        storeRenderResolution(value);
+        this.sceneHost.setResolution(value);
       });
     // Auto picks the touch layout on phones / tablets; applies from the next play.
     skin
