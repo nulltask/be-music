@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vite-plus/test';
-import { beatorajaDisplayScrollBeat, beatorajaPixelsPerBeat, resolveBeatorajaNoteLane } from './notes.ts';
+import {
+  beatorajaDisplayScrollBeat,
+  beatorajaPixelsPerBeat,
+  lr2LastWalkedBeat,
+  resolveBeatorajaNoteLane,
+} from './notes.ts';
 
 // Mirrors upstream `LaneRenderer.java:271-276`'s `rxhs = (hu - hl) * hispeed` divided by
 // `getMeasureBeats(1.0) === 4` to convert "y-delta per measure" into "y-delta per beat".
@@ -54,6 +59,22 @@ describe('beatorajaDisplayScrollBeat (LR2 negative-BPM reversal display clock)',
     expect(beatorajaDisplayScrollBeat({ currentBeat: 21, displayBeat: 11 })).toBe(11);
     // A mirrored beat of 0 is a valid position (back at the chart head) — `??` must not treat it as unset.
     expect(beatorajaDisplayScrollBeat({ currentBeat: 32, displayBeat: 0 })).toBe(0);
+  });
+});
+
+describe('lr2LastWalkedBeat (where the note walk stops under LR2 rules)', () => {
+  it('stops one pixel past the lead-in band above the lane top', () => {
+    // 100 px per beat: the 24 px band and one more pixel are 0.25 beats past the window's last beat.
+    expect(lr2LastWalkedBeat({ rules: 'lr2', lastBeat: 10 }, 100)).toBeCloseTo(10.25, 10);
+  });
+
+  it('does not stop under beatoraja rules, which end at their own window', () => {
+    expect(lr2LastWalkedBeat({ rules: 'beatoraja', lastBeat: 10 }, 100)).toBe(Number.POSITIVE_INFINITY);
+  });
+
+  it('does not stop when notes do not scroll (no speed, or a NaN one)', () => {
+    expect(lr2LastWalkedBeat({ rules: 'lr2', lastBeat: 10 }, 0)).toBe(Number.POSITIVE_INFINITY);
+    expect(lr2LastWalkedBeat({ rules: 'lr2', lastBeat: 10 }, Number.NaN)).toBe(Number.POSITIVE_INFINITY);
   });
 });
 
