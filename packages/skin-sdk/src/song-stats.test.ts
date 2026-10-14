@@ -59,6 +59,25 @@ describe('resolveSongStats', () => {
   });
 });
 
+describe('resolveSongStats judgeRank', () => {
+  it('names #RANK 0-4 and defaults to NORMAL', () => {
+    expect(resolveSongStats(song(PLAIN)).judgeRank).toBe('NORMAL');
+    expect(resolveSongStats(song(`#RANK 0\n${PLAIN}`)).judgeRank).toBe('VERY HARD');
+    expect(resolveSongStats(song(`#RANK 1\n${PLAIN}`)).judgeRank).toBe('HARD');
+    expect(resolveSongStats(song(`#RANK 3\n${PLAIN}`)).judgeRank).toBe('EASY');
+    expect(resolveSongStats(song(`#RANK 4\n${PLAIN}`)).judgeRank).toBe('VERY EASY');
+  });
+
+  it('prefers #DEFEXRANK, printed as its value', () => {
+    expect(resolveSongStats(song(`#RANK 1\n#DEFEXRANK 120\n${PLAIN}`)).judgeRank).toBe('120');
+    expect(resolveSongStats(song(`#DEFEXRANK 99.50\n${PLAIN}`)).judgeRank).toBe('99.5');
+  });
+
+  it('falls back to NORMAL for a #RANK outside 0-4', () => {
+    expect(resolveSongStats(song(`#RANK 7\n${PLAIN}`)).judgeRank).toBe('NORMAL');
+  });
+});
+
 describe('formatSongLength', () => {
   it('prints m:ss', () => {
     expect(formatSongLength(125.4)).toBe('2:05');

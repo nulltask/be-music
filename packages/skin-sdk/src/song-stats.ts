@@ -15,6 +15,12 @@ export interface SongStats {
   mines: number;
   /** Whether the chart has STOP sequences. */
   stops: boolean;
+  /**
+   * The judge rank as players read it: `VERY HARD` … `VERY EASY` for `#RANK 0`–`4`, the `#DEFEXRANK` / bmson
+   * `judge_rank` value (`120`, `100` …) when the chart sets one, `NORMAL` when it sets neither (bmson: `100`), and
+   * `RANDOM` when `#EXRANKxx` changes it mid-chart.
+   */
+  judgeRank: string;
 }
 
 const STATS = new WeakMap<BeMusicJson, SongStats>();
@@ -35,6 +41,7 @@ function computeSongStats(chart: BeMusicJson, fallbackBpm: number | undefined): 
   let minBpm = Number.POSITIVE_INFINITY;
   let maxBpm = 0;
   let stops = false;
+  let rankChanges = false;
   try {
     // The song list sees the chart before any `#RANDOM` draw: only its unconditional content counts.
     const resolved = resolveChart(chart, { inferBmsLnTypeWhenMissing: true });
@@ -53,6 +60,7 @@ function computeSongStats(chart: BeMusicJson, fallbackBpm: number | undefined): 
       maxBpm = Math.max(maxBpm, point.bpm);
     }
     stops = timing.stopPoints.some((stop) => stop.seconds > 0 && stop.seconds <= lengthSeconds);
+    rankChanges = resolved.judgeRank.changes.length > 0;
   } catch {
     // A chart the timing pass can't read still lists; it just shows no extra facts.
   }
@@ -61,7 +69,31 @@ function computeSongStats(chart: BeMusicJson, fallbackBpm: number | undefined): 
     minBpm = bpm;
     maxBpm = bpm;
   }
-  return { lengthSeconds, minBpm, maxBpm, longNotes, mines, stops };
+  return { lengthSeconds, minBpm, maxBpm, longNotes, mines, stops, judgeRank: judgeRankLabel(chart, rankChanges) };
+}
+
+const JUDGE_RANK_NAMES = ['VERY HARD', 'HARD', 'NORMAL', 'EASY', 'VERY EASY'] as const;
+
+/**
+ * {@link SongStats.judgeRank}. The same rules as the player's song screens (`resolveDisplayedJudgeRankLabel` in
+ * `@be-music/player`'s `utils.ts`): a positive `#DEFEXRANK` / bmson `judge_rank` wins, then `#RANK` 0–4 (truncated),
+ * then the format's default.
+ */
+function judgeRankLabel(chart: BeMusicJson, changes: boolean): string {
+  if (changes) return 'RANDOM';
+  const exRank = chart.sourceFormat === 'bmson' ? chart.bmson.info.judgeRank : chart.bms.defExRank;
+  if (typeof exRank === 'number' && Number.isFinite(exRank) && exRank > 0) {
+    return Number.isInteger(exRank) && exRank <= 4 ? JUDGE_RANK_NAMES[exRank]! : formatRankValue(exRank);
+  }
+  if (chart.sourceFormat === 'bmson') return '100';
+  const rank = chart.metadata.rank;
+  const truncated = typeof rank === 'number' && Number.isFinite(rank) ? Math.trunc(rank) : Number.NaN;
+  return truncated >= 0 && truncated <= 4 ? JUDGE_RANK_NAMES[truncated]! : 'NORMAL';
+}
+
+/** `120`, `99.5`: an `#DEFEXRANK` value with up to two decimals and no trailing zeros. */
+function formatRankValue(value: number): string {
+  return (Math.round(value * 100) / 100).toFixed(2).replace(/(?:\.0+|(\.\d+?)0+)$/, '$1');
 }
 
 /** `m:ss` play length. */
