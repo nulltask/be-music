@@ -30,6 +30,7 @@ import { createCroppedBeatorajaTexture, flipRectToPixi } from '../../skin/beator
 import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import type { TempoReversalPoint } from '@be-music/chart';
 import {
+  advanceDrawCursor,
   GoneDrawObjects,
   isDrawnAtTime,
   isDrawnUntilJudged,
@@ -38,6 +39,22 @@ import {
   resolveDrawY,
 } from '../core/note-draw-window.ts';
 import { resolveBeatorajaScrollPlacement } from './scroll-placement.ts';
+import type { NoteDrawWindow } from '../core/note-draw-window.ts';
+
+/** How far above a lane's top a note still draws: the lead-in band notes scroll in through. */
+const TAP_LEAD_IN_PX = 24;
+
+/**
+ * The last beat the note walk needs under LR2's drawing rules: LR2's window ends at the lane top, but a note still
+ * draws in the {@link TAP_LEAD_IN_PX} band above it, so the walk stops one pixel past that band — every later note is
+ * above it too. `Infinity` (no stop) under beatoraja's rules, which stop at their own window, or with no scroll speed.
+ */
+export function lr2LastWalkedBeat(window: Pick<NoteDrawWindow, 'rules' | 'lastBeat'>, pixelsPerBeat: number): number {
+  if (window.rules !== 'lr2' || !(pixelsPerBeat > 0)) {
+    return Number.POSITIVE_INFINITY;
+  }
+  return window.lastBeat + (TAP_LEAD_IN_PX + 1) / pixelsPerBeat;
+}
 
 /**
  * Beats per standard 4/4 measure. Mirrors `getMeasureBeats(1.0) === 4` from
@@ -229,6 +246,11 @@ export class BeatorajaNoteLayer {
   private readonly reversal?: TempoReversalPoint;
   /** Notes gone under LR2's rules, so the mirrored scroll past a negative-BPM reversal does not redraw them. */
   private readonly goneDrawObjects = new GoneDrawObjects();
+  /**
+   * LR2's `draw_count` for the frame's notes under LR2's drawing rules ({@link advanceDrawCursor}), kept between frames
+   * so a frame starts past the notes already gone. Rebuilt when the note array changes or the playhead moves back.
+   */
+  private drawCursor: { notes: readonly PlayerUiFrameNote[]; seconds: number; index: number } | undefined;
   /** Pool of generic Graphics nodes for the fallback path. Reused across frames. */
   private readonly graphicsPool: Graphics[] = [];
   /** Pool of skin-sprite nodes (tap notes / mines / LN caps). One sprite per slot — texture swapped per use. */
@@ -336,8 +358,13 @@ export class BeatorajaNoteLayer {
       );
     }
 
-    for (const note of frame.notes) {
+    const notes = frame.notes;
+    const firstIndex = this.advanceLr2DrawCursor(frame, drawWindow);
+    const lr2LastBeat = lr2LastWalkedBeat(drawWindow, pixelsPerBeat);
+    for (let noteIndex = firstIndex; noteIndex < notes.length; noteIndex += 1) {
+      const note = notes[noteIndex]!;
       if (scrolling && isPastDrawWindow(drawWindow, note.beat)) break;
+      if (note.beat > lr2LastBeat) break;
       const isLongNote = note.endBeat !== undefined && Number.isFinite(note.endBeat);
       // A judged note is not dropped on the spot: beatoraja's `LaneRenderer` draws a note while its time is ahead, judged
       // or not (and keeps a long note while its end is), and LR2 keeps one until it is judged and its beat has passed, so
@@ -368,7 +395,7 @@ export class BeatorajaNoteLayer {
         // Cull when the entire LN has scrolled past the top of the lane. Both head AND
         // tail must be off the top edge — if the tail is still on-screen but the head
         // has just slipped past, we want to keep drawing the part that's still visible.
-        if (y < rect.y - 24 && yEnd < rect.y - 24) continue;
+        if (y < rect.y - TAP_LEAD_IN_PX && yEnd < rect.y - TAP_LEAD_IN_PX) continue;
         // The head sits on the judgement line once it has passed: LR2 caps its position there, and under beatoraja's
         // window a head whose time has passed sits on the line, and a long note whose tail does not sit above its head is
         // skipped, as in `LaneRenderer`.
@@ -396,7 +423,7 @@ export class BeatorajaNoteLayer {
 
       // Tap notes draw from a small lead-in margin above the lane top down to the draw bottom: the judgement line (LR2's
       // rules hold a passed note there), or under beatoraja's rules the stage bottom while the note's time is ahead.
-      if (y < rect.y - 24 || y > drawBottom) continue;
+      if (y < rect.y - TAP_LEAD_IN_PX || y > drawBottom) continue;
       if (scrolling && !isDrawnAtTime(drawWindow, note.seconds)) continue;
       const r = this.paintTapNote(usedG, usedS, rect, lane, note, y);
       usedG = r.g;
@@ -404,6 +431,29 @@ export class BeatorajaNoteLayer {
     }
 
     this.shrinkPoolsTo(usedG, usedS, usedT);
+  }
+
+  /**
+   * Under LR2's drawing rules without a negative-BPM reversal, moves {@link drawCursor} past the notes gone by this
+   * frame and returns where the walk starts; 0 otherwise, as before.
+   */
+  private advanceLr2DrawCursor(frame: PlayerUiFramePayload, drawWindow: NoteDrawWindow): number {
+    if (drawWindow.rules !== 'lr2' || this.reversal !== undefined) {
+      this.drawCursor = undefined;
+      return 0;
+    }
+    let cursor = this.drawCursor;
+    if (!cursor || cursor.notes !== frame.notes || frame.currentSeconds < cursor.seconds) {
+      cursor = { notes: frame.notes, seconds: frame.currentSeconds, index: 0 };
+    }
+    cursor.index = advanceDrawCursor(
+      frame.notes,
+      cursor.index,
+      (note) => !isDrawnUntilJudged(drawWindow, note, this.autoplay),
+    );
+    cursor.seconds = frame.currentSeconds;
+    this.drawCursor = cursor;
+    return cursor.index;
   }
 
   dispose(): void {
