@@ -153,6 +153,99 @@ function diffKeyed<T>(
   }
 }
 
+/** The keys of a top-level list and where each key first appears, worked out once per list. */
+interface KeyedTop {
+  keys: string[];
+  first: Map<string, number>;
+}
+
+const KEYED_TOPS = new WeakMap<ReadonlyArray<unknown>, KeyedTop>();
+
+function keyedTop<T>(list: ReadonlyArray<T>, key: (item: T) => string): KeyedTop {
+  let keyed = KEYED_TOPS.get(list);
+  if (keyed === undefined) {
+    const keys = list.map(key);
+    const first = new Map<string, number>();
+    for (const [index, itemKey] of keys.entries()) {
+      if (!first.has(itemKey)) {
+        first.set(itemKey, index);
+      }
+    }
+    keyed = { keys, first };
+    KEYED_TOPS.set(list, keyed);
+  }
+  return keyed;
+}
+
+/**
+ * `diffKeyed` against a top-level list that every outcome is diffed against: the top's keys are worked out once, and
+ * the runs both lists share at their start and end (an outcome usually changes one stretch of a lane) cancel out, so
+ * only the stretch between them is counted. The result is `diffKeyed`'s, in its order: keys the top holds by where the
+ * top first holds them, then the outcome's own keys by where it first holds them, each with the item `diffKeyed` would
+ * take (the top's first for a key the top holds).
+ */
+function diffKeyedAgainstTop<T>(
+  before: ReadonlyArray<T>,
+  after: ReadonlyArray<T>,
+  key: (item: T) => string,
+  add: Array<Keyed<T>>,
+  remove: Array<Keyed<T>>,
+): void {
+  const top = keyedTop(before, key);
+  const afterKeys = after.map(key);
+  const beforeLength = before.length;
+  const afterLength = after.length;
+  let prefix = 0;
+  while (prefix < beforeLength && prefix < afterLength && top.keys[prefix] === afterKeys[prefix]) {
+    prefix += 1;
+  }
+  let suffix = 0;
+  while (
+    suffix < beforeLength - prefix &&
+    suffix < afterLength - prefix &&
+    top.keys[beforeLength - 1 - suffix] === afterKeys[afterLength - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+
+  const counts = new Map<string, { item: T; count: number; order: number }>();
+  for (let index = prefix; index < beforeLength - suffix; index += 1) {
+    const itemKey = top.keys[index]!;
+    const entry = counts.get(itemKey);
+    if (entry) {
+      entry.count -= 1;
+    } else {
+      const first = top.first.get(itemKey)!;
+      counts.set(itemKey, { item: before[first]!, count: -1, order: first });
+    }
+  }
+  for (let index = prefix; index < afterLength - suffix; index += 1) {
+    const itemKey = afterKeys[index]!;
+    const entry = counts.get(itemKey);
+    if (entry) {
+      entry.count += 1;
+    } else {
+      const first = top.first.get(itemKey);
+      counts.set(
+        itemKey,
+        first === undefined
+          ? { item: after[index]!, count: 1, order: beforeLength + index }
+          : { item: before[first]!, count: 1, order: first },
+      );
+    }
+  }
+  const changed = [...counts].filter(([, entry]) => entry.count !== 0);
+  changed.sort((left, right) => left[1].order - right[1].order);
+  for (const [itemKey, entry] of changed) {
+    for (let index = 0; index < entry.count; index += 1) {
+      add.push({ key: itemKey, item: entry.item });
+    }
+    for (let index = 0; index > entry.count; index -= 1) {
+      remove.push({ key: itemKey, item: entry.item });
+    }
+  }
+}
+
 function isEmptyLists(lists: DeltaLists): boolean {
   return (
     lists.notes.length === 0 && lists.mines.length === 0 && lists.timeline.length === 0 && lists.lengths.length === 0
@@ -396,7 +489,7 @@ export function computeDelta(
   const top = context.topItems;
   for (const bucket of touched) {
     if (bucket.startsWith('lane:')) {
-      diffKeyed(
+      diffKeyedAgainstTop(
         top.lanes.get(bucket) ?? [],
         items.lanes.get(bucket) ?? [],
         noteKey,
@@ -404,10 +497,10 @@ export function computeDelta(
         delta.remove.notes,
       );
     } else if (bucket === MINES_BUCKET) {
-      diffKeyed(top.mines, items.mines, mineKey, delta.add.mines, delta.remove.mines);
+      diffKeyedAgainstTop(top.mines, items.mines, mineKey, delta.add.mines, delta.remove.mines);
     } else if (bucket.startsWith('tl:')) {
       const type = bucket.slice(3) as FingerprintTimelineType;
-      diffKeyed(
+      diffKeyedAgainstTop(
         top.timeline.get(type) ?? [],
         items.timeline.get(type) ?? [],
         timelineKey,
