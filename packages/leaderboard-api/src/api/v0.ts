@@ -16,6 +16,7 @@ import { isOn } from '../http/query.ts';
 import { afterResponse } from '../http/after-response.ts';
 import { loadPlaylogAccess, loadScoreDetail, toScoreResponse } from '../scores/detail.ts';
 import { submitScore } from '../scores/submit.ts';
+import { canSeeScore, setScoreHidden } from '../scores/visibility.ts';
 import {
   accountResponse,
   errorResponse,
@@ -25,6 +26,8 @@ import {
   rankingQuery,
   rankingResponse,
   scoreResponse,
+  scoreVisibilityBody,
+  scoreVisibilityResponse,
   submissionBody,
   submissionResponse,
 } from './schemas.ts';
@@ -276,12 +279,40 @@ export function createV0Api(options: { now: () => number; newId: () => string; c
     describeRoute({
       tags: ['Scores'],
       summary: 'A play',
+      description: 'A hidden play answers only its player; to anyone else it does not exist.',
       responses: { 200: json('The play under every ruleset.', scoreResponse), 404: notFound('The score') },
     }),
     async (c) => {
       const detail = await loadScoreDetail(c.get('db'), c.req.param('id'));
-      if (detail === undefined) return c.json({ error: 'not-found' }, 404);
+      if (detail === undefined || !canSeeScore(detail.score, c.get('userId'))) {
+        return c.json({ error: 'not-found' }, 404);
+      }
       return c.json(toScoreResponse(detail));
+    },
+  );
+
+  v0.patch(
+    '/scores/:id',
+    describeRoute({
+      tags: ['Scores'],
+      summary: 'Hide or show my play',
+      description:
+        'A hidden play is kept, but leaves the rankings, the personal bests, the figures and every list, and only its player can open it. The player’s bests on the chart are rebuilt from the plays still shown.',
+      responses: {
+        200: json('The play’s visibility after the change.', scoreVisibilityResponse),
+        401: signInRequired,
+        403: json('Someone else played it.', errorResponse(['not-your-score'])),
+        404: notFound('The score'),
+      },
+    }),
+    validator('json', scoreVisibilityBody),
+    async (c) => {
+      const userId = c.get('userId');
+      if (userId === undefined) return c.json({ error: 'sign-in-required' }, 401);
+      const id = c.req.param('id');
+      const result = await setScoreHidden(c.get('db'), id, userId, c.req.valid('json').hidden, now());
+      if (!result.ok) return c.json({ error: result.error }, result.status);
+      return c.json({ id, hidden: result.hidden });
     },
   );
 

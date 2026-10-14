@@ -25,6 +25,8 @@ const en = {
     avatarTooLarge: 'The image is too large.',
     unsupportedImage: 'Use a PNG, JPEG or WebP image.',
     signInRequired: 'Sign in first.',
+    notYourScore: 'Only the player of this play can change it.',
+    notFound: 'This play no longer exists.',
     unknown: (error: string) => `Something went wrong (${error}).`,
   },
 };
@@ -56,6 +58,8 @@ const ja: ClientMessages = {
     avatarTooLarge: '画像が大きすぎます。',
     unsupportedImage: 'PNG・JPEG・WebP の画像を使ってください。',
     signInRequired: '先にサインインしてください。',
+    notYourScore: 'このプレイを変更できるのは、プレイしたプレイヤーだけです。',
+    notFound: 'このプレイはもう存在しません。',
     unknown: (error) => `問題が発生しました（${error}）。`,
   },
 };

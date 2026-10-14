@@ -107,11 +107,41 @@ function ShareCard(props: { data: ScoreCardData; pageUrl: string; image: string;
   );
 }
 
+/** The play's own player hides it, or shows it again (wired by the client script's `hide-score` / `show-score`). */
+function VisibilityCard(props: { scoreId: string; hidden: boolean }) {
+  const t = useMessages().score;
+  return (
+    <section class="card gap-4" data-size="sm">
+      <header>
+        <h2>{t.visibility}</h2>
+        <p>{props.hidden ? t.visibilityHiddenLead : t.visibilityShownLead}</p>
+      </header>
+      <div class="space-y-3 px-4">
+        <button
+          type="button"
+          class="btn"
+          data-variant="outline"
+          data-account-action={props.hidden ? 'show-score' : 'hide-score'}
+          data-score-id={props.scoreId}
+        >
+          {props.hidden ? t.show : t.hide}
+        </button>
+        <p class="text-destructive text-sm" data-visibility-status role="status" hidden />
+      </div>
+    </section>
+  );
+}
+
 /** One play under every ruleset, with how it was played. */
 export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
   const db = openDatabase(c.env.DB);
   const detail = await loadScoreDetail(db, c.req.param('id'));
-  if (detail === undefined || detail.player === null) return notFound(c, 'score');
+  const viewer = c.get('viewer');
+  const isOwner = viewer !== null && viewer.userId === detail?.score.userId;
+  // A hidden play is its player's alone: to anyone else it does not exist.
+  if (detail === undefined || detail.player === null || (detail.score.hidden && !isOwner)) {
+    return notFound(c, 'score');
+  }
   const { player } = detail;
   const filed = await loadChartsetOf(db, detail.chart.chartsetId);
   const title = chartTitle(detail.chart.title, detail.chart.chartFingerprint);
@@ -122,8 +152,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
       : `${player.displayName} · ${title}`;
   const card = played === undefined ? undefined : scoreCardData(detail, played, title);
   const image = cardUrl(detail.score.id, detail.score.cardKey);
-  const viewer = c.get('viewer');
-  const isOwner = viewer !== null && viewer.handle === player.handle;
+  const { hidden } = detail.score;
   c.header('cache-control', PAGE_CACHE);
   const t = pageMessages(c);
   const pageMeta = {
@@ -133,8 +162,8 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
       { label: t.score.crumb(player.displayName), kind: 'score' as const },
     ]),
     image: { path: image, alt: card !== undefined ? shareText(card) : description },
-    // A play of a chart not listed yet stays out of search engines too.
-    noindex: detail.chart.status !== 'listed',
+    // A play of a chart not listed yet stays out of search engines too, and so does a hidden one.
+    noindex: hidden || detail.chart.status !== 'listed',
   };
   return c.html(
     <Layout meta={pageMeta}>
@@ -153,6 +182,12 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
         </a>
         {player.anonymous ? <Tag>{t.lists.anonymous}</Tag> : null}
       </PageHeader>
+      {hidden ? (
+        <div class="alert" role="note">
+          <h2>{t.score.hiddenTitle}</h2>
+          <section>{t.score.hiddenLead}</section>
+        </div>
+      ) : null}
       <ResultCards
         results={detail.results}
         playedRuleset={detail.score.playedRuleset}
@@ -208,7 +243,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
             : []),
         ]}
       />
-      {card !== undefined ? (
+      {card !== undefined && !hidden ? (
         <ShareCard
           data={card}
           pageUrl={c.req.url}
@@ -217,6 +252,7 @@ export async function scorePage(c: PageContext<'/leaderboard/scores/:id'>) {
           hasCard={detail.score.cardKey !== null}
         />
       ) : null}
+      {isOwner ? <VisibilityCard scoreId={detail.score.id} hidden={hidden} /> : null}
     </Layout>,
   );
 }

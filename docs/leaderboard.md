@@ -228,6 +228,9 @@ turning a play document's positions and timeline into note times that match the 
   each pointing at the score that set it, so each best's replay and ghost are one click away. Misses count for every
   play that was not aborted, cleared or not.
 - **Score history**: every submission is kept, which gives progress graphs and "most improved" lists for free.
+- **Hidden plays**: a player can hide one of their plays (`PATCH /api/v0/scores/:id`) and show it again. A hidden play
+  is kept but leaves the rankings, the personal bests (rebuilt from the plays still shown), the figures and every list,
+  and only its player can open it.
 - **Sorting**: a ranking can be sorted by EX score, clear lamp, or misses.
 - **Ties** share a rank (1, 1, 3). Within a tie the earlier achievement is listed first, but the rank number is the same
   (proposed; section 15).

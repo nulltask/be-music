@@ -1,7 +1,7 @@
 /** Pure helpers of the pages' client script (main.ts): messages for API errors and the icon's square crop. */
 import { clientMessages, type ClientMessages } from './messages.ts';
 
-/** A message for an error the account API answered (`{ error, detail? }`), for the settings page. */
+/** A message for an error the account API answered (`{ error, detail? }`), for the settings and play pages. */
 export function describeAccountError(
   error: string,
   detail?: string,
@@ -23,6 +23,10 @@ export function describeAccountError(
       return m.unsupportedImage;
     case 'sign-in-required':
       return m.signInRequired;
+    case 'not-your-score':
+      return m.notYourScore;
+    case 'not-found':
+      return m.notFound;
     default:
       return m.unknown(error);
   }

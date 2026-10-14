@@ -68,6 +68,7 @@ export async function loadChartStats(db: Database, filter: RankingFilter): Promi
   const playConditions: SQL[] = [
     eq(score.chartFingerprint, filter.chartFingerprint),
     eq(score.assisted, filter.assisted),
+    eq(score.hidden, false),
   ];
   if (!filter.includeAnonymous) playConditions.push(eq(user.isAnonymous, false));
   const [[plays], lampRows] = await Promise.all([
@@ -143,11 +144,11 @@ export async function loadPlayerStats(db: Database, userId: string, ruleset: Pla
         last: max(score.createdAt),
       })
       .from(score)
-      .where(eq(score.userId, userId)),
+      .where(and(eq(score.userId, userId), eq(score.hidden, false))),
     db
       .select({ ruleset: score.playedRuleset, count: count() })
       .from(score)
-      .where(eq(score.userId, userId))
+      .where(and(eq(score.userId, userId), eq(score.hidden, false)))
       .groupBy(score.playedRuleset)
       .orderBy(desc(count())),
     db
@@ -163,7 +164,7 @@ export async function loadPlayerStats(db: Database, userId: string, ruleset: Pla
       })
       .from(score)
       .innerJoin(scoreResult, and(eq(scoreResult.scoreId, score.id), eq(scoreResult.ruleset, ruleset)))
-      .where(eq(score.userId, userId)),
+      .where(and(eq(score.userId, userId), eq(score.hidden, false))),
   ]);
   const totalOf = (value: unknown) => Number(value ?? 0);
   return {
