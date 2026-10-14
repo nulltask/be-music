@@ -47,7 +47,9 @@ import { resolveLr2LaneIndex, resolveSideRelativeLaneIndex } from '../gameplay-l
 import {
   computeBombDurationsMs,
   computeFullComboDurationMs,
+  computeGaugeBucketOp,
   computeGaugeTimerDurationsMs,
+  computeGaugeTypeOps,
   computeKeyOnFadeDurationsMs,
   computeLnHoldDurationsMs,
   computeRankOp,
@@ -656,12 +658,8 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
     // Autoscratch 1P / 2P (54 / 55, 56 / 57).
     this.runtimeOps.add(this.options.autoScratch1P ? 55 : 54);
     this.runtimeOps.add(this.options.autoScratch2P ? 57 : 56);
-    // Gauge type — HARD / DEATH map to the LR2 "red" gauge ops (43 / 45); GROOVE / EASY share the normal branch (42 /
-    // 44).
-    const selectedGauge = this.resolveSelectedGauge();
-    const isRedGaugeOp = selectedGauge === 'HARD' || selectedGauge === 'DEATH';
-    this.runtimeOps.add(isRedGaugeOp ? 43 : 42);
-    this.runtimeOps.add(isRedGaugeOp ? 45 : 44);
+    // Gauge type (42 / 43 1P, 44 / 45 2P) — fixed for the run; `updateGaugeOps` only refreshes the percentage buckets.
+    computeGaugeTypeOps(this.resolveSelectedGauge()).forEach((op) => this.runtimeOps.add(op));
     // Score graph (38 / 39).
     this.runtimeOps.add(this.options.scoreGraph ? 39 : 38);
     // BGA on/off (40 / 41). With AUTOPLAY_ONLY we mirror LR2: the BGA is "on" only when autoplay is also engaged.
@@ -1092,21 +1090,15 @@ export class PixiGameplayView extends CoreGameplayView<PixiGameplayViewOptions> 
   }
 
   /**
-   * Drives the LR2 1P gauge state ops: - **230–240**: 10 %-bucket flags (230 = 0–9 %, 231 = 10–19 %, …, 240 = 100 %).
-   * Skin elements like the "WARNING" overlay light up by gating on these buckets. - **42 / 43**: NORMAL (gauge-up
-   * animation) vs HARD (red-zone) flag. The NORMAL gauge fires 42; we don't currently model HARD/EX.
+   * Refreshes the LR2 1P gauge-percentage bucket ops (230–240, see {@link computeGaugeBucketOp}). Skin elements like
+   * the "WARNING" overlay light up by gating on these buckets. The gauge-type ops (42–45) are set once in
+   * {@link initializeRuntimeOps} and left alone here.
    */
   private updateGaugeOps(): void {
     for (let op = 230; op <= 240; op += 1) {
       this.runtimeOps.delete(op);
     }
-    const bucket = Math.min(10, Math.max(0, Math.floor(this.gaugeState.current / 10)));
-    this.runtimeOps.add(230 + bucket);
-    // NORMAL gauge is the default play-session gauge type; keep op 42 set so the matching frame plate (`#IF op42`)
-    // remains visible.
-    this.runtimeOps.add(42);
-    // op 43 = 1P HARD/EX (not modeled yet — leave clear).
-    this.runtimeOps.delete(43);
+    this.runtimeOps.add(computeGaugeBucketOp(this.gaugeState.current));
   }
 
   /**

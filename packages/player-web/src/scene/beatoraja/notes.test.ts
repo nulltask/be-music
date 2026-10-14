@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
+import { BEATORAJA_OP, normalizeBeatorajaNote } from '@be-music/beatoraja-skin';
+import type { BeatorajaTextureCache } from '../../skin/beatoraja/textures.ts';
 import {
+  BeatorajaNoteLayer,
   beatorajaDisplayScrollBeat,
   beatorajaPixelsPerBeat,
   lr2LastWalkedBeat,
@@ -102,5 +105,40 @@ describe('resolveBeatorajaNoteLane', () => {
     expect(resolveBeatorajaNoteLane('26', '14')).toBe(15);
     expect(resolveBeatorajaNoteLane('16', '10')).toBe(5);
     expect(resolveBeatorajaNoteLane('25', '9')).toBe(8);
+  });
+});
+
+describe('BeatorajaNoteLayer lane geometry under a mutated activeOps Set', () => {
+  const textures: BeatorajaTextureCache = {
+    get: () => undefined,
+    values: () => [][Symbol.iterator](),
+    pathOf: () => undefined,
+  };
+  // A lift-gated layout ahead of the default one: with `LIFT1_ON` lit the lane sits 100 px higher (libGDX Y-UP).
+  const noteSection = normalizeBeatorajaNote({
+    dst: [
+      { if: [BEATORAJA_OP.LIFT1_ON], values: [{ x: 0, y: 300, w: 50, h: 500 }] },
+      { if: [], values: [{ x: 0, y: 200, w: 50, h: 500 }] },
+    ],
+  });
+
+  it('switches lane bounds when a gating op toggles on the same Set, and back again', () => {
+    const layer = new BeatorajaNoteLayer({
+      noteSection,
+      variant: '7',
+      images: new Map(),
+      textures,
+      canvasHeight: 1000,
+    });
+    const activeOps = new Set<number>();
+    expect(layer.getLaneBounds(activeOps)).toEqual({ topY: 300, bottomY: 800 });
+    activeOps.add(BEATORAJA_OP.LIFT1_ON);
+    expect(layer.getLaneBounds(activeOps)).toEqual({ topY: 200, bottomY: 700 });
+    // An op the note dst does not gate on leaves the geometry alone.
+    activeOps.add(BEATORAJA_OP.LANECOVER1_ON);
+    expect(layer.getLaneBounds(activeOps)).toEqual({ topY: 200, bottomY: 700 });
+    activeOps.delete(BEATORAJA_OP.LIFT1_ON);
+    expect(layer.getLaneBounds(activeOps)).toEqual({ topY: 300, bottomY: 800 });
+    layer.dispose();
   });
 });

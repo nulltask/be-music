@@ -2391,7 +2391,7 @@ html.touch-first .shell.in-gameplay.touch-play .touch-controls {
  * Leaderboard sign-in / sign-up dialogs (account-dialogs.ts): the same
  * steps as the Leaderboard's own dialogs, in the demo's palette — a
  * dark card over a dimmed page, the accent on the main button, Google
- * and Discord shown greyed out with an "In development" badge.
+ * and Discord shown greyed out with an "Coming soon" badge.
  */
 .account-dialog {
   width: min(380px, calc(100vw - 32px));
