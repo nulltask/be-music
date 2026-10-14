@@ -4,7 +4,7 @@ import { openDatabase } from '../db/client.ts';
 import { RecentScoresList } from './components/lists.tsx';
 import { Details, DistributionCard, JudgeTotalsCard, Stats } from './components/cards.tsx';
 import { Avatar, LocalTime, SectionHeading, Tag } from './components/basics.tsx';
-import { loadPlayer, loadPlayInfos, loadRecentScores } from './data.ts';
+import { loadPlayer, loadRecentScores } from './data.ts';
 import { formatPercent, formatPlayTime, RULESET_LABELS } from './format.ts';
 import { Layout, PageHeader } from './layout.tsx';
 import {
@@ -115,10 +115,7 @@ export async function playerPage(c: PageContext<'/leaderboard/players/:handle'>)
         <SectionHeading id="latest-plays">{t.player.latestPlays}</SectionHeading>
         <RecentScoresList
           scores={scores}
-          infos={await loadPlayInfos(
-            db,
-            scores.map((entry) => entry.scoreId),
-          )}
+          infos={new Map(scores.map((entry) => [entry.scoreId, entry.info]))}
           showPlayer={false}
           empty={t.player.empty}
         />
