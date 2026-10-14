@@ -73,12 +73,31 @@ const actions: Record<string, (button: HTMLButtonElement) => Promise<void>> = {
     if (result?.error) return say(t.passkeyFailed(errorText(result.error)), '[data-settings-status]');
     location.reload();
   },
+  async 'hide-score'(button) {
+    await setScoreHidden(button, true);
+  },
+  async 'show-score'(button) {
+    await setScoreHidden(button, false);
+  },
   async 'remove-avatar'() {
     const result = await callAccountApi('/api/v0/me/avatar', { method: 'DELETE' });
     if (!result.ok) return say(result.message, '[data-settings-status]');
     location.reload();
   },
 };
+
+/** Hides the play the button names, or shows it again, then reloads its page. */
+async function setScoreHidden(button: HTMLButtonElement, hidden: boolean): Promise<void> {
+  const id = button.dataset.scoreId;
+  if (id === undefined) return;
+  const result = await callAccountApi(`/api/v0/scores/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hidden }),
+  });
+  if (!result.ok) return say(result.message, '[data-visibility-status]');
+  location.reload();
+}
 
 /** Opens one account dialog, closing any other first (Sign in links to Sign up). */
 function openDialog(selector: string): void {

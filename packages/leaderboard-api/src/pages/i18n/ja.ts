@@ -165,6 +165,8 @@ export const ja: Messages = {
     fewerMisses: '自己ベストより少ないミス数',
     anonymous: '匿名',
     assist: 'アシスト',
+    hidden: '非表示',
+    hiddenHelp: 'あなたが非表示にしたプレイです。あなただけが見られます。開くと表示に戻せます。',
     notListed: '非公開',
     notListedHelp:
       'このプレイはあなたにだけ表示されています。譜面がまだ一般公開されていないためです。パスキーを持つプレイヤー 2 人が遊ぶと公開されます。',
@@ -288,6 +290,15 @@ export const ja: Messages = {
     postOnX: 'X に投稿',
     shareNative: '共有…',
     copyLink: 'リンクをコピー',
+    hiddenTitle: 'このプレイは非表示です',
+    hiddenLead:
+      'あなただけが見られます。表示に戻すまで、ランキング・自己ベスト・集計・すべてのリストから外れています。',
+    visibility: '表示',
+    visibilityShownLead:
+      '非表示にすると、このプレイはランキング・自己ベスト・集計・すべてのリストから外れます。プレイは残り、いつでも表示に戻せます。',
+    visibilityHiddenLead: '表示に戻すと、ランキング・自己ベスト・リストに再び載ります。',
+    hide: 'このプレイを非表示にする',
+    show: 'このプレイを表示に戻す',
   },
   settings: {
     title: '設定',
