@@ -26,7 +26,7 @@ import {
   type BeatorajaDestinationGroup,
   type BeatorajaSkin,
 } from '@be-music/beatoraja-skin';
-import { pickActiveBgaKey, type BgaCue } from '../core/gameplay-bga.ts';
+import { pickActiveBgaKey, resolveBgaImageRect, type BgaCue } from '../core/gameplay-bga.ts';
 
 export interface BeatorajaBgaLayerOptions {
   skin: BeatorajaSkin;
@@ -58,6 +58,8 @@ export interface BeatorajaBgaLayerOptions {
 
 export class BeatorajaBgaLayer {
   readonly container: Container = new Container();
+  /** Black fill behind an image smaller than the BGA canvas, which beatoraja leaves black around it. */
+  private readonly canvasSprite: Sprite;
   private readonly sprite: Sprite;
   private readonly group: BeatorajaDestinationGroup | undefined;
   private readonly textures: ReadonlyMap<string, Texture>;
@@ -81,9 +83,10 @@ export class BeatorajaBgaLayer {
 
     // Mounted with no texture — `update()` swaps in the active BGA texture per frame. Kept invisible
     // until the destination group resolves with `visible = true` so a chart with no BGA stays clean.
+    this.canvasSprite = new Sprite({ texture: Texture.WHITE, tint: 0x000000, visible: false });
     this.sprite = new Sprite();
     this.sprite.visible = false;
-    this.container.addChild(this.sprite);
+    this.container.addChild(this.canvasSprite, this.sprite);
   }
 
   /**
@@ -93,6 +96,7 @@ export class BeatorajaBgaLayer {
    */
   update(seconds: number, context: BeatorajaRenderContext, poorBgaActive: boolean): void {
     if (this.disposed) return;
+    this.canvasSprite.visible = false;
     if (this.group === undefined) {
       this.sprite.visible = false;
       return;
@@ -127,11 +131,29 @@ export class BeatorajaBgaLayer {
     if (this.sprite.texture !== texture) {
       this.sprite.texture = texture;
     }
+    // The destination stands for the 256x256 BMS canvas: a still image that fits it is centered horizontally and
+    // top-aligned at its pixel size on a black canvas (beatoraja's `BGImageProcessor`), anything larger and videos
+    // fill the rect.
+    const rect = { x: props.x, y: props.y, w: props.width, h: props.height };
+    const placed =
+      effectiveKey !== undefined && this.videoElements.has(effectiveKey)
+        ? rect
+        : resolveBgaImageRect(texture.frame.width, texture.frame.height, rect);
+    if (placed.w < rect.w || placed.h < rect.h) {
+      this.canvasSprite.visible = true;
+      this.canvasSprite.x = rect.x;
+      this.canvasSprite.y = rect.y;
+      this.canvasSprite.width = rect.w;
+      this.canvasSprite.height = rect.h;
+      this.canvasSprite.alpha = props.alpha;
+      this.canvasSprite.angle = props.angle;
+      this.canvasSprite.blendMode = props.blendMode;
+    }
     this.sprite.visible = true;
-    this.sprite.x = props.x;
-    this.sprite.y = props.y;
-    this.sprite.width = props.width;
-    this.sprite.height = props.height;
+    this.sprite.x = placed.x;
+    this.sprite.y = placed.y;
+    this.sprite.width = placed.w;
+    this.sprite.height = placed.h;
     this.sprite.alpha = props.alpha;
     this.sprite.tint = props.tint;
     this.sprite.angle = props.angle;

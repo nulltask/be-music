@@ -501,6 +501,10 @@ export interface BeMusicMeasureLine {
  * while {@link base} and {@link poor} are opaque: draw all three with plain alpha blending, without keying them again.
  * A bmson layer (whose spec keeps black opaque) and a video layer come as authored. `#SWBGA` animation frames are
  * already picked; a slot's `#ARGB` tint and opacity are left to the skin.
+ *
+ * Images come at their authored size. The BGA rect stands for a 256x256 canvas: to match other BMS players, draw a
+ * still image whose long edge is at most 256 px at its own size on that canvas, centered horizontally and against the
+ * top edge, and stretch a larger image or a video over the whole rect.
  */
 export interface BeMusicBgaFrame {
   /** The base layer (`#BMP` on channel 04), or a video frame. */
