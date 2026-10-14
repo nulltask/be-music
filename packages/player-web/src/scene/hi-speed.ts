@@ -26,3 +26,63 @@ export function snapHiSpeed(value: number): number | undefined {
   const snapped = Math.round(value * 1000) / 1000;
   return Math.max(HISPEED_MIN, Math.min(HISPEED_MAX, snapped));
 }
+
+/**
+ * How long the note scroll takes to glide to a new hi-speed. Long enough that the notes visibly ease instead of
+ * jumping, short enough that the new speed is readable right away.
+ */
+export const HISPEED_TRANSITION_MS = 200;
+
+/**
+ * The scroll hi-speed `nowMs` into a transition from `from` to `to` that started at `startMs` and lasts `durationMs`,
+ * eased out (cubic) so the change responds at once and settles softly. `from` before the start, `to` from the end on
+ * (and at once for a non-positive duration). Time is an input: the caller owns the clock.
+ */
+export function easeHiSpeed(from: number, to: number, startMs: number, nowMs: number, durationMs: number): number {
+  if (!(durationMs > 0) || nowMs >= startMs + durationMs) return to;
+  if (nowMs <= startMs) return from;
+  const remaining = 1 - (nowMs - startMs) / durationMs;
+  return from + (to - from) * (1 - remaining * remaining * remaining);
+}
+
+/**
+ * A hi-speed whose note-scroll value glides to each new target ({@link easeHiSpeed}). The target is what the HUD shows
+ * and what is reported to the host; {@link valueAt} is what notes, bar lines and long notes are positioned with.
+ * Visual only — judging never reads it.
+ */
+export class HiSpeedTransition {
+  private from: number;
+  private to: number;
+  private startMs = 0;
+  private readonly durationMs: number;
+
+  public constructor(initial: number, durationMs: number = HISPEED_TRANSITION_MS) {
+    this.from = initial;
+    this.to = initial;
+    this.durationMs = durationMs;
+  }
+
+  /** The hi-speed being moved to. */
+  public get target(): number {
+    return this.to;
+  }
+
+  /** The scroll hi-speed at `nowMs`. */
+  public valueAt(nowMs: number): number {
+    return easeHiSpeed(this.from, this.to, this.startMs, nowMs, this.durationMs);
+  }
+
+  /** Glides to `value` from wherever the scroll is at `nowMs` (mid-transition included), so a retarget never jumps. */
+  public retarget(value: number, nowMs: number): void {
+    if (value === this.to) return;
+    this.from = this.valueAt(nowMs);
+    this.to = value;
+    this.startMs = nowMs;
+  }
+
+  /** Moves to `value` at once — for setup before the notes are on screen. */
+  public jump(value: number): void {
+    this.from = value;
+    this.to = value;
+  }
+}
