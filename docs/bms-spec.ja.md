@@ -127,6 +127,9 @@
 - [x] BGA 画像を 256x256 キャンバス前提で扱う
 - [x] BGA 画像を通常は拡大縮小しない
 - [x] 256x256 未満の画像を X 軸中央 / Y 軸上詰めで配置
+- [x] 256x256 を超える画像（長辺が 256 超）と動画は、LR2・beatoraja と同じく BGA 枠いっぱいに引き伸ばす
+- [x] 小さい画像の周りのベース / POOR キャンバスは黒（1x1 の黒 `#BMPxx` で BGA を暗転できる）。レイヤーのキャンバスは透過
+- [x] `#BGAxx` の切り抜きは 256x256 キャンバスの `dx dy` に配置（ブラウザプレイヤー）
 - [x] `04` / `07` / `0A` で未定義 `#BMPxx` 参照時は 256x256 黒として扱う
 - [x] BGA 動画を描画で再生 (`mpeg1video` / `h264` / `mjpeg`, 音声は無視)
 - [x] 制御構文 `#RANDOM` を保持して実行時評価
@@ -313,7 +316,6 @@ runtime と round-trip の扱い:
 - [ ] `#STOPxx` 空定義参照（例: `#05209:` の未定義トークン）時の互換挙動
 - [ ] `#IF` / `#SWITCH` ブロック未終端（`#ENDIF` / `#ENDSW` 欠落）時の EOF 補完規則
 - [ ] Bemuse 拡張行 `#EXT #xxxyy:...` の受理規則（通常オブジェクトとの差分）
-- [ ] 256x256 超過 BGA（oversize BGA）の描画方針（切り抜き・縮小・配置）
 - [ ] 動画 BGA に対する `#ARGBxx` / `#BGAxx` パラメータ適用の有無
 - [ ] `#BASEBPM` の core time-resolution 反映方針。browser HS-FIX は視覚上の reference BPM として使いますが、内部 chart timing は BPM event に従います。
 - [ ] player: `#PLAYER` 未指定時の既定値 `1` を選曲画面・TUI・結果表示へ反映
