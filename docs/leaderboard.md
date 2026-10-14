@@ -365,7 +365,33 @@ application, HonoX or Nuxt can take over; the shared data-access functions keep 
   reports cover images (section 12).
 - **First card**: one design for a score — title, artist, level, clear-lamp band, EX score, rate, DJ level, judgments,
   rank and player count, ruleset badge, player name, date. Ranking, profile and versus cards come later.
+- **The score card's playfield shows the chart.** When the play's own player opens a score page without a card, the
+  page hands the client the chart's densest stretch (`src/pages/chart-excerpt.ts`), read from the chart's fingerprint
+  document in R2 and laid on the lanes of its lane mode (`src/pages/score-card-excerpt.ts`). The card draws it on the
+  right-hand playfield as the Synesthesia skin would at HIGH SPEED 2.0: its lane widths (scratch 41, white key 24,
+  blue key 19 design px, double play's banks 60 px apart; 9 KEY shares a 194 px side evenly) scaled so a 7 KEY side
+  fills the panel, and its scroll speed (72 px a beat at 2.0x over its 321 px playfield, 2.23 beats), so the stretch
+  is the window of 2.23 beats, from a whole beat, with the most notes (the earliest on a tie). The notes come in the
+  usual colours (white and blue keys, a red scratch, long notes as bars, bar lines) above the lamp-coloured judge line,
+  inside the safe area and below the site's name. Without the document, with an unknown lane mode or with more than
+  16 lanes (24 / 48 KEY), the playfield keeps its decorative notes. A chart with `#RANDOM` shows the notes every
+  outcome shares, and the chart is drawn as written, whatever lane option the play used.
 - **Meta tags** on every page: absolute `og:image`, `og:image:width` / `height`, `twitter:card=summary_large_image`.
+- **Safe area** (`src/pages/share-card-safe-area.ts`): link previews draw over and crop the card, so titles, scores,
+  the player and the site's name stay inside it, and the bottom left holds nothing that matters. As of October 2026:
+  - X shows `summary_large_image` at 2:1 (15 px off the top and the bottom of a 1200 × 630 card), rounds the corners,
+    and since October 2023 lays the link's domain over the bottom left, 12 px in and 20 px high on the shown card
+    ([Polypane, 2023-10-09](https://polypane.app/blog/where-to-put-text-so-it-doesnt-overlap-in-the-new-x-twitter-preview/),
+    which keeps the bottom 20 % clear; [TechCrunch, 2023-11-22](https://techcrunch.com/2023/11/22/elon-musk-says-x-will-show-headlines-on-the-platform-again/)).
+    On a phone, where the card is about 300 px wide, that is the bottom fifth and, for a domain of some 20
+    characters, the left half: `X_DOMAIN_LABEL_ZONE`.
+  - Bluesky shows link cards at 1200 / 630 with rounded corners (`CARD_ASPECT_RATIO` in bluesky-social/social-app);
+    Mastodon at 1.91:1 with 8 px corners, or a 1:1 thumbnail beside the text when the card is not large
+    (mastodon/mastodon `card.tsx`); Facebook, Threads, Slack and Discord show 1.91:1 with the title outside the
+    picture. None of them lays text over it.
+  - So content keeps 24 px from every edge (`SAFE_EDGE`), out of a 48 px square at each corner (`SAFE_CORNER`) and out
+    of X's label. The score card puts the player in the footer's right half and the site's name in the top right; the
+    tests check every block's box against the safe area.
 - **Sharing**: a "Share on X" button opens the X post intent; no X API and no X sign-in are needed:
 
   ```

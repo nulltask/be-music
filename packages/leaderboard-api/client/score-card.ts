@@ -2,16 +2,25 @@
  * Draws a play's share card (1200 x 630, the link-preview picture of its score page) on a canvas. The player's browser
  * draws it, since the Worker cannot rasterize on the Free plan, and main.ts uploads it.
  *
- * The layout keeps to a grid: one left edge (MARGIN) for every block, the same margin at the top and right, and the
- * player in a footer band below. Blocks group what belongs together: the chart (genre, title, artist), the result (DJ Rank,
+ * The layout keeps to a grid: one left edge (MARGIN) for every block, the same margin at the top and right, the site's
+ * name in the top right corner and the player in a footer band below, on its right: link previews lay their own labels
+ * over the bottom left (src/pages/share-card-safe-area.ts), so nothing that matters sits there. Blocks group what belongs together: the chart (genre, title, artist), the result (DJ Rank,
  * EX-Score, rate), the play (lamp, ruleset, gauge), the counts, and who played it when. Space between the groups is
  * wider than within them. The DJ Rank is the one big thing; the lamp's colour is the one accent, repeated in the
  * glow, the lamp pill and the playfield's judge line. Labels repeat one style (small, spaced capitals, muted).
  */
+import { SYNESTHESIA_PLAYFIELD, type ChartExcerpt, type ExcerptTone } from '../src/pages/chart-excerpt.ts';
 import type { ScoreCardData } from '../src/pages/score-card-data.ts';
+import {
+  type Box,
+  SAFE_EDGE,
+  SHARE_CARD_HEIGHT,
+  SHARE_CARD_WIDTH,
+  X_DOMAIN_LABEL_ZONE,
+} from '../src/pages/share-card-safe-area.ts';
 
-export const CARD_WIDTH = 1200;
-export const CARD_HEIGHT = 630;
+export const CARD_WIDTH = SHARE_CARD_WIDTH;
+export const CARD_HEIGHT = SHARE_CARD_HEIGHT;
 
 /**
  * Latin letters and figures in Inter Tight (main.ts loads it from the site); Japanese and anything else Inter Tight
@@ -139,6 +148,37 @@ const BYLINE_BASELINE = TITLE_BASELINE + 38;
 /** Where the result block starts, and the counts row's baseline (the playfield's judge line sits on it). */
 const RESULT_TOP = 206;
 const COUNTS_BASELINE = FOOTER_TOP - TOP;
+const RIGHT = CARD_WIDTH - MARGIN;
+const FOOTER_MIDDLE = (FOOTER_TOP + CARD_HEIGHT) / 2;
+const AVATAR_SIZE = 56;
+/** The footer's two lines: the player's name, then their handle and the date, on these baselines. */
+const PLAYER_BASELINE = 570;
+const HANDLE_BASELINE = PLAYER_BASELINE + 26;
+/** The player's lines end left of the avatar, at the right margin, and stay clear of X's domain label. */
+export const PLAYER_TEXT_RIGHT = RIGHT - AVATAR_SIZE - 18;
+export const PLAYER_TEXT_MAX_WIDTH = PLAYER_TEXT_RIGHT - (X_DOMAIN_LABEL_ZONE.x + X_DOMAIN_LABEL_ZONE.width) - 24;
+/** The widest the site's name gets in the top right corner, clear of the chart's column. */
+export const SITE_NAME_MAX_WIDTH = RIGHT - (MARGIN + COLUMN_WIDTH) - 24;
+
+/**
+ * The boxes the card's important content may take, whatever the play: the chart, the result, the play's pills, the
+ * counts, the player and the site's name. Heights reach from the cap height above the first line to the descenders
+ * below the last; the tests keep each inside the safe area.
+ */
+export const SCORE_CARD_BOXES = {
+  chart: { x: MARGIN, y: TOP, width: COLUMN_WIDTH, height: BYLINE_BASELINE + 8 - TOP },
+  result: { x: MARGIN, y: RESULT_TOP, width: COLUMN_WIDTH, height: 102 },
+  play: { x: MARGIN, y: RESULT_TOP + 102 + 24, width: COLUMN_WIDTH, height: 40 },
+  counts: { x: MARGIN, y: COUNTS_BASELINE - 60, width: COLUMN_WIDTH, height: 66 },
+  avatar: { x: RIGHT - AVATAR_SIZE, y: FOOTER_MIDDLE - AVATAR_SIZE / 2, width: AVATAR_SIZE, height: AVATAR_SIZE },
+  player: {
+    x: PLAYER_TEXT_RIGHT - PLAYER_TEXT_MAX_WIDTH,
+    y: PLAYER_BASELINE - 20,
+    width: PLAYER_TEXT_MAX_WIDTH,
+    height: HANDLE_BASELINE + 5 - (PLAYER_BASELINE - 20),
+  },
+  siteName: { x: RIGHT - SITE_NAME_MAX_WIDTH, y: TOP, width: SITE_NAME_MAX_WIDTH, height: 26 },
+} as const satisfies Record<string, Box>;
 
 const TEXT = '#ffffff';
 const SOFT = '#c7cde0';
@@ -156,43 +196,189 @@ export function countColumns(left: number, width: number, gap: number): number[]
   return COUNT_LABELS.map((_, i) => Math.round(left + i * column + (i >= 5 ? gap : 0)));
 }
 
-/** The 7-key playfield on the right, as in the site icon; the judge line takes the lamp's colour. */
-function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string): void {
-  const lane = 58;
-  const width = lane * 7;
-  const left = CARD_WIDTH - width;
-  const fadeWidth = 200;
+/** The playfield's panel: 406 px at the card's right edge, its left edge fading into the background. */
+const PANEL_WIDTH = 406;
+const PANEL_LEFT = CARD_WIDTH - PANEL_WIDTH;
+const LANE_LIGHT = '#1a2036';
+const LANE_DARK = '#10152a';
+
+/**
+ * Where the chart's own notes go on the panel: lanes from past the fade to the safe area's right edge; the window's
+ * start on the judge line (its top on the counts row's baseline), its end below the site's name, and long notes cut
+ * off just above that.
+ */
+export const EXCERPT_FRAME = {
+  left: PANEL_LEFT + 48,
+  right: CARD_WIDTH - SAFE_EDGE,
+  topY: 112,
+  clipY: 96,
+  judgeY: COUNTS_BASELINE - 8,
+  noteHeight: 10,
+  fadeWidth: 48,
+} as const;
+
+export type ExcerptRectKind = 'lane-light' | 'lane-dark' | 'bar' | `long-${ExcerptTone}` | `note-${ExcerptTone}`;
+
+export const EXCERPT_RECT_COLORS: Readonly<Record<ExcerptRectKind, string>> = {
+  'lane-light': LANE_LIGHT,
+  'lane-dark': LANE_DARK,
+  bar: '#2e3657',
+  'long-white': '#8f97b3',
+  'long-blue': '#2c7fa8',
+  'long-red': '#a83445',
+  'note-white': '#ffffff',
+  'note-blue': '#4ec9ff',
+  'note-red': '#ff4d5e',
+};
+
+export interface ExcerptRect extends Box {
+  kind: ExcerptRectKind;
+}
+
+/**
+ * The excerpt's lanes across the panel, as the Synesthesia skin lays them out (SYNESTHESIA_PLAYFIELD): IIDX modes give
+ * the scratch, white and blue keys their fixed widths and part double play's banks by the side gap; 9 KEY shares one
+ * side's width evenly. The design widths are scaled by one factor so a 7 KEY side fills the panel (and wider modes fit
+ * it), and centred in it. Edges are rounded to whole pixels, each lane starting where the previous one ends.
+ */
+export function excerptLaneBoxes(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): Array<{ x: number; width: number }> {
+  const { laneWidths, sideGap, sideWidth } = SYNESTHESIA_PLAYFIELD;
+  const shared = sideWidth / Math.max(1, excerpt.lanes.filter((lane) => lane.side === '1P').length);
+  const widths = excerpt.lanes.map(({ tone }) =>
+    excerpt.widths === 'shared'
+      ? shared
+      : tone === 'red'
+        ? laneWidths.scratch
+        : tone === 'blue'
+          ? laneWidths.black
+          : laneWidths.white,
+  );
+  const gaps = excerpt.lanes.map((lane, i): number =>
+    i > 0 && excerpt.widths === 'iidx' && lane.side !== excerpt.lanes[i - 1]?.side ? sideGap : 0,
+  );
+  const total = widths.reduce((sum, width) => sum + width, 0) + gaps.reduce((sum, gap) => sum + gap, 0);
+  const span = frame.right - frame.left;
+  const scale = Math.min(span / sideWidth, span / total);
+  const left = frame.left + (span - total * scale) / 2;
+  const boxes: Array<{ x: number; width: number }> = [];
+  let edge = 0;
+  widths.forEach((width, i) => {
+    edge += gaps[i] ?? 0;
+    const x = Math.round(left + edge * scale);
+    edge += width;
+    boxes.push({ x, width: Math.round(left + edge * scale) - x });
+  });
+  return boxes;
+}
+
+/**
+ * The rectangles of a chart excerpt on the panel, back to front: lane backgrounds (blue keys' lanes darker), bar lines,
+ * long-note bodies, then note heads. Lanes follow excerptLaneBoxes; the vertical scale is Synesthesia's at HIGH SPEED
+ * 2.0 (its playfield's height in the window's beats), so the window's start sits on the judge line and its end at
+ * `frame.topY`.
+ */
+export function excerptRects(excerpt: ChartExcerpt, frame = EXCERPT_FRAME): ExcerptRect[] {
+  const lanes = excerptLaneBoxes(excerpt, frame);
+  const fieldLeft = lanes[0]?.x ?? frame.left;
+  const fieldRight = (lanes.at(-1)?.x ?? frame.right) + (lanes.at(-1)?.width ?? 0);
+  const pixelsPerBeat = (frame.judgeY - frame.topY) / excerpt.beats;
+  const yOf = (beat: number) => Math.round(frame.judgeY - beat * pixelsPerBeat);
+  const rects: ExcerptRect[] = excerpt.lanes.map(({ tone }, i) => ({
+    x: lanes[i]?.x ?? 0,
+    y: 0,
+    width: lanes[i]?.width ?? 0,
+    height: CARD_HEIGHT,
+    kind: tone === 'blue' ? 'lane-dark' : 'lane-light',
+  }));
+  for (const beat of excerpt.bars) {
+    rects.push({ x: fieldLeft, y: yOf(beat) - 1, width: fieldRight - fieldLeft, height: 2, kind: 'bar' });
+  }
+  const heads: ExcerptRect[] = [];
+  for (const note of excerpt.notes) {
+    const tone = excerpt.lanes[note.lane]?.tone;
+    const lane = lanes[note.lane];
+    if (tone === undefined || lane === undefined) continue;
+    const gap = lane.width >= 20 ? 2 : 1;
+    const x = lane.x + gap;
+    const width = lane.width - 2 * gap;
+    const bottom = yOf(note.beat);
+    if (note.end !== undefined) {
+      // The body runs up to its end, or to the clip line when it ends past the window.
+      const endY = yOf(note.end);
+      const top = Math.max(frame.clipY, endY);
+      const inset = Math.max(1, Math.round(width / 6));
+      rects.push({ x: x + inset, y: top, width: width - 2 * inset, height: bottom - top, kind: `long-${tone}` });
+      if (endY - frame.noteHeight >= frame.clipY) {
+        heads.push({ x, y: endY - frame.noteHeight, width, height: frame.noteHeight, kind: `note-${tone}` });
+      }
+    }
+    heads.push({ x, y: bottom - frame.noteHeight, width, height: frame.noteHeight, kind: `note-${tone}` });
+  }
+  return [...rects, ...heads];
+}
+
+/** The decorative notes of a card without its chart: lane, top, colour on 7 lanes of 58 px. */
+const DECORATIVE_NOTES: ReadonlyArray<readonly [number, number, string]> = [
+  // The top row peeks in from above, leaving the top right corner to the site's name.
+  [1, -6, '#4ec9ff'],
+  [5, -6, '#4ec9ff'],
+  [4, 108, '#ffffff'],
+  [2, 182, '#ffffff'],
+  [6, 182, '#ffffff'],
+  [3, 256, '#4ec9ff'],
+  [2, 330, '#ffffff'],
+  [6, 330, '#ffffff'],
+  [1, 404, '#4ec9ff'],
+];
+
+/**
+ * The playfield on the right; the judge line takes the lamp's colour. With the chart's excerpt it shows the chart's
+ * densest two measures; without it, a 7-key playfield of decorative notes, as in the site icon.
+ */
+function drawPlayfield(ctx: CanvasRenderingContext2D, lampColor: string, excerpt: ChartExcerpt | undefined): void {
+  const width = PANEL_WIDTH;
+  const left = PANEL_LEFT;
+  const fadeWidth = excerpt !== undefined ? EXCERPT_FRAME.fadeWidth : 200;
   const layer = typeof OffscreenCanvas === 'function' ? new OffscreenCanvas(width, CARD_HEIGHT) : null;
   const target = layer?.getContext('2d') ?? null;
   const g = target ?? ctx;
   const x0 = target !== null ? 0 : left;
-  for (let i = 0; i < 7; i++) {
-    g.fillStyle = i % 2 === 0 ? '#1a2036' : '#10152a';
-    g.fillRect(x0 + i * lane, 0, lane, CARD_HEIGHT);
+  // The glow and the judge line sit on the counts row's baseline.
+  const drawGlow = () => {
+    const glow = g.createLinearGradient(0, COUNTS_BASELINE - 64, 0, COUNTS_BASELINE);
+    glow.addColorStop(0, hexAlpha(lampColor, 0));
+    glow.addColorStop(1, hexAlpha(lampColor, 0.5));
+    g.fillStyle = glow;
+    g.fillRect(x0, COUNTS_BASELINE - 64, width, 64);
+  };
+  if (excerpt !== undefined) {
+    // The panel behind the lanes, and between double play's banks.
+    g.fillStyle = '#0b0f1f';
+    g.fillRect(x0, 0, width, CARD_HEIGHT);
+    const rects = excerptRects(excerpt);
+    // Lanes and bar lines under the glow, notes over it.
+    const firstNote = rects.findIndex((rect) => rect.kind.startsWith('long-') || rect.kind.startsWith('note-'));
+    rects.forEach((rect, i) => {
+      if (i === firstNote) drawGlow();
+      g.fillStyle = EXCERPT_RECT_COLORS[rect.kind];
+      g.beginPath();
+      g.roundRect(x0 + rect.x - left, rect.y, rect.width, rect.height, rect.kind.startsWith('note-') ? 2 : 0);
+      g.fill();
+    });
+    if (firstNote < 0) drawGlow();
+  } else {
+    for (let i = 0; i < 7; i++) {
+      g.fillStyle = i % 2 === 0 ? LANE_LIGHT : LANE_DARK;
+      g.fillRect(x0 + i * 58, 0, 58, CARD_HEIGHT);
+    }
+    for (const [laneIndex, y, color] of DECORATIVE_NOTES) {
+      g.fillStyle = color;
+      g.beginPath();
+      g.roundRect(x0 + laneIndex * 58 + 4, y, 58 - 8, 16, 3);
+      g.fill();
+    }
+    drawGlow();
   }
-  const notes: Array<[number, number, string]> = [
-    [1, 34, '#4ec9ff'],
-    [5, 34, '#4ec9ff'],
-    [4, 108, '#ffffff'],
-    [2, 182, '#ffffff'],
-    [6, 182, '#ffffff'],
-    [3, 256, '#4ec9ff'],
-    [2, 330, '#ffffff'],
-    [6, 330, '#ffffff'],
-    [1, 404, '#4ec9ff'],
-  ];
-  for (const [laneIndex, y, color] of notes) {
-    g.fillStyle = color;
-    g.beginPath();
-    g.roundRect(x0 + laneIndex * lane + 4, y, lane - 8, 16, 3);
-    g.fill();
-  }
-  // The judge line sits on the counts row's baseline.
-  const glow = g.createLinearGradient(0, COUNTS_BASELINE - 64, 0, COUNTS_BASELINE);
-  glow.addColorStop(0, hexAlpha(lampColor, 0));
-  glow.addColorStop(1, hexAlpha(lampColor, 0.5));
-  g.fillStyle = glow;
-  g.fillRect(x0, COUNTS_BASELINE - 64, width, 64);
   g.fillStyle = lampColor;
   g.fillRect(x0, COUNTS_BASELINE - 8, width, 8);
   if (target === null || layer === null) return;
@@ -213,7 +399,6 @@ export function drawScoreCard(
   avatar: CanvasImageSource | null,
   playedOn: string,
 ): void {
-  const right = CARD_WIDTH - MARGIN;
   let fontSize = 0;
   const set = (weight: number, size: number, color: string, spacing = 0) => {
     fontSize = size;
@@ -255,7 +440,7 @@ export function drawScoreCard(
   aura.addColorStop(1, hexAlpha(data.lamp.color, 0));
   ctx.fillStyle = aura;
   ctx.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT);
-  drawPlayfield(ctx, data.lamp.color);
+  drawPlayfield(ctx, data.lamp.color, data.excerpt);
 
   // The chart: the genre as a label on the top margin, the title (shrunk to fit, then cut) and the artist below. The
   // rows keep their places when the chart names no genre, so every card shares one grid.
@@ -263,6 +448,16 @@ export function drawScoreCard(
     set(700, 15, MUTED, 1.5);
     inkText(fit(data.genre, COLUMN_WIDTH), MARGIN, TOP + capHeight());
   }
+  // The site's name in the top right corner, its capitals' top on the genre's.
+  set(700, 26, TEXT);
+  const siteBaseline = TOP + capHeight();
+  set(400, 26, MUTED);
+  const siteWidth = ctx.measureText(' Leaderboard').width;
+  ctx.textAlign = 'right';
+  ctx.fillText(' Leaderboard', RIGHT, siteBaseline);
+  set(700, 26, TEXT);
+  ctx.fillText('be-music', RIGHT - siteWidth, siteBaseline);
+  ctx.textAlign = 'left';
   const titleSize = fitFontSize(
     (text, size) => {
       ctx.font = font(800, size);
@@ -349,47 +544,33 @@ export function drawScoreCard(
     inkText(String(counts[i]), x, COUNTS_BASELINE);
   });
 
-  // The footer band: who played it, and when, on the site.
+  // The footer band: who played it, and when, on its right; its left is where previews put their own labels.
   ctx.fillStyle = 'rgba(5, 7, 14, 0.78)';
   ctx.fillRect(0, FOOTER_TOP, CARD_WIDTH, CARD_HEIGHT - FOOTER_TOP);
   ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
   ctx.fillRect(0, FOOTER_TOP, CARD_WIDTH, 1);
-  const footerMiddle = (FOOTER_TOP + CARD_HEIGHT) / 2;
-  const avatarSize = 56;
-  const avatarTop = footerMiddle - avatarSize / 2;
+  const avatarBox = SCORE_CARD_BOXES.avatar;
   ctx.save();
   ctx.beginPath();
-  ctx.arc(MARGIN + avatarSize / 2, footerMiddle, avatarSize / 2, 0, Math.PI * 2);
+  ctx.arc(avatarBox.x + AVATAR_SIZE / 2, FOOTER_MIDDLE, AVATAR_SIZE / 2, 0, Math.PI * 2);
   ctx.clip();
   if (avatar !== null) {
-    ctx.drawImage(avatar, MARGIN, avatarTop, avatarSize, avatarSize);
+    ctx.drawImage(avatar, avatarBox.x, avatarBox.y, AVATAR_SIZE, AVATAR_SIZE);
   } else {
     ctx.fillStyle = '#334155';
-    ctx.fillRect(MARGIN, avatarTop, avatarSize, avatarSize);
+    ctx.fillRect(avatarBox.x, avatarBox.y, AVATAR_SIZE, AVATAR_SIZE);
     set(700, 26, TEXT);
     ctx.textAlign = 'center';
-    ctx.fillText([...data.playerName][0] ?? '?', MARGIN + avatarSize / 2, footerMiddle + capHeight() / 2);
+    ctx.fillText([...data.playerName][0] ?? '?', avatarBox.x + AVATAR_SIZE / 2, FOOTER_MIDDLE + capHeight() / 2);
     ctx.textAlign = 'left';
   }
   ctx.restore();
-  // Two lines on each side, on the same two baselines, centred in the band.
-  set(700, 26, TEXT);
-  const nameCap = capHeight();
-  const lineGap = 26;
-  const firstBaseline = Math.round(footerMiddle + (nameCap - lineGap) / 2);
-  const secondBaseline = firstBaseline + lineGap;
-  const nameX = MARGIN + avatarSize + 18;
-  ctx.fillText(fit(data.playerName, 420), nameX, firstBaseline);
-  set(400, 18, MUTED);
-  ctx.fillText(fit(`@${data.handle}`, 420), nameX, secondBaseline);
+  // Two lines, right-aligned to the avatar: the name, then the handle and the date.
   ctx.textAlign = 'right';
-  set(400, 26, MUTED);
-  const siteWidth = ctx.measureText(' Leaderboard').width;
-  ctx.fillText(' Leaderboard', right, firstBaseline);
   set(700, 26, TEXT);
-  ctx.fillText('be-music', right - siteWidth, firstBaseline);
+  ctx.fillText(fit(data.playerName, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, PLAYER_BASELINE);
   set(400, 18, MUTED);
-  ctx.fillText(playedOn, right, secondBaseline);
+  ctx.fillText(fit(`@${data.handle}  ·  ${playedOn}`, PLAYER_TEXT_MAX_WIDTH), PLAYER_TEXT_RIGHT, HANDLE_BASELINE);
   ctx.textAlign = 'left';
   if ('letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
