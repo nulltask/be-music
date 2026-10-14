@@ -1,4 +1,4 @@
-import { and, asc, countDistinct, desc, eq, inArray, or, sql, type SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, or, sql, type SQL } from 'drizzle-orm';
 import { avatarUrl } from '../avatars.ts';
 import type { Database } from '../db/client.ts';
 import type { RulesetId } from '../rulesets.ts';
@@ -41,6 +41,8 @@ export interface RecentScore {
   /** Where the play's EX-Score stands among the other players' bests on the chart, and how many players there are. */
   rank: number;
   players: number;
+  /** The play's info popover, read in the same query. */
+  info: PlayInfo;
 }
 
 export interface RecentScoresFilter {
@@ -117,6 +119,7 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       missCount: scoreResult.missCount,
       gaugeType: scoreResult.gaugeType,
       gaugeFinal: scoreResult.gaugeFinal,
+      info: PLAY_INFO_COLUMNS,
       ...previousBest(filter.ruleset),
       ...standing(filter),
     })
@@ -139,9 +142,11 @@ export async function loadRecentScores(db: Database, filter: RecentScoresFilter)
       previousMiss,
       above,
       players,
+      info,
       ...row
     }) => ({
       ...row,
+      info: toPlayInfo(info),
       avatarUrl: avatarUrl(row.handle, avatarKey),
       createdAt: createdAt.getTime(),
       anonymous: anonymous === true,
@@ -279,13 +284,3 @@ export async function loadChartAliases(db: Database, chartFingerprint: string): 
 }
 
 export type { PlayInfo } from '../play-info.ts';
-
-/** Info of several scores at once, keyed by score id. */
-export async function loadPlayInfos(db: Database, scoreIds: readonly string[]): Promise<Map<string, PlayInfo>> {
-  if (scoreIds.length === 0) return new Map();
-  const rows = await db
-    .select(PLAY_INFO_COLUMNS)
-    .from(score)
-    .where(inArray(score.id, [...new Set(scoreIds)]));
-  return new Map(rows.map((row) => [row.scoreId, toPlayInfo(row)]));
-}
