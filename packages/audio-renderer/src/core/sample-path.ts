@@ -10,13 +10,24 @@ export interface ResolveSamplePathOptions {
   pathPrefix?: string;
 }
 
+/**
+ * The file a chart's sample resolves to under `baseDir` (the chart's folder): the {@link createSamplePathCandidates}
+ * walk there, then the same walk one folder up. Absolute path, or `undefined` when nothing matches.
+ */
 export async function resolveSamplePath(
   baseDir: string,
   samplePath: string,
   signal?: AbortSignal,
   options: ResolveSamplePathOptions = {},
 ): Promise<string | undefined> {
-  return resolveFirstExistingPath(baseDir, createSamplePathCandidates(samplePath, options), signal);
+  const candidates = createSamplePathCandidates(samplePath, options);
+  const found = await resolveFirstExistingPath(baseDir, candidates, signal);
+  if (found !== undefined) return found;
+  // As LR2: every candidate once more one folder up, so a 差分 (alternate difficulty) chart shipped in a sub-folder finds
+  // the keysounds beside its parent.
+  // `..` rather than a string `dirname`: `baseDir` is a file-system path (absolute, maybe Windows), which the resolver
+  // normalises with Node's `path.resolve`.
+  return resolveFirstExistingPath(`${baseDir.replace(/[\\/]+$/u, '')}/..`, candidates, signal);
 }
 
 /**

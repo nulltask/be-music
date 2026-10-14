@@ -313,8 +313,8 @@ Also, volume changes will only be reflected in the initial gain of new sounds th
 - [ ] Upper limit of measure number (near `#999`) and handling when inputting after `#1000`
 - [ ] Policy for audio format compatibility (μ-law WAV, etc.)
 - [ ] Compatibility policy for treating `00` object tokens as ordinary `#WAV00` references outside landmine playback
-- [ ] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback)
-- [ ] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback)
+- [x] Search for alternative files when extension omitted/mismatches for `#WAVxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
+- [x] Search for alternative files when extension omitted/mismatches for `#BMPxx` (extension fallback; see [BMS / bmson compatibility notes §2.19](./format-compat.md#219-asset-file-lookup))
 - [ ] Compatible behavior when referencing undefined `#BPMxx` / `#STOPxx` (ignored, default value, error)
 - [ ] `#STOPxx` Compatibility behavior when empty definition reference (e.g. undefined token of `#05209:`)
 - [ ] EOF completion rules when `#IF` / `#SWITCH` block is unterminated (`#ENDIF` / `#ENDSW` is missing)
