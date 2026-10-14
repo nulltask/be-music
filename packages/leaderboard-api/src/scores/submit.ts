@@ -19,6 +19,7 @@ import { sha256Hex } from '../hash.ts';
 import { fileHashAliases, playedFileOf } from './played-file.ts';
 import { byRulesetOrder, RULESET_IDS } from '../rulesets.ts';
 import { loadBestScores, toBestScoreRow } from './bests.ts';
+import { nextHasLongNotes, playlogHasLongNotes } from './long-notes.ts';
 
 export interface SubmissionInput {
   userId: string;
@@ -137,6 +138,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
     return { ruleset, result, lamp, missCount, update, playedHere };
   });
 
+  const playedLongNotes = playlogHasLongNotes(input.playlog.chart);
   const chartValues = chartRegistration
     ? [
         db
@@ -153,6 +155,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
             laneMode: input.playlog.chart.laneMode,
             total: input.playlog.chart.total ?? null,
             lnMode: input.playlog.chart.lnMode,
+            hasLongNotes: playedLongNotes,
             judgeRank: chartJudgeRank(input.playlog.chart.judgeRank),
             noteCount: input.playlog.chart.noteCount,
             playFingerprints: verification === 'L4' ? [playFingerprint] : [],
@@ -164,18 +167,18 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
           .onConflictDoNothing(),
       ]
     : [];
-  // Charts registered before play logs carried the level take it from the first play that does.
-  const levelValues =
-    known !== undefined && known.playLevel === null && input.playlog.chart.playLevel !== undefined
-      ? [
-          db
-            .update(chart)
-            .set({
-              playLevel: input.playlog.chart.playLevel,
-              difficulty: input.playlog.chart.difficulty ?? null,
-            })
-            .where(eq(chart.chartFingerprint, chartFingerprint)),
-        ]
+  // What a known chart learns from this play, in one statement: charts registered before play logs carried the level
+  // take it from the first play that does, and whether the chart has long notes (see `nextHasLongNotes`).
+  const learned: Partial<typeof chart.$inferInsert> = {};
+  if (known !== undefined && known.playLevel === null && input.playlog.chart.playLevel !== undefined) {
+    learned.playLevel = input.playlog.chart.playLevel;
+    learned.difficulty = input.playlog.chart.difficulty ?? null;
+  }
+  const hasLongNotes = known === undefined ? undefined : nextHasLongNotes(known.hasLongNotes, playedLongNotes);
+  if (hasLongNotes !== undefined) learned.hasLongNotes = hasLongNotes;
+  const learnedValues =
+    Object.keys(learned).length > 0
+      ? [db.update(chart).set(learned).where(eq(chart.chartFingerprint, chartFingerprint))]
       : [];
   // The file hashes the client claims (`chart.sha256`, `chart.md5`). The server cannot check them without the file, so
   // they only name the chart on other sites; well-formed ones are kept, lowercased.
@@ -187,7 +190,7 @@ export async function submitScore(deps: SubmissionDeps, input: SubmissionInput):
   );
   const statements: BatchItem<'sqlite'>[] = [
     ...chartValues,
-    ...levelValues,
+    ...learnedValues,
     ...aliasValues,
     db.insert(score).values({
       id: scoreId,

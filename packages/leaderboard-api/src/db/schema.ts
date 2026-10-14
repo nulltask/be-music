@@ -164,6 +164,11 @@ export const chart = sqliteTable(
     total: real('total'),
     /** Long-note mode: 1 LN, 2 CN, 3 HCN. */
     lnMode: integer('ln_mode'),
+    /**
+     * Whether a play of the chart had long notes (FREE ZONE notes aside). Null for charts registered before this was
+     * kept, until their next play; a later play with long notes sets it, as `#RANDOM` outcomes can differ.
+     */
+    hasLongNotes: integer('has_long_notes', { mode: 'boolean' }),
     /** Judge rank as the play log carried it: the window percentage and the raw `#RANK` / `#DEFEXRANK`. */
     judgeRank: text('judge_rank', { mode: 'json' }).$type<{
       percent: number;
